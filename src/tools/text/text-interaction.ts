@@ -17,6 +17,12 @@ import {
   getLayerTextureDimensions,
 } from '../../engine-wasm/wasm-bridge';
 import { utf8ToUtf16 } from '../../engine-wasm/text-offset';
+import {
+  captureLayerGpu,
+  restoreLayerGpu,
+  releaseLayerGpu,
+  type LayerHistoryBefore,
+} from '../../app/store/layer-gpu-capture';
 import { wordAt } from './text-input';
 import { extractFamilyName } from '../../utils/font-loader';
 
@@ -53,6 +59,65 @@ function now(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
+/**
+ * The edited layer as it was when the editing session began. The live preview
+ * renders every keystroke straight into the layer's GPU texture, so this copy
+ * is the only record of the pre-edit pixels: commit pushes it as the history
+ * entry's "before" state and cancel restores it (#813).
+ */
+let preEdit: LayerHistoryBefore | null = null;
+
+function beginEditSession(state: TextEditingState, layer: TextLayer): void {
+  discardPreEdit();
+  preEdit = { layer, gpuHandle: captureLayerGpu(layer.id) };
+  useUIStore.getState().startTextEditing(state);
+}
+
+function takePreEdit(layerId: string): LayerHistoryBefore | null {
+  const taken = preEdit;
+  preEdit = null;
+  if (taken && taken.layer.id !== layerId) {
+    releaseLayerGpu(taken.gpuHandle);
+    return null;
+  }
+  return taken;
+}
+
+function discardPreEdit(): void {
+  if (preEdit) releaseLayerGpu(preEdit.gpuHandle);
+  preEdit = null;
+}
+
+/** Put the edited layer's texture and descriptor back to their pre-edit state. */
+function restorePreEdit(layerId: string): void {
+  const before = takePreEdit(layerId);
+  if (!before) return;
+  restoreLayerGpu(layerId, before.gpuHandle);
+  releaseLayerGpu(before.gpuHandle);
+  if (before.layer.type === 'text') {
+    useEditorStore.getState().updateTextLayerProperties(layerId, before.layer);
+  }
+}
+
+/**
+ * Abandon the current editing session: a new layer is removed, an existing one
+ * gets its pre-edit glyphs and position back.
+ */
+export function cancelTextEditing(): void {
+  const uiState = useUIStore.getState();
+  const editing = uiState.textEditing;
+  if (!editing) return;
+  uiState.cancelTextEditing();
+  const editorState = useEditorStore.getState();
+  if (editing.isNew) {
+    discardPreEdit();
+    editorState.removeLayer(editing.layerId);
+  } else {
+    restorePreEdit(editing.layerId);
+  }
+  useEditorStore.getState().notifyRender();
+}
+
 /** Reset transient click/drag state. For test isolation only. */
 export function resetTextInteractionState(): void {
   dragSelectState.active = false;
@@ -63,6 +128,7 @@ export function resetTextInteractionState(): void {
   lastClick.x = 0;
   lastClick.y = 0;
   lastClick.layerId = '';
+  preEdit = null;
 }
 
 /** Map a document-space point to a UTF-16 offset in the edited text via the engine. */
@@ -100,6 +166,7 @@ export function commitTextEditing(): void {
 
   const layerExists = editorState.document.layers.some((l) => l.id === editing.layerId);
   if (!layerExists) {
+    discardPreEdit();
     editorState.notifyRender();
     return;
   }
@@ -107,11 +174,13 @@ export function commitTextEditing(): void {
   // If no text was entered, just cancel.
   if (editing.text.trim() === '') {
     if (editing.isNew) {
+      discardPreEdit();
       editorState.removeLayer(editing.layerId);
     } else {
-      editorState.updateTextLayerProperties(editing.layerId, { visible: editing.originalVisible });
+      restorePreEdit(editing.layerId);
+      useEditorStore.getState().updateTextLayerProperties(editing.layerId, { visible: editing.originalVisible });
     }
-    editorState.notifyRender();
+    useEditorStore.getState().notifyRender();
     return;
   }
 
@@ -172,7 +241,7 @@ export function commitTextEditing(): void {
     }
   }
 
-  editorState.pushHistory('Text');
+  editorState.pushHistory('Text', takePreEdit(editing.layerId) ?? undefined);
   toolSettings.addRecentColor(textColor);
 
   const textForLayer = toolSettings.settings.text;
@@ -352,7 +421,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
       isNew: false,
       originalVisible: hitLayer.visible,
     };
-    uiState.startTextEditing(editingState);
+    beginEditSession(editingState, hitLayer);
     editorState.notifyRender();
     return undefined;
   }
@@ -439,7 +508,7 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
     color: textColor,
   });
 
-  editorState.addTextLayer({
+  const addedLayer: TextLayer = {
     ...newLayer,
     x: boundsX,
     y: boundsY,
@@ -449,7 +518,8 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
     textAlign: text.align,
     vertical: text.vertical,
     visible: true, // GPU renders text preview in real-time
-  });
+  };
+  editorState.addTextLayer(addedLayer);
 
   const editingState: TextEditingState = {
     layerId: newLayer.id,
@@ -465,6 +535,6 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
     isNew: true,
     originalVisible: true,
   };
-  uiState.startTextEditing(editingState);
+  beginEditSession(editingState, addedLayer);
   editorState.notifyRender();
 }

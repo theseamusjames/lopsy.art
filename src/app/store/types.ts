@@ -199,7 +199,7 @@ export interface EditorState {
   undoBy: (steps: number) => void;
   /** Batched redo — see `undoBy`. */
   redoBy: (steps: number) => void;
-  pushHistory: (label?: string) => void;
+  pushHistory: (label?: string, before?: import('./layer-gpu-capture').LayerHistoryBefore) => void;
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;
   markClean: () => void;

@@ -1,9 +1,10 @@
 import type { HistorySnapshot, SliceCreator } from './types';
 import type { Layer } from '../../types';
+import { EMPTY_HANDLE, restoreLayerGpu, type LayerHistoryBefore } from './layer-gpu-capture';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
-  endStroke, getLayerTextureDimensions, uploadLayerPixels,
-  snapshotLayerGpu, restoreFromGpuSnapshot, releaseGpuSnapshot,
+  endStroke, getLayerTextureDimensions,
+  snapshotLayerGpu, releaseGpuSnapshot,
   hasFloat, dropFloat,
 } from '../../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync, syncLayers } from '../../engine-wasm/engine-sync';
@@ -28,13 +29,18 @@ export interface HistorySlice {
   undoBy: (steps: number) => void;
   /** Batched redo — see `undoBy`. */
   redoBy: (steps: number) => void;
-  pushHistory: (label?: string) => void;
+  /**
+   * Snapshot the current state onto the undo stack. `before` substitutes one
+   * layer's descriptor and GPU texture with a copy captured earlier — used by
+   * operations (text editing) that mutate the layer texture live before the
+   * history entry is pushed.
+   */
+  pushHistory: (label?: string, before?: LayerHistoryBefore) => void;
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;
   markClean: () => void;
 }
 
-const EMPTY_HANDLE = 0xFFFFFFFF;
 
 let lastRestoredSnapshot: HistorySnapshot | null = null;
 
@@ -97,11 +103,17 @@ function snapshotGpuLayers(
   layerOrder: readonly string[],
   dirtyIds: Set<string>,
   previous: HistorySnapshot | undefined,
+  before?: LayerHistoryBefore,
 ): Map<string, number> {
   const engine = getEngine();
   const gpuSnapshots = new Map<string, number>();
 
   for (const layerId of layerOrder) {
+    if (before && before.layer.id === layerId) {
+      gpuSnapshots.set(layerId, before.gpuHandle);
+      continue;
+    }
+
     // Reuse previous handle when the layer hasn't changed.
     if (!dirtyIds.has(layerId) && previous?.kind === 'pixels' && previous.gpuSnapshots.has(layerId)) {
       const curLayer = layers.find((l) => l.id === layerId);
@@ -188,15 +200,8 @@ function mergeMetadataLayerPositions(
 function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
   if (snapshot.kind === 'metadata') return;
 
-  const engine = getEngine();
-  if (!engine) return;
-
   for (const [layerId, handle] of snapshot.gpuSnapshots) {
-    if (handle === EMPTY_HANDLE) {
-      uploadLayerPixels(engine, layerId, new Uint8Array(4), 1, 1, 0, 0);
-    } else {
-      restoreFromGpuSnapshot(engine, layerId, handle);
-    }
+    restoreLayerGpu(layerId, handle);
   }
 }
 
@@ -404,7 +409,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     }
   },
 
-  pushHistory: (label = 'Edit') => {
+  pushHistory: (label = 'Edit', before) => {
     // #756: mask readbacks are deferred to idle. Ensure any pending read
     // has settled so this snapshot captures the current mask data, not
     // the pre-stroke state.
@@ -421,11 +426,19 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     flushLayerSync(state);
 
     const prevSnapshot = state.undoStack[state.undoStack.length - 1];
-    const gpuSnapshots = snapshotGpuLayers(state.document.layers, state.document.layerOrder, state.dirtyLayerIds, prevSnapshot);
+    const gpuSnapshots = snapshotGpuLayers(
+      state.document.layers, state.document.layerOrder, state.dirtyLayerIds, prevSnapshot, before,
+    );
+    const document = before
+      ? {
+        ...state.document,
+        layers: state.document.layers.map((l) => (l.id === before.layer.id ? before.layer : l)),
+      }
+      : state.document;
 
     const snapshot: HistorySnapshot = {
       kind: 'pixels',
-      document: state.document,
+      document,
       selection: state.selection,
       gpuSnapshots,
       label,
@@ -435,7 +448,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],
       redoStack: [],
-      dirtyLayerIds: new Set(),
+      // The substituted layer's live texture differs from the pushed one, so
+      // keep it dirty: the next snapshot (e.g. undo's redo entry) must copy
+      // the live texture instead of reusing the "before" handle.
+      dirtyLayerIds: before ? new Set([before.layer.id]) : new Set(),
       isDirty: true,
       renderVersion: state.renderVersion + 1,
     });

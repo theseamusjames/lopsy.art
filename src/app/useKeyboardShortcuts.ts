@@ -20,7 +20,7 @@ import {
   type TextEditState,
 } from '../tools/text/text-input';
 import { makeTextGeometry } from '../tools/text/text-geometry';
-import { commitTextEditing } from '../tools/text/text-interaction';
+import { commitTextEditing, cancelTextEditing } from '../tools/text/text-interaction';
 import { POINTER_IDLE, POINTER_SPACE_HELD, type PointerMode } from './pointer-mode';
 
 // Text-entry input types swallow global shortcuts; other input types
@@ -127,13 +127,7 @@ export function useKeyboardShortcuts({
         if (e.key === 'Escape') {
           e.preventDefault();
           preferredXRef.current = null;
-          const uiState = useUIStore.getState();
-          const editorState = useEditorStore.getState();
-          if (textEditing.isNew) {
-            editorState.removeLayer(textEditing.layerId);
-          }
-          uiState.cancelTextEditing();
-          editorState.notifyRender();
+          cancelTextEditing();
           return;
         }
 
