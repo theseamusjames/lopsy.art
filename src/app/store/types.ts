@@ -126,6 +126,7 @@ export interface EditorState {
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
+  dropLayer: (layerId: string, target: import('./actions/drop-layer').LayerDropTarget) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
   alignLayer: (edge: AlignEdge) => void;
   fitActiveLayerToCanvas: () => void;

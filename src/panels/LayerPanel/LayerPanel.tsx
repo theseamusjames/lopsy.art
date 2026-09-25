@@ -21,7 +21,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const selectedLayerIds = useEditorStore((s) => s.document.selectedLayerIds);
   const onToggleVisibility = useEditorStore((s) => s.toggleLayerVisibility);
   const onAddLayer = useEditorStore((s) => s.addLayer);
-  const onReorderLayer = useEditorStore((s) => s.moveLayer);
+  const onDropLayer = useEditorStore((s) => s.dropLayer);
   const onUpdateOpacity = useEditorStore((s) => s.updateLayerOpacity);
   const addLayerMask = useEditorStore((s) => s.addLayerMask);
   const removeLayerMask = useEditorStore((s) => s.removeLayerMask);
@@ -31,7 +31,6 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const addGroup = useEditorStore((s) => s.addGroup);
   const rasterizeTextLayer = useEditorStore((s) => s.rasterizeTextLayer);
   const toggleGroupCollapsed = useEditorStore((s) => s.toggleGroupCollapsed);
-  const moveLayerToGroup = useEditorStore((s) => s.moveLayerToGroup);
   const setLayerColorTag = useEditorStore((s) => s.setLayerColorTag);
   const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
   const layerOrder = useEditorStore((s) => s.document.layerOrder);
@@ -53,10 +52,10 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   );
 
   const {
-    dragIndex, dropGap, dropIntoGroup,
+    dragIndex, dropGap, dropDepth, dropIntoGroup,
     editingOpacityId, setEditingOpacityId,
     listRef, handleGripDown,
-  } = useLayerDnd({ displayList, layers, layerOrder, onReorderLayer, moveLayerToGroup });
+  } = useLayerDnd({ displayList, layers, layerOrder, onDropLayer });
 
   const isRootGroup = useCallback((layerId: string) => layerId === rootGroupId, [rootGroupId]);
 
@@ -168,8 +167,9 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
             isSelected={layer.id !== activeLayerId && selectedLayerIds.includes(layer.id)}
             isRootGroup={isRootGroup(layer.id)}
             isDragging={dragIndex === ri}
-            isDropTarget={dropGap !== null && dropGap === ri && dropGap !== dragIndex && dropGap !== (dragIndex ?? -1) + 1}
-            isDropTargetEnd={dropGap !== null && dropGap === displayList.length && ri === displayList.length - 1 && dropGap !== (dragIndex ?? -1) + 1}
+            isDropTarget={dropGap !== null && dropGap === ri}
+            isDropTargetEnd={dropGap !== null && dropGap === displayList.length && ri === displayList.length - 1}
+            dropDepth={dropDepth}
             isDropIntoGroup={dropIntoGroup === layer.id}
             isEditingOpacity={editingOpacityId === layer.id}
             isMaskEditActive={maskEditMode && layer.id === activeLayerId}

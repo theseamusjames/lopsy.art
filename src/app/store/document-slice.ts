@@ -25,6 +25,8 @@ import { computeAddLayer } from './actions/add-layer';
 import { computeAddTextLayer, computeUpdateTextLayerProperties } from './actions/add-text-layer';
 import { computeRemoveLayer } from './actions/remove-layer';
 import { computeMoveLayer } from './actions/move-layer';
+import { computeDropLayer } from './actions/drop-layer';
+import type { LayerDropTarget } from './actions/drop-layer';
 import { computeDuplicateLayer } from './actions/duplicate-layer';
 import { computeMergeDown } from './actions/merge-down';
 import { computeFlattenImage } from './actions/flatten-image';
@@ -212,6 +214,7 @@ export interface DocumentSlice {
   updateLayerOpacity: (id: string, opacity: number) => void;
   updateLayerBlendMode: (id: string, blendMode: BlendMode) => void;
   moveLayer: (fromIndex: number, toIndex: number) => void;
+  dropLayer: (layerId: string, target: LayerDropTarget) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
   alignLayer: (edge: AlignEdge) => void;
   fitActiveLayerToCanvas: () => void;
@@ -511,6 +514,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   moveLayer: (fromIndex, toIndex) => {
     const s = get();
     const result = computeMoveLayer(s.document, s.renderVersion, fromIndex, toIndex);
+    if (!result) return;
+    s.pushHistoryMetadata('Reorder Layer');
+    set(result);
+  },
+
+  dropLayer: (layerId, target) => {
+    const s = get();
+    const result = computeDropLayer(s.document, s.renderVersion, layerId, target);
     if (!result) return;
     s.pushHistoryMetadata('Reorder Layer');
     set(result);

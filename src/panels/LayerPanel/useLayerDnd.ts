@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Layer } from '../../types';
-import { isGroupLayer, canMoveToGroup, findParentGroup, isAncestorOf } from '../../layers/group-utils';
+import type { LayerDropTarget } from '../../app/store/actions/drop-layer';
+import { isGroupLayer, canMoveToGroup, findParentGroup, getDescendantIds } from '../../layers/group-utils';
 import styles from './LayerPanel.module.css';
 
 interface DisplayEntry {
@@ -9,58 +10,115 @@ interface DisplayEntry {
 }
 
 /**
- * Translate a display-list drag (top→bottom, respects collapsed
- * groups) into `moveLayer(fromLayerOrderIdx, toLayerOrderIdx)` indices
- * on the full `document.layerOrder` (bottom→top, every layer).
- *
- * #797 — the previous formula `layers.length - 1 - from` treated `from`
- * as if it were an index into the full layers array. That silently
- * picked a HIDDEN child of any collapsed group above the dragged row.
- *
- * #824 — indices must be resolved against `layerOrder`, not
- * `document.layers`. Paste and every add after it can leave the two
- * arrays out of order, and `moveLayer` only understands `layerOrder`
- * indices.
- *
- * Returns null when the drag is a no-op (no motion, or the neighbour
- * cannot be resolved).
+ * Horizontal pointer travel that shifts the drop depth by one level.
+ * Twice the 8px row indent so small sideways jitter during a vertical
+ * drag doesn't flip the drop in or out of a group.
  */
-export function resolveDisplayDropIndices(
-  layerOrder: readonly string[],
-  displayList: readonly DisplayEntry[],
-  from: number,
-  gap: number,
-): { fromIdx: number; toIdx: number } | null {
-  const draggedLayer = displayList[from]?.layer;
-  if (!draggedLayer) return null;
-  const fromIdx = layerOrder.indexOf(draggedLayer.id);
-  if (fromIdx < 0) return null;
+export const DROP_DEPTH_STEP_PX = 16;
 
-  let toIdx: number;
-  const neighborAboveEntry = gap < displayList.length ? displayList[gap] : null;
-  if (neighborAboveEntry) {
-    const neighborIdx = layerOrder.indexOf(neighborAboveEntry.layer.id);
-    if (neighborIdx < 0) return null;
-    toIdx = neighborIdx > fromIdx ? neighborIdx : neighborIdx + 1;
-  } else {
-    toIdx = 0;
+export interface GapDropSlot {
+  target: LayerDropTarget;
+  /** Display depth of the dropped row — drives the indicator's indent. */
+  depth: number;
+}
+
+/**
+ * Resolve a drop in the gap above display row `gap` into a tree position.
+ *
+ * A gap below the last child of a group is ambiguous: it can mean "bottom
+ * of that group" or "below the group, one level up". The panel resolves
+ * it by depth — `desiredDepth` (the dragged row's depth plus horizontal
+ * pointer travel) is clamped to the depths that gap can hold, and the
+ * indicator is indented to the same depth. The same slot feeds both the
+ * indicator and the drop, so the result always matches what was shown
+ * (#814, #824).
+ *
+ * The dragged row and its subtree are removed from the list first so a
+ * group can never be dropped inside itself and its own rows never serve
+ * as the neighbour.
+ */
+export function resolveGapDrop(
+  layers: readonly Layer[],
+  displayList: readonly DisplayEntry[],
+  draggedId: string,
+  gap: number,
+  desiredDepth: number,
+): GapDropSlot | null {
+  const excluded = new Set([draggedId, ...getDescendantIds(layers, draggedId)]);
+  const rows: DisplayEntry[] = [];
+  let effectiveGap = 0;
+  for (const [i, entry] of displayList.entries()) {
+    if (excluded.has(entry.layer.id)) continue;
+    if (i < gap) effectiveGap++;
+    rows.push(entry);
+  }
+  // Nothing may be dropped above the root row.
+  effectiveGap = Math.max(1, effectiveGap);
+
+  const above = rows[effectiveGap - 1];
+  if (!above) return null;
+  const below = rows[effectiveGap];
+
+  const canNest = isGroupLayer(above.layer) && !above.layer.collapsed;
+  const maxDepth = canNest ? above.depth + 1 : above.depth;
+  const minDepth = Math.max(1, below ? below.depth : 1);
+  if (minDepth > maxDepth) return null;
+  const depth = Math.min(maxDepth, Math.max(minDepth, desiredDepth));
+
+  if (canNest && depth === above.depth + 1) {
+    return { target: { parentId: above.layer.id, belowId: null }, depth };
   }
 
-  if (toIdx === fromIdx || (fromIdx < toIdx && toIdx === fromIdx + 1)) return null;
-  return { fromIdx, toIdx };
+  let sibling: Layer = above.layer;
+  for (let d = above.depth; d > depth; d--) {
+    const parent = findParentGroup(layers, sibling.id);
+    if (!parent) return null;
+    sibling = parent;
+  }
+  const parent = findParentGroup(layers, sibling.id);
+  if (!parent) return null;
+  return { target: { parentId: parent.id, belowId: sibling.id }, depth };
+}
+
+/**
+ * The slot the layer already occupies: its parent, and the sibling
+ * directly above it in the panel (by layerOrder, not `children` order).
+ */
+export function currentDropTarget(
+  layers: readonly Layer[],
+  layerOrder: readonly string[],
+  layerId: string,
+): LayerDropTarget | null {
+  const parent = findParentGroup(layers, layerId);
+  if (!parent) return null;
+  const rank = new Map(layerOrder.map((id, i) => [id, i]));
+  const ownRank = rank.get(layerId) ?? -1;
+  let belowId: string | null = null;
+  let belowRank = Infinity;
+  for (const childId of parent.children) {
+    const r = rank.get(childId);
+    if (r === undefined || r <= ownRank || r >= belowRank) continue;
+    belowId = childId;
+    belowRank = r;
+  }
+  return { parentId: parent.id, belowId };
+}
+
+function isSameTarget(a: LayerDropTarget | null, b: LayerDropTarget): boolean {
+  return a !== null && a.parentId === b.parentId && a.belowId === b.belowId;
 }
 
 interface UseLayerDndParams {
   displayList: readonly DisplayEntry[];
   layers: readonly Layer[];
   layerOrder: readonly string[];
-  onReorderLayer: (from: number, to: number) => void;
-  moveLayerToGroup: (layerId: string, groupId: string) => void;
+  onDropLayer: (layerId: string, target: LayerDropTarget) => void;
 }
 
 interface UseLayerDndResult {
   dragIndex: number | null;
   dropGap: number | null;
+  dropDepth: number | null;
   dropIntoGroup: string | null;
   editingOpacityId: string | null;
   setEditingOpacityId: (id: string | null) => void;
@@ -68,33 +126,45 @@ interface UseLayerDndResult {
   handleGripDown: (e: React.PointerEvent, ri: number) => void;
 }
 
+interface DragState {
+  slot: GapDropSlot | null;
+  gap: number | null;
+  intoGroup: string | null;
+}
+
 export function useLayerDnd({
   displayList,
   layers,
   layerOrder,
-  onReorderLayer,
-  moveLayerToGroup,
+  onDropLayer,
 }: UseLayerDndParams): UseLayerDndResult {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
+  const [dropDepth, setDropDepth] = useState<number | null>(null);
   const [dropIntoGroup, setDropIntoGroup] = useState<string | null>(null);
   const [editingOpacityId, setEditingOpacityId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<{ from: number; gap: number; intoGroup: string | null } | null>(null);
+  const dragRef = useRef<DragState | null>(null);
 
   const handleGripDown = useCallback((e: React.PointerEvent, ri: number) => {
     e.preventDefault();
     e.stopPropagation();
-    dragRef.current = { from: ri, gap: ri, intoGroup: null };
-    setDragIndex(ri);
-    setDropGap(ri);
-    setDropIntoGroup(null);
+    const draggedEntry = displayList[ri];
+    if (!draggedEntry) return;
+    const draggedLayer = draggedEntry.layer;
+    const startX = e.clientX;
+    const current = currentDropTarget(layers, layerOrder, draggedLayer.id);
 
-    const draggedLayer = displayList[ri]?.layer;
+    dragRef.current = { slot: null, gap: null, intoGroup: null };
+    setDragIndex(ri);
+    setDropGap(null);
+    setDropDepth(null);
+    setDropIntoGroup(null);
 
     const onMove = (ev: PointerEvent) => {
       const list = listRef.current;
-      if (!list || !dragRef.current) return;
+      const drag = dragRef.current;
+      if (!list || !drag) return;
       const items = list.querySelectorAll(`.${styles.itemWrapper}`);
       let gap = items.length;
       let intoGroup: string | null = null;
@@ -111,11 +181,9 @@ export function useLayerDnd({
 
         if (relY < h) {
           const entry = displayList[i];
-          if (entry && isGroupLayer(entry.layer) && relY > h * 0.25 && relY < h * 0.75) {
-            if (draggedLayer && canMoveToGroup(layers, draggedLayer.id, entry.layer.id)) {
-              intoGroup = entry.layer.id;
-              gap = -1;
-            }
+          if (entry && isGroupLayer(entry.layer) && relY > h * 0.25 && relY < h * 0.75
+            && canMoveToGroup(layers, draggedLayer.id, entry.layer.id)) {
+            intoGroup = entry.layer.id;
           } else if (relY < h / 2) {
             gap = i;
           } else {
@@ -125,10 +193,29 @@ export function useLayerDnd({
         }
       }
 
-      dragRef.current.gap = gap;
-      dragRef.current.intoGroup = intoGroup;
-      setDropGap(intoGroup ? null : gap);
-      setDropIntoGroup(intoGroup);
+      if (intoGroup) {
+        const target: LayerDropTarget = { parentId: intoGroup, belowId: null };
+        const isNoop = isSameTarget(current, target);
+        drag.slot = isNoop ? null : { target, depth: draggedEntry.depth };
+        drag.gap = null;
+        drag.intoGroup = isNoop ? null : intoGroup;
+        setDropGap(null);
+        setDropDepth(null);
+        setDropIntoGroup(drag.intoGroup);
+        return;
+      }
+
+      // The root row is always first; nothing can be dropped above it.
+      gap = Math.max(1, gap);
+      const desiredDepth = draggedEntry.depth + Math.round((ev.clientX - startX) / DROP_DEPTH_STEP_PX);
+      const slot = resolveGapDrop(layers, displayList, draggedLayer.id, gap, desiredDepth);
+      const isNoop = !slot || isSameTarget(current, slot.target);
+      drag.slot = isNoop ? null : slot;
+      drag.gap = isNoop ? null : gap;
+      drag.intoGroup = null;
+      setDropGap(drag.gap);
+      setDropDepth(drag.slot ? drag.slot.depth : null);
+      setDropIntoGroup(null);
     };
 
     const onUp = () => {
@@ -138,61 +225,20 @@ export function useLayerDnd({
       dragRef.current = null;
       setDragIndex(null);
       setDropGap(null);
+      setDropDepth(null);
       setDropIntoGroup(null);
-      if (!drag || !draggedLayer) return;
-
-      if (drag.intoGroup) {
-        moveLayerToGroup(draggedLayer.id, drag.intoGroup);
-        return;
-      }
-
-      const { from, gap } = drag;
-      if (gap === from || gap === from + 1) return;
-
-      // Use the item BELOW the gap to determine which group the drop
-      // position belongs to. This prevents layers from being pulled into
-      // a group when dropped at its lower boundary.
-      const neighborIdx = gap < displayList.length ? gap : gap - 1;
-      const neighbor = displayList[neighborIdx];
-      const draggedParent = findParentGroup(layers, draggedLayer.id);
-
-      if (neighbor) {
-        let targetParentId: string | null = null;
-        const neighborParent = findParentGroup(layers, neighbor.layer.id);
-        if (neighborParent) {
-          targetParentId = neighborParent.id;
-        } else if (isGroupLayer(neighbor.layer)) {
-          targetParentId = neighbor.layer.id;
-        }
-
-        if (targetParentId && draggedParent && targetParentId !== draggedParent.id) {
-          // If the target parent is an ancestor of the dragged layer's
-          // current parent, the drop is "escaping outward" past a group
-          // boundary (e.g. below the group's last child). The flat
-          // reorder honors the drop gap and re-parents based on the
-          // neighbor above; jumping straight to moveLayerToGroup would
-          // ignore the gap and hoist the layer to the top of the parent
-          // stack (#788).
-          const isEscapingOutward = isAncestorOf(layers, targetParentId, draggedParent.id);
-          if (!isEscapingOutward && canMoveToGroup(layers, draggedLayer.id, targetParentId)) {
-            moveLayerToGroup(draggedLayer.id, targetParentId);
-            return;
-          }
-        }
-      }
-
-      const resolved = resolveDisplayDropIndices(layerOrder, displayList, from, gap);
-      if (!resolved) return;
-      onReorderLayer(resolved.fromIdx, resolved.toIdx);
+      if (!drag?.slot) return;
+      onDropLayer(draggedLayer.id, drag.slot.target);
     };
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
-  }, [layers, layerOrder, displayList, onReorderLayer, moveLayerToGroup]);
+  }, [layers, layerOrder, displayList, onDropLayer]);
 
   return {
     dragIndex,
     dropGap,
+    dropDepth,
     dropIntoGroup,
     editingOpacityId,
     setEditingOpacityId,
