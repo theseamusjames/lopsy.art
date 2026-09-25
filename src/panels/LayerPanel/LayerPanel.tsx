@@ -56,7 +56,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
     dragIndex, dropGap, dropIntoGroup,
     editingOpacityId, setEditingOpacityId,
     listRef, handleGripDown,
-  } = useLayerDnd({ displayList, layers, onReorderLayer, moveLayerToGroup });
+  } = useLayerDnd({ displayList, layers, layerOrder, onReorderLayer, moveLayerToGroup });
 
   const isRootGroup = useCallback((layerId: string) => layerId === rootGroupId, [rootGroupId]);
 

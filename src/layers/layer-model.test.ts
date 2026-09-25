@@ -7,6 +7,7 @@ import {
   duplicateLayer,
   duplicateOffsetForLayer,
   updateLayer,
+  DEFAULT_EFFECTS,
 } from './layer-model';
 import type { RasterLayer } from '../types';
 
@@ -20,6 +21,16 @@ describe('createRasterLayer', () => {
     expect(a.width).toBe(100);
     expect(a.visible).toBe(true);
     expect(a.opacity).toBe(1);
+  });
+});
+
+describe('DEFAULT_EFFECTS', () => {
+  // #831 — the drop shadow's Opacity slider goes to 100%, so its color
+  // alpha must not multiply the slider back down. The default color
+  // alpha stays at 1 so users can get a fully opaque shadow when
+  // Opacity is set to 100.
+  it('drop shadow default color alpha is 1 (#831)', () => {
+    expect(DEFAULT_EFFECTS.dropShadow.color.a).toBe(1);
   });
 });
 

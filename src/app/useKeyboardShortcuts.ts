@@ -23,6 +23,18 @@ import { makeTextGeometry } from '../tools/text/text-geometry';
 import { commitTextEditing } from '../tools/text/text-interaction';
 import { POINTER_IDLE, POINTER_SPACE_HELD, type PointerMode } from './pointer-mode';
 
+// Text-entry input types swallow global shortcuts; other input types
+// (range, checkbox, radio, color, button…) do not. Undefined `type`
+// defaults to 'text' per the HTML spec.
+const TEXT_ENTRY_INPUT_TYPES = new Set([
+  'text', 'search', 'url', 'email', 'password', 'tel', 'number',
+]);
+
+function isTextEntryInput(el: HTMLInputElement): boolean {
+  const t = (el.type || 'text').toLowerCase();
+  return TEXT_ENTRY_INPUT_TYPES.has(t);
+}
+
 // Fallback timer for browsers where the paste event may not fire on non-editable
 // elements (e.g. Firefox with canvas focus). The keydown handler schedules a
 // deferred internal paste; if the paste event fires, it cancels the timer.
@@ -100,13 +112,16 @@ export function useKeyboardShortcuts({
       const textEditing = useUIStore.getState().textEditing;
 
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        if (!textEditing) return;
-        const el = e.target as HTMLInputElement;
-        if (el.type === 'text' || el.type === 'number' || el.type === 'search'
-          || e.target instanceof HTMLTextAreaElement) {
-          return;
+        // #817 — only swallow shortcuts when a text-entry field has focus.
+        // Range sliders, checkboxes, radios etc. must not eat ⌘Z / tool keys.
+        const isTextEntry = e.target instanceof HTMLTextAreaElement
+          || isTextEntryInput(e.target as HTMLInputElement);
+        if (!textEditing) {
+          if (isTextEntry) return;
+        } else {
+          if (isTextEntry) return;
+          (e.target as HTMLInputElement).blur();
         }
-        el.blur();
       }
       if (textEditing) {
         if (e.key === 'Escape') {
@@ -255,7 +270,8 @@ export function useKeyboardShortcuts({
     // Fired by the browser's native paste event (Cmd+V keydown does NOT preventDefault,
     // so the paste event always fires).
     const handlePaste = (e: ClipboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLInputElement && isTextEntryInput(e.target)) return;
 
       // Cancel the fallback timer — the paste event fired as expected.
       cancelFallbackPaste();

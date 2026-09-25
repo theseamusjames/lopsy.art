@@ -146,10 +146,14 @@ const rerenderCoalesced = coalesceToAnimationFrame((layerId: string) => {
 
 /**
  * Refresh text after a web-font binary finishes downloading: re-render the
- * live-editing preview and/or the committed target layer that was changed, so
- * the glyphs switch from the Inter fallback to the real font (staying anchored).
+ * live-editing preview, the committed target layer that was changed, and
+ * every other committed text layer that uses the same family, so glyphs
+ * switch from the Inter fallback to the real font (staying anchored).
  */
-function refreshTextAfterFontLoad(target: { id: string; anchorX: number; anchorY: number } | null): void {
+function refreshTextAfterFontLoad(
+  target: { id: string; anchorX: number; anchorY: number } | null,
+  family?: string,
+): void {
   const engine = getEngine();
   if (!engine) return;
   const editor = useEditorStore.getState();
@@ -165,6 +169,8 @@ function refreshTextAfterFontLoad(target: { id: string; anchorX: number; anchorY
     return;
   }
 
+  const familyName = family ? extractFamilyName(family) : null;
+
   if (target) {
     const layer = editor.document.layers.find(
       (l): l is TextLayer => l.id === target.id && l.type === 'text',
@@ -174,9 +180,29 @@ function refreshTextAfterFontLoad(target: { id: string; anchorX: number; anchorY
       resetTextLayerLayout(engine, layer.id);
       const pos = placeTextLayerAtAnchor(engine, layer, target.anchorX, target.anchorY);
       if (pos) editor.updateTextLayerProperties(layer.id, { x: pos.x, y: pos.y });
-      editor.notifyRender();
     }
   }
+
+  // #836 — refresh any other committed text layer that shares the family
+  // that just finished loading. A layer typed and committed while the
+  // binary was still downloading is neither `editing` nor `target`, so
+  // without this it would stay in the Inter fallback forever.
+  if (familyName) {
+    for (const l of editor.document.layers) {
+      if (l.type !== 'text') continue;
+      if (target && l.id === target.id) continue;
+      if (extractFamilyName((l as TextLayer).fontFamily) !== familyName) continue;
+      if ((l as TextLayer).pathId) {
+        invalidatePathTextCache(l.id);
+        continue;
+      }
+      resetTextLayerLayout(engine, l.id);
+      const pos = placeTextLayerAtAnchor(engine, l as TextLayer, l.x, l.y);
+      if (pos) editor.updateTextLayerProperties(l.id, { x: pos.x, y: pos.y });
+    }
+  }
+
+  editor.notifyRender();
 }
 
 /**
@@ -256,6 +282,7 @@ export function applyTextFontFamily(family: string): void {
     if (!loaded) return;
     refreshTextAfterFontLoad(
       targetId && anchor ? { id: targetId, anchorX: anchor.anchorX, anchorY: anchor.anchorY } : null,
+      family,
     );
   });
 }
@@ -284,6 +311,7 @@ export function applyTextWeight(weight: number): void {
     if (!loaded) return;
     refreshTextAfterFontLoad(
       targetId && anchor ? { id: targetId, anchorX: anchor.anchorX, anchorY: anchor.anchorY } : null,
+      family,
     );
   });
 }

@@ -1,6 +1,6 @@
 import type { DocumentState } from '../../../types';
 import type { SparseLayerEntry, ActionResult } from '../types';
-import { getDescendantIds, isGroupLayer, removeFromParentGroup } from '../../../layers/group-utils';
+import { findParentGroup, getDescendantIds, isGroupLayer, removeFromParentGroup } from '../../../layers/group-utils';
 
 export function computeRemoveLayer(
   doc: DocumentState,
@@ -22,17 +22,20 @@ export function computeRemoveLayer(
     }
   }
 
+  // #819 — pick the deleted layer's sibling as the next active layer,
+  // so the panel selection stays where the user was working. Read the
+  // pre-remove parent so its child list still contains the deleted id.
+  const activeWasRemoved = idsToRemove.has(doc.activeLayerId ?? '');
+  const activeLayerId = activeWasRemoved
+    ? findNeighbourActiveId(doc, id, idsToRemove)
+    : doc.activeLayerId;
+
   // Remove from parent group's children
   let layers = removeFromParentGroup(doc.layers, id);
 
   // Filter out all removed IDs
   layers = layers.filter((l) => !idsToRemove.has(l.id));
   const layerOrder = doc.layerOrder.filter((lid) => !idsToRemove.has(lid));
-
-  const activeLayerId =
-    idsToRemove.has(doc.activeLayerId ?? '')
-      ? (layerOrder.find((lid) => !isGroupLayer(layers.find((l) => l.id === lid)!)) ?? layerOrder[layerOrder.length - 1] ?? null)
-      : doc.activeLayerId;
 
   const pixelData = new Map(layerPixelData);
   const sparse = new Map(sparseLayerData);
@@ -55,4 +58,51 @@ export function computeRemoveLayer(
     sparseLayerData: sparse,
     removedLayerIds: Array.from(idsToRemove),
   };
+}
+
+function findNeighbourActiveId(
+  doc: DocumentState,
+  removedId: string,
+  idsToRemove: ReadonlySet<string>,
+): string | null {
+  const parent = findParentGroup(doc.layers, removedId);
+  if (parent) {
+    const siblings = parent.children;
+    const idx = siblings.indexOf(removedId);
+    if (idx !== -1) {
+      for (let i = idx - 1; i >= 0; i--) {
+        const s = siblings[i];
+        if (s && !idsToRemove.has(s) && !isGroupOf(doc, s)) return s;
+      }
+      for (let i = idx + 1; i < siblings.length; i++) {
+        const s = siblings[i];
+        if (s && !idsToRemove.has(s) && !isGroupOf(doc, s)) return s;
+      }
+    }
+    if (!idsToRemove.has(parent.id) && parent.id !== doc.rootGroupId) {
+      return parent.id;
+    }
+  }
+  const remaining = doc.layerOrder.filter((lid) => !idsToRemove.has(lid));
+  const removedIdx = doc.layerOrder.indexOf(removedId);
+  if (removedIdx !== -1) {
+    for (let i = removedIdx - 1; i >= 0; i--) {
+      const lid = doc.layerOrder[i];
+      if (lid && !idsToRemove.has(lid) && !isGroupOf(doc, lid)) return lid;
+    }
+    for (let i = removedIdx + 1; i < doc.layerOrder.length; i++) {
+      const lid = doc.layerOrder[i];
+      if (lid && !idsToRemove.has(lid) && !isGroupOf(doc, lid)) return lid;
+    }
+  }
+  return (
+    remaining.find((lid) => !isGroupOf(doc, lid)) ??
+    remaining[remaining.length - 1] ??
+    null
+  );
+}
+
+function isGroupOf(doc: DocumentState, id: string): boolean {
+  const l = doc.layers.find((x) => x.id === id);
+  return !!l && isGroupLayer(l);
 }

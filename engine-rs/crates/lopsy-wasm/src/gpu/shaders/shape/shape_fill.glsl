@@ -122,7 +122,8 @@ void main() {
         d = sdRect(p, u_size * 0.5, u_cornerRadius);
     }
     float fill = 1.0 - smoothstep(-0.5, 0.5, d);
-    float stroke = 1.0 - smoothstep(u_strokeWidth - 0.5, u_strokeWidth + 0.5, abs(d));
+    float halfW = u_strokeWidth * 0.5;
+    float stroke = 1.0 - smoothstep(halfW - 0.5, halfW + 0.5, abs(d));
     vec4 color = u_fillColor * fill;
     if (u_strokeWidth > 0.0) color = mix(color, u_strokeColor, stroke * u_strokeColor.a);
     fragColor = color;

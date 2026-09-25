@@ -6,11 +6,32 @@ import {
 } from '../../../layers/layer-model';
 import { findParentGroup, addToGroup, isGroupLayer, getDescendantIds } from '../../../layers/group-utils';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import { duplicateLayerTexture } from '../../../engine-wasm/wasm-bridge';
+import { duplicateLayerTexture, getLayerContentBounds } from '../../../engine-wasm/wasm-bridge';
 
 function shiftLayer(layer: Layer, dx: number, dy: number): Layer {
   if (dx === 0 && dy === 0) return layer;
   return { ...layer, x: layer.x + dx, y: layer.y + dy } as Layer;
+}
+
+/**
+ * Return a layer descriptor with its content-cropped bounds patched in
+ * over the store's transiently-expanded ones. Used only for the
+ * duplicate-offset clamp so a raster whose texture was expanded to full
+ * document size (crop-on-leave / expand-on-return lifecycle) still gets
+ * the documented +10/+10 shift on Duplicate Layer (#835).
+ */
+function layerWithContentBounds(layer: Layer): Layer {
+  if (layer.type !== 'raster') return layer;
+  const engine = getEngine();
+  if (!engine) return layer;
+  const bounds = getLayerContentBounds(engine, layer.id);
+  if (!bounds || bounds.length < 4) return layer;
+  const cx = bounds[0]!;
+  const cy = bounds[1]!;
+  const cw = bounds[2]!;
+  const ch = bounds[3]!;
+  if (cw <= 0 || ch <= 0) return layer;
+  return { ...layer, x: cx, y: cy, width: cw, height: ch };
 }
 
 /**
@@ -40,7 +61,7 @@ export function computeDuplicateLayer(
     const descIds = getDescendantIds(doc.layers, activeId);
     const allIds = [activeId, ...descIds];
 
-    const { dx, dy } = duplicateOffsetForLayer(layer, doc.width, doc.height);
+    const { dx, dy } = duplicateOffsetForLayer(layerWithContentBounds(layer), doc.width, doc.height);
 
     for (const id of allIds) {
       const orig = doc.layers.find((l) => l.id === id);
@@ -84,7 +105,7 @@ export function computeDuplicateLayer(
   }
 
   // Simple layer duplication
-  const { dx, dy } = duplicateOffsetForLayer(layer, doc.width, doc.height);
+  const { dx, dy } = duplicateOffsetForLayer(layerWithContentBounds(layer), doc.width, doc.height);
   const newLayer = shiftLayer(duplicateLayerModel(layer), dx, dy);
   const newId = newLayer.id;
   const orderIdx = doc.layerOrder.indexOf(activeId);

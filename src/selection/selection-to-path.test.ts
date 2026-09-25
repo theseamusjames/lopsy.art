@@ -129,4 +129,30 @@ describe('selectionToPath', () => {
     // Should either return empty or very small path without throwing
     expect(() => selectionToPath(mask, W, H)).not.toThrow();
   });
+
+  // #821 — each anchor's handleIn must point away from the previous
+  // anchor (i.e. be on the opposite side of the anchor point from
+  // handleOut), not forward toward the next anchor. The pre-fix code
+  // stored `handleIn` at `next.x + tangentIn.x`, which put both handles
+  // on the same side and kinked every segment.
+  it('handleIn opposes handleOut about the anchor point (#821)', () => {
+    const W = 200;
+    const H = 200;
+    const mask = createEllipseSelection({ x: 40, y: 40, width: 120, height: 120 }, W, H);
+
+    const anchors = selectionToPath(mask, W, H, 2);
+    // Closed path: every anchor has both handles.
+    const bothHandles = anchors.filter((a) => a.handleIn && a.handleOut);
+    expect(bothHandles.length).toBe(anchors.length);
+
+    for (const a of bothHandles) {
+      const dxIn = a.handleIn!.x - a.point.x;
+      const dyIn = a.handleIn!.y - a.point.y;
+      const dxOut = a.handleOut!.x - a.point.x;
+      const dyOut = a.handleOut!.y - a.point.y;
+      // handleIn and handleOut are mirrored: same magnitude, opposite direction.
+      expect(dxIn).toBeCloseTo(-dxOut, 5);
+      expect(dyIn).toBeCloseTo(-dyOut, 5);
+    }
+  });
 });

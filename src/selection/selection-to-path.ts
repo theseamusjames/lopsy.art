@@ -213,17 +213,12 @@ function catmullRomToAnchors(pts: Point[], closed: boolean): PathAnchor[] {
     const prev = pts[(i - 1 + n) % n]!;
     const curr = pts[i]!;
     const next = pts[(i + 1) % n]!;
-    const next2 = pts[(i + 2) % n]!;
 
-    // Catmull-Rom tangent at curr (for handleOut)
-    // and tangent at next (for handleIn of next anchor)
+    // Catmull-Rom tangents at curr. Both handles anchor to curr;
+    // handleIn points back toward prev (opposite direction of handleOut).
     const tangentOut: Point = {
       x: (next.x - prev.x) * alpha,
       y: (next.y - prev.y) * alpha,
-    };
-    const tangentIn: Point = {
-      x: (curr.x - next2.x) * alpha,
-      y: (curr.y - next2.y) * alpha,
     };
 
     // For an open path, clamp first/last anchors to have null handles
@@ -233,7 +228,7 @@ function catmullRomToAnchors(pts: Point[], closed: boolean): PathAnchor[] {
     anchors.push({
       point: { x: curr.x, y: curr.y },
       handleOut: isFirst || isLast ? null : { x: curr.x + tangentOut.x, y: curr.y + tangentOut.y },
-      handleIn: isFirst || isLast ? null : { x: next.x + tangentIn.x, y: next.y + tangentIn.y },
+      handleIn: isFirst || isLast ? null : { x: curr.x - tangentOut.x, y: curr.y - tangentOut.y },
     });
   }
 
