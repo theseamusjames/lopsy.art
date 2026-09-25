@@ -153,6 +153,25 @@ against a copy of the destination instead, and resample with
 `gpu/shaders/premul_sample.glsl`). The group-adjustment scratch is also
 straight alpha — blend it with `premultiplied = false`.
 
+## Read layer texture size AFTER ensure_layer_full_size, not before (#848)
+
+`apply_filter`/`apply_filter_inner` (filter_gpu.rs) call
+`engine.ensure_layer_full_size(layer_id)` internally, but only right
+before they read the layer texture for the actual pass. If a caller
+reads `texture_pool.get_size(tex_handle)` *before* invoking
+`apply_filter` — e.g. to compute a shader uniform like
+`u_layerSize` — it sees the lazy 1x1 placeholder size on a
+never-painted layer, not the doc-sized texture `apply_filter` is about
+to expand it to. `filter_pattern_fill` (api/filter/render.rs) had
+exactly this bug: `u_layerSize=(1,1)` made every fragment sample the
+pattern texture's first texel, producing a solid block instead of a
+tile. Fix: call `ensure_layer_full_size` (or `ensure_layer_covers`,
+both idempotent no-ops when already correct) yourself before reading
+the size, same as the precedent fix in `fill_with_color` (#765). Other
+call sites that read `texture_pool.get_size` directly are safe only if
+they don't need that size *before* delegating to `apply_filter` /
+`apply_separable_blur`.
+
 ## E2E: prove "no GPU readback on this event" by counting readPixels
 
 `window.__wasmBridge` is an ES module namespace — wrapping its exports
