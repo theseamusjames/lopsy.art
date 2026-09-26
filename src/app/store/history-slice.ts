@@ -1,4 +1,4 @@
-import type { HistorySnapshot, SliceCreator } from './types';
+import type { HistorySnapshot, SelectionData, SliceCreator } from './types';
 import type { Layer } from '../../types';
 import { EMPTY_HANDLE, restoreLayerGpu, type LayerHistoryBefore } from './layer-gpu-capture';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -13,6 +13,8 @@ import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 import { cancelPrefloat } from '../interactions/prefloat';
 import { snapshotGpuMasks, withCurrentMaskStaleness, restoreMasksAfterUndo } from './mask-history';
+import { useUIStore } from '../ui-store';
+import { createTransformState } from '../../tools/transform/transform';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -248,6 +250,25 @@ function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
   }
 }
 
+/**
+ * The transform-handle overlay (`uiStore.transform`) is a separate store
+ * from the undo/redo stack, so restoring a snapshot's `selection` here
+ * doesn't touch it. Left alone, the handle box (and its `originalBounds`
+ * pivot) stays at wherever a Move/Transform gesture last drew it — even
+ * after undo/redo has moved the real selection and pixels elsewhere (#871).
+ * Only resync a transform that's already showing; this never conjures one
+ * for a selection nothing was transforming.
+ */
+function syncTransformAfterHistoryRestore(selection: SelectionData): void {
+  const uiState = useUIStore.getState();
+  if (!uiState.transform) return;
+  if (selection.active) {
+    uiState.setTransform(createTransformState(selection.bounds, uiState.transform.mode));
+  } else {
+    uiState.setTransform(null);
+  }
+}
+
 export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   undoStack: [],
   redoStack: [],
@@ -349,6 +370,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       const restored = get();
       syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
     }
+    syncTransformAfterHistoryRestore(target.selection);
   },
 
   redoBy: (steps: number) => {
@@ -430,6 +452,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       const restored = get();
       syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
     }
+    syncTransformAfterHistoryRestore(target.selection);
   },
 
   pushHistory: (label = 'Edit', before) => {
