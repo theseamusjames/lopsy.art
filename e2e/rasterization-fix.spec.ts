@@ -260,6 +260,23 @@ async function getPixelFromGpu(page: Page, x: number, y: number, layerId?: strin
   }, { x, y, lid: layerId ?? null });
 }
 
+async function getPixelFromGpuBuffer(page: Page, layerId: string) {
+  return page.evaluate(async (lid) => {
+    const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+    return readFn(lid);
+  }, layerId);
+}
+
+function countOpaque(px: { pixels: number[] } | null): number {
+  if (!px) return 0;
+  let n = 0;
+  for (let i = 3; i < px.pixels.length; i += 4) {
+    if ((px.pixels[i] ?? 0) > 10) n++;
+  }
+  return n;
+}
+
 async function getLayerPixelDataSizeFromGpu(page: Page, layerId: string) {
   return page.evaluate(async (lid) => {
     const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
@@ -412,6 +429,69 @@ test.describe('Rasterize Layer Style', () => {
     const sizeAfterUndo = await getLayerPixelDataSize(page, layerId);
     expect(sizeAfterUndo.width).toBe(sizeBefore.width);
     expect(sizeAfterUndo.height).toBe(sizeBefore.height);
+  });
+
+  // #903: pushHistory used to run AFTER computeRasterizeStyle already baked
+  // the effect into the GPU texture, so the undo snapshot captured the
+  // POST-bake texture alongside the pre-bake ("effects enabled") metadata.
+  // Undo re-enabled the live effect on top of pixels that already had it
+  // baked in — e.g. a drop shadow rendered a second time over its own
+  // baked shadow. `sizeAfterUndo` above (a JS-side, metadata-derived size)
+  // doesn't catch this; only a GPU pixel-content readback does, matching
+  // the diagnostic in the issue report.
+  test('undo restores the pre-bake pixels, not a double-baked shadow (#903)', async ({ page }) => {
+    await createDocument(page, 400, 300, true);
+    const state = await getEditorState(page);
+    const layerId = state.document.activeLayerId;
+
+    await setActiveLayer(page, layerId);
+    await drawRect(page, 100, 100, 120, 80, { r: 255, g: 0, b: 0 });
+
+    await setActiveLayer(page, layerId);
+    await configureEffectUI(page, 'Drop Shadow', {
+      'Offset X': 20,
+      'Offset Y': 20,
+      'Blur': 0,
+      'Opacity': 100,
+    });
+    await setEffectColorUI(page, 'Shadow color', 0, 0, 0);
+    await closeEffectsPanel(page);
+
+    const preBake = await getPixelFromGpuBuffer(page, layerId);
+    const preBakeOpaque = countOpaque(preBake);
+    // Just the filled rectangle — no shadow baked into the layer yet.
+    expect(preBakeOpaque).toBe(120 * 80);
+
+    await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { rasterizeLayerStyle: () => void };
+      };
+      store.getState().rasterizeLayerStyle();
+    });
+    await page.waitForTimeout(200);
+
+    const afterRasterizeState = await getEditorState(page);
+    expect(afterRasterizeState.document.layers.find((l) => l.id === layerId)!.effects.dropShadow.enabled).toBe(false);
+
+    const postBake = await getPixelFromGpuBuffer(page, layerId);
+    const postBakeOpaque = countOpaque(postBake);
+    // The baked shadow adds opaque area beyond the original rectangle.
+    expect(postBakeOpaque).toBeGreaterThan(preBakeOpaque);
+
+    await page.keyboard.press(`${mod}+KeyZ`);
+    await page.waitForTimeout(200);
+
+    const afterUndoState = await getEditorState(page);
+    const undoneLayer = afterUndoState.document.layers.find((l) => l.id === layerId)!;
+    expect(undoneLayer.effects.dropShadow.enabled).toBe(true);
+
+    const afterUndo = await getPixelFromGpuBuffer(page, layerId);
+    const afterUndoOpaque = countOpaque(afterUndo);
+
+    // The core regression check: undo must NOT leave the baked (post-bake)
+    // pixels on the layer — it must go back to the pre-bake content.
+    expect(afterUndoOpaque).not.toBe(postBakeOpaque);
+    expect(afterUndoOpaque).toBe(preBakeOpaque);
   });
 
   test('rasterize does nothing when no effects are enabled', async ({ page }) => {
