@@ -4,7 +4,7 @@ import { useEditorStore } from './editor-store';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { strokeCurrentPath } from './useCanvasInteraction';
 import { getEngine } from '../engine-wasm/engine-state';
-import { clipboardCut, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
+import { clearSelectedPixels, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
@@ -398,13 +398,10 @@ function handleDeleteKey(): void {
     setSelectionMask(engine, maskBytes, selNow.maskWidth, selNow.maskHeight);
 
     editor.pushHistory('Clear Selection');
-    const bx = selNow.bounds ? Math.round(selNow.bounds.x) : 0;
-    const by = selNow.bounds ? Math.round(selNow.bounds.y) : 0;
-    const bw = selNow.bounds ? Math.round(selNow.bounds.width) : 0;
-    const bh = selNow.bounds ? Math.round(selNow.bounds.height) : 0;
-    // GPU-side clear: uses clipboardCut which copies then clears.
-    // We discard the clipboard result — we just want the clear.
-    clipboardCut(engine, activeId, true, bx, by, bw, bh);
+    // Clear only — clipboardCut would also re-copy into the retained
+    // internal clipboard as a side effect, clobbering a paste-in-place
+    // copy made earlier with ⌘C/⌘X (see #870).
+    clearSelectedPixels(engine, activeId, true);
     clearJsPixelData(activeId);
     editor.notifyRender();
   } else {
