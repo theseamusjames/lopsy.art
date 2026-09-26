@@ -256,11 +256,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     applyActionResult(set, result);
     // clearEngine() released the GPU clipboard texture; drop the stale JS
     // clipboard so a subsequent paste doesn't operate on a freed texture.
-    set({ documentVersion: get().documentVersion + 1, clipboard: null });
+    // Paths belong to the old document's coordinate space, so they must not
+    // survive into the new one (Paths panel, Text path dropdown, overlay).
+    set({ documentVersion: get().documentVersion + 1, clipboard: null, paths: [], selectedPathId: null });
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
     useUIStore.getState().clearGuides();
+    useUIStore.getState().clearPath();
 
     // Match convertColorMode: the swatches must sit in the new document's
     // value space, or a fresh Grayscale doc opens showing a saturated color.
@@ -279,12 +282,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     clearEngine();
     const result = computeOpenImage(imageData, name);
     applyActionResult(set, result);
-    // See createDocument: the GPU clipboard texture is gone after clearEngine().
-    set({ documentVersion: get().documentVersion + 1, clipboard: null });
+    // See createDocument: the GPU clipboard texture is gone after
+    // clearEngine(), and paths belong to the old document's coordinate space.
+    set({ documentVersion: get().documentVersion + 1, clipboard: null, paths: [], selectedPathId: null });
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
     useUIStore.getState().clearGuides();
+    useUIStore.getState().clearPath();
   },
 
   addLayer: () => {
