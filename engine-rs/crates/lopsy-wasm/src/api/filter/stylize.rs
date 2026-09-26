@@ -53,6 +53,17 @@ pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, densi
 
 #[wasm_bindgen(js_name = "filterKaleidoscope")]
 pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, rotation_degrees: f32) {
+    // Kaleidoscope's polar math needs the texture's pixel dimensions to stay
+    // isotropic on non-square layers (see kaleidoscope.glsl). Resize up front
+    // (apply_filter does this too, but only after we'd already read the size)
+    // so the uniform matches the texture the shader actually runs against.
+    let _ = engine.inner.ensure_layer_full_size(layer_id);
+    let tex_handle = match engine.inner.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+
     filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
@@ -63,6 +74,9 @@ pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, r
             }
             if let Some(loc) = shader.location(gl, "u_rotation") {
                 gl.uniform1f(Some(&loc), rotation_degrees.to_radians());
+            }
+            if let Some(loc) = shader.location(gl, "u_size") {
+                gl.uniform2f(Some(&loc), w as f32, h as f32);
             }
         },
     );

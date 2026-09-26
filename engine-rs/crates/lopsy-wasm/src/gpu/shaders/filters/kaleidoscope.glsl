@@ -4,14 +4,17 @@ in vec2 v_uv;
 uniform sampler2D u_tex;
 uniform float u_segments;  // number of mirror segments (2 - 32)
 uniform float u_rotation;  // rotation offset in radians
+uniform vec2 u_size;       // texture size in pixels, for aspect-correct polar math
 out vec4 fragColor;
 
 const float PI = 3.14159265359;
 
 void main() {
-    // Polar coordinates relative to image center
+    // Polar coordinates relative to image center, in pixel space so a unit
+    // of angle/radius means the same physical distance on both axes — UV
+    // space alone stretches non-square layers along the long axis.
     vec2 center = vec2(0.5, 0.5);
-    vec2 pos = v_uv - center;
+    vec2 pos = (v_uv - center) * u_size;
     float r = length(pos);
     float theta = atan(pos.y, pos.x);
 
@@ -23,10 +26,10 @@ void main() {
         folded = segAngle - folded;
     }
 
-    // Project back to Cartesian. We add the rotation back so the whole
-    // kaleidoscope can be spun as a unit.
+    // Project back to Cartesian in pixel space, then back to UV for sampling.
+    // We add the rotation back so the whole kaleidoscope can be spun as a unit.
     float sampleTheta = folded + u_rotation;
-    vec2 sampled = center + vec2(cos(sampleTheta), sin(sampleTheta)) * r;
+    vec2 sampled = center + (vec2(cos(sampleTheta), sin(sampleTheta)) * r) / u_size;
 
     // Outside the source image → transparent so the effect doesn't wrap
     // garbage from clamp-to-edge sampling.
