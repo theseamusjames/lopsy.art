@@ -78,8 +78,15 @@ export function Slider({
   const knobMin = Math.max(min, sliderMin ?? min);
   const knobMax = Math.min(max, sliderMax ?? max);
 
+  // The value box, its arrow keys, and double-click-reset each apply a
+  // single discrete change rather than a continuous drag, but callers that
+  // rely on onDragStart/onCommit to bracket a change with history (e.g. text
+  // layer restyles, #846) need that bracketing here too — a drag on the
+  // range input isn't the only way to change a value.
   const handleDoubleClick = () => {
+    onDragStart?.();
     onChange(defaultValue ?? min);
+    onCommit?.();
   };
 
   const handleBlur = useCallback(() => {
@@ -90,9 +97,11 @@ export function Slider({
     } else {
       const clamped = clamp(parsed, min, max);
       setLocalValue(String(clamped));
+      onDragStart?.();
       onChange(clamped);
+      onCommit?.();
     }
-  }, [localValue, value, min, max, onChange]);
+  }, [localValue, value, min, max, onChange, onDragStart, onCommit]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -102,17 +111,21 @@ export function Slider({
         e.preventDefault();
         const raw = scale === 'log' ? nextValueLog(value, step, min, max) : value + step;
         const next = clamp(raw, min, max);
+        onDragStart?.();
         onChange(next);
+        onCommit?.();
         setLocalValue(String(next));
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
         const raw = scale === 'log' ? nextValueLog(value, step, min, max) : value - step;
         const next = clamp(raw, min, max);
+        onDragStart?.();
         onChange(next);
+        onCommit?.();
         setLocalValue(String(next));
       }
     },
-    [value, step, onChange, scale, min, max],
+    [value, step, onChange, scale, min, max, onDragStart, onCommit],
   );
 
   const knobPosition = sliderKnobPosition(value, knobMin, knobMax, scale);

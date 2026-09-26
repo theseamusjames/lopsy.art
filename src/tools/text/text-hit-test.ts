@@ -21,13 +21,22 @@ export function hitTestTextLayer(
     // estimate from text length.
     const lines = textLayer.text.split('\n');
     const isVertical = textLayer.vertical ?? false;
+    // Point text has no explicit width, so estimate from character count — but
+    // a multi-line layer's LONGEST line drives the on-screen width, not the
+    // total character count across every line (#845; a 3-line layer with
+    // short lines was hit-testing as wide as all three lines end-to-end).
+    const longestLineLength = Math.max(1, ...lines.map((l) => l.length));
     const estimatedWidth = isVertical
       ? Math.max(1, lines.length) * textLayer.fontSize * textLayer.lineHeight
-      : textLayer.width ?? textLayer.text.length * textLayer.fontSize * 0.6;
+      : textLayer.width ?? longestLineLength * textLayer.fontSize * 0.6;
+    // paragraphSpacing widens the gap between hard lines (see text_gpu.rs's
+    // `para_y = para * run.line_i`), so it contributes once per gap between
+    // lines, not once per line.
     const estimatedHeight = isVertical
       ? Math.max(1, ...lines.map((l) => Array.from(l).length)) *
           (textLayer.fontSize + textLayer.letterSpacing)
-      : textLayer.fontSize * textLayer.lineHeight * (lines.length || 1);
+      : textLayer.fontSize * textLayer.lineHeight * (lines.length || 1) +
+          textLayer.paragraphSpacing * Math.max(0, lines.length - 1);
     if (
       canvasPos.x >= layerX &&
       canvasPos.x <= layerX + estimatedWidth &&
