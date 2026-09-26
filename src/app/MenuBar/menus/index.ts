@@ -4,7 +4,7 @@ import type { DocumentColorMode } from '../../../types';
 import { fileMenu } from './file-menu';
 import { createEditMenu } from './edit-menu';
 import { createImageMenu, type ImageDialogId } from './image-menu';
-import { layerMenu } from './layer-menu';
+import { createLayerMenu } from './layer-menu';
 import { createSelectMenu, type SelectDialogId } from './select-menu';
 import { createFilterMenu } from './filter-menu';
 import { createPathMenu } from './path-menu';
@@ -28,7 +28,7 @@ export function getMenus(
     fileMenu,
     createEditMenu(showFilterDialog),
     createImageMenu(showImageDialog, colorMode, convertColorMode),
-    layerMenu,
+    createLayerMenu(),
     createSelectMenu(showSelectDialog),
     createFilterMenu(showFilterDialog),
     createPathMenu(),

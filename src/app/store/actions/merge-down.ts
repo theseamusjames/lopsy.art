@@ -9,6 +9,27 @@ import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import { invalidateBitmapCache } from '../../../engine/bitmap-cache';
 
 /**
+ * Whether Merge Down can run for the document's current active layer.
+ *
+ * A group has no raster texture to composite into, so `mergeLayers`
+ * against one is a no-op on the GPU that would otherwise still drop the
+ * active layer from `layerOrder` as if it had succeeded (#879). Shared
+ * by `computeMergeDown`'s own guard and by the Layer menu / keyboard
+ * shortcut's disabled state so both agree on when merging is valid.
+ */
+export function canMergeDown(doc: DocumentState): boolean {
+  const activeId = doc.activeLayerId;
+  if (!activeId) return false;
+  const orderIdx = doc.layerOrder.indexOf(activeId);
+  if (orderIdx <= 0) return false;
+  const belowId = doc.layerOrder[orderIdx - 1];
+  if (!belowId) return false;
+  const belowLayer = doc.layers.find((l) => l.id === belowId);
+  if (!belowLayer) return false;
+  return belowLayer.type !== 'group';
+}
+
+/**
  * Merge the active layer into the layer below it on the GPU.
  *
  * `mergeLayers` composites top onto bottom on the GPU — no pixel data
@@ -30,6 +51,11 @@ export function computeMergeDown(
   const topLayer = doc.layers.find((l) => l.id === activeId);
   const bottomLayer = doc.layers.find((l) => l.id === belowId);
   if (!topLayer || !bottomLayer) return undefined;
+
+  // #879: refuse rather than merge onto a group — a group has no raster
+  // texture, so `mergeLayers` would composite into nothing while the code
+  // below still dropped the active layer, silently destroying its pixels.
+  if (bottomLayer.type === 'group') return undefined;
 
   const engine = getEngine();
   if (engine) {

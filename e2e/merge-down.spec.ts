@@ -392,4 +392,100 @@ test.describe('Merge Down', () => {
     const after = await getEditorState(page);
     expect(after.document.layers).toHaveLength(3);
   });
+
+  // #879: merging onto a group must never silently drop the active
+  // layer's pixels. Repro: 400x300 doc (ships with Background + Layer 1),
+  // paint red on Layer 1, insert a group directly below it via the
+  // Layers panel's "New Group" button, then try to merge Layer 1 down.
+  test.describe('onto a group (#879)', () => {
+    async function setUpLayerAboveGroup(page: Page) {
+      await createDocument(page, 400, 300, false);
+
+      const initial = await getEditorState(page);
+      const bgId = initial.document.layers[0]!.id;
+      const layer1Id = initial.document.layers[1]!.id;
+      expect(initial.document.activeLayerId).toBe(layer1Id);
+
+      // Paint a red rectangle on Layer 1 while it's active by default.
+      await drawRect(page, 0, 0, 50, 50, { r: 255, g: 0, b: 0 });
+
+      // Select Background, then insert a new group directly above it —
+      // this lands the group between Background and Layer 1 in stacking
+      // order, matching the issue's repro ("Layer 1 / Group / Background").
+      await setActiveLayer(page, bgId);
+      await page.locator('[aria-label="New Group"]').click();
+
+      const afterGroup = await getEditorState(page);
+      const groupId = afterGroup.document.activeLayerId;
+      expect(groupId).not.toBe(bgId);
+      expect(groupId).not.toBe(layer1Id);
+
+      // Click Layer 1's row to make it active again.
+      await setActiveLayer(page, layer1Id);
+
+      return { bgId, layer1Id, groupId: groupId! };
+    }
+
+    test('Merge Down menu item is disabled when the layer below is a group', async ({ page }) => {
+      const { layer1Id } = await setUpLayerAboveGroup(page);
+
+      await page.locator('nav[aria-label="Application menu"]').locator('button:has-text("Layer")').click();
+      await page.waitForTimeout(100);
+
+      const mergeDownItem = page.locator('[role="menu"][aria-label="Layer"]').locator('button:has-text("Merge Down")');
+      await expect(mergeDownItem).toHaveAttribute('aria-disabled', 'true');
+
+      const before = await getEditorState(page);
+
+      // Clicking a disabled menu item must be a genuine no-op: no action
+      // runs and the menu (which only closes on a successful action)
+      // stays open. The item has no `pointer-events: none` (only
+      // `aria-disabled` + a CSS style change), so a real mouse click at
+      // its coordinates does land on it — Playwright's own `.click()`
+      // won't do this because it treats `aria-disabled` as "not enabled"
+      // and waits forever, so drive it with `page.mouse` instead to
+      // exercise the app's own disabled guard rather than Playwright's.
+      const box = await mergeDownItem.boundingBox();
+      if (!box) throw new Error('Merge Down menu item has no bounding box');
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(page.locator('[role="menu"][aria-label="Layer"]')).toBeVisible();
+
+      const after = await getEditorState(page);
+      expect(after.document.layers).toHaveLength(before.document.layers.length);
+      expect(after.document.layerOrder).toEqual(before.document.layerOrder);
+      expect(after.document.activeLayerId).toBe(layer1Id);
+      expect(after.undoStack).toBe(before.undoStack);
+
+      await page.keyboard.press('Escape');
+    });
+
+    test('keyboard shortcut does not drop Layer 1 or its pixels when the layer below is a group', async ({ page }) => {
+      const { bgId, layer1Id, groupId } = await setUpLayerAboveGroup(page);
+
+      const before = await getEditorState(page);
+
+      await page.keyboard.press(`${mod}+KeyE`);
+
+      const after = await getEditorState(page);
+      // Nothing was merged, dropped, or renamed — the whole document is
+      // untouched, not just "recoverable via undo".
+      expect(after.document.layers).toHaveLength(before.document.layers.length);
+      expect(after.document.layerOrder).toEqual(before.document.layerOrder);
+      expect(after.document.activeLayerId).toBe(layer1Id);
+      expect(after.undoStack).toBe(before.undoStack);
+      expect(after.document.layers.map((l) => l.id).sort()).toEqual(
+        before.document.layers.map((l) => l.id).sort(),
+      );
+      expect(after.document.layers.some((l) => l.id === bgId)).toBe(true);
+      expect(after.document.layers.some((l) => l.id === groupId)).toBe(true);
+
+      // Layer 1's red content must still be there — the whole point of
+      // the guard is that it's never silently composited away.
+      const layer1Pixel = await getPixelAt(page, 10, 10, layer1Id);
+      expect(layer1Pixel.r).toBe(255);
+      expect(layer1Pixel.g).toBe(0);
+      expect(layer1Pixel.b).toBe(0);
+      expect(layer1Pixel.a).toBe(255);
+    });
+  });
 });
