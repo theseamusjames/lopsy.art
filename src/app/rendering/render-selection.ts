@@ -12,7 +12,22 @@ export interface SelectionData {
 }
 
 let cachedMaskRef: Uint8ClampedArray | null = null;
-let cachedContours: number[][] = [];
+// Built once per mask (not per frame) so an animated antPhase never re-traces
+// contours or re-issues a beginPath()/stroke() pair per contour. With
+// thousands of islands (e.g. a non-contiguous wand pick on a noisy texture),
+// stroking per-contour was ~40k stroke() calls/frame — see #923.
+let cachedPath: Path2D | null = null;
+
+function buildContourPath(contours: number[][]): Path2D {
+  const path = new Path2D();
+  for (const pts of contours) {
+    path.moveTo(pts[0]!, pts[1]!);
+    for (let i = 2; i < pts.length; i += 2) {
+      path.lineTo(pts[i]!, pts[i + 1]!);
+    }
+  }
+  return path;
+}
 
 export function renderSelectionAnts(
   ctx: CanvasRenderingContext2D,
@@ -24,11 +39,12 @@ export function renderSelectionAnts(
   if (!selection.active || !selection.mask) return;
 
   if (selection.mask !== cachedMaskRef) {
-    cachedContours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight, selection.bounds);
+    const contours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight, selection.bounds);
+    cachedPath = contours.length > 0 ? buildContourPath(contours) : null;
     cachedMaskRef = selection.mask;
   }
 
-  if (cachedContours.length === 0) return;
+  if (!cachedPath) return;
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
@@ -49,25 +65,14 @@ export function renderSelectionAnts(
 
   const offset = (antPhase % 120) / 120 * dashLen * 2;
 
-  const drawContours = () => {
-    for (const pts of cachedContours) {
-      ctx.beginPath();
-      ctx.moveTo(pts[0]!, pts[1]!);
-      for (let i = 2; i < pts.length; i += 2) {
-        ctx.lineTo(pts[i]!, pts[i + 1]!);
-      }
-      ctx.stroke();
-    }
-  };
-
   ctx.setLineDash([]);
   ctx.strokeStyle = '#000000';
-  drawContours();
+  ctx.stroke(cachedPath);
 
   ctx.setLineDash([dashLen, dashLen]);
   ctx.lineDashOffset = -offset;
   ctx.strokeStyle = '#ffffff';
-  drawContours();
+  ctx.stroke(cachedPath);
 
   ctx.restore();
 }
