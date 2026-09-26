@@ -108,8 +108,10 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   // Update document size on the engine
   setDocumentSize(engine, newWidth, newHeight);
 
-  // GPU-side rotate invalidates every layer's JS cache.
-  pixelDataManager.clearAll();
+  // GPU-side rotate invalidates every layer's JS cache. clearAll() is a
+  // one-shot (see its call sites in history-slice.ts) and would go silent
+  // on a second consecutive rotate — use invalidateLayers() instead (#918).
+  pixelDataManager.invalidateLayers(newLayers.map((l) => l.id));
   useEditorStore.setState({
     document: {
       ...doc,

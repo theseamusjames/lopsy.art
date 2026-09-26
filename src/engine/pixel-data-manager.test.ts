@@ -142,6 +142,54 @@ describe('PixelDataManager', () => {
     expect(mgr.version()).toBe(v);
   });
 
+  it('invalidateLayers bumps and notifies on every call, even back-to-back with nothing cached (#918)', () => {
+    // Undo/redo restores a GPU snapshot without ever touching the JS
+    // cache, so `layerVersions` and both data maps are typically already
+    // empty by the time invalidateLayers() runs. A second consecutive
+    // undo (e.g. undoing straight through a metadata-only history entry)
+    // must still bump and notify, unlike clearAll() which goes silent
+    // once its maps are drained.
+    let calls = 0;
+    mgr.subscribe(() => { calls++; });
+
+    mgr.invalidateLayers(['a']);
+    const afterFirst = mgr.versionOf('a');
+    expect(calls).toBe(1);
+
+    mgr.invalidateLayers(['a']);
+    const afterSecond = mgr.versionOf('a');
+    expect(calls).toBe(2);
+    expect(afterSecond).toBeGreaterThan(afterFirst);
+  });
+
+  it('invalidateLayers keeps incrementing a layer version across repeated calls, unlike clearAll', () => {
+    mgr.setDense('a', makeImageData());
+    // clearAll() bumps once then drains layerVersions — a second call is a
+    // silent no-op because there is nothing left to bump.
+    mgr.clearAll();
+    const afterClearAll = mgr.versionOf('a');
+    mgr.clearAll();
+    expect(mgr.versionOf('a')).toBe(afterClearAll);
+
+    mgr.setDense('a', makeImageData());
+    mgr.invalidateLayers(['a']);
+    const afterFirstInvalidate = mgr.versionOf('a');
+    mgr.invalidateLayers(['a']);
+    expect(mgr.versionOf('a')).toBeGreaterThan(afterFirstInvalidate);
+  });
+
+  it('invalidateLayers drops cached data and pruned layerVersions entries for layers no longer given', () => {
+    mgr.setDense('a', makeImageData());
+    mgr.setSparse('b', makeSparse());
+    mgr.invalidateLayers(['a']);
+    expect(mgr.hasDense('a')).toBe(false);
+    expect(mgr.hasSparse('b')).toBe(false);
+    // 'b' was dropped entirely (not kept in the invalidated set), so it
+    // reverts to the default version instead of accumulating forever.
+    expect(mgr.versionOf('b')).toBe(0);
+    expect(mgr.versionOf('a')).toBeGreaterThan(0);
+  });
+
   it('subscribers fire on every mutation and can unsubscribe', () => {
     let count = 0;
     const unsub = mgr.subscribe(() => { count++; });
