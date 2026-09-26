@@ -7,20 +7,35 @@ import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import { invalidateBitmapCache } from '../../../engine/bitmap-cache';
 
 /**
+ * Whether the active layer has anything for `computeRasterizeStyle` to bake.
+ * Pure metadata check — no GPU mutation. Callers use this to decide whether
+ * to push a history entry *before* calling `computeRasterizeStyle`, since
+ * that function bakes pixels to the GPU as a side effect (#903).
+ */
+export function canRasterizeLayerStyle(doc: DocumentState): boolean {
+  const activeId = doc.activeLayerId;
+  if (!activeId) return false;
+  const layer = doc.layers.find((l) => l.id === activeId);
+  if (!layer || !hasEnabledEffects(layer.effects)) return false;
+  return getEngine() !== null;
+}
+
+/**
  * Rasterize the active layer's effects into its own texture.
  *
  * The read + upload happens entirely GPU-side via
  * `rasterizeLayerEffects` + `uploadLayerPixels`; no JS-side pixel
  * buffer is threaded through (#746). The caller does not need to
  * `resolveAllPixelData` beforehand or `syncPixelDataToGpu` afterward.
+ *
+ * This mutates the GPU texture directly, so the caller must call
+ * `pushHistory` beforehand — see `canRasterizeLayerStyle` (#903).
  */
 export function computeRasterizeStyle(
   doc: DocumentState,
 ): ActionResult | undefined {
-  const activeId = doc.activeLayerId;
-  if (!activeId) return undefined;
-  const layer = doc.layers.find((l) => l.id === activeId);
-  if (!layer || !hasEnabledEffects(layer.effects)) return undefined;
+  if (!canRasterizeLayerStyle(doc)) return undefined;
+  const activeId = doc.activeLayerId as string;
 
   const engine = getEngine();
   if (!engine) return undefined;

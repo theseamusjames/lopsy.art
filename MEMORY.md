@@ -13,6 +13,32 @@ thing to check. Marching-ants / text-cursor animation deliberately does
 NOT dirty the engine — it repaints only the 2D overlay canvas via
 `renderOverlayFrame()`.
 
+## `pushHistory` must run BEFORE any GPU pixel mutation, not after
+
+`pushHistory()` snapshots whatever is *currently* on the GPU for the
+active/dirty layers at the moment it's called — it does not take a
+"before" document/pixels argument (except the `before` GPU-capture
+override used by live-editing sessions like text). A store action
+that computes+applies a GPU-mutating side effect (uploads baked
+pixels, renders a warp, etc.) and only calls `pushHistory` afterward
+captures the **post-mutation texture** paired with **pre-mutation
+metadata** — undo then restores the old metadata on top of already-
+mutated pixels (effect re-enabled + already-baked pixels = doubled
+effect; text reverted + new glyphs still on canvas; liquify undone
+but warp still applied). This exact bug shape hit rasterize-layer-style
+(#903), liquify apply (#816), and text-edit commit (#813). Fix:
+reorder so `pushHistory(label)` runs before the function that mutates
+the GPU texture (see `rasterizeLayerStyle` in `document-slice.ts`,
+and `applyLiquify` in `liquify-actions.ts`, which restores the
+pre-warp preview before pushing). A guard that decides *whether* to
+push (e.g. "are there enabled effects to bake") must be checked
+first and kept side-effect-free so it's safe to call before
+`pushHistory` without doing the mutation twice. A test that only
+compares JS-side/metadata-derived pixel dimensions (e.g.
+`getOrCreateLayerPixelData(id).width`) will NOT catch this class of
+bug — it requires reading actual GPU content via `__readLayerPixels`
+before/after undo and comparing opaque pixel counts or values.
+
 ## Memories should be inlined in MEMORY.md, not in separate files
 
 Keep everything in this single file. No separate memory files in .claude or elsewhere.

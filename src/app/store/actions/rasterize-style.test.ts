@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../../../test/canvas-mock';
 import { describe, it, expect } from 'vitest';
-import { computeRasterizeStyle } from './rasterize-style';
+import { computeRasterizeStyle, canRasterizeLayerStyle } from './rasterize-style';
 import { createRasterLayer, DEFAULT_EFFECTS } from '../../../layers/layer-model';
 import type { DocumentState } from '../../../types';
 import type { LayerEffects } from '../../../types/effects';
@@ -48,5 +48,23 @@ describe('computeRasterizeStyle', () => {
     // getEngine() returns null in unit tests — rasterize requires GPU
     const result = computeRasterizeStyle(doc);
     expect(result).toBeUndefined();
+  });
+});
+
+describe('canRasterizeLayerStyle', () => {
+  it('is false when no active layer', () => {
+    const doc = makeDoc(enabledEffects());
+    expect(canRasterizeLayerStyle({ ...doc, activeLayerId: null })).toBe(false);
+  });
+
+  it('is false when no enabled effects', () => {
+    const doc = makeDoc(DEFAULT_EFFECTS);
+    expect(canRasterizeLayerStyle(doc)).toBe(false);
+  });
+
+  it('is false when no GPU engine available', () => {
+    const doc = makeDoc(enabledEffects());
+    // getEngine() returns null in unit tests — rasterize requires GPU
+    expect(canRasterizeLayerStyle(doc)).toBe(false);
   });
 });
