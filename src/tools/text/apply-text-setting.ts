@@ -5,6 +5,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import {
   rerenderCommittedTextLayerAnchored,
   placeTextLayerAtAnchor,
+  refreshCommittedTextLayerFont,
   invalidateEditingTextCache,
   invalidatePathTextCache,
   resetTextLayerLayout,
@@ -196,8 +197,12 @@ function refreshTextAfterFontLoad(
         invalidatePathTextCache(l.id);
         continue;
       }
-      resetTextLayerLayout(engine, l.id);
-      const pos = placeTextLayerAtAnchor(engine, l as TextLayer, l.x, l.y);
+      // Not the target layer that owns a tracked anchor — recover this
+      // layer's anchor from its own still-cached (fallback-shaped) layout
+      // rather than treating `l.x`/`l.y` as the anchor directly, which would
+      // double-count the alignment render offset for centered/right-aligned
+      // area text (#888).
+      const pos = refreshCommittedTextLayerFont(engine, l as TextLayer);
       if (pos) editor.updateTextLayerProperties(l.id, { x: pos.x, y: pos.y });
     }
   }

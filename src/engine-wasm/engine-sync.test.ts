@@ -72,6 +72,7 @@ vi.mock('./wasm-bridge', () => ({
   renderTextLayer: vi.fn(() => new Int32Array([100, 50, 0, 0])),
   renderTextLayerToTexture: vi.fn(() => new Float64Array([100, 50, 0, 0])),
   getRenderedTextPixels: vi.fn(() => new Uint8Array(100 * 50 * 4)),
+  removeTextLayerState: vi.fn(),
 }));
 
 vi.mock('../tools/text/render-text-on-path', () => ({
@@ -637,6 +638,56 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
     call(engine, editing('hello'));
 
     expect(vi.mocked(bridge.renderTextLayerToTexture)).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('refreshCommittedTextLayerFont — anchor recovery on web-font load (#888)', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.setTextLayerContent).mockClear();
+    vi.mocked(bridge.renderTextLayer).mockClear();
+    vi.mocked(bridge.renderTextLayerToTexture).mockClear();
+  });
+
+  it('does not double-count the alignment render offset for a centered area-text layer', () => {
+    const engine = makeFakeEngine();
+    const layer = {
+      ...createTextLayer({ name: 'Caption', text: 'hello' }),
+      textAlign: 'center' as const,
+      width: 340,
+      // Committed texture top-left: anchor (100, 200) + a 26px centering
+      // offset baked in when the layer was first committed with the Inter
+      // fallback face — matches the #888 report's "shift right by
+      // (boxWidth - contentWidth) / 2" symptom.
+      x: 126,
+      y: 200,
+    };
+    // The still-cached (fallback-shaped) layout reports the same 26px
+    // offset the layer was originally placed with.
+    vi.mocked(bridge.renderTextLayer).mockReturnValueOnce(new Float64Array([288, 40, 26, 0]));
+    // Once the real font is measured (after resetTextLayerLayout drops the
+    // cache), the offset can legitimately change — use a different value so
+    // a test that accidentally reused the old offset would be caught too.
+    vi.mocked(bridge.renderTextLayerToTexture).mockReturnValueOnce(new Float64Array([300, 42, 20, 0]));
+
+    const pos = sync.refreshCommittedTextLayerFont(engine, layer);
+
+    // Correct: recovered anchor (126 - 26, 200) = (100, 200), then placed at
+    // anchor + newOffset = (100 + 20, 200 + 0) = (120, 200).
+    // The pre-fix behavior (treating layer.x/y as the anchor directly) would
+    // instead land at (126 + 20, 200) = (146, 200), double-counting the
+    // original 26px centering offset.
+    expect(pos).toEqual({ x: 120, y: 200 });
+  });
+
+  it('is a true no-op when the render offset is unchanged (same font, just refreshed)', () => {
+    const engine = makeFakeEngine();
+    const layer = { ...createTextLayer({ name: 'Caption', text: 'hello' }), x: 126, y: 200 };
+    vi.mocked(bridge.renderTextLayer).mockReturnValueOnce(new Float64Array([288, 40, 26, 0]));
+    vi.mocked(bridge.renderTextLayerToTexture).mockReturnValueOnce(new Float64Array([288, 40, 26, 0]));
+
+    const pos = sync.refreshCommittedTextLayerFont(engine, layer);
+
+    expect(pos).toEqual({ x: 126, y: 200 });
   });
 });
 
