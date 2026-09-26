@@ -92,6 +92,26 @@ describe('resetTrackedState({ preserveContentRefs: true }) — #781', () => {
     expect(tracked.selectionActive).toBe(true);
   });
 
+  it('keeps pathTextKeys so redo of a Move does not re-anchor path text (#910)', () => {
+    const engine = makeFakeEngine();
+    resetTrackedState(engine);
+    getTracked(engine).pathTextKeys = new Map([['text-1', 'key']]);
+
+    resetTrackedState(engine, { preserveContentRefs: true });
+
+    expect(getTracked(engine).pathTextKeys?.get('text-1')).toBe('key');
+  });
+
+  it('the default reset (no option) still wipes pathTextKeys', () => {
+    const engine = makeFakeEngine();
+    resetTrackedState(engine);
+    getTracked(engine).pathTextKeys = new Map([['text-1', 'key']]);
+
+    resetTrackedState(engine);
+
+    expect(getTracked(engine).pathTextKeys).toBeNull();
+  });
+
   it('still drops descriptor refs so undo triggers a re-diff', () => {
     const engine = makeFakeEngine();
     resetTrackedState(engine);

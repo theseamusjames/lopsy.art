@@ -216,8 +216,8 @@ export function getTracked(engine: Engine): TrackedState {
 
 export interface ResetOptions {
   /**
-   * When true, `maskDataRefs`, `masksOnEngine`, `selectionMask` and
-   * `selectionActive` are kept across the reset. Ref-equality gating in `syncLayers` /
+   * When true, `maskDataRefs`, `masksOnEngine`, `selectionMask`,
+   * `selectionActive` and `pathTextKeys` are kept across the reset. Ref-equality gating in `syncLayers` /
    * `syncSelection` then re-diffs against the restored data references —
    * unchanged masks skip re-upload, actually-changed masks still re-upload.
    *
@@ -242,6 +242,12 @@ export function resetTrackedState(engine: Engine, opts?: ResetOptions): void {
       fresh.masksOnEngine = prev.masksOnEngine;
       fresh.selectionMask = prev.selectionMask;
       fresh.selectionActive = prev.selectionActive;
+      // A path-text re-render re-anchors layer.x/y to the path, so dropping
+      // these keys made redo of a Move snap the text back onto its path
+      // (#910). The restored texture already holds the raster the key
+      // describes; a restore that changes text/font/path still misses the
+      // key and re-renders.
+      fresh.pathTextKeys = prev.pathTextKeys;
     }
   }
   trackedByEngine.set(engine, fresh);
