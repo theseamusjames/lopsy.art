@@ -5,24 +5,34 @@ use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
 
-/// The document-space origin a layer's mask should be sampled at.
+/// The document-space origin of a layer's mask texture — where mask texel
+/// (0, 0) sits in the document. Every mask reader and writer goes through
+/// this so they agree: compositing (`blend.glsl`'s `u_maskOffset`), merge,
+/// the mask-edit overlay, and the mask brush/pencil/fill/gradient, which
+/// all take document-space coordinates and subtract this origin.
 ///
-/// A layer mask is always created (`addLayerMask`) while its layer is the
-/// active layer, and a raster layer is always expanded to full document
-/// size — x=0, y=0 — while active (see `useCanvasRendering.ts`), so a
-/// raster layer's mask is always anchored at the document origin. The
-/// "crop on switch away" optimization then shrinks the raster texture to
-/// its content bounds and moves `layer.x/y` off (0,0) purely as a GPU
-/// memory optimization — the content hasn't moved, so the mask must not
-/// follow that offset (#850). Group layers composite through a doc-sized
-/// scratch texture, so their mask is likewise always at the origin. Shape
-/// and text layers are never auto-cropped/expanded — their mask is created
-/// at, and tracks, the layer's own (possibly non-zero) position.
+/// Raster and group masks are document-anchored: `addLayerMask` sizes them
+/// to the document, at the origin. A raster layer's own `x/y` is *not* a
+/// stable anchor — the "crop on switch away" optimization (#850), the
+/// expand-on-activate path, and the brush prewarm's
+/// `ensure_layer_full_size` all rewrite it without moving any content — so
+/// a raster mask must never follow it (#907). Group layers composite
+/// through a doc-sized scratch texture, so their mask is at the origin
+/// too. Shape and text layers are never auto-cropped/expanded — their mask
+/// is created at, and tracks, the layer's own (possibly non-zero) position.
 pub(crate) fn mask_doc_offset(layer_type: lopsy_core::layer::LayerType, layer_x: f32, layer_y: f32) -> (f32, f32) {
     match layer_type {
         lopsy_core::layer::LayerType::Raster | lopsy_core::layer::LayerType::Group => (0.0, 0.0),
         _ => (layer_x, layer_y),
     }
+}
+
+/// `mask_doc_offset` for a layer looked up by id in the engine's stack.
+pub(crate) fn mask_doc_origin(engine: &EngineInner, layer_id: &str) -> (f32, f32) {
+    engine.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| mask_doc_offset(l.layer_type, l.x as f32, l.y as f32))
+        .unwrap_or((0.0, 0.0))
 }
 
 /// Main compositing pipeline — called every frame
@@ -340,7 +350,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // --- Mask edit overlay: translucent blue showing mask coverage ---
         if is_mask_editing {
             if let Some((mask_gl, mw, mh, _)) = &mask_info {
-                render_mask_overlay(engine, mask_gl, *mw, *mh, layer_x, layer_y);
+                render_mask_overlay(engine, mask_gl, *mw, *mh, mask_offset_x, mask_offset_y);
             }
         }
 
@@ -630,8 +640,8 @@ fn render_mask_overlay(
     mask_tex: &web_sys::WebGlTexture,
     mask_w: u32,
     mask_h: u32,
-    layer_x: f32,
-    layer_y: f32,
+    mask_offset_x: f32,
+    mask_offset_y: f32,
 ) {
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
@@ -647,7 +657,7 @@ fn render_mask_overlay(
     if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
+    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), mask_offset_x, mask_offset_y); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }

@@ -506,6 +506,7 @@ pub fn apply_healing_dab_batch(
 // ============================================================
 // Layer Mask GPU Painting
 // ============================================================
+// All coordinates are document space; see `mask_paint_gpu`.
 
 #[wasm_bindgen(js_name = "paintMaskDab")]
 pub fn paint_mask_dab(
@@ -537,10 +538,10 @@ pub fn draw_mask_pencil_line(
 #[wasm_bindgen(js_name = "fillMask")]
 pub fn fill_mask(
     engine: &mut Engine, layer_id: &str,
-    start_x: u32, start_y: u32,
+    doc_x: i32, doc_y: i32,
     tolerance: u32, contiguous: bool, mode: u32,
 ) {
-    mask_paint_gpu::fill_mask(&mut engine.inner, layer_id, start_x, start_y, tolerance, contiguous, mode);
+    mask_paint_gpu::fill_mask(&mut engine.inner, layer_id, doc_x, doc_y, tolerance, contiguous, mode);
 }
 
 #[wasm_bindgen(js_name = "renderMaskLinearGradient")]

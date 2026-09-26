@@ -59,8 +59,9 @@ export function handleFillDown(ctx: InteractionContext): void {
     // GPU copy is current or newer than `mask.data` (#780).
     uploadLayerMaskIfChanged(engine, activeLayerId, maskLayer.mask.data, maskLayer.mask.width, maskLayer.mask.height);
 
-    const startX = Math.round(layerPos.x);
-    const startY = Math.round(layerPos.y);
+    // Document space: the engine maps it onto the mask's own origin.
+    const startX = Math.round(canvasPos.x);
+    const startY = Math.round(canvasPos.y);
 
     // mode 1 = fill black (hide), matching brush behavior
     wasmFillMask(engine, activeLayerId, startX, startY, tolerance, contiguous, 1);

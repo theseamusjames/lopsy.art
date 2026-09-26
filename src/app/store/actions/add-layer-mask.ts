@@ -1,5 +1,6 @@
 import type { DocumentState, Layer, LayerMask } from '../../../types';
 import type { ActionResult } from '../types';
+import { getNewMaskSize } from '../../../layers/mask-origin';
 
 export function computeAddLayerMask(
   doc: DocumentState,
@@ -9,8 +10,7 @@ export function computeAddLayerMask(
   const layer = doc.layers.find((l) => l.id === id);
   if (!layer) return undefined;
 
-  const width = layer.type === 'raster' || layer.type === 'shape' ? layer.width : doc.width;
-  const height = layer.type === 'raster' || layer.type === 'shape' ? layer.height : doc.height;
+  const { width, height } = getNewMaskSize(layer, doc.width, doc.height);
   const maskData = new Uint8ClampedArray(width * height);
   maskData.fill(255);
   const layerMask: LayerMask = {
