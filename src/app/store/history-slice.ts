@@ -352,7 +352,11 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     }
     markAllMasksGpuDirty();
 
-    pixelDataManager.clearAll();
+    // Not clearAll(): that's a one-shot (drains layerVersions after
+    // bumping), so a second consecutive undo/redo with no intervening
+    // pixel-cache write sees it already empty and skips notifying,
+    // leaving LayerThumbnail's cached read stale (#918).
+    pixelDataManager.invalidateLayers(target.document.layerOrder);
     const restoredDocument = target.kind === 'metadata'
       ? mergeMetadataLayerPositions(target.document, state.document)
       : target.document;
@@ -434,7 +438,8 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     }
     markAllMasksGpuDirty();
 
-    pixelDataManager.clearAll();
+    // See undoBy — invalidateLayers() always notifies, unlike clearAll().
+    pixelDataManager.invalidateLayers(target.document.layerOrder);
     const restoredDocument = target.kind === 'metadata'
       ? mergeMetadataLayerPositions(target.document, state.document)
       : target.document;
