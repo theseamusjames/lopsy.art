@@ -35,6 +35,10 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     let doc_h = engine.doc_height;
     let bg = engine.bg_color;
 
+    // Every scratch pass below renders at the doc viewport and blits the
+    // whole scratch texture back; a layer op may have left it layer-sized.
+    engine.ensure_scratch_size(doc_w, doc_h)?;
+
     // Reset GL state — brush/shape/selection tools may have left blending enabled.
     // If BLEND is on, the blit passes in blend_onto_composite would blend
     // instead of overwrite, corrupting alpha.
@@ -1348,6 +1352,7 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     let bg = engine.bg_color;
+    engine.ensure_scratch_size(doc_w, doc_h)?;
 
     engine.gl.disable(WebGl2RenderingContext::BLEND);
 
@@ -1506,6 +1511,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
 pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Result<Vec<u8>, String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
+    engine.ensure_scratch_size(doc_w, doc_h)?;
 
     // Render to composite FBO with transparent background
     engine.gl.disable(WebGl2RenderingContext::BLEND);
