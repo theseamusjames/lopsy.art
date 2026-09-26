@@ -1016,18 +1016,6 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const parentGroup = findParentGroup(doc.layers, topmostId);
     const targetGroupId = parentGroup?.id ?? doc.rootGroupId ?? null;
 
-    // Remove selected layers from their current parents BEFORE adding the
-    // group — otherwise removeFromParentGroup also strips children from
-    // the newly created group.
-    let newLayers = [...doc.layers];
-    for (const id of idsBottomToTop) {
-      newLayers = removeFromParentGroup(newLayers, id);
-    }
-    newLayers = [...newLayers, group];
-    if (targetGroupId) {
-      newLayers = addToGroupUtil(newLayers, group.id, targetGroupId);
-    }
-
     // Rebuild layerOrder: put the [selected bottom→top, group] block at
     // the topmost selected layer's original z-index, so the group ends up
     // exactly where the selection was (#784). "Position of topmost" =
@@ -1046,6 +1034,22 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       group.id,
       ...filteredOrder.slice(insertAt),
     ];
+
+    // Remove selected layers from their current parents BEFORE adding the
+    // group — otherwise removeFromParentGroup also strips children from
+    // the newly created group.
+    let newLayers = [...doc.layers];
+    for (const id of idsBottomToTop) {
+      newLayers = removeFromParentGroup(newLayers, id);
+    }
+    newLayers = [...newLayers, group];
+    if (targetGroupId) {
+      // Insert the group into the parent's children at the slot matching
+      // its position in newOrder, not appended — otherwise a non-contiguous
+      // selection (e.g. selecting the bottom and middle of three siblings)
+      // leaves `children` and `layerOrder` disagreeing on stacking order (#881).
+      newLayers = addToGroupUtil(newLayers, group.id, targetGroupId, newOrder);
+    }
 
     s.pushHistoryMetadata('Group Layers');
     set({
