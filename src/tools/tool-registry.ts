@@ -68,6 +68,12 @@ export interface ToolDescriptor {
   /** True for tools whose down/move are handled directly via WASM and don't
    *  need JS-side pixel data (skips the 16-bit → 8-bit round-trip). */
   isGpu?: boolean;
+  /** True for paint tools whose own down-handler pushes its own correctly
+   *  labeled history entry (or, for a source-set click, correctly pushes
+   *  nothing because no pixels changed). The generic paint dispatch in
+   *  useCanvasInteraction.ts must not also push a fallback 'Eraser' entry
+   *  for these tools — see #887. */
+  ownsHistoryEntry?: boolean;
   /** Hook that runs when the user selects this tool. Used for tool-specific
    *  setup (e.g. shape tool seeding its fill color from the current
    *  foreground) so those side effects live with the tool rather than
@@ -160,6 +166,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     optionsComponent: StampOptions,
     isPaint: true,
     isGpu: true,
+    ownsHistoryEntry: true,
     handler: {
       down: (ctx) => handleStampDown(ctx),
       move: (ctx, state) => handleStampMove(state, ctx.layerPos, ctx.stampOffsetRef),
@@ -172,6 +179,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     optionsComponent: HealingOptions,
     isPaint: true,
     isGpu: true,
+    ownsHistoryEntry: true,
     handler: {
       down: (ctx) => handleHealingDown(ctx),
       move: (ctx, state) => handleHealingMove(state, ctx.layerPos, ctx.stampOffsetRef),
@@ -184,6 +192,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     optionsComponent: DodgeOptions,
     isPaint: true,
     isGpu: true,
+    ownsHistoryEntry: true,
     handler: {
       down: (ctx) => handleDodgeDown(ctx),
       move: (ctx, state) => handleDodgeMove(state, ctx.layerPos),
@@ -197,6 +206,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     optionsComponent: SpongeOptions,
     isPaint: true,
     isGpu: true,
+    ownsHistoryEntry: true,
     handler: {
       down: (ctx) => handleSpongeDown(ctx),
       move: (ctx, state) => handleSpongeMove(state, ctx.layerPos),
@@ -356,6 +366,9 @@ function buildSet(predicate: (d: ToolDescriptor) => boolean): ReadonlySet<ToolId
 
 export const PAINT_TOOLS: ReadonlySet<ToolId> = buildSet((d) => !!d.isPaint);
 export const GPU_TOOLS: ReadonlySet<ToolId> = buildSet((d) => !!d.isGpu);
+/** Paint tools whose own down-handler owns pushing (or skipping) history —
+ *  see `ownsHistoryEntry` on `ToolDescriptor`. */
+export const SELF_HISTORY_PAINT_TOOLS: ReadonlySet<ToolId> = buildSet((d) => !!d.ownsHistoryEntry);
 
 /** Map of single-key shortcut → tool id, derived from the registry. */
 export const SHORTCUT_TO_TOOL: ReadonlyMap<string, ToolId> = new Map(

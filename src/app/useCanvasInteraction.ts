@@ -51,7 +51,7 @@ import { createTransformState } from '../tools/transform/transform';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // PAINT_TOOLS / GPU_TOOLS are derived from the tool registry, so adding a
 // new paint or GPU tool is a single-file change at the descriptor.
-import { PAINT_TOOLS, GPU_TOOLS } from '../tools/tool-registry';
+import { PAINT_TOOLS, GPU_TOOLS, SELF_HISTORY_PAINT_TOOLS } from '../tools/tool-registry';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { guardPixelWrite, toolWritesRasterPixels } from '../layers/paint-target';
 
@@ -228,14 +228,22 @@ export function useCanvasInteraction(
             flushLayerSync(currentState);
             syncSelection(engine, currentState.selection);
             if (!canContinueStroke) {
-              const toolLabel = activeTool === 'brush'
-                ? 'Brush'
-                : activeTool === 'pencil'
-                  ? 'Pencil'
-                  : activeTool === 'spray'
-                    ? 'Spray'
-                    : 'Eraser';
-              useEditorStore.getState().pushHistory(toolLabel);
+              // Dodge/Burn, Sponge, Clone Stamp and Healing push their own
+              // correctly-labeled history entry from their own down-handler
+              // (or, for a clone/healing source-set click, correctly push
+              // nothing since no pixels changed). Pushing a generic entry
+              // here too would double up as a phantom 'Eraser' row on top
+              // of the tool's real one (#887).
+              if (!SELF_HISTORY_PAINT_TOOLS.has(activeTool)) {
+                const toolLabel = activeTool === 'brush'
+                  ? 'Brush'
+                  : activeTool === 'pencil'
+                    ? 'Pencil'
+                    : activeTool === 'spray'
+                      ? 'Spray'
+                      : 'Eraser';
+                useEditorStore.getState().pushHistory(toolLabel);
+              }
               beginStroke(engine, activeLayerId);
             }
 
