@@ -211,3 +211,23 @@ does no synchronous GPU→CPU read, patch
 the event with a window **capture** listener (runs before the app's
 window-level pointer handlers) and a later-registered window **bubble**
 listener (runs after them). See `e2e/mask-gpu-undo-780.spec.ts`.
+
+## GLSL `smoothstep(edge0, edge1, x)` is undefined when edge0 == edge1
+
+The GLSL ES spec leaves `smoothstep` undefined when `edge0 >= edge1`
+(not just an error — implementations may return anything). A shader
+parameter that can reach 0 and gets added/subtracted symmetrically
+around a midpoint (`mid + p`, `mid - p`) will collapse both edges to
+the same value exactly at `p == 0`, and different GPU backends handle
+that differently — `halftone.glsl`'s Softness slider hit this at
+`u_contrast == 0.0`: on the ANGLE/SwiftShader backend used in this
+project's headless test runs, `smoothstep(r, r, dist)` evaluated to 1
+for every `dist >= r`, making light halftone cells render fully opaque
+instead of tiny dots (issue #878). Passing edges in reversed order
+(`edge0 > edge1`) is *not* itself the bug — the standard
+`t*t*(3-2t)` formula is still well-defined and even useful for getting
+a decreasing falloff without a separate `1.0 - smoothstep(...)`, as
+long as `edge0 != edge1`. The fix is to floor the separation between
+the two edges at a small epsilon (`max(param, 1e-4)`) before computing
+them, so they're never exactly equal — indistinguishable visually from
+a true hard step, and keeps the parameter continuous down to 0.
