@@ -23,9 +23,32 @@ export function createIdentityGrid(cols: number, rows: number): MeshWarpGrid {
 }
 
 /**
- * Encode the grid as displacements in texture UV space.
- * Each point's offset from its identity position is scaled by the bounds
- * size (in texture UV) so the GPU shader applies the right v_uv displacement.
+ * Byte that decodes to exactly zero displacement. `mesh_warp.glsl` decodes
+ * `(byte - DISPLACEMENT_CENTER) / DISPLACEMENT_SCALE`, so these constants
+ * must stay in sync with the shader. A centre of 127.5 (the naive
+ * `(d / 2 + 0.5) * 255`) is not representable and made untouched grid
+ * points drift content by half a step (#909).
+ */
+export const DISPLACEMENT_CENTER = 128;
+export const DISPLACEMENT_SCALE = 127;
+
+export function encodeDisplacement(d: number): number {
+  // Round half away from zero so +d and -d encode symmetrically
+  // (Math.round alone rounds halves toward +Infinity).
+  const steps = Math.sign(d) * Math.round(Math.abs(d) * DISPLACEMENT_SCALE);
+  const encoded = steps + DISPLACEMENT_CENTER;
+  return Math.max(DISPLACEMENT_CENTER - DISPLACEMENT_SCALE, Math.min(DISPLACEMENT_CENTER + DISPLACEMENT_SCALE, encoded));
+}
+
+export function decodeDisplacement(byte: number): number {
+  return (byte - DISPLACEMENT_CENTER) / DISPLACEMENT_SCALE;
+}
+
+/**
+ * Encode the grid as forward displacements in texture UV space: content
+ * at a point's identity position moves by (R, G) so it follows the
+ * dragged handle. Each point's offset from its identity position is
+ * scaled by the bounds size (in texture UV).
  */
 export function encodeGridToRgba(grid: MeshWarpGrid, boundsScaleU: number, boundsScaleV: number): Uint8Array {
   const { cols, rows, points } = grid;
@@ -34,17 +57,11 @@ export function encodeGridToRgba(grid: MeshWarpGrid, boundsScaleU: number, bound
     for (let c = 0; c < cols; c++) {
       const idx = r * cols + c;
       const point = points[idx]!;
-      const origX = c / (cols - 1);
-      const origY = r / (rows - 1);
-      const dxLocal = point.x - origX;
-      const dyLocal = point.y - origY;
-      const dx = dxLocal * boundsScaleU;
-      const dy = dyLocal * boundsScaleV;
-      const encodedX = Math.round((dx / 2.0 + 0.5) * 255);
-      const encodedY = Math.round((dy / 2.0 + 0.5) * 255);
+      const dx = (point.x - c / (cols - 1)) * boundsScaleU;
+      const dy = (point.y - r / (rows - 1)) * boundsScaleV;
       const pi = idx * 4;
-      data[pi] = Math.max(0, Math.min(255, encodedX));
-      data[pi + 1] = Math.max(0, Math.min(255, encodedY));
+      data[pi] = encodeDisplacement(dx);
+      data[pi + 1] = encodeDisplacement(dy);
       data[pi + 2] = 0;
       data[pi + 3] = 255;
     }
