@@ -97,7 +97,8 @@ test.describe('text input sink (#803)', () => {
     expect(await textLayerOpaquePixels(page)).toBeGreaterThan(100);
   });
 
-  test('an IME composition previews inline and commits once', async ({ page }) => {
+  test('an IME composition previews inline and commits once', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'IME composition is driven via CDP Input.imeSetComposition (Chromium only)');
     await startEditing(page);
     await page.keyboard.type('x');
 
@@ -123,7 +124,8 @@ test.describe('text input sink (#803)', () => {
     expect(await committedText(page)).toBe('x日本y');
   });
 
-  test('a composition that is cancelled leaves the buffer unchanged', async ({ page }) => {
+  test('a composition that is cancelled leaves the buffer unchanged', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'IME composition is driven via CDP Input.imeSetComposition (Chromium only)');
     await startEditing(page);
     await page.keyboard.type('ab');
 
