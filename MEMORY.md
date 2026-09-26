@@ -155,7 +155,23 @@ expected right after undo/redo, most often on whichever test runs
 immediately after the first in a file. Before treating an undo/redo e2e
 failure as a real regression, rerun the same test in isolation and rerun
 the untouched baseline under the same load to rule out ambient flakiness.
+## Canvas2D stroke-count perf regressions: spy on `stroke()`, don't trust sandbox wall-clock
 
+For a perf bug whose fix is "stop calling a Canvas2D method once per item"
+(e.g. #923, `renderSelectionAnts` calling `stroke()` per traced contour),
+prefer instrumenting `CanvasRenderingContext2D.prototype.stroke` in the page
+(monkey-patch, count calls, restore after) over asserting on rAF wall-clock
+frame times. In this sandbox, `initEngine` fires-and-forgets
+`loadBuiltinBitmapBrushes()`, which decodes each builtin brush PNG via
+`OffscreenCanvas.getContext('2d').getImageData(...)` — on this environment's
+substituted/mismatched Chromium build that call is pathologically slow
+(seconds, not sub-ms) and runs in the background regardless of what the test
+is doing, so it randomly dominates any CDP `Profiler` capture or rAF
+frame-time sample with cost that has nothing to do with the code under test.
+A call-count assertion (e.g. "stroke() fires ~2 times per overlay frame
+regardless of a mask having 2 or 18,000 islands") is deterministic and
+immune to that noise, and fails hard against the unfixed per-item code path.
+See `e2e/marching-ants-perf.spec.ts`.
 ## cosmic-text has no cross-style / cross-stretch fallback
 
 `Attrs::matches` keeps only faces whose `style` and `stretch` equal the
