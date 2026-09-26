@@ -1,7 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { waitForStore, createDocument, drawRect } from './helpers';
+import { waitForStore, createDocument, drawRect, drawEllipse, getPixelAt, applyFilter } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -159,5 +159,51 @@ test.describe('Kaleidoscope Filter', () => {
     });
 
     expect(layerCount).toBeGreaterThan(0);
+  });
+
+  // Regression test for #889: kaleidoscope computed its polar math in UV
+  // space, where a unit of x and a unit of y cover different pixel counts
+  // on a non-square layer. That stretched mirrored copies along the long
+  // axis instead of placing them at an equal radius from center.
+  test('mirrors copies at an equal radius on a non-square layer (#889)', async ({ page }) => {
+    await createDocument(page, 400, 200, true);
+
+    // A red dot 50px above center (200, 100) on a 400x200 doc.
+    await drawEllipse(page, 200, 50, 5, 5, { r: 255, g: 0, b: 0 });
+    await fitToView(page);
+
+    await applyFilter(page, 'Kaleidoscope...', { Segments: 4, Rotation: 270 });
+    await page.waitForTimeout(300);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'kaleidoscope-aspect-after.png') });
+
+    const isRed = (p: { r: number; g: number; b: number; a: number }) =>
+      p.a > 100 && p.r > 150 && p.g < 100 && p.b < 100;
+
+    // Correct, aspect-corrected copies: 4-fold symmetry, all 50px from
+    // center (200, 100) — up, right, down, left.
+    const expectedCopies = [
+      { x: 200, y: 50 },
+      { x: 250, y: 100 },
+      { x: 200, y: 150 },
+      { x: 150, y: 100 },
+    ];
+    for (const { x, y } of expectedCopies) {
+      const pixel = await getPixelAt(page, x, y);
+      expect(isRed(pixel), `expected red at (${x}, ${y})`).toBe(true);
+    }
+
+    // The pre-fix (UV-space) math placed the horizontal mirrors 100px out
+    // instead of 50px, at roughly (292, 98) and (92, 98). Those locations
+    // must be background (transparent), not red, once the aspect-ratio
+    // math is fixed.
+    const buggyLocations = [
+      { x: 292, y: 98 },
+      { x: 92, y: 98 },
+    ];
+    for (const { x, y } of buggyLocations) {
+      const pixel = await getPixelAt(page, x, y);
+      expect(isRed(pixel), `expected background (not red) at (${x}, ${y})`).toBe(false);
+    }
   });
 });
