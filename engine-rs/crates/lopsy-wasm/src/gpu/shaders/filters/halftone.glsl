@@ -51,8 +51,15 @@ void main() {
     float maxRadius = u_dotSize * 0.5;
     float dotRadius = maxRadius * (1.0 - lum);
 
-    // Apply contrast to sharpen/soften dot edges
-    float edge = smoothstep(dotRadius + u_contrast, dotRadius - u_contrast, dist);
+    // Apply contrast to sharpen/soften dot edges. smoothstep() is undefined
+    // (GLSL ES spec) when its two edges are equal, which happens at
+    // u_contrast == 0.0 (Softness slider minimum) and made every light cell
+    // render fully opaque instead of a tiny dot on some GPU backends. Floor
+    // the edge separation at a tiny epsilon so the two edges are always
+    // distinct; this is visually indistinguishable from a hard step at
+    // dist == dotRadius and keeps Softness continuous down to 0.
+    float contrastEps = max(u_contrast, 1e-4);
+    float edge = smoothstep(dotRadius + contrastEps, dotRadius - contrastEps, dist);
 
     // Output: dot color where inside dot, transparent where outside
     fragColor = vec4(c.rgb, c.a * edge);

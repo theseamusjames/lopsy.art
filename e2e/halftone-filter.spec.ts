@@ -1,7 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { waitForStore, createDocument, drawRect } from './helpers';
+import { waitForStore, createDocument, drawRect, addLayer, docToScreen, applyFilter, undo } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +15,91 @@ async function fitToView(page: Page) {
     store.getState().fitToView();
   });
   await page.waitForTimeout(300);
+}
+
+// ---------------------------------------------------------------------------
+// Helpers for the softness-0 regression test (#878)
+// ---------------------------------------------------------------------------
+
+async function activateGradientTool(page: Page) {
+  await page.locator('[data-tool-id="gradient"]').click();
+  await page.waitForTimeout(100);
+}
+
+async function setBlackToWhiteGradientStops(page: Page) {
+  await page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__toolSettingsStore as {
+      getState: () => {
+        setGradientSetting: (
+          k: 'stops' | 'type',
+          v: Array<{ position: number; color: { r: number; g: number; b: number; a: number } }> | string,
+        ) => void;
+      };
+    };
+    store.getState().setGradientSetting('type', 'linear');
+    store.getState().setGradientSetting('stops', [
+      { position: 0, color: { r: 0, g: 0, b: 0, a: 1 } },
+      { position: 1, color: { r: 255, g: 255, b: 255, a: 1 } },
+    ]);
+  });
+}
+
+async function dragGradient(
+  page: Page,
+  fromDoc: { x: number; y: number },
+  toDoc: { x: number; y: number },
+) {
+  const start = await docToScreen(page, fromDoc.x, fromDoc.y);
+  const end = await docToScreen(page, toDoc.x, toDoc.y);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 20 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+}
+
+/**
+ * Fraction of pixels with alpha > 128 inside [xMin, xMax) x [yMin, yMax)
+ * of the given layer, in document coordinates. Used to detect the
+ * "light cells stay fully opaque" failure mode from issue #878.
+ */
+async function opaqueFractionInRegion(
+  page: Page,
+  layerId: string,
+  region: { xMin: number; xMax: number; yMin: number; yMax: number },
+): Promise<number> {
+  return page.evaluate(
+    async ({ layerId, region }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => {
+          document: { layers: Array<{ id: string; x: number; y: number }> };
+        };
+      };
+      const layer = store.getState().document.layers.find((l) => l.id === layerId);
+      const lx = layer?.x ?? 0;
+      const ly = layer?.y ?? 0;
+      const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as (
+        id?: string,
+      ) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+      const result = await readFn(layerId);
+      if (!result || result.width === 0) return 0;
+      let opaque = 0;
+      let total = 0;
+      for (let y = region.yMin; y < region.yMax; y++) {
+        const localY = y - ly;
+        if (localY < 0 || localY >= result.height) continue;
+        for (let x = region.xMin; x < region.xMax; x++) {
+          const localX = x - lx;
+          if (localX < 0 || localX >= result.width) continue;
+          const idx = (localY * result.width + localX) * 4;
+          total++;
+          if (result.pixels[idx + 3] > 128) opaque++;
+        }
+      }
+      return total === 0 ? 0 : opaque / total;
+    },
+    { layerId, region },
+  );
 }
 
 test.describe('Halftone Filter', () => {
@@ -128,5 +213,92 @@ test.describe('Halftone Filter', () => {
     });
 
     expect(layerCount).toBeGreaterThan(0);
+  });
+});
+
+test.describe('Halftone Filter — Softness 0 regression (#878)', () => {
+  // Region covering the light (right) half of the black-to-white gradient,
+  // inset from the doc edges to avoid gradient-tool edge artifacts.
+  const LIGHT_REGION = { xMin: 300, xMax: 390, yMin: 10, yMax: 290 };
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 400, 300, false);
+  });
+
+  async function drawGradientLayer(page: Page): Promise<string> {
+    const layerId = await addLayer(page);
+    await activateGradientTool(page);
+    await setBlackToWhiteGradientStops(page);
+    await dragGradient(page, { x: 0, y: 150 }, { x: 399, y: 150 });
+    return layerId;
+  }
+
+  test('Softness 0 turns light cells into dots, not a solid opaque fill', async ({ page }) => {
+    const layerId = await drawGradientLayer(page);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'halftone-softness-0-before.png') });
+
+    await applyFilter(page, 'Halftone...', {
+      'Dot Size': 14,
+      Density: 1,
+      Angle: 45,
+      Softness: 0,
+    });
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'halftone-softness-0-after.png') });
+
+    const opaqueFraction = await opaqueFractionInRegion(page, layerId, LIGHT_REGION);
+
+    // Before the fix, the undefined smoothstep(edge, edge, dist) call made
+    // ~99.3% of this region opaque (a solid stepped gradient instead of
+    // dots). It should now be mostly transparent, with small dots covering
+    // only a minority of the area.
+    expect(opaqueFraction).toBeLessThan(0.4);
+    // ...but dots should still exist — this isn't just erasing the region.
+    expect(opaqueFraction).toBeGreaterThan(0);
+  });
+
+  test('Softness 1 still produces dots on transparency (no regression)', async ({ page }) => {
+    const layerId = await drawGradientLayer(page);
+
+    await applyFilter(page, 'Halftone...', {
+      'Dot Size': 14,
+      Density: 1,
+      Angle: 45,
+      Softness: 1,
+    });
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'halftone-softness-1-after.png') });
+
+    const opaqueFraction = await opaqueFractionInRegion(page, layerId, LIGHT_REGION);
+    expect(opaqueFraction).toBeLessThan(0.4);
+  });
+
+  test('Softness 0 and Softness 0.1 produce visually similar coverage (continuity)', async ({ page }) => {
+    const layerIdA = await drawGradientLayer(page);
+    await applyFilter(page, 'Halftone...', {
+      'Dot Size': 14,
+      Density: 1,
+      Angle: 45,
+      Softness: 0,
+    });
+    const fractionAtZero = await opaqueFractionInRegion(page, layerIdA, LIGHT_REGION);
+
+    await undo(page);
+    await page.waitForTimeout(300);
+
+    await applyFilter(page, 'Halftone...', {
+      'Dot Size': 14,
+      Density: 1,
+      Angle: 45,
+      Softness: 0.1,
+    });
+    const fractionNearZero = await opaqueFractionInRegion(page, layerIdA, LIGHT_REGION);
+
+    // Softness should interpolate continuously — a small step away from 0
+    // must not cause a huge jump in opaque coverage.
+    expect(Math.abs(fractionNearZero - fractionAtZero)).toBeLessThan(0.3);
   });
 });
