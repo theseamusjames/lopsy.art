@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import '../../../test/canvas-mock';
 import { describe, it, expect, vi } from 'vitest';
-import { computeMergeDown } from './merge-down';
-import { createRasterLayer, createTextLayer } from '../../../layers/layer-model';
+import { computeMergeDown, canMergeDown } from './merge-down';
+import { createRasterLayer, createTextLayer, createGroupLayer } from '../../../layers/layer-model';
 import type { DocumentState } from '../../../types';
 
 // #746: computeMergeDown must not read the JS pixel map — it is a
@@ -112,5 +112,86 @@ describe('computeMergeDown', () => {
     const result = computeMergeDown(doc)!;
     const merged = result.document!.layers.find((l) => l.id === bottomId)!;
     expect(merged.type).toBe('raster');
+  });
+
+  // #879: merging onto a group must never silently drop the active
+  // layer's pixels — there is no raster texture on the other side to
+  // composite into, so the operation must refuse entirely.
+  it('returns undefined (no-op) when the layer below is a group', () => {
+    const group = createGroupLayer({ name: 'Group' });
+    const top = createRasterLayer({ name: 'Top', width: 4, height: 4 });
+    const doc: DocumentState = {
+      id: 'doc-1',
+      name: 'Test',
+      width: 4,
+      height: 4,
+      layers: [group, top],
+      layerOrder: [group.id, top.id],
+      activeLayerId: top.id,
+      selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+
+    const result = computeMergeDown(doc);
+    expect(result).toBeUndefined();
+  });
+
+  it('leaves the document layers and layerOrder untouched when the target is a group', () => {
+    const group = createGroupLayer({ name: 'Group' });
+    const top = createRasterLayer({ name: 'Top', width: 4, height: 4 });
+    const doc: DocumentState = {
+      id: 'doc-1',
+      name: 'Test',
+      width: 4,
+      height: 4,
+      layers: [group, top],
+      layerOrder: [group.id, top.id],
+      activeLayerId: top.id,
+      selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+
+    computeMergeDown(doc);
+    // computeMergeDown must not mutate the doc it was given either.
+    expect(doc.layers).toHaveLength(2);
+    expect(doc.layerOrder).toEqual([group.id, top.id]);
+  });
+});
+
+describe('canMergeDown', () => {
+  it('is true when the layer below the active layer is raster', () => {
+    const doc = makeDoc();
+    expect(canMergeDown(doc)).toBe(true);
+  });
+
+  it('is false when the active layer is at the bottom', () => {
+    const doc = makeDoc();
+    const bottomDoc = { ...doc, activeLayerId: doc.layerOrder[0]! };
+    expect(canMergeDown(bottomDoc)).toBe(false);
+  });
+
+  it('is false when the layer below is a group', () => {
+    const group = createGroupLayer({ name: 'Group' });
+    const top = createRasterLayer({ name: 'Top', width: 4, height: 4 });
+    const doc: DocumentState = {
+      id: 'doc-1',
+      name: 'Test',
+      width: 4,
+      height: 4,
+      layers: [group, top],
+      layerOrder: [group.id, top.id],
+      activeLayerId: top.id,
+      selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+    expect(canMergeDown(doc)).toBe(false);
+  });
+
+  it('is false when there is no active layer', () => {
+    const doc = makeDoc();
+    expect(canMergeDown({ ...doc, activeLayerId: null })).toBe(false);
   });
 });
