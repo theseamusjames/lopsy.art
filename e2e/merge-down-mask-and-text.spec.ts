@@ -7,6 +7,9 @@ import {
   addLayer,
   setActiveLayer,
   docToScreen,
+  selectTool,
+  setForegroundColor,
+  setToolOption,
 } from './helpers';
 
 const isMac = process.platform === 'darwin';
@@ -21,6 +24,54 @@ async function clickAtDoc(page: Page, docX: number, docY: number): Promise<void>
   const pos = await docToScreen(page, docX, docY);
   await page.mouse.click(pos.x, pos.y);
   await page.waitForTimeout(80);
+}
+
+/**
+ * Fill a rectangular marquee selection via Edit > Fill, entirely through
+ * the UI (GPU-only paint, no JS-side pixel-cache sync). Unlike the
+ * `drawRect` helper, this does NOT trigger a premature `cropLayerToContent`
+ * — the layer stays full document size while active, matching how a real
+ * user paints a fill (see e2e/GUIDE.md and mask-crop-offset-850.spec.ts's
+ * `rectFill`). Using `drawRect` here would leave the layer (and the mask
+ * added on top of it) cropped to the fill's own bounds even though the
+ * layer was never switched away from, which isn't the scenario #851 is
+ * about.
+ */
+async function rectFillViaMenu(
+  page: Page,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  color: { r: number; g: number; b: number },
+): Promise<void> {
+  await setForegroundColor(page, color.r, color.g, color.b);
+  await selectTool(page, 'marquee-rect');
+  const a = await docToScreen(page, x0, y0);
+  const b = await docToScreen(page, x1, y1);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  await page.getByRole('button', { name: /^Edit$/ }).click();
+  await page.getByRole('menuitem', { name: /^Fill$/ }).click();
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Control+d');
+  await page.waitForTimeout(150);
+}
+
+/** Two vertical brush strokes on the currently-edited mask, painting black
+ * (hidden). Matches mask-crop-offset-850.spec.ts's proven approach — real
+ * pointer input, not a direct store write. */
+async function verticalMaskStroke(page: Page, x: number, y0: number, y1: number): Promise<void> {
+  const a = await docToScreen(page, x, y0);
+  const b = await docToScreen(page, x, y1);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 20 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
 }
 
 interface LayerSnapshot {
@@ -63,36 +114,26 @@ test.describe('Merge Down — mask (#851)', () => {
     await setActiveLayer(page, bgId);
     await drawRect(page, 0, 0, 400, 300, { r: 0, g: 180, b: 0 });
 
-    // Layer B above it: a 160x160 red square at (200, 100).
+    // Layer B above it: a 160x160 red square at (200, 100). Filled via the
+    // menu (not `drawRect`) so the layer stays full document size while
+    // active — see rectFillViaMenu's doc comment.
     const topId = await addLayer(page);
-    await drawRect(page, 200, 100, 160, 160, { r: 255, g: 0, b: 0 });
+    await rectFillViaMenu(page, 200, 100, 360, 260, { r: 255, g: 0, b: 0 });
 
-    // Add a mask to B (the active layer) and hide the left half of the
-    // square — only the mask pixel data itself is set via the store, per
-    // e2e/GUIDE.md's documented exception for layer masks.
+    // Add a mask to B and paint two vertical brush strokes to hide the
+    // left half (x: 200-280) of the square in the mask, then leave
+    // mask-edit mode — same UI-driven approach as
+    // mask-crop-offset-850.spec.ts, per e2e/GUIDE.md's "test the UI"
+    // mandate.
     await page.locator('[aria-label="Add Mask"]').click();
+    await page.getByRole('button', { name: /Edit mask for/ }).click();
+    await setForegroundColor(page, 0, 0, 0);
+    await selectTool(page, 'brush');
+    await setToolOption(page, 'Size', 90);
+    await verticalMaskStroke(page, 220, 105, 255);
+    await verticalMaskStroke(page, 260, 105, 255);
+    await page.locator(`[data-layer-id="${topId}"]`).click();
     await page.waitForTimeout(150);
-
-    await page.evaluate((id) => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { layers: Array<{ id: string; mask: { width: number; height: number } | null }> };
-          updateLayerMaskData: (layerId: string, data: Uint8ClampedArray) => void;
-        };
-      };
-      const state = store.getState();
-      const layer = state.document.layers.find((l) => l.id === id);
-      const mask = layer?.mask;
-      if (!mask) throw new Error('expected layer to have a mask');
-      const data = new Uint8ClampedArray(mask.width * mask.height);
-      for (let y = 0; y < mask.height; y++) {
-        for (let x = 0; x < mask.width; x++) {
-          data[y * mask.width + x] = x < mask.width / 2 ? 0 : 255;
-        }
-      }
-      state.updateLayerMaskData(id, data);
-    }, topId);
-    await page.waitForTimeout(300);
 
     // Merge B down onto A.
     await pressMergeDown(page);

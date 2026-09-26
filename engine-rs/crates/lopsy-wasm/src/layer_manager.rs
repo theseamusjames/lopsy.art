@@ -1,5 +1,6 @@
 use web_sys::WebGl2RenderingContext;
 use lopsy_core::layer::LayerDesc;
+use crate::compositor::mask_doc_offset;
 use crate::engine::EngineInner;
 use crate::gpu::texture_pool::TextureHandle;
 
@@ -302,11 +303,13 @@ pub fn merge_layers(
         if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some((mask_gl_tex, mask_w, mask_h)) = &top_mask_info {
+            let (mask_offset_x, mask_offset_y) = mask_doc_offset(top_desc.layer_type, top_desc.x as f32, top_desc.y as f32);
             engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
             engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_gl_tex));
             if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 2); }
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 1); }
             if let Some(loc) = shader.location(&engine.gl, "u_maskSize") { engine.gl.uniform2f(Some(&loc), *mask_w as f32, *mask_h as f32); }
+            if let Some(loc) = shader.location(&engine.gl, "u_maskOffset") { engine.gl.uniform2f(Some(&loc), mask_offset_x, mask_offset_y); }
         } else {
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
         }
