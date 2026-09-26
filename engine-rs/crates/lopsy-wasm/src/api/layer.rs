@@ -415,6 +415,21 @@ pub fn clipboard_cut(
     Ok(vec![w as i32, h as i32, ox, oy])
 }
 
+/// Clear pixels in the selection (or whole layer) without touching the
+/// retained internal clipboard. Delete/Backspace uses this instead of
+/// `clipboardCut` — `clipboardCut` re-copies into `engine.clipboard_texture`
+/// as a side effect, which clobbers a paste-in-place copy made earlier with
+/// `clipboardCopy`/`clipboardCut` (see #870).
+#[wasm_bindgen(js_name = "clearSelectedPixels")]
+pub fn clear_selected_pixels(
+    engine: &mut Engine,
+    layer_id: &str,
+    has_selection: bool,
+) -> Result<(), JsError> {
+    layer_manager::clipboard_clear_selected(&mut engine.inner, layer_id, has_selection)
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "clipboardPaste")]
 pub fn clipboard_paste(
     engine: &mut Engine,
