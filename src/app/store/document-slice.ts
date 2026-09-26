@@ -28,7 +28,7 @@ import { computeMoveLayer } from './actions/move-layer';
 import { computeDropLayer } from './actions/drop-layer';
 import type { LayerDropTarget } from './actions/drop-layer';
 import { computeDuplicateLayer } from './actions/duplicate-layer';
-import { computeMergeDown } from './actions/merge-down';
+import { computeMergeDown, canMergeDown } from './actions/merge-down';
 import { computeFlattenImage } from './actions/flatten-image';
 import { computeRasterizeStyle, canRasterizeLayerStyle } from './actions/rasterize-style';
 import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
@@ -645,13 +645,22 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   mergeDown: () => {
     const s = get();
     flushLayerSync(s);
+    if (!canMergeDown(s.document)) return;
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
+    // #921: pushHistory must run before computeMergeDown. computeMergeDown
+    // mutates the below-layer's GPU texture in place (mergeLayers composites
+    // top onto bottom immediately), so a snapshot taken after it runs would
+    // capture the *merged* pixels under the label "state before this merge" —
+    // corrupting the undo checkpoint for the below layer whenever the
+    // snapshot-reuse shortcut in pushHistory doesn't kick in (e.g. a
+    // just-rasterized text layer's position shifts slightly between commit
+    // and rasterize, breaking the posMatch fast path).
+    s.pushHistory('Merge Down');
     // GPU-only (mergeLayers composites on the GPU); the compute
     // function invalidates JS pixel cache for the two touched layers
     // directly. No whole-document round trip (#746).
     const result = computeMergeDown(s.document);
     if (!result) return;
-    s.pushHistory('Merge Down');
     applyActionResult(set, result);
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
