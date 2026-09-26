@@ -317,7 +317,10 @@ describe('bucket fill — layer mask mode', () => {
     const updated = new Uint8Array(DOC_W * DOC_H).fill(127);
     readMaskTexture.mockReturnValue(updated);
 
-    handleFillDown(makeCtx({ layerPos: { x: 4.4, y: 4.6 } }));
+    // The engine maps document coords onto the mask's own origin, so the
+    // layer-local position (which drifts as a raster layer is re-origined)
+    // must not be what's forwarded (#907).
+    handleFillDown(makeCtx({ canvasPos: { x: 4.4, y: 4.6 }, layerPos: { x: -5.6, y: -5.4 } }));
 
     expect(editorState.pushHistory).toHaveBeenCalledWith('Mask Fill');
     expect(uploadLayerMask).toHaveBeenCalledTimes(1);
@@ -328,7 +331,7 @@ describe('bucket fill — layer mask mode', () => {
 
     expect(fillMask).toHaveBeenCalledTimes(1);
     const fm = fillMask.mock.calls[0]!;
-    // (engine, layerId, x, y, tolerance, contiguous, mode=1 fill-black)
+    // (engine, layerId, docX, docY, tolerance, contiguous, mode=1 fill-black)
     expect(fm[2]).toBe(4);
     expect(fm[3]).toBe(5);
     expect(fm[6]).toBe(1);

@@ -46,6 +46,9 @@ pub fn apply_healing_dab_batch(
         Some(t) => t.clone(),
         None => return,
     };
+    // This pass renders at the layer's size and blits the whole scratch
+    // back, so scratch must match the layer exactly (see ensure_scratch_size).
+    if engine.ensure_scratch_size(w, h).is_err() { return; }
 
     let radius = size * 0.5;
 

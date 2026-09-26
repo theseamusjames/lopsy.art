@@ -30,7 +30,7 @@ import type { LayerDropTarget } from './actions/drop-layer';
 import { computeDuplicateLayer } from './actions/duplicate-layer';
 import { computeMergeDown } from './actions/merge-down';
 import { computeFlattenImage } from './actions/flatten-image';
-import { computeRasterizeStyle } from './actions/rasterize-style';
+import { computeRasterizeStyle, canRasterizeLayerStyle } from './actions/rasterize-style';
 import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
 import { computeCropCanvas } from './actions/crop-canvas';
 import { computeResizeCanvas } from './actions/resize-canvas';
@@ -670,13 +670,22 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   rasterizeLayerStyle: () => {
     const s = get();
     flushLayerSync(s);
+    if (!canRasterizeLayerStyle(s.document)) return;
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
+    // pushHistory must run BEFORE computeRasterizeStyle: that function
+    // bakes the effects into the layer's GPU texture as a side effect
+    // (rasterizeLayerEffects + uploadLayerPixels), and pushHistory
+    // snapshots whatever is currently on the GPU. Pushing after the bake
+    // (the old order) captured the POST-bake texture alongside the
+    // pre-bake "effects enabled" metadata, so undo re-enabled the effect
+    // on top of pixels that already had it baked in — the same
+    // pushHistory-after-mutation bug as #813 and #816 (#903).
+    s.pushHistory('Rasterize Layer Style');
     // GPU-only (rasterizeLayerEffects + uploadLayerPixels for the
     // active layer). The compute function invalidates the JS pixel
     // cache for the active layer directly (#746).
     const result = computeRasterizeStyle(s.document);
     if (!result) return;
-    s.pushHistory('Rasterize Layer Style');
     applyActionResult(set, result);
     for (const id of sparseIds) get().cropLayerToContent(id);
   },

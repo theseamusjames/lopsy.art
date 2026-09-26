@@ -6,6 +6,7 @@ import { createTransformState } from '../../tools/transform/transform';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
 import { schedulePrefloat } from '../../app/interactions/prefloat';
+import { getMaskDocOrigin } from '../../layers/mask-origin';
 
 export function selectLayerAlpha(layerId: string): void {
   // Commit any active GPU float so the layer texture has the final pixels
@@ -57,11 +58,12 @@ export function convertMaskToMarquee(layerId: string): void {
   if (!layer?.mask) return;
   const { mask } = layer;
   const { width: docW, height: docH } = editorState.document;
+  const origin = getMaskDocOrigin(layer);
   const selMask = new Uint8ClampedArray(docW * docH);
   for (let y = 0; y < mask.height; y++) {
     for (let x = 0; x < mask.width; x++) {
-      const docX = x + layer.x;
-      const docY = y + layer.y;
+      const docX = x + origin.x;
+      const docY = y + origin.y;
       if (docX >= 0 && docX < docW && docY >= 0 && docY < docH) {
         selMask[docY * docW + docX] = 255 - (mask.data[y * mask.width + x] ?? 0);
       }

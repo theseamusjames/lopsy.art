@@ -184,6 +184,13 @@ pub fn end_dodge_burn_stroke(engine: &mut EngineInner, layer_id: &str) {
         }
     };
 
+    // Renders at the layer's size and blits the whole scratch back, so
+    // scratch must match the layer exactly (see ensure_scratch_size).
+    if engine.ensure_scratch_size(w, h).is_err() {
+        engine.texture_pool.release(coverage_handle);
+        if let Some(p) = preview_handle { engine.texture_pool.release(p); }
+        return;
+    }
     let gl = &engine.gl;
     gl.disable(WebGl2RenderingContext::BLEND);
     engine.fbo_pool.bind(gl, engine.scratch_fbo_a);

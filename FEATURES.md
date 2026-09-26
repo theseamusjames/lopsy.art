@@ -1537,7 +1537,7 @@ every non-raster layer outright.
 |---|---|---|---|---|---|---|
 | **Crop canvas** | cropped to the rect | reset to `(0,0)` at full canvas size | translated by the crop origin | untouched | untouched | untouched by the tool; **Edit → Crop clears it** |
 | **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | untouched | untouched |
-| **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position scaled, **font size unchanged** | untouched | untouched | untouched |
+| **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position, font size, letter spacing, area-text width, and effect dimensions all scaled | untouched | untouched | untouched |
 | **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | **untouched** | untouched | untouched | untouched |
 | **Flip** | mirrored within the layer's own texture | untouched | mirrors the rendered glyph texture | no-op on a group's 1×1 placeholder | untouched | untouched |
 
@@ -1697,10 +1697,17 @@ share their number handling and diverge everywhere else.
   Image* step on the undo stack. Crop guards more carefully — `cropCanvas` rejects a
   zero-area rectangle *before* `pushHistory`, so a degenerate drag records
   nothing (cropping to the full document is still a real entry).
-- **Only the raster layers are resampled by Image Size.** Text layers have their
-  `x` / `y` scaled but not their font size, so type stays at its original point
-  size while the artwork around it grows or shrinks; shape and group layers are
-  not touched at all.
+- **Only the raster and text layers are transformed by Image Size**; shape and
+  group layers are not touched at all. Text layers scale `x` / `y`, `fontSize`,
+  `letterSpacing`, and the area-text box `width` (when the layer isn't point
+  text). `fontSize` and `letterSpacing` are axis-less font metrics, so both
+  scale by the geometric mean of the horizontal/vertical factors
+  (`sqrt(scaleX * scaleY)`) rather than picking one axis; the area-text `width`
+  is a horizontal document-space extent, so it scales by `scaleX` alone, same
+  as a raster layer's width. Layer effects (drop shadow, stroke, inner/outer
+  glow) scale the same way on both text and raster layers: offsetX/offsetY
+  follow scaleX/scaleY respectively, and the axis-less fields (blur, spread,
+  glow size, stroke width) use the geometric-mean scale.
 
 ### Crop tool commit
 

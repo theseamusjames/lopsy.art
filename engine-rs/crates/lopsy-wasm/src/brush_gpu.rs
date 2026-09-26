@@ -526,7 +526,6 @@ pub fn apply_eraser_dab_batch(
     points: &[f64],
     size: f32, hardness: f32, opacity: f32,
 ) {
-    let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
@@ -536,6 +535,10 @@ pub fn apply_eraser_dab_batch(
         Some(t) => t.clone(),
         None => return,
     };
+    // This pass renders at the layer's size and blits the whole scratch
+    // back, so scratch must match the layer exactly (see ensure_scratch_size).
+    if engine.ensure_scratch_size(w, h).is_err() { return; }
+    let gl = &engine.gl;
 
     // Generate stamp
     let stamp_size = size.ceil() as u32;

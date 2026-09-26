@@ -10,12 +10,24 @@ import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-typ
 const SPRAY_INTERVAL_MS = 166;
 
 let sprayTimer: ReturnType<typeof setInterval> | null = null;
+// #793 — the airbrush timer used to read `state.lastPoint`, but the
+// interaction dispatcher hands each move handler a shallow COPY of the
+// state (see `withMoveGesture`/`withToolGesture`), so subsequent
+// mutations never reach the closure the timer captured — the timer kept
+// spraying at the pointer-DOWN position forever. Track the live cursor
+// at module scope instead, and let the timer read from there.
+let sprayCursor: {
+  layerId: string;
+  point: { x: number; y: number };
+  strokeColor: { r: number; g: number; b: number; a: number } | null;
+} | null = null;
 
 function clearSprayTimer(): void {
   if (sprayTimer !== null) {
     clearInterval(sprayTimer);
     sprayTimer = null;
   }
+  sprayCursor = null;
 }
 
 function emitSprayDabs(
@@ -38,8 +50,9 @@ function emitSprayDabs(
   }
 }
 
-function sprayAtCurrentPosition(state: InteractionState): void {
-  if (!state.lastPoint || !state.layerId) return;
+function sprayAtCurrentPosition(): void {
+  const cursor = sprayCursor;
+  if (!cursor) return;
 
   const engine = getEngine();
   if (!engine) return;
@@ -48,12 +61,12 @@ function sprayAtCurrentPosition(state: InteractionState): void {
   const { size, density, opacity: opacityPct, hardness: hardnessPct } = toolSettings.settings.spray;
   const opacity = opacityPct / 100;
   const hardness = hardnessPct / 100;
-  const color = toDocumentColor(state.strokeColor ?? toolSettings.foregroundColor);
+  const color = toDocumentColor(cursor.strokeColor ?? toolSettings.foregroundColor);
   const r = color.r / 255;
   const g = color.g / 255;
   const b = color.b / 255;
 
-  emitSprayDabs(engine, state.layerId, state.lastPoint.x, state.lastPoint.y, size / 2, density, hardness, r, g, b, color.a, opacity);
+  emitSprayDabs(engine, cursor.layerId, cursor.point.x, cursor.point.y, size / 2, density, hardness, r, g, b, color.a, opacity);
   useEditorStore.getState().notifyRender();
 }
 
@@ -100,7 +113,12 @@ export function handleSprayDown(
   editorState.notifyRender();
 
   clearSprayTimer();
-  sprayTimer = setInterval(() => sprayAtCurrentPosition(state), SPRAY_INTERVAL_MS);
+  sprayCursor = {
+    layerId: activeLayerId,
+    point: { x: layerPos.x, y: layerPos.y },
+    strokeColor,
+  };
+  sprayTimer = setInterval(sprayAtCurrentPosition, SPRAY_INTERVAL_MS);
 
   return state;
 }
@@ -130,8 +148,21 @@ export function handleSprayMove(
   const dy = layerLocalPos.y - state.lastPoint.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
 
+  // #793 — keep the airbrush timer aimed at the LIVE cursor position,
+  // regardless of whether the step-spacing loop below emits this frame.
+  // Without this the timer stayed pinned at pointer-down forever
+  // because the interaction dispatcher shallow-copies state and the
+  // timer closed over the pre-copy `lastPoint`.
+  if (sprayCursor && sprayCursor.layerId === state.layerId) {
+    sprayCursor.point = { x: layerLocalPos.x, y: layerLocalPos.y };
+  }
+
   if (dist < spacing) {
-    state.lastPoint = layerLocalPos;
+    // #793 — DO NOT advance state.lastPoint here. The old code moved
+    // the anchor without emitting, so sub-spacing move events discarded
+    // their accumulated distance and a slow hand-speed drag emitted
+    // only the pointer-down cloud. Keep the anchor pinned; the next
+    // move event that finally exceeds `spacing` still triggers dabs.
     return;
   }
 

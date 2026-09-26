@@ -238,6 +238,35 @@ test.describe('Mesh Warp Inline Overlay', () => {
     });
 
     expect(scanResults.totalDiff).toBeGreaterThan(100);
+
+    // Content follows the handle (#911): dragging the (266, 133) handle left
+    // pulls the red/blue boundary on that row from x=200 to ~x=170, so
+    // (185, 133) turns blue. The old reversed warp pushed the boundary right
+    // to ~x=255 and left this pixel red.
+    const followed = await readPixel(page, 185, 133);
+    expect(followed.b).toBeGreaterThan(followed.r);
+  });
+
+  test('applying an untouched grid does not shift the layer', async ({ page }) => {
+    await createDocument(page, 400, 400, true);
+    await paintRedBlueSplit(page);
+    await page.waitForTimeout(300);
+    await fitToView(page);
+
+    await activateMeshWarp(page);
+    await page.locator('button:has-text("Apply")').click();
+    await page.waitForTimeout(400);
+
+    // #909: a zero displacement used to decode as a small positive offset,
+    // shifting content down/right and leaving a transparent strip at the
+    // far edges.
+    const corner = await readPixel(page, 399, 399);
+    expect(corner.a).toBe(255);
+    expect(corner.b).toBeGreaterThan(200);
+    const lastRed = await readPixel(page, 199, 200);
+    const firstBlue = await readPixel(page, 200, 200);
+    expect(lastRed.r).toBeGreaterThan(200);
+    expect(firstBlue.b).toBeGreaterThan(200);
   });
 
   test('cancel restores the original layer and clears the session', async ({ page }) => {
