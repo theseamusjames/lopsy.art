@@ -1133,6 +1133,31 @@ export function rerenderCommittedTextLayerAnchored(
 }
 
 /**
+ * Refresh a committed text layer whose *props are unchanged* but whose
+ * rendered glyphs may change because a web font finished downloading
+ * (Inter fallback → the real face), keeping it anchored.
+ *
+ * Unlike {@link rerenderCommittedTextLayerAnchored}, old and new props are
+ * identical here, so the engine's props-hash dedup would otherwise skip the
+ * re-shape needed to pick up the newly available font. The old anchor must
+ * be recovered from the *still-cached* (fallback-shaped) layout before that
+ * cache is dropped — recovering it after `resetTextLayerLayout` would measure
+ * the new layout's offset against `layer.x`, double-counting the alignment
+ * offset already baked into `layer.x` for centered/right-aligned area text.
+ */
+export function refreshCommittedTextLayerFont(
+  engine: Engine,
+  layer: TextLayer,
+): { x: number; y: number } | null {
+  setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
+  const oldBounds = renderTextLayer(engine, layer.id);
+  const anchorX = oldBounds.length === 4 ? layer.x - oldBounds[2]! : layer.x;
+  const anchorY = oldBounds.length === 4 ? layer.y - oldBounds[3]! : layer.y;
+  resetTextLayerLayout(engine, layer.id);
+  return placeTextLayerAtAnchor(engine, layer, anchorX, anchorY);
+}
+
+/**
  * Render a text layer's current content and upload the texture so its layout
  * origin lands at document (`anchorX`, `anchorY`). Use this to refresh a layer
  * (e.g. after a font binary finishes downloading) while keeping it anchored.
