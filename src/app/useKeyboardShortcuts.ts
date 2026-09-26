@@ -8,6 +8,7 @@ import { clearSelectedPixels, hasFloat, setSelectionMask } from '../engine-wasm/
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
+import { isNativeArrowKeyTarget } from './shortcuts/native-control-keys';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob } from './paste-or-open';
@@ -248,6 +249,12 @@ export function useKeyboardShortcuts({
 
       if (!e.metaKey && !e.ctrlKey && !e.altKey) {
         if (handleToolShortcut(e)) return;
+        // #897 — a focused range/radio/select handles arrow keys itself
+        // (slider stepping, radio-group navigation, option cycling); don't
+        // let the global nudge shortcut win the race and move the layer
+        // instead. Tool-select letters and other shortcuts above/below this
+        // check are unaffected, per #817's intent for non-text inputs.
+        if (isNativeArrowKeyTarget(e.target, e.key)) return;
         if (handleNudgeShortcut(e, nudgeMove, nudgeSelection)) return;
         if (handleSizeShortcut(e)) return;
       }
