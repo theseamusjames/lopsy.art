@@ -341,6 +341,9 @@ pub fn remove_group_adjustment(engine: &mut Engine, group_id: &str) {
         if let Some(t) = ga.adjustments.gradient_map_texture {
             engine.inner.texture_pool.release(t);
         }
+        if let Some(t) = engine.inner.group_pre_adj_cache.remove(group_id) {
+            engine.inner.texture_pool.release(t);
+        }
         engine.inner.needs_recomposite = true;
     }
 }
@@ -410,6 +413,9 @@ pub fn clear_group_adjustments(engine: &mut Engine) {
         engine.inner.texture_pool.release(tex);
     }
     engine.inner.group_adjustments.clear();
+    for (_, tex) in engine.inner.group_pre_adj_cache.drain() {
+        engine.inner.texture_pool.release(tex);
+    }
     engine.inner.needs_recomposite = true;
 }
 

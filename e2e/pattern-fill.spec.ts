@@ -1,5 +1,44 @@
-import { test, expect } from '@playwright/test';
-import { waitForStore, createDocument, getPixelAt, drawRect, setActiveLayer, getEditorState } from './helpers';
+import { test, expect, type Page } from '@playwright/test';
+import { waitForStore, createDocument, getPixelAt, drawRect, addLayer, setActiveLayer, setForegroundColor, selectTool, getEditorState, docToScreen } from './helpers';
+
+/** Draw a rectangular selection (marquee-rect drag, no fill) at document coordinates. */
+async function selectRect(page: Page, docX: number, docY: number, docW: number, docH: number): Promise<void> {
+  await page.keyboard.press('m');
+  await page.waitForTimeout(100);
+  const start = await docToScreen(page, docX, docY);
+  const end = await docToScreen(page, docX + docW, docY + docH);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+}
+
+/**
+ * Marquee-select and fill with the Fill tool, like `drawRect`, but without
+ * `drawRect`'s trailing GPU→JS pixel-cache sync. That sync calls
+ * `updateLayerPixelData`, which runs `cropLayerToContent` (e2e/GUIDE.md
+ * pitfall #1) and shrinks the layer to the painted bounds — losing the
+ * "layer is still full document size" state a real Fill-tool click leaves
+ * behind (the production Fill tool never calls `updateLayerPixelData`).
+ */
+async function fillRectViaTool(
+  page: Page,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: { r: number; g: number; b: number },
+): Promise<void> {
+  await setForegroundColor(page, color.r, color.g, color.b);
+  await selectRect(page, x, y, w, h);
+  await selectTool(page, 'fill');
+  const center = await docToScreen(page, x + w / 2, y + h / 2);
+  await page.mouse.click(center.x, center.y);
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Control+d');
+  await page.waitForTimeout(100);
+}
 
 test.describe('Pattern Fill', () => {
   test.beforeEach(async ({ page, isMobile }) => {
@@ -202,5 +241,133 @@ test.describe('Pattern Fill', () => {
     // Cancel
     await dialog.locator('button:has-text("Cancel")').click();
     await expect(dialog).not.toBeVisible();
+  });
+
+  // #848: a layer's GPU texture stays a lazy 1x1 placeholder until it's
+  // painted on at least once. Fill with Pattern on such a layer must expand
+  // it to full size *before* reading its dimensions for the tile math, or
+  // every fragment samples the pattern's top-left texel and the fill comes
+  // out as a solid block instead of tiling.
+  test('fills a never-painted layer with a tiled pattern, not a solid block', async ({ page }) => {
+    await createDocument(page, 400, 300, false);
+
+    // createDocument(transparentBg: false) creates an opaque white
+    // "Background" layer plus an empty, transparent "Layer 1" which becomes
+    // active — Layer 1's GPU texture is not yet allocated.
+    const initial = await getEditorState(page);
+    const layer1 = initial.document.layers.find((l) => l.name === 'Layer 1');
+    if (!layer1) throw new Error('Layer 1 not found');
+
+    // Paint a 48x2 black bar onto Layer 1 at (20,20) — this is the source
+    // content for the pattern (paints Layer 1 for the first time).
+    await fillRectViaTool(page, 20, 20, 48, 2, { r: 0, g: 0, b: 0 });
+
+    // Select a 48x7 region (2 black rows + 5 transparent rows) and define it
+    // as a pattern.
+    await selectRect(page, 20, 20, 48, 7);
+    await page.click('button:has-text("Edit")');
+    await page.click('button[role="menuitem"]:has-text("Define Pattern")');
+    const patternCount = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__patternStore as {
+        getState: () => { patterns: Array<{ id: string }> };
+      };
+      return store.getState().patterns.length;
+    });
+    expect(patternCount).toBe(1);
+    await page.keyboard.press('Control+d');
+
+    // Add a brand new, never-painted layer and hide Layer 1 so only the new
+    // layer (and the white background) are visible.
+    const layer2Id = await addLayer(page);
+    await page.locator(`[data-layer-id="${layer1.id}"]`)
+      .locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]')
+      .click();
+
+    // Select a region on the new layer and fill it with the pattern via the
+    // dialog, with "Preview" left unchecked (the default apply path).
+    await selectRect(page, 100, 80, 200, 140);
+    await page.click('button:has-text("Edit")');
+    await page.click('button[role="menuitem"]:has-text("Fill with Pattern")');
+    const dialog = page.locator('[role="dialog"][aria-label="Pattern Fill"]');
+    await expect(dialog).toBeVisible();
+    await dialog.locator('button:has-text("Apply")').click();
+    await expect(dialog).not.toBeVisible();
+    await page.waitForTimeout(200);
+
+    await page.screenshot({ path: 'e2e/screenshots/pattern-fill-never-painted-after.png' });
+
+    // The pattern tiles vertically with period 7: rows where doc-y % 7 is 0
+    // or 1 are opaque black (from the 2-row bar); every other row is fully
+    // transparent. Probe several cycles inside the marquee (y in [80, 220)).
+    const opaqueRows = [84, 85, 91, 92, 98, 99];
+    const transparentRows = [87, 90, 94, 97];
+    for (const y of opaqueRows) {
+      expect(y % 7).toBeLessThanOrEqual(1);
+      const px = await getPixelAt(page, 150, y, layer2Id);
+      expect(px.a).toBeGreaterThan(200);
+      expect(px.r).toBeLessThan(50);
+      expect(px.g).toBeLessThan(50);
+      expect(px.b).toBeLessThan(50);
+    }
+    for (const y of transparentRows) {
+      expect(y % 7).toBeGreaterThan(1);
+      const px = await getPixelAt(page, 150, y, layer2Id);
+      // Under the bug, u_layerSize=(1,1) makes every fragment sample the
+      // pattern's first texel (opaque black), so alpha is 255 everywhere.
+      expect(px.a).toBeLessThan(50);
+    }
+  });
+
+  test('fills an already-painted layer with a tiled pattern (control)', async ({ page }) => {
+    await createDocument(page, 400, 300, false);
+
+    const initial = await getEditorState(page);
+    const layer1 = initial.document.layers.find((l) => l.name === 'Layer 1');
+    if (!layer1) throw new Error('Layer 1 not found');
+
+    await fillRectViaTool(page, 20, 20, 48, 2, { r: 0, g: 0, b: 0 });
+    await selectRect(page, 20, 20, 48, 7);
+    await page.click('button:has-text("Edit")');
+    await page.click('button[role="menuitem"]:has-text("Define Pattern")');
+    await page.keyboard.press('Control+d');
+
+    // Add a new layer, but this time paint it (full-layer white fill) before
+    // filling with the pattern — its GPU texture is already full document
+    // size, unlike the never-painted case above.
+    const layer2Id = await addLayer(page);
+    await page.locator(`[data-layer-id="${layer1.id}"]`)
+      .locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]')
+      .click();
+    await setActiveLayer(page, layer2Id);
+    await drawRect(page, 0, 0, 400, 300, { r: 255, g: 255, b: 255 });
+
+    await selectRect(page, 100, 80, 200, 140);
+    await page.click('button:has-text("Edit")');
+    await page.click('button[role="menuitem"]:has-text("Fill with Pattern")');
+    const dialog = page.locator('[role="dialog"][aria-label="Pattern Fill"]');
+    await expect(dialog).toBeVisible();
+    await dialog.locator('button:has-text("Apply")').click();
+    await expect(dialog).not.toBeVisible();
+    await page.waitForTimeout(200);
+
+    await page.screenshot({ path: 'e2e/screenshots/pattern-fill-already-painted-after.png' });
+
+    const opaqueRows = [84, 85, 91, 92];
+    const transparentRows = [87, 90];
+    for (const y of opaqueRows) {
+      const px = await getPixelAt(page, 150, y, layer2Id);
+      expect(px.a).toBeGreaterThan(200);
+      expect(px.r).toBeLessThan(50);
+      expect(px.g).toBeLessThan(50);
+      expect(px.b).toBeLessThan(50);
+    }
+    for (const y of transparentRows) {
+      // The selection mask blend hard-selects the filtered (pattern) result
+      // inside the marquee (mix(original, filtered, mask) with mask=1), so
+      // the transparent pattern rows come out transparent here too, not the
+      // pre-existing white fill showing through.
+      const px = await getPixelAt(page, 150, y, layer2Id);
+      expect(px.a).toBeLessThan(50);
+    }
   });
 });

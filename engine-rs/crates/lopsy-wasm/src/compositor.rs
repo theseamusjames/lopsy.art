@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
 use crate::gpu::texture_pool::TextureHandle;
@@ -18,7 +18,7 @@ use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
 /// scratch texture, so their mask is likewise always at the origin. Shape
 /// and text layers are never auto-cropped/expanded — their mask is created
 /// at, and tracks, the layer's own (possibly non-zero) position.
-fn mask_doc_offset(layer_type: lopsy_core::layer::LayerType, layer_x: f32, layer_y: f32) -> (f32, f32) {
+pub(crate) fn mask_doc_offset(layer_type: lopsy_core::layer::LayerType, layer_x: f32, layer_y: f32) -> (f32, f32) {
     match layer_type {
         lopsy_core::layer::LayerType::Raster | lopsy_core::layer::LayerType::Group => (0.0, 0.0),
         _ => (layer_x, layer_y),
@@ -56,12 +56,52 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     let n = engine.layer_stack.len();
 
     // Pre-compute group adjustment routing: for each child layer, which group
-    // (if any) owns it for adjustment purposes.
+    // (if any) owns it for adjustment purposes. `child_ids` for each group
+    // only lists descendants up to (and including) the nearest nested group
+    // that itself needs routing — see `flattenGroupDescendants` on the JS
+    // side — so each id maps to exactly one immediate parent group, even
+    // when adjusted groups are nested inside one another (#857).
     let child_to_group: HashMap<String, String> = engine.group_adjustments.iter()
         .flat_map(|(gid, ga)| ga.child_ids.iter().map(move |cid| (cid.clone(), gid.clone())))
         .collect();
-    let mut active_group_id: Option<String> = None;
-    let mut skip_group_children = false;
+
+    // Groups that participate in nesting (an adjusted ancestor or an
+    // adjusted descendant of another adjusted group) never use the
+    // pre-adjustment cache fast path: a nested group's cached texture would
+    // otherwise embed a stale copy of the other group's adjusted output
+    // whenever only the *other* group's adjustment values change. Flat
+    // (non-nested) groups — the common case — keep the original caching
+    // behavior untouched.
+    let nested_group_ids: HashSet<String> = {
+        let routed_ids: HashSet<&str> =
+            engine.group_adjustments.keys().map(String::as_str).collect();
+        let mut nested = HashSet::new();
+        for (gid, ga) in engine.group_adjustments.iter() {
+            for cid in &ga.child_ids {
+                if routed_ids.contains(cid.as_str()) {
+                    nested.insert(gid.clone());
+                    nested.insert(cid.clone());
+                }
+            }
+        }
+        nested
+    };
+
+    // Whether the pre-adjustment caches were valid (nothing dirtied since
+    // they were built) at the START of this frame. Captured once so a
+    // recompute triggered by one group mid-frame doesn't let a later,
+    // still-stale group in the same frame read a cache built before that
+    // recompute — `group_pre_adj_valid` itself is only set back to `true`
+    // once, at the end of this function, after every group encountered
+    // this frame has had a chance to refresh its entry.
+    let cache_was_valid = engine.group_pre_adj_valid;
+
+    // Stack of currently-open adjusted-group accumulations, innermost last.
+    // A leaf (or nested group marker) whose resolved parent doesn't match
+    // the current top pushes a new frame at the next depth; a group marker
+    // matching the top pops and finalizes it, blending onto whatever is now
+    // the new top (an ancestor's scratch) or onto the main composite.
+    let mut group_stack: Vec<GroupFrame> = Vec::new();
 
     for idx in 0..n {
         let (
@@ -104,144 +144,115 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 
         if !visible || opacity < 1e-7 {
             // If this is a group layer with adjustments but invisible, close
-            // out the group so children don't keep routing to scratch.
-            if layer_type == lopsy_core::layer::LayerType::Group && active_group_id.as_ref() == Some(&layer_id) {
-                active_group_id = None;
+            // out the group (discarding its unfinished scratch) so children
+            // don't keep routing to it.
+            if layer_type == lopsy_core::layer::LayerType::Group
+                && group_stack.last().map(|f| f.id.as_str()) == Some(layer_id.as_str())
+            {
+                group_stack.pop();
             }
             continue;
         }
 
         // --- Group adjustment handling ---
         // When we encounter a Group layer that has adjustments, finalize the
-        // group scratch: apply adjustments, blend onto composite, then skip
-        // the normal per-layer compositing (groups have no texture).
+        // group scratch: apply adjustments, blend onto whatever is
+        // accumulating this group's content, then skip the normal
+        // per-layer compositing (groups have no texture).
         if layer_type == lopsy_core::layer::LayerType::Group {
-            if let Some(ref agid) = active_group_id {
-                if *agid == layer_id {
-                    // This is the group marker — finalize its children
-                    let gs_fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
-                    let gs_tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
+            if group_stack.last().map(|f| f.id.as_str()) == Some(layer_id.as_str()) {
+                // This is the group marker — finalize its children.
+                let frame = group_stack.pop().expect("checked by the condition above");
+                let gs_tex = frame.target.tex;
+                let gs_fbo = frame.target.fbo;
+                let is_cache_eligible = !nested_group_ids.contains(&layer_id);
 
-                    // Cache the pre-adjustment composited children so subsequent
-                    // frames that only change adjustment values (not children)
-                    // can skip re-blending all children.
-                    if !engine.group_pre_adj_valid || engine.group_pre_adj_id.as_ref() != Some(&layer_id) {
-                        let cache_tex = match engine.group_pre_adj_texture {
-                            Some(t) => {
-                                let (cw, ch) = engine.texture_pool.get_size(t).unwrap_or((0, 0));
-                                if cw != doc_w || ch != doc_h {
-                                    engine.texture_pool.release(t);
-                                    let nt = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).ok();
-                                    engine.group_pre_adj_texture = nt;
-                                    nt
-                                } else { Some(t) }
-                            }
-                            None => {
-                                let nt = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).ok();
-                                engine.group_pre_adj_texture = nt;
-                                nt
-                            }
-                        };
-                        if let Some(ct) = cache_tex {
-                            if let (Some(dst), Some(src)) = (engine.texture_pool.get(ct).cloned(), engine.texture_pool.get(gs_tex).cloned()) {
-                                engine.render_to_texture(&dst, doc_w as i32, doc_h as i32, |eng| {
-                                    eng.gl.use_program(Some(&eng.shaders.blit.program));
-                                    eng.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-                                    eng.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
-                                    if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") {
-                                        eng.gl.uniform1i(Some(&loc), 0);
-                                    }
-                                    eng.draw_fullscreen_quad();
-                                });
-                            }
-                        }
-                        engine.group_pre_adj_id = Some(layer_id.clone());
-                        engine.group_pre_adj_valid = true;
-                    } else {
-                        // Children unchanged — restore cached pre-adjustment scratch.
-                        // We skipped child blending for this group (skip_group_children was set).
-                        if let Some(ct) = engine.group_pre_adj_texture {
-                            if let (Some(dst), Some(src)) = (engine.texture_pool.get(gs_tex).cloned(), engine.texture_pool.get(ct).cloned()) {
-                                engine.fbo_pool.attach_texture(&engine.gl, gs_fbo, &dst);
-                                engine.fbo_pool.bind(&engine.gl, gs_fbo);
-                                engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-                                engine.gl.use_program(Some(&engine.shaders.blit.program));
-                                engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-                                engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
-                                if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") {
-                                    engine.gl.uniform1i(Some(&loc), 0);
-                                }
-                                engine.draw_fullscreen_quad();
-                            }
-                        }
-                    }
-
-                    if let Some(ga) = engine.group_adjustments.get(&layer_id) {
-                        let adj = ga.adjustments.clone();
-                        apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
-                    }
-                    // Look up the group's mask (same path as individual layer masks).
-                    // The group FBO is doc-sized so mask offset is (0,0) and size is doc size.
-                    let mask_enabled_in_stack = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
-                    let group_mask_info = engine.layer_masks.get(&layer_id).copied().and_then(|mask_handle| {
-                        let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
-                        let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
-                        Some((mask_gl, mw, mh, mask_enabled_in_stack))
-                    });
-                    let group_mask_arg = group_mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
-                        if *enabled { Some((tex, *mw, *mh)) } else { None }
-                    });
-                    // Blend the adjusted group scratch onto composite with the group's
-                    // opacity, blend mode, and mask applied. The scratch holds
-                    // straight alpha (blend.glsl un-premultiplies its output),
-                    // so it must not be un-premultiplied again — that
-                    // over-brightened every partially transparent child pixel,
-                    // e.g. a glow's falloff.
-                    if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
-                        blend_onto_composite(
-                            engine,
-                            &gs_gl,
-                            opacity,
-                            blend_mode,
-                            0.0, 0.0,
-                            doc_w, doc_h,
-                            false,
-                            None,
-                            group_mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h, 0.0f32, 0.0f32)),
-                        )?;
-                    }
-                    active_group_id = None;
-                    // Re-bind composite FBO for subsequent layers
-                    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-                    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-                    continue;
+                if !frame.skip && is_cache_eligible {
+                    // Children were freshly rendered this frame (not
+                    // restored from cache) — refresh the persistent
+                    // pre-adjustment cache so a later frame that only
+                    // changes adjustment values can skip re-blending them.
+                    refresh_pre_adj_cache(engine, &layer_id, gs_tex);
                 }
+
+                if let Some(ga) = engine.group_adjustments.get(&layer_id) {
+                    let adj = ga.adjustments.clone();
+                    apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
+                }
+                // Look up the group's mask (same path as individual layer masks).
+                // The group FBO is doc-sized so mask offset is (0,0) and size is doc size.
+                let mask_enabled_in_stack = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
+                let group_mask_info = engine.layer_masks.get(&layer_id).copied().and_then(|mask_handle| {
+                    let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
+                    let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
+                    Some((mask_gl, mw, mh, mask_enabled_in_stack))
+                });
+                let group_mask_arg = group_mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
+                    if *enabled { Some((tex, *mw, *mh)) } else { None }
+                });
+                // Blend the adjusted group scratch onto whichever target is
+                // accumulating this group's content: an ancestor group's
+                // scratch if this group is nested inside one that's still
+                // open, otherwise the main composite (#857). The scratch
+                // holds straight alpha (blend.glsl un-premultiplies its
+                // output), so it must not be un-premultiplied again — that
+                // over-brightened every partially transparent child pixel,
+                // e.g. a glow's falloff.
+                let dest = group_stack.last().map(|f| f.target).unwrap_or_else(|| main_target(engine));
+                if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
+                    blend_onto_target(
+                        engine,
+                        &gs_gl,
+                        opacity,
+                        blend_mode,
+                        0.0, 0.0,
+                        doc_w, doc_h,
+                        false,
+                        None,
+                        // A group's own scratch is always doc-sized/doc-origin
+                        // (#850), regardless of nesting depth.
+                        group_mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h, 0.0f32, 0.0f32)),
+                        dest,
+                    )?;
+                }
+                // Re-bind the destination FBO for subsequent layers.
+                engine.fbo_pool.bind(&engine.gl, dest.fbo);
+                engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+                continue;
             }
             continue;
         }
 
         // Check if this layer is a child of a group with adjustments.
-        // If so, ensure the group scratch is set up and redirect compositing.
-        // If the pre-adjustment cache is valid, skip child blending entirely —
-        // the cache already holds the children together with their effects.
-        let target = if let Some(gid) = child_to_group.get(&layer_id) {
-            if active_group_id.is_none() {
-                // Check if we can skip child compositing (cache valid)
-                skip_group_children = engine.group_pre_adj_valid
-                    && engine.group_pre_adj_id.as_ref() == Some(gid);
-            }
-            if skip_group_children {
-                if active_group_id.is_none() {
-                    active_group_id = Some(gid.clone());
+        // If so, ensure that group's scratch is set up (pushing a new
+        // frame on the group stack if we're not already accumulating into
+        // it) and redirect compositing there. If its pre-adjustment cache
+        // is valid, skip child blending entirely — the cache already holds
+        // the children together with their effects.
+        let target = if let Some(gid) = child_to_group.get(&layer_id).cloned() {
+            let top_matches = group_stack.last().map(|f| f.id.as_str()) == Some(gid.as_str());
+            if top_matches {
+                if group_stack.last().is_some_and(|f| f.skip) {
+                    continue;
                 }
-                continue;
+                group_stack.last().unwrap().target
+            } else {
+                let depth = group_stack.len();
+                let scratch_target = acquire_group_scratch_level(engine, depth)?;
+                let is_cache_eligible = !nested_group_ids.contains(&gid);
+                let use_cache = is_cache_eligible
+                    && cache_was_valid
+                    && engine.group_pre_adj_cache.contains_key(&gid);
+                if use_cache {
+                    let cache_tex = *engine.group_pre_adj_cache.get(&gid).unwrap();
+                    restore_pre_adj_cache(engine, cache_tex, scratch_target);
+                    group_stack.push(GroupFrame { id: gid, target: scratch_target, skip: true });
+                    continue;
+                }
+                clear_target(engine, scratch_target);
+                group_stack.push(GroupFrame { id: gid, target: scratch_target, skip: false });
+                scratch_target
             }
-            if active_group_id.is_none() {
-                // First child of this group — allocate/clear scratch
-                begin_group_scratch(engine)?;
-                active_group_id = Some(gid.clone());
-            }
-            group_scratch_target(engine)?
         } else {
             main_target(engine)
         };
@@ -378,6 +389,14 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 
     engine.draw_fullscreen_quad();
 
+    // Every adjusted group encountered this frame either refreshed its
+    // pre-adjustment cache entry or (if `cache_was_valid`) reused an
+    // already-fresh one, so the caches as a whole are now consistent.
+    // Flipping this only here (not per-group mid-loop) keeps a group
+    // recomputed early in the frame from making a still-stale group later
+    // in the same frame think it's safe to read its own stale cache entry.
+    engine.group_pre_adj_valid = true;
+
     engine.needs_recomposite = false;
     Ok(())
 }
@@ -401,44 +420,105 @@ fn main_target(engine: &EngineInner) -> Target {
     Target { tex: engine.composite_texture, fbo: engine.composite_fbo }
 }
 
-/// Allocate (or resize) the doc-sized group scratch texture and its FBO,
-/// clear it to transparent and leave it bound.
-fn begin_group_scratch(engine: &mut EngineInner) -> Result<Target, String> {
+/// One open adjusted-group accumulation on the compositor's group stack.
+/// `skip == true` means this group's content was restored directly from
+/// its pre-adjustment cache (its children were not re-rendered this frame).
+struct GroupFrame {
+    id: String,
+    target: Target,
+    skip: bool,
+}
+
+/// Get (allocating or resizing on demand) the persistent scratch
+/// (texture, FBO) pair for nesting depth `depth`, cleared to transparent.
+/// Depth 0 is the outermost currently-open adjusted group; a group nested
+/// inside another gets the next depth's scratch instead of colliding with
+/// its ancestor's (#857).
+fn acquire_group_scratch_level(engine: &mut EngineInner, depth: usize) -> Result<Target, String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    let tex = match engine.group_scratch_texture {
-        Some(t) if engine.texture_pool.get_size(t) == Some((doc_w, doc_h)) => t,
-        existing => {
-            if let Some(t) = existing {
-                engine.texture_pool.release(t);
-            }
-            let t = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
-            engine.group_scratch_texture = Some(t);
-            t
+    while engine.group_scratch_levels.len() <= depth {
+        let tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
+        let fbo = engine.fbo_pool.create(&engine.gl)?;
+        if let Some(gl_tex) = engine.texture_pool.get(tex).cloned() {
+            engine.fbo_pool.attach_texture(&engine.gl, fbo, &gl_tex);
         }
-    };
-    let fbo = match engine.group_scratch_fbo {
-        Some(f) => f,
-        None => {
-            let f = engine.fbo_pool.create(&engine.gl)?;
-            engine.group_scratch_fbo = Some(f);
-            f
-        }
-    };
-    if let Some(gl_tex) = engine.texture_pool.get(tex).cloned() {
-        engine.fbo_pool.attach_texture(&engine.gl, fbo, &gl_tex);
+        engine.group_scratch_levels.push((tex, fbo));
     }
-    engine.fbo_pool.bind(&engine.gl, fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+    let (mut tex, fbo) = engine.group_scratch_levels[depth];
+    if engine.texture_pool.get_size(tex) != Some((doc_w, doc_h)) {
+        engine.texture_pool.release(tex);
+        tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
+        if let Some(gl_tex) = engine.texture_pool.get(tex).cloned() {
+            engine.fbo_pool.attach_texture(&engine.gl, fbo, &gl_tex);
+        }
+        engine.group_scratch_levels[depth] = (tex, fbo);
+    }
     Ok(Target { tex, fbo })
 }
 
-fn group_scratch_target(engine: &EngineInner) -> Result<Target, String> {
-    let tex = engine.group_scratch_texture.ok_or("group scratch texture not allocated")?;
-    let fbo = engine.group_scratch_fbo.ok_or("group scratch FBO not allocated")?;
-    Ok(Target { tex, fbo })
+/// Clear a scratch target to transparent and leave it bound.
+fn clear_target(engine: &mut EngineInner, target: Target) {
+    let doc_w = engine.doc_width as i32;
+    let doc_h = engine.doc_height as i32;
+    engine.fbo_pool.bind(&engine.gl, target.fbo);
+    engine.gl.viewport(0, 0, doc_w, doc_h);
+    engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
+    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+}
+
+/// Get (allocating or resizing on demand) the persistent pre-adjustment
+/// cache texture for `group_id`.
+fn get_or_create_pre_adj_cache(engine: &mut EngineInner, group_id: &str) -> Result<TextureHandle, String> {
+    let doc_w = engine.doc_width;
+    let doc_h = engine.doc_height;
+    if let Some(&tex) = engine.group_pre_adj_cache.get(group_id) {
+        if engine.texture_pool.get_size(tex) == Some((doc_w, doc_h)) {
+            return Ok(tex);
+        }
+        engine.texture_pool.release(tex);
+        engine.group_pre_adj_cache.remove(group_id);
+    }
+    let tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
+    engine.group_pre_adj_cache.insert(group_id.to_string(), tex);
+    Ok(tex)
+}
+
+/// Copy a group's freshly-composited children into its persistent
+/// pre-adjustment cache, so a later frame that only changes adjustment
+/// values (not children) can restore from it instead of re-blending.
+fn refresh_pre_adj_cache(engine: &mut EngineInner, group_id: &str, src_tex: TextureHandle) {
+    let doc_w = engine.doc_width as i32;
+    let doc_h = engine.doc_height as i32;
+    let cache_tex = match get_or_create_pre_adj_cache(engine, group_id) {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+    if let (Some(dst), Some(src)) = (engine.texture_pool.get(cache_tex).cloned(), engine.texture_pool.get(src_tex).cloned()) {
+        engine.render_to_texture(&dst, doc_w, doc_h, |eng| {
+            eng.gl.use_program(Some(&eng.shaders.blit.program));
+            eng.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            eng.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
+            if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") { eng.gl.uniform1i(Some(&loc), 0); }
+            eng.draw_fullscreen_quad();
+        });
+    }
+}
+
+/// Restore a group's cached pre-adjustment pixels into its live scratch
+/// target, skipping re-rendering of its children.
+fn restore_pre_adj_cache(engine: &mut EngineInner, cache_tex: TextureHandle, target: Target) {
+    let doc_w = engine.doc_width as i32;
+    let doc_h = engine.doc_height as i32;
+    if let Some(src) = engine.texture_pool.get(cache_tex).cloned() {
+        engine.fbo_pool.bind(&engine.gl, target.fbo);
+        engine.gl.viewport(0, 0, doc_w, doc_h);
+        engine.gl.use_program(Some(&engine.shaders.blit.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
+        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        engine.draw_fullscreen_quad();
+    }
 }
 
 /// Blend a source texture onto the composite using the blend shader
@@ -1279,7 +1359,10 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
     let child_to_group: HashMap<String, String> = engine.group_adjustments.iter()
         .flat_map(|(gid, ga)| ga.child_ids.iter().map(move |cid| (cid.clone(), gid.clone())))
         .collect();
-    let mut active_group_id: Option<String> = None;
+    // No pre-adjustment cache here (export is a one-shot render, not a
+    // per-frame loop), but nested adjusted groups still need their own
+    // scratch per depth rather than colliding on a single slot (#857).
+    let mut group_stack: Vec<GroupFrame> = Vec::new();
 
     let layer_info: Vec<_> = engine.layer_stack.iter().map(|layer| {
         let mask_info = engine.layer_masks.get(&layer.id).and_then(|&mask_handle| {
@@ -1293,8 +1376,10 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
 
     for (layer_id, layer_type, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_info) in &layer_info {
         if !visible || *opacity < 1e-7 {
-            if *layer_type == lopsy_core::layer::LayerType::Group && active_group_id.as_ref() == Some(layer_id) {
-                active_group_id = None;
+            if *layer_type == lopsy_core::layer::LayerType::Group
+                && group_stack.last().map(|f| f.id.as_str()) == Some(layer_id.as_str())
+            {
+                group_stack.pop();
             }
             continue;
         }
@@ -1305,30 +1390,37 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         });
 
         if *layer_type == lopsy_core::layer::LayerType::Group {
-            if active_group_id.as_ref() == Some(layer_id) {
-                let scratch = group_scratch_target(engine)?;
+            if group_stack.last().map(|f| f.id.as_str()) == Some(layer_id.as_str()) {
+                let frame = group_stack.pop().expect("checked by the condition above");
                 if let Some(ga) = engine.group_adjustments.get(layer_id) {
                     let adj = ga.adjustments.clone();
-                    apply_adjustments_to_texture(engine, scratch.tex, scratch.fbo, &adj);
+                    apply_adjustments_to_texture(engine, frame.target.tex, frame.target.fbo, &adj);
                 }
                 // Same opacity / blend mode / mask handling as the live
-                // compositor, so exports match the canvas.
-                if let Some(gs_gl) = engine.texture_pool.get(scratch.tex).cloned() {
-                    blend_onto_composite(engine, &gs_gl, *opacity, *blend_mode, 0.0, 0.0, doc_w, doc_h, false, None, mask_arg)?;
+                // compositor, so exports match the canvas. Blend onto the
+                // new stack top (an ancestor group still open) or the main
+                // composite if this group isn't nested inside another.
+                let dest = group_stack.last().map(|f| f.target).unwrap_or_else(|| main_target(engine));
+                if let Some(gs_gl) = engine.texture_pool.get(frame.target.tex).cloned() {
+                    blend_onto_target(engine, &gs_gl, *opacity, *blend_mode, 0.0, 0.0, doc_w, doc_h, false, None, mask_arg, dest)?;
                 }
-                active_group_id = None;
-                engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
+                engine.fbo_pool.bind(&engine.gl, dest.fbo);
                 engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
             }
             continue;
         }
 
         let target = if let Some(gid) = child_to_group.get(layer_id) {
-            if active_group_id.is_none() {
-                begin_group_scratch(engine)?;
-                active_group_id = Some(gid.clone());
+            let top_matches = group_stack.last().map(|f| f.id.as_str()) == Some(gid.as_str());
+            if top_matches {
+                group_stack.last().unwrap().target
+            } else {
+                let depth = group_stack.len();
+                let scratch_target = acquire_group_scratch_level(engine, depth)?;
+                clear_target(engine, scratch_target);
+                group_stack.push(GroupFrame { id: gid.clone(), target: scratch_target, skip: false });
+                scratch_target
             }
-            group_scratch_target(engine)?
         } else {
             main_target(engine)
         };

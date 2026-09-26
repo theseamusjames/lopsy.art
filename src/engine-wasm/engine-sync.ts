@@ -441,10 +441,21 @@ export function syncAdjustments(engine: Engine, adjustments: ImageAdjustments, e
  * direct children causes sub-group descendants to bypass the scratch and
  * render directly onto the composite, where the group's normal-blend finalize
  * later covers them up.
+ *
+ * `routedGroupIds` are the ids of OTHER groups that need their own routing
+ * (their own adjustments or mask, per `groupNeedsRouting`). The walk stops at
+ * any such nested group instead of descending into it — that nested group's
+ * own `child_ids` entry already claims its descendants, and the compositor
+ * treats the nested group's finalized (already-adjusted) output as this
+ * group's "child" instead. Without this, a descendant deep inside a nested
+ * adjusted group would appear in BOTH groups' `child_ids`, and the
+ * compositor's id → group routing map (last write wins) would send it to
+ * only one of them — silently dropping the other group's adjustments (#857).
  */
 export function flattenGroupDescendants(
   layers: readonly Layer[],
   groupId: string,
+  routedGroupIds?: ReadonlySet<string>,
 ): string[] {
   const layerMap = new Map<string, Layer>();
   for (const l of layers) layerMap.set(l.id, l);
@@ -455,6 +466,7 @@ export function flattenGroupDescendants(
     const group = layer as import('../types').GroupLayer;
     for (const childId of group.children) {
       result.push(childId);
+      if (childId !== groupId && routedGroupIds?.has(childId)) continue;
       walk(childId);
     }
   };
@@ -468,12 +480,13 @@ function pushGroupToEngine(
   layers: readonly Layer[],
   precomputedAdj: ReturnType<typeof nodesToLegacyAdjustments> | null,
   cachedChildrenJson: string | undefined,
+  routedGroupIds: ReadonlySet<string>,
 ): string {
   const adj = precomputedAdj;
   const hasCurves = adj?.curves != null && !isIdentityCurves(adj.curves);
   const hasLevels = adj?.levels != null && !isIdentityLevels(adj.levels);
 
-  const childrenJson = cachedChildrenJson ?? JSON.stringify(flattenGroupDescendants(layers, group.id));
+  const childrenJson = cachedChildrenJson ?? JSON.stringify(flattenGroupDescendants(layers, group.id, routedGroupIds));
 
   setGroupAdjustments(
     engine,
@@ -576,6 +589,28 @@ function groupNeedsRouting(
 export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): void {
   const tracked = getTracked(engine);
 
+  // Precompute which groups need their own routing BEFORE walking children,
+  // so a nested group's ancestors know to stop their descendant walk at it
+  // (#857) regardless of which group happens to be visited first below.
+  const routedGroupIds = new Set<string>();
+  for (const layer of layers) {
+    if (layer.type !== 'group') continue;
+    const group = layer as import('../types').GroupLayer;
+    const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
+    const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
+    if (groupNeedsRouting(group, adj)) routedGroupIds.add(group.id);
+  }
+  // If the set of routed groups changed since last time — a group started
+  // or stopped needing its own routing — any OTHER group's cached
+  // `childrenJson` may now stop (or need to stop) at a different boundary,
+  // even though that other group's own `children` reference is unchanged.
+  // Drop the "unchanged, skip" fast path this call so everything still
+  // routed gets its descendant list recomputed with the current set.
+  const routedSetChanged =
+    routedGroupIds.size !== tracked.groupAdjRoutedIds.size ||
+    [...routedGroupIds].some((id) => !tracked.groupAdjRoutedIds.has(id));
+  tracked.groupAdjRoutedIds = routedGroupIds;
+
   if (tracked.groupAdjNeedsFullSync) {
     clearGroupAdjustments(engine);
     tracked.groupAdjTracked.clear();
@@ -587,7 +622,7 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
       const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
       const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
       if (!groupNeedsRouting(group, adj)) continue;
-      const childrenJson = pushGroupToEngine(engine, group, layers, adj, undefined);
+      const childrenJson = pushGroupToEngine(engine, group, layers, adj, undefined, routedGroupIds);
       tracked.groupAdjTracked.set(group.id, {
         adjustments: group.adjustments,
         adjustmentsEnabled: group.adjustmentsEnabled,
@@ -607,6 +642,7 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     const prev = tracked.groupAdjTracked.get(group.id);
 
     if (
+      !routedSetChanged &&
       prev &&
       prev.adjustments === group.adjustments &&
       prev.adjustmentsEnabled === group.adjustmentsEnabled &&
@@ -618,8 +654,8 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
     const needs = groupNeedsRouting(group, adj);
     if (needs) {
-      const cachedJson = prev && prev.children === group.children ? prev.childrenJson : undefined;
-      const childrenJson = pushGroupToEngine(engine, group, layers, adj, cachedJson);
+      const cachedJson = !routedSetChanged && prev && prev.children === group.children ? prev.childrenJson : undefined;
+      const childrenJson = pushGroupToEngine(engine, group, layers, adj, cachedJson, routedGroupIds);
       tracked.groupAdjTracked.set(group.id, {
         adjustments: group.adjustments,
         adjustmentsEnabled: group.adjustmentsEnabled,

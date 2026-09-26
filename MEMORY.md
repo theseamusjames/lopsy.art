@@ -100,6 +100,36 @@ headless grants it via `context.grantPermissions(['local-fonts'])`. `FontData.bl
 back a per-face SFNT (macOS `true`-tagged TrueType, CFF `OTTO`, TTC
 members already split) that `fontdb::load_font_data` parses as-is.
 
+## `[data-testid="canvas-container"]` never appears without a document
+
+`App.tsx` renders nothing but a start screen while `documentReady` is
+false — there's no auto-created document on load (the only auto-create
+effect is gated on a `?lighthouse` URL param). An e2e `beforeEach` that
+does `page.goto('/'); ...; waitForSelector('[data-testid="canvas-container"]')`
+before any `createDocument` call hangs for the full test timeout. Call
+`createDocument` (helper or store) first, in the test body or a
+beforeEach that also creates the doc — see `text-tool.spec.ts`'s
+beforeEach for the pattern. Also: `createDocument(w, h, false)`
+(non-transparent) seeds a second raster layer ("Layer 1", active) above
+"Background" via `create-document.ts`'s flat-mode check — only
+`createDocument(w, h, true)` gives you the plain single-background
+layout most tests assume. Every document also always ends with a
+"Project" root group layer, so `layers.length` after N flat layers is
+N+1.
+
+## This sandbox runs many concurrent Claude sessions — expect e2e flakiness under load
+
+`ps aux` during heavy work shows multiple unrelated `wasm-pack`/`vite`/
+`playwright`/headless-Chrome processes from other worktrees running at
+once. Undo/redo-adjacent e2e tests in `merge-down.spec.ts` intermittently
+fail or need Playwright's built-in retry under this contention (verified
+by re-running the *unmodified* suite and reproducing the exact same
+failures with no code changes at all) — layer counts land one short of
+expected right after undo/redo, most often on whichever test runs
+immediately after the first in a file. Before treating an undo/redo e2e
+failure as a real regression, rerun the same test in isolation and rerun
+the untouched baseline under the same load to rule out ambient flakiness.
+
 ## cosmic-text has no cross-style / cross-stretch fallback
 
 `Attrs::matches` keeps only faces whose `style` and `stretch` equal the
@@ -152,6 +182,25 @@ against a copy of the destination instead, and resample with
 `samplePremulBilinear` (`//#include premul_sample`, see
 `gpu/shaders/premul_sample.glsl`). The group-adjustment scratch is also
 straight alpha — blend it with `premultiplied = false`.
+
+## Read layer texture size AFTER ensure_layer_full_size, not before (#848)
+
+`apply_filter`/`apply_filter_inner` (filter_gpu.rs) call
+`engine.ensure_layer_full_size(layer_id)` internally, but only right
+before they read the layer texture for the actual pass. If a caller
+reads `texture_pool.get_size(tex_handle)` *before* invoking
+`apply_filter` — e.g. to compute a shader uniform like
+`u_layerSize` — it sees the lazy 1x1 placeholder size on a
+never-painted layer, not the doc-sized texture `apply_filter` is about
+to expand it to. `filter_pattern_fill` (api/filter/render.rs) had
+exactly this bug: `u_layerSize=(1,1)` made every fragment sample the
+pattern texture's first texel, producing a solid block instead of a
+tile. Fix: call `ensure_layer_full_size` (or `ensure_layer_covers`,
+both idempotent no-ops when already correct) yourself before reading
+the size, same as the precedent fix in `fill_with_color` (#765). Other
+call sites that read `texture_pool.get_size` directly are safe only if
+they don't need that size *before* delegating to `apply_filter` /
+`apply_separable_blur`.
 
 ## E2E: prove "no GPU readback on this event" by counting readPixels
 

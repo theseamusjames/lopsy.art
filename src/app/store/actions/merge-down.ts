@@ -72,8 +72,33 @@ export function computeMergeDown(
 
   // mergeLayers bakes both layers' opacities and blend modes into the
   // merged content, so the result layer resets to opacity 1 / normal blend.
+  //
+  // #859: the merged pixels are a raster composite, but a text layer's
+  // renderer re-typesets from `text`/`fontFamily`/etc. on every edit and
+  // ignores whatever is in its GPU texture — so if either merged layer was
+  // 'text', the result must become a plain raster layer (mirroring
+  // rasterizeTextLayer's explicit field whitelist) or a later text-tool
+  // edit would erase the merge.
   layers = layers.map((l) => {
     if (l.id !== belowId) return l;
+    if (l.type === 'text' || topLayer.type === 'text') {
+      return {
+        id: l.id,
+        name: l.name,
+        type: 'raster' as const,
+        visible: l.visible,
+        locked: l.locked,
+        opacity: 1,
+        blendMode: 'normal' as const,
+        x: 0,
+        y: 0,
+        clipToBelow: l.clipToBelow,
+        effects: DEFAULT_EFFECTS,
+        mask: l.mask,
+        width: doc.width,
+        height: doc.height,
+      };
+    }
     return { ...l, effects: DEFAULT_EFFECTS, opacity: 1, blendMode: 'normal' as const, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
   });
 

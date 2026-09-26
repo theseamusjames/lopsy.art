@@ -1,5 +1,6 @@
 use web_sys::WebGl2RenderingContext;
 use lopsy_core::layer::LayerDesc;
+use crate::compositor::mask_doc_offset;
 use crate::engine::EngineInner;
 use crate::gpu::texture_pool::TextureHandle;
 
@@ -218,6 +219,18 @@ pub fn merge_layers(
     let bottom_tex = engine.texture_pool.get(bottom_handle).cloned()
         .ok_or("Bottom texture not found")?;
 
+    // Merging bakes the top layer's mask into the composited alpha (its
+    // mask disappears along with the layer) but must NOT bake the bottom
+    // layer's mask — that mask belongs to the surviving layer and keeps
+    // applying to the merged content afterward (matches Photoshop/GIMP).
+    let top_mask_info = engine.layer_masks.get(top_id).copied().and_then(|mask_handle| {
+        let enabled = top_desc.mask.as_ref().is_some_and(|m| m.enabled);
+        if !enabled { return None; }
+        let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
+        let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
+        Some((mask_gl, mw, mh))
+    });
+
     // Merge into a doc-sized result at position (0, 0).
     // Both layers are mapped into document space via their positions.
     // We use the doc-sized scratch buffers as intermediaries, ping-ponging
@@ -289,11 +302,25 @@ pub fn merge_layers(
         if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some((mask_gl_tex, mask_w, mask_h)) = &top_mask_info {
+            let (mask_offset_x, mask_offset_y) = mask_doc_offset(top_desc.layer_type, top_desc.x as f32, top_desc.y as f32);
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_gl_tex));
+            if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 2); }
+            if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 1); }
+            if let Some(loc) = shader.location(&engine.gl, "u_maskSize") { engine.gl.uniform2f(Some(&loc), *mask_w as f32, *mask_h as f32); }
+            if let Some(loc) = shader.location(&engine.gl, "u_maskOffset") { engine.gl.uniform2f(Some(&loc), mask_offset_x, mask_offset_y); }
+        } else {
+            if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+        }
         if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), 0); }
         engine.draw_fullscreen_quad();
     }
 
+    if top_mask_info.is_some() {
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
