@@ -61,6 +61,7 @@ export function TextOptions() {
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       if (!editingLayerId || !editingLayer || editingLayer.type !== 'text') return;
       const val = e.target.value;
+      beginTextLayerHistory();
       if (val) {
         updateTextLayerProperties(editingLayerId, {
           pathId: val,
