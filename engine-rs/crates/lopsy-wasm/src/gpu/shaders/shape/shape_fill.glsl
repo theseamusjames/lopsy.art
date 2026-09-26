@@ -16,10 +16,33 @@ out vec4 fragColor;
 
 const float PI = 3.14159265359;
 
+// True Euclidean signed distance to an ellipse (#900). The stroke is the
+// band |d| < halfW, so d must be a real distance at every angle: the old
+// scaled-circle estimate `(|p/r| - 1) * min(r)` was short by the aspect
+// ratio on the major axis and ballooned the stroke at the tips.
+//
+// Finds the closest boundary point by iterating on its unit-circle
+// parameter t = (cos θ, sin θ): each step approximates the boundary near
+// the current point by its osculating circle (centred on the evolute point
+// e) and re-projects p onto it. Three fixed iterations are within ~0.05px
+// of exact even at 10:1, and it is exact for circles (e = 0).
 float sdEllipse(vec2 p, vec2 r) {
     if (min(r.x, r.y) < 0.5) return 1e6;
-    vec2 q = abs(p) / r;
-    return (length(q) - 1.0) * min(r.x, r.y);
+    // The tiny floor keeps the exact centre of a circle (e = 0, no defined
+    // closest point) from collapsing t to zero and reporting d = 0 there.
+    vec2 ap = max(abs(p), vec2(1e-3));
+    vec2 t = vec2(0.70710678);
+    float k = r.x * r.x - r.y * r.y;
+    for (int i = 0; i < 3; i++) {
+        vec2 x = r * t;
+        vec2 e = vec2(k, -k) * t * t * t / r;
+        float rc = length(x - e);
+        float qd = max(length(ap - e), 1e-6);
+        t = clamp(((ap - e) * (rc / qd) + e) / r, 0.0, 1.0);
+        t /= max(length(t), 1e-6);
+    }
+    float d = length(ap - r * t);
+    return dot(ap / r, ap / r) < 1.0 ? -d : d;
 }
 float sdRect(vec2 p, vec2 b, float r) {
     vec2 q = abs(p) - b + r;
