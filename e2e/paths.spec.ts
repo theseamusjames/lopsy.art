@@ -311,6 +311,30 @@ async function drawOpenPath(page: Page, points: Array<{ x: number; y: number }>)
   await page.waitForTimeout(200);
 }
 
+/**
+ * File → New via the real menu, the discard-confirmation dialog (accepted
+ * if the browser shows one), and the New Document modal — the same flow a
+ * user drives, not a store shortcut.
+ */
+async function createNewDocumentViaMenu(page: Page, width: number, height: number) {
+  page.once('dialog', (dialog) => { dialog.accept().catch(() => {}); });
+
+  await page.locator('nav button:has-text("File")').click();
+  await page.waitForSelector('[role="menu"]', { timeout: 5_000 });
+  await page.locator('[role="menuitem"]:has-text("New")').click();
+
+  const modal = page.locator('[role="dialog"][aria-label="New Document"]');
+  await modal.waitFor({ state: 'visible', timeout: 5_000 });
+
+  const numberInputs = modal.locator('input[type="number"]');
+  await numberInputs.nth(0).fill(String(width));
+  await numberInputs.nth(1).fill(String(height));
+
+  await modal.locator('button:has-text("Create")').click();
+  await modal.waitFor({ state: 'hidden', timeout: 5_000 });
+  await page.waitForTimeout(300);
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
@@ -759,5 +783,52 @@ test.describe('Paths Panel', () => {
 
     const state = await getPathsState(page);
     expect(state.paths).toHaveLength(0);
+  });
+
+  test('File > New clears stale paths from the previous document (#873)', async ({ page }) => {
+    // Repro from the bug report: pen tool, three points, commit via the
+    // on-canvas checkmark button.
+    await clickAtDoc(page, 100, 100);
+    await clickAtDoc(page, 300, 300);
+    await clickAtDoc(page, 500, 100);
+    await page.locator('button[aria-label="Commit path"]').click();
+    await page.waitForTimeout(200);
+
+    const before = await getPathsState(page);
+    expect(before.paths).toHaveLength(1);
+    expect(before.paths[0]!.name).toBe('Path 1');
+
+    await page.screenshot({
+      path: path.join(SCREENSHOT_DIR, '14-path-before-new-document.png'),
+    });
+
+    await createNewDocumentViaMenu(page, 500, 500);
+
+    // Paths panel must say "No paths", not still list the old "Path 1".
+    await expect(page.locator('[data-testid^="path-item-"]')).toHaveCount(0);
+    await expect(page.locator('text=No paths')).toBeVisible();
+
+    const after = await getPathsState(page);
+    expect(after.paths).toHaveLength(0);
+    expect(after.selectedPathId).toBeNull();
+
+    // The Text tool's Path dropdown must not offer the stale path — with
+    // zero paths, the whole control is omitted from the options bar.
+    await page.keyboard.press('t');
+    await page.waitForTimeout(100);
+    await expect(page.locator('select[aria-label="Text path"]')).toHaveCount(0);
+
+    // The old path must not be drawn as an overlay on the new canvas.
+    await triggerNotifyRender(page);
+    const staleOverlay = await overlayHasPixelsBetween(
+      page,
+      { x: 100, y: 100 },
+      { x: 300, y: 300 },
+    );
+    expect(staleOverlay).toBe(false);
+
+    await page.screenshot({
+      path: path.join(SCREENSHOT_DIR, '15-no-stale-path-after-new-document.png'),
+    });
   });
 });
