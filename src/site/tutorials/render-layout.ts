@@ -41,6 +41,10 @@ export function coverImage(tutorial: Tutorial): TutorialImage {
   return tutorial.cover ?? lastStep?.image ?? { src: '', alt: '' };
 }
 
+export function finishedImage(tutorial: Tutorial): TutorialImage | null {
+  return tutorial.finished ?? tutorial.steps[tutorial.steps.length - 1]?.image ?? null;
+}
+
 /** `<script>` content ends at the first `</script`, so `<` must never appear raw. */
 function serializeJsonLd(data: unknown): string {
   return JSON.stringify(data).replace(/</g, '\\u003c');

@@ -71,6 +71,8 @@ function readFrontmatter(
   const durationRaw = fields.get('duration') ?? '';
   const coverSrc = fields.get('cover') ?? '';
   const coverAlt = fields.get('coverAlt') ?? '';
+  const finishedSrc = fields.get('finished') ?? '';
+  const finishedAlt = fields.get('finishedAlt') ?? '';
 
   if (!title) errors.push('Missing `title`.');
   if (title.length > TITLE_MAX) {
@@ -97,6 +99,7 @@ function readFrontmatter(
   }
 
   if (coverSrc && !coverAlt) errors.push('`cover` needs a `coverAlt` description.');
+  if (finishedSrc && !finishedAlt) errors.push('`finished` needs a `finishedAlt` description.');
 
   const tags = splitList(fields.get('tags')).map((tag) => tag.toLowerCase());
   if (tags.length === 0) warnings.push('No `tags`; related tutorials are matched by tag.');
@@ -112,6 +115,7 @@ function readFrontmatter(
     tags,
     related: splitList(fields.get('related')),
     cover: coverSrc ? { src: coverSrc, alt: coverAlt } : null,
+    finished: finishedSrc ? { src: finishedSrc, alt: finishedAlt } : null,
     isDraft: fields.get('draft') === 'true',
   };
 }

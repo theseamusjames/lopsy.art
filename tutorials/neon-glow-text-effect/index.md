@@ -7,6 +7,8 @@ duration: 5
 tags: text effects, layer effects, typography, social media
 cover: cover.jpg
 coverAlt: The word NEON in glowing pink neon letters on a dark purple background
+finished: cover.jpg
+finishedAlt: The finished NEON sign: glowing pink neon letters on a dark purple radial gradient
 ---
 
 Neon signs are just bright text with light bleeding out around the edges. You

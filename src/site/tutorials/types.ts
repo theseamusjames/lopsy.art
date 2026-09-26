@@ -30,6 +30,8 @@ export interface TutorialFrontmatter {
   tags: string[];
   related: string[];
   cover: TutorialImage | null;
+  /** Shown under the header as the finished result. Defaults to the last step's image. */
+  finished: TutorialImage | null;
   isDraft: boolean;
 }
 

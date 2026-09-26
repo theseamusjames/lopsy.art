@@ -52,6 +52,7 @@ describe('parseTutorial', () => {
       tags: ['painting', 'brushes'],
       related: ['make-clouds', 'glow-effects'],
       cover: null,
+      finished: null,
       isDraft: false,
       intro: 'Intro text.',
     });
@@ -97,6 +98,7 @@ published: March 1st
 level: expert
 duration: soon
 cover: c.webp
+finished: f.webp
 ---
 ## Step
 ![a](a.png)
@@ -111,6 +113,7 @@ text`;
         '`level` must be one of: Beginner, Intermediate, Advanced.',
         '`duration` must be a whole number of minutes.',
         '`cover` needs a `coverAlt` description.',
+        '`finished` needs a `finishedAlt` description.',
       ]),
     );
   });
