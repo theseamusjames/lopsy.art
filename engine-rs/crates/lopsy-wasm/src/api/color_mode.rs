@@ -114,6 +114,22 @@ pub fn quantize_composite_to_palette(
     Ok(palette.into_iter().flatten().collect())
 }
 
+/// Extract up to `max_colors` dominant colors from the flattened document for
+/// the Swatches panel. Unlike `quantizeCompositeToPalette` the result is
+/// refined with k-means, so each entry is a color that actually occurs in the
+/// image rather than a population-weighted blend (see
+/// `quantize::dominant_colors`). RGBA bytes, 4 per entry.
+#[wasm_bindgen(js_name = "extractCompositePalette")]
+pub fn extract_composite_palette(
+    engine: &mut Engine,
+    max_colors: u32,
+) -> Result<Vec<u8>, JsError> {
+    let composite = compositor::composite_for_export(&mut engine.inner)
+        .map_err(|e| JsError::new(&e))?;
+    let palette = quantize::dominant_colors(&composite, max_colors as usize);
+    Ok(palette.into_iter().flatten().collect())
+}
+
 /// Snap a layer's pixels to `palette` (RGBA entries, 4 bytes each), optionally
 /// diffusing quantization error with Floyd–Steinberg.
 ///
