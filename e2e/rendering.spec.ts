@@ -2043,38 +2043,46 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '39-workflow-step4-effects.png') });
 
-    // Step 5: Undo back to the red background
-    // May need multiple undos depending on how many history entries were created
-    // Undo gradient fill and any intermediate states
-    await page.keyboard.press('Control+z');
-    await page.keyboard.press('Control+z');
-    await page.waitForTimeout(300);
-
-    // Verify we're back to the red background
-    const result = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
+    // Step 5: Undo back to the red background. Configuring the drop shadow
+    // records one history entry per committed slider edit (#846/#867), so the
+    // number of undos between the gradient and here is not fixed — undo until
+    // the center is red again (capped, so a genuine restore failure still
+    // fails the assertion rather than looping forever).
+    const readCenter = () =>
+      page.evaluate(() => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => {
+            document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
+            resolvePixelData: (id: string) => ImageData | undefined;
+          };
         };
-      };
-      const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
-      if (!data) return { error: 'no data' };
-      const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
-      if (!layer) return { error: 'no layer' };
-      const lx = 150 - layer.x;
-      const ly = 150 - layer.y;
-      if (lx < 0 || lx >= data.width || ly < 0 || ly >= data.height) return { error: 'out of bounds' };
-      const idx = (ly * data.width + lx) * 4;
-      return { r: data.data[idx], g: data.data[idx + 1], b: data.data[idx + 2] };
-    });
+        const state = store.getState();
+        const data = state.resolvePixelData(state.document.activeLayerId);
+        if (!data) return { error: 'no data' } as const;
+        const layer = state.document.layers.find((l) => l.id === state.document.activeLayerId);
+        if (!layer) return { error: 'no layer' } as const;
+        const lx = 150 - layer.x;
+        const ly = 150 - layer.y;
+        if (lx < 0 || lx >= data.width || ly < 0 || ly >= data.height) return { error: 'out of bounds' } as const;
+        const idx = (ly * data.width + lx) * 4;
+        return { r: data.data[idx]!, g: data.data[idx + 1]!, b: data.data[idx + 2]! };
+      });
+
+    const isRed = (p: Awaited<ReturnType<typeof readCenter>>): boolean =>
+      !('error' in p) && p.r > 150 && p.g < 100;
+
+    let result = await readCenter();
+    for (let i = 0; i < 10 && !isRed(result); i++) {
+      await page.keyboard.press('Control+z');
+      await page.waitForTimeout(150);
+      result = await readCenter();
+    }
 
     console.log('Complex workflow undo result:', JSON.stringify(result));
     expect(result).not.toHaveProperty('error');
     // Center should be back to the red background (200, 50, 50)
-    expect(result.r).toBeGreaterThan(150);
-    expect(result.g).toBeLessThan(100);
+    expect('error' in result ? -1 : result.r).toBeGreaterThan(150);
+    expect('error' in result ? 999 : result.g).toBeLessThan(100);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '39-workflow-step5-undo.png') });
   });
 

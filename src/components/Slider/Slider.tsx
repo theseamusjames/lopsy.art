@@ -84,8 +84,10 @@ export function Slider({
   // layer restyles, #846) need that bracketing here too — a drag on the
   // range input isn't the only way to change a value.
   const handleDoubleClick = () => {
+    const next = defaultValue ?? min;
+    if (next === value) return;
     onDragStart?.();
-    onChange(defaultValue ?? min);
+    onChange(next);
     onCommit?.();
   };
 
@@ -97,9 +99,14 @@ export function Slider({
     } else {
       const clamped = clamp(parsed, min, max);
       setLocalValue(String(clamped));
-      onDragStart?.();
-      onChange(clamped);
-      onCommit?.();
+      // Re-entering the current value is a no-op — don't bracket it with a
+      // history entry (onDragStart), or every value-box visit would pollute
+      // undo with an empty step (#867 regression).
+      if (clamped !== value) {
+        onDragStart?.();
+        onChange(clamped);
+        onCommit?.();
+      }
     }
   }, [localValue, value, min, max, onChange, onDragStart, onCommit]);
 
@@ -111,18 +118,22 @@ export function Slider({
         e.preventDefault();
         const raw = scale === 'log' ? nextValueLog(value, step, min, max) : value + step;
         const next = clamp(raw, min, max);
-        onDragStart?.();
-        onChange(next);
-        onCommit?.();
-        setLocalValue(String(next));
+        if (next !== value) {
+          onDragStart?.();
+          onChange(next);
+          onCommit?.();
+          setLocalValue(String(next));
+        }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
         const raw = scale === 'log' ? nextValueLog(value, step, min, max) : value - step;
         const next = clamp(raw, min, max);
-        onDragStart?.();
-        onChange(next);
-        onCommit?.();
-        setLocalValue(String(next));
+        if (next !== value) {
+          onDragStart?.();
+          onChange(next);
+          onCommit?.();
+          setLocalValue(String(next));
+        }
       }
     },
     [value, step, onChange, scale, min, max, onDragStart, onCommit],

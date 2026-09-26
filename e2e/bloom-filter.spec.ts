@@ -53,7 +53,11 @@ test.describe('Bloom Filter', () => {
       return { activeLayerId: store.getState().document.activeLayerId };
     });
 
-    const beforeEdge = await getPixelAt(page, 80, 150, state.activeLayerId);
+    // Sample just outside the bright square's left edge (x=100). A correct
+    // Gaussian bloom concentrates its glow near the source and fades within
+    // ~radius px, so we probe 10px out where the glow is unambiguous (#828
+    // fixed the old kernel bug that spread a flat ring out to the full radius).
+    const beforeEdge = await getPixelAt(page, 90, 150, state.activeLayerId);
 
     // Screenshot before
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'bloom-before.png') });
@@ -71,7 +75,7 @@ test.describe('Bloom Filter', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'bloom-after.png') });
 
     // The area adjacent to the bright square should now be brighter due to bloom
-    const afterEdge = await getPixelAt(page, 80, 150, state.activeLayerId);
+    const afterEdge = await getPixelAt(page, 90, 150, state.activeLayerId);
 
     // The dark area near the bright square should have increased brightness from the glow
     const edgeBrightnessIncrease =
