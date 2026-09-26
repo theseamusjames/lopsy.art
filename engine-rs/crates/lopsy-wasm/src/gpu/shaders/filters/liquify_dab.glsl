@@ -56,7 +56,15 @@ void main() {
     vec2 disp = decodeDisp(current);
 
     if (u_mode == 0) {
-        disp += u_drag * w;
+        // liquify_warp.glsl resamples with srcUv = v_uv + disp (backward/pull
+        // mapping), so a pixel that should visually move along +drag needs
+        // disp = -drag: the output at p then pulls source content from
+        // p - drag, i.e. from where that content used to sit before the
+        // drag carried it forward to p. Storing +drag here samples from
+        // p + drag instead, which pulls in whatever was ahead of the drag
+        // (e.g. transparent pixels past an edge) and reads as a notch
+        // opening backward instead of a bulge pushed forward.
+        disp -= u_drag * w;
     } else if (u_mode == 1 || u_mode == 2) {
         float angle = (u_mode == 1) ? 0.05 : -0.05;
         float a = angle * w;

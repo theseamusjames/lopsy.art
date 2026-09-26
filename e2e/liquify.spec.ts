@@ -1,7 +1,7 @@
 import { test, expect, type Page } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { waitForStore, createDocument, drawRect, getPixelAt } from './helpers';
+import { waitForStore, createDocument, drawRect, getPixelAt, setForegroundColor } from './helpers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -112,6 +112,56 @@ async function liquifyDrag(page: Page, fromDocX: number, fromDocY: number, toDoc
   await page.mouse.move(end.x, end.y, { steps: 25 });
   await page.mouse.up();
   await page.waitForTimeout(200);
+}
+
+/**
+ * Perform a vertical brush stroke in Liquify mode by dragging down (or up)
+ * the canvas at a fixed doc x-coordinate.
+ */
+async function liquifyDragVertical(
+  page: Page,
+  docX: number,
+  fromDocY: number,
+  toDocY: number,
+): Promise<void> {
+  const start = await docToScreen(page, docX, fromDocY);
+  const end = await docToScreen(page, docX, toDocY);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 25 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+}
+
+/**
+ * Reads a doc-space column of a layer's pixels and returns the doc-space y
+ * of the lowest (largest-y) opaque pixel, or -1 if the column is empty or
+ * out of the layer's (possibly content-cropped) bounds.
+ */
+async function columnLowestOpaqueY(page: Page, docX: number, layerId: string): Promise<number> {
+  return page.evaluate(
+    async ({ docX, layerId }) => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+      };
+      const layer = store.getState().document.layers.find((l) => l.id === layerId);
+      const lx = layer?.x ?? 0;
+      const ly = layer?.y ?? 0;
+      const readFn = (window as unknown as Record<string, unknown>).__readLayerPixels as
+        (id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+      const result = await readFn(layerId);
+      if (!result || result.width === 0) return -1;
+      const localX = docX - lx;
+      if (localX < 0 || localX >= result.width) return -1;
+      let lowestLocalY = -1;
+      for (let y = 0; y < result.height; y++) {
+        const alpha = result.pixels[(y * result.width + localX) * 4 + 3] ?? 0;
+        if (alpha > 10) lowestLocalY = y;
+      }
+      return lowestLocalY === -1 ? -1 : lowestLocalY + ly;
+    },
+    { docX, layerId },
+  );
 }
 
 test.describe('Liquify Tool', () => {
@@ -295,6 +345,90 @@ test.describe('Liquify Tool', () => {
     const afterUndo = await getPixelAt(page, 100, 100, layerId);
     expect(afterUndo.b).toBeCloseTo(beforeCenter.b, -1);
     expect(afterUndo.a).toBeCloseTo(beforeCenter.a, -1);
+  });
+
+  test('Push Forward drags pixels along the drag direction, not against it (#861)', async ({ page }) => {
+    await createDocument(page, 400, 300, true);
+    await fitToView(page);
+    await page.waitForTimeout(300);
+
+    // Marquee-select (100,60)-(300,160), fill red, deselect — the exact
+    // repro from #861. Bottom edge ends up at doc y=159.
+    //
+    // This must be a marquee + bucket fill, not the shape tool's drawRect:
+    // drawRect commits through updateLayerPixelData, which auto-crops the
+    // layer to its painted bounds (e2e/GUIDE.md pitfall #1). A fresh-layer
+    // bucket fill instead takes the GPU fast path (wasmBucketFillSolid),
+    // which expands the layer to the full canvas via ensure_layer_full_size
+    // and leaves it there — matching what a real Liquify session expects
+    // (openLiquify captures the layer's current width/height for the
+    // displacement texture before the session's own full-size expansion).
+    // A cropped layer leaves that displacement texture too small to reach
+    // this drag at all, which would mask the bug under test.
+    await page.keyboard.press('m');
+    const selStart = await docToScreen(page, 100, 60);
+    const selEnd = await docToScreen(page, 300, 160);
+    await page.mouse.move(selStart.x, selStart.y);
+    await page.mouse.down();
+    await page.mouse.move(selEnd.x, selEnd.y, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+
+    await page.keyboard.press('g');
+    await setForegroundColor(page, 255, 0, 0);
+    const fillPoint = await docToScreen(page, 200, 110);
+    await page.mouse.click(fillPoint.x, fillPoint.y);
+    await page.waitForTimeout(200);
+
+    await page.keyboard.press('Control+d');
+    await page.waitForTimeout(150);
+
+    const layerId = await getActiveLayerId(page);
+    await pushHistory(page);
+
+    // Sanity check the block's bottom edge before any warp.
+    const beforeDragColumn = await columnLowestOpaqueY(page, 200, layerId);
+    const beforeOutsideColumn = await columnLowestOpaqueY(page, 120, layerId);
+    expect(beforeDragColumn).toBe(159);
+    expect(beforeOutsideColumn).toBe(159);
+
+    await openLiquify(page);
+    await page.evaluate(() => {
+      const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => {
+          liquify: { settings: Record<string, unknown> } | null;
+          updateLiquifySettings: (s: Record<string, unknown>) => void;
+        };
+      };
+      const state = ui.getState();
+      if (state.liquify) {
+        // 'push' is the default mode; only brush size / pressure need setting.
+        state.updateLiquifySettings({ ...state.liquify.settings, brushSize: 40, pressure: 1.0 });
+      }
+    });
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-push-down-before.png') });
+
+    // Drag straight down from inside the block (200,140), across its
+    // bottom edge, to (200,200).
+    await liquifyDragVertical(page, 200, 140, 200);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-push-down-preview.png') });
+
+    await applyLiquify(page);
+    await page.waitForTimeout(300);
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-push-down-applied.png') });
+
+    const afterDragColumn = await columnLowestOpaqueY(page, 200, layerId);
+    const afterOutsideColumn = await columnLowestOpaqueY(page, 120, layerId);
+
+    // Expected: a bulge pushed DOWN past the old edge — the lowest opaque
+    // pixel at the drag column moves to a larger y. The pre-fix bug bit a
+    // notch UP into the block instead, moving it to a smaller y.
+    expect(afterDragColumn).toBeGreaterThan(beforeDragColumn);
+    // Outside the brush's radius, the edge is untouched.
+    expect(afterOutsideColumn).toBe(159);
   });
 
 });
