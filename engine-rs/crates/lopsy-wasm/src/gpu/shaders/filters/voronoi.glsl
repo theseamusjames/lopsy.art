@@ -70,8 +70,10 @@ void main() {
 
     vec3 edgeColor = vec3(u_edgeR, u_edgeG, u_edgeB);
     vec3 finalColor = mix(cellColor.rgb, edgeColor, edge);
-    // #766: voronoi is a generator — write full alpha so the cell pattern
-    // shows on a transparent layer. Sampling cellColor.a from the source
-    // meant an empty layer stayed empty.
-    fragColor = vec4(finalColor, 1.0);
+    // #916: voronoi is a Stylize filter, not a generator (unlike Clouds /
+    // Smoke / Fibers) — it samples the source image via u_tex, so it must
+    // preserve the sampled cell's alpha to keep the layer's silhouette on
+    // transparent areas. The #766 fix forced alpha to 1.0 here too, which
+    // flooded every transparent region with opaque black.
+    fragColor = vec4(finalColor, cellColor.a);
 }
