@@ -125,6 +125,43 @@ async function selectTool(page: Page, key: string) {
   await page.keyboard.press(key);
 }
 
+// Helper: sample the 2D overlay canvas (marching ants, transform handles,
+// grid, guides) at a document-space coordinate and return its RGBA.
+async function getOverlayPixel(page: Page, docX: number, docY: number) {
+  return page.evaluate(({ docX, docY }) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { width: number; height: number };
+        viewport: { zoom: number; panX: number; panY: number };
+      };
+    };
+    const s = store.getState();
+    const canvases = Array.from(document.querySelectorAll('canvas'));
+    const overlay = canvases.find((c) => /overlayCanvas/.test(c.className)) as HTMLCanvasElement | undefined;
+    if (!overlay) return null;
+    const ctx = overlay.getContext('2d');
+    if (!ctx) return null;
+    const container = document.querySelector('[data-testid="canvas-container"]');
+    const rect = container!.getBoundingClientRect();
+    const overlayRect = overlay.getBoundingClientRect();
+    const dpr = overlay.width / overlayRect.width;
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const screenX = (docX - s.document.width / 2) * s.viewport.zoom + s.viewport.panX + cx;
+    const screenY = (docY - s.document.height / 2) * s.viewport.zoom + s.viewport.panY + cy;
+    const sx = Math.round(screenX * dpr);
+    const sy = Math.round(screenY * dpr);
+    if (sx < 0 || sx >= overlay.width || sy < 0 || sy >= overlay.height) return null;
+    const px = ctx.getImageData(sx, sy, 1, 1).data;
+    return { r: px[0], g: px[1], b: px[2], a: px[3] };
+  }, { docX, docY });
+}
+
+/** True when something opaque (the rotate-handle's white fill + blue ring) is painted here. */
+function hasOverlayInk(px: { r: number; g: number; b: number; a: number } | null): boolean {
+  return !!px && px.a > 50;
+}
+
 test.describe('Free Transform', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -410,6 +447,110 @@ test.describe('Free Transform', () => {
     // Pixel count should be preserved (moved, not lost)
     const pixelCount = await countAllOpaquePixels(page);
     expect(pixelCount).toBeGreaterThan(50);
+  });
+
+  test('undoing a chain of Move drags resyncs the selection on every step, not just the first (#925)', async ({ page }) => {
+    // Paint a wide horizontal stroke.
+    await selectTool(page, 'b');
+    const paintStart = await docToScreen(page, 100, 150);
+    await page.mouse.move(paintStart.x, paintStart.y);
+    await page.mouse.down();
+    const paintEnd = await docToScreen(page, 300, 150);
+    await page.mouse.move(paintEnd.x, paintEnd.y, { steps: 15 });
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+
+    // Marquee-select part of the stroke.
+    await selectTool(page, 'm');
+    const selStart = await docToScreen(page, 80, 100);
+    const selEnd = await docToScreen(page, 220, 200);
+    await page.mouse.move(selStart.x, selStart.y);
+    await page.mouse.down();
+    await page.mouse.move(selEnd.x, selEnd.y, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+
+    const initialSel = await getEditorState(page);
+    expect(initialSel.selection.active).toBe(true);
+    const initialBounds = initialSel.selection.bounds!;
+
+    // Drag the selected pixels 20px right, 4 separate times (4 distinct
+    // pointer-down/move/up sequences — not one continuous drag), each of
+    // which should push its own "Move" history entry.
+    await selectTool(page, 'v');
+    await page.mouse.move((await docToScreen(page, 0, 0)).x, (await docToScreen(page, 0, 0)).y);
+    await page.waitForTimeout(100);
+
+    const expectedBoundsByStep: Array<{ x: number; y: number; width: number; height: number }> = [];
+    let cursorX = 150;
+    for (let i = 0; i < 4; i++) {
+      const from = await docToScreen(page, cursorX, 150);
+      const to = await docToScreen(page, cursorX + 20, 150);
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(to.x, to.y, { steps: 10 });
+      await page.mouse.up();
+      await page.waitForTimeout(100);
+      cursorX += 20;
+
+      const stepBounds = { ...initialBounds, x: initialBounds.x + (i + 1) * 20 };
+      expectedBoundsByStep.push(stepBounds);
+
+      const afterMove = await getEditorState(page);
+      expect(afterMove.selection.bounds).toEqual(stepBounds);
+    }
+
+    // Sanity: exactly 4 "Move" entries plus the initial paint are undoable.
+    const historyLabels = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undoStack: Array<{ label: string }> };
+      };
+      return store.getState().undoStack.map((e) => e.label);
+    });
+    expect(historyLabels.filter((l) => l === 'Move')).toHaveLength(4);
+
+    // Undo the 4 Move drags one at a time. After EVERY step the selection
+    // marquee AND the Move tool's transform-handle box (read from the UI
+    // store, and confirmed against the actual rendered overlay pixels for
+    // the last step) must both reflect that step's bounds — not just on the
+    // final undo back past the first Move.
+    for (let i = 3; i >= 0; i--) {
+      const expectedUndoStackLength = 2 + i; // 'New Document' + 'Brush' + remaining 'Move' entries
+      await page.keyboard.press('Control+z');
+      await page.waitForFunction((len) => {
+        const store = (window as unknown as Record<string, unknown>).__editorStore as {
+          getState: () => { undoStack: unknown[] };
+        };
+        return store.getState().undoStack.length === len;
+      }, expectedUndoStackLength);
+      await page.waitForTimeout(150);
+
+      const expected = i === 0 ? initialBounds : expectedBoundsByStep[i - 1]!;
+
+      const sel = await getEditorState(page);
+      expect(sel.selection.active).toBe(true);
+      expect(sel.selection.bounds).toEqual(expected);
+
+      // BUG #925: the transform-handle box previously stayed frozen at the
+      // most-recent Move's position through every intermediate undo step.
+      const ui = await getUIState(page);
+      expect(ui.transform).not.toBeNull();
+      expect(ui.transform!.originalBounds).toEqual(expected);
+      expect(ui.transform!.translateX).toBe(0);
+      expect(ui.transform!.translateY).toBe(0);
+    }
+
+    // Ground the last (fully-undone) step in the actual rendered overlay:
+    // the rotate handle sits 20 doc-px diagonally outside the top-left
+    // corner, in solid blue (#00aaff), well clear of the marching ants.
+    await page.screenshot({ path: 'e2e/screenshots/undo-move-selection-handles.png' });
+    const handlePx = await getOverlayPixel(page, initialBounds.x - 20, initialBounds.y - 20);
+    expect(hasOverlayInk(handlePx)).toBe(true);
+
+    // And the handle must NOT still be sitting at the last (move #4) position.
+    const staleBounds = expectedBoundsByStep[3]!;
+    const stalePx = await getOverlayPixel(page, staleBounds.x - 20, staleBounds.y - 20);
+    expect(hasOverlayInk(stalePx)).toBe(false);
   });
 
   test('move selection away and back produces identical canvas', async ({ page }) => {

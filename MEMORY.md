@@ -39,6 +39,24 @@ the preview via the overlay-only path (gated on `getMarqueePreview()`).
 so they scan only the selection bbox, not the whole canvas — used by lasso/wand
 which still trace per frame.
 
+## `useUIStore().transform` is not part of history — resync it yourself
+
+The Move tool's transform-handle box (`uiStore.transform`, drawn by
+`renderTransformHandles`) lives in a separate Zustand store from the
+document/selection history in `useEditorStore`. Every code path that
+produces a selection (marquee commit, `selectLayerAlpha`, a Move drag's
+pointer-up, …) explicitly calls `setTransform(createTransformState(bounds))`
+to seed it — `setSelection` does *not* do this on its own (see
+[Transform](FEATURES.md#transform) in FEATURES.md). `undoBy`/`redoBy`
+(`history-slice.ts`) restore `selection` correctly on every step, but until
+#925 they never touched `uiStore.transform`, so stepping back through a
+chain of "Move" entries left the handle box frozen at the most recent
+position — only disappearing once the selection itself got undone away.
+The fix (`resyncTransformToSelection` in `history-slice.ts`) reseeds an
+identity `TransformState` from the restored selection's bounds (or clears
+it) on every undo/redo step. Any other code that mutates `selection`
+directly without going through an interaction handler should do the same.
+
 ## Undo snapshots use normalized u16, not raw FP16 bits
 
 Undo snapshots read GPU RGBA16F textures as normalized u16 (value * 65535) and restore by dividing back (u16 / 65535). This linear encoding can't preserve FP16's extra precision at small magnitudes. Values above ~0.03 round-trip losslessly; darker values can shift by a few FP16 ULPs (worst case ~8 ULPs near 0.001).

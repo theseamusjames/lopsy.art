@@ -1,4 +1,4 @@
-import type { HistorySnapshot, SliceCreator } from './types';
+import type { HistorySnapshot, SelectionData, SliceCreator } from './types';
 import type { Layer } from '../../types';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -11,6 +11,8 @@ import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 import { cancelPrefloat } from '../interactions/prefloat';
 import { flushAllPendingMaskReads } from '../mask-read-queue';
+import { useUIStore } from '../ui-store';
+import { createTransformState } from '../../tools/transform/transform';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -141,6 +143,28 @@ function snapshotGpuLayers(
   return gpuSnapshots;
 }
 
+/**
+ * Undo/redo restore the document and selection in `useEditorStore`, but the
+ * Move tool's transform-handle box lives in `useUIStore` and is only ever
+ * re-seeded by the interaction handlers that produce a selection (marquee
+ * commit, `selectLayerAlpha`, a Move drag's pointer-up, …) — undo/redo never
+ * called any of those, so the box was left pointing at whatever position the
+ * last live drag put it at. Stepping back through a chain of "Move" entries
+ * therefore restored the marquee correctly every time but left its
+ * transform-handle box frozen at the newest position until the selection
+ * itself was undone away entirely (#925). Re-seed a fresh identity transform
+ * from the restored selection's bounds on every step so the handles track
+ * the marquee exactly like a fresh selection would.
+ */
+function resyncTransformToSelection(selection: SelectionData): void {
+  const uiState = useUIStore.getState();
+  if (selection.active && selection.bounds) {
+    uiState.setTransform(createTransformState(selection.bounds));
+  } else if (uiState.transform) {
+    uiState.setTransform(null);
+  }
+}
+
 function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
   if (snapshot.kind === 'metadata') return;
 
@@ -257,6 +281,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       dirtyLayerIds: new Set(target.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
+    resyncTransformToSelection(target.selection);
     if (eng) {
       const restored = get();
       syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
@@ -342,6 +367,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       dirtyLayerIds: new Set(target.document.layerOrder),
       renderVersion: state.renderVersion + 1,
     });
+    resyncTransformToSelection(target.selection);
     if (eng) {
       const restored = get();
       syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
