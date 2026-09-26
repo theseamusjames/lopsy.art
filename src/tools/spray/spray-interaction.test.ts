@@ -143,12 +143,88 @@ describe('spray move', () => {
     expect(state.lastPoint).toEqual({ x: 36, y: 0 });
   });
 
-  it('a short move only advances the anchor without spraying', () => {
+  // #793 — the previous behaviour advanced the anchor without emitting,
+  // which discarded the accumulated distance between real move events.
+  // A slow drag (each move under the spacing threshold) then emitted
+  // only the pointer-down cloud. Keep the anchor pinned on sub-spacing
+  // moves so the next move that finally crosses `spacing` emits.
+  it('leaves the anchor pinned on a sub-spacing move so accumulated distance survives', () => {
     const state = handleSprayDown(makeCtx({ layerPos: { x: 0, y: 0 } }))!;
     applyBrushDab.mockClear();
     handleSprayMove(makeCtx({ layerPos: { x: 5, y: 0 } }), state);
     expect(applyBrushDab).not.toHaveBeenCalled();
-    expect(state.lastPoint).toEqual({ x: 5, y: 0 });
+    expect(state.lastPoint).toEqual({ x: 0, y: 0 });
+  });
+
+  // Sequel to the pinned-anchor fix: a run of sub-spacing moves must
+  // eventually spray as soon as the total drag exceeds `spacing`,
+  // because each move re-tests distance from the original anchor.
+  it('emits when a slow drag of many sub-spacing moves finally crosses the spacing threshold', () => {
+    const state = handleSprayDown(makeCtx({ layerPos: { x: 0, y: 0 } }))!;
+    applyBrushDab.mockClear();
+    // spacing = size * 0.3 = 12; three 5px moves = 5, 10, 15 — the third
+    // crosses the threshold and must emit.
+    handleSprayMove(makeCtx({ layerPos: { x: 5, y: 0 } }), state);
+    handleSprayMove(makeCtx({ layerPos: { x: 10, y: 0 } }), state);
+    expect(applyBrushDab).not.toHaveBeenCalled();
+    handleSprayMove(makeCtx({ layerPos: { x: 15, y: 0 } }), state);
+    expect(applyBrushDab).toHaveBeenCalled();
+  });
+
+  // #898 — regression coverage for a normal-speed human drag: many small
+  // pointer-move events (Playwright's `steps: 120` over a 600px drag is
+  // 5px/step), none of which individually cross the spacing threshold on
+  // their own. Before the fix, each of these advanced the anchor without
+  // emitting, so the whole drag after pointer-down produced nothing.
+  it('sprays continuously along a slow drag made of many small moves (normal mouse speed)', () => {
+    const state = handleSprayDown(makeCtx({ layerPos: { x: 0, y: 0 } }))!;
+    applyBrushDab.mockClear();
+
+    const totalDistance = 600;
+    const stepCount = 120;
+    const stepSize = totalDistance / stepCount; // 5 units/step
+    for (let i = 1; i <= stepCount; i++) {
+      handleSprayMove(makeCtx({ layerPos: { x: i * stepSize, y: 0 } }), state);
+    }
+
+    const density = ts.settings.spray.density;
+    // Spacing is size * 0.3 = 12, so an emission happens roughly every
+    // 12 units of travel — far more than the single pointer-down cloud.
+    expect(applyBrushDab.mock.calls.length).toBeGreaterThan(density * 10);
+
+    const xs = applyBrushDab.mock.calls.map((call) => call[2] as number);
+    // Emissions must be spread across the whole path, not clustered near
+    // the pointer-down position.
+    expect(Math.min(...xs)).toBeLessThan(100);
+    expect(Math.max(...xs)).toBeGreaterThan(500);
+    expect(state.lastPoint!.x).toBeCloseTo(totalDistance, 0);
+  });
+
+  // #898 — the fast "flick" case must keep working: a handful of large
+  // jumps (each already past spacing) should still interpolate dabs
+  // across each jump rather than only stamping at the jump endpoints.
+  it('still distributes dabs across the path for a fast flick with large jumps', () => {
+    const state = handleSprayDown(makeCtx({ layerPos: { x: 0, y: 0 } }))!;
+    applyBrushDab.mockClear();
+
+    const jumpTargets = [150, 300, 450, 600];
+    for (const x of jumpTargets) {
+      handleSprayMove(makeCtx({ layerPos: { x, y: 0 } }), state);
+    }
+
+    const density = ts.settings.spray.density;
+    expect(applyBrushDab.mock.calls.length).toBeGreaterThan(density * jumpTargets.length);
+
+    const xs = applyBrushDab.mock.calls.map((call) => call[2] as number);
+    expect(Math.min(...xs)).toBeLessThan(50);
+    expect(Math.max(...xs)).toBeGreaterThan(550);
+    // Dabs should land throughout the range, not just at the four jump
+    // endpoints — bucket into thirds and require coverage in each.
+    const inFirstThird = xs.some((x) => x > 0 && x < 200);
+    const inMiddleThird = xs.some((x) => x >= 200 && x < 400);
+    const inLastThird = xs.some((x) => x >= 400 && x <= 600);
+    expect(inFirstThird && inMiddleThird && inLastThird).toBe(true);
+    expect(state.lastPoint).toEqual({ x: 600, y: 0 });
   });
 
   it('keeps using the color captured at stroke start', () => {
@@ -165,6 +241,28 @@ describe('spray move', () => {
     applyBrushDab.mockClear();
     handleSprayMove(makeCtx({ layerPos: { x: 36, y: 0 } }), { ...state, layerId: null } as InteractionState);
     expect(applyBrushDab).not.toHaveBeenCalled();
+  });
+
+  // #793 — the interaction dispatcher shallow-copies `state` on every
+  // frame (see `withMoveGesture`/`withToolGesture`), so the airbrush
+  // interval's closure holds the original `state` object with a stale
+  // `lastPoint`. The timer used to spray at pointer-down forever, no
+  // matter how far the cursor had travelled. Track the live cursor at
+  // module scope so the interval reads the up-to-date position.
+  it('airbrush timer follows the live cursor as the drag continues', () => {
+    const state = handleSprayDown(makeCtx({ layerPos: { x: 0, y: 0 } }))!;
+    // Drag far enough to advance the anchor.
+    handleSprayMove(makeCtx({ layerPos: { x: 100, y: 0 } }), state);
+    applyBrushDab.mockClear();
+    // The airbrush interval fires at 166ms; every emission must now be
+    // centred near the cursor's live x=100 (± brushRadius), not x=0.
+    vi.advanceTimersByTime(166);
+    expect(applyBrushDab).toHaveBeenCalled();
+    const brushRadius = ts.settings.spray.size / 2;
+    for (const call of applyBrushDab.mock.calls) {
+      const x = call[2] as number;
+      expect(Math.abs(x - 100)).toBeLessThanOrEqual(brushRadius + 0.001);
+    }
   });
 });
 
