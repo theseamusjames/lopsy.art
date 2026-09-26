@@ -1,6 +1,6 @@
 import type { DocumentState, Layer } from '../../../types';
 import type { ActionResult } from '../types';
-import { resizeCanvasTexture } from '../../../engine-wasm/wasm-bridge';
+import { getLayerEngineBounds, resizeCanvasTexture } from '../../../engine-wasm/wasm-bridge';
 import { mapLayersForTransform } from './_helpers/layer-transform';
 
 export function computeResizeCanvas(
@@ -24,9 +24,20 @@ export function computeResizeCanvas(
     }) as Layer,
     onRaster: (layer, engine) => {
       if (engine) {
+        // The layer's GPU texture may be smaller than the document — an
+        // inactive layer is cropped to its content bounds (#902) — so the
+        // "old size" for the copy must be the texture's actual dimensions,
+        // not the document's. `getLayerEngineBounds` reads that straight
+        // from `texture_pool`, which never lags the store.
+        const [ex = 0, ey = 0, ew = 0, eh = 0] = getLayerEngineBounds(engine, layer.id);
+        const hasValidBounds = ew > 0 && eh > 0;
+        const srcX = hasValidBounds ? ex : layer.x;
+        const srcY = hasValidBounds ? ey : layer.y;
+        const srcW = hasValidBounds ? ew : oldW;
+        const srcH = hasValidBounds ? eh : oldH;
         resizeCanvasTexture(
           engine, layer.id,
-          layer.x, layer.y, oldW, oldH,
+          srcX, srcY, srcW, srcH,
           newWidth, newHeight, offsetX, offsetY,
         );
       }
