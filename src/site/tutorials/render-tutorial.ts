@@ -4,6 +4,7 @@ import {
   type RenderContext,
   breadcrumbJsonLd,
   coverImage,
+  finishedImage,
   formatDate,
   renderBreadcrumbs,
   renderDocument,
@@ -19,10 +20,18 @@ function renderStep(ctx: RenderContext, tutorial: Tutorial, step: TutorialStep, 
   <h2 class="step-title"><span class="step-number" aria-hidden="true">${index + 1}</span>${renderInline(step.title)}</h2>
   <div class="step-body">${renderMarkdown(step.body)}</div>
   <figure class="step-figure">${renderImage(ctx, tutorial.slug, step.image, {
-    isEager: index === 0,
     sizes: '(min-width: 800px) 760px, 100vw',
   })}</figure>
 </li>`;
+}
+
+function renderFinished(ctx: RenderContext, tutorial: Tutorial): string {
+  const image = finishedImage(tutorial);
+  if (!image) return '';
+  return `<figure class="finished-figure">${renderImage(ctx, tutorial.slug, image, {
+    isEager: true,
+    sizes: '(min-width: 800px) 760px, 100vw',
+  })}</figure>`;
 }
 
 function renderRelated(ctx: RenderContext, related: readonly Tutorial[]): string {
@@ -99,6 +108,7 @@ export function renderTutorialPage(
     <p class="lede">${escapeHtml(tutorial.description)}</p>
     <div class="tutorial-meta">${renderMetaList(tutorial, { showStepCount: true })}<p class="date">${dateLine}</p></div>
   </header>
+  ${renderFinished(ctx, tutorial)}
   ${tutorial.intro ? `<div class="intro">${renderMarkdown(tutorial.intro)}</div>` : ''}
   <ol class="steps">
 ${tutorial.steps.map((step, index) => renderStep(ctx, tutorial, step, index)).join('\n')}

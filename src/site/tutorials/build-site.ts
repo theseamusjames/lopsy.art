@@ -24,6 +24,7 @@ export interface BuildResult {
 function referencedImages(tutorial: Tutorial): string[] {
   const images = tutorial.steps.map((step) => step.image.src);
   if (tutorial.cover) images.push(tutorial.cover.src);
+  if (tutorial.finished) images.push(tutorial.finished.src);
   return images;
 }
 

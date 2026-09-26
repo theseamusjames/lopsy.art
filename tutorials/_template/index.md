@@ -35,6 +35,12 @@ related:
 cover:
 coverAlt:
 
+# Optional. The finished result, shown right under the title and date with no
+# step text. Defaults to the last step's image. Set it when the last step's
+# screenshot isn't the finished piece (an Export dialog, for example).
+finished:
+finishedAlt:
+
 # Drafts appear in `npm run dev` but are left out of production builds.
 draft: true
 ---
@@ -73,4 +79,5 @@ Lists work too:
 ![The Export dialog with PNG selected](03-export.webp)
 
 Finish with the result. The last step's image is used as the cover when
-`cover` is left empty.
+`cover` is left empty, and as the finished image at the top of the page when
+`finished` is left empty.

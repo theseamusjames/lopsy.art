@@ -124,9 +124,20 @@ describe('buildTutorialSite', () => {
     );
   });
 
-  it('only loads the first step image eagerly', () => {
+  it('only loads the finished image eagerly', () => {
     const html = build([source('alpha', '')]).files.get('tutorials/alpha/index.html') as string;
     expect(html.match(/fetchpriority="high"/g)).toHaveLength(1);
+    expect(html).toMatch(/<figure class="finished-figure"><img src="\/tutorials\/alpha\/02.png"[^>]*fetchpriority="high"/);
+  });
+
+  it('shows the finished image between the header and the intro', () => {
+    const html = build([
+      source('alpha', 'finished: done.png\nfinishedAlt: The finished piece', ['done.png']),
+    ]).files.get('tutorials/alpha/index.html') as string;
+    const figure = html.indexOf('<figure class="finished-figure"><img src="/tutorials/alpha/done.png" alt="The finished piece"');
+    expect(figure).toBeGreaterThan(html.indexOf('</header>'));
+    expect(figure).toBeLessThan(html.indexOf('class="intro"'));
+    expect(html.match(/class="finished-figure"/g)).toHaveLength(1);
   });
 
   it('lists tutorials newest first with an ItemList', () => {

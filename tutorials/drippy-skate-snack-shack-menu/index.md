@@ -8,11 +8,9 @@ tags: restaurant menu, skate, typography, layer effects, symmetry, halftone, tra
 related: skate-style-restaurant-menu, screen-print-restaurant-menu, baroque-restaurant-menu
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Mango Kickflip menu, with a drippy yellow MANGO title over a pink KICKFLIP bar, a pink sunburst on black grip tape, a two-column menu board with dotted leaders, and a pink-to-orange flame skateboard between orange checkerboard bands
+finished: 01-finished-mango-kickflip-menu.webp
+finishedAlt: The finished Mango Kickflip menu: orange and black checkerboard bands top and bottom, a pink sunburst on black grip tape, a melting yellow MANGO title with a hard pink shadow, a tilted pink KICKFLIP bar, a teal FRESH! starburst sticker, a black menu board listing GRINDS and SLURPS with prices and short descriptions, and a pink-to-orange skateboard with black flames and teal wheels
 ---
-
-## Look at the finished menu
-
-![The finished Mango Kickflip menu: orange and black checkerboard bands top and bottom, a pink sunburst on black grip tape, a melting yellow MANGO title with a hard pink shadow, a tilted pink KICKFLIP bar, a teal FRESH! starburst sticker, a black menu board listing GRINDS and SLURPS with prices and short descriptions, and a pink-to-orange skateboard with black flames and teal wheels](01-finished-mango-kickflip-menu.webp)
 
 Skate graphics borrow from the shop wall:
 

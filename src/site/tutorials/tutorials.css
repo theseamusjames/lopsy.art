@@ -404,6 +404,10 @@ kbd {
   color: var(--text-muted);
 }
 
+.finished-figure {
+  margin: 28px 0 0;
+}
+
 .intro {
   margin-top: 28px;
 }
@@ -449,6 +453,7 @@ kbd {
   margin: 20px 0 0;
 }
 
+.finished-figure img,
 .step-figure img {
   width: 100%;
   border: 1px solid var(--border);

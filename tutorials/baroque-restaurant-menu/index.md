@@ -8,11 +8,9 @@ tags: restaurant menu, baroque, gradients, symmetry, filters, layer effects, typ
 related: screen-print-restaurant-menu, etching-style-lighthouse-illustration, surrealist-cinema-logo
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Quince & Elderberry Baroque menu, with a gilded frame, a crimson QE cartouche with curved Osteria Barocca text, a Pinyon Script title, a candle-lit still life of quinces and elderberries on red velvet, and a two-column menu with gold headings
+finished: 01-finished-quince-elderberry-menu.webp
+finishedAlt: The finished Quince & Elderberry menu: a dark oxblood page with a gilded triple frame, shell crests, acanthus corners, a crimson QE cartouche, a gold script title, an oval still life of two quinces and elderberries on red velvet, and a two-column menu with gold small-caps headings
 ---
-
-## Look at the finished menu
-
-![The finished Quince & Elderberry menu: a dark oxblood page with a gilded triple frame, shell crests, acanthus corners, a crimson QE cartouche, a gold script title, an oval still life of two quinces and elderberries on red velvet, and a two-column menu with gold small-caps headings](01-finished-quince-elderberry-menu.webp)
 
 Baroque design is about drama:
 
