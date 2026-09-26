@@ -538,6 +538,14 @@ impl EngineInner {
         let new_w = (max_x - min_x) as u32;
         let new_h = (max_y - min_y) as u32;
 
+        // Filter passes (filter_gpu.rs, api/filter/*.rs) bind scratch_fbo_a/b
+        // and set the viewport to the layer's *current* texture size right
+        // after calling this function. Grow the scratch textures alongside
+        // the layer so a layer expanded past doc bounds (content hanging off
+        // a canvas edge) is never rendered into a scratch FBO smaller than
+        // the viewport — that silently clips/misaligns the output (#862).
+        self.ensure_scratch_covers(new_w, new_h)?;
+
         if layer_x <= min_x && layer_y <= min_y
             && layer_x + lw as i32 >= max_x
             && layer_y + lh as i32 >= max_y
@@ -595,6 +603,41 @@ impl EngineInner {
             layer.height = new_h;
         }
         self.mark_layer_dirty(layer_id);
+        Ok(())
+    }
+
+    /// Grow `scratch_texture_a`/`scratch_texture_b` (and their FBOs) so both
+    /// are at least `w`×`h`. These textures are otherwise only sized at
+    /// `set_document_size` time to doc_width×doc_height; filter passes bind
+    /// their FBOs and set the viewport to a layer's current texture size,
+    /// which `ensure_layer_covers` can grow past doc bounds. No-op once the
+    /// scratch textures already cover the requested size — they only grow,
+    /// never shrink, so repeated filter calls don't reallocate every time.
+    fn ensure_scratch_covers(&mut self, w: u32, h: u32) -> Result<(), String> {
+        let (sw, sh) = self.texture_pool.get_size(self.scratch_texture_a).unwrap_or((0, 0));
+        if sw >= w && sh >= h {
+            return Ok(());
+        }
+        let new_w = sw.max(w);
+        let new_h = sh.max(h);
+
+        self.texture_pool.release(self.scratch_texture_a);
+        self.texture_pool.release(self.scratch_texture_b);
+        self.scratch_texture_a = self.texture_pool.acquire(&self.gl, new_w, new_h)?;
+        self.scratch_texture_b = self.texture_pool.acquire(&self.gl, new_w, new_h)?;
+
+        // System textures use NEAREST — always sampled 1:1
+        self.texture_pool.set_nearest_filter(&self.gl, self.scratch_texture_a);
+        self.texture_pool.set_nearest_filter(&self.gl, self.scratch_texture_b);
+
+        self.fbo_pool.attach_texture(
+            &self.gl, self.scratch_fbo_a,
+            self.texture_pool.get(self.scratch_texture_a).ok_or("texture pool handle invalid")?,
+        );
+        self.fbo_pool.attach_texture(
+            &self.gl, self.scratch_fbo_b,
+            self.texture_pool.get(self.scratch_texture_b).ok_or("texture pool handle invalid")?,
+        );
         Ok(())
     }
 
