@@ -1,8 +1,8 @@
-import type { DocumentState, Layer } from '../../../types';
+import type { DocumentState, Layer, TextLayer } from '../../../types';
 import type { RasterLayer } from '../../../types/layers';
 import type { ActionResult } from '../types';
 import { scaleLayerTexture } from '../../../engine-wasm/wasm-bridge';
-import { mapLayersForTransform } from './_helpers/layer-transform';
+import { mapLayersForTransform, scaleLayerEffects, scaleTextLayerForResize } from './_helpers/layer-transform';
 
 export function computeResizeImage(
   doc: DocumentState,
@@ -14,11 +14,7 @@ export function computeResizeImage(
   const scaleY = newHeight / doc.height;
 
   const newLayers = mapLayersForTransform(doc.layers, {
-    onText: (layer) => ({
-      ...layer,
-      x: Math.round(layer.x * scaleX),
-      y: Math.round(layer.y * scaleY),
-    }) as Layer,
+    onText: (layer) => scaleTextLayerForResize(layer as TextLayer, scaleX, scaleY) as Layer,
     onRaster: (layer, engine) => {
       // Raster layers are stored cropped to their content bounds, so their
       // texture is layer.width x layer.height positioned at (x, y) — not
@@ -37,6 +33,7 @@ export function computeResizeImage(
         y: Math.round(layer.y * scaleY),
         width: scaledWidth,
         height: scaledHeight,
+        effects: scaleLayerEffects(layer.effects, scaleX, scaleY),
       } as Layer;
     },
   });
