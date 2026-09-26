@@ -223,9 +223,14 @@ export function handlePaintDown(
     markMaskDataStale(activeLayerId);
     const engine = getEngine();
 
+    // The engine maps doc-space points onto the mask via the same origin
+    // the compositor samples it at. Layer-local coords would drift, since
+    // the brush prewarm re-origins a moved layer's x/y before this (#907).
+    const maskFrom = shiftLine ? lastPaintPointRef.current!.point : canvasPos;
+
     const state: InteractionState = {
       drawing: true,
-      lastPoint: layerPos,
+      lastPoint: canvasPos,
       layerId: activeLayerId,
       tool,
       startPoint: null,
@@ -254,16 +259,16 @@ export function handlePaintDown(
       const hardness = toolSettings.settings.brush.hardness / 100;
       const opacity = toolSettings.settings.brush.opacity / 100;
       if (shiftLine) {
-        const arr = packDabLine(lineFrom, layerPos, size);
+        const arr = packDabLine(maskFrom, canvasPos, size);
         gpuMaskDabBatch(engine, activeLayerId, arr, size, hardness, opacity, mode);
       } else {
-        gpuMaskDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity, mode);
+        gpuMaskDab(engine, activeLayerId, canvasPos.x, canvasPos.y, size, hardness, opacity, mode);
       }
     } else if (tool === 'pencil') {
       const size = toolSettings.settings.pencil.size;
       gpuMaskPencilLine(
         engine, activeLayerId,
-        lineFrom.x, lineFrom.y, layerPos.x, layerPos.y,
+        maskFrom.x, maskFrom.y, canvasPos.x, canvasPos.y,
         1.0, size, mode,
       );
     } else {
@@ -271,10 +276,10 @@ export function handlePaintDown(
       const hardness = 0.8;
       const opacity = toolSettings.settings.eraser.opacity / 100;
       if (shiftLine) {
-        const arr = packDabLine(lineFrom, layerPos, size);
+        const arr = packDabLine(maskFrom, canvasPos, size);
         gpuMaskDabBatch(engine, activeLayerId, arr, size, hardness, opacity, mode);
       } else {
-        gpuMaskDab(engine, activeLayerId, layerPos.x, layerPos.y, size, hardness, opacity, mode);
+        gpuMaskDab(engine, activeLayerId, canvasPos.x, canvasPos.y, size, hardness, opacity, mode);
       }
     }
 
@@ -641,8 +646,8 @@ export function handlePaintMove(
     const maskTarget: MaskTarget = useUIStore.getState().maskMode === 'quickMask' ? 'quickMask' : 'layerMask';
     const engine = getEngine();
     if (!engine) return;
-    const maskPos = maskTarget === 'quickMask' ? ctx.canvasPos : layerLocalPos;
-    handleMaskPaintMoveUnified(engine, state, maskPos, toolSettings, maskTarget);
+    // Both mask targets paint in document space (see handlePaintDown).
+    handleMaskPaintMoveUnified(engine, state, ctx.canvasPos, toolSettings, maskTarget);
     return;
   }
 

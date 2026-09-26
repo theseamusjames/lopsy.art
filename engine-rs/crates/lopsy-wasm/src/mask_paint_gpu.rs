@@ -1,5 +1,12 @@
 use web_sys::WebGl2RenderingContext;
+use crate::compositor::mask_doc_origin;
 use crate::engine::EngineInner;
+
+// Every layer-mask writer here takes DOCUMENT-space coordinates and maps
+// them into mask texels with `mask_doc_origin` — the same origin the
+// compositor samples the mask at — so painting always lands where the
+// mask is displayed, however the layer's own x/y has been re-origined by
+// crop/expand/prewarm (#907).
 
 pub fn paint_mask_dab(
     engine: &mut EngineInner,
@@ -29,13 +36,16 @@ pub fn paint_mask_dab_batch(
         Some(t) => t.clone(),
         None => return,
     };
+    let (ox, oy) = mask_doc_origin(engine, layer_id);
+    // Each dab renders at the mask's size and blits the whole scratch back.
+    if engine.ensure_scratch_size(w, h).is_err() { return; }
 
     let gl = &engine.gl;
 
     for chunk in points.chunks(2) {
         if chunk.len() < 2 { break; }
-        let cx = chunk[0] as f32;
-        let cy = chunk[1] as f32;
+        let cx = chunk[0] as f32 - ox;
+        let cy = chunk[1] as f32 - oy;
 
         engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
         gl.viewport(0, 0, w as i32, h as i32);
@@ -169,21 +179,28 @@ pub fn draw_mask_pencil_line(
 ) {
     let Some(&tex_handle) = engine.layer_masks.get(layer_id) else { return };
     let value = if mode == 0 { a } else { 0.0 };
-    draw_pencil_blocks_gpu(engine, tex_handle, x0, y0, x1, y1, size, value);
+    let (ox, oy) = mask_doc_origin(engine, layer_id);
+    let (ox, oy) = (ox as f64, oy as f64);
+    draw_pencil_blocks_gpu(engine, tex_handle, x0 - ox, y0 - oy, x1 - ox, y1 - oy, size, value);
     engine.needs_recomposite = true;
 }
 
 pub fn fill_mask(
     engine: &mut EngineInner,
     layer_id: &str,
-    start_x: u32,
-    start_y: u32,
+    doc_x: i32,
+    doc_y: i32,
     tolerance: u32,
     contiguous: bool,
     mode: u32,
 ) {
     let Some(&tex_handle) = engine.layer_masks.get(layer_id) else { return };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let (ox, oy) = mask_doc_origin(engine, layer_id);
+    let local_x = doc_x - ox.round() as i32;
+    let local_y = doc_y - oy.round() as i32;
+    if local_x < 0 || local_y < 0 || local_x >= w as i32 || local_y >= h as i32 { return; }
+    let (start_x, start_y) = (local_x as u32, local_y as u32);
 
     let fbo = match engine.gl.create_framebuffer() {
         Some(f) => f,
@@ -285,11 +302,12 @@ pub fn render_mask_linear_gradient(
         None => return,
     };
 
-    let gl = &engine.gl;
+    let (layer_x, layer_y) = mask_doc_origin(engine, layer_id);
+    // Copies the mask into scratch at the mask's size and samples it back
+    // by v_uv, so scratch must match the mask exactly.
+    if engine.ensure_scratch_size(w, h).is_err() { return; }
 
-    let layer_desc = engine.layer_stack.iter().find(|l| l.id == layer_id);
-    let layer_x = layer_desc.map(|l| l.x as f32).unwrap_or(0.0);
-    let layer_y = layer_desc.map(|l| l.y as f32).unwrap_or(0.0);
+    let gl = &engine.gl;
 
     engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
     gl.viewport(0, 0, w as i32, h as i32);
@@ -328,10 +346,10 @@ pub fn render_mask_linear_gradient(
 
         crate::gradient_gpu::set_gradient_uniforms(gl, shader, &stops, w, h);
         if let Some(loc) = shader.location(gl, "u_start") {
-            gl.uniform2f(Some(&loc), start_x as f32, start_y as f32);
+            gl.uniform2f(Some(&loc), start_x as f32 - layer_x, start_y as f32 - layer_y);
         }
         if let Some(loc) = shader.location(gl, "u_end") {
-            gl.uniform2f(Some(&loc), end_x as f32, end_y as f32);
+            gl.uniform2f(Some(&loc), end_x as f32 - layer_x, end_y as f32 - layer_y);
         }
 
         engine.draw_fullscreen_quad();
@@ -360,11 +378,12 @@ pub fn render_mask_radial_gradient(
         None => return,
     };
 
-    let gl = &engine.gl;
+    let (layer_x, layer_y) = mask_doc_origin(engine, layer_id);
+    // Copies the mask into scratch at the mask's size and samples it back
+    // by v_uv, so scratch must match the mask exactly.
+    if engine.ensure_scratch_size(w, h).is_err() { return; }
 
-    let layer_desc = engine.layer_stack.iter().find(|l| l.id == layer_id);
-    let layer_x = layer_desc.map(|l| l.x as f32).unwrap_or(0.0);
-    let layer_y = layer_desc.map(|l| l.y as f32).unwrap_or(0.0);
+    let gl = &engine.gl;
 
     engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
     gl.viewport(0, 0, w as i32, h as i32);
@@ -403,7 +422,7 @@ pub fn render_mask_radial_gradient(
 
         crate::gradient_gpu::set_gradient_uniforms(gl, shader, &stops, w, h);
         if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), center_x as f32, center_y as f32);
+            gl.uniform2f(Some(&loc), center_x as f32 - layer_x, center_y as f32 - layer_y);
         }
         if let Some(loc) = shader.location(gl, "u_radius") {
             gl.uniform1f(Some(&loc), radius as f32);

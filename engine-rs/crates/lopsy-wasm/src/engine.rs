@@ -540,11 +540,11 @@ impl EngineInner {
 
         // Filter passes (filter_gpu.rs, api/filter/*.rs) bind scratch_fbo_a/b
         // and set the viewport to the layer's *current* texture size right
-        // after calling this function. Grow the scratch textures alongside
+        // after calling this function. Size the scratch textures to match
         // the layer so a layer expanded past doc bounds (content hanging off
         // a canvas edge) is never rendered into a scratch FBO smaller than
         // the viewport — that silently clips/misaligns the output (#862).
-        self.ensure_scratch_covers(new_w, new_h)?;
+        self.ensure_scratch_size(new_w, new_h)?;
 
         if layer_x <= min_x && layer_y <= min_y
             && layer_x + lw as i32 >= max_x
@@ -606,20 +606,23 @@ impl EngineInner {
         Ok(())
     }
 
-    /// Grow `scratch_texture_a`/`scratch_texture_b` (and their FBOs) so both
-    /// are at least `w`×`h`. These textures are otherwise only sized at
-    /// `set_document_size` time to doc_width×doc_height; filter passes bind
-    /// their FBOs and set the viewport to a layer's current texture size,
-    /// which `ensure_layer_covers` can grow past doc bounds. No-op once the
-    /// scratch textures already cover the requested size — they only grow,
-    /// never shrink, so repeated filter calls don't reallocate every time.
-    fn ensure_scratch_covers(&mut self, w: u32, h: u32) -> Result<(), String> {
+    /// Make `scratch_texture_a`/`scratch_texture_b` (and their FBOs) exactly
+    /// `w`×`h`. Nearly every scratch user renders at a `w`×`h` viewport and
+    /// then copies the scratch back with a full-quad blit whose UVs span the
+    /// *whole* scratch texture, so the scratch must match the pass's
+    /// viewport exactly — larger is as wrong as smaller. A layer grown past
+    /// doc bounds needs layer-sized scratch for its filter/dab passes
+    /// (#862), while the compositor needs doc-sized scratch every frame:
+    /// leaving it layer-sized squashed the whole composite into the doc
+    /// viewport (#907). Callers size it for their own pass; resizing is a
+    /// texture-pool swap, and a no-op when the size already matches.
+    pub(crate) fn ensure_scratch_size(&mut self, w: u32, h: u32) -> Result<(), String> {
         let (sw, sh) = self.texture_pool.get_size(self.scratch_texture_a).unwrap_or((0, 0));
-        if sw >= w && sh >= h {
+        if sw == w && sh == h {
             return Ok(());
         }
-        let new_w = sw.max(w);
-        let new_h = sh.max(h);
+        let new_w = w.max(1);
+        let new_h = h.max(1);
 
         self.texture_pool.release(self.scratch_texture_a);
         self.texture_pool.release(self.scratch_texture_b);

@@ -237,6 +237,7 @@ pub fn merge_layers(
     // to avoid read/write feedback on the same texture.
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
+    engine.ensure_scratch_size(doc_w, doc_h)?;
 
     // Step 1: clear scratch_b, then blend bottom onto it in doc space.
     // Render target = scratch_b, src = bottom_tex, dst = scratch_b (cleared).
