@@ -122,9 +122,14 @@ function snapshotGpuLayers(
       const curLayer = layers.find((l) => l.id === layerId);
       const prevLayer = previous.document.layers.find((l) => l.id === layerId);
       const posMatch = curLayer && prevLayer && curLayer.x === prevLayer.x && curLayer.y === prevLayer.y;
+      // A type change (e.g. text -> raster on Rasterize Layer) can leave a
+      // layer's x/y coincidentally unchanged while its underlying texture
+      // size does change. dimsChanged alone can't catch that because it
+      // only compares width/height when both sides are already 'raster'.
+      const typeChanged = curLayer?.type !== prevLayer?.type;
       const dimsChanged = curLayer?.type === 'raster' && prevLayer?.type === 'raster' &&
         (curLayer.width !== prevLayer.width || curLayer.height !== prevLayer.height);
-      if (posMatch && !dimsChanged) {
+      if (posMatch && !dimsChanged && !typeChanged) {
         gpuSnapshots.set(layerId, previous.gpuSnapshots.get(layerId)!);
         continue;
       }

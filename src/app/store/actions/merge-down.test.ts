@@ -158,10 +158,87 @@ describe('computeMergeDown', () => {
     expect(doc.layers).toHaveLength(2);
     expect(doc.layerOrder).toEqual([group.id, top.id]);
   });
+
+  // #920: the bottom child of a group has no sibling below it within
+  // the group, so its only "layerOrder neighbor" is whatever sits below
+  // the group itself, outside it. Merging into that layer would pull
+  // the active layer out of the group entirely, silently discarding the
+  // group's visibility/opacity/blend-mode/adjustments (and, if the
+  // group was hidden, un-hiding the merged content).
+  it('returns undefined (no-op) for the bottom child of a group with nothing below it in the same parent', () => {
+    const belowGroup = createRasterLayer({ name: 'Layer 1', width: 4, height: 4 });
+    const child = createRasterLayer({ name: 'Child', width: 4, height: 4 });
+    const group = createGroupLayer({ name: 'Group', children: [child.id] });
+    const doc: DocumentState = {
+      id: 'doc-1',
+      name: 'Test',
+      width: 4,
+      height: 4,
+      // layerOrder is a flat bottom-to-top stack: belowGroup, then the
+      // group's child, then the group marker itself.
+      layers: [belowGroup, child, group],
+      layerOrder: [belowGroup.id, child.id, group.id],
+      activeLayerId: child.id,
+      selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+
+    const result = computeMergeDown(doc);
+    expect(result).toBeUndefined();
+  });
+
+  it('leaves the document layers and layerOrder untouched when there is no valid same-parent target', () => {
+    const belowGroup = createRasterLayer({ name: 'Layer 1', width: 4, height: 4 });
+    const child = createRasterLayer({ name: 'Child', width: 4, height: 4 });
+    const group = createGroupLayer({ name: 'Group', children: [child.id] });
+    const doc: DocumentState = {
+      id: 'doc-1',
+      name: 'Test',
+      width: 4,
+      height: 4,
+      layers: [belowGroup, child, group],
+      layerOrder: [belowGroup.id, child.id, group.id],
+      activeLayerId: child.id,
+      selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+
+    computeMergeDown(doc);
+    expect(doc.layers).toHaveLength(3);
+    expect(doc.layerOrder).toEqual([belowGroup.id, child.id, group.id]);
+    expect(group.children).toEqual([child.id]);
+  });
+
+  // A sibling below the active layer within the same group is still a
+  // valid merge target — only crossing out of the group is refused.
+  it('merges normally between two siblings inside the same group', () => {
+    const bottomChild = createRasterLayer({ name: 'BottomChild', width: 4, height: 4 });
+    const topChild = createRasterLayer({ name: 'TopChild', width: 4, height: 4 });
+    const group = createGroupLayer({ name: 'Group', children: [topChild.id, bottomChild.id] });
+    const doc: DocumentState = {
+      id: 'doc-1',
+      name: 'Test',
+      width: 4,
+      height: 4,
+      layers: [bottomChild, topChild, group],
+      layerOrder: [bottomChild.id, topChild.id, group.id],
+      activeLayerId: topChild.id,
+      selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+
+    const result = computeMergeDown(doc);
+    expect(result).toBeDefined();
+    expect(result!.document!.layers.find((l) => l.id === topChild.id)).toBeUndefined();
+    expect(result!.document!.layers.find((l) => l.id === bottomChild.id)).toBeDefined();
+  });
 });
 
 describe('canMergeDown', () => {
-  it('is true when the layer below the active layer is raster', () => {
+  it('is true when the layer below the active layer is raster and shares its parent', () => {
     const doc = makeDoc();
     expect(canMergeDown(doc)).toBe(true);
   });
@@ -170,6 +247,11 @@ describe('canMergeDown', () => {
     const doc = makeDoc();
     const bottomDoc = { ...doc, activeLayerId: doc.layerOrder[0]! };
     expect(canMergeDown(bottomDoc)).toBe(false);
+  });
+
+  it('is false when there is no active layer', () => {
+    const doc = makeDoc();
+    expect(canMergeDown({ ...doc, activeLayerId: null })).toBe(false);
   });
 
   it('is false when the layer below is a group', () => {
@@ -190,8 +272,42 @@ describe('canMergeDown', () => {
     expect(canMergeDown(doc)).toBe(false);
   });
 
-  it('is false when there is no active layer', () => {
-    const doc = makeDoc();
-    expect(canMergeDown({ ...doc, activeLayerId: null })).toBe(false);
+  // #920
+  it('is false for the bottom child of a group when nothing below it shares its parent', () => {
+    const belowGroup = createRasterLayer({ name: 'Layer 1', width: 4, height: 4 });
+    const child = createRasterLayer({ name: 'Child', width: 4, height: 4 });
+    const group = createGroupLayer({ name: 'Group', children: [child.id] });
+    const doc: DocumentState = {
+      id: 'doc-1',
+      name: 'Test',
+      width: 4,
+      height: 4,
+      layers: [belowGroup, child, group],
+      layerOrder: [belowGroup.id, child.id, group.id],
+      activeLayerId: child.id,
+      selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+    expect(canMergeDown(doc)).toBe(false);
+  });
+
+  it('is true for a sibling below the active layer inside the same group', () => {
+    const bottomChild = createRasterLayer({ name: 'BottomChild', width: 4, height: 4 });
+    const topChild = createRasterLayer({ name: 'TopChild', width: 4, height: 4 });
+    const group = createGroupLayer({ name: 'Group', children: [topChild.id, bottomChild.id] });
+    const doc: DocumentState = {
+      id: 'doc-1',
+      name: 'Test',
+      width: 4,
+      height: 4,
+      layers: [bottomChild, topChild, group],
+      layerOrder: [bottomChild.id, topChild.id, group.id],
+      activeLayerId: topChild.id,
+      selectedLayerIds: [],
+      backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+      colorMode: 'rgb',
+    };
+    expect(canMergeDown(doc)).toBe(true);
   });
 });

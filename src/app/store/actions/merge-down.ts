@@ -4,18 +4,29 @@ import { getEngine } from '../../../engine-wasm/engine-state';
 import { mergeLayers, rasterizeLayerEffects, updateLayer, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
 import { layerToDescJson } from '../../../engine-wasm/sync-layers';
 import { DEFAULT_EFFECTS, hasEnabledEffects } from '../../../layers/layer-model';
-import { removeFromParentGroup } from '../../../layers/group-utils';
+import { findParentGroup, removeFromParentGroup } from '../../../layers/group-utils';
 import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import { invalidateBitmapCache } from '../../../engine/bitmap-cache';
 
 /**
  * Whether Merge Down can run for the document's current active layer.
  *
- * A group has no raster texture to composite into, so `mergeLayers`
- * against one is a no-op on the GPU that would otherwise still drop the
- * active layer from `layerOrder` as if it had succeeded (#879). Shared
- * by `computeMergeDown`'s own guard and by the Layer menu / keyboard
- * shortcut's disabled state so both agree on when merging is valid.
+ * Two things make the layer below the active one an invalid target:
+ *
+ * - It's a group. Groups have no raster texture to composite into, so
+ *   `mergeLayers` against one would be a no-op on the GPU while the
+ *   active layer still gets dropped from `layerOrder` as if the merge
+ *   had succeeded, silently destroying its pixels (#879).
+ * - It doesn't share the active layer's parent (#920). `layerOrder` is
+ *   a flat stack across every group's subtree, so the immediate
+ *   neighbor below a group's bottom child is whatever sits below the
+ *   group itself, outside it. Merging into that layer would pull the
+ *   active layer out of its group, silently discarding the group's
+ *   visibility/opacity/blend-mode/adjustments.
+ *
+ * Shared by `computeMergeDown`'s own guard and by the Layer menu /
+ * keyboard shortcut's disabled state so both agree on when merging is
+ * valid.
  */
 export function canMergeDown(doc: DocumentState): boolean {
   const activeId = doc.activeLayerId;
@@ -26,7 +37,11 @@ export function canMergeDown(doc: DocumentState): boolean {
   if (!belowId) return false;
   const belowLayer = doc.layers.find((l) => l.id === belowId);
   if (!belowLayer) return false;
-  return belowLayer.type !== 'group';
+  if (belowLayer.type === 'group') return false;
+
+  const activeParentId = findParentGroup(doc.layers, activeId)?.id ?? null;
+  const belowParentId = findParentGroup(doc.layers, belowId)?.id ?? null;
+  return activeParentId === belowParentId;
 }
 
 /**
@@ -41,16 +56,16 @@ export function canMergeDown(doc: DocumentState): boolean {
 export function computeMergeDown(
   doc: DocumentState,
 ): ActionResult | undefined {
-  const activeId = doc.activeLayerId;
-  if (!activeId) return undefined;
-  const orderIdx = doc.layerOrder.indexOf(activeId);
-  if (orderIdx <= 0) return undefined;
-  const belowId = doc.layerOrder[orderIdx - 1];
-  if (!belowId) return undefined;
+  if (!canMergeDown(doc)) return undefined;
 
-  const topLayer = doc.layers.find((l) => l.id === activeId);
-  const bottomLayer = doc.layers.find((l) => l.id === belowId);
-  if (!topLayer || !bottomLayer) return undefined;
+  const activeId = doc.activeLayerId;
+  const orderIdx = activeId ? doc.layerOrder.indexOf(activeId) : -1;
+  const belowId = orderIdx > 0 ? doc.layerOrder[orderIdx - 1] : undefined;
+  const topLayer = activeId ? doc.layers.find((l) => l.id === activeId) : undefined;
+  const bottomLayer = belowId ? doc.layers.find((l) => l.id === belowId) : undefined;
+  // canMergeDown already guarantees all of these resolve; the checks above
+  // are just to satisfy strict null checks without non-null assertions.
+  if (!activeId || !belowId || !topLayer || !bottomLayer) return undefined;
 
   // #879: refuse rather than merge onto a group — a group has no raster
   // texture, so `mergeLayers` would composite into nothing while the code
