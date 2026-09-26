@@ -117,6 +117,7 @@ import {
   handleMoveDown,
   handleMoveMove,
   handleMoveUp,
+  handleNudgeMove,
   flushQuickMaskDrag,
 } from './move-handlers';
 import type { InteractionState, FloatingSelection, PersistentTransform, InteractionContext, LastPaintPoint } from './interaction-types';
@@ -126,11 +127,17 @@ import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { DEFAULT_EFFECTS } from '../../layers/layer-model';
 import type { Layer, RasterLayer, Point } from '../../types';
 
-function makeMoveState(overrides: Partial<InteractionState> = {}): InteractionState {
+/** 5x5 selection mask at (5,5) in a DOC_W x DOC_H document. */
+function makeSquareMask(): Uint8ClampedArray {
   const mask = new Uint8ClampedArray(DOC_W * DOC_H);
   for (let y = 5; y < 10; y++) {
     for (let x = 5; x < 10; x++) mask[y * DOC_W + x] = 255;
   }
+  return mask;
+}
+
+function makeMoveState(overrides: Partial<InteractionState> = {}): InteractionState {
+  const mask = makeSquareMask();
   const base: InteractionState = {
     drawing: true,
     lastPoint: { x: 0, y: 0 },
@@ -588,5 +595,59 @@ describe('handleMoveDown/Up — bare click on the move tool must not record hist
     handleMoveMove(state, { x: ctx.canvasPos.x + 7, y: ctx.canvasPos.y + 1 }, ctx.floatingSelectionRef);
     handleMoveUp(state, { x: ctx.canvasPos.x + 7, y: ctx.canvasPos.y + 1 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
     expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('floated-selection moves mark the layer dirty for history (#925)', () => {
+  // compositeFloat rewrites the layer texture without touching the store's
+  // dirtyLayerIds; unless the handlers mark it, pushHistory reuses the
+  // previous entry's GPU snapshot and undo restores stale pixels.
+  function floatAt(offsetX: number, offsetY: number): { current: FloatingSelection | null } {
+    return {
+      current: {
+        offsetX,
+        offsetY,
+        originalMask: makeSquareMask(),
+        originalBounds: { x: 5, y: 5, width: 5, height: 5 },
+        gpuResident: true,
+      },
+    };
+  }
+
+  beforeEach(() => {
+    uiState.maskMode = 'off';
+    vi.mocked(clearJsPixelData).mockClear();
+    vi.mocked(bridge.floatSelection).mockClear();
+    editorState.setSelection.mockClear();
+  });
+
+  it('handleMoveUp on a floated selection marks the dragged layer dirty', () => {
+    const floatRef = floatAt(0, 0);
+    handleMoveUp(makeMoveState(), { x: 4, y: 2 }, floatRef, makePersistentRef());
+    expect(vi.mocked(clearJsPixelData)).toHaveBeenCalledWith('layer-1');
+  });
+
+  it('handleMoveUp without a float leaves dirty tracking alone', () => {
+    handleMoveUp(makeMoveState(), { x: 4, y: 2 }, makeFloatRef(), makePersistentRef());
+    expect(vi.mocked(clearJsPixelData)).not.toHaveBeenCalled();
+  });
+
+  it('handleNudgeMove on an existing float marks the active layer dirty', () => {
+    const layer = { id: 'layer-1', type: 'raster', x: 0, y: 0, locked: false };
+    editorState.document.layers = [layer];
+    editorState.document.activeLayerId = 'layer-1';
+    editorState.selection = {
+      active: true,
+      mask: makeSquareMask(),
+      bounds: { x: 5, y: 5, width: 5, height: 5 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    const floatRef = floatAt(3, 0);
+
+    handleNudgeMove(1, 0, floatRef, makePersistentRef());
+
+    expect(vi.mocked(bridge.floatSelection)).not.toHaveBeenCalled();
+    expect(vi.mocked(clearJsPixelData)).toHaveBeenCalledWith('layer-1');
   });
 });

@@ -619,6 +619,10 @@ export function useCanvasInteraction(
     // The float is only dropped when the user commits (clearPersistentTransform).
     if (state.gesture.kind === 'transform') {
       useUIStore.getState().setActiveTransformHandle(null);
+      // compositeFloatAffine/Perspective rewrote the layer texture during the
+      // drag; mark it dirty so the next pushHistory snapshots it rather than
+      // reusing the previous Transform entry's handle (#925).
+      if (!state.gesture.selectionOnly && state.layerId) clearJsPixelData(state.layerId);
     }
 
     // Clear gradient preview
