@@ -226,7 +226,10 @@ export function applyTextSetting<K extends keyof TextSettings>(key: K, value: Te
   const layerKey = (SETTING_TO_LAYER as Record<string, keyof TextLayer | undefined>)[key];
   if (!layerKey) return;
   const layer = selectedCommittedTextLayer();
-  if (!layer) return;
+  if (!layer) {
+    if (key === 'fontStyle') refreshWhenStyleLoads(null);
+    return;
+  }
 
   const clamped = useToolSettingsStore.getState().settings.text[key];
   useEditorStore.getState().updateTextLayerProperties(layer.id, { [layerKey]: clamped });
@@ -238,10 +241,29 @@ export function applyTextSetting<K extends keyof TextSettings>(key: K, value: Te
     return;
   }
 
-  rerenderLayer(layer, { ...layer, [layerKey]: clamped } as TextLayer);
+  const anchor = rerenderLayer(layer, { ...layer, [layerKey]: clamped } as TextLayer);
+  if (key === 'fontStyle') {
+    refreshWhenStyleLoads(anchor ? { id: layer.id, anchorX: anchor.anchorX, anchorY: anchor.anchorY } : null);
+  }
 }
 
-/** Snap `weight` to the nearest weight the font offers, and load its binary. */
+/**
+ * A Style change needs the family's face for that style in the engine —
+ * Google families only ship the upright binary until italic is asked for
+ * (#951). Load it and re-render once it lands.
+ */
+function refreshWhenStyleLoads(target: { id: string; anchorX: number; anchorY: number } | null): void {
+  const text = useToolSettingsStore.getState().settings.text;
+  const { loading } = ensureWeightLoaded(text.fontFamily, text.fontWeight);
+  void loading.then((loaded) => {
+    if (loaded) refreshTextAfterFontLoad(target, text.fontFamily);
+  });
+}
+
+/**
+ * Snap `weight` to the nearest weight the font offers, and load its binary
+ * for the current Style setting.
+ */
 function ensureWeightLoaded(family: string, weight: number): { weight: number; loading: Promise<boolean> } {
   const name = extractFamilyName(family);
   const entry = findFontEntry(name);
@@ -252,8 +274,9 @@ function ensureWeightLoaded(family: string, weight: number): { weight: number; l
     : entry.weights.reduce((prev, curr) => (Math.abs(curr - weight) < Math.abs(prev - weight) ? curr : prev));
 
   if (entry.source === 'google') {
-    loadGoogleFont(name, entry.weights);
-    return { weight: resolved, loading: loadFontBinaryToEngine(name, resolved) };
+    loadGoogleFont(name, entry.weights, entry.hasItalic);
+    const isItalic = entry.hasItalic && useToolSettingsStore.getState().settings.text.fontStyle === 'italic';
+    return { weight: resolved, loading: loadFontBinaryToEngine(name, resolved, isItalic) };
   }
   if (entry.source === 'local') return { weight: resolved, loading: loadLocalFontToEngine(name) };
   return { weight: resolved, loading: Promise.resolve(false) };
