@@ -362,12 +362,15 @@ test.describe('Pattern Fill', () => {
       expect(px.b).toBeLessThan(50);
     }
     for (const y of transparentRows) {
-      // The selection mask blend hard-selects the filtered (pattern) result
-      // inside the marquee (mix(original, filtered, mask) with mask=1), so
-      // the transparent pattern rows come out transparent here too, not the
-      // pre-existing white fill showing through.
+      // #942: Fill with Pattern now composites the tile "over" the existing
+      // pixels instead of replacing them, so the transparent tile rows keep
+      // the layer's pre-existing white fill (opaque white) rather than
+      // punching through to transparent.
       const px = await getPixelAt(page, 150, y, layer2Id);
-      expect(px.a).toBeLessThan(50);
+      expect(px.a).toBeGreaterThan(200);
+      expect(px.r).toBeGreaterThan(200);
+      expect(px.g).toBeGreaterThan(200);
+      expect(px.b).toBeGreaterThan(200);
     }
   });
 });
