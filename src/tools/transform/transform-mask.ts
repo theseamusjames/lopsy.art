@@ -1,6 +1,7 @@
 import type { Point, Rect } from '../../types';
 import type { TransformState } from './transform';
 import { getCornerPositions } from './transform';
+import { applyHomography, invertHomography, squareToQuad, type Homography } from './homography';
 
 /**
  * Forward-transform a point through the affine chain:
@@ -56,48 +57,14 @@ function inversePoint(px: number, py: number, state: TransformState): Point {
 }
 
 /**
- * Inverse bilinear: given a point in the destination quad, find the (u,v)
- * in [0,1]² that maps to it via bilinear interpolation of the 4 corners.
- * Returns null if the point is outside the quad.
+ * Map a destination point back through the quad's projective map to the
+ * original bounds. Returns null outside the quad.
  */
-function inverseBilinear(
-  p: Point,
-  tl: Point, tr: Point, br: Point, bl: Point,
-  ob: Rect,
-): Point | null {
-  // Solve for (u,v) such that:
-  // p = (1-v)*((1-u)*tl + u*tr) + v*((1-u)*bl + u*br)
-  // Use iterative approach for robustness
-  const e = { x: tr.x - tl.x, y: tr.y - tl.y };
-  const f = { x: bl.x - tl.x, y: bl.y - tl.y };
-  const g = { x: tl.x - tr.x + br.x - bl.x, y: tl.y - tr.y + br.y - bl.y };
-  const h = { x: p.x - tl.x, y: p.y - tl.y };
-
-  const k2 = g.x * f.y - g.y * f.x;
-  const k1 = e.x * f.y - e.y * f.x + h.x * g.y - h.y * g.x;
-  const k0 = h.x * e.y - h.y * e.x;
-
-  let v: number;
-  if (Math.abs(k2) < 1e-10) {
-    if (Math.abs(k1) < 1e-10) return null;
-    v = -k0 / k1;
-  } else {
-    const disc = k1 * k1 - 4 * k0 * k2;
-    if (disc < 0) return null;
-    const sqrtDisc = Math.sqrt(disc);
-    const v1 = (-k1 + sqrtDisc) / (2 * k2);
-    const v2 = (-k1 - sqrtDisc) / (2 * k2);
-    v = (v1 >= -0.01 && v1 <= 1.01) ? v1 : v2;
-  }
-
-  const denom = e.x + g.x * v;
-  const denomY = e.y + g.y * v;
-  const u = Math.abs(denom) > Math.abs(denomY)
-    ? (h.x - f.x * v) / denom
-    : (h.y - f.y * v) / denomY;
-
+function inverseProjective(p: Point, quadToSquare: Homography, ob: Rect): Point | null {
+  const uv = applyHomography(quadToSquare, p.x, p.y);
+  if (!uv) return null;
+  const { x: u, y: v } = uv;
   if (u < -0.01 || u > 1.01 || v < -0.01 || v > 1.01) return null;
-
   return {
     x: ob.x + u * ob.width,
     y: ob.y + v * ob.height,
@@ -114,12 +81,13 @@ export function applyTransformToMask(
   const ob = state.originalBounds;
   const isCornerMode = state.mode === 'distort' || state.mode === 'perspective';
 
-  let corners: [Point, Point, Point, Point] | null = null;
+  let quadToSquare: Homography | null = null;
   let c0: Point, c1: Point, c2: Point, c3: Point;
 
   if (isCornerMode) {
-    corners = getCornerPositions(state);
-    [c0, c1, c2, c3] = corners; // TL, TR, BR, BL
+    [c0, c1, c2, c3] = getCornerPositions(state); // TL, TR, BR, BL
+    quadToSquare = invertHomography(squareToQuad(c0, c1, c2, c3));
+    if (!quadToSquare) return { mask: result, bounds: null };
   } else {
     c0 = forwardPoint(ob.x, ob.y, state);
     c1 = forwardPoint(ob.x + ob.width, ob.y, state);
@@ -135,8 +103,8 @@ export function applyTransformToMask(
   for (let y = minY; y < maxY; y++) {
     for (let x = minX; x < maxX; x++) {
       let orig: Point | null;
-      if (corners) {
-        orig = inverseBilinear({ x, y }, corners[0], corners[1], corners[2], corners[3], ob);
+      if (quadToSquare) {
+        orig = inverseProjective({ x, y }, quadToSquare, ob);
       } else {
         orig = inversePoint(x, y, state);
       }

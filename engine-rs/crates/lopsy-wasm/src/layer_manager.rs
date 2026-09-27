@@ -1,4 +1,5 @@
 use web_sys::WebGl2RenderingContext;
+use lopsy_core::homography;
 use lopsy_core::layer::LayerDesc;
 use crate::compositor::mask_doc_offset;
 use crate::engine::EngineInner;
@@ -1491,17 +1492,15 @@ fn composite_float_transformed(
                 engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
             }
             let c = &engine.float_transform_corners;
-            if let Some(loc) = shader.location(&engine.gl, "u_cornerTL") {
-                engine.gl.uniform2f(Some(&loc), c[0], c[1]);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_cornerTR") {
-                engine.gl.uniform2f(Some(&loc), c[2], c[3]);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_cornerBR") {
-                engine.gl.uniform2f(Some(&loc), c[4], c[5]);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_cornerBL") {
-                engine.gl.uniform2f(Some(&loc), c[6], c[7]);
+            let corner = |i: usize| [c[i * 2] as f64, c[i * 2 + 1] as f64];
+            let quad_to_square = homography::invert(&homography::square_to_quad(
+                corner(0), corner(1), corner(2), corner(3),
+            ))
+            .map(|m| homography::to_gl_column_major(&m))
+            // Degenerate quad: w = 0 everywhere, so every fragment is rejected.
+            .unwrap_or([0.0; 9]);
+            if let Some(loc) = shader.location(&engine.gl, "u_quadToSquare") {
+                engine.gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, &quad_to_square);
             }
             let r = &engine.float_transform_orig_rect;
             if let Some(loc) = shader.location(&engine.gl, "u_origRect") {
