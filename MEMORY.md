@@ -39,6 +39,23 @@ compares JS-side/metadata-derived pixel dimensions (e.g.
 bug — it requires reading actual GPU content via `__readLayerPixels`
 before/after undo and comparing opaque pixel counts or values.
 
+## GPU layer writes must also mark the store's `dirtyLayerIds`
+
+`pushHistory` reuses the previous entry's GPU snapshot handle for any
+layer that is NOT in the store's `dirtyLayerIds` and whose x/y/w/h are
+unchanged. `engine.mark_layer_dirty` (Rust) only drives recompositing —
+the history slice never sees it. So a JS path that writes a layer
+texture through the engine (float composites, affine/perspective
+transforms, …) must also call `clearJsPixelData(layerId)`, or every
+later history entry silently shares a stale texture. This bit chained
+selection Moves / nudges / Free Transform drags (#925): each gesture
+rewrote the float's layer texture via `compositeFloat*` without
+touching `dirtyLayerIds`, so undo restored the marquee correctly but the
+pixels stayed at the first drag's result. Tests for this must do 3+
+gestures (the first two entries always get fresh copies) and assert on
+`__readLayerPixels` at each undo step — selection bounds and transform
+handles restore correctly either way.
+
 ## Memories should be inlined in MEMORY.md, not in separate files
 
 Keep everything in this single file. No separate memory files in .claude or elsewhere.

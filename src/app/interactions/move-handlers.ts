@@ -598,6 +598,12 @@ export function handleMoveUp(
 
   if (!floatingSelectionRef.current || !state.startPoint) return;
 
+  // compositeFloat rewrote the layer texture during the drag. Mark the layer
+  // dirty so the next pushHistory snapshots it instead of reusing the
+  // previous entry's handle — otherwise every Move after the second restores
+  // the first drag's pixels under the correct marquee (#925).
+  if (state.layerId) clearJsPixelData(state.layerId);
+
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
   const dragDy = Math.round(canvasPos.y - state.startPoint.y);
   floatingSelectionRef.current.offsetX += dragDx;
@@ -722,6 +728,8 @@ export function handleNudgeMove(
     floatingSelectionRef.current.offsetY = newOffsetY;
 
     compositeFloat(engine, newOffsetX, newOffsetY);
+    // Same as handleMoveUp: the composite changed the layer texture (#925).
+    clearJsPixelData(activeId);
 
     // Shift selection mask
     const { width: docW, height: docH } = editor.document;
