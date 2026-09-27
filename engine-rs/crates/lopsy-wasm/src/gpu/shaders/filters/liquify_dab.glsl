@@ -14,6 +14,7 @@ uniform vec2 u_size;
 out vec4 fragColor;
 
 const float MAX_DISP = 2048.0;
+const float BLOAT_STRENGTH = 0.5;
 
 vec2 decodeDisp(vec4 c) {
     float ndx = (c.r * 256.0 + c.g) / 257.0;
@@ -74,18 +75,19 @@ void main() {
         float ndy = dx * sn + dy * cs - dy;
         disp.x += ndx + (disp.x * cs - disp.y * sn - disp.x);
         disp.y += ndy + (disp.x * sn + disp.y * cs - disp.y);
-    } else if (u_mode == 3) {
-        float dist = sqrt(distSq);
-        if (dist > 0.001) {
-            disp.x -= (dx / dist) * w * u_radius * 0.1;
-            disp.y -= (dy / dist) * w * u_radius * 0.1;
-        }
-    } else if (u_mode == 4) {
-        float dist = sqrt(distSq);
-        if (dist > 0.001) {
-            disp.x += (dx / dist) * w * u_radius * 0.1;
-            disp.y += (dy / dist) * w * u_radius * 0.1;
-        }
+    } else if (u_mode == 3 || u_mode == 4) {
+        // #945: the per-dab offset is proportional to the distance from the
+        // centre (a radial scale), not a constant-length unit vector — a
+        // constant magnitude doesn't vanish at the centre, so pixels nearer
+        // than that magnitude sample from the opposite side and the image
+        // folds. With k * pressure < 1 the radial map stays monotonic.
+        // The new offset is composed with the existing field (sampled at
+        // the displaced point) rather than added, so repeated dabs keep
+        // magnifying smoothly instead of accumulating past the fold.
+        float k = (u_mode == 3) ? -BLOAT_STRENGTH : BLOAT_STRENGTH;
+        vec2 delta = vec2(dx, dy) * (k * w);
+        vec2 prev = decodeDisp(texture(u_disp, (pixel + delta) / u_size));
+        disp = delta + prev;
     }
 
     fragColor = encodeDisp(disp);
