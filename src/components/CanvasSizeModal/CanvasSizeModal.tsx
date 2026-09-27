@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { useEditorStore } from '../../app/editor-store';
 import { formatDimension, toPixels, type DimensionUnit } from '../../utils/dimension-units';
 import styles from './CanvasSizeModal.module.css';
+import { clampDocumentSide } from '../../utils/document-size';
+import { getMaxDocumentSide } from '../../engine-wasm/gpu-limits';
 
 type AnchorX = 0 | 0.5 | 1;
 type AnchorY = 0 | 0.5 | 1;
@@ -43,8 +45,9 @@ export function CanvasSizeModal({ onClose }: CanvasSizeModalProps) {
     const rawH = parseFloat(height);
     const pxW = Number.isFinite(rawW) ? toPixels(rawW, unit, dpiNum) : docWidth;
     const pxH = Number.isFinite(rawH) ? toPixels(rawH, unit, dpiNum) : docHeight;
-    const w = Math.max(1, Math.min(16384, pxW));
-    const h = Math.max(1, Math.min(16384, pxH));
+    const maxSide = getMaxDocumentSide();
+    const w = clampDocumentSide(pxW, maxSide);
+    const h = clampDocumentSide(pxH, maxSide);
     resizeCanvas(w, h, anchorX, anchorY);
     onClose();
   }, [width, height, unit, dpi, anchorX, anchorY, docWidth, docHeight, resizeCanvas, onClose]);

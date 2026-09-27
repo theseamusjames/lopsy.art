@@ -23,11 +23,20 @@ pub struct TexturePool {
     /// shift entries — only replace slots in place.
     entries: Vec<Option<TextureEntry>>,
     use_float: bool,
+    /// The GPU's `MAX_TEXTURE_SIZE`. Oversized `tex_image_2d` calls don't
+    /// throw — they raise a GL error and leave a 0x0 texture that later
+    /// uploads/readbacks trip over — so `acquire` rejects them up front
+    /// (#934).
+    max_size: u32,
 }
 
 impl TexturePool {
-    pub fn new(use_float: bool) -> Self {
-        Self { entries: Vec::new(), use_float }
+    pub fn new(use_float: bool, max_size: u32) -> Self {
+        Self { entries: Vec::new(), use_float, max_size }
+    }
+
+    pub fn max_size(&self) -> u32 {
+        self.max_size
     }
 
     /// Verify RGBA16F is actually renderable on this GPU.
@@ -122,6 +131,13 @@ impl TexturePool {
         // delay between "no longer needed" and "actually deleted" is fine —
         // what matters is that the pool can't grow unbounded across resize
         // / crop cycles. See MAX_FREE_PER_SIZE above.
+        if width > self.max_size || height > self.max_size {
+            return Err(format!(
+                "texture {width}x{height} exceeds the GPU limit of {}",
+                self.max_size
+            ));
+        }
+
         self.evict_excess_free_entries(gl);
 
         // Look for a free texture of matching size

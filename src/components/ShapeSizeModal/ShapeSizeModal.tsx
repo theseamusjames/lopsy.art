@@ -1,6 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Button } from '../Button/Button';
 import styles from './ShapeSizeModal.module.css';
+import { clampDocumentSide } from '../../utils/document-size';
+import { getMaxDocumentSide } from '../../engine-wasm/gpu-limits';
 
 interface ShapeSizeModalProps {
   onConfirm: (width: number, height: number) => void;
@@ -11,16 +13,17 @@ export function ShapeSizeModal({ onConfirm, onCancel }: ShapeSizeModalProps) {
   const [width, setWidth] = useState('200');
   const [height, setHeight] = useState('200');
   const widthRef = useRef<HTMLInputElement>(null);
+  const maxSide = useMemo(() => getMaxDocumentSide(), []);
 
   useEffect(() => {
     widthRef.current?.select();
   }, []);
 
   const handleConfirm = useCallback(() => {
-    const w = Math.max(1, Math.min(16384, Math.round(parseFloat(width) || 1)));
-    const h = Math.max(1, Math.min(16384, Math.round(parseFloat(height) || 1)));
+    const w = clampDocumentSide(parseFloat(width) || 1, maxSide);
+    const h = clampDocumentSide(parseFloat(height) || 1, maxSide);
     onConfirm(w, h);
-  }, [width, height, onConfirm]);
+  }, [width, height, maxSide, onConfirm]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -47,7 +50,7 @@ export function ShapeSizeModal({ onConfirm, onCancel }: ShapeSizeModalProps) {
                 className={styles.fieldInput}
                 type="number"
                 min="1"
-                max="16384"
+                max={maxSide}
                 value={width}
                 onChange={(e) => setWidth(e.target.value)}
               />
@@ -58,7 +61,7 @@ export function ShapeSizeModal({ onConfirm, onCancel }: ShapeSizeModalProps) {
                 className={styles.fieldInput}
                 type="number"
                 min="1"
-                max="16384"
+                max={maxSide}
                 value={height}
                 onChange={(e) => setHeight(e.target.value)}
               />
