@@ -14,6 +14,7 @@ import {
   computeRotation,
   getCursorForHandle,
   applyTransformToMask,
+  translateTransform,
 } from './transform';
 
 describe('createTransformState', () => {
@@ -350,5 +351,34 @@ describe('applyTransformToMask', () => {
     const state = createTransformState({ x: 0, y: 0, width: 10, height: 10 });
     const { bounds } = applyTransformToMask(mask, 10, 10, state);
     expect(bounds).toBeNull();
+  });
+});
+
+describe('translateTransform (#948)', () => {
+  it('moves a scaled transform without changing its size', () => {
+    const t = { ...createTransformState({ x: 60, y: 60, width: 80, height: 60 }), scaleX: 1.5, scaleY: 1.5 };
+    const before = getTransformedContentBounds(t);
+    const moved = translateTransform(t, 30, -10);
+    const after = getTransformedContentBounds(moved);
+    expect(after.width).toBeCloseTo(before.width);
+    expect(after.height).toBeCloseTo(before.height);
+    expect(after.x).toBeCloseTo(before.x + 30);
+    expect(after.y).toBeCloseTo(before.y - 10);
+    expect(moved.scaleX).toBe(1.5);
+  });
+
+  it('offsets the corners in distort/perspective modes', () => {
+    const t = {
+      ...createTransformState({ x: 0, y: 0, width: 100, height: 100 }, 'perspective'),
+      corners: [{ x: 10, y: 0 }, { x: -10, y: 0 }, { x: 20, y: 0 }, { x: -20, y: 0 }] as [
+        { x: number; y: number }, { x: number; y: number }, { x: number; y: number }, { x: number; y: number },
+      ],
+    };
+    const moved = translateTransform(t, 5, 7);
+    const before = getTransformedContentBounds(t);
+    const after = getTransformedContentBounds(moved);
+    expect(after.x).toBeCloseTo(before.x + 5);
+    expect(after.y).toBeCloseTo(before.y + 7);
+    expect(after.width).toBeCloseTo(before.width);
   });
 });

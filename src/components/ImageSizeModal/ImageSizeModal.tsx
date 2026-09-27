@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { useEditorStore } from '../../app/editor-store';
 import { formatDimension, toPixels, type DimensionUnit } from '../../utils/dimension-units';
 import styles from './ImageSizeModal.module.css';
+import { clampDocumentSide } from '../../utils/document-size';
+import { getMaxDocumentSide } from '../../engine-wasm/gpu-limits';
 
 interface ImageSizeModalProps {
   onClose: () => void;
@@ -69,8 +71,9 @@ export function ImageSizeModal({ onClose }: ImageSizeModalProps) {
     const rawH = parseFloat(height);
     const pxW = Number.isFinite(rawW) ? toPixels(rawW, unit, dpiNum) : docWidth;
     const pxH = Number.isFinite(rawH) ? toPixels(rawH, unit, dpiNum) : docHeight;
-    const w = Math.max(1, Math.min(16384, pxW));
-    const h = Math.max(1, Math.min(16384, pxH));
+    const maxSide = getMaxDocumentSide();
+    const w = clampDocumentSide(pxW, maxSide);
+    const h = clampDocumentSide(pxH, maxSide);
     resizeImage(w, h);
     onClose();
   }, [width, height, unit, dpi, docWidth, docHeight, resizeImage, onClose]);

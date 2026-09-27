@@ -134,6 +134,14 @@ export function applyTwirlDab(
 }
 
 /**
+ * Radial scale per Bloat/Pinch dab at full weight and pressure. The offset
+ * is proportional to the distance from the centre so it vanishes there —
+ * a constant-length offset folds the image across the centre (#945).
+ * Must stay below 1 so the radial map remains monotonic.
+ */
+export const BLOAT_STRENGTH = 0.5;
+
+/**
  * Apply a Bloat dab. Pushes displacement vectors outward from brush center.
  */
 export function applyBloatDab(
@@ -157,13 +165,10 @@ export function applyBloatDab(
       const w = brushWeight(distSq, radiusSq);
       if (w <= 0) continue;
 
-      const dist = Math.sqrt(distSq);
-      if (dist < 0.001) continue;
-
       const idx = y * map.width + x;
-      const scale = w * pressure * radius * 0.02;
-      map.dx[idx]! -= (distX / dist) * scale;
-      map.dy[idx]! -= (distY / dist) * scale;
+      const scale = w * pressure * BLOAT_STRENGTH;
+      map.dx[idx]! -= distX * scale;
+      map.dy[idx]! -= distY * scale;
     }
   }
 }
@@ -192,13 +197,10 @@ export function applyPinchDab(
       const w = brushWeight(distSq, radiusSq);
       if (w <= 0) continue;
 
-      const dist = Math.sqrt(distSq);
-      if (dist < 0.001) continue;
-
       const idx = y * map.width + x;
-      const scale = w * pressure * radius * 0.02;
-      map.dx[idx]! += (distX / dist) * scale;
-      map.dy[idx]! += (distY / dist) * scale;
+      const scale = w * pressure * BLOAT_STRENGTH;
+      map.dx[idx]! += distX * scale;
+      map.dy[idx]! += distY * scale;
     }
   }
 }

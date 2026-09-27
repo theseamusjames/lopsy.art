@@ -474,6 +474,42 @@ export function flattenGroupDescendants(
   return result;
 }
 
+/**
+ * The `children` arrays visited by `flattenGroupDescendants` for this
+ * group, in walk order. Comparing these by reference detects a change
+ * anywhere in the flattened descendant list without re-serializing it.
+ */
+export function collectWalkedChildren(
+  layerMap: ReadonlyMap<string, Layer>,
+  groupId: string,
+  routedGroupIds: ReadonlySet<string>,
+): (readonly string[])[] {
+  const result: (readonly string[])[] = [];
+  const walk = (id: string): void => {
+    const layer = layerMap.get(id);
+    if (!layer || layer.type !== 'group') return;
+    const group = layer as import('../types').GroupLayer;
+    result.push(group.children);
+    for (const childId of group.children) {
+      if (childId !== groupId && routedGroupIds.has(childId)) continue;
+      walk(childId);
+    }
+  };
+  walk(groupId);
+  return result;
+}
+
+function sameWalkedChildren(
+  a: readonly (readonly string[])[],
+  b: readonly (readonly string[])[],
+): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 function pushGroupToEngine(
   engine: Engine,
   group: import('../types').GroupLayer,
@@ -611,6 +647,11 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     [...routedGroupIds].some((id) => !tracked.groupAdjRoutedIds.has(id));
   tracked.groupAdjRoutedIds = routedGroupIds;
 
+  const layerMap = new Map<string, Layer>();
+  if (routedGroupIds.size > 0 || tracked.groupAdjTracked.size > 0) {
+    for (const l of layers) layerMap.set(l.id, l);
+  }
+
   if (tracked.groupAdjNeedsFullSync) {
     clearGroupAdjustments(engine);
     tracked.groupAdjTracked.clear();
@@ -627,6 +668,7 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
         adjustments: group.adjustments,
         adjustmentsEnabled: group.adjustmentsEnabled,
         children: group.children,
+        walkedChildren: collectWalkedChildren(layerMap, group.id, routedGroupIds),
         maskEnabled: group.mask?.enabled ?? false,
         childrenJson,
       });
@@ -640,13 +682,17 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     const group = layer as import('../types').GroupLayer;
     seenGroupIds.add(group.id);
     const prev = tracked.groupAdjTracked.get(group.id);
+    const walkedChildren = prev || routedGroupIds.has(group.id)
+      ? collectWalkedChildren(layerMap, group.id, routedGroupIds)
+      : [];
+    const descendantsUnchanged = !!prev && sameWalkedChildren(prev.walkedChildren, walkedChildren);
 
     if (
       !routedSetChanged &&
       prev &&
       prev.adjustments === group.adjustments &&
       prev.adjustmentsEnabled === group.adjustmentsEnabled &&
-      prev.children === group.children &&
+      descendantsUnchanged &&
       prev.maskEnabled === (group.mask?.enabled ?? false)
     ) continue;
 
@@ -654,12 +700,13 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
     const needs = groupNeedsRouting(group, adj);
     if (needs) {
-      const cachedJson = !routedSetChanged && prev && prev.children === group.children ? prev.childrenJson : undefined;
+      const cachedJson = !routedSetChanged && descendantsUnchanged ? prev?.childrenJson : undefined;
       const childrenJson = pushGroupToEngine(engine, group, layers, adj, cachedJson, routedGroupIds);
       tracked.groupAdjTracked.set(group.id, {
         adjustments: group.adjustments,
         adjustmentsEnabled: group.adjustmentsEnabled,
         children: group.children,
+        walkedChildren,
         maskEnabled: group.mask?.enabled ?? false,
         childrenJson,
       });

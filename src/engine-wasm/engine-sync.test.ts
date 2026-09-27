@@ -728,6 +728,39 @@ describe('syncGroupAdjustments — nested descendants are routed to the group', 
   });
 });
 
+describe('syncGroupAdjustments — layers added to a sub-group (#940)', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.setGroupAdjustments).mockClear();
+  });
+
+  it('re-pushes the root group when only a nested sub-group gains a child', () => {
+    const engine = makeFakeEngine();
+    const leaf1 = createRasterLayer({ name: 'Leaf 1', width: 100, height: 100 });
+    const subGroup = createGroupLayer({ name: 'Sub', children: [leaf1.id] });
+    const root = {
+      ...createGroupLayer({ name: 'Root', children: [subGroup.id] }),
+      adjustmentsEnabled: true,
+      adjustments: [{ id: 'v-1', type: 'vignette' as const, enabled: true, vignette: 0.5 }],
+    };
+    sync.syncGroupAdjustments(engine, [leaf1, subGroup, root]);
+    vi.mocked(bridge.setGroupAdjustments).mockClear();
+
+    // Unchanged tree → fast path, no re-push.
+    sync.syncGroupAdjustments(engine, [leaf1, subGroup, root]);
+    expect(vi.mocked(bridge.setGroupAdjustments)).not.toHaveBeenCalled();
+
+    // Adding a layer replaces only the sub-group's children array; the
+    // root's own `children` reference is untouched.
+    const leaf2 = createRasterLayer({ name: 'Leaf 2', width: 100, height: 100 });
+    const subGroup2 = { ...subGroup, children: [leaf1.id, leaf2.id] };
+    sync.syncGroupAdjustments(engine, [leaf1, leaf2, subGroup2, root]);
+    expect(vi.mocked(bridge.setGroupAdjustments)).toHaveBeenCalledOnce();
+    const [, calledId, childrenJson] = vi.mocked(bridge.setGroupAdjustments).mock.calls[0]!;
+    expect(calledId).toBe(root.id);
+    expect(JSON.parse(childrenJson as string)).toContain(leaf2.id);
+  });
+});
+
 describe('path-bound text and web font loading (#823)', () => {
   const path = {
     id: 'p1',

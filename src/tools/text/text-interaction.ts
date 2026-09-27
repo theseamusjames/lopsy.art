@@ -8,6 +8,7 @@ import { toDocumentColor } from '../../app/document-color';
 import { hitTestTextLayer } from './text-hit-test';
 import { createTextLayer } from '../../layers/layer-model';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
+import { loadTextSettingsFromLayer } from '../../app/text-settings-layer-sync';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
   setTextLayerContent,
@@ -352,19 +353,8 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
   // Click on an existing text layer enters edit mode for it.
   const hitLayer = hitTestTextLayer(editorState.document.layers, canvasPos);
   if (hitLayer) {
-    const toolSettings = useToolSettingsStore.getState();
-    toolSettings.setTextSetting('fontSize', hitLayer.fontSize);
-    toolSettings.setTextSetting('fontFamily', hitLayer.fontFamily);
-    toolSettings.setTextSetting('fontWeight', hitLayer.fontWeight);
-    toolSettings.setTextSetting('fontStyle', hitLayer.fontStyle);
-    toolSettings.setTextSetting('align', hitLayer.textAlign);
-    toolSettings.setForegroundColor(hitLayer.color);
-    toolSettings.setTextSetting('underline', hitLayer.underline);
-    toolSettings.setTextSetting('strikethrough', hitLayer.strikethrough);
-    toolSettings.setTextSetting('lineHeight', hitLayer.lineHeight);
-    toolSettings.setTextSetting('letterSpacing', hitLayer.letterSpacing);
-    toolSettings.setTextSetting('paragraphSpacing', hitLayer.paragraphSpacing);
-    toolSettings.setTextSetting('vertical', hitLayer.vertical ?? false);
+    loadTextSettingsFromLayer(hitLayer);
+    useToolSettingsStore.getState().setForegroundColor(hitLayer.color);
 
     editorState.setActiveLayer(hitLayer.id);
 

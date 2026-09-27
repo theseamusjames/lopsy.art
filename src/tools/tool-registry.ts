@@ -10,7 +10,7 @@ import { handleQuickSelectDown, handleQuickSelectMove, handleQuickSelectUp } fro
 import { handleEyedropperDown, handleEyedropperMove } from './eyedropper/eyedropper-interaction';
 import { handleDodgeDown, handleDodgeMove, handleDodgeUp } from './dodge/dodge-interaction';
 import { handleSpongeDown, handleSpongeMove, handleSpongeUp } from './sponge/sponge-interaction';
-import { handleSmudgeDown, handleSmudgeMove } from './smudge/smudge-interaction';
+import { handleSmudgeDown, handleSmudgeMove, handleSmudgeUp } from './smudge/smudge-interaction';
 import { handleStampDown, handleStampMove } from './stamp/stamp-interaction';
 import { handleHealingDown, handleHealingMove } from './healing/healing-interaction';
 import { handleTextDown, handleTextMove, handleTextUp, commitTextEditing } from './text/text-interaction';
@@ -222,6 +222,7 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     handler: {
       down: (ctx) => handleSmudgeDown(ctx),
       move: (ctx, state) => handleSmudgeMove(state, ctx.layerPos),
+      up: (_ctx, state) => handleSmudgeUp(state),
     },
   },
   'marquee-rect': {

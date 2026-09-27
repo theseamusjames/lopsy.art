@@ -286,3 +286,10 @@
   color: var(--color-accent);
   text-decoration: underline;
 }
+
+.sizeWarning {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+}

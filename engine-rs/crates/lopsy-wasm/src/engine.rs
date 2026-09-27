@@ -313,7 +313,14 @@ pub struct SnapshotTexture {
 impl EngineInner {
     pub fn new(gpu_ctx: GpuContext, shaders: ShaderPrograms) -> Result<Self, String> {
         let gl = gpu_ctx.gl.clone();
-        let mut texture_pool = TexturePool::new(gpu_ctx.has_half_float);
+        let max_texture_size = gl
+            .get_parameter(WebGl2RenderingContext::MAX_TEXTURE_SIZE)
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map(|v| v as u32)
+            .filter(|&v| v > 0)
+            .unwrap_or(u32::MAX);
+        let mut texture_pool = TexturePool::new(gpu_ctx.has_half_float, max_texture_size);
         let mut fbo_pool = FramebufferPool::new();
 
         // Default document size — will be resized

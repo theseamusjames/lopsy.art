@@ -8,6 +8,7 @@ import {
   MAX_DISP,
   applyDab,
   type LiquifySettings,
+  type LiquifyMode,
 } from './liquify';
 
 describe('createDisplacementMap', () => {
@@ -215,5 +216,42 @@ describe('applyDab dispatch', () => {
     const aboveIdx = 35 * 100 + 50;
     expect(mapCw.dx[aboveIdx]).toBeGreaterThan(0);
     expect(mapCcw.dx[aboveIdx]).toBeLessThan(0);
+  });
+});
+
+describe('bloat/pinch continuity (#945)', () => {
+  const settings: LiquifySettings = { mode: 'bloat', brushSize: 60, pressure: 1 };
+
+  function sourceXAlongRow(mode: LiquifyMode): number[] {
+    const map = createDisplacementMap(101, 101);
+    applyDab(map, 50, 50, 0, 0, { ...settings, mode });
+    const xs: number[] = [];
+    for (let x = 20; x <= 80; x++) {
+      const idx = 50 * 101 + x;
+      xs.push(x + map.dx[idx]!);
+    }
+    return xs;
+  }
+
+  it.each<LiquifyMode>(['bloat', 'pinch'])('%s has no displacement at the centre', (mode) => {
+    const map = createDisplacementMap(101, 101);
+    applyDab(map, 50, 50, 0, 0, { ...settings, mode });
+    const idx = 50 * 101 + 50;
+    expect(map.dx[idx]).toBe(0);
+    expect(map.dy[idx]).toBe(0);
+  });
+
+  it.each<LiquifyMode>(['bloat', 'pinch'])('%s source mapping is monotonic (no fold)', (mode) => {
+    const xs = sourceXAlongRow(mode);
+    for (let i = 1; i < xs.length; i++) {
+      expect(xs[i]!).toBeGreaterThan(xs[i - 1]!);
+    }
+  });
+
+  it('bloat magnifies near the centre', () => {
+    const xs = sourceXAlongRow('bloat');
+    const centre = 30;
+    const sourceSpan = xs[centre + 1]! - xs[centre - 1]!;
+    expect(sourceSpan).toBeLessThan(2);
   });
 });

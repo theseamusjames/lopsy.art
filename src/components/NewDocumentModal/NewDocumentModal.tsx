@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { DocumentColorMode } from '../../types';
 import { BrandLinks } from '../BrandLinks/BrandLinks';
 import styles from './NewDocumentModal.module.css';
+import { clampDocumentSide } from '../../utils/document-size';
+import { getMaxDocumentSide } from '../../engine-wasm/gpu-limits';
 
 type Unit = 'px' | 'in';
 type BackgroundType = 'white' | 'transparent';
@@ -68,6 +70,12 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
   const [activePreset, setActivePreset] = useState<number | 'clipboard' | null>(0);
   const [clipboardImage, setClipboardImage] = useState<ClipboardImageInfo | null>(null);
   const tip = useMemo(() => TIPS[Math.floor(Math.random() * TIPS.length)], []);
+  const maxSide = useMemo(() => getMaxDocumentSide(), []);
+  const requestedPx = Math.max(
+    toPixels(parseFloat(width) || 0, unit, parseInt(dpi, 10) || 72),
+    toPixels(parseFloat(height) || 0, unit, parseInt(dpi, 10) || 72),
+  );
+  const isOversize = requestedPx > maxSide;
 
   // Probe clipboard for image data when the modal mounts
   useEffect(() => {
@@ -139,10 +147,10 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
     const wNum = parseFloat(width) || 1;
     const hNum = parseFloat(height) || 1;
     const dpiNum = parseInt(dpi, 10) || 72;
-    const pxW = Math.max(1, Math.min(16384, toPixels(wNum, unit, dpiNum)));
-    const pxH = Math.max(1, Math.min(16384, toPixels(hNum, unit, dpiNum)));
+    const pxW = clampDocumentSide(toPixels(wNum, unit, dpiNum), maxSide);
+    const pxH = clampDocumentSide(toPixels(hNum, unit, dpiNum), maxSide);
     onCreateDocument(pxW, pxH, background, colorMode, dpiNum);
-  }, [width, height, unit, dpi, background, colorMode, onCreateDocument, activePreset, clipboardImage, onPasteClipboard]);
+  }, [width, height, unit, dpi, background, colorMode, onCreateDocument, activePreset, clipboardImage, onPasteClipboard, maxSide]);
 
   const handleOpenFile = useCallback(() => {
     const input = document.createElement('input');
@@ -242,6 +250,12 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
                 </select>
               </div>
             </div>
+
+            {isOversize && (
+              <p className={styles.sizeWarning} role="status" data-testid="new-doc-size-warning">
+                {`${requestedPx.toLocaleString()} px is larger than this device supports. Each side will be limited to ${maxSide.toLocaleString()} px.`}
+              </p>
+            )}
 
             {unit === 'in' && (
               <div className={styles.dpiRow}>

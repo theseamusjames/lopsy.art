@@ -17,5 +17,15 @@ void main() {
     float row = floor(tileCoord.y);
     tileCoord.x += row * u_offset.x;
     tileCoord.y += col * u_offset.y;
-    fragColor = texture(u_pattern, fract(tileCoord));
+    vec4 src = texture(u_pattern, fract(tileCoord));
+    vec4 dst = texture(u_tex, v_uv);
+    // #942: composite the tile "over" the existing pixels (straight alpha)
+    // instead of replacing them, so transparent tile areas keep the layer.
+    float outA = src.a + dst.a * (1.0 - src.a);
+    if (outA < 1e-6) {
+        fragColor = vec4(0.0);
+        return;
+    }
+    vec3 rgb = (src.rgb * src.a + dst.rgb * dst.a * (1.0 - src.a)) / outA;
+    fragColor = vec4(rgb, outA);
 }

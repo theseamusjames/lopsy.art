@@ -18,6 +18,11 @@ vi.mock('../../app/sync-layer-after-full-size', () => ({
   syncLayerAfterFullSize: (...args: unknown[]) => syncLayerAfterFullSize(...args),
 }));
 
+const clearJsPixelData = vi.fn();
+vi.mock('../../app/store/clear-js-pixel-data', () => ({
+  clearJsPixelData: (...args: unknown[]) => clearJsPixelData(...args),
+}));
+
 const editorState = {
   pushHistory: vi.fn(),
   notifyRender: vi.fn(),
@@ -34,7 +39,7 @@ vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
 }));
 
-import { handleSmudgeDown, handleSmudgeMove } from './smudge-interaction';
+import { handleSmudgeDown, handleSmudgeMove, handleSmudgeUp } from './smudge-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
@@ -79,6 +84,7 @@ beforeEach(() => {
   applySmudgeDab.mockClear();
   applySmudgeDabBatch.mockClear();
   editorState.pushHistory.mockClear();
+  clearJsPixelData.mockClear();
   editorState.notifyRender.mockClear();
   ts.settings.smudge = { size: 40, strength: 50 };
 });
@@ -166,5 +172,17 @@ describe('smudge move', () => {
     handleSmudgeMove(state, { x: 10, y: 0 });
     expect(applySmudgeDabBatch).not.toHaveBeenCalled();
     expect(state.lastPoint).toEqual({ x: 10, y: 0 });
+  });
+});
+
+describe('smudge up', () => {
+  it('marks the smudged layer dirty so the next snapshot captures it (#939)', () => {
+    handleSmudgeUp(makeState({ layerId: 'layer-1' }));
+    expect(clearJsPixelData).toHaveBeenCalledWith('layer-1');
+  });
+
+  it('does nothing without a layer', () => {
+    handleSmudgeUp(makeState({ layerId: null }));
+    expect(clearJsPixelData).not.toHaveBeenCalled();
   });
 });
