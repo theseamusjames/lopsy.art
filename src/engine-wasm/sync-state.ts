@@ -143,6 +143,13 @@ export interface GroupAdjTrackedEntry {
   adjustments: readonly AdjustmentNode[];
   adjustmentsEnabled: boolean;
   children: readonly string[];
+  /**
+   * The `children` array of every group the descendant walk visited (the
+   * group itself plus nested, non-routed sub-groups), in walk order. Adding
+   * a layer to a sub-group replaces only that sub-group's array, so the
+   * group's own `children` reference alone can't detect it (#940).
+   */
+  walkedChildren: readonly (readonly string[])[];
   maskEnabled: boolean;
   childrenJson?: string;
 }
