@@ -13,5 +13,8 @@ void main() {
     soft = clamp(soft / (2.0 * knee + 0.0001), 0.0, 1.0);
     soft = soft * soft;
     float contribution = max(soft, step(u_threshold, brightness));
-    fragColor = vec4(c.rgb * contribution, c.a * contribution);
+    // Carry the contribution in alpha only: gaussian_blur.glsl premultiplies
+    // by alpha and un-premultiplies its result, so bloom_combine.glsl must
+    // re-multiply by the blurred alpha to recover a falloff (#959).
+    fragColor = vec4(c.rgb, c.a * contribution);
 }

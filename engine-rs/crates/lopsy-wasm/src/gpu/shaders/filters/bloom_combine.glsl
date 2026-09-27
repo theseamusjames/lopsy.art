@@ -8,5 +8,5 @@ out vec4 fragColor;
 void main() {
     vec4 original = texture(u_tex, v_uv);
     vec4 bloom = texture(u_bloomTex, v_uv);
-    fragColor = vec4(original.rgb + bloom.rgb * u_intensity, original.a);
+    fragColor = vec4(original.rgb + bloom.rgb * bloom.a * u_intensity, original.a);
 }
