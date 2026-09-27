@@ -65,7 +65,10 @@ void main() {
 
     // Compute edge factor from distance to cell boundary
     float edgeDist = secondDist - minDist;
-    float edgePx = u_edgeWidth / max(texSize.x, texSize.y) * u_cellCount;
+    // #936: one cell unit spans height / cellCount px (scaledUV scales the
+    // short axis by cellCount), so the px → cell-unit conversion must use
+    // the same side. Dividing by the long side thinned edges by the aspect.
+    float edgePx = u_edgeWidth / texSize.y * u_cellCount;
     float edge = 1.0 - smoothstep(0.0, max(edgePx, 0.001), edgeDist);
 
     vec3 edgeColor = vec3(u_edgeR, u_edgeG, u_edgeB);

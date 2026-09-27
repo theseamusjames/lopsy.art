@@ -63,18 +63,18 @@ The guide at 745 divides the illustration half from the lettering half.
 
 ## Break the panel into tesserae with Voronoi
 
-![The Voronoi dialog with Cells 24, Edge Width 6 and Seed 17 previewing small mosaic tiles](02-voronoi-tesserae.webp)
+![The Voronoi dialog with Cells 24, Edge Width 2 and Seed 17 previewing small mosaic tiles](02-voronoi-tesserae.webp)
 
 Rename `Layer 1` to `Mosaic`. With no selection, fill the whole layer with
 sage `#8FA079`, then run **Add Noise** at `22` in **Color**. The noise gives
 every tile a slightly different tone.
 
-Open **Filter → Voronoi…** and set **Cells** `24`, **Edge Width** `6` and
+Open **Filter → Voronoi…** and set **Cells** `24`, **Edge Width** `2` and
 **Seed** `17`. Turn on **Preview** and click **Apply**.
 
-> **Tip:** Cells counts cells along the *short* side of the layer, so 24 on a
-> 720 px tall document gives tiles about 30 px across. Edge Width is scaled
-> down on wide documents, so `6` draws roughly 2 px grout here.
+> **Tip:** Cells counts cells along the *height* of the layer, so 24 on a
+> 720 px tall document gives tiles about 30 px across. Edge Width is in
+> pixels, so `2` draws roughly 2 px grout.
 
 Fill the whole layer first. Voronoi samples a colour at each cell centre, and
 the cells need something to sample right up to the panel edge.
