@@ -141,6 +141,38 @@ export class PixelDataManager {
     this.layerVersions.clear();
   }
 
+  /**
+   * Drop the JS pixel cache and force-bump every given layer's version,
+   * unconditionally — always notifies, even when there was nothing cached
+   * to drop. Use this (not `clearAll()`) whenever a layer's GPU texture may
+   * have changed without ever touching the JS cache: restoring a GPU undo/
+   * redo snapshot, or a whole-image GPU-only op (rotate image, etc).
+   *
+   * `clearAll()` drains `layerVersions` after bumping it, as a document is
+   * going away. That makes it a one-shot: call it twice in a row with no
+   * intervening `bump()` — e.g. two consecutive `undo()`s, the second
+   * undoing straight through a metadata-only history entry — and the
+   * second call sees every map already empty and returns early without
+   * notifying, so per-layer subscribers like `LayerThumbnail` never learn
+   * the GPU texture changed again (#918). This method never drains
+   * `layerVersions` for a layer still in `layerIds`, so consecutive calls
+   * keep incrementing and keep notifying. Entries for layers no longer in
+   * `layerIds` (removed by the restore) are dropped, same as `dropLayer()`.
+   */
+  invalidateLayers(layerIds: Iterable<string>): void {
+    this.pixelData.clear();
+    this.sparseData.clear();
+    const keep = new Set(layerIds);
+    for (const id of Array.from(this.layerVersions.keys())) {
+      if (!keep.has(id)) this.layerVersions.delete(id);
+    }
+    for (const id of keep) {
+      this.layerVersions.set(id, (this.layerVersions.get(id) ?? 0) + 1);
+    }
+    this.globalVersion++;
+    this.notify();
+  }
+
   // ─── Subscriptions ─────────────────────────────────────────────────
 
   subscribe(listener: () => void): () => void {
