@@ -20,7 +20,16 @@ function activeCommittedTextLayer(
 ): TextLayer | null {
   if (!activeLayerId) return null;
   const layer = layers.find((l) => l.id === activeLayerId);
-  return layer && layer.type === 'text' ? (layer as TextLayer) : null;
+  if (!layer || layer.type !== 'text') return null;
+  const textLayer = layer as TextLayer;
+  // A freshly-created text layer becomes the active layer a tick before
+  // `startTextEditing` flips `textEditing` on (see handleTextUp: addTextLayer
+  // then beginEditSession). Syncing the tool settings from that transient,
+  // not-yet-typed layer would overwrite decorations the user just toggled
+  // (underline/strikethrough) with the blank layer's defaults. An empty text
+  // layer carries nothing worth reflecting in the panel, so skip it.
+  if (textLayer.text.length === 0) return null;
+  return textLayer;
 }
 
 /**
