@@ -12,6 +12,10 @@ import { isNativeArrowKeyTarget } from './shortcuts/native-control-keys';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob } from './paste-or-open';
+import {
+  invalidateInternalClipboardPriority,
+  isInternalClipboardNewer,
+} from './store/system-clipboard-sync';
 import { describeError, notifyError } from './notifications-store';
 import {
   processTextKey,
@@ -309,6 +313,14 @@ export function useKeyboardShortcuts({
         return;
       }
 
+      // A Copy/Cut made moments ago may still be on its way to the OS
+      // clipboard, so clipboardData would hold the previous image (#960).
+      if (isInternalClipboardNewer() && useEditorStore.getState().clipboard) {
+        e.preventDefault();
+        useEditorStore.getState().paste();
+        return;
+      }
+
       const files = e.clipboardData?.files;
       if (files && files.length > 0) {
         const file = files[0];
@@ -368,10 +380,12 @@ export function useKeyboardShortcuts({
     window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('paste', handlePaste);
+    window.addEventListener('blur', invalidateInternalClipboardPriority);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('paste', handlePaste);
+      window.removeEventListener('blur', invalidateInternalClipboardPriority);
     };
   }, [setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setPointerMode, clearPersistentTransform, nudgeMove, nudgeSelection]);
 }
