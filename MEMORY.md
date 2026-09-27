@@ -290,3 +290,13 @@ long as `edge0 != edge1`. The fix is to floor the separation between
 the two edges at a small epsilon (`max(param, 1e-4)`) before computing
 them, so they're never exactly equal — indistinguishable visually from
 a true hard step, and keeps the parameter continuous down to 0.
+
+## Group-adjustment routing must track nested `children` arrays
+
+`syncGroupAdjustments` sends each routed group a *flattened* descendant list,
+but adding a layer to a sub-group replaces only that sub-group's `children`
+array — the routed ancestor's own `children` reference is unchanged. Its
+"unchanged, skip" fast path therefore compares `walkedChildren` (the
+`children` array of every group the descendant walk visited) rather than
+`group.children` alone; otherwise the new layer never enters the ancestor's
+`child_ids` and the group's finalize pass covers it (#940).
