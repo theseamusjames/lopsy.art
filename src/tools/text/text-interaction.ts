@@ -507,6 +507,14 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
     fontStyle: text.fontStyle,
     textAlign: text.align,
     vertical: text.vertical,
+    // Carry every tool setting: adding the layer activates it before the
+    // edit session starts, and the text-settings sync (#943) would copy
+    // any property left at its default back over the tool settings.
+    underline: text.underline,
+    strikethrough: text.strikethrough,
+    lineHeight: text.lineHeight,
+    letterSpacing: text.letterSpacing,
+    paragraphSpacing: text.paragraphSpacing,
     visible: true, // GPU renders text preview in real-time
   };
   editorState.addTextLayer(addedLayer);
