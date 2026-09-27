@@ -9,6 +9,7 @@ import {
   applySmudgeDabBatch as gpuSmudgeDabBatch,
 } from '../../engine-wasm/wasm-bridge';
 import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
+import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { interpolateFlat } from '../common/dab-interpolation';
 
 export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
@@ -76,4 +77,14 @@ export function handleSmudgeMove(state: InteractionState, layerLocalPos: Point):
   }
   state.lastPoint = layerLocalPos;
   useEditorStore.getState().notifyRender();
+}
+
+/**
+ * Smudge writes the layer texture directly (it isn't a PAINT_TOOLS stroke,
+ * so the shared pointer-up path never marks it). Without this the next
+ * history snapshot — including the redo entry captured on undo — reuses the
+ * pre-smudge texture handle and the smudge is lost on redo (#939).
+ */
+export function handleSmudgeUp(state: InteractionState): void {
+  if (state.layerId) clearJsPixelData(state.layerId);
 }
