@@ -7,7 +7,9 @@ import {
   extractFontUrlPreferLatin,
   previewFontFamily,
   renameCss2FontFamily,
+  resolveTtfUrl,
 } from './font-urls';
+import { fontsByFamily } from './font-catalog';
 
 function fontFaceBlock(subset: string | null, url: string, unicodeRange: string): string {
   const comment = subset === null ? '' : `/* ${subset} */\n`;
@@ -41,11 +43,37 @@ describe('buildCss2StylesheetUrl', () => {
   });
 });
 
+describe('buildCss2StylesheetUrl with italics (#951)', () => {
+  it('requests upright then italic tuples, sorted as css2 requires', () => {
+    expect(buildCss2StylesheetUrl('Lora', [400, 700], true)).toBe(
+      'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400;1,700&display=swap',
+    );
+  });
+});
+
 describe('buildCss2SingleWeightUrl', () => {
   it('requests exactly one weight', () => {
     expect(buildCss2SingleWeightUrl('Open Sans', 300)).toBe(
       'https://fonts.googleapis.com/css2?family=Open%20Sans:wght@300&display=swap',
     );
+  });
+
+  it('requests the italic face when asked (#951)', () => {
+    expect(buildCss2SingleWeightUrl('Instrument Serif', 400, true)).toBe(
+      'https://fonts.googleapis.com/css2?family=Instrument%20Serif:ital,wght@1,400&display=swap',
+    );
+  });
+});
+
+describe('resolveTtfUrl (#951)', () => {
+  const entry = fontsByFamily.get('Roboto')!;
+
+  it('returns the baked upright file', () => {
+    expect(resolveTtfUrl(entry, 400)).toContain('/ofl/roboto/');
+  });
+
+  it('returns null for italic so the css2 italic face is used instead', () => {
+    expect(resolveTtfUrl(entry, 400, true)).toBeNull();
   });
 });
 

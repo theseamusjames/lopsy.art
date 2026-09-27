@@ -8,17 +8,30 @@ import type { FontEntry } from './font-catalog';
 // jsDelivr CDN for the google/fonts GitHub repo (raw TTF files).
 const GOOGLE_FONTS_GH_CDN = 'https://cdn.jsdelivr.net/gh/google/fonts@main';
 
-/** Stylesheet URL used by loadGoogleFont() to load a family into the DOM. */
-export function buildCss2StylesheetUrl(family: string, weights: readonly number[]): string {
-  const weightsStr = weights.join(';');
+/**
+ * Stylesheet URL used by loadGoogleFont() to load a family into the DOM.
+ * With `hasItalic`, the italic faces are requested too (`ital,wght@0,…;1,…`)
+ * — css2 only serves the upright faces for a plain `wght@` axis list.
+ */
+export function buildCss2StylesheetUrl(
+  family: string,
+  weights: readonly number[],
+  hasItalic = false,
+): string {
   const encoded = encodeURIComponent(family);
-  return `https://fonts.googleapis.com/css2?family=${encoded}:wght@${weightsStr}&display=swap`;
+  if (!hasItalic) {
+    return `https://fonts.googleapis.com/css2?family=${encoded}:wght@${weights.join(';')}&display=swap`;
+  }
+  // css2 rejects tuples that are not sorted by ital then wght.
+  const tuples = [...weights.map((w) => `0,${w}`), ...weights.map((w) => `1,${w}`)];
+  return `https://fonts.googleapis.com/css2?family=${encoded}:ital,wght@${tuples.join(';')}&display=swap`;
 }
 
-/** Single-weight CSS URL used by the engine's CSS-API fallback. */
-export function buildCss2SingleWeightUrl(family: string, weight: number): string {
+/** Single-face CSS URL used by the engine's CSS-API fallback. */
+export function buildCss2SingleWeightUrl(family: string, weight: number, isItalic = false): string {
   const encoded = encodeURIComponent(family);
-  return `https://fonts.googleapis.com/css2?family=${encoded}:wght@${weight}&display=swap`;
+  const axes = isItalic ? `ital,wght@1,${weight}` : `wght@${weight}`;
+  return `https://fonts.googleapis.com/css2?family=${encoded}:${axes}&display=swap`;
 }
 
 /**
@@ -65,9 +78,12 @@ export function renameCss2FontFamily(css: string, family: string, alias: string)
  * repo filenames follow no derivable convention (Roboto[wdth,wght].ttf,
  * PT_Sans-Web-Regular.ttf, PTM55FT.ttf, …) — guessing requires a waterfall
  * of speculative requests and still misses hundreds of families (#665).
+ *
+ * The baked paths are upright files only, so an italic request always
+ * resolves to null and goes through the css2 API (#951).
  */
-export function resolveTtfUrl(entry: FontEntry, weight: number): string | null {
-  if (!entry.ttfDir) return null;
+export function resolveTtfUrl(entry: FontEntry, weight: number, isItalic = false): string | null {
+  if (isItalic || !entry.ttfDir) return null;
   const file = entry.ttfFile ?? entry.ttfWeightFiles?.[weight] ?? null;
   if (!file) return null;
   return `${GOOGLE_FONTS_GH_CDN}/${entry.ttfDir}/${file}`;

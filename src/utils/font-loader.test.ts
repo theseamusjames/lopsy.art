@@ -226,10 +226,10 @@ describe('loadFontBinaryToEngine fetch behavior', () => {
     vi.doUnmock('../engine-wasm/wasm-bridge');
   });
 
-  async function loadOnce(family: string, weight = 400) {
+  async function loadOnce(family: string, weight = 400, isItalic = false) {
     // Fresh import per test so the module-level cache doesn't cross-pollute.
     const mod = await import('./font-loader');
-    mod.loadFontBinaryToEngine(family, weight);
+    mod.loadFontBinaryToEngine(family, weight, isItalic);
     // Let the loader's async IIFE and its css2 fallback fire.
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 0));
@@ -270,6 +270,16 @@ describe('loadFontBinaryToEngine fetch behavior', () => {
     // latin url() was chosen over the cyrillic-ext one listed first.
     expect(fetches.some((u) => u.endsWith('latin.woff2'))).toBe(true);
     expect(fetches.every((u) => !u.includes('cyr-ext'))).toBe(true);
+  });
+
+  // #951: the baked TTF paths are upright-only, so an italic request must
+  // ask css2 for the italic face instead of re-fetching the Regular file.
+  it('fetches the italic face through css2 when italic is requested', async () => {
+    await loadOnce('Instrument Serif', 400, true);
+    expect(fetches[0]).toBe(
+      'https://fonts.googleapis.com/css2?family=Instrument%20Serif:ital,wght@1,400&display=swap',
+    );
+    expect(fetches.some((u) => u.includes('cdn.jsdelivr.net'))).toBe(false);
   });
 });
 

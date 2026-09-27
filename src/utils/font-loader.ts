@@ -27,12 +27,16 @@ const binaryCache = new Map<string, ArrayBuffer>();
 // face on every load, so a cache hit only reloads for a new engine instance.
 const loadedIntoEngine = new Map<string, Engine>();
 
-export function loadGoogleFont(family: string, weights: readonly number[]): Promise<void> {
+export function loadGoogleFont(
+  family: string,
+  weights: readonly number[],
+  hasItalic = false,
+): Promise<void> {
   const key = family;
   const cached = loadCache.get(key);
   if (cached) return cached;
 
-  const href = buildCss2StylesheetUrl(family, weights);
+  const href = buildCss2StylesheetUrl(family, weights, hasItalic);
 
   const link = document.createElement('link');
   link.rel = 'stylesheet';
@@ -106,10 +110,10 @@ async function loadCss2Preview(family: string, text: string): Promise<void> {
  * is baked for this weight or the fetch fails (e.g. the baked path went
  * stale after a repo rename) — callers fall back to the css2 API.
  */
-async function fetchTtfFromGithub(family: string, weight: number): Promise<ArrayBuffer | null> {
+async function fetchTtfFromGithub(family: string, weight: number, isItalic: boolean): Promise<ArrayBuffer | null> {
   const entry = fontsByFamily.get(family);
   if (!entry) return null;
-  const url = resolveTtfUrl(entry, weight);
+  const url = resolveTtfUrl(entry, weight, isItalic);
   if (!url) return null;
   try {
     const resp = await fetch(url);
@@ -124,9 +128,9 @@ async function fetchTtfFromGithub(family: string, weight: number): Promise<Array
  * first font URL (WOFF2 in practice), and return its bytes. The WASM engine
  * decodes WOFF2 internally via the brotli-based decoder.
  */
-async function fetchFontFromCssApi(family: string, weight: number): Promise<ArrayBuffer | null> {
+async function fetchFontFromCssApi(family: string, weight: number, isItalic: boolean): Promise<ArrayBuffer | null> {
   try {
-    const cssUrl = buildCss2SingleWeightUrl(family, weight);
+    const cssUrl = buildCss2SingleWeightUrl(family, weight, isItalic);
     const cssResp = await fetch(cssUrl);
     if (!cssResp.ok) return null;
     const css = await cssResp.text();
@@ -175,9 +179,14 @@ function loadIntoEngine(engine: Engine, family: string, buf: ArrayBuffer): boole
  * (so callers should re-render text that uses it), and `false` when it was
  * already available in the engine or could not be loaded. A binary the
  * engine rejects is not cached, so a later request fetches it again.
+ *
+ * `isItalic` loads the family's italic face instead of the upright one. The
+ * engine reads the face's style from the binary, so both faces register
+ * under the same family and text layout picks whichever `fontStyle` asks
+ * for (#951).
  */
-export function loadFontBinaryToEngine(family: string, weight: number): Promise<boolean> {
-  const cacheKey = `${family}:${weight}`;
+export function loadFontBinaryToEngine(family: string, weight: number, isItalic = false): Promise<boolean> {
+  const cacheKey = `${family}:${weight}${isItalic ? ':italic' : ''}`;
   const cached = binaryCache.get(cacheKey);
   if (cached) {
     const engine = getEngine();
@@ -190,8 +199,8 @@ export function loadFontBinaryToEngine(family: string, weight: number): Promise<
 
   return (async () => {
     try {
-      const buf = await fetchTtfFromGithub(family, weight)
-        ?? await fetchFontFromCssApi(family, weight);
+      const buf = await fetchTtfFromGithub(family, weight, isItalic)
+        ?? await fetchFontFromCssApi(family, weight, isItalic);
 
       if (!buf) return false;
 

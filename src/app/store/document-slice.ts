@@ -1007,10 +1007,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const idsToGroup = doc.selectedLayerIds.filter(
       (id) => id !== doc.rootGroupId,
     );
-    if (idsToGroup.length < 2) {
+    // A single selected layer is wrapped like any other selection (#952);
+    // only an empty selection falls back to a bare new group.
+    if (idsToGroup.length === 0) {
       s.addGroup();
       return;
     }
+    if (!allowLayerCreation(doc)) return;
 
     const displayList = buildFlatDisplayList(doc.layers, doc.layerOrder);
     // displayList walks top→bottom (panel order). `layerOrder` and
