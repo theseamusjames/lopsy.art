@@ -177,3 +177,26 @@ describe('groupSelectedLayers keeps children[] and layerOrder in sync (#881)', (
     expect(layerOrderOf(siblingIds)).toEqual([bgId, aId, groupId, cId]);
   });
 });
+
+describe('groupSelectedLayers with a single selected layer (#952)', () => {
+  beforeEach(() => {
+    state().createDocument(400, 300, false);
+  });
+
+  it('wraps the lone selected layer instead of creating an empty group', () => {
+    const a = addNamedLayer('A');
+    expect(state().document.selectedLayerIds).toEqual([a]);
+    const undoBefore = state().undoStack.length;
+
+    state().groupSelectedLayers();
+
+    const doc = state().document;
+    const group = doc.layers.find((l) => l.id === doc.activeLayerId!)!;
+    expect(isGroupLayer(group)).toBe(true);
+    expect((group as { children: readonly string[] }).children).toEqual([a]);
+    const rootName = doc.layers.find((l) => l.id === doc.rootGroupId)!.name;
+    expect(panelTopToBottom()).toEqual([rootName, group.name, 'A', 'Layer 1', 'Background']);
+    expect(state().undoStack.length).toBe(undoBefore + 1);
+    expect(state().undoStack[state().undoStack.length - 1]!.label).toBe('Group Layers');
+  });
+});
