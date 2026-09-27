@@ -167,8 +167,13 @@ test.describe('#907: layer mask painting on a moved layer', () => {
     await selectTool(page, 'move');
     await dragDoc(page, 850, 345, 850, 385);
     await page.waitForTimeout(200);
-    // The drag leaves the texture cropped to the strip's content.
-    expect(await layerBox(page, strip)).toEqual({ x: 650, y: 340, width: 400, height: 90 });
+    // The drag leaves the texture cropped to the strip's content. Firefox's
+    // pointer coordinates round the marquee 1px smaller in each dimension, so
+    // assert the origin exactly and allow width/height within 1px.
+    const strippedBox = await layerBox(page, strip);
+    expect({ x: strippedBox.x, y: strippedBox.y }).toEqual({ x: 650, y: 340 });
+    expect(Math.abs(strippedBox.width - 400)).toBeLessThanOrEqual(1);
+    expect(Math.abs(strippedBox.height - 90)).toBeLessThanOrEqual(1);
 
     await addMaskAndPickBrush(page);
     // Strip spans x 650..1050, y 340..430. Stroke across its left part.
