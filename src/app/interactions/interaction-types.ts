@@ -45,6 +45,10 @@ export type CanvasGesture =
        *  the user drags with multiple layers selected (issue #707). Empty
        *  for single-layer moves; only populated on whole-layer moves. */
       siblings: readonly SiblingMoveTarget[];
+      /** The pending scale/rotate/distort when the drag started on a live
+       *  transformed float. The drag translates this transform instead of
+       *  re-compositing the untransformed float (#948). */
+      pendingTransform: TransformState | null;
     }
   | { kind: 'tool' }
   | { kind: 'liquify'; lastPoint: Point }
@@ -106,6 +110,7 @@ export function withMoveGesture(
     quickMaskOriginalWidth?: number;
     quickMaskOriginalHeight?: number;
     siblings?: readonly SiblingMoveTarget[];
+    pendingTransform?: TransformState | null;
   },
 ): InteractionState {
   return {
@@ -118,6 +123,7 @@ export function withMoveGesture(
       quickMaskOriginalWidth: payload.quickMaskOriginalWidth ?? 0,
       quickMaskOriginalHeight: payload.quickMaskOriginalHeight ?? 0,
       siblings: payload.siblings ?? [],
+      pendingTransform: payload.pendingTransform ?? null,
     },
   };
 }

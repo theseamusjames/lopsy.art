@@ -58,6 +58,21 @@ export function isShapeChangingTransform(t: TransformState): boolean {
   return t.corners.some((c) => c.x !== 0 || c.y !== 0);
 }
 
+/**
+ * Shift a transform by (dx, dy) in document space, keeping its shape.
+ * Corner modes place their corners relative to `originalBounds` and ignore
+ * `translateX/Y`, so the corners themselves are offset there.
+ */
+export function translateTransform(t: TransformState, dx: number, dy: number): TransformState {
+  if (t.mode === 'distort' || t.mode === 'perspective') {
+    return {
+      ...t,
+      corners: t.corners.map((c) => ({ x: c.x + dx, y: c.y + dy })) as unknown as CornerOffsets,
+    };
+  }
+  return { ...t, translateX: t.translateX + dx, translateY: t.translateY + dy };
+}
+
 /** Get the 4 absolute corner positions for distort/perspective modes */
 export function getCornerPositions(state: TransformState): [Point, Point, Point, Point] {
   const ob = state.originalBounds;

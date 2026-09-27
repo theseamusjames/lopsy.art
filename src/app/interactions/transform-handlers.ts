@@ -304,29 +304,32 @@ export function handleTransformMove(
   // causes it to diverge from the GPU-rendered content.
 
   // Render transform via GPU engine
-  const editorState = useEditorStore.getState();
+  renderTransformedFloat(state.layerId, newTransform);
+  useEditorStore.getState().notifyRender();
+}
+
+/**
+ * Re-render the live GPU float through `transform` (growing the float first
+ * so nothing is clipped). Shared by handle drags and by Move drags of a
+ * piece whose scale/rotate/distort is still pending (#948).
+ */
+export function renderTransformedFloat(layerId: string | null, transform: TransformState): void {
   const engine = getEngine();
-  if (engine && hasFloat(engine)) {
-    if (state.layerId) growFloatToCover(engine, state.layerId, getTransformedContentBounds(newTransform));
-    const isCornerMode = newTransform.mode === 'distort' || newTransform.mode === 'perspective';
-
-    if (isCornerMode) {
-      const [tl, tr, br, bl] = getCornerPositions(newTransform);
-      const corners = new Float32Array([tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]);
-      const ob = newTransform.originalBounds;
-      compositeFloatPerspective(engine, corners, ob.x, ob.y, ob.width, ob.height);
-    } else {
-      const ob = newTransform.originalBounds;
-      const srcCx = ob.x + ob.width / 2;
-      const srcCy = ob.y + ob.height / 2;
-      const dstCx = srcCx + newTransform.translateX;
-      const dstCy = srcCy + newTransform.translateY;
-      const invMatrix = computeInverseAffineMatrix(newTransform);
-      compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dstCx, dstCy);
-    }
+  if (!engine || !hasFloat(engine)) return;
+  if (layerId) growFloatToCover(engine, layerId, getTransformedContentBounds(transform));
+  const ob = transform.originalBounds;
+  if (transform.mode === 'distort' || transform.mode === 'perspective') {
+    const [tl, tr, br, bl] = getCornerPositions(transform);
+    const corners = new Float32Array([tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]);
+    compositeFloatPerspective(engine, corners, ob.x, ob.y, ob.width, ob.height);
+    return;
   }
-
-  editorState.notifyRender();
+  const srcCx = ob.x + ob.width / 2;
+  const srcCy = ob.y + ob.height / 2;
+  const dstCx = srcCx + transform.translateX;
+  const dstCy = srcCy + transform.translateY;
+  const invMatrix = computeInverseAffineMatrix(transform);
+  compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dstCx, dstCy);
 }
 
 /**

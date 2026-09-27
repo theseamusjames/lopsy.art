@@ -1,7 +1,9 @@
 import type { MutableRefObject } from 'react';
 import type { Point } from '../../types';
 import { snapPositionToGrid, snapPositionToLayers } from '../../tools/move/move';
-import { createTransformState } from '../../tools/transform/transform';
+import { createTransformState, isShapeChangingTransform, translateTransform } from '../../tools/transform/transform';
+import type { TransformState } from '../../tools/transform/transform';
+import { renderTransformedFloat } from './transform-handlers';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
@@ -153,6 +155,31 @@ export function flushQuickMaskDrag(): void {
  */
 let pendingWholeLayerMoveLabel: string | null = null;
 
+/**
+ * The pending shape-changing transform (scale / rotate / skew / distort)
+ * still carried by a live GPU float, or null. Such a float holds the
+ * *untransformed* lifted pixels; the transform is re-applied on every
+ * composite, so moving it must translate the transform rather than
+ * composite the bare float at an offset — that snapped a resized piece back
+ * to its original size the moment it was dragged (#948).
+ */
+function livePendingTransform(
+  persistentTransformRef: MutableRefObject<PersistentTransform | null>,
+): TransformState | null {
+  if (!persistentTransformRef.current) return null;
+  const engine = getEngine();
+  if (!engine || !hasFloat(engine)) return null;
+  const transform = useUIStore.getState().transform;
+  if (!transform || !isShapeChangingTransform(transform)) return null;
+  return transform;
+}
+
+function applyTranslatedTransform(layerId: string | null, transform: TransformState): void {
+  useUIStore.getState().setTransform(transform);
+  renderTransformedFloat(layerId, transform);
+  useEditorStore.getState().notifyRender();
+}
+
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
@@ -214,6 +241,23 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     editorState.duplicateLayer();
     const newState = useEditorStore.getState();
     activeLayerId = newState.document.activeLayerId ?? activeLayerId;
+  }
+
+  const pendingTransform = sel.active && sel.mask && !altKey && !isQuickMaskMode
+    ? livePendingTransform(persistentTransformRef)
+    : null;
+  if (pendingTransform) {
+    floatingSelectionRef.current = null;
+    return withMoveGesture({
+      drawing: true,
+      lastPoint: canvasPos,
+      layerId: activeLayerId,
+      tool: 'move',
+      startPoint: canvasPos,
+      layerStartX: 0,
+      layerStartY: 0,
+      ...DEFAULT_TRANSFORM_FIELDS,
+    }, { pendingTransform });
   }
 
   if (sel.active && sel.mask) {
@@ -484,6 +528,19 @@ export function handleMoveMove(
     return;
   }
 
+  if (move?.pendingTransform) {
+    let dx = dragDx;
+    let dy = dragDy;
+    const uiSnap = useUIStore.getState();
+    if (uiSnap.showGrid && uiSnap.snapToGrid) {
+      const snapped = snapPositionToGrid(dx, dy, uiSnap.gridSize);
+      dx = snapped.x;
+      dy = snapped.y;
+    }
+    applyTranslatedTransform(state.layerId, translateTransform(move.pendingTransform, dx, dy));
+    return;
+  }
+
   const engine = getEngine();
   if (floatingSelectionRef.current && engine && hasFloat(engine)) {
     // GPU path: composite float at new offset
@@ -596,6 +653,14 @@ export function handleMoveUp(
     quickMaskMaskTarget = null;
   }
 
+  // A translated pending transform stays pending — the float, the
+  // persistent ref and the transform handles carry on exactly as after a
+  // handle drag, and ⌘D commits it. Only the history dirty-mark is due.
+  if (state.gesture.kind === 'move' && state.gesture.pendingTransform) {
+    if (state.layerId) clearJsPixelData(state.layerId);
+    return;
+  }
+
   if (!floatingSelectionRef.current || !state.startPoint) return;
 
   // compositeFloat rewrote the layer texture during the drag. Mark the layer
@@ -647,13 +712,20 @@ export function handleNudgeMove(
   dx: number,
   dy: number,
   floatingSelectionRef: MutableRefObject<FloatingSelection | null>,
-  _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
+  persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   const editor = useEditorStore.getState();
   const activeId = editor.document.activeLayerId;
   if (!activeId) return;
   const layer = editor.document.layers.find((l) => l.id === activeId);
   if (!layer || layer.locked) return;
+
+  const pendingTransform = editor.selection.active ? livePendingTransform(persistentTransformRef) : null;
+  if (pendingTransform) {
+    applyTranslatedTransform(activeId, translateTransform(pendingTransform, dx, dy));
+    clearJsPixelData(activeId);
+    return;
+  }
 
   const sel = editor.selection;
   const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
