@@ -3,7 +3,9 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  overflow: hidden;
+  /* clip, not hidden: a hidden box is still a scroll container, so
+     scrollIntoView on an off-screen control could shift the whole UI (#953). */
+  overflow: clip;
 }
 
 .header {
@@ -114,7 +116,13 @@
   width: 420px;
   min-width: 280px;
   min-height: 200px;
-  max-height: 80vh;
+  /* Anchored to the Layers panel, which can sit low in the dock: cap the
+     height at the room left below the drawer's (dragged) top so expanded
+     adjustment nodes scroll inside it instead of running off-screen (#953). */
+  max-height: min(
+    80vh,
+    calc(100% - var(--effects-drawer-top, 0px) - var(--drag-y, 0px) - var(--space-2))
+  );
   resize: both;
   overflow: auto;
 }
