@@ -571,15 +571,17 @@ describe('commitTextEditing', () => {
     expect(editorState.pushHistory).toHaveBeenCalledWith('Text', undefined);
   });
 
-  it('skips the WASM render for path-bound text and pins it to the origin', () => {
-    editorState.document.layers = [makeTextLayer({ pathId: 'path-1' })];
+  // #981: resetting x/y to the origin read as an offset from the path anchor
+  // on the next reflow, so the commit keeps the path-rendered position.
+  it('skips the WASM render for path-bound text and keeps its path-rendered position', () => {
+    editorState.document.layers = [makeTextLayer({ pathId: 'path-1', x: 77, y: 88 })];
     uiState.textEditing = editingState();
     commitTextEditing();
     expect(setTextLayerContent).not.toHaveBeenCalled();
     expect(renderTextLayerToTexture).not.toHaveBeenCalled();
     expect(editorState.updateTextLayerProperties).toHaveBeenCalledWith(
       'text-1',
-      expect.objectContaining({ x: 0, y: 0 }),
+      expect.objectContaining({ x: 77, y: 88 }),
     );
   });
 
