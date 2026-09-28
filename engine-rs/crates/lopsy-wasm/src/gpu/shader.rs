@@ -38,6 +38,7 @@ pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_per
 // Effects
 pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
 pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
+pub const LAYER_MASK_APPLY_FRAG: &str = include_str!("shaders/effects/layer_mask_apply.glsl");
 pub const STROKE_EDT_FRAG: &str = include_str!("shaders/effects/stroke_edt.glsl");
 pub const SEPARABLE_DILATE_FRAG: &str = include_str!("shaders/effects/separable_dilate.glsl");
 pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
@@ -258,6 +259,7 @@ pub struct ShaderPrograms {
     pub final_blit: ShaderProgram,
     pub flip: ShaderProgram,
     pub clipboard_copy: ShaderProgram,
+    pub layer_mask_apply: ShaderProgram,
     pub clipboard_clear: ShaderProgram,
     pub selection_fill: ShaderProgram,
     pub rotate90: ShaderProgram,
@@ -388,6 +390,7 @@ impl ShaderPrograms {
             final_blit: compile_program(gl, v, FINAL_BLIT_FRAG)?,
             flip: compile_program(gl, v, FLIP_FRAG)?,
             clipboard_copy: compile_program(gl, v, CLIPBOARD_COPY_FRAG)?,
+            layer_mask_apply: compile_program(gl, v, LAYER_MASK_APPLY_FRAG)?,
             clipboard_clear: compile_program(gl, v, CLIPBOARD_CLEAR_FRAG)?,
             selection_fill: compile_program(gl, v, SELECTION_FILL_FRAG)?,
             rotate90: compile_program(gl, v, ROTATE90_FRAG)?,

@@ -83,6 +83,8 @@ export interface SerializedLayer {
   readonly pathId?: string;
   readonly prePathX?: number;
   readonly prePathY?: number;
+  readonly pathAnchorX?: number;
+  readonly pathAnchorY?: number;
   // shape
   readonly shapeType?: string;
   readonly fill?: unknown;
@@ -160,6 +162,8 @@ export function serializeLayer(
       pathId: layer.pathId,
       prePathX: layer.prePathX,
       prePathY: layer.prePathY,
+      pathAnchorX: layer.pathAnchorX,
+      pathAnchorY: layer.pathAnchorY,
     };
   }
   if (layer.type === 'shape') {

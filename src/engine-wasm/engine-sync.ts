@@ -947,10 +947,12 @@ export function flushLayerSync(state: {
  * Called each frame; only uploads when the layer's content key has changed
  * (text, font, color, or the path's anchors).
  *
- * `onPositionChange` is invoked with the top-left offset of the rendered
- * texture in document space so the caller can align the Zustand layer.x/y
- * with the compact texture. Without this the bounded texture would render
- * at the layer's stale position and appear offset.
+ * `onPositionChange` is invoked with the document-space top-left of the
+ * rendered texture and the path layout's anchor, so the caller can align the
+ * Zustand layer.x/y with the compact texture and record the anchor. Without
+ * this the bounded texture would render at the layer's stale position and
+ * appear offset. A layer moved off its path (`x !== pathAnchorX`) keeps that
+ * offset across the re-render (#981).
  *
  * Canvas2D draws with a fallback face while the layer's web font is still
  * loading. When that happens the layer's cache entry is dropped once the
@@ -964,7 +966,7 @@ export function syncPathTextLayers(
   docWidth: number,
   docHeight: number,
   textEditing: TextEditingState | null,
-  onPositionChange: (layerId: string, x: number, y: number) => void,
+  onPositionChange: (layerId: string, x: number, y: number, anchorX: number, anchorY: number) => void,
   onFontsSettled?: () => void,
 ): void {
   const tracked = getTracked(engine);
@@ -1014,12 +1016,16 @@ export function syncPathTextLayers(
       : layer;
     const result = renderTextOnPath(layerWithLiveText, path.anchors, path.closed, docWidth, docHeight);
     if (result) {
-      uploadLayerPixels(engine, layer.id, result.pixels, result.width, result.height, result.x, result.y);
-      onPositionChange(layer.id, result.x, result.y);
+      const offsetX = layer.pathAnchorX !== undefined ? layer.x - layer.pathAnchorX : 0;
+      const offsetY = layer.pathAnchorY !== undefined ? layer.y - layer.pathAnchorY : 0;
+      const x = result.x + offsetX;
+      const y = result.y + offsetY;
+      uploadLayerPixels(engine, layer.id, result.pixels, result.width, result.height, x, y);
+      onPositionChange(layer.id, x, y, result.x, result.y);
     } else {
       // Empty result — clear the layer texture and park it at the origin.
       uploadLayerPixels(engine, layer.id, new Uint8Array(4), 1, 1, 0, 0);
-      onPositionChange(layer.id, 0, 0);
+      onPositionChange(layer.id, 0, 0, 0, 0);
     }
     tracked.pathTextKeys.set(layer.id, key);
 

@@ -71,6 +71,17 @@ export interface ToolEvent {
   readonly detail?: number;
 }
 
+/** Where a stroke ended by hold-to-smooth may resume if the drag goes on. */
+interface SmoothResumePoint {
+  layerId: string;
+  layerPoint: Point;
+  clientX: number;
+  clientY: number;
+}
+
+/** Screen-space travel after a hold-to-smooth that counts as "still drawing". */
+const SMOOTH_RESUME_THRESHOLD_PX = 3;
+
 /** Finalize a deferred stroke from a previous mouseup. */
 function finalizePendingStroke(ref: React.MutableRefObject<{ layerId: string } | null>): void {
   const pending = ref.current;
@@ -115,11 +126,18 @@ export function useCanvasInteraction(
   const lastPaintPointRef = useRef<LastPaintPoint | null>(null);
   const pendingStrokeRef = useRef<{ layerId: string } | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdFrameRef = useRef<number | null>(null);
+  const moveSeqRef = useRef(0);
+  const resumeAfterSmoothRef = useRef<SmoothResumePoint | null>(null);
 
   const cancelHoldTimer = useCallback(() => {
     if (holdTimerRef.current !== null) {
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
+    }
+    if (holdFrameRef.current !== null) {
+      cancelAnimationFrame(holdFrameRef.current);
+      holdFrameRef.current = null;
     }
   }, []);
 
@@ -146,6 +164,7 @@ export function useCanvasInteraction(
 
       // Cancel any pending hold-to-smooth timer from the previous stroke
       cancelHoldTimer();
+      resumeAfterSmoothRef.current = null;
 
       const activeTool = useUIStore.getState().activeTool;
       const editorState = useEditorStore.getState();
@@ -356,6 +375,27 @@ export function useCanvasInteraction(
 
   const handleToolMove = useCallback(
     (e: ToolEvent) => {
+      moveSeqRef.current++;
+      const resume = resumeAfterSmoothRef.current;
+      if (resume && !stateRef.current.drawing) {
+        // Hold-to-smooth ended the stroke while the button is still down.
+        // Moving on resumes painting from the hold point instead of
+        // silently dropping the rest of the drag (#983).
+        if (Math.hypot(e.clientX - resume.clientX, e.clientY - resume.clientY) < SMOOTH_RESUME_THRESHOLD_PX) return;
+        resumeAfterSmoothRef.current = null;
+        lastPaintPointRef.current = { point: resume.layerPoint, layerId: resume.layerId };
+        handleToolDown({
+          clientX: e.clientX,
+          clientY: e.clientY,
+          button: 0,
+          shiftKey: true,
+          altKey: e.altKey,
+          metaKey: false,
+          ctrlKey: false,
+        });
+        return;
+      }
+
       const state = stateRef.current;
       if (!state.drawing || !state.layerId) return;
 
@@ -424,9 +464,26 @@ export function useCanvasInteraction(
         const layerId = state.layerId;
         const symmetryCenter = state.symmetryCenter;
 
+        const holdClientX = e.clientX;
+        const holdClientY = e.clientY;
+        const holdLayerPoint = state.lastPoint ?? strokePoints[strokePoints.length - 1]!;
+
         holdTimerRef.current = setTimeout(() => {
           holdTimerRef.current = null;
+          // A main-thread stall can fire this timer while pointer-moves are
+          // still queued behind it. Input is dispatched before the next
+          // frame's callbacks, so only smooth if no move arrived by then
+          // (#983).
+          const seqAtTimeout = moveSeqRef.current;
+          holdFrameRef.current = requestAnimationFrame(() => {
+            holdFrameRef.current = null;
+            if (moveSeqRef.current !== seqAtTimeout) return;
+            if (stateRef.current !== state) return;
+            applyHoldSmooth();
+          });
+        }, HOLD_TIMEOUT_MS);
 
+        const applyHoldSmooth = () => {
           const engine = getEngine();
           if (!engine) return;
 
@@ -509,15 +566,24 @@ export function useCanvasInteraction(
 
           // Mark the stroke as done so mouseup becomes a no-op
           stateRef.current = { ...INITIAL_INTERACTION_STATE };
-        }, HOLD_TIMEOUT_MS);
+          lastPaintPointRef.current = { point: holdLayerPoint, layerId };
+          useUIStore.getState().setLastPaintPoint({ point: holdLayerPoint, layerId });
+          resumeAfterSmoothRef.current = {
+            layerId,
+            layerPoint: holdLayerPoint,
+            clientX: holdClientX,
+            clientY: holdClientY,
+          };
+        };
       }
     },
-    [screenToCanvas, containerRef, cancelHoldTimer],
+    [screenToCanvas, containerRef, cancelHoldTimer, handleToolDown],
   );
 
   const handleToolUp = useCallback((e: ToolEvent) => {
     // Cancel any in-progress hold-to-smooth timer
     cancelHoldTimer();
+    resumeAfterSmoothRef.current = null;
 
     const state = stateRef.current;
 

@@ -35,6 +35,7 @@ import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
 import { expandLayerToDocSize, cropLayerToContent, hasFloat } from '../engine-wasm/wasm-bridge';
 import { invalidateCachedSnapshot } from './store/history-slice';
+import { handleGpuContextLost, handleGpuContextRestored } from './gpu-context-loss';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { scheduleDeferredCrop, cancelDeferredCropIfPending } from './deferred-crop-on-switch';
 
@@ -218,10 +219,11 @@ function renderFrameGpu(
       doc.width,
       doc.height,
       textEditing,
-      (layerId, x, y) => {
+      (layerId, x, y, anchorX, anchorY) => {
         const layer = textLayersWithPath.find((l) => l.id === layerId);
-        if (layer && (layer.x !== x || layer.y !== y)) {
-          editorState.updateTextLayerProperties(layerId, { x, y });
+        if (!layer) return;
+        if (layer.x !== x || layer.y !== y || layer.pathAnchorX !== anchorX || layer.pathAnchorY !== anchorY) {
+          editorState.updateTextLayerProperties(layerId, { x, y, pathAnchorX: anchorX, pathAnchorY: anchorY });
         }
       },
       () => useEditorStore.getState().notifyRender(),
@@ -281,11 +283,13 @@ export function useCanvasRendering(
       e.preventDefault();
       console.error('[Lopsy] WebGL context lost');
       engineReadyRef.current = false;
+      handleGpuContextLost();
     };
     const handleContextRestored = () => {
       console.warn('[Lopsy] WebGL context restored — reinitializing');
       initEngine(canvas)
         .then((engine) => {
+          handleGpuContextRestored();
           engineReadyRef.current = true;
           dirtyRef.current = true;
           markAllLayersDirty(engine);

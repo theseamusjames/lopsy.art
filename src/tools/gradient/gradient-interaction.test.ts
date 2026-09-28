@@ -137,26 +137,67 @@ describe('gradient drag lifecycle (issue #338)', () => {
     vi.restoreAllMocks();
   });
 
-  it('snapshots layer on down so subsequent renders restore from pre-drag state', () => {
-    handleGradientDown(makeCtx());
+  it('snapshots the layer before the first render so later renders restore from pre-drag state', () => {
+    const state = handleGradientDown(makeCtx());
+    handleGradientMove(state, { x: 50, y: 50 });
     expect(saveGradientPreview).toHaveBeenCalledTimes(1);
     expect(saveGradientPreview).toHaveBeenCalledWith(expect.anything(), 'layer-1');
+    expect(saveGradientPreview.mock.invocationCallOrder[0]!)
+      .toBeLessThan(renderLinearGradient.mock.invocationCallOrder[0]!);
   });
 
-  it('does not snapshot on each move (only on down)', () => {
+  it('snapshots only once per drag, not on each move', () => {
     const state = handleGradientDown(makeCtx());
-    saveGradientPreview.mockClear();
     handleGradientMove(state, { x: 50, y: 50 });
     handleGradientMove(state, { x: 60, y: 60 });
     handleGradientMove(state, { x: 70, y: 70 });
-    expect(saveGradientPreview).not.toHaveBeenCalled();
+    expect(saveGradientPreview).toHaveBeenCalledTimes(1);
     expect(renderLinearGradient).toHaveBeenCalledTimes(3);
   });
 
   it('releases snapshot on up so the layer is no longer pinned to the pre-drag state', () => {
     const state = handleGradientDown(makeCtx());
+    handleGradientMove(state, { x: 50, y: 50 });
     handleGradientUp(state);
     expect(endGradientPreview).toHaveBeenCalledTimes(1);
+  });
+
+  // #979: a click with no drag used to push an empty "Linear Gradient" step.
+  it('pushes no history for a click without a drag', () => {
+    const state = handleGradientDown(makeCtx());
+    handleGradientUp(state);
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
+    expect(renderLinearGradient).not.toHaveBeenCalled();
+    expect(saveGradientPreview).not.toHaveBeenCalled();
+  });
+
+  it('pushes no history when the pointer moves back onto the start point only', () => {
+    const state = handleGradientDown(makeCtx());
+    handleGradientMove(state, { x: 10, y: 10 });
+    handleGradientUp(state);
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
+    expect(renderLinearGradient).not.toHaveBeenCalled();
+  });
+
+  it('pushes exactly one history entry before the first render of a real drag', () => {
+    const state = handleGradientDown(makeCtx());
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
+    handleGradientMove(state, { x: 50, y: 50 });
+    handleGradientMove(state, { x: 60, y: 60 });
+    handleGradientUp(state);
+    expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+    expect(editorState.pushHistory).toHaveBeenCalledWith('Linear Gradient');
+    expect(editorState.pushHistory.mock.invocationCallOrder[0]!)
+      .toBeLessThan(renderLinearGradient.mock.invocationCallOrder[0]!);
+  });
+
+  it('a stray click after a real gradient does not push another step', () => {
+    const first = handleGradientDown(makeCtx());
+    handleGradientMove(first, { x: 50, y: 50 });
+    handleGradientUp(first);
+    const click = handleGradientDown(makeCtx());
+    handleGradientUp(click);
+    expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
   });
 
   // Issue #732 — the pixel-version bump moved from move to up. Bumping on
@@ -213,6 +254,7 @@ describe('gradient drag lifecycle (issue #338)', () => {
   it('syncs layer position after the gradient commit (issue #494)', () => {
     syncLayerAfterFullSize.mockClear();
     const state = handleGradientDown(makeCtx());
+    handleGradientMove(state, { x: 50, y: 50 });
     handleGradientUp(state);
     expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
     expect(syncLayerAfterFullSize).toHaveBeenCalledWith(expect.anything(), 'layer-1');
@@ -229,6 +271,7 @@ describe('gradient drag lifecycle (issue #338)', () => {
       height: 2,
     };
     const state = handleGradientDown(ctx);
+    handleGradientMove(state, { x: 50, y: 50 });
     handleGradientUp(state);
     expect(syncLayerAfterFullSize).not.toHaveBeenCalled();
   });
@@ -237,6 +280,7 @@ describe('gradient drag lifecycle (issue #338)', () => {
     syncLayerAfterFullSize.mockClear();
     uiStateValues.isQuickMaskMode = true;
     const state = handleGradientDown(makeCtx());
+    handleGradientMove(state, { x: 50, y: 50 });
     handleGradientUp(state);
     expect(syncLayerAfterFullSize).not.toHaveBeenCalled();
   });
@@ -275,7 +319,8 @@ describe('gradient on quick mask (issue #329)', () => {
 
   it('does not snapshot the layer preview in quick-mask mode', () => {
     uiStateValues.isQuickMaskMode = true;
-    handleGradientDown(makeCtx());
+    const state = handleGradientDown(makeCtx());
+    handleGradientMove(state, { x: 50, y: 50 });
     expect(saveGradientPreview).not.toHaveBeenCalled();
   });
 
@@ -319,15 +364,15 @@ describe('gradient on quick mask (issue #329)', () => {
     expect(call[4]).toBe(280); // 80 + 200
   });
 
-  it('records a quick-mask history label on down', () => {
+  it('records a quick-mask history label once the drag renders', () => {
     uiStateValues.isQuickMaskMode = true;
     ts.settings.gradient.type = 'linear';
-    handleGradientDown(makeCtx());
+    handleGradientMove(handleGradientDown(makeCtx()), { x: 50, y: 50 });
     expect(editorState.pushHistory).toHaveBeenCalledWith('Quick Mask Linear Gradient');
 
     editorState.pushHistory.mockClear();
     ts.settings.gradient.type = 'radial';
-    handleGradientDown(makeCtx());
+    handleGradientMove(handleGradientDown(makeCtx()), { x: 50, y: 50 });
     expect(editorState.pushHistory).toHaveBeenCalledWith('Quick Mask Radial Gradient');
   });
 

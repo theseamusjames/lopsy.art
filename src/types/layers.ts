@@ -56,6 +56,14 @@ export interface TextLayer extends LayerBase {
   readonly pathId?: string;
   readonly prePathX?: number;
   readonly prePathY?: number;
+  /**
+   * Where the path layout last placed a path-bound layer (document space).
+   * `x - pathAnchorX` is the user's offset from the path (a move or nudge),
+   * which a reflow — new size, spacing, text, path edit, or a history
+   * restore — preserves instead of snapping back onto the path (#981).
+   */
+  readonly pathAnchorX?: number;
+  readonly pathAnchorY?: number;
 }
 
 export interface ShapeLayer extends LayerBase {

@@ -839,6 +839,34 @@ describe('path-bound text and web font loading (#823)', () => {
     expect(onFontsSettled).not.toHaveBeenCalled();
   });
 
+  // #981: a reflow used to write the path-anchored x/y over a layer the user
+  // had moved off its path.
+  it('keeps a moved layer\'s offset from its path anchor across a reflow', () => {
+    fonts.loaded = true;
+    const engine = makeFakeEngine();
+    vi.mocked(bridge.uploadLayerPixels).mockClear();
+    vi.mocked(renderTextOnPathMock).mockReturnValueOnce({
+      pixels: new Uint8Array(4), width: 1, height: 1, x: 23, y: 198,
+    });
+    const moved = { ...makePathText('Inter'), x: 54, y: 218, pathAnchorX: 34, pathAnchorY: 218 };
+    const onPositionChange = vi.fn();
+    sync.syncPathTextLayers(engine, [moved], [path], 200, 100, null, onPositionChange);
+    expect(onPositionChange).toHaveBeenCalledWith(moved.id, 43, 198, 23, 198);
+    expect(vi.mocked(bridge.uploadLayerPixels).mock.calls[0]!.slice(5)).toEqual([43, 198]);
+  });
+
+  it('places a layer with no recorded anchor straight onto its path', () => {
+    fonts.loaded = true;
+    const engine = makeFakeEngine();
+    vi.mocked(renderTextOnPathMock).mockReturnValueOnce({
+      pixels: new Uint8Array(4), width: 1, height: 1, x: 34, y: 218,
+    });
+    const justBound = { ...makePathText('Inter'), x: 100, y: 100 };
+    const onPositionChange = vi.fn();
+    sync.syncPathTextLayers(engine, [justBound], [path], 200, 100, null, onPositionChange);
+    expect(onPositionChange).toHaveBeenCalledWith(justBound.id, 34, 218, 34, 218);
+  });
+
   it('pathTextLayersUsingFamilies picks only path-bound layers of a loaded family', () => {
     const fell = makePathText(`'IM Fell English', serif`);
     const other = makePathText(`'Montserrat', sans-serif`);
