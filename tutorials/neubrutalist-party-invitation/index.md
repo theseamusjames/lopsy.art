@@ -1,7 +1,8 @@
 ---
 title: Design a Neubrutalist Party Invitation
-description: Build a neubrutalist pool-party invitation in Lopsy with chunky outlines, hard offset shadows, rotated stickers, a flat axolotl mascot and snapped info cards.
+description: Build a neubrutalist pool-party invitation in Lopsy with rounded shapes, chunky outlines, hard shadows, rotated stickers, a flat axolotl mascot and info cards.
 published: 2026-09-26 10:00
+updated: 2026-09-28
 level: Intermediate
 duration: 50
 tags: neubrutalism, invitation, poster design, layer effects, stickers, text effects, illustration, groups
@@ -16,9 +17,9 @@ Neubrutalism takes the flat colour blocks of web UI and makes them loud:
 thick black outlines, hard offset shadows with no blur, saturated fills and
 chunky type, all slightly askew like stickers slapped on a page. In this
 tutorial you'll design a 1080 × 1350 invitation for an imaginary axolotl
-pool party, **Axolotl Xtravaganza**. You'll use a pattern fill, layer
-effects, rotate and scale transforms, copy and paste, groups, the snap grid
-and a filter.
+pool party, **Axolotl Xtravaganza**. You'll use a pattern fill, the Shape
+tool, layer effects, rotate and scale transforms, copy and paste, groups,
+the grid and a filter.
 
 The palette is five flat colours plus near-black:
 
@@ -29,11 +30,17 @@ The palette is five flat colours plus near-black:
 - Acid lime `#C6FF3D`
 - Sun yellow `#FFD93D`
 
-Almost every shape in this piece is a **rounded rectangle**. Lopsy doesn't
-have a rounded-rectangle tool, so you'll build one from selections: fill a
-rectangle inset by the corner radius horizontally, fill another inset
-vertically, then fill a circle with a diameter of twice the radius in each
-corner. It takes six quick fills and gives you a crisp, exact shape.
+Almost every shape in this piece is a **rounded rectangle**, drawn with
+the **Shape** tool ([[U]]). In the options bar, set **Shape** to
+**Polygon**, **Sides** to `4` and **Corner Radius** to the radius each step
+gives. A radius of half the height turns the rectangle into a pill.
+
+Shapes grow out from their centre, so the steps below give each one's
+centre. Click once at the centre (watch the X / Y readout in the status
+bar) and Lopsy asks for a **Width** and **Height**. Type the size and
+click **Create**. To set a colour, click the **Fill** swatch in the options
+bar and type the hex value. Leave **Stroke** off (`—`), because the
+outlines come from layer effects.
 
 ## Create the invitation document
 
@@ -80,11 +87,11 @@ later. Set **Feather** back to `0` before you draw anything else.
 
 ## Build the title slab with a stroke and hard shadow
 
-![A pink rounded rectangle with a thick black inside stroke and a solid black shadow offset down and right, with the Layer Effects drawer open](04-title-card-stroke-shadow.webp)
+![A pink rounded rectangle with a thick black inside stroke and a solid black shadow offset down and right, with the Shape tool set to Polygon, 4 sides and Corner Radius 28, and the Layer Effects drawer open](04-title-card-stroke-shadow.webp)
 
-Add a layer called `Title Card` and set the foreground to `#FF7EC8`. Build
-a rounded rectangle at (70, 210), 940 × 330 with a 28 px radius, using the
-six-fill trick from the intro.
+Add a layer called `Title Card`. Choose the **Shape** tool, set **Corner
+Radius** to `28` and **Fill** to `#FF7EC8`, then click at (540, 375) and
+create a 940 × 330 shape. The slab runs from (70, 210) to (1010, 540).
 
 Open the layer's effects and set:
 
@@ -137,10 +144,10 @@ same centre, so the type stays locked to its band.
 ![A lime pill with black RSVP BY OCT 10 / @AXOPARTY type near the bottom of the invitation, with a black outline and offset shadow](07-lime-rsvp-pill.webp)
 
 Click **Add Layer** twice. Name the first layer `Bubbles` and leave it
-empty for now. Name the second `RSVP Pill`. Build a pill at (80, 1180),
-920 × 92, with a 46 px radius (half the height), and fill it with lime
-`#C6FF3D`. Give it an Inside **Stroke** of `6` and a **Drop Shadow** of
-`10` / `10`.
+empty for now. Name the second `RSVP Pill`. With the **Shape** tool, set
+**Corner Radius** to `46` (half the height) and **Fill** to lime
+`#C6FF3D`, then click at (540, 1226) and create a 920 × 92 pill. Give it an
+Inside **Stroke** of `6` and a **Drop Shadow** of `10` / `10`.
 
 Type `RSVP BY OCT 10  /  @AXOPARTY` in **Archivo Black** at size `44` in
 ink, centre it on the pill, and rasterize it.
@@ -153,12 +160,12 @@ Stickers overlap the edges of other shapes, which gives the layout its
 collage energy. Each one is a filled shape with a thinner stroke (`5`) and
 a smaller shadow (`8` / `8`):
 
-- **Invite tag**: a white pill at (70, 150), 440 × 76 (radius 38). Its
-  bottom edge overlaps the slab. Add `YOU'RE INVITED!` in **Space Mono**
-  Bold at `34`.
-- **No Running**: a cobalt rounded rectangle at (600, 92), 264 × 58
-  (radius 16). Add `NO RUNNING!` in **Rubik Mono One** at `24` in cream,
-  rasterize it, and **Merge Down** onto the sticker.
+- **Invite tag**: a white `#FFFFFF` pill, 440 × 76 with radius `38`,
+  centred on (290, 188). Its bottom edge overlaps the slab. Add
+  `YOU'RE INVITED!` in **Space Mono** Bold at `34`.
+- **No Running**: a cobalt rounded rectangle, 264 × 58 with radius `16`,
+  centred on (732, 121). Add `NO RUNNING!` in **Rubik Mono One** at `24`
+  in cream, rasterize it, and **Merge Down** onto the sticker.
 - **Starburst**: with the **Lasso**, click an 18-point star centred on
   (952, 212), alternating between radius 122 and 95, then fill it with
   `#FFD93D`. Add `BYO` (Archivo Black, `52`) and `FLOATIE!` (`30`),
@@ -240,24 +247,26 @@ Finish with four short cream brush squiggles for ripples. The pool covers
 the bottom of the head and the arms, so the axolotl is sitting in the
 water.
 
-## Lay out the info cards on the snap grid
+## Lay out the info cards on the grid
 
 ![Three rounded rectangles in lime, yellow and pink stacked on the right with the 16 px grid visible, and small black tabs on their top edges](13-info-cards-snap-grid.webp)
 
 Click `Bubbles` again and create a **New Group** called `Info Cards`.
-Choose **View → Show Grid**. The grid defaults to 16 px, with **Snap**
-turned on. Marquee corners snap to the grid lines, so the cards line up
-perfectly.
+Choose **View → Show Grid**. The grid defaults to 16 px, which makes it
+easy to check the stack by eye.
 
-Add three layers and build a 416 × 128 card (radius 16) on each:
+Add three layers. With the **Shape** tool and **Corner Radius** `16`,
+create a 416 × 128 card on each:
 
-- `Card When`: lime, at (604, 707)
-- `Card Where`: yellow, at (588, 851)
-- `Card Wear`: pink, at (604, 995)
+- `Card When`: lime, centred on (812, 771)
+- `Card Where`: yellow, centred on (796, 915)
+- `Card Wear`: pink, centred on (812, 1059)
 
-The middle card sits 16 px to the left, which breaks up the stack. Hide
-the grid again, then add a black 112 × 36 tab (radius 10) to each card at
-its top-left, 18 px in and hanging 18 px above the edge.
+The middle card sits one grid square (16 px) to the left, which breaks up
+the stack. Hide the grid again. Then set **Corner Radius** to `10` and
+**Fill** to ink, and add a 112 × 36 tab to each card's layer, 18 px in from
+its left edge and hanging 18 px above it. The tabs are centred on
+(678, 707), (662, 851) and (678, 995).
 
 ## Write the card details
 
