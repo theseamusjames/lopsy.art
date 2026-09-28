@@ -22,34 +22,44 @@ import {
 } from '../../engine-wasm/wasm-bridge';
 import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
 
+interface PendingGradientCommit {
+  label: string;
+  maskLayer: InteractionContext['activeLayer'] | null;
+  savesLayerPreview: boolean;
+}
+
+// The history entry is pushed on the first move that actually renders, not
+// on pointer-down: a click without a drag changes no pixels and must not
+// leave an empty undo step behind (#979).
+let pendingCommit: PendingGradientCommit | null = null;
+
 export function handleGradientDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer } = ctx;
-  const editorState = useEditorStore.getState();
   const ts = useToolSettingsStore.getState();
   const ui = useUIStore.getState();
   const maskEditMode = ui.maskMode === 'layerMask';
   const isQuickMaskMode = ui.maskMode === 'quickMask';
+  const isRadial = ts.settings.gradient.type === 'radial';
 
-  const engine = getEngine();
-
-  const gradientType = ts.settings.gradient.type;
   if (isQuickMaskMode) {
-    editorState.pushHistory(gradientType === 'radial' ? 'Quick Mask Radial Gradient' : 'Quick Mask Linear Gradient');
+    pendingCommit = {
+      label: isRadial ? 'Quick Mask Radial Gradient' : 'Quick Mask Linear Gradient',
+      maskLayer: null,
+      savesLayerPreview: false,
+    };
   } else if (maskEditMode && activeLayer.mask) {
-    editorState.pushHistory(gradientType === 'radial' ? 'Mask Radial Gradient' : 'Mask Linear Gradient');
-    markMaskDataStale(activeLayerId);
-    if (engine) {
-      // Skip the upload when the engine already holds this mask array:
-      // the GPU copy is current or newer than `mask.data` (#780).
-      uploadLayerMaskIfChanged(engine, activeLayerId, activeLayer.mask.data, activeLayer.mask.width, activeLayer.mask.height);
-    }
+    pendingCommit = {
+      label: isRadial ? 'Mask Radial Gradient' : 'Mask Linear Gradient',
+      maskLayer: activeLayer,
+      savesLayerPreview: false,
+    };
   } else {
-    editorState.pushHistory(gradientType === 'radial' ? 'Radial Gradient' : 'Linear Gradient');
+    pendingCommit = {
+      label: isRadial ? 'Radial Gradient' : 'Linear Gradient',
+      maskLayer: null,
+      savesLayerPreview: true,
+    };
   }
-  ts.addRecentColor(ts.foregroundColor);
-  ts.addRecentColor(ts.backgroundColor);
-
-  if (engine && !maskEditMode && !isQuickMaskMode) gpuSaveGradientPreview(engine, activeLayerId);
 
   return {
     drawing: true,
@@ -65,7 +75,31 @@ export function handleGradientDown(ctx: InteractionContext): InteractionState {
   };
 }
 
+function beginGradientCommit(commit: PendingGradientCommit, layerId: string): void {
+  const engine = getEngine();
+  useEditorStore.getState().pushHistory(commit.label);
+  const mask = commit.maskLayer?.mask;
+  if (mask) {
+    markMaskDataStale(layerId);
+    if (engine) {
+      // Skip the upload when the engine already holds this mask array:
+      // the GPU copy is current or newer than `mask.data` (#780).
+      uploadLayerMaskIfChanged(engine, layerId, mask.data, mask.width, mask.height);
+    }
+  }
+  const ts = useToolSettingsStore.getState();
+  ts.addRecentColor(ts.foregroundColor);
+  ts.addRecentColor(ts.backgroundColor);
+  if (engine && commit.savesLayerPreview) gpuSaveGradientPreview(engine, layerId);
+}
+
 export function handleGradientUp(state: InteractionState): void {
+  const hasRendered = pendingCommit === null;
+  pendingCommit = null;
+  if (!hasRendered) {
+    useUIStore.getState().setGradientPreview(null);
+    return;
+  }
   const engine = getEngine();
   if (engine) {
     gpuEndGradientPreview(engine);
@@ -116,6 +150,16 @@ export function handleGradientMove(state: InteractionState, layerLocalPos: Point
   const engine = getEngine();
   if (!engine) return;
 
+  const startX = state.startPoint.x + state.layerStartX;
+  const startY = state.startPoint.y + state.layerStartY;
+  let endX = layerLocalPos.x + state.layerStartX;
+  let endY = layerLocalPos.y + state.layerStartY;
+  if (pendingCommit) {
+    if (endX === startX && endY === startY) return;
+    beginGradientCommit(pendingCommit, state.layerId);
+    pendingCommit = null;
+  }
+
   const stops = toolSettings.settings.gradient.stops.map((s) => {
     const c = toDocumentColor(s.color);
     return {
@@ -128,11 +172,6 @@ export function handleGradientMove(state: InteractionState, layerLocalPos: Point
   });
   if (reverse) stops.reverse();
   const stopsJson = JSON.stringify(stops);
-
-  const startX = state.startPoint.x + state.layerStartX;
-  const startY = state.startPoint.y + state.layerStartY;
-  let endX = layerLocalPos.x + state.layerStartX;
-  let endY = layerLocalPos.y + state.layerStartY;
 
   if (metaKey) {
     const dx = endX - startX;
