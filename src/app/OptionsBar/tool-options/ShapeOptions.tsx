@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { Slider } from '../../../components/Slider/Slider';
@@ -6,6 +6,7 @@ import { ColorSwatch } from '../../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../../components/ColorPicker/ColorPicker';
 import { useDockStore } from '../../../panels/dock/dock-store';
 import { AspectRatioControl } from './AspectRatioControl';
+import { rgbToHex6, hexToRgb } from '../../../utils/color';
 import type { Color } from '../../../types';
 import type { ShapeMode, ShapeOutput } from '../../../tools/shape/shape';
 import styles from '../OptionsBar.module.css';
@@ -19,10 +20,34 @@ interface ColorPopoverProps {
   onChange: (color: Color) => void;
   onRemove: () => void;
   removeLabel: string;
+  hexLabel: string;
 }
 
-function ColorPopover({ anchorRef, popoverRef, color, onChange, onRemove, removeLabel }: ColorPopoverProps) {
+// No leading '#': the row shows one. A pasted '#RRGGBB' still parses.
+function colorToHex(c: Color): string {
+  return rgbToHex6(c).slice(1);
+}
+
+function ColorPopover({ anchorRef, popoverRef, color, onChange, onRemove, removeLabel, hexLabel }: ColorPopoverProps) {
   const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [hexInput, setHexInput] = useState(colorToHex(color));
+
+  useEffect(() => {
+    setHexInput(colorToHex(color));
+  }, [color]);
+
+  const handleHexCommit = useCallback(() => {
+    const parsed = hexToRgb(hexInput);
+    if (parsed) {
+      onChange({ ...parsed, a: color.a });
+    } else {
+      setHexInput(colorToHex(color));
+    }
+  }, [hexInput, color, onChange]);
+
+  const handleHexKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleHexCommit();
+  }, [handleHexCommit]);
 
   useEffect(() => {
     const el = anchorRef.current;
@@ -35,6 +60,18 @@ function ColorPopover({ anchorRef, popoverRef, color, onChange, onRemove, remove
     <div ref={popoverRef} className={styles.colorPopover} style={{ '--popover-top': `${pos.top}px`, '--popover-left': `${pos.left}px` } as React.CSSProperties}>
       <ColorPicker color={color} onChange={onChange} />
       <div className={styles.popoverActions}>
+        <div className={styles.popoverHexRow}>
+          <span className={styles.popoverHexPrefix} aria-hidden="true">#</span>
+          <input
+            className={styles.popoverHexInput}
+            value={hexInput}
+            onChange={(e) => setHexInput(e.target.value)}
+            onBlur={handleHexCommit}
+            onKeyDown={handleHexKeyDown}
+            maxLength={7}
+            aria-label={hexLabel}
+          />
+        </div>
         <button className={styles.removeBtn} type="button" onClick={onRemove}>
           {removeLabel}
         </button>
@@ -152,6 +189,7 @@ export function ShapeOptions() {
             onChange={(c) => setShapeSetting('fillColor', c)}
             onRemove={() => { setShapeSetting('fillColor', null); setOpenPopover(null); }}
             removeLabel="Remove fill"
+            hexLabel="Fill hex color"
           />
         )}
       </div>
@@ -190,6 +228,7 @@ export function ShapeOptions() {
             onChange={(c) => setShapeSetting('strokeColor', c)}
             onRemove={() => { setShapeSetting('strokeColor', null); setOpenPopover(null); }}
             removeLabel="Remove stroke"
+            hexLabel="Stroke hex color"
           />
         )}
       </div>

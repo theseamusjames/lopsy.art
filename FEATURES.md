@@ -2147,7 +2147,7 @@ A flat list of the document's stored vector paths plus a three-button toolbar. I
 
 **Where stored paths come from**
 - The **Path / Pen tool**, when an in-progress anchor list is committed.
-- The **Shape tool with Output = path**: finishing the drag rasterizes nothing — the raster preview drawn during the drag is rolled back with an `undo()` and a closed path is added instead. Ellipses become 4-anchor Bezier ellipses; every other mode becomes a straight-sided polygon — a 4-sided one as a diamond with vertices at top / right / bottom / left, not a rectangle (#794) — so **corner radius is not carried into path output**. A drag smaller than 1 px in both axes is discarded.
+- The **Shape tool with Output = path**: finishing the drag rasterizes nothing — the raster preview drawn during the drag is rolled back with an `undo()` and a closed path is added instead. Ellipses become 4-anchor Bezier ellipses; every other mode becomes a straight-sided polygon — a 4-sided one as the drag's rectangle (#794) — so **corner radius is not carried into path output**. A drag smaller than 1 px in both axes is discarded.
 - **Select → Selection to Path**.
 - **Boolean path operations** (Unite / Subtract / Intersect / Exclude), which consume both source paths and add the result.
 
