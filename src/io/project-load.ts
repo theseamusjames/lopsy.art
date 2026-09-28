@@ -11,6 +11,7 @@ import { initWasm, uploadLayerPixels, uploadLayerMask } from '../engine-wasm/was
 import { resetTrackedState, flushLayerSync, syncDocumentSize } from '../engine-wasm/engine-sync';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError, describeError } from '../app/notifications-store';
+import { loadDocumentFonts } from '../app/load-document-fonts';
 import type { Layer, RasterLayer, TextLayer, ShapeLayer, GroupLayer } from '../types/layers';
 import type { LayerEffects } from '../types/effects';
 import type { Color } from '../types/color';
@@ -310,6 +311,8 @@ export async function loadProject(file: File): Promise<void> {
         );
         uploadLayerMask(engine, s.id, maskBytes, layer.mask.width, layer.mask.height);
       }
+
+      void loadDocumentFonts(newLayers);
     }
 
     useEditorStore.getState().fitToView();

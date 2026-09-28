@@ -591,6 +591,16 @@ pub fn flip_texture(
 
 /// GPU-side clipboard copy: read layer pixels (optionally masked by selection)
 /// into a retained clipboard texture. Returns (width, height, offset_x, offset_y).
+/// Texture unit for a `u_maskTex` sampler. Uniforms persist on the program,
+/// so without a mask unit 1 still holds whatever was bound there last —
+/// often a since-released selection mask that the pool has just handed out
+/// as this draw's render target. WebGL rejects that as a feedback loop even
+/// when `u_hasMask == 0` never samples it, and the draw silently writes
+/// nothing (#964). Unit 0 holds the source layer, which is never the target.
+fn mask_sampler_unit(has_mask: bool) -> i32 {
+    if has_mask { 1 } else { 0 }
+}
+
 pub fn clipboard_copy(
     engine: &mut EngineInner,
     layer_id: &str,
@@ -653,7 +663,7 @@ pub fn clipboard_copy(
             engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
         }
         if let Some(loc) = shader.location(&engine.gl, "u_maskTex") {
-            engine.gl.uniform1i(Some(&loc), 1);
+            engine.gl.uniform1i(Some(&loc), mask_sampler_unit(has_mask));
         }
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") {
             engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
@@ -731,7 +741,7 @@ pub fn clipboard_clear_selected(
             engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
         }
         if let Some(loc) = shader.location(&engine.gl, "u_maskTex") {
-            engine.gl.uniform1i(Some(&loc), 1);
+            engine.gl.uniform1i(Some(&loc), mask_sampler_unit(has_mask));
         }
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") {
             engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
@@ -858,6 +868,7 @@ pub fn expand_layer_to_doc_size(
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
         if let Some(loc) = shader.location(&engine.gl, "u_layerTex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), mask_sampler_unit(false)); }
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), layer_x as f32, layer_y as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32); }
@@ -990,7 +1001,7 @@ pub fn float_selection(
                 engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
                 engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
             }
-            if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 1); }
+            if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), mask_sampler_unit(has_mask)); }
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 }); }
             if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), lx as f32, ly as f32); }
             if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), flw as f32, flh as f32); }
@@ -1033,7 +1044,7 @@ pub fn float_selection(
                 engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
                 engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
             }
-            if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 1); }
+            if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), mask_sampler_unit(has_mask)); }
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 }); }
             if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32); }
             if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), lx as f32, ly as f32); }
@@ -1590,7 +1601,7 @@ pub fn fill_with_color(
             }
         }
     }
-    if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 1); }
+    if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), mask_sampler_unit(has_mask)); }
     if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 }); }
     if let Some(loc) = shader.location(&engine.gl, "u_fillColor") { engine.gl.uniform4f(Some(&loc), r, g, b, a); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32); }

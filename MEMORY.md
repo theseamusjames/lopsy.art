@@ -300,3 +300,27 @@ array — the routed ancestor's own `children` reference is unchanged. Its
 `children` array of every group the descendant walk visited) rather than
 `group.children` alone; otherwise the new layer never enters the ancestor's
 `child_ids` and the group's finalize pass covers it (#940).
+
+## Every `sampler2D` a shader declares must point at a safe unit — even unused ones
+
+WebGL rejects a draw (INVALID_OPERATION, nothing written) when *any*
+active sampler of the current program is bound to a texture attached to
+the draw framebuffer — whether or not the shader actually samples it on
+this draw (`u_hasMask == 0` does not help). Program uniforms persist
+across draws, so a sampler set to unit 1 by one caller still reads unit 1
+for the next caller that reuses the program without setting it. Unit 1
+then holds whatever was bound last, often a since-released texture that
+the pool has just handed out as the new render target (same size →
+same pooled texture). That silently wiped layers on crop→expand after a
+⌘C (#964). Rule: whenever a shader with an optional texture (e.g.
+`clipboard_copy`'s `u_maskTex`) runs without it, point that sampler at
+the unit holding the source texture (`mask_sampler_unit` in
+`layer_manager.rs`).
+
+## The blur shader outputs straight alpha — callers that add its RGB must re-multiply
+
+`gaussian_blur.glsl` premultiplies each tap and un-premultiplies the
+result (#929). A caller that treats the blurred RGB as additive energy
+(Bloom) must multiply it by the blurred alpha, or every pixel within the
+kernel's support gets the full source colour, which shows up as a hard-edged
+block (#959).

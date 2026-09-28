@@ -13,9 +13,15 @@ import {
   compositeForExport,
 } from '../../engine-wasm/wasm-bridge';
 import { decodeBlobToRgba, pixelsLikelySame } from './clipboard-image-match';
+import {
+  beginSystemClipboardWrite,
+  completeSystemClipboardWrite,
+  isSystemClipboardWriteCurrent,
+} from './system-clipboard-sync';
 import type { ClipboardData, SliceCreator } from './types';
 
 function writeToSystemClipboard(width: number, height: number): void {
+  const seq = beginSystemClipboardWrite();
   try {
     const engine = getEngine();
     if (!engine) return;
@@ -30,8 +36,11 @@ function writeToSystemClipboard(width: number, height: number): void {
     ctx.putImageData(imageData, 0, 0);
     canvas.convertToBlob({ type: 'image/png' }).then((blob) => {
       if (typeof navigator.clipboard?.write !== 'function') return;
+      if (!isSystemClipboardWriteCurrent(seq)) return;
       const item = new ClipboardItem({ 'image/png': blob });
-      navigator.clipboard.write([item]).catch(() => {});
+      navigator.clipboard.write([item])
+        .then(() => completeSystemClipboardWrite(seq))
+        .catch(() => {});
     }).catch(() => {});
   } catch {
     // System clipboard write is best-effort
