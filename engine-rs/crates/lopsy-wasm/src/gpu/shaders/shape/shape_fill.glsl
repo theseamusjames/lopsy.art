@@ -141,6 +141,10 @@ void main() {
     float d;
     if (u_shapeType == 0) {
         d = sdEllipse(p, u_size * 0.5);
+    } else if (u_sides == 4) {
+        // #794: sdPolygon fits a regular polygon to min(w, h), which would
+        // turn a non-square drag into a square. Four sides is the rectangle.
+        d = sdRect(p, u_size * 0.5, u_cornerRadius);
     } else if (u_sides >= 3) {
         d = sdPolygon(p, u_size * 0.5, u_sides, u_cornerRadius);
     } else {

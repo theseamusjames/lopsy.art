@@ -241,6 +241,17 @@ export function ellipseToPathAnchors(cx: number, cy: number, rx: number, ry: num
 /** Create a closed polygon path with N corner anchors (straight segments). */
 export function polygonToPathAnchors(cx: number, cy: number, rx: number, ry: number, sides: number): PathAnchor[] {
   const n = Math.max(3, Math.round(sides));
+  // Four sides is the rectangle, matching the GPU pixel path (#794). The
+  // general formula below would put its vertices at top/right/bottom/left
+  // and draw a diamond.
+  if (n === 4) {
+    return [
+      { point: { x: cx - rx, y: cy - ry }, handleIn: null, handleOut: null },
+      { point: { x: cx + rx, y: cy - ry }, handleIn: null, handleOut: null },
+      { point: { x: cx + rx, y: cy + ry }, handleIn: null, handleOut: null },
+      { point: { x: cx - rx, y: cy + ry }, handleIn: null, handleOut: null },
+    ];
+  }
   const anchors: PathAnchor[] = [];
   for (let i = 0; i < n; i++) {
     const angle = (2 * Math.PI * i) / n - Math.PI / 2;

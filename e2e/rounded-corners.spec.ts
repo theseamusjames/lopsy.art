@@ -335,6 +335,60 @@ test.describe('Shape tool corner radius (#62)', () => {
     expect(tlInner.a).toBeGreaterThan(200);
   });
 
+  test('4-sided polygon follows a non-square drag as a rounded rectangle (#794)', async ({ page }) => {
+    // Before #794 the 4-sided SDF fitted a regular polygon to min(w, h),
+    // so this 300 × 100 drag painted a 100 × 100 square at x 150-250.
+    await createDocument(page, 400, 300, true);
+
+    await setForegroundColor(page, 255, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
+    await setToolOption(page, 'Corner Radius', 20);
+
+    // Centre (200, 150), half-size (150, 50) → box (50, 100)..(350, 200).
+    await dragShape(page, { x: 200, y: 150 }, { x: 350, y: 200 });
+    await page.screenshot({ path: 'e2e/screenshots/rounded-corners-rectangle.png' });
+
+    const leftMid = await getPixelAt(page, 53, 150);
+    expect(leftMid.a).toBeGreaterThan(200);
+    const rightMid = await getPixelAt(page, 347, 150);
+    expect(rightMid.a).toBeGreaterThan(200);
+    const nearLeftEnd = await getPixelAt(page, 80, 150);
+    expect(nearLeftEnd.r).toBe(255);
+    expect(nearLeftEnd.a).toBe(255);
+    const topMid = await getPixelAt(page, 200, 103);
+    expect(topMid.a).toBeGreaterThan(200);
+
+    // The box corners are rounded off, and nothing spills past the box.
+    for (const [x, y] of [[53, 103], [347, 103], [53, 197], [347, 197]] as const) {
+      expect((await getPixelAt(page, x, y)).a).toBe(0);
+    }
+    expect((await getPixelAt(page, 200, 95)).a).toBe(0);
+    expect((await getPixelAt(page, 45, 150)).a).toBe(0);
+  });
+
+  test('corner radius of half the height turns a 4-sided drag into a pill', async ({ page }) => {
+    await createDocument(page, 400, 300, true);
+
+    await setForegroundColor(page, 0, 0, 255);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
+    await setToolOption(page, 'Corner Radius', 50);
+
+    // Box (50, 100)..(350, 200): each end is a semicircle of radius 50
+    // centred on (100, 150) and (300, 150).
+    await dragShape(page, { x: 200, y: 150 }, { x: 350, y: 200 });
+
+    expect((await getPixelAt(page, 53, 150)).a).toBeGreaterThan(200);
+    expect((await getPixelAt(page, 347, 150)).a).toBeGreaterThan(200);
+    expect((await getPixelAt(page, 200, 103)).a).toBeGreaterThan(200);
+    // 60 px from each end's centre, so outside the semicircle but inside the box.
+    expect((await getPixelAt(page, 60, 105)).a).toBe(0);
+    expect((await getPixelAt(page, 340, 195)).a).toBe(0);
+  });
+
   // Parameterised regression test: cornerRadius > 0 must visibly reduce
   // the opaque pixel count for every supported polygon count. Before
   // the sdPolygon SDF was corrected, this was only true for n=4 (and
