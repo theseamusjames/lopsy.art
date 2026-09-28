@@ -80,6 +80,9 @@ export interface SerializedLayer {
   readonly underline?: boolean;
   readonly strikethrough?: boolean;
   readonly vertical?: boolean;
+  readonly pathId?: string;
+  readonly prePathX?: number;
+  readonly prePathY?: number;
   // shape
   readonly shapeType?: string;
   readonly fill?: unknown;
@@ -106,7 +109,7 @@ export interface SerializedLayer {
   readonly pixelHeight?: number;
 }
 
-function serializeLayer(
+export function serializeLayer(
   layer: Layer,
   pixelDataIndex: number,
   maskDataIndex: number,
@@ -154,6 +157,9 @@ function serializeLayer(
       underline: layer.underline,
       strikethrough: layer.strikethrough,
       vertical: layer.vertical ?? false,
+      pathId: layer.pathId,
+      prePathX: layer.prePathX,
+      prePathY: layer.prePathY,
     };
   }
   if (layer.type === 'shape') {

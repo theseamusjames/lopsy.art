@@ -71,7 +71,7 @@ function parseEffects(raw: unknown): LayerEffects {
   };
 }
 
-function deserializeLayer(s: SerializedLayer): Layer {
+export function deserializeLayer(s: SerializedLayer): Layer {
   const base = {
     id: s.id,
     name: s.name,
@@ -119,6 +119,9 @@ function deserializeLayer(s: SerializedLayer): Layer {
       underline: s.underline ?? false,
       strikethrough: s.strikethrough ?? false,
       vertical: s.vertical ?? false,
+      ...(s.pathId !== undefined && { pathId: s.pathId }),
+      ...(s.prePathX !== undefined && { prePathX: s.prePathX }),
+      ...(s.prePathY !== undefined && { prePathY: s.prePathY }),
     };
     return layer;
   }
