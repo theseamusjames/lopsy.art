@@ -96,7 +96,11 @@ test('Rotate 90° turns layer content in place and CW → switch → CCW round-t
   // Turned about its own centre, not the canvas centre (the bug put it at x 550, y −50).
   expect(Math.abs(cw.x + cw.width / 2 - centreX)).toBeLessThanOrEqual(1);
   expect(Math.abs(cw.y + cw.height / 2 - centreY)).toBeLessThanOrEqual(1);
-  expect(cw.y).toBeGreaterThanOrEqual(0);
+  // The content spans the full canvas height after the turn, so its top edge
+  // sits at y ≈ 0. Firefox's marquee comes out 1px taller and shifted up, which
+  // puts the pivoted top edge at y = −1; allow the same ±1px the centre checks
+  // use. The #969 bug put it at y ≈ −50, which this still catches decisively.
+  expect(cw.y).toBeGreaterThanOrEqual(-1);
 
   // Switch away and back so the texture crops and re-expands.
   await setActiveLayer(page, await backgroundId(page));
