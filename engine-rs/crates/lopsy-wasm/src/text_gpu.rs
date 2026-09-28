@@ -111,6 +111,24 @@ fn line_x_comp(letter_spacing: f32, n_glyphs: usize, align: &str) -> f32 {
     }
 }
 
+/// Letter-spacing offset for each glyph of a layout run, in run order.
+/// Spacing accumulates in *visual* (left-to-right) order: cosmic-text hands
+/// an RTL run's glyphs in logical order, so glyph 0 is the rightmost on
+/// screen and indexing by position in the run would push each later (further
+/// left) glyph rightwards into its neighbours (#972).
+fn letter_spacing_offsets(glyph_xs: &[f32], letter_spacing: f32) -> Vec<f32> {
+    let mut offsets = vec![0.0; glyph_xs.len()];
+    if letter_spacing == 0.0 {
+        return offsets;
+    }
+    let mut order: Vec<usize> = (0..glyph_xs.len()).collect();
+    order.sort_by(|&a, &b| glyph_xs[a].total_cmp(&glyph_xs[b]).then(a.cmp(&b)));
+    for (rank, &i) in order.iter().enumerate() {
+        offsets[i] = letter_spacing * rank as f32;
+    }
+    offsets
+}
+
 pub struct TextRendererState {
     pub font_system: FontSystem,
     pub swash_cache: SwashCache,
@@ -492,14 +510,16 @@ impl TextRendererState {
             let comp = line_x_comp(ls, n, align);
 
             let start_x = if n > 0 {
-                run.glyphs[0].x + comp
+                run.glyphs.iter().map(|g| g.x).fold(f32::INFINITY, f32::min) + comp
             } else {
                 empty_start_x(line_i)
             };
             lines.push(AdjLine { line_i, line_top, line_height, start_x });
 
+            let xs: Vec<f32> = run.glyphs.iter().map(|g| g.x).collect();
+            let spacing = letter_spacing_offsets(&xs, ls);
             for (i, glyph) in run.glyphs.iter().enumerate() {
-                let x = glyph.x + comp + ls * i as f32;
+                let x = glyph.x + comp + spacing[i];
                 glyphs.push(AdjGlyph {
                     global_start: base + glyph.start,
                     global_end: base + glyph.end,
@@ -977,13 +997,15 @@ impl TextRendererState {
                 let mut run_x_start = i32::MAX;
                 let mut run_x_end = i32::MIN;
                 // Letter/paragraph spacing applied post-layout (cosmic-text lacks both):
-                // shift each glyph right by comp + letter_spacing*index and every run
-                // down by paragraph_spacing per hard line break.
+                // shift each glyph right by comp + letter_spacing × its visual rank
+                // and every run down by paragraph_spacing per hard line break.
                 let comp = line_x_comp(ls, run.glyphs.len(), &align);
                 let para_y = para * run.line_i as f32;
                 let baseline_y = run.line_y + para_y;
+                let xs: Vec<f32> = run.glyphs.iter().map(|g| g.x).collect();
+                let spacing = letter_spacing_offsets(&xs, ls);
                 for (i, glyph) in run.glyphs.iter().enumerate() {
-                    let extra_x = comp + ls * i as f32;
+                    let extra_x = comp + spacing[i];
                     let phys = glyph.physical((extra_x, baseline_y), 1.0);
                     let gx_start = phys.x;
                     let gx_end = phys.x + glyph.w.ceil() as i32;
@@ -1459,6 +1481,46 @@ mod tests {
         let wide = renderer.measure_text_bounds("wide")[2];
         // 5 glyphs, 4 gaps × 8px ≈ 32px wider.
         assert!(wide > plain + 20.0, "letter spacing should widen bounds: plain={plain} wide={wide}");
+    }
+
+    #[test]
+    fn letter_spacing_offsets_follow_visual_order() {
+        // LTR: logical order == visual order.
+        assert_eq!(letter_spacing_offsets(&[0.0, 10.0, 20.0], 5.0), vec![0.0, 5.0, 10.0]);
+        // RTL: glyph 0 is rightmost, so it gets the largest offset.
+        assert_eq!(letter_spacing_offsets(&[20.0, 10.0, 0.0], 5.0), vec![10.0, 5.0, 0.0]);
+        assert_eq!(letter_spacing_offsets(&[20.0, 10.0], 0.0), vec![0.0, 0.0]);
+    }
+
+    fn sorted_glyph_xs(renderer: &mut TextRendererState, id: &str) -> Vec<f64> {
+        let mut xs: Vec<f64> = renderer.get_glyph_positions(id).chunks(5).map(|c| c[0]).collect();
+        xs.sort_by(f64::total_cmp);
+        xs
+    }
+
+    #[test]
+    fn rtl_letter_spacing_spreads_glyphs_without_overlap() {
+        // #972: Hebrew with letter spacing piled the glyphs on top of each
+        // other and shifted the line right by ls × (n − 1).
+        let mut renderer = make_renderer();
+        let text = "\u{05e9}\u{05dc}\u{05d5}\u{05dd}";
+        renderer.set_text_content("plain", &spacing_props(text, 0.0, 0.0, "left")).expect("ok");
+        renderer.set_text_content("wide", &spacing_props(text, 10.0, 0.0, "left")).expect("ok");
+        let plain = renderer.measure_text_bounds("plain");
+        let wide = renderer.measure_text_bounds("wide");
+        // Same left edge, 3 gaps × 10 px wider.
+        assert!((wide[0] - plain[0]).abs() < 1.0, "left edge moved: plain={plain:?} wide={wide:?}");
+        assert!((wide[2] - plain[2] - 30.0).abs() < 2.0, "width: plain={plain:?} wide={wide:?}");
+
+        let plain_xs = sorted_glyph_xs(&mut renderer, "plain");
+        let wide_xs = sorted_glyph_xs(&mut renderer, "wide");
+        assert_eq!(plain_xs.len(), 4);
+        assert_eq!(wide_xs.len(), 4);
+        for i in 1..wide_xs.len() {
+            let plain_gap = plain_xs[i] - plain_xs[i - 1];
+            let wide_gap = wide_xs[i] - wide_xs[i - 1];
+            assert!((wide_gap - plain_gap - 10.0).abs() < 0.5, "gap {i}: plain={plain_xs:?} wide={wide_xs:?}");
+        }
     }
 
     #[test]
