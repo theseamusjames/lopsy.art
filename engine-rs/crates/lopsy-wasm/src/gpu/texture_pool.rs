@@ -227,6 +227,9 @@ impl TexturePool {
     /// by `evict_excess_free_entries`.
     pub fn release(&mut self, handle: TextureHandle) {
         if let Some(entry) = self.entries.get_mut(handle.0).and_then(|e| e.as_mut()) {
+            if !entry.in_use {
+                report_misuse("released twice", handle);
+            }
             entry.in_use = false;
         }
     }
@@ -264,7 +267,11 @@ impl TexturePool {
     }
 
     pub fn get(&self, handle: TextureHandle) -> Option<&WebGlTexture> {
-        self.entries.get(handle.0).and_then(|e| e.as_ref()).map(|e| &e.texture)
+        let entry = self.entries.get(handle.0).and_then(|e| e.as_ref())?;
+        if !entry.in_use {
+            report_misuse("read after release", handle);
+        }
+        Some(&entry.texture)
     }
 
     pub fn get_size(&self, handle: TextureHandle) -> Option<(u32, u32)> {
@@ -575,3 +582,16 @@ fn tex_sub_image_2d_f32(
         0,
     ).map_err(|e| format!("tex_sub_image_2d float failed: {:?}", e))
 }
+
+/// A released handle's slot goes straight back into the pool, so the next
+/// same-sized `acquire` hands the same texture to a new owner. Anything still
+/// holding the old handle then reads or clobbers the new owner's pixels — a
+/// silent, history-dependent corruption. Dev builds log it as a console error,
+/// which fails any e2e test that hits it.
+#[cfg(debug_assertions)]
+fn report_misuse(what: &str, handle: TextureHandle) {
+    web_sys::console::error_1(&format!("[texture-pool] handle {} {what}", handle.0).into());
+}
+
+#[cfg(not(debug_assertions))]
+fn report_misuse(_what: &str, _handle: TextureHandle) {}
