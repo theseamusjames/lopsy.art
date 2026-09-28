@@ -324,3 +324,15 @@ result (#929). A caller that treats the blurred RGB as additive energy
 (Bloom) must multiply it by the blurred alpha, or every pixel within the
 kernel's support gets the full source colour, which shows up as a hard-edged
 block (#959).
+
+## Long UI-driven e2e builds on SwiftShader: bake effects, Shift+click brush lines
+
+Every enabled layer effect (glow, stroke, shadow) is re-rendered on each
+recomposite, and under the headless SwiftShader backend each one adds roughly a
+second per frame. The thumbnail `readPixels` then waits for it, so a sheet with
+a dozen live effects makes every click take 5–10 s. Rasterize Layer Style as
+soon as an element is finished, as `e2e/composition-cosmic-xray.flow.ts` does.
+On a document that heavy, a brush *drag* also gets cut short: the
+hold-to-smooth timer (1500 ms, `tools/smooth-line`) fires between two slow
+pointer-moves and ends the stroke (#983). Paint deliberate linework as click +
+Shift+click chains (straight-line strokes) instead of multi-point drags.

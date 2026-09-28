@@ -1,59 +1,25 @@
-# Composition: Koi Fish Mid-Century Modern Poster
+# Last Run: Cosmic X-Ray tattoo flash sheet
 
-**Date**: 2026-05-06
-**Branch**: `theseamusjames/gpu-masks`
-**Test file**: `e2e/composition-koi-fish.spec.ts`
-**Result**: PASSED (2.5 minutes, chromium/SwiftShader)
+- **Project type**: tattoo flash sheet (1200 × 1540)
+- **Topic**: "Cosmic X-Ray": an x-ray skull with a comet, an x-ray hand holding a crescent moon, an x-ray heart inside a ribcage with a shooting star, and a ringed planet, on a nebula backdrop
+- **Style**: holographic (cyan → magenta → violet → mint → yellow foil ramps on a dark ink ground)
+- **Spec**: `e2e/composition-cosmic-xray.spec.ts` (steps in `composition-cosmic-xray.flow.ts` / `.steps.ts`)
+- **Export**: `e2e/screenshots/cosmic-xray-tattoo-flash.png`
+- **Tutorial**: `tutorials/cosmic-xray-tattoo-flash/`
 
-## What was tested
+## Features exercised
 
-### Layer Masks
-- Added masks to three layers (main koi, second koi, title)
-- Entered mask edit mode via UI (clicking mask thumbnail)
-- Painted on mask with brush tool (GPU mask painting path)
-- Used eraser on mask (GPU mask eraser path)
-- Applied gradient-style mask data (top-to-bottom, radial, left-to-right)
-- Verified mask state in store (enabled, non-null)
-- Exited mask edit mode
+- File → New dialog, Edit → Fill, Select → Shrink / Inverse, Layer → Group Layers / Merge Down, View → Show Grid, Quick Export PNG
+- 40+ layers, 4 design groups, group + multi-layer Move drag with Snap to Grid, rename, opacity, Ctrl+click thumbnail for alpha selections
+- Tools: rectangular and elliptical marquee, lasso, linear and radial gradients (5-stop gradient editor), brush (Shift+click straight-line strokes), eraser clipped by a selection, dodge/burn (burn), text (Rye; recoloured with Select All and a new foreground color), Move-tool rotate and uniform-scale handles
+- Effects: stroke, outer glow, inner glow, drop shadow; Rasterize Layer Style to bake them
+- Filters: Clouds, Brightness/Contrast, Add Noise (mono / Gaussian), Threshold, Motion Blur, Bloom, Chromatic Aberration
+- Blend modes: multiply, screen, overlay
+- Clipboard: copy / paste in place and cut / paste to duplicate badges and sparkles
+- Guides placed by clicking the rulers, 8 px grid
+- Undo ×3 / redo ×3 checked against layer pixel fingerprints
 
-### Marquee Selections
-- Rectangular marquee + fill: used extensively for background, geometric bars, and block letter title ("KOI")
-- Elliptical marquee + fill: used for water ripple circles (5 concentric ellipses)
-- Both marquee types verified via tool switching and mouse drag interactions
+## Issues
 
-### Undo/Redo
-- Undo after mask operations verified (composited output changes)
-- Redo after undo verified (produces valid frame)
-- General undo/redo on detail layer verified
-
-### Layer Effects
-- Drop shadow on main koi (offset, blur, opacity, color)
-- Outer glow on main koi (size, spread, opacity, color)
-- Inner glow on second koi (size, spread, opacity, color)
-- All effects verified as enabled in store state
-
-### Blend Modes & Opacity
-- Screen blend mode on water ripples layer
-- Layer opacity set to 60% on ripples layer
-
-### Brush Tool
-- Multiple brush sizes (25-100px), hardness levels, opacity levels
-- Color changes via store (orange, red, white, black)
-- Multiple stroke segments forming koi body shapes
-
-## Known Limitation
-
-GPU mask readback (`readMaskTexture`) does not produce correct results in the
-headless SwiftShader environment. The existing `tools.spec.ts` mask painting
-test also fails for the same reason. Mask data assertions in this composition
-test use store-based mask writes rather than GPU-painted mask readback.
-
-## Screenshots
-
-19 screenshots saved to `e2e/screenshots/koi-fish-*.png`:
-- `01-background` through `18-details`: incremental build phases
-- `koi-fish-final.png`: completed composition
-
-## Document Specs
-- 800 x 1000 px (portrait poster format)
-- 8 layers: background, main koi (with mask), geometry bars, water ripples, second koi (with mask), title "KOI" (with mask), decorative details, plus the root group
+- #983 (new): a mid-stroke pause fires hold-to-smooth, and the rest of the drag is dropped
+- #801 (comment): ⌘-click another layer's thumbnail, then paint. The first dab replaces the selection with the active layer's alpha
