@@ -2,7 +2,7 @@
 //! dumps the decoder's per-stage debug log and level statistics, and writes
 //! export JPGs next to the provided reference images.
 //!
-//! Run: cargo test -p lopsy-core --test dng_compare -- --nocapture
+//! Run: cargo test -p lopsy-core --test dng_compare --features sample-diagnostics -- --nocapture
 
 use std::path::PathBuf;
 

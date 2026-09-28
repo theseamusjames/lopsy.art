@@ -5,6 +5,15 @@ members = [
     "crates/lopsy-wasm",
 ]
 
+# Full debug info made each worktree's target/debug close to 1 GB. Line
+# tables keep file:line in panics and backtraces for our crates; deps get
+# none since we never step through them.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 opt-level = 3
 lto = "thin"

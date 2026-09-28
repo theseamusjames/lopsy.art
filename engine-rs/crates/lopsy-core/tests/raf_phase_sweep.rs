@@ -12,7 +12,7 @@
 //! green/nongreen ratio near 1.8.
 //!
 //! Run with:
-//!   cargo test -p lopsy-core --test raf_phase_sweep -- --nocapture
+//!   cargo test -p lopsy-core --test raf_phase_sweep --features sample-diagnostics -- --nocapture
 
 use std::path::PathBuf;
 

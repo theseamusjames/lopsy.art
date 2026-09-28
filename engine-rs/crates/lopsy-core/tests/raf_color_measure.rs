@@ -1,7 +1,7 @@
 //! Quantitative color measurement: export (read_raf) vs embedded JPEG preview.
 //!
 //! Run with:
-//!   cargo test -p lopsy-core --test raf_color_measure -- --nocapture
+//!   cargo test -p lopsy-core --test raf_color_measure --features sample-diagnostics -- --nocapture
 
 use std::fs;
 use std::path::PathBuf;

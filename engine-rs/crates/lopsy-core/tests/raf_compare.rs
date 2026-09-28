@@ -7,7 +7,7 @@
 //! visible at 100% without the hiding effect of downscaling.
 //!
 //! Run with:
-//!   cargo test -p lopsy-core --test raf_compare -- --nocapture
+//!   cargo test -p lopsy-core --test raf_compare --features sample-diagnostics -- --nocapture
 
 use std::fs;
 use std::path::PathBuf;

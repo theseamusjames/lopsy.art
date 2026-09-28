@@ -10,6 +10,32 @@ png = "0.17"
 flate2 = "1"
 lz4_flex = { version = "0.11", default-features = false, features = ["safe-encode", "safe-decode", "frame"] }
 
+[features]
+# Diagnostic harnesses that decode the local-only RAF/DNG files in /samples.
+# They are opt-in so a plain `cargo test` doesn't build ~100 MB of test
+# binaries that can't run without those files.
+sample-diagnostics = []
+
 [dev-dependencies]
 jpeg-encoder = "0.6"
 jpeg-decoder = "0.3"
+
+[[test]]
+name = "dng_compare"
+required-features = ["sample-diagnostics"]
+
+[[test]]
+name = "raf_color_measure"
+required-features = ["sample-diagnostics"]
+
+[[test]]
+name = "raf_compare"
+required-features = ["sample-diagnostics"]
+
+[[test]]
+name = "raf_demosaic_experiment"
+required-features = ["sample-diagnostics"]
+
+[[test]]
+name = "raf_phase_sweep"
+required-features = ["sample-diagnostics"]

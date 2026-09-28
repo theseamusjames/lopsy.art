@@ -10,7 +10,7 @@
 //! phase error in the channel levels coming out of WB.
 //!
 //! Run with:
-//!   cargo test -p lopsy-core --test raf_demosaic_experiment -- --nocapture
+//!   cargo test -p lopsy-core --test raf_demosaic_experiment --features sample-diagnostics -- --nocapture
 
 use std::fs;
 use std::path::PathBuf;
