@@ -2,6 +2,7 @@ import { useEditorStore } from '../../editor-store';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import {
   flipLayer,
+  getLayerContentBounds,
   rotateLayer90,
   setDocumentSize,
 } from '../../../engine-wasm/wasm-bridge';
@@ -11,6 +12,8 @@ import { computeAutoTone, computeAutoContrast, computeAutoColor } from '../../..
 import type { Layer, GroupLayer, DocumentColorMode } from '../../../types';
 import type { AdjustmentNode } from '../../../types/adjustment-nodes';
 import type { MenuDef, MenuItem } from './types';
+import type { Engine } from '../../../engine-wasm/wasm-bridge';
+import { rotatedTextureOrigin, type Rect } from '../../../layers/rotate-90';
 
 export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   const state = useEditorStore.getState();
@@ -31,6 +34,16 @@ export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   state.notifyRender();
 }
 
+/** Opaque-content rect of a layer, texture-local; null when the layer is empty. */
+function readContentRect(engine: Engine, layerId: string): Rect | null {
+  const bounds = getLayerContentBounds(engine, layerId);
+  if (bounds.length < 4) return null;
+  const width = bounds[2]!;
+  const height = bounds[3]!;
+  if (width <= 0 || height <= 0) return null;
+  return { x: bounds[0]!, y: bounds[1]!, width, height };
+}
+
 export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
@@ -43,13 +56,14 @@ export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
   if (!layer || layer.type !== 'raster') return;
 
   state.pushHistory(direction === 'cw' ? 'Rotate Layer 90° CW' : 'Rotate Layer 90° CCW');
+  const texture = { x: layer.x, y: layer.y, width: layer.width, height: layer.height };
+  const content = readContentRect(engine, activeId) ?? { x: 0, y: 0, width: layer.width, height: layer.height };
   rotateLayer90(engine, activeId, direction === 'cw');
 
-  const cx = layer.x + layer.width / 2;
-  const cy = layer.y + layer.height / 2;
+  const origin = rotatedTextureOrigin(texture, content, direction);
   const newLayers = state.document.layers.map((l) =>
     l.id === activeId && l.type === 'raster'
-      ? { ...l, x: cx - l.height / 2, y: cy - l.width / 2, width: l.height, height: l.width } as Layer
+      ? { ...l, x: origin.x, y: origin.y, width: l.height, height: l.width } as Layer
       : l,
   );
 
