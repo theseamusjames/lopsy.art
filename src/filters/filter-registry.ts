@@ -27,6 +27,7 @@ import { emboss } from './emboss';
 import { voronoiFilter } from './voronoi';
 import { surfaceBlur } from './surface-blur';
 import { fibers } from './fibers';
+import { sunburst } from './sunburst';
 
 export type { FilterDefinition };
 
@@ -59,6 +60,7 @@ const allFilters: FilterDefinition[] = [
   voronoiFilter,
   surfaceBlur,
   fibers,
+  sunburst,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(
