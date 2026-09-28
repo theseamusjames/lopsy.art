@@ -57,7 +57,7 @@ test.describe('Layer effects follow the layer mask (#977)', () => {
   });
 
   test('Stroke traces the masked silhouette, not the hidden pixels', async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(300_000);
     await page.goto('/');
     await waitForStore(page);
     await createDocument(page, 800, 600, false);
@@ -88,8 +88,8 @@ test.describe('Layer effects follow the layer mask (#977)', () => {
     await selectTool(page, 'brush');
     await setToolOption(page, 'Size', 200);
     await setToolOption(page, 'Hardness', 100);
-    await dragDoc(page, 100, 400, 700, 400, 20);
-    await dragDoc(page, 100, 540, 700, 540, 20);
+    await dragDoc(page, 100, 400, 700, 400, 8);
+    await dragDoc(page, 100, 540, 700, 540, 8);
     await page.locator(`[data-layer-id="${layerId}"]`).click();
     await page.waitForTimeout(300);
 

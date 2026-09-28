@@ -5,6 +5,7 @@ import { useToolSettingsStore } from '../tool-settings-store';
 import { rasterizePath } from '../../tools/path/path';
 import type { PathAnchor } from '../../tools/path/path';
 import type { Color } from '../../types';
+import { guardPixelWrite } from '../../layers/paint-target';
 
 /**
  * Stroke a path onto a layer. Anchors are in document space —
@@ -85,8 +86,11 @@ export function commitCurrentPath(): void {
  */
 export function strokeCurrentPath(): void {
   const draft = useUIStore.getState().pathDraft;
-  const activeLayerId = useEditorStore.getState().document.activeLayerId;
-  const canStroke = !!draft && draft.anchors.length >= 2 && !!activeLayerId;
+  const doc = useEditorStore.getState().document;
+  const activeLayerId = doc.activeLayerId;
+  const activeLayer = doc.layers.find((l) => l.id === activeLayerId);
+  const canStroke = !!draft && draft.anchors.length >= 2 && !!activeLayerId
+    && guardPixelWrite(activeLayer);
   const docAnchors = canStroke ? draftAnchorsInDocSpace(draft.anchors) : [];
   const isClosed = draft?.closed ?? false;
   commitCurrentPath();
