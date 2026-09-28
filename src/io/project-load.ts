@@ -122,6 +122,8 @@ export function deserializeLayer(s: SerializedLayer): Layer {
       ...(s.pathId !== undefined && { pathId: s.pathId }),
       ...(s.prePathX !== undefined && { prePathX: s.prePathX }),
       ...(s.prePathY !== undefined && { prePathY: s.prePathY }),
+      ...(s.pathAnchorX !== undefined && { pathAnchorX: s.pathAnchorX }),
+      ...(s.pathAnchorY !== undefined && { pathAnchorY: s.pathAnchorY }),
     };
     return layer;
   }

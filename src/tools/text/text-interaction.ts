@@ -193,14 +193,15 @@ export function commitTextEditing(): void {
   let finalY = editing.bounds.y;
 
   // Check if this text layer is bound to a path — if so, skip the normal
-  // WASM text render (syncPathTextLayers handles the texture) and keep
-  // the layer at (0, 0) since path text uses document-space coordinates.
+  // WASM text render (syncPathTextLayers handles the texture) and keep the
+  // position the path render gave it: resetting x/y would read as an offset
+  // from the path anchor on the next reflow (#981).
   const currentLayer = editorState.document.layers.find((l) => l.id === editing.layerId);
   const isPathText = currentLayer?.type === 'text' && !!(currentLayer as import('../../types').TextLayer).pathId;
 
   if (isPathText) {
-    finalX = 0;
-    finalY = 0;
+    finalX = currentLayer.x;
+    finalY = currentLayer.y;
   } else {
     // Explicitly render text to the GPU texture before pushHistory snapshots it.
     // This ensures the snapshot contains the final text pixels regardless of

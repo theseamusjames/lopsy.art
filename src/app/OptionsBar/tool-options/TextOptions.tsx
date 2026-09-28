@@ -67,6 +67,8 @@ export function TextOptions() {
           pathId: val,
           prePathX: editingLayer.prePathX ?? editingLayer.x,
           prePathY: editingLayer.prePathY ?? editingLayer.y,
+          pathAnchorX: undefined,
+          pathAnchorY: undefined,
         });
       } else {
         const restoreX = editingLayer.prePathX ?? editingLayer.x;
@@ -76,6 +78,8 @@ export function TextOptions() {
           pathId: undefined,
           prePathX: undefined,
           prePathY: undefined,
+          pathAnchorX: undefined,
+          pathAnchorY: undefined,
           x: restoreX,
           y: restoreY,
         });

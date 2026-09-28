@@ -218,10 +218,11 @@ function renderFrameGpu(
       doc.width,
       doc.height,
       textEditing,
-      (layerId, x, y) => {
+      (layerId, x, y, anchorX, anchorY) => {
         const layer = textLayersWithPath.find((l) => l.id === layerId);
-        if (layer && (layer.x !== x || layer.y !== y)) {
-          editorState.updateTextLayerProperties(layerId, { x, y });
+        if (!layer) return;
+        if (layer.x !== x || layer.y !== y || layer.pathAnchorX !== anchorX || layer.pathAnchorY !== anchorY) {
+          editorState.updateTextLayerProperties(layerId, { x, y, pathAnchorX: anchorX, pathAnchorY: anchorY });
         }
       },
       () => useEditorStore.getState().notifyRender(),
