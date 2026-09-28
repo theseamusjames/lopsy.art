@@ -856,6 +856,8 @@ The third control in this family is [Spray's "Softness"](#spray), which is the B
 
 Five non-destructive effects — drop shadow, stroke, outer glow, inner glow, and color overlay — are rendered on the GPU during compositing and never touch the layer's pixels until the style is rasterized or the layer is merged. Every layer carries all five (`effects` is a required field on the layer model, not an optional one); they are simply disabled by default.
 
+**Effects follow the layer mask (#977).** Drop shadow, stroke, outer glow and inner glow are built from the layer's alpha *multiplied by its enabled layer mask* — a masked copy of the layer texture is rendered each frame (`render_layer_masked_for_effects` in `compositor.rs`, also used by the export composite) and the effect passes sample that, so they trace the visible silhouette and the edge the mask creates, and draw nothing around hidden pixels. While the mask is being edited the mask is not applied, so effects follow the raw layer then, matching the unmasked preview. **Rasterize Layer Style** (`composite_single_layer`) still builds the effects from the unmasked layer.
+
 ### The Effects Drawer
 
 Effects are edited in the floating **effects drawer**, which is shared with the Adjustments panel rather than being one of the dockable panels — it is dragged by its header and resized from the native grip in its bottom-right corner. The drawer shows the **layer-effects** list for every layer type *except* groups, which get the Adjustments list instead (see Image Adjustments).
