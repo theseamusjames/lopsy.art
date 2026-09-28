@@ -98,6 +98,17 @@ export function clearSnapshotCache(): void {
 }
 
 /**
+ * Forget the pre-cached GPU snapshot handles after a WebGL context loss.
+ * They belong to the lost context, so they are dropped, not released: the
+ * new engine never allocated them (#973).
+ */
+export function forgetLostGpuSnapshotCache(): void {
+  preSnapshotCache.clear();
+  pendingCacheIds.clear();
+  lastRestoredSnapshot = null;
+}
+
+/**
  * Snapshot GPU textures via GPU blit (~1ms per layer).
  * No readback, no compression — just duplicate the texture on the GPU.
  */

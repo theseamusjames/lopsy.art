@@ -35,6 +35,7 @@ import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
 import { expandLayerToDocSize, cropLayerToContent, hasFloat } from '../engine-wasm/wasm-bridge';
 import { invalidateCachedSnapshot } from './store/history-slice';
+import { handleGpuContextLost, handleGpuContextRestored } from './gpu-context-loss';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { scheduleDeferredCrop, cancelDeferredCropIfPending } from './deferred-crop-on-switch';
 
@@ -282,11 +283,13 @@ export function useCanvasRendering(
       e.preventDefault();
       console.error('[Lopsy] WebGL context lost');
       engineReadyRef.current = false;
+      handleGpuContextLost();
     };
     const handleContextRestored = () => {
       console.warn('[Lopsy] WebGL context restored — reinitializing');
       initEngine(canvas)
         .then((engine) => {
+          handleGpuContextRestored();
           engineReadyRef.current = true;
           dirtyRef.current = true;
           markAllLayersDirty(engine);
