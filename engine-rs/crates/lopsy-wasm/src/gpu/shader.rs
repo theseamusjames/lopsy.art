@@ -81,6 +81,7 @@ pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/select
 pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.glsl");
 pub const LIQUIFY_DAB_FRAG: &str = include_str!("shaders/filters/liquify_dab.glsl");
 pub const FIBERS_FRAG: &str = include_str!("shaders/filters/fibers.glsl");
+pub const SUNBURST_FRAG: &str = include_str!("shaders/filters/sunburst.glsl");
 pub const COLOR_LUT_FRAG: &str = include_str!("shaders/filters/color_lut.glsl");
 
 // Brush (assembled from header + variant + footer at compile_all time)
@@ -306,6 +307,7 @@ pub struct ShaderPrograms {
     pub selection_mask_blend: ShaderProgram,
     pub surface_blur: ShaderProgram,
     pub fibers: ShaderProgram,
+    pub sunburst: ShaderProgram,
     pub color_lut: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab_circle: ShaderProgram,
@@ -435,6 +437,7 @@ impl ShaderPrograms {
             selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
             surface_blur: compile_program(gl, v, SURFACE_BLUR_FRAG)?,
             fibers: compile_program(gl, v, FIBERS_FRAG)?,
+            sunburst: compile_program(gl, v, SUNBURST_FRAG)?,
             color_lut: compile_program(gl, v, COLOR_LUT_FRAG)?,
             // Brush — assembled from header + variant body + footer
             brush_dab_circle: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_CIRCLE_BODY}{BRUSH_DAB_FOOTER}"))?,

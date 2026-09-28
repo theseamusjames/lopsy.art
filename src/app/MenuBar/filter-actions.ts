@@ -46,6 +46,7 @@ export type FilterDialogId =
   | 'emboss'
   | 'voronoi'
   | 'fibers'
+  | 'sunburst'
   | 'color-lut';
 
 function getActiveLayerId(): string | null {
