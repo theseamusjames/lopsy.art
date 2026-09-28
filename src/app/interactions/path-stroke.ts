@@ -45,6 +45,24 @@ export function rasterizePathToLayer(
   editorState.updateLayerPixelData(layerId, buf.toImageData());
 }
 
+function draftAnchorsInDocSpace(anchors: readonly PathAnchor[]): PathAnchor[] {
+  const editorState = useEditorStore.getState();
+  const activeLayer = editorState.document.layers.find(
+    (l) => l.id === editorState.document.activeLayerId,
+  );
+  const offsetX = activeLayer?.x ?? 0;
+  const offsetY = activeLayer?.y ?? 0;
+  return anchors.map((a) => ({
+    point: { x: a.point.x + offsetX, y: a.point.y + offsetY },
+    handleIn: a.handleIn
+      ? { x: a.handleIn.x + offsetX, y: a.handleIn.y + offsetY }
+      : null,
+    handleOut: a.handleOut
+      ? { x: a.handleOut.x + offsetX, y: a.handleOut.y + offsetY }
+      : null,
+  }));
+}
+
 /** Commit the current ephemeral path to the paths store. */
 export function commitCurrentPath(): void {
   const uiState = useUIStore.getState();
@@ -54,30 +72,25 @@ export function commitCurrentPath(): void {
     uiState.clearPath();
     return;
   }
-  const anchors = draft.anchors;
-
-  // Convert from layer-local to document space
-  const activeLayer = editorState.document.layers.find(
-    (l) => l.id === editorState.document.activeLayerId,
-  );
-  const offsetX = activeLayer?.x ?? 0;
-  const offsetY = activeLayer?.y ?? 0;
-  const docAnchors = anchors.map((a) => ({
-    point: { x: a.point.x + offsetX, y: a.point.y + offsetY },
-    handleIn: a.handleIn
-      ? { x: a.handleIn.x + offsetX, y: a.handleIn.y + offsetY }
-      : null,
-    handleOut: a.handleOut
-      ? { x: a.handleOut.x + offsetX, y: a.handleOut.y + offsetY }
-      : null,
-  }));
-
+  const docAnchors = draftAnchorsInDocSpace(draft.anchors);
   editorState.pushHistoryMetadata('Add Path');
   editorState.addPath(docAnchors, draft.closed);
   uiState.clearPath();
 }
 
-/** Legacy alias kept for re-export. */
+/**
+ * Enter with the Pen tool: keep the in-progress path in the Paths panel and
+ * stroke it onto the active layer with the options-bar stroke width and the
+ * foreground colour (#976).
+ */
 export function strokeCurrentPath(): void {
+  const draft = useUIStore.getState().pathDraft;
+  const activeLayerId = useEditorStore.getState().document.activeLayerId;
+  const canStroke = !!draft && draft.anchors.length >= 2 && !!activeLayerId;
+  const docAnchors = canStroke ? draftAnchorsInDocSpace(draft.anchors) : [];
+  const isClosed = draft?.closed ?? false;
   commitCurrentPath();
+  if (!canStroke) return;
+  const ts = useToolSettingsStore.getState();
+  rasterizePathToLayer(docAnchors, isClosed, activeLayerId, ts.settings.path.strokeWidth, ts.foregroundColor);
 }
