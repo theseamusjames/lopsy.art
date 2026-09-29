@@ -336,3 +336,16 @@ On a document that heavy, a brush *drag* also gets cut short: the
 hold-to-smooth timer (1500 ms, `tools/smooth-line`) fires between two slow
 pointer-moves and ends the stroke (#983). Paint deliberate linework as click +
 Shift+click chains (straight-line strokes) instead of multi-point drags.
+
+## Sandboxed e2e runs: fonts can silently fall back
+
+Some cloud sandboxes block `cdn.jsdelivr.net` (the engine's Google Font TTFs)
+and give headless Chromium no route to `fonts.googleapis.com` (the canvas
+path-text renderer's `@font-face`), even though `curl` through the proxy
+works. Nothing errors: straight text renders in Inter and path-bound text in a
+generic serif. `e2e/composition-uncharted-fjords.spec.ts` shows a
+`page.route` shim (`FJORDS_FONT_DIR`) that serves TTFs from a local mirror and
+fetches Google Fonts CSS/woff2 with curl. Also: point text has `width: null`,
+so size things from `__readLayerPixels` content bounds, and deselect the
+current path (Paths panel) before drawing a new Pen path on top of it, or the
+presses edit the old path.
