@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createViewportSlice } from './store/viewport-slice';
 import { createSelectionSlice } from './store/selection-slice';
 import { createPixelDataSlice } from './store/pixel-data-slice';
-import { createHistorySlice } from './store/history-slice';
+import { createHistorySlice, installSnapshotReclaim } from './store/history-slice';
 import { createClipboardSlice } from './store/clipboard-slice';
 import { createDocumentSlice } from './store/document-slice';
 import { createPathsSlice } from './store/paths-slice';
@@ -19,3 +19,5 @@ export const useEditorStore = create<EditorState>((...a) => ({
   ...createDocumentSlice(...a),
   ...createPathsSlice(...a),
 }));
+
+installSnapshotReclaim(useEditorStore);

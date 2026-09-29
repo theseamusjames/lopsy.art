@@ -371,3 +371,15 @@ presses edit the old path.
 - **The Healing Brush keeps a thin foreign line's tint**, because it matches
   the destination's mean colour. Use the Clone Stamp for a grass blade or a
   wire.
+
+## Undo snapshot handle ownership (#1005)
+
+- Handles in `undoStack` / `redoStack` entries (layer `gpuSnapshots` and
+  `maskSnapshots`) are owned by the sweep in `app/store/snapshot-ledger.ts`,
+  run from a store subscription on every stack change. Don't release them by
+  hand. A handle outside history (pre-snapshot cache, Move pre-float, text
+  pre-edit capture) is released by its holder until a push hands it over.
+- Engine snapshot ids are recycled from a free list, so "largest handle"
+  is only a high-water mark. For leak checks in e2e compare
+  `window.__gpuSnapshotCount()` with the distinct handles referenced by both
+  stacks (`e2e/undo-snapshot-release-1005.spec.ts`).
