@@ -11,6 +11,7 @@ import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
 import { cancelPrefloat } from '../interactions/prefloat';
+import { releaseSnapshotsForDocumentReset } from './history-slice';
 import { invalidateBitmapCache, clearBitmapCache } from '../../engine/bitmap-cache';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import type { ActionResult, SliceCreator, SparseLayerEntry } from './types';
@@ -251,6 +252,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   createDocument: (width, height, transparentBg, colorMode, dpi) => {
     cancelLiquify();
     clearBitmapCache();
+    releaseSnapshotsForDocumentReset();
     clearEngine();
     const result = computeCreateDocument(width, height, transparentBg, colorMode, dpi);
     applyActionResult(set, result);
@@ -279,6 +281,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   openImageAsDocument: (imageData, name) => {
     cancelLiquify();
     clearBitmapCache();
+    releaseSnapshotsForDocumentReset();
     clearEngine();
     const result = computeOpenImage(imageData, name);
     applyActionResult(set, result);

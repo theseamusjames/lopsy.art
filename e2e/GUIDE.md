@@ -259,12 +259,13 @@ double-check that a global exists before using it — don't assume.
 | `__brushPresetStore` | Zustand store for brush presets and the brush modal |
 | `__readCompositedPixels()` | Async. Triggers a fresh render and returns the full WebGL canvas as `{width, height, pixels[]}`. The buffer is bottom-up — flip y when projecting doc coords. |
 | `__readLayerPixels(layerId?)` | Async. Syncs layers and returns a single layer's GPU texture as `{width, height, pixels[]}`. Returns `{width: 0, height: 0, pixels: []}` if the layer isn't tracked by the engine. |
+| `__gpuSnapshotCount()` | Number of undo snapshot textures the engine currently holds. Compare against the distinct handles in `undoStack`/`redoStack` to catch snapshot leaks (#1005). |
 
 **What is NOT exposed:** there is no `__engineState`, `__wasmBridge`,
 `__wasmEngine`, or `__imageAdjustmentsModule`. Several historical tests
 referenced these and silently passed because the globals returned
-`undefined`. Don't add them — use the four stores plus the two read
-functions.
+`undefined`. Don't add them — use the four stores plus the read
+functions above.
 
 ### Shared helpers (`e2e/helpers.ts`)
 
