@@ -858,9 +858,20 @@ export function cloudPts(x0: number, base: number, radii: number[]): Pt[] {
 export const CLOUD = { x0: 96, base: 330, radii: [22, 34, 26] };
 
 export async function s27(page: Page): Promise<void> {
+  // Build the cloud from overlapping circles on one layer, so the fills merge
+  // into a single silhouette, then square off the base with a marquee fill.
   await selectLayer(page, 'ZEN ENCLAVES');
   await newLayer(page, 'Cloud');
-  await fillPoly(page, cloudPts(CLOUD.x0, CLOUD.base, CLOUD.radii), '#FFF9EC');
+  await setFg(page, '#FFF9EC');
+  let x = CLOUD.x0;
+  for (const r of CLOUD.radii) {
+    await ellipseSelect(page, x + r, CLOUD.base - r * 0.9, r, r * 0.9);
+    await fill(page);
+    x += r * 1.55;
+  }
+  await rectSelect(page, CLOUD.x0, CLOUD.base - 22, x - CLOUD.x0 + 12, 22);
+  await fill(page);
+  await deselect(page);
   await effect(page, 'Stroke', { Width: 3 }, { label: 'Stroke color', hex: INK.toLowerCase() });
   await closeEffects(page);
   await rasterizeStyle(page);
@@ -1054,7 +1065,7 @@ export const SEAL: Pt = { x: 1084, y: 1440 };
 export async function s33(page: Page): Promise<unknown> {
   // A hanko-style seal: vermilion block, cream keyline, ZEN reversed out.
   await newLayer(page, 'Seal');
-  await rectSelect(page, SEAL.x - 28, SEAL.y - 28, 56, 56);
+  await rectSelect(page, SEAL.x - 32, SEAL.y - 32, 64, 64);
   await setFg(page, VERM);
   await fill(page);
   await selectModify(page, 'Shrink', 4);
@@ -1065,10 +1076,10 @@ export async function s33(page: Page): Promise<unknown> {
   await fill(page);
   await deselect(page);
   await tool(page, 'text');
-  await toolOption(page, 'Size', 17);
+  await toolOption(page, 'Size', 14);
   await setFont(page, 'Dela Gothic One');
   await setFg(page, PAPER);
-  await clickDoc(page, SEAL.x - 20, SEAL.y - 12);
+  await clickDoc(page, SEAL.x - 18, SEAL.y - 10);
   await page.keyboard.type('ZEN', { delay: 50 });
   await page.keyboard.press('Tab');
   await pause(page, 800);
@@ -1168,21 +1179,16 @@ export async function s35(page: Page): Promise<void> {
 }
 
 export async function s36(page: Page): Promise<void> {
-  // A hard-edged shadow facet on each rock's right flank: lasso the facet,
-  // then burn inside the selection so the edge stays crisp.
-  await tool(page, 'dodge');
-  await page.locator('[aria-labelledby="dodge-mode-label"]').selectOption('burn');
-  await toolOption(page, 'Exposure', 35);
-  await toolOption(page, 'Size', 60);
+  // A hard-edged shadow facet on each rock's right flank, so the undersides
+  // read as cut stone rather than a flat wedge.
   for (const d of DESIGNS) {
     await selectLayer(page, `Isle ${d.n}`);
     const g = isleGeometry(d.c, d.n);
     const br = iso(g.o, ISLE_W, 0, 0), bf = iso(g.o, ISLE_W, ISLE_W, 0);
-    await lassoSelect(page, [lerp(bf, br, 0.1), lerp(bf, br, 0.55), lerp(g.apex, br, 0.35), g.apex]);
-    if (d.n === 1) await shot(page, '36a-burn-facet-marquee');
-    await tool(page, 'dodge');
-    const a = lerp(g.apex, bf, 0.6), b = lerp(g.apex, br, 0.3);
-    await polyline(page, [a, b, lerp(bf, br, 0.35), a]);
+    await lassoSelect(page, [lerp(bf, br, 0.12), lerp(bf, br, 0.58), lerp(g.apex, br, 0.4), lerp(g.apex, bf, 0.25)]);
+    if (d.n === 1) await shot(page, '36a-facet-marquee');
+    await setFg(page, '#3D3733');
+    await fill(page);
     await deselect(page);
   }
   await selectLayer(page, 'ZEN ENCLAVES');
