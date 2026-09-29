@@ -699,8 +699,7 @@ export async function s21(page: Page): Promise<unknown> {
   // and swing it round with the rotation handle.
   await selectLayer(page, 'Koi');
   await pressKey(page, 'Control+c');
-  await pressKey(page, 'Control+v');
-  await pause(page, 600);
+  await pasteAsNewLayer(page);
   await renameActive(page, 'Koi 2');
   const o = isleOrigin(T4);
   const k = iso(o, 44, 164, ISLE_H - 10);
@@ -883,8 +882,7 @@ export async function s28(page: Page): Promise<unknown> {
   // right corner and shrink it with a uniform corner-handle scale.
   await selectLayer(page, 'Cloud');
   await pressKey(page, 'Control+c');
-  await pressKey(page, 'Control+v');
-  await pause(page, 600);
+  await pasteAsNewLayer(page);
   await renameActive(page, 'Cloud 2');
   const { moveBy } = await import('./composition-zen-enclaves.steps.ts');
   await moveBy(page, { x: CLOUD.x0 + 60, y: CLOUD.base - 20 }, 900, 1010);
@@ -940,8 +938,7 @@ export async function s30(page: Page): Promise<void> {
   await selectLayer(page, 'Blossoms');
   await rectSelect(page, BLOSSOM.x - 24, BLOSSOM.y - 24, 48, 48);
   await pressKey(page, 'Control+x');
-  await pressKey(page, 'Control+v');
-  await pause(page, 600);
+  await pasteAsNewLayer(page);
   await renameActive(page, 'Blossom 1');
   const spots = [
     { dx: 0, dy: 560, rot: 36, scale: 1.35 },
@@ -951,8 +948,7 @@ export async function s30(page: Page): Promise<void> {
   const { moveBy } = await import('./composition-zen-enclaves.steps.ts');
   let i = 2;
   for (const sp of spots) {
-    await pressKey(page, 'Control+v');
-    await pause(page, 500);
+    await pasteAsNewLayer(page);
     const name = `Blossom ${i++}`;
     await renameActive(page, name);
     await moveBy(page, BLOSSOM, sp.dx, sp.dy);
@@ -1206,4 +1202,25 @@ export async function s37(page: Page, path = 'e2e/screenshots/zen-enclaves-flash
   await deselect(page);
   await shot(page, '37-finished-in-editor');
   await exportPng(page, path);
+}
+
+async function layerCount(page: Page): Promise<number> {
+  return page.evaluate(() => (window as unknown as { __editorStore: { getState: () => { document: { layers: unknown[] } } } }).__editorStore.getState().document.layers.length);
+}
+
+/** Cmd+V, then wait for the pasted layer to exist before touching it. */
+export async function pasteAsNewLayer(page: Page): Promise<void> {
+  const before = await layerCount(page);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await pressKey(page, 'Control+v');
+    for (let i = 0; i < 25; i++) {
+      if ((await layerCount(page)) > before) {
+        await pause(page, 300);
+        return;
+      }
+      await pause(page, 200);
+    }
+    console.log(`paste produced no layer (attempt ${attempt + 1})`);
+  }
+  throw new Error('paste produced no layer');
 }
