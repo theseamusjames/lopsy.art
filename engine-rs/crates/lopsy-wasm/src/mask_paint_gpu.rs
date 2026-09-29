@@ -94,7 +94,7 @@ pub fn paint_mask_dab_batch(
         });
     }
 
-    engine.needs_recomposite = true;
+    engine.mark_layer_dirty(layer_id);
 }
 
 /// Render hard square pencil blocks into a mask-style RGBA texture
@@ -182,7 +182,7 @@ pub fn draw_mask_pencil_line(
     let (ox, oy) = mask_doc_origin(engine, layer_id);
     let (ox, oy) = (ox as f64, oy as f64);
     draw_pencil_blocks_gpu(engine, tex_handle, x0 - ox, y0 - oy, x1 - ox, y1 - oy, size, value);
-    engine.needs_recomposite = true;
+    engine.mark_layer_dirty(layer_id);
 }
 
 pub fn fill_mask(
@@ -278,7 +278,7 @@ pub fn fill_mask(
         rgba_out[i * 4 + 3] = 255;
     }
     let _ = engine.texture_pool.upload_rgba(&engine.gl, tex_handle, 0, 0, w, h, &rgba_out);
-    engine.needs_recomposite = true;
+    engine.mark_layer_dirty(layer_id);
 }
 
 pub fn render_mask_linear_gradient(
@@ -355,7 +355,7 @@ pub fn render_mask_linear_gradient(
         engine.draw_fullscreen_quad();
     });
 
-    engine.needs_recomposite = true;
+    engine.mark_layer_dirty(layer_id);
 }
 
 pub fn render_mask_radial_gradient(
@@ -431,7 +431,7 @@ pub fn render_mask_radial_gradient(
         engine.draw_fullscreen_quad();
     });
 
-    engine.needs_recomposite = true;
+    engine.mark_layer_dirty(layer_id);
 }
 
 pub fn read_mask_texture(engine: &mut EngineInner, layer_id: &str) -> Option<Vec<u8>> {

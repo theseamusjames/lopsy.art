@@ -229,6 +229,13 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                         dest,
                     )?;
                 }
+                // A mask-edited child's overlay can't be drawn into the
+                // scratch (the adjustments would tint it) nor under it (the
+                // scratch would cover it), so it's drawn once the outermost
+                // adjusted group lands on the main composite (#992).
+                if group_stack.is_empty() {
+                    render_routed_mask_edit_overlay(engine, mask_edit_id.as_deref(), &layer_id, &child_to_group);
+                }
                 // Re-bind the destination FBO for subsequent layers.
                 engine.fbo_pool.bind(&engine.gl, dest.fbo);
                 engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
@@ -360,7 +367,9 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         }
 
         // --- Mask edit overlay: translucent blue showing mask coverage ---
-        if is_mask_editing {
+        // Routed children get theirs at the group's finalize instead.
+        let is_main_target = target.fbo == engine.composite_fbo;
+        if is_mask_editing && is_main_target {
             if let Some((mask_gl, mw, mh, _)) = &mask_info {
                 render_mask_overlay(engine, mask_gl, *mw, *mh, mask_offset_x, mask_offset_y);
             }
@@ -698,6 +707,36 @@ fn render_mask_overlay(
     }
     if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
+}
+
+/// Draw the mask edit overlay for `mask_edit_id` if that layer is routed
+/// (directly or through nested adjusted groups, #857) into `group_id`.
+fn render_routed_mask_edit_overlay(
+    engine: &mut EngineInner,
+    mask_edit_id: Option<&str>,
+    group_id: &str,
+    child_to_group: &HashMap<String, String>,
+) {
+    let Some(edit_id) = mask_edit_id else { return };
+    let mut parent = child_to_group.get(edit_id);
+    while let Some(gid) = parent {
+        if gid == group_id {
+            break;
+        }
+        parent = child_to_group.get(gid);
+    }
+    if parent.is_none() {
+        return;
+    }
+    let Some(layer) = engine.layer_stack.iter().find(|l| l.id == edit_id) else { return };
+    if !layer.visible || layer.opacity < 1e-7 {
+        return;
+    }
+    let (offset_x, offset_y) = mask_doc_offset(layer.layer_type, layer.x as f32, layer.y as f32);
+    let Some(&mask_handle) = engine.layer_masks.get(edit_id) else { return };
+    let Some((mw, mh)) = engine.texture_pool.get_size(mask_handle) else { return };
+    let Some(mask_gl) = engine.texture_pool.get(mask_handle).cloned() else { return };
+    render_mask_overlay(engine, &mask_gl, mw, mh, offset_x, offset_y);
 }
 
 /// Render the quick mask as a translucent blue overlay on top of the composite.
