@@ -50,6 +50,7 @@ const ALLOWLIST = {
   'src/app/store/actions/resize-image.test.ts': 1,
   'src/app/store/clipboard-image-match.test.ts': 1,
   'src/app/store/history-metadata-mask-flush.test.ts': 1,  // #782/#780 mask-read-queue fixture
+  'src/app/store/history-snapshot-release.test.ts': 1,  // #1005 layer-mask fixture
   'src/engine-wasm/engine-sync.test.ts': 7,            // +4: uploadLayerMaskIfChanged fixtures (#780)
   'src/engine-wasm/sync-layers.test.ts': 13,           // +3: #734 mask-readback seed tests, +2: #780 mask gate tests
   'src/engine-wasm/sync-selection.test.ts': 5,         // #763 seedSelectionMaskRef fixtures

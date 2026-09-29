@@ -27,6 +27,17 @@ const binaryCache = new Map<string, ArrayBuffer>();
 // face on every load, so a cache hit only reloads for a new engine instance.
 const loadedIntoEngine = new Map<string, Engine>();
 
+/**
+ * Cache `promise` under `key` until it rejects. A failed load must not stay
+ * cached, or every later call replays the failure instead of retrying (#997).
+ */
+function cacheUntilRejected(cache: Map<string, Promise<void>>, key: string, promise: Promise<void>): void {
+  cache.set(key, promise);
+  promise.catch(() => {
+    if (cache.get(key) === promise) cache.delete(key);
+  });
+}
+
 export function loadGoogleFont(
   family: string,
   weights: readonly number[],
@@ -51,11 +62,15 @@ export function loadGoogleFont(
       const loads = weights.map((w) => document.fonts.load(`${w} 16px '${family}'`).catch(() => []));
       Promise.all(loads).then(() => document.fonts.ready).then(() => resolve());
     };
-    link.onerror = () => reject(new Error(`Failed to load font: ${family}`));
+    link.onerror = () => {
+      // Drop the dead link so a retry starts from a clean <head>.
+      link.remove();
+      reject(new Error(`Failed to load font: ${family}`));
+    };
     document.head.appendChild(link);
   });
 
-  loadCache.set(key, promise);
+  cacheUntilRejected(loadCache, key, promise);
   return promise;
 }
 
@@ -86,7 +101,7 @@ export function loadGoogleFontPreview(family: string, text: string): Promise<voi
     await loadCss2Preview(family, text);
   })();
 
-  previewLoadCache.set(key, promise);
+  cacheUntilRejected(previewLoadCache, key, promise);
   return promise;
 }
 

@@ -983,3 +983,11 @@ pub fn clear_gpu_snapshots(engine: &mut Engine) {
     engine.inner.snapshot_textures.clear();
     engine.inner.snapshot_free_list.clear();
 }
+
+/// Number of snapshot textures currently allocated. Released slots are
+/// reused, so this — not the largest handle ever returned — is the live
+/// GPU cost of the undo history (#1005).
+#[wasm_bindgen(js_name = "liveGpuSnapshotCount")]
+pub fn live_gpu_snapshot_count(engine: &Engine) -> u32 {
+    engine.inner.snapshot_textures.iter().filter(|s| s.is_some()).count() as u32
+}

@@ -9,6 +9,19 @@ export interface PatternDefinition {
   readonly thumbnail: string;
 }
 
+/** Pattern Fill dialog values, all in the dialog's percent units. */
+export interface PatternFillSettings {
+  readonly scale: number;
+  /** Shifts each successive row horizontally (brick layout). */
+  readonly rowStagger: number;
+  /** Shifts each successive column vertically (half-drop layout). */
+  readonly columnStagger: number;
+  /** Moves the tiling origin right, shifting every row together. */
+  readonly offsetX: number;
+  /** Moves the tiling origin down, shifting every column together. */
+  readonly offsetY: number;
+}
+
 interface PatternStore {
   readonly patterns: readonly PatternDefinition[];
   readonly activePatternId: string | null;

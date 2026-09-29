@@ -12,6 +12,7 @@ import { renderMeshWarpOverlay } from './render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderPaintLinePreview, renderBrushCursor, renderStampSourcePreview, renderSymmetryCenter, renderPerspectiveCropOverlay } from './render-overlays';
 import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './render-text-overlay';
 import { hitTestTextLayer } from '../../tools/text/text-hit-test';
+import { engineRenderedSize } from '../../tools/text/text-geometry';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './render-guides';
 import { renderTiltShiftOverlay } from './render-tilt-shift-overlay';
 import { contextOptions } from '../../engine/color-space';
@@ -140,7 +141,7 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
     renderTextDragOverlay(overlayCtx, textDrag, viewport.zoom);
   }
   if (activeTool === 'text' && !textEditing && !textDrag) {
-    const hoveredText = hitTestTextLayer(layers, cursorPosition);
+    const hoveredText = hitTestTextLayer(layers, cursorPosition, engineRenderedSize(engine));
     if (hoveredText) {
       const dims = getLayerTextureDimensions(engine, hoveredText.id);
       const texW = dims?.[0] ?? hoveredText.width ?? hoveredText.text.length * hoveredText.fontSize * 0.6;

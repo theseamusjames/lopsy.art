@@ -15,6 +15,7 @@ import { cancelPrefloat } from '../interactions/prefloat';
 import { snapshotGpuMasks, withCurrentMaskStaleness, restoreMasksAfterUndo } from './mask-history';
 import { useUIStore } from '../ui-store';
 import { createTransformState } from '../../tools/transform/transform';
+import { addSnapshotHandles, createSnapshotHandleLedger } from './snapshot-ledger';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -56,9 +57,10 @@ export function cacheLayerSnapshot(layerId: string): void {
   const engine = getEngine();
   if (!engine) return;
   const handle = snapshotLayerGpu(engine, layerId);
-  if (handle !== EMPTY_HANDLE) {
-    preSnapshotCache.set(layerId, handle);
-  }
+  if (handle === EMPTY_HANDLE) return;
+  const superseded = preSnapshotCache.get(layerId);
+  if (superseded !== undefined) releaseGpuSnapshot(engine, superseded);
+  preSnapshotCache.set(layerId, handle);
 }
 
 export function deferCacheLayerSnapshot(layerId: string): void {
@@ -105,6 +107,68 @@ export function clearSnapshotCache(): void {
 export function forgetLostGpuSnapshotCache(): void {
   preSnapshotCache.clear();
   pendingCacheIds.clear();
+  lastRestoredSnapshot = null;
+  snapshotLedger.forget();
+}
+
+const snapshotLedger = createSnapshotHandleLedger((handle) => {
+  const engine = getEngine();
+  if (engine) releaseGpuSnapshot(engine, handle);
+});
+
+function isPreSnapshotCacheHandle(handle: number): boolean {
+  for (const cached of preSnapshotCache.values()) {
+    if (cached === handle) return true;
+  }
+  return false;
+}
+
+interface HistoryStacks {
+  undoStack: readonly HistorySnapshot[];
+  redoStack: readonly HistorySnapshot[];
+}
+
+/**
+ * Release every snapshot texture no history holder references any more: an
+ * entry trimmed off the 50-state cap, a redo stack a new push discarded, a
+ * stack a new document cleared, or an undo target a later push superseded
+ * (#1005). Holders are both stacks plus the last restored snapshot, whose
+ * handles the next undo/redo reuses for the live state. The pre-snapshot
+ * cache owns its handles separately and is never swept.
+ */
+export function reclaimUnreferencedSnapshots(state: HistoryStacks): number[] {
+  const live = new Set<number>();
+  for (const entry of state.undoStack) addSnapshotHandles(entry, live);
+  for (const entry of state.redoStack) addSnapshotHandles(entry, live);
+  addSnapshotHandles(lastRestoredSnapshot, live);
+  return snapshotLedger.reconcile(live, isPreSnapshotCacheHandle);
+}
+
+interface HistoryStackStore {
+  subscribe: (listener: (state: HistoryStacks, prev: HistoryStacks) => void) => unknown;
+}
+
+/**
+ * Sweep on every stack change, whoever makes it — the history actions, and
+ * the document-open paths that reset both stacks with a plain `setState`.
+ */
+export function installSnapshotReclaim(store: HistoryStackStore): void {
+  store.subscribe((state, prev) => {
+    if (state.undoStack === prev.undoStack && state.redoStack === prev.redoStack) return;
+    reclaimUnreferencedSnapshots(state);
+  });
+}
+
+/**
+ * Release the snapshots only the outgoing document can use, before a new or
+ * opened document replaces it. Clearing both stacks (in the same action)
+ * then sweeps every history handle. Released one by one rather than with
+ * `clearGpuSnapshots`, which would also free handles a live holder outside
+ * history (e.g. a text edit's pre-edit capture) still expects to release.
+ */
+export function releaseSnapshotsForDocumentReset(): void {
+  cancelPrefloat();
+  clearSnapshotCache();
   lastRestoredSnapshot = null;
 }
 

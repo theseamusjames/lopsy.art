@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hitTestTextLayer } from './text-hit-test';
+import { hitTestTextLayer, type RenderedSize } from './text-hit-test';
 import type { TextLayer } from '../../types';
 
 function makeTextLayer(overrides: Partial<TextLayer> = {}): TextLayer {
@@ -115,5 +115,53 @@ describe('hitTestTextLayer', () => {
     const bottom = makeTextLayer({ id: 'bottom', text: 'HELLO', x: 40, y: 200 });
     const top = makeTextLayer({ id: 'top', text: 'HELLO', x: 40, y: 200 });
     expect(hitTestTextLayer([bottom, top], { x: 60, y: 210 })).toBe(top);
+  });
+});
+
+function makeCapsLayer(overrides: Partial<TextLayer> = {}): TextLayer {
+  return makeTextLayer({ text: 'HELLO', fontSize: 120, lineHeight: 1.4, x: 40, y: 74, ...overrides });
+}
+
+function sizes(map: Record<string, RenderedSize>) {
+  return (id: string): RenderedSize | null => map[id] ?? null;
+}
+
+describe('hitTestTextLayer with rendered sizes (#989)', () => {
+  // 120px caps "HELLO": ink ≈ y 78→167, texture = ink + 4px padding each side.
+  const layer = makeCapsLayer();
+  const rendered = sizes({ [layer.id]: { width: 420, height: 97 } });
+
+  it('hits clicks on the glyphs', () => {
+    expect(hitTestTextLayer([layer], { x: 60, y: 120 }, rendered)?.id).toBe(layer.id);
+    expect(hitTestTextLayer([layer], { x: 450, y: 168 }, rendered)?.id).toBe(layer.id);
+  });
+
+  it('misses empty canvas below the ink that the line box used to cover', () => {
+    // The line-box estimate reaches y = 74 + 120 × 1.4 = 242.
+    expect(hitTestTextLayer([layer], { x: 60, y: 207 })?.id).toBe(layer.id);
+    expect(hitTestTextLayer([layer], { x: 60, y: 207 }, rendered)).toBeNull();
+  });
+
+  it('misses empty canvas above and beside the ink', () => {
+    expect(hitTestTextLayer([layer], { x: 60, y: 60 }, rendered)).toBeNull();
+    expect(hitTestTextLayer([layer], { x: 480, y: 120 }, rendered)).toBeNull();
+  });
+
+  it('hits the gap between lines of multi-line text', () => {
+    const multi = makeCapsLayer({ text: 'HELLO\nWORLD' });
+    const lookup = sizes({ [multi.id]: { width: 420, height: 265 } });
+    expect(hitTestTextLayer([multi], { x: 60, y: 190 }, lookup)?.id).toBe(multi.id);
+  });
+
+  it('keeps the whole area-text box width clickable', () => {
+    const area = makeCapsLayer({ width: 600 });
+    const lookup = sizes({ [area.id]: { width: 200, height: 97 } });
+    expect(hitTestTextLayer([area], { x: 500, y: 120 }, lookup)?.id).toBe(area.id);
+  });
+
+  it('falls back to the estimate when the size is unknown or degenerate', () => {
+    const lookup = sizes({ [layer.id]: { width: 1, height: 1 } });
+    expect(hitTestTextLayer([layer], { x: 60, y: 207 }, lookup)?.id).toBe(layer.id);
+    expect(hitTestTextLayer([layer], { x: 60, y: 207 }, () => null)?.id).toBe(layer.id);
   });
 });

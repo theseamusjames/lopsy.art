@@ -274,7 +274,9 @@ function ensureWeightLoaded(family: string, weight: number): { weight: number; l
     : entry.weights.reduce((prev, curr) => (Math.abs(curr - weight) < Math.abs(prev - weight) ? curr : prev));
 
   if (entry.source === 'google') {
-    loadGoogleFont(name, entry.weights, entry.hasItalic);
+    // A failed stylesheet is dropped from the loader's cache, so picking the
+    // family again retries; nothing to do with the rejection here.
+    loadGoogleFont(name, entry.weights, entry.hasItalic).catch(() => undefined);
     const isItalic = entry.hasItalic && useToolSettingsStore.getState().settings.text.fontStyle === 'italic';
     return { weight: resolved, loading: loadFontBinaryToEngine(name, resolved, isItalic) };
   }

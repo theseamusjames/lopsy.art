@@ -17,7 +17,10 @@ void main() {
         vec2 docPos = u_layerOffset + v_uv * u_layerSize;
         vec2 maskUV = docPos / u_docSize;
         float maskVal = texture(u_maskTex, maskUV).r;
-        if (maskVal > 0.0) {
+        // Clear in proportion to the mask so anti-aliased and feathered
+        // selections leave a soft edge, mirroring clipboard_copy's multiply.
+        color.a *= 1.0 - maskVal;
+        if (color.a <= 0.0) {
             color = vec4(0.0);
         }
     } else {
