@@ -262,6 +262,11 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
 
   if (sel.active && sel.mask) {
     const engine = getEngine();
+    // Alt over a float left by a plain Move drag stamps it (#985); a float
+    // carrying a transform goes through the persistent branch below instead.
+    const isStampingLiveFloat = altKey
+      && floatingSelectionRef.current !== null
+      && persistentTransformRef.current === null;
 
     // If a transform float is active (persistentTransformRef set), the GPU
     // already holds the rotated/scaled pixels. Drag-to-reposition must
@@ -309,7 +314,12 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     const selNow = useEditorStore.getState().selection;
 
     if (floatingSelectionRef.current) {
-      // Reuse existing float — GPU already has the textures
+      // Reuse existing float — GPU already has the textures. For Alt, first
+      // bake the float's current position into the base so the drag leaves
+      // this copy behind and carries a new one, as a fresh Alt float does.
+      if (isStampingLiveFloat && engine && hasFloat(engine)) {
+        restoreFloatBase(engine, activeLayerId);
+      }
     } else if (prebuilt) {
       // Prefloat already set up the GPU float
       floatingSelectionRef.current = {

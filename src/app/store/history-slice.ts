@@ -14,7 +14,7 @@ import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 import { cancelPrefloat } from '../interactions/prefloat';
 import { snapshotGpuMasks, withCurrentMaskStaleness, restoreMasksAfterUndo } from './mask-history';
 import { useUIStore } from '../ui-store';
-import { createTransformState } from '../../tools/transform/transform';
+import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
 import { addSnapshotHandles, createSnapshotHandleLedger } from './snapshot-ledger';
 
 export interface HistorySlice {
@@ -349,6 +349,26 @@ function syncTransformAfterHistoryRestore(selection: SelectionData): void {
   }
 }
 
+/**
+ * The selection a history entry records. While a Move-tool transform is
+ * pending, the store keeps the *pre-transform* mask — the ants and the GPU
+ * float draw it through `uiStore.transform` — but a snapshot captures layer
+ * pixels that already carry the transform, and undo/redo drops the float.
+ * Recording the bare mask put the flat marquee back over rotated pixels on
+ * redo, and the next handle drag lifted only that rectangle out of them
+ * (#991). Record the outline the user sees instead: the mask baked through
+ * the transform.
+ */
+function historySelection(selection: SelectionData): SelectionData {
+  const transform = useUIStore.getState().transform;
+  if (!selection.active || !transform || !isShapeChangingTransform(transform)) return selection;
+  const { mask, bounds } = applyTransformToMask(
+    selection.mask, selection.maskWidth, selection.maskHeight, transform,
+  );
+  if (!bounds) return selection;
+  return { ...selection, mask, bounds };
+}
+
 export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   undoStack: [],
   redoStack: [],
@@ -396,7 +416,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       firstSnapshot = {
         kind: 'metadata',
         document: state.document,
-        selection: state.selection,
+        selection: historySelection(state.selection),
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
@@ -406,7 +426,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       firstSnapshot = {
         kind: 'pixels',
         document: state.document,
-        selection: state.selection,
+        selection: historySelection(state.selection),
         gpuSnapshots,
         maskSnapshots: liveMaskSnapshots(state.document.layers, state.undoStack[S - 1]),
         label: target.label,
@@ -482,7 +502,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       firstSnapshot = {
         kind: 'metadata',
         document: state.document,
-        selection: state.selection,
+        selection: historySelection(state.selection),
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
@@ -492,7 +512,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       firstSnapshot = {
         kind: 'pixels',
         document: state.document,
-        selection: state.selection,
+        selection: historySelection(state.selection),
         gpuSnapshots,
         maskSnapshots: liveMaskSnapshots(state.document.layers, state.redoStack[R - 1]),
         label: target.label,
@@ -571,7 +591,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const snapshot: HistorySnapshot = {
       kind: 'pixels',
       document,
-      selection: state.selection,
+      selection: historySelection(state.selection),
       gpuSnapshots,
       maskSnapshots,
       label,
@@ -617,7 +637,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const snapshot: HistorySnapshot = {
       kind: 'metadata',
       document: state.document,
-      selection: state.selection,
+      selection: historySelection(state.selection),
       label,
       paths: state.paths,
       selectedPathId: state.selectedPathId,

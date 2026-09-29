@@ -5,15 +5,16 @@ import { useEditorStore } from '../editor-store';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 
 /**
- * Grow the live float of a raster layer so its buffer holds `rect` (the
+ * Grow the live float of a raster or text layer so its buffer holds `rect` (the
  * transformed content's document-space bounds) before the transform is
  * composited into it. Without this, pixels a rotate/scale carries past the
  * canvas-plus-content buffer were clipped at render time and lost for good
- * when the float was dropped (#818). The store follows the grown texture.
+ * when the float was dropped (#818, and #994 for text). The store follows
+ * the grown texture.
  */
 export function growFloatToCover(engine: Engine, layerId: string, rect: Rect): void {
   const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
-  if (!layer || layer.type !== 'raster') return;
+  if (!layer || (layer.type !== 'raster' && layer.type !== 'text')) return;
   // One pixel of slack for the bilinear edge of the transformed content.
   const x = Math.floor(rect.x) - 1;
   const y = Math.floor(rect.y) - 1;
