@@ -356,8 +356,9 @@ presses edit the old path.
   `File`) adds it as a new layer, auto-fits it if it's larger than the
   canvas, selects its alpha and switches to Move. `dropPhoto` in
   `e2e/composition-masked-monk.flow.ts` does this from a fixture on disk.
-- **A gradient fills the whole layer or selection.** Two gradient drags on
-  one layer leave only the second one, so fence each band with a marquee.
+- **A gradient composites over the layer (#1023).** Opaque stops still cover
+  the whole layer or selection, so fence each opaque band with a marquee;
+  transparent stops keep what is underneath.
 - **Add Mask does not enter mask edit mode.** Click the row's
   `Edit mask for <name>` thumbnail before painting or dragging a gradient,
   or the stroke lands on the layer's pixels.

@@ -175,8 +175,10 @@ pub fn render_linear_gradient(
             gl.active_texture(WebGl2RenderingContext::TEXTURE1);
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
         }
+        // Without a selection, point the mask sampler at the source unit so
+        // it never aliases a stale unit-1 texture bound to the target FBO.
         if let Some(loc) = shader.location(gl, "u_maskTex") {
-            gl.uniform1i(Some(&loc), 1);
+            gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
         }
         if let Some(loc) = shader.location(gl, "u_hasMask") {
             gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
@@ -268,8 +270,10 @@ pub fn render_radial_gradient(
             gl.active_texture(WebGl2RenderingContext::TEXTURE1);
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
         }
+        // Without a selection, point the mask sampler at the source unit so
+        // it never aliases a stale unit-1 texture bound to the target FBO.
         if let Some(loc) = shader.location(gl, "u_maskTex") {
-            gl.uniform1i(Some(&loc), 1);
+            gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
         }
         if let Some(loc) = shader.location(gl, "u_hasMask") {
             gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
