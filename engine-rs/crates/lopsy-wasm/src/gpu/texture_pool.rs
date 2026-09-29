@@ -234,6 +234,20 @@ impl TexturePool {
         }
     }
 
+    /// Delete an in-use texture outright instead of returning it to the
+    /// pool. For one-off sizes that will never be acquired again — the
+    /// textures a float growth replaces (#1019). `release` would keep them:
+    /// eviction only trims free entries above `MAX_FREE_PER_SIZE` of the
+    /// same size, so a stream of distinct sizes is never reclaimed.
+    pub fn delete(&mut self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
+        let Some(slot) = self.entries.get_mut(handle.0) else { return };
+        let Some(entry) = slot.take() else { return };
+        if !entry.in_use {
+            report_misuse("deleted after release", handle);
+        }
+        gl.delete_texture(Some(&entry.texture));
+    }
+
     /// Walk the entries and delete any free entries above the per-size cap.
     /// Called from `acquire` so the gl context is always available. The
     /// pool's worst-case free-entry count is therefore

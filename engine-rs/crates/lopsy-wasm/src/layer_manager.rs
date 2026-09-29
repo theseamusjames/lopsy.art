@@ -1,4 +1,6 @@
 use web_sys::WebGl2RenderingContext;
+use lopsy_core::float_growth::grow_rect_to_cover;
+use lopsy_core::geometry::Rect;
 use lopsy_core::homography;
 use lopsy_core::layer::LayerDesc;
 use crate::compositor::mask_doc_offset;
@@ -1221,11 +1223,15 @@ pub fn composite_float(
 
 /// Release float textures and reset transform state.
 pub fn drop_float(engine: &mut EngineInner) {
-    if let Some(tex) = engine.float_texture.take() {
-        engine.texture_pool.release(tex);
-    }
-    if let Some(tex) = engine.float_base_texture.take() {
-        engine.texture_pool.release(tex);
+    // A float that outgrew the canvas has a size nothing else will ask the
+    // pool for; pooling it would keep it alive for good (#1019).
+    let doc_size = (engine.doc_width, engine.doc_height);
+    for tex in [engine.float_texture.take(), engine.float_base_texture.take()].into_iter().flatten() {
+        if engine.texture_pool.get_size(tex) == Some(doc_size) {
+            engine.texture_pool.release(tex);
+        } else {
+            engine.texture_pool.delete(&engine.gl, tex);
+        }
     }
     engine.float_layer_id = None;
     engine.float_transform_mode = 0;
@@ -1290,15 +1296,12 @@ pub fn ensure_float_covers(
         .ok_or("Layer texture not found")?;
 
     let (fx, fy, fw, fh) = (engine.float_layer_x, engine.float_layer_y, engine.float_width, engine.float_height);
-    let min_x = fx.min(x);
-    let min_y = fy.min(y);
-    let max_x = (fx + fw as i32).max(x + w as i32);
-    let max_y = (fy + fh as i32).max(y + h as i32);
-    let new_w = (max_x - min_x) as u32;
-    let new_h = (max_y - min_y) as u32;
-    if min_x == fx && min_y == fy && new_w == fw && new_h == fh {
+    let current = Rect { x: fx, y: fy, width: fw, height: fh };
+    let requested = Rect { x, y, width: w, height: h };
+    let Some(grown) = grow_rect_to_cover(current, requested, engine.texture_pool.max_size()) else {
         return Ok(None);
-    }
+    };
+    let Rect { x: min_x, y: min_y, width: new_w, height: new_h } = grown;
 
     let off_x = fx - min_x;
     let off_y = fy - min_y;
@@ -1306,9 +1309,11 @@ pub fn ensure_float_covers(
     let new_base = copy_into_larger_texture(engine, base_handle, fw, fh, new_w, new_h, off_x, off_y)?;
     let new_layer = copy_into_larger_texture(engine, layer_handle, fw, fh, new_w, new_h, off_x, off_y)?;
 
-    engine.texture_pool.release(float_handle);
-    engine.texture_pool.release(base_handle);
-    engine.texture_pool.release(layer_handle);
+    // Each growth size is new, so pooling the replaced textures would keep
+    // them for good (#1019).
+    engine.texture_pool.delete(&engine.gl, float_handle);
+    engine.texture_pool.delete(&engine.gl, base_handle);
+    engine.texture_pool.delete(&engine.gl, layer_handle);
     engine.float_texture = Some(new_float);
     engine.float_base_texture = Some(new_base);
     engine.layer_textures.insert(layer_id.clone(), new_layer);
