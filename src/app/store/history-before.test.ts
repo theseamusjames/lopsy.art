@@ -63,7 +63,12 @@ describe('pushHistory with a captured "before" layer', () => {
     const before = { ...live, name: 'pre-edit' };
 
     get().pushHistory('Text', { layer: before, gpuHandle: 42 });
-    get().renameLayer(live.id, 'post-edit');
+    useEditorStore.setState((st) => ({
+      document: {
+        ...st.document,
+        layers: st.document.layers.map((l) => (l.id === live.id ? { ...l, name: 'post-edit' } : l)),
+      },
+    }));
     get().undo();
 
     expect(get().document.layers.find((l) => l.id === live.id)?.name).toBe('pre-edit');
