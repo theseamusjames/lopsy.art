@@ -1,7 +1,8 @@
 import type { Engine } from '../../engine-wasm/wasm-bridge';
-import { textCursorRect, textHitPosition } from '../../engine-wasm/wasm-bridge';
+import { getLayerTextureDimensions, textCursorRect, textHitPosition } from '../../engine-wasm/wasm-bridge';
 import { utf16ToUtf8, utf8ToUtf16 } from '../../engine-wasm/text-offset';
 import type { TextGeometry } from './text-input';
+import type { RenderedSizeLookup } from './text-hit-test';
 
 /**
  * Build a {@link TextGeometry} backed by the engine's layout for a text layer.
@@ -24,5 +25,14 @@ export function makeTextGeometry(
       const p = textHitPosition(engine, layerId, x, y);
       return p >= 0 ? utf8ToUtf16(text, p) : null;
     },
+  };
+}
+
+/** Look up layer texture sizes in the engine, for {@link hitTestTextLayer}. */
+export function engineRenderedSize(engine: Engine): RenderedSizeLookup {
+  return (layerId) => {
+    const dims = getLayerTextureDimensions(engine, layerId);
+    if (!dims || dims.length < 2) return null;
+    return { width: dims[0]!, height: dims[1]! };
   };
 }

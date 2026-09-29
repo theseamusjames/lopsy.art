@@ -6,6 +6,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { toDocumentColor } from '../../app/document-color';
 import { hitTestTextLayer } from './text-hit-test';
+import { engineRenderedSize } from './text-geometry';
 import { createTextLayer } from '../../layers/layer-model';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { loadTextSettingsFromLayer } from '../../app/text-settings-layer-sync';
@@ -371,7 +372,12 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
   }
 
   // Click on an existing text layer enters edit mode for it.
-  const hitLayer = hitTestTextLayer(editorState.document.layers, canvasPos);
+  const hitEngine = getEngine();
+  const hitLayer = hitTestTextLayer(
+    editorState.document.layers,
+    canvasPos,
+    hitEngine ? engineRenderedSize(hitEngine) : undefined,
+  );
   if (hitLayer) {
     loadTextSettingsFromLayer(hitLayer);
     useToolSettingsStore.getState().setForegroundColor(hitLayer.color);
