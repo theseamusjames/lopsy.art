@@ -534,11 +534,13 @@ pub fn set_group_gradient_map_lut(engine: &mut Engine, group_id: &str, lut: &[u8
 #[wasm_bindgen(js_name = "setMaskEditLayer")]
 pub fn set_mask_edit_layer(engine: &mut Engine, layer_id: &str) {
     engine.inner.mask_edit_layer_id = Some(layer_id.to_string());
-    engine.inner.needs_recomposite = true;
+    // A group pre-adjustment cache holds its children masked or
+    // unmasked depending on mask edit state, so it can't survive a toggle.
+    engine.inner.mark_all_dirty();
 }
 
 #[wasm_bindgen(js_name = "clearMaskEditLayer")]
 pub fn clear_mask_edit_layer(engine: &mut Engine) {
     engine.inner.mask_edit_layer_id = None;
-    engine.inner.needs_recomposite = true;
+    engine.inner.mark_all_dirty();
 }

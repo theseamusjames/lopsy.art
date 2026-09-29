@@ -17,11 +17,16 @@ void main() {
         vec2 docPos = u_layerOffset + v_uv * u_layerSize;
         vec2 maskUV = docPos / u_docSize;
         float maskVal = texture(u_maskTex, maskUV).r;
-        // Clear in proportion to the mask so anti-aliased and feathered
-        // selections leave a soft edge, mirroring clipboard_copy's multiply.
-        color.a *= 1.0 - maskVal;
-        if (color.a <= 0.0) {
+        // Subtract the mask as coverage: anti-aliased and feathered selections
+        // on opaque pixels leave a soft 1 - mask edge, while a selection loaded
+        // from the layer's own alpha (mask == alpha) clears the pixel instead of
+        // leaving an alpha * (1 - alpha) ghost. The one-step slack absorbs the
+        // 8-bit mask quantizing a 16-bit float alpha.
+        float remaining = color.a - maskVal;
+        if (remaining < 1.0 / 255.0) {
             color = vec4(0.0);
+        } else {
+            color.a = remaining;
         }
     } else {
         // No selection: clear everything

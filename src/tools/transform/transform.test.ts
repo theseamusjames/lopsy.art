@@ -209,6 +209,15 @@ describe('hitTestHandle', () => {
     const result = hitTestHandle(rotPos, state, 6);
     expect(result).toBe('rotate-top-right');
   });
+
+  it('uses the separate rotate radius for rotation handles only', () => {
+    const state = createTransformState({ x: 0, y: 0, width: 200, height: 16 });
+    const rotPos = getHandlePositions(state)['rotate-top-right'];
+    const offCentre = { x: rotPos.x + 8, y: rotPos.y };
+    expect(hitTestHandle(offCentre, state, 6.4)).toBeNull();
+    expect(hitTestHandle(offCentre, state, 6.4, 10)).toBe('rotate-top-right');
+    expect(hitTestHandle({ x: 208, y: 0 }, state, 6.4, 10)).toBeNull();
+  });
 });
 
 describe('isScaleHandle / isRotateHandle', () => {
