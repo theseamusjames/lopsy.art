@@ -94,6 +94,7 @@ const BRUSH_DAB_COLOR_BODY: &str = include_str!("shaders/brush/brush_dab_color.g
 pub const ERASER_DAB_FRAG: &str = include_str!("shaders/brush/eraser_dab.glsl");
 pub const PENCIL_DAB_FRAG: &str = include_str!("shaders/brush/pencil_dab.glsl");
 pub const QUICK_MASK_DAB_FRAG: &str = include_str!("shaders/brush/quick_mask_dab.glsl");
+pub const CONTENT_BOUNDS_REDUCE_FRAG: &str = include_str!("shaders/content_bounds_reduce.glsl");
 pub const DODGE_BURN_FRAG: &str = include_str!("shaders/brush/dodge_burn.glsl");
 pub const DODGE_BURN_DAB_FRAG: &str = include_str!("shaders/brush/dodge_burn_dab.glsl");
 pub const SMUDGE_DAB_FRAG: &str = include_str!("shaders/brush/smudge_dab.glsl");
@@ -318,6 +319,7 @@ pub struct ShaderPrograms {
     pub eraser_dab: ShaderProgram,
     pub pencil_dab: ShaderProgram,
     pub quick_mask_dab: ShaderProgram,
+    pub content_bounds_reduce: ShaderProgram,
     pub dodge_burn: ShaderProgram,
     pub dodge_burn_dab: ShaderProgram,
     pub smudge_dab: ShaderProgram,
@@ -449,6 +451,7 @@ impl ShaderPrograms {
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
             pencil_dab: compile_program(gl, v, PENCIL_DAB_FRAG)?,
             quick_mask_dab: compile_program(gl, v, QUICK_MASK_DAB_FRAG)?,
+            content_bounds_reduce: compile_program(gl, v, CONTENT_BOUNDS_REDUCE_FRAG)?,
             dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
             dodge_burn_dab: compile_program(gl, v, DODGE_BURN_DAB_FRAG)?,
             smudge_dab: compile_program(gl, v, SMUDGE_DAB_FRAG)?,

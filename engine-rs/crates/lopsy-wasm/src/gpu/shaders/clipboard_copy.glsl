@@ -28,7 +28,16 @@ void main() {
     if (u_hasMask == 1) {
         vec2 maskUV = docPos / u_docSize;
         float maskVal = texture(u_maskTex, maskUV).r;
-        color.a *= maskVal;
+        // Take the mask as coverage, min(alpha, mask), mirroring
+        // clipboard_clear's alpha - mask so copy + clear conserve the pixel.
+        // A product would square alpha for a selection built from the
+        // layer's own alpha (#1009). The mask is 8-bit while the layer may be
+        // RGBA16F, so a mask within one 8-bit step of alpha covers it whole.
+        if (maskVal <= 0.0) {
+            color.a = 0.0;
+        } else if (maskVal < color.a - 1.0 / 255.0) {
+            color.a = maskVal;
+        }
     }
 
     fragColor = color;

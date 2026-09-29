@@ -11,6 +11,12 @@ import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
  * canvas-plus-content buffer were clipped at render time and lost for good
  * when the float was dropped (#818, and #994 for text). The store follows
  * the grown texture.
+ *
+ * Runs on every pointer-move of a transform drag, so it leaves the layer's
+ * pixel version alone: a bump per growth queued a synchronous thumbnail
+ * readback mid-drag (#1018). Callers bump it when the gesture ends — the
+ * transform and Move pointer-ups call `clearJsPixelData`, and the Rotate /
+ * Flip buttons reselect through `selectLayerAlpha`.
  */
 export function growFloatToCover(engine: Engine, layerId: string, rect: Rect): void {
   const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
@@ -21,5 +27,5 @@ export function growFloatToCover(engine: Engine, layerId: string, rect: Rect): v
   const right = Math.ceil(rect.x + rect.width) + 1;
   const bottom = Math.ceil(rect.y + rect.height) + 1;
   const grown = ensureFloatCovers(engine, x, y, right - x, bottom - y);
-  if (grown.length === 4) reconcileLayerBoundsWithEngine(engine, layerId);
+  if (grown.length === 4) reconcileLayerBoundsWithEngine(engine, layerId, { shouldBumpVersion: false });
 }

@@ -2,6 +2,7 @@ pub mod color;
 pub mod orientation;
 pub mod blend;
 pub mod geometry;
+pub mod float_growth;
 pub mod homography;
 pub mod layer;
 pub mod selection;

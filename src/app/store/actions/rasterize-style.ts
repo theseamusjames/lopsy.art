@@ -61,6 +61,10 @@ export function computeRasterizeStyle(
               ...l,
               x: 0,
               y: 0,
+              // The bake already multiplied the layer's opacity into the
+              // content (effects keep their own), so keeping it would
+              // apply it twice (#1007).
+              opacity: 1,
               effects: DEFAULT_EFFECTS,
               ...(l.type === 'raster' || l.type === 'text' ? { type: 'raster' as const, width: doc.width, height: doc.height } : {}),
             } as Layer

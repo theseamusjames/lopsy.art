@@ -31,70 +31,101 @@ pub fn paint_mask_dab_batch(
     mode: u32,
 ) {
     let Some(&tex_handle) = engine.layer_masks.get(layer_id) else { return };
-    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let mask_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-    let (ox, oy) = mask_doc_origin(engine, layer_id);
-    // Each dab renders at the mask's size and blits the whole scratch back.
+    let origin = mask_doc_origin(engine, layer_id);
+    let dab = MaskDab { size, hardness, opacity, mode };
+    paint_mask_dabs_scissored(engine, tex_handle, points, origin, dab);
+    engine.mark_layer_dirty(layer_id);
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct MaskDab {
+    pub size: f32,
+    pub hardness: f32,
+    pub opacity: f32,
+    pub mode: u32,
+}
+
+/// Paint round `quick_mask_dab` dabs into a mask-style RGBA texture.
+/// `points` are (x, y) pairs; `origin` is subtracted to get texel
+/// coordinates. Shared by layer masks and the Quick Mask.
+///
+/// The dab shader reads the mask it modifies, so each dab renders into
+/// scratch and is copied back. Both passes are scissored to the dab's
+/// bounding box (#1020): the shader passes every texel outside the
+/// radius through unchanged, so the rect-limited result is identical to
+/// rendering the whole texture — which cost two full-texture passes per
+/// dab (~60 s of queued GPU work for one stroke on a 4096² mask). Texels
+/// of scratch outside the rect are stale but never copied back.
+pub(crate) fn paint_mask_dabs_scissored(
+    engine: &mut EngineInner,
+    tex_handle: crate::gpu::texture_pool::TextureHandle,
+    points: &[f64],
+    origin: (f32, f32),
+    dab: MaskDab,
+) {
+    let Some((w, h)) = engine.texture_pool.get_size(tex_handle) else { return };
+    let Some(mask_tex) = engine.texture_pool.get(tex_handle).cloned() else { return };
+    // The copy-back samples scratch by v_uv, so scratch must match the mask exactly.
     if engine.ensure_scratch_size(w, h).is_err() { return; }
+    let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a).cloned() else { return };
+    let (ox, oy) = origin;
 
     let gl = &engine.gl;
+    let dab_shader = &engine.shaders.quick_mask_dab;
+    gl.use_program(Some(&dab_shader.program));
+    if let Some(loc) = dab_shader.location(gl, "u_maskTex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
+    if let Some(loc) = dab_shader.location(gl, "u_size") {
+        gl.uniform1f(Some(&loc), dab.size);
+    }
+    if let Some(loc) = dab_shader.location(gl, "u_hardness") {
+        gl.uniform1f(Some(&loc), dab.hardness);
+    }
+    if let Some(loc) = dab_shader.location(gl, "u_opacity") {
+        gl.uniform1f(Some(&loc), dab.opacity);
+    }
+    if let Some(loc) = dab_shader.location(gl, "u_texSize") {
+        gl.uniform2f(Some(&loc), w as f32, h as f32);
+    }
+    if let Some(loc) = dab_shader.location(gl, "u_mode") {
+        gl.uniform1i(Some(&loc), dab.mode as i32);
+    }
+    let u_center_loc = dab_shader.location(gl, "u_center");
+    let blit = &engine.shaders.blit;
+    gl.use_program(Some(&blit.program));
+    if let Some(loc) = blit.location(gl, "u_tex") {
+        gl.uniform1i(Some(&loc), 0);
+    }
 
-    for chunk in points.chunks(2) {
-        if chunk.len() < 2 { break; }
+    gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
+    for chunk in points.chunks_exact(2) {
         let cx = chunk[0] as f32 - ox;
         let cy = chunk[1] as f32 - oy;
+        let Some([x, y, rw, rh]) =
+            lopsy_core::brush::circle_dab_scissor_rect(cx, cy, dab.size, w, h) else { continue };
 
+        let gl = &engine.gl;
+        gl.scissor(x, y, rw, rh);
         engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
         gl.viewport(0, 0, w as i32, h as i32);
-
-        let shader = &engine.shaders.quick_mask_dab;
-        gl.use_program(Some(&shader.program));
-
+        gl.use_program(Some(&engine.shaders.quick_mask_dab.program));
         gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
-        if let Some(loc) = shader.location(gl, "u_maskTex") {
-            gl.uniform1i(Some(&loc), 0);
+        if let Some(loc) = &u_center_loc {
+            gl.uniform2f(Some(loc), cx, cy);
         }
-        if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), cx, cy);
-        }
-        if let Some(loc) = shader.location(gl, "u_size") {
-            gl.uniform1f(Some(&loc), size);
-        }
-        if let Some(loc) = shader.location(gl, "u_hardness") {
-            gl.uniform1f(Some(&loc), hardness);
-        }
-        if let Some(loc) = shader.location(gl, "u_opacity") {
-            gl.uniform1f(Some(&loc), opacity);
-        }
-        if let Some(loc) = shader.location(gl, "u_texSize") {
-            gl.uniform2f(Some(&loc), w as f32, h as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_mode") {
-            gl.uniform1i(Some(&loc), mode as i32);
-        }
-
         engine.draw_fullscreen_quad();
 
-        let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
         engine.render_to_texture(&mask_tex, w as i32, h as i32, |engine| {
             let gl = &engine.gl;
             gl.use_program(Some(&engine.shaders.blit.program));
             gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            if let Some(s) = &scratch_a_tex {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-            }
-            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_tex));
             engine.draw_fullscreen_quad();
         });
     }
-
-    engine.mark_layer_dirty(layer_id);
+    engine.gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
 }
 
 /// Render hard square pencil blocks into a mask-style RGBA texture

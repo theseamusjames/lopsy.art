@@ -271,6 +271,31 @@ the event with a window **capture** listener (runs before the app's
 window-level pointer handlers) and a later-registered window **bubble**
 listener (runs after them). See `e2e/mask-gpu-undo-780.spec.ts`.
 
+## E2E: verify a GPU-work reduction by replaying the shader on the CPU
+
+When an optimisation must not change output (scissoring, skipping
+passes), record what the engine actually draws and replay it: in
+`page.addInitScript`, patch `getUniformLocation` (tag locations with
+their program and name — `ShaderProgram::location` caches lazily, so the
+first query happens at first use, after the init script), `useProgram`,
+`uniform1f/1i/2f` and `drawArrays`, snapshot the uniforms on each draw of
+the program you care about, then recompute the shader's formula per
+texel in the page and compare the whole texture (quantise to fp16 when
+`EXT_color_buffer_float` exists, else u8). See
+`e2e/mask-dab-scissor-1020.spec.ts`.
+
+## Content bounds of a GPU texture: reduce on the GPU, don't read it back
+
+`content_bounds_gpu::texture_content_bounds` folds a texture into a
+column strip and a row strip (`content_bounds_reduce.glsl`) and reads
+back only `w + h` texels; its occupancy test matches
+`crop_to_content_bounds` on a `read_rgba` result exactly. Use it (or
+`layer_manager::layer_content_bounds`) instead of `read_pixels` +
+`crop_to_content_bounds`, which at 4K is a 256 MB float readback plus a
+16M-pixel CPU scan (#1021). Count readback size in e2e by summing
+`width × height` in a patched `readPixels` — see
+`e2e/move-grab-content-bounds-1021.spec.ts`.
+
 ## GLSL `smoothstep(edge0, edge1, x)` is undefined when edge0 == edge1
 
 The GLSL ES spec leaves `smoothstep` undefined when `edge0 >= edge1`
@@ -356,8 +381,9 @@ presses edit the old path.
   `File`) adds it as a new layer, auto-fits it if it's larger than the
   canvas, selects its alpha and switches to Move. `dropPhoto` in
   `e2e/composition-masked-monk.flow.ts` does this from a fixture on disk.
-- **A gradient fills the whole layer or selection.** Two gradient drags on
-  one layer leave only the second one, so fence each band with a marquee.
+- **A gradient composites over the layer (#1023).** Opaque stops still cover
+  the whole layer or selection, so fence each opaque band with a marquee;
+  transparent stops keep what is underneath.
 - **Add Mask does not enter mask edit mode.** Click the row's
   `Edit mask for <name>` thumbnail before painting or dragging a gradient,
   or the stroke lands on the layer's pixels.
@@ -383,3 +409,15 @@ presses edit the old path.
   is only a high-water mark. For leak checks in e2e compare
   `window.__gpuSnapshotCount()` with the distinct handles referenced by both
   stacks (`e2e/undo-snapshot-release-1005.spec.ts`).
+
+## The texture pool never reclaims one-off sizes — delete them
+
+`TexturePool::release` keeps a free texture for reuse and eviction only trims
+free entries above `MAX_FREE_PER_SIZE` (2) *of the same size*. Any code that
+releases a stream of distinct sizes (a float growing on every pointer-move
+did, #1019) leaks VRAM permanently. Delete textures whose size won't recur
+with `TexturePool::delete(gl, handle)`, and make per-move growth geometric
+(`lopsy_core::float_growth`). To assert on VRAM in e2e, hook
+`WebGL2RenderingContext.prototype` createTexture / deleteTexture /
+texImage2D / texStorage2D (tracking the bound texture per unit) — see
+`e2e/transform-float-growth-vram-1019.spec.ts`.

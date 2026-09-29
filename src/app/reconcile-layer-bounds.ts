@@ -3,6 +3,7 @@ import type { Engine } from '../engine-wasm/wasm-bridge';
 import { getLayerEngineBounds } from '../engine-wasm/wasm-bridge';
 import { useEditorStore } from './editor-store';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
+import type { ClearJsPixelDataOptions } from './store/clear-js-pixel-data';
 
 export interface LayerBounds {
   x: number;
@@ -38,9 +39,14 @@ export function boundsPatchForEngine(layer: Layer, engine: LayerBounds): Partial
  * next full resync (every undo/redo resets tracked state) pushes the stale
  * store bounds back onto the resized texture and the content lands offset by
  * the layer's old position (#810), or a later operation reads a stale rect
- * (#822). Returns true when the store changed.
+ * (#822). Returns true when the store changed. `options` is passed on to
+ * `clearJsPixelData`.
  */
-export function reconcileLayerBoundsWithEngine(engine: Engine, layerId: string): boolean {
+export function reconcileLayerBoundsWithEngine(
+  engine: Engine,
+  layerId: string,
+  options: ClearJsPixelDataOptions = {},
+): boolean {
   const state = useEditorStore.getState();
   const layer = state.document.layers.find((l) => l.id === layerId);
   if (!layer) return false;
@@ -55,6 +61,6 @@ export function reconcileLayerBoundsWithEngine(engine: Engine, layerId: string):
     },
     renderVersion: s.renderVersion + 1,
   }));
-  clearJsPixelData(layerId);
+  clearJsPixelData(layerId, options);
   return true;
 }
