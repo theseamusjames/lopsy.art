@@ -277,17 +277,11 @@ pub fn get_layer_engine_bounds(engine: &Engine, layer_id: &str) -> Vec<i32> {
 }
 
 #[wasm_bindgen(js_name = "getLayerContentBounds")]
-pub fn get_layer_content_bounds(engine: &Engine, layer_id: &str) -> Vec<i32> {
-    // Read layer pixels and find content bounds
-    if let Ok(pixels) = layer_manager::read_pixels(&engine.inner, layer_id) {
-        if let Some(&tex) = engine.inner.layer_textures.get(layer_id) {
-            if let Some((w, h)) = engine.inner.texture_pool.get_size(tex) {
-                let (_, rect) = lopsy_core::pixel_buffer::crop_to_content_bounds(&pixels, w, h);
-                return vec![rect.x, rect.y, rect.width as i32, rect.height as i32];
-            }
-        }
+pub fn get_layer_content_bounds(engine: &mut Engine, layer_id: &str) -> Vec<i32> {
+    match layer_manager::layer_content_bounds(&mut engine.inner, layer_id) {
+        Ok(rect) => vec![rect.x, rect.y, rect.width as i32, rect.height as i32],
+        Err(_) => Vec::new(),
     }
-    Vec::new()
 }
 
 #[wasm_bindgen(js_name = "rasterizeLayerEffects")]

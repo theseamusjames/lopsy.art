@@ -97,7 +97,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 
 - **Only Size and Opacity reach the dab.** `eraser-stroke.ts` reads exactly those two settings; hardness is the hard-coded `0.8` and spacing is a hard-coded `Math.max(1, size * 0.25)`. The **Spacing setting, the tip bitmap, all four jitters, scatter, angle, texture, flow, fade, taper, speed-size, and sub-brushes are all dropped** — the same shape of gap as [mask editing](#editing-a-layer-mask), and for the same reason: this is a second implementation that was never grown to match. Symmetry and the active selection *are* honored (`mirrorBatchPoints`, and `u_hasSelection` in the shader, which additionally modulates the erase amount by the mask value so a feathered selection erases softly).
 - **Opacity does not behave like the Brush's.** A brush stroke with a circular or alpha tip accumulates into a stroke texture under `blend_equation(MAX)`, so overlapping dabs within one stroke cannot push alpha past the opacity ceiling — a single pass lands at exactly the slider value. The eraser has no stroke texture: `eraser_dab.glsl` reads the layer, writes `existing.a * (1 − stamp × opacity)`, and blits the result straight back over the layer **once per dab**, so every dab sees the previous dab's output and the erasure **compounds multiplicatively**. With spacing pinned at 25 % of size, roughly four dabs cover any given pixel in one pass, so an Opacity of 50 % removes about `1 − 0.5⁴ ≈ 94 %` of a pixel's alpha in a single stroke rather than 50 %. Opacity on the eraser is therefore closer to a rate than a ceiling.
-- **Every eraser dab costs two full-texture passes.** The brush scissors each dab to its bounding box — the code's own note is that without it a dab "discards >99.98% of invocations for a typical brush size" — and `draw_pencil_line` does the same. `apply_eraser_dab_batch` enables no scissor at all: per point in the batch it sets `gl.viewport(0, 0, w, h)` and draws a fullscreen quad into `scratch_fbo_a`, then blits the entire scratch texture back over the layer. On a large layer that pair of full-canvas passes, not the erasing itself, is the dominant cost — the same pattern already documented for [mask dabs](#editing-a-layer-mask).
+- **Every eraser dab costs two full-texture passes.** The brush scissors each dab to its bounding box — the code's own note is that without it a dab "discards >99.98% of invocations for a typical brush size" — and `draw_pencil_line` does the same. `apply_eraser_dab_batch` enables no scissor at all: per point in the batch it sets `gl.viewport(0, 0, w, h)` and draws a fullscreen quad into `scratch_fbo_a`, then blits the entire scratch texture back over the layer. On a large layer that pair of full-canvas passes, not the erasing itself, is the dominant cost — the pattern mask dabs had until #1020 scissored them (see [Editing a Layer Mask](#editing-a-layer-mask)).
 - **The scratch texture now grows to cover the layer before the eraser runs (fixed incidentally by #883).** `scratch_texture_a` starts at document dimensions, while the eraser's viewport and its blit use the *layer* texture's dimensions — so erasing on a layer expanded past the document bounds used to sample and write beyond the scratch texture's extent. Since #914, `apply_eraser_dab_batch` itself calls `ensure_scratch_size(w, h)`, which resizes both scratch textures (and re-attaches their FBOs) to *exactly* the layer's texture size before each batch — the compositor shrinks the scratch back to the document every frame, so the per-dab path can no longer rely on the size `beginStroke` → `ensure_layer_covers` set at pointer-down. Before #914, #883's `ensure_scratch_covers` only ever grew the scratch, and a larger-than-document scratch squashed the whole composite (#907). `end_stroke` keeps its own temporary-texture guard for brush strokes. The mask dab batches never reach `beginStroke` and are unaffected.
 - The eraser body also never sets or clears GL blend state, inheriting whatever the previous operation left bound. It happens to be correct today only because `apply_dab_batch` disables blending on its way out, so the read-modify-write lands as a plain replace.
 
@@ -718,6 +718,7 @@ gets baked first.
 - **Undo granularity.** A whole-layer drag records exactly one **"Move"** history entry, and it is pushed **lazily — on the first pointer-move that actually shifts the layer**, not on pointer-down. A click-and-release on the Move tool therefore records nothing and mutates nothing; before that deferral every bare click left a no-op *Move* step on the stack, which is what made long undo chains replay through positions the layer was never in (#721).
   - The guard compares a **document-space** delta (`round(canvasPos − startPoint)`), so a jiggle that stays inside one document pixel — easy at high zoom — still counts as a bare click. Once it clears one document pixel the entry is pushed even if snapping then returns the layer to exactly where it started.
   - **The deferral is specific to the whole-layer case.** An option-drag pushes **"Duplicate Layer"** at pointer-down, a drag with an active marquee pushes its float snapshot at pointer-down, and a Quick Mask drag pushes **"Move"** at pointer-down — all unconditionally, so a bare click under any of those *does* still leave a history entry behind.
+- **A whole-layer grab crops the layer to its content first.** Pointer-down on a raster layer with no marquee calls `cropLayerToContent`, so the drag moves the content rect: grid snapping aligns the content's corner, snap-to-layers uses the content's edges, and the undo entry records the content's position. Until #1021 that crop read the entire texture back and scanned it on the CPU inside the engine — 214–312 ms per grab at 4K — and a full-canvas layer paid it on *every* grab, since its crop never shrinks it. The bounds now come from the GPU reduction described under [Layer Texture Lifecycle](#layer-texture-lifecycle-crop-on-switch-expand-on-return): a grab reads back at most `width + height` pixels, and an already-tight texture is not re-copied. Option-drag's Duplicate Layer uses the same reduction for its content-bounds clamp (`getLayerContentBounds`).
 - **Cmd/Meta+drag (transform handles)**: forces a uniform scale (by averaging the two axis scales) and snaps rotation to 15° increments. Grid + snap-to-grid applies the same rotation snap automatically, and additionally snaps the pointer to grid cells while scaling. The Move tool is the only tool whose handle drags transform pixels — see [Transform](#transform).
 
 ### Paste / Drop behavior
@@ -1348,22 +1349,25 @@ differences are not cosmetic.
   of a synchronous `readMaskTexture` — so the click also no longer drains a
   previous stroke's pending readback first. There is no GPU route and no
   empty-mask fast path.
-- **A mask dab costs two full-texture passes.** The layer brush scissors each dab
-  to its bounding box — without that the fragment shader runs across the whole
-  stroke texture and discards well over 99 % of its invocations — and accumulates
-  into a separate stroke texture that is composited once at pointer-up. The mask
-  path does neither. For **every interpolated dab point** it renders the dab
-  across the entire mask texture into a scratch buffer, then blits the whole
-  scratch back over the mask: two unscissored full-texture passes per point. (The
-  mask *pencil* is the exception — it scissors each block, like the layer pencil.)
-  At the `max(1, size × 0.25)` spacing above, a
-  100 px drag of a 10 px brush is at least **41** points even when it arrives as
-  a single pointer segment — 82 full-mask passes — and every further pointer
-  event along the way adds one more, because each segment re-stamps its own
-  starting point. Quick
-  Mask uses the identical loop against a **document-sized** texture. This is why
-  mask painting on a large document feels heavier than painting pixels, despite
-  never touching the CPU.
+- **A mask dab is scissored to its bounding box (#1020).** The dab shader reads
+  the mask it writes, so every interpolated dab point still takes two passes —
+  render the dab into a scratch buffer, then copy it back over the mask — but
+  both passes are scissored to the dab's bounding box
+  (`lopsy_core::brush::circle_dab_scissor_rect`, the layer brush's half-extent
+  plus a 2 px margin, clamped to the texture). The shader passes every texel
+  outside the radius through unchanged, so the result is the same as the old
+  full-texture passes: the #1020 spec replays every dab the engine draws on the
+  CPU and compares the whole mask, and a before/after dump differed in 16 of
+  93 600 texels by 1 LSB (layer mask) and not at all (Quick Mask). Before the
+  scissor each dab cost two passes over the *entire* mask — roughly 60 s of
+  queued GPU work for one 20-move stroke on a 4096² mask, against 1.6 s for the
+  layer brush. The mask path still has no stroke texture, so hiding compounds
+  within a stroke (see below). At the `max(1, size × 0.25)` spacing above, a
+  100 px drag of a 10 px brush is at least **41** dab points even when it arrives
+  as a single pointer segment, and every further pointer event adds one more,
+  because each segment re-stamps its own starting point. Quick Mask runs the
+  same scissored loop (`mask_paint_gpu::paint_mask_dabs_scissored`) against its
+  document-sized texture.
 - **Undo behaves, though.** Every pixel history entry carries a GPU snapshot of
   each layer mask (see **Mask** above), which is what makes all of this undoable;
   the history entries are *Mask Paint*, *Mask Erase*, and *Mask Fill*.
@@ -1416,7 +1420,7 @@ differences are not cosmetic.
 
 A raster layer's GPU texture is not always the size the Layers panel implies. The renderer runs a **crop-on-leave / expand-on-return** cycle keyed on the active layer, purely to keep GPU memory down: the layer you are editing is held at document size so a stroke can run anywhere on the canvas, and the layers you are not editing are shrunk back to their content bounds.
 
-- **Leaving a raster layer schedules a crop back to its content bounds.** `cropLayerToContent` reads the texture back, scans its alpha for the tight bounding box, and reallocates. The store's `x / y / width / height` are updated to the cropped rect and `renderVersion` is bumped — but **no history entry is pushed**, so the change is invisible to undo and the crop is silently re-derivable from the pixels.
+- **Leaving a raster layer schedules a crop back to its content bounds.** `cropLayerToContent` finds the tight bounding box and reallocates. Since #1021 the bounds come from a GPU reduction — the texture is folded to one column strip and one row strip, and only those `width + height` texels are read back (the old path read the whole texture and scanned its alpha on the CPU) — and a texture that is already tight is left alone instead of being copied into an identical one. The store's `x / y / width / height` are updated to the cropped rect and `renderVersion` is bumped — but **no history entry is pushed**, so the change is invisible to undo and the crop is silently re-derivable from the pixels.
 - **The crop no longer drags the layer's mask with it (#850, fixed in #868; #907, fixed in #914).** Raster and group masks are anchored at the document origin: since #914 `addLayerMask` creates them document-sized at `(0, 0)` (`getNewMaskSize`); only a shape mask takes the layer's own box. It used to size a raster mask to the layer box on the assumption that an active raster layer is always at `(0, 0)` and document-sized — which a moved layer breaks (a nudge leaves a full-canvas texture at `(0, 8)`, a Move drag one cropped to its content), so painting that mask could make the layer vanish once it was cropped again. Every mask writer now takes **document** coordinates and subtracts one shared origin (`mask_doc_origin` in Rust, `getMaskDocOrigin` in JS): the mask brush, eraser, pencil, bucket, and gradients, the mask-edit overlay, Convert mask to selection, and PSD export. `blend.glsl` used to sample the mask at the layer's `x` / `y`, so once the idle crop moved those off `(0, 0)` the mask appeared shifted — usually off its own edge, hiding nothing. The mask is now sampled at `u_maskOffset` from `mask_doc_offset()`: always `(0, 0)` for raster and group layers, and the layer's own position for text and shape layers, which are never cropped. Merge Down uses the same offset.
 - **Since #743 that crop is deferred, not run on the switch frame.** At 4K it is a 61 MB GPU→CPU readback plus a 16-million-pixel linear alpha scan — measured at 313 ms — and it used to land on exactly the frame the user had just clicked. It is now scheduled on a `requestIdleCallback` with a 500 ms timeout, falling back on browsers without one to a plain 500 ms `setTimeout` (the fallback path caps any requested delay at 1 s, but this is its only caller and it asks for 500 ms). At most **one crop is queued per layer id**; re-scheduling a layer that already has one pending replaces the earlier callback.
 - **Coming back to the layer cancels it outright.** The pending crop is dropped the moment the layer becomes active again, so a bounce off and back pays nothing at all, and the crop can never run mid-edit. When the callback does fire it re-checks its assumptions against live state before doing any work — it bails if the engine is gone, if the layer has become active again, if a float is live, or if the layer is no longer a raster.
