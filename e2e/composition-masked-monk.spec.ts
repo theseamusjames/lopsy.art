@@ -40,7 +40,14 @@ async function alphaAt(page: import('@playwright/test').Page, name: string, x: n
 test.describe('composition: Rise of the Masked Monk poster', () => {
   test.use({ viewport: { width: 1600, height: 1000 } });
 
-  test('builds the collage through the UI', async ({ page }) => {
+  test('builds the collage through the UI', async ({ page, browserName }) => {
+    // Chromium only: this is the heaviest composition in the suite, and by the
+    // atmospheric-haze stage Firefox's SwiftShader backend loses the WebGL
+    // context under the layer/mask/filter load and tears the page down
+    // ("Execution context was destroyed"). It builds cleanly on Chromium,
+    // which is also where the tutorial screenshots are captured. Same class of
+    // guard as the transform-* and brush-perf-6k Chromium-only WebGL tests.
+    test.skip(browserName !== 'chromium', 'Firefox SwiftShader loses the WebGL context on this heavy build');
     test.setTimeout(3 * 60 * 60 * 1000);
 
     await flow.s01(page);
