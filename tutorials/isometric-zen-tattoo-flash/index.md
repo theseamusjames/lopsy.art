@@ -344,7 +344,7 @@ the grid off. Press [[Cmd+Z]] three times to look back, then
 ![Four dark ink badges with cream rings, each holding a centred cream number, tucked under the left flank of each island](31-flash-numbers.webp)
 
 On a **Badges** layer, fill a 27 px radius ink circle under each island's left
-flank: (162, 762), (702, 762), (162, 1288) and (702, 1288). Fill a 22 px
+flank: (162, 762), (702, 762), (162, 1292) and (702, 1292). Fill a 22 px
 paper circle inside it, **Shrink** by 2 and fill ink again. That leaves a thin
 cream ring. Type each number in **Dela Gothic One** at **26 px** in paper,
 then nudge its glyph into the middle of its badge.
@@ -381,14 +381,22 @@ Press [[Cmd+D]] and run **Filter → Halftone…** at **Dot Size 5**. Set the
 layer to **Multiply**. The white disappears, leaving dots that thicken
 toward the bottom, like tattoo dotwork shading.
 
-## Cut shadow facets and add grain
+## Cut a shadow facet into each rock
 
-![The finished sheet in the editor, with a darker hard-edged facet on the right side of each island's rock and a fine paper grain](36-finishing.webp)
+![The first island's rock with a four-point lasso selection marching around a facet on its right side, already filled a darker grey](36a-facet-marquee.webp)
 
-On each **Isle** layer, lasso a facet on the right side of the rock, from
-the bottom edge to partway down the ridge, and fill it `#3D3733`. The cut
-edge reads as chiselled stone. Finally, add a **Paper Grain** layer on top.
-Fill it `#808080`, run **Filter → Add Noise…** (**Amount 20**, **Mono**,
-**Gaussian**), and set it to **Overlay** at **30%**.
+On each **Isle** layer, use the Lasso to select a facet on the right side of
+the rock: from the bottom edge of the earth band, partway down the ridge and
+back. Fill it with `#3D3733`. The hard edge reads as chiselled stone, which
+suits a vector flash sheet better than a soft airbrushed shadow.
+
+## Add paper grain and export
+
+![The finished sheet in the editor with a fine paper grain over everything and the Paper Grain layer at the top of the Layers panel](36-finishing.webp)
+
+Select the title layer and add a **Paper Grain** layer. Fill it with
+`#808080`, run **Filter → Add Noise…** (**Amount 20**, **Mono**,
+**Gaussian**), and set it to **Overlay** at **30%**. Overlay leaves mid-grey
+invisible, so only the grain shows.
 
 Choose **File → Quick Export PNG** to save the sheet.
