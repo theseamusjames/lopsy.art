@@ -103,13 +103,13 @@ lens-shaped dashes in `#FFE3B0`, about 150, 110 and 60 px long.
 
 ## Tile the pattern across the sea
 
-![The Pattern Fill dialog with the new 280 by 100 wave tile selected, Scale 50 and Row Offset 50, over a marquee covering the sea](07-pattern-fill.webp)
+![The Pattern Fill dialog with the new 280 by 100 wave tile selected, Scale 50 and Column Stagger 50, over a marquee covering the sea](07-pattern-fill.webp)
 
 Marquee the sea again, from y 1004 to the bottom. Choose
 **Edit → Fill with Pattern…**, pick the newest tile, and set:
 
 - **Scale** 50
-- **Row Offset** 50, which staggers the columns so the dashes don't line up
+- **Column Stagger** 50, which staggers the columns so the dashes don't line up
 
 Click **Apply**. The dashes are evenly sized, so the sea still looks like
 wallpaper. The next step fixes that.

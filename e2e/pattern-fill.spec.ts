@@ -40,6 +40,46 @@ async function fillRectViaTool(
   await page.waitForTimeout(100);
 }
 
+/**
+ * #993: define a 40x40 pattern whose only content is a 10x10 black square in
+ * its top-left corner, then clear the layer so the fill result stands alone.
+ */
+async function defineCornerSquarePattern(page: Page): Promise<string> {
+  await createDocument(page, 400, 300, true);
+  const layerId = (await getEditorState(page)).document.activeLayerId;
+  await fillRectViaTool(page, 0, 0, 10, 10, { r: 0, g: 0, b: 0 });
+
+  await selectRect(page, 0, 0, 40, 40);
+  await page.click('button:has-text("Edit")');
+  await page.click('button[role="menuitem"]:has-text("Define Pattern")');
+
+  await page.keyboard.press('Control+a');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Control+d');
+  await page.waitForTimeout(100);
+  return layerId;
+}
+
+async function fillWithPattern(page: Page, sliders: Record<string, number>): Promise<void> {
+  await page.click('button:has-text("Edit")');
+  await page.click('button[role="menuitem"]:has-text("Fill with Pattern")');
+  const dialog = page.locator('[role="dialog"][aria-label="Pattern Fill"]');
+  await expect(dialog).toBeVisible();
+  await dialog.locator('button[class*="patternSwatch"]').first().click();
+  for (const [label, value] of Object.entries(sliders)) {
+    await dialog.locator(`text=${label}`).locator('..').locator('input[type="range"]').fill(String(value));
+  }
+  await dialog.locator('button:has-text("Apply")').click();
+  await expect(dialog).not.toBeVisible();
+  await page.waitForTimeout(200);
+}
+
+async function isInk(page: Page, x: number, y: number, layerId: string): Promise<boolean> {
+  return (await getPixelAt(page, x, y, layerId)).a > 128;
+}
+
 test.describe('Pattern Fill', () => {
   test.beforeEach(async ({ page, isMobile }) => {
     test.skip(isMobile, 'layer panel requires sidebar, hidden on touch devices');
@@ -141,14 +181,14 @@ test.describe('Pattern Fill', () => {
         getEngine: () => unknown;
       };
       const wasmBridge = (window as unknown as Record<string, unknown>).__wasmBridge as {
-        filterPatternFill: (engine: unknown, layerId: string, data: Uint8Array, w: number, h: number, scale: number, ox: number, oy: number) => void;
+        filterPatternFill: (engine: unknown, layerId: string, data: Uint8Array, w: number, h: number, scale: number, staggerX: number, staggerY: number, originX: number, originY: number) => void;
       };
 
       const engine = engineState.getEngine();
       if (!engine) throw new Error('No engine');
 
       state.pushHistory('Pattern Fill');
-      wasmBridge.filterPatternFill(engine, activeId, pattern.data, pattern.width, pattern.height, 1.0, 0, 0);
+      wasmBridge.filterPatternFill(engine, activeId, pattern.data, pattern.width, pattern.height, 1.0, 0, 0, 0, 0);
       state.notifyRender();
     });
 
@@ -372,5 +412,45 @@ test.describe('Pattern Fill', () => {
       expect(px.g).toBeGreaterThan(200);
       expect(px.b).toBeGreaterThan(200);
     }
+  });
+  test('Horizontal Offset shifts every row of tiles by the same amount (#993)', async ({ page }) => {
+    const layerId = await defineCornerSquarePattern(page);
+    await fillWithPattern(page, { 'Horizontal Offset': 50 });
+    await page.screenshot({ path: 'e2e/screenshots/pattern-fill-offset-x.png' });
+
+    // Tile origin moves right by half a tile (20 px): the black square sits
+    // at x 20-30 in every row, not staggered x 20 / 0 / 20 brick-style.
+    for (const y of [5, 45, 85]) {
+      expect(await isInk(page, 25, y, layerId)).toBe(true);
+      expect(await isInk(page, 5, y, layerId)).toBe(false);
+    }
+  });
+
+  test('Vertical Offset shifts every column of tiles by the same amount (#993)', async ({ page }) => {
+    const layerId = await defineCornerSquarePattern(page);
+    await fillWithPattern(page, { 'Vertical Offset': 25 });
+    await page.screenshot({ path: 'e2e/screenshots/pattern-fill-offset-y.png' });
+
+    // Tile origin moves down by a quarter tile (10 px): the square sits at
+    // y 10-20 in every column.
+    for (const x of [5, 45, 85]) {
+      expect(await isInk(page, x, 15, layerId)).toBe(true);
+      expect(await isInk(page, x, 5, layerId)).toBe(false);
+    }
+  });
+
+  test('Row Stagger still offsets alternate rows into a brick layout (#993)', async ({ page }) => {
+    const layerId = await defineCornerSquarePattern(page);
+    await fillWithPattern(page, { 'Row Stagger': 50 });
+    await page.screenshot({ path: 'e2e/screenshots/pattern-fill-row-stagger.png' });
+
+    // Even rows keep the square at x 0-10; the odd row (y 40-80) is shifted
+    // by half a tile so its square sits at x 20-30.
+    for (const y of [5, 85]) {
+      expect(await isInk(page, 5, y, layerId)).toBe(true);
+      expect(await isInk(page, 25, y, layerId)).toBe(false);
+    }
+    expect(await isInk(page, 25, 45, layerId)).toBe(true);
+    expect(await isInk(page, 5, 45, layerId)).toBe(false);
   });
 });

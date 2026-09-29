@@ -74,9 +74,9 @@ Select the whole 200 × 200 tile again and choose **Edit → Define Pattern**.
 
 Press [[Cmd+D]] to deselect, then fill the whole `Blocks` layer with
 `#808080`. Choose **Edit → Fill with Pattern…**, pick your new pattern and
-set **Scale** `80`. Leave both offsets at `0` and click **Apply**.
+set **Scale** `80`. Leave both stagger sliders and both offset sliders at `0` and click **Apply**.
 
-> **Tip:** Row Offset staggers each *column* of tiles vertically. Leave it
+> **Tip:** Column Stagger staggers each *column* of tiles vertically. Leave it
 > at 0 here, because the stagger is already drawn into the tile.
 
 ## Emboss the blocks

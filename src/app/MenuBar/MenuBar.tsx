@@ -27,6 +27,7 @@ import {
   cancelColorLutPreview,
 } from './color-lut-actions';
 import type { LutPreset } from '../../filters/color-lut';
+import type { PatternFillSettings } from '../pattern-store';
 import {
   exportCanvasWithOptions,
   createExportPreviewSession,
@@ -176,12 +177,12 @@ export function MenuBar() {
     return () => window.removeEventListener('mousedown', handleClick);
   }, [openMenu]);
 
-  const handlePatternFillApply = useCallback((patternId: string, scale: number, offsetX: number, offsetY: number) => {
+  const handlePatternFillApply = useCallback((patternId: string, settings: PatternFillSettings) => {
     if (previewActiveRef.current) {
-      applyPatternFillWithPreview(patternId, scale, offsetX, offsetY);
+      applyPatternFillWithPreview(patternId, settings);
       previewActiveRef.current = false;
     } else {
-      applyPatternFill(patternId, scale, offsetX, offsetY);
+      applyPatternFill(patternId, settings);
     }
     setActiveDialog(null);
   }, []);
@@ -198,9 +199,9 @@ export function MenuBar() {
     }
   }, []);
 
-  const handlePatternPreviewChange = useCallback((patternId: string, scale: number, offsetX: number, offsetY: number) => {
+  const handlePatternPreviewChange = useCallback((patternId: string, settings: PatternFillSettings) => {
     if (!previewActiveRef.current) return;
-    previewPatternFill(patternId, scale, offsetX, offsetY);
+    previewPatternFill(patternId, settings);
   }, []);
 
   const handleColorLutApply = useCallback((preset: LutPreset, intensity: number) => {
