@@ -74,11 +74,15 @@ export function computeMergeDown(
 
   const engine = getEngine();
   if (engine) {
+    // `rasterizeLayerEffects` bakes the layer's opacity into the pixels
+    // (effects keep their own opacity, as in the live composite), so the
+    // baked descriptor goes to opacity 1 or `mergeLayers` would apply it
+    // a second time (#1007).
     if (hasEnabledEffects(topLayer.effects)) {
       const rasterized = rasterizeLayerEffects(engine, activeId);
       if (rasterized && rasterized.length > 0) {
         uploadLayerPixels(engine, activeId, rasterized, doc.width, doc.height, 0, 0);
-        const cleared = { ...topLayer, x: 0, y: 0, width: doc.width, height: doc.height, effects: DEFAULT_EFFECTS, mask: null };
+        const cleared = { ...topLayer, x: 0, y: 0, width: doc.width, height: doc.height, opacity: 1, effects: DEFAULT_EFFECTS, mask: null };
         updateLayer(engine, layerToDescJson(cleared, topLayer.visible));
       }
     }
@@ -87,7 +91,7 @@ export function computeMergeDown(
       const rasterized = rasterizeLayerEffects(engine, belowId);
       if (rasterized && rasterized.length > 0) {
         uploadLayerPixels(engine, belowId, rasterized, doc.width, doc.height, 0, 0);
-        const cleared = { ...bottomLayer, x: 0, y: 0, width: doc.width, height: doc.height, effects: DEFAULT_EFFECTS, mask: null };
+        const cleared = { ...bottomLayer, x: 0, y: 0, width: doc.width, height: doc.height, opacity: 1, effects: DEFAULT_EFFECTS, mask: null };
         updateLayer(engine, layerToDescJson(cleared, bottomLayer.visible));
       }
     }

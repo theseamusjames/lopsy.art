@@ -2,14 +2,27 @@
 import '../../../test/canvas-mock';
 import { describe, it, expect, vi } from 'vitest';
 import { computeMergeDown, canMergeDown } from './merge-down';
-import { createRasterLayer, createTextLayer, createGroupLayer } from '../../../layers/layer-model';
+import { createRasterLayer, createTextLayer, createGroupLayer, DEFAULT_EFFECTS } from '../../../layers/layer-model';
 import type { DocumentState } from '../../../types';
+
+const mocks = vi.hoisted(() => ({
+  engine: null as object | null,
+  updateLayer: vi.fn<(engine: unknown, json: string) => void>(),
+  mergeLayers: vi.fn(),
+}));
 
 // #746: computeMergeDown must not read the JS pixel map — it is a
 // GPU-only operation.
 vi.mock('../../../engine-wasm/engine-state', () => ({
-  getEngine: () => null,
+  getEngine: () => mocks.engine,
   clearEngine: () => {},
+}));
+
+vi.mock('../../../engine-wasm/wasm-bridge', () => ({
+  mergeLayers: mocks.mergeLayers,
+  rasterizeLayerEffects: () => new Uint8Array(4 * 4 * 4),
+  updateLayer: mocks.updateLayer,
+  uploadLayerPixels: () => {},
 }));
 
 function makeDoc(): DocumentState {
@@ -309,5 +322,28 @@ describe('canMergeDown', () => {
       colorMode: 'rgb',
     };
     expect(canMergeDown(doc)).toBe(true);
+  });
+});
+
+describe('computeMergeDown with effects (#1007)', () => {
+  it('sends the baked layer to the merge at opacity 1', () => {
+    mocks.engine = {};
+    mocks.updateLayer.mockClear();
+    const doc = makeDoc();
+    const topId = doc.activeLayerId!;
+    const effects = { ...DEFAULT_EFFECTS, innerGlow: { ...DEFAULT_EFFECTS.innerGlow, enabled: true } };
+    const withEffect: DocumentState = {
+      ...doc,
+      layers: doc.layers.map((l) => (l.id === topId ? { ...l, opacity: 0.5, effects } : l)),
+    };
+
+    computeMergeDown(withEffect);
+    mocks.engine = null;
+
+    expect(mocks.mergeLayers).toHaveBeenCalled();
+    expect(mocks.updateLayer).toHaveBeenCalledTimes(1);
+    const desc = JSON.parse(mocks.updateLayer.mock.calls[0]![1]) as { id: string; opacity: number };
+    expect(desc.id).toBe(topId);
+    expect(desc.opacity).toBe(1);
   });
 });

@@ -957,9 +957,10 @@ Bakes the enabled effects into the layer's pixels and clears them. Available fro
 - The layer is repositioned to the document origin and resized to the **full document size**, since effects like shadows and glows extend beyond the original bounds. Sparse layers are re-cropped to their content afterward.
 - A **text layer becomes a raster layer**, losing editability.
 - All five effects reset to their disabled defaults.
+- The layer's **opacity is baked into the pixels and reset to 100%**. The bake renders the content at the layer's opacity while the effects keep their own (as the live composite does), so keeping the opacity would apply it a second time (#1007). The blend mode is kept.
 - Pushes one `Rasterize Layer Style` history entry, **before** the bake (#903, fixed in #914). `pushHistory` snapshots what is on the GPU, and the push used to run after `computeRasterizeStyle` had already baked the effects in, so undo restored "effects enabled" on top of baked pixels and a drop shadow rendered twice. A pure `canRasterizeLayerStyle` check gates the push, so nothing is recorded when no effect is enabled or there is no engine.
 
-**Merge Down** performs the same bake implicitly: if either the top or bottom layer has enabled effects, each is rasterized with its effects and repositioned to full document size before the merge.
+**Merge Down** performs the same bake implicitly: if either the top or bottom layer has enabled effects, each is rasterized with its effects and repositioned to full document size before the merge. The baked layer enters the merge at opacity 1, since its opacity is already in the pixels.
 
 ### Gaps
 - **Effect colors and stroke position are not undoable.** Only the enable checkboxes and slider drags push history entries. Changing any of the five color swatches, or switching the stroke between outside/center/inside, mutates the document with no history entry — undo jumps past the change to whatever was recorded before it.
