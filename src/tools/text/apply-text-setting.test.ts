@@ -34,7 +34,7 @@ vi.mock('../../app/local-fonts-store', () => ({
 }));
 vi.mock('../../utils/font-loader', () => ({
   extractFamilyName: (f: string) => f,
-  loadGoogleFont: () => {},
+  loadGoogleFont: () => Promise.resolve(),
   loadFontBinaryToEngine: () => Promise.resolve(false),
 }));
 

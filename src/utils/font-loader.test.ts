@@ -15,29 +15,44 @@ interface FakeElement {
   textContent: string;
   onload: (() => void) | null;
   onerror: (() => void) | null;
+  remove: () => void;
 }
 
 interface InstalledDocumentStub {
   restore: () => void;
+  /** Links currently attached to <head>. */
   links: FakeElement[];
+  /** Every link ever appended, in order. */
+  appendedLinks: FakeElement[];
   styles: FakeElement[];
   fontLoads: string[];
+  /** Make the next `count` appended links fail with onerror. */
+  failNextLinks: (count: number) => void;
 }
 
 function installDocumentStub(): InstalledDocumentStub {
   const links: FakeElement[] = [];
+  const appendedLinks: FakeElement[] = [];
   const styles: FakeElement[] = [];
   const fontLoads: string[] = [];
+  let linkFailuresLeft = 0;
   const previousDocument = (globalThis as { document?: unknown }).document;
   const doc = {
-    createElement: (tag: string): FakeElement => ({
-      tag,
-      rel: '',
-      href: '',
-      textContent: '',
-      onload: null,
-      onerror: null,
-    }),
+    createElement: (tag: string): FakeElement => {
+      const el: FakeElement = {
+        tag,
+        rel: '',
+        href: '',
+        textContent: '',
+        onload: null,
+        onerror: null,
+        remove: () => {
+          const i = links.indexOf(el);
+          if (i >= 0) links.splice(i, 1);
+        },
+      };
+      return el;
+    },
     head: {
       appendChild: (node: FakeElement) => {
         if (node.tag === 'style') {
@@ -45,8 +60,11 @@ function installDocumentStub(): InstalledDocumentStub {
           return node;
         }
         links.push(node);
-        // Fire onload asynchronously so the loader's promise resolves.
-        queueMicrotask(() => node.onload?.());
+        appendedLinks.push(node);
+        const shouldFail = linkFailuresLeft > 0;
+        if (shouldFail) linkFailuresLeft--;
+        // Fire asynchronously, as the browser does.
+        queueMicrotask(() => (shouldFail ? node.onerror?.() : node.onload?.()));
         return node;
       },
     },
@@ -65,8 +83,12 @@ function installDocumentStub(): InstalledDocumentStub {
       else (globalThis as { document?: unknown }).document = previousDocument;
     },
     links,
+    appendedLinks,
     styles,
     fontLoads,
+    failNextLinks: (count: number) => {
+      linkFailuresLeft = count;
+    },
   };
 }
 
@@ -174,6 +196,70 @@ describe('loadGoogleFontPreview', () => {
     ]);
     expect(previewCalls).toEqual(['Roboto']);
     expect(stub.links.length).toBe(0);
+  });
+});
+
+describe('Google font loads retry after failure (#997)', () => {
+  let stub: InstalledDocumentStub;
+
+  beforeEach(() => {
+    stub = installDocumentStub();
+    vi.doMock('../engine-wasm/engine-state', () => ({ getEngine: () => null }));
+    vi.doMock('../engine-wasm/wasm-bridge', () => ({ loadFontDataForFamily: vi.fn(), isFontLoaded: vi.fn() }));
+  });
+
+  afterEach(() => {
+    stub.restore();
+    vi.resetModules();
+    vi.doUnmock('../engine-wasm/engine-state');
+    vi.doUnmock('../engine-wasm/wasm-bridge');
+    vi.doUnmock('./font-previews');
+  });
+
+  it('retries the stylesheet after a failed load and drops the dead <link>', async () => {
+    const mod = await import('./font-loader');
+    stub.failNextLinks(1);
+
+    await expect(mod.loadGoogleFont('Lobster', [400])).rejects.toThrow('Failed to load font: Lobster');
+    expect(stub.links).toHaveLength(0);
+
+    await expect(mod.loadGoogleFont('Lobster', [400])).resolves.toBeUndefined();
+    expect(stub.appendedLinks).toHaveLength(2);
+    expect(stub.links).toHaveLength(1);
+    expect(stub.links[0]!.href).toBe('https://fonts.googleapis.com/css2?family=Lobster:wght@400&display=swap');
+  });
+
+  it('still dedupes while a load is in flight or after it succeeds', async () => {
+    const mod = await import('./font-loader');
+    const first = mod.loadGoogleFont('Lobster', [400]);
+    expect(mod.loadGoogleFont('Lobster', [400])).toBe(first);
+    await first;
+    await mod.loadGoogleFont('Lobster', [400]);
+    expect(stub.appendedLinks).toHaveLength(1);
+  });
+
+  it('retries a css2 preview whose request failed', async () => {
+    vi.doMock('./font-previews', () => ({
+      loadPreviewFace: () => Promise.resolve(null),
+      prefetchFontPreviewsBlob: () => undefined,
+    }));
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls++;
+      if (calls === 1) return new Response(null, { status: 503 });
+      return new Response("@font-face { font-family: 'Sunflower'; src: url(x.woff2); }", { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const mod = await import('./font-loader');
+      await expect(mod.loadGoogleFontPreview('Sunflower', 'Sunflower')).rejects.toThrow();
+      await expect(mod.loadGoogleFontPreview('Sunflower', 'Sunflower')).resolves.toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    expect(calls).toBe(2);
+    expect(stub.styles).toHaveLength(1);
   });
 });
 
