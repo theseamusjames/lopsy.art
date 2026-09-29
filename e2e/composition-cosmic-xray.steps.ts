@@ -1,5 +1,11 @@
 import type { Page } from '@playwright/test';
 
+// The mod-click that selects a layer (or its alpha) is ⌘ on macOS and Ctrl
+// elsewhere. On macOS a bare Ctrl-click is a secondary (right) click, so it
+// never reaches the panel's onClick — use Meta there instead.
+const isMac = process.platform === 'darwin';
+const modClick = (m: 'Control'): 'Control' | 'Meta' => (isMac ? 'Meta' : m);
+
 // Shared UI-driving helpers for the Cosmic X-Ray tattoo flash composition.
 // Every mutation goes through the real UI (menus, tools, panels, mouse and
 // keyboard). The only store reads are for coordinate projection and ids.
@@ -408,7 +414,7 @@ export async function selectLayer(page: Page, name: string, modifiers: Array<'Sh
   const row = page.locator(`[data-layer-id="${id}"]`);
   await row.scrollIntoViewIfNeeded();
   const label = row.locator('[class*="_name_"]').first();
-  await label.click({ modifiers });
+  await label.click({ modifiers: modifiers.map((m) => (m === 'Control' ? modClick(m) : m)) });
   await pause(page, 120);
   return id;
 }
@@ -643,7 +649,7 @@ export async function selectAlpha(page: Page, name: string): Promise<void> {
   const id = await layerIdByName(page, name);
   const row = page.locator(`[data-layer-id="${id}"]`);
   await row.scrollIntoViewIfNeeded();
-  await row.locator('[class*="_thumbnail_"]').first().click({ modifiers: ['Control'] });
+  await row.locator('[class*="_thumbnail_"]').first().click({ modifiers: [modClick('Control')] });
   await pause(page, 400);
 }
 
@@ -715,7 +721,16 @@ export async function scaleSelection(page: Page, corner: Pt, dx: number, dy: num
   await pause(page, 150);
   if (uniform) await page.keyboard.down('Meta');
   await page.mouse.down();
-  const s1 = await docToScreen(page, corner.x + dx, corner.y + dy);
+  // Firefox clamps pointer coordinates to the viewport and mishandles a drag
+  // whose endpoint leaves it — an outward (grow) scale then collapses instead
+  // of enlarging. Keep the endpoint just inside the viewport so the drag stays
+  // a real scale on both engines; Chromium is unaffected (its endpoints for
+  // these compositions already sit inside).
+  const raw = await docToScreen(page, corner.x + dx, corner.y + dy);
+  const vp = page.viewportSize();
+  const s1 = vp
+    ? { x: Math.min(Math.max(raw.x, 2), vp.width - 2), y: Math.min(Math.max(raw.y, 2), vp.height - 2) }
+    : raw;
   await page.mouse.move(s1.x, s1.y, { steps: 10 });
   await page.mouse.up();
   if (uniform) await page.keyboard.up('Meta');
