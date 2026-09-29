@@ -23,12 +23,13 @@ import {
   floatSelection,
   hasFloat,
   setSelectionMask,
+  clearSelection,
   compositeFloat,
   compositeFloatAffine,
   compositeFloatPerspective,
   dropFloat,
 } from '../../engine-wasm/wasm-bridge';
-import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
+import { isLayerAlphaSelection, selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { growFloatToCover } from './float-growth';
 import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
@@ -133,12 +134,22 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
       // floatSelection extracts the entire layer instead of just the
       // selected pixels.
       const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
-      setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
+      // A layer-alpha selection means the whole layer, but its doc-sized
+      // mask drops whatever lies past the canvas edge. Lift unmasked so
+      // that part turns with the rest instead of staying behind (#994).
+      const isWholeLayer = isLayerAlphaSelection(activeLayerId, sel.mask);
+      if (isWholeLayer) {
+        clearSelection(engine);
+      } else {
+        setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
+      }
 
-      // floatSelection returns [new_x, new_y, fw, fh] — for text layers it
-      // expands the buffer to the diagonal size to prevent rotation clipping.
+      // The float covers the union of the canvas and the layer.
       floatSelection(engine, activeLayerId);
       compositeFloat(engine, 0, 0);
+      if (isWholeLayer) {
+        setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
+      }
 
       // Mirror the float's expanded texture rect into the store so neither
       // engine-sync nor the post-drop store holds the pre-float bounds.

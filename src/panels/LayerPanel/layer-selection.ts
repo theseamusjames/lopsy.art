@@ -8,6 +8,21 @@ import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
 import { schedulePrefloat } from '../../app/interactions/prefloat';
 import { getMaskDocOrigin } from '../../layers/mask-origin';
 
+/**
+ * The most recent selection built from a layer's alpha, identified by its
+ * mask array (every later selection change installs a new array). A
+ * document-sized mask cannot hold the part of a layer past the canvas edge,
+ * so a transform of this selection lifts the whole layer instead (#994).
+ */
+let layerAlphaSelection: { layerId: string; mask: Uint8ClampedArray } | null = null;
+
+/** Whether `mask` is still the alpha selection `selectLayerAlpha` made for `layerId`. */
+export function isLayerAlphaSelection(layerId: string, mask: Uint8ClampedArray): boolean {
+  return layerAlphaSelection !== null
+    && layerAlphaSelection.layerId === layerId
+    && layerAlphaSelection.mask === mask;
+}
+
 export function selectLayerAlpha(layerId: string): void {
   // Commit any active GPU float so the layer texture has the final pixels
   const engine = getEngine();
@@ -39,6 +54,7 @@ export function selectLayerAlpha(layerId: string): void {
   const bounds = selectionBounds(selMask, docW, docH);
   if (bounds) {
     editorState.setSelection(bounds, selMask, docW, docH);
+    layerAlphaSelection = { layerId, mask: selMask };
     useUIStore.getState().setTransform(createTransformState(bounds));
     // Prefloat runs ensure_layer_full_size on the engine, which re-origins
     // the layer to (0,0). For text layers that destroys the anchor

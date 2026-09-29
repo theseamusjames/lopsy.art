@@ -633,9 +633,19 @@ gets baked first.
     gradient, or filter confined to "the selection" afterwards covers the whole
     layer. For what `Delete` does with the swapped mask, see
     [Clipboard](#clipboard).
-- Floating a **text** layer expands the buffer to the layer's diagonal so
-  rotation doesn't clip the glyphs.
-- **A transform keeps the pixels it carries off the canvas (#818, fixed in #856).** A float's buffer is the union of the canvas and the layer's content, and the engine composites a transform only inside it, so a rotate or scale that swung pixels past that rect rendered them clipped — and ⌘D baked the clip in (a 200 × 40 bar at the bottom edge turned upright became 40 × 140, and stayed that way when moved back on-canvas). Each handle drag now computes the transformed content's bounds — rotation, skew and distort/perspective corners included (`getTransformedContentBounds`) — and grows the float, its base and the layer texture to cover them first (`growFloatToCover` → `ensureFloatCovers`); the flip and Rotate 90° buttons do the same from their matrix (`mapRectThroughInverse`). Raster layers only. The grown rect, like the float's initial expansion on a handle grab or Move drag, is mirrored into the store as x/y **and** width/height (`reconcileLayerBoundsWithEngine`) rather than x/y alone, so the store no longer keeps the pre-float size once the float drops (#822).
+- Floating a **text** layer gets no special buffer: like any layer, the float
+  covers the union of the canvas and the layer, and a transform grows it as
+  below. A committed transform leaves the layer `type: 'text'` holding the
+  transformed pixels.
+- **A layer-alpha selection lifts the whole layer (#994).** The selection mask
+  is document-sized, so the one Cmd/Ctrl+clicking a thumbnail builds
+  (`selectLayerAlpha`) drops whatever part of the layer lies past the canvas
+  edge — and a handle grab then floated only the on-canvas rows, leaving the
+  rest behind (HELLO typed across the bottom edge and turned −90° came out as
+  fragments). While the selection is still that exact mask
+  (`isLayerAlphaSelection`: same layer, same mask array), a handle grab floats
+  the layer unmasked and re-uploads the mask afterwards.
+- **A transform keeps the pixels it carries off the canvas (#818, fixed in #856).** A float's buffer is the union of the canvas and the layer's content, and the engine composites a transform only inside it, so a rotate or scale that swung pixels past that rect rendered them clipped — and ⌘D baked the clip in (a 200 × 40 bar at the bottom edge turned upright became 40 × 140, and stayed that way when moved back on-canvas). Each handle drag now computes the transformed content's bounds — rotation, skew and distort/perspective corners included (`getTransformedContentBounds`) — and grows the float, its base and the layer texture to cover them first (`growFloatToCover` → `ensureFloatCovers`); the flip and Rotate 90° buttons do the same from their matrix (`mapRectThroughInverse`). Raster and text layers (text since #994 — a text layer's rotated glyphs were clipped at the canvas edge). The grown rect, like the float's initial expansion on a handle grab or Move drag, is mirrored into the store as x/y **and** width/height (`reconcileLayerBoundsWithEngine`) rather than x/y alone, so the store no longer keeps the pre-float size once the float drops (#822).
 - **Transformed edges are straight alpha (#815, fixed in #856).** The affine and perspective float shaders resampled with hardware `LINEAR` filtering, bleeding the black RGB of transparent texels into anti-aliased edges — a dark fringe round every rotated or scaled selection. They now sample through `samplePremulBilinear` (`premul_sample.glsl`): four `texelFetch` taps interpolated premultiplied and un-premultiplied on return.
 
 ### Quick transforms
