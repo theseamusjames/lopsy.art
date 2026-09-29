@@ -97,7 +97,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 
 - **Only Size and Opacity reach the dab.** `eraser-stroke.ts` reads exactly those two settings; hardness is the hard-coded `0.8` and spacing is a hard-coded `Math.max(1, size * 0.25)`. The **Spacing setting, the tip bitmap, all four jitters, scatter, angle, texture, flow, fade, taper, speed-size, and sub-brushes are all dropped** — the same shape of gap as [mask editing](#editing-a-layer-mask), and for the same reason: this is a second implementation that was never grown to match. Symmetry and the active selection *are* honored (`mirrorBatchPoints`, and `u_hasSelection` in the shader, which additionally modulates the erase amount by the mask value so a feathered selection erases softly).
 - **Opacity does not behave like the Brush's.** A brush stroke with a circular or alpha tip accumulates into a stroke texture under `blend_equation(MAX)`, so overlapping dabs within one stroke cannot push alpha past the opacity ceiling — a single pass lands at exactly the slider value. The eraser has no stroke texture: `eraser_dab.glsl` reads the layer, writes `existing.a * (1 − stamp × opacity)`, and blits the result straight back over the layer **once per dab**, so every dab sees the previous dab's output and the erasure **compounds multiplicatively**. With spacing pinned at 25 % of size, roughly four dabs cover any given pixel in one pass, so an Opacity of 50 % removes about `1 − 0.5⁴ ≈ 94 %` of a pixel's alpha in a single stroke rather than 50 %. Opacity on the eraser is therefore closer to a rate than a ceiling.
-- **Every eraser dab costs two full-texture passes.** The brush scissors each dab to its bounding box — the code's own note is that without it a dab "discards >99.98% of invocations for a typical brush size" — and `draw_pencil_line` does the same. `apply_eraser_dab_batch` enables no scissor at all: per point in the batch it sets `gl.viewport(0, 0, w, h)` and draws a fullscreen quad into `scratch_fbo_a`, then blits the entire scratch texture back over the layer. On a large layer that pair of full-canvas passes, not the erasing itself, is the dominant cost — the same pattern already documented for [mask dabs](#editing-a-layer-mask).
+- **Every eraser dab costs two full-texture passes.** The brush scissors each dab to its bounding box — the code's own note is that without it a dab "discards >99.98% of invocations for a typical brush size" — and `draw_pencil_line` does the same. `apply_eraser_dab_batch` enables no scissor at all: per point in the batch it sets `gl.viewport(0, 0, w, h)` and draws a fullscreen quad into `scratch_fbo_a`, then blits the entire scratch texture back over the layer. On a large layer that pair of full-canvas passes, not the erasing itself, is the dominant cost — the pattern mask dabs had until #1020 scissored them (see [Editing a Layer Mask](#editing-a-layer-mask)).
 - **The scratch texture now grows to cover the layer before the eraser runs (fixed incidentally by #883).** `scratch_texture_a` starts at document dimensions, while the eraser's viewport and its blit use the *layer* texture's dimensions — so erasing on a layer expanded past the document bounds used to sample and write beyond the scratch texture's extent. Since #914, `apply_eraser_dab_batch` itself calls `ensure_scratch_size(w, h)`, which resizes both scratch textures (and re-attaches their FBOs) to *exactly* the layer's texture size before each batch — the compositor shrinks the scratch back to the document every frame, so the per-dab path can no longer rely on the size `beginStroke` → `ensure_layer_covers` set at pointer-down. Before #914, #883's `ensure_scratch_covers` only ever grew the scratch, and a larger-than-document scratch squashed the whole composite (#907). `end_stroke` keeps its own temporary-texture guard for brush strokes. The mask dab batches never reach `beginStroke` and are unaffected.
 - The eraser body also never sets or clears GL blend state, inheriting whatever the previous operation left bound. It happens to be correct today only because `apply_dab_batch` disables blending on its way out, so the read-modify-write lands as a plain replace.
 
@@ -1347,22 +1347,25 @@ differences are not cosmetic.
   of a synchronous `readMaskTexture` — so the click also no longer drains a
   previous stroke's pending readback first. There is no GPU route and no
   empty-mask fast path.
-- **A mask dab costs two full-texture passes.** The layer brush scissors each dab
-  to its bounding box — without that the fragment shader runs across the whole
-  stroke texture and discards well over 99 % of its invocations — and accumulates
-  into a separate stroke texture that is composited once at pointer-up. The mask
-  path does neither. For **every interpolated dab point** it renders the dab
-  across the entire mask texture into a scratch buffer, then blits the whole
-  scratch back over the mask: two unscissored full-texture passes per point. (The
-  mask *pencil* is the exception — it scissors each block, like the layer pencil.)
-  At the `max(1, size × 0.25)` spacing above, a
-  100 px drag of a 10 px brush is at least **41** points even when it arrives as
-  a single pointer segment — 82 full-mask passes — and every further pointer
-  event along the way adds one more, because each segment re-stamps its own
-  starting point. Quick
-  Mask uses the identical loop against a **document-sized** texture. This is why
-  mask painting on a large document feels heavier than painting pixels, despite
-  never touching the CPU.
+- **A mask dab is scissored to its bounding box (#1020).** The dab shader reads
+  the mask it writes, so every interpolated dab point still takes two passes —
+  render the dab into a scratch buffer, then copy it back over the mask — but
+  both passes are scissored to the dab's bounding box
+  (`lopsy_core::brush::circle_dab_scissor_rect`, the layer brush's half-extent
+  plus a 2 px margin, clamped to the texture). The shader passes every texel
+  outside the radius through unchanged, so the result is the same as the old
+  full-texture passes: the #1020 spec replays every dab the engine draws on the
+  CPU and compares the whole mask, and a before/after dump differed in 16 of
+  93 600 texels by 1 LSB (layer mask) and not at all (Quick Mask). Before the
+  scissor each dab cost two passes over the *entire* mask — roughly 60 s of
+  queued GPU work for one 20-move stroke on a 4096² mask, against 1.6 s for the
+  layer brush. The mask path still has no stroke texture, so hiding compounds
+  within a stroke (see below). At the `max(1, size × 0.25)` spacing above, a
+  100 px drag of a 10 px brush is at least **41** dab points even when it arrives
+  as a single pointer segment, and every further pointer event adds one more,
+  because each segment re-stamps its own starting point. Quick Mask runs the
+  same scissored loop (`mask_paint_gpu::paint_mask_dabs_scissored`) against its
+  document-sized texture.
 - **Undo behaves, though.** Every pixel history entry carries a GPU snapshot of
   each layer mask (see **Mask** above), which is what makes all of this undoable;
   the history entries are *Mask Paint*, *Mask Erase*, and *Mask Fill*.

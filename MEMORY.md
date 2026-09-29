@@ -271,6 +271,19 @@ the event with a window **capture** listener (runs before the app's
 window-level pointer handlers) and a later-registered window **bubble**
 listener (runs after them). See `e2e/mask-gpu-undo-780.spec.ts`.
 
+## E2E: verify a GPU-work reduction by replaying the shader on the CPU
+
+When an optimisation must not change output (scissoring, skipping
+passes), record what the engine actually draws and replay it: in
+`page.addInitScript`, patch `getUniformLocation` (tag locations with
+their program and name — `ShaderProgram::location` caches lazily, so the
+first query happens at first use, after the init script), `useProgram`,
+`uniform1f/1i/2f` and `drawArrays`, snapshot the uniforms on each draw of
+the program you care about, then recompute the shader's formula per
+texel in the page and compare the whole texture (quantise to fp16 when
+`EXT_color_buffer_float` exists, else u8). See
+`e2e/mask-dab-scissor-1020.spec.ts`.
+
 ## GLSL `smoothstep(edge0, edge1, x)` is undefined when edge0 == edge1
 
 The GLSL ES spec leaves `smoothstep` undefined when `edge0 >= edge1`

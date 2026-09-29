@@ -112,6 +112,37 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
     t * t * (3.0 - 2.0 * t)
 }
 
+/// Texel rectangle `[x, y, w, h]` (clamped to the texture) that bounds
+/// every texel a round mask dab of diameter `size` centred at (cx, cy)
+/// can change, or `None` when the dab misses the texture entirely.
+///
+/// The mask dab shaders (`quick_mask_dab.glsl`) sample at texel centres
+/// (`v_uv * texSize`) and pass through any texel farther than `size / 2`
+/// from the centre unchanged, so scissoring both the dab pass and the
+/// copy-back to this rect is pixel-identical to rendering the full
+/// texture (#1020). The +2 margin mirrors the layer brush's scissor
+/// (#178) and covers the texel-centre offset and the antialiased rim.
+pub fn circle_dab_scissor_rect(
+    cx: f32,
+    cy: f32,
+    size: f32,
+    tex_w: u32,
+    tex_h: u32,
+) -> Option<[i32; 4]> {
+    if !(cx.is_finite() && cy.is_finite() && size.is_finite()) || size <= 0.0 {
+        return None;
+    }
+    let half_extent = (size * 0.5).ceil() as i32 + 2;
+    let x0 = (cx.floor() as i32).saturating_sub(half_extent).max(0);
+    let y0 = (cy.floor() as i32).saturating_sub(half_extent).max(0);
+    let x1 = (cx.ceil() as i32).saturating_add(half_extent).min(tex_w as i32);
+    let y1 = (cy.ceil() as i32).saturating_add(half_extent).min(tex_h as i32);
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    Some([x0, y0, x1 - x0, y1 - y0])
+}
+
 /// Generate a circular brush stamp with hardness falloff
 /// Returns a flat array of alpha values (size x size), row-major
 pub fn generate_brush_stamp(size: u32, hardness: f32) -> Vec<f32> {
@@ -250,6 +281,64 @@ pub fn interpolate_points_with_scatter(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn mask_dab_touches(px: i32, py: i32, cx: f32, cy: f32, size: f32) -> bool {
+        let fx = px as f32 + 0.5 - cx;
+        let fy = py as f32 + 0.5 - cy;
+        (fx * fx + fy * fy).sqrt() <= size * 0.5
+    }
+
+    #[test]
+    fn test_circle_dab_scissor_rect_covers_every_touched_texel() {
+        let (tw, th) = (64u32, 48u32);
+        let sizes = [0.5f32, 1.0, 1.5, 2.0, 3.3, 7.0, 20.0, 45.5, 200.0];
+        let centres = [
+            (0.0f32, 0.0f32), (0.5, 0.5), (10.25, 7.75), (31.5, 23.9),
+            (63.99, 47.01), (64.0, 48.0), (-3.2, 20.0), (70.0, 50.0), (32.0, -5.5),
+        ];
+        for &size in &sizes {
+            for &(cx, cy) in &centres {
+                let rect = circle_dab_scissor_rect(cx, cy, size, tw, th);
+                for py in 0..th as i32 {
+                    for px in 0..tw as i32 {
+                        if !mask_dab_touches(px, py, cx, cy, size) { continue; }
+                        let [x, y, w, h] = rect.unwrap_or_else(|| {
+                            panic!("dab ({cx},{cy}) size {size} touches ({px},{py}) but rect is None")
+                        });
+                        assert!(
+                            px >= x && px < x + w && py >= y && py < y + h,
+                            "texel ({px},{py}) outside rect {:?} for dab ({cx},{cy}) size {size}",
+                            [x, y, w, h],
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_circle_dab_scissor_rect_is_dab_sized_not_texture_sized() {
+        let [x, y, w, h] = circle_dab_scissor_rect(2048.3, 1024.6, 40.0, 4096, 4096).unwrap();
+        assert_eq!((x, y), (2048 - 22, 1024 - 22));
+        assert_eq!((w, h), (45, 45));
+        assert!((w as i64) * (h as i64) < 4096 * 4096 / 1000);
+    }
+
+    #[test]
+    fn test_circle_dab_scissor_rect_clamps_to_texture() {
+        assert_eq!(circle_dab_scissor_rect(1.0, 1.0, 10.0, 100, 100), Some([0, 0, 8, 8]));
+        assert_eq!(circle_dab_scissor_rect(99.5, 99.5, 10.0, 100, 100), Some([92, 92, 8, 8]));
+        let [_, _, w, h] = circle_dab_scissor_rect(50.0, 50.0, 1000.0, 100, 100).unwrap();
+        assert_eq!((w, h), (100, 100));
+    }
+
+    #[test]
+    fn test_circle_dab_scissor_rect_misses() {
+        assert_eq!(circle_dab_scissor_rect(-20.0, 5.0, 10.0, 100, 100), None);
+        assert_eq!(circle_dab_scissor_rect(5.0, 130.0, 10.0, 100, 100), None);
+        assert_eq!(circle_dab_scissor_rect(5.0, 5.0, 0.0, 100, 100), None);
+        assert_eq!(circle_dab_scissor_rect(f32::NAN, 5.0, 10.0, 100, 100), None);
+    }
 
     #[test]
     fn test_edge_distance_solid_rect() {
