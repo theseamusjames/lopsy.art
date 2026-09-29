@@ -243,7 +243,7 @@ pub fn upload_layer_mask(
             engine.inner.texture_pool.release(old);
         }
     }
-    engine.inner.needs_recomposite = true;
+    engine.inner.mark_layer_dirty(layer_id);
 }
 
 #[wasm_bindgen(js_name = "removeLayerMask")]
@@ -251,7 +251,7 @@ pub fn remove_layer_mask(engine: &mut Engine, layer_id: &str) {
     if let Some(mask) = engine.inner.layer_masks.remove(layer_id) {
         engine.inner.texture_pool.release(mask);
     }
-    engine.inner.needs_recomposite = true;
+    engine.inner.mark_layer_dirty(layer_id);
 }
 
 #[wasm_bindgen(js_name = "getLayerTextureDimensions")]
