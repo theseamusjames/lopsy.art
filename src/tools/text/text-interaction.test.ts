@@ -97,6 +97,7 @@ import {
   cancelTextEditing,
   resetTextInteractionState,
   textLayerNameFromContent,
+  committedTextLayerName,
 } from './text-interaction';
 import { DEFAULT_EFFECTS } from '../../layers/layer-model';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
@@ -500,6 +501,16 @@ describe('commitTextEditing', () => {
     );
   });
 
+  it('keeps a custom layer name when re-editing (#1001)', () => {
+    editorState.document.layers = [makeTextLayer({ name: 'Headline', text: 'Hello world' })];
+    uiState.textEditing = editingState({ text: 'Hello world', isNew: false });
+    commitTextEditing();
+    expect(editorState.updateTextLayerProperties).toHaveBeenCalledWith(
+      'text-1',
+      expect.objectContaining({ name: 'Headline' }),
+    );
+  });
+
   it('renders via the engine and positions the layer at bounds plus layout offset', () => {
     editorState.document.layers = [makeTextLayer()];
     uiState.textEditing = editingState({
@@ -713,6 +724,22 @@ describe('pre-edit history snapshot (#813)', () => {
     commitTextEditing();
     expect(restoreFromGpuSnapshot).toHaveBeenCalledWith(engine, 'text-1', 7);
     expect(editorState.pushHistory).not.toHaveBeenCalled();
+  });
+});
+
+describe('committedTextLayerName', () => {
+  it('names new layers from their text', () => {
+    expect(committedTextLayerName(true, 'Text 3', '', 'Hello world')).toBe('Hello world');
+  });
+
+  it('follows the text while the name is still auto-derived', () => {
+    expect(committedTextLayerName(false, 'The quick brown ', 'The quick brown fox', 'Goodbye')).toBe('Goodbye');
+    expect(committedTextLayerName(false, 'Line 1 Line 2', 'Line 1\nLine 2', 'Other')).toBe('Other');
+  });
+
+  it('keeps a name the user chose', () => {
+    expect(committedTextLayerName(false, 'Headline', 'Hello world', 'Hello world')).toBe('Headline');
+    expect(committedTextLayerName(false, 'Headline', 'Hello world', 'Goodbye')).toBe('Headline');
   });
 });
 

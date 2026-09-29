@@ -153,6 +153,20 @@ export function textLayerNameFromContent(text: string): string {
   return collapsed.length > 16 ? collapsed.slice(0, 16) : collapsed;
 }
 
+/**
+ * Name for a text layer after a commit. New layers and layers whose name still
+ * matches the auto-derived name of their previous text follow the new text;
+ * a name the user chose is kept (#1001).
+ */
+export function committedTextLayerName(
+  isNew: boolean,
+  currentName: string,
+  previousText: string,
+  nextText: string,
+): string {
+  const isAutoNamed = isNew || currentName === textLayerNameFromContent(previousText);
+  return isAutoNamed ? textLayerNameFromContent(nextText) : currentName;
+}
 
 /** Commit the current text editing session: render text to pixels and update the layer. */
 export function commitTextEditing(): void {
@@ -250,7 +264,12 @@ export function commitTextEditing(): void {
   toolSettings.addRecentFont(extractFamilyName(textForLayer.fontFamily));
   editorState.updateTextLayerProperties(editing.layerId, {
     text: editing.text,
-    name: textLayerNameFromContent(editing.text),
+    name: committedTextLayerName(
+      editing.isNew,
+      currentLayer?.name ?? '',
+      currentLayer?.type === 'text' ? currentLayer.text : '',
+      editing.text,
+    ),
     fontFamily: textForLayer.fontFamily,
     fontSize: textForLayer.fontSize,
     fontWeight: textForLayer.fontWeight,
