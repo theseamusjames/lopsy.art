@@ -23,7 +23,9 @@ void main() {
         // leaving an alpha * (1 - alpha) ghost. The one-step slack absorbs the
         // 8-bit mask quantizing a 16-bit float alpha.
         float remaining = color.a - maskVal;
-        if (remaining < 1.0 / 255.0) {
+        if (maskVal <= 0.0) {
+            // Outside the selection: untouched.
+        } else if (remaining <= 1.0 / 255.0) {
             color = vec4(0.0);
         } else {
             color.a = remaining;
