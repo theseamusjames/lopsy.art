@@ -43,6 +43,9 @@ function mid(a: Point, b: Point): Point {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
+/** Distance (doc px, per axis) a rotate handle sits outside its corner. */
+export const ROTATE_HANDLE_OFFSET = 20;
+
 function isCornerMode(state: TransformState): boolean {
   return state.mode === 'distort' || state.mode === 'perspective';
 }
@@ -53,7 +56,7 @@ export function getHandlePositions(
   if (isCornerMode(state)) {
     // In distort/perspective modes, corners are positioned directly
     const [tl, tr, br, bl] = getCornerPositions(state);
-    const rotOff = 20;
+    const rotOff = ROTATE_HANDLE_OFFSET;
 
     // Direction vectors for rotation handle offsets
     function cornerOffset(corner: Point, adj1: Point, adj2: Point): Point {
@@ -105,7 +108,7 @@ export function getHandlePositions(
   const rightMid = transformPoint(right, midY, state);
 
   // Rotation handles offset outside corners
-  const rotOff = 20;
+  const rotOff = ROTATE_HANDLE_OFFSET;
 
   return {
     'top-left': tl,
@@ -127,6 +130,7 @@ export function hitTestHandle(
   point: Point,
   state: TransformState,
   handleRadius: number,
+  rotateHandleRadius: number = handleRadius,
 ): TransformHandle | null {
   const positions = getHandlePositions(state);
 
@@ -142,7 +146,7 @@ export function hitTestHandle(
     const pos = positions[handle];
     const dx = point.x - pos.x;
     const dy = point.y - pos.y;
-    if (dx * dx + dy * dy <= handleRadius * handleRadius) {
+    if (dx * dx + dy * dy <= rotateHandleRadius * rotateHandleRadius) {
       return handle;
     }
   }

@@ -14,6 +14,7 @@ import {
   createTransformState,
 } from '../../tools/transform/transform';
 import type { TransformState } from '../../tools/transform/transform';
+import { ROTATE_HANDLE_OFFSET } from '../../tools/transform/transform-handles';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
@@ -81,8 +82,14 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   // as a handle hit.
   const bounds = getTransformedBounds(currentTransform);
   const halfMin = Math.min(bounds.width, bounds.height) / 2;
-  const handleRadius = Math.max(1, Math.min(8 / editorState.viewport.zoom, halfMin * 0.8));
-  const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
+  const zoom = editorState.viewport.zoom;
+  const handleRadius = Math.max(1, Math.min(8 / zoom, halfMin * 0.8));
+  // Rotate handles sit outside the box, so the interior clamp above only
+  // made them smaller than their drawn circle (#1000). Their own cap keeps
+  // the hit area short of the box corner at low zoom.
+  const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
+  const rotateHandleRadius = Math.max(handleRadius, Math.min(8 / zoom, rotateCornerClearance));
+  const hit = hitTestHandle(canvasPos, currentTransform, handleRadius, rotateHandleRadius);
 
   if (!hit) {
     return null;

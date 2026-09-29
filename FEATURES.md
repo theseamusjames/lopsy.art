@@ -512,7 +512,12 @@ state over it.
 - **Hit radius** is `8 / zoom` in document space — constant in screen terms.
   For the Move tool it is additionally clamped to at most 80% of the
   selection's smaller half-extent (and at least 1 px) so a click near the
-  middle of a small selection can't register as a handle grab.
+  middle of a small selection can't register as a handle grab. That clamp
+  applies to the **scale** handles only: rotation handles sit outside the box,
+  so they keep `8 / zoom` (capped only at 80% of their ~28 doc-px distance
+  from the corner, so at very low zoom they still can't reach the box). A
+  thin selection's rotate circles are therefore grabbable over their whole
+  drawn circle (#1000).
 - **Cursors**: `nwse-resize` / `nesw-resize` on the corners, `ns-resize` /
   `ew-resize` on the edge midpoints, `crosshair` on the rotation handles.
 - **Drawing**: a blue (`#00aaff`) quad through the four corners, white filled
