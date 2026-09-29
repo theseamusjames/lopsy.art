@@ -349,3 +349,25 @@ fetches Google Fonts CSS/woff2 with curl. Also: point text has `width: null`,
 so size things from `__readLayerPixels` content bounds, and deselect the
 current path (Paths panel) before drawing a new Pen path on top of it, or the
 presses edit the old path.
+
+## UI-driven photo collages: gotchas from `composition-masked-monk`
+
+- **Dropping a file** (a `drop` event on the canvas container carrying a
+  `File`) adds it as a new layer, auto-fits it if it's larger than the
+  canvas, selects its alpha and switches to Move. `dropPhoto` in
+  `e2e/composition-masked-monk.flow.ts` does this from a fixture on disk.
+- **A gradient fills the whole layer or selection.** Two gradient drags on
+  one layer leave only the second one, so fence each band with a marquee.
+- **Add Mask does not enter mask edit mode.** Click the row's
+  `Edit mask for <name>` thumbnail before painting or dragging a gradient,
+  or the stroke lands on the layer's pixels.
+- **With a text layer active, the Text tool's options bar edits that
+  layer.** Select a non-text layer before you set the size, font and weight
+  for the next line. Type lines from the bottom up so a click never lands
+  inside an earlier text box.
+- **ColorPicker clicks on the last pixel row or column of the SV square
+  are ignored.** Keep programmatic clicks a couple of pixels inside it (the
+  flow's `pickColorIn`), or black comes out as the previous colour.
+- **The Healing Brush keeps a thin foreign line's tint**, because it matches
+  the destination's mean colour. Use the Clone Stamp for a grass blade or a
+  wire.
