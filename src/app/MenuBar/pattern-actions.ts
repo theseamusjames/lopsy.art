@@ -4,7 +4,7 @@ import { readLayerPixels, getLayerTextureDimensions, filterPatternFill, saveFilt
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { usePatternStore, generateThumbnail } from '../pattern-store';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
-import type { PatternDefinition } from '../pattern-store';
+import type { PatternDefinition, PatternFillSettings } from '../pattern-store';
 import { guardPixelWrite } from '../../layers/paint-target';
 import type { Layer } from '../../types';
 
@@ -98,7 +98,27 @@ export function definePattern(): void {
   usePatternStore.getState().addPattern(pattern);
 }
 
-export function applyPatternFill(patternId: string, scale: number, offsetX: number, offsetY: number): void {
+function runPatternFill(
+  engine: NonNullable<ReturnType<typeof getEngine>>,
+  layerId: string,
+  pattern: PatternDefinition,
+  settings: PatternFillSettings,
+): void {
+  filterPatternFill(
+    engine,
+    layerId,
+    pattern.data,
+    pattern.width,
+    pattern.height,
+    settings.scale / 100,
+    settings.rowStagger / 100,
+    settings.columnStagger / 100,
+    settings.offsetX / 100,
+    settings.offsetY / 100,
+  );
+}
+
+export function applyPatternFill(patternId: string, settings: PatternFillSettings): void {
   const pattern = usePatternStore.getState().patterns.find((p) => p.id === patternId);
   if (!pattern) return;
 
@@ -111,16 +131,7 @@ export function applyPatternFill(patternId: string, scale: number, offsetX: numb
   if (!engine) return;
 
   useEditorStore.getState().pushHistory('Pattern Fill');
-  filterPatternFill(
-    engine,
-    activeId,
-    pattern.data,
-    pattern.width,
-    pattern.height,
-    scale / 100,
-    offsetX / 100,
-    offsetY / 100,
-  );
+  runPatternFill(engine, activeId, pattern, settings);
   syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
@@ -138,7 +149,7 @@ export function beginPatternPreview(): void {
   syncLayerAfterFullSize(engine, activeId);
 }
 
-export function previewPatternFill(patternId: string, scale: number, offsetX: number, offsetY: number): void {
+export function previewPatternFill(patternId: string, settings: PatternFillSettings): void {
   const pattern = usePatternStore.getState().patterns.find((p) => p.id === patternId);
   if (!pattern) return;
 
@@ -151,16 +162,7 @@ export function previewPatternFill(patternId: string, scale: number, offsetX: nu
   if (!engine) return;
 
   restoreFilterPreview(engine);
-  filterPatternFill(
-    engine,
-    activeId,
-    pattern.data,
-    pattern.width,
-    pattern.height,
-    scale / 100,
-    offsetX / 100,
-    offsetY / 100,
-  );
+  runPatternFill(engine, activeId, pattern, settings);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();
 }
@@ -177,7 +179,7 @@ export function cancelPatternPreview(): void {
   useEditorStore.getState().notifyRender();
 }
 
-export function applyPatternFillWithPreview(patternId: string, scale: number, offsetX: number, offsetY: number): void {
+export function applyPatternFillWithPreview(patternId: string, settings: PatternFillSettings): void {
   const pattern = usePatternStore.getState().patterns.find((p) => p.id === patternId);
   if (!pattern) return;
 
@@ -193,16 +195,7 @@ export function applyPatternFillWithPreview(patternId: string, scale: number, of
   clearFilterPreview(engine);
 
   useEditorStore.getState().pushHistory('Pattern Fill');
-  filterPatternFill(
-    engine,
-    activeId,
-    pattern.data,
-    pattern.width,
-    pattern.height,
-    scale / 100,
-    offsetX / 100,
-    offsetY / 100,
-  );
+  runPatternFill(engine, activeId, pattern, settings);
   syncLayerAfterFullSize(engine, activeId);
   clearJsPixelData(activeId);
   useEditorStore.getState().notifyRender();

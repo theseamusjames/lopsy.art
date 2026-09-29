@@ -1,14 +1,14 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Slider } from '../Slider/Slider';
 import { useDraggablePanel } from '../../app/hooks/useDraggablePanel';
 import { usePatternStore } from '../../app/pattern-store';
-import type { PatternDefinition } from '../../app/pattern-store';
+import type { PatternDefinition, PatternFillSettings } from '../../app/pattern-store';
 import styles from './PatternFillDialog.module.css';
 
 interface PatternFillDialogProps {
-  onApply: (patternId: string, scale: number, offsetX: number, offsetY: number) => void;
+  onApply: (patternId: string, settings: PatternFillSettings) => void;
   onCancel: () => void;
-  onPreviewChange?: (patternId: string, scale: number, offsetX: number, offsetY: number) => void;
+  onPreviewChange?: (patternId: string, settings: PatternFillSettings) => void;
   onPreviewStart?: () => void;
   onPreviewStop?: () => void;
 }
@@ -22,8 +22,14 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
 
   const [selectedId, setSelectedId] = useState<string | null>(activePatternId);
   const [scale, setScale] = useState(100);
+  const [rowStagger, setRowStagger] = useState(0);
+  const [columnStagger, setColumnStagger] = useState(0);
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
+  const settings = useMemo<PatternFillSettings>(
+    () => ({ scale, rowStagger, columnStagger, offsetX, offsetY }),
+    [scale, rowStagger, columnStagger, offsetX, offsetY],
+  );
   const [preview, setPreview] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewActiveRef = useRef(false);
@@ -37,12 +43,12 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
     if (!preview || !onPreviewChange || !selectedId) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      onPreviewChange(selectedId, scale, offsetX, offsetY);
+      onPreviewChange(selectedId, settings);
     }, 150);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [selectedId, scale, offsetX, offsetY, preview, onPreviewChange]);
+  }, [selectedId, settings, preview, onPreviewChange]);
 
   const handlePreviewToggle = useCallback(() => {
     setPreview((prev) => {
@@ -51,7 +57,7 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
         previewActiveRef.current = true;
         onPreviewStart?.();
         if (onPreviewChange && selectedId) {
-          setTimeout(() => onPreviewChange(selectedId, scale, offsetX, offsetY), 0);
+          setTimeout(() => onPreviewChange(selectedId, settings), 0);
         }
       } else {
         previewActiveRef.current = false;
@@ -59,12 +65,12 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
       }
       return next;
     });
-  }, [onPreviewStart, onPreviewStop, onPreviewChange, selectedId, scale, offsetX, offsetY]);
+  }, [onPreviewStart, onPreviewStop, onPreviewChange, selectedId, settings]);
 
   const handleApply = useCallback(() => {
     if (!selectedId) return;
-    onApply(selectedId, scale, offsetX, offsetY);
-  }, [onApply, selectedId, scale, offsetX, offsetY]);
+    onApply(selectedId, settings);
+  }, [onApply, selectedId, settings]);
 
   const handleCancel = useCallback(() => {
     if (previewActiveRef.current) {
@@ -133,19 +139,39 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
                 onChange={setScale}
               />
               <Slider
-                label="Column Offset"
+                label="Row Stagger"
+                value={rowStagger}
+                min={0}
+                max={100}
+                step={1}
+                suffix="%"
+                onChange={setRowStagger}
+              />
+              <Slider
+                label="Column Stagger"
+                value={columnStagger}
+                min={0}
+                max={100}
+                step={1}
+                suffix="%"
+                onChange={setColumnStagger}
+              />
+              <Slider
+                label="Horizontal Offset"
                 value={offsetX}
                 min={0}
                 max={100}
                 step={1}
+                suffix="%"
                 onChange={setOffsetX}
               />
               <Slider
-                label="Row Offset"
+                label="Vertical Offset"
                 value={offsetY}
                 min={0}
                 max={100}
                 step={1}
+                suffix="%"
                 onChange={setOffsetY}
               />
             </>

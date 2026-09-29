@@ -1180,7 +1180,8 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 - **Pattern Fill**: tiles a user-defined pattern across the active layer. Reached from **Edit → Fill with Pattern…** (it is documented here with the other render filters because it shares the generic filter-dialog machinery, but it has no Filter-menu entry of its own).
   - **Define Pattern** (Edit menu): captures the active layer's pixels as a reusable pattern
   - **Scale**: 10 - 1000% (tile size relative to original pattern dimensions)
-  - **Column / Row Offset**: 0 - 100% (shifts the tiling origin along X / Y)
+  - **Row / Column Stagger**: 0 - 100% of one tile. Row Stagger shifts each successive row of tiles horizontally by that fraction of the tile width (`row × stagger`, so 50% gives a brick / half-step layout); Column Stagger does the same to each successive column vertically (50% gives a half-drop). Because the shift is multiplied by the row or column index and wraps, 100% looks the same as 0%. (Before #993 these two sliders were labelled Column Offset / Row Offset.)
+  - **Horizontal / Vertical Offset**: 0 - 100% of one tile's width / height. Shifts the tiling origin right / down, so every row and column of tiles moves together (#993). The origin shift is applied first and the stagger is counted from the shifted grid, so the two compose.
   - Pattern selector grid with thumbnails
   - Live preview support
   - Selection mask support (fills only the selected area)

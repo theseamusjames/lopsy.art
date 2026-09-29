@@ -6,7 +6,10 @@ use web_sys::WebGl2RenderingContext;
 use crate::Engine;
 use crate::filter_gpu;
 
+/// `stagger_*` offsets alternate rows / columns (brick, half-drop) and
+/// `origin_*` shifts the whole tiling grid; all four are fractions of one tile.
 #[wasm_bindgen(js_name = "filterPatternFill")]
+#[allow(clippy::too_many_arguments)]
 pub fn filter_pattern_fill(
     engine: &mut Engine,
     layer_id: &str,
@@ -14,8 +17,10 @@ pub fn filter_pattern_fill(
     pattern_width: u32,
     pattern_height: u32,
     scale: f32,
-    offset_x: f32,
-    offset_y: f32,
+    stagger_x: f32,
+    stagger_y: f32,
+    origin_x: f32,
+    origin_y: f32,
 ) {
     if pattern_width == 0 || pattern_height == 0 || pattern_data.is_empty() {
         return;
@@ -75,8 +80,11 @@ pub fn filter_pattern_fill(
             if let Some(loc) = shader.location(gl, "u_scale") {
                 gl.uniform1f(Some(&loc), scale);
             }
-            if let Some(loc) = shader.location(gl, "u_offset") {
-                gl.uniform2f(Some(&loc), offset_x, offset_y);
+            if let Some(loc) = shader.location(gl, "u_stagger") {
+                gl.uniform2f(Some(&loc), stagger_x, stagger_y);
+            }
+            if let Some(loc) = shader.location(gl, "u_origin") {
+                gl.uniform2f(Some(&loc), origin_x, origin_y);
             }
         },
     );

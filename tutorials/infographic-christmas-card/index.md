@@ -65,7 +65,7 @@ ticks and the tops of the bars.
 
 Marquee (0, 0) to (100, 100) and choose **Edit → Define Pattern**.
 
-> **Tip:** Bake any alignment offset into the tile itself. Fill with Pattern's Column / Row Offset sliders stagger alternate rows like bricks; they don't move the grid's origin.
+> **Tip:** Here the alignment is baked into the tile itself. In Fill with Pattern, Row / Column Stagger offset alternate rows or columns like bricks, while Horizontal / Vertical Offset shift the whole grid's origin; leave all four at 0 for this tile.
 
 ## Tile the pattern across the card
 

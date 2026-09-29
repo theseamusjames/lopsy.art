@@ -97,7 +97,7 @@ y = `752`, so the box is 184 px square. Press [[Cmd+D]] to commit.
 
 ## Turn it into a half-drop damask
 
-![The Pattern Fill dialog showing the rosette pattern at scale 130 with a 50 percent column offset](06-pattern-fill-half-drop.webp)
+![The Pattern Fill dialog showing the rosette pattern at scale 130 with a 50 percent row stagger](06-pattern-fill-half-drop.webp)
 
 1. Marquee a 240 × 240 tile around the rosette, from (380, 540), and choose
    **Edit → Define Pattern**.
@@ -105,7 +105,7 @@ y = `752`, so the box is 184 px square. Press [[Cmd+D]] to commit.
 3. Add a layer called `Damask`. With no selection, choose **Edit → Fill** so
    the layer covers the whole canvas.
 4. Choose **Edit → Fill with Pattern…**. Set **Scale** to `130` and
-   **Column Offset** to `50` for a classic half-drop repeat, then click
+   **Row Stagger** to `50` for a classic half-drop repeat, then click
    **Apply**.
 
 ## Knock the damask back

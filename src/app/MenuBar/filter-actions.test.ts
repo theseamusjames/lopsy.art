@@ -213,9 +213,11 @@ describe('#771 — filter-actions.ts reconciles JS bounds after each engine writ
 });
 
 describe('#771 — pattern-actions.ts reconciles JS bounds after each engine write', () => {
+  const NO_OFFSETS = { scale: 100, rowStagger: 0, columnStagger: 0, offsetX: 0, offsetY: 0 };
+
   it('applyPatternFill reconciles bounds after filterPatternFill', async () => {
     const { applyPatternFill } = await import('./pattern-actions');
-    applyPatternFill('pattern-1', 100, 0, 0);
+    applyPatternFill('pattern-1', NO_OFFSETS);
     expect(filterPatternFill).toHaveBeenCalledTimes(1);
     expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
   });
@@ -229,7 +231,7 @@ describe('#771 — pattern-actions.ts reconciles JS bounds after each engine wri
 
   it('applyPatternFillWithPreview reconciles bounds after commit', async () => {
     const { applyPatternFillWithPreview } = await import('./pattern-actions');
-    applyPatternFillWithPreview('pattern-1', 100, 0, 0);
+    applyPatternFillWithPreview('pattern-1', NO_OFFSETS);
     expect(filterPatternFill).toHaveBeenCalledTimes(1);
     expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
   });
