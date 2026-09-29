@@ -9,7 +9,7 @@ related: pulp-sci-fi-movie-flier, vaporwave-venice-poster, ukiyo-e-great-wave-al
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Rise of the Masked Monk poster, a raccoon-headed kung fu monk in a saffron sash standing on stone temple steps under a storm, with the Layers panel listing the title and grain layers
 finished: finished-masked-monk.webp
-finishedAlt: The finished Rise of the Masked Monk poster. A kung fu fighter with a raccoon's head, dark hand wraps, a saffron sash and a string of prayer beads balances on one leg on the steps of a Wudang mountain temple, holding a wine jar. Warm light rays burst from behind his head and sparks drift up around him. The image has a muted teal and amber blockbuster grade. The tagline HE WAS BORN WITH THE MASK sits at the top, and RISE OF THE MASKED MONK, a billing line and COMING SOON sit at the bottom
+finishedAlt: The finished Rise of the Masked Monk poster. A kung fu fighter with a raccoon's head, black cloth shoes, a saffron sash and a string of prayer beads balances on one leg on the steps of a Wudang mountain temple, holding a wine jar. Warm light rays burst from behind his head and sparks drift up around him. The image has a muted teal and amber blockbuster grade. The tagline HE WAS BORN WITH THE MASK sits at the top, and RISE OF THE MASKED MONK, a billing line and COMING SOON sit at the bottom
 ---
 
 This poster is a photo collage of three photos: a raccoon's head on a kung
@@ -203,16 +203,16 @@ Give the layer a pale **Inner Glow** (`#F7C98F`, **Size 5**,
 **Opacity 70**) for a polished highlight, and a tight **Drop Shadow**
 (**X 2**, **Y 4**, **Blur 5**, **Opacity 75**).
 
-## Wrap the hands and shoes
+## Darken the stage shoes
 
-![The fighter's fist, jar hand and white trainers darkened to umber cloth wraps and black shoes](13-wraps.webp)
+![The fighter's white trainers darkened to black cloth kung fu shoes](13-shoes.webp)
 
-Pale human hands and white stage-lit trainers give the collage away. Select
-**Fighter** and add a **Wraps** layer. Set the foreground to `#4A4038`.
-Lasso each hand and each shoe, just inside the edge, and choose
-**Edit → Fill** after each one. Then deselect and set the layer to
-**Multiply**. Multiply keeps the knuckles and folds but turns them dark,
-so the fists read as wrapped and the trainers as black cloth kung fu
+The fighter's white stage trainers are the brightest thing in the lower half
+of the poster, and they pull the eye away from the head. Select **Fighter**
+and add a **Shoes** layer. Set the foreground to `#4A4038`. Lasso each shoe,
+just inside the edge, and choose **Edit → Fill** after each one. Then
+deselect and set the layer to **Multiply**. Multiply keeps the folds and
+seams but turns the trainers dark, so they read as black cloth kung fu
 shoes.
 
 ## Light the hero from behind
@@ -333,7 +333,7 @@ adjustment stack. It already holds four nodes that do nothing yet:
 Leave Curves, Exposure and Hue / Saturation as they are.
 
 > **Tip:** Toggle the eye on each node to compare before and after. If the
-> sash or the wraps go muddy, ease Color Balance before you touch
+> sash or the jar go muddy, ease Color Balance before you touch
 > saturation.
 
 ## Finish with film grain
@@ -346,6 +346,6 @@ layer (**COMING SOON**) and add a **Grain** layer. Fill it with `#808080` and
 run **Add Noise…** with **Amount 28**, **Mono** and **Gaussian**. Set it to
 **Overlay** at **40%**. Export with **File → Quick Export PNG**.
 
-> **Tip:** Save a `.lopsy` project as well. The Wraps, Neck Shadow and
+> **Tip:** Save a `.lopsy` project as well. The Shoes, Neck Shadow and
 > Contact Shadow layers are the ones to revisit if you swap in a different
 > head or body.

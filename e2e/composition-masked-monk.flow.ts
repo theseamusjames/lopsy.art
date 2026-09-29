@@ -415,30 +415,28 @@ export async function s11(page: Page): Promise<void> {
   await shot(page, '11-mala-beads');
 }
 
-// Skin and white sneakers in the fighter photo's pixels.
-const WRAPS: Record<string, string> = {
-  jarhand: '368,235 368,243 373,243 375,237 383,235 384,246 391,251 407,255 413,259 420,259 421,264 442,265 444,278 458,275 462,279 460,298 466,299 469,294 473,294 478,301 481,301 469,285 469,263 471,258 469,250 461,243 453,224 434,210 422,206 398,210 392,215 386,228 378,229',
-  fist: '871,556 866,549 866,539 863,531 844,510 835,509 818,513 809,520 804,521 782,516 777,520 764,543 747,538 727,546 708,546 704,550 703,556 697,556 688,560 688,567 723,555 724,560 721,562 721,566 732,566 732,578 729,586 729,595 721,596 721,600 728,600 732,613 735,613 739,620 751,631 761,631 764,642 770,645 770,638 772,636 777,636 782,640 795,640 810,632 818,625 828,608 835,606 836,597 849,600 849,604 842,614 842,619 838,626 839,629 845,622 852,604 858,597 863,574 869,565',
+// The white stage trainers in the fighter photo's pixels.
+const SHOES: Record<string, string> = {
   kneeshoe: '662,1001 648,998 647,996 632,996 616,993 613,990 607,991 580,1062 564,1087 559,1101 554,1108 552,1145 559,1157 569,1165 579,1169 597,1170 613,1162 625,1152 626,1146 637,1128 643,1110 658,1035 662,1022 670,1009 670,1006',
   footshoe: '495,1494 505,1501 516,1504 541,1505 561,1501 582,1488 590,1487 588,1486 588,1481 604,1471 633,1468 633,1476 636,1465 635,1457 638,1454 649,1453 645,1439 647,1452 629,1456 623,1461 576,1462 560,1454 545,1451 533,1451 522,1458 518,1458 512,1438 517,1460 495,1479',
 };
 
 export async function s11b(page: Page): Promise<void> {
-  // Human hands and stage-lit trainers give the collage away. A Multiply
-  // layer in dark umber turns them into cloth wraps and black kung fu shoes
-  // while keeping their folds and knuckles.
+  // Stage-lit white trainers are the brightest thing in the lower half. A
+  // Multiply layer in dark umber turns them into black cloth kung fu shoes
+  // while keeping their folds.
   await selectLayer(page, 'Fighter');
-  await newLayer(page, 'Wraps');
+  await newLayer(page, 'Shoes');
   await setFg(page, '#4A4038');
-  for (const outline of Object.values(WRAPS)) {
+  for (const outline of Object.values(SHOES)) {
     await lassoSelect(page, parsePts(outline).map(figPhoto));
     await fill(page);
   }
-  await shot(page, '11a-wraps-fill');
+  await shot(page, '11a-shoes-fill');
   await deselect(page);
   await blendMode(page, 'multiply');
   await closeEffects(page);
-  await shot(page, '11b-wraps');
+  await shot(page, '11b-shoes');
 }
 
 export const HEAD = fig({ x: 606, y: 420 });
