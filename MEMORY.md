@@ -383,3 +383,15 @@ presses edit the old path.
   is only a high-water mark. For leak checks in e2e compare
   `window.__gpuSnapshotCount()` with the distinct handles referenced by both
   stacks (`e2e/undo-snapshot-release-1005.spec.ts`).
+
+## The texture pool never reclaims one-off sizes — delete them
+
+`TexturePool::release` keeps a free texture for reuse and eviction only trims
+free entries above `MAX_FREE_PER_SIZE` (2) *of the same size*. Any code that
+releases a stream of distinct sizes (a float growing on every pointer-move
+did, #1019) leaks VRAM permanently. Delete textures whose size won't recur
+with `TexturePool::delete(gl, handle)`, and make per-move growth geometric
+(`lopsy_core::float_growth`). To assert on VRAM in e2e, hook
+`WebGL2RenderingContext.prototype` createTexture / deleteTexture /
+texImage2D / texStorage2D (tracking the bound texture per unit) — see
+`e2e/transform-float-growth-vram-1019.spec.ts`.
