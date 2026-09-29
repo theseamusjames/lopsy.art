@@ -246,21 +246,24 @@ export async function s07(page: Page): Promise<unknown> {
   await setFont(page, 'Dela Gothic One');
   await setFg(page, INK);
   await clickDoc(page, 240, 112);
-  await page.keyboard.type('ZEN ENCLAVES', { delay: 50 });
+  // Two spaces: Dela Gothic One's word space is barely wider than its letter gaps.
+  await page.keyboard.type('ZEN  ENCLAVES', { delay: 50 });
   await pause(page, 800);
   await shot(page, '07a-title-typing');
   await page.keyboard.press('Tab');
   await pause(page, 800);
   await shot(page, '07b-title-committed');
+  await renameActive(page, 'ZEN ENCLAVES');
   return { layer: await layerBounds(page, 'ZEN ENCLAVES'), content: await contentBounds(page, 'ZEN ENCLAVES') };
 }
 
 export async function s08(page: Page): Promise<unknown> {
-  // Too wide for the plate at 84 px: drop to 68 px, then select all of the
-  // text and recolour it cream.
+  // Too wide for the plate at 84 px: drop to 62 px, open the tracking up,
+  // then select all of the text and recolour it cream.
   await selectLayer(page, 'ZEN ENCLAVES');
   await tool(page, 'text');
-  await toolOption(page, 'Size', 68);
+  await toolOption(page, 'Size', 62);
+  await textPanelSetting(page, 'Letter spacing', 4);
   await pause(page, 800);
   const cb = await contentBounds(page, 'ZEN ENCLAVES');
   await clickDoc(page, (cb!.x0 + cb!.x1) / 2, (cb!.y0 + cb!.y1) / 2);
@@ -273,7 +276,7 @@ export async function s08(page: Page): Promise<unknown> {
   await pause(page, 800);
   // Seat the glyph box in the middle of the plate face.
   const b = await centerContentOn(page, 'ZEN ENCLAVES', (PLATE.x0 + PLATE.x1) / 2, (PLATE.y0 + PLATE.y1) / 2);
-  await effect(page, 'Drop Shadow', { 'Offset X': 4, 'Offset Y': 3, Blur: 0, Opacity: 100 }, { label: 'Shadow color', hex: VERM_DARK.toLowerCase() });
+  await effect(page, 'Drop Shadow', { 'Offset X': 3, 'Offset Y': 2, Blur: 0, Opacity: 100 }, { label: 'Shadow color', hex: VERM_DARK.toLowerCase() });
   await closeEffects(page);
   await shot(page, '08-title-seated');
   return b;
@@ -498,7 +501,7 @@ export async function s12(page: Page): Promise<void> {
   // Rising-sun rays first (they sit behind the disc), clipped to a circle.
   await selectLayer(page, 'Border');
   await newLayer(page, 'Sun Rays');
-  await ellipseSelect(page, SUN.x, SUN.y, 162, 162);
+  await ellipseSelect(page, SUN.x, SUN.y, 176, 176);
   await setFg(page, '#E2694A');
   await menu(page, 'Filter', 'Sunburst');
   const modal = page.locator('[role="dialog"][aria-label="Sunburst"]');
@@ -508,8 +511,8 @@ export async function s12(page: Page): Promise<void> {
     await input.fill(String(v));
     await input.press('Tab');
   };
-  await set('Rays', 16);
-  await set('Width', 48);
+  await set('Rays', 12);
+  await set('Width', 42);
   await set('Taper', 0);
   await set('Fade', 0);
   await set('Center X', Math.round((SUN.x / 1200) * 100));
