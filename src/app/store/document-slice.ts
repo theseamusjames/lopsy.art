@@ -358,8 +358,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set(computeToggleVisibility(s.document, id));
   },
 
-  // No history — lock state is ephemeral UI, not a document edit worth an undo step
+  // Lock, name and colour tag are metadata-only history steps: without an
+  // entry of their own, undoing the step before them restored the older
+  // snapshot's metadata and silently reverted them (#1014).
   toggleLayerLock: (id) => {
+    const s = get();
+    const layer = s.document.layers.find((l) => l.id === id);
+    if (!layer) return;
+    s.pushHistoryMetadata(layer.locked ? 'Unlock Layer' : 'Lock Layer');
     const doc = get().document;
     const layers = doc.layers.map((l) =>
       l.id === id ? { ...l, locked: !l.locked } : l,
@@ -367,8 +373,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers } });
   },
 
-  // No history — renaming is lightweight metadata, not worth an undo step
   renameLayer: (id, name) => {
+    const s = get();
+    const layer = s.document.layers.find((l) => l.id === id);
+    if (!layer || layer.name === name) return;
+    s.pushHistoryMetadata('Rename Layer');
     const doc = get().document;
     const layers = doc.layers.map((l) =>
       l.id === id ? { ...l, name } : l,
@@ -376,8 +385,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set({ document: { ...doc, layers } });
   },
 
-  // No history — color tag is visual organization metadata, not a pixel-level edit
   setLayerColorTag: (id, tag) => {
+    const s = get();
+    const layer = s.document.layers.find((l) => l.id === id);
+    if (!layer || (layer.colorTag ?? null) === tag) return;
+    s.pushHistoryMetadata(tag ? 'Set Color Tag' : 'Clear Color Tag');
     const doc = get().document;
     const layers = doc.layers.map((l) =>
       l.id === id ? { ...l, colorTag: tag } : l,

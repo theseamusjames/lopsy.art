@@ -36,17 +36,19 @@ void main() {
 
     vec4 existing = texture(u_existingTex, v_uv);
 
+    // Always composite over the existing pixels: the selection only scales
+    // the gradient's coverage, so transparent stops keep what is underneath
+    // with or without a selection (#1023).
+    float coverage = 1.0;
     if (u_hasMask == 1) {
         vec2 docPos = u_layerOffset + v_uv * u_texSize;
         vec2 maskUV = docPos / u_docSize;
-        float maskVal = texture(u_maskTex, maskUV).r;
-        vec4 masked = vec4(gradColor.rgb, gradColor.a * maskVal);
-        float outA = masked.a + existing.a * (1.0 - masked.a);
-        vec3 outRGB = outA > 0.0
-            ? (masked.rgb * masked.a + existing.rgb * existing.a * (1.0 - masked.a)) / outA
-            : vec3(0.0);
-        fragColor = vec4(outRGB, outA);
-    } else {
-        fragColor = gradColor;
+        coverage = texture(u_maskTex, maskUV).r;
     }
+    float srcA = gradColor.a * coverage;
+    float outA = srcA + existing.a * (1.0 - srcA);
+    vec3 outRGB = outA > 0.0
+        ? (gradColor.rgb * srcA + existing.rgb * existing.a * (1.0 - srcA)) / outA
+        : vec3(0.0);
+    fragColor = vec4(outRGB, outA);
 }
