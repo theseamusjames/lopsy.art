@@ -210,9 +210,97 @@ pub fn crop_layer_pixel_data(
     out
 }
 
+/// Content bounds from occupancy projections: `col_occupied[x]` is
+/// non-zero when any pixel in column x has content, `row_occupied[y]`
+/// likewise for row y (bytes as read back from an RGBA channel, so
+/// "occupied" is > 127). Returns the same rect `crop_to_content_bounds`
+/// would for the image the projections came from — width/height 0 when
+/// there is no content. Lets the GPU reduce a layer to `w + h` texels
+/// instead of reading back `w * h` (#1021).
+pub fn content_rect_from_projections(col_occupied: &[u8], row_occupied: &[u8]) -> Rect {
+    let first = |v: &[u8]| v.iter().position(|&b| b > 127);
+    let last = |v: &[u8]| v.iter().rposition(|&b| b > 127);
+    match (first(col_occupied), last(col_occupied), first(row_occupied), last(row_occupied)) {
+        (Some(x0), Some(x1), Some(y0), Some(y1)) => Rect::new(
+            x0 as i32,
+            y0 as i32,
+            (x1 - x0 + 1) as u32,
+            (y1 - y0 + 1) as u32,
+        ),
+        _ => Rect::new(0, 0, 0, 0),
+    }
+}
+
+/// Output lengths of successive reduction steps that fold `len` texels
+/// down to one, `span` at a time: e.g. 4096 with span 64 → [64, 1].
+pub fn reduction_steps(len: u32, span: u32) -> Vec<u32> {
+    let span = span.max(2);
+    let mut steps = Vec::new();
+    let mut cur = len.max(1);
+    loop {
+        cur = cur.div_ceil(span);
+        steps.push(cur);
+        if cur <= 1 {
+            return steps;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn projections(data: &[u8], w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
+        let mut cols = vec![0u8; w as usize];
+        let mut rows = vec![0u8; h as usize];
+        for y in 0..h {
+            for x in 0..w {
+                if data[((y * w + x) * 4 + 3) as usize] > 0 {
+                    cols[x as usize] = 255;
+                    rows[y as usize] = 255;
+                }
+            }
+        }
+        (cols, rows)
+    }
+
+    #[test]
+    fn test_projection_bounds_match_cpu_scan() {
+        let (w, h) = (37u32, 23u32);
+        let cases: &[&[(u32, u32, u8)]] = &[
+            &[],
+            &[(0, 0, 1)],
+            &[(36, 22, 255)],
+            &[(5, 7, 1), (30, 2, 200)],
+            &[(0, 22, 3), (36, 0, 3)],
+            &[(12, 11, 128), (13, 11, 128), (12, 12, 128)],
+        ];
+        for pixels in cases {
+            let mut data = vec![0u8; (w * h * 4) as usize];
+            for &(x, y, a) in pixels.iter() {
+                data[((y * w + x) * 4 + 3) as usize] = a;
+            }
+            let (_, expected) = crop_to_content_bounds(&data, w, h);
+            let (cols, rows) = projections(&data, w, h);
+            assert_eq!(content_rect_from_projections(&cols, &rows), expected, "pixels {pixels:?}");
+        }
+    }
+
+    #[test]
+    fn test_projection_bounds_full_texture() {
+        let rect = content_rect_from_projections(&[255; 8], &[255; 5]);
+        assert_eq!(rect, Rect::new(0, 0, 8, 5));
+    }
+
+    #[test]
+    fn test_reduction_steps_fold_to_one() {
+        assert_eq!(reduction_steps(4096, 64), vec![64, 1]);
+        assert_eq!(reduction_steps(16384, 64), vec![256, 4, 1]);
+        assert_eq!(reduction_steps(65, 64), vec![2, 1]);
+        assert_eq!(reduction_steps(64, 64), vec![1]);
+        assert_eq!(reduction_steps(1, 64), vec![1]);
+        assert_eq!(reduction_steps(0, 64), vec![1]);
+    }
 
     #[test]
     fn test_crop_and_expand_roundtrip() {

@@ -284,6 +284,18 @@ texel in the page and compare the whole texture (quantise to fp16 when
 `EXT_color_buffer_float` exists, else u8). See
 `e2e/mask-dab-scissor-1020.spec.ts`.
 
+## Content bounds of a GPU texture: reduce on the GPU, don't read it back
+
+`content_bounds_gpu::texture_content_bounds` folds a texture into a
+column strip and a row strip (`content_bounds_reduce.glsl`) and reads
+back only `w + h` texels; its occupancy test matches
+`crop_to_content_bounds` on a `read_rgba` result exactly. Use it (or
+`layer_manager::layer_content_bounds`) instead of `read_pixels` +
+`crop_to_content_bounds`, which at 4K is a 256 MB float readback plus a
+16M-pixel CPU scan (#1021). Count readback size in e2e by summing
+`width × height` in a patched `readPixels` — see
+`e2e/move-grab-content-bounds-1021.spec.ts`.
+
 ## GLSL `smoothstep(edge0, edge1, x)` is undefined when edge0 == edge1
 
 The GLSL ES spec leaves `smoothstep` undefined when `edge0 >= edge1`

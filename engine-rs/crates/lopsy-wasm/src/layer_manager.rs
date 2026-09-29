@@ -896,6 +896,38 @@ pub fn expand_layer_to_doc_size(
 /// pixels. Returns [new_x, new_y, new_w, new_h] on success.
 /// If the layer is fully transparent, returns [x, y, 0, 0] (no resize).
 /// Counterpart to expand_layer_to_doc_size — called when a layer is deactivated.
+/// Texture-local content bounds of a layer (width/height 0 when empty).
+pub fn layer_content_bounds(
+    engine: &mut EngineInner,
+    layer_id: &str,
+) -> Result<lopsy_core::geometry::Rect, String> {
+    let tex_handle = *engine.layer_textures.get(layer_id)
+        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+    let (tw, th) = engine.texture_pool.get_size(tex_handle).ok_or("Texture not found")?;
+    layer_content_rect(engine, layer_id, tex_handle, tw, th)
+}
+
+/// Texture-local content bounds of a layer. Reduces on the GPU and reads
+/// back `w + h` texels (#1021); falls back to the full readback + CPU scan
+/// if the GPU path fails.
+fn layer_content_rect(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    tex_handle: crate::gpu::texture_pool::TextureHandle,
+    tw: u32,
+    th: u32,
+) -> Result<lopsy_core::geometry::Rect, String> {
+    if let Some(tex) = engine.texture_pool.get(tex_handle).cloned() {
+        if let Ok(rect) = crate::content_bounds_gpu::texture_content_bounds(engine, &tex, tw, th) {
+            return Ok(rect);
+        }
+    }
+    // read_pixels returns top-down pixels: GL row 0 = image top row (textures
+    // are stored with image-top at GL-bottom, matching document space).
+    let pixels = read_pixels(engine, layer_id)?;
+    Ok(lopsy_core::pixel_buffer::crop_to_content_bounds(&pixels, tw, th).1)
+}
+
 pub fn crop_layer_to_content(
     engine: &mut EngineInner,
     layer_id: &str,
@@ -910,13 +942,21 @@ pub fn crop_layer_to_content(
         (desc.x, desc.y)
     };
 
-    // read_pixels returns top-down pixels: GL row 0 = image top row (textures
-    // are stored with image-top at GL-bottom, matching document space).
-    let pixels = read_pixels(engine, layer_id)?;
-    let (_, crop_rect) = lopsy_core::pixel_buffer::crop_to_content_bounds(&pixels, tw, th);
+    let crop_rect = layer_content_rect(engine, layer_id, tex_handle, tw, th)?;
 
     if crop_rect.width == 0 || crop_rect.height == 0 {
         return Ok([layer_x, layer_y, 0, 0]);
+    }
+
+    // Already tight (always the case for a full-canvas layer): re-copying
+    // the texture into an identical one would be a full-texture pass for
+    // nothing, on every Move grab (#1021).
+    if crop_rect.x == 0 && crop_rect.y == 0 && crop_rect.width == tw && crop_rect.height == th {
+        if let Some(desc) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
+            desc.width = tw;
+            desc.height = th;
+        }
+        return Ok([layer_x, layer_y, tw as i32, th as i32]);
     }
 
     let cx = crop_rect.x;
