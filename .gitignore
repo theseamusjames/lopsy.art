@@ -22,3 +22,6 @@ tests/screenshots/
 public/test-sample.raf
 e2e/screenshots/raf-import-error.png
 e2e/screenshots/raf-import.png
+# Composition-run outputs (the run log, compositions/LAST_RUN.md, stays tracked)
+compositions/*.lopsy
+compositions/*.png
