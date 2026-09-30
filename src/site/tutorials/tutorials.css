@@ -46,7 +46,6 @@
   --accent-subtle: rgba(74, 158, 255, 0.12);
   --radius: 8px;
   --radius-lg: 12px;
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   --content-width: 760px;
   --wide-width: 1120px;
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -65,7 +64,6 @@
     --accent-hover: #185bb0;
     --accent-text: #ffffff;
     --accent-subtle: rgba(31, 111, 214, 0.08);
-    --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
 }
 
@@ -312,12 +310,6 @@ kbd {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-raised);
-  transition: transform 150ms ease, box-shadow 150ms ease;
-}
-
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow);
 }
 
 .card-image img {
