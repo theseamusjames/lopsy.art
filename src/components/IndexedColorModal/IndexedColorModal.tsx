@@ -37,7 +37,7 @@ export function IndexedColorModal({ onClose }: IndexedColorModalProps) {
 
   return (
     <div className={styles.overlay} role="presentation">
-      <div className={styles.modal} role="dialog" aria-label="Indexed Color" onKeyDown={handleKeyDown}>
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Indexed Color" onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>Indexed Color</h2>
         </div>

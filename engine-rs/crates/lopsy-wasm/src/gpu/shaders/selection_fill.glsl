@@ -17,7 +17,9 @@ void main() {
     if (u_hasMask == 1) {
         vec2 docPos = u_layerOffset + v_uv * u_layerSize;
         vec2 maskUV = docPos / u_docSize;
-        maskVal = texture(u_maskTex, maskUV).r;
+        // Off-canvas texels are outside the selection; clamp-to-edge would
+        // smear the edge row/column across them (#1033).
+        maskVal = (any(lessThan(maskUV, vec2(0.0))) || any(greaterThan(maskUV, vec2(1.0)))) ? 0.0 : texture(u_maskTex, maskUV).r;
     }
 
     // Blend fill color over existing using standard alpha compositing

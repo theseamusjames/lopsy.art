@@ -9,6 +9,9 @@ import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
 import { isNativeArrowKeyTarget } from './shortcuts/native-control-keys';
+import { isModalDialogOpen } from './shortcuts/modal-guard';
+import { fillActiveLayerMask } from './fill-layer-mask';
+import { useToolSettingsStore } from './tool-settings-store';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob } from './paste-or-open';
@@ -116,6 +119,9 @@ export function useKeyboardShortcuts({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // A modal dialog owns the keyboard; its own handlers see the keys.
+      if (isModalDialogOpen()) return;
+
       // Text editing mode: route keyboard input to the text editor
       const textEditing = useUIStore.getState().textEditing;
 
@@ -285,6 +291,7 @@ export function useKeyboardShortcuts({
     // Fired by the browser's native paste event (Cmd+V keydown does NOT preventDefault,
     // so the paste event always fires).
     const handlePaste = (e: ClipboardEvent) => {
+      if (isModalDialogOpen()) return;
       if (!isTextInputSink(e.target)) {
         if (e.target instanceof HTMLTextAreaElement) return;
         if (e.target instanceof HTMLInputElement && isTextEntryInput(e.target)) return;
@@ -395,6 +402,10 @@ function handleDeleteKey(): void {
   const sel = editor.selection;
   const activeId = editor.document.activeLayerId;
   if (!activeId) return;
+
+  // Mask edit mode: Delete fills the mask with the background colour, like
+  // Photoshop, instead of clearing pixels or deleting the layer (#1034).
+  if (fillActiveLayerMask(useToolSettingsStore.getState().backgroundColor, 'Mask Clear')) return;
 
   if (sel.active && sel.mask) {
     const engine = getEngine();

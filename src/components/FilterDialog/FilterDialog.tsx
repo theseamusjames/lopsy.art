@@ -118,7 +118,7 @@ export function FilterDialog({ title, params, showRegenerate, onApply, onCancel,
     <div className={`${styles.overlay} ${preview ? styles.overlayTransparent : ''}`} role="presentation">
       <div
         className={styles.modal}
-        role="dialog"
+        role="dialog" aria-modal="true"
         aria-label={title}
         onKeyDown={handleKeyDown}
         style={{ '--drag-x': `${offset.x}px`, '--drag-y': `${offset.y}px` } as React.CSSProperties}

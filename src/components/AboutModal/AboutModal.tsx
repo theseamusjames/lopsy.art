@@ -7,7 +7,7 @@ interface AboutModalProps {
 export function AboutModal({ onClose }: AboutModalProps) {
   return (
     <div className={styles.overlay} onMouseDown={onClose}>
-      <div className={styles.modal} role="dialog" aria-label="About Lopsy" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="About Lopsy" onMouseDown={(e) => e.stopPropagation()}>
         <div className={styles.body}>
           <h2 className={styles.title}>Lopsy</h2>
           <p className={styles.description}>

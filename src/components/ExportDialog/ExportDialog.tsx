@@ -124,7 +124,7 @@ export function ExportDialog({ onExport, onCancel, onPreviewSourceRequest }: Exp
 
   return (
     <div className={styles.overlay} role="presentation" onKeyDown={handleKeyDown}>
-      <div className={styles.modal} role="dialog" aria-label="Export">
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Export">
         <div className={styles.header}>
           <h2>Export</h2>
         </div>

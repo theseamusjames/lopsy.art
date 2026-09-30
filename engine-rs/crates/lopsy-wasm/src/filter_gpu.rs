@@ -28,6 +28,11 @@ fn blend_with_selection_mask(
         None => return,
     };
 
+    let (layer_x, layer_y) = engine.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map_or((0.0, 0.0), |l| (l.x as f32, l.y as f32));
+    let (doc_w, doc_h) = (engine.doc_width as f32, engine.doc_height as f32);
+
     let filtered_tex = engine.texture_pool.get(filtered_scratch).cloned();
     let original_tex = engine.texture_pool.get(original_scratch).cloned();
 
@@ -59,6 +64,15 @@ fn blend_with_selection_mask(
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&sel_tex));
         if let Some(loc) = shader.location(gl, "u_selMask") {
             gl.uniform1i(Some(&loc), 2);
+        }
+        if let Some(loc) = shader.location(gl, "u_docSize") {
+            gl.uniform2f(Some(&loc), doc_w, doc_h);
+        }
+        if let Some(loc) = shader.location(gl, "u_layerOffset") {
+            gl.uniform2f(Some(&loc), layer_x, layer_y);
+        }
+        if let Some(loc) = shader.location(gl, "u_layerSize") {
+            gl.uniform2f(Some(&loc), w as f32, h as f32);
         }
 
         engine.draw_fullscreen_quad();

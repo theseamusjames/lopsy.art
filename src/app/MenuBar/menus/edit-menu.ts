@@ -6,6 +6,7 @@ import { getEngine } from '../../../engine-wasm/engine-state';
 import { fillWithColor } from '../../../engine-wasm/wasm-bridge';
 import { syncLayerAfterFullSize } from '../../sync-layer-after-full-size';
 import { guardPixelWrite } from '../../../layers/paint-target';
+import { fillActiveLayerMask } from '../../fill-layer-mask';
 import { definePattern } from '../pattern-actions';
 import { defineBrush } from '../brush-actions';
 import type { FilterDialogId } from '../filter-actions';
@@ -20,6 +21,7 @@ export function fillSelection(): void {
   // either invisible (group) or wiped by the next text re-render.
   const activeLayer = state.document.layers.find((l) => l.id === activeId);
   if (activeLayer?.locked) return;
+  if (fillActiveLayerMask(useToolSettingsStore.getState().foregroundColor, 'Mask Fill')) return;
   if (!guardPixelWrite(activeLayer)) return;
 
   const engine = getEngine();

@@ -150,7 +150,7 @@ function AdjustmentLayerInfoModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       className={styles.overlay}
-      role="dialog"
+      role="dialog" aria-modal="true"
       aria-label="Adjustment layers"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -179,7 +179,7 @@ function AdjustmentLayerInfoModal({ onClose }: { onClose: () => void }) {
 
 export function LoadingOverlay({ message }: { message: string }) {
   return (
-    <div className={styles.overlay} role="dialog" aria-label={message}>
+    <div className={styles.overlay} role="dialog" aria-modal="true" aria-label={message}>
       <div className={styles.loadingContent}>
         {message}
       </div>

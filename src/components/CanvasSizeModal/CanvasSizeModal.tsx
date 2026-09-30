@@ -73,7 +73,7 @@ export function CanvasSizeModal({ onClose }: CanvasSizeModalProps) {
 
   return (
     <div className={styles.overlay} role="presentation">
-      <div className={styles.modal} role="dialog" aria-label="Canvas Size" onKeyDown={handleKeyDown}>
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Canvas Size" onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>Canvas Size</h2>
         </div>

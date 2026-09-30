@@ -99,7 +99,7 @@ export function ImageSizeModal({ onClose }: ImageSizeModalProps) {
 
   return (
     <div className={styles.overlay} role="presentation">
-      <div className={styles.modal} role="dialog" aria-label="Image Size" onKeyDown={handleKeyDown}>
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Image Size" onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>Image Size</h2>
         </div>
