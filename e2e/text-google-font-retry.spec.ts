@@ -13,7 +13,11 @@ import { clickAtDoc, selectTextTool } from './text-edit-helpers';
 const STYLESHEET = /fonts\.googleapis\.com\/css2\?family=Lobster:wght@400&display=swap/;
 
 // One regex: Playwright reads a two-element array here as [value, options].
-test.use({ allowConsoleErrors: [/Failed to load font: Lobster|Failed to load resource|ERR_FAILED/] });
+// Firefox reports each request the stub aborts as a blocked cross-origin
+// request rather than a failed resource.
+test.use({
+  allowConsoleErrors: [/Failed to load font: Lobster|Failed to load resource|ERR_FAILED|CORS request did not succeed/],
+});
 
 interface StylesheetLog {
   requests: number;

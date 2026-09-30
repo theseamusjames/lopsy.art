@@ -85,60 +85,139 @@ async function clickFitLayerToCanvas(page: Page): Promise<void> {
   await page.waitForTimeout(80);
 }
 
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+async function getSelectionBounds(page: Page): Promise<Rect | null> {
+  return page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { selection: { bounds: Rect | null } };
+    };
+    return store.getState().selection.bounds;
+  });
+}
+
+/**
+ * Document-space rect of the pasted layer's opaque pixels, plus whether every
+ * pixel inside it is the paste colour. A squashed or offset fit shows up as a
+ * different rect or as a mix of transparent and opaque pixels.
+ */
+async function readPastedContent(
+  page: Page,
+  color: { r: number; g: number; b: number },
+): Promise<{ rect: Rect | null; isSolid: boolean }> {
+  return page.evaluate(async (color) => {
+    const w = window as unknown as Record<string, unknown>;
+    const read = w.__readLayerPixels as (
+      id?: string,
+    ) => Promise<{ width: number; height: number; pixels: number[] } | null>;
+    const store = w.__editorStore as {
+      getState: () => {
+        document: { layers: Array<{ id: string; name: string; x: number; y: number }> };
+      };
+    };
+    const id = store.getState().document.layers.find((l) => l.name === 'Pasted Layer')!.id;
+    const result = await read(id);
+    const layer = store.getState().document.layers.find((l) => l.id === id)!;
+    if (!result || result.width === 0) return { rect: null, isSolid: false };
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < result.height; y++) {
+      for (let x = 0; x < result.width; x++) {
+        if ((result.pixels[(y * result.width + x) * 4 + 3] ?? 0) === 0) continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+    if (maxX < 0) return { rect: null, isSolid: false };
+    let isSolid = true;
+    for (let y = minY; y <= maxY && isSolid; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const i = (y * result.width + x) * 4;
+        if (
+          Math.abs((result.pixels[i] ?? 0) - color.r) > 2 ||
+          Math.abs((result.pixels[i + 1] ?? 0) - color.g) > 2 ||
+          Math.abs((result.pixels[i + 2] ?? 0) - color.b) > 2 ||
+          (result.pixels[i + 3] ?? 0) !== 255
+        ) {
+          isSolid = false;
+          break;
+        }
+      }
+    }
+    return {
+      rect: { x: layer.x + minX, y: layer.y + minY, width: maxX - minX + 1, height: maxY - minY + 1 },
+      isSolid,
+    };
+  }, color);
+}
+
+/**
+ * Paste an oversized image, let the prefloat run, click Fit Layer, and check
+ * the click changed nothing the user can see: the content stays at the
+ * auto-fit rect, unscaled, and no history entry is pushed.
+ *
+ * The auto-fit rect is read from the selection, not the layer descriptor:
+ * the prefloat floats the pasted pixels, which expands the layer texture to
+ * the document, and the store deliberately mirrors that expanded texture
+ * (#810). Fit drops the float and crops back to the content before deciding
+ * whether there is anything to do.
+ */
+async function expectFitIsNoopAfterPaste(
+  page: Page,
+  doc: { width: number; height: number },
+  paste: { width: number; height: number },
+  expectedFit: Rect,
+): Promise<void> {
+  const color = { r: 40, g: 180, b: 220 };
+  await page.goto('/');
+  await waitForStore(page);
+  await createDocument(page, doc.width, doc.height, false);
+
+  await pastePng(page, paste.width, paste.height, color);
+  await waitForPrefloat(page);
+
+  expect(await getSelectionBounds(page)).toEqual(expectedFit);
+  const undoBefore = (await getEditorState(page)).undoStackLength;
+
+  await clickFitLayerToCanvas(page);
+
+  const after = await getEditorState(page);
+  const layer = after.document.layers.find((l) => l.name === 'Pasted Layer')!;
+  expect({ x: layer.x, y: layer.y, width: layer.width, height: layer.height }).toEqual(expectedFit);
+  expect(after.undoStackLength).toBe(undoBefore);
+  expect(await readPastedContent(page, color)).toEqual({ rect: expectedFit, isSolid: true });
+}
+
 test.describe('#721 — Fit Layer to Canvas is a no-op when the layer is already fit', () => {
   test('oversized paste → click Fit Layer → layer bounds unchanged, no history entry', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Move-tool options bar is desktop-only');
-    await page.goto('/');
-    await waitForStore(page);
-    await createDocument(page, 400, 300, false);
-
     // 800×600 paste on a 400×300 canvas — computeFit shrinks it to (0,0,400,300).
-    await pastePng(page, 800, 600, { r: 220, g: 40, b: 60 });
-    await waitForPrefloat(page);
-
-    // Baseline: this is the state we expect the click NOT to alter.
-    const before = await getEditorState(page);
-    const pasted = before.document.layers.find((l) => l.name === 'Pasted Layer')!;
-    // Auto-fit landed the content at (0, 0, 400, 300) for the 4:3 paste.
-    expect(pasted.width).toBe(400);
-    expect(pasted.height).toBe(300);
-    const undoBefore = before.undoStackLength;
-
-    await clickFitLayerToCanvas(page);
-
-    const after = await getEditorState(page);
-    const same = after.document.layers.find((l) => l.name === 'Pasted Layer')!;
-    // The layer must not have been resized by the noop click.
-    expect(same.width).toBe(pasted.width);
-    expect(same.height).toBe(pasted.height);
-    // And no history entry — `computeFitLayer` returned undefined, so
-    // `pushHistory('Fit Layer to Canvas')` never ran.
-    expect(after.undoStackLength).toBe(undoBefore);
+    await expectFitIsNoopAfterPaste(
+      page,
+      { width: 400, height: 300 },
+      { width: 800, height: 600 },
+      { x: 0, y: 0, width: 400, height: 300 },
+    );
   });
 
   test('oversized wide paste (2:1 aspect) → click Fit Layer → letterboxed bounds unchanged, no history entry', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Move-tool options bar is desktop-only');
-    await page.goto('/');
-    await waitForStore(page);
-    await createDocument(page, 400, 400, false);
-
     // 800×400 paste on a 400×400 canvas → auto-fit lands at (0, 100, 400, 200).
-    await pastePng(page, 800, 400, { r: 40, g: 180, b: 220 });
-    await waitForPrefloat(page);
-
-    const before = await getEditorState(page);
-    const pasted = before.document.layers.find((l) => l.name === 'Pasted Layer')!;
-    expect(pasted.width).toBe(400);
-    expect(pasted.height).toBe(200);
-    const undoBefore = before.undoStackLength;
-
-    await clickFitLayerToCanvas(page);
-
-    const after = await getEditorState(page);
-    const same = after.document.layers.find((l) => l.name === 'Pasted Layer')!;
-    expect(same.width).toBe(pasted.width);
-    expect(same.height).toBe(pasted.height);
-    expect(after.undoStackLength).toBe(undoBefore);
+    await expectFitIsNoopAfterPaste(
+      page,
+      { width: 400, height: 400 },
+      { width: 800, height: 400 },
+      { x: 0, y: 100, width: 400, height: 200 },
+    );
   });
 });
 

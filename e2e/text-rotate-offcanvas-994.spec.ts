@@ -70,7 +70,7 @@ test.describe('rotating a text layer across the canvas edge (#994)', { tag: '@ch
     expect(flatW).toBeGreaterThan(flatH * 2);
 
     const row = page.locator('[class*="itemWrapper"]').filter({ has: page.getByText('HELLO', { exact: true }) });
-    await row.locator('div[class*="thumbnail"]').click({ modifiers: ['Control'] });
+    await row.locator('div[class*="thumbnail"]').click({ modifiers: ['ControlOrMeta'] });
     await page.waitForTimeout(300);
     await selectTool(page, 'move');
 
@@ -97,7 +97,7 @@ test.describe('rotating a text layer across the canvas edge (#994)', { tag: '@ch
     // The upright word spans ~cy ± flatW/2, well past the 1080 bottom edge.
     expect(cy + flatW / 2).toBeGreaterThan(1080 + 20);
 
-    await page.keyboard.press('Control+d');
+    await page.keyboard.press('ControlOrMeta+d');
     await page.waitForTimeout(200);
 
     // Whole-layer Move drag 450 px up brings everything back on canvas.
