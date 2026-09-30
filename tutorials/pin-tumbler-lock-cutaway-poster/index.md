@@ -34,7 +34,7 @@ The palette is a period brass-and-steel one, with a single accent colour:
 
 - paper `#EDE6D3`
 - ink `#1F1D1A`
-- brass `#C8973A` (housing) and `#DDB255` (plug)
+- brass `#C8973A` / `#DDB255` (housing and plug)
 - cavity `#2A2622`
 - steel `#6C757A` / `#A9B1B5` / `#DCE2E4`
 - safety orange `#E4572E`, used **only** for the shear line

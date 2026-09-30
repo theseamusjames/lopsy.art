@@ -1,5 +1,6 @@
 import { imageMimeType, readImageSize } from './image-size';
 import { parseTutorial } from './parse-tutorial';
+import { unparsedPaletteItems } from './swatch';
 import { byNewest, pickRelated } from './related';
 import { type RenderContext, coverImage } from './render-layout';
 import { renderTutorialIndex } from './render-index';
@@ -98,6 +99,11 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
       if (!knownSlugs.has(slug)) errors.push(`tutorials/${tutorial.slug}: related tutorial "${slug}" does not exist.`);
     }
     measureImages(tutorial, source, sizes, errors);
+    for (const item of unparsedPaletteItems(tutorial.intro)) {
+      warnings.push(
+        `tutorials/${tutorial.slug}: the palette won't render as swatches because of "${item}". Write it as named colour groups (see tutorials/README.md).`,
+      );
+    }
     checkProject(tutorial, source, errors);
   }
 

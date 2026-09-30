@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isHexColor, parsePaletteItem, renderSwatch } from './swatch';
+import { isHexColor, parsePaletteItem, renderSwatch, unparsedPaletteItems } from './swatch';
 
 describe('isHexColor', () => {
   it('accepts 3, 4, 6 and 8 digit hex colours', () => {
@@ -44,11 +44,33 @@ describe('parsePaletteItem', () => {
     ]);
   });
 
+  it('reads a trailing phrase and a closing parenthesis as notes', () => {
+    expect(parsePaletteItem('safety orange `#E4572E`, used **only** for the shear line')).toEqual([
+      { label: 'safety orange', colors: ['#E4572E'], isRamp: false, note: 'used **only** for the shear line' },
+    ]);
+    expect(parsePaletteItem('blush pink `#FFC7DB` (small type), frame pink `#FF9EC2`')).toEqual([
+      { label: 'blush pink', colors: ['#FFC7DB'], isRamp: false, note: 'small type' },
+      { label: 'frame pink', colors: ['#FF9EC2'], isRamp: false, note: '' },
+    ]);
+  });
+
   it('rejects prose that only mentions colours', () => {
     expect(parsePaletteItem('Teal `#2F6E69` with halftone dots in `#6FB3A8`')).toBeNull();
     expect(parsePaletteItem('Constructivist red `#C8261B`, with `#8E1A12` for wings')).toBeNull();
     expect(parsePaletteItem('Neon: cyan `#05D9E8`')).toBeNull();
     expect(parsePaletteItem('Fill the shape with ink `#15110E` and deselect before you go on to the next step')).toBeNull();
     expect(parsePaletteItem('No colours here')).toBeNull();
+  });
+});
+
+describe('unparsedPaletteItems', () => {
+  it('reports the items that keep an all-colour list from becoming a palette', () => {
+    const intro = 'Intro text.\n\n- Paper `#F2E4C6`\n- Moon and type cream: `#F4ECD8` (moon `#F2E6C9`)';
+    expect(unparsedPaletteItems(intro)).toEqual(['Moon and type cream: `#F4ECD8` (moon `#F2E6C9`)']);
+  });
+
+  it('ignores palettes that parse and lists that are not palettes', () => {
+    expect(unparsedPaletteItems('- Paper `#F2E4C6`\n- Ink `#141414`')).toEqual([]);
+    expect(unparsedPaletteItems('- Fill it with `#C8272F` and deselect\n- Then add a layer')).toEqual([]);
   });
 });

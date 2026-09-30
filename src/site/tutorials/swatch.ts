@@ -67,9 +67,12 @@ function parseGroup(text: string): PaletteGroup | null {
 export function parsePaletteItem(item: string): PaletteGroup[] | null {
   if (!item.includes('`#')) return null;
   const parts: string[] = [];
-  for (const part of item.split(/(?<=`)(?:\s*,\s+(?:and\s+)?|\s+and\s+)/)) {
-    const startsWithCode = part.trim().startsWith('`#');
-    if (startsWithCode && parts.length > 0) {
+  const pieces = item.split(/(?<=[`)])(\s*,\s+(?:and\s+)?|\s+and\s+)/);
+  for (let i = 0; i < pieces.length; i += 2) {
+    const part = pieces[i] ?? '';
+    const separator = pieces[i - 1] ?? '';
+    const isNote = !part.includes('`#') && separator.includes(',');
+    if (parts.length > 0 && (part.trim().startsWith('`#') || isNote)) {
       parts[parts.length - 1] += `, ${part}`;
     } else {
       parts.push(part);
@@ -77,6 +80,24 @@ export function parsePaletteItem(item: string): PaletteGroup[] | null {
   }
   const groups = parts.map(parseGroup);
   return groups.every((g): g is PaletteGroup => g !== null) ? groups : null;
+}
+
+/**
+ * Intro lists where every item holds a colour code are meant as palettes.
+ * Returns the items that stop such a list rendering as a swatch panel.
+ */
+export function unparsedPaletteItems(markdown: string): string[] {
+  const unparsed: string[] = [];
+  for (const block of markdown.split(/\n\s*\n/)) {
+    if (!/^[-*]\s/.test(block.trim())) continue;
+    const items = block
+      .trim()
+      .split(/\n(?=[-*]\s)/)
+      .map((item) => item.replace(/^[-*]\s+/, '').replace(/\s*\n\s*/g, ' ').trim());
+    if (!items.every((item) => item.includes('`#'))) continue;
+    unparsed.push(...items.filter((item) => !parsePaletteItem(item)));
+  }
+  return unparsed;
 }
 
 export function renderPaletteGroup(group: PaletteGroup, renderInline: (markdown: string) => string): string {

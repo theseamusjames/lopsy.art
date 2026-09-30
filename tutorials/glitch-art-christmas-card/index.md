@@ -24,7 +24,7 @@ Glitch art works best when the damage is *controlled*. Keep to a small palette
 and put the effects in zones instead of spraying them everywhere:
 
 - Night sky: `#05060F` → `#11113C` → `#4A1760`
-- Moon and type cream: `#F4ECD8` (moon `#F2E6C9`)
+- Cream: `#F4ECD8` / `#F2E6C9` (type and moon)
 - Channel red: `#FF2A4D`
 - Channel cyan: `#19E3E3`
 - Ink: `#0B0C1C` and `#070811`
