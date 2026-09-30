@@ -2,6 +2,7 @@
 title: Design a Tropical Paper-Cut Restaurant Menu
 description: Make a layered paper-cut jungle menu in Lopsy with lasso monstera leaves, palm fronds, hibiscus, cacao pods and a clean three-column price list.
 published: 2026-09-27 13:30
+updated: 2026-09-30
 level: Intermediate
 duration: 75
 tags: restaurant menu, tropical, paper cut, layer effects, lasso, typography, area text, menu design
@@ -41,40 +42,51 @@ Choose **File → New**, set the unit to **Pixels**, and create a
 
 Pick the **Gradient** tool and set **Type** to **Radial**. Click
 **Advanced…** and set three stops: `#2A6B4F` at 0%, `#123F2F` at 55% and
-`#061A13` at 100%. Drag from **(600, 520)** down to **(600, 1750)**. The
-glow sits behind where the title will go, and the corners fall away into
+`#061A13` at 100%. Start the drag on the centre line, about a third of the
+way down, and drag straight down to just past the bottom edge. The glow
+sits behind where the title will go, and the corners fall away into
 darkness.
 
 ## Add guides and a grid
 
-![The dark green document with a 16 pixel grid shown and blue guides at x 168, 600 and 1032 and y 354, 786 and 1602](02-guides-grid.webp)
+![The dark green document with a 16 pixel grid shown, three vertical blue guides marking the arch's sides and centre, and three horizontal guides marking the top of the dome, the dome's widest point and the bottom of the arch](02-guides-grid.webp)
 
-Click the top ruler at **168**, **600** and **1032** for vertical guides,
-and the left ruler at **354**, **786** and **1602** for horizontal ones.
-They mark the arch's sides, its centre line, the top of the dome, where
-the dome meets the straight sides, and the bottom.
+Guides mark the arch's sides, its centre line, the top of the dome, where
+the dome meets the straight sides, and the bottom. The ruler shows a
+readout as you hover, so you can place them by eye:
+
+- **Top ruler:** [[Cmd]]-click the middle for a guide exactly on the centre
+  line. Then click about **168** px in from each side (168 and 1032).
+- **Left ruler:** click at about **354** (the top of the dome), **786**
+  (where the dome meets the straight sides) and **1602** (the bottom).
 
 Turn on **View → Show Grid**. Snap switches on with it, so your marquees
 land on the 16 px lattice.
 
-> **Tip:** Guides are reference lines only; marquees snap to the grid, not
-> to guides. That's why the guides sit on grid lines here.
+> **Tip:** Guides are reference lines only. Marquees snap to the grid, not
+> to guides, so these guides sit on grid lines.
 
 ## Draw the dome of the arch
 
-![A circular elliptical marquee from x 168 to 1032 filled with cream on a new Arch layer, with the marquee handles still visible](03-arch-dome.webp)
+![A circular elliptical marquee spanning the two side guides, filled with cream on a new Arch layer, with the marquee handles still visible](03-arch-dome.webp)
 
 Add a layer named **Arch**. Set the foreground colour to `#F6EAD2`. With
-the **Elliptical Marquee**, drag a circle from **(168, 354)** to
-**(1032, 1218)**. That's 864 px wide, so its centre sits exactly on the
-786 guide. Choose **Edit → Fill**.
+the **Elliptical Marquee**, [[Cmd]]-drag a circle from where the left guide
+meets the dome-top guide, until it reaches the right guide. That's 864 px
+wide, so its centre sits exactly on the middle horizontal guide. Choose
+**Edit → Fill**.
+
+> **Tip:** To type the circle instead, click once with the Elliptical
+> Marquee while nothing is selected and enter **From** 168, 354 **To**
+> 1032, 1218.
 
 ## Add the straight sides
 
 ![A rectangular marquee running from the middle of the cream circle down to the bottom guide, ready to fill](04-arch-body.webp)
 
-Switch to the **Rectangular Marquee** and drag from **(168, 786)** to
-**(1032, 1602)**. Choose **Edit → Fill** again. The rectangle's top edge
+Switch to the **Rectangular Marquee** and drag from where the left guide
+crosses the middle horizontal guide down to the bottom-right guide
+crossing. Choose **Edit → Fill** again. The rectangle's top edge
 cuts through the circle's widest point, so the two shapes merge into one
 seamless arched window. Press [[Cmd+D]] to deselect.
 
@@ -158,7 +170,7 @@ point out from the arch.
 Select **Arch Rule** and create another group, **Front Jungle**, with a
 layer called **Monstera**. Cut six larger leaves in `#2A8452`:
 
-- one at each top shoulder, rotated about ±42°, just overlapping the dome
+- one at each top shoulder, tilted about 42° outwards, just overlapping the dome
 - one in each bottom corner
 - two lying almost flat along the bottom edge, so the card sits *in* the
   foliage
@@ -200,8 +212,8 @@ For each pod:
 3. Brush four curved ribs down the pod in `#8E3212`, plus one pale
    `#FFE08A` highlight on the lit side.
 
-Run **Filter → Gaussian Blur** with **Radius 1** to soften the lasso's
-stair-stepped edges, then add the leaf Drop Shadow.
+Add the leaf Drop Shadow. Lasso fills have smooth, anti-aliased edges, so
+the pods need no extra softening.
 
 ## Paint a hibiscus
 
@@ -226,8 +238,8 @@ Add the leaf Drop Shadow.
 
 ![A copy of the hibiscus in the bottom-right corner selected with a marquee and mid-rotation, with transform handles visible](14-rotate-copy.webp)
 
-Draw a marquee around the flower, press [[Cmd+C]], wait a second, and press
-[[Cmd+V]]. The copy lands in place on a new layer. Rename it **Hibiscus
+Draw a marquee around the flower, press [[Cmd+C]], then [[Cmd+V]]. The
+copy lands in place on a new layer. Rename it **Hibiscus
 BR**, then:
 
 1. Drag it with the **Move** tool to the bottom-right corner of the arch,
@@ -271,14 +283,16 @@ set the colour to cacao brown `#3B1A0E`. Click inside the dome, type
 ![The title centred with a mango offset shadow, JUNGLE in spaced bold coral capitals below it, and a small green tagline](17-title-lockup.webp)
 
 With the **Move** tool, click **Align center horizontally**, then use the
-arrow keys to put the top of the letters at **y 478**. Add a **Drop
+arrow keys to settle the title in the upper part of the dome, about a
+third of the way down the arch. Add a **Drop
 Shadow** with colour mango `#F2A531`, **Offset** 5 / 6, **Blur** 0 and
 **Opacity** 100. It gives the title a retro, screen-printed feel.
 
-Below it, add **J U N G L E** in **Josefin Sans SemiBold** at **52** px in
-coral `#C24A26`, with its top at y 590. Then add the tagline
+Just below it, add **J U N G L E** in **Josefin Sans SemiBold** at **52**
+px in coral `#C24A26`. Under that, add the tagline
 **CACAO BAR · TROPICAL KITCHEN · EST. 2019** in Josefin Sans **19** px,
-`#2A6B4F`, at y 666. Centre both with **Align center horizontally**.
+`#2A6B4F`. Centre both with **Align center horizontally**, and keep the
+gaps between the three lines tight so they read as one lockup.
 
 > **Tip:** Create each new line of type in an empty area of the canvas,
 > then move it into place. Clicking inside an existing text layer's box
@@ -290,18 +304,21 @@ coral `#C24A26`, with its top at y 590. Then add the tagline
 
 Each section has four text layers:
 
-- **Header:** Shrikhand, 36 px, `#2A8452`, centred with its top at y 740.
-- **Names:** an area-text box from x 262 to 790 in **Arvo Bold**, 24 px,
-  `#3B1A0E`. One item per line, with **Line height** set to **2.417** in
-  the Text panel, which gives a 58 px pitch. Put its first line 56 px below
-  the header.
-- **Prices:** an area-text box from x 800 to 938 with the same font, size
-  and line height, **Align right**, in `#C8553D`. Line its first line up
-  with the names, and put its right edge at x 937.
+- **Header:** Shrikhand, 36 px, `#2A8452`, centred a comfortable gap
+  below the tagline.
+- **Names:** an area-text box in **Arvo Bold**, 24 px, `#3B1A0E`. Drag it
+  from about 70 px inside the terracotta rule on the left to a little past
+  the centre line. One item per line, with **Line height** set to
+  **2.417** in the Text panel, which gives a 58 px pitch. Put its first
+  line about 56 px below the header.
+- **Prices:** a narrow area-text box with the same font, size and line
+  height, set to **Align right**, in `#C8553D`. Drag it from just right of
+  the names box to about 70 px inside the rule on the right, so the menu
+  has even margins. Line its first line up with the names.
 - **Descriptions:** an area-text box in **Josefin Sans** 17 px, `#7A5A48`,
-  with **Line height** **3.412** (the same 58 px pitch). Put it 28 px below
-  the names, so each description sits closer to its own item than to the
-  next one.
+  with **Line height** **3.412** (the same 58 px pitch). Put it about
+  28 px below the names, so each description sits closer to its own item
+  than to the next one.
 
 Set the line height in the **Text** panel *before* you drag each box.
 Because the three blocks share a pitch, every price stays level with its
@@ -311,8 +328,8 @@ dish.
 
 ![All three sections set: Drinking Chocolate, Jungle Plates and Sweet Things, each with three items, descriptions and prices](19-all-sections.webp)
 
-Repeat for **Jungle Plates** (header top at y 1000) and **Sweet Things**
-(y 1260). Leave about 45 px between each section's last description and
+Repeat for **Jungle Plates** and **Sweet Things**, stacking them down the
+arch. Leave about 45 px between each section's last description and
 the next header. That's clearly more than the space between items, so the
 sections read as separate groups.
 
@@ -320,9 +337,10 @@ sections read as separate groups.
 
 ![Thin terracotta rules with small diamond ends flanking each section header](20-header-rules.webp)
 
-On **Ornaments**, draw a **2 px** tall rectangular marquee from x 300 to
-22 px left of each header, and another from 22 px right of it to x 900.
-Fill both with `#C8553D`. At the outer ends, lasso a small diamond,
+On **Ornaments**, draw a **2 px** tall rectangular marquee level with the
+middle of each header. Start it about 110 px inside the arch rule and stop
+it about 22 px short of the header's first letter. Mirror it on the right
+side. Fill both with `#C8553D`. At the outer ends, lasso a small diamond,
 12 px across, and fill it with the same colour. The rules frame each
 header like a label on a crate.
 
@@ -332,8 +350,8 @@ header like a label on a crate.
 
 Set **Letter spacing** to **2** in the Text panel. Then type **OPEN DAILY
 8AM – LATE · CALLE DE LA PALMA 14, TULUM** in Josefin Sans at **16** px.
-Centre it with its top at y 1522. That leaves about 45 px above it and
-below it, to the rule.
+Centre it horizontally, and nudge it up or down until the space above it
+(to the last description) matches the space below it (to the rule).
 
 Give it a **Color Overlay** of deep leaf green `#0F6B3A`, so it's strong
 enough to hold the bottom of the card. Reset **Letter spacing** to 0
@@ -345,8 +363,8 @@ afterwards.
 
 Add a layer named **Sunlight** and drag its row above **Front Jungle**,
 so it sits at the top of the stack. Drag a **Radial** gradient of
-`#FFE7A0` at full opacity fading to transparent, from **(600, 180)** to
-**(600, 1000)**. Set the blend mode to **Soft Light** and the layer opacity
+`#FFE7A0` at full opacity fading to transparent, from just above the top of
+the dome straight down to about the middle of the card. Set the blend mode to **Soft Light** and the layer opacity
 to **75%**.
 
 The top leaves pick up a warm, sunlit yellow-green, and the glow draws the
@@ -357,9 +375,9 @@ eye to the title.
 ![The Front Jungle group being dragged 60 pixels right with the Move tool, with all its leaves, pods and flowers moving together](23-group-move.webp)
 
 Before exporting, select the **Front Jungle** group and drag it with the
-**Move** tool. Everything in the group moves together: leaves, pods and
-flowers. Press [[Cmd+Z]] to put it back. It returns pixel for pixel, which
-confirms the group is complete and nothing is stranded on another layer.
+**Move** tool. Everything in the group should move together: leaves, pods
+and flowers. If a piece stays behind, it's on a layer outside the group, so
+drag its row in. Press [[Cmd+Z]] to put the group back.
 
 Finally, choose **File → Save Project** to keep the editable `.lopsy`, and
 **File → Quick Export PNG** for the finished menu.

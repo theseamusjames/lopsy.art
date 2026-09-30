@@ -2,6 +2,7 @@
 title: Design a Cyberpunk Neon Dragon Logo
 description: Build a glitchy cyberpunk bar logo in Lopsy with Sunburst rays, a neon dragon silhouette, RGB-split type, vertical Japanese text and HUD details.
 published: 2026-09-28 09:00
+updated: 2026-09-30
 level: Intermediate
 duration: 90
 tags: cyberpunk, logo, neon, glitch, synthwave, japanese, vertical text, typography, layer effects, filters
@@ -32,26 +33,26 @@ The palette:
 
 ## Set up the canvas and guides
 
-![A 2000 by 2000 document filled with near-black violet, with blue guides at 160, 1000 and 1840 across and at 160, 800 and 1840 down](01-background-guides.webp)
+![A 2000 by 2000 document filled with near-black violet, with blue margin guides 160 px in from every edge, a vertical centre guide and a horizontal guide a little above the middle](01-background-guides.webp)
 
 Choose **File → New**, set the unit to **Pixels**, and create a
 **2000 × 2000** document with a white background.
 
 1. Select the **Background** layer, set the foreground to `#07050F`, and choose **Edit → Fill** (with nothing selected, it fills the whole layer).
-2. Click the top ruler at **160**, **1000** and **1840** to add vertical guides.
-3. Click the left ruler at **160**, **800** and **1840**.
+2. Click the top ruler about 160 px in from each side, then [[Cmd]]-click ([[Ctrl]]-click) the middle of it. The modifier snaps that guide exactly to the centre.
+3. Click the left ruler about 160 px from the top and bottom, and once more at about 800, a little above the middle.
 
-The outer guides are your safe margin. The sun will sit on the 1000 × 800
-crossing.
+The outer guides are your safe margin. The sun will sit where the centre guide
+crosses the 800 guide.
 
 ## Cut a soft window for the rays
 
-![A lasso selection shaped like a large circle around the sun's centre with its bottom sliced off flat at y 1290, shown as marching ants](02-feathered-ray-selection.webp)
+![A lasso selection shaped like a large circle around the sun's centre with its bottom sliced off flat about two-thirds of the way down, shown as marching ants](02-feathered-ray-selection.webp)
 
 Rename **Layer 1** to *Rays*. The rays shouldn't streak behind the title, so
 limit them before you draw them:
 
-1. With the **Lasso**, trace a circle of radius about 900 around (1000, 800), but run the bottom flat along y **1290**.
+1. With the **Lasso**, drag a big circle centred on the guide crossing, about 900 px in radius so it nearly touches the canvas edges. Cut its bottom off with a flat, horizontal run about two-thirds of the way down the canvas (around 1290 on the left ruler). That's just above where the title will go.
 2. Choose **Select → Feather…** and set **120**.
 
 Filters respect the selection, feather included, so the rays will fade out at
@@ -87,13 +88,17 @@ and leave room for the neon on top.
 Add a layer called *Sun*:
 
 1. With the **Gradient** tool, open **Advanced…** and set three stops: `#F9F002` at 0%, `#FF2A6D` at 50% and `#6A0DAD` at 100%.
-2. Draw an **Elliptical Marquee** circle, radius 430, centred on (1000, 800).
-3. Drag a **Linear** gradient from its top (y 370) straight down to its bottom (y 1230).
+2. With the **Elliptical Marquee**, [[Cmd]]-drag a circle about 860 px across, centred on the guide crossing. [[Cmd]] keeps it round.
+3. Drag a **Linear** gradient from the circle's top edge straight down to its bottom edge.
 
-Now cut the slits. Each one is a **Rect Marquee** from x 540 to 1460, then
-**Delete**. They get taller as they go down:
+Now cut the slits across the lower half. Each one is a **Rectangular
+Marquee** a little wider than the sun, then [[Delete]]. Start just below the
+800 guide and space the slits about 60 px apart. They get taller as they go
+down: **8**, **12**, **17**, **23**, **29** and **35 px**.
 
-- y 845 (8 px tall), 905 (12), 965 (17), 1025 (23), 1085 (29) and 1145 (35)
+> **Tip:** For exact slit heights, click once with the Rectangular Marquee
+> instead of dragging (with nothing selected) and type the corners into the
+> dialog. The first slit runs from about 845 to 853 on the left ruler.
 
 ## Give the sun a glow
 
@@ -111,16 +116,17 @@ Deselect, open the Sun's effects drawer and enable **Outer Glow**:
 Click **New Group**, name it *Dragon*, and add a layer called *Horns* inside
 it. Set the foreground to `#0C0818`.
 
-Lasso two long horns sweeping back from the forehead, and fill each one:
+The dragon faces right, with its head filling the sun. Lasso two long, thin
+horns and fill each one:
 
-- Tips at about (600, 380) and (590, 530)
-- Bases around x 885–1045 at y 560–580
+- The bases sit on top of the head, a little left of the centre guide and about 220 px above the 800 guide.
+- The tips sweep back and up to the upper left, past the sun's edge. One ends near the top of the sun, the other about 150 px lower.
 
 Add a *Head* layer and lasso the whole head in one pass, then **Edit → Fill**:
 
-1. **Snout.** Start at the nose (1395, 730), bump up over a nostril, and run along the brow to a pointed brow ridge at (1090, 570).
-2. **Mane.** Drop down the back of the skull as a row of sharp spikes, about 70–90 px deep, from (760, 565) to (815, 865).
-3. **Neck.** Keep going into a neck with smaller dorsal spikes that ends flat at y 1170.
+1. **Snout.** Start at the tip of the nose, just inside the sun's right edge, bump up over a nostril, and run back along the brow to a pointed brow ridge just right of the centre guide.
+2. **Mane.** Drop down the back of the skull as a row of sharp spikes, about 70–90 px deep, pointing back to the left.
+3. **Neck.** Keep going into a neck with smaller dorsal spikes that ends flat near the bottom of the sun.
 4. **Jaws.** Come back up the throat. Draw an open lower jaw with two upward fangs, then the upper jaw with two downward fangs back to the nose.
 
 Deselect, click the Head row and choose **Layer → Merge Down**. Rename the
@@ -144,7 +150,7 @@ so keep the fill a flat near-black.
 
 Add an *Eye* layer:
 
-1. Lasso a narrow slanted slit at about (1040–1130, 640–672). Fill it `#F9F002`.
+1. Lasso a narrow slanted slit, about 90 px long, under the brow ridge. Fill it `#F9F002`.
 2. Lasso a small nostril triangle and fill it `#05D9E8`.
 3. Give the layer an **Outer Glow** in `#F9F002`: **Size** 28, **Spread** 20, **Opacity** 90.
 
@@ -152,8 +158,10 @@ Add a *Whiskers* layer. Draw each whisker as a thin **ribbon** with the Lasso:
 go out along one side of an S-curve and come back along the other side. Start
 about 13 px wide at the lip and end in a point.
 
-- The upper whisker curls up from (1392, 725) to (1610, 515).
-- The lower whisker curls down from (1398, 752) to (1620, 1000).
+- The upper whisker curls up and out from the nose, ending about 200 px above it.
+- The lower whisker curls down from just below it, ending about 250 px below the nose.
+
+Both run about 220 px out to the right, past the sun's edge.
 
 Fill both `#05D9E8` and add an **Outer Glow** (`#05D9E8`, Size 22, Spread 10,
 Opacity 85). A tapered ribbon looks like a whisker; a stroke of one width
@@ -165,9 +173,9 @@ looks like a cable.
 
 Click the *Rays* row and add a layer called *Column Shade*:
 
-1. Pick the **Rect Marquee** and set **Feather** to 60 in the options bar.
-2. Marquee x 110–300, y 300–1050 and fill it `#07050F`.
-3. Do the same at x 1700–1890.
+1. Pick the **Rectangular Marquee** and set **Feather** to 60 in the options bar.
+2. Marquee a tall panel about 190 px wide, straddling the left margin guide and running from about 300 to 1050 on the left ruler. Fill it `#07050F`.
+3. Do the same over the right margin guide.
 
 Set **Feather** back to 0 and the layer opacity to 85%. The Japanese columns
 will sit on these calm panels instead of on the rays.
@@ -176,22 +184,22 @@ will sit on these calm panels instead of on the rays.
 
 ![DRAGON in large white Audiowide capitals under the sun, IZAKAYA in tracked yellow capitals below it, and a cyan monospace footer line](11-type.webp)
 
-Create text in empty canvas, bottom line first, so the Text tool never grabs
-an existing line. Keep a **raster** layer (like *Sun*) selected when you
-change fonts: with a text layer selected, changing the font restyles that
-layer.
+Click in empty canvas for each new line, so the Text tool starts a new layer
+instead of editing one you've already set. Keep a **raster** layer (like
+*Sun*) selected when you change fonts: with a text layer selected, changing
+the font restyles that layer.
 
 - **Footer:** Share Tech Mono, size 44, `#05D9E8`, letter spacing 0. Type `EST. 2077  //  NEO-SHINJUKU  SECTOR 07  //  OPEN TILL DAWN`.
 - **IZAKAYA:** Michroma, size 84, `#F9F002`, letter spacing 46.
 - **DRAGON:** Audiowide, size 230, `#FFFFFF`, letter spacing 10.
 
 Select each one with the **Move** tool and click **Align center
-horizontally**. Then nudge them (Shift + arrow keys move 10 px) so the caps
-tops sit at:
+horizontally** in the options bar. Then nudge them up or down with the arrow
+keys ([[Shift]] + arrow moves 10 px):
 
-- DRAGON y ≈ 1340
-- IZAKAYA y ≈ 1586
-- footer y ≈ 1770
+- DRAGON sits a little below the flat bottom of the ray window, with its caps starting around 1340 on the left ruler.
+- IZAKAYA sits under it, with about 80 px of air between them.
+- The footer sits just above the bottom margin guide.
 
 > **Tip:** Pick a title face whose O is a plain ring. A slashed or barred O turns DRAGON into "DRAGΘN" at logo size.
 
@@ -199,7 +207,7 @@ tops sit at:
 
 ![DRAGON with a cyan copy peeking out on the upper left and a hard magenta offset on the lower right](12-rgb-split.webp)
 
-1. Select *DRAGON* and click **Duplicate Layer**. The copy lands 10 px down and right, so nudge it back until the two line up exactly.
+1. Select *DRAGON* and click **Duplicate Layer**. The copy lands 10 px down and right, so press [[Shift+Up]] and [[Shift+Left]] with the **Move** tool to line the two up exactly.
 2. On the **copy** (the top layer), add a **Drop Shadow**: `#FF2BD6`, Offset X 8, Offset Y 4, **Blur 0**, **Opacity 100**. That gives a hard magenta offset.
 3. Select the **original** underneath and nudge it 8 px left and 4 px up.
 4. Give the original a **Color Overlay** in `#00F0FF`.
@@ -214,8 +222,8 @@ and **Merge Down** (the merge bakes the shadow and overlay in). Rename it
 
 Now tear it in two places:
 
-1. Rect Marquee x 395–1060, y 1398–1428 (through D-R-A). Switch to **Move** and drag the strip **13 px right**, then press [[Cmd+D]].
-2. Marquee x 1418–1625, y 1470–1488 on the N and drag it **14 px left**.
+1. With the Rectangular Marquee, select a 30 px strip across the upper half of D, R and A, a little over a third of the way down the caps. Switch to **Move** and drag the strip **13 px right** (or nudge it), then press [[Cmd+D]].
+2. Select an 18 px strip across the lower part of the N and move it **14 px left**.
 
 Keep the tears off the O, and keep each shifted piece overlapping its own
 stroke. If a strip lands in empty counters, it reads as a strikethrough.
@@ -227,8 +235,8 @@ stroke. If a strip lands in empty counters, it reads as a strikethrough.
 With *Sun* selected, pick the Text tool:
 
 1. Choose **DotGothic16** at size 78 and turn on **Vertical text** (the A-over-B toggle in the options bar).
-2. Click at (150, 330) and paste `ドラゴン居酒屋` with [[Cmd+V]]. Commit with [[Tab]] and set **Letter spacing** 18 in the Text panel.
-3. Do the same at (1745, 330) with `焼鳥・拉麺・酒` in `#05D9E8`.
+2. Set the foreground to magenta `#FF2A6D`, click near the top of the left shade panel, and paste `ドラゴン居酒屋` with [[Cmd+V]]. Commit with [[Tab]] and set **Letter spacing** 18 in the Text panel.
+3. Do the same at the top of the right shade panel with `焼鳥・拉麺・酒` in `#05D9E8`.
 
 Turn the toggle off again afterwards. Selecting a vertical text layer loads
 its settings into the tool, so check the toggle before you create horizontal
@@ -239,38 +247,42 @@ text.
 ![Cyan corner brackets, a thin cyan rule under the top label row and another above the footer, a magenta mono label at top left and a cyan barcode at top right](15-hud.webp)
 
 Add a *HUD Brackets* layer. Choose **View → Show Grid** (it turns Snap on),
-then fill eight Rect Marquee bars in `#05D9E8`. Each is 16 px thick and 144 px
-long, making an L in each corner 88 px from the edge. Hide the grid again and
-untick **Snap to Grid**.
+then fill eight Rectangular Marquee bars in `#05D9E8`. Each is 16 px thick and
+144 px long, making an L in each corner about 88 px in from the canvas edges.
+The grid keeps all four corners identical. Hide the grid again and untick
+**View → Snap to Grid**.
 
-On the same layer, fill two 3 px rules from x 162 to 1838:
+On the same layer, fill two 3 px rules that run from the left margin guide to
+the right one:
 
-- one at y 212
-- one at y 1735
+- one about 50 px below the top margin, under the label row you're about to add
+- one about 100 px above the bottom margin, over the footer
 
 Give the layer an **Outer Glow** (`#05D9E8`, Size 18, Spread 10, Opacity 70).
 
 Add the top labels:
 
-- **Left:** `NODE_07 // RAMEN . YAKITORI . SAKE` in Share Tech Mono 36, `#FF2A6D`, letter spacing 3, left edge at x 167.
-- **Right:** `*DI2077*` in **Libre Barcode 39**, size 96, `#05D9E8`, right edge at x 1833.
+- **Left:** `NODE_07 // RAMEN . YAKITORI . SAKE` in Share Tech Mono 36, `#FF2A6D`, letter spacing 3, with its left edge on the left margin guide.
+- **Right:** `*DI2077*` in **Libre Barcode 39**, size 96, `#05D9E8`, with its right edge on the right margin guide.
 
 ## Squash the barcode
 
 ![A zoomed view of the top-right corner with a transform box and handles around the short, wide barcode above the cyan rule](16-barcode-scale.webp)
 
-The barcode is taller than the label beside it. Rasterize it, draw a Rect
-Marquee around it, switch to **Move**, and drag the **top-middle** handle down
-until the bars are **40 px** tall. Press [[Cmd+D]], then nudge it so its
+The barcode is taller than the label beside it. Rasterize it, draw a
+Rectangular Marquee around it, switch to **Move**, and drag the
+**top-middle** handle down until the bars are about **40 px** tall, the height
+of the label's capitals. Press [[Cmd+D]], then nudge it so its
 bottom lines up with the label's baseline.
 
 ## Build the neon sign
 
 ![A zoomed view of a small tilted neon sign with a glowing magenta frame reading 営業中 in magenta and OPEN 24H in yellow, inside a transform box](17-sign-rotate.webp)
 
-In the Signage area (select *HUD Brackets*), add a *Sign Frame* layer:
+Select *HUD Brackets* so the sign stacks above it, and add a *Sign Frame*
+layer:
 
-1. Fill a `#FF2A6D` rectangle from (150, 1070) to (415, 1205).
+1. Fill a `#FF2A6D` rectangle about 265 × 135 px on the left margin, just below the left shade panel.
 2. **Select → Shrink…** by 9, press **Delete**, then fill the inside `#0C0818`.
 3. Add an **Outer Glow** (`#FF2A6D`, Size 24, Spread 10, Opacity 80).
 
@@ -283,11 +295,15 @@ Centre both on the frame with 14 px of padding above and below.
 
 Rasterize the two texts. Then tilt all three layers by the same amount:
 
-1. Select a layer and Rect Marquee (130, 1050) to (435, 1225).
-2. With **Move**, drag the rotate handle just off the top-right corner about **−6°**.
+1. Select a layer and draw a Rectangular Marquee about 20 px outside the frame on every side.
+2. With **Move**, drag the rotate handle just off the top-right corner about **−6°** (anticlockwise).
 3. Press [[Cmd+D]].
 
-Repeat with the identical marquee and drag on the other two layers.
+Repeat with the identical marquee and rotation on the other two layers.
+
+> **Tip:** To get the identical marquee each time, click once with the
+> Rectangular Marquee (with nothing selected) and type the same **From** and
+> **To** corners into the dialog.
 
 ## Fade the neck and add scanlines
 
@@ -298,11 +314,11 @@ click **Rasterize Layer Style** in its effects drawer, so the stroke and glow
 become pixels.
 
 1. Click **Add Mask**, then click the **Mask** row.
-2. With the Gradient tool (black → white, **Reverse** on), drag from y 1105 down to y 1195.
+2. With the Gradient tool (black → white, **Reverse** on), drag straight down over the last 90 px or so of the neck, ending at its flat bottom edge.
 
 The neck and its outline now dissolve into the stripes.
 
-> **Tip:** Bake the effects first. Layer effects are drawn from the unmasked layer, so a live Stroke would still outline the hidden neck.
+> **Tip:** Bake the effects first. Live effects follow the mask, so a live Stroke would trace a fresh outline along the faded edge instead of fading with it.
 
 For the CRT texture, define a 200 × 5 tile with one 2 px black line and use
 **Edit → Fill with Pattern…** on a *Scanlines* layer directly above *Sun*, at

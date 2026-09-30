@@ -2,6 +2,7 @@
 title: Design a Screen-Print Style Restaurant Menu
 description: Make a three-ink screen-print kebab menu in Lopsy with halftone dots, Multiply overprints, a misregistered headline, dotted price leaders and a rotated badge.
 published: 2026-09-26 01:40
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: restaurant menu, screen print, halftone, blend modes, typography, layer effects, groups, selections, transforms
@@ -48,37 +49,52 @@ Open [Lopsy](/). In the **New Document** dialog, set **Width** `1000` and
 **Height** `1400`, choose a **White** background and click **Create**.
 
 Select **Background**, type `EFE4CC` into the Color panel's hex field and
-choose **Edit → Fill**. Click the top ruler at x `50`, `500` and `950`, and the
-left ruler at y `50`, `640` and `1350`, to drop six guides.
+choose **Edit → Fill**. Then drop six guides with single clicks on the rulers:
 
-Rename **Layer 1** to `Border` and set the foreground to teal `#1D4E57`. With
-the **Rectangular Marquee** ([[M]]), build two frames:
+- On the top ruler, click about 50 px in from each side, and [[Cmd]]-click (Ctrl-click) the middle to snap a guide exactly to the centre.
+- On the left ruler, click about 50 px from the top and from the bottom, and once a little under halfway down, around 640. That one marks the bottom of the picture at the top of the menu.
 
-1. Drag from (30, 30) to (970, 1370), choose **Edit → Fill**, then marquee
-   (42, 42) to (958, 1358) and press [[Delete]]. That leaves a 12 px rule.
-2. Marquee (50, 50) to (950, 1350), **Fill**, then marquee (55, 55) to
-   (945, 1345) and press [[Delete]]. That leaves a thin 5 px inner rule.
+Rename **Layer 1** to `Border` and set the foreground to teal `#1D4E57`. The
+rules need to be even all the way round, so let the marquee dialog place
+them. With nothing selected, a single click (no drag) with the **Rectangular
+Marquee** ([[M]]) opens fields for the **From** and **To** corners.
+
+1. Click once and enter **From** `30, 30` **To** `970, 1370`. Choose **Edit → Fill**, then **Select → Shrink…** by `12` px and press [[Delete]]. That leaves a 12 px rule 30 px in from the edge.
+2. Press [[Cmd+D]], click again and enter `50, 50` to `950, 1350`, so the box sits right on the guides. **Fill**, **Shrink** by `5` px and press [[Delete]]. That leaves a thin 5 px inner rule.
 
 ## Lasso a sunburst
 
 ![An 18-point star selection drawn with the Lasso tool across the top half of the menu](02-sunburst-lasso.webp)
 
-Click **Add Layer** and name it `Rays`. With the **Lasso** ([[L]]), click
-around a star centred on (500, 380). Alternate between points 400 px out and
-215 px out, 18 of each, so the tips run off the top of the scene.
+Click **Add Layer** and name it `Rays`. The sun will sit on the centre guide,
+a little over a quarter of the way down the page, so that's the star's centre
+too. With the **Lasso** ([[L]]), drag round it in straight runs, alternating
+between long points about 400 px out and short ones about 215 px out, 18 of
+each, and let go back at the start. The long tips run off the top of the
+scene.
+
+> **Tip:** For perfectly straight rays, click the 36 corners with the
+> **Pen Tool** instead, click **Commit path**, then **Path to Selection** in
+> the Paths panel.
 
 Fill it with mustard `#F2B233`. Then trim the rays to the scene:
 
-1. Marquee (55, 55) to (945, 640).
+1. Marquee the inside of the inner rule, from its top-left corner down to the guide at 640.
 2. Choose **Select → Inverse** and press [[Delete]].
 3. Click the layer's opacity and set it to `60%`.
+
+> **Tip:** **Filter → Sunburst…** makes even rays in one go. Set the
+> foreground to mustard and use **Rays** `18`, **Center X** `50` and
+> **Center Y** `27`, with **Gaps: Keep Layer**, then trim it the same way.
 
 ## Overprint a red sun with Multiply
 
 ![A red sun disc over the mustard sunburst, set to the Multiply blend mode](03-multiply-sun.webp)
 
-Add a layer called `Sun`. With the **Elliptical Marquee**, drag a 360 × 360
-circle from (320, 200). Fill it with tomato `#E0452B`, then press [[Cmd+D]].
+Add a layer called `Sun`. With the **Elliptical Marquee**, [[Cmd]]-drag a
+circle about 360 px across, centred on the middle guide where the rays meet.
+For an exact one, click once instead and enter **From** `320, 200` **To**
+`680, 560`. Fill it with tomato `#E0452B`, then press [[Cmd+D]].
 
 Click the layer's **✦** (Layer effects) button and set **Blend** to
 **Multiply**. In screen printing, a second ink on top of the first darkens it.
@@ -89,9 +105,10 @@ on reads as real ink on paper.
 
 ![A black-to-white linear gradient clipped to the circular sun selection](04-sun-gradient.webp)
 
-Add a layer called `Sun Dots` and marquee the same 360 px circle again. Pick
-the **Gradient** tool. It starts black to white, so drag from the upper left
-(380, 240) to the lower right (560, 470).
+Add a layer called `Sun Dots` and [[Cmd]]-click the `Sun` thumbnail to load
+the same circle as a selection. Pick the **Gradient** tool. It starts black
+to white, so drag from just inside the circle's upper-left edge to a little
+past its centre, towards the lower right.
 
 The dark end of the gradient becomes big dots and the light end becomes small
 ones.
@@ -125,9 +142,10 @@ which is the classic two-ink halftone blend.
 
 ![Wavy teal dunes across the bottom of the scene, overprinting the sun and rays](07-teal-dunes-multiply.webp)
 
-Add a layer called `Dunes`. With the **Lasso**, click a gently rolling
-horizon from (50, 500) across to (950, 460), then down to (950, 640) and back
-along the bottom to (50, 640). Fill it with teal.
+Add a layer called `Dunes`. With the **Lasso**, drag a gently rolling
+horizon from the left guide, about 140 px above the 640 guide, across to the
+right guide a little higher. Then drag down to the 640 guide and back along
+it, and let go where you started. Fill it with teal.
 
 Set the layer to **Multiply**. Where the teal crosses the rays and the sun,
 you now get darker olive and brown overprints, and no fourth ink.
@@ -136,9 +154,9 @@ you now get darker olive and brown overprints, and no fourth ink.
 
 ![A second, lower dune filled with mustard halftone dots that get bigger toward the bottom](08-halftone-dune-dots.webp)
 
-Add a layer called `Dune Dots` and lasso a lower, shallower wave between about
-y 566 and 640. Drag the **Gradient** from the bottom (500, 640) up to
-(500, 570).
+Add a layer called `Dune Dots` and lasso a lower, shallower wave in the
+bottom 70 px or so of the scene, ending on the 640 guide. Drag the
+**Gradient** from that guide straight up to the top of the wave.
 
 Run **Filter → Halftone…** with **Dot Size** `9`, **Angle** `15` and
 **Softness** `1`, press [[Cmd+D]], then add a mustard **Color Overlay**. The
@@ -151,10 +169,8 @@ dots swell toward the bottom edge like sand in the foreground.
 In the Layers panel, click **Dune Dots**, click **New Group** and name the
 group `Spit`. Inside it:
 
-1. Add a layer called `Skewer`. Fill a 14 px wide teal bar from (493, 150)
-   down to y 575, and a 40 px teal disc on top at (480, 128).
-2. Add a layer called `Meat` and lasso a cone that's 184 px wide at y 215 and
-   tapers to about 76 px at y 545.
+1. Add a layer called `Skewer`. Fill a 14 px wide teal bar centred on the middle guide, from above the top of the sun down into the dunes. Add a 40 px teal disc on its top end.
+2. Add a layer called `Meat` and lasso a cone that's about 184 px wide near the top of the sun and tapers to about 76 px just above the dunes.
 3. Fill it with mustard, and keep the selection active.
 
 ## Paint stripes inside the selection
@@ -164,9 +180,10 @@ group `Spit`. Inside it:
 Add a layer called `Meat Stripes`. Pick the **Brush** ([[B]]) and set
 **Size** `9`, **Hardness** `100`, and tomato as the colour.
 
-Starting at y 238 and moving down every 26 px, click on the left of the cone,
-then [[Shift]]-click on the right, a little higher, to draw a slanted line.
-The active selection clips every stroke to the cone.
+Starting just below the top of the cone and working down about every 26 px,
+click just outside the left of the cone, then [[Shift]]-click just outside
+the right, a little higher, to draw a slanted line. The active selection
+clips every stroke to the cone.
 
 Press [[Cmd+D]] and set the layer to **Multiply**. The red over mustard turns
 the colour of seared meat.
@@ -175,8 +192,9 @@ the colour of seared meat.
 
 ![The cone with teal halftone shading on its right side and a teal outside stroke](11-cone-stroke-shading.webp)
 
-Add `Meat Shade` and lasso the cone again. Drag a gradient from the right
-edge (600, 380) to the left edge (395, 380), then run **Halftone** with
+Add `Meat Shade` and [[Cmd]]-click the `Meat` thumbnail to select the cone
+again. Drag a gradient straight across from just past the cone's right edge
+to its left edge, then run **Halftone** with
 **Dot Size** `10`, **Angle** `30` and **Softness** `1`. Give it a teal
 **Color Overlay** and set it to **Multiply**. The dots grow toward the right
 edge, so the cone looks round.
@@ -189,9 +207,8 @@ Select `Meat`, open **✦**, tick **Stroke**, and set the colour to teal,
 ![The Spit group selected and moved down with the Move tool so the skewer sinks into the dunes](12-move-spit-group.webp)
 
 Click the **Spit** group row, press [[V]] for **Move**, and drag the spit
-25 px down so the skewer sinks into the dunes. All four layers move together.
-
-Try [[Cmd+Z]] and [[Cmd+Shift+Z]]. The group jumps back and forth exactly.
+about 25 px down so the skewer sinks into the dunes. All four layers move
+together.
 
 ## Set the headline in Shrikhand
 
@@ -205,17 +222,17 @@ Click **Dune Dots**, so the new text is anchored on a raster layer. Press
 - tomato as the colour
 
 Click in empty space near the top of the canvas, type `Nomad` and press
-[[Tab]] to commit. Switch to **Move** and drag the word down so its letters
-start at about y 670, centred on the 500 guide.
+[[Tab]] to commit. Switch to **Move** and drag the word down until its
+letters start just below the 640 guide. Click **Align center horizontally**
+in the options bar to centre it on the middle guide.
 
 ## Misregister the headline
 
 ![The red Nomad headline with a teal copy peeking out 6 px up and to the left](14-misregistered-headline.webp)
 
-Click **Duplicate Layer** in the Layers panel, then **click the copy's row**
-so only the copy is selected. The copy lands 10 px down and right. Nudge it
-back with [[←]] and [[↑]] four times each, which leaves it 6 px off the
-original.
+Click **Duplicate Layer** in the Layers panel. The copy is selected and lands
+10 px down and right. With **Move**, nudge it back with [[←]] and [[↑]] four
+times each, which leaves it 6 px off the original.
 
 Now select the original **Nomad** layer and give it a teal **Color Overlay**.
 The red copy prints on top, and the teal plate peeks out at the top left, just
@@ -231,8 +248,8 @@ under the headline, centred.
 
 Repeat the misregistration the other way round:
 
-1. **Duplicate Layer**, click the copy's row, and press [[Shift+←]] and
-   [[Shift+↑]] to put it back in place.
+1. **Duplicate Layer**, then press [[Shift+←]] and [[Shift+↑]] to put the
+   copy back in place. [[Shift]]+arrow nudges 10 px.
 2. Give the original a tomato **Color Overlay**.
 3. Nudge the original 3 px right and 3 px down.
 
@@ -242,8 +259,8 @@ A thin red edge now shows at the lower right of each letter.
 
 ![A tomato banner across the page with CHARCOAL-GRILLED • SINCE 1998 • OPEN TILL 3 AM in cream Space Mono Bold](16-tagline-banner.webp)
 
-Add a layer called `Banner`, marquee (55, 950) to (945, 1000) and fill it with
-tomato. Set the Text panel's **Letter spacing** back to `1`, then type
+Add a layer called `Banner`. Below `KEBAB`, marquee a 50 px band right across
+the page between the inner rules and fill it with tomato. Set the Text panel's **Letter spacing** back to `1`, then type
 `CHARCOAL-GRILLED • SINCE 1998 • OPEN TILL 3 AM`. Use **Space Mono**,
 **Bold**, `22` px, in paper cream `#EFE4CC`.
 
@@ -256,43 +273,52 @@ Paste the bullets from the clipboard if your keyboard can't type them. Then
 
 The column is three separate area-text layers, all anchored on
 **Dune Dots**. Create an area-text box by **dragging** with the Text tool.
-Make the descriptions first, so later drags never start inside an existing
-text box.
+Make the descriptions first, so later drags start in clear space rather than
+inside an existing text box.
+
+The item and price boxes start just below the banner, about 10 px under it.
+The description box starts about 76 px lower, so each description tucks under
+its item. All three left boxes start about 30 px inside the inner rule.
 
 1. **Descriptions:** Space Mono Regular, `17` px, teal. Set **Line height**
-   `1.4` and **Paragraph spacing** `76`. Drag a box from (85, 1086) to
-   x 405 and type the three lines:
+   `1.4` and **Paragraph spacing** `76`. Drag a box from about 76 px below the
+   banner across to just short of the middle guide (around 405 on the top
+   ruler) and type the three lines:
    - `lamb & beef, garlic yogurt`
    - `hand-minced lamb, sumac onion`
    - `saffron, lemon, charred tomato`
 2. **Items:** Bebas Neue, `46` px, teal, **Line height** `2.174` (a 100 px
-   pitch). Drag from (85, 1010) to x 390 and type `DÖNER WRAP`,
-   `ADANA KEBAB` and `CHICKEN SHISH`, one per line.
-3. **Prices:** Bebas Neue, `46` px, tomato, **Align right**. Drag a narrow box
-   from (408, 1010) to x 470 and type `9`, `13` and `12`.
+   pitch). Drag from just under the banner across to about 390 on the top
+   ruler and type `DÖNER WRAP`, `ADANA KEBAB` and `CHICKEN SHISH`, one per
+   line.
+3. **Prices:** Bebas Neue, `46` px, tomato, **Align right**. Drag a narrow
+   box, about 60 px wide, at the same height, ending about 30 px short of the
+   middle guide. Type `9`, `13` and `12`.
 
 ## Build the right menu column
 
 ![Both menu columns in place, with FALAFEL PLATE, İSKENDER and AYRAN & ÇAY on the right](18-menu-right-column.webp)
 
-Repeat the three layers on the right half:
+Repeat the three layers on the right half, starting each box about 30 px
+right of the middle guide, at the same heights as on the left:
 
-1. Descriptions from (530, 1086):
+1. Descriptions:
    - `hummus, tahini, parsley salad`
    - `sliced döner, butter tomato`
    - `salted yogurt drink, black tea`
-2. Items from (530, 1010): `FALAFEL PLATE`, `İSKENDER` and `AYRAN & ÇAY`.
-3. Right-aligned prices from (853, 1010) to x 915: `11`, `15` and `4`.
+2. Items: `FALAFEL PLATE`, `İSKENDER` and `AYRAN & ÇAY`.
+3. Right-aligned prices, in a narrow box ending about 30 px inside the right inner rule: `11`, `15` and `4`.
 
 The 100 px pitch lines every price up with its item.
 
 ## Space out the brush for dots
 
-![The Brushes modal with Spacing set to 260 percent, previewing a dotted stroke](19-dotted-brush-spacing.webp)
+![The Brushes modal with Spacing set to its maximum of 200, previewing a dotted stroke](19-dotted-brush-spacing.webp)
 
 Click **Dune Dots**, then add a layer called `Rules`. Pick the **Brush**, set
-**Size** `5` and **Hardness** `100`, and open the brush presets. On the
-**Shape** tab, set **Spacing** to `260`.
+**Size** `5` and **Hardness** `100`, and open the brush presets to get the
+**Brushes** window. On the **Shape** tab, set **Spacing** to `200`, the
+maximum.
 
 Each dab now lands well apart from the last, so a stroke becomes a row of
 round dots.
@@ -301,12 +327,11 @@ round dots.
 
 ![Teal dotted leaders running from each menu item to its price, plus a dotted vertical divider between the columns](20-dotted-leaders.webp)
 
-In teal, click at (500, 1038) and [[Shift]]-click at (500, 1300) to draw the
-column divider. Then do the same for each leader, just above the baseline,
-from the end of each item to its price:
-
-- left column at y 1070, 1169 and 1270
-- right column at y 1069, 1170 and 1270
+In teal, click on the middle guide level with the first item and
+[[Shift]]-click on it again just below the last description, to draw the
+column divider. Then do the same for each leader, just above the item's
+baseline, from the end of each item to just before its price. Keep the
+leaders in each row at the same height on both sides.
 
 Leave a gap after `ADANA KEBAB` for the chilli.
 
@@ -315,17 +340,18 @@ Leave a gap after `ADANA KEBAB` for the chilli.
 ![A large red chilli pepper with a small teal stem drawn with the Lasso next to ADANA KEBAB](21-chili-lasso.webp)
 
 Add a layer called `Chili`. Working at double size is easier, so lasso a
-curved pod about 30 × 60 px starting near (306, 1110), and fill it with
-tomato. Lasso a thin stem on top and fill it with teal.
+curved pod about 30 × 60 px in the empty space near `ADANA KEBAB`, and fill
+it with tomato. Lasso a thin stem on top and fill it with teal.
 
 Keep it to two inks, so it reads as part of the print rather than an emoji.
 
 ## Scale the chilli down
 
-![A marquee around the chilli being scaled down from its bottom-right corner handle with Shift held](22-scale-chili.webp)
+![A marquee around the chilli being scaled down from its bottom-right corner handle](22-scale-chili.webp)
 
-Marquee around the chilli and switch to **Move**. Hold [[Shift]] and drag the
-bottom-right handle up and left until the chilli is about half size. Press
+Marquee around the chilli and switch to **Move**. Hold [[Cmd]] to keep its
+proportions and drag the bottom-right handle up and left until the chilli is
+about half size. Press
 [[Cmd+D]] to commit the scale.
 
 Then drag it into the gap after `ADANA KEBAB`, so it lines up with the
@@ -338,7 +364,7 @@ capitals.
 Marquee the chilli and press [[Cmd+C]], then [[Cmd+V]]. The paste lands in
 place on a new layer.
 
-1. **Move** the paste 24 px to the right, then press [[Cmd+D]].
+1. **Move** the paste about 24 px to the right, then press [[Cmd+D]].
 2. Marquee it again. Drag just outside the top-right corner (the cursor turns
    into a crosshair) to rotate it about 22°, then press [[Cmd+D]].
 3. Choose **Layer → Merge Down** to fold it into `Chili`.
@@ -349,9 +375,12 @@ Two chillies mean *extra hot*.
 
 ![A red scalloped seal with a mustard centre in the top-right corner of the scene](24-badge-seal.webp)
 
-Click **Dune Dots** and add a layer called `Badge`. Lasso a 28-point seal
-around (790, 185), alternating 92 px and 83 px from the centre. Fill it with
-tomato. Then drag a 144 px ellipse from (718, 113) and fill it with mustard.
+Click **Dune Dots** and add a layer called `Badge`. In the top-right corner
+of the scene, lasso a 28-point seal: drag
+round a centre point, alternating about 92 px and 83 px out, and let go back
+at the start for a shallow scalloped edge. Fill it with tomato. Then [[Cmd]]-drag a circle about 144 px
+across with the **Elliptical Marquee**, centred on the seal, and fill it with
+mustard.
 
 Drag an area-text box across the disc and type `HOT` / `OFF THE` / `SPIT`,
 one word group per line. Use **Bowlby One**, `26` px, teal, **Align center**
@@ -382,8 +411,8 @@ layers: both item columns, both price columns, the other description layer,
 ![The menu layers gathered in a collapsed Menu group, nudged up 6 px](27-menu-group.webp)
 
 Choose **Layer → Group Layers** and rename the group `Menu`. Press [[V]], then
-[[Shift+↑]] once and [[↓]] four times. That lifts the whole menu 6 px, so the
-space above and below the columns is even.
+[[↑]] six times. That lifts the whole menu 6 px, so the space above and below
+the columns is even.
 
 ## Add paper grain and ink texture
 

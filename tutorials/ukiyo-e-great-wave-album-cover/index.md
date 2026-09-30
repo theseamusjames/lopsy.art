@@ -2,6 +2,7 @@
 title: Design a Ukiyo-e Great Wave Album Cover
 description: Make a Hokusai-style woodblock album cover in Lopsy with a curling great wave, seigaiha sea pattern, paper lanterns, vertical Japanese type and a hanko seal.
 published: 2026-09-27 21:00
+updated: 2026-09-30
 level: Intermediate
 duration: 90
 tags: ukiyo-e, album cover, woodblock, japanese, patterns, vertical text, typography, layer effects
@@ -33,21 +34,22 @@ The palette:
 
 ## Set up the sheet and paint a bokashi sky
 
-![A 1500 by 1500 document with a cream paper border and a night sky gradient from deep navy at the top to pale blue-grey at the horizon, with guides at 60, 750 and 1440](01-bokashi-night-sky.webp)
+![A 1500 by 1500 document with a cream paper border and a night sky gradient from deep navy at the top to pale blue-grey at the horizon, with margin and centre guides](01-bokashi-night-sky.webp)
 
 Choose **File → New**, set the unit to **Pixels**, and create a
 **1500 × 1500** document with a white background.
 
-Add the margins:
+Add the margins. The ruler shows a readout as you hover:
 
-1. Click the top ruler at **60**, **750** and **1440**.
-2. Click the left ruler at **60**, **900** (the horizon) and **1310** (the bottom of the picture area).
+1. On the top ruler, click about **60** px in from each side, then [[Cmd]]-click the middle to drop a guide exactly on the centre line.
+2. On the left ruler, click at about **60**, **900** (the horizon, three-fifths of the way down) and **1310** (the bottom of the picture area, which leaves room for a title band).
 
-Fill the **Background** with paper cream `#EEE2C6` (Rect Marquee over the whole
-page, then **Edit → Fill**).
+Select **Background**, choose **Select → All** and **Edit → Fill** it with paper
+cream `#EEE2C6`.
 
-Rename **Layer 1** to *Sky*. Marquee the picture area from (60, 60) to
-(1440, 900). Pick the **Gradient** tool, open **Advanced…** and set four stops:
+Rename **Layer 1** to *Sky*. Marquee the picture area, from the top-left guide
+crossing to where the right-hand guide meets the horizon. Pick the
+**Gradient** tool, open **Advanced…** and set four stops:
 
 - `#0A1532` at 0%
 - `#1B3764` at 45%
@@ -64,12 +66,12 @@ fights the moon.
 
 Build these three pieces on new layers:
 
-- **Moon.** Draw an Elliptical Marquee circle from (420, 190), 280 px wide. Fill it `#F4E6C0`. Open **Layer effects** and add an **Outer Glow** (`#F3DDA6`, Size 34, Opacity 35) and a **Stroke** (`#0D1A33`, Width 2).
-- **Fuji.** Lasso a low cone from (296, 905) up to a flat peak at about (470, 742) and back down to (644, 905). Fill it `#22406E`. Lasso a zigzag snow cap over the top, fill it `#EFE8DA`, and add the same 2 px Stroke.
+- **Moon.** [[Cmd]]-drag a 280 px Elliptical Marquee circle left of centre (its middle about three-eighths of the way across), with its top about 130 px below the top guide. Fill it `#F4E6C0`. Open **Layer effects** and add an **Outer Glow** (`#F3DDA6`, Size 34, Opacity 35) and a **Stroke** (`#0D1A33`, Width 2).
+- **Fuji.** Lasso a low cone below the moon and slightly left of it: about 350 px wide at its base, which dips just under the horizon, rising about 160 px to a small flat peak. Fill it `#22406E`. Lasso a zigzag snow cap over the top, fill it `#EFE8DA`, and add the same 2 px Stroke.
 - **Mist.** Kasumi are long ribbons whose ends step in as two rounded lobes: the upper lobe sticks out further than the lower one. Lasso three of them and fill them `#97A8C2` at 100% opacity:
-  - x 300–662 at y 484
-  - x 268–560 at y 548
-  - x 180–770 across Fuji's lower slopes at y 846
+  - one just under the moon, a little wider than it
+  - a shorter one below that, shifted slightly left
+  - a long one across Fuji's lower slopes, just above the horizon
 
   Give them the 2 px Stroke too.
 
@@ -83,7 +85,7 @@ Seigaiha ("blue ocean waves") is overlapping fans of concentric rings. Make
 one tile on a scratch layer:
 
 1. Rect Marquee a **120 × 60** box and fill it `#13294D`.
-2. Circles are centred on the tile's corners (0,0), (120,0), (0,60), (120,60) and its middle (60,30). Draw them in rows: top corners first, then the middle, then the bottom corners, so each row overlaps the one above.
+2. Circles are centred on the tile's four corners and its middle. Draw them in rows: top corners first, then the middle, then the bottom corners, so each row overlaps the one above.
 3. For each circle, fill concentric Elliptical Marquee discs with radius 60 `#3E6899`, 56 `#13294D`, 46 `#3E6899`, 42 `#13294D`, 32 `#3E6899`, 28 `#13294D`, 18 `#3E6899` and 14 `#13294D`. Each smaller disc covers the last, which leaves 4 px light rings.
 
 Marquee exactly the 120 × 60 tile, choose **Edit → Define Pattern**, then
@@ -94,14 +96,20 @@ delete the scratch layer.
 ![The Pattern Fill dialog open over the bottom zone of the sea at Scale 100, with smaller seigaiha rows above it toward the horizon](04-pattern-fill-zones.webp)
 
 Add a *Sea* layer. The pattern should get smaller toward the horizon, so fill
-it in three bands with **Edit → Fill with Pattern…**:
+it in three bands with **Edit → Fill with Pattern…**. Marquee each band across
+the picture width, from side guide to side guide:
 
-- y 900–990 at **Scale 50**
-- y 990–1080 at **Scale 75**
-- y 1080–1310 at **Scale 100**
+- a 90 px band starting at the horizon at **Scale 50**
+- the next 90 px at **Scale 75**
+- everything from there down to the bottom guide at **Scale 100**
 
-Each band's height is a whole number of tile rows (30, 45 and 60 px), so the
-zone edges fall on tile edges.
+At those scales a tile row is 30, 45 and 60 px tall, so a 90 px band holds a
+whole number of rows and the zone edges fall on tile edges.
+
+> **Tip:** To get the band edges exact, click once with the Rectangular
+> Marquee while nothing is selected and type the corners: **From** 60, 900
+> **To** 1440, 990 for the first band, then 60, 990 to 1440, 1080, and
+> 60, 1080 to 1440, 1310.
 
 ## Add depth and a broken moon path
 
@@ -112,7 +120,7 @@ gradient from `#5B769C` at the horizon to white at the bottom. Set the layer to
 **Multiply**. White multiplies to nothing, so only the far sea darkens.
 
 **Moon path.** Add a *Moonpath* layer and lasso about a dozen thin, pointed
-shards in `#F3E3B0` under the moon (x ≈ 560):
+shards in `#F3E3B0` in a loose column straight below the moon:
 
 - Near the horizon, make them about 20 × 3 px. Near the bottom, make them about 90 × 8 px.
 - Vary the x-offset by ±15 px and use uneven gaps.
@@ -127,9 +135,9 @@ so irregularity is the point.
 
 Add a *Wave* layer. Lasso the wave's outline:
 
-1. Start at the right edge around (1440, 1125). Climb the back slope to a crest at about (1000, 272).
-2. Curl over and down to a lip that hooks inward at about (826, 692).
-3. Run back up under the lip, then down the concave face through (990, 760) and (880, 1050) to the bottom at about (600, 1310).
+1. Start on the right-hand guide, about halfway down the sea. Climb the back slope to a crest about two-thirds of the way across, level with the upper half of the moon.
+2. Curl over and down to a lip that hooks inward, to the right of the moon and a little above Fuji's peak.
+3. Run back up under the lip, then sweep down the concave face in a long curve, bowing to the right, to the bottom guide about two-fifths of the way across.
 
 Fill the lasso with a vertical Linear gradient from `#2F6FB5` under the crest to
 `#0E2A5C` at the base.
@@ -141,8 +149,8 @@ sooner, so they don't pinch together at the summit.
 
 They'll spill outside the wave. To clip them, lasso the wave outline again,
 choose **Select → Inverse** and press [[Delete]]. Then marquee the picture area
-(60, 60 to 1440, 1310), **Inverse**, and [[Delete]] again to trim anything past
-the frame. Add a 2 px `#0D1A33` Stroke.
+(from the top-left guide crossing to the bottom-right one), **Inverse**, and
+[[Delete]] again to trim anything past the frame. Add a 2 px `#0D1A33` Stroke.
 
 ## Break up the trough
 
@@ -174,7 +182,7 @@ Trim to the frame and add a 2 px Stroke.
 
 A second, smaller wave gives the big one scale. On a *Swell* layer:
 
-1. Lasso a small curl from about (930, 1340) up to a crest at y 1198, hooking left to a tip at (614, 1300).
+1. Lasso a small curl in the bottom middle of the picture, overlapping the base of the big wave. Start just below the bottom guide, a little right of centre, rise to a crest about 110 px above the guide, then hook left to a tip about 300 px away, just above the bottom guide.
 2. Give it the same blue gradient and three short `#6FA3DA` stripes, then clip it.
 3. Add a thin foam band and a few small claws.
 
@@ -202,8 +210,8 @@ glyph onto the centre of the front face, and choose **Layer → Merge Down**.
 
 ![A pasted copy of the lantern being scaled down with the Move tool's transform handles, overlapping another lantern in the sea](11-scale-lantern-copies.webp)
 
-Marquee the lantern and press [[Cmd+C]], then [[Cmd+V]] straight away. The copy
-pastes in place on a new layer.
+Marquee the lantern and press [[Cmd+C]], then [[Cmd+V]]. The copy pastes in
+place on a new layer.
 
 1. Drag it to its spot with the **Move** tool.
 2. Marquee it, hold [[Cmd]] and drag the bottom-right corner handle to scale it uniformly. Press [[Cmd+D]] to commit.
@@ -212,7 +220,7 @@ pastes in place on a new layer.
 Make seven copies at 72%, 55%, 45%, 40%, 36%, 30% and 24%. Place the smallest
 near the horizon and the largest toward the viewer.
 
-> **Tip:** Press [[Cmd+D]] after every scale or rotate before you move the piece again.
+> **Tip:** Press [[Cmd+D]] after every move, scale or rotate before you start the next one. Committing each transform keeps the handles and the preview in step with the pixels.
 
 ## Merge the lanterns and make them glow
 
@@ -247,14 +255,16 @@ four groups: *Night Sky*, *Night Sea*, *Great Wave* and *Lantern Float*.
 
 **Frame.** On a *Frame* layer at the top:
 
-1. Marquee from (56, 56), 1388 × 1258. Fill it `#1A2340`.
+1. Marquee the picture area plus 4 px all round, so the marquee starts just outside the guides. Fill it `#1A2340`.
 2. Choose **Select → Shrink…** 5 px and press [[Delete]], which leaves a crisp 5 px keyline.
 
-**Band.** On a *Band* layer, fill (56, 1336, 1388 × 140) with `#E8D5AE`. Draw
-2 px `#1A2340` rules at y 1344 and y 1466.
+**Band.** On a *Band* layer, fill a 140 px tall strip in `#E8D5AE` below the
+picture, lined up with the frame's sides and leaving a gap of about 20 px
+under it. Draw 2 px `#1A2340` rules just inside its top and bottom edges.
 
-**Cartouche.** On a *Cartouche* layer, marquee (100, 100, 136 × 480) and fill
-it in rings using **Shrink**:
+**Cartouche.** On a *Cartouche* layer, marquee a tall 136 × 480 px box in the
+top-left corner of the picture, about 40 px in from the frame, and fill it
+in rings using **Shrink**:
 
 - `#1A2340`
 - shrink 4, fill `#F3E9CF`
@@ -276,15 +286,18 @@ Select the **Text** tool with the Cartouche layer active. Set:
 Click inside the cartouche, paste **深淵の灯籠** ("lanterns of the abyss")
 and press [[Tab]].
 
-Centre it with the Move tool and arrow keys. The glyphs should sit 25 px from
-the red rule at both top and bottom, centred on x 168.
+Centre it in the cartouche with the Move tool and arrow keys, so the gap to
+the red rule is the same at the top and bottom (about 25 px) and on both
+sides.
 
 ## Carve the hanko seal
 
 ![A zoomed view of the red square seal reading 海月 in cream with a rough carved edge and inner keyline, shown mid-rotation with the transform box](16-hanko-seal.webp)
 
-On a *Seal* layer, lasso an 84 px square at (126, 606) with slightly jittered
-edges and a couple of nicks (a point every 5 px, pushed in 0–3 px at random).
+On a *Seal* layer, lasso an 84 px square just below the cartouche, centred
+under it. Drag slowly along each side and let the line
+wander in by a pixel or two here and there, and add a couple of nicks, so the edge looks
+rough-carved rather than ruled.
 Fill it `#C23A22`. For the inner keyline, shrink 5 and fill `#F6EEDC`, then
 shrink 2 and fill `#C23A22` again.
 
@@ -321,10 +334,10 @@ The band name should lead:
 Both are `#1A2340`. Create each one in empty space so the text tool doesn't
 grab the other layer, then line them up:
 
-1. Put the two words on one shared baseline (y 1428).
-2. Centre KURAGE's caps between the rules.
-3. Leave 35 px, then a small `#C23A22` lassoed diamond, then another 35 px before the title.
-
-Measure the whole line and nudge it until it centres on x 750. Finally, check
+1. Centre KURAGE's caps vertically between the band's rules.
+2. Put ABYSSAL LANTERNS on the same baseline. With the Move tool, press [[Up]] or [[Down]] until the bottoms of the capitals line up.
+3. Leave room between the words for a small diamond with about 35 px of space on each side of it.
+4. [[Cmd]]-click both text rows in the Layers panel and nudge them sideways together until the whole line is centred on the centre guide.
+5. On the *Band* layer, lasso a small `#C23A22` diamond in the middle of the gap. Finally, check
 that *Woodgrain* is still the top layer, so the type is textured too, then
 **File → Save Project** and **File → Quick Export PNG**.

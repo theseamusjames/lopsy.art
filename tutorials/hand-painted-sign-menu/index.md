@@ -2,6 +2,7 @@
 title: Paint a Hand-Lettered Roadside Menu Board
 description: Make a weathered, sign-painted crawfish shack menu in Lopsy with peeling paint on plywood, shaded lettering, a naive mascot and dot-leader prices.
 published: 2026-09-26 15:30
+updated: 2026-09-30
 level: Intermediate
 duration: 75
 tags: vernacular, sign painting, restaurant menu, hand lettering, weathered texture, text effects, layer effects, illustration
@@ -62,7 +63,7 @@ Choose **File → New** and make a **1000 × 1400** document with a white backgr
 ![Four blue vertical guides at 200, 400, 600 and 800 px with thin dark seam lines painted along them](02-guides-and-plank-seams.webp)
 
 Plywood signs are built from planks. Click the top ruler at **200**, **400**,
-**600** and **800** to drop four vertical guides.
+**600** and **800**, every fifth of the width, to drop four vertical guides.
 
 Add a layer called **Seams** and pick the **Brush** with Size **5**,
 Hardness **90** and colour `#24140A`. For each guide, click at the top of the
@@ -94,7 +95,8 @@ paint has flaked off.
 On a real board, paint wears worst at the edges and seams, where the weather
 gets in. Choose the **Brush** with colour white, Size **520**, Hardness **0** and
 Opacity **80**. Paint one long vertical stroke down the centre. Then set Size
-**380** and paint one stroke down each side, around x 330 and x 670.
+**380** and paint one stroke down each side, about a third of the way in from
+each edge.
 
 The middle of the map is now light, so it will keep its paint.
 
@@ -143,10 +145,18 @@ Freshly filled paint looks like plastic, so age it:
 Click **New Group** in the Layers panel and name it **Header**. Inside it, add a
 layer called **Red Board** and set the foreground to sign red `#C23A2B`.
 
-1. With the **Rectangular Marquee**, drag from **70, 110** to **930, 380** and
-   choose **Edit → Fill**.
-2. With the **Elliptical Marquee**, drag from **70, 30** to **930, 200** and fill
-   again. The ellipse caps the rectangle with an arch.
+1. With the **Rectangular Marquee**, drag a wide board about 70 px in from
+   each side, from about 110 px below the top edge down to about 380. Choose
+   **Edit → Fill**.
+2. With the **Elliptical Marquee**, drag an ellipse the same width, from about
+   30 px below the top edge down to about 200, so its lower half overlaps the
+   top of the rectangle. Fill again. The ellipse caps the rectangle with an
+   arch.
+
+> **Tip:** Both edges need to line up. Press [[Cmd+D]], then click once
+> (don't drag) with either marquee to type exact corners: From 70, 110 To
+> 930, 380 for the rectangle, and From 70, 30 To 930, 200 for the ellipse.
+> Deselect again between the two.
 
 ## Paint a pinstripe with Select → Shrink
 
@@ -172,7 +182,9 @@ text layer. Pick the **Text** tool, set **Sancreek** at **236 px** in cream
 `#F1E4C0`, click in the upper left of the board and type **BAYOU**. Press
 [[Tab]] to commit.
 
-Use the **Move** tool to centre the word on the board. Then open its layer
+Use the **Move** tool to centre the word on the board. **Align center
+horizontally** in the options bar centres it across the page, which is also
+the board's centre. Then open its layer
 effects and turn on **Drop Shadow** with colour `#2A120C`, Offset **8 / 8**,
 Blur **0**, Spread **0** and Opacity **100**. A blur of zero makes a hard,
 solid block, the classic hand-painted "shade".
@@ -193,7 +205,8 @@ separates the yellow from both the red and the turquoise.
 
 To tilt it, drag a **Rectangular Marquee** around the word and switch to the
 **Move** tool. Drag just outside the top-right corner handle to rotate it about
-**−6°**, then press [[Cmd+D]] to commit.
+**−6°**, then press [[Cmd+D]] to commit. Rotate type last, once the wording
+and size are final.
 
 ## Age the header with the Burn tool
 
@@ -213,8 +226,10 @@ a new group, **Crawfish**, below it, add a layer **Craw Body**, and set the
 foreground to crawfish red `#CF4A2E`. Every part is a selection plus
 **Edit → Fill**:
 
-- **Body:** an elliptical marquee from 445, 470, 110 wide and 135 tall.
-- **Head:** a lasso triangle pointing up to 500, 430.
+- **Body:** a 110 × 135 elliptical marquee, centred left to right on the
+  canvas and starting about a third of the way down.
+- **Head:** a lasso triangle on top of the body, pointing up to a tip about
+  40 px above it on the centre line.
 - **Tail:** four ellipses stacked below the body, each a little narrower (112,
   102, 90 and 76 px wide), and a lasso **fan** at the bottom.
 - **Arms and claws:** a lasso arm running up and out to each side, a tilted oval
@@ -255,8 +270,8 @@ one layer, **Craw Body**.
 
 ![A marquee around the crawfish with transform handles, the crawfish scaled to about 80 percent inside it](16-scale-crawfish.webp)
 
-Drag a **Rectangular Marquee** that fully contains the crawfish, from 246, 296
-to 754, 754, and switch to the **Move** tool. Hold [[Cmd]] and drag the
+Drag a **Rectangular Marquee** that fully contains the crawfish, legs and
+antennae included, and switch to the **Move** tool. Hold [[Cmd]] and drag the
 bottom-right handle up and in to about **80%**. [[Cmd]] keeps both axes in
 proportion. Press [[Cmd+D]] to commit the scale.
 
@@ -314,7 +329,8 @@ with the Move tool's corner handle, pressing [[Cmd+D]] after each one:
 - **$7 a pound:** about **−5°**.
 
 The tilts are tiny, but together they make the stack look hand-painted
-rather than typeset.
+rather than typeset. As with **Lunch**, finish the wording and sizes before
+you tilt each line.
 
 ## Underline the price with a swash
 
@@ -352,8 +368,11 @@ shadow. Three chilis mean "hot" on any menu board.
 ![Two cream menu boards with soft brown aged edges, drop shadows and a dark nail head in each corner](23-menu-boards.webp)
 
 Make a group **Menu** and add a layer **Boards**. With the foreground at
-`#EFE0BC`, fill two rectangular marquees: **48, 800** and **514, 800**, each
-**438 × 440**.
+`#EFE0BC`, fill two **438 × 440** rectangular marquees side by side, starting
+about 800 px down. Leave a 48 px margin at each outer edge and a 28 px gap
+between them. With nothing selected, a click with the marquee lets you type
+the corners: From 48, 800 To 486, 1240, then (after [[Cmd+D]]) From 514, 800
+To 952, 1240.
 
 - Run **Filter → Add Noise…** (Mono, Amount **10**) so the boards aren't flat.
 - Add **Inner Glow** in `#8A5A2E`, Size **34**, Opacity **55**. It browns the
@@ -387,15 +406,16 @@ add a **5 px** light-grey glint to each one.
 
 ![A mustard ICE COLD BEER arrow at bottom left, and a grid overlay with a snapped rectangular marquee for the plaque beside it](25-arrow-and-snapped-plaque.webp)
 
-In a group **Footer**, add a layer **Arrow**. Lasso a mustard arrow with a
-notched tail from x 60 to a point at x 528, around y 1320. Give it a hard
+In a group **Footer**, add a layer **Arrow**. Under the left board, lasso a
+mustard arrow about 470 px long that points right, with a notched tail near
+the left edge. Give it a hard
 `#2A120C` shadow, and letter **ICE COLD BEER** on it in Alfa Slab One, 36 px,
 `#2A1A10`.
 
 Add a layer **Plaque** and choose **View → Show Grid**. Showing the grid also
-switches on **Snap**. Drag a marquee beside the arrow. It snaps to the 16 px
-grid, here landing at 548, 1260 and 160 × 112. Fill it with sign red, then turn
-the grid off again. Give the plaque an inside cream Stroke (**3 px**) and a hard
+switches on **Snap**. Drag a marquee about 160 × 112 px beside the arrow's
+point, under the right board. Its corners snap to the 16 px grid. Fill it with
+sign red, then turn the grid off again. Give the plaque an inside cream Stroke (**3 px**) and a hard
 shadow, and letter **SINCE** (Permanent Marker, 26 px, cream) over **1974**
 (Permanent Marker, 48 px, mustard).
 

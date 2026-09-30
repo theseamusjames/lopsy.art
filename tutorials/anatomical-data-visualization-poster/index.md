@@ -61,14 +61,20 @@ For foxing, use a soft **Brush** (Hardness 0, Opacity 14) at a few sizes. Dab a 
 
 ## Rule the frame and set the title
 
-![The paper with a heavy outer rule and a thin inner rule, blue guides at x 132, 700 and 1660, and the Plate XVI title block above a double rule with a diamond](02-frame-and-title.webp)
+![The paper with a heavy outer rule and a thin inner rule, blue guides marking the skull column, the zero line and the right edge of the chart, and the Plate XVI title block above a double rule with a diamond](02-frame-and-title.webp)
 
-Click the rulers to drop guides:
+The chart is drawn to scale, so its guides need to land on exact pixels.
+Zoom in on each ruler and watch the readout beside the pointer as you click:
 
-- **Vertical:** x **132** (skull column), **700** (the zero line) and **1660** (the right edge of the chart).
-- **Horizontal:** y **500** (top of the chart) and **2040** (the axis).
+- **Top ruler:** **132** (the left edge of the skull column), **700** (the zero line) and **1660** (the right edge of the chart).
+- **Left ruler:** **500** (the top of the chart) and **2040** (the axis).
 
 On a **Plate Frame** layer, marquee-fill a 7 px sepia ring 60 px in from the edge, and a 2 px ring 84 px in. The ring recipe is: marquee, Fill, **Select → Shrink**, then Delete.
+
+> **Tip:** For rectangles that must be exact, press [[Cmd+D]] and then *click*
+> (don't drag) with the **Rectangular Marquee**. A dialog opens where you type
+> the corners: From **60, 60** To **1740, 2340** for the outer rule, then
+> **Shrink** 7.
 
 Set the type with the Text tool, centring each line with **Align center horizontally**:
 
@@ -84,11 +90,15 @@ Under the subtitle, draw a thick and a thin rule the same width as the subtitle,
 
 The main scale is **0.058 px per newton**, so 2,000 N is exactly 116 px. Make a dash tile to match:
 
-1. On a scratch layer, fill a 2 × 9 px sepia dash at x 4.
-2. Marquee a **116 × 20** box from x 0 and run **Edit → Define Pattern**.
-3. On a **Gridlines** layer, marquee the chart area (x 700–1664, y 500–2040), run **Edit → Fill with Pattern…** and set the layer to 45%.
+1. On a scratch layer at the top-left corner of the canvas, fill a 2 × 9 px sepia dash starting 4 px in from the left edge.
+2. Select a **116 × 20** box starting at the canvas corner and run **Edit → Define Pattern**. Then delete the scratch layer.
+3. On a **Gridlines** layer, select the chart area, from the zero line to just past the right-edge guide and from the top guide down to the axis guide. Run **Edit → Fill with Pattern…**, pick the dash, and set the layer to 45%.
 
-A pattern fill anchors to the document origin. Because 700 ÷ 116 leaves 4, the dash at x 4 in the tile lands on x 700, 816, 932 and so on.
+Tiny, exact boxes like these are what the marquee's click-for-corners dialog is
+for: From **4, 0** To **6, 9** for the dash, From **0, 0** To **116, 20** for the
+tile, and From **700, 500** To **1664, 2040** for the chart area.
+
+A pattern fill tiles from the document's top-left corner. Because 700 ÷ 116 leaves 4, the dash at 4 px in the tile lands exactly on the zero line and then every 116 px after it.
 
 Draw the zero line and the x-axis as 4 px marquee fills. Add ticks every 58 px, with a long tick every 116. Label 0, 4,000, 8,000, 12,000 and 16,000 in Cormorant SC.
 
@@ -98,7 +108,7 @@ Draw the zero line and the x-axis as 4 px marquee fills. Add ticks every 58 px, 
 
 ![The 1911 Britannica skull engraving pasted at full size in the top-left corner of the canvas, with its bone labels Pa, Fr, Sq, Mx and Mn and the hyoid bone still visible](04-paste-engraving.webp)
 
-Make a **Skulls** group. Copy the human skull engraving from your browser and press [[Cmd+V]]. Lopsy pastes it at full size at the top-left of the canvas, with transform handles. Press [[Cmd+D]] to drop the transform and rename the layer **Human Skull**.
+Make a **Skulls** group. Copy the human skull engraving from your browser and press [[Cmd+V]]. Lopsy pastes it at the top-left of the canvas with transform handles, at full size if it fits (a larger image is scaled down to fit the canvas). Press [[Cmd+D]] to drop the transform and rename the layer **Human Skull**.
 
 Clean the engraving now, while it's full size and the lettering is easy to hit.
 
@@ -124,7 +134,7 @@ Draw a marquee around each skull, switch to the **Move** tool and [[Cmd]]-drag t
 - Mammal skulls: **190 px tall**.
 - Crocodile: **420 px wide**.
 
-Press [[Cmd+D]] to commit, then drag each skull to x 390 in its row. The rows are 308 px apart, starting at y 500.
+Press [[Cmd+D]] to commit, then drag each skull into the skull column, centred left of the zero line, one per row. The rows are 308 px apart, starting at the top guide, so it helps to click the left ruler at **808**, **1116**, **1424** and **1732** for row guides.
 
 ## Multiply the skulls onto the paper
 
@@ -132,7 +142,7 @@ Press [[Cmd+D]] to commit, then drag each skull to x 390 in its row. The rows ar
 
 Set every skull layer to **Multiply** in the effects drawer. White multiplies to nothing, so the paper shows through, and the grey engravings sit on it like printed ink.
 
-The human engraving has much thinner lines than the lithographs. To thicken them, run **Layer → Duplicate Layer**, click the copy's row, and nudge it so it sits exactly **1 px to the right** of the original. Keep it on Multiply too.
+The human engraving has much thinner lines than the lithographs. To thicken them, run **Layer → Duplicate Layer** and click the copy's row. Duplicate places the copy 10 px right and 10 px down, so with the Move tool press [[Shift+Left]] and [[Shift+Up]] once each to put it back, then [[Right]] once. It now sits exactly **1 px to the right** of the original. Keep it on Multiply too.
 
 ## Tone the set to one sepia
 
@@ -152,9 +162,9 @@ Two layers make the mixed engravings look like one printing:
 Under each skull, add two centred lines:
 
 - **"Fig. 2 · Tiger":** Cormorant SC SemiBold, 32 px, sepia.
-- ***Panthera tigris*:** Pinyon Script, 30 px, plate red. Google Fonts' italics don't render, so a copperplate script plays the italic.
+- ***Panthera tigris*:** Pinyon Script, 30 px, plate red. A copperplate script plays the italic, the way an engraver would have lettered the Latin name.
 
-Place every caption **16 px below the lowest ink** of its skull, counting faint tooth tips. That keeps each caption clearly with its own figure, and at least 45 px from the skull below.
+Place every caption about **16 px below the lowest ink** of its skull, counting faint tooth tips. That keeps each caption clearly with its own figure, and at least 45 px from the skull below.
 
 ## Frame the enlarged inset
 
@@ -162,9 +172,9 @@ Place every caption **16 px below the lowest ink** of its skull, counting faint 
 
 This is the honest way to show the small bars. In an **Enlarged Inset** group:
 
-1. **Magnified Tint:** fill a strip over the main chart's 0–1,500 N range (x 700–787, down to the axis) and the inset box (x 860–1660, y 770–1962) with carmine, at 6%. The shared tint links the two.
+1. **Magnified Tint:** fill two areas with carmine and set the layer to 6%. The first is a strip over the main chart's 0–1,500 N range: 87 px wide from the zero line, running from the top guide down to the axis. The second is the inset box, which fills most of the chart's right side: from about 160 px right of the zero line to the right-edge guide, and from about 270 px below the top guide to just above the axis (From **860, 770** To **1660, 1962** in the marquee dialog). The shared tint links the two.
 2. **Knock out the main grid:** on the Gridlines layer, marquee the inset box and Delete, so the two scales never mix.
-3. **Inset grid:** the inset scale is 8 × 0.058 = **0.464 px/N**, so 250 N is 116 px again. Define a second 116 px dash tile with its dash at x 80, so it lands on the inset zero at x 892. Pattern-fill it inside the box.
+3. **Inset grid:** the inset scale is 8 × 0.058 = **0.464 px/N**, so 250 N is 116 px again. Put the inset's zero line 32 px inside the box. Then define a second 116 px dash tile with its dash 80 px in: 892 ÷ 116 leaves 80, so the dashes land on that zero line and every 116 px after it. Pattern-fill it inside the box.
 4. **Inset frame and axis:** add the frame, its own axis and ticks, and labels 0, 500, 1,000 and 1,500.
 5. **Leaders:** draw two thin lassoed lines from the strip's corners to the inset's corners, at 60%.
 
@@ -174,9 +184,9 @@ Title the inset "Fig. 6 · The mammals at eight times the scale", centred on the
 
 ![A small red "Enlarged in Fig. 6" label, rasterized and rotated 90 degrees counter-clockwise with the rotate handle, still showing its transform box](11-rotate-band-label.webp)
 
-Type "Enlarged in Fig. 6" in Cormorant SC, 20 px, in plate red, and click **Rasterize Layer**. Rasterize before transforming, because a rotated live text layer can re-flow. Marquee it and switch to **Move**. Hold [[Cmd]] and drag the rotate handle, just outside the top-right corner, to snap to **−90°**. Press [[Cmd+D]].
+Type "Enlarged in Fig. 6" in Cormorant SC, 20 px, in plate red, and click **Rasterize Layer**. Rasterizing first bakes the rotation into pixels, so a later re-render of the text can't undo it. Marquee it and switch to **Move**. Hold [[Cmd]] and drag the rotate handle, just outside the top-right corner, to snap to **−90°**. Press [[Cmd+D]].
 
-Centre it in the strip at y 1383, in the gap between the lion and human bars.
+Centre it in the pale strip, in the gap between the lion and human bars.
 
 ## Draw the muscle bars
 
@@ -188,7 +198,7 @@ Plan each muscle as a polygon, and let the length carry the data:
 - **Belly:** an asymmetric spindle, 56 px deep. On very short bars the depth shrinks with the length.
 - **Insertion tendon:** tapers to a point **exactly at the value**.
 
-For the crocodile, 16,400 × 0.058 = 951 px, so its tip is at x 1653. The inset muscles use 0.464 px/N from x 892.
+For the crocodile, 16,400 × 0.058 = 951 px, so its tip lands 951 px right of the zero line, just short of the right-edge guide. The inset muscles use 0.464 px/N from the inset's own zero line.
 
 In a **Muscle Bars** group:
 
@@ -213,10 +223,10 @@ Then marquee around each label, 10 px out, and Delete the dashes on the gridline
 
 ![The finished plate in Lopsy with three lines of footnotes under the axis title explaining the muscle key, the dagger for estimates and the engraving sources](14-footnotes.webp)
 
-Under the axis title, set three lines of Cormorant Garamond at 24 px, left-aligned to the title's left edge (x 144). The lines explain three things:
+Under the axis title, set three lines of Cormorant Garamond at 24 px, left-aligned with the left edge of the title block at the top of the plate. The lines explain three things:
 
 - How to read a muscle bar.
 - What the dagger means.
 - Where every number and engraving comes from.
 
-Leave equal space above and below the block. Check the whole plate at 100%, then **File → Quick Export PNG** and **File → Save Project**.
+Leave equal space above and below the block. Check the whole plate at 100% (**View → Actual Size**), then **File → Quick Export PNG** and **File → Save Project**.

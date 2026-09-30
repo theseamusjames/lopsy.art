@@ -2,6 +2,7 @@
 title: Design a Surrealist Cinema Logo
 description: Make a Magritte-style logo in Lopsy with a keyhole of daytime sky in a night disc, a floating bowler hat, marquee bulbs and curved seal text.
 published: 2026-09-25 23:55
+updated: 2026-09-30
 level: Intermediate
 duration: 45
 tags: logo design, surrealism, selections, layer effects, text on a path, radial symmetry, branding
@@ -30,21 +31,25 @@ modes, and a group adjustment.
 
 ## Set up the paper, guides and night disc
 
-![A 1000 by 1000 cream canvas with blue guides at x 500 and y 66, 430 and 934, and a large navy circle centered on the guides](01-night-disc-guides.webp)
+![A 1000 by 1000 cream canvas with a vertical centre guide, horizontal guides at the top and bottom margins and at the badge's center, and a large navy circle centered where they cross](01-night-disc-guides.webp)
 
 Open [Lopsy](/) and create a **1000 × 1000** document with a white
 background. Click the `Background` layer, set the foreground color to
 `#EEE4CF` in the Color panel's hex field, and choose **Edit → Fill** to get a
 warm paper tone.
 
-Click the top ruler at x = `500` to drop a vertical guide. Then click the
-left ruler at y = `430` (the center of the badge), `66` (top margin) and
-`934` (bottom margin) for three horizontal guides.
+[[Cmd]]-click the middle of the top ruler to drop a vertical guide exactly
+on the centre line. Then click the left ruler three times for horizontal
+guides: about 66 px from the top and 66 px from the bottom for the margins,
+and at about 430, a little above halfway, for the center of the badge.
 
 Double-click `Layer 1` and rename it `Ink Disc`. Pick the **Elliptical
-Marquee** and drag from (216, 146) to (784, 714) to make a 568 px circle
-centered on the guides. Set the foreground to `#1B2340` and choose
-**Edit → Fill**. Press [[Cmd+D]] to deselect.
+Marquee** and [[Cmd]]-drag a circle about 568 px across, centered on the
+guide crossing. Set the foreground to `#1B2340` and choose **Edit → Fill**.
+Press [[Cmd+D]] to deselect.
+
+> **Tip:** To center the disc exactly, click once with the Elliptical Marquee
+> while nothing is selected, and type the corners `216, 146` to `784, 714`.
 
 ## Draw the keyhole with the Lasso and a 1 px feather
 
@@ -53,12 +58,15 @@ centered on the guides. Set the foreground to `#1B2340` and choose
 Click **Add Layer** and name it `Keyhole`. This white shape is a stencil
 you'll use to cut other layers, and you'll delete it at the end.
 
-1. Set the foreground to `#FFFFFF`. With the Elliptical Marquee, drag from
-   (390, 280) to (610, 500) and choose **Edit → Fill** for the round top.
-   Press [[Cmd+D]].
-2. Pick the **Lasso**. Drag straight lines from (456, 440) to (544, 440),
-   to (596, 642), to (404, 642), and back to the start. That's the tapered
-   bottom of the keyhole.
+1. Set the foreground to `#FFFFFF`. With the Elliptical Marquee, draw a
+   circle about 220 px across, centered on the vertical guide, with its
+   middle about 40 px above the badge's center guide. Choose
+   **Edit → Fill** for the round top. Press [[Cmd+D]].
+2. Pick the **Lasso** and drag straight through four corners for the
+   keyhole's tapered bottom: a narrow top edge about 90 px wide, just inside
+   the lower half of the circle, then a wider base about 190 px wide, around
+   200 px further down. Keep both edges centered on the vertical guide, then
+   let go back at the start point to close it.
 3. Choose **Select → Feather…**, set **Radius** to `1` and click **Apply**.
    The 1 px feather smooths the stair-stepped diagonal edges.
 
@@ -82,8 +90,9 @@ strip:
 2. A soft sky blue, about `#7CB1D6`, at 55%
 3. A pale haze, about `#DFEDF2`, at 100%
 
-Click **Done**, then drag from (500, 282) straight down to (500, 644). The
-sky runs from the top of the keyhole to its bottom.
+Click **Done**, then drag straight down the vertical guide, from the top of
+the keyhole to its bottom. The sky runs from deep blue at the top to pale
+haze at the base.
 
 ## Clip the sky to the keyhole
 
@@ -132,13 +141,9 @@ the keyhole edge, because you'll trim them in a moment.
 ![A rectangular marquee drawn around the upper-left cloud](08-copy-cloud-marquee.webp)
 
 Here's the surreal move: one cloud slips out of the keyhole and drifts off
-the badge. With the **Rectangular Marquee**, drag around the upper-left
-cloud, from (396, 280) to (506, 362). Press [[Cmd+C]], then [[Cmd+V]]. The
-copy is pasted in place on a new layer. Rename it `Drifter`.
-
-> **Tip:** Paste straight after copying. Pressing Delete on any layer
-> between the copy and the paste makes the paste land in the top-left corner
-> of the canvas instead of in place.
+the badge. With the **Rectangular Marquee**, drag a snug box around the
+upper-left cloud. Press [[Cmd+C]], then [[Cmd+V]]. The copy is pasted in
+place on a new layer. Rename it `Drifter`.
 
 ## Move the escaping cloud
 
@@ -146,7 +151,8 @@ copy is pasted in place on a new layer. Rename it `Drifter`.
 
 Draw the same marquee again over the copy and press [[V]] for the **Move**
 tool. Drag from inside the selection up and to the right, until the cloud
-sits across the top-right edge of the disc at about (770, 215).
+sits across the top-right edge of the disc, half on the navy and half out
+on the paper.
 
 ## Scale and rotate the cloud
 
@@ -155,8 +161,8 @@ sits across the top-right edge of the disc at about (770, 215).
 Press [[Cmd+D]] to drop the moved cloud. Draw a marquee around it again, and
 use these steps:
 
-1. [[Shift]]-drag the bottom-right corner handle out until the cloud is
-   about 1.45× its size, then press [[Cmd+D]].
+1. [[Cmd]]-drag the bottom-right corner handle out until the cloud is
+   about 1.45× its size. [[Cmd]] keeps its proportions. Press [[Cmd+D]].
 2. Marquee the bigger cloud once more. Drag the round **rotation handle**
    just outside the top-right corner counterclockwise by about 10°.
 3. Press [[Cmd+D]] to commit.
@@ -185,14 +191,21 @@ The hat is the hero, so make it big. Click the `Clouds` layer and then
 `#15182B` and build the hat from simple marquee fills. Press [[Cmd+D]]
 between shapes.
 
-1. **Crown top:** Elliptical Marquee from (439, 330) to (561, 434), then
-   **Edit → Fill**.
-2. **Crown sides:** Rectangular Marquee from (439, 381) to (561, 419), then
-   **Fill**. This gives the dome straight sides.
-3. **Band:** Rectangular Marquee from (439, 399) to (561, 417). Set the
-   foreground to `#D9481C` and **Fill**.
-4. **Brim:** set the foreground back to `#15182B`. Elliptical Marquee from
-   (378, 409) to (622, 439), then **Fill**.
+1. **Crown top:** an Elliptical Marquee about 122 × 104 px, centered on
+   the vertical guide in the round top of the keyhole, then **Edit → Fill**.
+2. **Crown sides:** a Rectangular Marquee the same width as the crown,
+   from its middle down about 38 px, then **Fill**. This gives the dome
+   straight sides.
+3. **Band:** a Rectangular Marquee the same width, about 18 px tall, across
+   the bottom of the crown. Set the foreground to `#D9481C` and **Fill**.
+4. **Brim:** set the foreground back to `#15182B`. A flat Elliptical Marquee
+   about 244 × 30 px, twice the crown's width and centered under it,
+   overlapping the bottom of the band. **Fill**.
+
+> **Tip:** A hat has to be symmetrical, so it helps to type exact corners.
+> Click once with either marquee while nothing is selected. The corners used
+> here are crown `439, 330` to `561, 434`, sides `439, 381` to `561, 419`,
+> band `439, 399` to `561, 417` and brim `378, 409` to `622, 439`.
 
 The brim pokes out past the keyhole onto the night sky. That's a second
 small paradox: the hat is in the daytime and the night at once.
@@ -215,10 +228,11 @@ Open the **Layer effects** for `Bowler`:
 Click `Ink Disc` and then **Add Layer**, so the new layers sit under the sky.
 Name the new layer `Moon`.
 
-1. Set the foreground to `#F4E7C6`. Elliptical Marquee from (306, 254) to
-   (378, 326) and **Fill**.
-2. Marquee a second circle from (325, 248) to (389, 312) and press
-   [[Delete]] to bite out a crescent.
+1. Set the foreground to `#F4E7C6`. In the upper left of the disc, well
+   clear of the keyhole, draw a small circle about 72 px across and
+   **Fill**.
+2. Marquee a slightly smaller circle, shifted up and to the right by about
+   a quarter of its width, and press [[Delete]] to bite out a crescent.
 3. Give the moon an **Outer Glow** in `#F6D58E` with **Size** `22` and
    **Opacity** `55`.
 
@@ -246,13 +260,17 @@ Offset Y `8`, Blur `10` and Opacity `35`, so it floats above the badge.
 Click `Bowler` and **Add Layer** so the ring sits below the drifting clouds.
 Name it `Ring`.
 
-1. Set the foreground to `#C2552F`. Elliptical Marquee from (186, 116) to
-   (814, 744), then **Fill**.
-2. Marquee from (216, 146) to (784, 714) and press [[Delete]] to hollow it
-   out.
-3. For a gold hairline, set the foreground to `#F3B35A`. Marquee from
-   (211, 141) to (789, 719) and **Fill**, then marquee from (213, 143) to
-   (787, 717) and press [[Delete]].
+1. Set the foreground to `#C2552F`. Draw a circle 30 px bigger than the
+   disc on every side, centered on the same guide crossing, then **Fill**.
+2. Marquee a circle exactly the size of the disc and press [[Delete]] to
+   hollow it out.
+3. For a gold hairline, set the foreground to `#F3B35A`. Marquee a circle
+   5 px bigger than the disc all round and **Fill**, then one 3 px bigger
+   and press [[Delete]].
+
+> **Tip:** Concentric circles are easiest with **Select → Grow…**.
+> [[Cmd]]-click the `Ink Disc` thumbnail to load the disc as a selection. Use
+> it as it is for step 2, or grow it by `30`, `5` or `3` px for the others.
 
 This leaves a thin gold line on the inside of the terracotta and a sliver of
 cream between the gold and the navy.
@@ -265,10 +283,11 @@ Add a layer named `Bulbs` and pick the **Brush**.
 
 1. Click the **Radial Symmetry** button in the options bar and set
    **Segments** to `32`.
-2. [[Cmd]]-click the center of the disc at (500, 430) to move the symmetry
-   center there.
+2. [[Cmd]]-click the center of the disc, where the guides cross, to move
+   the symmetry center there.
 3. Set the foreground to `#F8DB94`, **Size** `11` and **Hardness** `95`.
-   Click once on the middle of the ring at (500, 129).
+   Click once on the middle of the terracotta ring, straight above the
+   center on the vertical guide.
 
 One click stamps all 32 bulbs. Turn **Radial Symmetry** off again, then give
 `Bulbs` an **Outer Glow** in `#FFD27A` with **Size** `10` and **Opacity**
@@ -292,12 +311,14 @@ you can move the whole badge in one drag or adjust it as a unit.
 Floating objects that cast shadows are a staple of surrealism. Click
 `Background` and add a layer called `Seal Shadow`.
 
-1. Set the foreground to `#1B2340`. Marquee from (200, 128) to (824, 752),
-   which is slightly lower and to the right of the badge, and **Fill**.
+1. Set the foreground to `#1B2340`. Marquee a circle about the size of the
+   ring, shifted about 12 px right and 10 px down from the badge, and
+   **Fill**.
 2. Choose **Filter → Gaussian Blur…**, set **Radius** to `22` and click
    **Apply**.
-3. Marquee from (200, 130) to (800, 730) and press [[Delete]]. Only the
-   shadow outside the ring is left, so it doesn't gray out the cream sliver.
+3. Marquee a circle centered on the badge, just inside the ring's outer edge,
+   and press [[Delete]]. Only the shadow outside the ring is left, so it
+   doesn't gray out the cream sliver.
 4. Set the layer's blend mode to **Multiply** and its opacity to `28%`.
 
 ## Set the wordmark
@@ -324,15 +345,15 @@ CINEMA, matching XANADU's width. Finish each outer end with a single
 
 ![A smooth blue Bezier arc with handles, running around the left and top of the ring about 28 pixels outside it](21-pen-tool-arc.webp)
 
-The seal text will run along a circle concentric with the ring. Pick the
-**Pen** tool and place four smooth anchors on a 342 px radius around
-(500, 430). Press at each point and drag along the circle to pull out
-handles about 122 px long:
+The seal text will run along a circle concentric with the ring, about
+28 px outside it. Pick the **Pen** tool and place four smooth anchors on
+that imaginary circle. Press at each point and drag along the circle to pull
+out handles about 122 px long:
 
-1. (285, 696), bottom left
-2. (162, 376), left
-3. (377, 111), top left
-4. (715, 164), top right
+1. Bottom left, at about half past seven on a clock face
+2. Left, at about nine o'clock
+3. Top left, at about eleven o'clock
+4. Top right, at about one o'clock
 
 Click the ✓ **Commit path** button to store it as a path.
 
@@ -348,9 +369,6 @@ Click the `Rules` layer so you start from a raster layer. Set the Text tool to
 
 Press [[Tab]]. Then set the **Path** dropdown in the options bar to your new
 path. The line wraps around the badge, and the ✦ lands at about ten-thirty.
-
-> **Tip:** Binding to a path doesn't add its own undo step yet. Don't press
-> [[Cmd+Z]] straight after binding, or the typing is undone too.
 
 ## Add film grain
 

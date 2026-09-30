@@ -2,6 +2,7 @@
 title: Design a Folk Art Zine Cover
 description: Make an alpine folk art zine cover in Lopsy with radial-symmetry sunbursts, crossed alphorns, a painted medallion, woodtype titles and halftone.
 published: 2026-09-25 16:16
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: zine cover, folk art, typography, radial symmetry, layer effects, selections, transforms, halftone
@@ -61,15 +62,17 @@ Double-click **Layer 1** and rename it `Paper Fibers`, then:
 Choose **View → Show Grid**. Showing the grid switches **Snap** on in the
 options bar, and the grid is 16 px.
 
-Click the top ruler at `60`, `450` and `840` for vertical guides, and the left
-ruler at `60`, `700` and `1140` for horizontal ones. The `450`/`700` crossing
-is the centre of the medallion you'll paint later.
+Click the top ruler about 60 px in from each side, then [[Cmd]]-click its
+middle to drop a guide exactly at the centre (450). On the left ruler, click
+about 60 px from the top and from the bottom, and once more at about 700, a
+little below halfway. The crossing of the centre guide and the 700 guide is
+the centre of the medallion you'll paint later.
 
 1. Click **Add Layer** and name the layer `Frame`. Set the foreground to `#B3261E`.
-2. With the **Rectangular Marquee** ([[M]]), drag from about (20, 20) to (880, 1180). Snap pulls the edges onto the grid.
+2. With the **Rectangular Marquee** ([[M]]), drag from near the top-left corner to near the bottom-right, about 20 px in from every edge. Snap pulls the edges onto the grid.
 3. Fill it with the Paint Bucket.
-4. Marquee from (52, 52) to (848, 1148) and press [[Delete]] to hollow it out.
-5. Press [[Cmd+D]] to deselect, then **untick Snap**. The rest of the cover uses exact positions.
+4. Drag a second marquee two grid cells (32 px) further in on every side and press [[Delete]] to hollow it out.
+5. Press [[Cmd+D]] to deselect, then **untick Snap** so the smaller shapes can land exactly where you put them.
 
 ## Add frame dots and heart corners
 
@@ -77,15 +80,15 @@ is the centre of the medallion you'll paint later.
 
 Add a layer named `Frame Dots` and press [[B]] for the **Brush**. Open the
 brush presets. On the **Shape** tab, set **Size** `9`, **Hardness** `100` and
-**Spacing** `355`. With spacing that wide, a stroke lays down separate dots.
+**Spacing** `200`, its maximum. With spacing that wide, a stroke lays down
+separate dots.
 
 Set the foreground to cream `#F4EAD2`. Draw each side with a click and a
-[[Shift]]-click, which paints a straight dotted line:
+[[Shift]]-click, which paints a straight dotted line. Keep each line down the
+middle of the red band:
 
-- top: (34, 40) to (866, 40)
-- bottom: (34, 1160) to (866, 1160)
-- left: (34, 72) to (34, 1128)
-- right: (866, 72) to (866, 1128)
+- top and bottom: from one corner of the frame to the other
+- left and right: from just below the top corner square to just above the bottom one
 
 Finish the corners with small hearts. Draw a 20 px heart with the **Lasso**
 ([[L]]) on each corner square and fill it cream.
@@ -99,10 +102,10 @@ Finish the corners with small hearts. Draw a 20 px heart with the **Lasso**
 Add a layer named `Alphorn L`. Build the horn lying flat across the middle,
 and rotate it later.
 
-1. **Body:** with the Lasso, trace a long taper. Start at (62, 739), go to (772, 732), flare out to (838, 711), come down to (838, 779), back to (772, 758) and (62, 751), then release. Fill it with `#8A5A2B`.
-2. **Mouthpiece:** marquee a 16 × 16 square at (46, 737) and fill it with ink `#2A1E17`.
-3. **Bell rim:** with the **Elliptical Marquee**, drag a 16 × 72 oval at (830, 709) and fill it with `#6B4320`.
-4. **Bands:** every 60 px from x `110` to `710`, marquee a 10 px-wide strip from y `700` to `790` and bucket-click the horn inside it with red `#B3261E`. Then add a 3 px cream strip 13 px to the right of each red band.
+1. **Body:** with the Lasso, trace a long taper just below the 700 guide, from just inside the left of the frame to just inside the right. It starts about 12 px thick at the left end and widens slowly to about 26 px, about 65 px before the right end. Then it flares out into a bell about 68 px tall. Press at one corner, drag through the others in order around the outline and release. Fill it with `#8A5A2B`.
+2. **Mouthpiece:** marquee a 16 × 16 square at the thin left tip and fill it with ink `#2A1E17`.
+3. **Bell rim:** with the **Elliptical Marquee**, drag a 16 × 72 oval over the mouth of the bell and fill it with `#6B4320`.
+4. **Bands:** every 60 px along the horn, from about `110` to `710` on the top ruler, marquee a 10 px-wide strip a little taller than the horn and bucket-click the horn inside it with red `#B3261E`. Then add a 3 px cream strip 13 px to the right of each red band.
 
 Because the bucket only floods the horn's brown pixels, each band wraps the
 horn neatly without spilling onto the paper.
@@ -114,14 +117,16 @@ horn neatly without spilling onto the paper.
 Give the horn an outline first so that both copies get it. Open **Alphorn L**'s
 effects, tick **Stroke**, and set **Width** `2`, position **outside**, colour ink.
 
-Click **Duplicate Layer** and rename the copy `Alphorn R`. If the copy lands
-offset, use the **Move** tool ([[V]]) and the arrow keys to put it exactly on
-top of the original.
+Click **Duplicate Layer** and rename the copy `Alphorn R`. The copy lands
+10 px right and 10 px down, so pick the **Move** tool ([[V]]) and press
+[[Shift+Left]] and [[Shift+Up]] once each to put it exactly on top of the
+original.
 
-Marquee from (46, 700) to (851, 790) around the horn. Press [[V]] and click
-**Flip Horizontal** in the options bar. The bell now points left.
+Marquee a snug box around the whole horn, from the mouthpiece to the bell
+rim. Press [[V]] and click **Flip Horizontal** in the options bar. The bell
+now points left.
 
-> **Tip:** After you click an options-bar button, click the status bar before you press any keys. The button keeps keyboard focus, so pressing [[Enter]] or [[Space]] clicks it again and flips the horn back.
+> **Tip:** The Flip button keeps keyboard focus after you click it, so pressing [[Enter]] clicks it again and flips the horn back. Commit with [[Cmd+D]], or click the status bar first.
 
 Press [[Cmd+D]].
 
@@ -129,7 +134,7 @@ Press [[Cmd+D]].
 
 ![Alphorn L mid-rotation with the transform box and rotation handles tilted 45 degrees clockwise](06-rotate-alphorn.webp)
 
-Select **Alphorn L** and marquee the same (46, 700) to (851, 790) box. With the
+Select **Alphorn L** and marquee the same snug box around the horn. With the
 Move tool, drag the **top-right rotation handle** (the circle just outside the
 corner) clockwise. Hold [[Cmd]] so it snaps in 15° steps, and stop at **45°**,
 with the bell pointing to the lower right. Press [[Cmd+D]] to commit.
@@ -148,19 +153,23 @@ crossing, leaving the mouthpieces and bells showing like an emblem.
 
 ![A slate blue disc over the horns with an ochre sun near the top and sixteen long and sixteen short rays drawn with radial symmetry](08-sky-disc-sunburst.webp)
 
-Select **Alphorn R** and add a layer named `Sky Disc`. Drag an **Elliptical
-Marquee** of 528 × 528 at (186, 436) and fill it with `#6E8FB0`.
+Select **Alphorn R** and add a layer named `Sky Disc`. With the **Elliptical
+Marquee**, draw a 528 px circle centred on the guide crossing and fill it
+with `#6E8FB0`.
 
-Add a layer named `Sun`, marquee a 104 × 104 circle at (398, 488), and fill it
+Add a layer named `Sun`, marquee a 104 px circle on the centre guide near
+the top of the disc (its centre about 160 px above the crossing), and fill it
 with ochre `#D4A017`.
+
+> **Tip:** For exact circles, deselect each time and click once with the Elliptical Marquee to type the corners: From 186, 436 To 714, 964 for the disc, and From 398, 488 To 502, 592 for the sun.
 
 Next, add a layer named `Sun Rays` and select the Brush. In the brush presets,
 set **Spacing** back to `10` and **Size** to `11`. Then:
 
 1. Click **Radial Symmetry** in the options bar and set **Segments** to `16`.
-2. [[Cmd]]-click the sun's centre at (450, 540) to move the symmetry centre there.
-3. Drag straight up from (450, 476) to (450, 436). Sixteen rays appear at once.
-4. For the short rays in between, set **Size** to `6` and drag from (463, 475) to (466, 458).
+2. [[Cmd]]-click the centre of the sun to move the symmetry centre there.
+3. Starting about 12 px above the sun's edge, drag straight up to the top of the disc. Sixteen rays appear at once.
+4. For the short rays in between, set **Size** to `6`. Start just above the sun, halfway between two long rays, and drag a short stroke about 17 px outward.
 5. Click **Radial Symmetry** again to turn it off.
 
 ## Build the mountains and hills
@@ -170,11 +179,11 @@ set **Spacing** back to `10` and **Size** to `11`. Then:
 Folk painting likes mirror symmetry, so keep every shape balanced around the
 450 guide. Add one layer per shape, lasso it, and fill it:
 
-- **Far Peaks** `#3B5A6E`: a zigzag through (170, 820), (240, 700), (290, 750), (350, 640), (420, 720), (450, 690), then the mirror image out to (730, 820). Close it along the bottom at y 980.
-- **Hero Peak** fir green `#1E4D2B`: a triangle (296, 910), (450, 560), (604, 910).
-- **Snowcap** cream: (450, 560), (496, 664), (474, 648), (450, 674), (426, 648), (404, 664).
-- **Back Hill** `#4B7A3C`: a band with a wavy, scalloped top around y 862 (about 88 px per wave), closed at the bottom.
-- **Front Hill** `#2F6135`: the same wave around y 922, offset by half a wave.
+- **Far Peaks** `#3B5A6E`: a zigzag ridge. Start at the disc's left edge about 120 px below the crossing, rise to a peak level with the crossing, dip, climb to the tallest peak about 60 px above it, dip again, and finish on a small peak on the centre guide. Mirror the same points out to the right edge, then close the shape well below the disc.
+- **Hero Peak** fir green `#1E4D2B`: a tall triangle with its tip on the centre guide just under the sun, and a base about 310 px wide, roughly 210 px below the crossing.
+- **Snowcap** cream: the top 100 px or so of the Hero Peak, with a zigzag lower edge of three points and two notches.
+- **Back Hill** `#4B7A3C`: a band with a wavy, scalloped top about 160 px below the crossing (about 88 px per wave), closed at the bottom.
+- **Front Hill** `#2F6135`: the same wave about 60 px lower, offset by half a wave.
 
 ## Add the chalet and fir trees
 
@@ -182,14 +191,15 @@ Folk painting likes mirror symmetry, so keep every shape balanced around the
 
 Select **Front Hill** and add a layer named `Chalet`:
 
-- body: a 64 × 46 rectangle at (418, 872) in `#8A5A2B`
-- roof: a red triangle (404, 878), (450, 836), (496, 878)
-- windows: two cream 12 px squares at (426, 882) and (462, 882), and a round 12 px window at (444, 850)
-- door: an ink 14 × 20 rectangle at (443, 898)
+- body: a 64 × 46 rectangle in `#8A5A2B`, centred on the guide at the foot of the Hero Peak
+- roof: a red triangle, a little wider than the body, with its peak about 40 px above the walls
+- windows: two cream 12 px squares side by side in the wall, and a round 12 px window in the gable
+- door: an ink 14 × 20 rectangle in the middle of the wall's base
 
 Add a `Fir Trees` layer. Each tree is two stacked lasso triangles in
-`#163B21` plus a short ink trunk. Put two trees at x `372` and `528` (base at
-y 916) and two smaller ones at x `312` and `588` (base at y 934).
+`#163B21` plus a short ink trunk. Put two trees about 80 px either side of
+the chalet, and two smaller ones about 140 px out, standing a little lower on
+the hill.
 
 ## Clip the landscape to the disc
 
@@ -197,7 +207,7 @@ y 916) and two smaller ones at x `312` and `588` (base at y 934).
 
 The peaks and hills overhang the disc. To trim them:
 
-1. Drag the 528 × 528 elliptical marquee at (186, 436) again.
+1. Draw the sky disc's circle again, on the same centre (the typed corners are From 186, 436 To 714, 964).
 2. Choose **Select → Inverse**.
 3. Click each of **Fir Trees**, **Chalet**, **Front Hill**, **Back Hill**, **Far Peaks** and **Sun Rays** in turn, pressing [[Delete]] after each one. The selection stays put while you switch layers.
 4. Press [[Cmd+D]].
@@ -208,17 +218,19 @@ The peaks and hills overhang the disc. To trim them:
 
 Select **Fir Trees** and add a layer named `Scallops`. With the Brush at
 **Size** `22` in ochre, turn on **Radial Symmetry** with `32` segments.
-[[Cmd]]-click the medallion centre (450, 700), then click once at (450, 438).
-Thirty-two half-hidden dabs make a scalloped inner edge.
+[[Cmd]]-click the guide crossing, the medallion's centre, then click once
+straight above it, right on the top edge of the disc. Thirty-two half-hidden
+dabs make a scalloped inner edge.
 
-Add a `Ring` layer. Fill a 564 × 564 elliptical marquee at (168, 418) with red,
-then marquee the 528 disc at (186, 436) and press [[Delete]]. This leaves a
-clean 18 px ring.
+Add a `Ring` layer. Fill a 564 px circle on the same centre with red (From
+168, 418 To 732, 982), then choose **Select → Shrink…** by `18` and press
+[[Delete]]. This leaves a clean 18 px ring.
 
 Add `Ring Dots`, set the brush to **Size** `6` in cream, and keep 32 radial
-segments centred on (450, 700). Click once at (477, 429). That point is
-rotated half a step from the scallops, so the dots sit between them. Turn
-radial symmetry off.
+segments centred on the crossing. Click once in the middle of the ring,
+about 27 px to the right of the centre guide. That point is rotated half a
+step from the scallops, so the dots sit between them. Turn radial symmetry
+off.
 
 ## Turn the front hill into a golden field
 
@@ -245,14 +257,18 @@ You can now select a whole group and move it as one piece.
 
 ![A wide red ribbon across the bottom with dark red forked tails, thin cream rules and a soft drop shadow, overlapping the horn bells](15-swallowtail-ribbon.webp)
 
-On **Ribbon Tails**, lasso the left tail with `#7A1712`: (120, 1048),
-(204, 1048), (204, 1112), (120, 1112), with the notch point at (146, 1080).
-Draw its mirror image on the right, from x 780 to 696. Add two small
-fold triangles in `#4A0E0A` where the band meets the tails, at
-(172–204, 1096–1112) and (696–728, 1096–1112).
+The band is 556 × 64 px, centred on the centre guide, with its bottom about
+50 px above the frame. Draw the tails first so they sit behind it.
 
-Add a layer named `Ribbon Band`. Fill a 556 × 64 rectangle at (172, 1032) with
-red, then add two 2 px cream rules at y `1040` and `1086`, from x 186 to 714.
+On **Ribbon Tails**, lasso the left tail with `#7A1712`: a block 84 × 64 px
+that starts 32 px under the band's left end and sticks out 52 px past it,
+sitting 16 px lower than the band, with a V notch cut 26 px into its outer
+end. Draw its mirror image on the right. Add two small fold triangles in
+`#4A0E0A` in the corners where the band's lower edge meets each tail.
+
+Add a layer named `Ribbon Band`. Fill the 556 × 64 rectangle with red, then
+add two 2 px cream rules just inside its top and bottom edges (about 8 px
+in), stopping 14 px short of each end.
 
 Finally, open the band's effects, tick **Drop Shadow**, and set **Offset X**
 `4`, **Offset Y** `5`, **Blur** `4`, colour ink and **Opacity** about `40`.
@@ -265,7 +281,7 @@ With **Ribbon Band** still selected, press [[T]] for the **Text** tool:
 
 1. Open the **Font** browser, search `Special Elite` and click it. Set **Size** to `30` and the foreground to cream.
 2. Click an empty spot near the bottom of the canvas, type `ZINE No. 7  -  HERBST 2026`, and press [[Tab]] to commit.
-3. With the Move tool, drag the text onto the ribbon so it's centred at (450, 1064).
+3. With the Move tool, drag the text onto the ribbon and centre it there. **Align center horizontally** in the Move options centres it on the page, which is also the ribbon's centre.
 
 ## Add the tagline
 
@@ -276,8 +292,8 @@ Keep **Special Elite**, but set **Size** to `17` and the foreground to ink.
 
 Copy `LIEDER  ·  WANDERWEGE  ·  GESCHICHTEN` to your clipboard. Click an empty
 spot and **paste** it with [[Cmd+V]]. The middle dots are easiest to paste
-rather than type. Press [[Tab]], then move the tagline to centre it at
-(450, 1009).
+rather than type. Press [[Tab]], then move the tagline so it's centred in the
+gap between the medallion and the ribbon.
 
 ## Set the woodtype title
 
@@ -286,9 +302,9 @@ rather than type. Press [[Tab]], then move the tagline to centre it at
 Select **Ribbon Band**. In the Text tool, pick **Rye**, a Western woodtype
 face that suits folk posters. Set **Size** to `190` and the foreground to red.
 
-Wait a moment for the font to download, then click at about (110, 80), type
-`YODEL` and press [[Tab]]. Nudge it with the Move tool until it's centred on
-the 450 guide.
+Click inside the frame near the top-left corner, type `YODEL` and press
+[[Tab]]. With the Move tool, click **Align center horizontally** to centre it
+on the page.
 
 ## Give the title a cream outline and ink shadow
 
@@ -307,13 +323,14 @@ woodtype.
 ![of the Uplands in green Berkshire Swash under the title, flanked by red hearts, with a thin ochre rule and tiny ochre heart below](20-subtitle-ornaments.webp)
 
 Select **Ribbon Band** and set type again: **Berkshire Swash**, **Size** `64`,
-fir green. Type `of the Uplands`, commit, and centre it at (450, 334).
+fir green. Type `of the Uplands`, commit, and centre it just under the
+title.
 
 Add a layer named `Ornaments`:
 
-- two red lasso hearts about 38 px wide at (206, 338) and (694, 338)
-- two 3 px ochre rules, 120 px long, at (300, 390) and (480, 390)
-- a tiny ochre heart between the rules at (450, 392)
+- two red lasso hearts about 38 px wide, one either side of the subtitle
+- two 3 px ochre rules, 120 px long, under the subtitle, with a 60 px gap between them on the centre guide
+- a tiny ochre heart in that gap
 
 ## Grow a vine in the margin
 
@@ -321,25 +338,27 @@ Add a layer named `Ornaments`:
 
 Add a layer named `Vine L`. In the brush presets, set **Size** `5`,
 **Spacing** `10` and **Taper** `0`. Paint a gently wavy fir-green stem up the
-left margin, from (108, 960) to (108, 580).
+left margin, midway between the frame and the medallion. Start about 50 px
+above the tagline and stop just below the level of the sun, roughly 380 px
+higher.
 
 For the leaves, lasso small almond shapes, about 36 px long and tilted
-upwards, and fill them with `#4B7A3C`. Alternate sides at y `920`, `870`,
-`760`, `700` and `640`.
+upwards, and fill them with `#4B7A3C`. Place five up the stem, alternating
+sides, with a larger gap in the lower middle where the heart will go.
 
 ## Add the tulip, heart and edelweiss
 
 ![The vine topped with a red folk tulip with an ochre flame, a red heart on the stem, ochre berries and a star-shaped edelweiss with green bracts](22-tulip-edelweiss.webp)
 
-- **Tulip:** lasso a three-petal tulip on top of the stem, through (90, 590), (82, 556), (97, 568), (108, 538), (119, 568), (134, 556), (126, 590), (108, 600). Choose **Edit → Fill** with red. Add a small ochre flame in the middle the same way.
-- **Heart:** lasso a small heart on the stem at (115, 815) and **Edit → Fill** it red.
+- **Tulip:** lasso a three-petal tulip on top of the stem: a cup about 50 px wide and 60 px tall, with a tall pointed middle petal and a shorter point on each side. Choose **Edit → Fill** with red. Add a small ochre flame in the middle the same way.
+- **Heart:** lasso a small heart on the stem, in the gap between the leaves, and **Edit → Fill** it red.
 - **Berries:** click a few ochre dots (**Size** `8`) beside the leaves.
 
 > **Tip:** Use **Edit → Fill** for shapes that sit on top of the stem. The Paint Bucket would only recolour the stem pixels under your click, but Fill covers the whole selection.
 
 For the **edelweiss**, set the brush **Taper** to `80` so each stroke ends in
 a point. Turn on **Radial Symmetry** with `9` segments and [[Cmd]]-click
-(108, 488) to centre it there. Then paint three layers of petals, each with a
+about 50 px above the tulip, in line with the stem, to centre it there. Then paint three layers of petals, each with a
 single short outward drag:
 
 1. green `#4B7A3C` bracts at **Size** `12`
@@ -353,9 +372,12 @@ of tiny ochre and brown dots in the centre.
 
 ![A wide marquee centred on the 450 guide around the left vine, ready for Flip Horizontal](23-mirror-vine.webp)
 
-Duplicate **Vine L** and rename the copy `Vine R`. Marquee from (52, 420) to
-(848, 1020). This box is centred on the 450 guide, so a flip mirrors the vine
-exactly into the right margin.
+Duplicate **Vine L** and rename the copy `Vine R`. With the Move tool, press
+[[Shift+Left]] and [[Shift+Up]] once each to undo the duplicate's 10 px
+offset. Then marquee from the inside edge of the frame on the left to the
+inside edge on the right, tall enough to take in the whole vine. The frame
+is symmetrical, so this box is centred on the centre guide, and a flip
+mirrors the vine exactly into the right margin.
 
 Press [[V]], click **Flip Horizontal**, click the status bar, and press
 [[Cmd+D]].
@@ -367,7 +389,7 @@ Press [[V]], click **Flip Horizontal**, click the status bar, and press
 Screen prints and risographs never line up perfectly. To fake that:
 
 1. Duplicate **Frame** and rename the copy `Frame Misprint`.
-2. With the Move tool (and Snap off), press the right arrow **3** times and the down arrow **2** times.
+2. The copy lands 10 px right and 10 px down. With the Move tool (and Snap off), press [[Shift+Left]] and [[Shift+Up]] once each to put it back over the original, then press the right arrow **3** times and the down arrow **2** times.
 3. Set the copy's blend mode to **Multiply** and its opacity to `30%`.
 
 You get a faint darker edge, like a second plate that slipped.

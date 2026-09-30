@@ -2,6 +2,7 @@
 title: Design a Neon Sign Roller Disco Flyer
 description: Build a glowing neon sign flyer in Lopsy with tube outlines, Inner and Outer Glow, a patterned brick wall and colored light spill.
 published: 2026-09-27 09:30
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: neon, flyer design, event flyer, layer effects, text effects, pattern fill, glow, typography
@@ -31,34 +32,45 @@ The palette:
 
 ## Draw a brick tile
 
-![A 160 by 80 pixel brick tile selected with the Rectangular Marquee in the top-left corner of a new 1200 by 1600 document, with guides at x 600 and y 145, 760, 1075 and 1276](01-brick-tile.webp)
+![A 160 by 80 pixel brick tile selected with the Rectangular Marquee in the top-left corner of a new 1200 by 1600 document, with a vertical centre guide and four horizontal guides](01-brick-tile.webp)
 
 Choose **File → New**, set the unit to **Pixels**, and create a **1200 × 1600**
-document. Click the rulers to add guides. Click the top ruler at **600** for a
-centre line. Click the left ruler at **145**, **760**, **1075** and **1276**
-for the tops of the headline, the planet's centre, SKATE NIGHT and the
-information block.
+document. Add guides by clicking the rulers (a single click drops a guide):
+
+- [[Cmd]]-click ([[Ctrl]]-click) the middle of the top ruler. Holding [[Cmd]]
+  snaps the guide to the exact centre line.
+- On the left ruler, click at about **145**, **760**, **1075** and **1276**.
+  The ruler shows a readout as you hover, so you can land close to each
+  one. These mark the top of the headline, the planet's centre, the top of
+  SKATE NIGHT and the top of the information block.
 
 Fill the **Background** with `#140E18`. On **Layer 1** (rename it
-*Bricks*), build one tile of a running bond in the top-left corner using the
-**Rectangular Marquee** and **Edit → Fill**:
+*Bricks*), build one 160 × 80 tile of a running bond in the top-left corner
+using the **Rectangular Marquee** and **Edit → Fill**:
 
-1. Fill a 160 × 80 rectangle with the mortar colour `#0B070D`.
-2. Fill three bricks with `#452738`: the full top brick (0,0) 156 × 36, and
-   two half-bricks (0,40) 76 × 36 and (80,40) 80 × 36.
+1. Fill the whole 160 × 80 rectangle with the mortar colour `#0B070D`.
+2. Fill three bricks with `#452738`, leaving 4 px of mortar between them:
+   a full 156 × 36 brick across the top row, then two half-bricks in the
+   bottom row: 76 × 36 from the left edge, and 80 × 36 from the middle to
+   the right edge.
 3. Fill a 3 px strip of `#603B4E` along the top of each brick. This catches
    the light.
+
+> **Tip:** Exact rectangles are easiest with the corner dialog. With
+> nothing selected, click once (no drag) with the **Rectangular Marquee**
+> and type **From** and **To** values, for example `0`, `40` → `76`, `76`
+> for the left half-brick.
 
 ## Tile it across the wall
 
 ![The Pattern Fill dialog with the new 160 by 80 brick pattern selected and the brick wall previewed across the whole canvas](02-pattern-fill.webp)
 
-Draw a marquee exactly over the tile, 0,0 to 160,80. Turn **Snap** off if
-the grid is on. Choose **Edit → Define Pattern**.
+Select exactly the tile, **0, 0 → 160, 80**. Turn **Snap** off if the grid
+is on. Choose **Edit → Define Pattern**.
 
-Press [[Cmd+D]] to deselect, then fill the whole layer with the mortar colour
-so there are no transparent gaps. Choose **Edit → Fill with Pattern...**, pick
-the 160 × 80 brick pattern and click **Apply**.
+Press [[Cmd+D]] to deselect, then choose **Edit → Fill with Pattern...**,
+pick the 160 × 80 brick pattern and click **Apply**. With nothing selected,
+the pattern covers the whole layer.
 
 ## Add grain to the bricks
 
@@ -81,8 +93,9 @@ Neon only glows against darkness.
    set to **Radial**.
 3. In **Advanced...**, set both stops to `#0A0610`, with about **30%** opacity
    on the left stop and **93%** on the right.
-4. Drag from the middle of the wall (600, 720) about 1050 px outward. The
-   centre stays readable and the corners drop away.
+4. Drag from the middle of the wall, near where the centre guide crosses the
+   760 guide, about 1050 px outward, past a corner. The centre stays
+   readable and the corners drop away.
 
 ## Bend the planet tube
 
@@ -91,10 +104,11 @@ Neon only glows against darkness.
 Every tube in this flyer is built the same way. Fill a shape, shrink the
 selection by the tube width, then delete the middle.
 
-Add a layer called *Planet*. With the **Elliptical Marquee**, drag a 420 px
-circle centred on (600, 760) and fill it with the pale amber core colour
-`#FFE2B0`. Choose **Select → Shrink…**, set **10** px, click **Apply**, and
-press [[Delete]]. What's left is a 10 px ring.
+Add a layer called *Planet*. With the **Elliptical Marquee**, hold [[Cmd]] and
+drag a 420 px circle centred on the point where the centre guide crosses the
+760 guide. Fill it with the pale amber core colour `#FFE2B0`. Choose
+**Select → Shrink…**, set **10** px, click **Apply**, and press [[Delete]].
+What's left is a 10 px ring.
 
 ## Clip each latitude band
 
@@ -106,8 +120,9 @@ the same way (fill, **Shrink 9**, [[Delete]]). Then:
 
 1. Marquee the top half of that ellipse and press [[Delete]]. That leaves
    the lower arc, a "smile" that reads as a line of latitude.
-2. Draw a 372 px circle centred on the planet and choose **Select →
-   Inverse**. Press [[Delete]] so the band stops 14 px inside the outline.
+2. [[Cmd]]-drag a 372 px circle centred on the planet, 24 px inside its
+   outer edge, and choose **Select → Inverse**. Press [[Delete]] so the band
+   stops 14 px inside the outline.
 3. Choose **Layer → Merge Down** to merge the band into *Planet*.
 
 Use three bands: two above the middle of the planet and one near the
@@ -137,17 +152,19 @@ the ring ends leave a small gap before the outline.
 ![The ring passing in front of the planet, with small gaps cut into the planet's outline where the front of the ring crosses it](09-crossing-gaps.webp)
 
 Neon tubes never overlap. A bender leaves a gap where one tube passes in front
-of another. On *Planet*, draw two small 34 px circles where the front of the
-ring crosses the outline, and press [[Delete]] in each.
+of another. Click the *Planet* row, draw two small 34 px circles where the
+front of the ring crosses the outline, and press [[Delete]] in each.
 
 ## Tilt the planet and ring together
 
 ![The planet layer inside a rotated transform box, turned 14 degrees counter-clockwise to match the ring](10-rotate-planet.webp)
 
-Draw the same marquee on each layer so they share a pivot: **190, 530, 820 ×
-460**, centred on the planet. Select the **Move** tool, drag the rotate
-handle outside the top-right corner **14°** counter-clockwise, and press
-[[Cmd+D]] to commit. Repeat on the other layer with the identical marquee.
+Rotate each layer with the same marquee so they share a pivot. Press
+[[Cmd+D]], then click once with the **Rectangular Marquee** and enter
+**From** `190`, `530` and **To** `1010`, `990`. That's an 820 × 460 box
+centred on the planet. Select the **Move** tool, drag the rotate handle
+outside the top-right corner **14°** counter-clockwise, and press [[Cmd+D]]
+to commit. Click the other layer and repeat with the identical marquee.
 The gaps you cut line up perfectly again.
 
 ## Smooth the tube edges
@@ -162,16 +179,17 @@ anti-aliasing without making the tube look blurry.
 
 ![The Layer Effects drawer with Drop Shadow, Outer Glow and Inner Glow enabled on the Ring layer](12-tube-effects.webp)
 
-Open the layer effects (the ✦ button on the layer row) and enable three
-effects:
+Open the layer effects (the sparkle button on the layer row) and enable
+three effects:
 
 - **Inner Glow:** the tube colour (`#FF9A1F` for the planet, `#16D9FF` for
   the ring), Size **5**, Spread **30**, Opacity **100**. This colours the
   edges and leaves the pale core looking white-hot.
 - **Outer Glow:** the same colour, Size **26**, Spread **18**, Opacity
   **85**.
-- **Drop Shadow:** near-black `#050208`, Offset **7 / 11**, Blur **7**,
-  Opacity **70**. The tube now seems to stand off the wall.
+- **Drop Shadow:** near-black `#050208`, **Offset X** **7**, **Offset Y**
+  **11**, Blur **7**, Opacity **70**. The tube now seems to stand off the
+  wall.
 
 ## See the planet light up
 
@@ -184,10 +202,11 @@ shadow. Everything else in the flyer reuses it.
 
 ![Pink neon Saturn script in the Neonderthaw font at 314 pixels near the top of the flyer](14-saturn-script.webp)
 
-Click a raster layer such as *Ring* first, so the text settings don't restyle
-another text layer. Select the **Text** tool and choose **Neonderthaw** (a
-Google font drawn as single tube strokes). Set **314** px and the colour
-`#FFD3EE`, then click in the empty space at the top and type *Saturn*.
+Click *Ring* first. The new text layer is added above the active layer, and
+while a text layer is active, changing the Text settings restyles it. Select
+the **Text** tool and choose **Neonderthaw** (a Google font drawn as single
+tube strokes). Set **314** px and the colour `#FFD3EE`, then click in the
+empty space at the top and type *Saturn*.
 
 Give it the same three effects in hot pink `#FF2D95`: Inner Glow Size
 **4**, Outer Glow Size **30**, Spread **20**.
@@ -199,15 +218,16 @@ Give it the same three effects in hot pink `#FF2D95`: Inner Glow Size
 Script neon looks livelier with a slight upward lean. Marquee around the word,
 switch to **Move**, and drag the rotate handle **7°** counter-clockwise. Press
 [[Cmd+D]], then use the arrow keys to nudge it until the pink core is centred
-on the 600 guide with its top on the 145 guide. The text stays editable.
+on the centre guide with its top on the 145 guide. The text stays editable.
 
 ## Track out SKATE NIGHT
 
 ![The Text panel with Letter spacing set to 10 px for the new SKATE NIGHT line](16-letter-spacing.webp)
 
-Click a raster layer again. Type **SKATE NIGHT** in **Tilt Neon** at **150**
-px in `#D8FBFF`, clicking just above the 1075 guide. In the **Text** panel,
-set **Letter spacing** to **10** px so the capitals don't touch.
+Click a raster layer such as *Ring* again, so your new settings don't
+restyle *Saturn*. Type **SKATE NIGHT** in **Tilt Neon** at **150** px in
+`#D8FBFF`, clicking just above the 1075 guide. In the **Text** panel, set
+**Letter spacing** to **10** px so the capitals don't touch.
 
 ## Centre it and make it glow
 
@@ -233,8 +253,10 @@ stripe: a rectangle with a circle at each end.
 
 ![A violet neon roller skate tilted 12 degrees, with its toe kicked up](19-neon-skate.webp)
 
-Run **Gaussian Blur 2** on the skate, then add the tube effects in violet
-`#A64DFF`. Rotate it **12°** counter-clockwise so the toe kicks up.
+Run **Gaussian Blur** at **Radius 2** on the skate, then add the tube
+effects in violet `#A64DFF`. Marquee it and rotate it **12°**
+counter-clockwise with the **Move** tool so the toe kicks up, then press
+[[Cmd+D]].
 
 ## Add the event details
 
@@ -267,7 +289,7 @@ Choose **Layer → Group Layers** and rename the group *Info*.
 
 With *Info* active, drag with the **Move** tool to move the whole group at
 once, until the block from the skate to the end of the date is centred on the
-600 guide.
+centre guide.
 
 ## Scatter a few stars
 
@@ -283,7 +305,7 @@ Glow in `#FFC93C`.
 ![A black layer with feathered ellipses of pink, amber, teal and violet placed behind each neon element](24-spill-shapes.webp)
 
 Neon tints the wall around it. Add a *Spill* layer above *Shade* and fill it
-completely with **black**, which is invisible in Screen mode. Set the
+completely with **black**, which disappears in Screen mode. Set the
 Elliptical Marquee's **Feather** to **60**. Fill ellipses behind each sign in
 a darker version of its colour:
 
@@ -300,15 +322,14 @@ Reset Feather to **0** afterwards.
 ![The light spill blurred and set to Screen, washing the bricks in pink, amber, cyan and violet](25-light-spill.webp)
 
 Run **Gaussian Blur** at **90** on *Spill*, set its blend mode to **Screen**
-and its opacity to **65%**. The black base means the blur has nothing
-transparent to darken, and Screen ignores the black completely.
+and its opacity to **65%**. Screen ignores the black completely, so only the
+coloured light is added, and the heavy blur melts the pools into the bricks.
 
 ## Add a wide halo
 
 ![Gaussian Blur at radius 63 applied to a pasted copy of the whole flyer](26-wide-glow.webp)
 
-Click the top layer and choose **Edit → Copy Merged**. Wait a couple of
-seconds, then press [[Cmd+V]].
+Click the top layer, choose **Edit → Copy Merged**, then press [[Cmd+V]].
 
 1. Name the paste *Haze*. Blur it at **26**, set it to **Lighten** at
    **80%**.
@@ -321,8 +342,9 @@ This adds the soft bloom a camera sees around bright neon.
 
 ![The finished Saturn Skate Night flyer in Lopsy with all layers, the Info group and the haze layers in the Layers panel](27-haze.webp)
 
-Hide the guides if you like, then choose **File → Quick Export PNG** for the
-flyer and **File → Save Project** to keep an editable `.lopsy` copy.
+Hide the guides with **View → Show Guides** if you like, then choose
+**File → Quick Export PNG** for the flyer and **File → Save Project** to keep
+an editable `.lopsy` copy.
 
 To make another night, double-click the date or venue text and retype it.
 Then repeat the Copy Merged haze step so the glow matches the new words.

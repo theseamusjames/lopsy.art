@@ -2,7 +2,7 @@
 title: Make a Vintage Halftone Christmas Card
 description: Design a retro screen-printed Christmas card in Lopsy. Halftone dots shade the sky, snow and script title, and a snowy village glows under a guiding star.
 published: 2026-09-29 12:00
-updated: 2026-09-29
+updated: 2026-09-30
 level: Intermediate
 duration: 90
 tags: holiday card, christmas card, halftone, screen print, retro, vintage, illustration, typography, layer effects, transforms, groups
@@ -29,7 +29,7 @@ Along the way you'll also use:
 - **guides**, the **Gradient Editor** and the **Sunburst** filter
 - **Lasso** fills, **copy / paste in place**, **Flip Horizontal**, scaling and rotating with the **transform handles**
 - the **Magic Wand** with **Select → Grow** to recolor a copy
-- **groups**, a **Snap to Grid** group drag, and **undo / redo** checks
+- **groups**, a **Snap to Grid** group drag, and **undo**
 - **text**: a tilted script title with dots inside the letters, and small caps seated in a ribbon
 
 The palette is four inks on cream paper:
@@ -40,14 +40,16 @@ The palette is four inks on cream paper:
 
 ## Set up the card and its guides
 
-![A blank 1200 by 1600 document with blue guides at x 60, 600 and 1140 and y 60 and 1240](01-guides.webp)
+![A blank 1200 by 1600 document with blue guides 60 px in from the sides and top, one down the centre, and one a little over three-quarters of the way down](01-guides.webp)
 
 Choose **File → New** and make a **1200 × 1600** px document with a white
 background.
 
 Make sure **View → Show Rulers** and **Show Guides** are on. Then click the
-top ruler at **60**, **600** and **1140**, and the left ruler at **60** and
-**1240**. The rectangle between the outer guides is the picture. The cream
+top ruler about 60 px in from each side, and [[Cmd]]-click its middle to drop
+a guide exactly at the centre. On the left ruler, click about 60 px from the
+top and again at about **1240**, a little over three-quarters of the way
+down. The rectangle between the outer guides is the picture. The cream
 border outside it and the band under it hold the lettering. The center guide
 lines up the star, the steeple and the title.
 
@@ -60,11 +62,12 @@ Select **Background**, set the foreground to `#F3EAD6` and choose
 on for a faint paper tooth.
 
 Rename **Layer 1** to *Night Sky* by double-clicking its name. Drag a
-**Rectangular Marquee** ([[M]]) from guide to guide, (60, 60) to (1140, 1240).
+**Rectangular Marquee** ([[M]]) from guide to guide around the picture.
 
 Pick the **Gradient** tool, set **Type** to Linear, and open **Advanced…** to
-build three stops: `#131D38`, `#1D2B4F` at 70% and `#34507F`. Drag from
-(600, 60) straight down to (600, 1000).
+build three stops: `#131D38`, `#1D2B4F` at 70% and `#34507F`. Drag straight
+down the centre guide, from the top of the picture to about 1000 on the left
+ruler, where the hills will start. Hold [[Cmd]] to keep the drag vertical.
 
 ## Screen the sky with halftone dots
 
@@ -73,7 +76,7 @@ build three stops: `#131D38`, `#1D2B4F` at 70% and `#34507F`. Drag from
 This is the core technique, so take it slowly.
 
 1. Add a layer called *Sky Screen*. Marquee the sky rectangle again.
-2. With the Gradient tool, make a two-stop gradient from `#5A5A5A` to `#C8C8C8` and drag from (600, 60) down to (600, 1000).
+2. With the Gradient tool, make a two-stop gradient from `#5A5A5A` to `#C8C8C8` and make the same drag as before, from the top of the picture down to about 1000.
 3. Choose **Filter → Halftone…** and set **Dot Size** 14, **Density** 1, **Angle** 45, **Softness** 0.6. Click **Apply**.
 4. Press [[Cmd+D]]. Open the layer's effects and turn on **Color Overlay** with `#3A4F85`.
 
@@ -90,8 +93,9 @@ screen printed over the navy.
 
 Add a layer called *Moon Glow Dots* and marquee the sky again. Set the
 Gradient tool to **Radial**, with stops `#000000`, `#8A8A8A` at 50% and
-`#FFFFFF`. Drag from the moon's center at (880, 290) out 440 px to
-(1320, 290).
+`#FFFFFF`. Drag from where the moon will sit, in the upper right (about
+280 px right of the centre guide and 290 px down), straight out to the right
+about 440 px, past the edge of the canvas.
 
 Run **Halftone** with the same settings (Dot Size 14, Angle 45). Deselect,
 then give the layer a **Color Overlay** of `#8A9CC0` and set its opacity to
@@ -102,9 +106,9 @@ glow without any blur.
 
 ![A cream moon with a red crescent peeking out at its lower left and a dotted crater pattern across its face](05-misregistered-moon.webp)
 
-1. Add a *Moon Misprint* layer. Hold [[Cmd]] as you drag the **Elliptical Marquee** to make a circle of radius 100 centered on (870, 299), and fill it with red `#C9362B`.
-2. Add a *Moon* layer and fill the same size circle centered on (880, 290) with the paper color `#F3EAD6`. The red plate now shows as a thin crescent at the lower left.
-3. Add *Moon Craters*. Marquee a circle of radius 94 on the moon's center and run **Filter → Clouds…** at **Scale 5**, then **Halftone** at **Dot Size 10**, **Angle 15**.
+1. Add a *Moon Misprint* layer. Hold [[Cmd]] as you drag the **Elliptical Marquee** to make a 200 px circle, centred a little left of and below the middle of the halo, and fill it with red `#C9362B`.
+2. Add a *Moon* layer. Keep the marquee tool and nudge the selection 10 px right and 9 px up with the arrow keys ([[Shift+Right]] once, then [[Up]] nine times), so it sits on the halo's centre. Fill it with the paper color `#F3EAD6`. The red plate now shows as a thin crescent at the lower left.
+3. Add *Moon Craters*. With the moon's circle still selected, choose **Select → Shrink…** by **6**. Run **Filter → Clouds…** at **Scale 5**, then **Halftone** at **Dot Size 10**, **Angle 15**.
 4. Deselect, add a **Color Overlay** of `#C9B68C`, and set the layer to **70%**.
 
 The Clouds filter's light and dark patches turn into large and small dots,
@@ -122,7 +126,7 @@ them away from the moon.
 For the guiding star:
 
 1. Add *Star Rays*, set the foreground to gold `#F2BE4B` and choose **Filter → Sunburst…**. Use **Rays** 16, **Length** 16, **Width** 30, **Taper** 100, **Fade** 60, **Softness** 10, **Center X** 50, **Center Y** 35. Taper 100 turns the wedges into needle-sharp spikes.
-2. Add *Guiding Star* and lasso a larger sparkle, 100 px across, centered on (600, 560). Fill it with `#FFF6DC` and give it a 3 px **Stroke** of `#D89A2A`.
+2. Add *Guiding Star* and lasso a larger sparkle, 100 px across, centered where the sunburst's rays meet on the centre guide. Fill it with `#FFF6DC` and give it a 3 px **Stroke** of `#D89A2A`.
 
 ## Lay down the snow drifts
 
@@ -131,8 +135,8 @@ For the guiding star:
 Real screen prints have a dark **key line** around every shape. You'll give
 each shape a 3 px **Stroke** in night `#131D38`.
 
-1. Add *Back Hill*. Lasso a gently rolling horizon from (40, 990) up to around y 890 – 940 and across to (1160, 900), then down past the bottom of the picture. Fill it with `#B7C6DD` and add the stroke.
-2. Add *Front Hill* and lasso a second, lower drift whose top edge dips between y 1038 and 1080. Fill it with `#F7F1E3` and add the stroke.
+1. Add *Back Hill*. Start about 20 px outside the left edge of the picture, just above the 1000 mark. Lasso a gently rolling horizon that rises and falls between about 890 and 940 on the left ruler, across to 20 px outside the right edge, then down past the bottom of the picture. Fill it with `#B7C6DD` and add the stroke.
+2. Add *Front Hill* and lasso a second, lower drift whose top edge rolls between about 1040 and 1080. Fill it with `#F7F1E3` and add the stroke.
 
 Start and end both drifts 20 px outside the picture. The border you add later
 hides their outer key lines.
@@ -144,24 +148,24 @@ hides their outer key lines.
 Use the same halftone recipe, but load the drift's shape as the selection.
 
 1. Add *Drift Shadow Dots*. [[Cmd]]-click the *Front Hill* thumbnail to select its pixels.
-2. Drag a linear gradient (`#000000` → `#9A9A9A` at 40% → `#FFFFFF`) from the top of the drift at y 1036 down to y 1240.
+2. Drag a linear gradient (`#000000` → `#9A9A9A` at 40% → `#FFFFFF`) from the top of the drift down to the bottom of the picture.
 3. Run **Halftone** at **Dot Size 12**, **Angle 45**, deselect, and add a **Color Overlay** of `#7F95BA` at **70%**.
 
 Do the same for the back hill on a *Back Hill Dots* layer. Use a
-`#707070` → white gradient from y 890 to 1080, the overlay `#8C9FC4`, and
-70% opacity.
+`#707070` → white gradient from the top of the back hill down to about 1080,
+the overlay `#8C9FC4`, and 70% opacity.
 
 ## Build the first cottage
 
 ![A red cottage with a navy roof, snow-capped eaves, a chimney and three gold windows standing on the back hill](09-first-cottage.webp)
 
 Select *Back Hill Dots* and add a *Cottage Red* layer, so the village sits
-behind the front drift. Build the house from lasso fills around a base point
-at (330, 1000):
+behind the front drift. Build the house from lasso fills, centred about
+270 px left of the centre guide and standing on the back hill:
 
-- Chimney `#8E2A22`: x 356 – 374, y 850 – 905
-- Walls `#C9362B`: x 270 – 390, from y 908 down to 1060 (the drift hides the bottom)
-- Roof `#1D2B4F`: a triangle from (256, 914) up to (330, 840) and down to (404, 914)
+- Walls `#C9362B`: 120 px wide, with their top about 90 px above the 1000 mark. Run them down behind the front drift, which hides the bottom.
+- Roof `#1D2B4F`: a triangle 148 px wide and 74 px tall sitting on the walls, so it overhangs 14 px on each side
+- Chimney `#8E2A22`: 18 px wide and about 55 px tall, rising out of the right slope of the roof
 - Snow `#FBF6EA`: a chevron hugging the roof edge, plus a cap on the chimney
 - Windows `#F2BE4B`: two 24 × 30 px windows and one small gable window
 
@@ -176,9 +180,9 @@ copy is pasted in place on a new layer. Name it *Cottage Teal*.
 
 1. [[Cmd]]-click its thumbnail to select it. The transform handles appear.
 2. Press [[V]] and click **Flip Horizontal** in the options bar. The chimney moves to the left.
-3. Drag from inside the selection 520 px to the right.
+3. Drag from inside the selection 520 px to the right, then press [[Cmd+D]] to commit the flip and the move. [[Cmd]]-click the thumbnail again for fresh handles.
 4. Hold [[Cmd]] and drag the top-left corner handle 20 px in to scale it evenly to about 87%.
-5. Press [[Enter]] to commit, then [[Cmd+D]].
+5. Press [[Cmd+D]] to commit.
 
 ## Recolor the copy with the Magic Wand
 
@@ -200,11 +204,13 @@ Paste twice more:
 - *Cottage Cream*: move it 165 px left, scale it to 75%, and wand-recolor the walls `#EFE6D2`.
 - *Cottage Tilted*: move it 690 px right and scale it to 70%. Keep it red.
 
+As before, commit each move with [[Cmd+D]] before you reselect and scale.
+
 Select the tilted cottage's pixels and drag the top-right **rotation handle**
 (the circle outside the corner) about 6°. A slightly crooked house gives the
-village a hand-drawn feel. Press [[Enter]].
+village a hand-drawn feel. Press [[Cmd+D]].
 
-> **Tip:** Press [[Cmd+Z]] three times and then [[Cmd+Shift+Z]] three times. The cottage should go back to where it was pasted and then return exactly as you left it. It's a quick way to confirm the history holds each transform as its own step.
+> **Tip:** Each paste, move, scale and rotation is its own history step. If a transform goes wrong, [[Cmd+Z]] steps back one change at a time and [[Cmd+Shift+Z]] brings it back.
 
 ## Raise the chapel
 
@@ -212,9 +218,9 @@ village a hand-drawn feel. Press [[Enter]].
 
 Add a *Chapel* layer and build it on the center guide:
 
-- Nave `#EFE6D2`: x 515 – 685, y 868 – 1080, with a navy roof and a snow chevron
-- Tower `#EFE6D2`: x 562 – 638, y 712 – 880
-- Spire `#1D2B4F`: from (552, 716) up to (600, 612) and down to (648, 716), edged in snow up to y 604
+- Nave `#EFE6D2`: 170 px wide, centred on the guide, with its top about 130 px above the 1000 mark. Give it a navy roof and a snow chevron.
+- Tower `#EFE6D2`: 76 px wide, rising about 155 px above the nave
+- Spire `#1D2B4F`: a triangle 96 px wide and about 100 px tall on top of the tower, edged in snow that runs a few pixels past its tip
 - Gold arched windows (circle plus rectangle) in the tower and the nave, and a red arched door
 
 The snow tip of the spire ends just inside the bottom point of the guiding
@@ -265,11 +271,12 @@ turn the grid and snapping back off.
 
 ![A three-tier teal pine at the lower left with snow ledges, and a halftone selection turning its right side into darker dots](17-pine-halftone-shading.webp)
 
-Select *Drift Shadow Dots* and add a *Pine* layer above it. With a base point
-at (190, 1190), lasso-fill:
+Select *Drift Shadow Dots* and add a *Pine* layer above it. Stand it at the
+lower left, about 190 px in from the left edge, with its base about 50 px
+above the bottom of the picture. Lasso-fill:
 
 - a brown trunk `#4A3226`, 24 × 40 px
-- three teal `#2F6E62` triangles: 200 px wide at y 1150 – 1015, 160 px at 1065 – 945, and 112 px at 985 – 885
+- three overlapping teal `#2F6E62` triangles: 200 px wide and 135 px tall at the bottom, 160 × 120 px above it, and 112 × 100 px at the top
 - a wavy snow ledge `#FBF6EA` under each tier and a cap on the tip
 
 For the shading, add a *Pine Shade* layer and [[Cmd]]-click the pine's
@@ -286,7 +293,7 @@ Then choose **Layer → Merge Down** to bake the dots into *Pine*.
 Marquee the pine and copy it. Use the cottage routine again:
 
 - *Pine Right*: paste, flip, move it 850 px right and scale it to 84%.
-- *Pine Small*: paste, move it up behind the drift near (455, 1040) and scale it to 45%.
+- *Pine Small*: paste, move it up behind the front drift, about 145 px left of the centre guide, and scale it to 45%.
 
 ## Place the trees and key-line them
 
@@ -305,7 +312,7 @@ ones.
 ![Select Inverse around the sky rectangle, marching ants along the outside of the picture while the pines still hang past its edges](20-select-inverse-border.webp)
 
 Select *Pine Small* and add a *Card Border* layer above everything so far.
-Marquee the picture rectangle (60, 60) to (1140, 1240) and choose
+Marquee the picture rectangle from guide to guide and choose
 **Select → Inverse**.
 
 Fill with paper `#F3EAD6` and run **Add Noise** at **Amount 6**, **Mono**.
@@ -316,9 +323,11 @@ art trimmed by a printed border.
 
 ![A thin navy keyline around the picture, 14 px outside its edge](21-keyline-frame.webp)
 
-Add a *Keyline* layer. Marquee from (46, 46) to (1154, 1254) and fill it with
-navy `#1D2B4F`. Then choose **Select → Shrink…** by **3 px** and press
-[[Delete]]. What's left is a crisp 3 px rule.
+Add a *Keyline* layer. Marquee a rectangle 14 px outside the picture on
+every side and fill it with navy `#1D2B4F`. Then choose **Select → Shrink…**
+by **3 px** and press [[Delete]]. What's left is a crisp 3 px rule.
+
+> **Tip:** To get the 14 px exactly, click once (don't drag) with the **Rectangular Marquee** while nothing is selected, and enter From 46, 46 To 1154, 1254.
 
 ## Let it snow
 
@@ -339,8 +348,9 @@ Select *Keyline*. Pick the **Text** tool ([[T]]), set **Size** 138 and the font
 to **Lobster**, and choose red `#C9362B`. Click in the lower band and type
 `Joyeux Noël`. Press [[Tab]] to commit, and rename the layer *Title*.
 
-Center it on (600, 1350) with the Move tool. Arrow keys nudge 1 px, and
-[[Shift]]+arrow nudges 10 px.
+Center it in the band under the picture with the Move tool. **Align center
+horizontally** in the options bar centres it across the card. Arrow keys
+nudge 1 px, and [[Shift]]+arrow nudges 10 px.
 
 ## Tilt the title
 
@@ -348,12 +358,12 @@ Center it on (600, 1350) with the Move tool. Arrow keys nudge 1 px, and
 
 [[Cmd]]-click the *Title* thumbnail to select the lettering. Press [[V]] and
 drag the top-right rotation handle up by about **3°**, so the baseline rises
-to the right. Press [[Enter]].
+to the right. Press [[Cmd+D]].
 
 Now **seat it**. Nudge the title until its highest point (the dots on the ë)
-is **36 px** below the keyline, at y 1290, and the inked width is centered on
-x 600. Check the gap below the J's descender too. It should be about the same
-as the gap above.
+is about **36 px** below the keyline, and the inked width is centered on the
+centre guide. Check the gap below the J's descender too. It should be about
+the same as the gap above.
 
 Add a **Drop Shadow**: Offset X 6, Offset Y 6, **Blur 0**, opacity 100,
 navy `#1D2B4F`. With no blur, it reads as a second ink plate slipping out of
@@ -377,11 +387,12 @@ a screen-printed sign.
 
 ![The finished red ribbon band under the title, with a cream inner rule, navy swallowtail ends and darker folds where the tails tuck under](26-ribbon.webp)
 
-Add a *Ribbon* layer.
+Add a *Ribbon* layer. The band is 564 × 56 px, centred on the centre guide
+below the title.
 
-1. **Tails:** lasso-fill two navy `#1D2B4F` swallowtails behind the band ends. They run from x 278 to 348 on the left and 852 to 922 on the right, 8 px lower than the band, with a 22 px notch.
+1. **Tails:** lasso-fill two navy `#1D2B4F` swallowtails behind the band ends. Each is 70 px long, starts 30 px under the band and sticks out 40 px past its end, sits 8 px lower than the band, and has a 22 px notch.
 2. **Folds:** fill a small triangle in `#121B35` where each tail tucks under the band.
-3. **Band:** marquee (318, 1486) to (882, 1542) and fill it red.
+3. **Band:** marquee the 564 × 56 band (typed corners: From 318, 1486 To 882, 1542) and fill it red.
 4. **Inner rule:** **Select → Shrink** by 5 px and fill with paper. Then shrink by 2 px more and fill red again.
 
 ## Recolor the greeting with Select All
@@ -394,18 +405,17 @@ the **Text** panel, set **Letter spacing** to **9 px**. Wide tracking suits
 small capitals.
 
 To recolor it, click into the text, press [[Cmd+A]] to select every
-character, and pick paper `#F3EAD6`. Press [[Tab]] to commit.
-
-> **Tip:** Committing a text edit renames the layer after its text again, so rename it *Greeting* once more.
+character, and pick paper `#F3EAD6`. Press [[Tab]] to commit. The layer keeps
+the *Greeting* name you gave it.
 
 ## Seat the greeting in the ribbon
 
 ![The cream greeting centered in the red ribbon with equal space above and below inside the inner rule](28-greeting-seated.webp)
 
-Nudge the greeting so the inked caps sit halfway between the inner rules. The
-band is y 1486 – 1542 and the rules end at y 1493 and 1535. The caps are
-about 25 px tall, so they belong at about y 1502 – 1527, with 9 px above and
-8 px below. Center them horizontally on x 600.
+Nudge the greeting so the inked caps sit halfway between the inner rules.
+The caps are about 25 px tall and the space inside the rules is about 42 px,
+so aim for 8–9 px of red above and below them. Center them horizontally on
+the centre guide.
 
 Capitals have no descenders, so centering the inked box also centers them
 optically.
@@ -436,4 +446,4 @@ paper and the inks alike.
 Turn off **View → Show Guides** and choose **File → Quick Export PNG**.
 
 At 1200 × 1600 it prints at 4 × 5.3 in at 300 dpi. For a 5 × 7 in card, start
-at 1500 × 2100 and scale every coordinate by 1.25.
+at 1500 × 2100 and scale every size, offset and distance by 1.25.

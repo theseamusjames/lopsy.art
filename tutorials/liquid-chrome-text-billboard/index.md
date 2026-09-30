@@ -2,6 +2,7 @@
 title: Make a Liquid Chrome Text Billboard
 description: Build a liquid-metal billboard in Lopsy with dripping chrome type, a mirror-floor reflection, a molten chrome sphere, xenon light streaks and film grain.
 published: 2026-09-25 22:15
+updated: 2026-09-30
 level: Intermediate
 duration: 50
 tags: liquid metal, chrome, text effects, layer effects, gradients, liquify, billboard, poster design
@@ -41,11 +42,13 @@ down to the bottom edge. Holding the key snaps the angle to vertical.
 
 ## Add ruler guides
 
-![The same sky with thin blue guide lines at x 80 and x 1440 and at y 60 and y 330](02-ruler-guides.webp)
+![The same sky with thin blue margin guides near the left and right edges, one near the top and one on the violet horizon](02-ruler-guides.webp)
 
-Click the top ruler above x = `80` and x = `1440` to drop two vertical guides,
-one for each margin. Click the left ruler at y = `60` and y = `330` for two
-horizontal guides. The 330 guide is the horizon, where the headline will stand.
+Click the top ruler about 80 px in from the left edge and about 60 px in
+from the right edge to drop two vertical margin guides. On the left ruler,
+click about 60 px down for the top margin, and again at about 330, right
+under the bright violet band. That lower guide is the horizon, where the
+headline will stand.
 
 ## Draw the xenon streak cores
 
@@ -56,14 +59,16 @@ Click **Add Layer** and name it `Xenon Streaks`. Pick the **Brush** and set
 `#EAF6FF`.
 
 To draw a straight streak, click its start point, then [[Shift]]-click its end
-point:
+point. Hold [[Cmd]] too and the line snaps level. Draw three pale streaks at
+different heights, each running off one edge of the canvas:
 
-- (360, 150) to (1500, 150)
-- (0, 300) to (1120, 300)
-- (0, 250) to (640, 250)
+- a long one across the upper sky, from about a quarter of the way in to the
+  right edge
+- one from the left edge across most of the canvas, just above the horizon
+- a shorter one from the left edge, a little higher, ending before the middle
 
 Change the foreground to `#9B5CFF`, set Size to `6`, and draw one violet streak
-from (860, 95) to (1500, 95).
+near the top, from a little past the middle to the right edge.
 
 ## Blur and glow the streaks
 
@@ -81,18 +86,18 @@ Open the layer's effects (the sparkle button on the `Xenon Streaks` row). Set
 ![XENON over DRIFT in white Rubik Mono One, both lines the same width, sitting on the horizon guide](05-headline-lockup.webp)
 
 Pick the **Text** tool. Choose the **Rubik Mono One** font, set **Size** to
-`195` and the color to white. Click near the top left, type `XENON`, and click
-the check mark to commit.
+`195` and the color to white. Click near the top left, type `XENON`, and press
+[[Tab]] to commit.
 
 Click the `Xenon Streaks` row before you set up the second line. If a text
 layer is active when you change the size, Lopsy restyles *that* layer. Set Size
 to `155`, click an empty spot on the right, type `DRIFT` and commit.
 
 Open the **Text** panel and set **Letter spacing** to `40.5`. DRIFT now matches
-XENON's width, about 803 px. Switch to the **Move** tool, drag DRIFT under
-XENON, and use the arrow keys to line them up. Both left edges go on the
-x = 80 guide, XENON's letter tops at y = 70, and DRIFT's baseline on the 330
-horizon guide.
+XENON's width. Switch to the **Move** tool, drag DRIFT under XENON, and use the
+arrow keys to line them up. Both left edges go on the left margin guide,
+XENON's letter tops sit just below the top guide, and DRIFT's baseline rests
+on the horizon guide.
 
 ## Select the letters with the Magic Wand
 
@@ -118,9 +123,10 @@ ramp:
 6. `#F3EAFF` at 84%
 7. `#A898E0` at 100%
 
-Hold [[Cmd]] and drag from the top of XENON (y = 70) to its baseline
-(y = 210). Repeat for DRIFT: rasterize it, Magic Wand one letter, and drag from
-y = 222 to y = 330, so it gets its own sweep. Press [[Cmd+D]] when you're done.
+Hold [[Cmd]] and drag straight down from the top of XENON's letters to their
+baseline. Repeat for DRIFT: rasterize it, Magic Wand one letter, and drag from
+the top of its letters to the horizon guide, so it gets its own sweep. Press
+[[Cmd+D]] when you're done.
 
 ## Melt the bottoms into drips
 
@@ -130,19 +136,20 @@ Select the `DRIFT` layer and choose **Layer → Merge Down**, then rename the
 result `Chrome`. Open **Filter → Liquify…**, keep **Push Forward**, and set
 **Brush Size** `30` and **Pressure** `100%`.
 
-Start about 30 px below a stem and drag straight up into the letter. Do this
-under each stem of DRIFT (x ≈ 112, 292, 470, 628 and 842), in three passes that
-each start a little lower. Then use a 20 px brush to add a few shorter drips.
-If the preview dents the letter instead of stretching it, drag the other way.
-Click **Apply**.
+Press just inside the bottom of a stem and drag straight down about 30 px.
+Push Forward moves the pixels along with the drag, so the chrome stretches
+into a drip. Do this under each stem of DRIFT, then go over each drip two or
+three more times, starting a little lower each pass, to stretch it longer.
+Switch to a 20 px brush to add a few shorter drips, and click **Apply**.
 
 ## Add a 3D extrusion
 
 ![The chrome headline now has a deep blue offset extrusion with a cyan outline and a blue glow behind it](09-extrude-layer-effects.webp)
 
-With the **Move** tool active, click **Duplicate Layer**. The copy is offset
-10 px, so select it and press [[←]] and [[↑]] ten times each to put it back.
-Rename the copy `Chrome Face` and the original `Extrude`.
+With the **Move** tool active, click **Duplicate Layer**. The copy lands 10 px
+right and down, so select it and press [[Shift]]+[[←]] and [[Shift]]+[[↑]] once
+each (Shift nudges 10 px) to put it back. Rename the copy `Chrome Face` and the
+original `Extrude`.
 
 Select `Extrude` and nudge it 6 px right and 6 px down. In its effects, turn on
 these three:
@@ -169,8 +176,8 @@ Nudge the copy back 10 px up and left, and rename it `Chrome Face`. Rename the
 original underneath `Reflection` and turn off its Inner Glow.
 
 On `Reflection`, choose **Filter → Motion Blur…** with **Angle** `90` and
-**Distance** `24`. Blur it now, while it's still inside the canvas. Then choose
-**Image → Flip Vertical**.
+**Distance** `24`, then choose **Image → Flip Vertical**. A vertical blur
+smears the letters the way a wet floor does.
 
 ## Drop the reflection onto the floor
 
@@ -185,14 +192,20 @@ gives you a glossy floor.
 
 ![A glowing blue disc at the top right and a circular marquee around it on a new layer](13-sphere-halo-marquee.webp)
 
-Add a layer called `Sphere Halo` above `Chrome Face`. Drag an **Elliptical
-Marquee** from (1262, 62) to (1408, 208), set the foreground to `#4FB4FF` and
-choose **Edit → Fill**. Press [[Cmd+D]], then give it an **Outer Glow** in
-`#3A8BFF` with Size `34` and Opacity `80`.
+Add a layer called `Sphere Halo` above `Chrome Face`. With the **Elliptical
+Marquee**, [[Cmd]]-drag a circle about 146 px across in the top-right corner,
+just inside the right margin guide and level with XENON. Set the foreground to
+`#4FB4FF` and choose **Edit → Fill**. Press [[Cmd+D]], then give it an **Outer
+Glow** in `#3A8BFF` with Size `34` and Opacity `80`.
 
 Click **New Group** and name it `Mercury`. Click **Add Layer** to make a
-`Sphere` layer inside it. Draw a circle marquee from (1260, 60) to
-(1410, 210).
+`Sphere` layer inside it. Draw a circle marquee about 150 px across on the same
+centre, 2 px bigger all round than the halo.
+
+> **Tip:** For two circles that share a centre exactly, click with the
+> Elliptical Marquee while nothing is selected and type the corners: **From
+> 1262, 62 To 1408, 208** for the halo and **From 1260, 60 To 1410, 210** for
+> the sphere.
 
 ## Shade the sphere in grayscale
 
@@ -203,7 +216,7 @@ Build a gray gradient with these stops: `#F2F2F2` at 0%, `#9A9A9A` at 42%,
 drag from the top of the circle to the bottom.
 
 Switch to the **Brush** and set **Size** `44`, **Hardness** `0` and a white
-foreground. Click once at about (1300, 98) for the highlight. Press [[Cmd+D]]
+foreground. Click once on the upper left of the sphere for the highlight. Press [[Cmd+D]]
 and run **Filter → Gaussian Blur…** at radius `2` to soften the edge.
 
 ## Turn it into chrome with a Gradient Map
@@ -225,7 +238,8 @@ The group maps every gray inside it to this palette. Anything you paint in
 `Mercury` from now on comes out as chrome.
 
 > **Tip:** Keep the glow on `Sphere Halo`, outside the group. Layer effects
-> inside a group with adjustments don't show up.
+> inside an adjusted group are adjusted too, so the Gradient Map would remap
+> the blue glow along with the sphere.
 
 ## Swirl the sphere into liquid
 
@@ -242,11 +256,11 @@ Click **Apply**.
 
 Draw an elliptical marquee just around the sphere, then press [[Cmd+C]] and
 [[Cmd+V]]. The pasted layer lands inside `Mercury`. With the Move tool, drag
-the bottom-right corner handle toward the top left until the copy is about
-38 px wide.
+the bottom-right corner handle toward the top left, holding [[Cmd]] to keep it
+round, until the copy is about 38 px wide.
 
-Press [[Cmd+D]] to bake the scale in before you move it. If you drag inside the
-box first, the scale is thrown away.
+Press [[Cmd+D]] to commit the scale before you rotate or move the droplet.
+Finishing each transform before you start the next keeps them predictable.
 
 ## Rotate the droplet
 
@@ -261,8 +275,8 @@ stamped copy. Press [[Cmd+D]].
 
 ![The small chrome droplet sitting on the horizon line right after the T of DRIFT](19-droplet-full-stop.webp)
 
-Draw a marquee around the droplet and drag it to the end of DRIFT, so it sits
-on the baseline at about (902–940, 292–330). Press [[Cmd+D]]. It works as a
+Draw a marquee around the droplet and drag it to just after the T of DRIFT,
+with its bottom resting on the horizon guide. Press [[Cmd+D]]. It works as a
 full stop and echoes the big sphere.
 
 ## Set the event details
@@ -278,8 +292,9 @@ empty space:
   spacing `0`
 - `THE NIGHT CIRCUIT`: **Michroma**, `25`, `#EEF6FF`, letter spacing `2`
 
-Nudge all three lines by the same amount, so the widest one ends on the
-x = 1440 guide and the URL sits just above the bottom edge.
+[[Cmd]]-click all three rows in the Layers panel and move them together, so
+the widest line ends on the right margin guide and the URL sits just above the
+bottom edge.
 
 ## Build a soft vignette gradient
 
@@ -294,8 +309,8 @@ and 60% with the opacity bar at **0**, and 100% with the opacity bar at about
 
 ![The billboard with softly darkened corners and edges, drawing the eye to the headline](22-radial-vignette.webp)
 
-Drag from the center of the canvas (750, 250) out past the right edge to
-(1550, 250). The fade starts well inside the frame, so no hard ellipse edge
+Drag from the center of the canvas straight out to just past the right
+edge. The fade starts well inside the frame, so no hard ellipse edge
 shows. Set the layer's opacity to `65%` so the event text stays readable.
 
 ## Add film grain

@@ -2,7 +2,7 @@
 title: Design a Technical Illustration Christmas Card
 description: Draw an exploded isometric gingerbread house in Lopsy, as a vintage assembly drawing with balloons, an X-ray detail view, a parts list and a title block.
 published: 2026-09-29 23:30
-updated: 2026-09-29
+updated: 2026-09-30
 level: Advanced
 duration: 120
 tags: christmas card, holiday card, technical illustration, isometric, exploded view, greeting card, transforms, pattern fill, typography, groups
@@ -53,8 +53,10 @@ Select **Background**, set the foreground to `#EFE6D0` and choose **Edit → Fil
 
 Rename **Layer 1** to `Sheet Border` and set the foreground to ink `#2A1C12`. Each rule is a filled marquee with its middle deleted:
 
-1. Marquee (36, 36) → (2064, 1464), **Edit → Fill**, then **Select → Shrink…** by 3 and press [[Delete]]. That leaves a 3 px outer rule.
-2. Marquee (60, 60) → (2040, 1440), **Fill**, **Shrink…** by 6 and [[Delete]]. That leaves a 6 px inner frame.
+1. With the **Rectangular Marquee**, drag a rectangle over almost the whole sheet, leaving a margin of about 36 px on every side. Choose **Edit → Fill**, then **Select → Shrink…** by 3 and press [[Delete]]. That leaves a 3 px outer rule.
+2. Drag a second rectangle about 24 px inside the first (roughly 60 px in from the edges). **Fill**, **Shrink…** by 6 and [[Delete]]. That leaves a 6 px inner frame.
+
+> **Tip:** For rules that sit exactly parallel, press [[Cmd+D]] so nothing is selected, then click once with the marquee (don't drag). A dialog opens where you can type the corners: **From** 36, 36 **To** 2064, 1464 for the outer rule, and 60, 60 to 2040, 1440 for the inner one.
 
 ## Draw one tile of engineering grid
 
@@ -67,11 +69,13 @@ Add a layer called `Grid` above Background and press [[Cmd+1]] to zoom to 100%, 
 
 Marquee exactly the 150 × 150 square and choose **Edit → Define Pattern**. Then press [[Delete]] to clear the tile.
 
+> **Tip:** Precise little marquees are easier to type than to drag. With nothing selected, a single click with the Rectangular Marquee opens a dialog with **From X / From Y / To X / To Y** fields.
+
 ## Tile the grid across the sheet
 
 ![The Pattern Fill dialog with the 150 by 150 grid pattern selected and Preview on, showing grid lines filling the area inside the border](03-grid-pattern-fill.webp)
 
-Press [[Cmd+0]] to fit the view. Marquee the inside of the frame, from (66, 66) to (2034, 1434), and choose **Edit → Fill with Pattern…**. Pick the grid thumbnail and tick **Preview** to check it, then click **Apply**.
+Press [[Cmd+0]] to fit the view. Marquee the area just inside the thick frame and choose **Edit → Fill with Pattern…**. Pick the grid thumbnail and tick **Preview** to check it, then click **Apply**.
 
 To finish the grid:
 
@@ -85,9 +89,11 @@ To finish the grid:
 
 Isometric drawing only uses three directions. Verticals stay vertical, and the other two axes slope **30°** up to the left and up to the right. The board is a flat slab, so draw it straight in isometric with the **Lasso** ([[L]]) and **Edit → Fill**:
 
-- The top face is a rhombus whose edges slope at 30°. This board's corners are (631, 635), (1108, 910), (675, 1160) and (198, 885).
-- Under the front edges go two thin parallelograms in red `#B8322C` and a darker `#8F2320`, each 18 px deep.
+- The top face is a rhombus in white `#FBF8F1` whose edges all slope at 30°. Its left point sits a little inside the left border, its right point just past the middle of the sheet, its top point about 40% of the way down and its bottom point about three-quarters of the way down.
+- Under the two front edges go thin parallelograms in red `#B8322C` and a darker `#8F2320`, each 18 px deep.
 - Short slanted white quads along those edges make the candy stripes.
+
+The grid paper makes the angle easy to judge. Each major square is 150 px, and a 30° line drops about one major square for every 1¾ squares across.
 
 The trees are three-point triangles in green `#3D7A4A` with white chevrons for snow. The stepping stones are ellipse-marquee fills in chocolate `#6B3A1E`.
 
@@ -104,18 +110,17 @@ Add a layer called `Side Wall`. Don't draw it in perspective. Draw it **straight
 - a row of white piping dots down each edge
 - a wavy white snow skirt along the bottom
 
-Everything is marquee, ellipse and lasso fills. This wall sits in the rectangle (373, 706) → (795, 947).
+Everything is marquee, ellipse and lasso fills. Draw it roughly where the wall will stand, over the back-left half of the board, so the distort in the next step only has to bend it.
 
 ## Distort the elevation onto its isometric face
 
 ![The side wall being distorted, with the transform box bent into a parallelogram whose top and bottom edges slope down to the right at 30 degrees](06-distort-side-wall.webp)
 
-Marquee the whole elevation, switch to the **Move** tool ([[V]]) and click **Distort** in the options bar. In Distort mode, each corner handle moves on its own, so drag the four corners onto the face:
+Marquee the whole elevation, switch to the **Move** tool ([[V]]) and click **Distort** in the options bar. In Distort mode each corner handle moves on its own:
 
-- top-left (373, 706) → **(401, 601)**
-- top-right (795, 706) → **(766, 812)**
-- bottom-right (795, 947) → **(766, 1053)**
-- bottom-left (373, 947) → **(401, 842)**
+1. Drag the two left corners straight up about 105 px, and pull them in about 30 px.
+2. Drag the two right corners straight down by the same amount, and pull them in about 30 px too. The narrower face is the foreshortening.
+3. Keep both sides vertical. The top and bottom edges should now slope down to the right at 30°, parallel to the board's front-left edge.
 
 The windows, shutters and doorway all come along in correct isometric. Press [[Cmd+D]] to commit.
 
@@ -125,12 +130,10 @@ The windows, shutters and doorway all come along in correct isometric. Press [[C
 
 ![The assembled walls: the tan side wall on the left face and a darker pentagon gable wall on the right face with a round attic window, a red piped heart and a large window, plus the wreathed door fitted in the doorway](07-gable-wall-and-door.webp)
 
-The **gable wall** is a pentagon in the darker `#9A5C2C`, 270 wide and 380 tall at the peak. It has a round attic window, a piped red heart and one big window. Draw it flat, then Distort it onto the right-hand face:
+The **gable wall** is a pentagon in the darker `#9A5C2C`, 270 wide and 380 tall at the peak. It has a round attic window, a piped red heart and one big window. Draw it flat to the right of the side wall, then Distort it onto the right-hand face. This face turns the other way:
 
-- (737, 586) → (756, 657)
-- (1019, 586) → (1000, 516)
-- (1019, 982) → (1000, 912)
-- (737, 982) → (756, 1053)
+- drag the two left corners down about 70 px, and the two right corners up by the same amount, so the top and bottom rise to the right at 30°
+- line its bottom-left corner up with the side wall's bottom-right corner, so the two walls meet at the front corner of the house
 
 The **door** is its own layer. Draw it as a brown `#7E4523` arch with plank lines, a green ring wreath with a red bow, and a gold knob. Distort it into the doorway so it can be pulled out later.
 
@@ -149,7 +152,7 @@ Marquee exactly the 28 × 48 tile and choose **Edit → Define Pattern**. Delete
 
 ![The Pattern Fill dialog with the new shingle pattern chosen, previewing rows of fish-scale shingles filling a flat roof rectangle above the house](09-roof-pattern-fill.webp)
 
-Add a layer called `Roof` above the door. Marquee the flat roof panel, (393, 501) → (851, 755), then choose **Edit → Fill with Pattern…** and pick the **28×48** thumbnail. Tick **Preview**, then **Apply**.
+Add a layer called `Roof` above the door. Marquee a flat roof panel about 460 × 255 px in the empty space above the side wall, then choose **Edit → Fill with Pattern…** and pick the **28×48** thumbnail. Tick **Preview**, then **Apply**.
 
 Add the icing on top of the shingles:
 
@@ -162,10 +165,9 @@ Add the icing on top of the shingles:
 
 Marquee the roof and use **Distort** again. The roof slopes back to the ridge, so its face is a steeper parallelogram:
 
-- top-left → **(500, 366)**
-- top-right → **(908, 601)**
-- bottom-right → **(744, 913)**
-- bottom-left → **(337, 678)**
+- Drag the two top corners up and to the right, until the ridge (the top edge) runs parallel to the wall tops and its right end sits on the gable's peak.
+- Drag the two bottom corners down and to the left, until the eave overhangs the side wall a little.
+- The left and right edges should follow the slope of the gable's roof line.
 
 The shingles shrink toward the ridge automatically, which is exactly what they should do.
 
@@ -176,7 +178,7 @@ The shingles shrink toward the ridge automatically, which is exactly what they s
 These pieces are small, so draw them straight in isometric with the lasso:
 
 - **Roof Rake:** a white chevron strip that follows the gable's roof line, with 9 px white scallops underneath.
-- **Gumdrops:** twelve half-domes in red, green and gold, spaced 36 px apart along the ridge, each with a white highlight.
+- **Gumdrops:** twelve half-domes in red, green and gold, evenly spaced along the ridge, each with a white highlight.
 - **Chimney:** two brick faces (`#A8402F` lit, `#86301F` shaded) with pale mortar lines, and a white snow cap on top. Its bottom edge follows the roof slope, so it can sit *on* the roof.
 
 ## Outline every part with a Stroke effect
@@ -203,20 +205,20 @@ Group the layers into sub-assemblies. For each group, click the first layer, [[S
 
 Collapse those three groups. Then click **Base**, [[Shift]]-click **Chimney** and group everything into **House**.
 
-> **Tip:** Collapse sub-groups before [[Shift]]-clicking a range. With a group expanded, the range also picks up its child rows. Group Layers then pulls those children out of their group and leaves it empty, so its adjustments stop applying to them.
+> **Tip:** Always collapse sub-groups before you [[Shift]]-click a range. An expanded group's child rows join the range too, and grouping would pull them out of their sub-assembly.
 
 ## Explode the house with group moves
 
 ![The exploded house: the roof assembly lifted well above the walls, the chimney floating above the roof, the door pulled out in front of the doorway and the board dropped below](14-exploded-view.webp)
 
-Now take the kit apart. Select a group or layer, switch to **Move** and drag. Finish each move with arrow keys ([[Shift]]+arrow moves 10 px) for exact distances:
+Now take the kit apart. Select a group or layer, switch to **Move** and drag. Arrow keys finish each move neatly: each press nudges 1 px, and [[Shift]]+arrow nudges 10 px.
 
-- **Roof Assembly:** up **165 px**
-- **Chimney:** up **370 px** (you'll lift it once more later)
-- **Door:** out along the left isometric axis, **−143, +83**
-- **Base:** down **130 px**
+- **Roof Assembly:** straight up about **165 px**, so there's a clear gap above the walls
+- **Chimney:** straight up about **370 px**, well clear of the roof (you'll lift it once more later)
+- **Door:** out of the doorway, down and to the left along the isometric axis (about 145 px left and 85 px down)
+- **Base:** straight down about **130 px**
 
-Every move of a group carries its children with it. [[Cmd+Z]] and [[Cmd+Shift+Z]] step through the moves cleanly.
+Every move of a group carries its children with it. [[Cmd+Z]] and [[Cmd+Shift+Z]] step through the moves if you want to compare.
 
 ## Draw dashed assembly lines
 
@@ -236,7 +238,7 @@ On the **Board** layer, dash the walls' **footprint** onto the snow in grey `#8A
 
 A detail view blows up one joint in a circle. Here it's an "X-ray" of how the walls are glued.
 
-Make a new group called `Detail A`, add a layer called `Disc`, and draw an elliptical marquee of **radius 180** centred at (1436, 636). Then:
+Make a new group called `Detail A` and add a layer called `Disc`. In the right half of the sheet, about a third of the way down, [[Cmd]]-drag an elliptical marquee **360 px** across (radius 180). The right column of text will line up with its left edge later. Then:
 
 1. Pick the **Gradient** tool and set **Type** to **Radial**. In **Advanced…**, set the stops to `#3E86A6` → `#1D4A63`.
 2. Drag from the centre to the edge.
@@ -248,11 +250,11 @@ Make a new group called `Detail A`, add a layer called `Disc`, and draw an ellip
 
 Section views mark cut material with **45° hatching**:
 
-1. **Section layer:** fill an L of two wall slabs in `#5C97B4`. Clip it to the circle with an ellipse marquee of radius 163, then **Select → Inverse** and [[Delete]].
-2. **Hatch tile:** make a **16 × 16** pattern tile holding three thin white bands along x + y = 0, 16 and 32. Two of them clip the corners, so the lines join seamlessly across tiles.
+1. **Section layer:** fill an L of two wall slabs in `#5C97B4`. Clip it to the circle: [[Cmd]]-drag an ellipse marquee about 17 px inside the disc's edge (radius 163), then **Select → Inverse** and [[Delete]].
+2. **Hatch tile:** make a **16 × 16** pattern tile holding three thin white diagonal bands: one through the middle from bottom-left to top-right, and one clipping each of the other two corners. The corner pieces meet up with the next tile, so the lines join seamlessly.
 3. **Hatch layer:** [[Cmd]]-click the Section thumbnail to select the slabs. On a new `Hatch` layer, use **Fill with Pattern…** with the 16 × 16 tile, then set the layer to **70%**.
-4. **Icing layer:** fill a white circle of radius 34 in the inside corner. [[Cmd]]-click the Section thumbnail again and press [[Delete]]. The walls cut it back to a quarter-round **icing bead**.
-5. **Ring:** add a thin white ring at radius 166.
+4. **Icing layer:** fill a white circle of radius 34 in the inside corner. [[Cmd]]-click the Section thumbnail again, click the `Icing` row so [[Delete]] clears only the selection, and press [[Delete]]. The walls cut it back to a quarter-round **icing bead**.
+5. **Ring:** add a thin white ring just inside the disc's edge (radius about 166).
 
 Label the section in **B612 Mono** 16 px white, each label with a short leader.
 
@@ -276,13 +278,13 @@ The jokes live here too: DRAWN S. CLAUS, CHECKED MRS. CLAUS, SCALE NTS.
 
 ![Close-up of the right column: a red letter-spaced kicker, the two-line serif headline Some Assembly Required., the red handwritten line Merry Christmas! Instructions not included., the X-ray detail and a four-line notes list](19-headline-and-notes.webp)
 
-Every block in the right column shares one left edge at **x 1256**. Nudge each one to it with the arrow keys.
+Every block in the right column shares one left edge, the left edge of the detail circle. Click the top ruler there to drop a guide, then nudge each block to it with the arrow keys.
 
 - **Kicker:** `ASSEMBLY INSTRUCTIONS — MODEL XMAS-26` in **B612 Mono** Bold 19, red, with **Letter spacing 3**.
 - **Headline:** `Some Assembly` / `Required.` in **Old Standard TT** Bold 104 with **Line height 1.02**.
 - **Greeting:** `Merry Christmas! Instructions not included.` in **Architects Daughter** 34, red. It's the drafter's handwriting.
 - **Notes:** B612 Mono 18 at Line height 1.7, beside the detail circle. For example, *4. DO NOT EAT BEFORE 25.12.*
-- **Caption:** `DETAIL A · X-RAY · SCALE 3:1` under the circle. Add **Letter spacing 0.6** so it spans exactly the circle's 360 px width.
+- **Caption:** `DETAIL A · X-RAY · SCALE 3:1` under the circle. Add **Letter spacing 0.6** so it spans the circle's full width.
 
 ## Rebalance the drawing with one multi-select move
 
@@ -291,8 +293,8 @@ Every block in the right column shares one left edge at **x 1256**. Nudge each o
 Step back and check the balance. Here the lifted chimney crowded the ridge, and there was spare room at the bottom of the sheet.
 
 1. Click **House**, then [[Cmd]]-click every other layer of the drawing: Assembly Lines, plus any callout layers you've already added (the screenshot has the balloons, Dimension and the detail marker selected too).
-2. With the Move tool, drag down **45 px**. Every selected layer moves together, and one undo reverts them all.
-3. Expand **House** and lift **Chimney** another **50 px**, so its base clears the gumdrops.
+2. With the Move tool, drag down about **45 px**. Every selected layer moves together, and one undo reverts them all.
+3. Expand **House** and lift **Chimney** another **50 px** or so, so its base clears the gumdrops.
 4. Extend its three dashed drop lines to a dashed footprint on the roof.
 
 ## Call out the parts with balloons
@@ -301,7 +303,9 @@ Step back and check the balance. Here the lifted chimney crowded the ridge, and 
 
 Balloons are **27 px** red rings, made with an ellipse fill, **Shrink** by 3 and [[Delete]]. The numbers are **B612 Mono** Bold 24, centred with arrow nudges.
 
-Keep the leaders consistent. Every leader is a **1.8 px** ink line at exactly **30°**, the isometric angle, and ends in a 4 px dot on the part. Parallel leaders make the sheet look engineered rather than scribbled. Number the balloons in the same order as the parts list.
+> **Tip:** If Shrink leaves the inside of such a small circle looking squared off, delete the middle with a second circle instead: [[Cmd]]-drag a 21 px ellipse marquee centred inside the ring and press [[Delete]].
+
+Keep the leaders consistent. Every leader is a **1.8 px** ink line at the isometric angle, **30°**, and ends in a 4 px dot on the part. With the **Brush**, click the start of a leader, then hold [[Shift]]+[[Cmd]] and click its end to snap the line to 15° steps. Parallel leaders make the sheet look engineered rather than scribbled. Number the balloons in the same order as the parts list.
 
 ## Add a dimension with a rotated label
 
@@ -315,7 +319,7 @@ Run a dimension line parallel to the board's front edge:
 4. Marquee the label, switch to **Move** and drag a rotation handle while holding [[Cmd]]. That snaps the angle to 15° steps, so it lands on exactly **30°**.
 5. Press [[Cmd+D]] and move the label into the gap.
 
-> **Tip:** Rasterize type before transforming it. A Move-tool rotate or distort on live text is lost the next time the text re-renders.
+> **Tip:** Rasterize type before you rotate or distort it. Live text re-renders from its settings, so a later edit would set it straight again.
 
 ## Age the paper and finish
 
@@ -327,6 +331,6 @@ Add a top layer called `Vignette`. Marquee the whole canvas, then pick the **Gra
 - 0% opacity at 0.6
 - 100% opacity at 1
 
-Drag from the centre to beyond a corner. Set the layer to **Multiply** at **35%**. The edges warm up like an old blueprint.
+Drag from the centre of the sheet to beyond a corner. Set the layer to **Multiply** at **35%**. The edges warm up like an old blueprint.
 
 Export with **File → Quick Export PNG** and save the project with **File → Save Project**.

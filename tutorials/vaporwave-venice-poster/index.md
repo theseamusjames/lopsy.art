@@ -2,6 +2,7 @@
 title: Design a Vaporwave Venice Poster
 description: Make a pastel vaporwave poster in Lopsy with a halftone sun, a perspective checkerboard floor, a neon gondola and a retro Windows-style dialog.
 published: 2026-09-26 13:30
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: vaporwave, poster design, perspective transform, pattern fill, halftone, layer effects, text effects, retro
@@ -52,14 +53,16 @@ Click **Done**.
 
 ## Paint the sky and place guides
 
-![A teal-to-peach gradient filling the top of the canvas, with a vertical guide at the center and a horizontal guide at y 1020](02-sky-and-guides.webp)
+![A teal-to-peach gradient filling the top of the canvas, with a vertical guide at the center and a horizontal horizon guide a little less than two-thirds of the way down](02-sky-and-guides.webp)
 
-Drag the gradient straight down from the top edge to **y 1020**. That line
-will be the horizon, and everything below it is peach for now.
+Place the guides first. [[Cmd]]-click the middle of the top ruler to drop a
+vertical guide exactly on the centre line. Then click the left ruler at about
+**1020** for the horizon, a little less than two-thirds of the way down (the
+ruler shows a readout as you hover). You'll line up the sun, the palace and
+the floor against these two guides.
 
-Click the top ruler above x 600 to drop a vertical center guide. Then click
-the left ruler at y 1020 to drop a horizontal horizon guide. You'll line up
-the sun, the palace and the floor against these two guides.
+Drag the gradient straight down from the top edge to the horizon guide.
+Everything below it is peach for now.
 
 ## Render clouds
 
@@ -67,8 +70,8 @@ the sun, the palace and the floor against these two guides.
 
 Click **Add Layer** and name the new layer `Clouds`. Choose
 **Filter → Clouds…**, set **Scale** to `3` and tick **Preview**. Clouds is
-randomized, so if you don't like the pattern, preview it again for a new one.
-Click **Apply**.
+randomized, so if you don't like the pattern, click the circular-arrow
+**Regenerate** button next to Preview for a new one. Click **Apply**.
 
 ## Blend the clouds into the sky
 
@@ -88,25 +91,31 @@ Rectangular-marquee everything below the horizon guide and press
 Add a layer named `Moon`. In the Gradient Editor, set three stops: pale yellow
 `#FFF1B8`, pink `#FF9CC8` at 55 % and hot pink `#FF4F9E`.
 
-With the **Elliptical Marquee**, draw a 540 × 540 circle from (330, 290). The
-Options bar's ratio lock or the guides help keep it round. Drag the gradient
-from the top of the circle to the bottom. Deselect.
+With the **Elliptical Marquee**, [[Cmd]]-drag a 540 px circle centred on the
+centre guide, with its top a little under a fifth of the way down the poster
+and its bottom well above the horizon. Holding [[Cmd]] keeps it perfectly
+round. Drag the gradient from the top of the circle to the bottom. Deselect.
+
+> **Tip:** You'll need this exact circle again for the dots. Click once with
+> the Elliptical Marquee while nothing is selected to type its corners:
+> **From** 330, 290 **To** 870, 830. For the trim circle in the next step but
+> one, use 334, 294 to 866, 826.
 
 Open the effects drawer, enable **Outer Glow** in cream `#FFF4D6`, then set
 **Size** `60`, **Spread** `10` and **Opacity** `70`.
 
 ## Add a halftone fade
 
-![The Halftone dialog with Dot Size 14, Angle 0 and Softness 10, previewing pink dots that grow toward the bottom of the sun](06-halftone-dialog.webp)
+![The Halftone dialog with Dot Size 14, Angle 0 and Softness 4, previewing pink dots that grow toward the bottom of the sun](06-halftone-dialog.webp)
 
 Most vaporwave suns are cut into stripes. This one fades out in halftone dots
 instead.
 
 1. Add a layer named `Moon Dots` and set the gradient to plain white → black.
-2. Re-draw the same circle and drag the gradient from **y 470** to the bottom
-   of the sun, then deselect.
+2. Re-draw the same circle and drag the gradient from about a third of the
+   way down the sun to its bottom edge, then deselect.
 3. Choose **Filter → Halftone…** and set **Dot Size** `14`, **Angle** `0` and
-   **Softness** `10`. Dark areas become big dots and light areas become tiny
+   **Softness** `4`. Dark areas become big dots and light areas become tiny
    ones. Click **Apply**.
 
 ## Recolor and trim the dots
@@ -116,8 +125,8 @@ instead.
 Enable **Color Overlay** on `Moon Dots` in `#E23C93`, so every dot turns a
 deep sunset pink.
 
-Dots near the rim poke out past the circle. Draw a slightly smaller circle
-(about 532 px) over the sun, choose **Select → Inverse** and press
+Dots near the rim poke out past the circle. Draw a circle about 4 px inside
+the sun's edge (about 532 px across), choose **Select → Inverse** and press
 [[Delete]]. The edge is clean again.
 
 ## Make a checkerboard tile
@@ -126,8 +135,8 @@ Dots near the rim poke out past the circle. Draw a slightly smaller circle
 
 Add a temporary layer.
 
-1. Marquee a 100 × 100 square at the top-left corner and **Edit → Fill** it
-   with deep purple `#3A1C71`.
+1. Marquee a 100 × 100 square in the top-left corner of the canvas and
+   **Edit → Fill** it with deep purple `#3A1C71`.
 2. Fill the top-left and bottom-right 50 px quarters with pink `#FF6EC7`.
 3. Marquee the whole 100 × 100 tile and choose **Edit → Define Pattern**.
 
@@ -137,14 +146,15 @@ Delete the temporary layer.
 
 ![The checkerboard floor with the Perspective transform active, its bottom corners pulled far outside the canvas so the tiles converge toward the horizon](09-perspective-floor.webp)
 
-Click the `Moon Dots` row, then add a layer named `Floor`. Marquee from the
-horizon to the bottom of the canvas (0, 1020 to 1200, 1600). Choose
+Click the `Moon Dots` row, then add a layer named `Floor`. Marquee the whole
+width of the canvas from the horizon guide down to the bottom edge. Choose
 **Edit → Fill with Pattern…**, pick the checker tile and click **Apply**.
 
 Zoom out with [[Cmd+-]] a couple of times so there's room around the canvas.
 Keep the marquee, switch to the **Move** tool and click **Perspective** in the
-Options bar. Drag the **bottom-left corner** about 1100 px out to the left. The
-bottom-right corner mirrors it, so the tiles now converge toward the horizon.
+Options bar. Drag the **bottom-left corner** far out to the left, almost a
+full canvas width past the edge. The bottom-right corner mirrors it, so the
+tiles now converge toward the horizon.
 
 ## Commit the floor
 
@@ -162,8 +172,8 @@ Add a layer named `Haze`. Set two gradient stops, both pale pink `#F8D8F2`.
 Select the right-hand stop and drag the **Opacity** bar under the colour
 picker all the way to transparent.
 
-Marquee the floor area, then drag the gradient from the horizon down to about
-**y 1250**. The far rows now dissolve into mist. Because the haze fades out,
+Marquee the floor area, then drag the gradient from the horizon down about
+230 px, about two-fifths of the way to the bottom edge. The far rows now dissolve into mist. Because the haze fades out,
 there's no hard seam between it and the floor.
 
 ## Block in the palace
@@ -172,12 +182,12 @@ there's no hard seam between it and the floor.
 
 Click `Moon Dots` and add two layers: `Towers`, then `Palace` above it.
 
-1. On `Palace`, marquee a band from y 800 down to the horizon and fill it with
-   `#F3E9FF`.
+1. On `Palace`, marquee a full-width band about 220 px tall sitting on the
+   horizon and fill it with `#F3E9FF`.
 2. Crenellate the roofline with the **Lasso**: make one small triangle every
-   60 px along y 800 and **Edit → Fill** each one.
-3. Fill a band from y 805 to 890 with pink `#FBD0E8`. That's the Doge's Palace
-   pink upper wall.
+   60 px along the band's top edge and **Edit → Fill** each one.
+3. Fill a band about 85 px tall with pink `#FBD0E8`, starting just under the
+   top edge. That's the Doge's Palace pink upper wall.
 
 ## Cut the arches
 
@@ -190,8 +200,8 @@ Each arch is a rectangle plus a circle on top, filled with the same colour:
 - **Upper loggia:** small arches every 50 px, 26 px wide.
 - **Lower arcade:** large 58 px arches every 86 px in deeper `#7E5DC4`.
 
-Finish with a white 8 px cornice at y 889 and a thin `#7A4FB0` line on the
-horizon. The line gives the palace a clean base.
+Finish with a white 8 px cornice along the bottom of the pink wall and a thin
+`#7A4FB0` line on the horizon. The line gives the palace a clean base.
 
 ## Add domes and the campanile
 
@@ -202,7 +212,8 @@ On `Towers`, which sits behind the palace:
 - **Domes:** three teal `#3FC6C8` domes made from elliptical fills, with a
   small lasso triangle on each for the onion point. Add gold `#FFE08A`
   finials: a thin rectangle plus a small circle.
-- **Campanile:** a pink `#F48CC0` shaft at x 995–1091 with two darker
+- **Campanile:** a pink `#F48CC0` shaft, about 96 px wide, near the right
+  edge of the poster, with two darker
   pilaster strips, a lavender belfry with three arches, a lasso-filled teal
   spire, and a gold angel at the tip.
 
@@ -216,8 +227,7 @@ Click `Towers`, [[Shift]]-click `Palace` and choose **Layer → Group Layers**.
 Rename the group `Venice`.
 
 To try it out, click the group and drag with the **Move** tool, and the whole
-skyline moves together. Press [[Cmd+Z]] to put it back. Undo and redo restore
-it pixel-for-pixel.
+skyline moves together. Press [[Cmd+Z]] to put it back.
 
 ## Draw the gondola hull
 
@@ -293,8 +303,8 @@ Venice's striped *pali* poles are just another pattern:
    `#2FB8C0` on the top half. **Define Pattern**, then delete the layer.
 2. Add a `Poles` layer. Marquee a 50 px-wide column at the bottom left and
    **Fill with Pattern…** with it.
-3. Add two thinner poles on the right at **Scale** `50`, running down to about
-   y 1420.
+3. Add two thinner poles on the right at **Scale** `50`, running from just
+   above the horizon to about 400 px below it.
 4. Cap each pole with a teal ellipse. Put soft feathered Multiply shadows at
    the base of the right-hand poles.
 
@@ -310,13 +320,15 @@ stay upright. Press [[Cmd+D]] to commit.
 
 ![Pink Gondola typed in large pink Shrikhand across the top of the sky](23-shrikhand-headline.webp)
 
-Add an empty layer, drag it to the top of the Layers panel, and click it. New
-text lands above the active layer, so this puts the type above everything
-else.
+Add an empty layer called `Type Anchor`, drag it to the top of the Layers
+panel, and click it. New text lands above the active layer, so this puts the
+type above everything else. It also means changing the text settings never
+restyles a text layer you've already committed.
 
 Pick the **Text** tool, set **Size** to `150`, choose **Shrikhand** in the
 font browser and set the colour to `#FF3FA4`. Click near the top-left of the
-sky and type `Pink Gondola`. Press [[Tab]] to commit.
+sky and type `Pink Gondola`. Press [[Tab]] to commit, then centre it with the
+Move tool's **Align center horizontally**.
 
 ## Style the headline
 
@@ -337,7 +349,7 @@ disappear into it.
 
 Vaporwave loves full-width characters. Copy
 `ＶＥＮＥＺＩＡ　・　ＮＩＧＨＴ　ＣＲＵＩＳＥ　・　１９８９` to your clipboard.
-Click the anchor layer, set **Size** `26`, choose **DotGothic16** and white,
+Click `Type Anchor`, set **Size** `26`, choose **DotGothic16** and white,
 click in empty sky, then paste with [[Cmd+V]] and press [[Tab]].
 
 Give it an outside `#3A1C71` **Stroke** of `3`, so the thin letters stay
@@ -356,8 +368,10 @@ the type. Enable **Outer Glow** in white, **Size** `18`, **Opacity** `90`.
 
 ![A lavender dialog window with bevelled edges, a gradient title bar, minimize, maximize and close buttons, a pink progress bar and an OK button](27-window-frame.webp)
 
-Click the anchor layer and add a `Window` layer. Marquee a 520 × 175 box at
-(590, 1400) and fill it with lavender `#DCD3F5`. Fake the bevel with 3 px
+Click `Type Anchor` and add a `Window` layer. Marquee a 520 × 175 box in the
+lower right of the poster, starting just left of the centre guide and
+finishing about 25 px above the bottom edge. Fill it with lavender
+`#DCD3F5`. Fake the bevel with 3 px
 fills: white on the top and left edges, dark `#4B3A86` on the bottom and
 right.
 
@@ -388,7 +402,8 @@ until everything is flattened into `Window`.
 
 ![The merged dialog window selected with a marquee and rotated two degrees counter-clockwise](29-rotate-window.webp)
 
-Marquee the window and rotate it about 2° counter-clockwise. A slight tilt
+Marquee the window, switch to **Move**, and drag just outside a corner handle
+to rotate it about 2° counter-clockwise. A slight tilt
 makes it look dropped onto the poster, not printed on it. Press [[Cmd+D]].
 
 ## Drop a hard shadow under the dialog
@@ -405,7 +420,7 @@ headline, which ties the two together.
 
 Click the headline row and add a `Scanlines` layer on top.
 
-1. Fill an 8 × 2 strip at the top-left corner with `#1B0E3A`.
+1. Fill an 8 × 2 strip in the top-left corner of the canvas with `#1B0E3A`.
 2. Marquee 8 × 6 and **Define Pattern**. The transparent rows are part of the
    tile.
 3. Deselect and **Fill with Pattern…** the whole layer.

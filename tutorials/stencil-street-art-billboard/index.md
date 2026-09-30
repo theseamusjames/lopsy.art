@@ -2,6 +2,7 @@
 title: Make a Stencil Street Art Billboard
 description: Paint a Banksy-style stencil billboard in Lopsy with a cinder-block wall, spray-paint overspray, a bandit koala, dripping stencil type and paper tape.
 published: 2026-09-26 09:30
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: stencil, street art, graffiti, spray paint, billboard, text effects, layer effects, poster design
@@ -59,23 +60,31 @@ is what the concrete looks like up close.
 ![A 200 by 200 grey tile in the top-left corner with dark mortar lines forming two courses of offset blocks](04-cinder-block-tile.webp)
 
 Double-click `Layer 1` and rename it `Blocks`. With the **Rectangular
-Marquee**, select (0, 0) to (200, 200) and fill it with `#808080`. Switch
-the foreground to `#4C4942` and fill four thin selections for the mortar:
+Marquee**, select a 200 × 200 square in the top-left corner of the canvas
+and fill it with `#808080`. Switch the foreground to `#4C4942` and fill four
+thin selections, each 6 px thick, for the mortar:
 
-1. (0, 0), 200 × 6, the top joint
-2. (0, 100), 200 × 6, the middle joint
-3. (0, 0), 6 × 100, the vertical joint in the top course
-4. (100, 100), 6 × 100, the vertical joint in the bottom course, offset by half a block
+1. The top joint, across the full width of the tile along its top edge.
+2. The middle joint, across the full width, starting exactly halfway down.
+3. The vertical joint in the top course, down the tile's left edge to the middle joint.
+4. The vertical joint in the bottom course, down the middle of the bottom half, so it's offset by half a block.
 
 Select the whole 200 × 200 tile again and choose **Edit → Define Pattern**.
+
+> **Tip:** A repeating tile has to be exact, so type the corners instead of
+> dragging. Press [[Cmd+D]], then click once with the Rectangular Marquee
+> and enter **From** and **To**: `0, 0` to `200, 200` for the tile, then
+> `0, 0` to `200, 6`, `0, 100` to `200, 106`, `0, 0` to `6, 100` and
+> `100, 100` to `106, 200` for the four joints.
 
 ## Tile the wall with Fill with Pattern
 
 ![The Pattern Fill dialog at Scale 80 previewing a regular running-bond block wall across the whole canvas](05-block-pattern-fill.webp)
 
-Press [[Cmd+D]] to deselect, then fill the whole `Blocks` layer with
-`#808080`. Choose **Edit → Fill with Pattern…**, pick your new pattern and
-set **Scale** `80`. Leave both stagger sliders and both offset sliders at `0` and click **Apply**.
+Press [[Cmd+D]] to deselect, so the pattern covers the whole `Blocks`
+layer. Choose **Edit → Fill with Pattern…**, pick your new pattern and set
+**Scale** `80`. Leave both stagger sliders and both offset sliders at `0` and
+click **Apply**.
 
 > **Tip:** Column Stagger staggers each *column* of tiles vertically. Leave it
 > at 0 here, because the stagger is already drawn into the tile.
@@ -103,8 +112,8 @@ layer's opacity to `28%` for uneven, weathered patches.
 
 Add a layer called `Streaks`. Pick the **Brush** and set **Size** `16`,
 **Hardness** `40` and **Opacity** `70`, with the color `#3B3833`. Drag eight
-short vertical strokes down from the top edge, 90–270 px long, at x ≈ 60,
-150, 610, 830, 1090, 1240, 1450 and 1560.
+short vertical strokes down from the top edge, 90–270 px long. Space them
+unevenly: a pair near each end of the wall and the rest scattered between.
 
 Choose **Filter → Motion Blur…** with **Angle** `90` and **Distance** `60`.
 Set the layer to **Multiply** at `40%` to get soft rain stains.
@@ -113,8 +122,12 @@ Set the layer to **Multiply** at `40%` to get soft rain stains.
 
 ![A flat safety-orange circle filled inside an elliptical marquee on the left half of the wall](09-orange-spray-disc.webp)
 
-Add a layer called `Disc`. With the **Elliptical Marquee**, select a
-600 × 600 circle starting at (140, 30), then fill it with `#FF5B1F`.
+Add a layer called `Disc`. With the **Elliptical Marquee**, [[Cmd]]-drag a
+600 px circle on the left half of the wall, starting about 140 px in from the
+left edge and 30 px down from the top, then fill it with `#FF5B1F`.
+
+> **Tip:** Click once with the Elliptical Marquee instead of dragging to type
+> exact corners: `140, 30` to `740, 630`.
 
 ## Add overspray with the Spray tool
 
@@ -125,13 +138,12 @@ layer called `Overspray` and choose **Select → Inverse**, so you can only
 paint *outside* the circle.
 
 Pick the **Spray** tool and set **Size** `70`, **Density** `45`,
-**Opacity** `55` and **Softness** `60`. Drag two laps around the disc, just
-outside its edge. Move in big steps of about 30 px, because the Spray tool
-skips very short drag segments. Start each lap at the bottom, where the
-koala will cover the denser cloud you get at pointer-down.
+**Opacity** `55` and **Softness** `60`. Drag two steady laps around the disc,
+just outside its edge. Paint builds up wherever the nozzle lingers, so keep
+moving, and start each lap at the bottom, where the koala will cover it.
 
-Deselect, click the `Disc` row and add **Add Noise** at `10`, **Mono**, for
-spray-can grain.
+Deselect, click the `Disc` row and run **Filter → Add Noise…** at
+**Amount** `10`, **Mono**, for spray-can grain.
 
 ## Cut the koala silhouette in a group
 
@@ -142,13 +154,14 @@ add while inside the group stay inside it. Build four layers from the bottom
 up with the **Lasso** and **Edit → Fill**:
 
 - `Body`: a wide ink trapezoid for the shoulders that runs off the bottom
-  edge, plus a jagged bone chest patch centered at (440, 640)
-- `Ears`: two jagged mid-grey circles about 250 px across, centered at
-  (237, 129) and (656, 129)
+  edge, plus a jagged bone chest patch on the bottom edge, centered under the disc
+- `Ears`: two jagged mid-grey circles about 250 px across, high on the left
+  and right of the disc, each reaching out past its edge
 - `Ear Fluff`: smaller jagged bone circles inside each ear
-- `Head`: a jagged bone oval about 435 × 350 centered at (440, 289)
+- `Head`: a jagged bone oval about 435 × 350, centered across the disc and a
+  little above its middle, overlapping the inner edges of the ears
 
-Click short, uneven zig-zags into the lasso edges so they read as cut fur
+Drag short, uneven zig-zags into the lasso edges so they read as cut fur
 rather than smooth vector curves.
 
 ## Shade the face with the Magic Wand
@@ -179,12 +192,13 @@ together. Lasso two thin slivers across the mask tails and press
 
 ![A bone eye with an ink pupil pasted and dragged to the right, with its transform box still active](14-copy-paste-eye.webp)
 
-Add a layer called `Eyes`. Fill a 74 × 46 ellipse in bone at (339, 231).
-Then fill a 28 px ink pupil against its right side, so he's giving shifty
-side-eye.
+Add a layer called `Eyes`. Fill a bone ellipse about 74 × 46 px on the left
+of the head, inside the mask band. Then fill a 28 px ink pupil against its
+right side, so he's giving shifty side-eye.
 
 Marquee around the eye, press [[Cmd+C]] then [[Cmd+V]]. Use the **Move**
-tool to drag the pasted copy 133 px to the right. Deselect and choose
+tool to drag the pasted copy straight to the right, about 130 px, so the two
+eyes sit evenly on either side of the head's centre. Deselect and choose
 **Layer → Merge Down** to fold it back into `Eyes`.
 
 ## Add the nose and smirk
@@ -192,7 +206,8 @@ tool to drag the pasted copy 133 px to the right. Deselect and choose
 ![A large glossy ink nose with a small bone highlight and a thin ink smirk below it](15-koala-nose.webp)
 
 Add a layer called `Nose`. Lasso-fill a big rounded ink shape about
-115 × 130, centered at (440, 362), slightly wider at the top. Koala noses
+115 × 130, centered between the eyes and just below them, slightly wider at
+the top. Koala noses
 are huge. Add a small bone crescent at its upper left as a highlight, and a
 thin ink smirk curving up to the right below it.
 
@@ -201,9 +216,10 @@ thin ink smirk curving up to the right below it.
 ![A black arm raised to the right and a small upright green spray can with a bone label band and black cap](16-arm-and-spray-can.webp)
 
 Add an `Arm` layer and lasso-fill an ink arm that rises from the right
-shoulder toward (790, 380).
+shoulder and reaches out just past the disc's right edge.
 
-Add a `Can` layer and draw the can upright at (700, 150) from marquee fills:
+Add a `Can` layer and draw the can upright near the disc's upper right, from
+marquee fills:
 
 - a 64 × 150 body in green `#2F6F55`
 - a 10 px highlight stripe in `#6FB893`
@@ -246,24 +262,27 @@ of the can. Fill three small ink triangles across the top of it for claws.
 Click the `Overspray` row so the type lands outside the group. Pick the
 **Text** tool and set **Stardos Stencil**, **Bold**, **Size** `195`.
 
-Type `KOALA` first, in orange, clicking at (930, 200). Then click the
-`Overspray` row again and type `ROGUE` in ink, clicking at (930, 5).
+Type `KOALA` first, in orange, clicking about 190 px to the right of the
+disc, a little under a third of the way down. Then click the `Overspray` row
+again and type `ROGUE` in ink, clicking at the same left edge, right at the
+top of the wall.
 
 > **Tip:** Create the lower line first. A text layer's click area reaches
-> well below its glyphs, so clicking just under `ROGUE` would edit it
-> instead of starting new text.
+> below its glyphs, so clicking just under `ROGUE` would edit it instead of
+> starting new text.
 
 ## Stretch the letters taller
 
 ![ROGUE rasterized inside a marquee whose bottom edge handle has been dragged down, making the letters 20 percent taller](21-stretch-title-vertically.webp)
 
 Real stencil lettering is often condensed. Click `ROGUE` and click
-**Rasterize Layer**. Marquee tightly around the word and drag the
-**bottom-middle** handle down 28 px, about 120% taller. Press [[Cmd+D]],
-then Move-drag the word so its left edge sits at x = 915 and its top at
-y = 36.
+**Rasterize Layer**, so the stretch stays put. Marquee tightly around the
+word and drag the **bottom-middle** handle down about 28 px, making it about
+120% taller. Press [[Cmd+D]], then Move-drag the word so its top sits about
+36 px below the top edge, with its left edge about 175 px right of the disc.
 
-Repeat for `KOALA`, placing it at x = 915, y = 227.
+Repeat for `KOALA`, placing it right under `ROGUE` with the same left edge
+and a small gap between the words.
 
 ## Add a hard shadow and paint drips
 
@@ -295,14 +314,15 @@ tagging the headline.
 
 ![A cream strip of paper tape with torn zig-zag ends under the headline, carrying the typewriter tagline STREET ART FEST · FITZROY · 3–12 OCT](24-paper-tape-tagline.webp)
 
-Add a `Tape` layer and fill a 670 × 62 rectangle at (905, 432) with
-`#EFE3C4`. For torn ends, lasso a zig-zag over each end of the strip and
-press [[Delete]].
+Add a `Tape` layer and fill a 670 × 62 rectangle with `#EFE3C4`, just under
+`KOALA` and starting a little left of the headline. For torn ends, lasso a
+zig-zag over each end of the strip and press [[Delete]].
 
-Set the Text tool to **Special Elite**, **Size** `28` and ink. Click at
-(978, 452) and paste `STREET ART FEST · FITZROY · 3–12 OCT`. Pasting is the
-easiest way to get the middle dots and the dash. Click **Rasterize Layer**,
-then **Layer → Merge Down** onto `Tape`.
+Set the Text tool to **Special Elite**, **Size** `28` and ink. Click near the
+left end of the tape, about 70 px in, and paste
+`STREET ART FEST · FITZROY · 3–12 OCT`. Pasting is the easiest way to get
+the middle dots and the dash. Choose **Layer → Merge Down** to fold it onto
+`Tape`. The merge rasterizes the text for you.
 
 ## Rotate the tape
 
@@ -325,19 +345,20 @@ shadow.
 
 ![A black bar with sprayed speckled edges holding bone text FREE ENTRY · ALL AGES · BYO CAN](27-sprayed-footer-bar.webp)
 
-Add a `Footer Bar` layer. Fill a 384 × 36 ink rectangle at (918, 550),
-left-aligned with the tape. Spray along its top and bottom edges in ink at
+Add a `Footer Bar` layer. Fill a 384 × 36 ink rectangle below the tape,
+left-aligned with it. Spray along its top and bottom edges in ink at
 **Size** `24` and **Opacity** `30`.
 
-Set **Special Elite**, **Size** `22` and bone `#EEE6D6`. Click at
-(934, 557) and paste `FREE ENTRY · ALL AGES · BYO CAN`.
+Set **Special Elite**, **Size** `22` and bone `#EEE6D6`. Click just inside the
+bar's left end and paste `FREE ENTRY · ALL AGES · BYO CAN`.
 
 ## Throw up a graffiti tag
 
 ![A big green rk! tag in a graffiti hand, scaled up and being rotated counter-clockwise over the right end of the tape](28-graffiti-tag-rotate.webp)
 
 Set the Text tool to **Sedgwick Ave Display**, **Size** `96`, green
-`#2F6F55`. Type `rk!` at (1420, 470), then click **Rasterize Layer**.
+`#2F6F55`. Type `rk!` in the empty space near the right end of the tape, then
+click **Rasterize Layer** so the scale and rotation stick.
 
 Marquee it and [[Cmd]]-drag the top-left handle out to about **180%**.
 Commit, marquee again and rotate it about **12°** counter-clockwise. Commit,
@@ -386,9 +407,9 @@ silhouette.
 
 Spray paint skips over the recessed mortar joints. Pick the **Eraser** at
 **Size** `6` and **Opacity** `65`. On `ROGUE`, drag short broken strokes
-along the mortar lines at y = 80 and 160. Do the same on `KOALA` at y = 240
-and 320. Then set **Size** `12` and add a few diagonal scuffs to the edges of
-`Disc`.
+along the two horizontal mortar lines that run through the word. You can see
+them in the wall texture. Do the same on `KOALA`. Then set **Size** `12` and
+add a few diagonal scuffs to the edges of `Disc`.
 
 ## Export the billboard
 

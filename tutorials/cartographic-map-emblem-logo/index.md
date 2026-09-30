@@ -2,6 +2,7 @@
 title: Design a Cartographic Map Emblem Logo
 description: Build an antique sea-chart logo in Lopsy with contour-tinted fjords, waterlines, rhumb lines, a compass rose, a ribbon wordmark and seal text on a path.
 published: 2026-09-29 01:30
+updated: 2026-09-30
 level: Advanced
 duration: 90
 tags: logo design, cartographic, map, compass rose, vintage, badge, selections, text on a path, sunburst, branding
@@ -41,11 +42,14 @@ and you'll allow for both.
 
 ![A blank 1200 by 1200 document with blue guides at x 420 and 600 and y 130, 600 and 1070](01-guides-new-document.webp)
 
-Create a **1200 × 1200** document. Everything is centred on (600, 600), so
-click the top ruler at x = `600` and the left ruler at y = `600` to drop a
-centre cross. Add horizontal guides at y = `130` and `1070`, the top and
-bottom of the emblem, and a vertical guide at x = `420`. That last one marks
-the compass rose's centre, which sits at **(420, 624)**.
+Create a **1200 × 1200** document. The emblem is centred on the page, so
+[[Cmd]]-click the middle of the top ruler and the middle of the left ruler.
+[[Cmd]]-clicking a ruler snaps the guide to a layout fraction, so both land
+exactly on the ½ mark and give you a centre cross.
+
+Then click the left ruler at about `130` and `1070` for the top and bottom
+of the emblem, and click the top ruler at about `420`. That last guide marks
+the compass rose, which sits on it about 24 px below the centre line.
 
 ## Lay down the parchment
 
@@ -61,8 +65,15 @@ is a quiet mottle, not a cloudy sky.
 
 ![A 940 px dark disc selected with marching ants over the parchment, with guides crossing its centre](03-plate-double-rule.webp)
 
-Add a layer named `Plate`. With the **Elliptical Marquee**, drag from
-(130, 130) to (1070, 1070) for a 470 px radius disc. Fill it with `#F2E7CB`.
+Add a layer named `Plate`. With the **Elliptical Marquee**, hold [[Cmd]] and
+drag a circle whose edges touch the top and bottom guides, centred on the
+centre cross. That's a 940 px disc. Fill it with `#F2E7CB`.
+
+> **Tip:** Every circle in this logo is centred, and a few pixels off shows.
+> With nothing selected, a single click (no drag) with the Elliptical Marquee
+> opens a dialog where you type the corners. For the plate, enter **From**
+> `130`, `130` and **To** `1070`, `1070`. The later steps give these values
+> in brackets.
 
 Now build a double rule:
 
@@ -84,8 +95,9 @@ keep a big document fast.
 
 ![The Sunburst filter drawing 72 cream wedges over a dark ink disc inside the plate](04-sunburst-degree-bars.webp)
 
-Add a layer named `Neatline`. Select a disc from (212, 212) to (988, 988)
-(radius 388) and fill it with ink. Set the foreground to the plate cream.
+Add a layer named `Neatline`. Select a centred disc of radius 388 (From
+`212`, `212` to `988`, `988`) and fill it with ink. Set the foreground to
+the plate cream.
 
 Choose **Filter → Sunburst…** with these settings, then click **Apply**:
 
@@ -98,10 +110,10 @@ Half of every slot turns cream, so you get alternating wedges.
 
 ![A thin chequered black and cream ring inside the plate, the classic degree border of a sea chart](05-chart-neatline.webp)
 
-Select the radius 380 disc, from (220, 220) to (980, 980), and press
-[[Delete]]. Only an 8 px band of alternating bars is left, like the degree
-border of an old chart. Deselect, add a `2` px ink **Stroke**, and rasterize
-the layer style.
+Select a centred disc of radius 380 (From `220`, `220` to `980`, `980`) and
+press [[Delete]]. Only an 8 px band of alternating bars is left, like the
+degree border of an old chart. Deselect, add a `2` px ink **Stroke**, and
+rasterize the layer style.
 
 ## Fill the sea
 
@@ -115,34 +127,36 @@ stops:
 - `#3A6B78` at 60%
 - `#1F404A` at 100%
 
-Drag from the compass centre (420, 624) to (980, 624), so the water is
-lightest where the rose will sit. Deselect. Add an **Inner Glow** of Size
-`40`, Opacity `55` in `#12272D` to darken the edge, then rasterize.
+Start the drag on the compass guide, just below the centre line, and drag
+straight right to the neatline, so the water is lightest where the rose will
+sit. Deselect. Add an **Inner Glow** of Size `40`, Opacity `55` in
+`#12272D` to darken the edge, then rasterize.
 
 ## Fan out the rhumb lines
 
 ![Thirty-two thin pale gold lines radiating from the compass point across the sea](07-rhumb-lines-sunburst.webp)
 
-Add `Rhumb Lines`. Select a radius 378 disc so the lines stop at the border,
-and set the foreground to `#D9BE84`. Run **Sunburst** again with these
-settings:
+Add `Rhumb Lines`. Select a centred disc of radius 378 (From `222`, `222` to
+`978`, `978`) so the lines stop at the border, and set the foreground to
+`#D9BE84`. Run **Sunburst** again with these settings:
 
 - **Rays** `32`, **Width** `5`, **Taper** `50`
 - **Center X** `35`, **Center Y** `52`
 
-Taper 50 gives parallel-sided lines instead of wedges. The centre is 35% and
-52% of 1200 px, which is exactly (420, 624). Deselect and set the layer to
-`32%` opacity.
+Taper 50 gives parallel-sided lines instead of wedges. Center X and Y are
+percentages of the page, and 35% / 52% of 1200 px puts the burst right on
+the compass point. Deselect and set the layer to `32%` opacity.
 
 ## Lasso the coastline
 
 ![A long ragged Lasso selection running diagonally from the upper left to the lower right of the canvas](08-coastline-lasso.webp)
 
-Add a layer named `Land`. With the **Lasso**, draw a rocky coast that enters
-at the left edge around y = 250. Pass through roughly these points, then close
-the selection round the top-right corner, outside the canvas:
-
-(250, 318), (425, 408), (552, 560), (700, 702), (885, 800), (1200, 905)
+Add a layer named `Land`. With the **Lasso**, draw a rocky coast that runs
+diagonally across the chart. Enter at the left edge about a fifth of the way
+down, cross the compass guide about a third of the way down, run through the
+centre cross, and leave the right edge about three quarters of the way
+down. Then close the selection round the top-right
+corner, outside the canvas, so the land is everything above the line.
 
 Keep the line nervous and jagged. Real coasts double back on themselves.
 
@@ -157,32 +171,34 @@ Fjords are long, narrow channels that get thinner toward their heads. For
 each one, lasso a wiggling channel about 30–40 px wide at the mouth and
 8 px wide at the head. Feather it by `1`, then press [[Delete]].
 
-1. A short one from (272, 368) up to (452, 250).
-2. The main fjord, from (508, 540) through (604, 440) and (690, 372) to its
-   head at (792, 318).
-3. One from (722, 752) through (842, 676) to (928, 596).
+1. A short one near the upper left, running up and to the right toward the
+   neatline.
+2. The main fjord, starting at the coast just above the centre and winding up
+   and to the right until its head is close to the neatline at about one
+   o'clock.
+3. A third one lower down, from the coast below and right of centre, climbing
+   up and to the right into the hills.
 
 ## Copy, rotate and scale the skerries
 
 ![A small island being rotated with the Move tool's rotation handle, with the marching ants turning with it](10-skerry-copy-rotate.webp)
 
-Lasso a small ragged island, about 52 × 30 px, at (300, 470) on `Land` and
-fill it. To make an archipelago:
+On `Land`, lasso a small ragged island about 52 × 30 px in the sea to the
+left of the compass guide and fill it. To make an archipelago:
 
 1. Marquee the island and press [[Cmd+C]], then [[Cmd+V]]. The copy is
    pasted in place.
 2. Drag the copy with the Move tool.
 3. [[Cmd]]-click its thumbnail to select it, then turn it with a corner
    rotation handle and resize it with [[Cmd]] held on a corner scale handle.
+   Press [[Cmd+D]] to commit before you move on to the next copy.
 
-Make three copies:
+Make three copies, scattered through the sea:
 
-- 60° at 70% scale, at (252, 566)
-- −35° at 125% scale, at (612, 752)
-- 25° at 75% scale, at (668, 938)
+- one below the first island, turned 60° and scaled to 70%
+- one below and right of the compass, turned −35° and scaled to 125%
+- one near the bottom of the chart, turned 25° and scaled to 75%
 
-Try [[Cmd+Z]] three times and [[Cmd+Shift+Z]] three times on the last one.
-The skerry steps back through scale, rotate and move, then returns exactly.
 Finally, **Layer → Merge Down** each copy into `Land`.
 
 ## Step the contours inland
@@ -217,8 +233,8 @@ headland and fjord. The stroke on each band reads as an engraved contour line.
 
 ![The coast grown 29 px out to sea, with marching ants following the shore at that distance](13-waterlines-grow-selection.webp)
 
-Click `Rhumb Lines` and add `Shallows`. [[Cmd]]-click `Land`, choose
-**Select → Grow…** `12` and fill with `#5A8E98`.
+Click `Rhumb Lines` and add `Shallows`. Load the coast from `Land` (see the
+tip below), choose **Select → Grow…** `12` and fill with `#5A8E98`.
 
 Add `Waterlines`. Each ring is made in two moves: grow and fill, then grow
 2 px less and delete. Work from the outermost ring inward, because each
@@ -232,9 +248,9 @@ Delete clears everything nearer the coast.
 Set the layer to `75%` opacity.
 
 > **Tip:** Load the coast from `Land`'s own row: click `Land`, [[Cmd]]-click
-> its thumbnail, then click back on `Waterlines` before you Grow. If you
-> [[Cmd]]-click the thumbnail while `Waterlines` is active, [[Delete]] can
-> wipe the whole layer instead of the grown area.
+> its thumbnail, then click back on the layer you're working on before you
+> Grow. Clicking back on the row first means [[Delete]] clears only the grown
+> area, not the whole layer.
 
 ## Clip everything to the sea disc
 
@@ -256,15 +272,19 @@ Deselect.
 ![Thin blue-grey meridians converging upward and gently curved parallels crossing both land and sea](15-conic-graticule.webp)
 
 Old charts often use a conic projection. The meridians lean toward a pole
-off the top of the map, and the parallels curve around it.
+far above the top of the map, and the parallels curve around it.
 
-Add `Graticule` above `Contour 5` and select a radius 379 disc. Set the
-**Brush** to Size `2`, Hardness `100`, Spacing `10`, colour `#9DB0B6`.
+Add `Graticule` above `Contour 5` and select a centred disc of radius 379
+(From `221`, `221` to `979`, `979`). Set the **Brush** to Size `2`, Hardness
+`100`, Spacing `10`, colour `#9DB0B6`.
 
-- **Meridians:** click at y = 200, then [[Shift]]-click at y = 1000. Each
-  line points at (600, −1900) and crosses y = 600 at x = 300, 400 … 900.
-- **Parallels:** draw them every 100 px with [[Shift]]-click chains that
-  follow circles round the same point.
+- **Meridians:** draw seven, crossing the centre line every 100 px. For each
+  one, click near the top of the chart and [[Shift]]-click near the bottom.
+  Lean them so they would meet far above the page: the middle one is
+  vertical, and the outer ones splay out about 100 px from top to bottom.
+- **Parallels:** every 100 px down the chart, draw a gentle curve with a
+  chain of [[Shift]]-clicks. Make each one sag slightly in the middle, about
+  20 px lower on the centre line than at the outer meridians.
 
 Set the layer to `55%` opacity.
 
@@ -272,14 +292,15 @@ Set the layer to `55%` opacity.
 
 ![A small chequered ring with a hairline inside it, centred on the rhumb lines' focal point](16-compass-degree-ring.webp)
 
-Add `Rose Ring` and select a radius 84 disc on (420, 624). Fill it with
-`#1E1812`.
+Add `Rose Ring` and select a radius 84 disc centred on the compass point
+(From `336`, `540` to `504`, `708`). Fill it with `#1E1812`.
 
 Run **Sunburst** with **Rays** `64`, **Width** `50`, **Taper** `0`, and
-**Center** `35` / `52`. Delete a radius 78 disc to leave the ticks.
+**Center** `35` / `52`. Delete a radius 78 disc on the same centre (From
+`342`, `546` to `498`, `702`) to leave the ticks.
 
-For a hairline inside the ticks, select a radius 73 disc and fill it cream.
-Then choose **Shrink** `2` and delete.
+For a hairline inside the ticks, select a radius 73 disc (From `347`, `551`
+to `493`, `697`) and fill it cream. Then choose **Shrink** `2` and delete.
 
 ## Draw the cardinal star
 
@@ -304,15 +325,16 @@ Marquee the star, press [[Cmd+C]] and [[Cmd+V]], and name the pasted copy
 
 [[Cmd]]-click its thumbnail, pick the **Move** tool, and drag a corner
 rotation handle with [[Cmd]] held. [[Cmd]] snaps rotation to 15° steps, so
-stop at exactly **45°**.
+stop at exactly **45°**. Press [[Cmd+D]] to commit.
 
 ## Scale the intercardinals to 60%
 
 ![The rotated star being scaled down from a corner handle, now peeking between the main points](19-scale-intercardinal.webp)
 
-Deselect and [[Cmd]]-click the thumbnail again. Hold [[Cmd]] and drag a
-corner scale handle inward until the star is **60%** of its size. Nudge it
-back onto (420, 624) with the arrow keys.
+[[Cmd]]-click the thumbnail again. Hold [[Cmd]] and drag a corner scale
+handle inward until the star is **60%** of its size. Press [[Cmd+D]], then
+nudge it back so it's centred on the compass point with the arrow keys
+([[Shift]]+arrow moves 10 px at a time).
 
 Select the top `Rose Cardinal` and give it effects:
 
@@ -328,11 +350,12 @@ Rasterize the layer style.
 Add `Rose North` and refill the north point's two halves in `#C8503E` and
 `#7A2118`.
 
-Build the hub from a radius 9 disc:
+Build the hub from three circles on the compass point. At this size, draw
+each circle fresh rather than shrinking the last one, so they stay round:
 
-1. Fill it with `#1E1812`.
-2. **Shrink** `2` and fill with cream.
-3. **Shrink** `4` and fill with red.
+1. A radius 9 disc (From `411`, `615` to `429`, `633`) in `#1E1812`.
+2. A radius 7 disc (From `413`, `617` to `427`, `631`) in cream.
+3. A radius 3 disc (From `417`, `621` to `423`, `627`) in red.
 
 Finally, set an **N** in IM Fell English SC at `34` px in `#F4E9CE`. Nudge
 it so it's centred 22 px above the north tip.
@@ -344,11 +367,13 @@ it so it's centred 22 px above the north tip.
 Click `Rose Ring`, [[Shift]]-click `Rose N`, and choose
 **Layer → Group Layers**. Rename the group `Compass Rose`.
 
-Turn on **View → Show Grid** and **View → Snap to Grid**. With the group
-active, drag it with the Move tool. Every piece travels together and snaps to
-the grid. Press [[Cmd+Z]] to put it back, because the rhumb lines are centred
-on the original spot. [[Cmd+Shift+Z]] and [[Cmd+Z]] again check that the
-move redoes and undoes cleanly. Turn the grid and snapping off.
+Turn on **View → Show Grid**. It switches on **Snap to Grid** as well, and a
+**Snap** checkbox appears in the options bar. With the group active, drag it
+with the Move tool. Every piece travels together and snaps to the grid.
+
+Press [[Cmd+Z]] to put it back, because the rhumb lines are centred on the
+original spot. Then untick **Snap** in the options bar and turn off
+**View → Show Grid**.
 
 ## Plot the route and the summit
 
@@ -358,15 +383,17 @@ Add `Route` above `Graticule`. Set the **Brush** to Size `6`, Hardness
 `100`, Spacing `200`. At 200% spacing every dab stands alone, so the stroke
 becomes a dotted line.
 
-In `#B8322A`, click (706, 790) and [[Shift]]-click your way through the sea,
-past the compass, and up the fjord's centre to (772, 320).
+In `#B8322A`, click in the sea low on the chart, right of centre. Then
+[[Shift]]-click your way up through the sea and along the middle of the main
+fjord, stopping just short of its head.
 
-Set Spacing back to `10` and draw a 30 px **X** centred on (792, 318). Give
+Set Spacing back to `10` and draw a 30 px **X** at the fjord's head. Give
 the layer a `2` px cream **Stroke** so the dots read against the water, then
 rasterize.
 
-Add `Summit` and fill a 24 px triangle at (818, 470) with `#1E1812`. Under
-it, set `Skårtind 1834 m` in IM Fell English SC at `18` px.
+Add `Summit` and fill a small triangle, about 24 px wide, in the hills to
+the right of the main fjord with `#1E1812`. Under it, set `Skårtind 1834 m`
+in IM Fell English SC at `18` px.
 
 ## Build the ribbon
 
@@ -379,8 +406,11 @@ Click `Summit Label` so the new layers stay outside the Compass Rose group.
 2. Fill the small fold triangles `#4A150F`.
 3. Add a `3` px ink **Stroke** and rasterize.
 
-Add `Ribbon` and marquee the band from (196, 782) to (1004, 898). Fill it
-with a near-flat vertical gradient from `#AE3A2E` to `#9A2E26`.
+Add `Ribbon` and marquee the band across the lower third: about 808 × 116 px,
+centred on the vertical centre guide, with its ends just inside the plate's
+rim (From `196`, `782` to `1004`, `898` in the Rectangular Marquee's click
+dialog). Fill it with a near-flat vertical gradient from `#AE3A2E` to
+`#9A2E26`.
 
 For the inner rule:
 
@@ -407,10 +437,10 @@ text updates as you pick. Press [[Tab]].
 Centre the word on the **capitals**, not on its bounding box. The J hangs
 about 0.28 em below the baseline, so a box-centred word would ride high.
 
-Move it so the caps sit halfway between the inner rules, at y ≈ 840. The J
-then clears the bottom rule by about 8 px, with about 25 px above and below
-the caps. Add a crisp **Drop Shadow**: Offset `2`, `3`, Blur `0`, Opacity
-`70`, `#3D0F0A`.
+Move it so the caps sit halfway between the inner rules, with about 25 px
+of red above and below them. The J then clears the bottom rule by about
+8 px. Add a crisp **Drop Shadow**: Offset `2`, `3`, Blur `0`, Opacity `70`,
+`#3D0F0A`.
 
 ## Arch UNCHARTED over the top
 
@@ -420,23 +450,21 @@ Click `Plate` and set `UNCHARTED` at `54` px, letter spacing `16`, in
 `#1E1812`. Press [[Tab]].
 
 Pick the **Pen** tool. Text on a path starts at the path's first anchor, so
-the first anchor sets where the word begins. Press at each anchor below and
-drag to the handle point to pull out a smooth curve. Together they trace a
-405 px circle round (600, 600):
+the first anchor sets where the word begins. Trace an arc about 17 px
+outside the chequered neatline, round the centre of the page. It crosses the
+vertical centre guide about 195 px from the top.
 
-1. (367, 269) → (407, 241)
-2. (499, 208) → (546, 196)
-3. (643, 197) → (691, 202)
-4. (782, 238) → (825, 260)
-5. (898, 325) → (931, 361)
+Place five anchors, evenly spaced, from about eleven o'clock over the top to
+about half past one. At each one, press and drag a short way along the
+curve to pull out handles, so the path bends smoothly.
 
 Click ✓ **Commit path**. Select the `UNCHARTED` layer with the Text tool and
 pick the path in the options bar's **Path** dropdown. The caps now sit
 midway between the neatline and the plate's inner rule.
 
 If the word lands a little off centre, deselect the path in the **Paths**
-panel and draw a fresh arc a degree or two earlier or later. With the old
-path selected, Pen clicks edit it instead of starting a new one.
+panel and draw a fresh arc that starts a little earlier or later. With the
+old path selected, Pen clicks edit it instead of starting a new one.
 
 ## Set the bottom seal line
 
@@ -444,14 +472,13 @@ path selected, Pen clicks edit it instead of starting a new one.
 
 Set `EXPEDITION CO. · EST. 1893` at `25` px with letter spacing `5`. For
 text along the bottom, the path must run **left to right**, so its letters
-face inward and read the right way up. Its radius is 437 px, so the caps
-fill the same band as UNCHARTED:
+face inward and read the right way up.
 
-1. (380, 978) → (419, 1000)
-2. (506, 1027) → (550, 1036)
-3. (640, 1035) → (685, 1031)
-4. (771, 1002) → (812, 985)
-5. (885, 931) → (919, 902)
+These letters hang *inside* their path, so draw this arc about 30 px further
+out than the top one, so the caps fill the same band as UNCHARTED. It
+crosses the vertical centre guide about 1037 px down. Place five anchors
+from about seven o'clock round the bottom to about half past four, dragging
+out handles as before.
 
 Commit the path and bind the text to it.
 
@@ -467,15 +494,16 @@ no prime sign, so use a straight apostrophe.
 - **Longitude:** turn it the other way by dragging a rotation handle with
   [[Cmd]] held, which snaps it to exactly 90°.
 
-Centre each label in the rim band, at (175, 600) and (1025, 600).
+Place the latitude in the rim band on the left and the longitude on the
+right, each centred on the horizontal centre guide.
 
 ## Finish with shading and grain
 
 ![The finished emblem with a grain layer set to Overlay at 28% opacity in the Layers panel](29-grain-finishing.webp)
 
 Select `Ribbon`, pick **Dodge/Burn** in **Burn** mode, and set Exposure `14`
-and Size `18`. Click at (210, 885) and [[Shift]]-click at (990, 885) to shade
-the foot of the ribbon.
+and Size `18`. Click near the left end of the ribbon's lower edge and
+[[Shift]]-click near the right end to shade the foot of the ribbon.
 
 Click `FJORDS` and add `Grain`. Fill it with `#808080`, then run
 **Filter → Add Noise…** with **Mono**, **Gaussian** and Amount `24`. Set the

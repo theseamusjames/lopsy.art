@@ -2,6 +2,7 @@
 title: Make a Raccoon Kung Fu Monk Movie Poster Photo Collage
 description: Build a superhero-style movie poster in Lopsy from three photos. Cut out a kung fu fighter, give him a raccoon head, and grade it like a blockbuster.
 published: 2026-09-28 23:30
+updated: 2026-09-30
 level: Intermediate
 duration: 100
 tags: photo collage, photo manipulation, compositing, movie poster, superhero, color grading, lasso, layer masks, clone stamp, typography
@@ -55,7 +56,7 @@ transparent, so the edges never flash white.
 A new document comes with an empty **Layer 1**. Click it, then drag the
 temple photo from your file browser onto the canvas. Lopsy adds the photo as
 a new layer above the one you clicked. Because the photo is bigger than the
-canvas, Lopsy shrinks it to fit (**1200 × 1488**) and switches to the
+canvas, Lopsy shrinks it to fit the width (about 1200 × 1488) and switches to the
 **Move** tool with transform handles ready. Double-click the layer name and
 rename it **Temple**.
 
@@ -67,14 +68,13 @@ At the fitted size the courtyard is tiny, and anyone standing in it looks
 like a giant hovering over the wall. Make the ground big enough to stand on.
 Press [[Cmd+-]] twice to zoom out so you can reach the corners. Hold
 [[Cmd]] (which keeps the proportions) and drag the bottom-right handle out
-until the box is about **1800 × 2232**, 1.5 times the fitted size.
+until the photo is about 1.5 times the fitted size, roughly 1800 px wide.
 
-Now drag inside the box to move the photo **244 px left** and **138 px up**.
-The **X / Y** readout in the status bar shows where the pointer is, so you
-can measure the drag. The front of the courtyard should meet the bottom
-edge, with the central hall in the middle of the poster. Press [[Cmd+D]] to
-apply the transform (it also clears the selection), then [[Cmd+0]] to fit the
-view.
+Now drag inside the box to move the photo up and to the left, about 240 px
+left and 140 px up. Judge it by eye: the front of the courtyard should meet
+the bottom edge, with the central hall in the middle of the poster. Press
+[[Cmd+D]] to apply the transform (it also clears the selection), then
+[[Cmd+0]] to fit the view.
 
 ## Brew a storm over the ridge
 
@@ -90,8 +90,9 @@ greys, so they darken the sky without going black. Set the blend mode to
 
 Click **Add Mask**, then click the new mask thumbnail so you paint on the
 mask, not the layer. Pick the **Gradient** tool, set a white-to-black linear
-gradient in **Advanced…**, and drag from **y 200** down to **y 640**. The
-storm stays in the sky and fades out before the forest.
+gradient in **Advanced…**, and drag straight down from just above the ridge
+(around 200 on the left ruler) to the top of the forest (around 640). The
+storm stays in the sky and fades out before the trees.
 
 ## Cut out the fighter with the Lasso
 
@@ -114,12 +115,14 @@ Choose **Select → Feather…** at **1 px** to soften the cut, then
 
 ![The fighter scaled down about his feet, with both shoes on the hall steps and a lasso loop around his face](06-remove-head.webp)
 
-With **Move** (V), drag the fighter **28 px** right and **40 px** down.
-[[Cmd]]-click the **Fighter** thumbnail to select his pixels, which gives
-transform handles around just his body. [[Cmd]]-drag the bottom-right
-handle in to **85%**, press [[Cmd+D]], and nudge him with the arrow keys
-until his planted shoe rests on the hall steps at about **y 1240**. There it
-sits in the photo's perspective, above where the title will go.
+With **Move** (V), drag the fighter a little right and down, so he stands
+in the middle of the poster. [[Cmd]]-click the **Fighter**
+thumbnail to select his pixels, which gives transform handles around just
+his body. [[Cmd]]-drag the bottom-right handle in to about **85%**, press
+[[Cmd+D]], and nudge him with the arrow keys ([[Shift]]+arrow moves 10 px)
+until his planted shoe rests on the hall steps, about three-quarters of the
+way down. There he sits in the photo's perspective, above where the title
+will go.
 
 Now lasso around his hair and face, stopping at the top of the collar, and
 press [[Delete]]. The raccoon's head will sit in that gap. His shoulders,
@@ -139,7 +142,7 @@ under the nose. Leave the leaves under the chin outside the loop. Feather
 ![The cut-out raccoon head with the grass blade across its muzzle cloned away](08-clone-grass.webp)
 
 A blade of grass cuts across the raccoon's muzzle. Pick the **Clone Stamp**
-(S) at **Size 16**, [[Alt]]-click the fur about **18 px** above the blade,
+(S) at **Size 16**, [[Alt]]-click the fur just above the blade (about 18 px),
 then paint along the blade in one stroke. The source moves with your brush,
 so every dab copies the fur just above it.
 
@@ -152,10 +155,10 @@ so every dab copies the fur just above it.
 ![The raccoon head scaled down and placed on the fighter's collar, cheek fur overlapping the neck](09-seat-head.webp)
 
 [[Cmd]]-click the **Raccoon** thumbnail to get handles around the head.
-[[Cmd]]-drag the bottom-right handle in to **44%** of the photo's head,
-about **233 px** wide. Drag it onto the collar, centred near
-**(605, 298)**. The cheek ruffs and chin should overlap the collar, so there
-is no gap at the neck. Press [[Cmd+D]].
+[[Cmd]]-drag the bottom-right handle in to about **44%**, so the head is
+roughly 230 px wide. Drag it onto the collar, centred over the gap where his head was. The cheek
+ruffs and chin should overlap the collar, so there is no gap at the neck.
+Press [[Cmd+D]].
 
 ## Match the head to the body
 
@@ -177,11 +180,11 @@ the head's shade.
 ![A saffron sash running from the fighter's left shoulder to his right hip, striped with light and dark creases](11-kasaya.webp)
 
 Select **Fighter** and add a **Kasaya** layer. Lasso a band about 50 px wide
-from his left shoulder, around **(702, 387)**, down to his right hip at
-**(566, 620)**. Set a five-stop linear gradient: `#5E250C`, `#C9772A`,
-`#8A3A14`, `#D98A34`, `#5A230A`. Drag it a short way *across* the band,
-from **(612, 489)** to **(665, 523)**. The stripes run the length of the sash
-and read as creases in the cloth.
+from his left shoulder (on the right as you look at him) diagonally across
+his chest to his right hip. Set a five-stop linear gradient: `#5E250C`,
+`#C9772A`, `#8A3A14`, `#D98A34`, `#5A230A`. Near the middle of the sash, drag
+it a short way *across* the band, about 60 px, at right angles to the sash.
+The stripes run the length of the sash and read as creases in the cloth.
 
 Run **Add Noise…** (**Amount 14**, **Mono**) and **Motion Blur…**
 (**Angle 124**, **Distance 14**) for a woven texture. Then run
@@ -196,7 +199,7 @@ like brass. Deselect and add a **Drop Shadow** (**X −4**, **Y 6**,
 Add a **Mala** layer. Pick the **Brush** (B) at **Size 15**, **Hardness
 95**, in light walnut `#8A5A30`. Beads darker than that disappear against
 the black jacket. Click once for each bead around a U that starts at the
-collar, dips to about **y 515**, and comes back up: 21 clicks. Add one
+collar, dips to about mid-chest, and comes back up: 21 clicks. Add one
 **Size 24** guru bead in `#B0421C` at the bottom of the loop.
 
 Give the layer a pale **Inner Glow** (`#F7C98F`, **Size 5**,
@@ -222,13 +225,13 @@ shoes.
 Superhero posters light the hero from behind. Select **Storm** and add a
 **Halo** layer. Set a three-stop radial gradient: `#FFE0AE` at 0%,
 `#F7A955` at **55%** opacity at the 35% mark, and `#F7A955` at **0%**
-opacity at 100%. Drag it from the head, about **(605, 285)**, 480 px out.
-Set the layer to **Screen**.
+opacity at 100%. Drag it from the centre of the raccoon's head about 480 px
+outward. Set the layer to **Screen**.
 
 Add a **Rays** layer, set the foreground to `#FFD08A`, and run
 **Filter → Sunburst…** with **Rays 44**, **Length 95**, **Width 30**,
-**Fade 85**, **Softness 70**, **Jitter 35**, **Opacity 60**, and the centre
-at **50%, 18%**. Set the layer to **Screen**. Then lower the layer's own
+**Fade 85**, **Softness 70**, **Jitter 35**, **Opacity 60**, and
+**Center X 50**, **Center Y 18**, which puts the centre behind the head. Set the layer to **Screen**. Then lower the layer's own
 opacity to **45%**, which you can tune later without re-running the filter.
 
 ## Push the temple back and add a rim light
@@ -266,7 +269,8 @@ Three things make him stand *in* the courtyard rather than on top of it:
 
 - **Haze in the distance:** select **Temple**, add a **Haze** layer, fill it
   with `#8FA3B3` and set it to **Screen** at **22%**. Add a mask and drag a
-  white-to-black gradient on it from **y 300** down to **y 1250**. Far
+  white-to-black gradient on it from the temple roofs (around 300 on the left
+ruler) down to just above his feet (around 1250). Far
   things turn paler and bluer, while the steps at his feet keep their
   contrast.
 - **Contact shadow:** select **Rays** and add a **Contact Shadow** layer set
@@ -275,46 +279,49 @@ Three things make him stand *in* the courtyard rather than on top of it:
   **Size 60**, **Opacity 85** right under the planted shoe.
 - **Ground mist:** select **Sparks** and add a **Ground Mist** layer. Run
   **Clouds…** at **Scale 6** and set it to **Screen**. Add a mask and drag a
-  white-to-black gradient on it from the bottom edge up to **y 1000**, then
-  set the layer to **55%**.
+  white-to-black gradient on it from the bottom edge up to around 1000 on
+  the left ruler, about his knees, then set the layer to **55%**.
 
 ## Set the title block
 
 ![RISE OF THE MASKED MONK in pale Cinzel below the fighter's feet, with a billing line and COMING SOON, and the tagline across the top](18-title.webp)
 
 Select **Ground Mist** and add a **Title Shade** layer. Set a gradient from
-`#05070A` at 92% opacity to fully clear. The gradient tool fills the whole
-layer, so fence each band with a marquee first. Marquee the bottom
-**420 px** and drag from the bottom edge up to **y 1180**. Then marquee the
-top **300 px** and drag from the top edge down.
+`#05070A` at 92% opacity to fully clear. Drag it from the bottom edge up to
+around 1180 on the left ruler. Then drag a second one from the top edge down
+about 300 px. A gradient lays over what's already on the layer, and its clear
+end leaves the first fade alone, so both bands share one layer.
 
 Type each line with the **Text** tool. The options bar edits whichever text
 layer is active, so click **Title Shade** in the Layers panel before you set
-up each new line. Work from the bottom up, so a click never lands inside an
-earlier text box. Set the letter spacing in the **Text** panel, then centre
-each line on x 600 with **Move** and the arrow keys:
+up each new line. Work from the bottom up, and start each line in clear space
+so the click doesn't open an earlier one for editing. Set the letter spacing
+in the **Text** panel, then centre each line with the **Move** tool's **Align
+center horizontally** button and nudge it up or down with the arrow keys:
 
-- `COMING SOON`: Oswald SemiBold 32, spacing 16, `#D9843A`, centred on
-  **y 1542**.
+- `COMING SOON`: Oswald SemiBold 32, spacing 16, `#D9843A`, about 60 px up
+  from the bottom edge.
 - `WUDANG PICTURES PRESENTS · A BANDIT MONK FILM · MUSIC BY THE TEMPLE BELLS`:
-  Oswald 22, spacing 2, `#B8B0A2`, on **y 1484**.
-- `MASKED MONK`: Cinzel Black 116, spacing 6, `#EFE7D6`, on **y 1400**. Add
+  Oswald 22, spacing 2, `#B8B0A2`, just above it.
+- `MASKED MONK`: Cinzel Black 116, spacing 6, `#EFE7D6`, above the billing line with a little breathing room. Add
   an **Inner Glow** (`#4A4038`, **Size 6**, **Opacity 75**) for a
   stamped-metal edge, an **Outer Glow** (`#FF8A2A`, **Size 26**,
   **Opacity 40**), and a **Drop Shadow** (**Y 6**, **Blur 14**,
   **Opacity 85**).
-- `RISE OF THE`: Oswald Medium 44, spacing 14, `#F2EADA`, on **y 1304**, with
-  a **Drop Shadow** (**Y 3**, **Blur 10**, **Opacity 95**).
-- `HE WAS BORN WITH THE MASK.`: Oswald Light 30, spacing 10, `#D9D2C3`, on
-  **y 70**.
+- `RISE OF THE`: Oswald Medium 44, spacing 14, `#F2EADA`, sitting right on top
+  of MASKED MONK, with a **Drop Shadow** (**Y 3**, **Blur 10**, **Opacity 95**).
+- `HE WAS BORN WITH THE MASK.`: Oswald Light 30, spacing 10, `#D9D2C3`, about
+  60 px down from the top edge, in the dark top band.
 
 ## Grade it like a blockbuster
 
 ![The whole poster desaturated and cooled, with the adjustments drawer listing the Levels, Curves, Exposure and Hue/Saturation defaults plus Saturation, Color Balance, Highlights and Shadows, Contrast and Vignette](19-grade.webp)
 
 A single grade over every layer is what makes three photos read as one
-film still. Choose **Layer → Adjustment Layer…** to open the document's
-adjustment stack. It already holds four nodes that do nothing yet:
+film still. Choose **Layer → Adjustment Layer…** and click **Got it** on the
+note that pops up. That opens the adjustments on the top-level *Project*
+group, which apply to every layer. It already holds four nodes that do
+nothing yet:
 **Levels**, **Curves**, **Exposure** and **Hue / Saturation**.
 
 1. **Levels:** expand it and drag the input black handle to **14** and the

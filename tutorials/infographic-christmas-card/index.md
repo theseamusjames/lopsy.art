@@ -2,6 +2,7 @@
 title: Design an Infographic Christmas Card with a Bar-Chart Tree
 description: Make a data-viz holiday card in Lopsy. Build a bar-chart Christmas tree on graph paper, plot ornaments as data points, then add a legend, axis and script.
 published: 2026-09-28 20:30
+updated: 2026-09-30
 level: Intermediate
 duration: 90
 tags: holiday card, christmas card, infographic, data visualization, bar chart, typography, graph paper, pattern, layer effects, text, groups
@@ -34,17 +35,19 @@ The palette:
 - Ornaments: red `#E0452B`, gold `#F2B233`, ice `#BFE3EE` / `#7FB9CE`
 - Type: cream `#F3E9D2`, sage `#9FC7B0`, gold `#F2B233`
 
-The whole layout runs on a **100 px = 10 cm** scale. The trunk's center line
-is x 750, and the tree is drawn in document pixels.
+The whole layout runs on a **100 px = 10 cm** scale, and the trunk stands on
+the card's vertical centre line. Because the chart has to be honest, this is
+the one kind of design where exact positions matter. The graph paper you make
+first does most of the measuring for you.
 
 ## Set up the card, guides and background
 
-![A 1500 by 2100 document filled with dark pine green, with blue guides at x 90, 750 and 1410 and y 90, 580, 1660 and 2010](01-guides-background.webp)
+![A 1500 by 2100 document filled with dark pine green, with blue guides for the margins, the centre line, the top of the chart and the axis baseline](01-guides-background.webp)
 
 Choose **File → New** and make a **1500 × 2100** px document.
 
-1. Click the top ruler at **90**, **750** and **1410** to place the side margins and the center line.
-2. Click the left ruler at **90**, **580**, **1660** and **2010**. These mark the top margin, the top of the chart, the axis baseline and the bottom margin.
+1. On the top ruler, click about 90 px in from each side for the margins, then [[Cmd]]-click (Ctrl-click) the middle of the ruler. Cmd snaps the guide to exactly half the width, so the centre line lands on 750.
+2. On the left ruler, click about 90 px from the top and from the bottom for the margins. Add two more: one at **580** for the top of the chart and one at **1660** for the axis baseline. The ruler readout shows the position as you hover.
 3. Select **Background**, set the foreground to `#10352A`, and click the canvas with the **Paint Bucket** ([[G]]).
 
 Rename **Layer 1** to *Graph Paper* by double-clicking its name.
@@ -53,17 +56,23 @@ Rename **Layer 1** to *Graph Paper* by double-clicking its name.
 
 ![The top-left corner of the canvas with a 100 by 100 pixel marquee around a tile of thin grid lines](02-graph-paper-tile.webp)
 
-On *Graph Paper*, draw a 100 × 100 px tile in the top-left corner. Use the
-Rectangular Marquee ([[M]]) and Paint Bucket to fill thin strips:
+On *Graph Paper*, draw a 100 × 100 px tile in the top-left corner of the
+canvas. Zoom in and use the Rectangular Marquee ([[M]]) and Paint Bucket to
+fill thin strips, measured from the tile's top-left corner:
 
-- **Minor lines**, `#6F8F80`, 1 px wide: vertical at x 0, 25 and 75, horizontal at y 5, 30 and 55.
-- **Major lines**, `#F3E9D2`, 2 px wide: vertical at x 50, horizontal at y 80.
+- **Minor lines**, `#6F8F80`, 1 px wide: vertical at 0, 25 and 75 px, horizontal at 5, 30 and 55 px.
+- **Major lines**, `#F3E9D2`, 2 px wide: vertical at 50 px, horizontal at 80 px.
 
-The major lines sit off-center in the tile on purpose. Once it tiles, they
-land on x 250, 350 … 1250 and y 580, 680 …, which are exactly the chart's 10 cm
-ticks and the tops of the bars.
+The major lines sit off-centre in the tile on purpose. Once it tiles, they
+land exactly on the chart's 10 cm ticks either side of the centre line and on
+the top edge of every bar.
 
-Marquee (0, 0) to (100, 100) and choose **Edit → Define Pattern**.
+Select the whole tile and choose **Edit → Define Pattern**.
+
+> **Tip:** A tile needs pixel-exact strips. With nothing selected, *click*
+> (don't drag) with the Rectangular Marquee to open a dialog where you type
+> the corners, for example **From 0, 5 To 100, 6** for the first horizontal
+> minor line and **From 0, 0 To 100, 100** for the whole tile.
 
 > **Tip:** Here the alignment is baked into the tile itself. In Fill with Pattern, Row / Column Stagger offset alternate rows or columns like bricks, while Horizontal / Vertical Offset shift the whole grid's origin; leave all four at 0 for this tile.
 
@@ -87,7 +96,8 @@ there.
 Add a layer called *Glow*. Pick the **Brush** ([[B]]) and set **Size** 1500,
 **Hardness** 0, **Opacity** 100.
 
-With `#4FB37E`, click once at (750, 1120). Set the layer to **Screen** at
+With `#4FB37E`, click once on the centre line, about halfway down the card,
+where the middle of the tree will be. Set the layer to **Screen** at
 **30%**. It lifts the middle of the card without looking like a gradient.
 
 ## Marquee the first chart bars
@@ -97,16 +107,22 @@ With `#4FB37E`, click once at (750, 1120). Set the layer to **Screen** at
 Click **New Group** in the Layers panel and name it *Tree*. Inside it, add a
 layer called *Bars*.
 
-Each tier is a bar **80 px** tall on a **100 px** pitch, centered on x 750.
-Tier *i* (0 for the top bar) starts at y = 580 + 100 × *i*. The widths in px
-are the spans in cm × 10:
+Each tier is a bar **80 px** tall, centred on the centre line. The top bar
+starts on the 580 guide, and each bar below starts 100 px lower, on the next
+major grid line. The widths in px are the spans in cm × 10:
 
 `150, 250, 350, 450, 500, 600, 700, 800, 900, 1000`
 
-For each bar, drag the marquee from (750 − w/2, y) to (750 + w/2, y + 80),
-set the foreground to the next ramp color, and click inside with the Paint
-Bucket. The ramp runs in ten even steps from `#8CC08A` at the top to
-`#1F6B48` at the bottom.
+For each bar, drag the marquee from the top-left corner to the bottom-right
+corner, set the foreground to the next ramp color, and click inside with the
+Paint Bucket. Every bar edge lands on a line of the graph paper, so zoom in
+and follow the grid. The ramp runs in ten even steps from `#8CC08A` at the
+top to `#1F6B48` at the bottom.
+
+> **Tip:** For exact bars, press [[Cmd+D]] and *click* with the marquee to
+> type the corners. The top bar is **From 675, 580 To 825, 660**. For each bar
+> after it, add 100 to both Y values and move both X values out by half the
+> extra width.
 
 ## Finish the stack
 
@@ -122,20 +138,22 @@ Keep the width list handy. The tier table later on quotes the same numbers.
 ![The tree with a brown trunk under the bottom bar and a cream axis line across the card with major and minor tick marks](07-trunk-axis.webp)
 
 1. **Highlights:** add a *Bar Highlights* layer and fill a 3 px white strip along the top of every bar. Set the layer to **15%**.
-2. **Trunk:** add a *Trunk* layer and fill a marquee from (700, 1580) to (800, 1660) with `#5E4030`. You'll warm it up later.
-3. **Axis:** add an *Axis* layer and pick the **Pencil** ([[N]]) at **Size 3** in `#F3E9D2`. Click (90, 1660), then [[Shift]]-click (1410, 1660) for a dead-straight baseline.
+2. **Trunk:** add a *Trunk* layer. Marquee a block 100 px wide, centred on the centre line, from just under the bottom bar down to the axis guide, and fill it with `#5E4030`. You'll warm it up later.
+3. **Axis:** add an *Axis* layer and pick the **Pencil** ([[N]]) at **Size 3** in `#F3E9D2`. Click where the left margin guide meets the axis guide, then [[Shift]]-click where the right margin guide meets it for a dead-straight baseline.
 
-For the major ticks, click each point from x 250 to 1250 in steps of 100 at
-y 1660, then [[Shift]]-click 18 px below it. For the minor ticks, switch to
-Size 2 and draw 10 px ticks at x 300, 400 … 1200.
+For the major ticks, click the baseline wherever a major grid line crosses it
+between the tree's outer edges (every 10 cm, eleven in all), then
+[[Shift]]-click about 18 px below. For the minor ticks, switch to Size 2 and
+draw 10 px ticks halfway between them.
 
 ## Draw the star with the Lasso
 
 ![A ten-point star-shaped lasso selection above the tree filled with gold](08-star-lasso.webp)
 
 Add a *Star* layer. With the **Lasso** ([[L]]), drag through the ten points of
-a five-pointed star centered on (750, 512). The outer points are 64 px from
-the center and the inner points are 27 px.
+a five-pointed star, centred on the centre line just above the top bar. Keep
+the outer points about 64 px from the centre and the inner points about
+27 px.
 
 Fill it with `#F2B233` and deselect.
 
@@ -143,8 +161,8 @@ Fill it with `#F2B233` and deselect.
 
 ![The gold star with a warm outer glow above the top bar, the Layer Effects drawer open on Outer Glow](09-star-glow.webp)
 
-Lasso fills have hard, stair-stepped edges. Run **Filter → Gaussian Blur…**
-at **Radius 2** to soften them.
+Run **Filter → Gaussian Blur…** at **Radius 2**. A slightly soft edge melts
+into the glow instead of cutting a hard outline through it.
 
 Open the star's effects and enable **Outer Glow**: color `#FFD873`,
 **Size** 48, **Spread** 10, **Opacity** 75.
@@ -155,18 +173,24 @@ Open the star's effects and enable **Outer Glow**: color `#FFD873`,
 
 Ornaments sit in fixed slots, so their positions carry data:
 
-- **Red baubles:** ±10 cm (x 650 / 850), on T03 – T10
-- **Gold baubles:** ±25 cm (x 500 / 1000), on T06 – T10
-- **Ice diamonds:** ±40 cm (x 350 / 1150), on T09 and T10
+- **Red baubles:** ±10 cm (one major grid line either side of the centre line), on T03 – T10
+- **Gold baubles:** ±25 cm (two and a half grid lines out), on T06 – T10
+- **Ice diamonds:** ±40 cm (four grid lines out), on T09 and T10
 
-Each ornament is centered on its bar's vertical middle, at y = 620 + 100 × *i*.
+Each ornament is centred on its bar's vertical middle, 40 px below the bar's
+top edge.
 
 Add a *Baubles Red* layer. Choose the **Shape** tool ([[U]]), set **Shape**
-to Ellipse, **Fill** white and **Stroke** none. The Shape tool draws from the
-center, so drag from (650, 820) to (672, 842) for a 44 px circle.
+to Ellipse, **Fill** white and **Stroke** none. Click (don't drag) the centre
+of the left-hand red slot on T03, one grid line left of the centre line. The
+**Shape Size** dialog opens; enter **44 × 44** and click **Create** for a
+circle centred on the click.
 
 Then open the layer's effects and turn on **Color Overlay** with `#E0452B`.
 The overlay gives you an exact hex color without touching the pixels.
+
+> **Tip:** You can also drag the shape out: it grows from where you press,
+> so press on the slot's centre and [[Cmd]]-drag out 22 px for a 44 px circle.
 
 ## Stamp the other red baubles with Alt-drag
 
@@ -174,24 +198,24 @@ The overlay gives you an exact hex color without touching the pixels.
 
 For each remaining red slot:
 
-1. Draw an **Elliptical Marquee** just around the first bauble (radius 25).
+1. Draw an **Elliptical Marquee** just around the first bauble, about 50 px across.
 2. Press [[V]] and [[Alt]]-drag from its center to the new slot.
 3. Press [[Cmd+D]].
 
-Alternate sides from tier to tier: 850 on T04, 650 on T05, and so on down to
-850 on T10.
+Alternate sides from tier to tier: right of the centre line on T04, left on
+T05, and so on down to the right on T10.
 
-> **Tip:** Re-marquee the source before every Alt-drag. A second Alt-drag on a copy that's still floating moves that copy instead of duplicating it.
+> **Tip:** You don't have to re-marquee between copies. While a copy is still floating, another [[Alt]]-drag drops it where it is and pulls off a fresh copy.
 
-Repeat on a new *Baubles Gold* layer with a `#F2B233` overlay, starting at
-(500, 1120) on T06.
+Repeat on a new *Baubles Gold* layer with a `#F2B233` overlay, starting with
+the left-hand slot on T06.
 
 ## Rotate a square into a diamond
 
 ![A small square on the ninth bar being rotated 45 degrees with the Move tool's rotation handle, transform handles visible](12-diamond-rotate.webp)
 
-Add a *Diamonds Ice* layer. Marquee a 36 px square centered on (350, 1420)
-and fill it with `#BFE3EE`.
+Add a *Diamonds Ice* layer. [[Cmd]]-drag a 36 px square marquee centred on
+the left-hand ice slot of T09 and fill it with `#BFE3EE`.
 
 Keep the marquee and press [[V]]. Hold [[Cmd]] and drag the top-right
 **rotation handle** clockwise. Cmd snaps rotation to 15° steps, so stop at
@@ -201,11 +225,12 @@ Keep the marquee and press [[V]]. Hold [[Cmd]] and drag the top-right
 
 ![The tree with all seventeen ornaments in their slots, including four two-tone ice diamonds near the ends of the bottom two bars](13-all-ornaments.webp)
 
-Give the diamond a cut-glass look. Marquee its right half, from (350, 1390)
-to (380, 1450), and fill it with the darker `#7FB9CE`.
+Give the diamond a cut-glass look. Marquee its right half, from its vertical
+centre line out past its right point, and fill it with the darker `#7FB9CE`.
 
-Then stamp it to (1150, 1420), (350, 1520) and (1150, 1520) with the same
-marquee + Alt-drag routine, using a rectangular marquee this time.
+Then stamp it to the other three ice slots (the right end of T09 and both
+ends of T10) with the same marquee + Alt-drag routine, using a rectangular
+marquee this time.
 
 That makes 8 red, 5 gold and 4 ice: **17 ornaments**.
 
@@ -226,8 +251,8 @@ The inner glow darkens each rim, so flat discs turn into spheres.
 ![Each bauble with a small cream highlight dot at its upper left](15-shine.webp)
 
 Add a *Shine* layer. Pick the Brush at **Size 11**, **Hardness 40** in
-`#FFF6E0`. Click once 7 px up and left of every bauble's center, then set the
-layer to **80%**.
+`#FFF6E0`. Click once a little up and to the left of every bauble's center,
+then set the layer to **80%**.
 
 ## Generate snow from noise
 
@@ -237,7 +262,7 @@ Select *Glow* and add a *Snow* layer above it. Fill the layer with black.
 
 1. **Filter → Add Noise…**: Amount 100, Mono, Uniform.
 2. **Filter → Gaussian Blur…**: Radius 3. Run it twice.
-3. **Filter → Threshold…** with Preview on. Raise the Level until only about one pixel in a thousand stays white. That was around **24** here.
+3. **Filter → Threshold…** with Preview on. Adjust the Level until only a sparse scatter of white specks is left. That was around **24** here.
 
 The blur clumps the noise, so the survivors are round specks rather than
 single pixels.
@@ -272,10 +297,11 @@ Size **191**, color `#F3E9D2`. Open the **Text** panel and set **Letter
 spacing** to 3.
 
 Click in empty canvas, type `ORNAMENT GEOMETRY`, and press [[Shift+Enter]]
-to commit. Then drag it with the Move tool so the cap tops start at
-(90, 136). At that size it runs almost exactly margin to margin.
+to commit. Then drag it with the Move tool so its left edge sits on the left
+margin guide, with the cap tops a little below the top margin. At that size
+it runs almost exactly margin to margin.
 
-> **Tip:** Create new text in open space, then drag it into place. A click just below a large headline reopens the headline for editing.
+> **Tip:** Create new text in open space, then drag it into place. A click on or right next to existing text reopens that layer for editing.
 
 ## Add a misregistered red shadow
 
@@ -294,11 +320,12 @@ Keep it to 4 px. A thicker extrusion makes the letters touch each other.
 
 In **IBM Plex Mono** Medium, Size 20, `#9FC7B0`, Letter spacing 2:
 
-- `FIG. 01 — 17 ORNAMENTS, 10 TIERS, 1 STAR, 0 REGRETS`, top-left at (91, 92)
-- `SURVEY PERIOD: DEC 2026`, right edge on the 1410 guide
+- `FIG. 01 — 17 ORNAMENTS, 10 TIERS, 1 STAR, 0 REGRETS`, tucked into the top-left corner where the margin guides meet
+- `SURVEY PERIOD: DEC 2026`, with its right edge on the right margin guide
 
-Add a *Rules* layer and draw a 3 px Pencil line from (90, 305) to
-(1410, 305) with [[Shift]]-click.
+Add a *Rules* layer and draw a 3 px Pencil line from margin to margin a
+little below the headline: click on the left margin guide, then
+[[Shift]]-click on the right one at the same height.
 
 ## Copy real ornaments into a legend
 
@@ -307,7 +334,7 @@ Add a *Rules* layer and draw a 3 px Pencil line from (90, 305) to
 Legend swatches should be the real ornaments, not new drawings.
 
 1. On *Baubles Red*, draw an elliptical marquee around one bauble. Press [[Cmd+C]] and then [[Cmd+V]].
-2. Rename the pasted layer *Legend Red* and drag it to the legend row, at x 112.
+2. Rename the pasted layer *Legend Red* and drag it into the legend row under the rule, against the left margin.
 
 Layer effects don't come along with a paste, so the swatch arrives white. Give
 it the same Color Overlay and Inner Glow as the tree baubles. Do the same for
@@ -325,20 +352,20 @@ Letter spacing 1:
 - `ICE DIAMOND · ±40 CM · 4`
 
 Leave 16 px between each swatch and its label. Make the gaps between the three
-pairs equal so the row spans 90 → 1410.
+pairs equal so the row spans the full width between the margin guides.
 
 [[Cmd]]-click the six legend rows in the Layers panel and choose **Layer →
 Group Layers**. Name the group *Legend*. With the group selected, one Move
-drag positions all six layers at once. Try [[Cmd+Z]] / [[Shift+Cmd+Z]] on the
-move; the whole group jumps back and forth together.
+drag positions all six layers at once, and a single [[Cmd+Z]] undoes the
+whole move.
 
 ## Label the tiers and spans
 
 ![TIER and SPAN, CM headers in gold, with T01 to T10 down the left margin and right-aligned span values 15 to 100 down the right margin, each centered on its bar](24-columns.webp)
 
-1. **Headers:** `TIER` and `SPAN, CM` in Plex Mono SemiBold 16, `#F2B233`, Letter spacing 3, at y 556. Put `TIER` on the left margin and right-align `SPAN, CM` to 1410.
+1. **Headers:** `TIER` and `SPAN, CM` in Plex Mono SemiBold 16, `#F2B233`, Letter spacing 3, sitting just above the chart-top guide. Put `TIER` on the left margin and right-align `SPAN, CM` to the right margin guide.
 2. **Tier column:** one text layer, `T01` to `T10` on separate lines, in Plex Mono 25 `#9FC7B0`. In the Text panel, set **Line height** to **4**: 25 px × 4 = 100 px, the bar pitch. Nudge it so each label is vertically centered on its bar.
-3. **Span column:** drag out an area-text box, set **Align** to Right, type the ten values (`15`, `25`, `35`, `45`, `50`, `60` … `100`), and give it the same line height. Move it so the right edge sits on 1410.
+3. **Span column:** drag out an area-text box, set **Align** to Right, type the ten values (`15`, `25`, `35`, `45`, `50`, `60` … `100`), and give it the same line height. Move it so the right edge sits on the right margin guide.
 
 Right-aligned area text keeps `100` flush with the two-digit values.
 
@@ -347,10 +374,11 @@ Right-aligned area text keeps `100` flush with the two-digit values.
 ![Axis numbers 50 to 0 to 50 centered under each major tick, with the gold caption DISTANCE FROM TRUNK, CM below](25-axis-labels.webp)
 
 Under each major tick, add its value in Plex Mono 18 `#9FC7B0`, centered on
-the tick: `50 40 30 20 10 0 10 20 30 40 50`. The labels' tops sit at y 1692.
+the tick: `50 40 30 20 10 0 10 20 30 40 50`. Keep the labels' tops level,
+a little below the tick ends.
 
-Center `DISTANCE FROM TRUNK, CM` below them at y 1726, in SemiBold 16 gold
-with Letter spacing 3.
+Center `DISTANCE FROM TRUNK, CM` on the centre line just below them, in
+SemiBold 16 gold with Letter spacing 3.
 
 ## Add callouts with dotted leaders
 
@@ -358,20 +386,21 @@ with Letter spacing 3.
 
 Add two callouts in Plex Mono SemiBold 16 gold, Letter spacing 2:
 
-- `APEX · 1 GOLD STAR`, starting at x 900, level with the star's center (y 492)
-- `ROOT · 1 TRUNK`, starting at x 872, level with the trunk (y 1620)
+- `APEX · 1 GOLD STAR`, to the right of the star and level with its centre
+- `ROOT · 1 TRUNK`, to the right of the trunk and level with it
 
-For the leaders, add a *Leaders* layer. In the Brush's presets, set **Size**
-4, **Hardness** 100 and **Spacing 200%**, so each dab lands as a separate dot.
-[[Shift]]-click lines from the star (826 → 888) and the trunk (808 → 860) to
-their labels. Set the layer to 75%.
+For the leaders, add a *Leaders* layer. Open the Brush's **Brushes** window
+and, on the **Shape** tab, set **Size** 4, **Hardness** 100 and
+**Spacing 200**, so each dab lands as a separate dot. [[Shift]]-click a short
+line from just right of the star to just before its label, and another from
+the trunk to its label. Set the layer to 75%.
 
 ## Build a tilted n = 1 badge
 
 ![The text n = 1 being rotated minus 8 degrees with the transform handles in empty canvas before being placed on the badge](27-badge-rotate.webp)
 
-Add a *Badge Disc* layer. Draw a white 96 px circle with the Shape tool, then
-add effects:
+Add a *Badge Disc* layer. Draw a white 96 px circle with the Shape tool (a
+click opens the size dialog), then add effects:
 
 - **Color Overlay** `#E0452B`
 - **Stroke** 3 px `#F3E9D2`
@@ -392,11 +421,13 @@ center, `TREE` below it.
 
 Choose **Fraunces**, then set **Style** to Italic and **Weight** to Regular
 in the Text panel. Set it at Size 136 in `#F3E9D2` and type `Merry
-everything.`. Center it on x 750 at about y 1786.
+everything.`. Center it on the centre line, just below the axis caption.
 
 Below it, add the sign-off in Plex Mono 18, `#9FC7B0`, Letter spacing 2:
-`& A WELL-PLOTTED 2027 · WITH LOVE, THE OKAFOR-GRANT HOUSEHOLD`. Center it at
-y 1978.
+`& A WELL-PLOTTED 2027 · WITH LOVE, THE OKAFOR-GRANT HOUSEHOLD`. Center it
+just above the bottom margin guide.
+
+> **Tip:** With the Move tool, **Align center horizontally** in the options bar centres the active layer on the card in one click.
 
 ## Scale the badge and group it
 
@@ -407,7 +438,7 @@ The badge needs more presence. [[Cmd]]-click *Badge Disc*'s thumbnail, press
 **120%**. Cmd keeps the scale uniform. Press [[Cmd+D]].
 
 Re-center the two text lines on the disc. Then select all three layers and
-choose **Group Layers**. Name the group *Badge* so it moves as one.
+choose **Layer → Group Layers**. Name the group *Badge* so it moves as one.
 
 ## Clear snow from the type
 
@@ -416,9 +447,9 @@ choose **Group Layers**. Name the group *Badge* so it moves as one.
 Snow behind small type looks like dust on a scan. Select the *Snow* layer
 and the Rectangular Marquee, and set **Feather** to 40.
 
-1. Marquee (0, 0) → (1500, 430) and press [[Delete]].
-2. Marquee (0, 1640) → (1500, 2100) and press [[Delete]].
-3. At Feather 20, clear the two side columns behind the tier and span labels (x 0–180 and x 1330–1500).
+1. Marquee a full-width band from the top edge down to just below the legend, and press [[Delete]].
+2. Marquee a full-width band from just above the axis down to the bottom edge, and press [[Delete]].
+3. At Feather 20, clear the two side columns behind the tier and span labels, each about 180 px wide.
 4. At Feather 12, clear small boxes behind both callouts.
 
 The feather lets the snow fade out gently instead of stopping at a hard line.
@@ -431,8 +462,8 @@ Step back and check the chart like a reviewer would.
 
 - **T05:** the jump from 45 to 50 cm kinks the outline. Widen the bar 25 px on each side with the marquee and bucket (`#5C9A6D`, plus its highlight strip). With the Text tool, double-click `50` in the span column and type `55`.
 - **Trunk:** bucket-fill it `#9C6B43` so it reads against the dark green.
-- **Greeting:** reduce it to Size **124** so it stops competing with the headline. Re-center it at y 1800.
-- **Badge:** drag the *Badge* group next to the star, centered at about (590, 492).
+- **Greeting:** reduce it to Size **124** so it stops competing with the headline, and re-center it under the axis caption.
+- **Badge:** drag the *Badge* group to the left of the star, level with it.
 - **Title block:** [[Cmd]]-click the title and *Title Offset* rows and nudge both 6 px down. Nudge *Rules* 10 px down and the *Legend* group 8 px down.
 
 ## Export the card

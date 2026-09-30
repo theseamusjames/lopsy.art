@@ -2,6 +2,7 @@
 title: Design a Constructivist Zine Cover in Lopsy
 description: Make a constructivist zine cover in Lopsy with a clock-eyed kino-eye, a rotated gear, a factory skyline, misregistered diagonal type and halftone texture.
 published: 2026-09-25 16:13
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: zine cover, constructivism, poster design, text effects, layer effects, selections, transforms, halftone
@@ -42,9 +43,14 @@ canvas. Then double-click **Layer 1** and rename it `Rays`.
 ![A thin triangular lasso selection fanning out from the middle of the canvas to its right edge](02-lasso-searchlight-ray.webp)
 
 The rays will seem to shine out from behind the eye, so they all start at the
-eye's centre, (640, 470). Press [[L]] for the **Lasso**. Press the mouse down
-at that point, drag out past the right edge of the canvas at about y = 150,
-come down to about y = 250, and drag back to the start.
+eye's centre: about two thirds of the way across the canvas and a third of
+the way down. Press [[L]] for the **Lasso**. Press the mouse down at that
+point, drag out past the right edge of the canvas about a tenth of the way
+down, come down about 100 px, and drag back to the start.
+
+> **Tip:** Click the top and left rulers at that point (about `640` and
+> `470`) to drop two guides. Their crossing marks the eye's centre, which
+> you'll come back to several times.
 
 Set the foreground to `#171514`, click inside the wedge with the Paint Bucket
 and press [[Cmd+D]] to deselect.
@@ -53,9 +59,10 @@ and press [[Cmd+D]] to deselect.
 
 ![Three black wedge-shaped rays of different widths radiating from one point to the right edge of the canvas](03-three-rays.webp)
 
-Lasso and fill two more wedges from the same point. The second one reaches the
-right edge between y = 330 and 400, and the last, thinner one between y = 470
-and 530. Rays of different widths look more dynamic than evenly spaced ones.
+Lasso and fill two more wedges from the same point. The second one meets the
+right edge about a quarter of the way down and is about 70 px wide there. The
+last, thinner one runs almost level with the starting point and is about
+60 px wide at the edge. Rays of different widths look more dynamic than evenly spaced ones.
 
 > **Tip:** The lasso always replaces the selection, so fill each wedge before
 > you draw the next one. Click well inside a thin wedge. A bucket click outside
@@ -66,8 +73,12 @@ and 530. Rays of different widths look more dynamic than evenly spaced ones.
 ![A circular marching-ants selection 600 pixels across over the point where the rays meet](04-red-sun-marquee.webp)
 
 Click **Add Layer** and name it `Red Sun`. Pick the **Elliptical Marquee**,
-hold [[Cmd]] and drag from (340, 210) to (940, 810) to make a perfect circle
-600 px across. Set the foreground to `#C62828` and fill it with the Paint
+hold [[Cmd]] and drag a perfect circle 600 px across, centred on the point
+where the rays meet but sitting about 40 px lower.
+
+> **Tip:** You'll need this exact circle again in a moment. With nothing
+> selected, a single click (no drag) with the Elliptical Marquee opens a
+> dialog for exact corners: **From** `340`, `210` and **To** `940`, `810`. Set the foreground to `#C62828` and fill it with the Paint
 Bucket. Press [[Cmd+D]].
 
 The circle hides where the rays start, so they now seem to come out from
@@ -104,8 +115,8 @@ mode to **Multiply**, and close the panel. Then set the layer's opacity to about
 Select `Sun Halftone` and click **New Group** in the Layers panel. Name the
 group `Kino-Eye` and add a layer inside it called `Eye`.
 
-Lasso an almond shape centred on (640, 470), about 524 px wide and 236 px
-tall. Trace two gentle arcs that meet in points at the left and right. Fill it
+Lasso an almond shape centred on the point where the rays meet, about
+524 px wide and 236 px tall. Trace two gentle arcs that meet in points at the left and right. Fill it
 with cream `#ECE2C6`.
 
 ## Outline the eye with a Stroke effect
@@ -163,14 +174,17 @@ trick again:
 ![A pasted black bar being rotated 60 degrees with the transform handles over a vertical bar and a 30 degree copy](13-rotate-gear-tooth.webp)
 
 Select `Sun Halftone` and add a layer called `Gear`. It sits below the
-Kino-Eye group. Make a rectangular marquee 48 × 424 px with its top-left at
-(156, 718) and fill it black. That bar is two opposite teeth. Press
+Kino-Eye group. Near the left edge, below the sun, make a tall rectangular
+marquee 48 × 424 px. Its centre becomes the gear's axle, about 180 px from
+the left edge and two thirds of the way down. (Click once with the
+Rectangular Marquee to type it exactly: **From** `156`, `718` and **To**
+`204`, `1142`.) Fill it black. That bar is two opposite teeth. Press
 [[Cmd+C]] to copy it and [[Cmd+D]] to deselect.
 
 Press [[Cmd+V]]. The copy is pasted in place on a new layer. Draw the same
 marquee over it, press [[V]] for **Move**, hold [[Cmd]] and drag a round
 rotation handle. [[Cmd]] snaps the rotation to 15° steps, so stop at **30°**.
-Press [[Enter]], then [[Cmd+D]].
+Press [[Cmd+D]] to commit.
 
 ## Finish the ring of teeth
 
@@ -187,9 +201,11 @@ crossed bars give you twelve evenly spaced teeth.
 ![A solid black twelve-tooth gear with a round cream hole in its centre](15-finished-gear.webp)
 
 Choose **Layer → Merge Down** five times to merge all the copies into `Gear`.
-Make an elliptical marquee 330 px across centred on (180, 930) and choose
-**Edit → Fill** to fill the hub. Then make a 110 px circle in the same centre
-and press [[Delete]] to punch out the axle hole.
+Make an elliptical marquee 330 px across, centred where the bars cross
+(**From** `15`, `765` to **To** `345`, `1095` in the click dialog), and
+choose **Edit → Fill** to fill the hub. Then make a 110 px circle on the
+same centre (`125`, `875` to `235`, `985`) and press [[Delete]] to punch out
+the axle hole.
 
 The teeth on the left run off the canvas. A cropped machine part feels bigger
 than one shown whole.
@@ -198,9 +214,10 @@ than one shown whole.
 
 ![A long slanted lasso selection crossing the lower part of the cover from lower left to upper right, over the bottom of the gear](16-diagonal-band-lasso.webp)
 
-Add a layer called `Band`. Lasso a band that rises about **15°** from left to
-right, with corners at (0, 1150), (1000, 870), (1000, 1080) and (0, 1360), and
-fill it black. The bottom of the gear now tucks behind the band.
+Add a layer called `Band`. Lasso a band about 210 px tall that rises about
+**15°** from left to right. On the left edge it runs from about 250 px above
+the bottom of the canvas to 40 px above it. On the right edge it sits about
+280 px higher. Fill it black. The bottom of the gear now tucks behind the band.
 
 ## Type INSOMNIA on the band
 
@@ -208,7 +225,7 @@ fill it black. The bottom of the gear now tucks behind the band.
 
 Press [[T]] for the **Text** tool. Open the font browser, search for **Anton**
 and click it. Set **Size** to `190` and the foreground to cream. Click on the
-band at about (150, 1050) and type `INSOMNIA`. Press [[Tab]] to commit.
+band near its left end and type `INSOMNIA`. Press [[Tab]] to commit.
 
 Typing over the black band means you can see the cream letters while you work
 on them.
@@ -217,12 +234,12 @@ on them.
 
 ![INSOMNIA inside a rotated rectangular selection with transform handles, turned about 15 degrees counter-clockwise](18-rotate-insomnia.webp)
 
-Click **Rasterize Layer** at the bottom of the Layers panel. Draw a rectangular
-marquee around the word and press [[V]]. Hold [[Cmd]] and drag a rotation
-handle to **−15°**, press [[Enter]], then [[Cmd+D]].
+Click **Rasterize Layer** at the bottom of the Layers panel. That bakes the
+letters into pixels, so the rotation stays put. Draw a rectangular marquee
+around the word and press [[V]]. Hold [[Cmd]] and drag a rotation handle to
+**−15°**, then press [[Cmd+D]].
 
-Then drag the word with the **Move** tool until it sits centred on the band,
-with its middle at about (520, 1117).
+Then drag the word with the **Move** tool until it sits centred on the band.
 
 ## Build a red misregistration
 
@@ -250,9 +267,11 @@ Select `Band` and click **New Group**. Name it `Factory`. It goes in above the
 band but below the headline, so the letters stay on top. Add a `Hall` layer
 inside it.
 
-Lasso a sawtooth roofline. Start at (540, 1010), go up to (540, 850), then zig
-up and down five times: up to y = 800, and back down to y = 850 every 88 px.
-Finish at the right edge and come back down to y = 1010. Fill it black.
+Lasso a sawtooth roofline. Start on the band a little right of centre and
+go straight up about 160 px. Then zig up and down five times toward the right
+edge: each tooth rises about 50 px and drops back down every 88 px. Finish at
+the right edge, come back down to the band, and close the shape. Fill it
+black.
 
 ## Add windows and chimneys
 
@@ -260,11 +279,12 @@ Finish at the right edge and come back down to y = 1010. Fill it black.
 
 Add these layers inside the Factory group:
 
-- `Windows`: cream 20 × 26 px rectangles every 40 px, in two rows at y = 866
-  and y = 908. Marquee each one and use **Edit → Fill**.
-- `Chimneys`: three black rectangles down to y = 860. Make them 36, 44 and
-  32 px wide, starting at x = 596, 698 and 822, with their tops at y = 700,
-  660 and 690.
+- `Windows`: cream 20 × 26 px rectangles every 40 px, in two rows just
+  under the roofline, about 16 px apart. Marquee each one and use
+  **Edit → Fill**.
+- `Chimneys`: three black rectangles rising from the roof, about 100 px
+  apart along the hall. Make them 36, 44 and 32 px wide and about 160, 200
+  and 170 px tall, so the middle one is the tallest.
 - `Chimney Bands`: two thin cream stripes near the top of each chimney.
 
 The chimneys stand in front of the sun, which gives the cover its depth.
@@ -285,19 +305,22 @@ on red is the cover's strongest contrast.
 ![Red Anton INDUSTRIAL rotated 90 degrees counter-clockwise inside transform handles](24-rotate-industrial.webp)
 
 Select the top INSOMNIA layer so the new text goes in above it. Set the
-foreground to red and the Size to `160`. Click at (40, 300) in the empty
-top-left area, type `INDUSTRIAL`, and press [[Tab]].
+foreground to red and the Size to `160`. Click in the empty top-left area,
+type `INDUSTRIAL`, and press [[Tab]].
 
 Rasterize it, marquee it, and rotate it **−90°** so it reads from bottom to
-top. Press [[Enter]], then move it to the left edge, from about y = 20 down to
-y = 676. That leaves a clear gap above the gear's top tooth.
+top. Press [[Cmd+D]], then move it to the left edge, running from near the
+top of the page down to a clear gap above the gear's top tooth.
+
+> **Tip:** For an exact quarter turn, click **Rotate 90° CCW** in the Move
+> tool's options bar instead of dragging a handle.
 
 ## Outline the issue number
 
 ![A cream 07 in Anton outlined in black, with the Stroke effect set to 8 pixels in the Layer Effects panel](25-outline-07-stroke.webp)
 
-Set the Size to `180` and the foreground to cream. Click at (228, 2) and type
-`07`, then press [[Tab]] and rasterize it. Open its **Layer Effects** and turn
+Set the Size to `180` and the foreground to cream. Click at the very top of
+the page, just right of INDUSTRIAL, and type `07`, then press [[Tab]] and rasterize it. Open its **Layer Effects** and turn
 on **Stroke** with **Width** `8`.
 
 The number is cream on cream, so all you see is the black outline. It's clearly
@@ -307,26 +330,28 @@ readable but stays lighter than INDUSTRIAL.
 
 ![Close-up of the masthead: THE NIGHT SHIFT ZINE in cream Russo One above ISSUE 07 / AUTUMN 2026 / 3 AM in red Space Mono inside a black box](26-masthead.webp)
 
-Add a `Masthead` layer and fill a black rectangle 450 × 96 px with its top-left
-at (530, 36). Then set two lines of type inside it:
+Add a `Masthead` layer and fill a black rectangle 450 × 96 px in the
+top-right corner, about 20 px from the right edge and 36 px from the top.
+Then set two lines of type inside it, each starting about 20 px in from the
+box's left edge:
 
-1. `THE NIGHT SHIFT ZINE` in cream **Russo One** at Size `30`, clicked in at
-   (552, 46).
+1. `THE NIGHT SHIFT ZINE` in cream **Russo One** at Size `30`, near the top
+   of the box.
 2. `ISSUE 07 / AUTUMN 2026 / 3 AM` in **Space Mono** Regular at Size `22`, in a
-   brighter red `#E0463A`, clicked in at (553, 92).
+   brighter red `#E0463A`, below it.
 
 Rasterize each line when you finish it.
 
 > **Tip:** Wait for the canvas to show the new font before you click
-> **Rasterize Layer**. Text committed while a font is still downloading keeps
-> the fallback face, and rasterizing bakes it in. If that happens, change the
-> Size by 1 to re-render the text.
+> **Rasterize Layer**. Rasterizing bakes in whatever face is on screen, and a
+> font you've just picked can take a moment to download.
 
 ## Rotate the slogan
 
 ![WE DO NOT SLEEP. WE PRODUCE. in red Bebas Neue inside rotation handles, turned to match the diagonal band](27-rotate-tagline.webp)
 
-Switch to **Bebas Neue** at Size `64` in red. Click at (580, 1215), type
+Switch to **Bebas Neue** at Size `64` in red. Click in the cream triangle
+under the band, on the right, and type
 `WE DO NOT SLEEP.`, press [[Enter]], and type `WE PRODUCE.`. Press [[Tab]] and
 rasterize the layer.
 

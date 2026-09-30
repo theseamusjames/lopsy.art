@@ -2,7 +2,7 @@
 title: Make an Outsider Art Thanksgiving Card on Cardboard
 description: Paint a folk-art Thanksgiving card in Lopsy. A turkey escapes a man with a fork, in flat house paint on corrugated cardboard inside a hand-lettered frame.
 published: 2026-09-29 16:00
-updated: 2026-09-29
+updated: 2026-09-30
 level: Intermediate
 duration: 120
 tags: holiday card, thanksgiving card, outsider art, folk art, illustration, hand lettering, texture, layer effects, transforms, groups, paths, brushes
@@ -61,9 +61,11 @@ brown cardboard.
 Corrugated board shows faint ridges where the flutes sit under the face
 paper. You'll draw one ridge as a tile and repeat it.
 
-1. Rename **Layer 1** to *Flutes*. Drag a **Rectangular Marquee** ([[M]]) from (0, 0) to (24, 60) and **Edit → Fill** it with white.
-2. Marquee (0, 0) to (9, 60) and fill it with `#B7A48C`. That's the ridge.
-3. Marquee the full 24 × 60 tile again and choose **Edit → Define Pattern**.
+The tile has to be an exact size, so let the marquee's corner dialog do the measuring. With nothing selected, a single click (no drag) with the **Rectangular Marquee** ([[M]]) opens fields for the **From X / From Y** and **To X / To Y** corners.
+
+1. Rename **Layer 1** to *Flutes*. Click once with the marquee, enter a tile from **0, 0** to **24, 60** and **Edit → Fill** it with white.
+2. Press [[Cmd+D]], click again and enter **0, 0** to **9, 60**. Fill that strip with `#B7A48C`. That's the ridge.
+3. Select the full 24 × 60 tile again the same way and choose **Edit → Define Pattern**.
 4. Press [[Cmd+D]], then choose **Edit → Fill with Pattern…**. Pick the new 24×60 tile, tick **Preview**, and click **Apply**.
 
 The stripes are much too strong for now. The next step softens them.
@@ -83,9 +85,9 @@ The stripes are much too strong for now. The next step softens them.
 With *Grain* selected, click **New Group** and name it *Border Group*. Add a
 layer inside it called *Border*.
 
-1. With the **Lasso** ([[L]]), click around a rectangle about 26 px in from the canvas edge. Wiggle each side a little and fill it with ink `#1D1915`.
-2. Lasso a second wobbly rectangle about 118 px in from the edge and press [[Delete]]. You're left with a black band about 92 px wide.
-3. Add a *Border Stars* layer and lasso a five-point star, 68 px across, in the middle of each corner. Fill them with ochre `#D9A23A`.
+1. With the **Lasso** ([[L]]), drag around a rectangle a finger's width (about 26 px) in from the canvas edge and let go back at the start. Kink the line off course once or twice partway along each side, so the edges wobble. Fill it with ink `#1D1915`.
+2. Lasso a second wobbly rectangle about 118 px in from the edge and press [[Delete]]. You're left with a black band a little under 100 px wide.
+3. Add a *Border Stars* layer and lasso a five-point star, about 68 px across, in each corner of the band. Fill them with ochre `#D9A23A`.
 
 Hand-cut, slightly uneven edges matter more than any other detail here.
 Perfectly straight lines instantly look digital.
@@ -97,7 +99,7 @@ Perfectly straight lines instantly look digital.
 Select *Grain* again and make a **New Group** called *Turkey Group*. Traylor
 built animals from a few bold, flat shapes, and the fan tail is the biggest.
 
-1. Add a *Tail* layer. Lasso eleven long feathers that radiate from a point near (741, 932). Each one is narrow at the centre, about 295 px long, and rounded at the tip. Spread them from just below the left horizontal to just below the right. Fill them in turn with brick `#A8381F`, ochre, cobalt `#2B4A8E` and umber `#6B4424`, and leave a sliver of cardboard between neighbours.
+1. Add a *Tail* layer. Pick a point about three-fifths of the way across and three-fifths of the way down the card, where the turkey's rump will sit. Lasso eleven long feathers that radiate from it like a half-open fan, each narrow at the centre, about 295 px long and rounded at the tip. Spread them from just below the left horizontal round to just below the right. Fill them in turn with brick `#A8381F`, ochre, cobalt `#2B4A8E` and umber `#6B4424`, and leave a sliver of cardboard between neighbours.
 2. Add *Tail Tips*. Lasso a rounded cap over the outer 50 px of every feather and fill it with ink. The umber feathers get ochre caps. Make each cap a little wider than its feather, so none of the feather colour peeks around it.
 3. Drop a chalk `#EDE3CC` dot, 20 px across, into each feather just inside its cap, using the **Elliptical Marquee** and **Edit → Fill**.
 
@@ -108,7 +110,7 @@ built animals from a few bold, flat shapes, and the fan tail is the biggest.
 Add each part on its own layer inside *Turkey Group*, in this order:
 
 1. *Legs*: select the **Brush** ([[B]]) at **Size 15**, **Hardness 100** in ochre. Paint one straight leg down to the ground with three toes. Paint the other leg bent back and raised, so the bird is clearly running.
-2. *Turkey*: lasso a big pear-shaped body, about 355 × 240 px, that leans forward to the right. Fill it with ink.
+2. *Turkey*: lasso a big pear-shaped body over the base of the fan, a bit wider than it is tall and leaning forward to the right. Fill it with ink.
 3. *Wing*: lasso an irregular wing on the body and fill it with umber. With the brush at **Size 5** in chalk, add five little chevrons for feathers.
 4. *Head*: lasso a curved, tapering neck up from the breast in ink. Then add a cobalt head circle about 74 px across, an ochre beak, brick snood and wattle ribbons, and a chalk eye with an ink pupil.
 
@@ -134,14 +136,14 @@ features.
 Select *Grain* and add these layers above it:
 
 - **Dog:** lasso a long, low dog running right in the lower left corner, about 265 px long. Brush the four legs and an upright tail, and lasso an ochre collar. It's a little big and in the wrong place for now. You'll fix that with the transform handles next.
-- **Pie:** brush a short umber ground stroke at y 1168. Lasso a pie tin in umber on it and a domed crust in ochre. Add a row of small ochre circles along the rim for the crimp, three brick steam vents and two wavy chalk wisps of steam.
-- **Stars** and **Dots:** Finster packed his skies. Make four clusters, each one big 38 px ochre star with two small ones and three chalk dots.
+- **Pie:** brush a short umber ground stroke in the gap between the man and the turkey, about three-quarters of the way down. Lasso a pie tin in umber on it and a domed crust in ochre. Add a row of small ochre circles along the rim for the crimp, three brick steam vents and two wavy chalk wisps of steam.
+- **Stars** and **Dots:** Finster packed his skies. Scatter four clusters through the empty space, each one big ochre star (about 38 px across) with two small ones and three chalk dots.
 
 ## Scale the dog down
 
 ![The dog inside a blue transform box with round rotation handles, scaled down to about 78 percent from its top left corner](09-dog-scale.webp)
 
-Select *Dog* and drag a marquee a few pixels bigger than the dog. Switch to
+Select *Dog* and drag a marquee a little bigger than the dog. Switch to
 the **Move** tool ([[V]]) so the transform handles appear. Hold [[Cmd]] and
 drag the bottom-right corner handle up and to the left until the box is
 about **78%** of its size. [[Cmd]] keeps the scale uniform. Press
@@ -152,8 +154,8 @@ about **78%** of its size. [[Cmd]] keeps the scale uniform. Press
 ![The smaller dog dragged right inside its selection box so its nose reaches the turkey's planted toes](10-dog-move.webp)
 
 Marquee the smaller dog and drag it with the **Move** tool until its nose
-touches the turkey's front toes. The bottom of its paws should sit at about
-y 1339. Press [[Cmd+D]]. The dog now has a job in the story: it's nipping at
+touches the turkey's planted toes, with its paws just above the bottom of the
+frame. Press [[Cmd+D]]. The dog now has a job in the story: it's nipping at
 the escaping bird.
 
 ## Nudge the whole man as a group
@@ -161,8 +163,8 @@ the escaping bird.
 ![The Man Group selected in the Layers panel and the whole figure, pitchfork and all, shifted slightly right](11-group-move.webp)
 
 Click the *Man Group* row and drag anywhere on the canvas with the **Move**
-tool. Every layer in the group moves together. Move him about **14 px**
-right, away from the frame, so he has room to run.
+tool. Every layer in the group moves together. Move him a short way right,
+about 14 px, away from the frame, so he has room to run.
 
 ## Draw a pencil underdrawing
 
@@ -191,11 +193,12 @@ type lands just above the active layer, so select *Type Anchor* before you
 start each new text layer.
 
 Pick the **Text** tool ([[T]]) and the Google font **Finger Paint**. Its
-letters have brush streaks built in, so they look like house paint.
+letters have brush streaks built in, so they look like house paint. Choose the
+font and size before you click, so each word is set right the first time.
 
-1. At **Size 172** in ink, click in an empty spot, type `LEFTOVER` and press [[Tab]] to commit. Move it so its top-left corner sits at (172, 168).
-2. At **Size 190** in brick, type `TURKEY` and move it so its top-right corner sits at (1033, 334). Pushing one word left and one right looks more hand-made than centring both.
-3. Rasterize before you rotate text. Select *LEFTOVER* and click **Rasterize Layer** at the bottom of the Layers panel. Marquee the word with a few pixels to spare, switch to **Move**, and drag the round rotation handle at the top-right corner a hair upward, to about **−2°**. Press [[Cmd+D]]. Do the same for *TURKEY*.
+1. At **Size 172** in ink, click in an empty spot, type `LEFTOVER` and press [[Tab]] to commit. Move it to the top left, about 50 px inside the black band on both sides.
+2. At **Size 190** in brick, type `TURKEY` and move it just under *LEFTOVER*, with its right end about 50 px short of the band. Pushing one word left and one right looks more hand-made than centring both.
+3. Select *LEFTOVER* and click **Rasterize Layer** at the bottom of the Layers panel, so the tilt is baked into the paint and a later text edit can't straighten it. Marquee the word with a little room to spare, switch to **Move**, and drag the round rotation handle at the top-right corner a hair upward, to about **−2°**. Press [[Cmd+D]]. Do the same for *TURKEY*.
 
 A sign painter's 2° tilt is enough. Much more and it starts to look like a
 mistake.
@@ -208,23 +211,25 @@ Expand *Border Group* and select *Border Stars*, so the new text lands inside
 the frame's group. Switch the font to **Just Another Hand**, a tall,
 narrow hand, at **Size 80** in chalk `#EDE3CC`.
 
-1. Type `GIVE THANKS FOR WHAT IS LEFT OVER`. Move it so it's centred on x 600 with its caps between y 42 and 102, which is the middle of the 26 – 118 px band.
-2. Type `HAPPY THANKSGIVING TO ONE AND ALL` and centre it in the bottom band, with its caps starting at y 1398.
+[[Cmd]]-click (Ctrl-click) the middle of the top ruler to drop a guide exactly on the centre line. It makes centring the lines below easy.
+
+1. Type `GIVE THANKS FOR WHAT IS LEFT OVER`. Move it so it's centred on the guide and sits in the middle of the top band, with an even strip of black above and below the capitals.
+2. Type `HAPPY THANKSGIVING TO ONE AND ALL` and centre it the same way in the bottom band.
 3. Type the two side lines in empty space for now: `THE BIRD GOT AWAY AGAIN SO WE ATE THE PIE` and `SECOND HELPINGS FOR EVERYBODY · No. 1126`. Paste the middle dot · from the clipboard. The number is a nod to Finster, who numbered every piece.
 
 ## Turn the side lines to fit the frame
 
 ![The left side inscription rasterized and rotated 90 degrees counterclockwise inside a tall thin transform box in the middle of the canvas](15-rotate-side.webp)
 
-A long line can only rotate cleanly if it stays inside the canvas, so do the
-turn in the middle of the card:
+A long line is easiest to turn in the middle of the card, where the whole
+thing stays in view while you work:
 
-1. Move the left line so its centre is on the canvas centre (600, 750). Click **Rasterize Layer**.
+1. Move the left line so it sits roughly in the centre of the card. Click **Rasterize Layer**.
 2. Marquee it, switch to **Move**, and hold [[Cmd]] as you drag the rotation handle. [[Cmd]] snaps to 15° steps, so stop at exactly **−90°**. The text now reads from bottom to top. Press [[Cmd+D]].
-3. Drag it left until it's centred on x 72, in the middle of the left band.
+3. Drag it left until it sits in the middle of the left band, with equal black on either side.
 
 Repeat with the right line, rotating **+90°** so it reads top to bottom, and
-centre it on x 1128.
+centre it in the right band.
 
 ## Colour-code who's talking
 
@@ -233,8 +238,8 @@ centre it on x 1128.
 Outsider pictures often talk. Colour tells you who's speaking, with the man in
 his coat colour and the turkey in its wattle colour.
 
-1. Select *Type Anchor*. At **Size 60** in cobalt, type `COME BACK`, [[Enter]], `HERE YOU`, [[Enter]], `BIRD!`. Open the **Text** panel and set **Line height** to **1.0**. Move the block to (335, 520), just above the man's hat.
-2. At **Size 70** in brick, type `NOT THIS` / `YEAR!` with line height 1.0 and move it to (845, 545), above the turkey's head.
+1. Select *Type Anchor*. At **Size 60** in cobalt, type `COME BACK`, [[Enter]], `HERE YOU`, [[Enter]], `BIRD!`. Open the **Text** panel and set **Line height** to **1.0**. Move the block just above the man's hat.
+2. At **Size 70** in brick, type `NOT THIS`, [[Enter]], `YEAR!` with line height 1.0 and move it above the turkey's head.
 3. Add a *Speech Tails* layer. With a **Size 5** brush, paint a short curved line from under each block to the speaker's mouth, each in the speaker's colour.
 
 ## Hand-dot the frame
@@ -246,7 +251,7 @@ makes them look hand-dotted rather than stamped.
 
 1. In *Border Group*, add a *Frame Dots* layer above *Border Stars*. Pick the brush at **Size 10**, **Hardness 100**, in chalk.
 2. Open the Brushes modal. On the **Shape** tab, set **Spacing** to **200**, which is the maximum. On the **Dynamics** tab, set **Size Jitter** to **35** and **Scatter** to **20**.
-3. Drag four slightly wavy lines about 18 px inside the black band: along y 136 and y 1364, and down x 136 and x 1064.
+3. Drag four slightly wavy lines all the way round, about 18 px inside the inner edge of the black band: across the top and bottom, then down each side.
 
 Set Spacing, Size Jitter and Scatter back to their old values afterwards.
 The Brushes modal remembers them for every later stroke.
@@ -298,7 +303,7 @@ gaps.
 
 Every card that sat on a kitchen table has one.
 
-1. Add a *Stain* layer. Drag an **Elliptical Marquee** 264 × 254 px centred on (1010, 1290), across the frame's corner, and fill it with `#7A4A22`.
+1. Add a *Stain* layer. Drag an **Elliptical Marquee** about 260 px across, a touch wider than it is tall, over the lower-right corner so it overlaps the frame. Fill it with `#7A4A22`.
 2. Choose **Select → Shrink…** at **9** px and fill the smaller ellipse with a pale `#D8BF9A`. That leaves a dark rim with a faint tint inside.
 3. Press [[Cmd+D]], lasso across one part of the rim, and press [[Delete]] to break it. Coffee rings are never complete.
 4. Run **Gaussian Blur** at **Radius 2**, then set the layer to **Multiply** at **55%**.

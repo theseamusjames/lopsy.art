@@ -2,6 +2,7 @@
 title: Design a Distressed Stencil T-Shirt Graphic
 description: Make a T-REX XING road-sign tee in Lopsy with stencil fonts, a lasso-cut dinosaur, pattern-filled hazard tape, spray overspray and a distressed print texture.
 published: 2026-09-26 11:00
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: stencil, t-shirt design, apparel, screen print, distressed texture, road sign, spray paint, pattern fill, text effects
@@ -47,11 +48,15 @@ the shirt they'll be printed on. Double-click the layer name and rename it
 
 ![An amber 566 pixel square selected in the middle of the canvas with a vertical and a horizontal guide crossing at its center](02-amber-square.webp)
 
-Click the top ruler at **600** and the left ruler at **720** to drop two
-guides that cross at the sign's center. Rename **Layer 1** to **Sign Plate**.
-With the **Rectangular Marquee** (M), drag a **566 × 566** square from
-**(317, 437)**, set the foreground to amber `#F2A900`, and choose
-**Edit → Fill**.
+[[Cmd]]-click the middle of the top ruler to drop a guide exactly on the
+centre line. Then click the left ruler just above halfway down, at about
+720, for a horizontal guide. The two cross where the sign's center will be.
+Rename **Layer 1** to **Sign Plate**. With the **Rectangular Marquee** (M),
+[[Cmd]]-drag a square about **566 px** across, centred on the guide crossing.
+Set the foreground to amber `#F2A900` and choose **Edit → Fill**.
+
+> **Tip:** To place the square exactly, click once with the marquee while
+> nothing is selected and type the corners: `317, 437` to `883, 1003`.
 
 ## Rotate it into a diamond
 
@@ -59,9 +64,10 @@ With the **Rectangular Marquee** (M), drag a **566 × 566** square from
 
 Keep the selection and switch to the **Move** tool (V). Hover just outside the
 top-right corner until the cursor turns into a crosshair, then drag
-clockwise until the square has turned **45°**. The guides make it easy to
-check that the points line up. Press **⌘D** to commit the rotation. The
-diamond now spans 800 px from point to point.
+clockwise until the square has turned **45°**. Hold [[Cmd]] while you drag
+and the rotation snaps in 15° steps, so 45° is easy to hit. The guides help
+you check that the points line up. Press **⌘D** to commit the rotation. The
+diamond now spans about 800 px from point to point.
 
 ## Select an inset for the border
 
@@ -85,8 +91,9 @@ the classic warning-sign border. Press **⌘D** to deselect.
 ![A lasso selection shaped like a T-rex with a raised tail, S-curved neck, open toothy jaw, tiny arm and two legs, drawn inside the sign](06-t-rex-lasso.webp)
 
 Click **Add Layer** and name it **Rex**. With the **Lasso** (L), trace a
-side-on T-rex facing right, about **520 px** wide and **300 px** tall,
-between x 320 and 842 and y 603 and 899:
+side-on T-rex facing right, about **520 px** wide and **300 px** tall. Its
+back rises a little above the horizontal guide, and its feet stand about
+halfway between the guide and the diamond's bottom point:
 
 - A long tail that tapers to a point at the left.
 - A back that rises to the hips, then an **S-curved neck**.
@@ -102,8 +109,8 @@ come close to it without touching.
 ![A solid black T-rex silhouette inside the amber diamond sign, with an amber eye hole](07-t-rex-silhouette-eye.webp)
 
 Fill the selection with `#111111` using **Edit → Fill**. Switch to the
-**Elliptical Marquee**, drag a small **20 × 14** oval over the head at about
-**(770, 617)**, and press **Delete**. The amber that shows through is the
+**Elliptical Marquee**, drag a small oval, about **20 × 14** px, near the top
+of the head, and press **Delete**. The amber that shows through is the
 eye, the same trick a stencil cutter uses. Press **⌘D**.
 
 ## Group the sign
@@ -130,10 +137,10 @@ bridged gaps of a real stencil built into every letter.
 ![XING set in amber Allerta Stencil centered under the sign, with T-REX centered above it](10-allerta-stencil-xing.webp)
 
 With the **Move** tool, drag T-REX until it's centered on the vertical guide
-with its top at about **y 70**. Click **Tee Heather** again, then set a new
-text layer in **Allerta Stencil**, **Size 320**, amber `#F2A900`: type
-**XING**. Center it the same way, with its top at about **y 1165**. That
-leaves a gap between the sign's bottom point and the type. A lighter stencil
+with its top about 70 px below the top edge. Click **Tee Heather** again,
+then set a new text layer in **Allerta Stencil**, **Size 320**, amber
+`#F2A900`: type **XING**. Center it the same way, leaving a gap of about
+45 px between the sign's bottom point and the top of the letters. A lighter stencil
 face under the heavy one keeps the two words from competing.
 
 ## Draw one footprint
@@ -141,8 +148,9 @@ face under the heavy one keeps the two words from competing.
 ![A small orange three-toed dinosaur footprint in the lower left corner of the canvas](11-dino-footprint.webp)
 
 Click **Tee Heather** and **Add Layer**, then name it **Tracks**. Set the
-foreground to safety orange `#E8622A`. Around **(95, 1120)**, use the
-**Lasso** to draw three long, thin, pointed toes that fan upward, with the
+foreground to safety orange `#E8622A`. Near the left edge, about level with
+the sign's bottom point, use the **Lasso** to draw three long, thin,
+pointed toes that fan upward, with the
 middle one about 65 px long. Then add a small round heel pad just below
 them, and leave a gap between the toes and the heel. Run **Edit → Fill**
 after each shape.
@@ -151,10 +159,9 @@ after each shape.
 
 ![The footprint inside a rotated transform box, turned about 60 degrees clockwise to point up and to the right](12-rotate-footprint.webp)
 
-Drag a **110 × 110** marquee around the print, starting at **(40, 1040)**.
-Switch to the **Move** tool and drag the rotate handle clockwise about
-**62°**, so the toes point up and to the right, toward the sign. Press
-**⌘D**.
+Drag a square marquee, about **110 × 110** px, around the print. Switch to
+the **Move** tool and drag the rotate handle clockwise about **62°**, so the
+toes point up and to the right, toward the sign. Press **⌘D**.
 
 ## Paste, move and rotate each step
 
@@ -165,12 +172,15 @@ one step at a time:
 
 1. Press **⌘V**. The copy pastes in place on a new layer.
 2. With the **Move** tool, drag it to the next spot, then press **⌘D**.
-3. Draw a 110 × 110 marquee around it and rotate it a few degrees, then press **⌘D**.
+3. Draw a marquee around it and rotate it a few degrees, then press **⌘D**.
 
-Place the steps at about (200, 1045) and (305, 960) at the lower left, then
-(815, 560), (925, 470) and (1040, 385) at the upper right. Vary the turn a
-little at each step (55°, 48°, 44°, 52° and 60° in total), so the trail
-curves like a real walk rather than a stamped row.
+Place two steps at the lower left, each about 100–130 px further up and to
+the right than the last. The trail then disappears behind the sign and comes
+out on the other side: put three more steps at the upper right, starting
+just inside the sign's upper-right edge and heading toward the top-right
+corner. Vary the
+turn a little at each step (55°, 48°, 44°, 52° and 60° in total), so the
+trail curves like a real walk rather than a stamped row.
 
 ## Merge the trackway
 
@@ -178,37 +188,48 @@ curves like a real walk rather than a stamped row.
 
 With the top pasted layer active, choose **Layer → Merge Down** five times.
 All the prints end up on **Tracks**. The layer sits under the Sign group, so
-the dinosaur walks *behind* the sign. The print at (815, 560) peeks out
-from behind the sign's edge, which sells the depth.
+the dinosaur walks *behind* the sign. The first print on the upper right
+peeks out from behind the sign's edge, which sells the depth.
 
 ## Make a hazard-stripe tile
 
 ![A 60 pixel amber and black diagonal stripe tile selected in the top-left corner of the canvas](15-hazard-stripe-tile.webp)
 
 Click **Rex** and **Add Layer**, then name it **Tile**. The new layer lands
-inside the Sign group. Marquee **60 × 60** at the top-left corner **(0, 0)**
-and fill it amber. Then, with the Lasso, fill two black shapes: the triangle
-(0, 0), (30, 0), (0, 30), and the band (60, 0), (60, 30), (30, 60), (0, 60).
+inside the Sign group. Marquee a **60 × 60** square in the top-left corner
+and fill it amber. Zoom in close, then use the Lasso to fill two black
+shapes:
+
+- A small triangle in the top-left corner: press at the corner, drag straight to the middle of the top edge and on to the middle of the left edge, then let go.
+- A band just below the diagonal: press at the top-right corner, drag straight through the middle of the right edge, the middle of the bottom edge and the bottom-left corner, then let go.
+
+> **Tip:** To land exactly on those corners and midpoints, click them with
+> the **Pen Tool** instead, click **Commit path**, then **Path to Selection**
+> in the Paths panel.
+
 The stripes line up across the tile edges, so the pattern repeats with no
 seams. Marquee the tile again and choose **Edit → Define Pattern**. Then
 delete the Tile layer.
+
+> **Tip:** Click once with the Rectangular Marquee while nothing is selected
+> to enter the tile's corners exactly: `0, 0` to `60, 60`.
 
 ## Pattern-fill the tape
 
 ![The Pattern Fill dialog previewing diagonal amber and black stripes inside a long selection across the sign's bottom point](16-pattern-fill-tape.webp)
 
 Click **Rex**, **Add Layer**, and name it **Hazard Tape**. Marquee a
-**740 × 70** strip at **(230, 975)** and fill it amber first. Pattern Fill
-needs pixels on the layer to fill into. Then choose **Edit → Fill with
-Pattern…**, keep your new 60 × 60 pattern at **Scale 100**, and click
-**Apply**.
+**740 × 70** strip across the sign's bottom point, reaching a little past the
+diamond on both sides. Choose **Edit → Fill with Pattern…**, keep your new
+60 × 60 pattern at **Scale 100**, and click **Apply**. The stripes fill only
+the selection.
 
 ## Tear the ends and tilt it
 
 ![The striped tape with zigzag torn ends, rotated about 7 degrees counterclockwise inside its transform box](17-torn-tape-rotate.webp)
 
 Lasso a zigzag over each end of the strip and press **Delete**, so the tape
-looks torn off the roll. Then marquee **744 × 80** at **(228, 970)**, switch
+looks torn off the roll. Then marquee loosely around the whole strip, switch
 to the **Move** tool, and rotate it **−7°** (counterclockwise). Press **⌘D**.
 
 ## Give the tape a hard shadow
@@ -232,8 +253,7 @@ something a screen printer can actually print.
 
 Press down in the **middle of the sign**. The plate hides any paint that
 builds up there while you hold still. Then trace just outside the diamond's
-edge and come back to the middle before you let go. Keep the stroke moving,
-in steps larger than about a third of the Size.
+edge at a steady pace and come back to the middle before you let go.
 
 ## Add a tagline along the tracks
 
@@ -252,8 +272,8 @@ Move tool until it clears the toes.
 Click **Overspray** again, then set **NEXT 66,000,000 YEARS · TINY ARMS ·
 NO BRAKES** in **Share Tech Mono**, **Size 34**, cream. The middle dots
 aren't on most keyboards, so paste the line in with ⌘V. Center it on the
-guide with its top at about **y 1428**. It's small enough to sit near the
-hem, and it gives anyone reading up close a second joke.
+guide, just above the bottom edge of the canvas. It's small enough to sit
+near the hem, and it gives anyone reading up close a second joke.
 
 ## Start the distress texture
 
@@ -272,9 +292,7 @@ Choose **Filter → Threshold…** and set **Level 218**. Only about a fifth of
 the layer stays white, in grainy patches. Click **Apply**.
 
 Next, pick the **Magic Wand** with **Contiguous** unticked and click any
-black area. Press **Delete** straight away, then **⌘D**. A selection with
-thousands of islands makes the marching ants slow to draw, so don't leave
-it active.
+black area. Press **Delete**, then **⌘D**. Only the white specks are left.
 
 ## Recolor the specks to the shirt
 
@@ -298,9 +316,8 @@ sign, the tracks and both headlines.
 
 ![A rotated lasso selection around the WATCH YOUR STEP tagline on the Wear layer, ready to delete](26-protect-small-type.webp)
 
-Fine print can't survive heavy wear. On the Wear layer, marquee a
-**960 × 52** band from **(120, 1416)** over the fine print and press
-**Delete**. Then lasso a tilted box around WATCH YOUR STEP and delete that
+Fine print can't survive heavy wear. On the Wear layer, marquee a band just
+bigger than the fine print line and press **Delete**. Then lasso a tilted box around WATCH YOUR STEP and delete that
 too.
 
 ## Keep the pictogram clean

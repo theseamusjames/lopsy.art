@@ -2,7 +2,7 @@
 title: Design a Vintage Americana Strawberry Festival Flier
 description: Make a letterpress-style Americana flier in Lopsy with a sunburst badge, a halftone strawberry, arched wood type on a path, bunting and real print wear.
 published: 2026-09-28 10:50
-updated: 2026-09-28
+updated: 2026-09-30
 level: Intermediate
 duration: 90
 tags: americana, flier, poster, letterpress, vintage, typography, text on path, halftone, liquify, layer effects
@@ -21,7 +21,7 @@ shadows, halftone dots for shading, and ink that didn't quite cover.
 
 In this tutorial you'll make a **1200 × 1800 px** flier for the fictional
 *26th Annual Strawberry Festival*. Everything is drawn in Lopsy with lasso
-polygons, marquees, filters and type. Nothing is imported.
+shapes, marquees, filters and type. Nothing is imported.
 
 The palette is four inks on cream paper:
 
@@ -34,16 +34,16 @@ Fonts: **Ultra** (the arched wood type), **Lobster** (the script),
 
 ## Set up the paper and guides
 
-![A blank cream 1200 by 1800 document with blue guides at 60, 600 and 1140 across and at 60, 926 and 1740 down](01-paper-guides.webp)
+![A blank cream 1200 by 1800 document with blue margin guides, a centre guide, and a horizontal guide a little below halfway down](01-paper-guides.webp)
 
 Choose **File → New**, set the unit to **Pixels**, and create a
 **1200 × 1800** document with a white background.
 
 1. Select **Background**, set the foreground to `#F2E4C6`, and choose **Edit → Fill**.
-2. Choose **Filter → Add Noise**, click **Mono** and **Gaussian**, and set Amount **7**. This gives the paper a faint tooth.
-3. Click the top ruler at **60**, **600** and **1140**. Click the left ruler at **60**, **926** and **1740**.
+2. Choose **Filter → Add Noise…**, pick **Mono** and **Gaussian**, and set Amount **7**. This gives the paper a faint tooth.
+3. Click the top ruler about 60 px in from each side, then [[Cmd]]-click ([[Ctrl]]-click) the middle of it to drop a guide exactly at the centre. On the left ruler, click about 60 px from the top and from the bottom, and once a little below halfway (the ruler readout says about 926).
 
-The 926 guide marks the centre of the badge you'll build later.
+That last guide marks the centre of the badge you'll build later.
 
 ## Rule a double frame
 
@@ -51,38 +51,55 @@ The 926 guide marks the centre of the badge you'll build later.
 
 Rename **Layer 1** to *Frame* and set the foreground to navy `#1F2D52`.
 
-1. With the **Rectangular Marquee**, drag from (36, 36) to (1164, 1764) and choose **Edit → Fill**.
+1. With the **Rectangular Marquee**, drag a rectangle over almost the whole page, leaving a margin of about 36 px on every side, and choose **Edit → Fill**.
 2. Choose **Select → Shrink…** and enter **14**, then press [[Delete]]. That leaves a 14 px border.
-3. Repeat from (60, 60) to (1140, 1740) with a Shrink of **4** for a thin inner rule.
+3. Press [[Cmd+D]], then do the same with a rectangle running along the four margin guides and a Shrink of **4**, for a thin inner rule.
 
 Fill, shrink, then delete is the fastest way to draw any ring or border in
 Lopsy. You'll use it again for the badge and the ribbon stitching.
+
+> **Tip:** For exact borders, press [[Cmd+D]] and then *click* (don't drag)
+> with the marquee. A dialog opens where you can type the corners, for
+> example From **36, 36** To **1164, 1764** for the outer rule.
 
 ## Draw a sunburst with one lasso
 
 ![A single 20-point star lasso selection radiating from the badge centre over a mustard disc](03-sunburst-lasso.webp)
 
-Click **New Group** and name it *Badge*. Then add a layer called *Disc*,
-make an **Elliptical Marquee** of radius 330 centred on (600, 926), and fill it
-with `#E9A825`.
+Click **New Group** and name it *Badge*. Add a layer called *Disc*,
+[[Cmd]]-drag an **Elliptical Marquee** into a circle about 660 px across,
+centred where the centre guide crosses the badge guide, and fill it with
+`#E9A825`.
 
-On a new layer called *Rays*, draw the sunburst as **one Lasso polygon**. Alternate
-between a point near the centre and two points 420 px out, twenty times around.
-Fill it with the lighter mustard `#F3C65A`.
+On a new layer called *Rays*, draw the whole sunburst as **one Lasso
+selection**. Work your way round the badge centre twenty times: start near
+the centre, go out about 420 px, across a short way, and back to the centre.
+That makes twenty thin wedges in one outline. Fill it with the lighter mustard
+`#F3C65A`.
 
-> **Tip:** Plan star shapes like this as a list of points first. Twenty wedges
-> in one polygon give you perfectly even rays in a single fill.
+> **Tip:** **Filter → Sunburst…** draws even rays for you in the foreground
+> colour. Set the foreground to `#F3C65A`, and on the *Rays* layer set **Rays** to 20 and **Center X** / **Center
+> Y** to about 50 / 51 so they radiate from the badge centre. You'll clip them
+> to a circle in the next step either way.
 
 ## Clip the rays and ring the badge
 
 ![The sunburst clipped to a circle inside a thick navy ring with a thin red inner ring](04-badge-rings.webp)
 
-1. Make an ellipse of radius **318** on the same centre, choose **Select → Inverse**, and press [[Delete]] on the *Rays* layer.
-2. On a new *Ring* layer, fill a radius-**336** circle with navy, **Shrink** 18, and delete.
-3. On a *Red Ring* layer, fill a radius-**308** circle with red, **Shrink** 5, and delete.
+All three circles share the badge centre, so the rings come out even.
+
+1. On the *Rays* layer, select a circle a little smaller than the disc (about 636 px across), choose **Select → Inverse**, and press [[Delete]].
+2. On a new *Ring* layer, fill a circle a little larger than the disc (about 672 px across) with navy, **Shrink** 18, and delete.
+3. On a *Red Ring* layer, fill a circle about 616 px across with red, **Shrink** 5, and delete.
 
 Keep the red ring on its own layer. At the end you'll nudge it off register,
 the way a real second ink plate slips.
+
+> **Tip:** Circles on one centre are easiest with the exact-corners dialog:
+> click with the Elliptical Marquee and type a box of the circle's width
+> around the centre. For a radius *r* on this badge that's From
+> **600 − r, 926 − r** To **600 + r, 926 + r**, so the disc (radius 330) is
+> From **270, 596** To **930, 1256**.
 
 ## Cut the strawberry
 
@@ -91,22 +108,22 @@ the way a real second ink plate slips.
 Click the *Frame* row, click **New Group** (*Berry*), and drag the group's row above
 *Badge*. Inside it:
 
-1. On a *Stem* layer, lasso a short curved stem up from (600, 724) and fill it with `#2F6A2E`.
-2. On a *Berry Body* layer, lasso the berry: broad shoulders at about y 830, sides that taper to a tip at (594, 1110), and a slightly fuller left side. Fill it with red `#C8272F`.
+1. On a *Stem* layer, lasso a short curved stem rising from about 200 px above the badge centre, and fill it with `#2F6A2E`.
+2. On a *Berry Body* layer, lasso the berry: broad, rounded shoulders just below the stem, sides that taper to a tip a little left of the centre guide, and a slightly fuller left side. Fill it with red `#C8272F`.
 
-Keep the tip at least 30 px above where the ribbon will go (about y 1140),
-so the two edges don't touch.
+The navy ribbon will cross the bottom of the badge, so keep the tip about
+30 px clear of it. Otherwise the two edges touch.
 
 ## Shade it with halftone dots
 
 ![The Halftone dialog open with Preview on, turning a blurred dark-red crescent into dots on the berry's lower right](06-halftone-shade.webp)
 
 On a *Berry Shade* layer, fill the berry lasso with shade red `#9E1B24`. Then
-lasso a copy of the berry shifted up and to the left, and delete it. That
+lasso a copy of the berry shape shifted up and to the left, and delete it. That
 leaves a crescent on the lower right.
 
-1. **Filter → Gaussian Blur**, Radius **28**.
-2. **Filter → Halftone**: Dot Size **10**, Angle **45**, Softness **1**.
+1. **Filter → Gaussian Blur…**, Radius **28**.
+2. **Filter → Halftone…**: Dot Size **10**, Angle **45**, Softness **1**.
 3. Lasso the berry again, **Select → Inverse**, and [[Delete]] to trim the dots to the edge.
 
 The blur's falloff becomes dot size, which is exactly how a printer fakes
@@ -116,20 +133,21 @@ shading with one ink. You'll widen this crescent in a later step.
 
 ![One of seventy small teardrop lasso selections on the berry, with the gold seeds already filled above it](07-seed-lasso.webp)
 
-On a *Seeds* layer, fill small teardrop lassos with `#F4D06A`, one per seed,
-about seventy in all. Put them in staggered rows, and make them narrower and closer
-together toward the sides so the berry reads as round.
+On a *Seeds* layer, lasso small teardrops one at a time and fill each with
+`#F4D06A`, about seventy in all. Put them in staggered rows, and make them
+narrower and closer together toward the sides so the berry reads as round.
 
 Then open **Layer effects ✦** and turn on **Drop Shadow**: colour `#7A1320`,
-offset X **2**, Y **3**, Blur **0**, Spread **1**. The hard shadow becomes the
-little pocket each seed sits in.
+Offset X **2**, Offset Y **3**, Blur **0**, Spread **1**. The hard shadow
+becomes the little pocket each seed sits in.
 
 ## Add the calyx with a hard shadow
 
 ![Ten pointed green sepals radiating from the top of the berry with pale green veins and a crisp navy shadow](08-calyx.webp)
 
-On a *Calyx* layer, lasso ten pointed sepals radiating from (600, 724), and fill
-them with `#3F7F38`. Fill a small ellipse over the hub to close the centre.
+On a *Calyx* layer, lasso ten pointed sepals radiating from the base of the
+stem, and fill them with `#3F7F38`. Fill a small ellipse over the hub to close
+the centre.
 
 - **Brush** at size **4** in `#7DB262`: draw one vein down the middle of each sepal.
 - **Drop Shadow**: navy, offset **5 / 5**, Blur **0**.
@@ -144,16 +162,19 @@ shadow on the sheet uses it.
 Create a *Ribbon* group above *Berry*.
 
 1. On *Ribbon Tails*, lasso two swallow-tailed ends in `#172243`, plus the dark folds in `#0B1227`.
-2. On *Ribbon Band*, lasso a gently arched band from x 170 to 1030 (96 px deep, rising 26 px in the middle). Fill it with navy and add the 5 / 5 navy shadow.
-3. On *Ribbon Stitch*, lasso the band again, **Shrink 10**, fill with paper cream, **Shrink 3**, and delete. Marquee-delete the short vertical ends so only the top and bottom stitch lines remain.
+2. On *Ribbon Band*, lasso a gently arched band across the bottom of the badge. Run it from about 170 px in from each side of the page, make it about 96 px deep, and let it rise about 26 px in the middle. Fill it with navy and add the 5 / 5 navy shadow.
+3. On *Ribbon Stitch*, lasso the band again, **Shrink 10**, fill with paper cream, **Shrink 3**, and delete. Then marquee over each short end of the stitching and delete it, so only the top and bottom stitch lines remain.
 
 ## Hang half the bunting
 
 ![Six pennants in red, navy with a white star, and cream with red stripes hanging from a sagging navy string on the left half](10-bunting-swag.webp)
 
-Create a *Bunting* group and a *Swag L* layer. Lasso six triangular pennants
-along a gentle sag from (76, 72) to (600, 72). Rotate each triangle to the
-string's slope and fill them in turn with red, navy and `#FBF4E4`.
+Create a *Bunting* group and a *Swag L* layer. You only draw the left half;
+the right half is a mirrored copy.
+
+Lasso six triangular pennants along a gentle sag, from just inside the
+frame's top-left corner to the centre guide. Tilt each one to follow the
+string's slope, and fill them in turn with red, navy and `#FBF4E4`.
 
 Add two red stripe wedges to each cream pennant and a small star to each
 navy one. Then fill a thin lasso for the string and give the layer the 5 / 5 navy
@@ -163,8 +184,9 @@ shadow.
 
 ![The pasted copy of the bunting inside a marquee with transform handles, mirrored by the Move tool's Flip Horizontal button](11-bunting-flip.webp)
 
-Marquee (70, 60) to (603, 225), then press [[Cmd+C]]. Wait a couple of seconds
-and press [[Cmd+V]]. The paste lands in place as a new layer, so rename it *Swag R*.
+Marquee the whole left swag, from the frame corner to just past the centre
+guide, and press [[Cmd+C]] then [[Cmd+V]]. The paste lands in place as a new
+layer, so rename it *Swag R*.
 
 Marquee the same area again, switch to the **Move** tool, and click
 **Flip Horizontal** in the options bar. Press [[Cmd+D]] to commit.
@@ -177,9 +199,9 @@ Marquee the same area again, switch to the **Move** tool, and click
 
 ![The complete garland, with the flipped right half meeting the left half at the centre guide](12-bunting-mirrored.webp)
 
-With the Move tool, drag *Swag R* to the right until its left edge touches the
-600 guide, about **527 px**. Finish with the arrow keys for an exact meet, then
-add the same 5 / 5 navy shadow.
+With the Move tool, drag *Swag R* to the right until the two strings meet at
+the centre guide. Finish with the arrow keys for an exact meet ([[Shift]]+arrow
+moves 10 px at a time), then add the same 5 / 5 navy shadow.
 
 Because the copy is a true mirror, the colours read red, navy, stripe outward from
 the middle on both sides.
@@ -188,16 +210,18 @@ the middle on both sides.
 
 ![STRAWBERRY in red Ultra capitals following a blue arched pen path across the top of the page](13-arch-path-text.webp)
 
-Create a *Type* group above *Ribbon*. Inside it, marquee (64, 1652) to
-(1136, 1736) on an *Admission Band* layer and fill it with navy for the footer.
+Create a *Type* group above *Ribbon*. Inside it, on an *Admission Band* layer,
+marquee a band across the bottom of the page, just inside the inner rule and
+about 84 px tall, and fill it with navy for the footer.
 
-1. With the **Pen** tool, press at (110, 497) and drag to (437, 350). Then press at (1090, 497) and drag to (1417, 644). Click **Commit path**.
-2. Click the *Admission Band* row (so type settings don't restyle another text layer). With the **Text** tool, set **Ultra**, Size **110**, red, then click in empty canvas, type `STRAWBERRY`, and press [[Tab]].
+1. With the **Pen Tool**, press about 110 px in from the left edge and roughly a quarter of the way down the page, and drag up and to the right to pull out a long handle. Then press at the same height about 110 px in from the right edge and drag down and to the right, mirroring the first handle. Click **Commit path** in the options bar. (Pressing [[Enter]] would also stroke the path onto the active layer.)
+2. Keep *Admission Band* selected, so the new type settings don't restyle an existing text layer. With the **Text** tool, set **Ultra**, Size **110**, red, then click in empty canvas, type `STRAWBERRY`, and press [[Tab]].
 3. In the options bar **Path** dropdown, pick your new path. In the **Text** panel, set Letter spacing to **2**.
-4. Switch to the Move tool and nudge with the arrow keys until the word is centred on x 600.
+4. Switch to the Move tool and nudge with the arrow keys until the word is centred on the centre guide.
 
-> **Tip:** Set the Size and letter spacing **before** you nudge path text.
-> Changing them later snaps the text back onto its path.
+> **Tip:** Settle the Size and letter spacing **before** you centre path
+> text. Both change the word's length, so changing them later means centring
+> it again.
 
 ## Give the wood type a cream outline and a navy shade
 
@@ -216,7 +240,8 @@ solid second ink printed behind them. It's the classic Hatch Show Print look.
 ![Festival in navy Lobster script inside a marquee, being scaled down from its corner handle](15-festival-scale.webp)
 
 Click the *Admission Band* row again. Create `Festival` in **Lobster** at Size
-**185** in navy, and click **Rasterize Layer** in the Layers footer.
+**185** in navy, and click **Rasterize Layer** in the Layers footer, so the
+scale and tilt you're about to apply are baked into pixels.
 
 Give it a cream **Stroke** of **6** and a red **Drop Shadow** of **8 / 10**,
 Blur 0, Spread 6.
@@ -229,8 +254,8 @@ inward to about **86 %**, then press [[Cmd+D]]. Holding [[Cmd]] keeps the scale 
 
 ![The Festival script inside a rotated transform box, tilted three degrees up to the right](16-festival-rotate.webp)
 
-Move *Festival* so it's centred at x 600 with its top at about y 454. That
-leaves at least 20 px under the arch's ends.
+Move *Festival* so it's centred on the centre guide and tucked under the arch,
+with at least 20 px of clear paper between it and the arch's ends.
 
 Marquee it again, and with the Move tool drag the **rotate handle** just
 outside the top-right corner **3°** counter-clockwise. Press [[Cmd+D]].
@@ -241,33 +266,38 @@ A small upward tilt adds energy without fighting the symmetric arch above.
 
 ![SATURDAY · JUNE 13 in cream slab capitals following a shallow arched path through the middle of the navy ribbon](17-date-on-ribbon.webp)
 
-Pen a second path that follows the ribbon's centre line. Press at (270, 1225)
-and drag to (490, 1202), then press at (930, 1225) and drag to (1150, 1247), and
-commit it.
+Pen a second path along the ribbon's centre line. Press near the ribbon's left
+end and drag along the band to the right, then press near its right end and
+drag outward to the right, so the curve follows the band's gentle arch. Click
+**Commit path**.
 
 Create `  SATURDAY · JUNE 13` in **Alfa Slab One** at Size **48**, in cream, with letter spacing
 **3**. The two leading spaces push the start inward. Bind it to the new path.
 
-Nudge it until the caps sit centred between the stitch lines. Here that's
-14 px above and 14 px below at the centre.
+Nudge it until the caps sit centred between the stitch lines, with the same
+gap above and below.
 
 > **Tip:** If the last letters disappear, the text is longer than its path.
-> Path text doesn't overflow, so lengthen the path.
+> Path text doesn't overflow, so lengthen the path, and leave a little spare
+> at the end rather than fitting it exactly.
 
 ## Stack the details and ornaments
 
 ![The lower third filled with two navy event lines, a star divider, PLEASANT VALLEY FAIRGROUNDS, red hours and the cream admission line in the navy band](18-info-block.webp)
 
-Create each line in empty canvas, then click **Align center horizontally** and
-move it to its row:
+Create each line in empty canvas (a click inside an existing text layer edits
+it instead), then switch to the Move tool, click **Align center horizontally**
+and drag it down into place:
 
-- Two event lines in **Alfa Slab One 30**, navy, letter spacing 1, at y **1362** and **1404**. Keep each under 880 px wide.
-- `PLEASANT VALLEY FAIRGROUNDS` in **Fjalla One 62**, letter spacing 4, at y **1486**.
-- The hours in **Fjalla One 30**, red, letter spacing 3, at y **1568**.
+- `THE 26TH ANNUAL` in **Fjalla One 34**, navy, letter spacing 8, just under the bunting.
+- Two event lines in **Alfa Slab One 30**, navy, letter spacing 1, stacked just below the ribbon: `PIE CONTEST • PICK-YOUR-OWN • SQUARE DANCE` and `SHORTCAKE SOCIAL • BRASS BAND • HAYRIDES`. Keep each under about 880 px wide.
+- `PLEASANT VALLEY FAIRGROUNDS` in **Fjalla One 62**, letter spacing 4, below the events.
+- The hours, `9 AM 'TIL DUSK • RAIN OR SHINE • ROUTE 9, PLEASANT VALLEY`, in **Fjalla One 30**, red, letter spacing 3, below that.
 - `ADMISSION 25¢ • KIDS UNDER 12 FREE` in **Fjalla One 38**, cream, centred in the band.
 
-On an *Ornaments* layer, lasso red stars either side of the tagline and at the centre of
-a thin two-part navy rule at y 1457. Add cream stars at the ends of the band.
+On an *Ornaments* layer, lasso red stars either side of the tagline. Draw a
+thin two-part navy rule between the events and the venue line, with a red star
+at its centre, and add cream stars at the ends of the band.
 
 ## Loosen the top with group and selection nudges
 
@@ -275,7 +305,7 @@ a thin two-part navy rule at y 1457. Add cream stars at the ends of the band.
 
 The pennant tips and the tagline were crowding each other.
 
-1. Click the *Bunting* **group** row, switch to the Move tool, and press [[Down]] ten times. The whole garland moves together.
+1. Click the *Bunting* **group** row, switch to the Move tool, and press [[Shift+Down]] once to move it 10 px. The whole garland moves together.
 2. Nudge the *Annual* text down **8**.
 3. On *Ornaments*, marquee just the two tagline stars and press [[Down]] eight times. With a selection active, the arrows move only the selected pixels.
 
@@ -284,8 +314,9 @@ The pennant tips and the tagline were crowding each other.
 ![A lasso of the berry offset up and left by about 75 pixels over the refilled shade layer](20-deeper-shade.webp)
 
 A thin crescent makes the berry look flat. Clear *Berry Shade*, refill the
-berry lasso with shade red, then lasso a smaller copy (90 % size) shifted
-**−70, −80** and delete it.
+berry lasso with shade red, then lasso a slightly smaller copy of the berry
+(about 90 % size) shifted well up and to the left, roughly 70–80 px each way,
+and delete it.
 
 Run **Gaussian Blur** at **40** and **Halftone** at **10 / 45° / 1**, then trim
 to the berry again. Now the dots cover the whole lower-right third.
@@ -297,9 +328,9 @@ to the berry again. Now the dots cover the whole lower-right third.
 Click *Calyx* and choose **Layer → Merge Down** three times. Calyx, seeds and
 shade fold into *Berry Body*, and their shadows bake in.
 
-Open **Filter → Liquify**, choose **Bloat**, and set Brush size **460** and pressure
-**12**. Press once at the middle of the berry with the smallest wiggle, then
-click **Apply**.
+Open **Filter → Liquify…**, set the mode to **Bloat**, and set Brush size **460**
+and Pressure **12**. Press once at the middle of the berry with the smallest
+wiggle, then click **Apply**.
 
 The centre seeds swell and the edge seeds stay small, so the rows now wrap
 around a sphere.
@@ -315,17 +346,19 @@ Marquee the berry. With the Move tool, click **Distort** in the options bar
 and drag the corner handles:
 
 - Top-right corner **down about 22 px** to drop the right shoulder.
-- Both bottom corners **15 px left and 16 px up** to move the tip off centre.
+- Both bottom corners **about 15 px left and 16 px up** to move the tip off centre.
 
 Press [[Cmd+D]]. A real berry is never symmetric, and this also opens up clear
-paper between the tip and the ribbon. Finally, marquee-delete the top of the
-*Stem* above y 612 so it stops just inside the ring.
+paper between the tip and the ribbon. Finally, on *Stem*, marquee the part of
+the stem that pokes past the navy ring and delete it, so the stem stops just
+inside the ring.
 
 ## Knock the red plate off register
 
 ![A close view of STRAWBERRY where the red letters sit a few pixels off their navy shadow, leaving a thin cream sliver](23-misregistration.webp)
 
-Two-colour presses never line up perfectly. Fake it:
+Two-colour presses never line up perfectly. Fake it with arrow-key nudges on
+the Move tool:
 
 - Nudge *Red Ring* **3 right, 2 down**, and *Hours* **2 right, 1 down**.
 - Nudge *STRAWBERRY* **3 right, 2 down**, then change its shadow offset to **6 / 9** so the navy stays put.
@@ -337,16 +370,15 @@ The result is a hairline of cream where the inks drift apart.
 
 ![A full-page grey texture of clumped clouds and horizontal noise streaks covering the flier](24-wear-texture.webp)
 
-Create a *Print Texture* group and drag it to the top of the stack. Make sure
-the target row is in view, and close the Color and Text panels if the Layers list is short.
+Create a *Print Texture* group and drag it to the top of the stack.
 
 On an *Ink Wear* layer:
 
 1. Fill it with grey `#808080`.
-2. **Filter → Clouds**, Scale **12**, to get clumps.
-3. **Filter → Add Noise**, Mono, Gaussian, **70**.
-4. **Filter → Motion Blur**, Angle **0**, Distance **14**, to streak it like a roller.
-5. **Filter → Threshold** at **250**. About 4 % of the pixels stay white.
+2. **Filter → Clouds…**, Scale **12**, to get clumps.
+3. **Filter → Add Noise…**, Mono, Gaussian, **70**.
+4. **Filter → Motion Blur…**, Angle **0**, Distance **14**, to streak it like a roller.
+5. **Filter → Threshold…** at Level **250**. Only a few percent of the pixels stay white.
 
 Marquee-delete the texture over the small text lines so they stay readable.
 
@@ -356,8 +388,8 @@ Marquee-delete the texture over the small text lines so they stay readable.
 
 Worn ink should only ever show *paper*, and only where there was ink.
 
-1. Take the **Magic Wand**, untick **Contiguous**, and click a white speck on *Ink Wear*.
-2. Click **Add Layer** (*Paper Show*), set the foreground to paper `#F2E4C6`, and choose **Edit → Fill**. Press [[Cmd+D]] straight away.
+1. Take the **Magic Wand**, untick **Contiguous**, zoom in, and click right in the middle of a white speck on *Ink Wear*.
+2. Click **Add Layer** (*Paper Show*), set the foreground to paper `#F2E4C6`, and choose **Edit → Fill**. Press [[Cmd+D]].
 3. Delete the *Ink Wear* layer and set *Paper Show* to **85 %**.
 
 On bare paper the specks match the paper and vanish. On the inks they read as
