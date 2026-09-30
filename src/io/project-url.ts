@@ -9,6 +9,7 @@
 
 import { useUIStore } from '../app/ui-store';
 import { describeError, notifyError } from '../app/notifications-store';
+import { loadProject } from './project-load';
 
 /** Must match OPEN_PROJECT_PARAM in src/site/tutorials/site-config.ts. */
 export const OPEN_PROJECT_PARAM = 'open';
@@ -77,6 +78,5 @@ export async function openProjectFromQuery(): Promise<void> {
     return;
   }
 
-  const { loadProject } = await import('./project-load');
   await loadProject(new File([blob], fileNameFromUrl(url)));
 }
