@@ -28,7 +28,7 @@ function renderMobileWelcome(): string {
   return `<dialog class="welcome" id="welcome" aria-labelledby="welcome-title">
   <form method="dialog">
     <h2 id="welcome-title">Welcome!</h2>
-    <p>${SITE_NAME} is an image editor that runs in your browser, but it's really made for bigger screens. But while you're here, check out some of the things you can do with it. Enjoy!</p>
+    <p>${SITE_NAME} is an image editor that runs in your browser, but it's really made for bigger screens. While you're here, check out some of the things you can do with it. Enjoy!</p>
     <button class="button button-large" autofocus>Let's go</button>
   </form>
 </dialog>
