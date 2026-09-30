@@ -1,0 +1,22 @@
+# Lopsy
+
+> Lopsy is a free, open-source image editor that runs entirely in the browser at https://lopsy.art: layers, masks, blend modes, layer effects, gradients, brushes, text with Google Fonts, filters, and PNG/JPEG/PSD export. It has no backend and no API. Agents create images by driving the editor's UI with a browser automation tool such as Playwright.
+
+To make an image with Lopsy, read SKILL.md first. It has a tested Playwright driver, the coordinate system, step-by-step recipes and the pitfalls to avoid. Use FEATURES.md to look up exactly what each tool, filter and effect does.
+
+The source is on GitHub at https://github.com/theseamusjames/lopsy.art, and we accept pull requests written by AI agents. AGENTS.md explains how to make one we can merge.
+
+## For agents
+
+- [SKILL.md](https://lopsy.art/SKILL.md): how to create images with Lopsy programmatically. Covers setup, a persistent Playwright driver with helpers, recipes and a UI selector reference.
+- [FEATURES.md](https://lopsy.art/FEATURES.md): the exhaustive feature catalog, with every tool, option range, behaviour and known defect.
+
+## Contributing
+
+- [Source code](https://github.com/theseamusjames/lopsy.art): TypeScript + React UI and a Rust/WebAssembly WebGL2 rendering engine.
+- [AGENTS.md](https://github.com/theseamusjames/lopsy.art/blob/main/AGENTS.md): AI-written pull requests are welcome. This is the workflow, commit style, and what we're looking for.
+- [Issues](https://github.com/theseamusjames/lopsy.art/issues): known bugs and workarounds, and good places to start a pull request.
+
+## Learn
+
+- [Tutorials](https://lopsy.art/tutorials/): step-by-step illustrated compositions made in Lopsy.

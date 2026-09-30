@@ -6,6 +6,7 @@ import { resolve } from 'path';
 import { statSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { tutorialsPlugin } from './scripts/vite-plugin-tutorials';
+import { agentDocsPlugin } from './scripts/vite-plugin-agent-docs';
 
 /**
  * Vite plugin that checks whether the WASM build output is older than any
@@ -78,6 +79,7 @@ export default defineConfig({
       contentDir: resolve(__dirname, 'tutorials'),
       cssFile: resolve(__dirname, 'src/site/tutorials/tutorials.css'),
     }),
+    agentDocsPlugin({ root: resolve(__dirname), files: ['SKILL.md', 'FEATURES.md'] }),
   ],
   server: {
     fs: {
