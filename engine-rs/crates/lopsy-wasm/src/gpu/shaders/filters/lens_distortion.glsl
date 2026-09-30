@@ -39,10 +39,13 @@ void main() {
         if (!inBounds(uvR) || !inBounds(uvG) || !inBounds(uvB)) {
             fragColor = vec4(0.0);
         } else {
-            float r = texture(u_tex, uvR).r;
-            vec4 g = texture(u_tex, uvG);
-            float b = texture(u_tex, uvB).b;
-            fragColor = vec4(r, g.g, b, g.a);
+            vec4 rs = texture(u_tex, uvR);
+            vec4 gs = texture(u_tex, uvG);
+            vec4 bs = texture(u_tex, uvB);
+            // Per-channel coverage keeps fringes visible past transparency (#1043).
+            float a = max(rs.a, max(gs.a, bs.a));
+            vec3 premul = vec3(rs.r * rs.a, gs.g * gs.a, bs.b * bs.a);
+            fragColor = a > 0.0 ? vec4(premul / a, a) : vec4(0.0);
         }
     } else {
         vec2 uv = distort(v_uv, k, aspect);
