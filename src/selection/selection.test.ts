@@ -8,6 +8,8 @@ import {
   isEmptySelection,
   getSelectionEdges,
   featherSelection,
+  growSelection,
+  shrinkSelection,
 } from './selection';
 
 describe('createRectSelection', () => {
@@ -205,5 +207,89 @@ describe('getSelectionEdges', () => {
       expect(Array.from(limited.h)).toEqual(Array.from(full.h));
       expect(Array.from(limited.v)).toEqual(Array.from(full.v));
     }
+  });
+});
+
+describe('growSelection / shrinkSelection (#1038)', () => {
+  function circleMask(w: number, h: number, cx: number, cy: number, r: number): Uint8ClampedArray {
+    const mask = new Uint8ClampedArray(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+        mask[y * w + x] = Math.round(Math.min(1, Math.max(0, r - d + 0.5)) * 255);
+      }
+    }
+    return mask;
+  }
+
+  function rectMask(w: number, h: number, x0: number, y0: number, rw: number, rh: number): Uint8ClampedArray {
+    const mask = new Uint8ClampedArray(w * h);
+    for (let y = y0; y < y0 + rh; y++) {
+      for (let x = x0; x < x0 + rw; x++) mask[y * w + x] = 255;
+    }
+    return mask;
+  }
+
+  const at = (m: Uint8ClampedArray, w: number, x: number, y: number) => m[y * w + x]!;
+
+  it('shrinks a 16 px circle by 3 into a ~10 px disc, not a square', () => {
+    const w = 40;
+    const mask = circleMask(w, w, 20, 20, 8);
+    const out = shrinkSelection(mask, w, w, 3);
+    const b = selectionBounds(out, w, w)!;
+    expect(b.width).toBeGreaterThanOrEqual(9);
+    expect(b.width).toBeLessThanOrEqual(10);
+    expect(b.height).toBe(b.width);
+    // Corners of the bounding box are cut away like a circle's.
+    expect(at(out, w, b.x, b.y)).toBe(0);
+    expect(at(out, w, b.x + b.width - 1, b.y + b.height - 1)).toBe(0);
+    // Middle of each flat side is solidly selected.
+    expect(at(out, w, 20, b.y)).toBeGreaterThan(127);
+    expect(at(out, w, b.x, 20)).toBeGreaterThan(127);
+    // Matches a directly drawn r = 5 circle to within a pixel's coverage.
+    const ref = circleMask(w, w, 20, 20, 5);
+    let diff = 0;
+    for (let i = 0; i < ref.length; i++) diff += Math.abs((ref[i]! >= 128 ? 1 : 0) - (out[i]! >= 128 ? 1 : 0));
+    expect(diff).toBeLessThanOrEqual(4);
+  });
+
+  it('shrinks a rectangle by exactly the amount on each side', () => {
+    const w = 50;
+    const out = shrinkSelection(rectMask(w, w, 10, 10, 30, 20), w, w, 3);
+    expect(selectionBounds(out, w, w)).toEqual({ x: 13, y: 13, width: 24, height: 14 });
+    expect(at(out, w, 13, 13)).toBe(255);
+  });
+
+  it('treats the document edge as a selection edge when shrinking', () => {
+    const w = 20;
+    const out = shrinkSelection(rectMask(w, w, 0, 0, 20, 20), w, w, 2);
+    expect(selectionBounds(out, w, w)).toEqual({ x: 2, y: 2, width: 16, height: 16 });
+  });
+
+  it('returns an empty mask when the shrink consumes the selection', () => {
+    const w = 60;
+    const out = shrinkSelection(rectMask(w, w, 10, 10, 30, 30), w, w, 20);
+    expect(isEmptySelection(out)).toBe(true);
+  });
+
+  it('grows a rectangle by exactly the amount on flat sides with rounded corners', () => {
+    const w = 60;
+    const out = growSelection(rectMask(w, w, 20, 20, 10, 10), w, w, 5);
+    expect(selectionBounds(out, w, w)).toEqual({ x: 15, y: 15, width: 20, height: 20 });
+    expect(at(out, w, 15, 25)).toBe(255);
+    // Outer corner is rounded off.
+    expect(at(out, w, 15, 15)).toBe(0);
+  });
+
+  it('grows a small circle into a round disc', () => {
+    const w = 40;
+    const out = growSelection(circleMask(w, w, 20, 20, 3), w, w, 5);
+    const ref = circleMask(w, w, 20, 20, 8);
+    let diff = 0;
+    for (let i = 0; i < ref.length; i++) diff += Math.abs((ref[i]! >= 128 ? 1 : 0) - (out[i]! >= 128 ? 1 : 0));
+    // At most one pixel of difference per octant.
+    expect(diff).toBeLessThanOrEqual(8);
+    const b = selectionBounds(out, w, w)!;
+    expect(at(out, w, b.x, b.y)).toBe(0);
   });
 });

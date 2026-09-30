@@ -200,3 +200,39 @@ describe('groupSelectedLayers with a single selected layer (#952)', () => {
     expect(state().undoStack[state().undoStack.length - 1]!.label).toBe('Group Layers');
   });
 });
+
+describe('groupSelectedLayers with a selected group and its children (#1030)', () => {
+  beforeEach(() => {
+    state().createDocument(400, 300, false);
+  });
+
+  it('moves the selected group as a subtree instead of emptying it', () => {
+    const layer1 = state().document.layers.find((l) => l.name === 'Layer 1')!.id;
+    const a = addNamedLayer('A');
+    const b = addNamedLayer('B');
+    state().setLayerSelection([a, b]);
+    state().groupSelectedLayers();
+    const inner = state().document.activeLayerId!;
+    state().renameLayer(inner, 'Inner');
+
+    // A Shift-range from Layer 1 up to the expanded Inner group selects the
+    // group's children too.
+    state().setLayerSelection([layer1, a, b, inner]);
+    state().groupSelectedLayers();
+
+    const doc = state().document;
+    const outer = doc.layers.find((l) => l.id === doc.activeLayerId!)!;
+    expect(isGroupLayer(outer)).toBe(true);
+    expect((outer as { children: readonly string[] }).children).toEqual([layer1, inner]);
+    const innerLayer = doc.layers.find((l) => l.id === inner)!;
+    expect((innerLayer as { children: readonly string[] }).children).toEqual([a, b]);
+
+    const rootName = doc.layers.find((l) => l.id === doc.rootGroupId)!.name;
+    expect(panelTopToBottom()).toEqual([rootName, outer.name, 'Inner', 'B', 'A', 'Layer 1', 'Background']);
+    // layerOrder keeps each subtree contiguous, children before their group.
+    const order = doc.layerOrder;
+    expect(order.indexOf(layer1)).toBeLessThan(order.indexOf(a));
+    expect(order.indexOf(b)).toBeLessThan(order.indexOf(inner));
+    expect(order.indexOf(inner)).toBeLessThan(order.indexOf(outer.id));
+  });
+});

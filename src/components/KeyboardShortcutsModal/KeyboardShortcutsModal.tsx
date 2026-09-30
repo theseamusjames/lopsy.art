@@ -170,7 +170,7 @@ export function KeyboardShortcutsModal({ onClose }: KeyboardShortcutsModalProps)
     <div className={styles.overlay} onMouseDown={onClose}>
       <div
         className={styles.modal}
-        role="dialog"
+        role="dialog" aria-modal="true"
         aria-label="Keyboard Shortcuts"
         onMouseDown={(e) => e.stopPropagation()}
       >

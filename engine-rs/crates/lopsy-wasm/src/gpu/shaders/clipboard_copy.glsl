@@ -27,7 +27,8 @@ void main() {
     // Apply selection mask if present
     if (u_hasMask == 1) {
         vec2 maskUV = docPos / u_docSize;
-        float maskVal = texture(u_maskTex, maskUV).r;
+        // Off-canvas texels are outside the selection (#1033).
+        float maskVal = (any(lessThan(maskUV, vec2(0.0))) || any(greaterThan(maskUV, vec2(1.0)))) ? 0.0 : texture(u_maskTex, maskUV).r;
         // Take the mask as coverage, min(alpha, mask), mirroring
         // clipboard_clear's alpha - mask so copy + clear conserve the pixel.
         // A product would square alpha for a selection built from the

@@ -67,7 +67,7 @@ const ALLOWLIST = {
   'src/app/store/mask-history.test.ts': 1,                   // #780 fixture mask
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
   'src/selection/selection-to-path.test.ts': 2,
-  'src/selection/selection.test.ts': 17,
+  'src/selection/selection.test.ts': 19,               // +2: #1038 grow/shrink circle and rect fixtures
   'src/test-setup.ts': 1,
   'src/test/canvas-mock.ts': 3,
   'src/tools/brush/brush-from-selection.test.ts': 3,
@@ -115,7 +115,7 @@ const ALLOWLIST = {
   'src/tools/wand/wand-strategy.ts': 1,
   'src/panels/LayerPanel/layer-selection.ts': 2,
   'src/panels/PathsPanel/path-to-selection.ts': 1,
-  'src/selection/selection.ts': 13,                          // see #442 — feather pass should move to existing GPU helper
+  'src/selection/selection.ts': 14,                          // see #442 — feather pass should move to existing GPU helper; +1: #1038 grow/shrink distance grid
   'src/tools/lasso/lasso.ts': 1,
   'src/tools/transform/transform-mask.ts': 1,
 

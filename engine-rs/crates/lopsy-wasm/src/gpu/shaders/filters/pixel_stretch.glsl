@@ -28,9 +28,12 @@ void main() {
     vec2 uvG = vec2(clamp(v_uv.x + offset, 0.0, 1.0), v_uv.y);
     vec2 uvB = vec2(clamp(v_uv.x + offset - split, 0.0, 1.0), v_uv.y);
 
-    float r = texture(u_tex, uvR).r;
-    vec4 center = texture(u_tex, uvG);
-    float b = texture(u_tex, uvB).b;
+    vec4 rs = texture(u_tex, uvR);
+    vec4 gs = texture(u_tex, uvG);
+    vec4 bs = texture(u_tex, uvB);
 
-    fragColor = vec4(r, center.g, b, center.a);
+    // Per-channel coverage keeps the split visible past transparency (#1043).
+    float a = max(rs.a, max(gs.a, bs.a));
+    vec3 premul = vec3(rs.r * rs.a, gs.g * gs.a, bs.b * bs.a);
+    fragColor = a > 0.0 ? vec4(premul / a, a) : vec4(0.0);
 }

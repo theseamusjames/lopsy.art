@@ -83,7 +83,7 @@ export function MarqueeRegionModal({ shape, initialFrom, initialTo, onConfirm, o
 
   return (
     <div className={styles.overlay} onMouseDown={onCancel}>
-      <div className={styles.modal} role="dialog" aria-label={title} onMouseDown={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>{title}</h2>
         </div>

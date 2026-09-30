@@ -1,4 +1,5 @@
 import type { InteractionState, InteractionContext } from '../../app/interactions/interaction-types';
+import { seedPixel } from '../../app/interactions/interaction-types';
 import type { SelectionToolStrategy, SelectionToolId } from '../../app/interactions/selection-strategy';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
@@ -20,8 +21,7 @@ export const wandStrategy: SelectionToolStrategy = {
     const editorState = useEditorStore.getState();
     const { width: docW, height: docH } = editorState.document;
     const pixelData = wasmReadLayerPixelsForFill(engine, ctx.activeLayerId);
-    const cx = Math.round(ctx.canvasPos.x);
-    const cy = Math.round(ctx.canvasPos.y);
+    const { x: cx, y: cy } = seedPixel(ctx);
     const wandMaskRaw = wandGraduated
       ? wasmFloodFillGraduated(pixelData, docW, docH, cx, cy, wandTolerance, wandContiguous)
       : wasmFloodFill(pixelData, docW, docH, cx, cy, 0, 0, 0, 0, wandTolerance, wandContiguous);

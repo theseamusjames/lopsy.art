@@ -97,7 +97,7 @@ export function PatternFillDialog({ onApply, onCancel, onPreviewChange, onPrevie
     <div className={`${styles.overlay} ${preview ? styles.overlayTransparent : ''}`} role="presentation">
       <div
         className={styles.modal}
-        role="dialog"
+        role="dialog" aria-modal="true"
         aria-label="Pattern Fill"
         onKeyDown={handleKeyDown}
         style={{ '--drag-x': `${offset.x}px`, '--drag-y': `${offset.y}px` } as React.CSSProperties}

@@ -43,6 +43,7 @@ import { KeyboardShortcutsModal } from '../../components/KeyboardShortcutsModal/
 import { AboutModal } from '../../components/AboutModal/AboutModal';
 import { useEditorStore } from '../editor-store';
 import { growSelection, shrinkSelection, selectionBounds } from '../../selection/selection';
+import { notifyInfo } from '../notifications-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { setSelectionMask, featherSelectionMask, readSelectionMask } from '../../engine-wasm/wasm-bridge';
 import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
@@ -283,8 +284,9 @@ export function MenuBar() {
       editor.setSelection(newBounds, newMask, docW, docH);
       useUIStore.getState().setTransform(createTransformState(newBounds));
     } else {
-      editor.clearSelection();
-      useUIStore.getState().setTransform(null);
+      // An empty result would read as "no selection", which Delete, Fill
+      // and filters treat as the whole layer (#1026). Keep the selection.
+      notifyInfo('No pixels would remain selected. The selection was not changed.');
     }
     setSelectDialog(null);
   }, [selectDialog]);

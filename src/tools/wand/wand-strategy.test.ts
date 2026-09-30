@@ -131,7 +131,7 @@ describe('wand strategy', () => {
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 
-  it('flood-fills at the rounded click point with the configured tolerance', () => {
+  it('flood-fills at the pixel under the click with the configured tolerance', () => {
     wandStrategy.onDown(makeCtx({ canvasPos: { x: 2.4, y: 2.6 } }), 'wand');
     expect(floodFill).toHaveBeenCalledTimes(1);
     const args = floodFill.mock.calls[0]!;
@@ -139,7 +139,7 @@ describe('wand strategy', () => {
     expect(args[1]).toBe(DOC_W);
     expect(args[2]).toBe(DOC_H);
     expect(args[3]).toBe(2);
-    expect(args[4]).toBe(3);
+    expect(args[4]).toBe(2);
     expect(args[9]).toBe(40);
     expect(args[10]).toBe(true);
   });

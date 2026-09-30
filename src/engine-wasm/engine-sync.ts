@@ -612,14 +612,29 @@ function adjIsNonTrivial(adj: ReturnType<typeof nodesToLegacyAdjustments>): bool
 
 function groupNeedsRouting(
   group: import('../types').GroupLayer,
-  precomputedAdj?: ReturnType<typeof nodesToLegacyAdjustments> | null,
+  precomputedAdj: ReturnType<typeof nodesToLegacyAdjustments> | null,
+  isRoot: boolean,
 ): boolean {
   const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
   if (hasAdj) {
     const adj = precomputedAdj ?? nodesToLegacyAdjustments(group.adjustments);
     if (adjIsNonTrivial(adj)) return true;
   }
-  return group.mask != null && group.mask.enabled;
+  if (group.mask != null && group.mask.enabled) return true;
+  return groupNeedsIsolation(group, isRoot);
+}
+
+/**
+ * A non-pass-through group applies its opacity and blend mode to the
+ * composite of its subtree, which needs its own buffer (#1029). A Normal
+ * group at 100% keeps blending its children straight through, as it always
+ * has, so documents that rely on that (e.g. Multiply layers reaching the
+ * paper below their group) render unchanged. The document root has nothing
+ * beneath it to isolate from.
+ */
+function groupNeedsIsolation(group: import('../types').GroupLayer, isRoot: boolean): boolean {
+  if (isRoot || group.blendMode === 'pass-through') return false;
+  return group.opacity < 1 || group.blendMode !== 'normal';
 }
 
 export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): void {
@@ -628,13 +643,23 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
   // Precompute which groups need their own routing BEFORE walking children,
   // so a nested group's ancestors know to stop their descendant walk at it
   // (#857) regardless of which group happens to be visited first below.
+  const layerMap = new Map<string, Layer>();
+  const childIds = new Set<string>();
+  for (const l of layers) {
+    layerMap.set(l.id, l);
+    if (l.type === 'group') {
+      for (const c of (l as import('../types').GroupLayer).children) childIds.add(c);
+    }
+  }
+  const isRoot = (id: string): boolean => !childIds.has(id);
+
   const routedGroupIds = new Set<string>();
   for (const layer of layers) {
     if (layer.type !== 'group') continue;
     const group = layer as import('../types').GroupLayer;
     const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
     const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
-    if (groupNeedsRouting(group, adj)) routedGroupIds.add(group.id);
+    if (groupNeedsRouting(group, adj, isRoot(group.id))) routedGroupIds.add(group.id);
   }
   // If the set of routed groups changed since last time — a group started
   // or stopped needing its own routing — any OTHER group's cached
@@ -647,22 +672,16 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
     [...routedGroupIds].some((id) => !tracked.groupAdjRoutedIds.has(id));
   tracked.groupAdjRoutedIds = routedGroupIds;
 
-  const layerMap = new Map<string, Layer>();
-  if (routedGroupIds.size > 0 || tracked.groupAdjTracked.size > 0) {
-    for (const l of layers) layerMap.set(l.id, l);
-  }
-
   if (tracked.groupAdjNeedsFullSync) {
     clearGroupAdjustments(engine);
     tracked.groupAdjTracked.clear();
     tracked.groupAdjNeedsFullSync = false;
 
     for (const layer of layers) {
-      if (layer.type !== 'group') continue;
+      if (layer.type !== 'group' || !routedGroupIds.has(layer.id)) continue;
       const group = layer as import('../types').GroupLayer;
       const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
       const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
-      if (!groupNeedsRouting(group, adj)) continue;
       const childrenJson = pushGroupToEngine(engine, group, layers, adj, undefined, routedGroupIds);
       tracked.groupAdjTracked.set(group.id, {
         adjustments: group.adjustments,
@@ -698,7 +717,7 @@ export function syncGroupAdjustments(engine: Engine, layers: readonly Layer[]): 
 
     const hasAdj = group.adjustmentsEnabled && group.adjustments && group.adjustments.length > 0;
     const adj = hasAdj ? nodesToLegacyAdjustments(group.adjustments) : null;
-    const needs = groupNeedsRouting(group, adj);
+    const needs = routedGroupIds.has(group.id);
     if (needs) {
       const cachedJson = !routedSetChanged && descendantsUnchanged ? prev?.childrenJson : undefined;
       const childrenJson = pushGroupToEngine(engine, group, layers, adj, cachedJson, routedGroupIds);

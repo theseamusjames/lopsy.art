@@ -8,5 +8,12 @@ out vec4 fragColor;
 void main() {
     vec4 original = texture(u_tex, v_uv);
     vec4 bloom = texture(u_bloomTex, v_uv);
-    fragColor = vec4(original.rgb + bloom.rgb * bloom.a * u_intensity, original.a);
+    // Add the glow as premultiplied light and let its coverage extend the
+    // layer's alpha, so the halo shows on transparent pixels (#1027).
+    // Opaque pixels reduce to original.rgb + glow, as before.
+    vec3 glow = bloom.rgb * bloom.a * u_intensity;
+    float glowAlpha = clamp(bloom.a * u_intensity, 0.0, 1.0);
+    float a = original.a + glowAlpha * (1.0 - original.a);
+    vec3 premul = original.rgb * original.a + glow;
+    fragColor = a > 0.0 ? vec4(premul / a, a) : vec4(0.0);
 }

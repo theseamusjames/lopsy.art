@@ -5,7 +5,7 @@ import { IconButton } from '../../components/IconButton/IconButton';
 import type { DragProps } from '../../app/hooks/useDraggablePanel';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
-import type { GroupLayer } from '../../types';
+import type { BlendMode, GroupLayer } from '../../types';
 import type {
   AdjustmentNode,
   AdjustmentNodeType,
@@ -13,7 +13,8 @@ import type {
 import {
   ADJUSTMENT_NODE_LABELS,
 } from '../../filters/adjustment-node-utils';
-import { isAdjustmentAllowedInMode } from '../../utils/color-mode-capabilities';
+import { getColorModeCapabilities, isAdjustmentAllowedInMode } from '../../utils/color-mode-capabilities';
+import { BlendModeSelect } from '../../components/BlendModeSelect/BlendModeSelect';
 import { NODE_CONTROLS_MAP } from './controls/node-controls-map';
 import styles from './AdjustmentsPanel.module.css';
 
@@ -70,6 +71,8 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
   const reorderAdjustmentNodes = useEditorStore((s) => s.reorderAdjustmentNodes);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
   const colorMode = useEditorStore((s) => s.document.colorMode);
+  const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
+  const updateLayerBlendMode = useEditorStore((s) => s.updateLayerBlendMode);
 
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
@@ -80,6 +83,13 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
 
   const nodes = group.adjustments;
   const adjustmentsEnabled = group.adjustmentsEnabled ?? true;
+  // The document root has no parent to blend into (#1040).
+  const showBlendMode = showHeader && group.id !== rootGroupId;
+
+  const handleBlendModeChange = (mode: BlendMode) => {
+    useEditorStore.getState().pushHistoryMetadata('Change Blend Mode');
+    updateLayerBlendMode(group.id, mode);
+  };
 
   const handleAddNode = (type: AdjustmentNodeType) => {
     setShowAddMenu(false);
@@ -133,6 +143,14 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
             onClick={() => setShowEffectsDrawer(false)}
           />
         </div>
+      )}
+      {showBlendMode && (
+        <BlendModeSelect
+          value={group.blendMode}
+          isGroup
+          allowHsl={getColorModeCapabilities(colorMode).hasHslBlendModes}
+          onChange={handleBlendModeChange}
+        />
       )}
       <div className={styles.scrollArea}>
         {nodes.length === 0 && (

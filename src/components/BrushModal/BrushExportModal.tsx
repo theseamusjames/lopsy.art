@@ -38,7 +38,7 @@ export function BrushExportModal({ onClose }: BrushExportModalProps) {
 
   return (
     <div className={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={styles.modal} role="dialog" aria-label="Export Brushes">
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Export Brushes">
         <div className={styles.titleBar}>
           <span className={styles.titleText}>Export Brushes</span>
           <button className={styles.closeX} onClick={onClose} aria-label="Close">&times;</button>

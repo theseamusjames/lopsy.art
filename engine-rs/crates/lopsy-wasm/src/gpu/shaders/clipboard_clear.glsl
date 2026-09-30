@@ -16,7 +16,8 @@ void main() {
         // Convert layer UV to document-space, then to mask UV
         vec2 docPos = u_layerOffset + v_uv * u_layerSize;
         vec2 maskUV = docPos / u_docSize;
-        float maskVal = texture(u_maskTex, maskUV).r;
+        // Off-canvas texels are outside the selection (#1033).
+        float maskVal = (any(lessThan(maskUV, vec2(0.0))) || any(greaterThan(maskUV, vec2(1.0)))) ? 0.0 : texture(u_maskTex, maskUV).r;
         // Subtract the mask as coverage: anti-aliased and feathered selections
         // on opaque pixels leave a soft 1 - mask edge, while a selection loaded
         // from the layer's own alpha (mask == alpha) clears the pixel instead of

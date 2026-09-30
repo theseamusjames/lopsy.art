@@ -199,6 +199,7 @@ import init, {
   drawMaskPencilLine as rawDrawMaskPencilLine,
   readMaskTexture,
   fillMask as rawFillMask,
+  fillMaskWithValue as rawFillMaskWithValue,
   renderMaskLinearGradient as rawRenderMaskLinearGradient,
   renderMaskRadialGradient as rawRenderMaskRadialGradient,
   screenToCanvas,
@@ -609,6 +610,7 @@ export const paintMaskDab = markingMaskDirty(rawPaintMaskDab);
 export const paintMaskDabBatch = markingMaskDirty(rawPaintMaskDabBatch);
 export const drawMaskPencilLine = markingMaskDirty(rawDrawMaskPencilLine);
 export const fillMask = markingMaskDirty(rawFillMask);
+export const fillMaskWithValue = markingMaskDirty(rawFillMaskWithValue);
 export const renderMaskLinearGradient = markingMaskDirty(rawRenderMaskLinearGradient);
 export const renderMaskRadialGradient = markingMaskDirty(rawRenderMaskRadialGradient);
 export const restoreMaskFromGpuSnapshot = markingMaskDirty(rawRestoreMaskFromGpuSnapshot);

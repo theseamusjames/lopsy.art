@@ -161,8 +161,9 @@ describe('bucket fill — normal mode', () => {
     // (pixels, docW, docH, x, y, r, g, b, a255, tolerance, contiguous)
     expect(ff[1]).toBe(DOC_W);
     expect(ff[2]).toBe(DOC_H);
-    expect(ff[3]).toBe(3); // round(3.4)
-    expect(ff[4]).toBe(4); // round(3.6)
+    // Pixel n covers [n, n + 1): the seed is the floor (#1036).
+    expect(ff[3]).toBe(3);
+    expect(ff[4]).toBe(3);
     expect(ff[5]).toBe(200);
     expect(ff[6]).toBe(100);
     expect(ff[7]).toBe(50);
@@ -182,12 +183,19 @@ describe('bucket fill — normal mode', () => {
     expect(editorState.notifyRender).toHaveBeenCalled();
   });
 
-  it('translates layer-local click coordinates into document space', () => {
+  it('seeds in document space on an offset layer', () => {
     editorState.document.layers = [{ id: 'layer-1', x: 2, y: 3, mask: null }];
-    handleFillDown(makeCtx({ layerPos: { x: 1, y: 1 } }));
+    handleFillDown(makeCtx({ canvasPos: { x: 3, y: 4 }, layerPos: { x: 1, y: 1 } }));
     const ff = floodFill.mock.calls[0]!;
-    expect(ff[3]).toBe(3); // 1 + layer.x
-    expect(ff[4]).toBe(4); // 1 + layer.y
+    expect(ff[3]).toBe(3);
+    expect(ff[4]).toBe(4);
+  });
+
+  it('prefers the pixel under the pointer over the rounded position (#1036)', () => {
+    handleFillDown(makeCtx({ canvasPos: { x: 5, y: 5 }, pixelPos: { x: 4, y: 4 } }));
+    const ff = floodFill.mock.calls[0]!;
+    expect(ff[3]).toBe(4);
+    expect(ff[4]).toBe(4);
   });
 
   it('aborts when clicking outside an active selection', () => {
@@ -289,8 +297,8 @@ describe('bucket fill — quick mask mode', () => {
     expect(fillQuickMask).toHaveBeenCalledTimes(1);
     const args = fillQuickMask.mock.calls[0]!;
     // (engine, x, y, tolerance, contiguous, mode)
-    expect(args[1]).toBe(6); // round(5.6)
-    expect(args[2]).toBe(2); // round(2.2)
+    expect(args[1]).toBe(5);
+    expect(args[2]).toBe(2);
     expect(args[3]).toBe(24);
     expect(args[4]).toBe(true);
     expect(args[5]).toBe(0);
@@ -333,7 +341,7 @@ describe('bucket fill — layer mask mode', () => {
     const fm = fillMask.mock.calls[0]!;
     // (engine, layerId, docX, docY, tolerance, contiguous, mode=1 fill-black)
     expect(fm[2]).toBe(4);
-    expect(fm[3]).toBe(5);
+    expect(fm[3]).toBe(4);
     expect(fm[6]).toBe(1);
 
     // #780: no synchronous glReadPixels on pointer-down — the read is

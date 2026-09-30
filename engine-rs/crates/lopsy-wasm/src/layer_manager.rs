@@ -561,6 +561,10 @@ pub fn flip_texture(
     let src_tex = engine.texture_pool.get(tex_handle).cloned()
         .ok_or("Texture not found")?;
 
+    // The copy back is a full-quad blit, so scratch must match the layer
+    // exactly; the last composite left it doc-sized (see ensure_scratch_size).
+    engine.ensure_scratch_size(w, h)?;
+
     // Render flipped into scratch_a using the flip shader
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.gl.viewport(0, 0, w as i32, h as i32);
@@ -1347,6 +1351,8 @@ pub fn flip_float(
         .ok_or("Float texture not found")?;
 
     // Render flipped float into scratch_a
+    // Full-quad blit back below: scratch must match the float exactly.
+    engine.ensure_scratch_size(fw, fh)?;
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.gl.viewport(0, 0, fw as i32, fh as i32);
     engine.gl.disable(WebGl2RenderingContext::BLEND);
@@ -1391,6 +1397,8 @@ pub fn rotate_float_90(
         .ok_or("Float texture not found")?;
 
     // Render rotated float into scratch_a
+    // Full-quad blit back below: scratch must match the float exactly.
+    engine.ensure_scratch_size(fw, fh)?;
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.gl.viewport(0, 0, fw as i32, fh as i32);
     engine.gl.disable(WebGl2RenderingContext::BLEND);
@@ -1615,27 +1623,59 @@ pub fn fill_with_color(
 
     let layer_tex_handle = *engine.layer_textures.get(layer_id)
         .ok_or_else(|| format!("Layer {layer_id} not found"))?;
-    let (lw, lh) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
     let layer_desc = engine.layer_stack.iter().find(|l| l.id == layer_id)
         .ok_or_else(|| format!("Layer desc {layer_id} not found"))?;
-    let layer_x = layer_desc.x as f32;
-    let layer_y = layer_desc.y as f32;
+    let origin = (layer_desc.x as f32, layer_desc.y as f32);
 
-    let layer_tex = engine.texture_pool.get(layer_tex_handle).cloned()
-        .ok_or("Layer texture not found")?;
+    fill_texture_in_selection(engine, layer_tex_handle, origin, [r, g, b, a])?;
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
+/// GPU-side fill of a layer's mask with a grey `value` (0 = hide,
+/// 1 = reveal), limited to the selection when one is active (#1034).
+pub fn fill_mask_with_value(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    value: f32,
+) -> Result<(), String> {
+    let mask_handle = *engine.layer_masks.get(layer_id)
+        .ok_or_else(|| format!("Layer {layer_id} has no mask"))?;
+    let origin = crate::compositor::mask_doc_origin(engine, layer_id);
+    let v = value.clamp(0.0, 1.0);
+    fill_texture_in_selection(engine, mask_handle, origin, [v, v, v, 1.0])?;
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
+/// Composite `color` over the texture `target_handle`, whose texel (0, 0)
+/// sits at `origin` in document space, weighted by the selection mask.
+fn fill_texture_in_selection(
+    engine: &mut EngineInner,
+    target_handle: TextureHandle,
+    origin: (f32, f32),
+    color: [f32; 4],
+) -> Result<(), String> {
+    let (tw, th) = engine.texture_pool.get_size(target_handle).unwrap_or((1, 1));
+    let target_tex = engine.texture_pool.get(target_handle).cloned()
+        .ok_or("Target texture not found")?;
+
+    // The copy back below is a full-quad blit, so scratch must match the
+    // target exactly (see ensure_scratch_size).
+    engine.ensure_scratch_size(tw, th)?;
 
     let has_mask = engine.selection_mask_texture.is_some();
 
     // Render filled result into scratch_a
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, lw as i32, lh as i32);
+    engine.gl.viewport(0, 0, tw as i32, th as i32);
     engine.gl.disable(WebGl2RenderingContext::BLEND);
 
     let shader = &engine.shaders.selection_fill;
     engine.gl.use_program(Some(&shader.program));
 
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&target_tex));
     if let Some(loc) = shader.location(&engine.gl, "u_layerTex") { engine.gl.uniform1i(Some(&loc), 0); }
 
     if has_mask {
@@ -1646,19 +1686,20 @@ pub fn fill_with_color(
             }
         }
     }
+    let [r, g, b, a] = color;
     if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), mask_sampler_unit(has_mask)); }
     if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 }); }
     if let Some(loc) = shader.location(&engine.gl, "u_fillColor") { engine.gl.uniform4f(Some(&loc), r, g, b, a); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-    if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), lw as f32, lh as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), origin.0, origin.1); }
+    if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
 
     engine.draw_fullscreen_quad();
 
-    // Copy scratch_a → layer texture
+    // Copy scratch_a → target texture
     let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned()
         .ok_or("scratch_a not found")?;
-    engine.render_to_texture(&layer_tex, lw as i32, lh as i32, |engine| {
+    engine.render_to_texture(&target_tex, tw as i32, th as i32, |engine| {
         engine.gl.use_program(Some(&engine.shaders.blit.program));
         engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_a_tex));
@@ -1667,8 +1708,6 @@ pub fn fill_with_color(
         }
         engine.draw_fullscreen_quad();
     });
-
-    engine.mark_layer_dirty(layer_id);
     Ok(())
 }
 

@@ -255,8 +255,11 @@ export interface LastPaintPoint {
 }
 
 export interface InteractionContext {
+  /** Pointer position in document space, rounded to the nearest integer. */
   canvasPos: Point;
   layerPos: Point;
+  /** Document pixel under the pointer (floor of the unrounded position). */
+  pixelPos?: Point;
   shiftKey: boolean;
   altKey: boolean;
   metaKey: boolean;
@@ -282,4 +285,12 @@ export interface ToolHandler {
   down?: (ctx: InteractionContext) => InteractionState | undefined;
   move?: (ctx: InteractionContext, state: InteractionState) => void;
   up?: (ctx: InteractionContext, state: InteractionState) => void;
+}
+
+/**
+ * Document pixel a click-seeded tool (wand, bucket, eyedropper) samples.
+ * Falls back to flooring `canvasPos` when the context has no `pixelPos`.
+ */
+export function seedPixel(ctx: Pick<InteractionContext, 'canvasPos' | 'pixelPos'>): Point {
+  return ctx.pixelPos ?? { x: Math.floor(ctx.canvasPos.x), y: Math.floor(ctx.canvasPos.y) };
 }

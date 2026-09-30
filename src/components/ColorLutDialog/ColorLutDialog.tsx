@@ -161,7 +161,7 @@ export function ColorLutDialog({ onApply, onCancel, onPreviewChange, onPreviewSt
     <div className={`${styles.overlay} ${preview ? styles.overlayTransparent : ''}`} role="presentation">
       <div
         className={styles.modal}
-        role="dialog"
+        role="dialog" aria-modal="true"
         aria-label="Color LUT"
         onKeyDown={handleKeyDown}
         style={{ '--drag-x': `${offset.x}px`, '--drag-y': `${offset.y}px` } as React.CSSProperties}

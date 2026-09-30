@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
 import { X } from 'lucide-react';
 import { useEditorStore } from '../../app/editor-store';
-import { getColorModeCapabilities, HSL_BLEND_MODES } from '../../utils/color-mode-capabilities';
+import { getColorModeCapabilities } from '../../utils/color-mode-capabilities';
 import { useUIStore } from '../../app/ui-store';
 import { IconButton } from '../../components/IconButton/IconButton';
 import type { DragProps } from '../../app/hooks/useDraggablePanel';
 import type { BlendMode, LayerEffects } from '../../types';
-import { BLEND_MODE_TO_DISPLAY } from '../../types/blend-mode-tables';
+import { BlendModeSelect } from '../../components/BlendModeSelect/BlendModeSelect';
 import { DropShadowForm } from './DropShadowForm';
 import { StrokeForm } from './StrokeForm';
 import { GlowForm } from './GlowForm';
@@ -14,24 +14,6 @@ import { ColorOverlayForm } from './ColorOverlayForm';
 import styles from './LayerEffectsPanel.module.css';
 
 type EffectKey = 'dropShadow' | 'stroke' | 'outerGlow' | 'innerGlow' | 'colorOverlay';
-
-// Grouping is a UX choice, not a Rust-side concept — the engine treats all
-// blend modes uniformly. Display labels are pulled from the shared
-// blend-mode-tables module so every surface says the same thing.
-const BLEND_MODE_GROUPS: { label: string; modes: BlendMode[] }[] = [
-  { label: 'Normal', modes: ['normal'] },
-  { label: 'Darken', modes: ['darken', 'multiply', 'color-burn'] },
-  { label: 'Lighten', modes: ['lighten', 'screen', 'color-dodge'] },
-  { label: 'Contrast', modes: ['overlay', 'soft-light', 'hard-light'] },
-  { label: 'Comparative', modes: ['difference', 'exclusion'] },
-  { label: 'Composite', modes: ['hue', 'saturation', 'color', 'luminosity'] },
-];
-
-// Pass Through is only valid on group layers and appears at the top of the list.
-const GROUP_BLEND_MODE_GROUPS: { label: string; modes: BlendMode[] }[] = [
-  { label: 'Pass Through', modes: ['pass-through'] },
-  ...BLEND_MODE_GROUPS,
-];
 
 const EFFECT_LIST: { key: EffectKey; label: string }[] = [
   { key: 'dropShadow', label: 'Drop Shadow' },
@@ -62,9 +44,6 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
   // Modes whose textures no longer hold sRGB can't run the HSL-decomposing
   // blend modes, so those options are dropped rather than shown as no-ops.
   const allowHsl = getColorModeCapabilities(colorMode).hasHslBlendModes;
-  const blendModeGroups = (activeLayer?.type === 'group' ? GROUP_BLEND_MODE_GROUPS : BLEND_MODE_GROUPS)
-    .map((group) => ({ ...group, modes: group.modes.filter((m) => allowHsl || !HSL_BLEND_MODES.has(m)) }))
-    .filter((group) => group.modes.length > 0);
 
   // Live preview: update effects without creating undo entries (for slider drags)
   const updateLive = useCallback(
@@ -107,10 +86,10 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
   );
 
   const handleBlendModeChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
+    (mode: BlendMode) => {
       if (!activeLayerId) return;
       useEditorStore.getState().pushHistoryMetadata('Change Blend Mode');
-      updateLayerBlendMode(activeLayerId, e.target.value as BlendMode);
+      updateLayerBlendMode(activeLayerId, mode);
     },
     [activeLayerId, updateLayerBlendMode],
   );
@@ -179,25 +158,12 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
           onClick={() => setShowEffectsDrawer(false)}
         />
       </div>
-      <div className={styles.blendModeRow}>
-        <label className={styles.fieldLabel} id="blend-mode-label">Blend</label>
-        <select
-          className={styles.blendModeSelect}
-          value={activeLayer.blendMode}
-          onChange={handleBlendModeChange}
-          aria-labelledby="blend-mode-label"
-        >
-          {blendModeGroups.map((group) => (
-            <optgroup key={group.label} label={group.label}>
-              {group.modes.map((mode) => (
-                <option key={mode} value={mode}>
-                  {BLEND_MODE_TO_DISPLAY[mode]}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
+      <BlendModeSelect
+        value={activeLayer.blendMode}
+        isGroup={activeLayer.type === 'group'}
+        allowHsl={allowHsl}
+        onChange={handleBlendModeChange}
+      />
       <div className={styles.split}>
         <div className={styles.effectList} role="listbox" aria-label="Layer effects">
           {EFFECT_LIST.map(({ key, label }) => {

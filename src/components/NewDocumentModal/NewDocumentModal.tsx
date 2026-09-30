@@ -178,7 +178,7 @@ export function NewDocumentModal({ onCreateDocument, onOpenFile, onPasteClipboar
       <div className={styles.brand}>
         <BrandLinks />
       </div>
-      <div className={styles.modal} role="dialog" aria-label="New Document" onKeyDown={handleKeyDown}>
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="New Document" onKeyDown={handleKeyDown}>
         <div className={styles.header}>
           <h2>New Document</h2>
         </div>

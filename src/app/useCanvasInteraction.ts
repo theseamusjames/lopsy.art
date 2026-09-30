@@ -117,6 +117,7 @@ const PRE_TOOL_DOWN_GUARDS: readonly PreToolDownGuard[] = [
 export function useCanvasInteraction(
   screenToCanvas: (screenX: number, screenY: number) => Point,
   containerRef: React.RefObject<HTMLDivElement | null>,
+  screenToPixel?: (screenX: number, screenY: number) => Point,
 ) {
   const stateRef = useRef<InteractionState>({ ...INITIAL_INTERACTION_STATE });
   const persistentTransformRef = useRef<PersistentTransform | null>(null);
@@ -144,9 +145,19 @@ export function useCanvasInteraction(
   // Clean up the hold timer on unmount
   useEffect(() => cancelHoldTimer, [cancelHoldTimer]);
 
+  const pixelUnderPointer = useCallback(
+    (e: ToolEvent): Point | undefined => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect || !screenToPixel) return undefined;
+      return screenToPixel(e.clientX - rect.left, e.clientY - rect.top);
+    },
+    [screenToPixel, containerRef],
+  );
+
   const buildContext = useCallback(
     (e: ToolEvent, canvasPos: Point, layerPos: Point, activeLayerId: string, activeLayer: Layer): InteractionContext => ({
       canvasPos, layerPos,
+      pixelPos: pixelUnderPointer(e),
       shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
       clickDetail: e.detail,
       clientX: e.clientX, clientY: e.clientY,
@@ -155,7 +166,7 @@ export function useCanvasInteraction(
       stateRef, floatingSelectionRef, persistentTransformRef,
       stampSourceRef, stampOffsetRef, lastPaintPointRef,
     }),
-    [screenToCanvas, containerRef],
+    [screenToCanvas, containerRef, pixelUnderPointer],
   );
 
   const handleToolDown = useCallback(

@@ -49,7 +49,8 @@ void main() {
     if (u_hasSelection == 1) {
         vec2 docPos = fragPos + u_layerOffset;
         vec2 selUV = docPos / u_docSize;
-        float selMask = texture(u_selectionMask, selUV).r;
+        bool isOffCanvas = any(lessThan(selUV, vec2(0.0))) || any(greaterThan(selUV, vec2(1.0)));
+        float selMask = isOffCanvas ? 0.0 : texture(u_selectionMask, selUV).r;
         eraseAmount *= selMask;
     }
 

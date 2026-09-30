@@ -535,6 +535,16 @@ pub fn fill_with_color(
         .map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "fillMaskWithValue")]
+pub fn fill_mask_with_value(
+    engine: &mut Engine,
+    layer_id: &str,
+    value: f32,
+) -> Result<(), JsError> {
+    layer_manager::fill_mask_with_value(&mut engine.inner, layer_id, value)
+        .map_err(|e| JsError::new(&e))
+}
+
 // ============================================================
 // Compressed Layer I/O
 // ============================================================
