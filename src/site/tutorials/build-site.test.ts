@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildTutorialSite } from './build-site';
+import { SWATCH_SCRIPT } from './swatch';
 import type { SourceTutorial } from './types';
 
 function png(width: number, height: number): Uint8Array {
@@ -166,6 +167,16 @@ describe('buildTutorialSite', () => {
     expect(build([source('alpha', 'project: ../beta/beta.lopsy')]).errors).toEqual([
       'tutorials/alpha: `project` must be the name of a `.lopsy` file next to index.md.',
     ]);
+  });
+
+  it('adds the swatch copy script only to pages with colour codes', () => {
+    const withColour = source('alpha', '');
+    withColour.source = withColour.source.replace('Done.', 'Fill it with `#C8272F`.');
+    const { files } = build([withColour, source('beta', '')]);
+    const alpha = files.get('tutorials/alpha/index.html') as string;
+    expect(alpha).toContain('data-copy="#C8272F"');
+    expect(alpha.split(SWATCH_SCRIPT)).toHaveLength(2);
+    expect(files.get('tutorials/beta/index.html')).not.toContain(SWATCH_SCRIPT);
   });
 
   it('lists tutorials newest first with an ItemList', () => {

@@ -2,8 +2,8 @@
 
 Step-by-step tutorials published at <https://lopsy.art/tutorials/>. Each one
 is a Markdown file plus its screenshots. They're turned into static HTML at
-build time. There's no backend and no database, and no JavaScript runs on
-the pages.
+build time. There's no backend and no database. The only JavaScript is a
+small inline script that copies colour swatches.
 
 ## Add a tutorial
 
@@ -52,6 +52,24 @@ Only this Markdown subset is supported. Anything else renders as plain text.
 | `[[Ctrl+Shift+Z]]` | Keyboard key caps |
 | `- item` / `1. item` | Bullet / numbered list |
 | `> **Tip:** text` | Highlighted note |
+| `` `#C8272F` `` | Colour swatch: a chip of the colour that copies the code when clicked |
+
+### Palettes
+
+A bullet list in the introduction where every item names colours renders as
+a swatch panel instead of a list. Each item holds one or more named groups:
+
+```
+- Paper `#F2E4C6`, cream ink `#F7ECD3`
+- Mustard `#E9A825` / `#F3C65A`
+- Sky `#0E2446` → `#6B2F6A` → `#FFC75E`
+- Shirt ink `#100C24` (the background, not an ink)
+```
+
+Colours joined by `→` become one continuous ramp. A short note may follow the
+codes, ideally in parentheses. Start each group with its name. If any item
+reads like a sentence ("Teal `#2F6E69` with dots in `#6FB3A8`") the whole list
+stays an ordinary list, so write those as separate items.
 
 ## What gets generated
 

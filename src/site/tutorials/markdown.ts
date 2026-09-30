@@ -4,7 +4,11 @@
  *
  *   Blocks: paragraphs, `- ` bullet lists, `1. ` numbered lists, `> ` notes
  *   Inline: **bold**, *italic*, `code`, [links](/url), [[Ctrl+Z]] key caps
+ *
+ * A code span holding a hex colour (`#F2E4C6`) renders as a copyable swatch.
  */
+
+import { isHexColor, parsePaletteItem, renderPaletteGroup, renderSwatch, type PaletteGroup } from './swatch';
 
 const HTML_ESCAPES: Record<string, string> = {
   '&': '&amp;',
@@ -34,7 +38,7 @@ function renderLink(text: string, url: string): string {
 export function renderInline(markdown: string): string {
   const codeSpans: string[] = [];
   const withoutCode = markdown.replace(/`([^`]+)`/g, (_, code: string) => {
-    codeSpans.push(`<code>${escapeHtml(code)}</code>`);
+    codeSpans.push(isHexColor(code) ? renderSwatch(code) : `<code>${escapeHtml(code)}</code>`);
     return `\uE000${codeSpans.length - 1}\uE000`;
   });
 
@@ -57,11 +61,34 @@ function blockKind(line: string): BlockKind {
   return 'p';
 }
 
-function renderBlock(kind: BlockKind, lines: string[]): string {
+export interface MarkdownOptions {
+  /** Render a bullet list made only of named colours as a swatch panel. */
+  shouldRenderPalettes?: boolean;
+}
+
+function listItems(lines: string[]): string[] {
+  return lines.map((line) => line.replace(/^([-*]|\d+\.)\s+/, ''));
+}
+
+function paletteGroups(lines: string[]): PaletteGroup[] | null {
+  const groups: PaletteGroup[] = [];
+  for (const item of listItems(lines)) {
+    const parsed = parsePaletteItem(item);
+    if (!parsed) return null;
+    groups.push(...parsed);
+  }
+  return groups;
+}
+
+function renderBlock(kind: BlockKind, lines: string[], options: MarkdownOptions): string {
+  const palette = kind === 'ul' && options.shouldRenderPalettes ? paletteGroups(lines) : null;
+  if (palette) {
+    return `<ul class="palette" aria-label="Palette">${palette.map((g) => renderPaletteGroup(g, renderInline)).join('')}</ul>`;
+  }
   switch (kind) {
     case 'ul':
     case 'ol': {
-      const items = lines.map((line) => `<li>${renderInline(line.replace(/^([-*]|\d+\.)\s+/, ''))}</li>`);
+      const items = listItems(lines).map((item) => `<li>${renderInline(item)}</li>`);
       return `<${kind}>${items.join('')}</${kind}>`;
     }
     case 'note': {
@@ -74,7 +101,7 @@ function renderBlock(kind: BlockKind, lines: string[]): string {
 }
 
 /** Renders a chunk of Markdown to HTML, one block per blank-line-separated group. */
-export function renderMarkdown(markdown: string): string {
+export function renderMarkdown(markdown: string, options: MarkdownOptions = {}): string {
   const html: string[] = [];
   const groups = markdown.trim().split(/\n\s*\n/);
 
@@ -94,10 +121,10 @@ export function renderMarkdown(markdown: string): string {
         }
         continue;
       }
-      if (current) html.push(renderBlock(current.kind, current.lines));
+      if (current) html.push(renderBlock(current.kind, current.lines, options));
       current = { kind, lines: [line] };
     }
-    if (current) html.push(renderBlock(current.kind, current.lines));
+    if (current) html.push(renderBlock(current.kind, current.lines, options));
   }
 
   return html.join('\n');

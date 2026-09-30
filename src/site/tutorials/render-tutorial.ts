@@ -20,6 +20,7 @@ import {
   tutorialAssetPath,
   tutorialPath,
 } from './site-config';
+import { SWATCH_SCRIPT } from './swatch';
 import type { Tutorial, TutorialStep } from './types';
 
 function renderStep(ctx: RenderContext, tutorial: Tutorial, step: TutorialStep, index: number): string {
@@ -120,8 +121,7 @@ export function renderTutorialPage(
     ? `Updated <time datetime="${tutorial.updated}">${formatDate(tutorial.updated)}</time>`
     : `Published <time datetime="${tutorial.published}">${formatDate(tutorial.published)}</time>`;
 
-  const body = `${renderBreadcrumbs(crumbs)}
-<article class="tutorial">
+  const article = `<article class="tutorial">
   <header class="tutorial-header">
     <h1>${escapeHtml(tutorial.title)}</h1>
     <p class="lede">${escapeHtml(tutorial.description)}</p>
@@ -129,13 +129,16 @@ export function renderTutorialPage(
   </header>
   ${renderFinished(ctx, tutorial)}
   ${renderFollowAlong(tutorial)}
-  ${tutorial.intro ? `<div class="intro">${renderMarkdown(tutorial.intro)}</div>` : ''}
+  ${tutorial.intro ? `<div class="intro">${renderMarkdown(tutorial.intro, { shouldRenderPalettes: true })}</div>` : ''}
   <ol class="steps">
 ${tutorial.steps.map((step, index) => renderStep(ctx, tutorial, step, index)).join('\n')}
   </ol>
   ${renderCallToAction()}
-</article>
-${renderRelated(ctx, related)}`;
+</article>`;
+  const swatchScript = article.includes('data-copy=') ? SWATCH_SCRIPT : '';
+  const body = `${renderBreadcrumbs(crumbs)}
+${article}
+${renderRelated(ctx, related)}${swatchScript}`;
 
   return renderDocument(ctx, {
     title: `${tutorial.title} | ${SITE_NAME} Tutorial`,
