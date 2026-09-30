@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Leftover Turkey card. A black-bordered cardboard panel with chalk lettering around the frame, LEFTOVER TURKEY in black and brick red, a man in a top hat chasing a striped-tail turkey with a fork, a dog, a pie and a coffee ring
 finished: finished-leftover-turkey.webp
 finishedAlt: The finished Leftover Turkey Thanksgiving card on kraft cardboard. A wobbly black painted frame holds chalk-white hand lettering on all four sides and gold stars in the corners, with a hand-dotted chalk line inside it. LEFTOVER in black and TURKEY in brick red are painted across the top at a slight tilt. Below, a man in a black top hat and cobalt coat runs with a pitchfork raised, shouting COME BACK HERE YOU BIRD in blue. A big turkey with a brick, ochre, cobalt and umber fan tail answers NOT THIS YEAR in red, while a black dog nips at its toes and a steaming pie sits between them. Dry-brush wear, corrugation lines and a coffee ring give it a found-cardboard look
+project: outsider-art-thanksgiving-card.lopsy
 ---
 
 American **outsider art** is made by painters with no formal training. Bill

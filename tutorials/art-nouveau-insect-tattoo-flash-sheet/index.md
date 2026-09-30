@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished JEWELLED INSECTS flash sheet, with an enamelled dragonfly on a gold halo under an arched teal title, a scarab, a cicada and a bee along the bottom, and the Dragonfly, Scarab, Cicada and Bee groups in the Layers panel
 finished: finished-jewelled-insects-flash.webp
 finishedAlt: The finished JEWELLED INSECTS tattoo flash sheet on warm laid paper. A teal-and-gold dragonfly with translucent veined wings spreads across a cream halo of gold beads and rays, under an arched teal title band with amethyst cabochons. The captions I · LIBELLULE and PLIQUE-À-JOUR curve beneath the halo. Along the bottom sit II · SCARABÉE, a green scarab holding a red sun, III · CIGALE, a cicada with clear lilac wings, and IV · ABEILLE, a striped bee. Purple irises on whiplash stems frame both sides.
+project: art-nouveau-insect-tattoo-flash-sheet.lopsy
 ---
 
 Around 1900 René Lalique made insects into jewellery. He set dragonflies,

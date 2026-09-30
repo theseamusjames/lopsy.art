@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Pink Gondola vaporwave poster, a neon-outlined gondola floating on a pink and purple checkerboard floor in front of a pastel Doge's Palace and a halftone sun
 finished: finished-pink-gondola.webp
 finishedAlt: The finished Pink Gondola poster, with a pink Shrikhand headline over a teal-to-peach cloudy sky, a halftone pink sun behind a pastel Venetian palace with teal domes and a pink bell tower, a gondolier rowing a neon-outlined gondola across a perspective checkerboard floor, striped mooring poles and a tilted gondola.exe dialog window
+project: vaporwave-venice-poster.lopsy
 ---
 
 Vaporwave takes something familiar and makes it dreamlike. Here that's

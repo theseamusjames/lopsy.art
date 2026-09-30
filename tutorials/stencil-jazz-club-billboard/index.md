@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Xylophone Nocturne billboard, a black cat on a pink, teal and cream stencil xylophone under a halftone crescent moon, beside XYLOPHONE NOCTURNE stencil type on a navy plywood wall
 finished: xylophone-nocturne-finished.webp
 finishedAlt: The finished Xylophone Nocturne billboard. A black cat sits on a pink, teal and cream stencil xylophone with crossed mallets, under a pink halftone crescent moon. Beside it are cream XYLOPHONE and dripping pink NOCTURNE stencil type, a pink script tagline, event details and a paper ticket stub on a navy plywood hoarding.
+project: stencil-jazz-club-billboard.lopsy
 ---
 
 A real multi-layer stencil is cut as a few flat sheets, one per ink, and

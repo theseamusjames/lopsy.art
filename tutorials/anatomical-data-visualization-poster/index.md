@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom showing the Zoological Jaws plate, with sepia skull engravings in the left column, red muscle-shaped bars and the Fig. 6 enlarged inset, and blue ruler guides over the cream paper
 finished: zoological-jaws-finished.webp
 finishedAlt: The finished Zoological Jaws poster, styled as a 19th-century anatomical plate on aged cream paper with a double-rule frame. Under "Plate XVI." and the title, the subtitle reads "The greatest bite of five species, measured in newtons". A left column holds sepia engravings of a crocodile, tiger, lion, human and grey wolf skull, each captioned "Fig." with its Latin name in script. To the right, each bite force is drawn as a red striated muscle with pale tendons. The crocodile's reaches 16,400 N across the whole chart. A framed, tinted inset labelled "Fig. 6 · The mammals at eight times the scale" redraws the tiger (1,470 N), lion (1,320 N), human (850 N) and wolf (490 N) against its own 0–1,500 axis. A pale strip on the main chart marks the enlarged region. Footnotes give methods and sources.
+project: anatomical-data-visualization-poster.lopsy
 ---
 
 This poster is a bar chart dressed as a page from a Victorian anatomy atlas.

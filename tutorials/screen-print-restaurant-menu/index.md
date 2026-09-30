@@ -8,6 +8,7 @@ tags: restaurant menu, screen print, halftone, blend modes, typography, layer ef
 related: skate-style-restaurant-menu, constructivist-zine-cover
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Nomad Kebab screen-print menu, with a döner spit in front of a halftone red sun and mustard sunburst, teal dunes, a misregistered red Nomad headline, a rotated Hot Off The Spit badge and a two-column menu with dotted price leaders
+project: screen-print-restaurant-menu.lopsy
 ---
 
 A screen print is built one ink at a time. Each ink is pushed through its own

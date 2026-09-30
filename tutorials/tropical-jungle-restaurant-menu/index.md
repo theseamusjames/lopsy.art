@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Xocolatl Jungle menu, a cream arched card framed by layered monstera leaves, palm fronds, pink hibiscus and orange cacao pods on a deep jungle-green background
 finished: finished-xocolatl-jungle-menu.webp
 finishedAlt: The finished Xocolatl Jungle menu. A cream arch holds the brown Shrikhand title Xocolatl with a mango drop shadow, JUNGLE in spaced coral capitals, and three sections (Drinking Chocolate, Jungle Plates, Sweet Things) with bold item names, small descriptions and coral prices. Layered paper-cut monstera leaves and palm fronds, four hibiscus flowers and three cacao pods frame the card on dark green
+project: tropical-jungle-restaurant-menu.lopsy
 ---
 
 Paper-cut illustration builds depth from flat shapes. Each layer of leaves

@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished CRYSTAL SODA billboard, with a holographic foil soda can inside an iridescent ring, floating pastel crystals, and a navy headline with rainbow offset echoes on a pale lilac background
 finished: finished-crystal-soda.webp
 finishedAlt: The finished CRYSTAL SODA billboard. On the left, a navy CRYSTAL SODA headline with pastel rainbow echoes offset down and right, the line "a prism in every sip." and a pill that reads ZERO SUGAR · ZERO CALORIES. On the right, a swirling holographic foil can inside a pastel iridescent ring, surrounded by four floating crystals, bubbles and sparkles
+project: holographic-soda-can-billboard.lopsy
 ---
 
 Holographic packaging works best when the shimmer is rationed. Give the

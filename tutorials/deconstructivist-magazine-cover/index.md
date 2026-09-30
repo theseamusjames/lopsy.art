@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished RIFT magazine cover, with a split black masthead, a tilted ultramarine plane crossed by a lime band, lime and black string-art shells, and XENAKIS set in huge condensed capitals that turn lime where they cross the blue
 finished: finished-xenakis-acoustics.webp
 finishedAlt: The finished RIFT issue 23 magazine cover on board-formed concrete grey. A split black RIFT masthead sits at top left and a serif deck at top right. A tilted ultramarine plane is sliced by a lime band that reads THE ARCHITECTURE OF SOUND. Lime and black ruled-line shells rise like the Philips Pavilion. XENAKIS runs across the bottom in tall condensed letters, lime over the blue and black over the concrete
+project: deconstructivist-magazine-cover.lopsy
 ---
 
 Deconstructivist graphic design came out of Cranbrook in the 1980s and David

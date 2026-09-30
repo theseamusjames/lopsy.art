@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Axolotl Xtravaganza invitation, a pink AXOLOTL title card and blue XTRAVAGANZA band over a dotted cream background, with a cartoon axolotl in a pool, three tilted info cards and a lime RSVP pill
 finished: finished-axolotl-xtravaganza.webp
 finishedAlt: The finished Axolotl Xtravaganza invitation. A black AXOLOTL headline sits on a pink slab with a tilted blue XTRAVAGANZA band. Below, a pink axolotl sits in a wavy blue pool next to lime, yellow and pink info cards, with a lime RSVP pill at the bottom and stickers around the title.
+project: neubrutalist-party-invitation.lopsy
 ---
 
 Neubrutalism takes the flat colour blocks of web UI and makes them loud:

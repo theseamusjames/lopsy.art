@@ -8,6 +8,7 @@ tags: poster design, propaganda poster, invitation, text effects, layer effects,
 related: vaporwave-sunset-billboard
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Tea Insurrection invitation, with a black teapot pouring into a cup over a red disc, a tilted red TEA headline and cream INSURRECTION on a black diagonal band
+project: propaganda-poster-party-invitation.lopsy
 ---
 
 Soviet constructivist posters by Rodchenko, Klutsis and the Stenberg brothers

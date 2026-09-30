@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Strawberry Festival flier on the canvas and its Print Texture, Type, Ribbon, Berry, Badge and Bunting groups in the Layers panel
 finished: finished-strawberry-festival.webp
 finishedAlt: The finished 26th Annual Strawberry Festival flier on aged cream paper. Red, navy and striped pennants hang across the top above THE 26TH ANNUAL. STRAWBERRY arches in red slab capitals with a cream outline and a navy shadow, over a navy Festival script with a red shadow. Below them a flat red strawberry with gold seeds and a green calyx sits in a mustard sunburst medallion ringed in navy and red. A navy ribbon reads SATURDAY · JUNE 13, and underneath are the events, PLEASANT VALLEY FAIRGROUNDS, the hours and a navy ADMISSION 25¢ · KIDS UNDER 12 FREE band, all with worn ink and toned edges
+project: americana-strawberry-festival-flier.lopsy
 ---
 
 Small-town fair posters were set by hand. The printer used wood type, carved

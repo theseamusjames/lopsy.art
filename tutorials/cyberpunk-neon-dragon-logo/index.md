@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Dragon Izakaya cyberpunk logo, a dark dragon head outlined in cyan neon over a striped yellow-to-magenta sun, with glitched DRAGON lettering and vertical Japanese text
 finished: finished-dragon-izakaya.webp
 finishedAlt: The finished Dragon Izakaya logo. A black dragon head with swept horns, a spiky mane, a yellow eye and tapered cyan whiskers is outlined in glowing cyan over a slit synthwave sun that runs from yellow to magenta to violet, with faint magenta rays behind it. DRAGON is set in white with a cyan and magenta RGB split and two glitch slices, IZAKAYA sits below in tracked yellow capitals, and a mono footer reads EST. 2077 // NEO-SHINJUKU SECTOR 07 // OPEN TILL DAWN. Vertical pixel-font columns read ドラゴン居酒屋 in magenta and 焼鳥・拉麺・酒 in cyan. A tilted neon sign reads 営業中 OPEN 24H, and cyan HUD corner brackets, a barcode and thin rules frame the square
+project: cyberpunk-neon-dragon-logo.lopsy
 ---
 
 Cyberpunk branding is neon on near-black, half-broken on purpose. You get a

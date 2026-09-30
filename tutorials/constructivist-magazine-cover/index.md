@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished APIARY magazine cover, with a red wedge carrying cream DRONE type into a black honeycomb disc, a black and ochre bee with red triangle wings, two small bees, a tilted red coverline slab and a huge black UPRISING headline
 finished: finished-drone-uprising.webp
 finishedAlt: The finished APIARY No. 7 magazine cover on cream paper, with a red wedge that pierces a black honeycomb disc and carries the word DRONE, a geometric bee with red wings flying beside it, two small bees under the wedge, a tilted red slab of coverlines, and UPRISING set in huge black condensed capitals across the bottom
+project: constructivist-magazine-cover.lopsy
 ---
 
 El Lissitzky's 1919 poster *Beat the Whites with the Red Wedge* is about as

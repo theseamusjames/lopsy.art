@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished T-REX XING t-shirt graphic, an amber diamond road sign with a black T-rex silhouette, hazard tape, orange dinosaur footprints and distressed stencil type on a charcoal shirt color
 finished: finished-t-rex-xing.webp
 finishedAlt: The finished T-REX XING t-shirt graphic, with cream stencil T-REX over an amber diamond warning sign holding a black T-rex, torn hazard tape across its bottom point, orange three-toed footprints walking behind it, amber XING below and a line of fine print, all worn with a speckled distress texture
+project: stencil-t-shirt-design.lopsy
 ---
 
 A good graphic tee reads from across the room and still rewards a closer

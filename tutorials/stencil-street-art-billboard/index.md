@@ -8,6 +8,7 @@ tags: stencil, street art, graffiti, spray paint, billboard, text effects, layer
 related: liquid-chrome-text-billboard, vaporwave-sunset-billboard, propaganda-poster-party-invitation
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Rogue Koala billboard, a black and bone stencil koala in a bandit mask holding a green spray can on an orange sprayed disc, next to dripping ROGUE KOALA stencil type on a concrete block wall
+project: stencil-street-art-billboard.lopsy
 ---
 
 Stencil art is flat shapes in two or three tones, cut with sharp edges and

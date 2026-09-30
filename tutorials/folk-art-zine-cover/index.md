@@ -8,6 +8,7 @@ tags: zine cover, folk art, typography, radial symmetry, layer effects, selectio
 related: propaganda-poster-party-invitation, swiss-style-exhibition-poster
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Yodel of the Uplands zine cover, with a red woodtype title, a painted mountain medallion framed by crossed alphorns, tulip and edelweiss vines, and a red swallowtail ribbon inside a dotted red border
+project: folk-art-zine-cover.lopsy
 ---
 
 Alpine folk art, such as Swiss and Tyrolean *Bauernmalerei* painted furniture

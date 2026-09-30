@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished WATCHMAKER'S CURIOSITIES flash sheet at fit-to-screen zoom, with seven cream-haloed steampunk tattoo designs on a verdigris sheet and the Winged Watch, Dirigible and Clockwork Heart groups in the Layers panel
 finished: finished-watchmakers-curiosities.webp
 finishedAlt: The finished WATCHMAKER'S CURIOSITIES tattoo flash sheet on mottled verdigris paper with a faint ghost of an 18th-century watch-parts engraving. A gilt title sits in an oxblood ribbon above "Flash Sheet · No. VII" between two gold stars. Across the top are a brass pocket watch with teal and cream wings and a copper airship with brass struts. The middle row has an Edison bulb with a glowing filament, a red riveted clockwork heart with a brass porthole, brass pipes and a wind-up key, and a pair of meshing brass and copper cogs. The bottom row has a top hat with brass goggles on an oxblood band, and a gear-bowed skeleton key under a cream banner reading TEMPUS FUGIT. Every design has a black keyline, a cream sticker halo and a soft drop shadow.
+project: steampunk-tattoo-flash-sheet.lopsy
 ---
 
 A **flash sheet** is the page of ready-to-tattoo designs on a tattoo parlour's

@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the Rhumba Bungalow album cover, a banded tropical sunset with palm silhouettes, a stilt bungalow with glowing windows, a canoe and Rhumba Bungalow lettering over the sea
 finished: finished-rhumba-bungalow.webp
 finishedAlt: The finished Rhumba Bungalow LP cover. A cream band across the top reads LEO MARQUEZ & HIS BAMBOO ORCHESTRA in dark plum capitals, with EXOTIC ISLAND RHYTHMS FOR A TROPICAL NIGHT in tracked red, a boxed RB-1958 catalog number at the right and a tilted red HI-FI LONG PLAY badge breaking the band's edge at the left. Below, a posterized sunset runs in flat bands from plum to coral to gold behind a huge pale sun. Two dark coconut palms frame a thatched stilt bungalow with glowing yellow windows and a small outrigger canoe on a sea of foreshortened cream wave dashes with a golden glitter path. The title Rhumba is set in a cream script and BUNGALOW in a heavy orange-to-red slab, both with a hard plum shadow
+project: exotica-tropical-album-cover.lopsy
 ---
 
 Exotica records from the late 1950s sold a fantasy island. The covers were a

@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Abyssal Lanterns album cover, a Hokusai-style great wave curling toward a full moon above a patterned night sea with glowing paper lanterns
 finished: finished-abyssal-lanterns.webp
 finishedAlt: The finished KURAGE Abyssal Lanterns album cover. A Prussian-blue great wave with white claw-shaped foam curls toward a cream full moon, with small Mount Fuji and stepped kasumi clouds on the horizon. Orange paper lanterns marked 灯 float on a seigaiha-patterned sea with wavy reflections. A cream cartouche holds the vertical title 深淵の灯籠, a carved red seal reads 海月, and a paper band at the bottom reads KURAGE ◆ ABYSSAL LANTERNS, all under a faint woodgrain texture
+project: ukiyo-e-great-wave-album-cover.lopsy
 ---
 
 Ukiyo-e prints are built from a few flat colours, one dark outline block and a

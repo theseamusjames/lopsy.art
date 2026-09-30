@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished SPITE magazine cover, a xeroxed photo of a spiked park bench taped onto a tilted safety-orange slab, with HOSTILE running up the left edge, FURNITURE across the bottom, a DO NOT SIT hazard sticker and grainy photocopy texture
 finished: finished-hostile-furniture.webp
 finishedAlt: The finished SPITE issue 07 cover on photocopy-grey paper, with a sliced black masthead that has an orange misregistered ghost, a black-and-white halftone photo of a bench with spikes and hoop armrests circled in orange marker and labelled POLICY, a DO NOT SIT hazard-stripe sticker, the tagline "the bench that hates you.", HOSTILE set vertically and FURNITURE cut off by the right edge, a barcode label, an EXHIBIT A tab and an UNSEATED SINCE 1998 rubber stamp
+project: anti-design-magazine-cover.lopsy
 ---
 
 Anti-design covers, the kind David Carson made for *Ray Gun* in the 90s,

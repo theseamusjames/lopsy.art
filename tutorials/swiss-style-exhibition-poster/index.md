@@ -8,6 +8,7 @@ tags: poster design, swiss style, typography, grid, halftone, layer effects, sel
 related: propaganda-poster-party-invitation, vaporwave-sunset-billboard
 cover: cover.jpg
 coverAlt: Lopsy showing the finished deep blue poster, with a huge black deep headline, a red sounding line dropping into eccentric blue circles, a red probe with sonar rings and blue knocked out of the circles in paper colour
+project: swiss-style-exhibition-poster.lopsy
 ---
 
 The Swiss International Typographic Style grew up in Zürich and Basel in the

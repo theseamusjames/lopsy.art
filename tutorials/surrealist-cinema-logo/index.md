@@ -8,6 +8,7 @@ tags: logo design, surrealism, selections, layer effects, text on a path, radial
 related: etching-style-lighthouse-illustration, liquid-chrome-text-billboard
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Xanadu Cinema logo, with a navy night disc, a keyhole of blue daytime sky holding a floating bowler hat, a terracotta ring of marquee bulbs, curved seal text, and the XANADU CINEMA wordmark
+project: surrealist-cinema-logo.lopsy
 ---
 
 Surrealist logos work by showing something impossible, drawn with plain,

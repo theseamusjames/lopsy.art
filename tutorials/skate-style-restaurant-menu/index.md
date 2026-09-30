@@ -8,6 +8,7 @@ tags: restaurant menu, skate, typography, layer effects, groups, selections, tra
 related: folk-art-zine-cover, propaganda-poster-party-invitation
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Ollie Eats skate menu, with a tilted orange skateboard deck logo, a burger next to yellow EATS lettering, taped section headers, two menu columns with yellow prices and checkerboard bands top and bottom
+project: skate-style-restaurant-menu.lopsy
 ---
 
 Skate graphics come from the shop wall and the grip tape:

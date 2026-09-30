@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished RATTLESNAKE MOON De Stijl tattoo flash sheet on the canvas and its Type, Rattlesnake Moon, Header, Mondrian Grid and flash groups in the Layers panel
 finished: finished-rattlesnake-moon.webp
 finishedAlt: The finished RATTLESNAKE MOON tattoo flash sheet. A thick black Mondrian grid on cream paper holds red, yellow and blue blocks and five numbered flash designs made of flat colour planes with black outlines. A striped S-shaped rattlesnake coils through a yellow crescent moon. Around it sit a blue swallow, a spiral red rose, a compass star and a heart pierced by a dagger with a MOM banner. The blocky title reads RATTLESNAKE MOON, and small type gives prices, WALK-INS WELCOME, EST. 1917 and AMSTERDAM
+project: de-stijl-tattoo-flash-sheet.lopsy
 ---
 
 A tattoo flash sheet is a menu. It's a sheet of ready-to-tattoo designs, each

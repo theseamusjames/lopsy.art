@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Hot Sauce Social invitation on the canvas. Dripping flame-gradient HOT, green script Sauce and black SOCIAL with a red offset plate sit on a peach sunburst
 finished: finished-hot-sauce-social.webp
 finishedAlt: The finished Hot Sauce Social invitation. A kicker line reads You're cordially invited to the. Below it are a dripping orange-to-red HOT, a tilted green script Sauce and a tall black SOCIAL with a red misregistered plate. Next comes a heat scale from MILD to INFERNO over a green-to-black gradient bar. At the bottom are a red BYOB badge with a chili and the party details, all on cream paper with a peach sunburst and halftone corners
+project: typographic-hot-sauce-party-invitation.lopsy
 ---
 
 In a typographic poster the letters *are* the picture. This tutorial builds

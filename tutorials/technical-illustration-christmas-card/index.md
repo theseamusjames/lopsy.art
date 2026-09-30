@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished card, an exploded isometric gingerbread house on cream grid paper with red numbered balloons, a blue X-ray detail circle, a parts list and an engineering title block
 finished: finished-gingerbread-x-ray.webp
 finishedAlt: The finished technical-illustration Christmas card on cream graph paper with a double black border. On the left is an exploded isometric gingerbread house. The fish-scale roof, the red brick chimney and the door float away from the walls along dashed assembly lines, and the candy-striped cake board has dropped below. Seven red numbered balloons point at the parts, and a dimension line reads 550 MM. On the right, the headline Some Assembly Required. sits over the red line Merry Christmas! Instructions not included. Below it are a blue X-ray Detail A circle showing a hatched corner joint with an icing fillet, a notes list, a seven-row parts list and a title block signed S. Claus
+project: technical-illustration-christmas-card.lopsy
 ---
 
 Assembly manuals and patent drawings have a look everyone recognises:

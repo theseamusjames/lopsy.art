@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished LIGHTS OUT neon poster, with the layers panel open beside a glowing pink headline, an amber ring chart, cyan bars and violet tubes
 finished: finished-hong-kong-kilowatts.webp
 finishedAlt: The finished neon data poster on a dark blue mosaic-tile wall. LIGHTS OUT glows pink at the top, and the T of OUT is burnt out and hangs crooked. A vertical cyan-framed sign reads 香港霓虹. A large amber ring labelled 120,000 signboards holds a tiny pink dot. A leader line runs from the dot to ~400 neon signs still lit, beside a pink 1:300 ratio. At the bottom, a cyan bar chart compares removal orders (under 700 in 2015, 1,119 in 2022, 60%+), and nine violet tubes show 8 or 9 neon masters left, with the ninth tube unlit
+project: neon-data-visualization-poster.lopsy
 ---
 
 Hong Kong's neon signs used to be part of how people pictured the city at night, and most of them are gone. This tutorial turns that story into a data poster made of the thing it's about. The charts are drawn as neon tubes, the headline has a burnt-out letter, and the whole sheet hangs on a wall of the small square mosaic tiles you see on Hong Kong tenements.

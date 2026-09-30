@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Invaders from Yuggoth flier, with a yellow receding title, a chrome flying saucer beaming up a car, a teal ringed planet and a drive-in screen with an alien eye
 finished: finished-invaders-from-yuggoth.webp
 finishedAlt: The finished Invaders from Yuggoth drive-in flier. A banded purple-to-orange sunset sky with halftone dots and stars, a chrome flying saucer lifting a car in a green tractor beam, a cratered teal planet with an orange ring, the yellow title INVADERS from YUGGOTH! with a red extruded shadow, a teal SEE IT IN SHOCK-O-SCOPE starburst, a drive-in screen showing an alien eye above three parked cars, and the tagline, showtime and credits at the bottom, all on aged, creased paper
+project: pulp-sci-fi-movie-flier.lopsy
 ---
 
 1950s drive-in posters sold a double feature from across a parking lot.

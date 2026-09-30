@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished APOGEE cover, with a chrome masthead above a chrome rocket liner climbing over Earth's cloud tops
 finished: finished-orbital-cruiser.webp
 finishedAlt: The finished APOGEE magazine cover. A chrome masthead with sky-blue tops, a white horizon line and copper bottoms spans the top, with star glints on its corners. Below it, THE ORBITAL CRUISER is set in heavy white condensed capitals over black space, with an orange 100th issue badge to the right. A chrome rocket liner with a row of glowing portholes, an orange stripe and swept tail fins climbs diagonally over a NASA photo of Earth's cloud tops and blue atmosphere, trailing a cyan exhaust plume and white speed lines. Three navy cover lines and a barcode sit along the bottom
+project: chrome-sci-fi-magazine-cover.lopsy
 ---
 
 Science magazines of the late 70s and 80s sold the future with airbrushed chrome. Their mastheads reflected a sky and a desert horizon, and their spaceships gleamed like new cars. In this tutorial you'll recreate that look for an imaginary 1985 issue of **APOGEE**. The cover story is a chrome rocket liner, *The Orbital Cruiser*, flying over the real cloud tops of Earth.

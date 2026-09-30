@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Bayou Lunch menu board, with cream BAYOU lettering on an arched red sign, a yellow Lunch script, a smiling red crawfish, and two cream menu boards nailed to peeling turquoise plywood
 finished: 30-finished-bayou-lunch-menu.webp
 finishedAlt: The finished Bayou Lunch menu, a hand-painted roadside sign with an arched red BAYOU header, a yellow Lunch script, BOILED CRAWFISH at $7 a pound, a crawfish mascot, PO'BOYS and THE POT boards with dotted prices, an ICE COLD BEER arrow, a SINCE 1974 plaque and a CASH ONLY stamp
+project: hand-painted-sign-menu.lopsy
 ---
 
 Vernacular design is the everyday lettering of roadside America: shack menus,

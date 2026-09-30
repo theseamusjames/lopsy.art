@@ -8,6 +8,7 @@ tags: zine cover, constructivism, poster design, text effects, layer effects, se
 related: propaganda-poster-party-invitation
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Industrial Insomnia zine cover, with a clock-faced eye in a red sun above a factory skyline, a black gear, vertical red INDUSTRIAL type and cream INSOMNIA on a black diagonal band
+project: constructivist-zine-cover.lopsy
 ---
 
 Constructivist designers like Rodchenko, the Stenberg brothers and Klutsis

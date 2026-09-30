@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Midnight Artichokes still life, with two green artichokes, a hanging pomegranate, a split pomegranate, a knife and a snuffed candle on a stone ledge in a dark niche
 finished: finished-midnight-artichokes.webp
 finishedAlt: The finished Midnight Artichokes painting. A pomegranate hangs on a string in a dark stone niche. Below it, a snuffed candle trails smoke, a split pomegranate shows garnet seeds, a knife overhangs the ledge, an artichoke stands upright and a second lies on its side, its stem drooping over the ledge edge.
+project: baroque-still-life-painting.lopsy
 ---
 
 Spanish still-life painters around 1600 had a simple formula: put a few

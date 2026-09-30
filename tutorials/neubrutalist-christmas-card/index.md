@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished neubrutalist Christmas card, with an upside-down tree hanging inside a pink retro app window under a SEASON'S GREETINGS headline
 finished: finished-upside-down-evergreen.webp
 finishedAlt: The finished neubrutalist holiday card on a lavender background with halftone dots in two corners. SEASON'S is set in black with a pink offset shadow, above a tilted yellow GREETINGS slab. Below it, a cream app window with a pink title bar reading upside-down-evergreen.png holds an upside-down Christmas tree hanging from a chain. The tree is made of three green triangles with black outlines, baubles and lights. Two gifts sit on the floor, next to a red gift balanced upside down on its bow. At the bottom, a blue box says & A HAPPY NEW YEAR upside down, beside a yellow FLIP ME! sticker
+project: neubrutalist-christmas-card.lopsy
 ---
 
 Neubrutalism is the loud cousin of flat design. It uses saturated colour blocks, thick black outlines, hard shadows with no blur, and big plain type. It started on the web, so it works well when a card looks like a piece of software. In this tutorial you'll build a holiday card that pretends to be an app window called `upside-down-evergreen.png`. Inside the window, a Christmas tree hangs upside down from the ceiling. The New Year greeting is printed upside down too, with a sticker telling the reader to flip the card.

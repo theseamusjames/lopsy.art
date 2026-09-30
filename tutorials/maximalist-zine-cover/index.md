@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the Yolk zine cover, with a red YOLK masthead over a swirling blue checkerboard and a fried egg with an onion-dome finial on a striped sunburst
 finished: finished-yolk-xanadu-zine-cover.webp
 finishedAlt: The finished YOLK zine cover. A fried egg sits on a pink, red and orange sunburst with a mint scalloped rim, flanked by two minarets. Coleridge's Xanadu line circles the yolk, over a swirling blue and cream halftone checkerboard, with a pink Nº7 badge, navy cover-line stickers, a red ribbon reading THE XANADU ISSUE and a navy price bar.
+project: maximalist-zine-cover.lopsy
 ---
 
 Maximalism isn't clutter. It's a lot of confident pieces, each with its own

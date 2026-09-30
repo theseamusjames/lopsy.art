@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Waffle Mambo menu, a black WAFFLE MAMBO title with a cobalt shadow, a cartoon waffle in a mint circle, and two white menu cards over a lilac squiggle-pattern block
 finished: finished-waffle-mambo.webp
 finishedAlt: The finished Waffle Mambo menu. A chunky black WAFFLE MAMBO headline with a cobalt offset shadow sits over a hot-pink quarter circle and a mustard triangle. A waffle with pink syrup, butter and blueberries sits in a mint circle ringed with sprinkles. Below, a Waffles card and a Shakes & Sips card with yellow and pink header bands sit on a lilac squiggle-print block, with a checkerboard quarter circle and a blue SINCE 1986 badge.
+project: memphis-restaurant-menu.lopsy
 ---
 
 In the early 1980s the Milan collective **Memphis Group**, led by Ettore

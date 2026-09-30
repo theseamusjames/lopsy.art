@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished MOTH DISCO t-shirt graphic, a pastel holographic Luna moth in front of a glowing mirror ball with soft light beams and a pastel Monoton title on a deep ink background
 finished: finished-moth-disco.webp
 finishedAlt: The finished MOTH DISCO t-shirt graphic, with a pastel iridescent Luna moth whose head touches a tiled mirror ball hanging on a thin chain, soft colored beams fanning out behind it, star glints near the light, a holographic MOTH DISCO title in Monoton and the line NOCTURNAL, GROOVE, SOCIETY underneath
+project: holographic-moth-t-shirt-design.lopsy
 ---
 
 Holographic foil prints work because they fake light: pale thin-film colors,

@@ -8,6 +8,7 @@ tags: vaporwave, synthwave, text effects, layer effects, gradients, poster desig
 related: neon-glow-text-effect
 cover: cover.jpg
 coverAlt: Lopsy rotating the pink Flamingo script headline over a striped retro sun, with the transform handles and a neon flamingo sign in view
+project: vaporwave-sunset-billboard.lopsy
 ---
 
 Vaporwave billboards run on a few reliable ingredients: a sunset gradient, a

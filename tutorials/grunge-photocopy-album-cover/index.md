@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished LUKEWARM QUICKSAND album cover, with the layers panel open beside a halftoned desert photo, a black recliner sinking into sand and cream QUICKSAND lettering
 finished: finished-lukewarm-quicksand.webp
 finishedAlt: The finished square album cover on dirty manila paper. LUKEWARM runs across the top in black condensed capitals with toner speckle and a misregistered rust copy. Below it is a torn, mustard-and-black halftone photo of desert dunes, taped at the corners. A photocopied black recliner with a scissor-cut cream border sinks into the sand, with pale ripple rings around it. QUICKSAND is tilted and half-buried in the foreground sand. At the bottom, MILDEW PARISH is marker-written on a strip of masking tape, beside a rust PROMO COPY, NOT FOR SALE rubber stamp and a coffee ring
+project: grunge-photocopy-album-cover.lopsy
 ---
 
 Early-90s Seattle sleeves were made with scissors, a photocopier and whatever turned up in a junk shop. Art Chantry's Sub Pop covers are the classic examples. This tutorial rebuilds that cut-and-paste process digitally for a made-up band, Mildew Parish, and their album *Lukewarm Quicksand*.

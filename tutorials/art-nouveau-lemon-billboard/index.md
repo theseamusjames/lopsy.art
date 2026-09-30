@@ -10,6 +10,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Lemon Elixir Art Nouveau billboard, a teal bottle in front of a lemon-slice halo wrapped in vines, beside yellow outlined lettering on a sage mosaic panel
 finished: finished-lemon-elixir.webp
 finishedAlt: The finished Lemon Elixir billboard. A teal bottle with an LE label stands in front of a giant lemon-slice halo ringed with dots, wrapped in whiplash vines with leaves and hanging lemons. On the right, yellow "Lemon Elixir" lettering with brown outlines and hard shadows sits on an arched sage mosaic panel, with a round Maison Citron medallion and a cream ribbon reading Sparkling Tonic of the Riviera
+project: art-nouveau-lemon-billboard.lopsy
 ---
 
 Around 1900, Alphonse Mucha and his contemporaries sold champagne, cigarettes

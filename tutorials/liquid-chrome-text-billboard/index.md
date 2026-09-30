@@ -8,6 +8,7 @@ tags: liquid metal, chrome, text effects, layer effects, gradients, liquify, bil
 related: vaporwave-sunset-billboard, neon-glow-text-effect
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Xenon Drift billboard, with dripping chrome XENON DRIFT type over a violet horizon, a mirror reflection on the floor, a liquid chrome sphere and blue event text
+project: liquid-chrome-text-billboard.lopsy
 ---
 
 Liquid metal has a simple recipe. You need a sky reflected as bands of light

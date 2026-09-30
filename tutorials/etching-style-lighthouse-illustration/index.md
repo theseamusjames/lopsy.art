@@ -8,6 +8,7 @@ tags: digital painting, etching, engraving, illustration, patterns, filters, mes
 related: folk-art-zine-cover, swiss-style-exhibition-poster
 cover: cover.jpg
 coverAlt: Lopsy showing the finished etching of The Juniper Light, a sepia engraved lighthouse on a cross-hatched headland under a ruled night sky with a hatched moon, a wind-bent juniper, gulls and a copperplate caption
+project: etching-style-lighthouse-illustration.lopsy
 ---
 
 A 19th-century etching builds all of its tone from lines. The plate is never
