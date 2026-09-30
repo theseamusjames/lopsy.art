@@ -7,6 +7,11 @@ Read SPEC.md for the full product specification.
   commit style, what's wanted).
 - `e2e/GUIDE.md` — read this before writing any e2e tests.
 - `MEMORY.md` — small facts about the codebase worth remembering. Consider adding to this when you discover a helpful technique or fact about the codebase.
+- `SKILL.md` — public guide for agents that create images by driving the
+  UI (published at `/SKILL.md`, along with `FEATURES.md`; indexed by
+  `public/llms.txt`). Its driver and selectors are tested against
+  lopsy.art, so update it when you change a label, aria-label or flow it
+  relies on.
 - `docs/pixel-data-debt.md` — authoritative tracker for places where
   pixel buffers still live on the JS side, with the migration plan
   for each.
