@@ -644,16 +644,19 @@ kbd {
 }
 
 .follow-along {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 16px 24px;
   margin: 20px 0 0;
   padding: 18px 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-raised);
+}
+
+.follow-along .button {
+  justify-self: start;
 }
 
 .follow-along p {
@@ -817,6 +820,14 @@ kbd {
 
   .cta {
     padding: 24px 20px;
+  }
+
+  .follow-along {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .follow-along-message {
+    order: -1;
   }
 }
 
