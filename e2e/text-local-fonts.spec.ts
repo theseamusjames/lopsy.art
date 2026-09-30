@@ -13,8 +13,15 @@ const CANDIDATE_FAMILIES = ['Zapfino', 'Impact'];
 const LOCAL_HEADER = /^Local\d+$/;
 
 async function openFontPicker(page: Page): Promise<void> {
-  await page.locator('button[aria-haspopup="listbox"]').first().click();
-  await page.locator('input[aria-label="Search fonts"]').waitFor({ state: 'visible' });
+  const trigger = page.locator('button[aria-haspopup="listbox"]').first();
+  const search = page.locator('input[aria-label="Search fonts"]');
+  // The trigger toggles, so only click while it reports closed. Once, under
+  // heavy load, a click right after Add Layer left the picker shut and the
+  // unbounded wait burned the whole test timeout; retry for a bounded time.
+  await expect(async () => {
+    if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+    await expect(search).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 20000 });
 }
 
 function localHeader(page: Page) {
