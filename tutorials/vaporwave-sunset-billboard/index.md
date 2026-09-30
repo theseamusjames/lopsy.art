@@ -2,12 +2,14 @@
 title: Make a Vaporwave Sunset Billboard
 description: Design a synthwave roadside billboard in your browser with a striped retro sun, neon grid, palm silhouettes, a neon sign and glowing script type in Lopsy.
 published: 2026-09-24
+updated: 2026-09-30
 level: Intermediate
 duration: 45
 tags: vaporwave, synthwave, text effects, layer effects, gradients, poster design
 related: neon-glow-text-effect
 cover: cover.jpg
 coverAlt: Lopsy rotating the pink Flamingo script headline over a striped retro sun, with the transform handles and a neon flamingo sign in view
+project: vaporwave-sunset-billboard.lopsy
 ---
 
 Vaporwave billboards run on a few reliable ingredients: a sunset gradient, a
@@ -47,16 +49,18 @@ Click **Done**.
 
 ![A canvas filled with a vertical gradient from dark indigo at the top through hot pink to peach](03-sunset-sky.webp)
 
-Drag from the top edge of the canvas straight down to about y = 400, where the
-horizon will sit. Hold [[Cmd]] while you drag to snap the angle to a perfect
-vertical.
+Drag from the top edge of the canvas straight down to about two-thirds of the
+way down, just above where the horizon will sit. Hold [[Cmd]] while you drag
+to snap the angle to a perfect vertical.
 
 ## Draw the retro sun
 
 ![A circular selection filled with a gradient from pale yellow at the top to hot pink at the bottom](04-retro-sun-gradient.webp)
 
-Add a layer named `Sun`. With the **Elliptical Marquee**, drag a 420 px circle
-on the right-hand side of the canvas, from about (1040, 120) to (1460, 540).
+Add a layer named `Sun`. With the **Elliptical Marquee**, [[Cmd]]-drag a circle
+about 420 px across on the right-hand half of the canvas. Start it about a
+fifth of the way down, so its lower edge runs past the horizon (about
+three-quarters of the way down), where the floor will hide it.
 
 Open the Gradient Editor again, delete one stop, and set the rest to `#FFF59A`,
 `#FFA53D` and `#FF2E97`. Drag a vertical gradient inside the selection. Only
@@ -71,8 +75,9 @@ Drag a thin horizontal band across the lower half of the sun and press
 [[Delete]]. Repeat about seven times, making each band a little thicker and
 the gaps a little wider as you go down. That's the classic 80s sunset look.
 
-> **Tip:** Turn off **Snap** in the options bar first. With grid snapping on,
-> very thin marquees can snap to zero height.
+> **Tip:** If the grid is showing, turn off **Snap** in the options bar
+> first. Snapping rounds each marquee to the grid, so a very thin band can
+> end up with no height at all.
 
 Finally, open the Sun layer's **Layer Effects** (the sparkle icon) and turn on
 **Outer Glow** in `#FF4FB0`, Size `70`.
@@ -81,8 +86,10 @@ Finally, open the Sun layer's **Layer Effects** (the sparkle icon) and turn on
 
 ![A dark purple floor below the horizon covered in glowing magenta perspective grid lines that converge on the sun](06-neon-grid-floor.webp)
 
-Add a `Floor` layer. Marquee everything below y = 440 and fill it with a dark
-gradient from `#3A0A5E` to `#07011A`.
+Add a `Floor` layer. Marquee everything below the horizon, about
+three-quarters of the way down, and fill it with a dark gradient from
+`#3A0A5E` to `#07011A`. Drag the gradient from the horizon to the bottom
+edge.
 
 Add a `Grid Lines` layer. Pick the **Brush** with Size `3`, Hardness `100` and
 color `#FF4DF0`. Draw straight lines fanning out from a vanishing point under
@@ -106,9 +113,10 @@ the trunk.
 ![A marquee around a copy of the palm, with scale handles, being shrunk beside the sun](08-scale-palm-copy.webp)
 
 Click **Duplicate Layer**, then click the copy's row. Marquee around the palm,
-press [[V]] for **Move**, and drag the copy to the other side of the sun. Drag
-a corner handle while holding [[Cmd]] to scale it down evenly, then press
-[[Enter]] to commit.
+press [[V]] for **Move**, and drag the copy to the other side of the sun.
+Press [[Cmd+D]] to commit the move, then marquee the copy again. Drag a
+corner handle while holding [[Cmd]] to scale it down evenly, and press
+[[Cmd+D]] to commit.
 
 Select both palms and choose **Layer → Group Layers**. You can then move them
 together by selecting the group and dragging.
@@ -119,7 +127,8 @@ together by selecting the group and dragging.
 
 Add a `Sign Board` layer. Press [[U]] for the **Shape** tool, choose
 **Polygon** with **Sides** `4` and **Corner Radius** `26`, set the Fill to
-`#150430` and add a Stroke. Drag the board out on the left side of the canvas.
+`#150430` and add a cyan Stroke. Drag out a rounded square board near the
+left edge of the canvas, filling most of the height above the horizon.
 
 On a new layer above it, draw a simple flamingo with a Size `7` brush in
 `#FFE6F7`: an oval body, an S-curved neck, a hooked beak, and one straight leg
@@ -145,7 +154,7 @@ signature synthwave detail.
 
 Script titles look livelier with a slight upward tilt. Marquee around the
 headline, switch to **Move**, and drag a round rotation handle (just outside a
-corner) about 6° counterclockwise. Press [[Enter]], then [[Cmd+D]].
+corner) about 6° counterclockwise. Press [[Cmd+D]] to commit.
 
 ## Add bold HOTEL lettering
 
@@ -167,8 +176,6 @@ Japanese text is a staple of the style. Choose **Dela Gothic One**, Size `30`,
 color `#FFE36B`, and click the **Vertical text** toggle (the stacked A over B)
 in the options bar. Click beside the sign and paste `フラミンゴ・ホテル`.
 
-> **Tip:** Pick a font that ships as a single static weight, such as Dela
-> Gothic One, for heavy Japanese type.
 
 ## Recolor the sign frame
 
@@ -176,20 +183,25 @@ in the options bar. Click beside the sign and paste `フラミンゴ・ホテル
 
 To change just the frame's color, select the `Sign Board` layer, press [[W]]
 for the **Magic Wand**, and click the frame. Set the foreground color to
-`#FF4FD8` and choose **Edit → Fill**. Add an **Outer Glow** to the board and
-give the `OPEN` text a red **Color Overlay** and glow so it reads like a
-vacancy light.
+`#FF4FD8` and choose **Edit → Fill**, then press [[Cmd+D]]. Add an **Outer
+Glow** to the board.
+
+Finally, type `OPEN` in the board's top-left corner, in a hollow display face
+such as **Bungee Outline**. Give it a red **Color Overlay** and a glow, so it
+reads like a vacancy light.
 
 ## Add the info band
 
 ![A dark translucent band along the bottom with the yellow tagline POOL, COLOR TV, NEXT EXIT 2 MI](15-info-band-tagline.webp)
 
-Billboards need a short call to action. Marquee a strip across the bottom
-52 px, fill it with near-black, and set the layer's opacity to about 80%.
+Billboards need a short call to action. On a new `Info Band` layer, marquee
+a strip across the bottom 52 px, fill it with near-black, and set the
+layer's opacity to about 80%.
 
 Type a short tagline in **Space Mono** Bold at Size `34`, color `#FFE66D`, with
-letter spacing `8`. Click the top ruler to drop a vertical guide at x = 900,
-and center the text on it with the Move tool. Keep it to three items. Nobody
+letter spacing `8`. [[Cmd]]-click the middle of the top ruler to drop a
+guide exactly on the centre line, and center the text on it with the Move
+tool. Keep it to three items. Nobody
 reads six items at highway speed.
 
 ## Finish with glow and grain

@@ -2,6 +2,7 @@
 title: Make a Multi-Layer Stencil Jazz Club Billboard
 description: Spray a two-screen stencil billboard in Lopsy with a halftone moon, a black cat on a xylophone, misregistered key-plate shadows and dripping stencil type.
 published: 2026-09-26 11:30
+updated: 2026-09-30
 level: Intermediate
 duration: 75
 tags: stencil, street art, spray paint, billboard, jazz poster, halftone, quick mask, text effects, poster design
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Xylophone Nocturne billboard, a black cat on a pink, teal and cream stencil xylophone under a halftone crescent moon, beside XYLOPHONE NOCTURNE stencil type on a navy plywood wall
 finished: xylophone-nocturne-finished.webp
 finishedAlt: The finished Xylophone Nocturne billboard. A black cat sits on a pink, teal and cream stencil xylophone with crossed mallets, under a pink halftone crescent moon. Beside it are cream XYLOPHONE and dripping pink NOCTURNE stencil type, a pink script tagline, event details and a paper ticket stub on a navy plywood hoarding.
+project: stencil-jazz-club-billboard.lopsy
 ---
 
 A real multi-layer stencil is cut as a few flat sheets, one per ink, and
@@ -71,14 +73,16 @@ grain now tints the sky instead of covering it.
 
 ![Five blue guides over the wood-grain sky, with dark seams between four plywood sheets](05-guides-and-plywood-seams.webp)
 
-Click the top ruler at x `450`, `900` and `1350` to drop guides where the
-plywood sheets meet. Add two more at `980` and `1740`: those are the left and
-right edges of the type block.
+The plywood comes in four equal sheets. [[Cmd]]-click the top ruler at a
+quarter, half and three quarters of the way across. [[Cmd]] snaps each guide
+to that exact fraction. Then plain-click two more guides for the type block:
+one a little right of the centre guide (about 980 px) for its left edge, and
+one about 60 px in from the right edge for its right edge.
 
 Click **Add Layer** and name the layer `Seams`. With the **Rectangular
-Marquee**, select a strip 6 px wide and the full canvas height centered on
-each sheet guide. Fill each strip with `#0A0C1E` using **Edit → Fill**. Set
-`Seams` to `70%`.
+Marquee**, drag a thin strip, about 6 px wide, down the full height of the
+canvas over each of the three sheet guides. Fill each strip with `#0A0C1E`
+using **Edit → Fill**. Set `Seams` to `70%`.
 
 ## Paint a radial selection in Quick Mask
 
@@ -87,7 +91,8 @@ each sheet guide. Fill each strip with `#0A0C1E` using **Edit → Fill**. Set
 Click **Add Layer** and name it `Stage Glow`. Press [[Q]] to enter **Quick
 Mask**. Pick the Gradient tool, switch **Type** to **Radial** and open
 **Advanced…**. Set the left stop to white and the right stop to black. Then
-drag from (480, 590) up to (480, 160).
+start just right of the first guide, about 130 px above the bottom edge, and
+drag straight up to about 160 px from the top.
 
 In Quick Mask, white adds to the selection and black leaves it out. So this
 paints a selection that is strongest behind where the xylophone will stand.
@@ -111,16 +116,22 @@ like a stage lamp on the hoarding.
 ![A 440 pixel elliptical marquee on the left side of the canvas](08-moon-ellipse-marquee.webp)
 
 Click **Add Layer** and name it `Moon`. Set the foreground to `#F2E6C8`.
-With the **Elliptical Marquee**, drag from (110, 60) to (550, 500), then
-choose **Edit → Fill**.
+With the **Elliptical Marquee**, [[Cmd]]-drag a circle about 440 px across,
+starting about 110 px in from the left edge and 60 px down from the top. It
+reaches a little past the first guide. Choose **Edit → Fill**.
+
+> **Tip:** For an exact circle, click once with the Elliptical Marquee while
+> nothing is selected, instead of dragging. A dialog opens where you can type
+> the **From** and **To** corners, here 110, 60 and 550, 500.
 
 ## Cut the crescent and a stencil bridge
 
 ![A cream disc with a second circular marquee overlapping its right side, ready to be deleted](09-crescent-cut-marquee.webp)
 
-Draw a second ellipse from (215, 15) to (635, 435) and press
-[[Delete]] to bite out the crescent. Then select a 5 px strip from (100, 318)
-to (300, 323) and press [[Delete]] again.
+Draw a second, slightly smaller circle, shifted about 100 px to the right
+and 45 px up so it covers most of the disc, and press [[Delete]] to bite out
+the crescent. Then marquee a strip about 5 px tall straight across the
+crescent, just below its middle, and press [[Delete]] again.
 
 That thin gap is a **stencil bridge**. A real cardboard stencil needs
 bridges to hold its islands together, and those gaps are a big part of what
@@ -141,8 +152,8 @@ Glow**. Set the color to `#F2E6C8`, **Size** `48`, **Spread** `6` and
 Pick the **Magic Wand**, untick **Contiguous** and click the crescent. That
 selects both halves on either side of the bridge. Click **Add Layer** and
 name it `Moon Shade`. Pick the Gradient tool with **Linear** type (the stops
-are still white to black) and drag from (470, 120) to (120, 400) inside the
-selection.
+are still white to black) and drag inside the selection from the crescent's
+upper right toward its lower left.
 
 Then choose **Filter → Halftone**. Set **Dot Size** `11`, **Density** `1`,
 **Angle** `30` and **Softness** `1`, and click **Apply**.
@@ -161,10 +172,12 @@ screen-printed tone over the cream.
 
 Click the `Stage Glow` row and add a layer named `Stars`. Pick the
 **Spray** tool and set **Size** `34`, **Density** `14` and **Opacity** `75`.
-Click once each at (610, 70), (880, 125), (455, 28) and (930, 330). Give
-each one a hard core by filling an 8 × 8 ellipse at its center. Then drop
-the spray to Size `24` and Density `3`, and click a few times across the
-sky for stray paint dust.
+Click once each in four spots across the sky to the right of the moon: two
+near the top between the first and centre guides, one just left of the
+centre guide a little lower, and one just right of it about halfway down.
+Give each one a hard core by filling a tiny ellipse, about 8 px across, at
+its center. Then drop the spray to Size `24` and Density `3`, and click a
+few times across the sky for stray paint dust.
 
 ## Start the xylophone group with rails
 
@@ -173,28 +186,35 @@ sky for stray paint dust.
 Click `Moon Shade`, then click **New Group** and name the group
 `Xylophone`. Everything for the instrument goes inside it.
 
-Add a layer named `Rails`. With the **Lasso**, click four corners for a
-16 px-tall rail sloping from (80, 459) to (888, 503) and fill it with cream.
-Then do a second rail from (80, 631) to (888, 587). The rails slope
-because the bars get shorter to the right.
+Add a layer named `Rails`. With the **Lasso**, drag straight through four
+corners for a thin rail, about 16 px tall, that starts near the left edge about two-thirds
+of the way down and runs to just short of the centre guide, sloping gently
+down as it goes. Fill it with cream. Then do a second rail near the bottom
+that slopes gently up, so the two rails close in toward the right. They
+slope because the bars get shorter to the right.
 
 ## Fill the eight bars
 
 ![Three filled bars and a live rectangular marquee for the next bar, over the two rails](15-bar-marquee-fills.webp)
 
-Add a layer named `Bars`. Each bar is 76 px wide with a 20 px gap, starting
-at x `110`, and centered on y `545`. The heights step down from `300` to
-`170`: 300, 281, 263, 244, 226, 207, 189, 170. Marquee each bar and fill it,
+Add a layer named `Bars`. Each bar is about 76 px wide with a 20 px gap.
+The first starts just inside the rails' left ends, and every bar is centred
+halfway between the two rails. The heights step down from `300` to `170`:
+300, 281, 263, 244, 226, 207, 189, 170. Marquee each bar and fill it,
 cycling pink, teal and cream from left to right.
+
+> **Tip:** The **Info** tab beside the Color panel shows the selection's
+> position and size. For exact bars, click once with the marquee while
+> nothing is selected and type each bar's corners.
 
 ## Punch cord holes and stencil bridges
 
 ![A thin marquee across the second bar, with cord holes already punched through every bar](16-stencil-bridge-marquee.webp)
 
-Where each bar crosses a rail, draw a 16 × 16 ellipse on the bar's center
-line and press [[Delete]]. Then cut a 5 px-tall bridge right across each
-bar, 45% of the way down, and press [[Delete]] again. These bridges split
-every bar into two stencil islands.
+Where each bar crosses a rail, draw a small circle, about 16 px across, on
+the bar's center line and press [[Delete]]. Then marquee a 5 px-tall bridge
+right across each bar, a little above its middle, and press [[Delete]]
+again. These bridges split every bar into two stencil islands.
 
 ## Let a few bars drip
 
@@ -211,12 +231,12 @@ tell.
 ![The Layer Effects drawer with Color Overlay set to near-black on the Key Plate layer, showing a dark offset copy behind the bars](18-key-plate-color-overlay.webp)
 
 Switch to the **Move** tool and choose **Layer → Duplicate Layer** twice.
-Each copy lands 10 px to the right, so press [[Shift+Left]] on each one to
-line it back up. Rename the three layers, from the bottom up: `Key Plate`,
-`Overspray` and `Bars`.
+Each copy lands offset by 10 px, so nudge it back into line with the
+[[Shift]]+arrow keys, which move 10 px per press. Rename the three layers,
+from the bottom up: `Key Plate`, `Overspray` and `Bars`.
 
 Click `Key Plate` and nudge it 6 px right and 4 px down with the arrow
-keys. Then add a **Color Overlay** of `#0E0B1A`. It reads as a black
+keys (1 px per press). Then add a **Color Overlay** of `#0E0B1A`. It reads as a black
 stencil sheet that was sprayed slightly out of line.
 
 ## Blur the overspray
@@ -239,9 +259,9 @@ in that bar's color. Keep it sparse: a few flecks sell the effect.
 
 ![A lasso outline of a sitting cat on top of the first bar, against the moon](21-cat-lasso.webp)
 
-Click `Bars` and add a layer named `Cat`. With the **Lasso**, click round a
-sitting cat facing right: its feet on top of the first bar at about (158,
-395), and its pointed ears reaching up to y 220. Fill it with `#0E0B1A`. It
+Click `Bars` and add a layer named `Cat`. With the **Lasso**, drag round a
+sitting cat facing right, its feet on top of the first bar and its pointed
+ears reaching up to about the middle of the moon. Fill it with `#0E0B1A`. It
 sits right in front of the moon, so the silhouette reads from across the
 street.
 
@@ -250,17 +270,19 @@ street.
 ![The black cat with a curled tail and a cut-out eye showing the pink moon behind it](22-cat-tail-and-eye.webp)
 
 Paint the tail with the Brush at **Size** `14`, curling from the cat's rear
-out to the left. Then cut the eye as a small 10 × 6 ellipse with
-[[Delete]], so the moon shows through as a glint. Add one more 16 × 4
-bridge across the tail.
+out to the left. Then cut the eye as a tiny ellipse, about 10 × 6 px, with
+[[Delete]], so the moon shows through as a glint. Add one more small bridge,
+about 16 × 4 px, across the tail.
 
 ## Draw and rotate the first mallet
 
 ![A marquee around the first mallet being rotated clockwise with the rotate handle](23-rotate-mallet.webp)
 
-Add a layer named `Mallet A`. Draw a cream 8 px Brush line straight down
-from (786, 278) to (786, 460) and fill a teal 40 px ellipse at its bottom
-end for the head. Do the same on `Mallet B` at x `757`, with a pink head.
+Add a layer named `Mallet A`. With a cream 8 px Brush, click about 180 px
+above the left edge of the last bar, then [[Shift]]-click straight down at
+the bar's top to draw a straight handle. Fill a teal circle, about 40 px
+across, at its bottom end for the head. Do
+the same on `Mallet B` about 30 px to the left, with a pink head.
 
 Marquee `Mallet A` loosely, switch to the Move tool, and drag the rotate
 handle just outside the box's top-right corner 40° clockwise. Press
@@ -279,9 +301,10 @@ of `#0E0B1A`, **Offset X** `6`, **Offset Y** `4`, **Blur** `0` and
 
 ![A cream eighth note floating above the mallets](25-eighth-note.webp)
 
-Add a layer named `Note`. Lasso a tilted oval head at about (610, 300) and
-fill it cream. Marquee a 7 × 108 stem up from its right side, then lasso
-the curved flag. Give it the same hard black Drop Shadow (5, 4).
+Add a layer named `Note`. Lasso a tilted oval head in the open sky above
+the middle bars and fill it cream. Marquee a thin stem, about 7 × 108 px, up
+from its right side, then lasso the curved flag. Give it the same hard black
+Drop Shadow, at **Offset X** `5` and **Offset Y** `4`.
 
 ## Copy and paste a second note
 
@@ -289,7 +312,8 @@ the curved flag. Give it the same hard black Drop Shadow (5, 4).
 
 Marquee the note, press [[Cmd+C]] and then [[Cmd+V]]. The paste lands in
 place on a new layer: rename it `Note 2`. Marquee it again and drag it up
-and to the left, to about (520, 80). Press [[Cmd+D]].
+and to the left, until it sits near the top of the canvas, just right of the
+first guide. Press [[Cmd+D]].
 
 ## Scale the pasted note
 
@@ -314,8 +338,9 @@ first note 12° the other way so the pair drifts up out of the mallets.
 Click `Moon Shade` first. With a raster layer active, changing the text
 options won't restyle an existing text layer. Pick the **Text** tool, set
 **Size** `128` and the font to **Allerta Stencil**, and set the foreground
-to cream. Click at (978, 44), type `XYLOPHONE` and press [[Tab]]. It spans
-the two type guides, from about x 987 to 1740.
+to cream. Click on the left type guide, just below the top edge, type
+`XYLOPHONE` and press [[Tab]]. It fills the space between the two type
+guides.
 
 ## Set NOCTURNE and stretch it to width
 
@@ -324,12 +349,14 @@ the two type guides, from about x 987 to 1740.
 Click `Moon Shade` again. Set the font to **Sirin Stencil** at Size `165`
 and the foreground to `#FF2E88`. Click in empty space lower down, type
 `NOCTURNE` and press [[Tab]]. With the Move tool, nudge it up with
-[[Shift+Up]] (10 px per press) and the arrow keys until its top sits 22 px
-under XYLOPHONE and its left edge lines up at x 987.
+[[Shift+Up]] (10 px per press) and the arrow keys until its top sits a
+narrow gap, about 22 px, under XYLOPHONE and its left edge lines up with
+XYLOPHONE's.
 
-Click **Rasterize Layer** in the Layers panel footer. Marquee the word and
-drag the right-middle handle out to the 1740 guide. Press [[Cmd+D]]. The two
-words now lock together as one block.
+Click **Rasterize Layer** in the Layers panel footer. You'll paint on the
+word next, and a raster layer keeps the stretch for good. Marquee the word
+and drag the right-middle handle out to the right type guide. Press
+[[Cmd+D]]. The two words now lock together as one block.
 
 ## Drip paint off the letters
 
@@ -343,8 +370,9 @@ from about 26 to 62 px.
 
 ![The Layer Effects drawer with a teal Drop Shadow at offset 6 and 4 on XYLOPHONE, and NOCTURNE carrying a black offset](32-registration-shadows.webp)
 
-Give `NOCTURNE` a **Drop Shadow** of `#0E0B1A` at offset (7, 5), Blur `0`,
-Opacity `100`. Give `XYLOPHONE` a teal `#19C7B4` shadow at (6, 4). Each word
+Give `NOCTURNE` a **Drop Shadow** of `#0E0B1A` at **Offset X** `7` and
+**Offset Y** `5`, Blur `0`, Opacity `100`. Give `XYLOPHONE` a teal `#19C7B4`
+shadow at `6` and `4`. Each word
 now looks sprayed through two sheets that didn't quite line up.
 
 ## Add a rotated script tagline
@@ -352,18 +380,19 @@ now looks sprayed through two sheets that didn't quite line up.
 ![The pink script line "live mallet jazz after dark" inside a rotated transform box under NOCTURNE](33-rotate-script.webp)
 
 Click `Moon Shade`. Type `live mallet jazz after dark` in **Yellowtail**,
-Size `50` and pink, somewhere in empty space. Rasterize it and rename it
-`Script`. Move it under NOCTURNE so its right edge sits at x 1735. Then
-marquee it, rotate it about 4° counter-clockwise and press [[Cmd+D]].
+Size `50` and pink, somewhere in empty space. Rasterize it, so the rotation
+sticks, and rename it `Script`. Move it under NOCTURNE so its right edge sits
+just inside the right type guide. Then marquee it, rotate it about 4°
+counter-clockwise and press [[Cmd+D]].
 
 ## Set the event details
 
 ![Two lines of Black Ops One: EVERY FRIDAY 11 PM to 3 AM in cream and THE BLUE MALLET CLUB 9 CANAL ST in teal](34-info-lines.webp)
 
 Use **Black Ops One** at Size `36`. Put `EVERY FRIDAY  ·  11 PM – 3 AM` in
-cream at y ≈ 478, and `THE BLUE MALLET CLUB  ·  9 CANAL ST` in teal at y ≈
-552. Nudge both so they start at x 987, and keep the right margin at least
-60 px.
+cream a little below the script, and `THE BLUE MALLET CLUB  ·  9 CANAL ST` in
+teal about 75 px under that. Nudge both so they start on the same left edge
+as the title, and keep at least 60 px clear of the canvas's right edge.
 
 > **Tip:** A click inside an existing text layer's box edits that layer.
 > Click for the second line well below the first, and paste characters like
@@ -373,32 +402,34 @@ cream at y ≈ 478, and `THE BLUE MALLET CLUB  ·  9 CANAL ST` in teal at y ≈
 
 ![A 460 by 72 rectangular marquee in the bottom right, below the event details](35-ticket-marquee.webp)
 
-Click `Moon Shade`, add a layer named `Ticket`, and marquee (1250, 615) at
-460 × 72. Fill it with cream.
+Click `Moon Shade`, add a layer named `Ticket`, and marquee a 460 × 72 strip
+in the bottom right, below the event details and ending just inside the
+right type guide. Fill it with cream.
 
 ## Cut the notches and perforation
 
 ![A cream ticket with round notches bitten out of both ends and a dotted perforation line near the left](36-ticket-cutouts.webp)
 
-Delete a 28 × 28 circle centered on each short end for the notches. Then
-delete a column of 6 × 6 circles every 11 px at x 1333 for the
-perforation.
+Delete a circle about 28 px across centered on each short end for the
+notches. Then, about 80 px in from the left end, delete a column of tiny
+circles, about 6 px across and 11 px apart, for the perforation.
 
 ## Type on the ticket
 
 ![The ticket reading 07 in pink on the stub and NO COVER · CATS WELCOME in black](37-ticket-type.webp)
 
 With `Ticket` active, set `07` in pink Black Ops One at Size `30` on the
-stub. Click **Rasterize Layer**, then **Layer → Merge Down**. Do the same
-with `NO COVER  ·  CATS WELCOME` at Size `22` in `#0E0B1A`, centered between
-the perforation and the right notch.
+stub, then choose **Layer → Merge Down** to fold it into `Ticket`. Merge Down
+rasterizes the text for you. Do the same with `NO COVER  ·  CATS WELCOME` at
+Size `22` in `#0E0B1A`, centered between the perforation and the right
+notch.
 
 ## Tilt the ticket
 
 ![The ticket inside a transform box rotated 3 degrees clockwise](38-rotate-ticket.webp)
 
 Marquee the ticket, rotate it 3° clockwise and press [[Cmd+D]]. Give it
-the black key-plate Drop Shadow at (7, 5).
+the black key-plate Drop Shadow at **Offset X** `7` and **Offset Y** `5`.
 
 ## Wear the paint with the Eraser
 

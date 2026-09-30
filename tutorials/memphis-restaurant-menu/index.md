@@ -2,6 +2,7 @@
 title: Design a Memphis-Style Restaurant Menu
 description: Make an 80s Memphis Group waffle-bar menu in Lopsy with squiggle pattern fills, flat geometric shapes, hard shadows, rotated confetti and area-text columns.
 published: 2026-09-26 22:00
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: memphis, restaurant menu, pattern fill, layer effects, text effects, illustration, groups, poster design
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Waffle Mambo menu, a black WAFFLE MAMBO title with a cobalt shadow, a cartoon waffle in a mint circle, and two white menu cards over a lilac squiggle-pattern block
 finished: finished-waffle-mambo.webp
 finishedAlt: The finished Waffle Mambo menu. A chunky black WAFFLE MAMBO headline with a cobalt offset shadow sits over a hot-pink quarter circle and a mustard triangle. A waffle with pink syrup, butter and blueberries sits in a mint circle ringed with sprinkles. Below, a Waffles card and a Shakes & Sips card with yellow and pink header bands sit on a lilac squiggle-print block, with a checkerboard quarter circle and a blue SINCE 1986 badge.
+project: memphis-restaurant-menu.lopsy
 ---
 
 In the early 1980s the Milan collective **Memphis Group**, led by Ettore
@@ -46,16 +48,19 @@ Choose **File → New** and create a **1200 × 1600** pixel document with a
 **White** background. Click the **Background** row, set the foreground to
 cream `#FFF1DC` and choose **Edit → Fill**.
 
-Add guides by clicking the rulers: click the top ruler at **60**, **600**
-and **1140** for the outer margins and the centre line. Then click the
-left ruler at **740** and **1420** for the top and bottom of the menu
-cards.
+Add guides by clicking the rulers (a single click drops a guide). On the
+top ruler, click about 60 px in from each side for the outer margins, then
+[[Cmd]]-click ([[Ctrl]]-click) the middle to drop a guide exactly on the
+centre line. On the left ruler, click at about **740** and **1420**. Those
+two mark the top and bottom of the menu cards.
 
-Rename `Layer 1` to `Lilac Block`. Drag a **Rectangular Marquee** from
-(0, 680) to the bottom of the canvas at x 540, fill it with lilac
-`#B9A6F0`, and press [[Cmd+D]]. Open its **Layer effects** and turn on a
-black **Stroke** of width `6`. Letting the block bleed off the left and
-bottom edges makes it feel like part of a bigger print.
+Rename `Layer 1` to `Lilac Block`. With the **Rectangular Marquee**, drag
+from just outside the bottom-left corner of the canvas up to a point about
+680 px down and 540 px across, a little short of the centre guide. Fill it
+with lilac `#B9A6F0` and press [[Cmd+D]]. Open its **Layer effects** (the
+sparkle button on the layer row) and turn on a black **Stroke** of width
+`6`. Letting the block bleed off the left and bottom edges makes it feel
+like part of a bigger print.
 
 ## Draw a Bacterio squiggle tile
 
@@ -69,7 +74,10 @@ corner of the canvas:
 2. Paint three short squiggles at different angles. Two full S-curves
    about 50–60 px long and one half-wave work well.
 3. Add five dots of 8–14 px with small **Elliptical Marquee** fills.
-4. Drag a **Rectangular Marquee** over exactly (0, 0) to (160, 160).
+4. Press [[Cmd+D]], then select exactly the 160 × 160 tile. With nothing
+   selected, a single click (no drag) with the **Rectangular Marquee**
+   opens a dialog where you can type **From** `0`, `0` and **To** `160`,
+   `160`.
 
 Keep marks away from the edges of the tile so nothing is cut when it
 repeats.
@@ -79,16 +87,16 @@ repeats.
 ![The Pattern Fill dialog previewing the squiggle tile across the lilac block](03-pattern-fill-bacterio-block.webp)
 
 With the tile still selected, choose **Edit → Define Pattern**. Then press
-[[Cmd+A]] and [[Delete]] to clear the tile, and [[Cmd+D]].
+[[Delete]] to clear the tile from the layer, and [[Cmd+D]].
 
-Select the lilac block's area again, from (0, 680) to (540, 1600). Choose
-**Edit → Fill with Pattern…**, pick the new 160 × 160 pattern and click
-**Apply**.
+[[Cmd]]-click the `Lilac Block` thumbnail in the Layers panel to select
+the block's shape, then click the `Bacterio` row again so the pattern goes
+on that layer. Choose **Edit → Fill with Pattern…**, pick the new
+160 × 160 pattern and click **Apply**.
 
-The pattern goes on its own `Bacterio` layer above the lilac block, not on
-the block itself. Pattern Fill replaces the pixels inside the selection
-with the tile, so the transparent parts of the tile would punch holes in
-the lilac. On a separate layer, the squiggles sit on top of the colour.
+The pattern could go straight onto the lilac block, but keeping it on its
+own layer above the block lets you trim or recolour the squiggles later
+without touching the lilac.
 
 ## Add the big Memphis shapes
 
@@ -98,29 +106,45 @@ Click `Bacterio` and use **New Group** three times to make `Shapes`,
 `Menu` and `Title` groups, with `Title` at the top. Click `Shapes` and add
 three layers inside it:
 
-- **Mint Circle:** an **Elliptical Marquee** from (740, 10), 520 × 520,
-  filled with mint `#6FDCC0`. It runs off the right edge.
-- **Pink Quarter:** a **Lasso** from the top-left corner around
-  a 430 px arc, filled with hot pink `#FF5FA2`.
-- **Mustard Triangle:** the **Shape** tool with **Polygon**, **Sides**
-  `3` and a mustard fill. Shapes draw from the centre, so drag from
-  (600, 150) to (682, 222).
+- **Mint Circle:** hold [[Cmd]] while you drag with the **Elliptical
+  Marquee** to get a true circle about 520 px across. Start it just below
+  the top edge and about 140 px right of the centre guide, so it runs off
+  the right edge. Fill it with mint `#6FDCC0`.
+- **Pink Quarter:** with the **Lasso**, press at the top-left corner of the
+  canvas, drag straight along the top edge to about 430 px, then sweep a
+  smooth curve round to about 430 px down the left edge and back up to the
+  corner, and let go. Fill it with hot pink
+  `#FF5FA2`.
+- **Mustard Triangle:** the **Shape** tool with **Polygon**, **Sides** `3`
+  and a mustard fill. Shapes draw from the centre out, so start the drag
+  near the top of the gap between the pink and mint shapes and pull out
+  about 80 px.
 
 Big, flat, overlapping primitives are the heart of Memphis. Don't outline
 them; they should read like cut paper.
+
+> **Tip:** A single click with the Shape tool, without dragging, opens a
+> size dialog where you can type an exact **Width** and **Height**.
 
 ## Add a checkerboard quarter circle
 
 ![A black-and-white checkerboard quarter circle in the bottom-right corner and a mint half circle at the bottom edge](05-checkerboard-quarter-circle.webp)
 
-Add a `Checker` layer. Fill a 40 × 40 white square at (0, 0), then fill
-two 20 × 20 ink squares at (0, 0) and (20, 20). Select the 40 × 40 square,
-**Define Pattern**, and clear the layer.
+Add a `Checker` layer and build the tile in the top-left corner: fill a
+40 × 40 white square, then fill two 20 × 20 ink squares in its top-left and
+bottom-right quarters. Select the 40 × 40 square (the click-for-exact-corners
+dialog helps again), choose **Define Pattern**, and press [[Delete]] to
+clear it.
 
-Lasso a 250 px quarter circle into the bottom-right corner and choose
-**Edit → Fill with Pattern…** with the checker tile. Give it the same
-6 px black **Stroke**. On a `Mint Half` layer, lasso a 120 px half circle
-sitting on the bottom edge at x 740 and fill it mint.
+With the **Lasso**, drag a quarter circle of about 250 px radius into the
+bottom-right corner: press at the corner itself, drag up the right edge to
+about 250 px, sweep a curve round to about 250 px along the bottom edge, and
+let go back at the corner. Choose
+**Edit → Fill with Pattern…** with the checker tile, and give the layer
+the same 6 px black **Stroke**.
+
+On a `Mint Half` layer, lasso a half circle of about 120 px radius sitting
+on the bottom edge, a little right of the centre guide, and fill it mint.
 
 ## Set the title
 
@@ -131,8 +155,9 @@ Click the `Title` group and choose the **Text** tool:
 1. Choose **Rammetto One**, size **120**, ink `#161616`.
 2. Click in the empty canvas and type `WAFFLE`. Press [[Tab]] to commit.
 3. Click `Title` again, then click lower down and type `MAMBO`.
-4. With the **Move** tool, stack them: `WAFFLE` at about y 225, `MAMBO` at
-   y 344, with `MAMBO` indented about 30 px.
+4. With the **Move** tool, stack them over the pink quarter circle near
+   the top left, with `MAMBO` directly under `WAFFLE` and indented about
+   30 px.
 
 Give both layers a **Drop Shadow** in cobalt `#2C4BD1` with **Offset X**
 `10`, **Offset Y** `10`, **Blur** `0` and **Opacity** `100`. A hard,
@@ -148,7 +173,10 @@ Open the **Text** panel and set **Letter spacing** to `2`. Choose
 **Space Mono** Bold at **22** and type
 `BELGIAN WAFFLES · MALTS · LATE-NIGHT GROOVES` (paste it if the `·`
 characters don't come through). Move it so its left edge lines up with
-**WAFFLE** at x 93, about 40 px under **MAMBO**.
+the left edge of **WAFFLE**, about 40 px under **MAMBO**.
+
+> **Tip:** Turn on **View → Snap to Layers** and the Move tool will catch
+> the edge of **WAFFLE** as you drag.
 
 ## Build the waffle grid
 
@@ -156,12 +184,14 @@ characters don't come through). Move it so its left edge lines up with
 
 Click `Mint Half` and add a **New Group** called `Waffle`. Inside it:
 
-1. On a `Waffle Disc` layer, fill a 320 × 320 circle at (830, 120) with
-   mustard.
-2. On a `Pockets` layer, fill a 32 × 32 square at (7, 7) with toasted
-   brown `#C9811A`. Select (0, 0)–(46, 46) and **Define Pattern**, then
-   clear the layer.
-3. Marquee (760, 50) to (1200, 510) and **Fill with Pattern…** with the
+1. On a `Waffle Disc` layer, [[Cmd]]-drag a 320 px circle centred in the
+   mint circle and fill it with mustard.
+2. On a `Pockets` layer, make a 46 × 46 tile in the top-left corner: fill
+   a 32 × 32 square in toasted brown `#C9811A`, 7 px in from the top and
+   left. Select the whole 46 × 46 tile and **Define Pattern**, then press
+   [[Delete]] to clear it.
+3. Marquee a square well beyond the disc on every side, so the grid still
+   covers the disc after it's rotated, and **Fill with Pattern…** with the
    46 px tile.
 4. Switch to the **Move** tool, drag the rotation handle outside the
    top-right corner about **22°**, then press [[Cmd+D]] to commit.
@@ -172,9 +202,13 @@ Rotating the grid keeps it from looking like graph paper.
 
 ![An elliptical selection inverted around the waffle, ready to delete the grid outside the circle](09-clip-grid-to-circle.webp)
 
-Draw an **Elliptical Marquee** from (848, 138), 284 × 284, just inside
-the disc. Choose **Select → Inverse** and press [[Delete]]. Deselect, then
-**Layer → Merge Down** the pockets into `Waffle Disc`.
+[[Cmd]]-click the `Waffle Disc` thumbnail to select the disc, then click the
+`Pockets` row. Clicking the row straight away means the next [[Delete]]
+clears only what's selected. Choose **Select → Shrink…** `18` so the
+selection sits just inside the disc's edge, choose **Select → Inverse**, and
+press [[Delete]].
+Deselect, then choose **Layer → Merge Down** to merge the pockets into
+`Waffle Disc`.
 
 ## Add syrup, butter, blueberries and outlines
 
@@ -184,7 +218,8 @@ Add three more layers above the disc:
 
 - **Syrup:** lasso a wavy pink blob over the upper half, with three
   finger-shaped drips. Round each drip with a small circle fill.
-- **Butter:** lasso a 68 px square rotated −14° in pale yellow `#FFF3B0`.
+- **Butter:** lasso a small square pat, about 68 px across and tilted
+  slightly, in pale yellow `#FFF3B0`.
 - **Blueberries:** three cobalt circles of 30–40 px in the lower right.
 
 Give all four layers a black **Stroke** of width `7`. One consistent
@@ -200,7 +235,7 @@ rotate the original about 40° with the Move tool and press [[Cmd+D]].
 
 For each extra sprinkle:
 
-1. Press [[Cmd+V]].
+1. Press [[Cmd+V]]. The copy lands in place on a new layer.
 2. Drag it with the **Move** tool to a spot around the waffle.
 3. Marquee it, rotate it to a new angle, and press [[Cmd+D]].
 4. Recolour it with a **Color Overlay** effect in cobalt, cream, mustard
@@ -214,26 +249,32 @@ but it looks timid if it spreads over the whole page.
 ![A thick black squiggle under the tagline and a cobalt zigzag on the right](12-squiggle-and-zigzag.webp)
 
 Click `Mint Half`, add a `Squiggles` layer and choose the **Brush** at
-**Size** `18`, **Hardness** `100`. Paint one wide black wave from about
-(96, 600) to (436, 600). Hold the shape steady by moving in small, even
-steps. At **Size** `15` in cobalt, paint a zigzag of eight 42 px
-segments, starting at (640, 640).
+**Size** `18`, **Hardness** `100`. Under the tagline, paint one wide black
+wave starting at the left margin and running about 340 px across. Move in
+small, even steps to keep the wave steady.
+
+Switch to **Size** `15` in cobalt and paint a zigzag of eight segments,
+each about 42 px long, starting just right of the centre guide and a
+little lower than the wave. Click the first point, then [[Shift]]-click
+each corner in turn to get dead-straight segments.
 
 ## Make the menu cards
 
 ![A white menu card with a black stroke and a black offset drop shadow over the lilac block](13-card-stroke-and-hard-shadow.webp)
 
-Click the `Menu` group and add a `Left Card` layer. Fill a white
-rectangle from (60, 740), 520 × 680. That puts its top and bottom on your
-two horizontal guides. Give it:
+Click the `Menu` group and add a `Left Card` layer. Marquee from the left
+margin guide to about 20 px short of the centre guide, with the top and
+bottom on your two horizontal guides (a 520 × 680 card), and fill it
+white. Give it:
 
 - A black **Stroke** of width `6`.
 - A black **Drop Shadow** with **Offset X** `14`, **Offset Y** `14`,
   **Blur** `0` and **Opacity** `100`.
 
-Add `Right Card` at (620, 740), the same size with the same effects.
-Matching tops, bottoms and shadows across both cards is what makes a busy
-Memphis page still feel designed.
+Add `Right Card` the same way, from about 20 px right of the centre guide
+to the right margin guide, with the same effects. Matching tops, bottoms
+and shadows across both cards is what makes a busy Memphis page still feel
+designed.
 
 ## Add header bands, a pill and a footer
 
@@ -241,13 +282,12 @@ Memphis page still feel designed.
 
 Add a `Card Details` layer and fill:
 
-- A mustard band, 520 × 92, at the top of the left card.
-- A pink band, 520 × 92, at the top of the right card.
+- A mustard band, 92 px tall, across the top of the left card.
+- A pink band, 92 px tall, across the top of the right card.
 - A 6 px ink rule under each band.
-- A black 64 px footer band along the bottom of the right card, from
-  y 1356.
-- A 460 × 44 pink pill on the left card at (90, 1348). Build it from a
-  rectangle plus a circle at each end.
+- A black 64 px footer band along the bottom of the right card.
+- A 460 × 44 pink pill near the bottom of the left card, 30 px in from
+  each side. Build it from a rectangle plus a circle at each end.
 
 ## Set the menu items with area text
 
@@ -256,22 +296,22 @@ Add a `Card Details` layer and fill:
 Put **WAFFLES** and **SHAKES & SIPS** in the bands in **Rammetto One**
 **46**, 30 px in from the card edge and centred vertically in the band.
 
-For the items, use **area text**, dragging a text box instead of
-clicking. Each column is one layer, so the rows stay perfectly spaced.
-Set **Line height** `1`, and use **Paragraph spacing** to control the gap
-between items:
+For the items, use **area text**: drag a text box instead of clicking.
+Each column is one layer, so the rows stay perfectly spaced. In the
+**Text** panel, set **Line height** `1`, and use **Paragraph spacing** to
+control the gap between items:
 
 - **Prices:** **Rammetto One** `28`, **Align right**, paragraph spacing
-  `72`, in a 100 px box ending at the card's inner edge.
+  `72`, in a 100 px wide box ending at the card's inner edge.
 - **Descriptions:** **DM Mono** `18` in plum `#3A3340`, paragraph spacing
   `82`, starting 36 px below the prices.
-- **Names:** **Archivo Black** `28`, paragraph spacing `72`, starting at
-  the same y as the prices.
+- **Names:** **Archivo Black** `28`, paragraph spacing `72`, starting level
+  with the prices.
 
 Make them in that order: prices, descriptions, then names. A text click
 or drag that lands inside an existing text box edits it instead of
-starting a new layer, so each new box should start in space that no text
-covers yet.
+starting a new layer, so start each new box in space that no text covers
+yet.
 
 Finish with the footer, `88 SQUIGGLE AVE · OPEN TIL 2AM`, in Space Mono
 Bold `20`, cream, centred in the black band. Then add
@@ -288,9 +328,9 @@ Build the badge above `Card Details`:
 2. On a `Badge Ring` layer, fill a 128 px mustard circle centred on it.
    Choose **Select → Shrink…** `5` and press [[Delete]] to leave a ring,
    then **Merge Down**.
-3. Type `SINCE` (Space Mono Bold 22, tracking 2) and `1986` (Rammetto One
-   36) in cream in empty space. Move them onto the badge, **Rasterize**
-   each, and **Merge Down** twice into `Badge`.
+3. Type `SINCE` (Space Mono Bold 22, letter spacing 2) and `1986`
+   (Rammetto One 36) in cream in empty space. Move them onto the badge,
+   **Rasterize** each, and **Merge Down** twice into `Badge`.
 4. Marquee the badge, rotate it **14°** with the Move tool, and press
    [[Cmd+D]].
 
@@ -315,12 +355,16 @@ mistakes. In this piece that meant four fixes:
 
 - **Badge:** moved up so it clears the Shakes card instead of grazing its
   corner.
-- **Bacterio pattern:** marqueed the pattern layer from x 522 to the
-  block's edge and pressed [[Delete]], so no squiggle is sliced by the
-  outline.
+- **Bacterio pattern:** on the pattern layer, marqueed a strip from about
+  18 px inside the block's right edge to just past it and pressed
+  [[Delete]], so no squiggle is sliced by the outline.
 - **Mint half circle:** slid 60 px left so it tucks under the card
   shadows.
 - **MAMBO:** nudged 12 px left so the **O** clears the mint circle.
+
+> **Tip:** With the **Move** tool, the arrow keys nudge the active layer
+> 1 px and [[Shift]]+arrow nudges 10 px, so six [[Shift]]+[[Left]] presses
+> move the half circle exactly 60 px.
 
 ## Export the menu
 

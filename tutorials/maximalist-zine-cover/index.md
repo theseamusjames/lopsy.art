@@ -2,6 +2,7 @@
 title: Design a Maximalist Retro Zine Cover
 description: Build a loud, layered 70s-style zine cover in Lopsy with a mesh-warped checkerboard, a radial sunburst, a fried-egg pleasure dome and text on a path.
 published: 2026-09-26 12:00
+updated: 2026-09-30
 level: Intermediate
 duration: 75
 tags: zine cover, maximalism, retro, mesh warp, radial symmetry, text on a path, layer effects, halftone, typography, groups
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the Yolk zine cover, with a red YOLK masthead over a swirling blue checkerboard and a fried egg with an onion-dome finial on a striped sunburst
 finished: finished-yolk-xanadu-zine-cover.webp
 finishedAlt: The finished YOLK zine cover. A fried egg sits on a pink, red and orange sunburst with a mint scalloped rim, flanked by two minarets. Coleridge's Xanadu line circles the yolk, over a swirling blue and cream halftone checkerboard, with a pink Nº7 badge, navy cover-line stickers, a red ribbon reading THE XANADU ISSUE and a navy price bar.
+project: maximalist-zine-cover.lopsy
 ---
 
 Maximalism isn't clutter. It's a lot of confident pieces, each with its own
@@ -30,11 +32,11 @@ Along the way you'll use:
 
 The palette:
 
-- Cobalt `#2340C8` and cream `#FFF1D6` for the background
-- Tomato `#E8412C`, orange `#FF7A1A` and bubblegum `#FF8FB8` for the sunburst
-- Mint `#5ED3A0` and teal `#19C9A0` as accents
-- Yolk `#FFB81C` and gold `#FFC21A`
-- Ink navy `#1A1030` for every outline and hard shadow
+- Background `#2340C8` / `#FFF1D6` (cobalt and cream)
+- Sunburst `#E8412C` / `#FF7A1A` / `#FF8FB8` (tomato, orange and bubblegum)
+- Accents `#5ED3A0` / `#19C9A0` (mint and teal)
+- Yolk `#FFB81C`, gold `#FFC21A`
+- Ink navy `#1A1030` (every outline and hard shadow)
 
 ## Create the zine document
 
@@ -50,19 +52,24 @@ background. That's close to A5 proportions, which suits a zine. Double-click
 
 You'll build the background from one small tile.
 
-1. With the Rectangular Marquee, drag a 100 × 100 selection at the top-left
-   corner. Set the foreground to cobalt `#2340C8` and choose **Edit → Fill**.
+1. With the Rectangular Marquee, drag a 100 × 100 selection in the top-left
+   corner of the canvas. Set the foreground to cobalt `#2340C8` and choose
+   **Edit → Fill**.
 2. Marquee the top-left 50 × 50 quarter and fill it with cream `#FFF1D6`.
 3. Do the same for the bottom-right quarter.
 4. Re-select the whole 100 × 100 tile and choose **Edit → Define Pattern**.
+
+> **Tip:** A tile has to be exact or the seams show. Press [[Cmd+D]] and
+> *click* (don't drag) with the Rectangular Marquee to type the corners:
+> **From 0, 0 To 100, 100** for the tile, **From 0, 0 To 50, 50** and
+> **From 50, 50 To 100, 100** for the cream quarters.
 
 ## Fill a layer with the pattern
 
 ![The Pattern Fill dialog with the checker pattern selected and Scale set to 140](03-pattern-fill-checker.webp)
 
 1. Press [[Cmd+D]] to deselect.
-2. Click **Add Layer**, name it **Checker**, and give it a solid **Edit → Fill**
-   first. Pattern Fill needs existing pixels to tile over.
+2. Click **Add Layer** and name it **Checker**.
 3. Choose **Edit → Fill with Pattern…**, pick the checker, set **Scale** to
    **140**, and click **Apply**. That gives you 70 px squares.
 4. Select the **Tile** layer and delete it.
@@ -75,8 +82,8 @@ Select the Move tool and click **Mesh Warp** in the options bar. Set the grid
 to **5 × 5** and tick **Preview**.
 
 Drag each of the nine interior handles about a quarter-turn around the point
-where the egg will sit (roughly x 500, y 760). Pull them slightly inward as
-you go. The checks spiral in like a vortex, which pulls the eye straight to
+where the egg will sit: on the vertical centre line, a little over halfway
+down the page. Pull them slightly inward as you go. The checks spiral in like a vortex, which pulls the eye straight to
 the centre of the cover. Click **Apply** when you're happy.
 
 > **Tip:** Leave the handles on the outer edge alone, so the corners stay
@@ -90,7 +97,7 @@ This layer gives the background a printed look.
 
 1. Add a layer called **Halftone**.
 2. Choose the **Gradient** tool, set Type to **Radial**, and tick **Reverse**.
-3. Drag from the centre (500, 760) straight down past the bottom edge.
+3. Drag from that same egg point straight down past the bottom edge.
 4. Run **Filter → Halftone…** with **Dot Size 14** and **Softness 1**.
 5. Open the layer's effects. Turn on **Color Overlay** in deep navy
    `#0E1A6B`, set the blend mode to **Multiply**, and drop the layer opacity
@@ -105,8 +112,9 @@ Add a layer called **Scallops**. Choose the Brush and set:
 - Size **120**, Hardness **100**
 - **Radial Symmetry** on, with **24** segments
 
-[[Cmd]]-click at (500, 770) to set the symmetry centre, then click once 445 px
-above it in mint `#5ED3A0`. One click stamps all 24 discs.
+[[Cmd]]-click the egg point to set the symmetry centre, then click once in
+mint `#5ED3A0` straight above it, about 445 px up. One click stamps all 24
+discs.
 
 Give the layer these effects:
 
@@ -118,13 +126,14 @@ Give the layer these effects:
 ![A sunburst disc of pink, red and orange wedges clipped to a circle and outlined in navy, sitting on the mint scallops](07-sunburst-rays.webp)
 
 1. Add a **Rays** layer.
-2. Ellipse-marquee a 880 px circle on the same centre and fill it orange
-   `#FF7A1A`.
+2. Ellipse-marquee an 880 px circle on the same centre and fill it orange
+   `#FF7A1A`. Clicking with the Elliptical Marquee (nothing selected) and
+   typing **From 60, 330 To 940, 1210** gives you the exact circle.
 3. With the Lasso, draw thin wedges from the centre out past the edge. Fill
    every third wedge tomato `#E8412C`, and the next every-third bubblegum
    `#FF8FB8`. Three colours stop neighbouring wedges from blurring together.
-4. Re-draw the 880 px circle marquee, choose **Select → Inverse**, and press
-   [[Delete]] to clip the wedges.
+4. Select the same 880 px circle again, choose **Select → Inverse**, and
+   press [[Delete]] to clip the wedges.
 5. Add a 7 px navy **Stroke** effect.
 
 ## Ring it with alternating dots
@@ -133,8 +142,10 @@ Give the layer these effects:
 
 1. On a new **Dots** layer, set the brush to Size **36** and Radial Symmetry
    to **12** segments, with the same centre.
-2. Click once in cream at 7.5° off vertical, 395 px out from the centre.
-3. Switch to gold `#FFC21A` and click once at 22.5°.
+2. Click once in cream about 395 px out from the centre, just to the right of
+   straight up, so the dot sits on the sunburst's rim.
+3. Switch to gold `#FFC21A` and click once on the rim, halfway between two
+   cream dots.
 
 That gives 24 dots that alternate colours. Turn symmetry off and add a 4 px
 navy Stroke.
@@ -146,8 +157,8 @@ navy Stroke.
 In Coleridge's poem, "Alph, the sacred river, ran" under the dome. On a
 **River** layer:
 
-1. Lasso a ribbon that snakes down from about y 960 to y 1260 and widens as
-   it goes.
+1. Lasso a ribbon that snakes down from just below the egg point to the
+   bottom of the sunburst, widening as it goes.
 2. Fill it with teal `#1FA3C8` and add a 5 px navy Stroke.
 3. Brush two 4 px cream wave lines along the current.
 
@@ -158,8 +169,8 @@ The top of the river will hide under the egg later.
 ![Two cream minaret towers with pink onion domes, navy arched windows and gold finials rising from the sunburst](10-onion-dome-minarets.webp)
 
 1. Click **New Group** and name it **Palace**.
-2. On a **Towers** layer, marquee two 38 px-wide towers at x 300 and x 702 and
-   fill them cream.
+2. On a **Towers** layer, marquee two 38 px-wide towers, one on each side of
+   the centre line about 200 px out, and fill them cream.
 3. Lasso an onion-dome outline on top of each tower and fill it pink.
 4. Add a 5 px navy Stroke.
 5. On a **Windows** layer above, fill small navy arches (a rectangle plus an
@@ -201,13 +212,10 @@ The egg will cover the bases of the towers.
 2. Inside it, lasso two notched **Ribbon Tails** in dark red `#A8261A`.
 3. Above them, marquee and fill an 824 × 86 tomato **Ribbon**.
 4. Draw a marquee around the ribbon, open **Mesh Warp** at **3 × 3**, and drag
-   the three middle handles about 22 px vertically until the banner bows into
-   an arch. Because of the marquee, the warp only affects the ribbon.
+   the three middle handles up about 22 px until the banner bows into an
+   arch. Because of the marquee, the warp only affects the ribbon.
 5. Add a navy Stroke, a hard navy shadow, and small dark fold triangles where
    the tails tuck behind.
-
-> **Tip:** Mesh Warp currently moves pixels *against* the handle (#911). If
-> the banner bends the wrong way, drag the handles the other way.
 
 ## Fry the egg
 
@@ -248,8 +256,9 @@ the highlight follows the curve of the yolk. Press [[Cmd+D]] to commit.
 
 ![A pink starburst badge reading Nº7 XANADU ISSUE rotated 14 degrees and biting into the K of the masthead](17-issue-badge.webp)
 
-1. In **Stickers**, lasso a 48-point starburst (alternating radius 112 / 92)
-   at (858, 392).
+1. In **Stickers**, lasso a 48-point starburst to the right of the masthead,
+   just below the K, alternating between points about 112 px and 92 px from
+   its centre.
 2. Fill it pink and add a navy Stroke and shadow.
 3. Set **Nº7** in **Chango** 58 and **XANADU / ISSUE** in Rubik Mono One 15.
 4. Rasterize both, **Merge Down** each into the badge, then rotate the badge
@@ -282,11 +291,11 @@ the checker gaps. Alternate gold and cream, then add a 4 px navy Stroke and a
 
 ## Snap the price bar to the grid
 
-![View Show Grid on with a 16 pixel grid, ruler guides at x 40 and x 960, and a full-width marquee snapped along the bottom edge for the footer bar](20-footer-grid-snap.webp)
+![View Show Grid on with a 16 pixel grid, margin guides near both side edges, and a full-width marquee snapped along the bottom edge for the footer bar](20-footer-grid-snap.webp)
 
 1. Turn on **View → Show Grid**. Snap turns on with it.
-2. Click the top ruler at x 40 and x 960 to drop margin guides, and click the
-   side ruler at y 1356.
+2. Click the top ruler about 40 px in from each side to drop margin guides,
+   and click the side ruler about 44 px up from the bottom edge.
 3. Drag a footer marquee along the bottom. It snaps to the grid. Fill it navy.
 4. Untick **Snap** and draw a small cream barcode with thin navy bars.
 5. Set `$6 / AUTUMN 2026 / A QUARTERLY OF BREAKFAST & PARADISE` in cream

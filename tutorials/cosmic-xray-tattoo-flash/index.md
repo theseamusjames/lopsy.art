@@ -2,6 +2,7 @@
 title: Design a Holographic X-Ray Tattoo Flash Sheet
 description: Make a COSMIC X-RAY tattoo flash sheet in Lopsy with x-ray skull, hand, heart and planet designs, holographic foil gradients and a Rye title banner.
 published: 2026-09-28
+updated: 2026-09-30
 level: Intermediate
 duration: 90
 tags: holographic, iridescent, tattoo flash, tattoo design, x-ray, skeleton, space, gradients, lasso, text effects
@@ -41,8 +42,9 @@ foreground to `#0B0720` and choose **Edit → Fill**.
 
 Double-click **Layer 1**, rename it **Holo Wash**, and pick the **Gradient**
 tool. Click **Advanced…** and set five stops: `#22E8FF` at 0%, `#FF3FD8` at
-30%, `#7B4DFF` at 58%, `#3DFFC8` at 80% and `#FFE45C` at 100%. Drag a
-**Linear** gradient from the top-left corner to the bottom-right corner.
+30%, `#7B4DFF` at 58%, `#3DFFC8` at 80% and `#FFE45C` at 100%. This is the
+foil ramp you'll reuse all the way through. With **Type** set to **Linear**,
+drag from the top-left corner to the bottom-right corner.
 
 ## Turn the wash into a nebula
 
@@ -51,16 +53,17 @@ tool. Click **Advanced…** and set five stops: `#22E8FF` at 0%, `#FF3FD8` at
 Add a **Nebula** layer and run **Filter → Clouds…** at **Scale 4**. Then
 run **Filter → Brightness/Contrast…** with **Brightness −45** and
 **Contrast 90**, so most of the cloud goes black and only wisps stay bright.
-Open the layer's effects and set **Blend** to **Multiply**. The foil wash
-now only shows through the wisps.
+Open the layer's effects drawer and set **Blend** to **Multiply**. The foil
+wash now only shows through the wisps.
 
 ## Scatter a star field
 
 ![Fine white stars speckled over the nebula from a noise layer in Screen mode](03-star-field.webp)
 
 First set **Holo Wash** to **40%** opacity, so the colour stays in the
-background. Then add a **Stars** layer, fill it black, and run **Filter → Add Noise…** with
-**Amount 100** and **Mono**. Then run **Filter → Threshold…** at **Level 48**.
+background. Then add a **Stars** layer, fill it black, and run
+**Filter → Add Noise…** with **Amount 100** and **Mono**. Then run
+**Filter → Threshold…** at **Level 48**.
 Only the brightest noise grains survive, and they become stars. Set the layer
 to **Screen** at **60%**, so the black disappears and only the stars stay.
 
@@ -68,15 +71,21 @@ to **Screen** at **60%**, so the black disappears and only the stars stay.
 
 ![A rainbow foil border band inset from the canvas edge with a thin white rule just inside it and a cyan glow](04-foil-border.webp)
 
-Add a **Frame** layer. Marquee **1148 × 1488** at **(26, 26)** and drag the
-foil gradient corner to corner. Press [[Cmd+D]], marquee **1120 × 1460** at
-**(40, 40)** and press [[Delete]]. That leaves a 14 px band.
+Add a **Frame** layer. With the **Rectangular Marquee**, select nearly the
+whole sheet, leaving a margin of about 26 px on every side, and drag the foil
+gradient across it corner to corner. Press [[Cmd+D]], then select a slightly
+smaller rectangle about 40 px in from each edge and press [[Delete]]. That
+leaves a 14 px foil band.
 
-For the inner rule, marquee **1092 × 1432** at **(54, 54)**, fill it with
-`#F4F0FF`, choose **Select → Shrink…** with **3 px**, and press [[Delete]].
-Add an **Outer Glow** in `#22E8FF` (**Size 18**, **Opacity 55**). Then click
-**Rasterize Layer Style** to bake it in: glows are recalculated every time the
-canvas redraws, and a flash sheet ends up with a lot of them.
+For the inner rule, select a rectangle about 54 px in from each edge, fill it
+with `#F4F0FF`, choose **Select → Shrink…** with **3 px**, and press
+[[Delete]]. Add an **Outer Glow** in `#22E8FF` (**Size 18**, **Opacity 55**).
+Then click **Rasterize Layer Style** to bake it in: glows are recalculated
+every time the canvas redraws, and a flash sheet ends up with a lot of them.
+
+> **Tip:** For even margins, click the canvas once with the marquee (don't
+> drag) while nothing is selected. A dialog opens where you can type exact
+> **From** and **To** corners, such as 26, 26 to 1174, 1514.
 
 > **Tip:** Always press [[Cmd+D]] before starting a new marquee. Dragging
 > from *inside* an existing selection moves that selection instead of drawing
@@ -84,31 +93,41 @@ canvas redraws, and a flash sheet ends up with a lot of them.
 
 ## Place guides for a 2 × 2 layout
 
-![Blue guides at x 330, 600 and 870 and y 170, 600 and 1130 over the bordered sheet, with the 8 pixel grid showing](05-guides-grid.webp)
+![Blue guides marking the two column centres, the sheet's vertical centre line, the banner line and the two row centres over the bordered sheet, with the 8 pixel grid showing](05-guides-grid.webp)
 
-Click the top ruler at **x 330**, **600** and **870**, and the left ruler at
-**y 170**, **600** and **1130**. Those are the column centres, the sheet's
-middle, the banner line and the two row centres. Turn on **View → Show Grid**
-with an **8 px** grid for later alignment, then turn it off again while you
-draw freehand shapes.
+A single click on a ruler drops a guide. On the top ruler, [[Cmd]]-click
+([[Ctrl]]-click) the middle to snap a guide exactly to the centre, then click
+about 330 px in from each side for the two column centres. On the left ruler,
+click once through the ribbon, about 170 px down, and once through the middle
+of each row, at roughly 600 and 1130.
+
+Turn on **View → Show Grid** and set the **Grid** slider in the options bar
+to **8px** for later alignment. Turn it off again while you draw freehand
+shapes, because the grid also switches on snapping.
 
 ## Cut the ribbon's swallowtails
 
 ![Two notched swallowtail ribbon ends in violet to pink to cyan at either side of the top of the sheet, with dark fold triangles](06-ribbon-tails.webp)
 
-Add a **Banner Tails** layer. With the **Lasso** (L), click out a swallowtail:
-(210, 128), (62, 128), (118, 188), (62, 248), (210, 248). Fill it with a
-**Linear** `#7B4DFF` → `#FF3FD8` → `#22E8FF` gradient, and repeat the tail
-mirrored on the right. Lasso a small triangle under each inner end
-((170, 218), (210, 218), (210, 248)) and fill it with `#2A124F`. That's the
-fold where the ribbon turns behind itself. Add a 6 px `#120A2E` **Stroke**.
+Add a **Banner Tails** layer. With the **Lasso** (L), drag out a swallowtail
+at the top left, just inside the frame: a flag about 150 px long and 120 px
+tall, straddling the banner guide, with a V-shaped notch cut into its outer
+end. Press at the inner top corner and drag in straight runs through the
+outer top corner, the notch point about a third of the way in, the outer
+bottom corner and the inner bottom corner, then let go. Fill it with a **Linear** `#7B4DFF` → `#FF3FD8` → `#22E8FF`
+gradient, and repeat the tail mirrored on the right.
+
+Lasso a small triangle in the bottom inner corner of each tail and fill it
+with `#2A124F`. That's the fold where the ribbon turns behind itself. Add a
+6 px `#120A2E` **Stroke**.
 
 ## Lay the ribbon band over the tails
 
 ![A holographic banner band across the top joining the two tails, with a dark outline and a soft pink glow](07-ribbon-band.webp)
 
-Add a **Banner** layer, marquee **860 × 126** at **(170, 92)** and drag the
-five-stop foil gradient across it. Give it a 7 px ink **Stroke**, a white
+Add a **Banner** layer. Marquee a band about 860 × 126 px, centred across
+the sheet and sitting a little higher than the tails, so its ends overlap
+their inner ends by about 40 px and the tails peek out below. Drag the five-stop foil gradient across it. Give it a 7 px ink **Stroke**, a white
 **Inner Glow** (**Size 14**, **Opacity 70**) for a chrome edge, and a
 `#FF3FD8` **Outer Glow** (**Size 30**, **Opacity 60**). Rasterize the style on
 both ribbon layers.
@@ -137,23 +156,27 @@ Press [[Tab]] to commit.
 ![The dark title centred in the ribbon with even space above, below and at both ends, a thin white outline and a hard violet shadow](10-title-seated.webp)
 
 Switch to **Move** (V) and nudge the title with the arrow keys (hold
-[[Shift]] for 10 px) until the letters sit in the middle of the band. That's about 70 px from each end
-of the band, and 27 px above and below the caps.
-Add a white **Stroke** of **3** and a `#2A124F` **Drop Shadow** with
-**Offset 4 / 4**, **Blur 0** and **Opacity 55**. The white keyline separates
+[[Shift]] for 10 px) until the letters sit in the middle of the band, with
+the same space at both ends and the same space above and below the caps.
+Add a white **Stroke** with **Width 3** and a `#2A124F` **Drop Shadow** with
+**Offset X 4**, **Offset Y 4**, **Blur 0** and **Opacity 55**. The white keyline separates
 the ink from the foil, and the hard offset shadow reads as a printed sticker.
 
 ## Launch a comet
 
 ![A comet with a pale yellow head and a cyan to magenta tail streaking up-left from the upper-left cell](11-comet.webp)
 
-Add a **Comet Tail** layer. Lasso a long tapered wedge from **(500, 500)** to
-**(115, 380)**, about 88 px wide at the head. Fill it with a **Linear**
-gradient from the head to the tip: white, `#22E8FF` at 25%, `#FF3FD8` at 70%
+Add a **Comet Tail** layer. The comet flies over the top-left design, so put
+its head up and to the right of where the skull will go: about 170 px right of
+the left column guide and 100 px above the top row guide. Lasso a long wedge
+about 88 px wide at that end, running up and to the left and narrowing to a
+point near the frame. Fill it with a **Linear** gradient from the head to the
+tip: white, `#22E8FF` at 25%, `#FF3FD8` at 70%
 (alpha 60%), and `#7B4DFF` at 0% alpha. Press [[Cmd+D]] and run
 **Filter → Motion Blur…** at **Angle 17**, **Distance 24**.
 
-On a **Comet Head** layer, fill a 60 px circle at (500, 500) with a
+On a **Comet Head** layer, [[Cmd]]-drag a 60 px circle with the
+**Elliptical Marquee** over the wide end of the tail, and fill it with a
 **Radial** white → `#FFF3B0` → `#22E8FF` gradient. Give it a 5 px ink
 **Stroke** and a `#22E8FF` **Outer Glow** (**Size 40**, **Opacity 90**).
 
@@ -161,9 +184,11 @@ On a **Comet Head** layer, fill a 60 px circle at (500, 500) with a
 
 ![A skull silhouette selected with the Lasso and filled with a pastel holographic gradient](12-skull-gradient.webp)
 
-Add a **Skull** layer. Lasso a skull centred on **(330, 620)**: a domed
-cranium 260 px wide, cheekbones that flare at y 690, and a jaw that narrows
-to a 60 px chin at y 772. Fill it with the pastel foil diagonally from the
+Add a **Skull** layer. Lasso a skull centred on the left column guide, with
+the top row guide running across its forehead: a domed cranium about 260 px
+wide, cheekbones that flare about 90 px below the guide, and a jaw that
+narrows to a 60 px chin about 170 px below it. Drag slowly and smoothly around
+the dome so it stays round. Fill it with the pastel foil diagonally from the
 top-left. A lighter ramp keeps bone looking like bone. Add a 7 px ink
 **Stroke** and a `#7B4DFF` **Inner Glow** (**Size 34**, **Opacity 80**) so
 the edges darken like an x-ray.
@@ -173,9 +198,11 @@ the edges darken like an x-ray.
 ![The skull with two dark oval eye sockets, a spade-shaped nose and a row of square teeth](13-skull-features.webp)
 
 On a **Skull Ink** layer, use the **Elliptical Marquee** to fill two
-74 × 66 eye sockets at (280, 648) and (380, 648) with ink. Lasso a spade
-shape for the nose. Marquee a 108 × 34 mouth at (276, 728) and fill it. Then
-fill two rows of 13 px `#F4F0FF` squares, 17 px apart, for the teeth.
+74 × 66 eye sockets with ink, one each side of the column guide, about
+100 px apart and just above the cheekbones. Lasso a small spade shape
+between and below them for the nose. Marquee a 108 × 34 mouth centred under
+the nose and fill it. Then fill two rows of 13 px `#F4F0FF` squares, 17 px
+apart, across the mouth for the teeth.
 
 ## Trace the x-ray sutures
 
@@ -200,8 +227,9 @@ small white catch-light, and add a cyan **Outer Glow** (**Size 26**).
 ![A violet skeletal-hand silhouette with four fingers and a thumb, shaded from light violet at the fingertips to deep indigo at the wrist, with a pink glow](15-hand-silhouette.webp)
 
 Select **Banner Tails** so new layers land outside the skull, and add a
-**Hand Flesh** layer. Lasso a palm around (870, 670), then lasso a capsule
-for each finger and the thumb, filling each with `#4A22B8`. The overlaps
+**Hand Flesh** layer. Lasso a palm on the right column guide, a little below
+the top row guide, then lasso a capsule for each finger (pointing up) and the
+thumb (angled out to the lower left), filling each with `#4A22B8`. The overlaps
 merge into one hand. [[Cmd]]-click the layer thumbnail to select its shape,
 and drag a diagonal `#7B4DFF` → `#3A1C8C` → `#1C0E4A` gradient from the
 upper left, the same light direction as the skull. Add a 7 px ink **Stroke**
@@ -223,10 +251,10 @@ as an x-ray rather than a glove.
 ![A pastel crescent moon inside rotation handles above the fingertips, being tilted with the Move tool](17-moon-rotate.webp)
 
 Select **Banner Tails** again and add a **Moon** layer, so the fingertips
-overlap the moon. Fill a 168 px circle at (864, 480) with a
-`#FFF3B0` → `#FFB3F0` → `#22E8FF` gradient. Then select a 152 px circle
-offset up and right (centre (898, 450)) and press [[Delete]] to bite out the
-crescent. [[Cmd]]-click the thumbnail, switch to **Move**, and drag a corner
+overlap the moon. Fill a 168 px circle, centred on the column guide just
+above the fingertips, with a `#FFF3B0` → `#FFB3F0` → `#22E8FF` gradient.
+Then select a 152 px circle shifted about 34 px right and 30 px up from the
+first, and press [[Delete]] to bite out the crescent. [[Cmd]]-click the thumbnail, switch to **Move**, and drag a corner
 **rotation handle** about **25°** anticlockwise so the horns cradle the
 fingertips. Press [[Cmd+D]], then add an ink **Stroke**, a white **Inner
 Glow** and a pale yellow **Outer Glow**.
@@ -244,9 +272,9 @@ group **01 Skull & Comet**. Do the same for **Moon** to **Hand Bones** as
 
 ![A heart filled with a radial gradient from warm yellow through magenta and violet to cyan edges, with a white glint on the left lobe](19-heart.webp)
 
-Add a **Heart** layer and lasso a classic heart centred at (330, 1103),
-320 px wide. Drag a **Radial** gradient from (270, 1040) out to (480, 1280)
-with `#FFF3B0`, `#FF3FD8` at 30%, `#7B4DFF` at 68% and `#22E8FF`. Add a 7 px
+Add a **Heart** layer and lasso a classic heart about 320 px wide, centred on
+the left column guide just below the lower row guide. Drag a **Radial**
+gradient from the upper-left lobe out past the heart's lower-right edge, with `#FFF3B0`, `#FF3FD8` at 30%, `#7B4DFF` at 68% and `#22E8FF`. Add a 7 px
 ink **Stroke**, a white **Inner Glow** and a `#FF3FD8` **Outer Glow**. On a
 **Heart Shine** layer, fill a curved kidney-shaped glint on the left lobe in
 white and set it to **Screen**.
@@ -265,11 +293,12 @@ heart glows faintly through the bone.
 
 ![A pale yellow five-point star at the heart's upper right trailing three magenta streaks up and to the left](21-shooting-star.webp)
 
-On a **Shooting Star Trail** layer, lasso three thin wedges from (470, 962)
-up-left toward (240, 880), and fill each with `#FFF3B0` → `#FF3FD8` (alpha
+On a **Shooting Star Trail** layer, lasso three thin wedges, about 250 px
+long, that start just above the heart's right lobe and fan out up and to the
+left. Fill each with `#FFF3B0` → `#FF3FD8` (alpha
 80%) → `#7B4DFF` (alpha 0). Add **Motion Blur** (**Angle 19**,
-**Distance 14**). On a **Shooting Star** layer, lasso a five-point star at
-(480, 962) and fill it with a radial white → `#FFF3B0` → `#FFB3F0` gradient.
+**Distance 14**). On a **Shooting Star** layer, lasso a five-point star at the
+wedges' right-hand end and fill it with a radial white → `#FFF3B0` → `#FFB3F0` gradient.
 Add an ink **Stroke** and a warm **Outer Glow**. Group the heart layers as
 **03 Heart & Star**.
 
@@ -278,9 +307,9 @@ Add an ink **Stroke** and a warm **Outer Glow**. Group the heart layers as
 ![A pastel sphere burned darker along its lower right, with soft violet latitude bands clipped to the sphere](22-planet-bands.webp)
 
 Click **Banner Tails** so the planet starts outside group 03, and add a
-**Planet** layer. Fill a 236 px circle at (870, 1140) with a **Radial**
-gradient from the upper left: white, `#B8F7FF`, `#C9B6FF`, `#FF3FD8`,
-`#3A1C8C`. Pick **Dodge / Burn** (O), set **Mode: Burn**, **Exposure 16** and
+**Planet** layer. Fill a 236 px circle, centred where the right column guide
+crosses the lower row guide, with a **Radial** gradient from the upper left: white, `#B8F7FF`, `#C9B6FF`, `#FF3FD8`,
+`#3A1C8C`. Pick **Dodge/Burn** (O), set **Mode: Burn**, **Exposure 16** and
 **Size 110**, and drag once along the lower-right edge to turn the sphere away
 from the light.
 
@@ -299,6 +328,11 @@ white, then select a 368 × 80 ellipse at the same centre and press
 left to right. With the selection still active, use the **Move** tool's
 rotation handle to tilt the ring about **18°** anticlockwise.
 
+> **Tip:** To centre both ellipses exactly on the planet, click once with the
+> **Elliptical Marquee** instead of dragging (with nothing selected) and type
+> the corners into the dialog. The planet's centre is where the two guides
+> cross.
+
 ## Erase the back of the ring
 
 ![The ring's back arc erased where it passes behind the planet, while the front arc stays in front](24-ring-back-erase.webp)
@@ -314,21 +348,24 @@ Add an ink **Stroke** and a cyan **Outer Glow** to the ring. Add a 44 px
 **Moonlet** at its upper right. Then group **Planet** to **Moonlet** as
 **04 Ringed Planet**.
 
-> **Tip:** Load the selection *from the Planet row* and then switch layers.
-> If you [[Cmd]]-click Planet's thumbnail while Ring is active, the first
-> eraser dab swaps the selection for Ring's own shape.
+> **Tip:** Load the selection *from the Planet row*, then switch layers.
+> Clicking another row settles the loaded shape into a plain selection, so
+> the eraser, Delete and Fill all respect it. Use the same order whenever you
+> borrow one layer's shape to trim another.
 
 ## Number the designs
 
 ![Four pastel foil badges with dark Rye numerals 1 to 4, each above and to the left of its design](25-flash-numbers.webp)
 
 Flash numbers let a client say "number 3, please". Add a **Badge 1** layer,
-fill a 54 px circle at (112, 302) with the pastel foil, and give it an ink
+fill a 54 px circle in the top-left corner, just inside the frame below the
+ribbon, with the pastel foil, and give it an ink
 **Stroke** and a cyan **Outer Glow**. Rasterize the style so the effects travel
 with the pixels. Then marquee the badge, press [[Cmd+C]], [[Cmd+V]] (it
 pastes in place on a new layer) and [[Cmd+D]], and drag the copy with
-**Move** to (700, 380). Paste two more copies at (112, 862) and (652, 952).
-Each badge sits just above and to the left of its own design.
+**Move** to the upper left of the hand. Paste two more copies for the heart
+and the planet. Each badge sits just above and to the left of its own
+design.
 
 Set each number in **Rye**, **Size 34**, ink, and nudge it with the arrow keys
 until it's centred on its badge.
@@ -337,10 +374,11 @@ until it's centred on its badge.
 
 ![A pasted copy of a four-point sparkle inside rotation handles, turned 45 degrees over the original](26-glint-rotate.webp)
 
-On a **Sparkle** layer, lasso a four-point star with concave sides, 68 px
-across, at (560, 790) and fill it white. Marquee it, then [[Cmd+C]] and
-[[Cmd+V]]. [[Cmd]]-click the pasted layer's thumbnail and rotate it **45°**
-with the Move tool's rotation handle.
+On a **Sparkle** layer, lasso a four-point star with concave sides, about
+68 px across, in the empty gap in the middle of the sheet, and fill it white.
+Marquee it, then [[Cmd+C]] and [[Cmd+V]]. [[Cmd]]-click the pasted layer's
+thumbnail and rotate it **45°** with the Move tool's rotation handle. Hold
+[[Cmd]] while you drag and the rotation snaps in 15° steps.
 
 ## Scale the copy and merge it
 
@@ -356,18 +394,20 @@ Press [[Cmd+D]], nudge the copy back to the original's centre and choose
 
 ![Eight-point glints placed around the sheet in the gaps between designs, two of them smaller](28-glints-scattered.webp)
 
-Copy and paste the glint into the empty spaces: (1070, 360), (140, 1320),
-(1070, 1320) and (600, 880) between the rows. Use [[Cmd+X]] and [[Cmd+V]] to
-move the original up beside the comet at (560, 470). Scale two of the copies
-down to about 65% so they read as further away.
+Copy and paste the glint into the empty spaces: the top-right corner beside
+the hand, the bottom-left and bottom-right corners, and the middle of the
+sheet between the two rows. Use [[Cmd+X]] and [[Cmd+V]] to move the original
+up beside the comet's head. Scale two of the copies down to about 65% so they
+read as further away.
 
 ## Plate the signature line
 
 ![A small pastel ribbon plate with notched violet ends at the bottom of the sheet carrying FLASH No. 13 ~ X-RAY SERIES in dark Rye](29-footer-plate.webp)
 
 Every sheet needs its series line. On a **Footer Plate** layer, lasso two
-small notched ends in `#7B4DFF`, then marquee **540 × 62** at **(330, 1420)**
-and fill it with the pastel foil. Give it a 4 px ink **Stroke** and a pink
+small notched ends in `#7B4DFF`, then marquee a 540 × 62 plate centred at
+the bottom of the sheet, just above the inner rule, and fill it with the
+pastel foil. The notched ends poke out at either side. Give it a 4 px ink **Stroke** and a pink
 **Outer Glow**, and rasterize it. Set `FLASH  No. 13   ~   X-RAY  SERIES` in
 **Rye 30**, ink, and nudge it to the centre of the plate. On a plate, the line
 stays readable over the busiest part of the star field.
@@ -381,9 +421,6 @@ The bottom row sits too high and leaves a dead band above the footer. Turn on
 [[Cmd]]-click **04 Ringed Planet**, **Badge 3**, **No. 3**, **Badge 4** and
 **No. 4**. With **Move**, drag the heart down about **40 px**. Every selected
 layer and group moves together and snaps to the 8 px grid. Turn the grid off.
-
-This is also a good time to check your history: [[Cmd+Z]] three times, then
-[[Cmd+Shift+Z]] three times, and the row lands exactly where you left it.
 
 ## Finish with bloom, fringe and grain
 

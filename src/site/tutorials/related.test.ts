@@ -16,6 +16,7 @@ function tutorial(slug: string, overrides: Partial<Tutorial> = {}): Tutorial {
     related: [],
     cover: null,
     finished: null,
+    project: null,
     isDraft: false,
     intro: '',
     steps: [],

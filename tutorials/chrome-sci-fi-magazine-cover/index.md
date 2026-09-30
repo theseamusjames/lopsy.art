@@ -2,7 +2,7 @@
 title: Design an 80s Chrome Sci-Fi Magazine Cover
 description: Build an 80s sci-fi magazine cover in Lopsy with chrome type, a chrome rocket liner over a NASA photo of Earth, and cover lines set on a grid.
 published: 2026-09-29 16:00
-updated: 2026-09-29
+updated: 2026-09-30
 level: Advanced
 duration: 120
 tags: magazine cover, editorial design, chrome, 80s, retro futurism, photo compositing, gradients, layer masks, layer effects, typography, transforms, clone stamp
@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished APOGEE cover, with a chrome masthead above a chrome rocket liner climbing over Earth's cloud tops
 finished: finished-orbital-cruiser.webp
 finishedAlt: The finished APOGEE magazine cover. A chrome masthead with sky-blue tops, a white horizon line and copper bottoms spans the top, with star glints on its corners. Below it, THE ORBITAL CRUISER is set in heavy white condensed capitals over black space, with an orange 100th issue badge to the right. A chrome rocket liner with a row of glowing portholes, an orange stripe and swept tail fins climbs diagonally over a NASA photo of Earth's cloud tops and blue atmosphere, trailing a cyan exhaust plume and white speed lines. Three navy cover lines and a barcode sit along the bottom
+project: chrome-sci-fi-magazine-cover.lopsy
 ---
 
 Science magazines of the late 70s and 80s sold the future with airbrushed chrome. Their mastheads reflected a sky and a desert horizon, and their spaceships gleamed like new cars. In this tutorial you'll recreate that look for an imaginary 1985 issue of **APOGEE**. The cover story is a chrome rocket liner, *The Orbital Cruiser*, flying over the real cloud tops of Earth.
@@ -33,7 +34,7 @@ Copy the photo in your browser and press [[Cmd+V]] in Lopsy. The photo is larger
 
 The Earth needs to fill the bottom of the cover edge to edge, so make it bigger. Hold [[Cmd]] and drag the bottom-right handle outward until the photo is **1500 px** wide. [[Cmd]] keeps the proportions locked. Press [[Cmd+D]] to commit the transform.
 
-Double-click the layer name and rename it `Earth`. With the **Move** tool, drag it **150 px left** and **200 px down**, so the curved blue edge of the atmosphere sits about two thirds of the way down the page.
+Double-click the layer name and rename it `Earth`. With the **Move** tool, drag it down and a little to the left (roughly 200 px down and 150 px left), so the curved blue edge of the atmosphere sits about two thirds of the way down the page and the photo still overhangs both sides.
 
 ## Fade the top of the photo with a layer mask
 
@@ -41,7 +42,7 @@ Double-click the layer name and rename it `Earth`. With the **Move** tool, drag 
 
 The top edge of the photo is a slightly lighter black than the background, so it shows as a visible seam. Click **Add Mask** at the bottom of the Layers panel, then click the mask row (**Edit mask for Earth**).
 
-Pick the **Gradient** tool and open **Advanced…**. Set the stops to black at the left and white at the right. Drag from y ≈ 600 down to y ≈ 790. The top of the photo now melts into the background.
+Pick the **Gradient** tool and open **Advanced…**. Set the stops to black at the left and white at the right. Drag straight down from about 40% of the way down the page to about halfway down, stopping above the faint crescent Moon. Hold [[Cmd]] while you drag to keep the line vertical. The top of the photo now melts into the background.
 
 > **Tip:** In mask edit mode Lopsy tints the hidden areas blue. Click the `Earth` layer row to leave mask editing.
 
@@ -55,11 +56,11 @@ Airbrushed covers were never subtle. With `Earth` selected, open **Filter → Hu
 
 ![A thin glow along the lit edge of the atmosphere, and a sparse starfield in the black sky above](05-stars-limb.webp)
 
-**Airglow.** Add a layer named `Limb Glow`. With the **Lasso**, draw a thin band that hugs the bright edge of the atmosphere, about 35 px tall, from edge to edge. In this photo that edge runs from y 968 at the left to y 938 at the right. Fill the band with a gradient that runs from transparent at the top to near-white cyan (`#E4FCFF`) at the bottom. Then apply **Gaussian Blur** at radius **3**, set the blend mode to **Screen**, and set the opacity to 80%.
+**Airglow.** Add a layer named `Limb Glow`. With the **Lasso**, draw a thin band that hugs the bright edge of the atmosphere, about 35 px tall, from edge to edge. In this photo that edge sits a little below 60% of the way down and rises slightly toward the right. Fill the band with a gradient that runs from transparent at the top to near-white cyan (`#E4FCFF`) at the bottom. Then apply **Gaussian Blur** at radius **3**, set the blend mode to **Screen**, and set the opacity to 80%.
 
-**Stars.** Rename `Layer 1` to `Stars` and fill it with mid-gray `#808080`. Run **Filter → Add Noise…** with **Amount 100**, **Mono** and **Gaussian**. Then run **Filter → Threshold…** at **Level 185**. Only about 0.03% of the pixels survive as white specks, which makes a believable, sparse starfield.
+**Stars.** Rename `Layer 1` to `Stars` and fill it with mid-gray `#808080`. Run **Filter → Add Noise…** with **Amount 100**, **Mono** and **Gaussian**. Then run **Filter → Threshold…** at **Level 185**. Only a few scattered pixels survive as white specks, which makes a believable, sparse starfield.
 
-Set `Stars` to **Screen** so the black disappears. Marquee everything below y = 760, choose **Select → Feather…** 60 px, and press [[Delete]]. The stars now fade out before they reach the atmosphere.
+Set `Stars` to **Screen** so the black disappears. With the **Rectangular Marquee**, select the whole width of the page from about halfway down to the bottom, choose **Select → Feather…** 60 px, and press [[Delete]]. The stars now fade out before they reach the atmosphere.
 
 ## Set the masthead and the margin guides
 
@@ -67,7 +68,7 @@ Set `Stars` to **Screen** so the black disappears. Marquee everything below y = 
 
 With the **Text** tool, click near the top and type `APOGEE` in **Krona One** at **199 px**. That size makes the word exactly span the page between 60 px margins.
 
-Click the top ruler at x = 60 and x = 1140 to add vertical guides. Click the left ruler at y = 84 and y = 1484 to add horizontal ones. With the **Move** tool, place the masthead so its top-left corner sits on the 60 / 84 guides.
+Click the top ruler about 60 px in from each side (at `60` and `1140`) to add vertical margin guides. Click the left ruler at about `84` and `1484` for the top and bottom margins. With the **Move** tool, place the masthead so its top-left corner sits where the left and top guides cross.
 
 ## Fill the letters with a chrome gradient
 
@@ -100,7 +101,9 @@ Open the **Layer effects** on `Masthead Chrome` and turn on:
 - **Drop Shadow**, black, Offset 0 / 10, Blur 18, Opacity 80
 - **Outer Glow**, `#4FA8FF`, Size 40, Opacity 30, for a faint glow in space
 
-Hide `Masthead Type`. For the specular highlight, add a layer named `Masthead Specular`, marquee a 2 px strip across the horizon line (y 165–167), and fill it white. Then [[Cmd]]-click the `Masthead Type` thumbnail, choose **Select → Inverse**, and press [[Delete]] so the line only survives inside the letters. Finish with a small white **Outer Glow** (Size 6).
+Hide `Masthead Type`. For the specular highlight, add a layer named `Masthead Specular`, marquee a 2 px strip across the whole word, right on the chrome's white horizon line, and fill it white. Zoom in to place it exactly.
+
+To keep the line inside the letters, [[Cmd]]-click the `Masthead Type` thumbnail to load the letters as a selection. Then click the `Masthead Specular` row, choose **Select → Inverse**, and press [[Delete]]. Clicking the row before you delete makes sure [[Delete]] clears only the area outside the letters. Finish with a small white **Outer Glow** (Size 6).
 
 ## Draw the chrome hull
 
@@ -160,7 +163,7 @@ Finish the hull with a `Near Fin` layer: a small fairing pod along the hull, and
 
 ![A 1200 by 360 strip copied from the photo, being squashed with the transform handles into a thin band](14-reflection-scale.webp)
 
-Real chrome reflects what's around it. Select `Earth`, marquee a strip across the horizon (0,880 → 1200,1240), then press [[Cmd+C]] and [[Cmd+V]]. Rename the paste `Hull Reflection` and drag it into the `Cruiser` group, just above `Hull`.
+Real chrome reflects what's around it. Select `Earth` and marquee a full-width strip about 360 px tall across the horizon, from just above the glowing edge of the atmosphere down into the clouds. Press [[Cmd+C]] and [[Cmd+V]]. Rename the paste `Hull Reflection` and drag it into the `Cruiser` group, just above `Hull`.
 
 With the strip still selected and the **Move** tool active, drag the bottom-middle handle up to squash the strip to 120 px tall. Then drag the right-middle handle in to make it 1060 px wide. Press [[Cmd+D]].
 
@@ -190,9 +193,9 @@ For grain, add a `Grain` layer and fill it with `#808080`. Run **Add Noise** (Am
 
 ![View → Show Grid turned on with a 16 pixel grid, and a marquee snapped to it in the bottom-right corner](18-grid-snap-marquee.webp)
 
-Click **New Group**, name it `Type`, and add a `Cloud Depth` layer inside it. Give that layer a gradient from transparent at y 1250 to light slate blue `#B9C6E0` at the bottom, and set it to **Multiply**. It gently darkens the clouds behind the bottom cover lines.
+Click **New Group**, name it `Type`, and add a `Cloud Depth` layer inside it. Give that layer a gradient from transparent about four fifths of the way down the page to light slate blue `#B9C6E0` at the bottom, and set it to **Multiply**. It gently darkens the clouds behind the bottom cover lines.
 
-Turn on **View → Show Grid**, which also turns on **Snap to Grid**. On a new `Barcode Box` layer, marquee the bottom-right corner. The marquee snaps to the 16 px grid, so it's easy to get it square and aligned. Fill it with white. Then turn the grid off and trim the box to the 1140 px margin guide and to y = 1478.
+Turn on **View → Show Grid**, which also turns on **Snap to Grid**. On a new `Barcode Box` layer, marquee the bottom-right corner. The marquee snaps to the 16 px grid, so it's easy to get it square and aligned. Fill it with white. Then untick **Snap** in the options bar, turn off **View → Show Grid**, and trim the box so its right edge sits on the right margin guide and its bottom sits just above the bottom guide.
 
 ## Stretch the barcode to fit
 
@@ -200,7 +203,7 @@ Turn on **View → Show Grid**, which also turns on **Snap to Grid**. On a new `
 
 Type the numbers `0 71486 02850 1` in **Michroma** at 11 px along the bottom of the box. Then type `*1185*` in **Libre Barcode 39** at 56 px above them. The asterisks are the barcode's start and stop characters.
 
-The bars come out too short, so click **Rasterize Layer**. Then marquee the barcode and drag the bottom handle down 13 px and the right handle in 16 px. Center the bars and the digits in the box.
+The bars come out too short, so click **Rasterize Layer**. Then marquee the barcode, drag the bottom handle down a little (about 13 px) to make the bars taller, and drag the right handle in slightly so they fit the box. Press [[Cmd+D]], then center the bars and the digits in the box.
 
 ## Set the bottom cover lines
 
@@ -208,9 +211,9 @@ The bars come out too short, so click **Rasterize Layer**. Then marquee the barc
 
 Each cover line has three parts. The kicker is **Michroma** 12 px in orange `#D9480F` with 3 px letter spacing. The headline is **Barlow Condensed Bold** 36 px in navy `#0B1A3F`. The description is **Barlow Condensed Medium** 25 px in `#22375F` with a line height of 1.15.
 
-Set the three columns at x 60, 354 and 677, which leaves about 70 px between each column and the next, and before the barcode. Align the headline cap tops with the top of the barcode box at y ≈ 1388.
+Start the first column on the left margin guide, and space the other two so there's about 70 px between each column and the next, and before the barcode. Line the headline cap tops up with the top of the barcode box.
 
-> **Tip:** Create lower and right-hand text first. A text click lands inside any existing text layer's box below and to the right of its start, and it would edit that layer instead of starting a new one.
+> **Tip:** A Text-tool click on top of an existing text layer edits that layer instead of starting a new one. Click in clear space to start each block, then move it into place with the **Move** tool.
 
 ## Set the cover story headline
 
@@ -218,7 +221,7 @@ Set the three columns at x 60, 354 and 677, which leaves about 70 px between eac
 
 This is the text that sells the issue, so make it big:
 
-- **Kicker:** `COVER STORY` in Michroma 15 px, `#FF7A2F`, letter spacing 4, at y 283.
+- **Kicker:** `COVER STORY` in Michroma 15 px, `#FF7A2F`, letter spacing 4, a little way below the masthead.
 - **Headline:** `THE ORBITAL` / `CRUISER` in Barlow Condensed ExtraBold 110 px, white, with a line height of 0.92. Put its cap tops 18 px under the kicker.
 - **Description:** "First class to the Moon aboard the chrome liner of 1999" in Barlow Condensed Medium 30 px, `#C8D6EE`, 30 px under the headline.
 
@@ -228,7 +231,7 @@ Everything starts on the 60 px guide. Across the very top, set `SCIENCE · FICTI
 
 ![An orange disc with a cream ring holding SPECIAL, 100th and ISSUE in white, centred in the space to the right of the headline](22-badge-type.webp)
 
-Select `Stars` and add a `Badge` layer. That keeps the badge below the ship. Fill an 82 px-radius circle with `#FF5A1F`, and give it a cream **Stroke** (`#FFE2B0`, 4 px) and a soft **Drop Shadow**.
+Select `Stars` and add a `Badge` layer. That keeps the badge below the ship. In the empty space to the right of the headline, fill an 82 px-radius circle with `#FF5A1F`, and give it a cream **Stroke** (`#FFE2B0`, 4 px) and a soft **Drop Shadow**.
 
 Type `SPECIAL` and `ISSUE` in Michroma 12 px, and `100th` in Barlow Condensed ExtraBold 60 px, all in white. Center the three lines on the disc with equal 18 px gaps.
 
@@ -246,7 +249,7 @@ Marquee the badge, drag the rotation handle to tilt it about −12°, and press 
 
 The photo's faint crescent Moon peeks out from behind the tail fin, and there it reads as a mistake. Select `Earth` and pick the **Clone Stamp** at Size 90.
 
-[[Alt]]-click clean sky at x ≈ 20, y ≈ 820. Then start your first stroke 300 px to the right, at the same height. Paint horizontal strokes across the Moon, working down to the clouds.
+[[Alt]]-click clean sky near the left edge of the page, level with the Moon. Then start your first stroke about 300 px to the right, at the same height, on the Moon itself. Paint horizontal strokes across the Moon, working down to the clouds.
 
 > **Tip:** The Clone Stamp is *aligned*. The gap between your [[Alt]]-click and your first stroke stays fixed for every later stroke. Keep that offset purely sideways, and make sure the source strip doesn't overlap the thing you're removing.
 

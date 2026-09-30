@@ -93,3 +93,29 @@ describe('stripMarkdown', () => {
     );
   });
 });
+
+describe('colour swatches', () => {
+  it('turns hex code spans into swatches and leaves other code alone', () => {
+    const html = renderInline('Fill with `#C8272F`, not `#1` or `rgb(0,0,0)`.');
+    expect(html).toContain('<button type="button" data-copy="#C8272F"');
+    expect(html).toContain('<code>#1</code>');
+    expect(html).toContain('<code>rgb(0,0,0)</code>');
+  });
+
+  it('renders a list of named colours as a palette only when asked', () => {
+    const markdown = '- Paper `#F2E4C6`\n- Sky `#0E2446` → `#FFC75E`';
+    const palette = renderMarkdown(markdown, { shouldRenderPalettes: true });
+    expect(palette).toMatch(/^<ul class="palette" aria-label="Palette">/);
+    expect(palette.match(/class="swatch-tile"/g)).toHaveLength(3);
+    expect(palette).toContain('<div class="palette-colors is-ramp">');
+    expect(palette).toContain('<span class="palette-label">Sky</span>');
+
+    expect(renderMarkdown(markdown)).toMatch(/^<ul><li>Paper <button/);
+  });
+
+  it('keeps a list as a list when any item is not a named colour', () => {
+    const html = renderMarkdown('- Paper `#F2E4C6`\n- Then fill it with `#C8272F` and deselect', { shouldRenderPalettes: true });
+    expect(html).toMatch(/^<ul><li>/);
+  });
+});
+

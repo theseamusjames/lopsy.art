@@ -2,12 +2,14 @@
 title: Design a Skate-Style Restaurant Menu
 description: Make a skatepark burger-shack menu in Lopsy with a checkerboard pattern, a tilted skateboard-deck logo, a burger drawn in a group, stickers and aligned prices.
 published: 2026-09-25 18:41
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: restaurant menu, skate, typography, layer effects, groups, selections, transforms, pattern fill
 related: folk-art-zine-cover, propaganda-poster-party-invitation
 cover: cover.jpg
 coverAlt: Lopsy showing the finished Ollie Eats skate menu, with a tilted orange skateboard deck logo, a burger next to yellow EATS lettering, taped section headers, two menu columns with yellow prices and checkerboard bands top and bottom
+project: skate-style-restaurant-menu.lopsy
 ---
 
 Skate graphics come from the shop wall and the grip tape:
@@ -29,8 +31,14 @@ Along the way you'll use:
 - Google fonts, including right-aligned area text
 - the **Spray** tool and a noise overlay
 
-The palette is grip-tape charcoal `#1C1C1F`, cream `#F4EBD3`, orange
-`#FF5A1F`, teal `#1FB5A6`, mustard `#FFC93C` and pink `#FF4F8B`.
+The palette:
+
+- Grip-tape charcoal `#1C1C1F`
+- Cream `#F4EBD3`
+- Orange `#FF5A1F`
+- Teal `#1FB5A6`
+- Mustard `#FFC93C`
+- Pink `#FF4F8B`
 
 ## Make a grip-tape background
 
@@ -48,13 +56,19 @@ to `18` and click **Apply**. The fine grain reads as grip tape.
 
 ![A 90 pixel checker tile of cream and black squares in the top-left corner with a marquee around it](02-checker-tile-pattern.webp)
 
-Select **Layer 1**. With the **Rectangular Marquee** ([[M]]), draw four 45 px
-squares and fill each with **Edit → Fill**:
+A pattern tile has to be exact, or the checks won't line up when they
+repeat. With nothing selected, a single click (no drag) with the
+**Rectangular Marquee** ([[M]]) opens a dialog with **From** and **To**
+corner fields, which makes that easy.
 
-- cream `#F4EBD3` at (0, 0) and (45, 45)
-- near-black `#111114` at (45, 0) and (0, 45)
+Select **Layer 1** and build a 90 px tile in the top-left corner from four
+45 px squares, filling each with **Edit → Fill** and pressing [[Cmd+D]]
+before the next click:
 
-Marquee the whole 90 × 90 tile from (0, 0) to (90, 90) and choose
+- cream `#F4EBD3`: `0, 0` to `45, 45`, and `45, 45` to `90, 90`
+- near-black `#111114`: `45, 0` to `90, 45`, and `0, 45` to `45, 90`
+
+Select the whole tile, `0, 0` to `90, 90`, and choose
 **Edit → Define Pattern**. Then press [[Delete]] to clear the tile and rename
 the layer `Checker Top`.
 
@@ -62,7 +76,8 @@ the layer `Checker Top`.
 
 ![The Pattern Fill dialog showing Pattern 1, 90 by 90, over a 900 by 90 marquee along the top of the canvas](03-fill-with-pattern.webp)
 
-Marquee from (0, 0) to (900, 90) and choose **Edit → Fill with Pattern…**.
+Select a band 90 px tall right across the top (`0, 0` to `900, 90` in the
+marquee dialog) and choose **Edit → Fill with Pattern…**.
 Leave **Scale** and the offsets alone and click **Apply**. Ten tiles fill
 the band exactly.
 
@@ -72,16 +87,21 @@ the band exactly.
 
 With the band still selected, press [[Cmd+C]] and then [[Cmd+V]]. The paste
 lands in place on a new layer. Press [[V]] for the **Move** tool and drag it
-straight down by 1110 px so it sits on the bottom edge. Rename it
+straight down until it sits flush on the bottom edge. Rename it
 `Checker Bottom`.
+
+> **Tip:** Click **Align bottom** in the Move tool's options bar to drop it
+> exactly onto the bottom edge.
 
 ## Add guides
 
-![Blue guides at x 60, 450 and 840 and at y 600 and 1030 over the dark canvas](05-guides.webp)
+![Blue guides marking the side margins, the centre gutter, the top of the menu and the top of the footer over the dark canvas](05-guides.webp)
 
-Click the top ruler at `60`, `450` and `840` for vertical guides: the two
-margins and the gutter between the menu columns. Click the left ruler at `600`,
-where the menu starts, and at `1030`, where the footer starts.
+A single click on a ruler drops a guide, and [[Cmd]]-click (Ctrl-click) snaps
+it to a fraction of the page such as the half.
+
+- On the top ruler, click about 60 px in from each side for the margins, and [[Cmd]]-click the middle for the gutter between the menu columns.
+- On the left ruler, [[Cmd]]-click halfway down, where the menu starts. Click again about 170 px from the bottom (around 1030), where the footer starts.
 
 ## Build the skateboard deck
 
@@ -89,22 +109,25 @@ where the menu starts, and at `1030`, where the footer starts.
 
 Click **Add Layer** and name it `Deck`. Set the foreground to orange `#FF5A1F`.
 
-1. Marquee from (190, 210) to (710, 450) and use **Edit → Fill**.
-2. Choose the **Elliptical Marquee**, drag a 240 × 240 circle from (70, 210) and fill it. That's the nose.
-3. Drag another 240 × 240 circle from (590, 210) and fill it for the tail.
+The round ends have to meet the straight edges exactly, so use the corner
+dialog again (click once with each marquee while nothing is selected):
 
-> **Tip:** The Shape tool's polygon is always regular, so a 4-sided polygon gives a square, not a long rectangle. A marquee rectangle with two circle caps is the quickest way to get a deck shape.
+1. **Rectangular Marquee** from `190, 210` to `710, 450`. Use **Edit → Fill**, then press [[Cmd+D]].
+2. **Elliptical Marquee** from `70, 210` to `310, 450`, a 240 px circle overlapping the left end. Fill it. That's the nose.
+3. Another circle from `590, 210` to `830, 450`, and fill it for the tail.
+
+> **Tip:** The Shape tool's four-sided polygon draws a square, so a marquee rectangle with two circle caps is the quickest way to a long deck shape.
 
 ## Punch the bolt holes
 
 ![The orange deck with eight small holes near each end and a tiny elliptical marquee around the last one](07-bolt-holes.webp)
 
-Trucks bolt on with four holes at each end. With the Elliptical Marquee, drag
-a 16 px circle centred on each of these points and press [[Delete]]. The grip
-tape shows through.
-
-- x `205` and `245`, at y `302` and `358`
-- x `655` and `695`, at y `302` and `358`
+Trucks bolt on with four holes at each end. Near each end, just inside where
+the round cap meets the straight edges, the holes form a small rectangle:
+two pairs about 40 px apart along the deck and 56 px apart across it,
+centred on the deck's midline. With the Elliptical Marquee, [[Cmd]]-drag a
+16 px circle for each hole and press [[Delete]]. The grip tape shows through.
+Keep both ends mirror images of each other.
 
 Press [[Cmd+D]] when you're done.
 
@@ -112,10 +135,10 @@ Press [[Cmd+D]] when you're done.
 
 ![The deck rotated 7 degrees counter-clockwise with the transform box and round rotation handles showing](08-rotate-deck.webp)
 
-Marquee around the whole deck, from (66, 206) to (834, 454), and press [[V]].
+Marquee around the whole deck with a few pixels to spare, and press [[V]].
 Round handles appear just outside the corners. Drag the top-right one upward
 to rotate the deck about **7° counter-clockwise**, so it climbs to the right.
-Press [[Enter]] to commit and [[Cmd+D]] to deselect.
+Press [[Cmd+D]] to commit and deselect.
 
 ## Give the deck a stroke and a hard shadow
 
@@ -136,17 +159,18 @@ hole, like hardware.
 With **Deck** selected, press [[T]]. Set the foreground to cream. Pick
 **Knewave** in the **Font** browser and type `240` in **Size**.
 
-Then click empty canvas at (150, 560), type `Ollie` and press [[Tab]].
+Then click empty canvas below the deck, type `Ollie` and press [[Tab]].
 
-> **Tip:** Set the size before you click. Typing a new size into a text layer that already exists changes it, but that change can't be undone on its own.
+> **Tip:** Set the font and size before you click, so the word comes out right the first time.
 
 ## Rotate the title
 
 ![The rasterized Ollie title inside a marquee transform box, rotated to match the deck](11-rotate-ollie.webp)
 
-Click **Rasterize Layer** at the bottom of the Layers panel. Marquee around the
-word, press [[V]], and drag a corner rotation handle to turn it the same
-**7° counter-clockwise** as the deck. Press [[Enter]], then [[Cmd+D]].
+Click **Rasterize Layer** at the bottom of the Layers panel, so the rotation
+is baked into the pixels and a later text edit can't straighten it. Marquee
+around the word, press [[V]], and drag a corner rotation handle to turn it
+the same **7° counter-clockwise** as the deck. Press [[Cmd+D]] to commit.
 
 ## Put the title on the deck
 
@@ -170,7 +194,7 @@ font to **Rubik Mono One** and the size to `96`. In the **Text** panel, set
 **Letter spacing** to `12`. Click empty canvas, type `EATS` and press [[Tab]].
 
 Rasterize it and rotate it **7° counter-clockwise** like the deck. Then drag
-it under the deck's right half so it's centred at about (638, 512). Give it a
+it under the deck's right half, tucked just below the tail. Give it a
 **Drop Shadow** in ink, offset `5` / `6`, **Blur** `0`.
 
 ## Start a burger in a group
@@ -182,18 +206,20 @@ from that layer puts the group *under* the deck in the stack, so the bun can
 tuck behind it later.
 
 With the group selected, **Add Layer** puts each new layer inside it. Build the
-burger bottom-up, each part on its own layer:
+burger in the empty space at the left, just below the deck. You'll move the
+finished group into place later. Work bottom-up, each part on its own layer,
+stacking each piece so it slightly overlaps the one below:
 
-1. **Bun Bottom** (`#E9A23B`): fill a 161 × 40 ellipse at (90, 548). Marquee from (82, 531) to (258, 564) and press [[Delete]] to flatten its top. Then fill a 161 × 10 strip at (90, 555).
-2. **Patty** (`#5B2A17`): fill a 176 × 35 ellipse at (82, 524).
-3. **Cheese** (mustard): fill a 150 × 11 bar at (95, 517). Then use the **Lasso** ([[L]]) to draw three downward-pointing drips under it, filling each with **Edit → Fill**.
+1. **Bun Bottom** (`#E9A23B`): fill an ellipse about 161 × 40 px. Marquee across its top 16 px or so and press [[Delete]] to flatten it. Then fill a strip the same width and about 10 px tall sitting on the flat top.
+2. **Patty** (`#5B2A17`): fill a slightly wider ellipse, about 176 × 35 px, overlapping the top of the bun.
+3. **Cheese** (mustard): fill a thin bar, about 150 × 11 px, across the top of the patty. Then use the **Lasso** ([[L]]) to draw three downward-pointing drips under it, filling each with **Edit → Fill**.
 
 ## Finish the burger
 
 ![A cartoon burger with a sesame bun, zigzag lettuce, cheese drips and a black outline on every part, tucked partly under the deck](15-burger-group.webp)
 
-4. **Lettuce** (`#6BBF3B`): press [[B]]. In the brush presets, set **Size** `14`, **Hardness** `100` and **Spacing** `10`. Drag a zigzag from (89, 510) to (256, 510), about 8 px high.
-5. **Bun Top** (`#E9A23B`): fill a 165 × 106 ellipse at (88, 460). Marquee from (82, 511) to (258, 577) and press [[Delete]] to keep only the dome.
+4. **Lettuce** (`#6BBF3B`): press [[B]]. In the brush presets, set **Size** `14`, **Hardness** `100` and **Spacing** `10`. Drag a zigzag about 8 px high along the top of the cheese, as wide as the patty.
+5. **Bun Top** (`#E9A23B`): fill an ellipse about 165 × 106 px above the lettuce. Marquee its lower half, from just above the lettuce down, and press [[Delete]] to keep only the dome.
 6. **Seeds:** set the brush **Size** to `5` and the colour to `#F8F0DC`, then click eight dots on the dome.
 
 Finally, give each of the five layers a **Stroke** in ink, **Width** `3`, for
@@ -204,7 +230,7 @@ a cartoon outline.
 ![The burger group moved right so it sits between the deck and the EATS lettering](16-move-burger-group.webp)
 
 Click the **Burger** group row, press [[V]], and drag anywhere on the burger.
-All five parts move together. Drop it about 190 px right and 11 px down, so its
+All five parts move together. Drop it to the right and a touch lower, so its
 right edge sits about 10 px from the **E** and the top of the bun hides under
 the deck's teal shadow. The burger and EATS now read as one logo.
 
@@ -212,33 +238,39 @@ the deck's teal shadow. The burger and EATS now read as one logo.
 
 ![A pink NO SCOOTERS sticker rotated 12 degrees with a cream die-cut border, left of the burger](17-no-scooters-sticker.webp)
 
-Select **EATS**, add a layer named `Sticker`, and fill a 130 × 130 circle at
-(60, 482) with pink `#FF4F8B`.
+Select **EATS**, add a layer named `Sticker`, and [[Cmd]]-drag a circle about
+130 px across on the left margin, left of the burger and just under the
+deck's nose. Fill it with pink `#FF4F8B`.
 
-Type the label in **Rubik Mono One** `15`, ink, **Line height** `1.2`. Click at
-(76, 525) and type three spaces, `NO`, [[Enter]], `SCOOTERS`, then [[Tab]].
+Type the label in **Rubik Mono One** `15`, ink, **Line height** `1.2`. Click
+inside the circle, a little in from its left edge and just above its middle,
+and type three spaces, `NO`, [[Enter]], `SCOOTERS`, then [[Tab]].
 The spaces centre the short word, because every letter in a mono font is the
 same width.
 
-Choose **Layer → Merge Down** to merge the words into the circle. Rotate the
-sticker **12° counter-clockwise**, then add a **Stroke** in cream `6` and an
+Choose **Layer → Merge Down** to merge the words into the circle. Marquee the
+sticker, rotate it **12° counter-clockwise** with the **Move** tool and press
+[[Cmd+D]]. Then add a **Stroke** in cream `6` and an
 ink **Drop Shadow** at `5` / `6`, blur `0`.
 
 ## Add the tagline and stars
 
 ![A cream Space Mono tagline across the top with a mustard lasso star on each side, the right star rotated](18-tagline-stars.webp)
 
-Set **Space Mono** **Bold** `17`, cream, **Letter spacing** `4`. Click at
-(150, 112) and type `SKATEPARK SNACK SHACK · EST. 1998 · PIER 9`. If the
-middle dots won't type, paste the line in with [[Cmd+V]].
+Set **Space Mono** **Bold** `17`, cream, **Letter spacing** `4`. Click just
+under the top checkerboard and type
+`SKATEPARK SNACK SHACK · EST. 1998 · PIER 9`. If the middle dots won't type,
+paste the line in with [[Cmd+V]]. Commit it and click **Align center
+horizontally** in the Move tool's options bar to centre it.
 
-Add a layer named `Star L`. With the Lasso, draw a five-point star around
-(112, 122), about 32 px across, and fill it with mustard. Press [[Cmd+C]] and
-[[Cmd+V]], rename the paste `Star R`, and drag it to (790, 122).
+Add a layer named `Star L`. With the Lasso, draw a five-point star about 32 px
+across just left of the tagline, and fill it with mustard. Press [[Cmd+C]] and
+[[Cmd+V]], rename the paste `Star R`, and drag it to the same height just
+right of the tagline.
 
 A paste in place has no selection, so marquee around the star again before you
 rotate it. Turn it about **24° clockwise** so the pair doesn't look copy-pasted,
-then press [[Enter]].
+then press [[Cmd+D]].
 
 ## Set the footer and a graffiti tag
 
@@ -246,28 +278,27 @@ then press [[Enter]].
 
 Set the footer now, before the menu columns (see the tip in the menu columns step).
 
-- `OPEN DAWN 'TIL STREETLIGHTS` in Rubik Mono One `19`, cream, **Letter spacing** `1`, clicked at (60, 1040).
-- `cash / card  -  pier 9 skatepark  -  helmets optional` in Space Mono **Regular** `13`, `#B9B09C`, at (62, 1076).
+- `OPEN DAWN 'TIL STREETLIGHTS` in Rubik Mono One `19`, cream, **Letter spacing** `1`, clicked on the left margin guide just below the footer guide.
+- `cash / card  -  pier 9 skatepark  -  helmets optional` in Space Mono **Regular** `13`, `#B9B09C`, clicked just below the first line.
 
 For the tag, set **Sedgwick Ave Display** `56` in pink. Click in empty space
-and type `eat & shred`. Rasterize it, drag it into open canvas, rotate it
-**8° counter-clockwise**, and drop it bottom-right, centred at about (712, 1066).
-A **Stroke** in `#1C1C1F` `4` plus an ink shadow at `4` / `4` makes it look
-like a sticker on the wall.
-
-> **Tip:** Rotate after moving the tag clear of the canvas edge. Pixels that cross the edge during a rotation are cropped when you commit.
+and type `eat & shred`. Rasterize it, rotate it **8° counter-clockwise**, and
+drop it at the bottom right, over the footer and just above the bottom
+checkerboard. A **Stroke** in `#1C1C1F` `4` plus an ink shadow at `4` / `4`
+makes it look like a sticker on the wall.
 
 ## Tape up the section headers
 
 ![A mustard tape strip with BURGERS in dark Rubik Mono One, rotated 2 degrees with its transform handles showing](20-header-tape.webp)
 
-Add a layer named `Tape Burgers` and fill a 222 × 50 rectangle at (52, 614)
-with mustard. Type `BURGERS` on it in Rubik Mono One `30`, `#1C1C1F`,
-**Letter spacing** `2`, clicked at (64, 616). Then **Merge Down** and rotate
-the strip **2° counter-clockwise**.
+Add a layer named `Tape Burgers`. Just below the menu guide, fill a rectangle
+about 222 × 50 px with mustard, starting a few pixels left of the left
+margin. Type `BURGERS` on it in Rubik Mono One `30`, `#1C1C1F`,
+**Letter spacing** `2`, clicking near the strip's top-left corner. Then
+**Merge Down** and rotate the strip **2° counter-clockwise**.
 
-Do the same for `Tape Sides`: a 352 × 50 strip at (462, 614) reading
-`SIDES+SHAKES`, rotated **2° clockwise**. Tilting the two strips opposite ways
+Do the same for `Tape Sides`: a strip about 352 × 50 px starting just right
+of the gutter, reading `SIDES+SHAKES`, rotated **2° clockwise**. Tilting the two strips opposite ways
 looks hand-taped.
 
 ## Draw dotted rules
@@ -275,12 +306,13 @@ looks hand-taped.
 ![Two cream dotted lines under the taped headers, one per menu column](21-dotted-rules.webp)
 
 Add a layer named `Rules` and press [[B]]. In the brush presets, set **Size**
-`6`, **Hardness** `100` and **Spacing** `260`. With spacing that wide, the
-brush stamps separate dots.
+`6`, **Hardness** `100` and **Spacing** `200`, the maximum. With spacing that
+wide, the brush stamps separate dots.
 
-With cream as the foreground, click (62, 690) and [[Shift]]-click (428, 690).
-Then click (472, 690) and [[Shift]]-click (838, 690). Set **Spacing** back to
-`10` afterwards.
+With cream as the foreground, click on the left margin guide about 25 px
+below the tape and [[Shift]]-click level with it just short of the gutter.
+Then click just past the gutter and [[Shift]]-click on the right margin guide
+at the same height. Set **Spacing** back to `10` afterwards.
 
 ## Set the menu columns
 
@@ -292,12 +324,15 @@ the descriptions another, spaced to the same 82 px rhythm:
 - **Descriptions:** Space Mono Regular `15`, `#B9B09C`, **Line height** `1.4`, **Paragraph spacing** `61`.
 - **Names:** Space Mono Bold `24`, cream, **Line height** `3.42`, **Paragraph spacing** `0`.
 
-Create the right column first: descriptions at (472, 756), then names at
-(470, 698). Then do the left column: descriptions at (62, 756), names at
-(60, 698). The descriptions end up 14 px under their names, so each pair
-reads as one item.
+Start the names just under the dotted rule, on the left margin guide for the
+left column and just right of the gutter for the right one. Start each
+description block about 58 px lower than its names, so every description
+sits about 14 px under its name and each pair reads as one item.
 
-> **Tip:** A Text-tool click inside an existing multi-line text layer's area edits that layer instead of starting a new one, and that area can be much wider than the visible text. Creating the right column first keeps every click clear of earlier layers.
+Create the right column first, descriptions then names, and then the left
+column the same way.
+
+> **Tip:** A Text-tool click on an existing text layer edits that layer instead of starting a new one. Making the descriptions before the names, and the right column before the left, keeps each click in clear space.
 
 ## Right-align the prices
 
@@ -305,11 +340,13 @@ reads as one item.
 
 Point text ignores alignment, so the prices use **area text**. Set
 **Permanent Marker** `34`, mustard, **Line height** `2.41`, and set **Align**
-to **Right**. Then *drag* a box with the Text tool from (340, 700) to
-(428, 760), type the four prices on separate lines, and press [[Tab]].
+to **Right**. Then *drag* a box with the Text tool, about 90 px wide, level
+with the first item name and ending just short of the gutter. Type the four
+prices on separate lines and press [[Tab]].
 
-Drag a second box from (750, 700) to (838, 760) for `$4`, `$5`, `$6`, `$6`.
-The right column now ends exactly on the 840 guide. Use the Move tool and
+Drag a second box the same size ending on the right margin guide for `$4`,
+`$5`, `$6`, `$6`. Right alignment makes the prices end exactly at the box
+edge, so the right column lines up with the margin. Use the Move tool and
 [[Up]] to nudge each price layer until the numbers sit on the item names'
 baselines.
 
@@ -320,8 +357,7 @@ baselines.
 Select **Background** and add a layer named `Overspray`. Press [[J]] for the
 **Spray** tool and set **Size** `70`, **Density** `45` and **Opacity** `60`.
 With orange as the foreground, spray one arc around the deck's nose and
-another around its tail. Use long, sweeping drags, because very short moves
-lay down almost nothing.
+another around its tail. Long, sweeping drags give the most even mist.
 
 Set the layer's row opacity to `45%`. The speckle then looks like paint that
 missed the deck.

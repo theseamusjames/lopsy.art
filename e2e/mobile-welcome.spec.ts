@@ -40,6 +40,13 @@ test.describe('Mobile first-visit welcome @chromium', () => {
     await expect(page.getByRole('heading', { name: 'Tutorials', level: 1 })).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Welcome!' })).toBeHidden();
   });
+
+  test('a link that opens a project goes to the editor, not the tutorials', async ({ page }) => {
+    await page.goto('/?open=%2Ftutorials%2Fneubrutalist-party-invitation%2Fneubrutalist-party-invitation.lopsy');
+    await waitForStore(page);
+    expect(new URL(page.url()).pathname).toBe('/');
+    await expect(page.getByRole('dialog', { name: 'Welcome!' })).toHaveCount(0);
+  });
 });
 
 test.describe('Desktop first visit @chromium', () => {

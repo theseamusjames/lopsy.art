@@ -2,6 +2,7 @@
 title: Design an Art Nouveau Billboard
 description: Make a Mucha-style Art Nouveau billboard in Lopsy with a lemon-wheel halo, whiplash vines, a Voronoi mosaic panel and outlined lettering.
 published: 2026-09-26 17:10
+updated: 2026-09-30
 level: Intermediate
 duration: 75
 tags: art nouveau, billboard, advertising, voronoi, pen tool, radial symmetry, layer effects, text effects, vintage
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Lemon Elixir Art Nouveau billboard, a teal bottle in front of a lemon-slice halo wrapped in vines, beside yellow outlined lettering on a sage mosaic panel
 finished: finished-lemon-elixir.webp
 finishedAlt: The finished Lemon Elixir billboard. A teal bottle with an LE label stands in front of a giant lemon-slice halo ringed with dots, wrapped in whiplash vines with leaves and hanging lemons. On the right, yellow "Lemon Elixir" lettering with brown outlines and hard shadows sits on an arched sage mosaic panel, with a round Maison Citron medallion and a cream ribbon reading Sparkling Tonic of the Riviera
+project: art-nouveau-lemon-billboard.lopsy
 ---
 
 Around 1900, Alphonse Mucha and his contemporaries sold champagne, cigarettes
@@ -56,8 +58,8 @@ isn't dead flat.
 
 Click the rulers to drop guides:
 
-- vertical guides at `40`, `745` and `2060` on the top ruler
-- horizontal guides at `40` and `680` on the left ruler
+- on the top ruler, one about 40 px in from each end, and one a little over a third of the way across (the readout says about `745`)
+- on the left ruler, one about 40 px from the top and one about 40 px from the bottom
 
 The guide at 745 divides the illustration half from the lettering half.
 
@@ -83,9 +85,11 @@ the cells need something to sample right up to the panel edge.
 
 ![The mosaic trimmed to a panel with a gently arched top, a dark outline and a thin cream keyline](03-arched-cartouche.webp)
 
-Art Nouveau panels rarely have square tops. Use the **Lasso** to click out a
-panel from `745` to `2040` across and down to `660`, with a shallow arch on
-top: the corners sit at about `118` and the centre peaks at `62`. Choose
+Art Nouveau panels rarely have square tops. Use the **Lasso** to draw a
+panel that runs from the divide guide to about 20 px short of the right-hand
+guide, and down to about 20 px above the bottom guide. Give it a shallow arch
+on top: the top corners sit about a sixth of the way down the page, and the
+arch peaks just below the top guide in the middle. Choose
 **Select → Inverse** and press [[Delete]].
 
 On the Mosaic layer, open **Layer effects** and turn on **Stroke**: `#3B2A1E`,
@@ -111,12 +115,16 @@ The panel should now read as quiet texture rather than pattern.
 
 ![A thick dark brown outer border and a thin inner rule, with gold dot ornaments at the corners and at the top and bottom centre](05-double-frame.webp)
 
-Add a layer named `Frame`. Draw a rectangular marquee from `14,14` to
-`2086,706` and fill it `#3B2A1E`. Choose **Select → Shrink** by `12` and press
+Add a layer named `Frame`. Draw a rectangular marquee 14 px in from every
+edge and fill it `#3B2A1E`. Choose **Select → Shrink** by `12` and press
 [[Delete]] to leave a thick border.
 
-Repeat with a marquee from `32,32` to `2068,688`, shrinking by `3`, for the
+Repeat with a marquee 32 px in from every edge, shrinking by `3`, for the
 thin inner rule.
+
+> **Tip:** With nothing selected, a plain *click* with the Rectangular Marquee
+> opens a dialog for exact corners. From `14, 14` To `2086, 706` gives the
+> outer border.
 
 For the corner ornaments, fill three stacked ellipse marquees at each corner
 of the inner rule:
@@ -132,8 +140,9 @@ Add two smaller dots at the middle of the top and bottom rules.
 ![A dark disc inside a gold ring banded with 64 dark dots and tiny terracotta dots, with the symmetry centre marker showing](06-radial-dot-band.webp)
 
 Select `Keyline` and click **New Group**. Name the group `Nimbus`, then add a
-layer named `Halo` inside it. The halo is centred at `422, 360`. Fill these
-concentric elliptical marquees:
+layer named `Halo` inside it. The halo sits in the illustration half,
+centred on the page's middle row and 422 px in from the left edge. Fill these
+concentric circles with the **Elliptical Marquee**:
 
 - radius 306 in `#3B2A1E`
 - radius 300 in gold `#D8C28A`
@@ -141,8 +150,14 @@ concentric elliptical marquees:
 
 Pick the **Brush** at Size `14` and Hardness `100`, then turn on
 **Radial Symmetry** with `32` segments. [[Cmd]]-click the halo centre to move
-the symmetry centre there. Click once on the gold band, 276 px right of
-centre, then again one half-step around. That gives 64 evenly spaced dots.
+the symmetry centre there. Click once in the middle of the gold band, level
+with the centre, then again one half-step around. That gives 64 evenly
+spaced dots.
+
+> **Tip:** Circles that share a centre are easiest to get exact with the
+> marquee's click-for-corners dialog. For radius *r*, type From
+> `422 − r, 360 − r` To `422 + r, 360 + r`, for example From `116, 54`
+> To `728, 666` for the radius-306 circle.
 
 Switch to Size `6` and terracotta `#B5654A`, and click between the dots.
 
@@ -154,7 +169,12 @@ Add a `Lemon Wheel` layer and fill three more circles: rind `#E3A91F` at
 radius 247, zest `#F0C53A` at 236 and pith `#F8EFD0` at 226.
 
 On a new `Segments` layer, lasso ten wedges in `#F6D65A`. Each one runs from
-near the centre out to radius 214, with a 5 px pith gap on either side.
+near the centre out to about 214 px, with a 5 px pith gap on either side.
+
+> **Tip:** For perfectly even wedges, select a circle of radius 214 on the
+> same centre and run **Filter → Sunburst…** in `#F6D65A` with **Rays** `10`,
+> **Width** about `90` and **Center X** / **Center Y** at `20` / `50`. The
+> rays only land inside the selection.
 
 For the juice, set **Radial Symmetry** to `10`, [[Cmd]]-click the centre again
 and drag three short strokes inside one segment:
@@ -171,9 +191,10 @@ juicy.
 
 ![The teal glass bottle with a four-stop gradient, selected with transform handles while its top is dragged upward](08-bottle-stretch.webp)
 
-Add a `Bottle` layer above `Segments`. Lasso a bottle silhouette centred at
-x `422`: a narrow neck from `150` down to `290`, a sloping shoulder, and a
-body about 224 px wide ending at `638`. Fill it with teal `#2E6B6A`.
+Add a `Bottle` layer above `Segments`. Lasso a bottle silhouette centred on
+the halo: a narrow neck starting about 150 px from the top, sloping
+shoulders about 290 px down, and a body about 224 px wide that ends about
+80 px above the bottom edge. Fill it with teal `#2E6B6A`.
 
 Pick the **Gradient** tool and open **Advanced…**. Set four stops:
 
@@ -184,8 +205,8 @@ Pick the **Gradient** tool and open **Advanced…**. Set four stops:
 
 Choose **Linear** and drag across the selection from left to right.
 
-For a more elegant neck, switch to the **Move** tool and drag the top-centre
-handle up from `150` to `104`. Press [[Cmd+D]] to commit.
+For a more elegant neck, marquee the bottle, switch to the **Move** tool and
+drag the top-centre handle up about 46 px. Press [[Cmd+D]] to commit.
 
 ## Add the cork, glints and label
 
@@ -212,8 +233,8 @@ Build the rest from simple shapes:
 ![The oval label with an LE monogram set in Metamorphous, centred with arrow-key nudges](10-monogram.webp)
 
 With the **Text** tool, set Size `54` and click in the label to type `LE`.
-Measure the glyphs against the label centre and nudge with the arrow keys
-until they sit dead centre.
+Switch to the Move tool, zoom in, and nudge with the arrow keys until the
+letters sit dead centre in the label.
 
 This shot uses **Metamorphous**. In the final polish step it gets swapped for
 **Marcellus**, because the uncial E read as "L€".
@@ -222,14 +243,19 @@ This shot uses **Metamorphous**. In the final polish step it gets swapped for
 
 ![A smooth Bezier path curving up the left side of the halo into a curl, with its anchors and handles shown](11-pen-path.webp)
 
-Add a `Vines` layer under the bottle. Pick the **Pen** tool and
-**click-drag** each anchor, so every point gets a smooth handle. The left vine
-runs from `72,705` up through `132,520`, `122,330` and `182,150`, then curls
-in at `312,110` and `284,158`.
+Add a `Vines` layer under the bottle. Pick the **Pen Tool** and
+**click-drag** each anchor, so every point gets a smooth handle. Start the
+left vine at the bottom edge, just inside the left frame. Climb up the left
+of the halo in a lazy S, with anchors about a quarter, half and
+three-quarters of the way up, then swing right over the halo's top-left and
+curl back in on itself with two small anchors.
 
 Click the ✓ **Commit path** button. Set the foreground to olive `#3E4A24` and
 click **Stroke Path** in the Paths panel with Width `9`. Draw a second vine up
 the right side of the halo the same way.
+
+> **Tip:** Set **Stroke** to `9` in the Pen options bar and press [[Enter]]
+> instead: it commits the path and strokes it in the foreground colour in one go.
 
 ## Add hair tendrils
 
@@ -280,8 +306,9 @@ Select `Keyline` and add a `Ribbon` layer. Build the banner back to front:
    below the band.
 2. **Lasso two small fold triangles** in `#A98E5E` where each tail tucks
    under the band.
-3. **Fill the main band** with a rectangle from `880,556` to `1930,620` in
-   `#F6ECD2`.
+3. **Fill the main band** with a rectangle about 1050 × 64 px in
+   `#F6ECD2`, across the bottom of the panel with roughly 120 px of mosaic
+   showing at each end.
 
 A 4 px outside **Stroke** outlines the whole banner.
 
@@ -292,9 +319,11 @@ A 4 px outside **Stroke** outlines the whole banner.
 Set the headline in **Metamorphous**, a Google Font with organic,
 Nouveau-style curves, in `#F2C230`:
 
-- **Elixir** at Size `215`, right-aligned so its last letter ends at x `1985`,
-  with its top at `343`.
-- **Lemon** at Size `250`, starting at x `872`, with its top at `135`.
+- **Elixir** at Size `215`, right-aligned so its last letter ends about
+  55 px inside the panel's right edge, with its top a little above the middle
+  of the page.
+- **Lemon** at Size `250`, starting about 130 px inside the panel's left
+  edge, with its top about 135 px down, under the arch.
 
 Type **Elixir** first. A new text click inside an existing text layer's
 bounds edits that layer instead of creating a new one.
@@ -320,14 +349,16 @@ contour and a printed shadow.
 Type `SPARKLING TONIC OF THE RIVIERA` in **Marcellus**, Size `36`, colour
 `#3B2A1E`. In the Text panel, set **Letter spacing** to `7`.
 
-Measure the glyph box and move it until its centre sits exactly on the band's
-centre (`1405, 588`), with equal air above and below the caps.
+Move it onto the ribbon and nudge with the arrow keys until it's centred on
+the band, with equal air above and below the caps and the same length of
+band showing at each end.
 
 ## Add the Maison Citron medallion
 
 ![A round medallion in the pocket left of Elixir: a dotted cream ring around a yellow disc that reads Maison Citron, Est. 1897](19-medallion.webp)
 
-On a `Medallion` layer centred at `1090, 445`, fill four circles:
+On a `Medallion` layer, fill four concentric circles in the pocket at the
+lower left of the lettering, left of `Elixir` and above the ribbon:
 
 - radius 100 in `#3B2A1E`
 - radius 96 in cream
@@ -362,10 +393,10 @@ A last critique pass caught four small problems:
   to Size `29` and re-centre it.
 - **Monogram:** switch `LE` to **Marcellus** so it can't read as "L€".
 - **Ribbon spacing:** select the ribbon and tagline together
-  ([[Shift]]-click the second row) and press [[↓]] ten times, which gives
-  `Elixir` room above the banner.
+  ([[Shift]]-click the second row) and, with the Move tool, press
+  [[Shift+↓]] once to move them 10 px. That gives `Elixir` room above the
+  banner.
 - **Vine ends:** on `Vines`, marquee the strip just above the bottom rule and
   press [[Delete]] so no stem touches the frame.
 
-Check your history with a few undos and redos. Every step here undoes and
-redoes pixel-exactly. Then export with **File → Quick Export PNG**.
+Save with **File → Save Project**, then export with **File → Quick Export PNG**.

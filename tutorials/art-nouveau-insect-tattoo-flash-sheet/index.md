@@ -2,6 +2,7 @@
 title: Draw an Art Nouveau Insect Tattoo Flash Sheet
 description: Build a Lalique-style JEWELLED INSECTS flash sheet in Lopsy with gold cloisons, translucent plique-à-jour enamel, a radial-symmetry halo and arched type.
 published: 2026-09-29 12:30
+updated: 2026-09-30
 level: Advanced
 duration: 120
 tags: art nouveau, tattoo flash, tattoo design, jewellery, insects, gradients, layer effects, text on path, symmetry, lasso
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished JEWELLED INSECTS flash sheet, with an enamelled dragonfly on a gold halo under an arched teal title, a scarab, a cicada and a bee along the bottom, and the Dragonfly, Scarab, Cicada and Bee groups in the Layers panel
 finished: finished-jewelled-insects-flash.webp
 finishedAlt: The finished JEWELLED INSECTS tattoo flash sheet on warm laid paper. A teal-and-gold dragonfly with translucent veined wings spreads across a cream halo of gold beads and rays, under an arched teal title band with amethyst cabochons. The captions I · LIBELLULE and PLIQUE-À-JOUR curve beneath the halo. Along the bottom sit II · SCARABÉE, a green scarab holding a red sun, III · CIGALE, a cicada with clear lilac wings, and IV · ABEILLE, a striped bee. Purple irises on whiplash stems frame both sides.
+project: art-nouveau-insect-tattoo-flash-sheet.lopsy
 ---
 
 Around 1900 René Lalique made insects into jewellery. He set dragonflies,
@@ -32,15 +34,19 @@ The palette:
 
 - Paper `#E4CFA0`, ink `#1A1410`, frame teal `#16403E`
 - Gold ramp `#F6DC8E` → `#C99A3B` → `#7A5418`
-- Enamels: teal `#0E6A66` → `#34AE9E` → violet `#7450B4`, jade `#1E5B3A` / `#8CCB8A`, amethyst `#D9B8F2` → `#7A4BB0` → `#2A1446`, amber `#7A3E0C` / `#F0B545`
+- Teal-to-violet enamel `#0E6A66` → `#34AE9E` → `#7450B4`
+- Jade enamel `#1E5B3A` / `#8CCB8A`
+- Amethyst enamel `#D9B8F2` → `#7A4BB0` → `#2A1446`
+- Amber enamel `#7A3E0C` / `#F0B545`
 
 ## Start a 1350 × 1800 sheet
 
 ![The New Document dialog set to 1350 by 1800 pixels with a White background](01-new-document.webp)
 
 Choose **File → New**, set **Unit** to **Pixels** and enter **1350 × 1800**
-(3:4, close to an 11 × 14 inch flash sheet), then click **Create**. Set the
-unit before you type the size: clicking a preset tile switches it to inches.
+(3:4, close to an 11 × 14 inch flash sheet), then click **Create**. If you
+clicked a print preset such as US Letter or A4 first, the unit will have
+switched to Inches, so check it says Pixels before you type the size.
 
 ## Make laid paper with Add Noise, Motion Blur and Emboss
 
@@ -64,22 +70,32 @@ fibres stay.
 
 On a new **Frame** layer:
 
-1. Draw a **Rectangular Marquee** from (22,22) to (1328,1778) and fill it with frame teal.
-2. Marquee (40,40)–(1310,1760) and press **Delete**, which leaves an 18 px band.
-3. Repeat inside it in gold: fill (50,50)–(1300,1750) with `#C99A3B`, then delete (54,54)–(1296,1746), which leaves a 4 px rule.
+1. Draw a **Rectangular Marquee** 22 px in from every edge and fill it with frame teal.
+2. Choose **Select → Shrink…** **18** and press **Delete**, which leaves an 18 px band.
+3. Repeat inside it in gold: press [[Cmd+D]], marquee a rectangle 50 px in from every edge and fill it with `#C99A3B`, then **Shrink 4** and delete, which leaves a 4 px rule.
+
+> **Tip:** With nothing selected, *click* (don't drag) with the Rectangular
+> Marquee to type exact corners: From **22, 22** To **1328, 1778** for the
+> teal band, and From **50, 50** To **1300, 1750** for the gold rule.
 
 ## Build the halo from shrunken ellipses
 
 ![An Elliptical Marquee around the inner disc of a cream halo with two gold rings](04-nimbus-rings.webp)
 
-Mucha put a halo behind every figure. On a **Nimbus** layer, centred on
-(675,700):
+Mucha put a halo behind every figure. On a **Nimbus** layer, build it from
+three circles that share one centre: on the sheet's centre line, 700 px down
+from the top.
 
-1. Drag an **Elliptical Marquee** with radius **330**, fill it gold, then **Select → Shrink… 6** and fill cream `#F6EBCB`.
-2. Do the same at radius **300** with **Shrink 3**.
+1. Select a circle **660 px** across (radius 330) with the **Elliptical Marquee**, fill it gold, then **Select → Shrink… 6** and fill cream `#F6EBCB`.
+2. Do the same with a circle of radius **300** and **Shrink 3**.
 3. Do it again at radius **230** in light gold `#E9C77A` with **Shrink 3** and `#EFDDB0`.
 
 Each pair of fills leaves a crisp gold ring.
+
+> **Tip:** Concentric circles are easiest to get exact from the marquee's
+> click-for-corners dialog. For radius *r* around this centre, type From
+> **675 − r, 700 − r** To **675 + r, 700 + r**: From **345, 370** To
+> **1005, 1030** for the outer circle.
 
 ## Paint beads and rays with Radial Symmetry
 
@@ -87,12 +103,13 @@ Each pair of fills leaves a crisp gold ring.
 
 Add a **Halo Beads** layer and pick the **Brush** (**Size 16**,
 **Hardness 100**, gold). Click **Radial Symmetry** in the options bar and set
-it to **32**. [[Cmd]]-click the halo centre (675,700) to move the symmetry
-centre there. Then:
+**Segments** to **32**. [[Cmd]]-click the centre of the halo to move the
+symmetry centre there. Zoom in and use the pointer markers on the rulers to
+land on 675 across and 700 down. Then:
 
-- One click at (675,385) paints 32 beads.
-- At **Size 10**, one click half a step round, at radius 265, gives the inner ring.
-- At **Size 4** and **Opacity 70**, click (675,630) and [[Shift]]-click (675,482). That straight line is mirrored into 32 rays.
+- One click in the outer cream band, straight above the centre, paints 32 beads.
+- At **Size 10**, one click in the inner cream band (about 265 px from the centre), half a step round from the beads, gives the inner ring.
+- At **Size 4** and **Opacity 70**, click about 70 px above the centre, then [[Shift]]-click straight up, just short of the innermost gold ring. That straight line is mirrored into 32 rays.
 
 Click **Radial Symmetry** again to switch it off. It captures every [[Cmd]]-click while it's on.
 
@@ -166,14 +183,17 @@ windows held by gold.
 ![A symmetric marquee around both wing pairs while the duplicated enamel is flipped to the right side](11-duplicate-flip.webp)
 
 Switch to the **Move** tool, click **Duplicate Layer**, click the copy's row
-and rename it **DF Wing Enamel R**. Draw a **Rectangular Marquee** that is
-exactly symmetric about the body, from (125,420) to (1225,920). Then click
-**Flip Horizontal** in the options bar: the flip happens about the marquee's
-centre. Press [[Cmd+D]].
+and rename it **DF Wing Enamel R**. Draw a **Rectangular Marquee** around
+both wing pairs that is exactly symmetric about the body, which sits on the
+sheet's centre line. Then click **Flip Horizontal** in the options bar: the
+flip happens about the marquee's centre. Press [[Cmd+D]].
 
-Duplicate offsets the copy by +10 / +10, and the flip mirrors that into
-−10 / +10. Nudge the copy **10 px right** and **10 px up** with the arrow
-keys. The two sides then match pixel for pixel.
+> **Tip:** The click-for-corners dialog makes the symmetric marquee easy.
+> Any box centred on x 675 works, such as From **125, 420** To **1225, 920**.
+
+Duplicate offsets the copy 10 px right and 10 px down, and the flip mirrors
+that into 10 px left and 10 px down. Press [[Shift+Right]] and [[Shift+Up]]
+once each to cancel it. The two sides then match exactly.
 
 ## Make the wings translucent
 
@@ -251,17 +271,22 @@ Set the text first:
 
 1. Click **Arch Band** and pick the **Text** tool.
 2. Choose **Oldenburg**, a Mucha-era display face, at **Size 52**, with colour `#F6EBCB` and **Letter spacing 2**.
-3. Click in empty canvas and type **JEWELLED INSECTS**. It measures about **597 px** wide.
+3. Click in empty canvas and type **JEWELLED INSECTS**. It comes out about **600 px** wide.
 
 Now draw the arc. To seat the capitals in the middle of the band, the
-baseline needs a radius of **432** around the halo centre. The arc spans
-597 ÷ 432 ≈ **79°**, so it runs from −129.7° to −50.3°.
+baseline needs a radius of **432** around the halo centre. A 600 px line on
+that circle spans about **79°**, so the arc runs about 40° either side of
+straight up.
 
-With the **Pen**, click-drag three anchors along that arc:
-- Start, top and end points on the circle.
-- Drag each handle along the tangent, at about **0.23 × radius**.
+With the **Pen Tool**, click-drag three anchors along that circle:
 
-Click **Commit path**.
+- **Start:** about 276 px left of the centre line and about 100 px lower than the top anchor. Drag the handle up and to the right, along the curve.
+- **Top:** on the centre line, 432 px above the halo centre, just below the middle of the band. Drag the handle straight to the right.
+- **End:** the mirror of the start. Drag the handle down and to the right.
+
+Keep each handle about **100 px** long (roughly a quarter of the radius). Click
+**Commit path** rather than pressing [[Enter]], which would also stroke the
+path onto the active layer.
 
 ## Bind the title to the arc
 
@@ -269,10 +294,11 @@ Click **Commit path**.
 
 Click the title's row. With the Text tool active, choose the new path in the
 options bar's **Path** dropdown. The capitals follow the arc and sit centred
-in the band, with about 37 px above and below.
+in the band, with the same space above and below.
 
-Size the arc from the measured text width, not by eye. A path that's too
-short silently cuts off the last letters.
+Work the arc's length out from the text's width rather than by eye. A path
+that's too short silently cuts off the last letters, so if you're unsure,
+make it a little long.
 
 ## Set the labels and curved captions
 
@@ -292,7 +318,7 @@ On a **Sparkles** layer, lasso a four-point star with radius 20. Fill it ink,
 **Shrink 4** and fill it gold, then add a small white centre. It's on its
 own layer, so you can draw it anywhere and move it later.
 
-1. Marquee the star, press [[Cmd+C]], wait a moment, then press [[Cmd+V]].
+1. Marquee the star, press [[Cmd+C]], then press [[Cmd+V]].
 2. Marquee the paste. With the **Move** tool, drag the rotation handle just outside the top-right corner through **45°**, then press [[Cmd+D]].
 3. Marquee it again and [[Cmd]]-drag a corner to scale it to about **62%**. Press [[Cmd+D]].
 4. Re-centre it on the original star and choose **Merge Down**. You now have an eight-point sparkle.
@@ -301,10 +327,11 @@ own layer, so you can draw it anywhere and move it later.
 
 ![Two eight-point sparkles flanking the subtitle, centred on a horizontal guide](21-sparkles-placed.webp)
 
-Click the rulers to add guides: a vertical one at **x 675** from the top
-ruler, and a horizontal one at **y 114** (the subtitle's centre) from the
-left ruler. Copy and paste the sparkle, then drag one copy to each end of
-the subtitle, at x 382 and x 968. Merge them onto the **Sparkles** layer.
+Add two guides: [[Cmd]]-click ([[Ctrl]]-click) the middle of the top ruler
+for a vertical guide exactly at the centre, and click the left ruler level
+with the middle of the subtitle's capitals. Copy and paste the sparkle, then
+drag one copy to each end of the subtitle, centred about 30 px beyond the
+first and last letters and on the horizontal guide. Merge them onto the **Sparkles** layer.
 Nudge the layer until it's symmetric about the centre guide. Turn guides off
 with **View → Show Guides**.
 

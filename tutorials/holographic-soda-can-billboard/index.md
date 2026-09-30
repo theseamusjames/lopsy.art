@@ -2,6 +2,7 @@
 title: Design a Holographic Soda Can Billboard
 description: Build a CRYSTAL SODA billboard in Lopsy with Clouds, Liquify and a Gradient Map for foil, faceted lasso crystals and a holographic echo headline.
 published: 2026-09-27 10:15
+updated: 2026-09-30
 level: Intermediate
 duration: 70
 tags: holographic, iridescent, billboard, product mockup, soda can, gradient map, liquify, clouds, crystals, text effects, advertising
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished CRYSTAL SODA billboard, with a holographic foil soda can inside an iridescent ring, floating pastel crystals, and a navy headline with rainbow offset echoes on a pale lilac background
 finished: finished-crystal-soda.webp
 finishedAlt: The finished CRYSTAL SODA billboard. On the left, a navy CRYSTAL SODA headline with pastel rainbow echoes offset down and right, the line "a prism in every sip." and a pill that reads ZERO SUGAR · ZERO CALORIES. On the right, a swirling holographic foil can inside a pastel iridescent ring, surrounded by four floating crystals, bubbles and sparkles
+project: holographic-soda-can-billboard.lopsy
 ---
 
 Holographic packaging works best when the shimmer is rationed. Give the
@@ -34,49 +36,55 @@ The palette:
 
 ## Lay down a pearl background and guides
 
-![A blank 2100 by 900 document filled with a pale lilac vertical gradient, with blue guides at x 110, 1100 and 1990 and y 110 and 790](01-pearl-gradient-and-guides.webp)
+![A blank 2100 by 900 document filled with a pale lilac vertical gradient, with blue margin guides on all four sides and a column guide just right of the middle](01-pearl-gradient-and-guides.webp)
 
 Choose **File → New**, set **Unit: Pixels**, enter **2100 × 900** and pick a
 White background.
 
-1. Select the Background layer and switch to the **Gradient** tool
-   ([[G]]).
+1. Select the Background layer and switch to the **Gradient** tool.
 2. Click **Advanced…** and set two stops, `#F3EFF8` at the top and
    `#D8D0E9` at the bottom.
-3. Drag straight down from the top edge to the bottom edge.
+3. Hold [[Cmd]] and drag straight down from the top edge to the bottom edge.
 
-Next, click the rulers to drop guides. A click on the top ruler at
-**110**, **1100** and **1990** adds vertical guides, and a click on the
-left ruler at **110** and **790** adds horizontal ones. The left column
-between 110 and 1100 holds the type, and the can is centred at x **1560**.
+Next, click the rulers to drop guides. On the top ruler, click about 110 px
+in from each side for the margins, and once just right of the middle (about
+1100) for the edge of the type column. On the left ruler, click about 110 px
+from the top and from the bottom. The type goes in the left column, and the
+can sits in the right-hand space, centred roughly halfway between the column
+guide and the right margin.
 
 ## Add a glowing disc and an iridescent ring
 
 ![An Elliptical Marquee circle with marching ants inside a pastel rainbow ring, with a soft white disc glowing in the middle](02-halo-disc-and-iridescent-ring.webp)
 
 Rename *Layer 1* to **Halo Disc**. Pick the **Elliptical Marquee** and
-drag a **700 × 700** circle centred on (1560, 470). Pick the
-Gradient tool and set its **Type** to **Radial**. Use white at the centre,
-`#FBF8FE` at 60% and `#E9E1F7` at the edge, then drag from the centre out
-to the rim. The disc lifts the can off the background without a hard
-edge.
+[[Cmd]]-drag a circle about **700 px** across in the right-hand space, a
+little below the vertical middle. Pick the Gradient tool and set its **Type**
+to **Radial**. Use white at the centre, `#FBF8FE` at 60% and `#E9E1F7` at the
+edge, then drag from the centre out to the rim. The disc lifts the can off
+the background without a hard edge.
 
-Add a layer called **Halo Ring**. Marquee a **744 × 744** circle around the
-same centre and fill it with a **Linear** gradient that runs the pastel
-ramp from the top left to the bottom right. Then draw a **704 × 704**
-circle on the same centre and press [[Delete]]. What's left is a 20 px
-iridescent ring. The screenshot shows the inner circle still selected just
-before the Delete.
+Add a layer called **Halo Ring**. Select a **744 px** circle around the same
+centre and fill it with a **Linear** gradient that runs the pastel ramp from
+the top left to the bottom right. Then select a **704 px** circle on the same
+centre and press [[Delete]]. What's left is a 20 px iridescent ring. The
+screenshot shows the inner circle still selected just before the Delete.
+
+> **Tip:** Concentric circles are easiest to get right by typing them. With
+> nothing selected, *click* (don't drag) with the Elliptical Marquee to open
+> the corner dialog. The disc is **From 1210, 120 To 1910, 820**, the ring's
+> outer circle **From 1188, 98 To 1932, 842**, and its inner circle
+> **From 1208, 118 To 1912, 822**.
 
 ## Soften a shadow under the can
 
 ![A blurred violet ellipse sitting at the bottom of the ring, set to Multiply at 40 percent](03-soft-can-shadow.webp)
 
-Add a **Can Shadow** layer. Marquee a flat **300 × 30** ellipse at
-(1410, 777) and use **Edit → Fill** with `#3A2A70`. Deselect with
-[[Cmd+D]].
+Add a **Can Shadow** layer. Marquee a flat ellipse, about **300 × 30**,
+centred under the disc near the bottom of the ring, and use **Edit → Fill**
+with `#3A2A70`. Deselect with [[Cmd+D]].
 
-- Run **Filter → Gaussian Blur** with **Radius 18**.
+- Run **Filter → Gaussian Blur…** with **Radius 18**.
 - In the layer's effects drawer, set **Blend** to **Multiply**.
 - Drag the row's opacity down to **40%**.
 
@@ -87,14 +95,15 @@ round blob would just look like a stain.
 
 ![A flat lavender can shape with a tapered neck and a rounded bottom chime inside the ring](04-lasso-can-silhouette.webp)
 
-Add a **Can Body** layer and draw the can with the **Lasso**:
+Add a **Can Body** layer and draw the can with the **Lasso**, centred in the
+ring:
 
-- **Top:** trace the upper half of a 264 px wide ellipse at y **170**.
-- **Neck:** flare out through (1402, 224) to the body sides at x **1395**
-  and **1725**.
-- **Chime:** run the sides straight down to y **732**, pull them in
-  slightly, and close along the lower half of a 300 px ellipse at y
-  **760**.
+- **Top:** trace the upper half of a narrow ellipse, about 264 px wide, a
+  little below the top of the ring.
+- **Neck:** flare out to the body sides, about 330 px apart.
+- **Chime:** run the sides straight down to just above the shadow, pull them
+  in slightly, and close along the lower half of a slightly wider ellipse
+  (about 300 px) that rests on the shadow.
 
 **Edit → Fill** it with `#CFC6E8`. It's only a base colour, because the foil
 will cover it.
@@ -110,10 +119,11 @@ separates the can from the white disc.
 Set the can type in empty canvas first, where it's easy to grab.
 
 1. With **Can Body** selected, pick the **Text** tool. Set **Archivo
-   Black** at **92** in ink `#1B1530`, click at about (300, 420) and type
-   `CRYSTAL`. Press [[Tab]] to commit.
+   Black** at **92** in ink `#1B1530`, click in the empty left half of the
+   canvas and type `CRYSTAL`. Press [[Tab]] to commit, and rename the layer
+   **Can Label**.
 2. Select **Can Body** again and add a second line lower down, in **DM
-   Mono 30**, that reads `SPARKLING  SODA`.
+   Mono 30**, that reads `SPARKLING  SODA`. Rename it **Can Sub**.
 3. Draw a Rectangular Marquee a few pixels larger than CRYSTAL and switch
    to the **Move** tool ([[V]]).
 4. Hold [[Cmd]] and drag the round handle past the top-right corner. [[Cmd]]
@@ -127,11 +137,11 @@ Set the can type in empty canvas first, where it's easy to grab.
 
 Drag each rotated line onto the can with the Move tool:
 
-- **CRYSTAL:** centre it at (1539, 468).
-- **SPARKLING SODA:** centre it at (1606, 468).
+- **CRYSTAL:** just left of the can's centre line, centred top to bottom.
+- **SPARKLING SODA:** just right of it, at the same height.
 
-That leaves the pair centred on the can, with about 40 px clear above and
-below. Leave both layers *above* Can Body. The foil goes between them in
+Together the pair should sit centred on the can, with about 40 px clear above
+and below. Leave both layers *above* Can Body. The foil goes between them in
 the next steps, and the shading goes over the top, so the lettering wraps
 with the cylinder.
 
@@ -140,15 +150,14 @@ with the cylinder.
 ![The Foil FX group's drawer showing a Gradient Map node with eight pastel stops, with the can above it half filled with holographic colour](07-gradient-map-foil-group.webp)
 
 1. Select **Can Body**, add a layer called **Foil**, and run **Filter →
-   Clouds** at **Scale 4** with nothing selected. The clouds fill the whole
+   Clouds…** at **Scale 4** with nothing selected. The clouds fill the whole
    layer.
 2. With Foil selected, click **New Group** in the Layers footer and rename
    the group **Foil FX**.
 3. Drag Foil's grip onto the Foil FX row so it moves into the group.
 
-> **Tip:** Don't use **Layer → Group Layers** for a single layer. With
-> only one layer selected it makes an *empty* group and leaves the layer
-> outside it.
+> **Tip:** **Layer → Group Layers** ([[Cmd+G]]) with only Foil selected does
+> steps 2 and 3 in one go: it wraps the layer in a new group.
 
 Open **Foil FX**'s drawer and choose **Add Adjustment → Gradient Map**.
 Click the handle row under the bar to add stops, and pick each colour on
@@ -167,16 +176,16 @@ The ramp cycles through the spectrum twice. Every soft grey step in the
 clouds becomes a thin band of colour, and that is what makes it look
 like foil.
 
-> **Tip:** If the drawer runs off the bottom of the window, drag it up by
-> its title bar.
+> **Tip:** An expanded Gradient Map makes the drawer tall. It scrolls, and
+> you can drag it by its header to give it more room.
 
 ## Re-roll the clouds if a big area goes flat
 
 ![The whole Foil layer mapped into pastel holographic bands after a fresh Clouds render](08-reroll-clouds.webp)
 
-Clouds has no seed, so every render is different. In the screenshot above
-this step, the top of the can landed on solid black and mapped to a flat
-purple slab. If that happens, press [[Cmd+Z]] and run **Filter → Clouds**
+Clouds renders a new random pattern every time. In the previous step's
+screenshot, the top of the can landed on solid black and mapped to a flat
+purple slab. If that happens, press [[Cmd+Z]] and run **Filter → Clouds…**
 again until the area behind the can is mostly mid-greys.
 
 Because Foil now sits inside the mapped group, you see the holographic
@@ -188,10 +197,10 @@ result straight away while you re-roll.
 
 Open **Filter → Liquify…** ([[Cmd+Shift+X]]).
 
-1. In **Push Forward** mode, set **Brush size 170** and **Pressure 70**.
+1. In **Push Forward** mode, set **Brush Size 170** and **Pressure 70**.
    Make four long, gently wavy strokes across the can, alternating
    direction.
-2. Switch to **Twirl CW** and set **size 240** and **pressure 60**.
+2. Switch to **Twirl CW** and set **Brush Size 240** and **Pressure 60**.
 3. Hold the mouse on three spots on the can (upper left, middle right,
    lower left) and wiggle it slightly so the twirl builds up.
 4. Click **Apply**.
@@ -204,15 +213,19 @@ in from outside the can.
 
 ![The can outline selected with the Lasso and inverted, with marching ants around the can and around the canvas edge](10-clip-foil-to-can.webp)
 
-Redraw the same can outline with the **Lasso** and choose **Select →
-Inverse**. Then press [[Delete]] and [[Cmd+D]]. Only the can keeps its
-foil.
+With **Foil** active, trace the can's outline again with the **Lasso** and
+choose **Select → Inverse**. Then press [[Delete]] and [[Cmd+D]]. Only the
+can keeps its foil.
+
+> **Tip:** Instead of tracing the can again, [[Cmd]]-click the **Can Body**
+> thumbnail in the Layers panel to select its exact outline. The same trick
+> works for the shading and gloss steps below.
 
 ## Tone the foil
 
 ![The finished holographic foil on the can, swirling bands of mint, butter, pink and violet behind the navy lettering](11-holographic-foil.webp)
 
-Select **Foil** and run **Filter → Hue/Saturation** with **Lightness −32**.
+Select **Foil** and run **Filter → Hue/Saturation…** with **Lightness −32**.
 Darker greys push more of the can into the middle of the ramp, so you get
 more distinct bands and less pale pink.
 
@@ -220,9 +233,10 @@ more distinct bands and less pale pink.
 
 ![The can with darker violet edges on the left and right from a Multiply gradient that also darkens the lettering at the edges](12-cylinder-shading.webp)
 
-Select **Can Label** and add a **Shade** layer above it. Lasso the can
-outline again and drag a horizontal **Linear** gradient from x 1395 to
-1725 with these stops, all in `#2A1F4A`:
+Select **Can Label** and add a **Shade** layer above it. Select the can's
+outline again and hold [[Cmd]] while you drag a horizontal **Linear**
+gradient from the can's left edge to its right edge, with these stops, all in
+`#2A1F4A`:
 
 - 60% opacity at 0
 - 0% at 20%
@@ -239,16 +253,18 @@ label wraps with them.
 **Gloss.** Add a **Gloss** layer and set the Rectangular Marquee
 **Feather** to **10**.
 
-1. Fill three white vertical strips: a wide one at x 1440–1478, a thin one
-   at 1500–1508, and a rim light at 1684–1696.
+1. Fill three tall white strips that run the height of the can: a wide one
+   (about 38 px) a little in from the left edge, a thin one (about 8 px)
+   just right of it, and a narrow rim light (about 12 px) near the right
+   edge.
 2. Set Feather back to 0.
-3. Lasso the can, choose **Select → Inverse** and press [[Delete]] to trim
-   the strips.
+3. Select the can's outline, choose **Select → Inverse** and press
+   [[Delete]] to trim the strips.
 4. Set the layer to **70%**.
 
-**Lid.** On a **Lid** layer, marquee a **264 × 44** ellipse at (1428, 148).
-Fill it with a silver gradient: `#7D7A92`, `#F6F4FB`, `#A6A2BA`, `#EAE7F3`,
-`#6F6C84`.
+**Lid.** On a **Lid** layer, marquee a **264 × 44** ellipse over the top of
+the can. Fill it with a silver gradient: `#7D7A92`, `#F6F4FB`, `#A6A2BA`,
+`#EAE7F3`, `#6F6C84`.
 
 1. Add a slightly smaller, darker ellipse inside it for the recess.
 2. Add a `#5E5A73` ellipse for the pull tab.
@@ -261,7 +277,7 @@ the same silver gradient.
 
 ![A single upright quartz crystal to the left of the can, built from cyan, pink-white and violet facets with pastel tips](14-crystal-facets.webp)
 
-Add a **Crystal A** layer. Each face is a Lasso polygon with its own fill:
+Add a **Crystal A** layer. Each face is a Lasso shape with its own fill:
 
 - **Left face:** a vertical gradient from cyan `#8FE3F5` to `#B7A2FF`.
 - **Centre face:** white to `#FFC4E3` to `#C4AEFF`, so it reads as the lit
@@ -294,7 +310,8 @@ disappears on a pale background.
 
 1. Choose **Layer → Duplicate Layer** and click the copy's row. Rename it
    **Crystal B**.
-2. With the Move tool, drag it to the right of the can, around (1885, 600).
+2. With the Move tool, drag it to the right of the can, a little below the
+   ring's middle.
 3. Marquee it and hold [[Cmd]] while you drag the bottom-right handle
    inward. [[Cmd]] keeps the scale uniform. Stop at about **62%**.
 4. Press [[Cmd+D]].
@@ -306,8 +323,8 @@ disappears on a pale background.
 Marquee Crystal B again and rotate it **+70°**, so it leans away from the
 can. Press [[Cmd+D]] to commit.
 
-Commit each transform before you start the next one. Scale, [[Cmd+D]],
-then rotate, [[Cmd+D]], gives a clean result every time.
+Commit each transform before you start the next one: scale, [[Cmd+D]],
+then rotate, [[Cmd+D]]. Each step then starts from settled pixels.
 
 ## Scatter four crystals
 
@@ -318,7 +335,7 @@ Make two more crystals the same way:
 - **Crystal C:** duplicate Crystal B, scale it to **55%**, rotate it
   **−40°** and put it at the top right, overlapping the ring.
 - **Crystal D:** duplicate Crystal A, scale it to **45%**, rotate it
-  **+36°** and drop it at the lower left around (1262, 700).
+  **+36°** and drop it at the lower left of the ring.
 
 Four crystals in three sizes, all tilted differently, keep the orbit
 lively without feeling random.
@@ -330,8 +347,10 @@ lively without feeling random.
 **Bubbles.** On a **Bubbles** layer, make six rings in three sizes:
 
 1. Marquee a circle and fill it with `#8C7AE6`.
-2. Choose **Select → Shrink…** by about 14% of its radius and press
-   [[Delete]].
+2. Select a circle about 14% smaller on the same centre and press
+   [[Delete]]. On the bigger bubbles, **Select → Shrink…** by about 14% of
+   the radius does the same job; on small ones, drawing the inner circle
+   yourself keeps it round.
 3. Add a small white ellipse at the upper left for the highlight.
 
 Keep the bubbles off the ring line and away from the can's edges, so
@@ -346,8 +365,9 @@ small white ones on the can's gloss.
 ![CRYSTAL SODA in Archivo Black, the tagline in Instrument Serif, a kicker line and a pill caption in DM Mono, and crystalsoda.co at the top right](20-headline-type.webp)
 
 Select the Sparkles layer first so the new type lands on top. Make each
-text layer by clicking in empty canvas. Work from the bottom of the column
-up, so a click never lands inside an earlier line's text box.
+text layer by clicking in empty canvas. A click on existing text reopens it
+for editing, so work from the bottom of the column up: each new line then
+starts in open space above the last one.
 
 - `ZERO SUGAR  ·  ZERO CALORIES` in **DM Mono 34**
 - `a prism in every sip.` in **Instrument Serif 84**
@@ -355,34 +375,36 @@ up, so a click never lands inside an earlier line's text box.
 - `NEW  —  PRISM-FILTERED SPARKLING WATER` in **DM Mono 34**
 - `crystalsoda.co` in **DM Mono 34**
 
-All of them are in ink `#1B1530`. Paste the lines that contain `·` or `—`
-with [[Cmd+V]] instead of typing them.
+All of them are in ink `#1B1530`. For the `·` and `—`, use your system's
+character viewer or paste them in.
 
 ## Align the column and draw the pill
 
 ![The type column aligned to the left guide, with the caption centred inside a navy outlined pill and the URL at the bottom right](21-type-placed-and-pill.webp)
 
-Move each line so its glyphs start on the **110** guide. Use Move-tool
-drags for the big jumps and arrow-key nudges for the last pixels. The
-glyph tops are:
+Move each line so its glyphs start on the left margin guide. Use Move-tool
+drags for the big jumps and arrow-key nudges for the last pixels ([[Shift]]
+plus an arrow moves 10 px). From the top, stack:
 
-- kicker **150**
-- CRYSTAL **205**
-- SODA **372**
-- tagline **560**
+- the kicker, just under the top margin guide
+- CRYSTAL, a small gap below it
+- SODA, tucked close under CRYSTAL
+- the tagline, a little further down
 
-The whole column is centred on the canvas height.
+Aim for the whole column to sit centred on the canvas height.
 
 For the pill, select **Tagline** and add a **Pill** layer.
 
-1. Build a **662 × 70** capsule at (110, 680) from a rectangle and two end
-   circles, and fill it with ink.
-2. Click inside it with the **Magic Wand** and choose **Select → Shrink…
-   3**.
+1. Below the tagline, build a capsule about **662 × 70** with its left end
+   on the margin guide, from a rectangle and two end circles, and fill it
+   with ink.
+2. Click inside it with the **Magic Wand** and choose **Select → Shrink…**
+   at **3**.
 3. Press [[Delete]] to leave a 3 px outline.
 
-Centre the caption inside it, with 48 px either side and the caps
-vertically centred. Right-align the URL to the 1990 guide below the ring.
+Centre the caption inside it, with equal space at both ends and the caps
+vertically centred. Right-align the URL to the right margin guide below the
+ring.
 
 ## Paint the holographic echo
 
@@ -390,8 +412,9 @@ vertically centred. Right-align the URL to the 1990 guide below the ring.
 
 Each headline word gets a rainbow twin behind it:
 
-1. Select **CRYSTAL** and choose **Layer → Duplicate Layer**. Nudge the
-   copy back to exactly where the original is.
+1. Select **CRYSTAL** and choose **Layer → Duplicate Layer**. The copy
+   lands 10 px right and down, so with the Move tool press [[Shift]]+[[←]]
+   and [[Shift]]+[[↑]] once each to put it exactly over the original.
 2. Select the original, which is now *under* the copy. Click **Rasterize
    Layer** in the Layers footer and rename it **CRYSTAL Echo**.
 3. With the **Magic Wand**, untick **Contiguous** and click one letter.
@@ -422,14 +445,14 @@ same, it reads as a deliberate 3D extrusion rather than a misprint.
 - pill and caption
 
 Choose **Layer → Group Layers** and rename the group **Type Block**. The
-layers keep their stacking order. You can now move the column as one
-piece. A test move down 40 px undid and redid cleanly.
+layers keep their stacking order, and you can now move the whole column as
+one piece.
 
 ## Add grain and export
 
 ![The finished billboard in Lopsy, with the holographic can and crystals on the right and the grouped type column on the left](25-final-billboard.webp)
 
-Select **Background** and run **Filter → Add Noise** with **Mono**,
+Select **Background** and run **Filter → Add Noise…** with **Mono**,
 **Gaussian** and **Amount 5**. The fine grain turns the pale gradient into
 matte paper, which makes the foil look shinier by contrast.
 

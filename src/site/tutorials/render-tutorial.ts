@@ -12,7 +12,15 @@ import {
   renderMetaList,
   renderTutorialCard,
 } from './render-layout';
-import { SITE_NAME, TUTORIALS_PATH, absoluteUrl, tutorialAssetPath, tutorialPath } from './site-config';
+import {
+  SITE_NAME,
+  TUTORIALS_PATH,
+  absoluteUrl,
+  openProjectHref,
+  tutorialAssetPath,
+  tutorialPath,
+} from './site-config';
+import { SWATCH_SCRIPT } from './swatch';
 import type { Tutorial, TutorialStep } from './types';
 
 function renderStep(ctx: RenderContext, tutorial: Tutorial, step: TutorialStep, index: number): string {
@@ -32,6 +40,18 @@ function renderFinished(ctx: RenderContext, tutorial: Tutorial): string {
     isEager: true,
     sizes: '(min-width: 800px) 760px, 100vw',
   })}</figure>`;
+}
+
+function renderFollowAlong(tutorial: Tutorial): string {
+  if (!tutorial.project) return '';
+  const projectUrl = tutorialAssetPath(tutorial.slug, tutorial.project);
+  return `<aside class="follow-along">
+  <div>
+    <p class="follow-along-title">Follow along with this tutorial</p>
+    <p class="follow-along-text">Open the finished project to see how every layer, group and effect is set up.</p>
+  </div>
+  <a class="button" href="${escapeHtml(openProjectHref(projectUrl))}" target="_blank" rel="noopener">Open Project in ${SITE_NAME}</a>
+</aside>`;
 }
 
 function renderRelated(ctx: RenderContext, related: readonly Tutorial[]): string {
@@ -101,21 +121,24 @@ export function renderTutorialPage(
     ? `Updated <time datetime="${tutorial.updated}">${formatDate(tutorial.updated)}</time>`
     : `Published <time datetime="${tutorial.published}">${formatDate(tutorial.published)}</time>`;
 
-  const body = `${renderBreadcrumbs(crumbs)}
-<article class="tutorial">
+  const article = `<article class="tutorial">
   <header class="tutorial-header">
     <h1>${escapeHtml(tutorial.title)}</h1>
     <p class="lede">${escapeHtml(tutorial.description)}</p>
     <div class="tutorial-meta">${renderMetaList(tutorial, { showStepCount: true })}<p class="date">${dateLine}</p></div>
   </header>
   ${renderFinished(ctx, tutorial)}
-  ${tutorial.intro ? `<div class="intro">${renderMarkdown(tutorial.intro)}</div>` : ''}
+  ${renderFollowAlong(tutorial)}
+  ${tutorial.intro ? `<div class="intro">${renderMarkdown(tutorial.intro, { shouldRenderPalettes: true })}</div>` : ''}
   <ol class="steps">
 ${tutorial.steps.map((step, index) => renderStep(ctx, tutorial, step, index)).join('\n')}
   </ol>
   ${renderCallToAction()}
-</article>
-${renderRelated(ctx, related)}`;
+</article>`;
+  const swatchScript = article.includes('data-copy=') ? SWATCH_SCRIPT : '';
+  const body = `${renderBreadcrumbs(crumbs)}
+${article}
+${renderRelated(ctx, related)}${swatchScript}`;
 
   return renderDocument(ctx, {
     title: `${tutorial.title} | ${SITE_NAME} Tutorial`,

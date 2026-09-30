@@ -2,6 +2,7 @@
 title: Design a 1950s Pulp Sci-Fi Movie Flier
 description: Make a retro drive-in B-movie flier in Lopsy with a flying saucer, ringed planet, perspective title, starburst badge and aged halftone paper.
 published: 2026-09-27 15:00
+updated: 2026-09-30
 level: Intermediate
 duration: 75
 tags: pulp, retro, flyer design, movie poster, sci-fi, perspective, halftone, typography, layer effects
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Invaders from Yuggoth flier, with a yellow receding title, a chrome flying saucer beaming up a car, a teal ringed planet and a drive-in screen with an alien eye
 finished: finished-invaders-from-yuggoth.webp
 finishedAlt: The finished Invaders from Yuggoth drive-in flier. A banded purple-to-orange sunset sky with halftone dots and stars, a chrome flying saucer lifting a car in a green tractor beam, a cratered teal planet with an orange ring, the yellow title INVADERS from YUGGOTH! with a red extruded shadow, a teal SEE IT IN SHOCK-O-SCOPE starburst, a drive-in screen showing an alien eye above three parked cars, and the tagline, showtime and credits at the bottom, all on aged, creased paper
+project: pulp-sci-fi-movie-flier.lopsy
 ---
 
 1950s drive-in posters sold a double feature from across a parking lot.
@@ -31,15 +33,17 @@ The palette:
 
 ## Set up the page and paint the sky
 
-![A new 1200 by 1600 document with guides at x 60, 600 and 1140 and y 60 and 1540, filled with a smooth purple-to-orange sunset gradient](01-sky-gradient.webp)
+![A new 1200 by 1600 document with guides marking a 60 px safe zone and the vertical centre line, filled with a smooth purple-to-orange sunset gradient](01-sky-gradient.webp)
 
 Choose **File → New**, set the unit to **Pixels**, and create a
 **1200 × 1600** document with a white background.
 
 Add a 60 px safe zone so nothing crowds the trim:
 
-1. Click the top ruler at **60**, **600** and **1140**.
-2. Click the left ruler at **60** and **1540**.
+1. Click the top ruler about 60 px in from the left and right edges. Then [[Cmd]]-click (Ctrl-click) the middle of the ruler, which snaps a guide exactly to the centre line.
+2. Click the left ruler about 60 px from the top and 60 px from the bottom.
+
+A single click on a ruler drops a guide; you don't need to drag.
 
 Rename **Layer 1** to *Sky*. Pick the **Gradient** tool, open
 **Advanced…** and set four stops:
@@ -50,7 +54,8 @@ Rename **Layer 1** to *Sky*. Pick the **Gradient** tool, open
 - `#F7953F` at 100%
 
 Then drag a **Linear** gradient from the top of the page straight down to
-y 1180.
+about three-quarters of the way down (around 1180 on the left ruler). That's
+where the horizon will be, so the orange sits right behind the landscape.
 
 ## Posterize the sky into ink bands
 
@@ -81,8 +86,8 @@ Set the layer's blend mode to **Screen** so the black disappears.
 
 Stars shouldn't show near the glowing horizon:
 
-1. Click **Add Mask** on *Stars*, then click the mask row to edit it.
-2. Drag a white-to-black **Linear** gradient from y 450 down to y 1000.
+1. Click **Add Mask** on *Stars*, then click the mask thumbnail to edit it.
+2. Drag a white-to-black **Linear** gradient from about 450 on the left ruler down to about 1000, a little above the middle of the page to a little below it.
 
 Add a layer called *Sparkles*. With the **Lasso**, draw a few thin
 four-point stars and fill them with cream `#FFF3D6`. Give the layer an
@@ -94,7 +99,7 @@ four-point stars and fill them with cream `#FFF3D6`. Give the layer an
 
 Add *RingBack* (leave it empty for now), then *Planet*:
 
-1. **Elliptical Marquee** a 440 px circle at (620, 210).
+1. **Elliptical Marquee** a circle about 440 px across in the upper right, [[Cmd]]-dragging to keep it round. Leave a little space between it and the right guide.
 2. Fill it with a **Radial** gradient from `#9BF0DC` through `#2FA39A` and
    `#124A5E` to `#081028`, dragged from the upper-left of the circle so the
    light comes from there.
@@ -129,7 +134,7 @@ Finally, give *Planet* an **Outer Glow** in `#6FF0D8` (Size 44, Opacity 55).
 A ring passes behind the planet at the top and in front of it at the bottom.
 Draw it twice:
 
-1. On *RingBack* (below the planet), fill a 600 × 150 ellipse with
+1. On *RingBack* (below the planet), fill a flat ellipse about 600 × 150 px, centred on the planet, with
    `#F4C77E`. Choose **Select → Shrink…** by 22 px and press
    [[Delete]]. Add a thin inner ring in `#E8795A` the same way.
 2. Add *RingFront* above the shade layers and draw the identical rings.
@@ -142,10 +147,15 @@ Only the front half is left on top of the planet.
 ![The Move tool rotating the front ring with a live selection box, with the corner rotation handles visible](08-rotate-rings.webp)
 
 Use the same marquee on both ring layers so they turn around the same
-centre. Draw a **Rectangular Marquee** from (530, 345) to (1150, 515) and
+centre. Draw a **Rectangular Marquee** that just contains the ring, and
 switch to the **Move** tool. Drag just outside a corner handle to rotate
 about **−16°**, then press [[Cmd+D]] to commit. Repeat on the other ring
 layer with the same marquee and angle.
+
+> **Tip:** To draw the identical box twice, click once with the Rectangular
+> Marquee instead of dragging (with nothing selected). A dialog opens where you
+> can type the corners, for example **From** `530, 345` **To** `1150, 515`.
+> Enter the same numbers for the second layer.
 
 ## Build a chrome flying saucer
 
@@ -170,7 +180,7 @@ Give *Dome* a soft cyan Outer Glow too.
 
 Click *Ports* and choose **Layer → Merge Down**, then do the same on *Body*.
 Merging bakes the glows into the pixels, so the saucer turns as one piece.
-Rename the result *UFO*. Marquee it with a few pixels to spare, then rotate
+Rename the result *UFO*. Marquee it with a little room to spare, then rotate
 it **−12°** with the Move tool and press [[Cmd+D]].
 
 ## Add the landscape and the drive-in screen
@@ -182,7 +192,7 @@ Make a *Landscape* group and drag it above *Saucer* in the Layers panel.
 1. **Mesas:** lasso a flat-topped mesa skyline from the horizon down to the
    bottom of the page. Fill it with `#4B1E5E` and add an orange **Inner
    Glow** (`#FF9A4A`, Size 7) to rim-light the tops.
-2. **Screen:** marquee the frame (826, 1020, 308 × 124) and two posts, and
+2. **Screen:** on the right, just above the horizon, marquee a wide frame about 308 × 124 px and two posts under it, and
    fill them with ink `#1A0B24`. On *ScreenFace*, fill a cream panel
    `#FFE9B8` inside it and give it a soft Outer Glow.
 3. **The movie:** on *ScreenEye*, stack ellipses to paint an alien eye:
@@ -197,12 +207,9 @@ Add a *Ground* layer (a lassoed band in `#1A0B24`) and a *Cars* layer. Lasso
 one tail-finned sedan silhouette in near-black `#07020C` and add two round
 wheels.
 
-Marquee the car, press [[Cmd+C]] and then [[Cmd+V]] right away. The paste
-lands in place on a new layer above. Drag it into the next spot with the
-**Move** tool, press [[Cmd+D]], and **Merge Down**. Repeat for a third car.
-
-Press [[Cmd+V]] straight after [[Cmd+C]], before clicking any other layer
-row. See the note at the end.
+Marquee the car, press [[Cmd+C]] and then [[Cmd+V]]. The paste lands in
+place on a new layer above. Drag it into the next spot with the **Move**
+tool, press [[Cmd+D]], and **Merge Down**. Repeat for a third car.
 
 ## Rim-light the silhouettes
 
@@ -217,8 +224,9 @@ horizon line in the last step.
 ![A large car silhouette selected with the Move tool and rotated nose-up about 22 degrees above the landscape](14-abducted-car.webp)
 
 On a new *Abductee* layer, draw the same car at almost twice the size. Keep
-it under the saucer, around (345, 1110). Rotate it **−22°** so it tips
-nose-up. Add a pale green **Inner Glow** (`#D9FF7A`, Size 8) so the beam
+it under the saucer, about halfway between the saucer and the ground, in the
+left part of the page. Rotate it **−22°** so it tips nose-up, and press
+[[Cmd+D]]. Add a pale green **Inner Glow** (`#D9FF7A`, Size 8) so the beam
 seems to light its edges.
 
 ## Fire the tractor beam
@@ -227,8 +235,8 @@ seems to light its edges.
 
 On a *Beam* layer:
 
-1. Lasso a cone from the saucer's underside down to the ground (about x 258
-   to 704 at the bottom).
+1. Lasso a cone from the saucer's underside down to the ground, widening to
+   about 450 px across at the bottom.
 2. Fill it with a **Linear** gradient from `#F6FFC0` at 95% opacity to
    `#B8FF5A` at 25%.
 3. Add a radial glow ellipse where it hits the ground.
@@ -251,10 +259,11 @@ With the **Text** tool, set **Bowlby One SC** at **184 px** in `#FFD83A`.
 Type `INVADERS`, and in a separate layer, `YUGGOTH!`. Check the Text panel's
 **Letter spacing** is 0, because it remembers the last value you used.
 
-Centre both lines horizontally with the **Move** tool:
+Centre both lines on the middle guide with the **Move** tool (**Align center
+horizontally** in the options bar does it in one click):
 
-- INVADERS: glyph tops at y **560**
-- YUGGOTH!: glyph tops at y **836**
+- INVADERS: its tops about a third of the way down the page, just below the planet
+- YUGGOTH!: about 275 px lower, leaving a gap between the lines for the word *from*
 
 ## Make the title recede in perspective
 
@@ -288,7 +297,7 @@ extrusion.
 ![The word from in red Yellowtail script with a cream outline, tilted slightly and sitting in the gap between the two title lines](19-from-script.webp)
 
 With *TitleBase* active, type `from` in **Yellowtail** at **120 px** in red
-`#E0102A`. Centre it at about (600, 773), in the gap between the lines.
+`#E0102A`. Centre it on the middle guide, in the gap between the two title lines.
 
 Then:
 
@@ -298,31 +307,32 @@ Then:
 3. Rotate it **−8°**.
 4. Drag it above *TitleBlock* in the Layers panel.
 
-Rasterize rotated text first. A live text layer that you rotate with the
-Move tool loses the rotation on its next edit.
+Always rasterize text before you rotate it. That bakes the angle into the
+pixels, so a later edit can't straighten it again.
 
 ## Add a Shock-O-Scope starburst
 
 ![A teal 18-point starburst with a yellow outline and the rotated words SEE IT IN SHOCK-O-SCOPE! centred in it, with the transform box still active](20-badge.webp)
 
-On a *Burst* layer under the title, lasso an 18-point star:
+On a *Burst* layer under the title, lasso an 18-point star in the lower left,
+between the left guide and the beam:
 
-- Centre (182, 1140), outer radius 122, inner radius 96
+- Drag round a centre through 36 corners and let go back at the start, alternating between about 122 px out for the tips and about 96 px out for the notches. Short, blunt points read as a price-sticker burst
 - Fill `#1FA59A`, with a darker `#14786F` disc in the middle
 - Yellow Stroke (5 px) and a hard ink Drop Shadow
 
 Keep the points clear of YUGGOTH's red shadow.
 
 Drag an area text box and type `SEE IT IN / SHOCK-O- / SCOPE!` on three
-lines in **Bangers** 40 px, centre-aligned, in `#FFD83A`. Move it until its
-bounds are centred on the disc. Then **Rasterize** it, add a 3 px ink Stroke,
+lines in **Bangers** 40 px, centre-aligned, in `#FFD83A`. Move it until it's
+centred on the disc. Then **Rasterize** it, add a 3 px ink Stroke,
 and rotate it **−12°**.
 
 ## Set the top line and the info block
 
 ![A tracked-out cream line THE MOONLIGHT DRIVE-IN PRESENTS at the top between two small stars, and the tagline, showtime and credits centred at the bottom](21-info-type.webp)
 
-Use centre-aligned area text boxes that span the safe zone, 60 to 1140:
+Use centre-aligned area text boxes that span the safe zone, from the left guide to the right one:
 
 - **Top line:** **Fjalla One** 36 px, letter spacing 8, in `#F4E6C0`,
   flanked by two small lassoed stars.
@@ -331,15 +341,18 @@ Use centre-aligned area text boxes that span the safe zone, 60 to 1140:
   title yellow.
 - **Credits:** Fjalla One 25 px, two lines.
 
-Create the lowest text box first and work upward. That way a click never
-lands inside an earlier text box. Space the blocks evenly, about 24 px
-apart, and keep the last baseline above y 1540.
+Create the lowest text box first and work upward, starting each new box in
+clear space so the click doesn't open an earlier one for editing. Space the
+blocks evenly, about 24 px apart, and keep the last line above the bottom
+guide.
 
 ## Screen-print the sky with halftone
 
 ![A close-up of the sky showing a visible diagonal halftone dot pattern over the color bands](22-halftone.webp)
 
-Duplicate *Sky* as *SkyDots* and make sure it sits exactly at 0, 0. Run
+Duplicate *Sky* as *SkyDots*. Check the copy lines up exactly with *Sky*,
+with no strip of the old layer showing at an edge, and nudge it back if it has
+shifted. Run
 **Filter → Halftone…** with Dot Size **12**, Angle **45** and Softness
 **1**, then set it to **Multiply** at **30%**. The dots read as coarse
 printing without fighting the art.
@@ -361,10 +374,12 @@ Stack these layers at the very top of the document, above the *Title* group:
 
 ![The flier with faint vertical and horizontal fold creases crossing through the centre](24-creases.webp)
 
-On a *Creases* layer, draw two 4 px **Brush** lines in black just right of
-the centre (x 603 and y 803). Draw two in white just left of it (x 599 and
-y 799). Run **Gaussian Blur** at 2 px and set the layer to **Soft Light**
-at **55%**. It looks as if the flier spent a summer folded in quarters.
+Folds cross at the centre of the page. On a *Creases* layer, draw two 4 px
+**Brush** lines in black, one down the page just right of the centre guide
+and one across it just below the halfway point. Draw two in white a few
+pixels to the left of and above them. Click at one end and [[Shift]]-click
+the other to keep each line dead straight. Run **Gaussian Blur** at 2 px and
+set the layer to **Soft Light** at **55%**. It looks as if the flier spent a summer folded in quarters.
 
 ## Refine the layout
 
@@ -372,21 +387,20 @@ at **55%**. It looks as if the flier spent a summer folded in quarters.
 
 Step back and check every element against the guides:
 
-- **Top line and stars:** nudge down 18 px so their caps sit inside the
-  safe zone.
-- **Badge:** nudge both layers 15 px right.
-- **Showtime and credits:** nudge up 6 and 12 px so the credits end at
-  y 1535.
+- **Top line and stars:** nudge them down until their caps sit inside the
+  top guide, about 18 px.
+- **Badge:** nudge both layers about 15 px right.
+- **Showtime and credits:** nudge them up a few pixels so the credits end
+  just inside the bottom guide.
 - **Credits colour:** add a cream `#E2D3AA` **Color Overlay** so they read
   on the dark ground.
-- **Cars:** move up 40 px onto the horizon, so they read as silhouettes
+- **Cars:** move them up about 40 px onto the horizon, so they read as silhouettes
   against the mesas. Lasso a purple `#4A3560` window into each. On a
   *Taillights* layer, add red `#FF2A3A` dots with a red Outer Glow.
 
-Hide the guides with **View → Show Guides** and export with
-**File → Quick Export PNG**.
+With the **Move** tool, arrow keys nudge 1 px and [[Shift]]+arrow keys
+10 px, which makes these small moves exact.
 
-**A known issue to avoid:** pressing [[Cmd+C]] on one layer and then clicking
-certain other layer rows can erase the clicked layer. It's being tracked in
-issue #964. Until it's fixed, paste straight after copying, and save your
-project often.
+Hide the guides with **View → Show Guides** and export with
+**File → Quick Export PNG**. Choose **File → Save Project** too, to keep every
+layer editable.

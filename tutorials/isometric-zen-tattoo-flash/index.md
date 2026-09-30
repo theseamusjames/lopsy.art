@@ -2,6 +2,7 @@
 title: Draw an Isometric Tattoo Flash Sheet of Zen Islands
 description: Make a ZEN ENCLAVES tattoo flash sheet in Lopsy. Four floating isometric islands (torii, pagoda, rock garden, koi pond) on iso drafting paper.
 published: 2026-09-29 12:00
+updated: 2026-09-30
 level: Advanced
 duration: 120
 tags: isometric, tattoo flash, tattoo design, japanese, zen garden, pagoda, torii, koi, pattern, lasso, gradients, text, groups
@@ -28,14 +29,18 @@ The palette:
 - Paper `#F2E6CB`, ink `#1C1A24`, grid `#7FB3AA`
 - Vermilion `#EE6A4B` / `#D8452B` / `#8C2717` (top / left / right faces)
 - Teal roofs `#4FA3A0` / `#2F7F7C` / `#174446`
-- Grass `#B4D98F` → `#8DBF6A` on top, sides `#5E9A4B` / `#3F6E3A`
+- Grass top `#B4D98F` → `#8DBF6A`, grass sides `#5E9A4B` / `#3F6E3A`
 - Earth `#B97A48` / `#80502F`, rock `#6E655E` / `#4A433F`
 - Stone `#DDD8CC` / `#ABA597` / `#7E786C`
 
 > **Tip:** Isometric in one sentence: one unit along x moves right and down
 > at 30°, one unit along y moves left and down at 30°, and one unit of height
-> moves straight up. Every island here is a 210-unit block drawn at 1.1 px per
-> unit, so its top face is a 400 × 230 px diamond.
+> moves straight up. Every island here uses the same block, so its top face
+> is a diamond about 400 px wide and 230 px tall.
+
+The Lasso draws freehand while you hold the mouse button, so for each face,
+press on one corner and move in straight runs from corner to corner before
+releasing. Zooming in makes straight edges much easier.
 
 ## Draw one tile of isometric graph paper
 
@@ -50,8 +55,14 @@ straight line. Draw vertical lines 52 px apart, then diagonals at ±30°
 (30 px of rise for every 52 px of run), each spaced 60 px apart
 vertically. Make the patch a little bigger than one repeat.
 
-Marquee exactly one repeat: **104 × 60**, placed so neither vertical sits on
-an edge (here at **(126, 300)**). Choose **Edit → Define Pattern**.
+Marquee exactly one repeat, **104 × 60**, placed so neither vertical line
+sits on its edge. Choose **Edit → Define Pattern**.
+
+> **Tip:** Hold [[Cmd]] as well as [[Shift]] when you click the end of a
+> line, and it snaps to the nearest 15°, which makes the 30° diagonals
+> easy. For the repeat, *click* (don't drag) with the Rectangular Marquee
+> while nothing is selected, and type corners exactly 104 px apart
+> horizontally and 60 px apart vertically.
 
 ## Fill the page with the pattern
 
@@ -66,33 +77,40 @@ opacity to **45%** so the grid reads as printed drafting paper.
 
 ![A thick dark border inset from the edge with a thin second rule just inside it](04-border.webp)
 
-Add a **Border** layer. Marquee **1140 × 1480** at **(30, 30)**, fill it with
-`#1C1A24`, then marquee **1120 × 1460** at **(40, 40)** and press
-[[Delete]]. That leaves a 10 px band.
+Add a **Border** layer. Marquee a rectangle **30 px** in from every edge,
+fill it with `#1C1A24`, then marquee a rectangle **10 px** further in and
+press [[Delete]]. That leaves a 10 px band.
 
-For the hairline, marquee **1096 × 1436** at **(52, 52)**, fill it, choose
-**Select → Shrink…** at **3 px** and press [[Delete]].
+For the hairline, marquee a rectangle **12 px** inside the band, fill it,
+choose **Select → Shrink…** at **3 px** and press [[Delete]].
+
+> **Tip:** Clicking with the Rectangular Marquee (nothing selected) lets you
+> type these exactly: **From 30, 30 To 1170, 1510** for the band's outside,
+> **From 40, 40 To 1160, 1500** for its inside, and **From 52, 52 To 1148,
+> 1488** for the hairline.
 
 ## Set up guides for a 2 × 2 sheet
 
 ![Blue guides at the three column lines and three row lines over the bordered sheet, with the 16 pixel grid showing](05-guides-grid.webp)
 
-Click the top ruler at **x 330**, **600** and **870**: the two column
-centres and the middle. Click the left ruler at **y 150**, **612** and
-**1124**: the title line and the two row centres. Turn on **View → Show
-Grid** (16 px) to check the layout, then turn it off again. Lasso points
-don't snap, but marquees do while the grid is showing.
+On the top ruler, click at about **330** and **870** for the two column
+centres, and [[Cmd]]-click the middle of the ruler for an exact centre line.
+On the left ruler, click at about **150** for the title line and about
+**612** and **1124** for the two row centres. Turn on **View → Show Grid**
+(16 px) to check the layout, then turn it off again. While the grid is
+showing, marquees and moves snap to it; Lasso strokes don't.
 
 ## Build an extruded title plate
 
 ![A vermilion plate across the top with a darker bottom and right side extruding down-right, an ink outline and a thin cream keyline inside](06-title-plate.webp)
 
-Add a **Title Plate** layer. The plate's face runs from **(180, 92)** to
-**(1000, 208)**, and it extrudes 22 px right and 13 px down. With the
-**Lasso** (L), click out the bottom face, (180, 208) → (1000, 208) →
-(1022, 221) → (202, 221), and fill it `#8C2717`. Then click out the right
-face, (1000, 92) → (1022, 105) → (1022, 221) → (1000, 208), and fill it
-`#B63722`.
+Add a **Title Plate** layer. The plate's face is a wide rectangle centred on
+the title guide, about 820 × 116 px, running from about 180 px in on the
+left to 200 px in on the right. It extrudes **22 px right and 13 px down**.
+With the **Lasso** (L), draw the bottom face as a thin parallelogram: run
+along the face's bottom edge, step 22 px right and 13 px down, run back the
+same length, and close. Fill it `#8C2717`. Draw the right face the same way
+down the face's right edge, and fill it `#B63722`.
 
 Marquee the face and drag a **Linear** gradient from `#E4583A` at the top to
 `#D8452B` at the bottom. Add a 4 px ink **Stroke**. On a **Plate Keyline**
@@ -125,23 +143,26 @@ the foreground to paper `#F2E6CB`. Press [[Tab]].
 ![The cream title centred on the plate face with even space on all four sides and a thin dark red offset shadow](08-title-seated.webp)
 
 Switch to **Move** (V) and nudge with the arrow keys ([[Shift]] for 10 px)
-until the letters sit in the middle of the face: about 65 px from each end
-and 26 px above and below the caps. All caps have no descenders, so centre
-the cap height itself. Add a `#8C2717` **Drop Shadow** at **Offset 3 / 2**,
-**Blur 0**, **Opacity 100**, a small extrusion that matches the plate's.
+until the letters sit in the middle of the face, with equal space at each
+end and equal space above and below the caps. All caps have no descenders,
+so centre the cap height itself. Add a `#8C2717` **Drop Shadow** at
+**Offset 3 / 2**, **Blur 0**, **Opacity 100**, a small extrusion that
+matches the plate's.
 
 ## Draw the first floating island
 
 ![An isometric block with a light-green top diamond, green drips over brown earth sides and a jagged grey rock cone hanging underneath](09-isle-one.webp)
 
-Every island is centred on its guide crossing. For island 1 at (330, 612),
-the top diamond's corners are **(330, 497)**, **(530, 612)**, **(330, 728)**
-and **(130, 612)**, and the sides drop 40 px. Add an **Isle 1** layer and
-lasso each face, back to front:
+Every island is centred on its guide crossing. For island 1, on the top-left
+crossing, the top diamond's left and right corners sit on the row guide about
+**200 px** either side of the column guide, and its back and front corners
+sit on the column guide about **115 px** above and below the row guide. The
+sides drop 40 px. Add an **Isle 1** layer and lasso each face, back to front:
 
 1. The rock underneath: two triangles from the bottom edge of each side down
-   to a point at about **(330, 852)**. Zig-zag the outer edges a little.
-   Fill the left one `#6E655E` and the right one `#4A433F`.
+   to a point on the column guide, about 240 px below the crossing. Zig-zag
+   the outer edges a little. Fill the left one `#6E655E` and the right one
+   `#4A433F`.
 2. The two earth sides, `#B97A48` on the left and `#80502F` on the right.
 3. A grass lip over the top 12 px of each side, with drips hanging down:
    `#5E9A4B` left, `#3F6E3A` right.
@@ -166,27 +187,32 @@ lift about 11 px, in `#4A4652` on top and `#2C2934` on the front. On a
 ![Twelve coral rays radiating from a point above the upper-right island, clipped to a circle](12-sun-rays.webp)
 
 Select **Border** and add a **Sun Rays** layer so the rays sit behind
-everything. Marquee a circle of radius **176** at **(900, 432)** with the
-**Elliptical Marquee** and set the foreground to `#E2694A`. Choose
-**Filter → Sunburst…** with **Rays 12**, **Width 42**, **Taper 0**, **Fade
-0**, and **Center X 75 / Center Y 28** (the circle's centre as a percentage
-of the page). The selection clips the burst to a disc. Press [[Cmd+D]] and
-set the layer to **60%**.
+everything. With the **Elliptical Marquee**, [[Cmd]]-drag a circle about
+**352 px** across, centred just right of the right column guide and about
+180 px above the top row guide, and set the foreground to `#E2694A`. Choose
+**Filter → Sunburst…** with **Rays 12**, **Width 42**, **Taper 0**,
+**Fade 0**, and **Center X 75 / Center Y 28** (the circle's centre as a
+percentage of the page). The selection clips the burst to a disc. Press
+[[Cmd+D]] and set the layer to **60%**.
+
+> **Tip:** To match the Sunburst centre exactly, click with the Elliptical
+> Marquee (nothing selected) and enter **From 724, 256 To 1076, 608**.
 
 ## Add the sun disc
 
 ![A red sun disc with a dark outline in front of the rays](13-sun.webp)
 
-Add a **Sun** layer above the rays. Marquee a circle of radius **100** at
-(900, 432), drag a **Radial** gradient from `#F07A52` to `#D8452B`, and add
-a 3 px ink **Stroke**.
+Add a **Sun** layer above the rays. Select a **200 px** circle on the same
+centre (**From 800, 332 To 1000, 532** in the marquee dialog), drag a
+**Radial** gradient from `#F07A52` to `#D8452B`, and add a 3 px ink
+**Stroke**.
 
 ## Stack the pagoda
 
 ![A three-tier pagoda with cream walls, vermilion corner posts, teal hip roofs and a gold spire, standing on a stone plinth on the second island in front of the sun](14-pagoda.webp)
 
-Draw island 2 at (870, 612) exactly like island 1. On a **Pagoda** layer,
-build from the bottom up, filling each face with the Lasso:
+Draw island 2 on the top-right guide crossing exactly like island 1. On a
+**Pagoda** layer, build from the bottom up, filling each face with the Lasso:
 
 - A stone plinth, slightly tapered, 13 px tall.
 - Three wall boxes, 84, 66 and 50 px across and 50, 42 and 35 px tall, in
@@ -201,12 +227,12 @@ build from the bottom up, filling each face with the Lasso:
 
 ![A third island with a cream sand top, grey stone lip, three concentric raked rings on the right and straight raked rows across the front](16-raked-sand.webp)
 
-Draw island 3 at (330, 1124) with a sand top: fill the lip in the stone
-tones and drag a `#FBF1D6` → `#F4E7C4` gradient across the top. On a
-**Raked Sand** layer, use the **Brush** (B) at **Size 3**, **Hardness 100**,
-in `#CDB88A`. Shift-click around three isometric circles (flattened ellipses
-tilted to the diamond) for the rings, then click straight rows across the
-front, parallel to the island's right edge.
+Draw island 3 on the bottom-left guide crossing with a sand top: fill the
+lip in the stone tones and drag a `#FBF1D6` → `#F4E7C4` gradient across the
+top. On a **Raked Sand** layer, use the **Brush** (B) at **Size 3**,
+**Hardness 100**, in `#CDB88A`. Shift-click around three isometric circles
+(flattened ellipses tilted to the diamond) for the rings, then click
+straight rows across the front, parallel to the island's right edge.
 
 ## Set a faceted boulder
 
@@ -233,11 +259,11 @@ wide.
 
 ![A fourth island with a square pond cut into its grassy top, showing a dark earth inner wall at the back and a blue gradient water surface](19-pond.webp)
 
-Draw island 4 at (870, 1124). To sink the pond, lasso the opening's diamond
-on the top and fill it `#80502F`. Then lasso the water: the same diamond
-dropped 11 px, trimmed so it stays inside the opening. Fill it with a
-`#9AD9DA` → `#3E97A6` gradient. The strip of dark earth left at the back
-is the pond's inner wall.
+Draw island 4 on the bottom-right guide crossing. To sink the pond, lasso
+the opening's diamond on the top and fill it `#80502F`. Then lasso the
+water: the same diamond dropped 11 px, trimmed so it stays inside the
+opening. Fill it with a `#9AD9DA` → `#3E97A6` gradient. The strip of dark
+earth left at the back is the pond's inner wall.
 
 ## Swim a koi across the water
 
@@ -256,7 +282,7 @@ With **Koi** active, press [[Cmd+C]] then [[Cmd+V]]. Lopsy pastes in place
 as a new layer. Rename it **Koi 2** and drag it across the pond with the
 **Move** tool. [[Cmd]]-click its thumbnail to select its pixels, then drag
 the **rotation handle** (the circle outside the top-right corner) about 75°.
-Press [[Enter]] to commit, so the two koi circle each other.
+Press [[Cmd+D]] to commit, so the two koi circle each other.
 
 > **Tip:** On a small selection, grab the rotation handle by its exact
 > centre. Near its edge, the drag can move the selection instead of
@@ -292,9 +318,9 @@ The strokes only trace silhouettes. The edges where two faces meet need
 drawing, so add an **Ink** layer above each island. Using a 3 px hard brush,
 Shift-click the top diamond's front edges, the front vertical corner and the
 rock's centre ridge. On the pagoda, a 2 px **Pagoda Ink** layer traces each
-roof's eave and front hip. When a design is lined, click **Rasterize Layer
-Style** on each layer to bake its effects. The canvas stays quick with
-dozens of layers.
+roof's eave and front hip. When a design is lined, you can click **Rasterize
+Layer Style** in each layer's effects drawer to bake the effects into its
+pixels. That keeps a sheet with dozens of styled layers responsive.
 
 ## Group the four designs
 
@@ -309,25 +335,28 @@ move as one piece.
 
 ![A second, smaller copy of the cloud in the bottom-right corner with the transform box, being scaled from its bottom-right handle](28b-cloud-scale-handles.webp)
 
-Select the title layer and add a **Cloud** layer. Fill three overlapping
-elliptical marquees in `#FFF9EC` above a flat marquee base at top left
-(96–235, y 266–330). Separate fills on one layer merge into one silhouette.
-Add a 3 px ink **Stroke** and rasterize it.
+Select the title layer and add a **Cloud** layer. At the top left, just
+below the left end of the title plate, fill a flat marquee base about
+140 × 64 px, then three overlapping elliptical marquees in `#FFF9EC` rising
+from it. Separate fills on one layer merge into one silhouette. Add a 3 px
+ink **Stroke** and click **Rasterize Layer Style**, so the outline becomes
+pixels that travel with a copy.
 
 Copy and paste the cloud, rename the copy **Cloud 2** and drag it to the
 bottom-right corner. [[Cmd]]-click its thumbnail, then hold [[Cmd]] and drag
-the bottom-right scale handle inward to about **75%**. Press [[Enter]].
+the bottom-right scale handle inward to about **75%**. Press [[Cmd+D]].
 
 ## Scatter cherry blossoms
 
 ![A pink five-petal blossom with a gold centre, pasted at the gutter crossing and scaled up, with its rotation handles showing](30a-blossom-rotate.webp)
 
-On a **Blossoms** layer at (600, 322), lasso five teardrop petals in
-`#F3A5B6` around a gold centre and add a 2 px ink **Stroke**. Marquee it and
-press [[Cmd+X]] then [[Cmd+V]] to lift it onto its own layer. Paste three
-more copies: one at the gutter crossing scaled to 135%, a small one in the
-left margin and one in the right margin. Rotate each a different amount so
-they don't look stamped.
+On a **Blossoms** layer, on the centre guide just below the title plate,
+lasso five teardrop petals in `#F3A5B6` around a gold centre, add a 2 px ink
+**Stroke** and rasterize the style as you did for the cloud. Marquee the
+blossom and press [[Cmd+X]] then [[Cmd+V]] to lift it onto its own layer.
+Paste three more copies: one at the gutter crossing in the middle of the
+sheet, scaled to 135%, a small one in the left margin and one in the right
+margin. Rotate each a different amount so they don't look stamped.
 
 ## Drop the bottom row with snapping
 
@@ -335,19 +364,23 @@ they don't look stamped.
 
 Select **03 Rock Garden**, [[Cmd]]-click **04 Koi Pond**, turn on **Show
 Grid** and drag both groups down about 16 px with the **Move** tool. The
-drag snaps to the grid, and both groups move by exactly the same amount. Turn
-the grid off. Press [[Cmd+Z]] three times to look back, then
-[[Cmd+Shift+Z]] three times to return.
+drag snaps to the grid, and both groups move by exactly the same amount.
+Turn the grid off, then toggle [[Cmd+Z]] and [[Cmd+Shift+Z]] to compare the
+spacing before and after.
 
 ## Number the designs
 
 ![Four dark ink badges with cream rings, each holding a centred cream number, tucked under the left flank of each island](31-flash-numbers.webp)
 
-On a **Badges** layer, fill a 27 px radius ink circle under each island's left
-flank: (162, 762), (702, 762), (162, 1292) and (702, 1292). Fill a 22 px
-paper circle inside it, **Shrink** by 2 and fill ink again. That leaves a thin
+On a **Badges** layer, tuck a badge under the left flank of each island.
+For each one, fill a **54 px** ink circle, then a **44 px** paper circle on
+the same centre, then a **40 px** ink circle on top. That leaves a thin
 cream ring. Type each number in **Dela Gothic One** at **26 px** in paper,
 then nudge its glyph into the middle of its badge.
+
+> **Tip:** Clicking with the Elliptical Marquee (nothing selected) opens a
+> dialog for exact corners, which is the easy way to keep all three circles
+> on one centre.
 
 ## Set the footer
 
@@ -356,20 +389,23 @@ then nudge its glyph into the middle of its badge.
 Select a raster layer (**Badges**) first. With a text layer active, the Text
 tool's options restyle *that* layer. Set **Zen Kaku Gothic New**, weight
 **700**, **Size 18**, and type `FLOATING ISLAND FLASH  ·  SHEET NO. 07` in
-ink. Give it **Letter spacing 3 px** and centre it on **y 1440**. On
-**Footer Rules**, fill 3 px rules either side, matching the border's hairline
-weight, with a 22 px gap to the text.
+ink. Give it **Letter spacing 3 px** and centre it on the centre guide, just
+above the bottom border (**Align center horizontally** in the Move options
+bar does the horizontal part). On **Footer Rules**, fill 3 px rules either
+side, matching the border's hairline weight, with a 22 px gap to the text.
 
 ## Stamp the seal
 
 ![A small vermilion square seal with a cream keyline and ZEN reversed out, tilted a few degrees at the right end of the footer](33b-seal-rotate.webp)
 
-On a **Seal** layer, marquee a **64 × 64** square centred on (1084, 1440) and
-fill it `#D8452B`. **Shrink** by 4 px and fill paper, then **Shrink** by 2 px
-and fill vermilion again. That leaves a cream keyline. Type `ZEN` in Dela
-Gothic One at 14 px in paper and centre it. Then [[Cmd]]-click the Seal
-thumbnail and drag a rotation handle about −6°, as if the stamp was pressed
-by hand.
+On a **Seal** layer, [[Cmd]]-drag a **64 × 64** square marquee at the right
+end of the footer, level with the text, and fill it `#D8452B`. **Shrink** by
+4 px and fill paper, then **Shrink** by 2 px and fill vermilion again. That
+leaves a cream keyline. Type `ZEN` in Dela Gothic One at 14 px in paper and
+centre it on the seal. Then [[Cmd]]-click the Seal thumbnail and drag a
+rotation handle about −6°, as if the stamp was pressed by hand. Press
+[[Cmd+D]], then turn the ZEN layer by the same amount and nudge it back to
+the middle of the seal.
 
 ## Shade the sun with dotwork
 

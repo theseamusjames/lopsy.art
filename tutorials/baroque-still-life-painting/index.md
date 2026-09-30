@@ -2,6 +2,7 @@
 title: Paint a Baroque Still Life of Artichokes
 description: Paint a candlelit Spanish Baroque still life in Lopsy with lasso-and-gradient artichoke bracts, a custom seed brush, Smoke, and Multiply shadows.
 published: 2026-09-26 19:40
+updated: 2026-09-30
 level: Advanced
 duration: 90
 tags: digital painting, baroque, still life, chiaroscuro, custom brushes, transforms, blend modes, filters
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Midnight Artichokes still life, with two green artichokes, a hanging pomegranate, a split pomegranate, a knife and a snuffed candle on a stone ledge in a dark niche
 finished: finished-midnight-artichokes.webp
 finishedAlt: The finished Midnight Artichokes painting. A pomegranate hangs on a string in a dark stone niche. Below it, a snuffed candle trails smoke, a split pomegranate shows garnet seeds, a knife overhangs the ledge, an artichoke stands upright and a second lies on its side, its stem drooping over the ledge edge.
+project: baroque-still-life-painting.lopsy
 ---
 
 Spanish still-life painters around 1600 had a simple formula: put a few
@@ -43,9 +45,10 @@ Click **Create**.
 
 1. Fill `Background` with `#0A0705` (**Edit → Fill**).
 2. Rename `Layer 1` to `Niche Glow`. Add a **Radial** gradient that fades
-   from `#3E2B19` to a transparent `#1E150D`. Drag it from the upper left
-   (about 330, 300) toward the lower right, then set the layer to 75%
-   opacity. That is your only light source.
+   from `#3E2B19` to a transparent `#1E150D`. Start the drag in the upper
+   left, roughly a quarter of the way across and down, and pull it toward the
+   lower right. Set the layer to 75% opacity. That is your only light
+   source.
 3. Click **New Group**, name it `Stone Niche`, and add one layer for each
    stone surface. Draw each one with the **Lasso** as a four-point polygon,
    then fill it with a linear gradient:
@@ -80,8 +83,8 @@ Click **Create**.
    of the stone.
 3. Add a layer called `Artichoke`. Lasso a short stem stub standing on the
    ledge and fill it with an olive gradient.
-4. Fill a 270 × 290 ellipse with `#141A0E`. This dark body shows through the
-   gaps between the bracts.
+4. Just above the stem, fill an ellipse about 270 × 290 px with `#141A0E`.
+   This dark body shows through the gaps between the bracts.
 
 Each **bract** (leaf scale) is a pointed, rounded leaf shape:
 
@@ -124,8 +127,10 @@ lower bract overlaps the one above it.
    - `Artichoke Light`: a radial `#E8D49A` to transparent, centred on the
      upper-left shoulder.
 3. To keep them inside the artichoke, select `Artichoke` and click the
-   **Magic Wand** on the empty wall beside it.
-4. Select each helper layer in turn and press **Delete**.
+   **Magic Wand** on the empty wall beside it. That selects everything
+   *outside* the artichoke.
+4. Select each helper layer in turn and press **Delete** to trim the
+   spill.
 
 ## Model the artichoke
 
@@ -181,9 +186,9 @@ A smaller second artichoke also reads as sitting a little further away.
 
 ![The lying artichoke resting on the front of the ledge beside the standing one](10-lying-placed.webp)
 
-Move the lying artichoke down and to the right until its lowest bract touches
-the front half of the ledge (about y 828). It now sits *in front of* the
-standing one, which breaks up the single baseline.
+With the Move tool, drag the lying artichoke down and to the right until its
+lowest bract rests on the front half of the ledge. It now sits *in front of*
+the standing one, which breaks up the single baseline.
 
 ## Let the stem droop over the edge
 
@@ -212,10 +217,12 @@ Select `Artichoke Lying` and click **New Group**. Name the group
 `Hanging Pomegranate`, then add these layers inside it:
 
 1. **String:** a 3 px Hard Round brush line in `#9C8C68`, from the lintel
-   down to about y 200.
+   down to about a fifth of the way down the canvas, where the fruit will
+   hang.
 2. **Pom Body:**
-   - Fill a 196 × 186 ellipse with a radial gradient: `#C85A4E` → `#96202A` →
-     `#4A0A12` → `#10020A`. Drag it from the upper left.
+   - Hang an ellipse about 196 × 186 px from the end of the string and fill
+     it with a radial gradient: `#C85A4E` → `#96202A` → `#4A0A12` →
+     `#10020A`. Drag it from the upper left.
    - Add Noise at `6`, Mono.
    - With the selection still live, dab a few low-opacity (22%) Soft Round
      blotches of `#9A6A34`, plus a darker stroke of `#2A060A` down the right
@@ -249,9 +256,11 @@ and let the whole handle project past the front edge.
 
 ![The Brushes window on the Dynamics tab with Scatter 30, Size Jitter 30 and Angle Jitter 100, and the stroke preview showing scattered seeds](14-seed-brush.webp)
 
-1. On a temporary layer, fill a 20 × 26 ellipse with `#2A030A` and shrink
-   it by 2 px.
-2. Add a radial gradient: `#C23A4E` → `#82102A` → `#3A0410`.
+1. On a temporary layer, fill a 20 × 26 ellipse with `#2A030A`.
+2. Draw a slightly smaller ellipse, about 16 × 22, centred inside it, and
+   fill it with a radial gradient: `#C23A4E` → `#82102A` → `#3A0410`. At
+   this tiny size a fresh marquee keeps a rounder shape than
+   **Select → Shrink**.
 3. Add a tiny `#FFF4F0` highlight.
 4. Marquee the seed and choose **Edit → Define Color Brush…**. Name it
    `Garnet Seed`, then delete the temporary layer.
@@ -363,7 +372,8 @@ The blur left a soft halo around the artichoke. To trim it:
 2. Shrink the selection by 2 px, invert again with **⇧⌘I**, and press
    **Delete**.
 
-Then, with the artichoke selected again, add two clipped layers:
+Then add two more layers and clip them the same way as before (Magic Wand
+the empty wall on `Artichoke`, then **Delete** on each layer):
 
 - `Artichoke Warm`: a radial `#CDB672` on **Screen** at 30%.
 - `Artichoke Core`: a Multiply gradient at 70% from the lower right.
@@ -391,9 +401,8 @@ adjustments. Then:
 2. **Add Adjustment → Photo Filter** and set Density to `10`. It warms the
    whole scene like candle-lit varnish.
 
-Add these root adjustments at the very end. After adding them, check that new
-layers still show on the canvas. If one doesn't, toggle **Disable
-adjustments** off and on again.
+Root adjustments sit over the whole painting, so add them last, once
+everything else is in place.
 
 Export with **File → Quick Export PNG** and save your layers with
 **File → Save Project**.

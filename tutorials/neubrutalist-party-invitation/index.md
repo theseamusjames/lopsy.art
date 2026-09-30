@@ -2,6 +2,7 @@
 title: Design a Neubrutalist Party Invitation
 description: Build a neubrutalist pool-party invitation in Lopsy with chunky outlines, hard offset shadows, rotated stickers, a flat axolotl mascot and snapped info cards.
 published: 2026-09-26 10:00
+updated: 2026-09-30
 level: Intermediate
 duration: 50
 tags: neubrutalism, invitation, poster design, layer effects, stickers, text effects, illustration, groups
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Axolotl Xtravaganza invitation, a pink AXOLOTL title card and blue XTRAVAGANZA band over a dotted cream background, with a cartoon axolotl in a pool, three tilted info cards and a lime RSVP pill
 finished: finished-axolotl-xtravaganza.webp
 finishedAlt: The finished Axolotl Xtravaganza invitation. A black AXOLOTL headline sits on a pink slab with a tilted blue XTRAVAGANZA band. Below, a pink axolotl sits in a wavy blue pool next to lime, yellow and pink info cards, with a lime RSVP pill at the bottom and stickers around the title.
+project: neubrutalist-party-invitation.lopsy
 ---
 
 Neubrutalism takes the flat colour blocks of web UI and makes them loud:
@@ -29,11 +31,16 @@ The palette is five flat colours plus near-black:
 - Acid lime `#C6FF3D`
 - Sun yellow `#FFD93D`
 
-Almost every shape in this piece is a **rounded rectangle**. Lopsy doesn't
-have a rounded-rectangle tool, so you'll build one from selections: fill a
-rectangle inset by the corner radius horizontally, fill another inset
-vertically, then fill a circle with a diameter of twice the radius in each
-corner. It takes six quick fills and gives you a crisp, exact shape.
+Almost every shape in this piece is a **rounded rectangle**. The Shape
+tool's polygons are always regular, so you'll build rounded rectangles from
+selections instead: fill a rectangle inset by the corner radius
+horizontally, fill another inset vertically, then fill a circle with a
+diameter of twice the radius in each corner. It takes six quick fills and
+gives you a crisp, exact shape.
+
+> **Tip:** There's a quicker way. Marquee the full rectangle, choose
+> **Select → Shrink…** by the corner radius, then **Select → Grow…** by
+> the same amount, and fill. Growing rounds every corner in one go.
 
 ## Create the invitation document
 
@@ -52,16 +59,20 @@ Click the **Background** row, set the foreground to cream `#FFF1DC` and
 choose **Edit → Fill**. Then double-click `Layer 1` and rename it
 `Dot Grid`.
 
-1. With the **Elliptical Marquee**, drag an 8 px circle at (16, 16) and fill
-   it with `#1A1A1A`.
-2. With the **Rectangular Marquee**, select the 40 × 40 square from (0, 0)
-   and choose **Edit → Define Pattern**.
+1. With the **Elliptical Marquee**, draw an 8 px circle in the middle of
+   the top-left 40 × 40 corner of the canvas and fill it with `#1A1A1A`.
+2. Press [[Cmd+D]]. With the **Rectangular Marquee**, select exactly that
+   40 × 40 square: a single click (no drag) opens a dialog where you type
+   **From** `0`, `0` and **To** `40`, `40`. Choose **Edit → Define
+   Pattern**.
 3. Press [[Cmd+D]], choose **Edit → Fill with Pattern…**, pick the new
    40 × 40 pattern and click **Apply**.
 
-Set the layer's opacity to `22%` so the dots read as graph paper. Then
-click the top ruler at 60, 540 and 1020, and the left ruler at 60 and 1290,
-to drop margin and centre guides.
+Set the layer's opacity to `22%` so the dots read as graph paper. Then add
+margin and centre guides by clicking the rulers: on the top ruler, click
+60 px in from each side and [[Cmd]]-click ([[Ctrl]]-click) the middle for
+an exact centre line. On the left ruler, click 60 px from the top and from
+the bottom.
 
 ## Add a soft pink glow
 
@@ -69,11 +80,14 @@ to drop margin and centre guides.
 
 Click **Add Layer** and name the new layer `Pink Blob`. Choose the
 **Elliptical Marquee**, set **Feather** to `45` in the options bar, and
-drag from (90, 700) to (510, 1120). Fill it with `#FFB3D9`, then deselect.
+hold [[Cmd]] while you drag a 420 px circle in the lower left, starting
+about 90 px in from the left edge and a little above halfway down. Fill it
+with `#FFB3D9`, then deselect.
 
-Open the layer's effects (✦ on the row), set **Blend** to **Multiply**,
-and drop the row opacity to `30%`. This faint halo sits behind the mascot
-later. Set **Feather** back to `0` before you draw anything else.
+Open the layer's effects (the sparkle button on the layer row), set
+**Blend** to **Multiply**, and drop the row opacity to `30%`. This faint
+halo sits behind the mascot later. Set **Feather** back to `0` before you
+draw anything else.
 
 > **Tip:** A feathered selection gives a cleaner soft edge here than
 > blurring a hard circle.
@@ -83,12 +97,13 @@ later. Set **Feather** back to `0` before you draw anything else.
 ![A pink rounded rectangle with a thick black inside stroke and a solid black shadow offset down and right, with the Layer Effects drawer open](04-title-card-stroke-shadow.webp)
 
 Add a layer called `Title Card` and set the foreground to `#FF7EC8`. Build
-a rounded rectangle at (70, 210), 940 × 330 with a 28 px radius, using the
-six-fill trick from the intro.
+a 940 × 330 rounded rectangle with a 28 px radius, 70 px in from each side
+(just outside the margin guides) and about 210 px from the top, using
+either method from the intro.
 
 Open the layer's effects and set:
 
-- **Stroke**: colour `#141414`, **Width** `6`, position **Inside**
+- **Stroke**: colour `#141414`, **Width** `6`, **Position** set to **inside**
 - **Drop Shadow**: colour `#141414`, **Offset X** `16`, **Offset Y** `16`,
   **Blur** `0`, **Spread** `0`, **Opacity** `100`
 
@@ -102,7 +117,8 @@ effects, at smaller sizes, on nearly every shape in the design.
 
 Choose the **Text** tool. In the options bar set **Size** `190` and pick
 **Bagel Fat One** from the font browser. Set the foreground to `#141414`,
-click at about (110, 240) and type `AXOLOTL`. Press [[Tab]] to commit.
+click near the top-left of the slab and type `AXOLOTL`. Press [[Tab]] to
+commit, then move it with the **Move** tool until it's centred on the slab.
 
 Bagel Fat One's soft, blobby letters match the mascot. The line is about
 860 px wide, which fills the slab with a comfortable margin.
@@ -111,9 +127,11 @@ Bagel Fat One's soft, blobby letters match the mascot. The line is about
 
 ![A blue band with cream XTRAVAGANZA type being rotated with the Move tool's transform handles, overlapping the bottom of the pink slab](06-rotate-xtravaganza-band.webp)
 
-Add a layer called `Xtra Band`. Select the rectangle (40, 520) to
-(1040, 650), fill it with cobalt `#3D4BFF`, and give it an Inside
-**Stroke** of `6` and a hard **Drop Shadow** of `14` / `14`.
+Add a layer called `Xtra Band`. Select a band 130 px tall that runs from
+40 px in from the left edge to 40 px in from the right, overlapping the
+bottom of the pink slab by about 20 px. Fill it with cobalt `#3D4BFF`, and
+give it an inside **Stroke** of `6` and a hard **Drop Shadow** of `14` /
+`14`.
 
 Type `XTRAVAGANZA` in **Archivo Black** at size `104` in cream `#FFF1DC`.
 Drag it with the **Move** tool until it's centred on the band, then click
@@ -121,8 +139,8 @@ Drag it with the **Move** tool until it's centred on the band, then click
 
 Now tilt both layers the same way:
 
-1. Click the `Xtra Band` row and draw a marquee from (36, 516) to
-   (1044, 654).
+1. Click the `Xtra Band` row and draw a marquee a few pixels larger than
+   the band on every side.
 2. Switch to the **Move** tool and drag the rotate handle (just outside the
    top-right corner) until the band tilts about **−3°**. Press [[Cmd+D]] to
    commit.
@@ -132,15 +150,19 @@ Now tilt both layers the same way:
 Using an identical marquee for both layers means they pivot around the
 same centre, so the type stays locked to its band.
 
+> **Tip:** To repeat a marquee exactly, click once with the Rectangular
+> Marquee (with nothing selected) and type the corners. For this band,
+> **From** `36`, `516` and **To** `1044`, `654` works for both layers.
+
 ## Add the RSVP pill
 
 ![A lime pill with black RSVP BY OCT 10 / @AXOPARTY type near the bottom of the invitation, with a black outline and offset shadow](07-lime-rsvp-pill.webp)
 
 Click **Add Layer** twice. Name the first layer `Bubbles` and leave it
-empty for now. Name the second `RSVP Pill`. Build a pill at (80, 1180),
-920 × 92, with a 46 px radius (half the height), and fill it with lime
-`#C6FF3D`. Give it an Inside **Stroke** of `6` and a **Drop Shadow** of
-`10` / `10`.
+empty for now. Name the second `RSVP Pill`. Build a 920 × 92 pill with a
+46 px radius (half the height), centred across the page and sitting just
+above the bottom margin guide, and fill it with lime `#C6FF3D`. Give it an
+inside **Stroke** of `6` and a **Drop Shadow** of `10` / `10`.
 
 Type `RSVP BY OCT 10  /  @AXOPARTY` in **Archivo Black** at size `44` in
 ink, centre it on the pill, and rasterize it.
@@ -153,28 +175,34 @@ Stickers overlap the edges of other shapes, which gives the layout its
 collage energy. Each one is a filled shape with a thinner stroke (`5`) and
 a smaller shadow (`8` / `8`):
 
-- **Invite tag**: a white pill at (70, 150), 440 × 76 (radius 38). Its
-  bottom edge overlaps the slab. Add `YOU'RE INVITED!` in **Space Mono**
-  Bold at `34`.
-- **No Running**: a cobalt rounded rectangle at (600, 92), 264 × 58
-  (radius 16). Add `NO RUNNING!` in **Rubik Mono One** at `24` in cream,
-  rasterize it, and **Merge Down** onto the sticker.
-- **Starburst**: with the **Lasso**, click an 18-point star centred on
-  (952, 212), alternating between radius 122 and 95, then fill it with
-  `#FFD93D`. Add `BYO` (Archivo Black, `52`) and `FLOATIE!` (`30`),
-  rasterize both, and Merge Down one text layer onto the other.
+- **Invite tag**: a white 440 × 76 pill (radius 38), lined up with the
+  slab's left edge and sitting just above it, so its bottom edge overlaps
+  the slab by about 16 px. Add `YOU'RE INVITED!` in **Space Mono** Bold at
+  `34`.
+- **No Running**: a cobalt 264 × 58 rounded rectangle (radius 16), up and
+  to the right of the tag, just right of the centre guide. Add
+  `NO RUNNING!` in **Rubik Mono One** at `24` in cream, rasterize it, and
+  **Merge Down** onto the sticker.
+- **Starburst**: with the **Lasso**, drag an 18-pointed star over the
+  slab's top-right corner. Go round a centre point through 36 corners in
+  straight runs, alternating between the tips, about 122 px out, and the
+  valleys, about 95 px out, and let go back at the start. Fill it with
+  `#FFD93D`. Add `BYO` (Archivo Black, `52`) and
+  `FLOATIE!` (`30`), rasterize both, and Merge Down one text layer onto
+  the other.
 
 ## Rotate the stickers
 
 ![The yellow starburst selected with rotation handles, being turned clockwise over the corner of the pink slab](09-rotate-starburst.webp)
 
 Rotate each sticker and its text together, the same way you did the band:
-the same marquee for both layers, then drag the rotate handle and press
+the same marquee for both layers, big enough to cover the sticker and its
+shadow with a little to spare. Then drag the rotate handle and press
 [[Cmd+D]].
 
-- Invite tag: marquee (64, 144) to (520, 236), **−4°**
-- No Running: marquee (590, 82) to (880, 166), **+6°**
-- Starburst: marquee (826, 86) to (1078, 338), **+12°**
+- Invite tag: **−4°**
+- No Running: **+6°**
+- Starburst: **+12°**
 
 > **Tip:** Merge Down bakes the lower layer's stroke and shadow into its
 > pixels, so the No Running sticker's shadow is now real pixels. Make the
@@ -185,9 +213,10 @@ the same marquee for both layers, then drag the rotate handle and press
 
 ![A small copy of a pale blue bubble with transform handles being scaled down next to the original](10-paste-and-scale-bubble.webp)
 
-Click the `Bubbles` layer. Make a 46 px black circle at (47, 997), choose
-**Select → Shrink** by `5`, and fill the smaller circle with pale blue
-`#D6E6FF`. Add a 13 × 11 white highlight near its top left.
+Click the `Bubbles` layer. Near the left edge, just above where the pool
+will go (a little under three-quarters of the way down), make a 46 px black
+circle. Choose **Select → Shrink…** by `5`, and fill the smaller circle
+with pale blue `#D6E6FF`. Add a 13 × 11 white highlight near its top left.
 
 Now make smaller copies:
 
@@ -208,15 +237,15 @@ one between the gills.
 Click the `Bubbles` row, click **New Group** and name it `Axolotl`. The
 group lands above `Bubbles`, and new layers now go inside it.
 
-- **Gills**: Add a layer. With the **Lasso**, click six feathery fronds
-  around the top half of an imaginary head centred on (300, 935). Make each
-  frond a long zigzag oval, about 156 × 40, fanning outward. Fill them with
-  `#E0287A`.
-- **Head**: Add a layer above. Fill an elliptical marquee 340 × 250 around
-  (300, 935) with `#FFC4E1`. Lasso two small tilted ovals under it for arms,
-  then fill a 156 × 78 belly ellipse in `#FFE3F0`.
+- **Gills**: Add a layer. With the **Lasso**, drag six feathery fronds
+  around the top half of an imaginary head centred on the pink glow. Make
+  each frond a long zigzag oval, about 156 × 40, fanning outward. Fill them
+  with `#E0287A`.
+- **Head**: Add a layer above. Fill a 340 × 250 elliptical marquee centred
+  on the same point with `#FFC4E1`. Lasso two small tilted ovals under it
+  for arms, then fill a 156 × 78 belly ellipse in `#FFE3F0`.
 
-Give both layers an Inside **Stroke** of `6` and a **Drop Shadow** of
+Give both layers an inside **Stroke** of `6` and a **Drop Shadow** of
 `12` / `12`. The head's outline cuts cleanly across the base of the gills.
 
 ## Add a face and drop it in a pool
@@ -230,11 +259,12 @@ On a new `Face` layer:
 - Highlights: a 12 px white dot in each eye.
 - Smile: a **Brush** arc at size `7`, hardness `100`.
 
-Add a `Pool` layer on top. With the **Lasso**, click a wavy line from
-(20, 1060) to (590, 1060) that rises and falls about 8 px every 70 px. Then
-click down to (590, 1152) and (20, 1152) to close the shape. Fill it with
-cobalt, and give it an Inside **Stroke** of `6` and a **Drop Shadow** of
-`10` / `10`.
+Add a `Pool` layer on top. With the **Lasso**, press just inside the left edge,
+level with the bottom of the head, and drag a wavy line to about 570 px
+across, rising and falling about 8 px every 70 px. Then drag about 90 px
+straight down and back across to the start, and let go to close the shape. Fill it
+with cobalt, and give it an inside **Stroke** of `6` and a **Drop Shadow**
+of `10` / `10`.
 
 Finish with four short cream brush squiggles for ripples. The pool covers
 the bottom of the head and the arms, so the axolotl is sitting in the
@@ -249,15 +279,18 @@ Choose **View → Show Grid**. The grid defaults to 16 px, with **Snap**
 turned on. Marquee corners snap to the grid lines, so the cards line up
 perfectly.
 
-Add three layers and build a 416 × 128 card (radius 16) on each:
+Add three layers and build a 416 × 128 card (radius 16) on each, stacked
+one grid square (16 px) apart on the right-hand side, with their right
+edges on the right margin guide. Start the top card a little over halfway
+down the page:
 
-- `Card When`: lime, at (604, 707)
-- `Card Where`: yellow, at (588, 851)
-- `Card Wear`: pink, at (604, 995)
+- `Card When`: lime, at the top
+- `Card Where`: yellow, in the middle, shifted one grid square to the left
+- `Card Wear`: pink, at the bottom
 
-The middle card sits 16 px to the left, which breaks up the stack. Hide
-the grid again, then add a black 112 × 36 tab (radius 10) to each card at
-its top-left, 18 px in and hanging 18 px above the edge.
+The shifted middle card breaks up the stack. Hide the grid again, then add
+a black 112 × 36 tab (radius 10) to each card at its top-left, 18 px in and
+hanging 18 px above the edge.
 
 ## Write the card details
 
@@ -272,14 +305,13 @@ so the text lands in the group:
 3. The label in **Space Mono** Bold `20` in cream, centred on the tab, e.g.
    `WHEN`.
 
-Create them **bottom line first**. A text-tool click just below an existing
-line of text edits that line instead of starting a new one.
+Create them **bottom line first**. A Text-tool click on or just under an
+existing line of text edits that line instead of starting a new one.
 
 Rasterize all three, click the top text layer and press **Merge Down**
-three times so everything ends up in the card layer. Stop there: the card
-is the bottom layer of its group, so a fourth Merge Down would pull it out
-of the group. Then give the card an Inside **Stroke** of `5` and a
-**Drop Shadow** of `10` / `10`.
+three times so everything ends up in the card layer. The card is the
+bottom layer of its group, so that's as far as the merges go. Then give
+the card an inside **Stroke** of `5` and a **Drop Shadow** of `10` / `10`.
 
 ## Tilt the cards
 
@@ -305,7 +337,7 @@ stars (inner radius about 30% of the outer) and fill them:
 - Bubblegum, 42 px, on the pool's corner
 - Acid lime, 26 px, between the tag and the sticker
 
-Give them a `4` px Inside **Stroke** and a `6` / `6` shadow.
+Give them a `4` px inside **Stroke** and a `6` / `6` shadow.
 
 Finally, click the **Background** row and choose **Filter → Add
 Noise…**. Set **Amount** `5` and **Mono**, then click **Apply**. The grain

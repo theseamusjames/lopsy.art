@@ -2,6 +2,7 @@
 title: Make a Neon Glow Text Effect
 description: Create glowing neon sign text for free in your browser. Build a radial gradient backdrop, type your words, then add outer and inner glows in Lopsy.
 published: 2026-09-25 04:50
+updated: 2026-09-30
 level: Beginner
 duration: 5
 tags: text effects, layer effects, typography, social media
@@ -42,7 +43,7 @@ and enter `#07040F`. Click **Done**.
 ![A 1080 pixel square canvas filled with a radial gradient, glowing purple in the middle and fading to almost black at the corners](03-radial-background.webp)
 
 Make sure **Layer 1** is selected in the Layers panel. Then drag from just
-above the middle of the canvas out to a corner.
+above the middle of the canvas out to one of the corners.
 
 The lighter center gives the sign something to sit in front of, and the dark
 corners make the glow stand out.
@@ -73,8 +74,8 @@ The text snaps to the exact middle of the canvas.
 
 ![The Layer Effects panel with Outer Glow turned on: color hot pink, size 60, spread 10, opacity 100](06-outer-glow.webp)
 
-In the Layers panel, click the sparkle icon on the **NEON** layer to open
-**Layer Effects**. Tick **Outer Glow** and set:
+In the Layers panel, click the sparkle icon on the **NEON** layer row to
+open **Layer Effects**. Tick **Outer Glow** and set:
 
 - **Color:** `#FF2BD6` (hot pink)
 - **Size:** `60`

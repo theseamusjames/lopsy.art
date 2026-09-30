@@ -2,6 +2,7 @@
 title: Design an Anti-Design Photocopy Magazine Cover
 description: Build a Ray Gun-style SPITE magazine cover in Lopsy with a xeroxed photo collage, sliced type, a hazard sticker, rubber stamp and toner grain.
 published: 2026-09-27 09:30
+updated: 2026-09-30
 level: Intermediate
 duration: 90
 tags: anti-design, magazine cover, editorial design, photocopy, xerox, collage, halftone, typography, perspective transform, textures
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished SPITE magazine cover, a xeroxed photo of a spiked park bench taped onto a tilted safety-orange slab, with HOSTILE running up the left edge, FURNITURE across the bottom, a DO NOT SIT hazard sticker and grainy photocopy texture
 finished: finished-hostile-furniture.webp
 finishedAlt: The finished SPITE issue 07 cover on photocopy-grey paper, with a sliced black masthead that has an orange misregistered ghost, a black-and-white halftone photo of a bench with spikes and hoop armrests circled in orange marker and labelled POLICY, a DO NOT SIT hazard-stripe sticker, the tagline "the bench that hates you.", HOSTILE set vertically and FURNITURE cut off by the right edge, a barcode label, an EXHIBIT A tab and an UNSEATED SINCE 1998 rubber stamp
+project: anti-design-magazine-cover.lopsy
 ---
 
 Anti-design covers, the kind David Carson made for *Ray Gun* in the 90s,
@@ -28,7 +30,8 @@ The palette uses three inks:
 
 - Photocopy paper `#D7D3C7`
 - Toner black `#141312`
-- Safety orange `#FF5A14` (stamp red-orange `#FF4A00`)
+- Safety orange `#FF5A14`
+- Stamp red-orange `#FF4A00`
 
 ## Make the photocopy paper
 
@@ -40,8 +43,8 @@ click **Create**. Click the **Background** row, set the foreground to
 **Mono**, **Gaussian** and **Amount 16** so the paper has grain.
 
 Rename **Layer 1** to **Copier Edge**. With the **Gradient** tool, drag a
-linear gradient from `#3A372F` to transparent from the right edge 160 px
-inwards. Set the layer to **Multiply** at **55%**. That's the shadow a
+linear gradient from `#3A372F` to transparent, starting at the right edge
+and ending about 160 px in. Set the layer to **Multiply** at **55%**. That's the shadow a
 photocopier lid leaves. Click the rulers to add margin guides at 60 px from
 each edge.
 
@@ -49,19 +52,25 @@ each edge.
 
 ![A large orange rectangle being rotated with the Move tool, the blue transform box and round rotation handles visible](02-rotate-orange-slab.webp)
 
-Add a layer called **Hazard Slab**. Draw a rectangular marquee from
-**(110, 410)** that's **960 × 800** and fill it with `#FF5A14`. Deselect,
-marquee the slab again with a few pixels of padding, switch to the **Move**
-tool (V) and drag a corner's round rotation handle to about **−6°**. Press
-[[Cmd+D]] to commit. Rotating commits on [[Cmd+D]], not Enter.
+Add a layer called **Hazard Slab**. Draw a rectangular marquee about
+**960 × 800**, roughly centred across the page and starting a little over a
+quarter of the way down, and fill it with `#FF5A14`. Deselect, marquee the
+slab again with a few pixels of padding, switch to the **Move** tool (V) and
+drag a corner's round rotation handle to about **−6°**. Press [[Cmd+D]] to
+commit. Transforms commit on [[Cmd+D]], not Enter.
+
+> **Tip:** To type an exact rectangle, press [[Cmd+D]] and *click* with the
+> Rectangular Marquee. In the dialog, From **110, 410** To **1070, 1210** gives
+> this slab.
 
 ## Add a halftone screen to the slab
 
 ![The orange slab now shows a fine grid of slightly darker orange dots](03-halftone-slab-screen.webp)
 
 Flat vector orange looks too clean for print. Choose **Layer → Duplicate
-Layer**, rename the copy **Slab Screen**, and nudge it back into place
-with the arrow keys if the duplicate landed 10 px off. Run **Filter →
+Layer** and rename the copy **Slab Screen**. Duplicate places the copy 10 px
+right and 10 px down, so with the Move tool press [[Shift+Left]] and
+[[Shift+Up]] once each to put it back in register. Run **Filter →
 Halftone** with **Dot Size 8**, **Angle 30** and **Softness 2**. Set the
 copy to **Multiply** at **30%**. The dots now read as printed ink.
 
@@ -70,10 +79,11 @@ copy to **Multiply** at **30%**. The dots now read as printed ink.
 ![A grey tiled pavement grid being pulled into a trapezoid by the Perspective transform, its rows getting taller toward the viewer](04-perspective-pavement.webp)
 
 Click the **New Group** button and call it **Bench Photo**. Inside it, add
-**Photo Wall** with a vertical `#D4D0C6` → `#85827A` gradient in a
-marquee at **(200, 520)**, **800 × 330**. Add **Pavement**: fill
-**(200, 840)**, **800 × 260** with `#9A968C`. Then draw 4 px strips in
-`#3A3833` every 52 px down and every 80 px across.
+**Photo Wall**: marquee an **800 × 330** rectangle over the upper middle of
+the slab and drag a vertical `#D4D0C6` → `#85827A` gradient through it. Add
+**Pavement**: directly below the wall, fill an **800 × 260** rectangle of the
+same width with `#9A968C`, overlapping the wall's bottom edge slightly. Then
+draw 4 px strips in `#3A3833` every 52 px down and every 80 px across.
 
 Marquee the pavement, pick the **Move** tool and click **Perspective** in
 the options bar. Drag the bottom-right corner **300 px** to the right. The
@@ -123,7 +133,8 @@ darks, and that's the point.
 
 ![The bench photo covered in a visible dot screen and grain, looking like a cheap xerox](08-xerox-halftone-noise.webp)
 
-Duplicate **Xerox Photo** and nudge the copy back to (0, 0). Run
+Duplicate **Xerox Photo** and nudge the copy back into register
+([[Shift+Left]] and [[Shift+Up]] once each). Run
 **Filter → Halftone** with **Dot Size 6**, **Angle 45** and **Softness
 2**. Set the copy to **Multiply** at **60%** and **Merge Down**. Finish with
 **Filter → Add Noise** (**Mono**, **Gaussian**, **14**). Now the clip-art
@@ -149,10 +160,11 @@ tool, set **Anton** at **500 px** in `#141312`, click in empty canvas and
 type **SPITE**. Drag it so the letter tops sit about **130 px above** the
 canvas top. The page cuts the masthead, and that's the anti-design move.
 
-**Duplicate Layer**, rename the copy **SPITE Ink**, and nudge it a further
-8 px right and 4 px down. On the original **SPITE** underneath, add a
-**Color Overlay** in `#FF5A14` and set it to **Multiply**. The orange ghost
-reads as a misregistered second ink.
+**Duplicate Layer** and rename the copy **SPITE Ink**. It lands 10 px right
+and 10 px down; nudge it a further 8 px right and 4 px down. On the original
+**SPITE** underneath, add a **Color Overlay** in `#FF5A14` and set the layer's
+**Blend** to **Multiply** in the same drawer. The orange ghost reads as a
+misregistered second ink.
 
 ## Run HOSTILE up the left edge
 
@@ -160,18 +172,22 @@ reads as a misregistered second ink.
 
 Create **HOSTILE** in **Abril Fatface** at **190 px** in empty space. A
 clashing high-contrast serif against the condensed masthead is part of the
-look. Drag it to the middle of the canvas, press [[Cmd+D]], marquee it and
-hold [[Cmd]] while dragging a rotation handle so it snaps to **−90°**. Press
-[[Cmd+D]] again, then drag it to the left edge so it runs from about
-**y 420 to y 1225**, starting at **x 22**.
+look. Drag it to the middle of the canvas, where the handles are easy to
+reach, and press [[Cmd+D]]. Marquee it and hold [[Cmd]] while dragging a
+rotation handle so it snaps to **−90°**. Press [[Cmd+D]] again, then drag it
+to the left edge, about **22 px** in, so it runs from roughly the top of the
+slab down to about 325 px above the bottom of the page.
+
+> **Tip:** Settle the font and size before you rotate live text. Editing a
+> rotated text layer afterwards sets it again from scratch, unrotated.
 
 ## Hinge FURNITURE under it
 
 ![FURNITURE set across the bottom in Abril Fatface, starting under HOSTILE and sliced by the right edge of the page](12-furniture-hinge.webp)
 
 Create **FURNITURE** in Abril Fatface at **214 px**. Move it so its left
-edge is at **x 22**, flush with HOSTILE, and its cap line is at
-**y 1268**. The two words form an L-shaped hinge. The right edge cuts
+edge is flush with HOSTILE's, 22 px in, and its capitals sit just under
+HOSTILE's bottom end. The two words form an L-shaped hinge. The right edge cuts
 through the final **E**, but the E's arms still show, so it reads as
 FURNITURE and not FURNITURI. Keep at least **40 px** between HOSTILE's
 bottom and FURNITURE's cap line. A gap of 15 px looks like a mistake, not a
@@ -181,24 +197,34 @@ choice.
 
 ![The Fill with Pattern dialog showing an 80 by 80 black and orange diagonal stripe tile](13-hazard-stripe-pattern.webp)
 
-On a temporary **Tile** layer, fill an **80 × 80** square with
-`#FF5A14`. Lasso-fill two black shapes to make diagonal stripes: the
-triangle (0,0)–(40,0)–(0,40), and the band (80,0)–(80,40)–(40,80)–(0,80).
+On a temporary **Tile** layer, fill an **80 × 80** square with `#FF5A14`
+in an empty corner of the canvas. Fill two black shapes to make diagonal
+stripes that repeat seamlessly:
+
+- A triangle in the top-left corner, cut off by a line between the midpoints of the top and left edges.
+- A band whose top edge runs from the top-right corner to the bottom-left corner, and whose bottom edge runs from the midpoint of the right edge to the midpoint of the bottom edge.
+
 Marquee the tile exactly and choose **Edit → Define Pattern**, then delete
 the Tile layer.
 
-Add a **Hazard Sticker** layer, marquee **(680, 400)** at **440 × 170**,
-and choose **Edit → Fill with Pattern**. Pick the new pattern.
+> **Tip:** The stripes only tile cleanly if their corners land exactly on
+> the square's corners and midpoints. Zoom in, click those points with the
+> **Pen Tool**, click **Commit path**, then **Path to Selection** in the Paths
+> panel. That gives you perfectly straight edges to fill.
+
+Add a **Hazard Sticker** layer, marquee a **440 × 170** rectangle over the
+slab's top-right corner, and choose **Edit → Fill with Pattern…**. Pick the
+new pattern.
 
 ## Build the DO NOT SIT sticker
 
 ![The DO NOT SIT hazard sticker being rotated with the Move tool, its cream label evenly inset inside the stripes](14-do-not-sit-sticker.webp)
 
-Fill a `#F1EEE6` label inset by **24 px** on every side, which is
-**(704, 424)**, **392 × 122**. Type **DO NOT SIT** in **Anton 80** and
-centre it on the label. Measure the glyph box so padding is equal on both
-sides: here it's 42 / 41 px across and 26 / 26 px top and bottom.
-**Merge Down** the text, rotate the sticker **+9°**, and add a hard black
+With the sticker rectangle still selected, choose **Select → Shrink…**
+**24** and fill with `#F1EEE6`. That leaves an even 24 px of stripes all
+round. Type **DO NOT SIT** in **Anton 80** and centre it on the label. Zoom
+in and nudge until the cream padding matches on the left and right, and on
+the top and bottom. **Merge Down** the text, rotate the sticker **+9°**, and add a hard black
 **Drop Shadow** (8 / 10, blur 0, 85%). Drag its row above the **Bench
 Photo** group so it overlaps the photo's corner.
 
@@ -206,11 +232,11 @@ Photo** group so it overlaps the photo's corner.
 
 ![A black strip with the words "the bench that hates you." in a white typewriter face, tilted to match the slab](15-tagline-strip.webp)
 
-Type **the bench that hates you.** in **Special Elite 46** in `#F1EEE6`
-and measure it (589 × 42). Fill a black strip with **36 px** of padding
-left and right and **25 px** top and bottom: **(380, 1094)**, **661 × 92**.
-Centre the text, **Merge Down**, then rotate the strip **−6°** so it
-matches the slab. It should clear FURNITURE by about 50 px.
+Type **the bench that hates you.** in **Special Elite 46** in `#F1EEE6`.
+Under it, fill a black strip that leaves about **36 px** of padding left and
+right of the words and **25 px** top and bottom (about **661 × 92**), across
+the lower part of the slab. Centre the text, **Merge Down**, then rotate the
+strip **−6°** so it matches the slab. It should clear FURNITURE by about 50 px.
 
 ## Add a barcode label
 
@@ -267,10 +293,11 @@ not just touches it.
 Turn on **View → Show Grid**, which also turns on Snap. Type the coverlines
 in **IBM Plex Mono** Bold at **25 px** on two lines: **ALSO: ARMRESTS AS
 POLICY / THE ANTI-SKATE STUD** and **A FIELD GUIDE TO SPIKES / WHO IS THE
-CITY FOR?**. Drag them near **x 22**, **y 1466**. Then hide the grid, untick
-**Snap**, and use the arrow keys to land exactly on **x 22** so the left
-edge lines up with HOSTILE and FURNITURE. That hidden grid keeps the chaos
-readable.
+CITY FOR?**. Drag them into the bottom-left corner, under FURNITURE. Then
+untick **Snap** in the options bar and turn **Show Grid** off, and nudge with
+the arrow keys until the left edge lines up exactly with HOSTILE and
+FURNITURE. (While Snap is on, each arrow press jumps a whole grid cell.)
+That hidden grid keeps the chaos readable.
 
 ## Run the issue line down the right edge
 
@@ -279,7 +306,7 @@ readable.
 Type **NO.07  //  AUTUMN 2026  //  $9.00  //  A QUARTERLY AGAINST
 COMFORT** in **IBM Plex Mono** Medium, **22 px**, `#111111`. Rotate it
 **+90°** with [[Cmd]] held for the 15° snap, then drag it onto the right
-margin guide at **x 1140**. Put it and the coverlines in a **Small Type**
+margin guide. Put it and the coverlines in a **Small Type**
 group: click **New Group**, then drag each row's grip onto the group row.
 Now you can move both blocks together.
 
@@ -312,13 +339,14 @@ look like a dirty photocopier drum dragging toner down the page.
 
 Cropping the top of SPITE isn't enough on its own. Click **SPITE Ink**,
 add a **Masthead Slice** layer, and fill two paper-coloured (`#D7D3C7`)
-bands across the masthead: one **16 px** tall at **y 148** and one **6 px**
-tall at **y 236**. Give the layer **Add Noise** (Mono, 16) so the bands
+bands across the masthead: one **16 px** tall a little below the top of the
+page, through the upper part of the letters, and one **6 px** tall about
+90 px lower. Give the layer **Add Noise** (Mono, 16) so the bands
 match the paper grain. The letters now look cut apart and re-pasted.
 
 Save with **File → Save Project** and export with **File → Quick Export
 PNG**.
 
 > **Tip:** Anti-design still needs a grid. Here, HOSTILE, FURNITURE and the
-> coverlines all share **x 22**, and every label has even padding. Let the
+> coverlines all share one left edge, 22 px in, and every label has even padding. Let the
 > type break the page, but keep the spacing consistent.

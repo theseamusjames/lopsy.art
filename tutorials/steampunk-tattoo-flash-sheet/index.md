@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished WATCHMAKER'S CURIOSITIES flash sheet at fit-to-screen zoom, with seven cream-haloed steampunk tattoo designs on a verdigris sheet and the Winged Watch, Dirigible and Clockwork Heart groups in the Layers panel
 finished: finished-watchmakers-curiosities.webp
 finishedAlt: The finished WATCHMAKER'S CURIOSITIES tattoo flash sheet on mottled verdigris paper with a faint ghost of an 18th-century watch-parts engraving. A gilt title sits in an oxblood ribbon above "Flash Sheet · No. VII" between two gold stars. Across the top are a brass pocket watch with teal and cream wings and a copper airship with brass struts. The middle row has an Edison bulb with a glowing filament, a red riveted clockwork heart with a brass porthole, brass pipes and a wind-up key, and a pair of meshing brass and copper cogs. The bottom row has a top hat with brass goggles on an oxblood band, and a gear-bowed skeleton key under a cream banner reading TEMPUS FUGIT. Every design has a black keyline, a cream sticker halo and a soft drop shadow.
+project: steampunk-tattoo-flash-sheet.lopsy
 ---
 
 A **flash sheet** is the page of ready-to-tattoo designs on a tattoo parlour's
@@ -28,18 +29,23 @@ It becomes a ghost texture in the paper.
 One recipe draws every piece, from back to front:
 
 1. Fill the shape with ink `#15110E`.
-2. Fill the same selection again with its colour, **Select → Shrink**-ed 5–7 px. That leaves an even black outline between overlapping parts.
+2. Choose **Select → Shrink…**, enter 5–7 px, and fill the smaller selection with its colour. That leaves an even black outline between overlapping parts.
 3. For metal, fill with a gradient instead of a flat colour.
+
+For tiny round parts such as rivets and bulb dots, skip the Shrink and draw
+the smaller colour circle directly with the **Elliptical Marquee**. It keeps
+very small circles perfectly round.
 
 The palette:
 
-- Sheet: verdigris `#1F3B35`
+- Verdigris sheet: `#1F3B35`
 - Ink: `#15110E`
 - Ivory: `#EFE4C8`
 - Brass: `#F0CF78` → `#C8952F` → `#8A5A1C`
 - Copper: `#E08A55` → `#B4532A` → `#6E2A12`
 - Teal: `#3F9A86`
-- Reds: oxblood `#7C1D23` and heart red `#B8323A`
+- Oxblood: `#7C1D23`
+- Heart red: `#B8323A`
 
 ## Start a 1650 × 2200 sheet
 
@@ -77,13 +83,14 @@ top of them.
 
 ![The pasted engraving of watch parts being scaled with a Command-drag on its bottom-right handle](04-paste-engraving.webp)
 
-Copy the Thiout engraving in your browser and press [[Cmd+V]]. External
-pastes land at the top-left corner, already selected, with the **Move** tool
-active.
+Copy the Thiout engraving in your browser and press [[Cmd+V]]. An image
+pasted from outside Lopsy arrives already selected, with the **Move** tool
+active, and a large one is shrunk to fit inside the sheet.
 
-Hold [[Cmd]] and drag the bottom-right corner handle until the image covers
-the sheet. [[Cmd]] keeps the scale uniform. Press [[Cmd+D]] to commit, then
-rename the layer **Engraving**.
+Hold [[Cmd]] and drag the bottom-right corner handle out until the image is
+big enough to cover the whole sheet, then drag it into place. [[Cmd]] keeps
+the scale uniform. Press [[Cmd+D]] to commit, then rename the layer
+**Engraving**.
 
 ## Turn it into a ghost
 
@@ -91,7 +98,7 @@ rename the layer **Engraving**.
 
 1. Run **Filter → Desaturate**, then **Filter → Invert**. The paper turns black and the lines turn white.
 2. **Filter → Brightness/Contrast…** with **Brightness −45** and **Contrast 70** crushes the paper to pure black.
-3. Marquee the scan's frame lines along the top and right edges and press [[Delete]].
+3. Marquee the scan's printed frame lines where they show along the top and right edges, and press [[Delete]].
 4. Set the layer to **Screen** at **16%**. Black vanishes in Screen, so only the gears and springs remain, like a watermark.
 
 ## Cut a wing from layered feathers
@@ -113,11 +120,12 @@ Draw the wing from the back forward:
 ![The left wing duplicated, flipped with Image then Flip Horizontal, and moved to mirror the right side](07-mirror-wing.webp)
 
 With **Wing** active, choose **Layer → Duplicate Layer**, then click the copy's
-row. **Image → Flip Horizontal** mirrors it about the canvas centre.
+row. **Image → Flip Horizontal** mirrors it.
 
-Drag it with the **Move** tool so it mirrors the first wing about the watch
-centre (x 430), then finish with the arrow keys. Choose **Layer → Merge Down**
-to join the pair.
+Drag the copy with the **Move** tool until the two wings sit symmetrically on
+either side of where the watch will go, then fine-tune with the arrow keys
+(1 px per press, or 10 px with [[Shift]]). Choose **Layer → Merge Down** to
+join the pair.
 
 ## Build the pocket watch
 
@@ -125,7 +133,7 @@ to join the pair.
 
 On a new **Watch** layer, stack Elliptical Marquee fills:
 
-- The case: a 146 px radius circle in ink, then the brass gradient dragged top-left to bottom-right.
+- The case: a circle about 290 px across, centred between the wings, in ink. [[Cmd]]-drag keeps it round. Then fill it with the brass gradient, dragged from top-left to bottom-right.
 - An inner bezel with the gradient reversed.
 - A cream dial.
 
@@ -145,7 +153,8 @@ A heavier outer line makes each design read from across the room:
 3. Click the empty **Watch Keyline** row and choose **Edit → Fill** with ink.
 
 Set **XII**, **III** and **IX** in **Cinzel Bold** at 30 px. Create each one in
-empty canvas, then move it onto the dial, inside the ticks.
+empty canvas, so the click doesn't land in another text layer, then move it
+onto the dial, just inside the ticks.
 
 ## Draw and rotate the airship
 
@@ -163,16 +172,18 @@ and a soft black gradient on the belly, then merge it down.
 
 To tilt the nose up, marquee the whole airship and switch to **Move**. Drag
 the round handle outside the top-right corner about **7°** clockwise, then
-press [[Cmd+D]]. Grow the keyline from the rotated shape.
+press [[Cmd+D]]. Build the keyline afterwards, growing it from the rotated
+shape, so it follows the new angle.
 
 ## Move a whole group
 
 ![The Dirigible group dragged left as one unit with the Move tool](11-move-group.webp)
 
 The rotation pushed the propeller too close to the right edge. Click the
-**Dirigible** group row and drag on the canvas with **Move**. The art and its
-keyline move together, 36 px left. Groups are the easiest way to keep
-multi-layer pieces aligned.
+**Dirigible** group row and drag on the canvas with **Move**, or tap
+[[Shift+Left]] a few times. The art and its keyline move together, here
+about 36 px to the left. Groups are the easiest way to keep multi-layer
+pieces aligned.
 
 ## Draw the clockwork heart
 
@@ -184,7 +195,7 @@ In a **Clockwork Heart** group, draw from back to front:
 - **The heart:** a heart-shaped lasso in ink, then Shrink 7 and fill `#B8323A`.
 - **A brass porthole:** a dark glass disc with a spoked brass gear and a small copper gear behind the glass.
 - **A wind-up key:** a figure-eight key on the right side.
-- **A riveted seam:** brass rivets inset about 30 px from the edge.
+- **A riveted seam:** small brass rivets spaced around the heart, about 30 px in from its edge.
 
 ## Seat the porthole and finish the rivets
 
@@ -312,24 +323,29 @@ solid black.
 
 ![The full sheet with the grid shown and guides at the centre line and the middle row](22-guides-balance.webp)
 
-Choose **View → Show Grid**. Click the top ruler at x 825 and the left ruler
-at the middle row to drop guides. Compare the gaps between the halos and the
-distance from each halo to the sheet edge. Here, the bulb floated alone while
-the heart crowded the cogs.
+Choose **View → Show Grid**. [[Cmd]]-click the middle of the top ruler to
+drop a guide exactly on the sheet's centre line, and click the left ruler
+level with the middle row of designs. Compare the gaps between the halos and
+the distance from each halo to the sheet edge. Here, the bulb floated alone
+while the heart crowded the cogs.
 
 ## Rebalance the rows
 
 ![The Clockwork Heart group being dragged left across the sheet](23-rebalance-row.webp)
 
-Fix the spacing by moving whole groups:
+Showing the grid also switches on **Snap** in the options bar. Untick it
+before you move anything, or drags and arrow-key nudges jump in whole grid
+cells.
 
-- **Clockwork Heart:** 68 px left.
-- **Top Hat:** 45 px left.
-- **Edison Bulb:** 10 px right.
+Then fix the spacing by moving whole groups, by eye:
+
+- **Clockwork Heart:** well to the left, about 70 px.
+- **Top Hat:** a little left, about 45 px.
+- **Edison Bulb:** a nudge to the right.
 - **Cogs:** scaled up slightly with a [[Cmd]]-corner drag, then their keyline refilled.
 
 Then turn the grid off, choose **Edit → Clear Guides**, and use
 **File → Quick Export PNG**.
 
-> **Tip:** Save a `.lopsy` after every design. Project files reopen
-> pixel-for-pixel, so you can always go back to a stage.
+> **Tip:** Choose **File → Save Project** after every design. Project files
+> reopen exactly as you left them, so you can always go back to a stage.

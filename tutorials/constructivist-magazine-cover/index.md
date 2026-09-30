@@ -2,6 +2,7 @@
 title: Design a Constructivist Magazine Cover in Lopsy
 description: Make a Lissitzky-style magazine cover in Lopsy with a red wedge, a pattern-filled honeycomb disc, a geometric bee, rotated type and a halftone print texture.
 published: 2026-09-26 15:00
+updated: 2026-09-30
 level: Intermediate
 duration: 60
 tags: magazine cover, constructivism, editorial design, pattern fill, halftone, text effects, selections, transforms
@@ -10,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished APIARY magazine cover, with a red wedge carrying cream DRONE type into a black honeycomb disc, a black and ochre bee with red triangle wings, two small bees, a tilted red coverline slab and a huge black UPRISING headline
 finished: finished-drone-uprising.webp
 finishedAlt: The finished APIARY No. 7 magazine cover on cream paper, with a red wedge that pierces a black honeycomb disc and carries the word DRONE, a geometric bee with red wings flying beside it, two small bees under the wedge, a tilted red slab of coverlines, and UPRISING set in huge black condensed capitals across the bottom
+project: constructivist-magazine-cover.lopsy
 ---
 
 El Lissitzky's 1919 poster *Beat the Whites with the Red Wedge* is about as
@@ -30,7 +32,8 @@ The palette:
 
 - Paper `#EAE0C8`
 - Ink black `#17130F`
-- Constructivist red `#C8261B`, with `#8E1A12` for shadowed wings
+- Constructivist red `#C8261B`
+- Shadowed wings `#8E1A12`
 - Honey ochre `#F2B01E`
 
 ## Lay down the paper
@@ -43,16 +46,19 @@ Choose **File → New**, check that **Unit** is **Pixels**, and enter
 **Filter → Add Noise…** with **Mono** and **Amount 6**. The flat cream picks
 up a faint newsprint tooth.
 
-> **Tip:** If you clicked a preset tile first, the Unit may have switched to
-> Inches. 1200 × 1600 *inches* is far too big to create.
+> **Tip:** The US Letter and A4 preset tiles switch **Unit** to **Inches**. If
+> you clicked one first, set Unit back to **Pixels** before you type the
+> size.
 
 ## Set margins with guides and a grid
 
 ![Cream canvas with a 16 px grid, three vertical guides at 60, 600 and 1140 and horizontal guides at 250 and 1250](02-guides-grid.webp)
 
-Click the **top ruler** at x = 60, 600 and 1140 to drop three vertical
-guides, and the **left ruler** at y = 250 and 1250 for two horizontal ones.
-The outer guides are your 60 px margins. The horizontal guides mark the
+Click the **top ruler** about 60 px in from each side, then [[Cmd]]-click
+the middle of it. [[Cmd]] snaps a guide to a layout fraction, so that one
+lands exactly on the centre line. On the **left ruler**, click at about
+`250` and `1250` for two horizontal guides. The outer vertical guides are
+your 60 px margins. The horizontal guides mark the
 bottom of the masthead and the top of the headline. Turn on
 **View → Show Grid**, which also turns on **Snap**, at the default 16 px.
 
@@ -60,18 +66,25 @@ bottom of the masthead and the top of the headline. Turn on
 
 ![An elliptical marquee snapped to the grid, 656 px wide, on the right side of the page](03-hive-disc-marquee.webp)
 
-Rename *Layer 1* to **Hive Disc**. Pick the **Elliptical Marquee** and drag a **656 × 656** circle with its
-top-left corner near **(504, 368)**. With Snap on, the corners lock to the
-grid. Fill it with ink black `#17130F` using **Edit → Fill**, then deselect
-with [[Cmd+D]].
+Rename *Layer 1* to **Hive Disc**. Pick the **Elliptical Marquee** and drag a
+**656 × 656** circle on the right side of the page. Its right edge sits just
+past the right margin guide, and its top a little over 100 px below the
+masthead guide. With Snap on, the corners lock to the grid. Fill it with ink
+black `#17130F` using **Edit → Fill**, then deselect with [[Cmd+D]].
+
+> **Tip:** You'll draw this circle three more times, so it helps to know its
+> exact corners. With nothing selected, a single click (no drag) with the
+> Elliptical Marquee opens a dialog: enter **From** `504`, `368` and **To**
+> `1160`, `1024`.
 
 ## Print a halftone shadow
 
 ![The Halftone dialog with Dot Size 16, Density 1, Angle 45 and Softness 1 over a grey circle behind the black disc](04-halftone-shadow.webp)
 
-Untick **Snap**. Select the Background and click **Add Layer** to put a
-**Disc Halftone** layer under the disc. Draw the same 656 px circle offset
-by about **+44, +44**, fill it with mid grey `#8A8A8A`, deselect, and run
+Untick **Snap** in the options bar. Select the Background and click
+**Add Layer** to put a **Disc Halftone** layer under the disc. Draw the same
+656 px circle about 44 px right of and 44 px below the disc (From `548`,
+`412` to `1204`, `1068`), fill it with mid grey `#8A8A8A`, deselect, and run
 **Filter → Halftone…** with **Dot Size 16**, **Angle 45** and
 **Softness 1**. A flat grey turns into an even grid of round dots.
 
@@ -81,8 +94,9 @@ by about **+44, +44**, fill it with mid grey `#8A8A8A`, deselect, and run
 
 Open the layer's effects (the effects button on its row), enable
 **Color Overlay** and set it to `#C8261B`. Halftone dots spill a little past
-the circle, so draw a circle 8 px smaller over the dots, choose
-**Select → Inverse** and press [[Delete]]. What's left is a crisp crescent of
+the circle, so draw a circle about 8 px narrower on the same centre (From
+`552`, `416` to `1200`, `1064`), choose **Select → Inverse** and press
+[[Delete]]. What's left is a crisp crescent of
 red dots, like a misregistered second ink.
 
 ## Build a honeycomb tile
@@ -95,7 +109,10 @@ hexagon (radius about 46 px) and press [[Delete]] to punch it out. Space the
 cell centres **156 px** apart horizontally and **90 px** vertically, with an
 extra cell in the middle of each block. The punched-out lattice leaves
 honeycomb walls about 10 px thick. Marquee exactly one repeat, **156 × 90**,
-choose **Edit → Define Pattern**, then delete the Tile layer.
+from the centre of one corner cell to the centre of the next corner cell
+diagonally. Clicking once with the Rectangular Marquee and typing the
+corners is the easiest way to get it exact. Choose **Edit → Define Pattern**,
+then delete the Tile layer.
 
 ## Fill the disc with honeycomb
 
@@ -121,9 +138,10 @@ that happens, undo with [[Cmd+Z]].
 
 ![A thin triangular lasso selection from the left edge to a point inside the honeycomb disc](09-red-wedge-lasso.webp)
 
-Add a **Red Wedge** layer above the honeycomb. With the **Lasso**, click
-through three points: **(0, 850)**, **(870, 690)** and **(0, 1250)**. This
-gives a long triangle whose tip stabs into the disc. Fill it with
+Add a **Red Wedge** layer above the honeycomb. With the **Lasso**, press
+on the left edge just over halfway down the page, drag in a straight line to
+just past the centre of the hive disc, then back out to the left edge where
+the lower guide meets it, and release. This gives a long triangle whose tip stabs into the disc. Fill it with
 `#C8261B`, deselect, and give it grit with **Filter → Add Noise…**,
 **Mono**, **Amount 10**.
 
@@ -156,9 +174,8 @@ wings without any outline.
 
 ![The Bee group selected and moved with the Move tool so its legs clear the disc](12-bee-group-move.webp)
 
-Click the **Bee** group row and drag with the **Move** tool. All five layers move together. Nudge the bee up and left until its
-legs clear the disc. Press [[Cmd+Z]] and [[Cmd+Shift+Z]] to compare: the
-group returns exactly to where it was.
+Click the **Bee** group row and drag with the **Move** tool. All five layers
+move together. Nudge the bee up and left until its legs clear the disc.
 
 ## Draw one small bee
 
@@ -174,8 +191,9 @@ drag a **Rectangular Marquee** snugly around it.
 ![Three small bees lined up under the red wedge, heading toward the hive](14-pasted-swarm.webp)
 
 Press [[Cmd+C]] then [[Cmd+V]]. The paste lands in place on a new layer.
-Drag it up and to the right with the Move tool, about **+140, −90**. Repeat
-from the Swarm layer with an offset of **+280, −180**. Then select the top
+Drag it up and to the right with the Move tool, about 140 px right and 90 px
+up, so it follows the wedge. Repeat from the Swarm layer and drag the second
+copy twice as far. Then select the top
 pasted layer and choose **Layer → Merge Down** twice to fold both copies
 back into Swarm.
 
@@ -187,7 +205,7 @@ Choose the **Text** tool and set the font to **Anton** and the size to
 **330** *before* clicking. Then click in empty space below the wedge, type
 **UPRISING** in ink black and press [[Tab]] to commit. Move it so the
 letters run from the left guide to the right guide, with the top of the
-caps at about **y = 1255**.
+caps just below the lower horizontal guide.
 
 ## Rotate DRONE to match the wedge
 
@@ -216,11 +234,12 @@ height. Keep a little red visible above the "NE" and below the "D".
 ![APIARY in big black Russo One capitals, a red issue box on the right, and a thick and a thin black rule underneath](18-masthead-rules.webp)
 
 Set **APIARY** in **Russo One 200**, ink black, and move it to the top-left
-margin (60, 64). On a **Masthead Rules** layer, marquee-fill three shapes:
+corner: on the left margin guide, about 64 px from the top. On a
+**Masthead Rules** layer, marquee-fill three shapes:
 
-- a red issue box, **260 × 140** at (880, 64)
-- a **12 px** black rule across the margins at y = 222
-- a **4 px** rule at y = 242
+- a red issue box, **260 × 140**, with its right edge on the right margin guide and its top level with APIARY's
+- a **12 px** black rule from margin to margin, a little above the masthead guide
+- a **4 px** rule 8 px below it, ending just above the guide
 
 ## Add the issue number and taglines
 
@@ -239,7 +258,8 @@ Align the first to the left margin and the second to the right.
 
 Constructivist covers rarely have just one diagonal. Add a
 **Coverline Bar** layer and lasso a **500 × 150** rectangle tilted
-**−12°**, centred near **(885, 1105)**, so it tucks under the disc. Fill it
+**−12°**, centred a little right of the disc's centre line and just below
+it, so it tucks under the disc. Fill it
 with `#C8261B` and add the same **Mono Amount 10** noise as the wedge.
 
 ## Set and rotate the coverlines
