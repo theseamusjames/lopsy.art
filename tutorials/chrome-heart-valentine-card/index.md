@@ -31,10 +31,10 @@ Along the way you'll use:
 
 The palette:
 
-- black cherry `#14040C` with a magenta glow `#9A1646`
-- rosy chrome from white `#FFFFFF` through pink `#F48AB4` to near-black `#2A0614`
-- electric cyan `#3FE8FF` with a white core
-- blush pink `#FFC7DB` for the small type and `#FF9EC2` for the frame
+- black cherry `#14040C`, magenta glow `#9A1646`
+- rosy chrome `#FFFFFF` → `#F48AB4` → `#2A0614` (white through pink to near-black)
+- electric cyan `#3FE8FF` (with a white core)
+- blush pink `#FFC7DB` (small type), frame pink `#FF9EC2`
 
 ## Make the canvas and a velvet glow
 

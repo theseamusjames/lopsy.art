@@ -179,6 +179,14 @@ describe('buildTutorialSite', () => {
     expect(files.get('tutorials/beta/index.html')).not.toContain(SWATCH_SCRIPT);
   });
 
+  it('warns when an intro palette will not render as swatches', () => {
+    const broken = source('alpha', '');
+    broken.source = broken.source.replace('Intro with <b>markup</b>.', '- Paper `#F2E4C6`\n- Teal `#2F6E69` with dots in `#6FB3A8`');
+    expect(build([broken]).warnings).toContain(
+      'tutorials/alpha: the palette won\'t render as swatches because of "Teal `#2F6E69` with dots in `#6FB3A8`". Write it as named colour groups (see tutorials/README.md).',
+    );
+  });
+
   it('lists tutorials newest first with an ItemList', () => {
     const { files } = build([source('old', 'published: 2025-01-01'), source('new', 'published: 2026-06-01')]);
     const html = files.get('tutorials/index.html') as string;
