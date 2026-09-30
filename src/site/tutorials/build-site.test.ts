@@ -140,6 +140,34 @@ describe('buildTutorialSite', () => {
     expect(html.match(/class="finished-figure"/g)).toHaveLength(1);
   });
 
+  it('publishes the project file and links to it under the finished image', () => {
+    const result = build([source('alpha', 'project: alpha.lopsy', ['alpha.lopsy']), source('beta', '')]);
+    expect(result.errors).toEqual([]);
+    expect(result.files.has('tutorials/alpha/alpha.lopsy')).toBe(true);
+    expect(result.warnings.some((w) => w.includes('alpha.lopsy'))).toBe(false);
+
+    const html = result.files.get('tutorials/alpha/index.html') as string;
+    const box = html.indexOf('<aside class="follow-along">');
+    expect(box).toBeGreaterThan(html.indexOf('class="finished-figure"'));
+    expect(box).toBeLessThan(html.indexOf('class="intro"'));
+    expect(html).toContain('Follow along with this tutorial');
+    expect(html).toContain(
+      '<a class="button" href="/?open=%2Ftutorials%2Falpha%2Falpha.lopsy" target="_blank" rel="noopener">Open Project in Lopsy</a>',
+    );
+
+    const other = result.files.get('tutorials/beta/index.html') as string;
+    expect(other).not.toContain('follow-along');
+  });
+
+  it('fails when the project file is missing or not a .lopsy', () => {
+    expect(build([source('alpha', 'project: alpha.lopsy')]).errors).toEqual([
+      'tutorials/alpha: project "alpha.lopsy" does not exist.',
+    ]);
+    expect(build([source('alpha', 'project: ../beta/beta.lopsy')]).errors).toEqual([
+      'tutorials/alpha: `project` must be the name of a `.lopsy` file next to index.md.',
+    ]);
+  });
+
   it('lists tutorials newest first with an ItemList', () => {
     const { files } = build([source('old', 'published: 2025-01-01'), source('new', 'published: 2026-06-01')]);
     const html = files.get('tutorials/index.html') as string;

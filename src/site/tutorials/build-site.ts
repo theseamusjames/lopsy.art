@@ -54,6 +54,12 @@ function measureImages(
   }
 }
 
+function checkProject(tutorial: Tutorial, source: SourceTutorial, errors: string[]): void {
+  if (tutorial.project && !source.assets.has(tutorial.project)) {
+    errors.push(`tutorials/${tutorial.slug}: project "${tutorial.project}" does not exist.`);
+  }
+}
+
 export function renderSitemap(tutorials: readonly Tutorial[]): string {
   const latest = tutorials.reduce((max, t) => (t.updated > max ? t.updated : max), '');
   const entries = [
@@ -92,6 +98,7 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
       if (!knownSlugs.has(slug)) errors.push(`tutorials/${tutorial.slug}: related tutorial "${slug}" does not exist.`);
     }
     measureImages(tutorial, source, sizes, errors);
+    checkProject(tutorial, source, errors);
   }
 
   const files = new Map<string, string | Uint8Array>();
@@ -108,6 +115,7 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
     const related = pickRelated(tutorial, tutorials, RELATED_LIMIT);
     files.set(`tutorials/${tutorial.slug}/index.html`, renderTutorialPage(ctx, tutorial, related));
     const used = new Set(referencedImages(tutorial));
+    if (tutorial.project) used.add(tutorial.project);
     for (const file of used) {
       const bytes = source.assets.get(file);
       if (bytes) files.set(`tutorials/${tutorial.slug}/${file}`, bytes);

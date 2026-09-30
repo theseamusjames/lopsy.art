@@ -41,6 +41,11 @@ coverAlt:
 finished:
 finishedAlt:
 
+# Optional. A .lopsy file next to index.md (File → Save Project). The page gets
+# a "Follow along" box under the finished image with a button that opens it in
+# the editor. Name it after the folder: <your-slug>.lopsy.
+project:
+
 # Drafts appear in `npm run dev` but are left out of production builds.
 draft: true
 ---

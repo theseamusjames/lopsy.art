@@ -2,6 +2,12 @@ export const SITE_ORIGIN = 'https://lopsy.art';
 export const SITE_NAME = 'Lopsy';
 export const TUTORIALS_PATH = '/tutorials/';
 
+/**
+ * Query parameter the editor reads on startup to open a `.lopsy` file from a
+ * URL. Must match OPEN_PROJECT_PARAM in src/io/project-url.ts.
+ */
+export const OPEN_PROJECT_PARAM = 'open';
+
 /** Query flag that index.html's first-visit phone redirect lands with. */
 export const WELCOME_PARAM = 'welcome';
 
@@ -29,4 +35,9 @@ export function tutorialPath(slug: string): string {
 
 export function tutorialAssetPath(slug: string, file: string): string {
   return `${tutorialPath(slug)}${file}`;
+}
+
+/** Editor URL that opens the project at `projectPath` as soon as the app loads. */
+export function openProjectHref(projectPath: string): string {
+  return `/?${OPEN_PROJECT_PARAM}=${encodeURIComponent(projectPath)}`;
 }

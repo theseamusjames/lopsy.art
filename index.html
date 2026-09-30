@@ -22,10 +22,13 @@
       The editor isn't usable on a phone, so a phone's first visit goes to the
       tutorials instead. Inline so it runs before the app bundle downloads.
       `?welcome` must match WELCOME_PARAM in src/site/tutorials/site-config.ts.
+      A link that opens a project (`?open=`, OPEN_PROJECT_PARAM in the same
+      file) asked for the editor, so it isn't redirected.
     -->
     <script>
       (function () {
         if (location.pathname !== '/') return;
+        if (new URLSearchParams(location.search).has('open')) return;
         var isPhone = matchMedia('(pointer: coarse)').matches
           && Math.min(screen.width, screen.height) < 768;
         if (!isPhone) return;

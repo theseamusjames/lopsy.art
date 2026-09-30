@@ -410,6 +410,34 @@ kbd {
   margin: 28px 0 0;
 }
 
+.follow-along {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin: 20px 0 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+}
+
+.follow-along p {
+  margin: 0;
+}
+
+.follow-along-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.follow-along-text {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--text-muted);
+}
+
 .intro {
   margin-top: 28px;
 }

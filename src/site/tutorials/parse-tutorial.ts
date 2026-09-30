@@ -16,6 +16,7 @@ export interface ParseResult {
 const LEVELS: readonly TutorialLevel[] = ['Beginner', 'Intermediate', 'Advanced'];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const PUBLISHED = /^(\d{4}-\d{2}-\d{2})(?:[ T]([01]\d|2[0-3]):([0-5]\d))?$/;
+const PROJECT_FILE = /^[^/\\]+\.lopsy$/i;
 const IMAGE_LINE = /^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/;
 export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -73,6 +74,7 @@ function readFrontmatter(
   const coverAlt = fields.get('coverAlt') ?? '';
   const finishedSrc = fields.get('finished') ?? '';
   const finishedAlt = fields.get('finishedAlt') ?? '';
+  const project = fields.get('project') ?? '';
 
   if (!title) errors.push('Missing `title`.');
   if (title.length > TITLE_MAX) {
@@ -100,6 +102,9 @@ function readFrontmatter(
 
   if (coverSrc && !coverAlt) errors.push('`cover` needs a `coverAlt` description.');
   if (finishedSrc && !finishedAlt) errors.push('`finished` needs a `finishedAlt` description.');
+  if (project && !PROJECT_FILE.test(project)) {
+    errors.push('`project` must be the name of a `.lopsy` file next to index.md.');
+  }
 
   const tags = splitList(fields.get('tags')).map((tag) => tag.toLowerCase());
   if (tags.length === 0) warnings.push('No `tags`; related tutorials are matched by tag.');
@@ -116,6 +121,7 @@ function readFrontmatter(
     related: splitList(fields.get('related')),
     cover: coverSrc ? { src: coverSrc, alt: coverAlt } : null,
     finished: finishedSrc ? { src: finishedSrc, alt: finishedAlt } : null,
+    project: project || null,
     isDraft: fields.get('draft') === 'true',
   };
 }

@@ -15,6 +15,10 @@ the pages.
    "look at the finished result" step: the finished image is shown under the
    title automatically (the last step's image, or `finished` if set).
 3. Drop the screenshots next to `index.md` and reference them by file name.
+   If you saved the finished piece as a project, put the `.lopsy` file there
+   too (named `<slug>.lopsy`) and set `project` in the frontmatter. The page
+   then shows a "Follow along" box under the finished image with a button that
+   opens the project in the editor.
 4. Run `npm run dev` and open <http://localhost:5173/tutorials/>. Pages
    reload as you save, and drafts are shown.
 5. Remove `draft: true` when it's ready. `npm run build` fails on content
@@ -55,7 +59,8 @@ Only this Markdown subset is supported. Anything else renders as plain text.
   time (`published: 2026-09-25 18:40`) when several tutorials share a date;
   without one, same-day tutorials fall back to alphabetical order.
 - `/tutorials/<slug>/`: one page per tutorial with breadcrumbs, the finished
-  image right under the title and date, the steps,
+  image right under the title and date, the "Follow along" box when it has a
+  `project`, the steps,
   a call to action, and up to three related tutorials (the ones listed in
   `related` first, then the ones sharing the most tags).
 - `/sitemap.xml`: every tutorial with its `updated` date.
@@ -63,6 +68,11 @@ Only this Markdown subset is supported. Anything else renders as plain text.
 Every page gets a canonical URL, Open Graph and Twitter card tags, and
 schema.org JSON-LD (`HowTo` with one `HowToStep` per step, `BreadcrumbList`,
 and `CollectionPage`/`ItemList` on the list page).
+
+The "Open Project in Lopsy" button links to `/?open=<project URL>`. On
+startup the editor fetches whatever `.lopsy` URL the `open` parameter names
+and opens it (`src/io/project-url.ts`). The parameter is deliberately
+undocumented in the app itself, with no menu item or dialog.
 
 The generator lives in `src/site/tutorials/`, the page styles in
 `src/site/tutorials/tutorials.css`, and the Vite glue in

@@ -44,6 +44,7 @@ import { useDocumentOpenHandlers } from './hooks/useDocumentOpenHandlers';
 import { useDraggablePanel } from './hooks/useDraggablePanel';
 import { useDockedPanelAnchor } from './hooks/useDockedPanelAnchor';
 import { useReleaseToolbarButtonFocus } from './toolbar-button-focus';
+import { openProjectFromQuery } from '../io/project-url';
 import styles from './App.module.css';
 
 // Isolated component for canvas rendering — prevents renderVersion and
@@ -85,6 +86,9 @@ export function App() {
       createDocument(1080, 1080, false);
     }
   }, [documentReady, createDocument]);
+  useEffect(() => {
+    void openProjectFromQuery();
+  }, []);
   useEffect(() => {
     const isPWA = window.matchMedia('(display-mode: standalone)').matches;
     if (!isPWA) return;
@@ -218,6 +222,7 @@ export function App() {
           onPasteClipboard={handlePreDocPasteClipboard}
         />
         {loadingMessage && <LoadingOverlay message={loadingMessage} />}
+        <Toasts />
       </div>
     );
   }
