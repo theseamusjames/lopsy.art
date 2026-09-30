@@ -33,8 +33,17 @@ test.describe('Fibers Filter', () => {
     await fitToView(page);
     await page.waitForTimeout(300);
 
-    const beforeLeft = await getPixelAt(page, 100, 150);
-    const beforeRight = await getPixelAt(page, 300, 150);
+    // Fibers is seeded randomly, so any single pixel can land within a few
+    // levels of the original grey. Judge each half by a row of samples.
+    const leftXs = [20, 50, 80, 110, 140, 170];
+    const rightXs = [230, 260, 290, 320, 350, 380];
+    const sampleRow = async (xs: number[]) => {
+      const row = [];
+      for (const x of xs) row.push(await getPixelAt(page, x, 150));
+      return row;
+    };
+    const beforeLeft = await sampleRow(leftXs);
+    const beforeRight = await sampleRow(rightXs);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'fibers-before.png') });
 
@@ -43,23 +52,22 @@ test.describe('Fibers Filter', () => {
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'fibers-after.png') });
 
-    const afterLeft = await getPixelAt(page, 100, 150);
-    const afterRight = await getPixelAt(page, 300, 150);
+    const afterLeft = await sampleRow(leftXs);
+    const afterRight = await sampleRow(rightXs);
 
-    const leftDiff = Math.abs(afterLeft.r - beforeLeft.r)
-      + Math.abs(afterLeft.g - beforeLeft.g)
-      + Math.abs(afterLeft.b - beforeLeft.b);
-    expect(leftDiff).toBeGreaterThan(10);
-
-    const rightDiff = Math.abs(afterRight.r - beforeRight.r)
-      + Math.abs(afterRight.g - beforeRight.g)
-      + Math.abs(afterRight.b - beforeRight.b);
-    expect(rightDiff).toBeGreaterThan(10);
+    const changedCount = (before: typeof afterLeft, after: typeof afterLeft) =>
+      after.filter((px, i) => {
+        const b = before[i]!;
+        return Math.abs(px.r - b.r) + Math.abs(px.g - b.g) + Math.abs(px.b - b.b) > 10;
+      }).length;
+    expect(changedCount(beforeLeft, afterLeft)).toBeGreaterThanOrEqual(4);
+    expect(changedCount(beforeRight, afterRight)).toBeGreaterThanOrEqual(4);
 
     // Fibers should be grayscale — R ≈ G ≈ B for any sampled pixel
-    expect(Math.abs(afterLeft.r - afterLeft.g)).toBeLessThan(5);
-    expect(Math.abs(afterLeft.g - afterLeft.b)).toBeLessThan(5);
-    expect(Math.abs(afterRight.r - afterRight.g)).toBeLessThan(5);
+    for (const px of [...afterLeft, ...afterRight]) {
+      expect(Math.abs(px.r - px.g)).toBeLessThan(5);
+      expect(Math.abs(px.g - px.b)).toBeLessThan(5);
+    }
 
     // Sample multiple pixels along a horizontal line — fibers create
     // vertical streaks so brightness should vary across x.
