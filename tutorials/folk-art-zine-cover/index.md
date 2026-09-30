@@ -32,9 +32,15 @@ Along the way you'll use:
 - groups, layer effects and Google fonts
 - **Copy Merged** and the **Halftone** filter
 
-The palette has six colours: red `#B3261E`, fir green `#1E4D2B`, ochre
-`#D4A017`, cream `#F4EAD2`, ink `#2A1E17` and paper `#EFE3C8`. The sky is a
-slate blue, `#6E8FB0`.
+The palette has six colours, plus a slate blue for the sky:
+
+- Red `#B3261E`
+- Fir green `#1E4D2B`
+- Ochre `#D4A017`
+- Cream `#F4EAD2`
+- Ink `#2A1E17`
+- Paper `#EFE3C8`
+- Sky `#6E8FB0`
 
 ## Make the paper
 

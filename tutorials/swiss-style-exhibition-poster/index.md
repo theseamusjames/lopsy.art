@@ -25,8 +25,12 @@ glowing probe. You'll work with a grid and guides, elliptical marquees, a
 feathered selection turned into halftone dots, shape-tool rings, copy and
 paste, a rotation transform and a grain overlay.
 
-The palette is: paper `#EDEBE4`, ink `#111111`, four blues (`#A3B5FF`,
-`#5470FF`, `#1F2FD6`, `#0A0F3C`) and one signal red `#FF3D1F`.
+The palette:
+
+- Paper `#EDEBE4`
+- Ink `#111111`
+- Four blues `#A3B5FF` → `#5470FF` → `#1F2FD6` → `#0A0F3C`
+- Signal red `#FF3D1F`
 
 ## Set up the canvas, grid and guides
 

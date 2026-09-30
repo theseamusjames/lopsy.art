@@ -24,7 +24,11 @@ because its iris is a clock stuck at 3 AM. You'll draw everything with
 selections and the brush, build a gear by rotating pasted copies, and finish
 with misregistered type and halftone print texture.
 
-The palette is: cream `#ECE2C6`, red `#C62828` and ink black `#171514`.
+The palette:
+
+- Cream `#ECE2C6`
+- Red `#C62828`
+- Ink black `#171514`
 
 ## Create the zine canvas
 

@@ -38,13 +38,14 @@ very small circles perfectly round.
 
 The palette:
 
-- Sheet: verdigris `#1F3B35`
+- Verdigris sheet: `#1F3B35`
 - Ink: `#15110E`
 - Ivory: `#EFE4C8`
 - Brass: `#F0CF78` → `#C8952F` → `#8A5A1C`
 - Copper: `#E08A55` → `#B4532A` → `#6E2A12`
 - Teal: `#3F9A86`
-- Reds: oxblood `#7C1D23` and heart red `#B8323A`
+- Oxblood: `#7C1D23`
+- Heart red: `#B8323A`
 
 ## Start a 1650 × 2200 sheet
 

@@ -32,11 +32,11 @@ Along the way you'll use:
 
 The palette:
 
-- Cobalt `#2340C8` and cream `#FFF1D6` for the background
-- Tomato `#E8412C`, orange `#FF7A1A` and bubblegum `#FF8FB8` for the sunburst
-- Mint `#5ED3A0` and teal `#19C9A0` as accents
-- Yolk `#FFB81C` and gold `#FFC21A`
-- Ink navy `#1A1030` for every outline and hard shadow
+- Background `#2340C8` / `#FFF1D6` (cobalt and cream)
+- Sunburst `#E8412C` / `#FF7A1A` / `#FF8FB8` (tomato, orange and bubblegum)
+- Accents `#5ED3A0` / `#19C9A0` (mint and teal)
+- Yolk `#FFB81C`, gold `#FFC21A`
+- Ink navy `#1A1030` (every outline and hard shadow)
 
 ## Create the zine document
 

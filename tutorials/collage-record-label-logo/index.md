@@ -26,9 +26,9 @@ marquees and the Shape tool. Nothing is imported.
 The palette is kraft paper and five "papers":
 
 - Kraft `#D9C6A2`, cream paper `#EFE6D0`, torn-edge cream `#F2EAD8`
-- Teal `#2F6E69` with halftone dots in `#6FB3A8`
+- Teal `#2F6E69`, halftone dots `#6FB3A8`
 - Vinyl black `#1C1A18`, copper label `#C0652F`
-- The lark: rust `#C9743A`, wing brown `#7A3A1E`, tail `#5B2C17`, breast `#F1E3C4`, beak `#E2A93B`
+- Lark rust `#C9743A`, wing brown `#7A3A1E`, tail `#5B2C17`, breast `#F1E3C4`, beak `#E2A93B`
 
 Fonts: **Abril Fatface** for the wordmark and **Special Elite** for the
 typewriter details.

@@ -30,7 +30,7 @@ The palette:
 - Jungle greens: `#061A13`, `#0B3727`, `#11513A`, `#17603F`, `#2A8452` and `#4FAA5E`
 - Paper `#F6EAD2`, terracotta rule `#C8553D`
 - Cacao brown `#3B1A0E`, mango `#F2A531`, coral `#C24A26`, leaf-green type `#2A8452`
-- Hibiscus `#FF5A5F` fading to crimson `#A0103A`, cacao pods `#FFC04A` → `#7E2610`
+- Hibiscus to crimson `#FF5A5F` → `#A0103A`, cacao pods `#FFC04A` → `#7E2610`
 
 ## Paint the jungle backdrop
 

@@ -31,7 +31,8 @@ marquees on exact pixel values, so every bar is honest.
 The palette:
 
 - Ink: `#1C1526`
-- Honey: `#F2A516`, with darker bars in `#9C6B1C`
+- Honey: `#F2A516`
+- Darker bars: `#9C6B1C`
 - Cream: `#FFF1C9`
 
 The chart data, as annual loss in %:

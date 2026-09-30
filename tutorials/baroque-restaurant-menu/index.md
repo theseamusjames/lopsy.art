@@ -35,7 +35,7 @@ an imaginary candle-lit osteria. It has:
 The palette:
 
 - near-black oxblood ground `#140B09`
-- a gold ramp: `#7A5418`, `#D9B25F` and `#F3DE9C`
+- gold ramp `#7A5418` → `#D9B25F` → `#F3DE9C`
 - crimson `#4A0F1C` and `#8A2033`
 - quince yellow `#C99A2E`
 - elderberry purple `#2A0A34`

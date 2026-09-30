@@ -31,7 +31,8 @@ The palette:
 
 - Paper `#E9DDC3`, plate cream `#F2E7CB`, ink `#2B2118`
 - Sea `#4F8591` → `#3A6B78` → `#1F404A`, waterlines `#CFE0DC`
-- Land `#EFE2C0` stepping down to `#AD8E59`, contour ink `#6E5234`
+- Land `#EFE2C0` → `#AD8E59` (in flat steps)
+- Contour ink `#6E5234`
 - Ribbon red `#AE3A2E` / `#9A2E26`, route red `#B8322A`
 
 Every face is **IM Fell English SC**, a revival of 17th-century type that

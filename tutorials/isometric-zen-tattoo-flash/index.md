@@ -29,7 +29,7 @@ The palette:
 - Paper `#F2E6CB`, ink `#1C1A24`, grid `#7FB3AA`
 - Vermilion `#EE6A4B` / `#D8452B` / `#8C2717` (top / left / right faces)
 - Teal roofs `#4FA3A0` / `#2F7F7C` / `#174446`
-- Grass `#B4D98F` → `#8DBF6A` on top, sides `#5E9A4B` / `#3F6E3A`
+- Grass top `#B4D98F` → `#8DBF6A`, grass sides `#5E9A4B` / `#3F6E3A`
 - Earth `#B97A48` / `#80502F`, rock `#6E655E` / `#4A433F`
 - Stone `#DDD8CC` / `#ABA597` / `#7E786C`
 

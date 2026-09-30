@@ -31,8 +31,14 @@ Along the way you'll use:
 - Google fonts, including right-aligned area text
 - the **Spray** tool and a noise overlay
 
-The palette is grip-tape charcoal `#1C1C1F`, cream `#F4EBD3`, orange
-`#FF5A1F`, teal `#1FB5A6`, mustard `#FFC93C` and pink `#FF4F8B`.
+The palette:
+
+- Grip-tape charcoal `#1C1C1F`
+- Cream `#F4EBD3`
+- Orange `#FF5A1F`
+- Teal `#1FB5A6`
+- Mustard `#FFC93C`
+- Pink `#FF4F8B`
 
 ## Make a grip-tape background
 

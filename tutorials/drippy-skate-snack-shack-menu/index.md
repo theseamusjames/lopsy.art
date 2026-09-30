@@ -32,8 +32,14 @@ snack shack at the skatepark. Along the way you'll use:
 - **Stroke**, **Drop Shadow**, **Outer Glow** and **Color Overlay** effects
 - the **Spray** tool, a **Gradient** clipped by the **Magic Wand**, and a layer group
 
-The palette is grip black `#171717`, mango `#FFB321`, checker orange
-`#FFA51F`, hot pink `#FF2E88`, teal `#1FD6C1` and cream `#FFF6E6`.
+The palette:
+
+- Grip black `#171717`
+- Mango `#FFB321`
+- Checker orange `#FFA51F`
+- Hot pink `#FF2E88`
+- Teal `#1FD6C1`
+- Cream `#FFF6E6`
 
 > **Tip:** Hard offset shadows, with **Blur** at 0, are what make this look read
 > as skate rather than generic neon. Use them on every "sticker".

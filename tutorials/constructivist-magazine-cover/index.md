@@ -32,7 +32,8 @@ The palette:
 
 - Paper `#EAE0C8`
 - Ink black `#17130F`
-- Constructivist red `#C8261B`, with `#8E1A12` for shadowed wings
+- Constructivist red `#C8261B`
+- Shadowed wings `#8E1A12`
 - Honey ochre `#F2B01E`
 
 ## Lay down the paper

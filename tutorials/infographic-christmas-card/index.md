@@ -30,10 +30,10 @@ In this tutorial you'll make **Ornament Geometry**, a 1500 × 2100 px card
 
 The palette:
 
-- Paper: pine `#10352A`, grid cream `#F3E9D2` and sage `#6F8F80`
-- Bars: a ten-step ramp from `#8CC08A` down to `#1F6B48`
-- Ornaments: red `#E0452B`, gold `#F2B233`, ice `#BFE3EE` / `#7FB9CE`
-- Type: cream `#F3E9D2`, sage `#9FC7B0`, gold `#F2B233`
+- Pine paper `#10352A`, grid cream `#F3E9D2`, grid sage `#6F8F80`
+- Bars `#8CC08A` → `#1F6B48` (a ten-step ramp)
+- Ornament red `#E0452B`, ornament gold `#F2B233`, ice `#BFE3EE` / `#7FB9CE`
+- Type cream `#F3E9D2`, type sage `#9FC7B0`, type gold `#F2B233`
 
 The whole layout runs on a **100 px = 10 cm** scale, and the trunk stands on
 the card's vertical centre line. Because the chart has to be honest, this is

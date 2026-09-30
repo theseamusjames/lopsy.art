@@ -28,7 +28,7 @@ The palette:
 
 - Brick wall `#452738`, mortar `#0B070D`, background `#140E18`
 - Hot pink `#FF2D95`, amber `#FF9A1F`, cyan `#16D9FF`, violet `#A64DFF`
-- Tube cores: pale tints such as `#FFD3EE` and `#FFE2B0`, so the Inner Glow can color the edges
+- Tube cores `#FFD3EE` / `#FFE2B0` (pale tints, so the Inner Glow can color the edges)
 
 ## Draw a brick tile
 

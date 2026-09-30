@@ -31,7 +31,7 @@ The palette:
 
 - Paper `#EDE5D1`, white planes `#F4EEDF`, ink `#141414`
 - Red `#D1291F`, yellow `#F2C230`, blue `#1F4E9A`
-- Two steel greys for the dagger: `#C9C4B8` and `#8E8B84`
+- Dagger steel `#C9C4B8` / `#8E8B84`
 
 Fonts: **Space Mono** Bold (labels) and **Archivo Black** (credits). The
 title is drawn, not typed.

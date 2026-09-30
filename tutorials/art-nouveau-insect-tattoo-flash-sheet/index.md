@@ -34,7 +34,10 @@ The palette:
 
 - Paper `#E4CFA0`, ink `#1A1410`, frame teal `#16403E`
 - Gold ramp `#F6DC8E` → `#C99A3B` → `#7A5418`
-- Enamels: teal `#0E6A66` → `#34AE9E` → violet `#7450B4`, jade `#1E5B3A` / `#8CCB8A`, amethyst `#D9B8F2` → `#7A4BB0` → `#2A1446`, amber `#7A3E0C` / `#F0B545`
+- Teal-to-violet enamel `#0E6A66` → `#34AE9E` → `#7450B4`
+- Jade enamel `#1E5B3A` / `#8CCB8A`
+- Amethyst enamel `#D9B8F2` → `#7A4BB0` → `#2A1446`
+- Amber enamel `#7A3E0C` / `#F0B545`
 
 ## Start a 1350 × 1800 sheet
 

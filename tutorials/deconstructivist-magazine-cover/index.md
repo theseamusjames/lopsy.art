@@ -31,7 +31,7 @@ crosses a plane. The document is 1400 × 1820 px.
 
 The palette:
 
-- Concrete `#C9C5BC`, with formwork seams in `#6F6B64`
+- Concrete `#C9C5BC`, formwork seams `#6F6B64`
 - Ink `#141414`
 - Ultramarine `#2A2FD8`
 - Acid lime `#D3F53A`

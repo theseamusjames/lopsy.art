@@ -32,8 +32,8 @@ The palette:
 
 - Sky: `#0E2446` → `#6B2F6A` → `#E8605A` → `#FFC75E`
 - Sea: `#F08A6A` → `#8A4A78` → `#27405E` → `#0A1F33`
-- Silhouettes: plum `#2A1433`, hut `#3B1B40`, lamp gold `#FFC46B`
-- Trade dress: cream `#F4E6C8`, ink `#24102E`, red `#C8323A`
+- Plum silhouettes `#2A1433`, hut `#3B1B40`, lamp gold `#FFC46B`
+- Trade-dress cream `#F4E6C8`, ink `#24102E`, red `#C8323A`
 
 ## Set up the canvas and paint the sky
 

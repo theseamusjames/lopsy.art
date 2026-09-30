@@ -28,7 +28,7 @@ The palette:
 
 - Paper `#F1E6D0`, ink `#1B1714`
 - Chili red `#D62718`, deep sauce red `#A80F12`, habanero `#F28A1E`
-- Jalapeño green `#2E6B3A`, plus `#3E7D2A` and olive `#8C8A1A` for the heat scale
+- Jalapeño green `#2E6B3A`, heat scale `#3E7D2A` / `#8C8A1A` (green and olive)
 - Sunburst peach `#F4CF9C`, halftone red `#E0301A`
 
 One rule keeps it coherent: every display element gets the **same hard

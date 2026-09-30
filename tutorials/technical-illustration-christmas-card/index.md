@@ -38,7 +38,7 @@ The palette is small:
 
 - paper `#EFE6D0`
 - ink `#2A1C12`
-- gingerbread `#B9773F` (lit face) and `#9A5C2C` (shaded face)
+- gingerbread `#B9773F` / `#9A5C2C` (lit and shaded faces)
 - icing `#FBF8F1`
 - candy red `#B8322C`
 - blueprint teal `#3E86A6` → `#1D4A63`

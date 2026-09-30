@@ -26,10 +26,10 @@ the title nudged sideways.
 
 The palette:
 
-- Night: `#07050F`, silhouette `#0C0818`
-- Neon: cyan `#05D9E8`, magenta `#FF2A6D`, toxic yellow `#F9F002`
-- Sun gradient: `#F9F002` → `#FF2A6D` → `#6A0DAD`
-- Split: cyan `#00F0FF`, magenta `#FF2BD6`, sign yellow `#FFE14D`
+- Night `#07050F`, silhouette `#0C0818`
+- Neon cyan `#05D9E8`, neon magenta `#FF2A6D`, toxic yellow `#F9F002`
+- Sun gradient `#F9F002` → `#FF2A6D` → `#6A0DAD`
+- Split cyan `#00F0FF`, split magenta `#FF2BD6`, sign yellow `#FFE14D`
 
 ## Set up the canvas and guides
 

@@ -30,7 +30,8 @@ The palette uses three inks:
 
 - Photocopy paper `#D7D3C7`
 - Toner black `#141312`
-- Safety orange `#FF5A14` (stamp red-orange `#FF4A00`)
+- Safety orange `#FF5A14`
+- Stamp red-orange `#FF4A00`
 
 ## Make the photocopy paper
 

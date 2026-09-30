@@ -23,8 +23,12 @@ draw everything from lasso and marquee selections, rotate artwork and type with
 the transform handles, fake a hard offset shadow, and finish with halftone dots
 and paper grain.
 
-The palette is: cream `#F1E4C8`, kraft `#E2CCA4`, red `#C8102E` and black
-`#1A1A1A`.
+The palette:
+
+- Cream `#F1E4C8`
+- Kraft `#E2CCA4`
+- Red `#C8102E`
+- Black `#1A1A1A`
 
 ## Create a portrait poster canvas
 
