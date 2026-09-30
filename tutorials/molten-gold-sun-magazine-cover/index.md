@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editor showing the finished HELIOS magazine cover with a melting liquid-gold sun above the gold headline YELLOW DWARF
 finished: yellow-dwarf-finished.webp
 finishedAlt: Finished HELIOS magazine cover, a swirling liquid-gold sun dripping molten drops onto the chrome headline YELLOW DWARF on a deep indigo sunburst background
+project: molten-gold-sun-magazine-cover.lopsy
 ---
 
 This tutorial builds an editorial cover for a fictional science monthly, *HELIOS*. The cover story is "Yellow Dwarf", about our Sun, told in a **liquid-metal** style. Everything is made in Lopsy with no photos:

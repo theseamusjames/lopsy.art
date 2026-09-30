@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Valentine's card, a rosy chrome heart pierced by a glowing cyan lightning bolt on a black-cherry sunburst, with the script headline You're Electric under it
 finished: finished-electric-valentine.webp
 finishedAlt: The finished Valentine's Day card. A glossy pink chrome heart with a dark curved horizon reflection and white window glints sits on a black-cherry background with soft magenta sunburst rays. A cyan lightning bolt enters through the left edge of a thin double pink frame, passes behind the heart and bursts out of its lower right with glowing cracks and a white star flare. BE MY VALENTINE is set in tracked capitals at the top, the chrome script You're Electric sits below the heart, and XOXO between two small lightning bolts sits at the bottom.
+project: chrome-heart-valentine-card.lopsy
 ---
 
 Chrome lettering and chrome hearts are all over Valentine's merch right now. The Y2K "liquid metal" look is back.

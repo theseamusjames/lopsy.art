@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished LOCKED / OPEN poster, with two brass lock cutaways, numbered balloons, two round face views and a parts list on cream graph paper
 finished: finished-locked-open-poster.webp
 finishedAlt: The finished poster on cream graph paper inside a double black border. The title reads LOCKED / OPEN in tall black condensed letters with an orange slash, over a tracked subtitle, Anatomy of the Pin-Tumbler Cylinder. Fig. 1 shows a hatched brass lock cylinder in section with no key. Five pin stacks of steel driver pins and brass key pins hang in their chambers under white springs, and an orange dashed shear line cuts through the driver pins. Fig. 2 shows the same cylinder with a silver key inserted. Its cuts lift every pin so the gaps line up on the shear line. Numbered balloons 1 to 8 point at the parts. At the bottom are two round face views, one with the keyway upright and one turned 30 degrees with an arrow, then a parts list with number, part, quantity and material columns and a three-cell title block.
+project: pin-tumbler-lock-cutaway-poster.lopsy
 ---
 
 Old shop manuals explained machines with **cutaways**. The part is sliced down the middle, the cut metal is hatched, and every piece gets a numbered balloon. It's a great format for a poster. Here you'll draw one of the best mechanisms to explain that way: the **pin-tumbler lock**, shown locked and then open.

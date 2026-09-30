@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished MERRY & BRIGHT glitch card at fit-to-screen zoom, with a black reindeer leaping across a pixelated full moon, a trail of red and cyan ghost frames, and the Layers panel open on the Moon layer
 finished: finished-advent-zoetrope.webp
 finishedAlt: The finished glitch-art Christmas card. A black reindeer with a glowing red nose leaps across a big pixelated cream full moon on a navy-to-violet night sky full of square pixel snowflakes. Behind it a trail of four smaller red-and-cyan ghost frames arcs down to the lower left, each one more corrupted than the last, ending in blocky pixels. MERRY & BRIGHT in heavy cream capitals with red and cyan channel offsets and two horizontal datamosh slices fills the top left, with a pixel star on the right. Pixel pine trees cross the horizon above a black ground with LOADING JOY... 24/24, a 24-cell progress bar whose last cell is red, and SEASON'S GREETINGS & A GLITCH-FREE 2027 in a terminal font.
+project: glitch-art-christmas-card.lopsy
 ---
 
 This card treats Christmas like a corrupted GIF. A reindeer leaps across the
