@@ -47,7 +47,7 @@ async function drag(page: Page, x0: number, y0: number, x1: number, y1: number):
 
 async function cmdClickThumbnail(page: Page, layerId: string): Promise<void> {
   const thumbnail = page.locator(`[data-layer-id="${layerId}"] div[class*="thumbnail"]`).first();
-  await thumbnail.click({ modifiers: ['Control'] });
+  await thumbnail.click({ modifiers: ['ControlOrMeta'] });
   await page.waitForTimeout(300);
 }
 
