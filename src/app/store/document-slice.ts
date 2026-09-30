@@ -4,7 +4,7 @@ import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
 import { createDefaultNode, createDefaultAdjustments } from '../../filters/adjustment-node-utils';
 import { createImageData } from '../../engine/color-space';
-import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil, buildFlatDisplayList, findParentGroup, removeFromParentGroup } from '../../layers/group-utils';
+import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil, buildFlatDisplayList, findParentGroup, isAncestorOf, removeFromParentGroup } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
@@ -1019,8 +1019,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   groupSelectedLayers: () => {
     const s = get();
     const doc = s.document;
-    const idsToGroup = doc.selectedLayerIds.filter(
+    const selectedIds = doc.selectedLayerIds.filter(
       (id) => id !== doc.rootGroupId,
+    );
+    // A Shift-range over an expanded group also selects its children. They
+    // move with their selected ancestor as one subtree instead of being
+    // pulled out of it (#1030).
+    const idsToGroup = selectedIds.filter(
+      (id) => !selectedIds.some((other) => other !== id && isAncestorOf(doc.layers, other, id)),
     );
     // A single selected layer is wrapped like any other selection (#952);
     // only an empty selection falls back to a bare new group.
@@ -1058,6 +1064,10 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     // count of non-selected entries strictly below it in the original
     // layerOrder.
     const toGroupSet = new Set(idsBottomToTop);
+    for (const id of idsBottomToTop) {
+      for (const d of getDescendantIdsUtil(doc.layers, id)) toGroupSet.add(d);
+    }
+    const movedBlock = doc.layerOrder.filter((id) => toGroupSet.has(id));
     const filteredOrder = doc.layerOrder.filter((id) => !toGroupSet.has(id));
     const topmostIdx = doc.layerOrder.indexOf(topmostId);
     const insertAt = doc.layerOrder
@@ -1066,7 +1076,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       .length;
     const newOrder = [
       ...filteredOrder.slice(0, insertAt),
-      ...idsBottomToTop,
+      ...movedBlock,
       group.id,
       ...filteredOrder.slice(insertAt),
     ];
