@@ -165,8 +165,10 @@ test('#1019: a scale drag past the canvas grows the float a few times and frees 
   const inside = await docToScreen(page, 1024, 1024);
   await page.mouse.click(inside.x, inside.y);
   await page.waitForTimeout(300);
-  const squarePixels = (await opaqueExtent(page, layerId)).count;
-  expect(squarePixels).toBeGreaterThan(1024 * 1024 * 0.98);
+  // Measured, not assumed: at this zoom one screen pixel is ~6 document
+  // pixels, and Firefox truncates pointer coordinates to whole screen pixels.
+  const square = await opaqueExtent(page, layerId);
+  expect(square.count).toBeGreaterThan(1024 * 1024 * 0.98);
 
   await page.keyboard.press('v');
   await page.waitForTimeout(300);
@@ -207,14 +209,16 @@ test('#1019: a scale drag past the canvas grows the float a few times and frees 
     return Array.from(w.__layerRects);
   });
 
-  const scaleX = await page.evaluate(() => {
+  const { scaleX, scaleY } = await page.evaluate(() => {
     const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { transform: { scaleX: number } | null };
+      getState: () => { transform: { scaleX: number; scaleY: number } | null };
     };
-    return ui.getState().transform?.scaleX ?? 0;
+    const t = ui.getState().transform;
+    return { scaleX: t?.scaleX ?? 0, scaleY: t?.scaleY ?? 0 };
   });
   // The corner followed the pointer 890 doc px out: 1024 → 1914.
   expect(scaleX).toBeGreaterThan(1.8);
+  expect(scaleY).toBeGreaterThan(1.8);
 
   await page.keyboard.press('Enter');
   await page.keyboard.press('Control+d');
@@ -237,18 +241,20 @@ test('#1019: a scale drag past the canvas grows the float a few times and frees 
   expect(afterDrag.mb - before.mb).toBeLessThan(300);
   expect(afterCommit.mb - before.mb).toBeLessThan(300);
 
-  // Nothing was cropped: the committed square spans 512..2426 on both axes,
-  // including the 378 px past the canvas edge.
+  // Nothing was cropped: the committed square keeps its top-left corner
+  // (~512) and spans ~1914 px on both axes, including the part past the
+  // canvas edge.
   const extent = await opaqueExtent(page, layerId);
-  const side = 1024 * scaleX;
-  expect(extent.minX).toBeGreaterThanOrEqual(510);
-  expect(extent.minX).toBeLessThanOrEqual(514);
-  expect(extent.minY).toBeGreaterThanOrEqual(510);
-  expect(extent.minY).toBeLessThanOrEqual(514);
-  expect(extent.maxX).toBeGreaterThan(512 + side - 4);
-  expect(extent.maxX).toBeLessThan(512 + side + 2);
-  expect(extent.maxY).toBeGreaterThan(512 + side - 4);
-  expect(extent.maxY).toBeLessThan(512 + side + 2);
-  expect(extent.count).toBeGreaterThan(side * side * 0.97);
-  expect(extent.count).toBeLessThan(side * side * 1.03);
+  const sideX = (square.maxX - square.minX + 1) * scaleX;
+  const sideY = (square.maxY - square.minY + 1) * scaleY;
+  expect(Math.abs(extent.minX - square.minX)).toBeLessThanOrEqual(2);
+  expect(Math.abs(extent.minY - square.minY)).toBeLessThanOrEqual(2);
+  expect(extent.maxX).toBeGreaterThan(square.minX + sideX - 4);
+  expect(extent.maxX).toBeLessThan(square.minX + sideX + 2);
+  expect(extent.maxY).toBeGreaterThan(square.minY + sideY - 4);
+  expect(extent.maxY).toBeLessThan(square.minY + sideY + 2);
+  expect(extent.maxX).toBeGreaterThan(2048);
+  expect(extent.maxY).toBeGreaterThan(2048);
+  expect(extent.count).toBeGreaterThan(sideX * sideY * 0.97);
+  expect(extent.count).toBeLessThan(sideX * sideY * 1.03);
 });

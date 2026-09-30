@@ -100,6 +100,38 @@ async function drag(page: Page, from: [number, number], to: [number, number]): P
   await page.waitForTimeout(100);
 }
 
+/**
+ * Drag between whole screen pixels and return the document-space offset the
+ * drag applies. Firefox truncates pointer coordinates to whole CSS pixels
+ * while Chromium keeps the fraction, and at a fit-to-window zoom below 1 each
+ * lost fraction is several document pixels — so expected positions must come
+ * from the pixels the pointer actually travelled, not the requested doc points.
+ */
+async function dragWholePixels(
+  page: Page,
+  from: [number, number],
+  to: [number, number],
+): Promise<{ dx: number; dy: number }> {
+  const zoom = await page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { viewport: { zoom: number } };
+    };
+    return store.getState().viewport.zoom;
+  });
+  const a = await docToScreen(page, from[0], from[1]);
+  const b = await docToScreen(page, to[0], to[1]);
+  const ax = Math.round(a.x);
+  const ay = Math.round(a.y);
+  const bx = Math.round(b.x);
+  const by = Math.round(b.y);
+  await page.mouse.move(ax, ay);
+  await page.mouse.down();
+  await page.mouse.move(bx, by, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(100);
+  return { dx: Math.round((bx - ax) / zoom), dy: Math.round((by - ay) / zoom) };
+}
+
 test.describe('Move grab reads back strips, not the layer (#1021)', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -124,9 +156,11 @@ test.describe('Move grab reads back strips, not the layer (#1021)', () => {
     await selectTool(page, 'move');
     await installReadPixelsCounter(page);
 
-    await drag(page, [800, 600], [830, 620]);
-    await drag(page, [800, 600], [760, 640]);
-    await drag(page, [800, 600], [810, 560]);
+    const offsets = [
+      await dragWholePixels(page, [800, 600], [830, 620]),
+      await dragWholePixels(page, [800, 600], [760, 640]),
+      await dragWholePixels(page, [800, 600], [810, 560]),
+    ];
     await page.screenshot({ path: 'e2e/screenshots/move-grab-full-canvas.png' });
 
     const reads = await pointerDownReadPx(page);
@@ -136,14 +170,19 @@ test.describe('Move grab reads back strips, not the layer (#1021)', () => {
       expect(px).toBeLessThanOrEqual(DOC_W + DOC_H);
     }
 
-    // The layer moved by the summed drag deltas: (+30,+20) + (-40,+40) + (+10,-40).
+    // The layer moved by the summed drag deltas: about (+30,+20) + (-40,+40)
+    // + (+10,-40), give or take a screen pixel per drag.
+    const dx = offsets.reduce((sum, o) => sum + o.dx, 0);
+    const dy = offsets.reduce((sum, o) => sum + o.dy, 0);
+    expect(Math.abs(dx)).toBeLessThanOrEqual(8);
+    expect(Math.abs(dy - 20)).toBeLessThanOrEqual(8);
     const moved = await activeLayer(page);
     expect({ x: moved.x, y: moved.y, width: moved.width, height: moved.height })
-      .toEqual({ x: filled.x + 0, y: filled.y + 20, width: filled.width, height: filled.height });
+      .toEqual({ x: filled.x + dx, y: filled.y + dy, width: filled.width, height: filled.height });
 
-    // Pixels moved with it: the fill's top edge now sits at doc y = 20.
-    expect(await compositedAt(page, 100, 10)).not.toMatchObject({ r: 40, g: 120, b: 200 });
-    expect(await compositedAt(page, 100, 40)).toMatchObject({ r: 40, g: 120, b: 200 });
+    // Pixels moved with it: the fill's top edge now sits at doc y = dy.
+    expect(await compositedAt(page, 100, dy - 10)).not.toMatchObject({ r: 40, g: 120, b: 200 });
+    expect(await compositedAt(page, 100, dy + 20)).toMatchObject({ r: 40, g: 120, b: 200 });
 
     await undo(page);
     await undo(page);
