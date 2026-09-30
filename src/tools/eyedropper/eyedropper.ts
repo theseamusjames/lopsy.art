@@ -21,8 +21,8 @@ export function sampleColor(
   y: number,
   sampleSize: 'point' | '3x3' | '5x5',
 ): Color {
-  const px = Math.round(x);
-  const py = Math.round(y);
+  const px = Math.floor(x);
+  const py = Math.floor(y);
 
   if (sampleSize === 'point') {
     if (px < 0 || px >= surface.width || py < 0 || py >= surface.height) {

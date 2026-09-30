@@ -1,5 +1,5 @@
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
-import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
+import { DEFAULT_TRANSFORM_FIELDS, seedPixel } from '../../app/interactions/interaction-types';
 import type { Point } from '../../types';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -32,7 +32,8 @@ export function handleEyedropperDown(ctx: InteractionContext): InteractionState 
 
   // Sample the down-click synchronously; the user expects the color to
   // update instantly on click even before the next frame.
-  sampleAndApply(canvasPos.x, canvasPos.y);
+  const pixel = seedPixel(ctx);
+  sampleAndApply(pixel.x, pixel.y);
 
   return {
     drawing: true,

@@ -139,7 +139,10 @@ budget.
 The `selection.ts` feather pass is also in this category but it isn't
 listed above because the GPU helper (`featherSelectionMask` in
 `wasm-bridge.ts`) already exists — see #442 for the migration to delete
-the CPU box-blur and route every caller through the bridge.
+the CPU box-blur and route every caller through the bridge. Its Grow /
+Shrink passes allocate a distance-transform grid over the selection's
+bounds (#1038); selection masks are CPU-side by design (see the table
+below), so this is not layer pixel data.
 
 ---
 

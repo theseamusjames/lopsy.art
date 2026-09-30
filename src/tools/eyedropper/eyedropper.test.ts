@@ -44,6 +44,20 @@ describe('sampleColor', () => {
     expect(result.g).toBe(128);
   });
 
+  it('maps a point in the right/bottom half of a pixel to that pixel (#1036)', () => {
+    const white: Color = { r: 255, g: 255, b: 255, a: 1 };
+    const black: Color = { r: 0, g: 0, b: 0, a: 1 };
+    const surface: PixelSurface = {
+      width: 10,
+      height: 10,
+      getPixel: (x: number, y: number): Color => (x === 4 && y === 4 ? white : black),
+      setPixel(): void {},
+    };
+    expect(sampleColor(surface, 4.8, 4.8, 'point')).toEqual(white);
+    expect(sampleColor(surface, 4.1, 4.1, 'point')).toEqual(white);
+    expect(sampleColor(surface, 5.0, 4.5, 'point')).toEqual(black);
+  });
+
   it('out-of-bounds point returns transparent', () => {
     const surface = createMockSurface(10, 10, { r: 255, g: 255, b: 255, a: 1 });
     expect(sampleColor(surface, -1, -1, 'point')).toEqual({ r: 0, g: 0, b: 0, a: 0 });

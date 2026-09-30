@@ -1,4 +1,5 @@
 import type { InteractionContext } from '../../app/interactions/interaction-types';
+import { seedPixel } from '../../app/interactions/interaction-types';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
@@ -23,7 +24,7 @@ import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
 /** Down handler for the bucket fill tool. Flood-fills from the click point,
  *  intersected with any active selection, and uploads to the GPU. */
 export function handleFillDown(ctx: InteractionContext): void {
-  const { layerPos, canvasPos, activeLayerId } = ctx;
+  const { activeLayerId } = ctx;
   const editorState = useEditorStore.getState();
   const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
 
@@ -36,8 +37,7 @@ export function handleFillDown(ctx: InteractionContext): void {
     const engine = getEngine();
     if (!engine) return;
 
-    const startX = Math.round(canvasPos.x);
-    const startY = Math.round(canvasPos.y);
+    const { x: startX, y: startY } = seedPixel(ctx);
 
     wasmFillQuickMask(engine, startX, startY, tolerance, contiguous, 0);
     editorState.notifyRender();
@@ -60,8 +60,7 @@ export function handleFillDown(ctx: InteractionContext): void {
     uploadLayerMaskIfChanged(engine, activeLayerId, maskLayer.mask.data, maskLayer.mask.width, maskLayer.mask.height);
 
     // Document space: the engine maps it onto the mask's own origin.
-    const startX = Math.round(canvasPos.x);
-    const startY = Math.round(canvasPos.y);
+    const { x: startX, y: startY } = seedPixel(ctx);
 
     // mode 1 = fill black (hide), matching brush behavior
     wasmFillMask(engine, activeLayerId, startX, startY, tolerance, contiguous, 1);
@@ -82,9 +81,7 @@ export function handleFillDown(ctx: InteractionContext): void {
   if (!engine) return;
 
   const { width: docW, height: docH } = editorState.document;
-  const layer = editorState.document.layers.find((l) => l.id === activeLayerId);
-  const canvasX = Math.round(layerPos.x + (layer?.x ?? 0));
-  const canvasY = Math.round(layerPos.y + (layer?.y ?? 0));
+  const { x: canvasX, y: canvasY } = seedPixel(ctx);
 
   // #811 — a click outside the canvas is a no-op, like Photoshop. Skip
   // the empty-layer fast path (which would flood the whole layer) and

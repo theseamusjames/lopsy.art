@@ -1,4 +1,5 @@
 import type { Rect } from '../types';
+import { squaredDistanceTransform, DISTANCE_INFINITY } from './distance-transform';
 
 interface SelectionMask {
   mask: Uint8ClampedArray | null;
@@ -133,85 +134,120 @@ export function isEmptySelection(mask: Uint8ClampedArray): boolean {
   return true;
 }
 
+/** A mask value at or above this counts as inside the selection edge. */
+const EDGE_THRESHOLD = 128;
+
+interface Region {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Squared distance from every cell of `region` (document space, may extend
+ * past the document) to the nearest cell whose inside-ness equals
+ * `targetInside`. Cells outside the document count as outside the selection.
+ */
+function regionDistances(
+  mask: Uint8ClampedArray,
+  docWidth: number,
+  docHeight: number,
+  region: Region,
+  targetInside: boolean,
+): Float32Array {
+  const grid = new Float32Array(region.width * region.height);
+  for (let ry = 0; ry < region.height; ry++) {
+    const y = region.y + ry;
+    for (let rx = 0; rx < region.width; rx++) {
+      const x = region.x + rx;
+      const isOnDoc = x >= 0 && x < docWidth && y >= 0 && y < docHeight;
+      const isInside = isOnDoc && (mask[y * docWidth + x] ?? 0) >= EDGE_THRESHOLD;
+      grid[ry * region.width + rx] = isInside === targetInside ? 0 : DISTANCE_INFINITY;
+    }
+  }
+  squaredDistanceTransform(grid, region.width, region.height);
+  return grid;
+}
+
+/**
+ * Coverage of a pixel whose centre sits `signedDistance` px inside an edge
+ * (negative = outside); a centre exactly on the edge is 50% covered.
+ */
+function edgeCoverage(signedDistance: number): number {
+  return Math.min(1, Math.max(0, signedDistance + 0.5));
+}
+
+/**
+ * Expand the selection by `amount` px, measured with a Euclidean distance
+ * transform from the 50% coverage edge so curves stay round (#1038).
+ */
 export function growSelection(
   mask: Uint8ClampedArray,
   width: number,
   height: number,
   amount: number,
 ): Uint8ClampedArray {
-  if (amount <= 0) return new Uint8ClampedArray(mask);
+  const bounds = amount > 0 ? selectionBounds(mask, width, height) : null;
+  if (!bounds) return new Uint8ClampedArray(mask);
+
+  const pad = Math.ceil(amount) + 1;
+  const x0 = Math.max(0, bounds.x - pad);
+  const y0 = Math.max(0, bounds.y - pad);
+  const x1 = Math.min(width, bounds.x + bounds.width + pad);
+  const y1 = Math.min(height, bounds.y + bounds.height + pad);
+  const region = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  const dist = regionDistances(mask, width, height, region, true);
+
   const result = new Uint8ClampedArray(mask);
-  const amountSq = amount * amount;
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (mask[y * width + x]! > 0) {
-        const isBorder =
-          x === 0 || x === width - 1 || y === 0 || y === height - 1 ||
-          mask[y * width + x - 1] === 0 ||
-          mask[y * width + x + 1] === 0 ||
-          mask[(y - 1) * width + x] === 0 ||
-          mask[(y + 1) * width + x] === 0;
-        if (!isBorder) continue;
-
-        const x0 = Math.max(0, x - amount);
-        const x1 = Math.min(width - 1, x + amount);
-        const y0 = Math.max(0, y - amount);
-        const y1 = Math.min(height - 1, y + amount);
-        for (let cy = y0; cy <= y1; cy++) {
-          for (let cx = x0; cx <= x1; cx++) {
-            const dx = cx - x;
-            const dy = cy - y;
-            if (dx * dx + dy * dy <= amountSq) {
-              result[cy * width + cx] = 255;
-            }
-          }
-        }
-      }
+  for (let ry = 0; ry < region.height; ry++) {
+    for (let rx = 0; rx < region.width; rx++) {
+      const idx = (region.y + ry) * width + region.x + rx;
+      const d = Math.sqrt(dist[ry * region.width + rx]!);
+      if (d === 0) continue;
+      // The old edge lies half-way to the nearest inside centre.
+      const coverage = Math.round(edgeCoverage(amount - (d - 0.5)) * 255);
+      if (coverage > result[idx]!) result[idx] = coverage;
     }
   }
-
   return result;
 }
 
+/**
+ * Contract the selection by `amount` px, measured with a Euclidean distance
+ * transform from the 50% coverage edge so curves stay round (#1038). The
+ * document edge counts as a selection edge.
+ */
 export function shrinkSelection(
   mask: Uint8ClampedArray,
   width: number,
   height: number,
   amount: number,
 ): Uint8ClampedArray {
-  if (amount <= 0) return new Uint8ClampedArray(mask);
-  const result = new Uint8ClampedArray(mask);
-  const amountSq = amount * amount;
+  const bounds = amount > 0 ? selectionBounds(mask, width, height) : null;
+  if (!bounds) return new Uint8ClampedArray(mask);
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (mask[y * width + x]! > 0) {
-        const isBorder =
-          x === 0 || x === width - 1 || y === 0 || y === height - 1 ||
-          mask[y * width + x - 1] === 0 ||
-          mask[y * width + x + 1] === 0 ||
-          mask[(y - 1) * width + x] === 0 ||
-          mask[(y + 1) * width + x] === 0;
-        if (!isBorder) continue;
+  const region = {
+    x: bounds.x - 1,
+    y: bounds.y - 1,
+    width: bounds.width + 2,
+    height: bounds.height + 2,
+  };
+  const dist = regionDistances(mask, width, height, region, false);
 
-        const x0 = Math.max(0, x - amount);
-        const x1 = Math.min(width - 1, x + amount);
-        const y0 = Math.max(0, y - amount);
-        const y1 = Math.min(height - 1, y + amount);
-        for (let cy = y0; cy <= y1; cy++) {
-          for (let cx = x0; cx <= x1; cx++) {
-            const dx = cx - x;
-            const dy = cy - y;
-            if (dx * dx + dy * dy <= amountSq) {
-              result[cy * width + cx] = 0;
-            }
-          }
-        }
-      }
+  const result = new Uint8ClampedArray(mask.length);
+  for (let ry = 1; ry < region.height - 1; ry++) {
+    for (let rx = 1; rx < region.width - 1; rx++) {
+      const x = region.x + rx;
+      const y = region.y + ry;
+      if (x < 0 || x >= width || y < 0 || y >= height) continue;
+      const idx = y * width + x;
+      const d = Math.sqrt(dist[ry * region.width + rx]!);
+      if (d === 0) continue;
+      const coverage = Math.round(edgeCoverage(d - 0.5 - amount) * 255);
+      result[idx] = Math.min(mask[idx]!, coverage);
     }
   }
-
   return result;
 }
 
