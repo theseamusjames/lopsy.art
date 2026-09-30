@@ -46,11 +46,11 @@ function renderFollowAlong(tutorial: Tutorial): string {
   if (!tutorial.project) return '';
   const projectUrl = tutorialAssetPath(tutorial.slug, tutorial.project);
   return `<aside class="follow-along">
-  <div>
+  <a class="button" href="${escapeHtml(openProjectHref(projectUrl))}" target="_blank" rel="noopener">Open Project in ${SITE_NAME}</a>
+  <div class="follow-along-message">
     <p class="follow-along-title">Follow along with this tutorial</p>
     <p class="follow-along-text">Open the finished project to see how every layer, group and effect is set up.</p>
   </div>
-  <a class="button" href="${escapeHtml(openProjectHref(projectUrl))}" target="_blank" rel="noopener">Open Project in ${SITE_NAME}</a>
 </aside>`;
 }
 
