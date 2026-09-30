@@ -84,7 +84,7 @@ export function renderPaletteGroup(group: PaletteGroup, renderInline: (markdown:
   const note = group.note ? `<span class="palette-note">${renderInline(group.note)}</span>` : '';
   return `<li class="palette-group" style="--colors: ${group.colors.length}">
 <span class="palette-label">${renderInline(group.label)}</span>
-<div class="${colorClass}">${group.colors.map(renderPaletteSwatch).join('')}</div>${note}
+<div class="palette-body"><div class="${colorClass}">${group.colors.map(renderPaletteSwatch).join('')}</div>${note}</div>
 </li>`;
 }
 
