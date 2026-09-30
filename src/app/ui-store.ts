@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { RulerUnit } from './rendering/ruler-units';
 import type { Color, Point, Rect, ToolId } from '../types';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
+import type { MarqueeShape } from '../tools/marquee/marquee-region';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import type { MeshWarpGrid } from '../filters/mesh-warp';
@@ -64,6 +65,12 @@ export interface ShapeSizeClick {
   layerY: number;
 }
 
+/** Where a plain marquee click (no drag, nothing selected) landed. */
+export interface MarqueeRegionClick {
+  shape: MarqueeShape;
+  point: Point;
+}
+
 export interface TiltShiftSession {
   focusPosition: number;
   focusWidth: number;
@@ -113,6 +120,7 @@ export interface LiquifySession {
 export type ModalState =
   | { kind: 'newDocument' }
   | { kind: 'shapeSize'; click: ShapeSizeClick }
+  | { kind: 'marqueeRegion'; click: MarqueeRegionClick }
   | { kind: 'strokePath'; pathId: string }
   | { kind: 'guideColor' }
   | { kind: 'brush' }

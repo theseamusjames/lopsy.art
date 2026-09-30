@@ -56,6 +56,7 @@ vi.mock('../../app/editor-store', () => ({
 
 const uiState = {
   setTransform: vi.fn(),
+  openModal: vi.fn(),
   showGrid: false,
   snapToGrid: false,
   gridSize: 10,
@@ -74,7 +75,7 @@ vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
 }));
 
-import { marqueeStrategy } from './marquee-strategy';
+import { marqueeStrategy, confirmMarqueeRegion } from './marquee-strategy';
 import { getMarqueePreview, setMarqueePreview } from './marquee-preview';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from '../../app/interactions/interaction-types';
@@ -135,6 +136,7 @@ beforeEach(() => {
   editorState.setSelection.mockClear();
   editorState.clearSelection.mockClear();
   uiState.setTransform.mockClear();
+  uiState.openModal.mockClear();
   editorState.document = { width: DOC_W, height: DOC_H, layers: [] };
   editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
   uiState.showGrid = false;
@@ -302,10 +304,40 @@ describe('marquee onMove — moving an existing selection', () => {
 });
 
 describe('marquee onUp', () => {
-  it('treats a sub-2px gesture as a click and clears the selection', () => {
+  it('treats a sub-2px gesture as a click and clears an active selection', () => {
+    editorState.selection = {
+      active: true,
+      mask: null,
+      bounds: { x: 50, y: 50, width: 1, height: 1 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
     marqueeStrategy.onUp!(makeState({ startPoint: { x: 10, y: 10 } }), { x: 11, y: 11 }, makeUpCtx(11, 11));
     expect(editorState.clearSelection).toHaveBeenCalledTimes(1);
     expect(uiState.setTransform).toHaveBeenCalledWith(null);
+    expect(uiState.openModal).not.toHaveBeenCalled();
+  });
+
+  it('opens the region modal on a click with nothing selected', () => {
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 10, y: 12 } }), { x: 11, y: 12 }, makeUpCtx(11, 12));
+    expect(uiState.openModal).toHaveBeenCalledWith({
+      kind: 'marqueeRegion',
+      click: { shape: 'rect', point: { x: 10, y: 12 } },
+    });
+    expect(editorState.clearSelection).not.toHaveBeenCalled();
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('opens the region modal in ellipse mode for the elliptical marquee', () => {
+    marqueeStrategy.onUp!(
+      makeState({ tool: 'marquee-ellipse', startPoint: { x: 10, y: 10 } }),
+      { x: 10, y: 10 },
+      makeUpCtx(10, 10),
+    );
+    expect(uiState.openModal).toHaveBeenCalledWith({
+      kind: 'marqueeRegion',
+      click: { shape: 'ellipse', point: { x: 10, y: 10 } },
+    });
   });
 
   it('builds and commits the previewed rect after a real drag', () => {
@@ -376,6 +408,45 @@ describe('marquee onUp', () => {
     });
     marqueeStrategy.onUp!(state, { x: 50, y: 50 }, makeUpCtx(50, 50));
     expect(editorState.clearSelection).not.toHaveBeenCalled();
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+});
+
+describe('confirmMarqueeRegion', () => {
+  function committed(): { rect: { x: number; y: number; width: number; height: number }; mask: Uint8ClampedArray } {
+    const [rect, mask] = editorState.setSelection.mock.calls[0]! as [
+      { x: number; y: number; width: number; height: number },
+      Uint8ClampedArray,
+    ];
+    return { rect, mask };
+  }
+
+  it('commits a rect selection from typed corners, To exclusive', () => {
+    confirmMarqueeRegion('rect', { x: 10, y: 20 }, { x: 40, y: 30 });
+    const { rect, mask } = committed();
+    expect(rect).toEqual({ x: 10, y: 20, width: 30, height: 10 });
+    expect(mask[20 * DOC_W + 10]).toBe(255);
+    expect(mask[29 * DOC_W + 39]).toBe(255);
+    expect(mask[30 * DOC_W + 39]).toBe(0);
+    expect(mask[29 * DOC_W + 40]).toBe(0);
+    expect(uiState.setTransform).toHaveBeenCalledTimes(1);
+  });
+
+  it('commits an ellipse selection whose corners stay unselected', () => {
+    confirmMarqueeRegion('ellipse', { x: 20, y: 20 }, { x: 60, y: 60 });
+    const { rect, mask } = committed();
+    expect(rect).toEqual({ x: 20, y: 20, width: 40, height: 40 });
+    expect(mask[40 * DOC_W + 40]).toBe(255);
+    expect(mask[20 * DOC_W + 20]).toBe(0);
+  });
+
+  it('accepts corners typed in reverse order', () => {
+    confirmMarqueeRegion('rect', { x: 40, y: 30 }, { x: 10, y: 20 });
+    expect(committed().rect).toEqual({ x: 10, y: 20, width: 30, height: 10 });
+  });
+
+  it('does nothing for a zero-area region', () => {
+    confirmMarqueeRegion('rect', { x: 10, y: 10 }, { x: 10, y: 50 });
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 });

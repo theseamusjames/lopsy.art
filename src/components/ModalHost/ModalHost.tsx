@@ -6,8 +6,12 @@ import { pasteOrOpenBlob } from '../../app/paste-or-open';
 import { importPsdFile } from '../../io/psd';
 import { describeError, notifyError } from '../../app/notifications-store';
 import { confirmShapeSize } from '../../tools/shape/shape-interaction';
+import { confirmMarqueeRegion } from '../../tools/marquee/marquee-strategy';
+import { defaultMarqueeCorners } from '../../tools/marquee/marquee-region';
+import type { Point } from '../../types';
 import { NewDocumentModal } from '../NewDocumentModal/NewDocumentModal';
 import { ShapeSizeModal } from '../ShapeSizeModal/ShapeSizeModal';
+import { MarqueeRegionModal } from '../MarqueeRegionModal/MarqueeRegionModal';
 import { BrushModal } from '../BrushModal/BrushModal';
 import { StrokePathModal } from '../StrokePathModal/StrokePathModal';
 import { Button } from '../Button/Button';
@@ -29,10 +33,15 @@ export function ModalHost() {
 
   // ESC closes any modal that has a cancel path. BrushModal and
   // StrokePathModal own their own ESC handling today; we only handle the
-  // two that didn't before (NewDocument and ShapeSize) to avoid double-firing.
+  // ones that didn't before to avoid double-firing.
   useEffect(() => {
     if (!modal) return;
-    if (modal.kind !== 'newDocument' && modal.kind !== 'shapeSize' && modal.kind !== 'adjustmentLayerInfo') return;
+    if (
+      modal.kind !== 'newDocument' &&
+      modal.kind !== 'shapeSize' &&
+      modal.kind !== 'marqueeRegion' &&
+      modal.kind !== 'adjustmentLayerInfo'
+    ) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeModal();
     };
@@ -84,6 +93,15 @@ export function ModalHost() {
     [modal, closeModal],
   );
 
+  const handleMarqueeRegionConfirm = useCallback(
+    (from: Point, to: Point) => {
+      if (modal?.kind !== 'marqueeRegion') return;
+      confirmMarqueeRegion(modal.click.shape, from, to);
+      closeModal();
+    },
+    [modal, closeModal],
+  );
+
   if (!modal) return null;
 
   switch (modal.kind) {
@@ -98,6 +116,19 @@ export function ModalHost() {
       );
     case 'shapeSize':
       return <ShapeSizeModal onConfirm={handleShapeSizeConfirm} onCancel={closeModal} />;
+    case 'marqueeRegion': {
+      const { width, height } = useEditorStore.getState().document;
+      const corners = defaultMarqueeCorners(modal.click.point, width, height);
+      return (
+        <MarqueeRegionModal
+          shape={modal.click.shape}
+          initialFrom={corners.from}
+          initialTo={corners.to}
+          onConfirm={handleMarqueeRegionConfirm}
+          onCancel={closeModal}
+        />
+      );
+    }
     case 'brush':
       return <BrushModal />;
     case 'strokePath':

@@ -17,6 +17,7 @@ import {
   commitFeatheredSelection,
 } from '../../app/interactions/selection-handlers';
 import { getMarqueePreview, setMarqueePreview } from './marquee-preview';
+import { regionFromCorners, type MarqueeShape } from './marquee-region';
 
 export const marqueeStrategy: SelectionToolStrategy = {
   onDown(ctx: InteractionContext, tool: SelectionToolId): InteractionState | undefined {
@@ -168,6 +169,15 @@ export const marqueeStrategy: SelectionToolStrategy = {
     const dy = Math.abs(upPos.y - state.startPoint.y);
 
     if ((dx < 2 && dy < 2) || !preview || preview.kind === 'move') {
+      // A bare click with nothing selected asks for exact corners instead —
+      // there's nothing to deselect, so the click would otherwise be a no-op.
+      if (!editorState.selection.active && dx < 2 && dy < 2) {
+        useUIStore.getState().openModal({
+          kind: 'marqueeRegion',
+          click: { shape: state.tool === 'marquee-ellipse' ? 'ellipse' : 'rect', point: state.startPoint },
+        });
+        return;
+      }
       editorState.clearSelection();
       useUIStore.getState().setTransform(null);
       return;
@@ -180,3 +190,18 @@ export const marqueeStrategy: SelectionToolStrategy = {
     commitFeatheredSelection(selRect, mask, docW, docH);
   },
 };
+
+/**
+ * Commit a selection whose corners were typed into the Marquee Region modal
+ * (the user clicked instead of dragged). Feather applies exactly as it does
+ * to a dragged marquee.
+ */
+export function confirmMarqueeRegion(shape: MarqueeShape, from: Point, to: Point): void {
+  const rect = regionFromCorners(from, to);
+  if (!rect) return;
+  const { width: docW, height: docH } = useEditorStore.getState().document;
+  const mask = shape === 'ellipse'
+    ? createEllipseSelection(rect, docW, docH)
+    : createRectSelection(rect, docW, docH);
+  commitFeatheredSelection(rect, mask, docW, docH);
+}
