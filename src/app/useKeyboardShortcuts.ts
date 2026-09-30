@@ -6,6 +6,7 @@ import { strokeCurrentPath } from './useCanvasInteraction';
 import { getEngine } from '../engine-wasm/engine-state';
 import { clearSelectedPixels, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
+import { isUnmovedPrefloat, commitUnmovedPrefloat } from './interactions/prefloat';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
 import { isNativeArrowKeyTarget } from './shortcuts/native-control-keys';
@@ -413,7 +414,11 @@ function handleDeleteKey(): void {
 
     // Commit any active transform/move float and rebuild the selection
     // mask from actual pixel alpha before clearing.
-    if (hasFloat(engine)) {
+    // A ⌘-click prefloat that hasn't moved already matches the selection;
+    // rebuilding from the active layer's alpha would clear all of it (#1055).
+    if (isUnmovedPrefloat(sel.mask)) {
+      commitUnmovedPrefloat();
+    } else if (hasFloat(engine)) {
       selectLayerAlpha(activeId);
     }
 

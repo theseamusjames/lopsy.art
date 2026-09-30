@@ -4,6 +4,7 @@ import {
   compositeFloat,
   setSelectionMask,
   hasFloat,
+  dropFloat,
   snapshotLayerGpu,
   releaseGpuSnapshot,
 } from '../../engine-wasm/wasm-bridge';
@@ -79,6 +80,31 @@ function executePrefloat(layerId: string, mask: Uint8ClampedArray, bounds: Rect)
   useEditorStore.getState().notifyRender();
 
   prefloat = { layerId, mask, bounds, snapshot };
+}
+
+/**
+ * Whether the live float is a prefloat nothing has moved yet: it still
+ * holds the pixels exactly where they were, for the selection `mask`.
+ */
+export function isUnmovedPrefloat(mask: Uint8ClampedArray | null): boolean {
+  if (!prefloat || prefloat.mask !== mask) return false;
+  const engine = getEngine();
+  return engine !== null && hasFloat(engine);
+}
+
+/**
+ * Put an unmoved prefloat's pixels back and forget it. The float was
+ * composited at its original position, so dropping it changes no pixels.
+ */
+export function commitUnmovedPrefloat(): void {
+  if (!prefloat) return;
+  const { layerId } = prefloat;
+  const engine = getEngine();
+  releasePrefloat();
+  if (!engine || !hasFloat(engine)) return;
+  dropFloat(engine);
+  reconcileLayerBoundsWithEngine(engine, layerId);
+  clearJsPixelData(layerId);
 }
 
 export function consumePrefloat(layerId: string, currentMask: Uint8ClampedArray | null): PrefloatState | null {
