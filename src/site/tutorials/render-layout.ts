@@ -82,7 +82,7 @@ export function renderTutorialCard(ctx: RenderContext, tutorial: Tutorial, headi
   const href = escapeHtml(`${TUTORIALS_PATH}${tutorial.slug}/`);
   const heading = `h${headingLevel}`;
   return `<article class="card">
-  <div class="card-image">${renderImage(ctx, tutorial.slug, coverImage(tutorial), { sizes: '(min-width: 720px) 360px, 100vw' })}</div>
+  <div class="card-image">${renderImage(ctx, tutorial.slug, coverImage(tutorial), { sizes: '(min-width: 1160px) 540px, (min-width: 721px) 50vw, 100vw' })}</div>
   <div class="card-body">
     <${heading} class="card-title"><a href="${href}">${escapeHtml(tutorial.title)}</a></${heading}>
     <p class="card-description">${escapeHtml(tutorial.description)}</p>

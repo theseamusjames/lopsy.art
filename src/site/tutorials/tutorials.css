@@ -299,8 +299,14 @@ kbd {
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
+}
+
+@media (max-width: 720px) {
+  .card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .card {
@@ -357,6 +363,10 @@ kbd {
   margin: 0;
   font-size: 15px;
   color: var(--text-muted);
+}
+
+.card .meta {
+  justify-content: flex-end;
 }
 
 .empty {
