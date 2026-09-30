@@ -10,6 +10,14 @@ test.describe('Mobile canvas @chromium', () => {
     viewport: { width: 390, height: 844 },
   });
 
+  // A phone's first visit redirects to the tutorials (see mobile-welcome.spec.ts);
+  // these tests are about a returning visitor who has already seen that.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('lopsy:mobile-welcome-shown', '1');
+    });
+  });
+
   test('canvas container is visible on mobile', async ({ page }) => {
     const hasTouch = await page.evaluate(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0);
     test.skip(!hasTouch, 'requires mobile-chrome project with touch emulation');

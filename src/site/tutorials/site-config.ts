@@ -2,6 +2,9 @@ export const SITE_ORIGIN = 'https://lopsy.art';
 export const SITE_NAME = 'Lopsy';
 export const TUTORIALS_PATH = '/tutorials/';
 
+/** Query flag that index.html's first-visit phone redirect lands with. */
+export const WELCOME_PARAM = 'welcome';
+
 export const INDEX_TITLE = 'Lopsy Tutorials — Free Photo Editing & Digital Art Guides';
 export const INDEX_HEADING = 'Tutorials';
 export const INDEX_DESCRIPTION =

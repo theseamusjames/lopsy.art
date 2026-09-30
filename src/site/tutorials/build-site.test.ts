@@ -158,6 +158,14 @@ describe('buildTutorialSite', () => {
     expect(html).not.toContain('20:30');
   });
 
+  it('carries the mobile welcome dialog on the index only', () => {
+    const { files } = build([source('alpha', '')]);
+    const index = files.get('tutorials/index.html') as string;
+    expect(index).toContain('<dialog class="welcome"');
+    expect(index).toContain("searchParams.has('welcome')");
+    expect(files.get('tutorials/alpha/index.html')).not.toContain('<dialog');
+  });
+
   it('renders an empty state when nothing is published', () => {
     const html = build([]).files.get('tutorials/index.html') as string;
     expect(html).toContain('class="empty"');
