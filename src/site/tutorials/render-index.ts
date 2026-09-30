@@ -14,10 +14,38 @@ import {
   INDEX_TITLE,
   SITE_NAME,
   TUTORIALS_PATH,
+  WELCOME_PARAM,
   absoluteUrl,
   tutorialPath,
 } from './site-config';
 import type { Tutorial } from './types';
+
+/**
+ * Shown once to a phone that index.html sent here instead of the editor. A
+ * closed dialog is inert, so every other visitor only pays for the markup.
+ */
+function renderMobileWelcome(): string {
+  return `<dialog class="welcome" id="welcome" aria-labelledby="welcome-title">
+  <form method="dialog">
+    <h2 id="welcome-title">Welcome!</h2>
+    <p>${SITE_NAME} is an image editor that runs in your browser, but it's really made for bigger screens. But while you're here, check out some of the things you can do with it. Enjoy!</p>
+    <button class="button button-large" autofocus>Let's go</button>
+  </form>
+</dialog>
+<script>
+(function () {
+  var url = new URL(location.href);
+  if (!url.searchParams.has('${WELCOME_PARAM}')) return;
+  url.searchParams.delete('${WELCOME_PARAM}');
+  history.replaceState(null, '', url.pathname + url.search + url.hash);
+  var dialog = document.getElementById('welcome');
+  dialog.addEventListener('click', function (e) {
+    if (e.target === dialog) dialog.close();
+  });
+  dialog.showModal();
+})();
+</script>`;
+}
 
 /** `tutorials` must already be in display order. */
 export function renderTutorialIndex(ctx: RenderContext, tutorials: readonly Tutorial[]): string {
@@ -34,7 +62,8 @@ export function renderTutorialIndex(ctx: RenderContext, tutorials: readonly Tuto
 <header class="index-header">
   <h1>${escapeHtml(INDEX_HEADING)}</h1>
 </header>
-${list}`;
+${list}
+${renderMobileWelcome()}`;
 
   const url = absoluteUrl(TUTORIALS_PATH);
   return renderDocument(ctx, {

@@ -18,6 +18,29 @@
     <meta name="twitter:title" content="Lopsy — A free image editor" />
     <meta name="twitter:description" content="Photo retouching, digital painting, compositing, and graphic design — no install, no account." />
     <meta name="twitter:image" content="https://lopsy.art/og-image.jpg" />
+    <!--
+      The editor isn't usable on a phone, so a phone's first visit goes to the
+      tutorials instead. Inline so it runs before the app bundle downloads.
+      `?welcome` must match WELCOME_PARAM in src/site/tutorials/site-config.ts.
+    -->
+    <script>
+      (function () {
+        if (location.pathname !== '/') return;
+        var isPhone = matchMedia('(pointer: coarse)').matches
+          && Math.min(screen.width, screen.height) < 768;
+        if (!isPhone) return;
+        var key = 'lopsy:mobile-welcome-shown';
+        try {
+          if (localStorage.getItem(key)) return;
+          localStorage.setItem(key, '1');
+        } catch (e) {
+          // Without storage we can't remember the visit, and redirecting on
+          // every load would lock the phone out of the editor for good.
+          return;
+        }
+        location.replace('/tutorials/?welcome');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
