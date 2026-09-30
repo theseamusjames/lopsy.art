@@ -9,6 +9,7 @@ import {
   readLayerPixels,
   getLayerTextureDimensions,
   readLayerPixelsCompressedU16,
+  readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
   readLayerThumbnail as wasmReadLayerThumbnail,
 } from './wasm-bridge';
@@ -68,6 +69,20 @@ export function readLayerCompressed(layerId: string): Uint8Array | null {
   if (!currentEngine) return null;
 
   const data = readLayerPixelsCompressedU16(currentEngine, layerId);
+  if (!data || data.length === 0) return null;
+
+  return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+}
+
+/**
+ * Read layer pixels as an LZ4-compressed 16-bit blob, for the CPU-side
+ * backup that survives a WebGL context loss (#973). Upload it back with
+ * `uploadCompressed`.
+ */
+export function readLayerBackupBlob(layerId: string): Uint8Array | null {
+  if (!currentEngine) return null;
+
+  const data = readLayerPixelsLz4U16(currentEngine, layerId);
   if (!data || data.length === 0) return null;
 
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
