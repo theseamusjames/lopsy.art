@@ -62,7 +62,10 @@ export function selectLayerAlpha(layerId: string): void {
     // click in empty space then edits the "moved" text at the top-left of
     // the canvas. Same broken invariant as #767 (Brush pre-warm); this is
     // the alpha-thumbnail-click entry point (#785).
-    if (layer.type !== 'text') {
+    // Only the active layer can be moved, so a prefloat of another layer
+    // is never used — and a live float on it made Delete clear the whole
+    // active layer (#801, #1055).
+    if (layer.type !== 'text' && layerId === editorState.document.activeLayerId) {
       schedulePrefloat(layerId, selMask, bounds);
     }
   }

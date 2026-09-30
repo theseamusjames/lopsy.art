@@ -333,7 +333,8 @@ export function useCanvasPointerHandlers({
         deps.setHoveredGuide(findGuideAtCursor(canvasPos.x, canvasPos.y));
       }
 
-      if (deps.showRulers && deps.showGuides && !panning && inside) {
+      // #1060 — a tool drag that crosses a ruler must keep feeding the tool.
+      if (deps.showRulers && deps.showGuides && !panning && inside && !isToolPointer) {
         const isOnHorizontalRuler = screenY < RULER_SIZE && screenX > RULER_SIZE;
         const isOnVerticalRuler = screenX < RULER_SIZE && screenY > RULER_SIZE;
         const snap = e.metaKey || e.ctrlKey;

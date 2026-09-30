@@ -866,13 +866,18 @@ impl EngineInner {
 
         // ES 3.0 / WebGL 2 spec: for an R8 color attachment, readPixels
         // with RED + UNSIGNED_BYTE is guaranteed to succeed.
+        // PACK_ALIGNMENT defaults to 4; with 1-byte pixels and a width that
+        // isn't a multiple of 4, WebGL expects padded rows and rejects the
+        // tightly sized buffer (#1057).
         let mut pixels = vec![0u8; (w * h) as usize];
+        gl.pixel_storei(WebGl2RenderingContext::PACK_ALIGNMENT, 1);
         let read_ok = gl.read_pixels_with_opt_u8_array(
             0, 0, w as i32, h as i32,
             WebGl2RenderingContext::RED,
             WebGl2RenderingContext::UNSIGNED_BYTE,
             Some(&mut pixels),
         ).is_ok();
+        gl.pixel_storei(WebGl2RenderingContext::PACK_ALIGNMENT, 4);
 
         gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
         gl.delete_framebuffer(Some(&fbo));

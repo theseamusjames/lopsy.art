@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Eye, EyeOff, X, ChevronDown, ChevronRight, GripVertical, Trash2, Plus } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
@@ -238,6 +238,21 @@ function AdjustmentNodeRow({
   onToggleExpand, onToggleEnabled, onRemove, onChange,
   onDragStart, onDragOver, onDrop, onDragEnd,
 }: NodeRowProps) {
+  // One `Edit <Node>` history entry per gesture: re-armed by each pointer
+  // press and whenever focus leaves a control, spent by the first change,
+  // so a slider drag's stream of updates undoes as a single step (#1052).
+  // Not armed on focus: a slider can change on pointer-down, before focus.
+  const isEditArmedRef = useRef(true);
+  const handleArmEdit = () => {
+    isEditArmedRef.current = true;
+  };
+  const handleControlsChange = (params: Partial<AdjustmentNode>) => {
+    if (isEditArmedRef.current) {
+      isEditArmedRef.current = false;
+      useEditorStore.getState().pushHistoryMetadata(`Edit ${ADJUSTMENT_NODE_LABELS[node.type]}`);
+    }
+    onChange(params);
+  };
   return (
     <div
       className={`${styles.nodeRow} ${isDragOver ? styles.nodeRowDragOver : ''}`}
@@ -277,8 +292,12 @@ function AdjustmentNodeRow({
         </button>
       </div>
       {isExpanded && (
-        <div className={styles.nodeControls}>
-          <NodeControls node={node} onChange={onChange} />
+        <div
+          className={styles.nodeControls}
+          onPointerDownCapture={handleArmEdit}
+          onBlurCapture={handleArmEdit}
+        >
+          <NodeControls node={node} onChange={handleControlsChange} />
         </div>
       )}
     </div>
