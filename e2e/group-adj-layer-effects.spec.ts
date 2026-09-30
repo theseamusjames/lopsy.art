@@ -264,6 +264,12 @@ test.describe('#796 — group adjustments keep child layer effects', () => {
     expect(cornerVignetted!.r).toBeLessThan(230);
 
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    // Setting the value is its own step (#1052): the first undo resets it
+    // and keeps the node, the second removes the node.
+    expect(await lastHistoryLabel(page)).toBe('Edit Vignette');
+    await undo(page);
+    await page.waitForTimeout(200);
+    expect(await groupAdjustmentCount(page, rootId)).toBe(countBefore + 1);
     expect(await lastHistoryLabel(page)).toBe('Add Adjustment');
     await undo(page);
     await page.waitForTimeout(200);
