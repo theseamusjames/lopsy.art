@@ -1,0 +1,493 @@
+/*
+ * Blog styles, inlined after tutorials.css (which supplies the colour
+ * variables and site chrome) on /blog/ pages only.
+ */
+
+/* Edge hint on scrollable code: a light glow reads on dark, a shadow on light. */
+:root {
+  --scroll-hint: rgba(255, 255, 255, 0.16);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --scroll-hint: rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* List page: as wide as the header and footer content. */
+
+.blog-header {
+  max-width: none;
+  margin-bottom: 0;
+}
+
+/* The dots spill a radius past each end so the first and last aren't clipped. */
+.dot-rule {
+  display: block;
+  overflow: visible;
+  margin: 4px 0 24px;
+  fill: var(--text-muted);
+  opacity: 0.1;
+}
+
+.post-list {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.post-summary {
+  padding: 28px 0;
+  border-top: 1px solid var(--border);
+}
+
+/* The dot rule already separates the first post from the heading. */
+.post-summary:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* The image on the left, exactly half the list's width, in the 1200×630 share shape. */
+.post-summary.has-image {
+  display: grid;
+  grid-template-columns: 50% minmax(0, 1fr);
+  align-items: start;
+  gap: 28px;
+}
+
+.post-summary-image {
+  display: block;
+}
+
+.post-summary-image img {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.post-summary h2 {
+  margin: 0 0 6px;
+  font-size: 26px;
+}
+
+.post-summary h2 a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.post-summary h2 a:hover {
+  color: var(--accent);
+}
+
+.post-summary p:last-child {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+}
+
+.read-more {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.post-byline {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* Post page */
+
+.post,
+.breadcrumbs:has(+ .post),
+.more-posts {
+  max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.post-header .dot-rule {
+  margin: 24px 0 0;
+}
+
+.post-header h1 {
+  margin: 0 0 12px;
+  font-size: clamp(30px, 5vw, 42px);
+}
+
+.post-header .lede {
+  margin-bottom: 16px;
+}
+
+/* Wider than the text column on desktop, centred on it. */
+.post-hero {
+  width: min(1040px, calc(100vw - 40px));
+  margin: 32px 0 0 calc(50% - min(520px, 50vw - 20px));
+}
+
+@media (min-width: 601px) {
+  .post-hero.is-tall {
+    width: auto;
+    margin-left: 0;
+  }
+}
+
+.post-hero img {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+}
+
+.prose {
+  margin-top: 32px;
+  overflow-wrap: break-word;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose h2,
+.prose h3,
+.prose h4 {
+  scroll-margin-top: 80px;
+}
+
+.prose h2 {
+  margin: 48px 0 12px;
+  font-size: 28px;
+}
+
+.prose h3 {
+  margin: 36px 0 8px;
+  font-size: 22px;
+}
+
+.prose h4 {
+  margin: 28px 0 8px;
+  font-size: 18px;
+}
+
+.heading-anchor {
+  color: inherit;
+  text-decoration: none;
+}
+
+.heading-anchor:hover::after {
+  content: ' #';
+  color: var(--text-muted);
+}
+
+.prose li + li {
+  margin-top: 4px;
+}
+
+.code-block {
+  position: relative;
+  margin: 1.5em 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+/*
+ * Long blocks scroll inside a capped height. The label and Copy button sit in
+ * the wrapper's top padding so text never scrolls under them, and a shadow at
+ * the bottom edge (covered by a "local" gradient once you reach the end) shows
+ * there's more below, even where scrollbars are hidden.
+ */
+.code-block pre {
+  max-height: 32em;
+  margin: 0;
+  padding: 16px 18px;
+  overflow: auto;
+  border-radius: inherit;
+  background:
+    linear-gradient(transparent, var(--bg-raised) 60%) 0 100% / 100% 32px no-repeat local,
+    radial-gradient(farthest-side at 50% 100%, var(--scroll-hint), transparent) 0 100% / 100% 14px no-repeat scroll,
+    var(--bg-raised);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.55;
+  tab-size: 4;
+  /* Code must show the characters typed: no -> arrows or != glyphs. */
+  font-variant-ligatures: none;
+}
+
+.code-block.is-wrapped pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.code-block[data-lang],
+.code-block.has-copy {
+  padding-top: 34px;
+}
+
+.code-block[data-lang] pre,
+.code-block.has-copy pre {
+  padding-top: 6px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.code-block[data-lang]::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  font: 600 11px/1 var(--font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.code-block code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font: 600 12px/1.4 var(--font);
+  cursor: pointer;
+}
+
+.code-copy:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.post-figure {
+  margin: 1.75em 0;
+}
+
+.post-figure img {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+}
+
+.post-figure figcaption,
+.post-gallery-figure figcaption {
+  margin-top: 10px;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.post-gallery-figure {
+  margin: 1.75em 0;
+}
+
+.post-gallery {
+  position: relative;
+}
+
+.post-gallery-scroller {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.post-gallery-scroller:focus-visible {
+  outline-offset: 4px;
+}
+
+.post-gallery ul {
+  display: flex;
+  width: max-content;
+  gap: 12px;
+  margin: 0;
+  padding: 0 0 12px;
+  list-style: none;
+}
+
+.post-gallery li {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+/* Height-led so screenshots of any shape sit in one even strip. */
+.post-gallery img {
+  width: auto;
+  max-width: none;
+  height: 340px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.gallery-nav {
+  display: none;
+  position: absolute;
+  top: calc(50% - 6px);
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg-raised) 92%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  transform: translateY(-50%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.gallery-nav:hover {
+  border-color: var(--text-muted);
+}
+
+.gallery-prev {
+  left: 12px;
+}
+
+.gallery-next {
+  right: 12px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gallery-nav:not([hidden]) {
+    display: flex;
+  }
+}
+
+.table-scroll {
+  margin: 1.5em 0;
+  overflow-x: auto;
+}
+
+.table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-scroll th,
+.table-scroll td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table-scroll th {
+  border-bottom-width: 2px;
+  font-weight: 600;
+}
+
+.table-scroll .align-center {
+  text-align: center;
+}
+
+.table-scroll .align-right {
+  text-align: right;
+}
+
+.dot-break {
+  margin: 48px 0;
+}
+
+.dot-break .dot-rule {
+  margin: 0;
+}
+
+.more-posts {
+  margin-top: 64px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+}
+
+.more-posts h2 {
+  margin: 0 0 16px;
+  font-size: 22px;
+}
+
+.more-posts ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.more-posts li + li {
+  margin-top: 16px;
+}
+
+.more-posts a {
+  font-weight: 600;
+  font-size: 18px;
+}
+
+@media (max-width: 720px) {
+  /* Half width would leave the text a sliver, so the image goes full width above it. */
+  .post-summary.has-image {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .prose h2 {
+    font-size: 24px;
+  }
+
+  .post-summary h2 {
+    font-size: 22px;
+  }
+
+  .code-block pre {
+    padding-left: 14px;
+    padding-right: 14px;
+    font-size: 13px;
+  }
+
+  .code-block[data-lang]::before {
+    left: 14px;
+  }
+
+  /* Edge to edge, breaking out of the page padding. */
+  .post-hero,
+  .post-gallery {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+  }
+
+  /* Inset the first image to line up with the text, but let the strip run to both edges. */
+  .post-gallery ul {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .post-gallery-scroller {
+    scroll-padding-left: 16px;
+  }
+
+  /* Short enough that the next image peeks in, so it's clear the strip scrolls. */
+  .post-gallery img {
+    height: 180px;
+  }
+
+  .post-hero img {
+    border-width: 1px 0;
+    border-radius: 0;
+  }
+}

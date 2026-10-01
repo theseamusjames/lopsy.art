@@ -65,11 +65,10 @@ function jsonLd(html: string): { '@graph': Array<Record<string, unknown>> } {
 }
 
 describe('buildTutorialSite', () => {
-  it('emits the index, a page per tutorial, used images and a sitemap', () => {
+  it('emits the index, a page per tutorial and used images', () => {
     const result = build([source('alpha', 'related: beta', ['unused.png']), source('beta', '')]);
     expect(result.errors).toEqual([]);
     expect([...result.files.keys()].sort()).toEqual([
-      'sitemap.xml',
       'tutorials/alpha/01.png',
       'tutorials/alpha/02.png',
       'tutorials/alpha/index.html',
@@ -230,11 +229,11 @@ describe('buildTutorialSite', () => {
     expect(result.files.get('tutorials/alpha/index.html')).not.toContain('/tutorials/beta/');
   });
 
-  it('writes a sitemap with lastmod dates', () => {
-    const sitemap = build([source('alpha', 'updated: 2026-04-02')]).files.get('sitemap.xml') as string;
-    expect(sitemap).toContain('<url><loc>https://lopsy.art/</loc></url>');
-    expect(sitemap).toContain('<url><loc>https://lopsy.art/tutorials/</loc><lastmod>2026-04-02</lastmod></url>');
-    expect(sitemap).toContain('<url><loc>https://lopsy.art/tutorials/alpha/</loc><lastmod>2026-04-02</lastmod></url>');
+  it('reports sitemap entries with lastmod dates', () => {
+    expect(build([source('alpha', 'updated: 2026-04-02')]).sitemapEntries).toEqual([
+      { path: '/tutorials/', lastmod: '2026-04-02' },
+      { path: '/tutorials/alpha/', lastmod: '2026-04-02' },
+    ]);
   });
 
   it('fails on missing images, unreadable images and unknown related slugs', () => {

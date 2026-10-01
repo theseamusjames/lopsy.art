@@ -44,7 +44,7 @@ function splitList(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function isValidDate(value: string): boolean {
+export function isValidDate(value: string): boolean {
   return ISO_DATE.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }
 
@@ -52,7 +52,7 @@ function isValidDate(value: string): boolean {
  * `published` may carry an optional UTC time (`2026-09-25 18:40`) so tutorials
  * released on the same day still list newest first. Only the date is shown.
  */
-function readPublished(raw: string): { date: string; sortKey: string } {
+export function readPublished(raw: string): { date: string; sortKey: string } {
   const match = PUBLISHED.exec(raw);
   if (!match) return { date: raw, sortKey: raw };
   const date = match[1] ?? '';
