@@ -32,6 +32,7 @@ import {
 import { isLayerAlphaSelection, selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { growFloatToCover } from './float-growth';
+import { cancelPrefloat } from './prefloat';
 import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
 import type { Point } from '../../types';
 import {
@@ -164,6 +165,11 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
       maskHeight: sel.maskHeight,
     };
   }
+
+  // The transform owns the live float now. A prefloat left registered would
+  // be committed by the next selection change, dropping the pending
+  // transform's float out from under it (#1076).
+  cancelPrefloat();
 
   const persistent = persistentTransformRef.current;
 
