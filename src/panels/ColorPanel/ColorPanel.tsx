@@ -152,7 +152,7 @@ export function ColorPanel() {
           ))}
         </div>
       ) : (
-        <ColorPicker color={activeColor} onChange={handlePickerChange} grayscale={isGrayscale} />
+        <ColorPicker color={activeColor} onChange={handlePickerChange} grayscale={isGrayscale} showHex={false} />
       )}
       <div className={styles.hexRow}>
         <span className={styles.hexLabel} aria-hidden="true">#</span>
