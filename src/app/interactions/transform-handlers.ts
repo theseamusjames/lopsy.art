@@ -13,7 +13,7 @@ import {
   getTransformedContentBounds,
   createTransformState,
 } from '../../tools/transform/transform';
-import type { TransformState } from '../../tools/transform/transform';
+import type { TransformHandle, TransformState } from '../../tools/transform/transform';
 import { ROTATE_HANDLE_OFFSET } from '../../tools/transform/transform-handles';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
@@ -76,21 +76,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     return null;
   }
 
-  // Cap the handle radius so a click near the centre of a small selection
-  // can't hit multiple handles at once. The 8/zoom screen-space heuristic
-  // breaks at low zoom because the doc-space radius can exceed the
-  // selection's half-extent, making every click on the selection register
-  // as a handle hit.
-  const bounds = getTransformedBounds(currentTransform);
-  const halfMin = Math.min(bounds.width, bounds.height) / 2;
-  const zoom = editorState.viewport.zoom;
-  const handleRadius = Math.max(1, Math.min(8 / zoom, halfMin * 0.8));
-  // Rotate handles sit outside the box, so the interior clamp above only
-  // made them smaller than their drawn circle (#1000). Their own cap keeps
-  // the hit area short of the box corner at low zoom.
-  const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
-  const rotateHandleRadius = Math.max(handleRadius, Math.min(8 / zoom, rotateCornerClearance));
-  const hit = hitTestHandle(canvasPos, currentTransform, handleRadius, rotateHandleRadius);
+  const hit = hitTestTransformHandle(canvasPos, currentTransform, editorState.viewport.zoom);
 
   if (!hit) {
     return null;
@@ -191,6 +177,25 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   uiState.setActiveTransformHandle(hit);
 
   return newState;
+}
+
+/**
+ * Hit-test the Move tool's transform handles at `zoom`. The radius is capped
+ * so a click near the centre of a small box can't hit several handles at
+ * once: the 8/zoom screen-space heuristic breaks at low zoom because the
+ * doc-space radius can exceed the box's half-extent, making every click on
+ * it register as a handle hit.
+ */
+export function hitTestTransformHandle(canvasPos: Point, transform: TransformState, zoom: number): TransformHandle | null {
+  const bounds = getTransformedBounds(transform);
+  const halfMin = Math.min(bounds.width, bounds.height) / 2;
+  const handleRadius = Math.max(1, Math.min(8 / zoom, halfMin * 0.8));
+  // Rotate handles sit outside the box, so the interior clamp above only
+  // made them smaller than their drawn circle (#1000). Their own cap keeps
+  // the hit area short of the box corner at low zoom.
+  const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
+  const rotateHandleRadius = Math.max(handleRadius, Math.min(8 / zoom, rotateCornerClearance));
+  return hitTestHandle(canvasPos, transform, handleRadius, rotateHandleRadius);
 }
 
 function handleSelectionTransformDown(

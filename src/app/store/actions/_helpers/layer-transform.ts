@@ -1,4 +1,4 @@
-import type { Layer, LayerEffects, TextLayer } from '../../../../types';
+import type { Layer, LayerEffects, TextLayer, TextTransform } from '../../../../types';
 import { getEngine } from '../../../../engine-wasm/engine-state';
 import { roundTo } from '../../../../utils/math';
 
@@ -70,14 +70,44 @@ export function scaleTextLayerForResize(
   scaleY: number,
 ): TextLayer {
   const scale = isotropicScale(scaleX, scaleY);
+  const x = Math.round(layer.x * scaleX);
+  const y = Math.round(layer.y * scaleY);
   return {
     ...layer,
-    x: Math.round(layer.x * scaleX),
-    y: Math.round(layer.y * scaleY),
+    x,
+    y,
+    ...(layer.transform && { transform: scaleTextTransformForResize(layer, layer.transform, x, y, scaleX, scaleY) }),
     fontSize: roundTo(layer.fontSize * scale, 2),
     letterSpacing: roundTo(layer.letterSpacing * scale, 2),
     width: layer.width === null ? null : Math.max(1, Math.round(layer.width * scaleX)),
     effects: scaleLayerEffects(layer.effects, scaleX, scaleY),
+  };
+}
+
+/**
+ * A transformed text layer's placement after Image Size. The anchor follows
+ * the document scale, and since the glyphs already grow by `isotropicScale`
+ * through the font size, the matrix only takes the remaining, directional
+ * part: `diag(scaleX, scaleY) · M / isotropicScale`.
+ */
+function scaleTextTransformForResize(
+  layer: TextLayer,
+  t: TextTransform,
+  newX: number,
+  newY: number,
+  scaleX: number,
+  scaleY: number,
+): TextTransform {
+  const k = isotropicScale(scaleX, scaleY);
+  const anchorX = (layer.x + t.anchorX) * scaleX;
+  const anchorY = (layer.y + t.anchorY) * scaleY;
+  return {
+    a: (t.a * scaleX) / k,
+    b: (t.b * scaleY) / k,
+    c: (t.c * scaleX) / k,
+    d: (t.d * scaleY) / k,
+    anchorX: anchorX - newX,
+    anchorY: anchorY - newY,
   };
 }
 

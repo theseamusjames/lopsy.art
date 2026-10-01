@@ -449,11 +449,12 @@ const h = {
 
   // ---- transforms (Move tool + the handles of the current selection) ---------------
   // Select the pixels first (h.rect / h.ellipse / h.lasso around them), then:
-  // rotate by dragging the rotation handle 20 doc px outside the top-right corner.
+  // rotate by dragging the rotation handle 20 doc px outside the top-left corner.
+  // A text layer needs no selection: pass its line box (see Rotating and scaling).
   async rotate(sel, degrees) {
     await h.tool('move');
     const cx = (sel.x0 + sel.x1) / 2, cy = (sel.y0 + sel.y1) / 2;
-    const start = { x: sel.x1 + 20, y: sel.y0 - 20 };
+    const start = { x: sel.x0 - 20, y: sel.y0 - 20 };
     const r = Math.hypot(start.x - cx, start.y - cy), a0 = Math.atan2(start.y - cy, start.x - cx);
     const pts = [start];
     for (let i = 1; i <= 8; i++) {
@@ -625,12 +626,21 @@ Arrow keys nudge by 1 px and Shift+arrows by 10 px, but prefer a drag for
 long distances. **Align** buttons on the Move tool's options bar align the
 active layer to the canvas.
 
-**Rotating and scaling.** Transforms act on the *selection*. Marquee around
-the pixels, then `h.rotate({ x0, y0, x1, y1 }, degrees)` (positive is
-clockwise) or `h.scale(corner, dx, dy)`, and **commit with `h.deselect()`**.
-Do rotations and scales last on a layer, and never drag inside a live
-rotated box, because that moves or resets it. Move-tool options also offer
-Flip, Rotate 90° and Mesh Warp.
+**Rotating and scaling.** On a pixel layer, transforms act on the
+*selection*. Marquee around the pixels, then `h.rotate({ x0, y0, x1, y1 },
+degrees)` (positive is clockwise) or `h.scale(corner, dx, dy)`, and **commit
+with `h.deselect()`**. Do rotations and scales last on a pixel layer, and
+never drag inside a live rotated box, because that moves or resets it.
+Move-tool options also offer Flip, Rotate 90° and Mesh Warp.
+
+**Text transforms stay live.** With the Move tool and a text layer active,
+handles appear around the text's *line box* with no selection: its top-left
+is the (x, y) you typed at and it is about 1.4 × size tall. Pass that box to
+`h.rotate` (`x1` is where the text ends; it turns about the box centre) or
+grab its corners with `h.scale`. Rotate, scale, flip and Free / Skew all keep
+the text editable, and later Size or font changes keep the transform, so you
+can transform text at any point. A selection over only part of a text layer
+is refused; Rasterize Layer first for that.
 
 **Duplicating.** `h.menu('Layer', 'Duplicate Layer')` makes `<name> copy`
 **offset by +10, +10 px**, and leaves both layers selected. Click the

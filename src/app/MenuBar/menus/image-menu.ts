@@ -9,11 +9,27 @@ import {
 import { readLayerAsImageData } from '../../../engine-wasm/gpu-pixel-access';
 import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import { computeAutoTone, computeAutoContrast, computeAutoColor } from '../../../filters/auto-enhance';
-import type { Layer, GroupLayer, DocumentColorMode } from '../../../types';
+import type { Layer, GroupLayer, DocumentColorMode, TextLayer } from '../../../types';
+import { measureTextFrame, placeTextLayerAtAnchor } from '../../../engine-wasm/engine-sync';
+import { transformTextLayerInDocument } from '../../text-layer-transform';
+import { notifyInfo } from '../../notifications-store';
+import {
+  applyDocumentLinear,
+  FLIP_HORIZONTAL,
+  FLIP_VERTICAL,
+  placementProps,
+  ROTATE_CCW,
+  ROTATE_CW,
+  textTransformFor,
+} from '../../../tools/text/text-transform';
 import type { AdjustmentNode } from '../../../types/adjustment-nodes';
 import type { MenuDef, MenuItem } from './types';
 import type { Engine } from '../../../engine-wasm/wasm-bridge';
 import { rotatedTextureOrigin, type Rect } from '../../../layers/rotate-90';
+
+function isTextLayer(layerId: string): boolean {
+  return useEditorStore.getState().document.layers.some((l) => l.id === layerId && l.type === 'text');
+}
 
 export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   const state = useEditorStore.getState();
@@ -23,7 +39,15 @@ export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   const engine = getEngine();
   if (!engine) return;
 
-  state.pushHistory(axis === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical');
+  const label = axis === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical';
+  if (isTextLayer(activeId)) {
+    if (!transformTextLayerInDocument(activeId, axis === 'horizontal' ? FLIP_HORIZONTAL : FLIP_VERTICAL, label)) {
+      notifyInfo('Rasterize this text layer to flip it.');
+    }
+    return;
+  }
+
+  state.pushHistory(label);
   flipLayer(engine, activeId, axis === 'horizontal');
 
   // GPU is now source of truth — clear stale JS pixel data.
@@ -53,9 +77,16 @@ export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
   if (!engine) return;
 
   const layer = state.document.layers.find((l) => l.id === activeId);
+  const label = direction === 'cw' ? 'Rotate Layer 90° CW' : 'Rotate Layer 90° CCW';
+  if (layer?.type === 'text') {
+    if (!transformTextLayerInDocument(activeId, direction === 'cw' ? ROTATE_CW : ROTATE_CCW, label)) {
+      notifyInfo('Rasterize this text layer to rotate it.');
+    }
+    return;
+  }
   if (!layer || layer.type !== 'raster') return;
 
-  state.pushHistory(direction === 'cw' ? 'Rotate Layer 90° CW' : 'Rotate Layer 90° CCW');
+  state.pushHistory(label);
   const texture = { x: layer.x, y: layer.y, width: layer.width, height: layer.height };
   const content = readContentRect(engine, activeId) ?? { x: 0, y: 0, width: layer.width, height: layer.height };
   rotateLayer90(engine, activeId, direction === 'cw');
@@ -77,6 +108,33 @@ export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
   });
 }
 
+/**
+ * Turn a live text layer with the canvas: the quarter turn joins its
+ * transform and its anchor moves to where the rotated canvas puts it, then
+ * the glyphs are re-rendered — the text stays editable.
+ */
+function rotateTextLayerWithCanvas(
+  engine: Engine,
+  layer: TextLayer,
+  direction: 'cw' | 'ccw',
+  docWidth: number,
+  docHeight: number,
+): Layer {
+  if (layer.pathId) return layer;
+  const frame = measureTextFrame(engine, layer);
+  if (!frame) return layer;
+  // CW maps (x, y) → (H − y, x); CCW maps (x, y) → (y, W − x).
+  const turn = direction === 'cw' ? ROTATE_CW : ROTATE_CCW;
+  const shift = direction === 'cw' ? { x: docHeight, y: 0 } : { x: 0, y: docWidth };
+  const turned = applyDocumentLinear(frame, turn, { x: 0, y: 0 });
+  const anchor = { x: turned.anchor.x + shift.x, y: turned.anchor.y + shift.y };
+  const next: TextLayer = { ...layer, transform: textTransformFor(turned.matrix, anchor, layer.x, layer.y) };
+  const pos = placeTextLayerAtAnchor(engine, next, anchor.x, anchor.y);
+  if (!pos) return layer;
+  pixelDataManager.remove(layer.id);
+  return { ...next, ...placementProps(pos) };
+}
+
 export function rotateImage(direction: 'cw' | 'ccw'): void {
   const state = useEditorStore.getState();
   const doc = state.document;
@@ -90,7 +148,14 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   const newHeight = doc.width;
   const newLayers: Layer[] = [];
 
+  const textLayerIds: string[] = [];
   for (const layer of doc.layers) {
+    if (layer.type === 'text') {
+      const turned = rotateTextLayerWithCanvas(engine, layer, direction, doc.width, doc.height);
+      if (turned !== layer) textLayerIds.push(layer.id);
+      newLayers.push(turned);
+      continue;
+    }
     if (layer.type !== 'raster') {
       newLayers.push(layer);
       continue;
@@ -127,6 +192,7 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   // on a second consecutive rotate — use invalidateLayers() instead (#918).
   pixelDataManager.invalidateLayers(newLayers.map((l) => l.id));
   useEditorStore.setState({
+    dirtyLayerIds: new Set([...useEditorStore.getState().dirtyLayerIds, ...textLayerIds]),
     document: {
       ...doc,
       width: newWidth,

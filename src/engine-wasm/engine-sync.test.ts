@@ -545,7 +545,7 @@ describe('syncTextLayers — cache the rendered text props (#685)', () => {
   const call = (
     engine: Engine,
     state: ReturnType<typeof editing> | null,
-    onPos: (id: string, x: number, y: number) => void = () => {},
+    onPos: (id: string, placement: import('./engine-sync').TextPlacement) => void = () => {},
   ) => {
     sync.syncTextLayers(
       engine,

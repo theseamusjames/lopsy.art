@@ -54,4 +54,13 @@ describe('text layer save/load round-trip', () => {
     expect(loaded.pathId).toBeUndefined();
     expect('pathId' in loaded).toBe(false);
   });
+
+  it('keeps a text transform', () => {
+    const transform = { a: 0, b: 1.5, c: -1.5, d: 0, anchorX: 12.25, anchorY: -3 };
+    expect(roundTrip(makeText({ transform })).transform).toEqual(transform);
+  });
+
+  it('leaves upright text without a transform', () => {
+    expect('transform' in roundTrip(makeText())).toBe(false);
+  });
 });

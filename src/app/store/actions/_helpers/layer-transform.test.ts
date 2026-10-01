@@ -85,3 +85,29 @@ describe('scaleTextLayerForResize', () => {
     expect(scaled.effects.dropShadow.blur).toBe(24);
   });
 });
+
+describe('scaleTextLayerForResize with a transform', () => {
+  const base = { ...createTextLayer({ name: 'Text', text: 'Hi', fontSize: 24 }), x: 10, y: 20 };
+
+  it('keeps the matrix under a uniform resize and scales the anchor with the document', () => {
+    const layer = { ...base, transform: { a: 0, b: 1, c: -1, d: 0, anchorX: 5, anchorY: 7 } };
+    const scaled = scaleTextLayerForResize(layer, 2, 2);
+    expect(scaled.transform).toMatchObject({ a: 0, b: 1, c: -1, d: 0 });
+    // Anchor (15, 27) → (30, 54), relative to the new (20, 40).
+    expect(scaled.transform!.anchorX).toBeCloseTo(10);
+    expect(scaled.transform!.anchorY).toBeCloseTo(14);
+  });
+
+  it('puts the directional part of a non-uniform resize into the matrix', () => {
+    const layer = { ...base, transform: { a: 1, b: 0, c: 0, d: 1, anchorX: 0, anchorY: 0 } };
+    const scaled = scaleTextLayerForResize(layer, 4, 1);
+    // Font grows ×2 (geometric mean); the matrix supplies the rest: x ×2, y ×½.
+    expect(scaled.fontSize).toBe(48);
+    expect(scaled.transform!.a).toBeCloseTo(2);
+    expect(scaled.transform!.d).toBeCloseTo(0.5);
+  });
+
+  it('leaves upright text without a transform', () => {
+    expect(scaleTextLayerForResize(base, 2, 2).transform).toBeUndefined();
+  });
+});

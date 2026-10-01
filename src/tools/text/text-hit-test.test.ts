@@ -165,3 +165,32 @@ describe('hitTestTextLayer with rendered sizes (#989)', () => {
     expect(hitTestTextLayer([layer], { x: 60, y: 207 }, () => null)?.id).toBe(layer.id);
   });
 });
+
+describe('hitTestTextLayer with transformed layers', () => {
+  // A layout box 100×20 turned 45° about its anchor at (200, 200).
+  const s = Math.SQRT1_2;
+  const frame = {
+    anchor: { x: 200, y: 200 },
+    matrix: { a: s, b: s, c: -s, d: s },
+    box: { x: 0, y: 0, width: 100, height: 20 },
+  };
+  const layer = makeTextLayer({
+    x: 180,
+    y: 190,
+    transform: { a: s, b: s, c: -s, d: s, anchorX: 20, anchorY: 10 },
+  });
+  const bigTexture = (): RenderedSize => ({ width: 200, height: 200 });
+
+  it('hits clicks along the rotated text', () => {
+    // 50px along the baseline direction from the anchor.
+    expect(hitTestTextLayer([layer], { x: 200 + 50 * s, y: 200 + 50 * s }, bigTexture, () => frame)).toBe(layer);
+  });
+
+  it('ignores clicks in the empty corners of its axis-aligned texture', () => {
+    expect(hitTestTextLayer([layer], { x: 370, y: 200 }, bigTexture, () => frame)).toBeNull();
+  });
+
+  it('falls back to the texture box when no frame is available', () => {
+    expect(hitTestTextLayer([layer], { x: 370, y: 200 }, bigTexture)).toBe(layer);
+  });
+});

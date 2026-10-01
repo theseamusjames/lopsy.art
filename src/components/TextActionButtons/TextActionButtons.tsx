@@ -14,6 +14,11 @@ export function TextActionButtons({ containerRef }: TextActionButtonsProps) {
   const viewport = useEditorStore((s) => s.viewport);
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
+  // Transformed text can run any direction from its anchor, so dock the
+  // buttons beside its texture's top-left instead of over the glyphs.
+  const editedLayer = useEditorStore((s) =>
+    textEditing?.matrix ? s.document.layers.find((l) => l.id === textEditing.layerId) ?? null : null,
+  );
 
   const handleCommit = useCallback(() => {
     commitTextEditing();
@@ -36,12 +41,14 @@ export function TextActionButtons({ containerRef }: TextActionButtonsProps) {
   const cx = rect.width / 2;
   const cy = rect.height / 2;
 
+  const originX = editedLayer?.x ?? textEditing.bounds.x;
+  const originY = editedLayer?.y ?? textEditing.bounds.y;
   const screenX =
     viewport.panX + cx +
-    (textEditing.bounds.x - docWidth / 2) * viewport.zoom;
+    (originX - docWidth / 2) * viewport.zoom;
   const screenY =
     viewport.panY + cy +
-    (textEditing.bounds.y - docHeight / 2) * viewport.zoom;
+    (originY - docHeight / 2) * viewport.zoom;
 
   const buttonX = screenX - 36;
   const buttonY = screenY;
