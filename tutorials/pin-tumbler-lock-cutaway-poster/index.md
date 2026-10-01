@@ -2,7 +2,7 @@
 title: Draw a Technical Cutaway Poster of a Pin-Tumbler Lock
 description: Make a 1950s shop-manual cutaway poster of a lock in Lopsy, with pattern-fill section hatching, cloned pins, a rotated face view, callouts and a parts list.
 published: 2026-09-30 10:20
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: poster, technical illustration, cutaway, section view, pattern fill, callouts, typography, transforms, groups
@@ -149,8 +149,8 @@ Skip gradients here. Flat bands read as printed ink.
 
 Clone the driver pin instead of redrawing it:
 
-1. Marquee it and press [[Cmd+C]], then [[Cmd+V]]. The paste lands in place, on a new layer.
-2. With the **Move** tool ([[V]]), drag it one chamber (140 px) to the right. Finish with the arrow keys: [[Shift+→]] moves 10 px and [[→]] moves 1 px.
+1. Marquee it and press [[Cmd+C]], then [[Cmd+V]]. The paste lands in place on a new layer, selected, with the **Move** tool active.
+2. Drag it one chamber (140 px) to the right. Finish with the arrow keys: [[Shift+→]] moves 10 px and [[→]] moves 1 px.
 3. Press [[Cmd+D]], then choose **Layer → Merge Down**.
 
 Repeat for the other chambers. In the locked view each driver sits at a different height, because it rests on a different length of key pin.
@@ -165,9 +165,7 @@ Finally add a `Shear Line` layer. Marquee a 4 px-tall strip centred on the plug'
 
 ![Fig. 2 roughed in: the same housing and plug with a flat silver key filling the keyway, its top edge cut into V notches of different depths](10-key-in-the-keyway.webp)
 
-Make a second group, `Fig 2 Open`, and rebuild the housing, plug and cavity **600 px lower**, using the same shapes. If you typed the corners, add 600 to every Y value.
-
-> **Tip:** Rebuild the parts rather than duplicating the Fig 1 group. A duplicated group mixes its layers in among the original's, so the two cutaways would print through each other.
+Fig. 2 uses the same housing, plug and cavity. Click the `Fig 1 Locked` group row and choose **Layer → Duplicate Layer**. Rename the copy `Fig 2 Open` and delete its `Springs`, `Driver Pins`, `Key Pins` and `Shear Line` layers. Then click the `Fig 2 Open` row and drag the group **600 px** straight down with the **Move** tool, so the housing's top sits at y 1196. Use the arrow keys for the last few pixels.
 
 The key goes on its own `Key 2` layer, above the plug:
 
@@ -218,9 +216,9 @@ Make a `Type` group and drag it above the figure groups. Create each text in an 
 
 - **Title:** `LOCKED` and `OPEN` in **Bebas Neue 290**, as two separate text layers. Put `LOCKED` flush with the left margin guide and `OPEN` flush with the right one, both with their tops about 124 px from the top of the sheet. Centre an orange `/` in the gap between them.
 - **Subtitle:** `ANATOMY OF THE PIN-TUMBLER CYLINDER` in **Bebas Neue 64**, sitting just above the title guide. Then raise its **Letter spacing** in the Text panel until it runs from margin guide to margin guide. About **14.3** does it.
-- **Kicker:** `SHOP MANUAL · SECTION 4 · PLATE 07` in **IBM Plex Mono Medium 20**, flush with the right margin above the title, about 84 px from the top.
+- **Kicker:** `SHOP MANUAL · SECTION 4 · PLATE 07` in **IBM Plex Mono Medium 20** with **Letter spacing** back to 0, flush with the right margin above the title, about 84 px from the top.
 
-Before you start each new text layer, click a layer that isn't text, so the new settings don't restyle a block you've already set. Nudge each block into place with the **Move** tool and the arrow keys.
+Before you set up each new text layer, click a layer that isn't text. Nudge each block into place with the **Move** tool and the arrow keys.
 
 ## Add captions, notes and the parts list
 
@@ -236,7 +234,7 @@ Set the rest of the text in two faces only:
 For the parts list, use monospace columns. IBM Plex Mono has the same advance width in every weight, so spaces line up the columns exactly:
 
 1. Type a header row, `NO. PART  QTY  MATERIAL`, in **SemiBold 21**.
-2. Set **Line height** to **1.52** in the Text panel. Then type eight rows in **Regular 21**, padding every part name to the same length (e.g. `3   SPRING           5    STAINLESS STEEL`).
+2. Click a layer that isn't text and set **Line height** to **1.52** in the Text panel. Then type eight rows in **Regular 21**, padding every part name to the same length (e.g. `3   SPRING           5    STAINLESS STEEL`).
 
 ## Snap the heavy rule to the grid
 

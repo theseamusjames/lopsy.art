@@ -2,7 +2,7 @@
 title: Design an Infographic Christmas Card with a Bar-Chart Tree
 description: Make a data-viz holiday card in Lopsy. Build a bar-chart Christmas tree on graph paper, plot ornaments as data points, then add a legend, axis and script.
 published: 2026-09-28 20:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: holiday card, christmas card, infographic, data visualization, bar chart, typography, graph paper, pattern, layer effects, text, groups
@@ -302,7 +302,7 @@ to commit. Then drag it with the Move tool so its left edge sits on the left
 margin guide, with the cap tops a little below the top margin. At that size
 it runs almost exactly margin to margin.
 
-> **Tip:** Create new text in open space, then drag it into place. A click on or right next to existing text reopens that layer for editing.
+> **Tip:** Create each new line of text in open canvas, then drag it into place with the Move tool.
 
 ## Add a misregistered red shadow
 
@@ -334,12 +334,14 @@ little below the headline: click on the left margin guide, then
 
 Legend swatches should be the real ornaments, not new drawings.
 
-1. On *Baubles Red*, draw an elliptical marquee around one bauble. Press [[Cmd+C]] and then [[Cmd+V]].
-2. Rename the pasted layer *Legend Red* and drag it into the legend row under the rule, against the left margin.
+1. On *Baubles Red*, draw an elliptical marquee around one bauble and press [[Cmd+C]].
+2. Click *Rules* in the *Type* group and press [[Cmd+V]], so the copy lands in *Type* above *Rules*.
+3. Rename the pasted layer *Legend Red* and drag it into the legend row under the rule, against the left margin.
 
 Layer effects don't come along with a paste, so the swatch arrives white. Give
 it the same Color Overlay and Inner Glow as the tree baubles. Do the same for
-the gold bauble and an ice diamond.
+the gold bauble and an ice diamond: copy each one from its own layer, then
+click *Rules* before you paste.
 
 ## Label the legend and move it as a group
 
@@ -364,8 +366,8 @@ whole move.
 
 ![TIER and SPAN, CM headers in gold, with T01 to T10 down the left margin and right-aligned span values 15 to 100 down the right margin, each centered on its bar](24-columns.webp)
 
-1. **Headers:** `TIER` and `SPAN, CM` in Plex Mono SemiBold 16, `#F2B233`, Letter spacing 3, sitting just above the chart-top guide. Put `TIER` on the left margin and right-align `SPAN, CM` to the right margin guide.
-2. **Tier column:** one text layer, `T01` to `T10` on separate lines, in Plex Mono 25 `#9FC7B0`. In the Text panel, set **Line height** to **4**: 25 px × 4 = 100 px, the bar pitch. Nudge it so each label is vertically centered on its bar.
+1. **Headers:** select *Rules*, then set `TIER` and `SPAN, CM` in Plex Mono SemiBold 16, `#F2B233`, Letter spacing 3, sitting just above the chart-top guide. Put `TIER` on the left margin and right-align `SPAN, CM` to the right margin guide.
+2. **Tier column:** select *Rules* again, then set one text layer, `T01` to `T10` on separate lines, in Plex Mono 25 `#9FC7B0`. In the Text panel, set **Line height** to **4**: 25 px × 4 = 100 px, the bar pitch. Nudge it so each label is vertically centered on its bar.
 3. **Span column:** drag out an area-text box, set **Align** to Right, type the ten values (`15`, `25`, `35`, `45`, `50`, `60` … `100`), and give it the same line height. Move it so the right edge sits on the right margin guide.
 
 Right-aligned area text keeps `100` flush with the two-digit values.
@@ -374,18 +376,19 @@ Right-aligned area text keeps `100` flush with the two-digit values.
 
 ![Axis numbers 50 to 0 to 50 centered under each major tick, with the gold caption DISTANCE FROM TRUNK, CM below](25-axis-labels.webp)
 
-Under each major tick, add its value in Plex Mono 18 `#9FC7B0`, centered on
-the tick: `50 40 30 20 10 0 10 20 30 40 50`. Keep the labels' tops level,
-a little below the tick ends.
+Select *Rules*. Under each major tick, add its value in Plex Mono 18
+`#9FC7B0`, centered on the tick: `50 40 30 20 10 0 10 20 30 40 50`. Keep
+the labels' tops level, a little below the tick ends.
 
-Center `DISTANCE FROM TRUNK, CM` on the centre line just below them, in
-SemiBold 16 gold with Letter spacing 3.
+Select *Rules* again and center `DISTANCE FROM TRUNK, CM` on the centre line
+just below them, in SemiBold 16 gold with Letter spacing 3.
 
 ## Add callouts with dotted leaders
 
 ![APEX · 1 GOLD STAR to the right of the star and ROOT · 1 TRUNK to the right of the trunk, each joined by a dotted cream leader](26-callouts.webp)
 
-Add two callouts in Plex Mono SemiBold 16 gold, Letter spacing 2:
+Select *Rules* and add two callouts in Plex Mono SemiBold 16 gold, Letter
+spacing 2:
 
 - `APEX · 1 GOLD STAR`, to the right of the star and level with its centre
 - `ROOT · 1 TRUNK`, to the right of the trunk and level with it
@@ -405,10 +408,10 @@ click opens the size dialog), then add effects:
 
 - **Color Overlay** `#E0452B`
 - **Stroke** 3 px `#F3E9D2`
-- **Drop Shadow**: 0 / 6, Blur 10, Opacity 50
+- **Drop Shadow**: 0 / 3, Blur 10, Opacity 50
 
-Set `n = 1` in Plex Mono Bold 28, and `TREE` in Bold 16 with Letter spacing 3.
-Rotate each one **−8°**:
+Set `n = 1` in Plex Mono Bold 28. Select *Badge Disc* again and set `TREE`
+in Bold 16 with Letter spacing 3. Rotate each one **−8°**:
 
 1. [[Cmd]]-click the text layer's thumbnail.
 2. Press [[V]], drag a rotation handle counter-clockwise, and press [[Cmd+D]].
@@ -420,11 +423,12 @@ center, `TREE` below it.
 
 ![Merry everything. in large cream Fraunces italic centered under the axis caption](28-greeting.webp)
 
-Choose **Fraunces**, then set **Style** to Italic and **Weight** to Regular
-in the Text panel. Set it at Size 136 in `#F3E9D2` and type `Merry
-everything.`. Center it on the centre line, just below the axis caption.
+Select *Rules*, choose **Fraunces**, then set **Style** to Italic and
+**Weight** to Regular in the Text panel. Set it at Size 136 in `#F3E9D2` and
+type `Merry everything.`. Center it on the centre line, just below the axis caption.
 
-Below it, add the sign-off in Plex Mono 18, `#9FC7B0`, Letter spacing 2:
+Select *Rules* again and add the sign-off below it in Plex Mono 18,
+`#9FC7B0`, Letter spacing 2:
 `& A WELL-PLOTTED 2027 · WITH LOVE, THE OKAFOR-GRANT HOUSEHOLD`. Center it
 just above the bottom margin guide.
 

@@ -2,7 +2,7 @@
 title: Design a Maximalist Retro Zine Cover
 description: Build a loud, layered 70s-style zine cover in Lopsy with a mesh-warped checkerboard, a radial sunburst, a fried-egg pleasure dome and text on a path.
 published: 2026-09-26 12:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: zine cover, maximalism, retro, mesh warp, radial symmetry, text on a path, layer effects, halftone, typography, groups
@@ -119,7 +119,7 @@ discs.
 Give the layer these effects:
 
 - **Stroke**: 7 px, ink navy
-- **Drop Shadow**: navy, offset 12 / 14, Blur 0, Opacity 100
+- **Drop Shadow**: navy, offset 5 / 7, Blur 0, Opacity 100
 
 ## Build a three-colour sunburst
 
@@ -186,8 +186,8 @@ The egg will cover the bases of the towers.
    tool, set **Shrikhand** at **250**, and type **YOLK** in tomato.
 2. Add a 10 px cream **Stroke**, then click **Rasterize Layer**.
 3. Marquee the word and [[Cmd]]-drag a corner handle to scale it up by 20%.
-   Press [[Cmd+D]] to commit.
-4. Marquee it again and drag the rotate handle to **−4°**. Press [[Cmd+D]].
+4. In the same box, drag the rotate handle to **−4°**. Press [[Cmd+D]] to
+   commit.
 5. Drag it so it's centred with its top about 36 px from the edge.
 
 ## Give it a stepped extrusion
@@ -196,9 +196,8 @@ The egg will cover the bases of the towers.
 
 1. With the Move tool active, click **Duplicate Layer** twice. Name the
    layers **YOLK Teal** (bottom), **YOLK Navy** and **YOLK Face** (top).
-2. Each copy lands 10 px down and right, so nudge them into place with the
-   arrow keys ([[Shift]] + arrow moves 10 px):
-   - Face back to 0 / 0
+2. Each copy lands exactly on top of the one below. Nudge the lower two down
+   and right with the arrow keys ([[Shift]] + arrow moves 10 px):
    - Navy to +9 / +9
    - Teal to +18 / +18
 3. On Navy, add a navy **Color Overlay** and a 10 px navy Stroke.
@@ -225,7 +224,7 @@ Select **YOLK Face** and create an **Egg** group. Build it from the bottom up:
 
 1. **White:** lasso a wobbly oval about 600 × 500, tilted 5° so the cover
    isn't perfectly symmetrical. Fill it `#FFFDF5` and add a 7 px navy Stroke
-   and a 14 / 16 hard shadow.
+   and a 7 / 9 hard shadow.
 2. **Finial:** lasso a small gold onion dome with a spire and ball so it rises
    from behind the yolk.
 3. **Yolk:** fill a 310 px circle in `#FFB81C`. Add an **Inner Glow** in
@@ -260,9 +259,10 @@ the highlight follows the curve of the yolk. Press [[Cmd+D]] to commit.
    just below the K, alternating between points about 112 px and 92 px from
    its centre.
 2. Fill it pink and add a navy Stroke and shadow.
-3. Set **Nº7** in **Chango** 58 and **XANADU / ISSUE** in Rubik Mono One 15.
-4. Rasterize both, **Merge Down** each into the badge, then rotate the badge
-   **14°** so it overlaps the K.
+3. Select the badge layer and set **Nº7** in **Chango** 58. Select the badge
+   again and set **XANADU / ISSUE** in Rubik Mono One 15.
+4. **Merge Down** each text into the badge, then rotate the badge **14°** so
+   it overlaps the K.
 
 ## Add editorial cover lines
 
@@ -270,14 +270,13 @@ the highlight follows the curve of the yolk. Press [[Cmd+D]] to commit.
 
 Maximalism needs editorial density, not just decoration.
 
-1. On a **Cover Pills** layer, build two rounded navy rectangles. Marquee
-   each one, choose **Select → Shrink…** by the corner radius, then
-   **Select → Grow…** by the same amount, and fill. Growing rounds the
-   corners.
+1. On a **Cover Pills** layer, draw two rounded navy rectangles with the
+   **Shape** tool: set **Shape** to **Rectangle**, **Corner Radius** to about
+   **14**, the **Fill** to navy `#1A1030` and no stroke.
 2. Add a 4 px cream Stroke and a tomato hard shadow.
 3. Set the cover lines in Rubik Mono One, with Chango for the punchlines in
-   gold and pink.
-4. Rasterize the lines and merge them into the pills.
+   gold and pink. Select **Cover Pills** before you set up each line.
+4. Merge the lines down into the pills.
 5. Rotate the left pill **−5°** and the right one **+4°**.
 
 ## Scatter sparkles with a hierarchy
@@ -288,7 +287,7 @@ Evenly sized ornaments look like wallpaper, so vary the sizes. On a
 **Sparkles** layer, lasso one **big** four-point star (radius 88), two
 **medium** ones (radius about 40), and six **tiny** ones (radius about 15) in
 the checker gaps. Alternate gold and cream, then add a 4 px navy Stroke and a
-5 px hard shadow.
+1 px hard shadow.
 
 ## Snap the price bar to the grid
 

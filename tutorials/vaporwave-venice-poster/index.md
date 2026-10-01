@@ -2,7 +2,7 @@
 title: Design a Vaporwave Venice Poster
 description: Make a pastel vaporwave poster in Lopsy with a halftone sun, a perspective checkerboard floor, a neon gondola and a retro Windows-style dialog.
 published: 2026-09-26 13:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: vaporwave, poster design, perspective transform, pattern fill, halftone, layer effects, text effects, retro
@@ -41,8 +41,8 @@ a white background and click **Create**. Double-click `Layer 1` and rename it
 `Sky`.
 
 Pick the **Gradient** tool and click **Advanced…** to open the Gradient
-Editor. Click the handle row to add stops. Select each stop and pick its colour
-on the saturation square and hue strip:
+Editor. Click the handle row to add stops. Select each stop and type its
+colour into the hex field:
 
 - teal `#2EC4C9` at 0 %
 - lavender `#9D8CF0` at about 45 %
@@ -325,8 +325,7 @@ stay upright. Press [[Cmd+D]] to commit.
 
 Add an empty layer called `Type Anchor`, drag it to the top of the Layers
 panel, and click it. New text lands above the active layer, so this puts the
-type above everything else. It also means changing the text settings never
-restyles a text layer you've already committed.
+type above everything else.
 
 Pick the **Text** tool, set **Size** to `150`, choose **Shrikhand** in the
 font browser and set the colour to `#FF3FA4`. Click near the top-left of the
@@ -341,7 +340,7 @@ Open the headline's effects drawer:
 
 - Enable an outside **Stroke** in white with **Width** `6`.
 - Enable **Drop Shadow** in `#3A1C71` with **Offset X** and **Offset Y**
-  `10`, **Blur** `0` and **Opacity** `100`.
+  `4`, **Blur** `0` and **Opacity** `100`.
 
 The hard purple shadow stands out against the teal sky. A cyan shadow would
 disappear into it.
@@ -392,8 +391,7 @@ Then add the details:
 
 ![gondola.exe in white VT323 in the title bar, a DotGothic16 line reading ゴンドラ Now drifting to 1989 and an OK label on the button](28-window-text.webp)
 
-Click `Window` before each new text layer, so changing the font doesn't
-restyle the previous one:
+Click `Window` before you set up each text layer:
 
 - `gondola.exe` in **VT323** 28 white, in the title bar
 - `ゴンドラ  Now drifting to 1989...` in **DotGothic16** 26 dark purple

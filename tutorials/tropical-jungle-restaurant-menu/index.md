@@ -2,7 +2,7 @@
 title: Design a Tropical Paper-Cut Restaurant Menu
 description: Make a layered paper-cut jungle menu in Lopsy with lasso monstera leaves, palm fronds, hibiscus, cacao pods and a clean three-column price list.
 published: 2026-09-27 13:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: restaurant menu, tropical, paper cut, layer effects, lasso, typography, area text, menu design
@@ -268,9 +268,8 @@ symmetrical.
 ![The word Xocolatl typed in dark brown Shrikhand at 112 pixels inside the dome of the arch](16-title.webp)
 
 Create a **Menu** group above **Arch Rule** with a raster layer inside
-called **Ornaments**. New text goes above the active layer, and keeping a
-raster layer active means changing type settings never restyles a text
-layer you've already committed.
+called **Ornaments**. Select **Ornaments** before you set up each new
+piece of type, here and in the steps that follow.
 
 Pick the **Text** tool, choose **Shrikhand**, set **Size** to **112**, and
 set the colour to cacao brown `#3B1A0E`. Click inside the dome, type
@@ -292,9 +291,8 @@ px in coral `#C24A26`. Under that, add the tagline
 `#2A6B4F`. Centre both with **Align center horizontally**, and keep the
 gaps between the three lines tight so they read as one lockup.
 
-> **Tip:** Create each new line of type in an empty area of the canvas,
-> then move it into place. Clicking inside an existing text layer's box
-> edits that layer instead of starting a new one.
+> **Tip:** Start each new line of type in an empty area of the canvas,
+> then move it into place.
 
 ## Set the first section
 
@@ -353,8 +351,7 @@ Centre it horizontally, and nudge it up or down until the space above it
 (to the last description) matches the space below it (to the rule).
 
 Give it a **Color Overlay** of deep leaf green `#0F6B3A`, so it's strong
-enough to hold the bottom of the card. Reset **Letter spacing** to 0
-afterwards.
+enough to hold the bottom of the card.
 
 ## Warm it up with sunlight
 

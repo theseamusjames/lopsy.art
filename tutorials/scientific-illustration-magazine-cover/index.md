@@ -2,7 +2,7 @@
 title: Make a Scientific Illustration Magazine Cover
 description: Turn a kingfisher photo into a science-magazine cover in Lopsy with Find Edges ink, layer masks, Voronoi cells, Radial Symmetry and a Pen-tool chart.
 published: 2026-09-30 22:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: magazine cover, scientific illustration, photo editing, magic wand, layer masks, filters, voronoi, symmetry, pen tool, typography
@@ -64,7 +64,7 @@ The soft bokeh background is easy to select and the bird is not, so select the b
 ![The cut-out kingfisher on cream paper with a generous lasso outline around the bird and twig, ready to invert and delete everything outside it](04-cut-out-and-clean-edges.webp)
 
 1. Press [[Cmd+C]], then [[Cmd+V]]. The paste lands in place on a new layer above the photo. Name it `Kingfisher` and hide `Photo`.
-2. The feathered selection leaves a faint 1 px line along the photo's old edges. Draw a generous **Lasso** around the bird and twig, choose **Select → Inverse**, and press [[Delete]].
+2. To clear any faint pixels along the photo's old edges, draw a generous **Lasso** around the bird and twig, choose **Select → Inverse**, and press [[Delete]].
 
 ## Patch the beak from the photo
 
@@ -104,8 +104,6 @@ Do the same for any other holes, such as the gap under the chin.
 
 To trim any leftover grey fringe, reuse that same wand selection. Choose **Select → Grow…** 2 px, then press [[Delete]] on each bird layer. Clean up stray wing-tip pixels with a small **Eraser**.
 
-> **Tip:** Don't trim a fringe by ⌘-clicking a layer's own thumbnail and then using Shrink, Inverse and Delete. A known bug makes that wipe the whole layer. The wand route above is safe.
-
 ## Fade the twig with a layer mask
 
 ![The kingfisher with its layer mask in edit mode, showing a blue overlay across the bottom of the canvas where the twig fades out](08-fade-twig-with-mask.webp)
@@ -138,7 +136,7 @@ The beak and tail break out of the field, which keeps the bird from looking past
 
 ![A zoomed view of Fig. 1: a pale disc holding an oval barb section with a tan cortex, a ring of blue Voronoi cells and a brown cellular core, inside a rotated transform box](10-fig1-barb-section.webp)
 
-1. Click a root layer below `Specimen` and click **New Group**. Name the group `Figures` and drag it above `Specimen`. New Group nests inside whichever group is active, so start from a root layer.
+1. Click a root layer below `Specimen` and click **New Group**. Name the group `Figures` and drag it above `Specimen`.
 2. Add `Fig1 Disc` inside it: a circle of radius **140** at **(240, 1020)** in `#F6F1E6`, with a 2 px ink **Stroke** effect.
 
 Draw the barb on three layers, all centred on the disc:
@@ -218,7 +216,7 @@ Everything hangs off four edges: **x 72** and **x 1128** for the full measure, *
   - `VOL. XLVII · NO. 3` on the left
   - `A JOURNAL OF NATURAL SCIENCE`, centred with **Align center horizontally**
   - `AUTUMN 2026 · £9.50` flush right
-- **Headline:** `The blue / that isn't / there` in **Instrument Serif** at **128 px**, cobalt, with **Line height 0.88** set in the Text panel *before* you click. Its top is at y 330.
+- **Headline:** `The blue / that isn't / there` in **Instrument Serif** at **128 px**, cobalt, with **Line height 0.88** in the Text panel. Its top is at y 330.
 - **Deck:** **Spectral** at 24 px with line height 1.32. Put four lines at x 72 with the top at y 682, clear of the field's 9 o'clock tick.
 - **Contents:** `ALSO IN THIS ISSUE` in Spectral SC 19 px, `#C0582A`, over three lines of Spectral 21 px, all at x 836.
 - **Captions:** **IBM Plex Mono Medium**, 13 px, at x 392:
@@ -229,7 +227,7 @@ Everything hangs off four edges: **x 72** and **x 1128** for the full measure, *
 - **Plate block:** `PLATE III` in Spectral SC 18 px orange. Below it, `Alcedo atthis` in Instrument Serif **Italic** at 30 px, then `Linnaeus, 1758 · common kingfisher` in Spectral 17 px.
 - **Frame:** two keylines, 3 px at a 34 px inset and 1 px at 43 px. For each, fill a rectangle, **Shrink** it, and **Delete**.
 
-> **Tip:** Create every text layer in an empty patch of canvas, then move it. A click inside an existing text layer's box edits that layer. The masthead's box is much wider and taller than its letters.
+> **Tip:** Create every text layer in an empty patch of canvas: click there, set the font, size and spacing, type, and then move it into place.
 
 ## Add the credit and paper grain
 

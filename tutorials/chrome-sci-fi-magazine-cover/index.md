@@ -2,7 +2,7 @@
 title: Design an 80s Chrome Sci-Fi Magazine Cover
 description: Build an 80s sci-fi magazine cover in Lopsy with chrome type, a chrome rocket liner over a NASA photo of Earth, and cover lines set on a grid.
 published: 2026-09-29 16:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: magazine cover, editorial design, chrome, 80s, retro futurism, photo compositing, gradients, layer masks, layer effects, typography, transforms, clone stamp
@@ -98,7 +98,7 @@ Open the **Layer effects** on `Masthead Chrome` and turn on:
 
 - **Stroke**, 3 px, `#050B1E`, for a crisp keyline
 - **Inner Glow**, `#1A0C05`, Size 4, Opacity 70, which darkens the inside edges like a bevel
-- **Drop Shadow**, black, Offset 0 / 10, Blur 18, Opacity 80
+- **Drop Shadow**, black, Offset 0 / 7, Blur 18, Opacity 80
 - **Outer Glow**, `#4FA8FF`, Size 40, Opacity 30, for a faint glow in space
 
 Hide `Masthead Type`. For the specular highlight, add a layer named `Masthead Specular` and pick the **Pencil** at Size 2 in white. Zoom in, click on the chrome's white horizon line just left of the A, then [[Cmd+Shift]]-click just past the last E for a dead-level line across the whole word.
@@ -165,13 +165,13 @@ Finish the hull with a `Near Fin` layer: a small fairing pod along the hull, and
 
 Real chrome reflects what's around it. Select `Earth` and marquee a full-width strip about 360 px tall across the horizon, from just above the glowing edge of the atmosphere down into the clouds. Press [[Cmd+C]] and [[Cmd+V]]. Rename the paste `Hull Reflection` and drag it into the `Cruiser` group, just above `Hull`.
 
-With the strip still selected and the **Move** tool active, drag the bottom-middle handle up to squash the strip to 120 px tall. Then drag the right-middle handle in to make it 1060 px wide. Press [[Cmd+D]].
+With the strip still selected and the **Move** tool active, drag the bottom-middle handle up to squash the strip to 120 px tall. Then drag the right-middle handle in to make it 1060 px wide. Keep the transform live for the next step.
 
 ## Rotate the reflection to match the hull
 
 ![The squashed reflection strip in a rotated transform box, tilted up to the right to match the hull](15-reflection-rotate.webp)
 
-Marquee the strip again. Grab the round rotation handle just outside a corner and turn the strip about −23°, until it lines up with the hull. Press [[Cmd+D]] to commit, then drag it so it covers the lower half of the hull.
+Grab the round rotation handle just outside a corner and turn the strip about −23°, until it lines up with the hull. Then drag inside the box so it covers the lower half of the hull, and press [[Cmd+D]] to commit.
 
 ## Clip the reflection into the hull
 
@@ -201,7 +201,7 @@ Turn on **View → Show Grid**, which also turns on **Snap to Grid**. On a new `
 
 ![A Libre Barcode 39 barcode being stretched taller with the transform handles inside the white box](19-barcode-stretch.webp)
 
-Type the numbers `0 71486 02850 1` in **Michroma** at 11 px along the bottom of the box. Then type `*1185*` in **Libre Barcode 39** at 56 px above them. The asterisks are the barcode's start and stop characters.
+Type the numbers `0 71486 02850 1` in **Michroma** at 11 px along the bottom of the box. Then click `Barcode Box` and type `*1185*` in **Libre Barcode 39** at 56 px above them. The asterisks are the barcode's start and stop characters.
 
 The bars come out too short, so click **Rasterize Layer**. Then marquee the barcode, drag the bottom handle down a little (about 13 px) to make the bars taller, and drag the right handle in slightly so they fit the box. Press [[Cmd+D]], then center the bars and the digits in the box.
 
@@ -209,23 +209,23 @@ The bars come out too short, so click **Rasterize Layer**. Then marquee the barc
 
 ![Three columns of cover lines along the bottom: orange Michroma kickers, navy Barlow Condensed headlines and short two-line descriptions](20-bottom-coverlines.webp)
 
-Each cover line has three parts. The kicker is **Michroma** 12 px in orange `#D9480F` with 3 px letter spacing. The headline is **Barlow Condensed Bold** 36 px in navy `#0B1A3F`. The description is **Barlow Condensed Medium** 25 px in `#22375F` with a line height of 1.15.
+Each cover line has three parts. The kicker is **Michroma** 12 px in orange `#D9480F` with 3 px letter spacing. The headline is **Barlow Condensed Bold** 36 px in navy `#0B1A3F`, with letter spacing 0. The description is **Barlow Condensed Medium** 25 px in `#22375F`, with letter spacing 0 and a line height of 1.15.
 
 Start the first column on the left margin guide, and space the other two so there's about 70 px between each column and the next, and before the barcode. Line the headline cap tops up with the top of the barcode box.
 
-> **Tip:** A Text-tool click on top of an existing text layer edits that layer instead of starting a new one. Click in clear space to start each block, then move it into place with the **Move** tool.
+> **Tip:** Before you set up each block, click the `Cloud Depth` layer. Then click in clear space to start the block, and move it into place with the **Move** tool.
 
 ## Set the cover story headline
 
 ![COVER STORY in orange, THE ORBITAL CRUISER in heavy white condensed capitals, and a two-line description, all on the left margin under the masthead](21-headline-block.webp)
 
-This is the text that sells the issue, so make it big:
+This is the text that sells the issue, so make it big. As before, click `Cloud Depth` before you set up each block:
 
 - **Kicker:** `COVER STORY` in Michroma 15 px, `#FF7A2F`, letter spacing 4, a little way below the masthead.
-- **Headline:** `THE ORBITAL` / `CRUISER` in Barlow Condensed ExtraBold 110 px, white, with a line height of 0.92. Put its cap tops 18 px under the kicker.
-- **Description:** "First class to the Moon aboard the chrome liner of 1999" in Barlow Condensed Medium 30 px, `#C8D6EE`, 30 px under the headline.
+- **Headline:** `THE ORBITAL` / `CRUISER` in Barlow Condensed ExtraBold 110 px, white, with letter spacing 0 and a line height of 0.92. Put its cap tops 18 px under the kicker.
+- **Description:** "First class to the Moon aboard the chrome liner of 1999" in Barlow Condensed Medium 30 px, `#C8D6EE`, letter spacing 0, 30 px under the headline.
 
-Everything starts on the 60 px guide. Across the very top, set `SCIENCE · FICTION · THE FUTURE` and `NOVEMBER 1985 · $2.50` in Michroma 12 px, `#8FA6CC`. The date goes flush right to the 1140 guide.
+Everything starts on the 60 px guide. Across the very top, set `SCIENCE · FICTION · THE FUTURE` and `NOVEMBER 1985 · $2.50` in Michroma 12 px, `#8FA6CC`, letter spacing 3. The date goes flush right to the 1140 guide.
 
 ## Build the anniversary badge
 
@@ -233,7 +233,7 @@ Everything starts on the 60 px guide. Across the very top, set `SCIENCE · FICTI
 
 Select `Stars` and add a `Badge` layer. That keeps the badge below the ship. In the empty space to the right of the headline, fill an 82 px-radius circle with `#FF5A1F`, and give it a cream **Stroke** (`#FFE2B0`, 4 px) and a soft **Drop Shadow**.
 
-Type `SPECIAL` and `ISSUE` in Michroma 12 px, and `100th` in Barlow Condensed ExtraBold 60 px, all in white. Center the three lines on the disc with equal 18 px gaps.
+Click `Badge` before you start each line. Type `SPECIAL` and `ISSUE` in Michroma 12 px, and `100th` in Barlow Condensed ExtraBold 60 px, all in white. Center the three lines on the disc with equal 18 px gaps.
 
 ## Merge and rotate the badge
 

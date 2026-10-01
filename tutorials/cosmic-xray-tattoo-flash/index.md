@@ -2,7 +2,7 @@
 title: Design a Holographic X-Ray Tattoo Flash Sheet
 description: Make a COSMIC X-RAY tattoo flash sheet in Lopsy with x-ray skull, hand, heart and planet designs, holographic foil gradients and a Rye title banner.
 published: 2026-09-28
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: holographic, iridescent, tattoo flash, tattoo design, x-ray, skeleton, space, gradients, lasso, text effects
@@ -103,7 +103,7 @@ of each row, at roughly 600 and 1130.
 
 Turn on **View → Show Grid** and set the **Grid** slider in the options bar
 to **8px** for later alignment. Turn it off again while you draw freehand
-shapes, because the grid also switches on snapping.
+shapes, so they don't snap to it.
 
 ## Cut the ribbon's swallowtails
 
@@ -159,7 +159,7 @@ Switch to **Move** (V) and drag the title until the letters sit in the
 middle of the band, with the same space at both ends and the same space above
 and below the caps. Fine-tune with the arrow keys.
 Add a white **Stroke** with **Width 3** and a `#2A124F` **Drop Shadow** with
-**Offset X 4**, **Offset Y 4**, **Blur 0** and **Opacity 55**. The white keyline separates
+**Offset X 1**, **Offset Y 1**, **Blur 0** and **Opacity 55**. The white keyline separates
 the ink from the foil, and the hard offset shadow reads as a printed sticker.
 
 ## Launch a comet
@@ -310,8 +310,7 @@ Add an ink **Stroke** and a warm **Outer Glow**. Group the heart layers as
 
 ![A pastel sphere burned darker along its lower right, with soft violet latitude bands clipped to the sphere](22-planet-bands.webp)
 
-Click **Banner Tails** so the planet starts outside group 03, and add a
-**Planet** layer. Fill a 236 px circle, centred where the right column guide
+Click **Banner Tails** and add a **Planet** layer. Fill a 236 px circle, centred where the right column guide
 crosses the lower row guide, with a **Radial** gradient from the upper left: white, `#B8F7FF`, `#C9B6FF`, `#FF3FD8`,
 `#3A1C8C`. Pick **Dodge/Burn** (O), set **Mode: Burn**, **Exposure 16** and
 **Size 110**, and drag once along the lower-right edge to turn the sphere away
@@ -364,9 +363,9 @@ Flash numbers let a client say "number 3, please". Add a **Badge 1** layer,
 fill a 54 px circle in the top-left corner, just inside the frame below the
 ribbon, with the pastel foil, and give it an ink
 **Stroke** and a cyan **Outer Glow**. Rasterize the style so the effects travel
-with the pixels. Then marquee the badge, press [[Cmd+C]], [[Cmd+V]] (it
-pastes in place on a new layer) and [[Cmd+D]], and drag the copy with
-**Move** to the upper left of the hand. Paste two more copies for the heart
+with the pixels. Then marquee the badge and press [[Cmd+C]] and [[Cmd+V]].
+The copy pastes in place on a new layer, already selected with the **Move**
+tool active, so drag it to the upper left of the hand. Paste two more copies for the heart
 and the planet. Each badge sits just above and to the left of its own
 design.
 
@@ -379,16 +378,15 @@ until it's centred on its badge.
 
 On a **Sparkle** layer, lasso a four-point star with concave sides, about
 68 px across, in the empty gap in the middle of the sheet, and fill it white.
-Marquee it, then [[Cmd+C]] and [[Cmd+V]]. [[Cmd]]-click the pasted layer's
-thumbnail and rotate it **45°** with the Move tool's rotation handle. Hold
+Marquee it, then press [[Cmd+C]] and [[Cmd+V]]. Rotate the pasted copy
+**45°** with the Move tool's rotation handle. Hold
 [[Cmd]] while you drag and the rotation snaps in 15° steps.
 
 ## Scale the copy and merge it
 
 ![The rotated copy inside a smaller box being scaled down from its bottom-right handle](27-glint-scale.webp)
 
-Press [[Cmd+D]], [[Cmd]]-click the thumbnail again, and [[Cmd]]-drag the
-bottom-right handle inward to about **80%**. [[Cmd]] keeps the scale uniform.
+Now [[Cmd]]-drag the bottom-right handle inward to about **80%**. [[Cmd]] keeps the scale uniform.
 Press [[Cmd+D]], nudge the copy back to the original's centre and choose
 **Layer → Merge Down**. Add a white **Outer Glow** (**Size 22**,
 **Opacity 95**) and rasterize it.

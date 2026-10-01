@@ -2,7 +2,7 @@
 title: Design a Swiss Style Exhibition Poster
 description: Build a Swiss International Style exhibition poster in Lopsy with a strict grid, giant grotesk type, eccentric circles, halftone shading and a rotated caption.
 published: 2026-09-25 09:38
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 50
 tags: poster design, swiss style, typography, grid, halftone, layer effects, selections, transforms
@@ -216,15 +216,15 @@ just right of the ticks, about 15 px above each one, and type `0 m`,
 `2 000 m`, `4 000 m`, `6 000 m`, `8 000 m` and `10 000 m`. Keep the left
 edges lined up. Press [[Tab]] after each one.
 
-> **Tip:** Clicking with the Text tool inside an existing text layer's box
-> edits that layer and loads its font and size. The `0 m` label sits close
-> to `deep`, so check that the word isn't under your click.
+> **Tip:** The `0 m` label sits inside the box around `deep`, so a click
+> there edits the word. Type it a little lower, below the **p**, then drag it
+> up into place with the **Move** tool.
 
 ## Add the probe's reading
 
 ![A red 10 935 m label beside the probe, inside the sonar rings](16-probe-reading.webp)
 
-Select `Ticks` again so you don't restyle the last label. Set the foreground
+Select `Ticks` again. Set the foreground
 to `#FF3D1F`, switch the weight to **SemiBold (600)**, and click just right of
 the sounding line, a little above the probe dot, to type `10 935 m`. The final depth reading belongs to the probe itself, so it
 sits right beside the red dot.

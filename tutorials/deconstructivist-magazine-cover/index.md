@@ -2,7 +2,7 @@
 title: Design a Deconstructivist Magazine Cover in Lopsy
 description: Build a deconstructivist magazine cover in Lopsy with a split masthead, brush-drawn concrete shells, a faulted blue plane and a two-color headline.
 published: 2026-09-29 16:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 90
 tags: magazine cover, deconstructivism, editorial design, typography, brush, selections, transforms, layer effects
@@ -219,8 +219,9 @@ right above the headline, so the two read as one cover line.
 
 ![A three-line mono issue block and a four-line serif deck in the top-right column beside the masthead](14-issue-info-deck.webp)
 
-Starting on the 940 guide, set **IBM Plex Mono 500** at **22** for
-three lines: *ISSUE 23 / AUTUMN 2026*, *MUSIC / ARCHITECTURE / NOISE* and
+Click the **Xenakis Lime** row before you set up each block. Starting on
+the 940 guide, set **IBM Plex Mono 500** at **22** for three lines:
+*ISSUE 23 / AUTUMN 2026*, *MUSIC / ARCHITECTURE / NOISE* and
 *EUR 14  USD 16  GBP 12*. Below it, set the deck in **Instrument Serif 44**:
 *He drew the string / glissandi of Metastaseis / as straight lines, then /
 poured them in concrete.* The calm serif against the torn masthead is the
@@ -230,9 +231,11 @@ contrast deconstructivism needs.
 
 ![Three cover lines numbered 52, 78 and 96 in blue Anton stacked in a narrow column above the lime band, grouped as Cover Lines in the Layers panel](15-cover-lines-group.webp)
 
-In the narrow column right of the black shell, set three page numbers in
-**Anton 56** ultramarine, stacked 160 px apart and starting level with the
-shell's apex. Under each, 65 px lower, add a cover line in **IBM Plex Mono 500** at **20**:
+Click the **Xenakis Lime** row again. In the narrow column right of the
+black shell, set three page numbers in **Anton 56** ultramarine, stacked
+160 px apart and starting level with the shell's apex. Then click
+**Xenakis Lime** once more and, under each number, 65 px lower, add a cover
+line in **IBM Plex Mono 500** at **20**:
 *STOCHASTIC / MUSIC, / A PRIMER*, *UPIC: THE / MACHINE THAT / DRAWS SOUND*
 and *CONCRETE / AS A SCORE*. Click the first row, **Shift-click** the last
 and choose **Layer → Group Layers**. Name the group **Cover Lines**, then
@@ -264,8 +267,8 @@ spaced on the left and end bunched on the right, so their crossings trace
 the same curve as the shells. Caption it in **IBM Plex Mono 14** white:
 *METASTASEIS, 1954 / BARS 309-314*.
 
-Add an elevation mark too: **+21.00** in Plex Mono 17 at the black shell's
-apex, with a short Shift-click leader line.
+Add an elevation mark too: click the **Score** row, then set **+21.00** in
+Plex Mono 17 at the black shell's apex, with a short Shift-click leader line.
 
 ## Add print grain
 
@@ -330,9 +333,9 @@ Every letter now has a 6 px gap where the lines stop short. Press
 
 ![The glissando score scaled to 80 percent and moved inward, with even blue margins to the plane edge and the X](24-reseat-score.webp)
 
-Drag the **Score Label** row directly above **Score**, rasterize it and
-choose **Layer → Merge Down**. Marquee the merged score, [[Cmd]]-drag a
-corner down to **80 %**, press [[Cmd+D]] and move it inward so it has about
+Drag the **Score Label** row directly above **Score** and choose
+**Layer → Merge Down**, which rasterizes the text for you. Marquee the
+merged score, [[Cmd]]-drag a corner down to **80 %**, press [[Cmd+D]] and move it inward so it has about
 90 px of blue to the plane's left edge and 45 px to the X.
 
 ## Share one right edge

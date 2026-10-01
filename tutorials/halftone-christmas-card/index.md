@@ -2,7 +2,7 @@
 title: Make a Vintage Halftone Christmas Card
 description: Design a retro screen-printed Christmas card in Lopsy. Halftone dots shade the sky, snow and script title, and a snowy village glows under a guiding star.
 published: 2026-09-29 12:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: holiday card, christmas card, halftone, screen print, retro, vintage, illustration, typography, layer effects, transforms, groups
@@ -176,13 +176,15 @@ Keep all the colors flat. The halftone layers do the shading.
 ![A pasted copy of the cottage, flipped so its chimney is on the left, moved to the right side and scaled down with the transform handles](10-flip-scale-copy.webp)
 
 Marquee the cottage and press [[Cmd+C]], then [[Cmd+D]] and [[Cmd+V]]. The
-copy is pasted in place on a new layer. Name it *Cottage Teal*.
+copy is pasted in place on a new layer, already selected, with the **Move**
+tool active and its transform handles showing.
 
-1. [[Cmd]]-click its thumbnail to select it. The transform handles appear.
-2. Press [[V]] and click **Flip Horizontal** in the options bar. The chimney moves to the left.
-3. Drag from inside the selection 520 px to the right.
-4. Hold [[Cmd]] and drag the top-left corner handle 20 px in to scale it evenly to about 87%.
-5. Press [[Cmd+D]] to commit the flip, move and scale.
+1. Click **Flip Horizontal** in the options bar. The chimney moves to the left.
+2. Drag from inside the selection 520 px to the right.
+3. Hold [[Cmd]] and drag the top-left corner handle 20 px in to scale it evenly to about 87%.
+4. Press [[Cmd+D]] to commit the flip, move and scale.
+
+Name the new layer *Cottage Teal*.
 
 ## Recolor the copy with the Magic Wand
 
@@ -204,8 +206,8 @@ Paste twice more:
 - *Cottage Cream*: move it 165 px left, scale it to 75%, and wand-recolor the walls `#EFE6D2`.
 - *Cottage Tilted*: move it 690 px right and scale it to 70%. Keep it red.
 
-Select the tilted cottage's pixels and drag the top-right **rotation handle**
-(the circle outside the corner) about 6°. A slightly crooked house gives the
+While the tilted cottage is still selected, drag the top-right **rotation
+handle** (the circle outside the corner) about 6°. A slightly crooked house gives the
 village a hand-drawn feel. Press [[Cmd+D]].
 
 > **Tip:** Each paste, move, scale and rotation is its own history step. If a transform goes wrong, [[Cmd+Z]] steps back one change at a time and [[Cmd+Shift+Z]] brings it back.
@@ -255,7 +257,7 @@ Give the layer a **Color Overlay** of `#F2D06B`, set its **Blend** to
 Give each cottage and the chapel two effects:
 
 - **Stroke**: 3 px, `#131D38`
-- **Drop Shadow**: Offset X −4, Offset Y 4, Blur 0, Opacity 60, color red `#C9362B`. This is a red plate printed slightly out of register.
+- **Drop Shadow**: Offset X −1, Offset Y 1, Blur 0, Opacity 60, color red `#C9362B`. This is a red plate printed slightly out of register.
 
 Click *Cottage Red*, [[Shift]]-click *Window Light*, and choose
 **Layer → Group Layers**. Name the group *Village* and select it.
@@ -281,8 +283,8 @@ For the shading, add a *Pine Shade* layer and [[Cmd]]-click the pine's
 thumbnail. Drag a linear gradient (white → `#B0B0B0` → black) from left to
 right across the tree. Then run **Halftone** at **Dot Size 10** and deselect.
 
-Add a **Color Overlay** of `#1F4F46` and click **Rasterize Layer Style**.
-Then choose **Layer → Merge Down** to bake the dots into *Pine*.
+Add a **Color Overlay** of `#1F4F46`, then choose **Layer → Merge Down** to
+bake the dots into *Pine*.
 
 ## Clone the pine
 

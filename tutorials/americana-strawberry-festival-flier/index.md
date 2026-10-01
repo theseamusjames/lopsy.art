@@ -2,7 +2,7 @@
 title: Design a Vintage Americana Strawberry Festival Flier
 description: Make a letterpress-style Americana flier in Lopsy with a sunburst badge, a halftone strawberry, arched wood type on a path, bunting and real print wear.
 published: 2026-09-28 10:50
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: americana, flier, poster, letterpress, vintage, typography, text on path, halftone, liquify, layer effects
@@ -188,14 +188,9 @@ shadow.
 
 Marquee the whole left swag, from the frame corner to just past the centre
 guide, and press [[Cmd+C]] then [[Cmd+V]]. The paste lands in place as a new
-layer, so rename it *Swag R*.
+layer, selected and with the **Move** tool active. Rename it *Swag R*.
 
-Marquee the same area again, switch to the **Move** tool, and click
-**Flip Horizontal** in the options bar. Press [[Cmd+D]] to commit.
-
-> **Tip:** Use the Move tool's Flip button on a selection here rather than
-> **Image → Flip Horizontal**. The selection flip mirrors exactly what you
-> selected, in place.
+Click **Flip Horizontal** in the options bar, then press [[Cmd+D]] to commit.
 
 ## Slide it into mirror position
 
@@ -216,8 +211,8 @@ Create a *Type* group above *Ribbon*. Inside it, on an *Admission Band* layer,
 marquee a band across the bottom of the page, just inside the inner rule and
 about 84 px tall, and fill it with navy for the footer.
 
-1. With the **Pen Tool**, press about 110 px in from the left edge and roughly a quarter of the way down the page, and drag up and to the right to pull out a long handle. Then press at the same height about 110 px in from the right edge and drag down and to the right, mirroring the first handle. Click **Commit path** in the options bar. (Pressing [[Enter]] would also stroke the path onto the active layer.)
-2. Keep *Admission Band* selected, so the new type settings don't restyle an existing text layer. With the **Text** tool, set **Ultra**, Size **110**, red, then click in empty canvas, type `STRAWBERRY`, and press [[Tab]].
+1. With the **Pen Tool**, press about 110 px in from the left edge and roughly a quarter of the way down the page, and drag up and to the right to pull out a long handle. Then press at the same height about 110 px in from the right edge and drag down and to the right, mirroring the first handle. Click **Commit path** in the options bar to keep the path without stroking it.
+2. Keep *Admission Band* selected. With the **Text** tool, set **Ultra**, Size **110**, red, then click in empty canvas, type `STRAWBERRY`, and press [[Tab]].
 3. In the options bar **Path** dropdown, pick your new path. In the **Text** panel, set Letter spacing to **2**.
 4. Switch to the Move tool and nudge with the arrow keys until the word is centred on the centre guide.
 
@@ -232,7 +227,7 @@ about 84 px tall, and fill it with navy for the footer.
 Open **Layer effects ✦** on *STRAWBERRY*.
 
 - **Stroke**: `#F7ECD3`, Width **7**, position outside.
-- **Drop Shadow**: navy, offset **9 / 11**, Blur **0**, Spread **7**.
+- **Drop Shadow**: navy, offset **2 / 4**, Blur **0**, Spread **7**.
 
 The spread makes the shadow as fat as the outlined letters, so it reads as a
 solid second ink printed behind them. It's the classic Hatch Show Print look.
@@ -245,22 +240,22 @@ Click the *Admission Band* row again. Create `Festival` in **Lobster** at Size
 **185** in navy, and click **Rasterize Layer** in the Layers footer, so the
 scale and tilt you're about to apply are baked into pixels.
 
-Give it a cream **Stroke** of **6** and a red **Drop Shadow** of **8 / 10**,
+Give it a cream **Stroke** of **6** and a red **Drop Shadow** of **2 / 4**,
 Blur 0, Spread 6.
 
 It has to clear both the arch and the badge, so it needs to shrink. Marquee it,
 switch to the Move tool, and hold [[Cmd]] while you drag the bottom-right handle
-inward to about **86 %**, then press [[Cmd+D]]. Holding [[Cmd]] keeps the scale uniform.
+inward to about **86 %**. Holding [[Cmd]] keeps the scale uniform.
 
 ## Tilt the script
 
 ![The Festival script inside a rotated transform box, tilted three degrees up to the right](16-festival-rotate.webp)
 
-Move *Festival* so it's centred on the centre guide and tucked under the arch,
+Drag *Festival* so it's centred on the centre guide and tucked under the arch,
 with at least 20 px of clear paper between it and the arch's ends.
 
-Marquee it again, and with the Move tool drag the **rotate handle** just
-outside the top-right corner **3°** counter-clockwise. Press [[Cmd+D]].
+Then drag the **rotate handle** just outside the top-right corner **3°**
+counter-clockwise, and press [[Cmd+D]].
 
 A small upward tilt adds energy without fighting the symmetric arch above.
 
@@ -287,15 +282,14 @@ gap above and below.
 
 ![The lower third filled with two navy event lines, a star divider, PLEASANT VALLEY FAIRGROUNDS, red hours and the cream admission line in the navy band](18-info-block.webp)
 
-Create each line in empty canvas (a click inside an existing text layer edits
-it instead), then switch to the Move tool, click **Align center horizontally**
+Create each line in empty canvas, then switch to the Move tool, click **Align center horizontally**
 and drag it down into place:
 
 - `THE 26TH ANNUAL` in **Fjalla One 34**, navy, letter spacing 8, just under the bunting.
 - Two event lines in **Alfa Slab One 30**, navy, letter spacing 1, stacked just below the ribbon: `PIE CONTEST • PICK-YOUR-OWN • SQUARE DANCE` and `SHORTCAKE SOCIAL • BRASS BAND • HAYRIDES`. Keep each under about 880 px wide.
 - `PLEASANT VALLEY FAIRGROUNDS` in **Fjalla One 62**, letter spacing 4, below the events.
 - The hours, `9 AM 'TIL DUSK • RAIN OR SHINE • ROUTE 9, PLEASANT VALLEY`, in **Fjalla One 30**, red, letter spacing 3, below that.
-- `ADMISSION 25¢ • KIDS UNDER 12 FREE` in **Fjalla One 38**, cream, centred in the band.
+- `ADMISSION 25¢ • KIDS UNDER 12 FREE` in **Fjalla One 38**, cream, letter spacing 5, centred in the band.
 
 On an *Ornaments* layer, lasso red stars either side of the tagline. Draw a
 thin two-part navy rule between the events and the venue line with the
@@ -365,8 +359,8 @@ Two-colour presses never line up perfectly. Fake it with arrow-key nudges on
 the Move tool:
 
 - Nudge *Red Ring* **3 right, 2 down**, and *Hours* **2 right, 1 down**.
-- Nudge *STRAWBERRY* **3 right, 2 down**, then change its shadow offset to **6 / 9** so the navy stays put.
-- Change *Festival*'s red shadow to **10 / 12**.
+- Nudge *STRAWBERRY* **3 right, 2 down**, then change its shadow offset to **0 / 2**, so the navy shifts only 1 px.
+- Change *Festival*'s red shadow to **4 / 6**.
 
 The result is a hairline of cream where the inks drift apart.
 
@@ -392,7 +386,7 @@ Marquee-delete the texture over the small text lines so they stay readable.
 
 Worn ink should only ever show *paper*, and only where there was ink.
 
-1. Take the **Magic Wand**, untick **Contiguous**, zoom in, and click right in the middle of a white speck on *Ink Wear*.
+1. Take the **Magic Wand**, untick **Contiguous**, zoom in, and click a white speck on *Ink Wear*.
 2. Click **Add Layer** (*Paper Show*), set the foreground to paper `#F2E4C6`, and choose **Edit → Fill**. Press [[Cmd+D]].
 3. Delete the *Ink Wear* layer and set *Paper Show* to **85 %**.
 

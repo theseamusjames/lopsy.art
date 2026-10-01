@@ -2,7 +2,7 @@
 title: Design a Cut-Paper Collage Record Label Logo
 description: Build a torn-paper collage logo in Lopsy, with a singing lark on a vinyl record, halftone paper, text on a circular path and a tape tagline.
 published: 2026-09-28 22:40
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: logo design, collage, cut paper, branding, selections, layer effects, text on a path, halftone, typography
@@ -153,10 +153,10 @@ When you tear real paper, the white core shows along the edge. In Teal Disc's
 effects:
 
 - **Stroke**: color `#F2EAD8`, **Width** `4`, position **Outside**
-- **Drop Shadow**: `#3A2410`, offsets `6` / `10`, **Blur** `16`, **Opacity** `45`
+- **Drop Shadow**: `#3A2410`, offsets `2` / `6`, **Blur** `16`, **Opacity** `45`
 
 Use deeper shadows for pieces that sit higher in the stack. The disc gets
-10 px, the bird will get 6 px and the tape will get 3 px.
+the deepest, then the bird, then the tape.
 
 ## Build the vinyl record
 
@@ -298,10 +298,10 @@ pale edges read as overlapping feathers.
 
 ![The Layer Effects drawer open on the Body layer showing a drop shadow and a cream stroke, with each lark piece casting a small shadow](19-lark-paper-shadows.webp)
 
-Give **Tail, Body, Wing, Breast, Crest** and **Beak** a **Drop Shadow** in
+Give **Tail, Wing, Breast, Crest** and **Beak** a **Drop Shadow** in
 `#1A1008` with offsets `3` / `6`, **Blur** `8` and **Opacity** `45`. Give Body
-a 3 px cream **Stroke** too, so the whole bird gets the same torn-paper
-outline as the disc.
+a 3 px cream **Stroke**, so the whole bird gets the same torn-paper
+outline as the disc, and a matching shadow at offsets `0` / `3`.
 
 Click `Eye`, [[Shift]]-click `Tail`, choose **Layer → Group Layers**, and
 name the group `Lark`.
@@ -317,7 +317,7 @@ With `Eye` selected, add a layer named `Note 1`. Build the note in
 2. For the stem, use a hard Brush at Size `6`. Click at the right side of the head, then [[Cmd+Shift]]-click about 80 px straight above it.
 3. Lasso a curved flag from the top of the stem sweeping down to the right, and fill it.
 
-Give it a 4 px cream **Stroke** and a small **Drop Shadow** (`2` / `4`,
+Give it a 4 px cream **Stroke** and a small **Drop Shadow** (`0` / `0`,
 Blur `5`, Opacity `40`) so it matches the other paper pieces.
 
 ## Copy, scale and rotate a second note
@@ -349,7 +349,7 @@ whole band tilts up about one degree to the right (the right end sits about
 16 px higher).
 
 Fill with `#1E1B19` and add noise at `10`. Add a 3 px cream **Stroke** and a
-**Drop Shadow** (`4` / `8`, Blur `10`, Opacity `45`).
+**Drop Shadow** (`1` / `5`, Blur `10`, Opacity `45`).
 
 > **Tip:** Overlap the record by about 40 px, not by just a few pixels. A
 > near-miss between two edges looks like a mistake, and a clear overlap looks

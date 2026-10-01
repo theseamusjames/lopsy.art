@@ -2,7 +2,7 @@
 title: Design a Constructivist Zine Cover in Lopsy
 description: Make a constructivist zine cover in Lopsy with a clock-eyed kino-eye, a rotated gear, a factory skyline, misregistered diagonal type and halftone texture.
 published: 2026-09-25 16:13
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: zine cover, constructivism, poster design, text effects, layer effects, selections, transforms, halftone
@@ -185,20 +185,17 @@ Rectangular Marquee to type it exactly: **From** `156`, `718` and **To**
 `204`, `1142`.) Fill it black. That bar is two opposite teeth. Press
 [[Cmd+C]] to copy it and [[Cmd+D]] to deselect.
 
-Press [[Cmd+V]]. The copy is pasted in place on a new layer. Draw the same
-marquee over it, press [[V]] for **Move**, hold [[Cmd]] and drag a round
-rotation handle. [[Cmd]] snaps the rotation to 15° steps, so stop at **30°**.
+Press [[Cmd+V]]. The copy is pasted in place on a new layer, already selected
+with the **Move** tool active. Hold [[Cmd]] and drag a round rotation
+handle. [[Cmd]] snaps the rotation to 15° steps, so stop at **30°**.
 Press [[Cmd+D]] to commit.
 
 ## Finish the ring of teeth
 
 ![A black twelve-point star of bars crossing at one centre on the left side of the canvas](14-gear-teeth.webp)
 
-Repeat the paste, marquee and rotate for **60°, 90°, 120° and 150°**. Six
-crossed bars give you twelve evenly spaced teeth.
-
-> **Tip:** Draw the marquee again after every paste. Without a selection, a
-> drag on the canvas moves the layer instead of rotating it.
+Repeat the paste and rotate for **60°, 90°, 120° and 150°**. Six crossed
+bars give you twelve evenly spaced teeth.
 
 ## Add the hub and axle hole
 
@@ -325,8 +322,8 @@ top of the page down to a clear gap above the gear's top tooth.
 ![A cream 07 in Anton outlined in black, with the Stroke effect set to 8 pixels in the Layer Effects panel](25-outline-07-stroke.webp)
 
 Set the Size to `180` and the foreground to cream. Click at the very top of
-the page, just right of INDUSTRIAL, and type `07`, then press [[Tab]] and rasterize it. Open its **Layer Effects** and turn
-on **Stroke** with **Width** `8`.
+the page, just right of INDUSTRIAL, and type `07`, then press [[Tab]]. Open its **Layer Effects** and turn on
+**Stroke** with **Width** `8`.
 
 The number is cream on cream, so all you see is the black outline. It's clearly
 readable but stays lighter than INDUSTRIAL.
@@ -342,16 +339,15 @@ box's left edge:
 
 1. `THE NIGHT SHIFT ZINE` in cream **Russo One** at Size `30`, near the top
    of the box.
-2. `ISSUE 07 / AUTUMN 2026 / 3 AM` in **Space Mono** Regular at Size `22`, in a
-   brighter red `#E0463A`, below it.
-
-Rasterize each line when you finish it.
+2. Select `Masthead` again, then set `ISSUE 07 / AUTUMN 2026 / 3 AM` in
+   **Space Mono** Regular at Size `22`, in a brighter red `#E0463A`, below
+   it.
 
 ## Rotate the slogan
 
 ![WE DO NOT SLEEP. WE PRODUCE. in red Bebas Neue inside rotation handles, turned to match the diagonal band](27-rotate-tagline.webp)
 
-Switch to **Bebas Neue** at Size `64` in red. Click in the cream triangle
+Select `Masthead` and switch to **Bebas Neue** at Size `64` in red. Click in the cream triangle
 under the band, on the right, and type
 `WE DO NOT SLEEP.`, press [[Enter]], and type `WE PRODUCE.`. Press [[Tab]] and
 rasterize the layer.

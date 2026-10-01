@@ -2,7 +2,7 @@
 title: Design a Duotone Data Visualization Poster
 description: Build a duotone infographic poster in Lopsy with a honeycomb and bee hero, a Gradient Map, an accurate bar chart, and clean editorial type.
 published: 2026-09-28 19:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 120
 tags: data visualization, infographic, duotone, poster, bar chart, gradient map, honeycomb, typography, layer masks, layer effects
@@ -77,12 +77,10 @@ cells.
 
 ![A second hexagon column offset down and to the right of the first so the two interlock, with the copy selected in the Layers panel](03-duplicate-offset.webp)
 
-Click **Duplicate Layer** in the Layers panel, then **click the copy's row**
-so that only the copy is selected. Press [[V]] and move the copy so it sits
-96 px right of and 55 px below the original. It already starts 10 px down and
-right, so it needs another 86 px right and 45 px down. Drag it most of the
-way and finish with the arrow keys ([[Shift]] + arrow moves 10 px). The cells
-now interlock.
+Click **Duplicate Layer** in the Layers panel. The copy lands exactly on top
+of the original and is selected. Press [[V]] and move the copy 96 px right
+and 55 px down. Drag it most of the way and finish with the arrow keys
+([[Shift]] + arrow moves 10 px). The cells now interlock.
 
 Press [[Cmd+E]] (Merge Down). Then duplicate and move again:
 
@@ -114,11 +112,9 @@ thorax just right of the head and the abdomen further right:
 2. *Abdomen*: drag a `#A3A3A3` ellipse out from its centre, 190 px across and 140 px down, so it's about 380 × 280 px. Centre it about 380 px right of the centre guide.
 3. *Stripes*: with the Rectangular Marquee, fill three `#1E1E1E` vertical bands, about 50 px wide and taller than the abdomen, spaced about 110 px apart across its middle.
 
-To trim the stripes to the body, [[Cmd]]-click the *Abdomen* thumbnail to
-load its shape as a selection. Then **click the Abdomen row and click back on
-Stripes**. Choose **Select → Inverse** ([[Shift+Cmd+I]]) and press [[Delete]].
-
-> **Tip:** Don't skip the click away and back. Without it, Delete can clear more than the stripe ends outside the body.
+To trim the stripes to the body, keep *Stripes* active and [[Cmd]]-click the
+*Abdomen* thumbnail to load its shape as a selection. Choose **Select →
+Inverse** ([[Shift+Cmd+I]]) and press [[Delete]].
 
 ## Add the head, thorax and antennae
 
@@ -173,12 +169,10 @@ them into *Bee*.
 
 [[Cmd]]-click the *Bee* thumbnail, press [[V]], and [[Cmd]]-drag the
 bottom-right corner handle out to **115%**. Hold [[Cmd]] to keep the
-proportions. Press [[Cmd+D]].
+proportions.
 
-Load the selection again and drag a rotation handle **12°** counter-clockwise,
-so the bee climbs toward the headline. Press [[Cmd+D]].
-
-> **Tip:** If a thin seam shows around the pollen basket after all the merging, [[Cmd]]-drag a circle a little larger than the basket with the Elliptical Marquee and choose **Edit → Fill** with the outline grey `#BDBDBD`. Then fill a slightly smaller circle with `#C6C6C7` to redraw the basket.
+Then drag a rotation handle **12°** counter-clockwise, so the bee climbs
+toward the headline. Press [[Cmd+D]].
 
 ## Make it duotone with a Gradient Map
 
@@ -273,11 +267,9 @@ hidden in one step.
 
 ![The kicker and a large white BEE SURVIVAL headline in Anton at the top left, with the last letter hidden behind the honeycomb](16-title-placed.webp)
 
-Before each new text layer, **click the Background row**. Font and size
-changes apply to the active text layer, and this keeps them off the text
-you've already set. Also click to type in empty canvas, well away from other
-type, and move the layer into place afterwards. A click inside an existing
-text layer's box edits that text instead.
+**Click the Background row** before you set up each text layer. Click to
+type in empty canvas, well away from other type, and move the layer into
+place afterwards.
 
 1. Kicker: **IBM Plex Mono**, Medium, **24**, `#F2A516`: `THE STATE OF THE AMERICAN HIVE  /  2010–2026`. Move it so its letters start on the left margin guide, about 150 px from the top.
 2. Title: **Anton**, Regular, **160**, white: `BEE SURVIVAL`. Move it so the caps start on the left margin, 32 px under the kicker.
@@ -300,7 +292,7 @@ top-left cells are faded dark honey, so the headline stays readable.
 A good data poster pulls one number out of the chart:
 
 1. **Anton** **136** in `#F2A516`: `55.6%`. In the **Text** panel, set **Letter spacing** to 6 so the period doesn't touch the fives. Place it on the left margin, well below the headline.
-2. **IBM Plex Mono** SemiBold **26**, white: `OF COLONIES LOST IN 2024–25,` and, on its own layer 40 px lower, `THE WORST YEAR ON RECORD`. Put both just under the stat.
+2. **IBM Plex Mono** SemiBold **26**, white, **Letter spacing** back to **0**: `OF COLONIES LOST IN 2024–25,` and, on its own layer 40 px lower, `THE WORST YEAR ON RECORD`. Put both just under the stat.
 3. **IBM Plex Mono** Regular **24**, white: `Share of managed U.S. honey bee colonies lost each year, April to April`, just above the chart, about 90 px over the 60% line.
 
 Every block now starts on the left margin guide.
@@ -326,8 +318,8 @@ Axis labels are **IBM Plex Mono** Medium **20**:
 
 ![Value labels over all sixteen bars, a HALF OF ALL COLONIES label above the dotted line, and a small marquee over the 48.2 label where the dots have been cut away](21-value-labels-knockout.webp)
 
-Label all 16 bars with **IBM Plex Mono** SemiBold **18**. Use `#F2A516` for
-most and `#FFF1C9` for **55.1** and **55.6**. Centre each one on its bar,
+Label all 16 bars with **IBM Plex Mono** SemiBold **18**, **Letter spacing**
+**0**. Use `#F2A516` for most and `#FFF1C9` for **55.1** and **55.6**. Centre each one on its bar,
 with its bottom 12 px above the bar's top. One label
 style with no % signs is quicker to read than mixed styles.
 
@@ -342,8 +334,8 @@ them out.
 
 ![Three lines of small honey mono caps under the chart citing the survey sources and explaining that '24 means 2024–25](22-footer.webp)
 
-In **IBM Plex Mono** Regular **16**, `#F2A516`, set three lines on the left
-margin, starting about 60 px under the year labels and 28 px apart:
+In **IBM Plex Mono** Regular **16**, `#F2A516`, **Letter spacing** **0**, set
+three lines on the left margin, starting about 60 px under the year labels and 28 px apart:
 
 - `SOURCE: AUBURN UNIVERSITY & APIARY INSPECTORS OF AMERICA U.S. BEEKEEPING SURVEY;`
 - `BEE INFORMED PARTNERSHIP (2010–2019). TOTAL ANNUAL LOSS, ROUNDED.`

@@ -2,7 +2,7 @@
 title: Design a Folk Art Zine Cover
 description: Make an alpine folk art zine cover in Lopsy with radial-symmetry sunbursts, crossed alphorns, a painted medallion, woodtype titles and halftone.
 published: 2026-09-25 16:16
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: zine cover, folk art, typography, radial symmetry, layer effects, selections, transforms, halftone
@@ -123,10 +123,8 @@ horn neatly without spilling onto the paper.
 Give the horn an outline first so that both copies get it. Open **Alphorn L**'s
 effects, tick **Stroke**, and set **Width** `2`, position **outside**, colour ink.
 
-Click **Duplicate Layer** and rename the copy `Alphorn R`. The copy lands
-10 px right and 10 px down, so pick the **Move** tool ([[V]]) and press
-[[Shift+Left]] and [[Shift+Up]] once each to put it exactly on top of the
-original.
+Click **Duplicate Layer** and rename the copy `Alphorn R`. The copy sits
+exactly on top of the original.
 
 Marquee a snug box around the whole horn, from the mouthpiece to the bell
 rim. Press [[V]] and click **Flip Horizontal** in the options bar. The bell
@@ -290,8 +288,7 @@ With **Ribbon Band** still selected, press [[T]] for the **Text** tool:
 
 ![A small ink tagline Lieder, Wanderwege, Geschichten between the medallion and the ribbon](17-tagline.webp)
 
-Click **Ribbon Band** again so the new type doesn't restyle the issue line.
-Keep **Special Elite**, but set **Size** to `17` and the foreground to ink.
+Click **Ribbon Band** again. Keep **Special Elite**, but set **Size** to `17` and the foreground to ink.
 
 Copy `LIEDER  ·  WANDERWEGE  ·  GESCHICHTEN` to your clipboard. Click an empty
 spot and **paste** it with [[Cmd+V]]. The middle dots are easiest to paste
@@ -316,7 +313,7 @@ on the page.
 Open **YODEL**'s effects:
 
 - **Stroke:** **Width** `3`, **outside**, cream.
-- **Drop Shadow:** **Offset X** and **Offset Y** `5`, **Blur** `0`, colour ink, **Opacity** `75`.
+- **Drop Shadow:** **Offset X** and **Offset Y** `2`, **Blur** `0`, colour ink, **Opacity** `75`.
 
 The hard, unblurred shadow gives the title the slightly raised look of printed
 woodtype.
@@ -375,9 +372,7 @@ of tiny ochre and brown dots in the centre.
 
 ![A wide marquee centred on the 450 guide around the left vine, ready for Flip Horizontal](23-mirror-vine.webp)
 
-Duplicate **Vine L** and rename the copy `Vine R`. With the Move tool, press
-[[Shift+Left]] and [[Shift+Up]] once each to undo the duplicate's 10 px
-offset. Then marquee from the inside edge of the frame on the left to the
+Duplicate **Vine L** and rename the copy `Vine R`. Then marquee from the inside edge of the frame on the left to the
 inside edge on the right, tall enough to take in the whole vine. The frame
 is symmetrical, so this box is centred on the centre guide, and a flip
 mirrors the vine exactly into the right margin.
@@ -391,7 +386,7 @@ Press [[V]], click **Flip Horizontal**, and press [[Cmd+D]].
 Screen prints and risographs never line up perfectly. To fake that:
 
 1. Duplicate **Frame** and rename the copy `Frame Misprint`.
-2. The copy lands 10 px right and 10 px down. With the Move tool (and Snap off), press [[Shift+Left]] and [[Shift+Up]] once each to put it back over the original, then press the right arrow **3** times and the down arrow **2** times.
+2. With the Move tool, press the right arrow **3** times and the down arrow **2** times.
 3. Set the copy's blend mode to **Multiply** and its opacity to `30%`.
 
 You get a faint darker edge, like a second plate that slipped.

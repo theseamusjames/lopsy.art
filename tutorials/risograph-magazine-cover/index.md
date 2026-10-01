@@ -2,7 +2,7 @@
 title: Make a Risograph Magazine Cover from a Photo
 description: Turn a whale photo into a two-colour risograph magazine cover in Lopsy with halftone plates, Multiply overprints, misregistration and ink texture.
 published: 2026-09-30 22:40
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: magazine cover, risograph, halftone, overprint, photo editing, blend modes, typography, texture, magic wand, dodge and burn
@@ -117,7 +117,7 @@ Open the layer's effects drawer:
 
 The dots now look like blue ink on paper.
 
-The photo also runs off the canvas, and halftone cells straddling the canvas edge can leave a sliver of dots in the empty sky. Marquee a 10 px strip at each side, above the horizon, and delete it.
+Then clear any stray dots along the canvas edges in the sky: marquee a 10 px strip at each side, above the horizon, and delete it.
 
 ## Separate the pink plate
 
@@ -141,7 +141,7 @@ Keep the plates at different screen angles (blue 15°, pink 75°). That's how re
 2. Because both are **Multiply**, the whale prints indigo where the inks overlap. The sea stays blue with a faint lilac tint.
 3. Select `Pink Plate`, pick the **Move** tool, and nudge it **7 px right** and **4 px down** with the arrow keys. That's the slight miss of a hand-fed second pass. Look for the pink fringe along the whale's back.
 
-The nudge pulls off-canvas pixels in from the left edge. Marquee the first 9 px of the sea on `Pink Plate` and delete them so the edge doesn't show a dense pink stripe.
+Then marquee the first 9 px of the sea on `Pink Plate` and delete them, so the left edge doesn't show a dense pink stripe.
 
 ## Set a yellow sun behind the whale
 
@@ -167,7 +167,7 @@ Keep everything on a **65 / 1135 px** margin.
 
 Set the masthead, rule and headline to **Multiply**.
 
-> **Tip:** Create each text layer in an empty patch of canvas and then move it into place. A text click inside an existing text layer's box edits that layer instead.
+> **Tip:** Create each text layer in an empty patch of canvas and then move it into place.
 
 ## Add the deck, route arc and photo credit
 
@@ -203,7 +203,7 @@ Align it flush right to 1135, with its top at y 540.
 2. Fill a 172 px circle centred on (1020, 832) with pink. It deliberately overlaps the horizon by about 50 px.
 3. Type `6,000` in **Dela Gothic One** 33 px and `KM ONE WAY` in **Space Mono Bold** 17 px, both in the paper colour.
 4. Centre the two lines as one block on the disc.
-5. Rasterize both, then use **Layer → Merge Down** twice so the sticker is a single layer.
+5. Use **Layer → Merge Down** twice so the sticker is a single layer. Merge Down rasterizes the text for you.
 6. Marquee the disc and rotate it **−12°** with the Move tool's rotate handle. Press [[Cmd+D]].
 7. Set the disc to **Multiply**, so the sea's dots show through its lower edge like real overprinted ink.
 
@@ -227,7 +227,7 @@ Drag the layer above the band in the Layers panel.
 2. Snap a 152 × 100 cream box.
 3. Snap 4, 8 and 12 px bars into it and fill them blue.
 4. Add the digits in Space Mono 11 px.
-5. Turn **Snap** off before you nudge anything. With snap on, every arrow press moves one full grid cell.
+5. Untick **Snap** before you nudge anything, so the arrow keys move 1 px at a time.
 
 ## Add riso ink texture
 

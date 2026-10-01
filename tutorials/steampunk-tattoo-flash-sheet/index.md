@@ -2,7 +2,7 @@
 title: Draw a Steampunk Tattoo Flash Sheet
 description: Draw a steampunk tattoo flash sheet in Lopsy with lasso-cut brass pieces, keylines, sticker halos, pepper shading, a gilt title and a motto on a curved path.
 published: 2026-09-30 05:50
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 150
 tags: steampunk, tattoo flash, tattoo design, lasso, gradients, layer effects, text on path, emboss, groups, photo texture
@@ -119,8 +119,8 @@ Draw the wing from the back forward:
 
 ![The left wing duplicated, flipped with Image then Flip Horizontal, and moved to mirror the right side](07-mirror-wing.webp)
 
-With **Wing** active, choose **Layer → Duplicate Layer**, then click the copy's
-row. **Image → Flip Horizontal** mirrors it.
+With **Wing** active, choose **Layer → Duplicate Layer**. **Image → Flip
+Horizontal** mirrors the copy.
 
 Drag the copy with the **Move** tool until the two wings sit symmetrically on
 either side of where the watch will go, then fine-tune with the arrow keys
@@ -153,8 +153,7 @@ A heavier outer line makes each design read from across the room:
 3. Click the empty **Watch Keyline** row and choose **Edit → Fill** with ink.
 
 Set **XII**, **III** and **IX** in **Cinzel Bold** at 30 px. Create each one in
-empty canvas, so the click doesn't land in another text layer, then move it
-onto the dial, just inside the ticks.
+empty canvas, then move it onto the dial, just inside the ticks.
 
 ## Draw and rotate the airship
 
@@ -275,7 +274,7 @@ To gild it:
 
 1. [[Cmd]]-click the text thumbnail and add a **Title Gilt** layer.
 2. Drag a four-stop gold gradient from the top of the letters to the bottom.
-3. Give the layer a 3 px dark **Stroke** and a hard 4 × 5 px **Drop Shadow** (Blur 0).
+3. Give the layer a 3 px dark **Stroke** and a hard 1 × 2 px **Drop Shadow** (Blur 0).
 
 Set the subtitle and footer in Playfair Display SC Regular, with 2–3 px letter
 spacing.
@@ -298,7 +297,7 @@ them.
 On each **Keyline** layer, open **Layer effects**:
 
 - **Stroke:** cream `#EFE4C8`, **Width 12**, **Outside**.
-- **Drop Shadow:** `#050706`, **12 × 20**, **Blur 14**, **75%**.
+- **Drop Shadow:** `#050706`, **0 × 8**, **Blur 14**, **75%**.
 
 The keyline gives the halo its clean outer edge, so the designs read as
 die-cut stickers on the dark sheet.
@@ -333,11 +332,8 @@ while the heart crowded the cogs.
 
 ![The Clockwork Heart group being dragged left across the sheet](23-rebalance-row.webp)
 
-Showing the grid also switches on **Snap** in the options bar. Untick it
-before you move anything, or drags and arrow-key nudges jump in whole grid
-cells.
-
-Then fix the spacing by moving whole groups, by eye:
+Untick **Snap** in the options bar, then fix the spacing by moving whole
+groups, by eye:
 
 - **Clockwork Heart:** well to the left, about 70 px.
 - **Top Hat:** a little left, about 45 px.

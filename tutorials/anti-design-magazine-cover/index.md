@@ -2,7 +2,7 @@
 title: Design an Anti-Design Photocopy Magazine Cover
 description: Build a Ray Gun-style SPITE magazine cover in Lopsy with a xeroxed photo collage, sliced type, a hazard sticker, rubber stamp and toner grain.
 published: 2026-09-27 09:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: anti-design, magazine cover, editorial design, photocopy, xerox, collage, halftone, typography, perspective transform, textures
@@ -68,9 +68,7 @@ commit. Transforms commit on [[Cmd+D]], not Enter.
 ![The orange slab now shows a fine grid of slightly darker orange dots](03-halftone-slab-screen.webp)
 
 Flat vector orange looks too clean for print. Choose **Layer → Duplicate
-Layer** and rename the copy **Slab Screen**. Duplicate places the copy 10 px
-right and 10 px down, so with the Move tool press [[Shift+Left]] and
-[[Shift+Up]] once each to put it back in register. Run **Filter →
+Layer** and rename the copy **Slab Screen**. Run **Filter →
 Halftone** with **Dot Size 8**, **Angle 30** and **Softness 2**. Set the
 copy to **Multiply** at **30%**. The dots now read as printed ink.
 
@@ -137,9 +135,7 @@ darks, and that's the point.
 
 ![The bench photo covered in a visible dot screen and grain, looking like a cheap xerox](08-xerox-halftone-noise.webp)
 
-Duplicate **Xerox Photo** and nudge the copy back into register
-([[Shift+Left]] and [[Shift+Up]] once each). Run
-**Filter → Halftone** with **Dot Size 6**, **Angle 45** and **Softness
+Duplicate **Xerox Photo**. Run **Filter → Halftone** with **Dot Size 6**, **Angle 45** and **Softness
 2**. Set the copy to **Multiply** at **60%** and **Merge Down**. Finish with
 **Filter → Add Noise** (**Mono**, **Gaussian**, **14**). Now the clip-art
 bench reads as a grainy newspaper photo.
@@ -159,13 +155,13 @@ layer's effects and add a **Stroke** in `#F1EEE6`, **Width 14**, with
 
 ![A huge black SPITE masthead in Anton cut off by the top edge, with an orange copy peeking out below and to the left](10-misregistered-masthead.webp)
 
-Click **Slab Screen** so the text lands at the root. Choose the **Text**
+Click **Slab Screen** (outside the group). Choose the **Text**
 tool, set **Anton** at **500 px** in `#141312`, click in empty canvas and
 type **SPITE**. Drag it so the letter tops sit about **130 px above** the
 canvas top. The page cuts the masthead, and that's the anti-design move.
 
-**Duplicate Layer** and rename the copy **SPITE Ink**. It lands 10 px right
-and 10 px down; nudge it a further 8 px right and 4 px down. On the original
+**Duplicate Layer** and rename the copy **SPITE Ink**. With the Move tool,
+nudge it 18 px right and 14 px down. On the original
 **SPITE** underneath, add a **Color Overlay** in `#FF5A14` and set the layer's
 **Blend** to **Multiply** in the same drawer. The orange ghost reads as a
 misregistered second ink.
@@ -298,10 +294,8 @@ Turn on **View → Show Grid**, which also turns on Snap. Type the coverlines
 in **IBM Plex Mono** Bold at **25 px** on two lines: **ALSO: ARMRESTS AS
 POLICY / THE ANTI-SKATE STUD** and **A FIELD GUIDE TO SPIKES / WHO IS THE
 CITY FOR?**. Drag them into the bottom-left corner, under FURNITURE. Then
-untick **Snap** in the options bar and turn **Show Grid** off, and nudge with
-the arrow keys until the left edge lines up exactly with HOSTILE and
-FURNITURE. (While Snap is on, each arrow press jumps a whole grid cell.)
-That hidden grid keeps the chaos readable.
+turn **Show Grid** off and nudge with the arrow keys until the left edge
+lines up exactly with HOSTILE and FURNITURE. That hidden grid keeps the chaos readable.
 
 ## Run the issue line down the right edge
 

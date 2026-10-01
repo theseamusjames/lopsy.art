@@ -2,7 +2,7 @@
 title: Design a Neon Data Visualization Poster
 description: Build a neon infographic poster in Lopsy with glowing tube type, a to-scale bubble chart, a neon bar chart, a Bloom glow pass and a mosaic tile wall.
 published: 2026-09-29 23:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 120
 tags: data visualization, infographic, neon, poster, layer effects, bloom, typography, pattern fill, grid, paths, vertical text
@@ -68,9 +68,9 @@ Click **New Group** in the Layers panel and name it `Title`. Tilt Neon is drawn 
 - **Outer Glow** `#FF2E88`: Size 40, Spread 10, Opacity 95.
 - **Drop Shadow** `#020106`: Offset X 10, Offset Y 14, Blur 12, Opacity 70.
 
-Above the headline, on the left margin, type the kicker `HONG KONG KILOWATTS  //  NO. 01` in **Space Mono Bold** at **28 px**, with **Letter spacing 6** set in the **Text** panel. For the intro, type four short lines in **IBM Plex Mono** at **34 px**, starting on the column guide. Move it so its last line sits level with the bottom of OUT.
+Click the `Title` group row before you set up each of the next two texts. Above the headline, on the left margin, type the kicker `HONG KONG KILOWATTS  //  NO. 01` in **Space Mono Bold** at **28 px**, with **Letter spacing 6** set in the **Text** panel. For the intro, type four short lines in **IBM Plex Mono** at **34 px**, with **Letter spacing** back to 0, starting on the column guide. Move it so its last line sits level with the bottom of OUT.
 
-> **Tip:** Create each new text layer in empty canvas and then move it. A click inside an existing text layer's box edits that layer instead of starting a new one.
+> **Tip:** Create each new text layer in empty canvas and then move it into place.
 
 ## Burn out the T
 
@@ -95,12 +95,12 @@ Finally, marquee the T, switch to the **Move** tool and drag the rotation handle
 ![A dark rounded sign plate with a cyan neon border and the vertical characters 香港霓虹 glowing pink-red, hanging from a metal arm at the top right](06-hanging-sign.webp)
 
 Hong Kong signs hang out over the street and read top to bottom. In a `Sign` group:
-1. **Rounded plate.** Marquee a tall plate at the top right, about 175 px wide and 510 px tall, with its right edge on the right margin guide and its top about 40 px below the top of the canvas. Run **Select → Shrink…** 26 followed by **Select → Grow…** 26. Shrinking and then growing rounds off the corners. Fill the selection with `#140F1E`, and add a **Stroke** of 3 px in `#2E2838` and a soft Drop Shadow (Blur 30, Opacity 55).
-2. **Frame.** On a new layer, marquee about 12 px inside the plate on every side and round it the same way with Shrink and Grow 20. Fill it `#D2F8FF`, **Shrink** by 9 and press [[Delete]] to hollow it out. Soften it with **Gaussian Blur** 1.5 and apply the neon recipe in cyan `#19D8FF`.
+1. **Rounded plate.** Pick the **Shape** tool ([[U]]), set **Shape** to **Rectangle**, **Corner Radius** to 26 and the fill to `#140F1E`, with no stroke. The plate is 172 px wide and 508 px tall, with its right edge on the right margin guide and its top about 40 px below the top of the canvas. Click once at its centre, about **(1323, 295)**, and enter **Width** 172 and **Height** 508. Add a **Stroke** effect of 3 px in `#2E2838` and a soft Drop Shadow (Blur 30, Opacity 55).
+2. **Frame.** On a new layer, draw a rounded outline 12 px inside the plate. Keep the **Rectangle**, set **Corner Radius** to 15, remove the fill, and set the options bar's **Stroke** to `#D2F8FF` with a **Width** of 10. Click the same centre and enter **Width** 138 and **Height** 474. The stroke is centred on that edge, so the outline's outside edge is 148 × 484 with 20 px corners, and it is 10 px thick. Soften it with **Gaussian Blur** 1.5 and apply the neon recipe in cyan `#19D8FF`.
 3. **Arm.** Fill a thin `#3B3746` bar, about 11 px tall, just below the top edge of the canvas. Start it just inside the plate's left edge and drag the marquee right off the edge of the canvas, so the arm runs out of frame as if it's fixed to a wall. Then fill two short rods from it down to the plate.
 4. **Characters.** Pick the Text tool, turn on **Toggle vertical text** in the **Text** panel, choose **ZCOOL QingKe HuangYou** at **118 px**, and paste `香港霓虹` (Hong Kong neon). Centre it on the plate and give it the neon recipe in `#FF2E6E`.
 
-> **Tip:** Leave vertical mode by selecting another layer *first* and then clicking the toggle. If you click the toggle while the text layer is still active, its characters are laid out horizontally again.
+> **Tip:** Before your next text, select another layer and click the toggle again to go back to horizontal type.
 
 ## Draw the ring to scale
 
@@ -123,7 +123,7 @@ On a `Small Dot` layer, click once with a hard **Brush** at **Size** 40 (a 20 px
 
 Add a `Leader` layer, set the foreground to `#FF7AB8` and pick the **Pen Tool** with a stroke **Width** of 4 in the options bar. Click just right of the small dot, then click again at the same height a little short of the column guide, and press [[Enter]] to stroke the path. Where the line crosses the ring, marquee a 20 px gap and press [[Delete]], so the two glows don't merge.
 
-**Varela Round** keeps the tube feel but has closed zeros, which makes the numbers easier to read. Set the text layers:
+**Varela Round** keeps the tube feel but has closed zeros, which makes the numbers easier to read. Click `Leader` before you set up each text layer. Set the **Letter spacing** whenever you switch fonts: **0** for Varela Round and IBM Plex Mono, and **4** for the Space Mono Bold labels, which are all 24 px.
 - `120,000` at **118 px**, centred in the ring, with an amber glow. Under it, `SIGNBOARDS OF ALL KINDS` in Space Mono Bold and the source in IBM Plex Mono.
 - The right column, all starting on the column guide:
   1. A cyan header, `NEON VS. EVERY SIGN`.
@@ -144,7 +144,11 @@ Draw each bar as a rounded 8 px outline. Both bars are about 128 px wide (16 gri
 - 2015: starting just over 100 px in from the left margin, 160 px (20 squares) tall.
 - 2022: about 270 px further right, 256 px (32 squares) tall.
 
-For each one, run **Shrink** 14 then **Grow** 14 to round the corners, fill with `#D2F8FF`, then **Shrink** 8 and press [[Delete]]. Snap keeps every corner on the grid, so both bars line up.
+Pick the **Shape** tool with **Rectangle**, **Corner Radius** 10, no fill, and a `#D2F8FF` **Stroke** with a **Width** of 8. The stroke is centred on the rectangle's edge, so draw each bar 8 px smaller than its outside size. Click once on the grid point at the middle of each bar (the status bar shows X and Y) and type its size:
+- 2015: click at **(264, 1752)** and enter **Width** 120 and **Height** 152.
+- 2022: click at **(536, 1704)** and enter **Width** 120 and **Height** 248.
+
+That gives two 8 px outlines, 128 px wide, with 14 px outer corners, both standing on the same baseline.
 
 The 2015 figure is only an upper bound ("below 700"), so don't draw a solid top on that bar. Marquee across the top edge between the corners and press [[Delete]]. Then untick Snap and fill three 16 × 6 px dashes where the top edge was. Blur by 1.5 and use the neon recipe in cyan.
 
@@ -157,7 +161,7 @@ Add these layers:
 - A `Baseline`: a 6 px pale line under the bars, from the left margin to a little past the 2022 bar. Use the **Pencil** at **Size** 6: click on the margin and [[Cmd+Shift]]-click at the far end.
 - The header `REMOVAL ORDERS, 2015 VS 2022`, on the left margin.
 
-Centre `<700` and `1,119` (Varela Round, 60 px) over their bars and the years underneath.
+Centre `<700` and `1,119` (Varela Round, 60 px) over their bars, and the years (Space Mono Bold, 24 px, Letter spacing 2) underneath.
 
 To show the change, add a `Bracket` layer and pick the **Pencil** at **Size** 3. Just right of the 2022 bar, draw it in one chain of clicks: click at the inner end of the top tick, then [[Cmd+Shift]]-click straight right, straight down to the height of the 2015 bar's top, and back left for the bottom tick. Put `60%+` beside it, centred on the bracket. Use "60%+" rather than "+60%": the 2015 number is an upper bound, so the real rise is at least 60%.
 
@@ -180,7 +184,7 @@ Neon lights up the wall behind it:
 
 Screen mode drops the black completely, so only the coloured light is added to the wall.
 
-With the **Pencil** at **Size** 2 in `#2B3658`, draw rules along the band guides, plus a vertical rule between the two bottom charts, just left of the column guide. Click at one end of each and [[Cmd+Shift]]-click at the other. Add a `Footer Scrim` over the strip below the footer guide (`#05040A`, 70%) so the small source text stays readable over the tiles. Then set `SOURCES` in cyan Space Mono Bold, followed by the sources in IBM Plex Mono at 18 px.
+With the **Pencil** at **Size** 2 in `#2B3658`, draw rules along the band guides, plus a vertical rule between the two bottom charts, just left of the column guide. Click at one end of each and [[Cmd+Shift]]-click at the other. Add a `Footer Scrim` over the strip below the footer guide (`#05040A`, 70%) so the small source text stays readable over the tiles. Then set `SOURCES` in cyan Space Mono Bold at 18 px with Letter spacing 3, followed by the sources in IBM Plex Mono at 18 px with Letter spacing 0.
 
 ## Finish with a Bloom pass
 

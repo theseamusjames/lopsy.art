@@ -2,7 +2,7 @@
 title: Make a Raccoon Kung Fu Monk Movie Poster Photo Collage
 description: Build a superhero-style movie poster in Lopsy from three photos. Cut out a kung fu fighter, give him a raccoon head, and grade it like a blockbuster.
 published: 2026-09-28 23:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 100
 tags: photo collage, photo manipulation, compositing, movie poster, superhero, color grading, lasso, layer masks, clone stamp, typography
@@ -118,11 +118,11 @@ Choose **Select → Feather…** at **1 px** to soften the cut, then
 With **Move** (V), drag the fighter a little right and down, so he stands
 in the middle of the poster. [[Cmd]]-click the **Fighter**
 thumbnail to select his pixels, which gives transform handles around just
-his body. [[Cmd]]-drag the bottom-right handle in to about **85%**, press
-[[Cmd+D]], and nudge him with the arrow keys ([[Shift]]+arrow moves 10 px)
-until his planted shoe rests on the hall steps, about three-quarters of the
-way down. There he sits in the photo's perspective, above where the title
-will go.
+his body. [[Cmd]]-drag the bottom-right handle in to about **85%**, then
+nudge him with the arrow keys ([[Shift]]+arrow moves 10 px) until his
+planted shoe rests on the hall steps, about three-quarters of the way down,
+and press [[Cmd+D]]. There he sits in the photo's perspective, above where
+the title will go.
 
 Now lasso around his hair and face, stopping at the top of the collar, and
 press [[Delete]]. The raccoon's head will sit in that gap. His shoulders,
@@ -292,10 +292,9 @@ around 1180 on the left ruler. Then drag a second one from the top edge down
 about 300 px. A gradient lays over what's already on the layer, and its clear
 end leaves the first fade alone, so both bands share one layer.
 
-Type each line with the **Text** tool. The options bar edits whichever text
-layer is active, so click **Title Shade** in the Layers panel before you set
-up each new line. Work from the bottom up, and start each line in clear space
-so the click doesn't open an earlier one for editing. Set the letter spacing
+Type each line with the **Text** tool. Before you set up each new line,
+click **Title Shade** in the Layers panel. Work from the bottom up, and start
+each line in clear space. Set the letter spacing
 in the **Text** panel, then centre each line with the **Move** tool's **Align
 center horizontally** button and nudge it up or down with the arrow keys:
 

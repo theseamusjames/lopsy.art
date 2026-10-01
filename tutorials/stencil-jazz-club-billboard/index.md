@@ -2,7 +2,7 @@
 title: Make a Multi-Layer Stencil Jazz Club Billboard
 description: Spray a two-screen stencil billboard in Lopsy with a halftone moon, a black cat on a xylophone, misregistered key-plate shadows and dripping stencil type.
 published: 2026-09-26 11:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: stencil, street art, spray paint, billboard, jazz poster, halftone, quick mask, text effects, poster design
@@ -48,9 +48,9 @@ Open [Lopsy](/) and choose **File → New**. Set **Width** `1800` and
 
 Click the **Background** row and pick the **Gradient** tool. It has no
 keyboard shortcut, so pick it from the toolbox. Set **Type** to **Linear**
-and click **Advanced…**. Click the left stop and use the hue strip and color
-square to pick a deep navy (about `#0E1230`). Click the right stop and pick
-a dusky violet (about `#2A2360`). Click **Done**.
+and click **Advanced…**. Click the left stop and type `0E1230`, a deep
+navy, into the hex field. Click the right stop and type `2A2360`, a dusky
+violet. Click **Done**.
 
 ## Drag the sky
 
@@ -233,8 +233,7 @@ tell.
 ![The Layer Effects drawer with Color Overlay set to near-black on the Key Plate layer, showing a dark offset copy behind the bars](18-key-plate-color-overlay.webp)
 
 Switch to the **Move** tool and choose **Layer → Duplicate Layer** twice.
-Each copy lands offset by 10 px, so nudge it back into line with the
-[[Shift]]+arrow keys, which move 10 px per press. Rename the three layers,
+Each copy lands exactly on top of the one below. Rename the three layers,
 from the bottom up: `Key Plate`, `Overspray` and `Bars`.
 
 Click `Key Plate` and nudge it 6 px right and 4 px down with the arrow
@@ -314,23 +313,22 @@ Drop Shadow, at **Offset X** `5` and **Offset Y** `4`.
 ![The pasted note with a live marquee around it, moved up and to the left](26-copy-paste-note.webp)
 
 Marquee the note, press [[Cmd+C]] and then [[Cmd+V]]. The paste lands in
-place on a new layer: rename it `Note 2`. Marquee it again and drag it up
-and to the left, until it sits near the top of the canvas, just right of the
-first guide. Press [[Cmd+D]].
+place on a new layer, selected and ready to move: rename it `Note 2`. Drag
+it up and to the left, until it sits near the top of the canvas, just right
+of the first guide.
 
 ## Scale the pasted note
 
 ![The second note inside a transform box being scaled down from its bottom-right corner](27-scale-note.webp)
 
-Marquee `Note 2` again and hold [[Cmd]] while you drag its bottom-right
-corner handle inward to about 75%. Holding [[Cmd]] keeps the proportions.
-Press [[Cmd+D]].
+Hold [[Cmd]] while you drag the bottom-right corner handle of `Note 2`
+inward to about 75%. Holding [[Cmd]] keeps the proportions.
 
 ## Rotate and recolor it
 
 ![The smaller note tilted 14 degrees inside a rotated transform box](28-rotate-note.webp)
 
-Marquee it once more, rotate it 14° clockwise and press [[Cmd+D]]. Add a
+Rotate it 14° clockwise and press [[Cmd+D]]. Add a
 **Color Overlay** of `#19C7B4` and the black Drop Shadow. Then tilt the
 first note 12° the other way so the pair drifts up out of the mallets.
 
@@ -338,8 +336,7 @@ first note 12° the other way so the pair drifts up out of the mallets.
 
 ![The word XYLOPHONE in cream Allerta Stencil across the top right](29-xylophone-title.webp)
 
-Click `Moon Shade` first. With a raster layer active, changing the text
-options won't restyle an existing text layer. Pick the **Text** tool, set
+Click `Moon Shade` first. Pick the **Text** tool, set
 **Size** `128` and the font to **Allerta Stencil**, and set the foreground
 to cream. Click on the left type guide, just below the top edge, type
 `XYLOPHONE` and press [[Tab]]. It fills the space between the two type
@@ -397,9 +394,7 @@ cream a little below the script, and `THE BLUE MALLET CLUB  ·  9 CANAL ST` in
 teal about 75 px under that. Nudge both so they start on the same left edge
 as the title, and keep at least 60 px clear of the canvas's right edge.
 
-> **Tip:** A click inside an existing text layer's box edits that layer.
-> Click for the second line well below the first, and paste characters like
-> `·` and `–` with [[Cmd+V]].
+> **Tip:** Paste characters like `·` and `–` with [[Cmd+V]].
 
 ## Marquee the ticket stub
 

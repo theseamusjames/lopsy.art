@@ -2,7 +2,7 @@
 title: Make a Chrome Heart Valentine's Day Card
 description: Build a glossy chrome heart pierced by a glowing lightning bolt in Lopsy, with gradients, Shrink, layer effects, a masked Sunburst and chrome script type.
 published: 2026-09-30 06:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: valentines card, holiday card, chrome, gradients, layer effects, lightning, typography, selections, greeting card, neon
@@ -189,7 +189,7 @@ The bolt should look like it **pierces** the heart: behind it at the top left, b
 
 ![The bolt tip now drawn over the heart's lower right edge with its own cyan glow](12-bolt-in-front.webp)
 
-Rename the pasted layer *Bolt Front*. Collapse the *Heart* group and drag *Bolt Front* by its grip until it sits **above** the group.
+Rename the pasted layer *Bolt Front* and drag it by its grip until it sits **above** the *Heart* group.
 
 Pasting copies pixels, not effects, so add the same **Outer Glow** (`#1FD6FF`, **Size** 55, **Spread** 14, **Opacity** 95).
 
@@ -197,7 +197,7 @@ Pasting copies pixels, not effects, so add the same **Outer Glow** (`#1FD6FF`, *
 
 ![Thin glowing cyan cracks with dark edges radiating from the point where the bolt leaves the heart, with a white four-point star flare at the impact](13-cracks-and-flare.webp)
 
-Expand *Heart* and click *Windows*. Add two layers above it: *Fissures* and *Crack Cores*.
+In the *Heart* group, click *Windows*. Add two layers above it: *Fissures* and *Crack Cores*.
 
 1. On *Fissures*, lasso four tapered cracks that radiate from the point where the bolt leaves the heart, each with one side branch. Make them about 18 px wide at the root, narrowing to a point. Fill them `#14030A`.
 2. On *Crack Cores*, lasso thinner copies (about a third of the width) along the same lines and fill them `#A8F9FF`.
@@ -211,7 +211,7 @@ The flare hides the flat cut end of *Bolt Front*.
 
 ![BE MY VALENTINE set in pale pink tracked Michroma capitals centred at the top of the card](14-greeting.webp)
 
-With a **raster** layer active (click *Flare*), pick the **Text** tool, choose **Michroma**, and set **Size** 58 and the colour `#FFC7DB`.
+Select *Flare*, then pick the **Text** tool, choose **Michroma**, and set **Size** 58 and the colour `#FFC7DB`.
 
 Click in empty space and type **BE MY VALENTINE**. Press [[Tab]] to commit, and rename the layer *Greeting*.
 
@@ -223,11 +223,9 @@ In the **Text** panel set **Letter spacing** to **16**. Then, with the **Move** 
 
 ![You're Electric typed in white Pacifico below the heart, centred](15-script-headline.webp)
 
-Click *Flare* again. **Don't start new type while a text layer is active:** changing the font or size would restyle that layer.
+Select *Flare* again, then set up the text: **Pacifico**, **Size** 170, white, **Letter spacing** 0. Type **You’re Electric** (with a curly ’). Commit it and rename the layer *Script*.
 
-Choose **Pacifico**, **Size** 170, white, and type **You’re Electric** (with a curly ’). Commit it and rename the layer *Script*.
-
-The Text panel still holds the greeting's letter spacing. Set it back to **0** for this layer. Then drag it so its top sits about three-quarters of the way down the card, a comfortable gap below the heart's tip, and click **Align center horizontally**.
+Drag it so its top sits about three-quarters of the way down the card, a comfortable gap below the heart's tip, and click **Align center horizontally**.
 
 ## Load the script as a selection
 
@@ -254,13 +252,13 @@ Deselect, then add three effects:
 
 - **Stroke**: `#1A030C`, **Width** 5, **Position** outside
 - **Outer Glow**: `#FF3D8B`, **Size** 30, **Spread** 8, **Opacity** 70
-- **Drop Shadow**: `#050002`, **Offset X** 0, **Offset Y** 14, **Blur** 16, **Opacity** 80
+- **Drop Shadow**: `#050002`, **Offset X** 0, **Offset Y** 9, **Blur** 16, **Opacity** 80
 
 ## XOXO and a mini bolt
 
 ![XOXO in small Michroma capitals near the bottom with a tiny cyan lightning bolt to its left, selected with rotation handles](18-rotate-mini-bolt.webp)
 
-With *Script* still active (it's a raster layer now), type **XOXO** in Michroma **47**, `#FFC7DB`, with **Letter spacing** 14, and rename the layer *XOXO*. Drag it below the script, roughly halfway between the script and the bottom edge, and click **Align center horizontally**.
+With *Script* still selected, type **XOXO** in Michroma **47**, `#FFC7DB`, with **Letter spacing** 14, and rename the layer *XOXO*. Drag it below the script, roughly halfway between the script and the bottom edge, and click **Align center horizontally**.
 
 Add a layer called *Mini Bolts*. Lasso a small classic bolt, about 27 px wide and 48 px tall, a little way to the left of the X, and fill it `#BFF8FF`.
 
@@ -274,9 +272,9 @@ To tilt it:
 
 ![Two mirrored mini lightning bolts flanking XOXO at equal distances](19-mirror-mini-bolt.webp)
 
-1. Marquee the mini bolt, press [[Cmd+C]] and [[Cmd+V]]. Marquee the pasted copy with the same rectangle.
-2. Click **Flip Horizontal** in the Move tool's options bar, then press [[Cmd+D]].
-3. Drag the copy to the right of **XOXO** so the gap between the bolt and the last O matches the gap on the left.
+1. Marquee the mini bolt, press [[Cmd+C]] and [[Cmd+V]]. The paste is selected, with the **Move** tool active.
+2. Click **Flip Horizontal** in the options bar.
+3. Drag the copy to the right of **XOXO** so the gap between the bolt and the last O matches the gap on the left, then press [[Cmd+D]].
 4. Choose **Layer → Merge Down** to fold the copy into *Mini Bolts*. Give that layer a cyan **Outer Glow** (`#1FD6FF`, **Size** 14, **Spread** 10, **Opacity** 90).
 
 > **Tip:** To check the spacing, zoom in and compare the two gaps against the top ruler, then fine-tune the copy with the arrow keys (1 px per press).

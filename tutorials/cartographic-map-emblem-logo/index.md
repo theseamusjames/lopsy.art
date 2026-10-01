@@ -2,7 +2,7 @@
 title: Design a Cartographic Map Emblem Logo
 description: Build an antique sea-chart logo in Lopsy with contour-tinted fjords, waterlines, rhumb lines, a compass rose, a ribbon wordmark and seal text on a path.
 published: 2026-09-29 01:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 90
 tags: logo design, cartographic, map, compass rose, vintage, badge, selections, text on a path, sunburst, branding
@@ -87,7 +87,7 @@ In the effects drawer, add these effects:
 
 - **Stroke** `3` px in ink.
 - **Inner Glow**, Size `46`, Opacity `45`, `#9C7A45`, for an aged rim.
-- **Drop Shadow** with Offset Y `10`, Blur `26`, Opacity `45`, `#3A2A14`.
+- **Drop Shadow** with Offset Y `7`, Blur `26`, Opacity `45`, `#3A2A14`.
 
 Click **Rasterize Layer Style** so the effects become pixels. Baked effects
 keep a big document fast.
@@ -188,11 +188,10 @@ On `Land`, lasso a small ragged island about 52 × 30 px in the sea to the
 left of the compass guide and fill it. To make an archipelago:
 
 1. Marquee the island and press [[Cmd+C]], then [[Cmd+V]]. The copy is
-   pasted in place.
-2. Drag the copy with the Move tool.
-3. [[Cmd]]-click its thumbnail to select it, then turn it with a corner
-   rotation handle and resize it with [[Cmd]] held on a corner scale handle.
-   Press [[Cmd+D]] to commit before you move on to the next copy.
+   pasted in place, selected, with the Move tool ready.
+2. Drag the copy into position.
+3. Turn it with a corner rotation handle and resize it with [[Cmd]] held on a
+   corner scale handle. Press [[Cmd+D]] to commit.
 
 Make three copies, scattered through the sea:
 
@@ -325,21 +324,21 @@ Marquee the star, press [[Cmd+C]] and [[Cmd+V]], and name the pasted copy
 
 [[Cmd]]-click its thumbnail, pick the **Move** tool, and drag a corner
 rotation handle with [[Cmd]] held. [[Cmd]] snaps rotation to 15° steps, so
-stop at exactly **45°**. Press [[Cmd+D]] to commit.
+stop at exactly **45°**.
 
 ## Scale the intercardinals to 60%
 
 ![The rotated star being scaled down from a corner handle, now peeking between the main points](19-scale-intercardinal.webp)
 
-[[Cmd]]-click the thumbnail again. Hold [[Cmd]] and drag a corner scale
-handle inward until the star is **60%** of its size. Press [[Cmd+D]], then
+Without deselecting, hold [[Cmd]] and drag a corner scale handle inward
+until the star is **60%** of its size. Press [[Cmd+D]], then
 nudge it back so it's centred on the compass point with the arrow keys
 ([[Shift]]+arrow moves 10 px at a time).
 
 Select the top `Rose Cardinal` and give it effects:
 
 - **Stroke** `1` px in cream.
-- **Drop Shadow** with Offset `3`, `4`, Blur `6`, Opacity `60`, `#050D14`.
+- **Drop Shadow** with Offset `2`, `3`, Blur `6`, Opacity `60`, `#050D14`.
 
 Rasterize the layer style.
 
@@ -373,8 +372,7 @@ Turn on **View → Show Grid**. It switches on **Snap to Grid** as well, and a
 with the Move tool. Every piece travels together and snaps to the grid.
 
 Press [[Cmd+Z]] to put it back, because the rhumb lines are centred on the
-original spot. Then untick **Snap** in the options bar and turn off
-**View → Show Grid**.
+original spot. Then turn off **View → Show Grid**.
 
 ## Plot the route and the summit
 
@@ -400,7 +398,7 @@ in IM Fell English SC at `18` px.
 
 ![A cream inner rule marquee inside a red ribbon band, with folded tails behind both ends](23-ribbon-inner-rule.webp)
 
-Click `Summit Label` so the new layers stay outside the Compass Rose group.
+Click `Summit Label`, outside the Compass Rose group.
 
 1. Add `Ribbon Tails` and lasso two swallow-tailed ends. Each one sits
    26 px lower than the band and reaches 84 px past it. Fill them `#6E1F1A`.
@@ -459,7 +457,7 @@ Place five anchors, evenly spaced, from about eleven o'clock over the top to
 about half past one. At each one, press and drag a short way along the
 curve to pull out handles, so the path bends smoothly.
 
-Click ✓ **Commit path**. Select the `UNCHARTED` layer with the Text tool and
+Click ✓ **Commit path** in the options bar. Select the `UNCHARTED` layer with the Text tool and
 pick the path in the options bar's **Path** dropdown. The caps now sit
 midway between the neatline and the plate's inner rule.
 
@@ -471,7 +469,7 @@ old path selected, Pen clicks edit it instead of starting a new one.
 
 ![EXPEDITION CO. · EST. 1893 curving along the bottom of the seal, reading left to right with its letters facing inward](27-bottom-seal-line.webp)
 
-Set `EXPEDITION CO. · EST. 1893` at `25` px with letter spacing `5`. For
+Click `Plate` again and set `EXPEDITION CO. · EST. 1893` at `25` px with letter spacing `5`. For
 text along the bottom, the path must run **left to right**, so its letters
 face inward and read the right way up.
 
@@ -487,7 +485,7 @@ Commit the path and bind the text to it.
 
 ![A small latitude label selected and rotated a quarter turn with Rotate 90° CCW in the Move options bar](28-rotate-coordinates.webp)
 
-Set `69°38'N` and `18°57'E` at `24` px with letter spacing `2`. IM Fell has
+Click `Plate` and set `69°38'N` and `18°57'E` at `24` px with letter spacing `2`. IM Fell has
 no prime sign, so use a straight apostrophe.
 
 - **Latitude:** [[Cmd]]-click the label's thumbnail, pick the **Move** tool

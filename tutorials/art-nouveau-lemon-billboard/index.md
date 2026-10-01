@@ -2,7 +2,7 @@
 title: Design an Art Nouveau Billboard
 description: Make a Mucha-style Art Nouveau billboard in Lopsy with a lemon-wheel halo, whiplash vines, a Voronoi mosaic panel and outlined lettering.
 published: 2026-09-26 17:10
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: art nouveau, billboard, advertising, voronoi, pen tool, radial symmetry, layer effects, text effects, vintage
@@ -77,9 +77,6 @@ Open **Filter → Voronoi…** and set **Cells** `24`, **Edge Width** `2` and
 > **Tip:** Cells counts cells along the *height* of the layer, so 24 on a
 > 720 px tall document gives tiles about 30 px across. Edge Width is in
 > pixels, so `2` draws roughly 2 px grout.
-
-Fill the whole layer first. Voronoi samples a colour at each cell centre, and
-the cells need something to sample right up to the panel edge.
 
 ## Clip the mosaic to an arched cartouche
 
@@ -216,7 +213,7 @@ drag the top-centre handle up about 46 px. Press [[Cmd+D]] to commit.
 Give the bottle two effects:
 
 - **Stroke**: `#3B2A1E`, Width `4`, outside.
-- **Outer Glow**: cream `#F6ECD2`, Size `9`, **Spread 100**, which makes a
+- **Outer Glow**: cream `#F6ECD2`, Size `5`, **Spread 100**, which makes a
   crisp cream band.
 
 That cream band is the *cerne*, the light contour that poster artists used to
@@ -251,7 +248,7 @@ of the halo in a lazy S, with anchors about a quarter, half and
 three-quarters of the way up, then swing right over the halo's top-left and
 curl back in on itself with two small anchors.
 
-Click the ✓ **Commit path** button. Set the foreground to olive `#3E4A24` and
+Click the ✓ **Commit path** button in the options bar. Set the foreground to olive `#3E4A24` and
 click **Stroke Path** in the Paths panel with Width `9`. Draw a second vine up
 the right side of the halo the same way.
 
@@ -265,8 +262,7 @@ the right side of the halo the same way.
 Mucha's whiplash lines come in two weights. Add thin spiral tendrils with the
 Pen and stroke them at Width `3`.
 
-Start each tendril at its curled tip in empty canvas. If the first click lands
-on an existing vine, it selects that path instead of starting a new one.
+Start each tendril at its curled tip, in empty canvas.
 
 ## Hang the leaves
 
@@ -326,8 +322,8 @@ Nouveau-style curves, in `#F2C230`:
 - **Lemon** at Size `250`, starting about 130 px inside the panel's left
   edge, with its top about 135 px down, under the arch.
 
-Type **Elixir** first. A new text click inside an existing text layer's
-bounds edits that layer instead of creating a new one.
+Type **Elixir** first. Then click the `Ribbon` row, set Size `250` and type
+**Lemon**.
 
 Staggering the two words leaves a pocket at the lower left for the medallion.
 
@@ -337,7 +333,7 @@ Staggering the two words leaves a pocket at the lower left for the medallion.
 
 On both text layers, add these effects:
 
-- **Drop Shadow**: `#3B2A1E`, offset `9, 9`, Blur `0`, Opacity `100`.
+- **Drop Shadow**: `#3B2A1E`, offset `3, 3`, Blur `0`, Opacity `100`.
 - **Stroke**: `#3B2A1E`, Width `6`, outside.
 
 Together they give the classic poster look: a light fill with a heavy dark
@@ -347,8 +343,8 @@ contour and a printed shadow.
 
 ![SPARKLING TONIC OF THE RIVIERA set in spaced Marcellus capitals, centred on the cream ribbon](18-tagline.webp)
 
-Type `SPARKLING TONIC OF THE RIVIERA` in **Marcellus**, Size `36`, colour
-`#3B2A1E`. In the Text panel, set **Letter spacing** to `7`.
+Click the `Ribbon` row, then type `SPARKLING TONIC OF THE RIVIERA` in
+**Marcellus**, Size `36`, colour `#3B2A1E`. In the Text panel, set **Letter spacing** to `7`.
 
 Move it onto the ribbon and nudge with the arrow keys until it's centred on
 the band, with equal air above and below the caps and the same length of
@@ -370,7 +366,7 @@ Add 24 dark dots on the cream ring with **Radial Symmetry**, and a hard
 `7, 7` **Drop Shadow** to match the headline.
 
 For the text, create a centred area-text block `Maison` / `Citron` in
-Metamorphous. Add `EST. 1897` in Marcellus at Size `17` with letter spacing
+Metamorphous at Size `29`, with letter spacing `0`. Click the `Medallion` row again and add `EST. 1897` in Marcellus at Size `17` with letter spacing
 `3`, and centre both in the disc.
 
 ## Add a lithograph grain

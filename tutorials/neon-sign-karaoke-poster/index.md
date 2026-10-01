@@ -2,7 +2,7 @@
 title: Make a Neon Sign Poster on a Brick Wall Photo
 description: Build a glowing neon saloon poster in Lopsy with Pen-tool tubes, outline-tube lettering, inner and outer glows, light spill and Bloom on a brick photo.
 published: 2026-09-30 23:58
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: poster, neon, photo editing, pen tool, paths, layer effects, glow, typography, bloom, selections, transform
@@ -66,13 +66,11 @@ Go easy here. Lightness is added straight onto the HSL lightness, so −38 crush
 3. Draw the hat band first: click (626, 318), drag out a smooth point at (800, 336), click (974, 318), then press [[Enter]]. Enter adds the path *and* strokes it.
 4. Now the outline. Click the brim tips (450, 296) and (1150, 296) and the crown corners (618, 368) and (982, 368). Every other point is a press-and-drag that pulls out handles. Go along the brim's underside, up the right side of the crown, across the dented top (dip to (800, 176)) and back down the left.
 
-> **Tip:** While you draw, the ✓/✗ buttons float just left of your first anchor. A click that lands on them hits ✗ and throws the whole path away, so start shapes at their left-most point.
-
-## Stroke the closed outline from the Paths panel
+## Close and stroke the hat outline
 
 ![The hat outline stroked in pale amber with Path 2 selected in the Paths panel and its anchors still showing](05-stroke-path-hat-tube.webp)
 
-Clicking back on the first anchor closes the path and commits it straight away, so [[Enter]] has nothing left to stroke. Open the **Paths** panel, select the new path, click **Stroke Path**, set the width to **14** and click **Stroke**. Deselect the path row afterwards to hide its anchors.
+Click back on the first anchor to close the outline, then press [[Enter]] to stroke it at **14**. Deselect the path's row in the **Paths** panel afterwards to hide its anchors.
 
 ## Cut a lasso ring with Shrink
 
@@ -94,13 +92,13 @@ Drag a rectangular marquee just outside the ring, switch to the **Move** tool, a
 
 1. **Honda knot:** on `Lasso Tube`, marquee a 52 px circle centred at (1318, 262), fill it, **Shrink 11**, then Delete and deselect. The hole cuts through the loop, so the rope looks like it passes through the knot.
 2. **Cord:** with the Pen at width **12**, click (1330, 287), drag smooth points through (1410, 400), (1458, 560), (1438, 760) and (1370, 860), click (1281, 826), and press [[Enter]].
-3. **Microphone:** on a new layer `Mic Tube`, make an 88 px ring centred at (1315, 594) the same way (Shrink 11). Add two short Pen grille lines at width 9 across it, keeping a gap at each end. Then draw a closed four-point handle from (1288, 646) down to (1268, 810) / (1294, 814) and back up to (1336, 652), and stroke it from the Paths panel at **11**. Finish with a small filled ellipse at the bottom as an end cap where the cord plugs in.
+3. **Microphone:** on a new layer `Mic Tube`, make an 88 px ring centred at (1315, 594) the same way (Shrink 11). Add two short Pen grille lines at width 9 across it, keeping a gap at each end. Then set **Stroke** to **11** and draw a closed four-point handle from (1288, 646) down to (1268, 810) / (1294, 814) and back up to (1336, 652). Click the first anchor to close it and press [[Enter]]. Finish with a small filled ellipse at the bottom as an end cap where the cord plugs in.
 
 ## Write "Karaoke" in a monoline script
 
 ![The word Karaoke in a thin, even pale pink script under the lasso, ending just short of the microphone](09-sacramento-script-text.webp)
 
-1. Make a group `Karaoke Sign` (select `Night` first so it isn't nested in `Hat Sign`) and an empty layer `Script Base` inside it.
+1. Select `Night`, then make a group `Karaoke Sign` and an empty layer `Script Base` inside it.
 2. Pick the **Text** tool. Choose **Sacramento**, Size **340**, colour `#FFD3E8`, and click at (170, 494). Type `Karaoke` and press [[Tab]].
 
 Sacramento is a monoline script, about 13 px wide at this size everywhere. That makes it a ready-made neon tube.
@@ -111,20 +109,20 @@ Sacramento is a monoline script, about 13 px wide at this size everywhere. That 
 
 Click **Rasterize Layer** in the Layers footer *before* transforming, because rotating live text doesn't stick. Marquee the word, and rotate it **−3°** with the Move tool's rotation handle so it climbs towards the mic. Then [[Cmd+D]].
 
-## Snap a raceway to the grid
+## Draw the raceway
 
 ![A rectangular marquee from 84, 904 to 1516, 1208 snapped to a fine 4 pixel grid under the script](11-raceway-grid-snap.webp)
 
 Neon letters are mounted on a metal box called a *raceway*.
-1. Make a group `Cowboy Sign` and a layer `Raceway`.
-2. **View → Show Grid**, set the grid size to **4 px**, and drag a marquee from (84, 904) to (1516, 1208). With Snap on, it lands on exact pixels.
-3. **Select → Shrink 24** then **Select → Grow 24** rounds the corners.
+1. Select `Night`, then make a group `Cowboy Sign` and a layer `Raceway`.
+2. Pick the **Shape** tool. Set **Shape** to **Rectangle**, **Corner Radius** to **24**, the Fill to `#2A2B33` and no stroke, with **Output** on **Pixels**.
+3. Click once at (800, 1056) and enter **1432 × 304**. The box runs from (84, 904) to (1516, 1208).
 
 ## Brush the metal
 
 ![A dark blue-grey rounded raceway with a subtle horizontal brushed-metal grain](12-brushed-metal-raceway.webp)
 
-Fill the selection with `#2A2B33`, then run **Filter → Add Noise** (Amount 22, Mono, Gaussian) and **Filter → Motion Blur** (Angle 0, Distance 60). The blur stretches the noise into brushed grain. Turn the grid off and deselect.
+[[Cmd]]-click the `Raceway` thumbnail to select the box, then run **Filter → Add Noise** (Amount 22, Mono, Gaussian) and **Filter → Motion Blur** (Angle 0, Distance 60). The blur stretches the noise into brushed grain. Deselect.
 
 ## Paint the letter faces
 
@@ -154,17 +152,17 @@ Add `Raceway Spill` just above `Raceway` and [[Cmd]]-click the raceway thumbnail
 
 ![A small four-point star copied from the big one, rotated inside a tilted transform box near the original sparkle](16-copy-scale-rotate-sparkle.webp)
 
-1. On a `Stars` layer in `Hat Sign`, Pen a closed 8-point sparkle at width **10**: tips 72 px from (210, 205), inner points 17 px. Start at the left tip. Stroke it from the Paths panel.
-2. Marquee it, [[Cmd+C]], then [[Cmd+V]]. The paste lands in place on its own layer.
-3. Marquee the copy and [[Cmd]]-drag a corner handle to scale it to **55%**. [[Cmd+D]].
-4. Marquee it again and rotate it **15°**. [[Cmd+D]].
-5. Drag it with the Move tool to (1405, 165), outside the loop, and **Layer → Merge Down** into `Stars`.
+1. On a `Stars` layer in `Hat Sign`, Pen a closed 8-point sparkle at width **10**: tips 72 px from (210, 205), inner points 17 px. Click the first anchor to close it and press [[Enter]] to stroke it.
+2. Marquee it, [[Cmd+C]], then [[Cmd+V]]. The paste lands in place on its own layer, selected, with the Move tool ready.
+3. [[Cmd]]-drag a corner handle to scale it to **55%**.
+4. Rotate it **15°**.
+5. Drag it to (1405, 165), outside the loop, and press [[Cmd+D]]. Then **Layer → Merge Down** into `Stars`.
 
 ## Build the marquee board and its bulbs
 
 ![A deep red rounded board with a thin cream pinstripe frame and a border of evenly spaced cream bulb dots in dark sockets](17-marquee-board-bulbs.webp)
 
-1. In a new group `Saloon Board`, marquee (240, 1420)–(1360, 1792), Shrink/Grow **22**, fill `#5C1A1C`, and add Noise **10** for painted grain.
+1. Select `Night` and make a new group `Saloon Board` with a layer `Board`. With the **Shape** tool (Rectangle, Corner Radius **22**, Fill `#5C1A1C`), click at (800, 1606) and enter **1120 × 372**, which fills (240, 1420)–(1360, 1792). [[Cmd]]-click the thumbnail and add Noise **10** for painted grain.
 2. On `Pinstripe`, fill the rectangle (310, 1490)–(1290, 1722) with `#EADBB8`, then **Shrink 4** and Delete for a hairline frame.
 3. On `Bulbs`, open the brush-tip thumbnail (the Brushes modal). On the **Shape** tab set Size **22**, Hardness **100** and **Spacing 200%**: one dab every 44 px.
 4. Click (272, 1452), then [[Shift]]-click (1328, 1452), (1328, 1760), (272, 1760) and back to the start. The side lengths are multiples of 44, so a bulb lands exactly in every corner.
@@ -174,10 +172,10 @@ Add `Raceway Spill` just above `Raceway` and [[Cmd]]-click the raceway thumbnail
 
 ![SILVER SPUR in tall western capitals on the board with a smaller subline, EVERY THURSDAY in pale turquoise between two sparkles above, and a cream address line at the bottom](18-board-type-and-footer.webp)
 
-Reset **Letter spacing** to **0** first, because the 34 from COWBOY carries over. Create each line in empty canvas, **Align center horizontally**, then nudge it to its top edge:
+Before each line, click `Bulbs` and set up the text as listed, with **Letter spacing** **0**. Create each line in empty canvas, **Align center horizontally**, then nudge it to its top edge:
 - `SILVER SPUR`: **Smokum** 160, `#EADBB8`, top at y **1519**
 - `SALOON · OPEN MIC · 9 PM TILL LAST CALL`: **Rye** 34, top at **1667**. That gives even 25 px gaps between frame, headline, subline and frame.
-- `EVERY THURSDAY`: **Tilt Neon** 96, `#CFFBFF`, top at **1281**, halfway between the raceway and the board. Pen two small sparkles beside it at x 372 and 1228.
+- `EVERY THURSDAY`: **Tilt Neon** 96, `#CFFBFF`, top at **1281**, halfway between the raceway and the board. On a new `Thursday Stars` layer, Pen two small sparkles beside it at x 372 and 1228.
 - `1407 RAILROAD AVE · NO COVER · BOOTS WELCOME`: **Rye** 32, `#D8CBAA`, top at **1872**
 
 On a Mac, type the `·` characters with [[Option+Shift+9]].

@@ -2,7 +2,7 @@
 title: Design a 1950s Exotica Tropical Album Cover
 description: Make a mid-century exotica LP cover in Lopsy with a posterized sunset, perspective wave patterns, palm silhouettes, script type and print texture.
 published: 2026-09-28 15:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: tropical, album cover, exotica, mid-century, retro, sunset, silhouette, pattern, perspective, halftone, typography, layer effects
@@ -170,8 +170,8 @@ There's no need to draw the second palm from scratch.
 
 1. Marquee the whole canvas, then [[Cmd+C]] and [[Cmd+V]]. Rename the pasted layer *Palm B*.
 2. Marquee the canvas again and, with the **Move** tool, click **Flip Horizontal**. Press [[Cmd+D]].
-3. Marquee the new palm. Hold [[Cmd]] and drag its top-left corner handle toward the opposite corner, to about **80%** (Cmd keeps the scale uniform). Press [[Cmd+D]].
-4. Marquee it once more and drag it about **190 px** right, so the crown sits over the right side of the sun and the trunk leaves the canvas at the right edge.
+3. Marquee the new palm. Hold [[Cmd]] and drag its top-left corner handle toward the opposite corner, to about **80%** (Cmd keeps the scale uniform).
+4. Drag it about **190 px** right, so the crown sits over the right side of the sun and the trunk leaves the canvas at the right edge. Press [[Cmd+D]].
 
 ## Build the stilt bungalow
 
@@ -211,7 +211,7 @@ Turn on **Outer Glow**: colour `#FF9A48`, **Size** 40, **Spread** 5,
 
 ![Faint, vertically smeared reflections of the bungalow stilts hanging just below the deck in the sea](15-reflection.webp)
 
-1. Duplicate the Bungalow layer and rename the copy *Reflection*. The copy lands 10 px right and 10 px down.
+1. Duplicate the Bungalow layer and rename the copy *Reflection*.
 2. Marquee around the hut and click **Flip Vertical** in the Move options. Press [[Cmd+D]].
 3. With the Move tool, drag the flipped copy so its stilts line up with the originals and its top meets the bottoms of the stilts.
 4. Marquee everything from about 75 px below the stilt tips to the bottom edge, **Feather** it by **40**, and press [[Delete]]. Only the stilt reflections are left, and they fade out before the title area.
@@ -257,19 +257,18 @@ layer. Rename it *Badge*.
 ![The red HI-FI LONG PLAY badge rotated about 15 degrees counter-clockwise, with its rotation handles showing](19-badge-rotate.webp)
 
 Set **HI-FI** in **Shrikhand** at 36 px and **LONG PLAY** in **Bebas Neue**
-at 22 px with 3 px letter spacing, both in `#F4E6C8`. Create each one in
-empty canvas, then move them so the pair is centred on the badge.
+at 22 px with 3 px letter spacing, both in `#F4E6C8`. Select Badge before you
+set up each one, create it in empty canvas, then move them so the pair is
+centred on the badge.
 
-1. Select each text layer and click **Rasterize Layer**, then use **Layer → Merge Down** twice so both land on Badge.
+1. Select the upper text layer and choose **Layer → Merge Down** twice, so both land on Badge.
 2. Marquee the badge. With the **Move** tool, drag a corner rotation handle about **−15°**. Press [[Cmd+D]].
-
-> **Tip:** Check the **Letter spacing** value in the Text panel before each new text layer. It carries over from the last text you set.
 
 ## Set the credit line and catalog number
 
 ![The cream band with LEO MARQUEZ & HIS BAMBOO ORCHESTRA in plum capitals, a red tracked tagline beneath it, and RB-1958 in a thin plum box at the right](20-credits-catalog.webp)
 
-With Top Band selected (so the new text lands above it):
+Select Top Band before you set up each line, so the new text lands above it:
 
 - **LEO MARQUEZ & HIS BAMBOO ORCHESTRA:** Bebas Neue 56 px, `#24102E`, letter spacing 4, about 48 px below the top edge.
 - **EXOTIC ISLAND RHYTHMS FOR A TROPICAL NIGHT:** Bebas Neue 30 px, `#C8323A`, letter spacing 7, under the first line with a small gap.
@@ -284,10 +283,11 @@ fill a rectangle that leaves about 15 px of padding around RB-1958. Then use
 
 ![Rhumba set in a large cream script above BUNGALOW in an orange slab, centred over the sea below the bungalow and canoe](21-title-placed.webp)
 
-Create each word in empty canvas, then position it:
+Select Catalog Box before you set up each word. Create each word in empty
+canvas, then position it:
 
-- **Rhumba:** **Yellowtail** 300 px, `#FFF0CF`. Place it in the sea below the bungalow and canoe, centred on the canvas.
-- **BUNGALOW:** **Shrikhand** 136 px, any orange for now. Place it directly under Rhumba, with its left edge in line with Rhumba's.
+- **Rhumba:** **Yellowtail** 300 px, `#FFF0CF`, letter spacing 0. Place it in the sea below the bungalow and canoe, centred on the canvas.
+- **BUNGALOW:** **Shrikhand** 136 px, letter spacing 0, any orange for now. Place it directly under Rhumba, with its left edge in line with Rhumba's.
 
 At these sizes both words are about 845 px wide, so they stack as a lockup.
 The script's baseline sits just above the slab, and the bottom margin is
@@ -297,10 +297,9 @@ about 90 px.
 
 ![BUNGALOW filled with a vertical gradient from pale gold at the top of the letters to coral red at the bottom](22-title-gradient.webp)
 
-1. Select BUNGALOW and click **Rasterize Layer**.
-2. [[Cmd]]-click its thumbnail to select just the letters.
-3. Click **Add Layer**, then drag a linear gradient through the letter height from `#FFE08A` through `#FFA24C` to `#F2555A`.
-4. Deselect and use **Merge Down** to bake the gradient into the letters.
+1. Select BUNGALOW and [[Cmd]]-click its thumbnail to select just the letters.
+2. Click **Add Layer**, then drag a linear gradient through the letter height from `#FFE08A` through `#FFA24C` to `#F2555A`.
+3. Deselect and use **Merge Down** to bake the gradient into the letters.
 
 ## Give the type one hard shadow
 
@@ -308,7 +307,7 @@ about 90 px.
 
 Give both Rhumba and BUNGALOW the same effects:
 
-- **Drop Shadow:** `#24102E`, **Offset X** 7, **Offset Y** 9, **Blur** 0, **Spread** 0, **Opacity** 100
+- **Drop Shadow:** `#24102E`, **Offset X** 3, **Offset Y** 5, **Blur** 0, **Spread** 0, **Opacity** 100
 - **Stroke:** `#24102E`, **Width** 4
 
 Use one depth treatment for all the display type. The title then reads as a

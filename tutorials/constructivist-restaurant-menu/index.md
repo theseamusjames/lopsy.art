@@ -2,7 +2,7 @@
 title: Design a Constructivist Restaurant Menu with Photomontage
 description: Build a Rodchenko-style canteen menu in Lopsy from a public-domain photo, with a duotone cutout, a diagonal masthead band, a coin badge and aligned prices.
 published: 2026-09-30 23:55
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: restaurant menu, constructivism, photomontage, photo editing, gradient map, magic wand, typography, layout, grid, texture
@@ -116,11 +116,9 @@ Then zoom along the cable and the legs. Lasso any leftover specks of haze *above
 1. In the Layers panel, click `Icarus`, then [[Shift]]-click `Figure` to select all three photo layers.
 2. Choose **Layer → Group Layers** and rename the group `Photo`.
 3. Open the group's effects drawer (the sparkle button on its row) and click **Add Adjustment → Gradient Map**.
-4. Click the left stop and set it to ink `#15130F`. Click the right stop and set it to paper `#EAE3D1`.
+4. Click the left stop and type ink `15130F` into the hex field. Click the right stop and type paper `EAE3D1`.
 
 Every grey in the photo now maps onto your two printing colours, so the photo's whites are the paper, not a cold grey.
-
-> **Tip:** The stop colour picker doesn't have a hex field. Pick the colours on the hue strip and the saturation/brightness square, and check the swatch next to *Stop N of M*. After you switch stops, the picker's cursors can still show the previous stop's colour until you click ([#1071](https://github.com/theseamusjames/lopsy.art/issues/1071)).
 
 Finally, select `City` and run **Brightness/Contrast** at **−22 / +34**. The skyline gets real blacks, so it reads as a slab and not as haze.
 
@@ -151,9 +149,7 @@ The keyline matters more than it looks: without it, the dark girders at the bott
 2. Click in an empty part of the page and type `JACKHAMMER`, then press [[Tab]] to commit.
 3. Click **Rasterize Layer** in the Layers panel. Rotated live text is fragile, so rasterize it first.
 4. Draw a **Rectangular Marquee** just larger than the word, switch to the **Move** tool, and drag just outside the top-right corner to rotate it **−7.6°**.
-5. Press [[Cmd+D]] and drag the word onto the band. Centre it at **x 600** with about **27 px** of band above and below.
-
-> **Tip:** Always create new text in empty canvas. A click inside an existing text layer's box edits that layer, and your new words get appended to it.
+5. Press [[Cmd+D]] and drag the word onto the band. Centre it at **x 600** with about **27 px** of band above and below. Rename the layer `Masthead`.
 
 ## Plug AUTOMAT into the band
 
@@ -173,13 +169,13 @@ AUTOMAT is set smaller than JACKHAMMER on purpose. It is taller, but JACKHAMMER 
 ![A red coin tilted 12 degrees against the band's angle, reading PIE, 5¢ and A DOOR, with a cream offset shadow, sitting inside the photo's left edge](12-nickel-coin-badge.webp)
 
 1. Click `Automat`, add a layer called `Coin`, and fill a **176 px** circle centred at **(440, 850)** in red.
-2. Add three centred lines:
+2. Select `Coin` before you set up each line, and add three centred lines:
    - `PIE` in Russo One 24 px, ink,
    - `5¢` in Anton 84 px, paper, and
    - `A DOOR` in Russo One 18 px, ink.
 
    Leave about 24 px of red above PIE and below A DOOR.
-3. Rasterize the three text layers. Click the top one and run **Layer → Merge Down** three times, which merges them into the disc.
+3. Click the top text layer and run **Layer → Merge Down** three times, which merges them into the disc.
 4. Marquee the coin and rotate it **+12°**. That's a deliberate counter-diagonal against the band.
 5. In **Layer effects → Drop Shadow**, set **Color** to paper, **Offset** 6 / 6, **Blur 0** and **Opacity 100**.
 
@@ -190,7 +186,7 @@ A black shadow disappears into the dark city. A paper-coloured one reads like a 
 ![The page with the 4 px grid showing and Snap on, a marquee snapped over the right-hand red header bar, the second header bar, the column rule, the footer bar and the nameplate bar already in place](13-menu-blocks-on-grid.webp)
 
 1. Select `Masthead`, click **New Group** and call the group `Menu`. Add a layer called `Header Bars` inside it.
-2. Turn on **View → Show Grid**, set **Grid** to **4 px**, and tick **Snap**.
+2. Turn on **View → Show Grid** and set **Grid** to **4 px**. **Snap** switches on with the grid.
 3. Snap two red bars from **(60, 1276)** to **(572, 1324)** and from **(628, 1276)** to **(1140, 1324)**.
 4. On a `Rules` layer, snap these in ink:
    - a **68 px** footer bar across the bottom, and
@@ -203,20 +199,20 @@ A black shadow disappears into the dark city. A paper-coloured one reads like a 
 
 ![A close zoom of the two menu columns: Anton dish names, Tenor Sans descriptions beneath each, and right-aligned red prices whose cent signs line up](14-menu-columns-and-prices.webp)
 
-Put each block of type in its own text layer, and space the lines with **Line height** instead of typing one layer per line.
+Put each block of type in its own text layer, and space the lines with **Line height** instead of typing one layer per line. Select `Header Bars` before you set up each block.
 
-1. **Headers:** `FIRST SHIFT · FROM 5 AM` and `HOT LINE · FROM 11 AM` in Russo One 28 px, paper, 16 px in from the left of each bar and centred vertically.
+1. **Headers:** `FIRST SHIFT · FROM 5 AM` and `HOT LINE · FROM 11 AM` in Russo One 28 px, **Line height 1.4**, paper, 16 px in from the left of each bar and centred vertically.
 2. **Dish names:** Anton 38 px, ink, with **Line height** set to **2.316** in the Text panel *before* you click, to give an 88 px pitch. Type all four names as one block per column. Left column: `RIVET HASH`, `STEEL-CUT OATS`, `FLAPJACK STACK`, `BOILER COFFEE`. Right column: `GIRDER ON RYE`, `BLAST-FURNACE CHILI`, `CRANE-HOOK FRANKS`, `FOREMAN’S PLATE`.
 3. **Descriptions:** Tenor Sans 22 px with **Line height 4** (the same 88 px pitch). Place them **46 px** below the names, so each sits about 10 px under its dish.
 4. **Prices:** drag an *area* text box instead of clicking, type the four prices, and set **Align** to **Right** in the options bar. Anton 44 px, red, **Line height 2**. Move each block so its right edge sits on the header bar's right edge (**572** and **1140**).
 
-Point text ignores alignment, but area text doesn't. A right-aligned area box lines up `5¢` under `35¢` exactly.
-
-Reset **Line height** to **1.4** when you're done, because the Text panel remembers it for the next layer.
+A right-aligned box lines up `5¢` under `35¢` exactly.
 
 ## Add the nameplate, slogan and footer
 
 ![A close zoom of the top-left corner: АВТОМАТ-СТОЛОВАЯ № 7 in cream on a black bar, and WORKERS' CANTEEN · EST. 1930 in red below it](15-cyrillic-nameplate.webp)
+
+Select `Rules` before you set up each line, and set **Line height** to **1.4**.
 
 1. **Nameplate:** `АВТОМАТ-СТОЛОВАЯ № 7` ("Automat-Canteen No. 7") in Russo One 26 px, paper, centred on the black bar. Russo One has Cyrillic, and pasting the text with [[Cmd+V]] is the most reliable way to enter it.
 2. **Subline:** `WORKERS’ CANTEEN · EST. 1930` in Russo One 20 px, red, 14 px under the bar.

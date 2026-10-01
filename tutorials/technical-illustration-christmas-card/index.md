@@ -2,7 +2,7 @@
 title: Design a Technical Illustration Christmas Card
 description: Draw an exploded isometric gingerbread house in Lopsy, as a vintage assembly drawing with balloons, an X-ray detail view, a parts list and a title block.
 published: 2026-09-29 23:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: christmas card, holiday card, technical illustration, isometric, exploded view, greeting card, transforms, pattern fill, typography, groups
@@ -123,8 +123,6 @@ Marquee the whole elevation, switch to the **Move** tool ([[V]]) and click **Dis
 3. Keep both sides vertical. The top and bottom edges should now slope down to the right at 30°, parallel to the board's front-left edge.
 
 The windows, shutters and doorway all come along in correct isometric. Press [[Cmd+D]] to commit.
-
-> **Tip:** The marching ants stay rectangular in Distort mode (that's by design). Only the blue handle box shows the new shape, so judge the result from the pixels.
 
 ## Build the gable wall and door the same way
 
@@ -265,7 +263,7 @@ Every engineering sheet ends in a **title block** in its bottom-right corner:
 1. On a `Table Fill` layer, fill paper-coloured rectangles behind the parts list and the title block. Keep them *inside* the frame, so the thick border still shows.
 2. On a `Table Rules` layer, draw the rules with the **Pencil** in ink, clicking each start and [[Cmd+Shift]]-clicking each end: **Size 3** for the outer lines and header, **Size 1** between rows.
 
-Set the type in **B612 Mono**:
+Set the type in **B612 Mono**. Select *Table Rules* before you set up each new block:
 
 - **Parts list:** 21 px with **Line height 1.62**, so each 34 px row holds one line. Make the QTY column an **area text** box (drag with the Text tool) set to **Align center**, so `12` and `2` centre in their cells.
 - **Title block:** 24 px bold for the title, and 19 px and 17 px for the cells.
@@ -276,10 +274,10 @@ The jokes live here too: DRAWN S. CLAUS, CHECKED MRS. CLAUS, SCALE NTS.
 
 ![Close-up of the right column: a red letter-spaced kicker, the two-line serif headline Some Assembly Required., the red handwritten line Merry Christmas! Instructions not included., the X-ray detail and a four-line notes list](19-headline-and-notes.webp)
 
-Every block in the right column shares one left edge, the left edge of the detail circle. Click the top ruler there to drop a guide, then nudge each block to it with the arrow keys.
+Every block in the right column shares one left edge, the left edge of the detail circle. Click the top ruler there to drop a guide, then nudge each block to it with the arrow keys. Select *Table Rules* before you set up each new block.
 
 - **Kicker:** `ASSEMBLY INSTRUCTIONS — MODEL XMAS-26` in **B612 Mono** Bold 19, red, with **Letter spacing 3**.
-- **Headline:** `Some Assembly` / `Required.` in **Old Standard TT** Bold 104 with **Line height 1.02**.
+- **Headline:** `Some Assembly` / `Required.` in **Old Standard TT** Bold 104 with **Letter spacing 0** and **Line height 1.02**.
 - **Greeting:** `Merry Christmas! Instructions not included.` in **Architects Daughter** 34, red. It's the drafter's handwriting.
 - **Notes:** B612 Mono 18 at Line height 1.7, beside the detail circle. For example, *4. DO NOT EAT BEFORE 25.12.*
 - **Caption:** `DETAIL A · X-RAY · SCALE 3:1` under the circle. Add **Letter spacing 0.6** so it spans the circle's full width.

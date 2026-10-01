@@ -2,7 +2,7 @@
 title: Design a Drippy Skate Snack Shack Menu
 description: Make a skatepark snack-shack menu in Lopsy with grip-tape texture, a sunburst, melting title lettering, a flame-graphic skateboard and die-cut stickers.
 published: 2026-09-26 08:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: restaurant menu, skate, typography, layer effects, symmetry, halftone, transforms, groups, spray, stickers
@@ -69,7 +69,8 @@ Add a layer named `Checker`:
 1. Marquee a strip two cells (64 px) tall across the whole top edge and fill it with `#FFA51F`.
 2. At the left end, fill two black `#111111` cells: the top-left one and the one diagonally below and to the right of it. That's a 64 × 64 tile.
 3. Marquee the tile, press [[Cmd+C]] then [[Cmd+V]], and drag the paste 64 px
-   to the right with the **Move** tool ([[V]]). The grid snaps it into place.
+   to the right. Pasting switches to the **Move** tool, and the grid snaps the
+   paste into place.
 4. Press [[Cmd+D]] and [[Cmd+E]] to merge it down.
 
 Repeat with a 128, 256 and 512 px wide marquee. Four doublings fill the row.
@@ -78,8 +79,8 @@ Repeat with a 128, 256 and 512 px wide marquee. Four doublings fill the row.
 
 ![Orange checker bands at the top and bottom edges of the grip-tape canvas](04-checker-bands.webp)
 
-Click **Duplicate Layer** in the Layers panel, then click the copy's row. With
-the **Move** tool, drag it down until it snaps to the bottom edge of the
+Click **Duplicate Layer** in the Layers panel. With the **Move** tool, drag
+the copy down until it snaps to the bottom edge of the
 canvas. Rename it `Checker Bottom`.
 
 ## Paint a sunburst with radial symmetry
@@ -131,14 +132,14 @@ centred.
 Open the layer's effects with the sparkle (✦) button on its row:
 
 - **Stroke**: `#111111`, **Width** `12`
-- **Drop Shadow**: `#FF2E88`, **Offset X** `14`, **Offset Y** `18`,
+- **Drop Shadow**: `#FF2E88`, **Offset X** `2`, **Offset Y** `6`,
   **Blur** `0`, **Spread** `10`, **Opacity** `100`
 
 ## Scale the KICKFLIP type
 
 ![KICKFLIP set in cream Bungee inside a scale box, with handles dragged to 130 percent](08-kickflip-scale.webp)
 
-Select a raster layer, add a layer named `Kickflip Strip`, and fill a
+Add a layer named `Kickflip Strip` above `MANGO`, and fill a
 700 × 112 px marquee with `#FF2E88`. Centre it across the canvas so its top
 overlaps the bottom of MANGO.
 
@@ -148,9 +149,6 @@ lower down. Click **Rasterize Layer** at the bottom of the Layers panel.
 Marquee the word, switch to **Move**, and [[Cmd]]-drag the bottom-right
 handle out to about 130%. [[Cmd]] keeps the proportions. Press [[Cmd+D]] to
 commit the scale.
-
-> **Tip:** Press [[Cmd+D]] to commit each scale or rotation before you move
-> the layer or start another transform.
 
 ## Merge and rotate the bar
 
@@ -169,7 +167,7 @@ The bar overlaps the bottom of MANGO like a slapped-on sticker.
 Give `Kickflip Strip` these effects:
 
 - **Stroke**: `#111111`, **Width** `7`
-- **Drop Shadow**: `#1FD6C1`, **Offset X** `-10`, **Offset Y** `12`,
+- **Drop Shadow**: `#1FD6C1`, **Offset X** `-3`, **Offset Y** `5`,
   **Blur** `0`, **Spread** `6`
 
 Then type the tagline in **Permanent Marker**, size `36`, colour `#1FD6C1`:
@@ -188,7 +186,7 @@ column:
 - `Header Grinds` in `#FFB321`, about 64 px in from the left edge
 - `Header Slurps` in `#1FD6C1`, starting about 32 px right of the canvas centre
 
-Type the label in black Bungee `46`, rasterize it, and drag it onto the tag.
+Type the label in black Bungee `46` and drag it onto the tag.
 Merge it down, then rotate the tag 3°: `GRINDS` counter-clockwise and
 `SLURPS` clockwise.
 
@@ -196,8 +194,9 @@ Merge it down, then rotate the tag 3°: `GRINDS` counter-clockwise and
 
 ![Two columns of cream Permanent Marker menu items with right-aligned Bungee prices](12-area-text-menu-items.webp)
 
-Open the **Text** panel from the right-hand toolbar. For each column, drag a
-text box instead of clicking. That makes area text with a fixed width.
+Open the **Text** panel from the right-hand toolbar. Select `Header Slurps`
+before you set up each box. For each column, drag a text box instead of
+clicking. That makes area text with a fixed width.
 
 - **Names**: Permanent Marker `26`, **Line height** `2.3`, cream. Drag a box about 364 px wide under each header, starting just inside the header's left end, then paste four lines.
 - **Prices**: Bungee `26`, **Line height** `2.3`, **Align right**. Drag a narrow box, about 60 px wide, at the right end of each column: the left one ending just short of the canvas centre, the right one ending about 60 px from the right edge. Start each at the same height as its names box.
@@ -256,8 +255,8 @@ reads as the same kind of information.
 ![The MANGO title in a scale box being enlarged about seven percent](17-scale-mango.webp)
 
 Select `MANGO`, click **Rasterize Layer**, and marquee the lettering.
-[[Cmd]]-drag the bottom-right handle out by about 7%, then press [[Cmd+D]]
-and drag it back to centre. The Stroke and Drop Shadow effects stay live on
+[[Cmd]]-drag the bottom-right handle out by about 7%, drag it back to centre,
+and press [[Cmd+D]]. The Stroke and Drop Shadow effects stay live on
 the raster layer.
 
 ## Melt the title with drips
@@ -291,15 +290,18 @@ still builds the paint up, so keep the bursts short.
 
 Select `Checker Bottom` and add a layer named `Deck`. The deck is a pill
 about 740 × 170 px, roughly centred across the canvas a little above the bottom
-checker band. Build it with three fills:
+checker band.
 
-- a 570 × 170 rectangle for the middle
-- a 170 px circle at each end ([[Cmd]]-drag with the **Elliptical Marquee**), each overlapping the rectangle by half its width
+Pick the **Shape** tool ([[U]]), set **Shape** to **Rectangle** and
+**Corner Radius** to `85`, half the height, so the ends are fully round. Set
+the Fill to `#FF2E88` and remove the stroke. Click (don't drag) on the
+canvas's centre line, a little above the bottom band, and enter **740 × 170**.
+The Shape tool draws from the centre out.
 
-Click it with the **Magic Wand** ([[W]]) to select the whole shape. Choose
-the **Gradient** tool and click **Advanced…**. Set the stops to `#FF2E88` and
-`#FFB321` with the hue strip and colour square, then drag across the deck
-from end to end.
+Click the deck with the **Magic Wand** ([[W]]) to select the whole shape.
+Choose the **Gradient** tool and click **Advanced…**. Type `FF2E88` and
+`FFB321` into the two stops' hex fields, then drag across the deck from end to
+end.
 
 ## Paint flames on the deck
 
@@ -319,7 +321,7 @@ stroke into a flame tip.
 Deselect, then add these effects to `Deck`:
 
 - **Stroke**: `#111111`, **Width** `6`
-- **Drop Shadow**: `#1FD6C1`, **Offset X** `10`, **Offset Y** `10`, **Blur** `0`, **Spread** `4`
+- **Drop Shadow**: `#1FD6C1`, **Offset X** `4`, **Offset Y** `4`, **Blur** `0`, **Spread** `4`
 
 ## Add trucks and wheels on their own layer
 
@@ -335,7 +337,7 @@ the deck, and build each one from:
 - a cream hub dot on each wheel
 
 Give `Hardware` a black **Stroke** with **Width** `3` and a black
-**Drop Shadow** with **Offset X** `5`, **Offset Y** `7`, **Blur** `4` and
+**Drop Shadow** with **Offset X** `2`, **Offset Y** `4`, **Blur** `4` and
 **Opacity** `75`. The shadow makes the trucks sit *on* the
 graphic instead of cutting through it.
 
@@ -343,8 +345,10 @@ graphic instead of cutting through it.
 
 ![The finished skateboard tilted about six degrees clockwise inside a rotation box above the bottom checker band](24-rotate-skateboard.webp)
 
-Press [[Cmd+E]] to merge `Hardware` into `Deck`. Merge Down bakes both
-layers' effects into the pixels, so the composite doesn't change.
+Open the ✦ drawer on `Deck` and click **Rasterize Layer Style**, so its
+outline and teal shadow stay around the deck alone. Then select `Hardware`
+and press [[Cmd+E]] to merge it into `Deck`. Its stroke and shadow are baked
+into the pixels as it merges, so the composite doesn't change.
 
 Marquee the board, rotate it about 6° clockwise, and press [[Cmd+D]]. Add an
 **Outer Glow** of `#FF8A1F` (**Size** `36`, **Spread** `8`, **Opacity** `45`)
@@ -363,8 +367,8 @@ about `80` px, and let go back at the start. Fill it with `#1FD6C1`.
 > instead, click **Commit path**, then **Path to Selection** in the Paths
 > panel.
 
-Type `FRESH!` in black Titan One `38` in empty space, rasterize it, drag it
-onto the star and merge it down. Add a cream **Stroke** with **Width** `7` for the die-cut
+Type `FRESH!` in black Titan One `38` in empty space, drag it onto the star
+and merge it down. Add a cream **Stroke** with **Width** `7` for the die-cut
 edge and a soft black **Drop Shadow**, then rotate the sticker 14°.
 
 ## Add a round badge
@@ -377,9 +381,9 @@ On a new layer, fill three concentric circles:
 - pink, 136 px
 - cream, 122 px
 
-Merge in `100%` in black Bungee `34` and `MANGO` in pink Permanent Marker
-`26`. Add a drop shadow, rotate the badge -14°, and park it in the
-bottom-left corner.
+Select the badge layer before you set up each word, and merge in `100%` in
+black Bungee `34` and `MANGO` in pink Permanent Marker `26`. Add a drop
+shadow, rotate the badge -14°, and park it in the bottom-left corner.
 
 ## Scatter small stickers
 

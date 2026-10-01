@@ -2,7 +2,7 @@
 title: Liquid Metal Magazine Cover with a Melting Gold Sun
 description: Design a science-magazine cover with a molten gold sun built from Clouds, Solarize and Liquify, plus chrome drip type in Lopsy.
 published: 2026-09-30 21:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: liquid metal, magazine cover, liquify, filters, gradients, typography, blend modes
@@ -132,8 +132,8 @@ Finally, give Sun Core a dark **Inner Glow** (`#3A2200`, **Size** 40, **Opacity*
 
 1. On a **Droplets** layer, build one teardrop under a drip tip: fill a small circle made with the **Elliptical Marquee**, then lasso a small triangle on top of it and fill that too.
 2. [[Cmd]]-click the layer's thumbnail to select the drop. Drag a radial gradient from `#FFF4D0` through gold to `#4A2E08`, lit from the upper left. Add a white dot highlight.
-3. Marquee the drop, then press [[Cmd+C]] and [[Cmd+V]].
-4. Marquee the pasted drop and [[Cmd]]-drag a corner handle to scale it down to 70–86%. Press [[Cmd+D]] to commit, then drag it under the next drip tip with the **Move** tool and fine-tune with the arrow keys.
+3. Marquee the drop, then press [[Cmd+C]] and [[Cmd+V]]. The paste is selected, with the **Move** tool active.
+4. [[Cmd]]-drag a corner handle to scale it down to 70–86%, then drag it under the next drip tip and fine-tune with the arrow keys. Press [[Cmd+D]] to commit.
 5. Choose **Layer → Merge Down** to fold it back into Droplets. Repeat for the other drips.
 
 Leave 20–30 px between each tip and its drop. For one drip, draw a drop still attached by a thin neck.
@@ -144,13 +144,13 @@ Leave 20–30 px between each tip and its drop. For one drip, draw a drop still 
 
 ![YELLOW DWARF in tall Anton capitals with a gold chrome gradient and horizon band, drips on the Y, D and F, above a two-line serif deck](09-chrome-headline.webp)
 
-1. Click a raster layer (**Droplets**) so the new type doesn't edit the masthead. Type **YELLOW DWARF** in **Anton** at 206 px, about two-thirds of the way down the cover, so it spans the margins exactly. Name the layer **Headline** and click **Rasterize Layer**.
+1. Select **Droplets**, then type **YELLOW DWARF** in **Anton** at 206 px, about two-thirds of the way down the cover, so it spans the margins exactly. Name the layer **Headline** and click **Rasterize Layer**.
 2. [[Cmd]]-click its thumbnail to select the letters. Drag a vertical linear gradient over the cap height with these stops:
    - `#FFF6D0` → `#F6C850` at 22% → `#B8740E` at 46%
    - a dark horizon line at `#2A1003` 50%
    - `#7A3E08` at 57% → `#F2B838` at 78% → `#FFE9A8` at 100%
 3. Deselect, then choose **Filter → Liquify…**, set **Mode** to **Push Forward** and **Brush Size** to 36, and pull drips from the **Y**, the **D**'s stem and the **F** only. Keep the L's and W clean so the word stays legible. Click **Apply**.
-4. Add a dark **Stroke** (`#1E0C02`, **Width** 3, **Position** outside) and a soft **Drop Shadow** (**Offset Y** 10, **Blur** 14, **Opacity** 75).
+4. Add a dark **Stroke** (`#1E0C02`, **Width** 3, **Position** outside) and a soft **Drop Shadow** (**Offset Y** 7, **Blur** 14, **Opacity** 75).
 5. Set the deck in **Instrument Serif** at 46 px, cream `#F4E9D0`, as two separate text layers: *The ordinary star that makes everything,* and *and the five billion years it has left.* Centre each one with **Align center horizontally** in the Move tool's options bar, about 40 px below the drips.
 
 ## Set the cover lines on a strict left edge
@@ -169,11 +169,11 @@ Set the three stacks:
 - **200×** / **HOTTER THAN ITS SKIN** / *The corona mystery,* / *finally cracked?*
 - **8:20** / **LIGHT-MINUTES AWAY** / *How old is the light* / *on your face?*
 
-Set the caption's **Line height** to 1.16 in the Text panel *before* you create it (about 36 px leading). Line every block up on the left margin guide, start the first just under HELIOS, and space the blocks evenly, about 240 px apart from number to number.
+Select **Headline** before you set up each new style, then type every line in that style. Set the caption's **Line height** to 1.16 in the Text panel *before* you create it (about 36 px leading). Line every block up on the left margin guide, start the first just under HELIOS, and space the blocks evenly, about 240 px apart from number to number.
 
 Add the folio line in **IBM Plex Mono** Medium at 20 px, lavender `#C8BEEA`, about 40 px from the top: **THE SCIENCE OF LIGHT** on the left margin, and **NO. 147 · OCTOBER 2026 · $12.99** ending exactly on the right margin guide.
 
-> **Tip:** Create new text in an empty part of the canvas, then move it into place. A click inside another text layer's box edits that layer instead.
+> **Tip:** Start new text in an empty part of the canvas, then move it into place.
 
 ## Add a rotated Solar Maximum badge
 
@@ -195,7 +195,7 @@ Let the badge overlap the sphere's edge, like a sticker on the photo, with its r
 
 ![The complete HELIOS cover with the ALSO INSIDE band and a barcode at the bottom, film grain and a soft vignette](12-bottom-band-barcode.webp)
 
-1. Set **ALSO INSIDE** in gold `#F2B630` **Barlow Condensed** Bold at 26 px on the left margin. Under it, add two lines of 30 px cream Instrument Serif, ending about 60 px above the bottom edge: *Planet Nine's last hiding place · Sunspot cycle 25 peaks* and *Why the sky isn't violet · Building a star in a bottle*.
+1. Set **ALSO INSIDE** in gold `#F2B630` **Barlow Condensed** Bold at 26 px on the left margin. Select **Headline** again, and under it add two lines of 30 px cream Instrument Serif, ending about 60 px above the bottom edge: *Planet Nine's last hiding place · Sunspot cycle 25 peaks* and *Why the sky isn't violet · Building a star in a bottle*.
 2. For the barcode, choose **View → Show Grid** and set **Grid** to 4px; Snap turns on with it. On the right margin, marquee a cream box whose top lines up with the ALSO INSIDE caps and fill it. Untick **Snap** in the options bar, then draw the bars with the **Pencil** in a dark colour, changing its **Size** between 2 and 6 px as you go: click at the top of each bar and [[Cmd+Shift]]-click at the bottom for a dead-vertical line. Add the digits `9 770147 202611` in IBM Plex Mono 13 px under the bars.
 3. Add a **Grain** layer on top: fill it grey `#808080`, run **Filter → Add Noise…** (**Amount** 40, **Mono**, **Gaussian**), and set it to **Overlay** at 22%.
 4. Finish with a **Vignette** over the whole cover: click the **✦** button on the top **Project** group, choose **Add Adjustment → Vignette** and set it to 35.

@@ -2,7 +2,7 @@
 title: Draw an Etching-Style Lighthouse Illustration
 description: Engrave a moonlit lighthouse scene in Lopsy with line patterns, Threshold-swelled sky lines, cross-hatching, Mesh Warp waves and a copperplate caption.
 published: 2026-09-25
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 90
 tags: digital painting, etching, engraving, illustration, patterns, filters, mesh warp, typography
@@ -286,13 +286,11 @@ knocks the sky lines away around itself.
 
 For more birds:
 
-1. Marquee a gull, press [[Cmd+C]] then [[Cmd+V]], drag the copy into
-   place with the **Move** tool, and press [[Cmd+D]] to commit.
+1. Marquee a gull and press [[Cmd+C]] then [[Cmd+V]]. The paste switches to
+   the **Move** tool, so drag the copy into place and press [[Cmd+D]].
 2. Choose **Merge Down** so the copy picks up the stroke.
 3. For the third gull, marquee it and pick **Move**. Drag the round handle
    just outside a corner to bank it about 20°, then press [[Cmd+D]].
-
-> **Tip:** Commit each change with [[Cmd+D]] before you start the next one.
 
 ## Add sea stacks and surf
 
@@ -337,10 +335,12 @@ corners, and a centred title below.
    240 px to the right.
 2. With the **Text** tool, set the subtitle in **Pinyon Script** at 30 px in
    `#2E2117`: *Moonrise over the northern headland*.
-3. Set the title in **Cormorant SC SemiBold** at 52 px: **The Juniper
-   Light**. In the Text panel, give it Letter spacing **4**.
-4. Add the plate marks in **Old Standard TT** at 16 px, with Letter
-   spacing **1**: *Pl. XII* on the left and *J. L. sculp.* on the right.
+3. Select **Rule** again and set the title in **Cormorant SC SemiBold** at
+   52 px: **The Juniper Light**. In the Text panel, give it Letter spacing
+   **4**.
+4. Select **Rule** again and add the plate marks in **Old Standard TT** at
+   16 px, with Letter spacing **1**: *Pl. XII* on the left and
+   *J. L. sculp.* on the right.
 
 Create each line in empty canvas, then move it into place: the title just
 under the rule and the subtitle under the title. Nudge with the arrow keys

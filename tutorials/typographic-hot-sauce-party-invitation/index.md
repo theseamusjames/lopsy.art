@@ -2,7 +2,7 @@
 title: Design a Typographic Hot Sauce Party Invitation
 description: Make a wood-type style party invitation in Lopsy with flame-gradient lettering, sauce drips, a misregistered red plate, a heat scale and text on a circle.
 published: 2026-09-27 18:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: typography, invitation, party invitation, text effects, letterpress, halftone, text on path, gradients
@@ -32,7 +32,7 @@ The palette:
 - Sunburst peach `#F4CF9C`, halftone red `#E0301A`
 
 One rule keeps it coherent: every display element gets the **same hard
-offset**, 12 px right and 10 px down with no blur. Dark type gets a red
+offset**, down and to the right with no blur. Dark type gets a red
 plate. Colored type gets an ink shadow.
 
 ## Set up the paper and margins
@@ -100,14 +100,15 @@ corners keep the page from feeling top-heavy.
 
 ![HOT typed in Ultra at 400 px in red above the sunburst, with the letter-spaced kicker line centred above it](05-hot-headline.webp)
 
-Select the *Dots* layer, so new type doesn't restyle anything, and pick the
-**Text** tool. In the Text panel, set **Letter spacing** to 8. Type
-`YOU'RE CORDIALLY INVITED TO THE` in **Space Mono**, weight 700, at 26 px in
-ink. With the Move tool, click **Align center horizontally**, then nudge it
-up until the tops of the letters sit just below the top margin guide.
+Select the *Dots* layer and pick the **Text** tool. In the Text panel, set
+**Letter spacing** to 8. Type `YOU'RE CORDIALLY INVITED TO THE` in
+**Space Mono**, weight 700, at 26 px in ink. With the Move tool, click
+**Align center horizontally**, then nudge it up until the tops of the letters
+sit just below the top margin guide.
 
-Reset the letter spacing to 0 and type **HOT** in **Ultra** at **400 px**.
-Ultra is a chunky slab serif that looks like cut wood type.
+Select *Dots* again, set the letter spacing to 0 and type **HOT** in
+**Ultra** at **400 px**. Ultra is a chunky slab serif that looks like cut
+wood type.
 
 ## Scale HOT to the margins
 
@@ -150,14 +151,14 @@ T's stem. Vary the lengths so they don't look like a comb.
 
 ## Add a keyline and a hard shadow
 
-![The effects drawer for HOT with Drop Shadow enabled, colour 1B1714, offset 12 by 10 and blur 0, above a stroked headline](09-keyline-and-shadow.webp)
+![The effects drawer for HOT with Drop Shadow enabled, colour 1B1714 and blur 0, above a stroked headline](09-keyline-and-shadow.webp)
 
 Open **Layer effects** on *HOT*. Enable **Stroke** in `#1B1714`, **Width 5**,
-and **Drop Shadow** in `#1B1714`: **Offset X 12**, **Offset Y 10**,
+and **Drop Shadow** in `#1B1714`: **Offset X 7**, **Offset Y 5**,
 **Blur 0**, **Opacity 100**.
 
 The keyline keeps the pale top of the gradient from dissolving into the
-cream paper. The hard shadow is the first use of the 12 / 10 offset. Because
+cream paper. The hard shadow is the first of the design's hard offsets. Because
 the effects wrap the whole layer, the drips get them too.
 
 ## Set Sauce in a tilted script
@@ -175,7 +176,7 @@ so a later text edit would set it straight again.
 Draw a new marquee and [[Cmd]]-scale Sauce to **1000 px** wide, then move it
 under HOT. Its left edge should sit just inside the left margin, and every
 drip should clear its cap line. Give it the same **Stroke 5** and **Drop
-Shadow 12 / 10** as HOT.
+Shadow 7 / 5** as HOT.
 
 ## Cut an inline stripe through SOCIAL
 
@@ -193,8 +194,7 @@ letters' cap height and press [[Delete]]. This one clean cut gives an
 
 ![SOCIAL in black with a red copy offset 12 pixels right and 10 pixels down behind it, like a misregistered two-colour print](12-red-offset-plate.webp)
 
-Choose **Layer → Duplicate Layer**. The copy lands 10 px down and right, so
-nudge it back with [[Shift+Left]] and [[Shift+Up]].
+Choose **Layer → Duplicate Layer**. The copy lands exactly on top.
 
 Select the original underneath, add a **Color Overlay** in `#D62718`, and
 nudge it **12 px right, 10 px down**: [[Shift+Right]] then two [[Right]]
@@ -208,8 +208,8 @@ missed the first.
 ![Five heat-scale words in Anton, MILD, MEDIUM, SPICY, HOTTER and INFERNO, typed in green, olive, orange, red and black inside a new Heat Scale group](13-heat-scale-words.webp)
 
 With *SOCIAL* selected, click **New Group** and name it *Heat Scale*. Add a
-layer inside it called *Scale Bar*. Select *Scale Bar* before each word, so
-the words land in the group without restyling each other.
+layer inside it called *Scale Bar*. Select *Scale Bar* before you set up
+each word.
 
 Type each word in **Anton 64 px** with letter spacing 3, then rasterize it.
 Use a single face for the whole scale. Five different fonts read as a font
@@ -242,7 +242,7 @@ its rounded ends. Magic Wand it, then drag a **Linear** gradient from
 the left margin to the right one, using the five heat colours as stops: 0,
 25, 50, 72 and 100%.
 
-Label the ends in **Space Mono 700, 20 px**, a small gap below the bar:
+Label the ends in **Space Mono 700, 20 px**, letter spacing 1, a small gap below the bar:
 `0 SHU` flush left and `2,000,000+ SHU` flush right.
 
 > **Tip:** Once the row is built, click the *Heat Scale* group row and drag
@@ -297,14 +297,15 @@ the bullets. At this size and radius, 6 closes the circle evenly.
 
 ![The details block beside the badge: a large Anton date line, the address in bold Courier Prime, a description line and a red RSVP line](18-details-block.webp)
 
-Line the details up with the badge. Start the block about 50 px right of
+Select *Chili* before you set up each line. Line the details up with the
+badge. Start the block about 50 px right of
 the badge, with the first line's cap top level with the top of the badge and
 the last line sitting on the bottom guide:
 
 - **Date:** `SATURDAY · OCTOBER 18 · 7 PM`, Anton 60 px, letter spacing 3.5, so it ends right on the right margin, under INFERNO.
-- **Where:** `THE FERNANDEZ BACKYARD — 214 PEPPER LANE`, Courier Prime 700, 25 px.
-- **What:** `Tasting flights, a taco bar & the wing-of-fire challenge.`, Courier Prime 400, 21 px.
-- **RSVP:** `RSVP BY OCT 10 · (555) 014-8822`, Space Mono 700, 23 px, `#D62718`.
+- **Where:** `THE FERNANDEZ BACKYARD — 214 PEPPER LANE`, Courier Prime 700, 25 px, letter spacing 0.
+- **What:** `Tasting flights, a taco bar & the wing-of-fire challenge.`, Courier Prime 400, 21 px, letter spacing 0.
+- **RSVP:** `RSVP BY OCT 10 · (555) 014-8822`, Space Mono 700, 23 px, letter spacing 2, `#D62718`.
 
 Space the lines so the three gaps between them are equal. That way the block
 reads as one unit with the badge.

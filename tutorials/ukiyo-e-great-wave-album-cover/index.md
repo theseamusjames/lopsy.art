@@ -2,7 +2,7 @@
 title: Design a Ukiyo-e Great Wave Album Cover
 description: Make a Hokusai-style woodblock album cover in Lopsy with a curling great wave, seigaiha sea pattern, paper lanterns, vertical Japanese type and a hanko seal.
 published: 2026-09-27 21:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: ukiyo-e, album cover, woodblock, japanese, patterns, vertical text, typography, layer effects
@@ -212,11 +212,12 @@ merge rasterizes the text for you.
 ![A pasted copy of the lantern being scaled down with the Move tool's transform handles, overlapping another lantern in the sea](11-scale-lantern-copies.webp)
 
 Marquee the lantern and press [[Cmd+C]], then [[Cmd+V]]. The copy pastes in
-place on a new layer.
+place on a new layer, already selected, with the **Move** tool ready.
 
-1. Drag it to its spot with the **Move** tool.
-2. Marquee it, hold [[Cmd]] and drag the bottom-right corner handle to scale it uniformly. Press [[Cmd+D]] to commit.
-3. Tilt a few by 3–5° with the rotate handle just outside the top-right corner, then [[Cmd+D]].
+1. Drag it to its spot.
+2. Hold [[Cmd]] and drag the bottom-right corner handle to scale it uniformly.
+3. Tilt a few by 3–5° with the rotate handle just outside the top-right corner.
+4. Press [[Cmd+D]] to commit.
 
 Make seven copies at 72%, 55%, 45%, 40%, 36%, 30% and 24%. Place the smallest
 near the horizon and the largest toward the viewer.
@@ -332,8 +333,9 @@ The band name should lead:
 - **KURAGE:** Shippori Mincho B1 ExtraBold, size 56, letter spacing 12
 - **ABYSSAL LANTERNS:** Medium (500), size 34, letter spacing 10
 
-Both are `#1A2340`. Create each one in empty space so the text tool doesn't
-grab the other layer, then line them up:
+Both are `#1A2340` and horizontal, so turn **Vertical** off. Before you set
+up each one, click the *Band* layer, then click in empty space on the band
+to type it. Then line them up:
 
 1. Centre KURAGE's caps vertically between the band's rules.
 2. Put ABYSSAL LANTERNS on the same baseline. With the Move tool, press [[Up]] or [[Down]] until the bottoms of the capitals line up.

@@ -2,7 +2,7 @@
 title: Design a Baroque Perfume Billboard with Photo Peonies
 description: Build a Dutch still-life perfume billboard in Lopsy with lassoed peony photos, a gradient crystal flacon, a pearl color brush and gilded baroque type.
 published: 2026-09-30 23:40
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 150
 tags: billboard, baroque, still life, photo editing, lasso, transform, gradients, custom brush, typography, group adjustments, dodge and burn
@@ -90,8 +90,6 @@ Most of this ends up behind flowers. It still has to be there, or the bouquet fl
 
 Pick the **Lasso** and trace just outside the petals. The leaves are dark and busy, so **Quick Selection** tends to leak into them. A careful lasso gives a cleaner edge, and it's what an old master's silhouette needs anyway.
 
-> **Tip:** If you do try Quick Selection, click its toolbox button. Pressing [[Q]] toggles Quick Mask instead, even though the button's tooltip says "(Q)".
-
 ## Cut the peony out
 
 ![The crimson peony cut out cleanly against the dark umber ground, with its leaves and background removed](07-peony-cut-out.webp)
@@ -105,8 +103,8 @@ Pick the **Lasso** and trace just outside the petals. The leaves are dark and bu
 
 1. Draw a rectangular marquee just outside the flower and switch to the **Move** tool.
 2. Hold [[Cmd]] and drag the bottom-right handle inward. [[Cmd]] keeps the proportions, and the opposite corner stays pinned.
-3. Stop at about **81%**: the crimson bloom goes from 418 to 338 px wide. Press [[Cmd+D]].
-4. Drag the flower so its centre sits at about **(545, 300)**, right over the tazza.
+3. Stop at about **81%**: the crimson bloom goes from 418 to 338 px wide.
+4. Drag inside the box so the flower's centre sits at about **(545, 300)**, right over the tazza, and press [[Cmd+D]].
 
 ## Rotate and arrange the bouquet
 
@@ -190,14 +188,14 @@ Keep the path on the ledge until it reaches the edge. Pearls hanging in mid-air 
 ![The type block on the right half with a vertical guide at x 1670: Maison Verdelet · Paris in small capitals, a gold swash script Duchess, PEONY in decorative capitals, a scroll ornament on a horizontal guide, and Eau de Parfum](16-gold-type-guides.webp)
 
 1. Click the top ruler at **x 1670** for a vertical guide, and the left ruler at **y 480** for the ornament's baseline.
-2. Create each text in empty canvas and then move it, bottom line first. Big text boxes swallow nearby clicks.
+2. Click `Pearls` before you set up each text. Create it in empty canvas and then move it into place, bottom line first.
    - **Eau de Parfum:** **Cormorant SC SemiBold** 32 px, letter spacing 12
    - **PEONY:** **Cinzel Decorative Bold** 112 px, spacing 16
-   - **Duchess:** **Monsieur La Doulaise** 212 px
+   - **Duchess:** **Monsieur La Doulaise** 212 px, spacing 0
    - **Maison Verdelet · Paris:** Cormorant SC SemiBold 24 px, spacing 6
 3. Centre each on x 1670. Leave about 45 px between the script and PEONY, and keep the D's swash more than 100 px from the right edge.
 4. To gild the two titles, [[Cmd]]-click the text layer's thumbnail to load its shape as a selection. Add a layer above it and drag a vertical five-stop gold gradient from the top of the letters to the bottom. Hide the original text.
-5. Give both gold layers a **Drop Shadow** (3, 6, blur 8, 85%). Add a **Stroke** of 1 px `#E6C270` to the script so its hairlines hold up at a distance.
+5. Give the PEONY gold layer a **Drop Shadow** (3, 6, blur 8, 85%). Give the script's gold layer a **Stroke** of 1 px `#E6C270`, so its hairlines hold up at a distance, and a **Drop Shadow** of (2, 5, blur 8, 85%).
 6. Draw the scroll ornament as lasso ribbons: a centre lozenge, tapering rules and C-scroll volutes, mirrored. Fill it gold and gradient it the same way.
 
 ## Inlay the retail line in the ledge

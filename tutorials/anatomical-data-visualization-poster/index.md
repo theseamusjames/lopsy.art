@@ -2,7 +2,7 @@
 title: Design an Anatomical Plate Data Visualization Poster
 description: Build a Victorian anatomical-plate bar chart in Lopsy with sepia skull engravings, muscle-shaped bars, a magnified inset, pattern gridlines and serif type.
 published: 2026-09-30 08:10
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 150
 tags: data visualization, infographic, anatomical, scientific illustration, poster, bar chart, engraving, pattern fill, clone stamp, blend modes, typography
@@ -76,13 +76,13 @@ On a **Plate Frame** layer, marquee-fill a 7 px sepia ring 60 px in from the edg
 > the corners: From **60, 60** To **1740, 2340** for the outer rule, then
 > **Shrink** 7.
 
-Set the type with the Text tool, centring each line with **Align center horizontally**:
+Set the type with the Text tool, centring each line with **Align center horizontally**. Click the **Plate Frame** layer before you set up each line:
 
 - **Title:** "ZOOLOGICAL JAWS" in **Castoro Titling**, 146 px, letter spacing 8.
-- **Plate number:** "PLATE XVI." in **Cormorant SC** SemiBold, 38 px, in plate red.
-- **Subtitle:** Cormorant SC Medium, 44 px.
+- **Plate number:** "PLATE XVI." in **Cormorant SC** SemiBold, 38 px, letter spacing 12, in plate red.
+- **Subtitle:** Cormorant SC Medium, 44 px, letter spacing 2.
 
-Under the subtitle, draw a thick and a thin rule the same width as the subtitle with the **Pencil**: click at one end and [[Cmd+Shift]]-click the other so the rule stays level. Lasso a small diamond at the centre.
+Back on **Plate Frame**, draw a thick and a thin rule under the subtitle, the same width as the subtitle, with the **Pencil**: click at one end and [[Cmd+Shift]]-click the other so the rule stays level. Lasso a small diamond at the centre.
 
 ## Draw dashed gridlines with a pattern
 
@@ -100,7 +100,7 @@ tile, and From **700, 500** To **1664, 2040** for the chart area.
 
 A pattern fill tiles from the document's top-left corner. Because 700 ÷ 116 leaves 4, the dash at 4 px in the tile lands exactly on the zero line and then every 116 px after it.
 
-Draw the zero line down the **700** guide and the x-axis along the **2040** guide with the **Pencil** at Size 4 in sepia: click at one end and [[Cmd+Shift]]-click the other. Add short Pencil ticks on the axis every 58 px, with a long tick every 116. Label 0, 4,000, 8,000, 12,000 and 16,000 in Cormorant SC.
+Draw the zero line down the **700** guide and the x-axis along the **2040** guide with the **Pencil** at Size 4 in sepia: click at one end and [[Cmd+Shift]]-click the other. Add short Pencil ticks on the axis every 58 px, with a long tick every 116. Label 0, 4,000, 8,000, 12,000 and 16,000 in Cormorant SC SemiBold, 34 px, letter spacing 0.
 
 > **Tip:** Cormorant's old-style figures have different heights. Place every label from the same text anchor, not by its top edge, or "8,000" will sit lower than "4,000".
 
@@ -134,7 +134,7 @@ Draw a marquee around each skull, switch to the **Move** tool and [[Cmd]]-drag t
 - Mammal skulls: **190 px tall**.
 - Crocodile: **420 px wide**.
 
-Press [[Cmd+D]] to commit, then drag each skull into the skull column, centred left of the zero line, one per row. The rows are 308 px apart, starting at the top guide, so it helps to click the left ruler at **808**, **1116**, **1424** and **1732** for row guides.
+Then drag each skull into the skull column, centred left of the zero line, one per row, and press [[Cmd+D]] to commit. The rows are 308 px apart, starting at the top guide, so it helps to click the left ruler at **808**, **1116**, **1424** and **1732** for row guides.
 
 ## Multiply the skulls onto the paper
 
@@ -142,7 +142,7 @@ Press [[Cmd+D]] to commit, then drag each skull into the skull column, centred l
 
 Set every skull layer to **Multiply** in the effects drawer. White multiplies to nothing, so the paper shows through, and the grey engravings sit on it like printed ink.
 
-The human engraving has much thinner lines than the lithographs. To thicken them, run **Layer → Duplicate Layer** and click the copy's row. Duplicate places the copy 10 px right and 10 px down, so with the Move tool nudge it 9 px left and 10 px up with the arrow keys. It now sits exactly **1 px to the right** of the original. Keep it on Multiply too.
+The human engraving has much thinner lines than the lithographs. To thicken them, run **Layer → Duplicate Layer**. The copy lands exactly on top of the original, so with the Move tool press [[→]] once to nudge it **1 px to the right**. Keep it on Multiply too.
 
 ## Tone the set to one sepia
 
@@ -153,16 +153,14 @@ Two layers make the mixed engravings look like one printing:
 1. **Ink Lift:** fill a rectangle over the skull column with `#4A2E1F` and set it to **Lighten**. Any ink darker than that brown is lifted to it. The paper is lighter, so it doesn't change.
 2. **Sepia Wash:** for each skull, marquee its box, then use the **Magic Wand** with [[Alt]]-click on the white background to subtract it, leaving only the ink. Fill that selection with `#6B4A30` on the wash layer. Set the layer to **Color** at 55%. Then wand the pure whites with **Contiguous** off and Delete them from the wash, so bare bone stays paper-coloured.
 
-> **Tip:** Start the Alt-click well away from the marquee's corners. At low zoom a click near a corner grabs the scale handle instead.
-
 ## Caption each figure
 
 ![Close-up of the tiger, lion and human skulls, each with a Fig. caption in small caps and a Latin name in red script beneath](09-figure-captions.webp)
 
-Under each skull, add two centred lines:
+Under each skull, add two centred lines. Click a layer that isn't text before you set up each one:
 
-- **"Fig. 2 · Tiger":** Cormorant SC SemiBold, 32 px, sepia.
-- ***Panthera tigris*:** Pinyon Script, 30 px, plate red. A copperplate script plays the italic, the way an engraver would have lettered the Latin name.
+- **"Fig. 2 · Tiger":** Cormorant SC SemiBold, 32 px, letter spacing 1, sepia.
+- ***Panthera tigris*:** Pinyon Script, 30 px, letter spacing 0, plate red. A copperplate script plays the italic, the way an engraver would have lettered the Latin name.
 
 Place every caption about **16 px below the lowest ink** of its skull, counting faint tooth tips. That keeps each caption clearly with its own figure, and at least 45 px from the skull below.
 
@@ -175,16 +173,16 @@ This is the honest way to show the small bars. In an **Enlarged Inset** group:
 1. **Magnified Tint:** fill two areas with carmine and set the layer to 6%. The first is a strip over the main chart's 0–1,500 N range: 87 px wide from the zero line, running from the top guide down to the axis. The second is the inset box, which fills most of the chart's right side: from about 160 px right of the zero line to the right-edge guide, and from about 270 px below the top guide to just above the axis (From **860, 770** To **1660, 1962** in the marquee dialog). The shared tint links the two.
 2. **Knock out the main grid:** on the Gridlines layer, marquee the inset box and Delete, so the two scales never mix.
 3. **Inset grid:** the inset scale is 8 × 0.058 = **0.464 px/N**, so 250 N is 116 px again. Put the inset's zero line 32 px inside the box. Then define a second 116 px dash tile with its dash 80 px in: 892 ÷ 116 leaves 80, so the dashes land on that zero line and every 116 px after it. Pattern-fill it inside the box.
-4. **Inset frame and axis:** add the frame, its own axis and ticks, and labels 0, 500, 1,000 and 1,500.
+4. **Inset frame and axis:** add the frame, its own axis and ticks, and labels 0, 500, 1,000 and 1,500 in Cormorant SC SemiBold, 28 px, letter spacing 0.
 5. **Leaders:** on a layer at 60%, draw two thin lines with a small, hard **Brush** from the strip's corners to the inset's corners: click one corner and [[Shift]]-click the other.
 
-Title the inset "Fig. 6 · The mammals at eight times the scale", centred on the plot area.
+Title the inset "Fig. 6 · The mammals at eight times the scale" in Cormorant SC SemiBold, 29 px, letter spacing 1, centred on the plot area.
 
 ## Rotate a label into the strip
 
 ![A small red "Enlarged in Fig. 6" label, rasterized and rotated 90 degrees counter-clockwise with the rotate handle, still showing its transform box](11-rotate-band-label.webp)
 
-Type "Enlarged in Fig. 6" in Cormorant SC, 20 px, in plate red, and click **Rasterize Layer**. Rasterizing first bakes the rotation into pixels, so a later re-render of the text can't undo it. Marquee it and switch to **Move**. Hold [[Cmd]] and drag the rotate handle, just outside the top-right corner, to snap to **−90°**. Press [[Cmd+D]].
+Click **Magnified Tint**, then type "Enlarged in Fig. 6" in Cormorant SC, 20 px, in plate red, and click **Rasterize Layer**. Rasterizing first bakes the rotation into pixels, so a later re-render of the text can't undo it. Marquee it and switch to **Move**. Hold [[Cmd]] and drag the rotate handle, just outside the top-right corner, to snap to **−90°**. Press [[Cmd+D]].
 
 Centre it in the pale strip, in the gap between the lion and human bars.
 
@@ -212,9 +210,9 @@ Run **Gaussian Blur** 2 on Bellies and Tendons to soften the lasso steps. Then g
 
 ![Close-up of 16,400 N above the crocodile muscle's tip and 1,470 N† above the tiger's, each right-aligned to its tendon tip, with the dashed gridlines knocked out behind the numbers](13-value-labels.webp)
 
-Right-align each value to its tendon tip, 10 px above the bar:
+Click a layer that isn't text before you set up each value. Right-align each value to its tendon tip, 10 px above the bar:
 
-- **Crocodile:** "16,400 N" in Cormorant SC Bold, 40 px.
+- **Crocodile:** "16,400 N" in Cormorant SC Bold, 40 px, letter spacing 1.
 - **Inset values:** 34 px, with a dagger (†) on the three estimates.
 
 Then marquee around each label, 10 px out, and Delete the dashes on the gridline layer underneath, so no line runs through a number.
@@ -223,7 +221,7 @@ Then marquee around each label, 10 px out, and Delete the dashes on the gridline
 
 ![The finished plate in Lopsy with three lines of footnotes under the axis title explaining the muscle key, the dagger for estimates and the engraving sources](14-footnotes.webp)
 
-Under the axis title, set three lines of Cormorant Garamond at 24 px, left-aligned with the left edge of the title block at the top of the plate. The lines explain three things:
+Click a layer that isn't text. Then, under the axis title, set three lines of Cormorant Garamond at 24 px, letter spacing 0, left-aligned with the left edge of the title block at the top of the plate. The lines explain three things:
 
 - How to read a muscle bar.
 - What the dagger means.

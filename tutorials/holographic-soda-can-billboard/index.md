@@ -2,7 +2,7 @@
 title: Design a Holographic Soda Can Billboard
 description: Build a CRYSTAL SODA billboard in Lopsy with Clouds, Liquify and a Gradient Map for foil, faceted lasso crystals and a holographic echo headline.
 published: 2026-09-27 10:15
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 70
 tags: holographic, iridescent, billboard, product mockup, soda can, gradient map, liquify, clouds, crystals, text effects, advertising
@@ -160,8 +160,8 @@ with the cylinder.
 > steps 2 and 3 in one go: it wraps the layer in a new group.
 
 Open **Foil FX**'s drawer and choose **Add Adjustment → Gradient Map**.
-Click the handle row under the bar to add stops, and pick each colour on
-the hue strip and SV square:
+Click the handle row under the bar to add stops, and type each colour into
+the stop's hex field:
 
 1. `#8E7BEA` at 0
 2. `#8FE3F5` at 14%
@@ -314,17 +314,14 @@ disappears on a pale background.
    ring's middle.
 3. Marquee it and hold [[Cmd]] while you drag the bottom-right handle
    inward. [[Cmd]] keeps the scale uniform. Stop at about **62%**.
-4. Press [[Cmd+D]].
 
 ## Rotate the copy
 
 ![Crystal B inside a rotation box, turned 70 degrees so it points up and to the right](17-rotate-crystal-copy.webp)
 
-Marquee Crystal B again and rotate it **+70°**, so it leans away from the
-can. Press [[Cmd+D]] to commit.
-
-Commit each transform before you start the next one: scale, [[Cmd+D]],
-then rotate, [[Cmd+D]]. Each step then starts from settled pixels.
+In the same box, drag the rotation handle to **+70°**, so Crystal B leans
+away from the can. Press [[Cmd+D]] to commit the scale and the rotation
+together.
 
 ## Scatter four crystals
 
@@ -363,9 +360,8 @@ small white ones on the can's gloss.
 ![CRYSTAL SODA in Archivo Black, the tagline in Instrument Serif, a kicker line and a pill caption in DM Mono, and crystalsoda.co at the top right](20-headline-type.webp)
 
 Select the Sparkles layer first so the new type lands on top. Make each
-text layer by clicking in empty canvas. A click on existing text reopens it
-for editing, so work from the bottom of the column up: each new line then
-starts in open space above the last one.
+text layer by clicking in empty canvas, working from the bottom of the
+column up so each new line starts in open space above the last one.
 
 - `ZERO SUGAR  ·  ZERO CALORIES` in **DM Mono 34**
 - `a prism in every sip.` in **Instrument Serif 84**
@@ -391,14 +387,12 @@ plus an arrow moves 10 px). From the top, stack:
 
 Aim for the whole column to sit centred on the canvas height.
 
-For the pill, select **Tagline** and add a **Pill** layer.
-
-1. Below the tagline, build a capsule about **662 × 70** with its left end
-   on the margin guide, from a rectangle and two end circles, and fill it
-   with ink.
-2. Click inside it with the **Magic Wand** and choose **Select → Shrink…**
-   at **3**.
-3. Press [[Delete]] to leave a 3 px outline.
+For the pill, select **Tagline** and add a **Pill** layer. Pick the
+**Shape** tool, set **Shape** to **Rectangle**, **Corner Radius** to **35**,
+remove the fill, and set the stroke to ink `#1B1530` at **Width 3**. Below
+the tagline, click (don't drag) about 331 px right of the margin guide and
+enter **662 × 70**. The Shape tool draws from the centre, so the capsule's
+left end lands on the guide.
 
 Centre the caption inside it, with equal space at both ends and the caps
 vertically centred. Right-align the URL to the right margin guide below the
@@ -411,8 +405,7 @@ ring.
 Each headline word gets a rainbow twin behind it:
 
 1. Select **CRYSTAL** and choose **Layer → Duplicate Layer**. The copy
-   lands 10 px right and down, so with the Move tool press [[Shift]]+[[←]]
-   and [[Shift]]+[[↑]] once each to put it exactly over the original.
+   sits exactly over the original.
 2. Select the original, which is now *under* the copy. Click **Rasterize
    Layer** in the Layers footer and rename it **CRYSTAL Echo**.
 3. With the **Magic Wand**, untick **Contiguous** and click one letter.

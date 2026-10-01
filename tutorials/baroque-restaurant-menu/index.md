@@ -2,7 +2,7 @@
 title: Design a Baroque Restaurant Menu
 description: Make a gilded Baroque menu in Lopsy with a kaleidoscope damask, a gold frame and cartouche, a candle-lit quince still life, and curved text.
 published: 2026-09-26 05:10
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 90
 tags: restaurant menu, baroque, gradients, symmetry, filters, layer effects, typography, text on a path, still life, groups, transforms
@@ -40,11 +40,6 @@ The palette:
 - quince yellow `#C99A2E`
 - elderberry purple `#2A0A34`
 - olive `#4F5B23`
-
-> **Tip:** New text takes its settings from the Text panel, and selecting a
-> text layer loads that layer's settings into the panel. So values carry over
-> to the next text you type: check **Letter spacing** and **Line height**
-> every time you make a new text layer.
 
 ## Lay a dark ground with a warm glow
 
@@ -90,9 +85,8 @@ to `270`, then click **Apply**. A rotation of 270° points the sampled wedge
 straight up, where you drew. At 0° it samples to the right of the centre and
 gives an empty layer.
 
-Check the rosette's proportions before you turn it into a pattern. The one in
-the screenshot came out taller than it is wide; the next step shows how to
-square it up if yours does too.
+Check the rosette's proportions before you turn it into a pattern. If it
+isn't round, square it up in the next step.
 
 ## Squash the rosette round
 
@@ -103,8 +97,7 @@ With the **Rectangular Marquee** ([[M]]), draw a snug box around the rosette
 drag the **bottom-middle** handle up until the box is square, 184 × 184.
 Press [[Cmd+D]] to commit.
 
-If your rosette is already round, skip the squash: the Kaleidoscope works in
-true pixel space, so it usually comes out circular on any canvas shape.
+If your rosette is already round, skip this step.
 
 ## Turn it into a staggered damask
 
@@ -136,8 +129,7 @@ Click its opacity (`100%`) in the Layers panel and click the slider at about
 ![Three concentric frame rings in flat gold, all selected with the Magic Wand](08-frame-rings-magic-wand.webp)
 
 Add a layer called `Gilt Frame` and set the foreground to `#D9B25F`. Press
-[[Cmd+D]] before every marquee: a drag that starts inside a live selection
-moves the outline instead of drawing a new one.
+[[Cmd+D]] before each new marquee.
 
 1. Marquee a rectangle 36 px in from every edge and choose **Edit → Fill**.
    Then choose **Select → Shrink…** `20` and press [[Delete]].
@@ -169,7 +161,7 @@ gradient only lands inside the wand selection.
 
 Deselect, then add three layer effects:
 
-- **Drop Shadow**: X `3`, Y `5`, Blur `8`, Opacity `75`, colour `#050201`
+- **Drop Shadow**: X `1`, Y `3`, Blur `8`, Opacity `75`, colour `#050201`
 - **Stroke**: Width `2`, colour `#3A2208`
 - **Inner Glow**: Size `4`, Opacity `55`, colour `#FFF1C4`, for a polished edge
 
@@ -213,15 +205,14 @@ Add a layer called `Crest`.
    the hinge in the middle of the flat edge, then [[Shift]]-click a point on
    the arc; a Shift-click draws a straight line from the last point.
 4. Add a `#F3DE9C` boss dot at Size `7`.
-5. Give it a Drop Shadow (Y `5`, Blur `8`) and a 2 px `#3A2208` Stroke.
+5. Give it a Drop Shadow (Y `3`, Blur `8`) and a 2 px `#3A2208` Stroke.
 
 ## Duplicate and flip the crest
 
 ![A marquee around the duplicated crest with the Move tool's Flip Vertical applied, so the fan now opens downwards](12-flip-crest-vertical.webp)
 
-With the Move tool active, click **Duplicate Layer**, then click the
-`Crest copy` row so it's the only selected layer. Marquee tightly around the
-copy and click **Flip Vertical** in the Move options bar. Press [[Cmd+D]].
+With the Move tool active, click **Duplicate Layer**. Marquee tightly around
+the copy and click **Flip Vertical** in the Move options bar. Press [[Cmd+D]].
 
 ## Drop the crest to the bottom
 
@@ -251,17 +242,15 @@ the oval straight down, past its bottom edge.
 
 ![The crimson cartouche with a gold stroke, dark inner glow and soft drop shadow](15-cartouche-effects.webp)
 
-Deselect, untick **Snap** in the options bar, then turn **View → Show Grid**
-off. (The Snap checkbox is only in the bar while the grid is showing.) Add
-three effects to the cartouche:
+Deselect and turn **View → Show Grid** off. Add three effects to the cartouche:
 
 - **Stroke**: Width `5`, `#D9B25F`
 - **Inner Glow**: Size `18`, Opacity `70`, `#1A0408`, for depth
-- **Drop Shadow**: Y `8`, Blur `16`, Opacity `75`
+- **Drop Shadow**: Y `3`, Blur `16`, Opacity `75`
 
 Click an empty spot away from the cartouche with the **Text** tool ([[T]]).
-Pick **Cinzel Decorative**, weight **Bold**, size `100`, colour `#F0D48A`, and
-type `Q E`. Press [[Tab]] to commit. Move it to the centre of the cartouche,
+Pick **Cinzel Decorative**, weight **Bold**, size `100`, colour `#F0D48A`,
+**Letter spacing** `8` in the Text panel, and type `Q E`. Press [[Tab]] to commit. Move it to the centre of the cartouche,
 a little low, so there's room above it for the curved text (its top about
 60 px below the oval's top edge). Give it a small warm Drop Shadow.
 
@@ -276,8 +265,8 @@ Choose the **Pen Tool** ([[P]]):
 2. On the centre line, about 16 px higher, **drag** about 66 px to the
    right. This makes a smooth anchor with horizontal handles.
 3. Click the mirror of the first point, about 130 px right of centre.
-4. Click **Commit path** in the options bar. (Pressing [[Enter]] would also
-   stroke the path onto the active layer.)
+4. Click **Commit path** in the options bar to keep the path without
+   stroking it.
 
 ## Set curved text on the path
 
@@ -297,10 +286,8 @@ around the arc.
 
 ![Quince & Elderberry in large gold Pinyon Script with a symmetrical scrolled rule underneath](18-pinyon-script-title.webp)
 
-Type `Quince & Elderberry` in **Pinyon Script** at `92`, colour `#F3DE9C`.
-
-> **Tip:** Set **Letter spacing** back to `0` first, or it inherits the 9 px
-> from the arc text.
+Type `Quince & Elderberry` in **Pinyon Script** at `92`, colour `#F3DE9C`,
+with **Letter spacing** `0`.
 
 Centre it under the cartouche with the Move tool's **Align center
 horizontally**, leaving a small gap below the oval, and add a soft Drop
@@ -419,15 +406,13 @@ Deselect.
 
 ![A marquee around the second quince, flipped horizontally and being scaled down from the corner handle](25-scale-back-quince.webp)
 
-With the Move tool, click **Duplicate Layer**. The copy lands 10 px down and
-right, so press [[Shift+Left]] and [[Shift+Up]] once each to put it back,
-then rename the copy `Quince Front`. The original,
-underneath it, becomes `Quince Back`:
+With the Move tool, click **Duplicate Layer** and rename the copy
+`Quince Front`. The original, underneath it, becomes `Quince Back`:
 
 1. Select `Quince Back` and marquee around it.
-2. Click **Flip Horizontal**, then press [[Cmd+D]].
-3. Marquee it again and [[Cmd]]-drag the bottom-right handle in to about 74%.
-   [[Cmd]] keeps the proportions.
+2. Click **Flip Horizontal**.
+3. [[Cmd]]-drag the bottom-right handle in to about 74%. [[Cmd]] keeps the
+   proportions.
 4. Press [[Cmd+D]].
 
 ## Tuck the second quince behind
@@ -485,8 +470,8 @@ On an `Elderberries` layer:
 ![The pasted elderberry cluster in a marquee, flipped horizontally with the Move tool](30-paste-flip-cluster.webp)
 
 Marquee around the whole cluster. Press [[Cmd+C]] and then [[Cmd+V]]; the
-paste lands in place on a new layer. Draw the same marquee again, then click
-**Flip Horizontal** and press [[Cmd+D]].
+paste lands in place on a new layer, selected, with the Move tool active.
+Click **Flip Horizontal** and press [[Cmd+D]].
 
 ## Move the second cluster
 
@@ -503,10 +488,12 @@ same Drop Shadow.
 Each section is four text layers:
 
 - **Heading:** Cinzel Decorative Bold, 28, `#E2BD66`, letter spacing 3.
-- **Dish names:** Cormorant SC SemiBold, 21, `#F1DFB0`, line height 1.4.
+- **Dish names:** Cormorant SC SemiBold, 21, `#F1DFB0`, letter spacing 0,
+  line height 1.4.
 - **Prices:** the same as the names, but with **Align** set to **Right** in
   the options bar.
-- **Descriptions:** Sorts Mill Goudy, 16, `#C4A57A`, line height 1.84,
+- **Descriptions:** Sorts Mill Goudy, 16, `#C4A57A`, letter spacing 0,
+  line height 1.84,
   placed 27 px below the names.
 
 The names, prices and descriptions are **area text** 340 px wide (drag with

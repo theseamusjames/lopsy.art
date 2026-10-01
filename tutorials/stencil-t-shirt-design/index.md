@@ -2,7 +2,7 @@
 title: Design a Distressed Stencil T-Shirt Graphic
 description: Make a T-REX XING road-sign tee in Lopsy with stencil fonts, a lasso-cut dinosaur, pattern-filled hazard tape, spray overspray and a distressed print texture.
 published: 2026-09-26 11:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: stencil, t-shirt design, apparel, screen print, distressed texture, road sign, spray paint, pattern fill, text effects
@@ -125,8 +125,7 @@ From now on you can move the whole sign in one drag.
 
 ![T-REX set in cream Black Ops One stencil type above the sign](09-black-ops-one-headline.webp)
 
-Click **Tee Heather** first, so the new text lands under the sign and your
-settings don't restyle another text layer. Pick the **Text** tool (T), set
+Click **Tee Heather** first, so the new text lands under the sign. Pick the **Text** tool (T), set
 **Size 300**, choose **Black Ops One** in the font browser, and set the
 foreground to cream `#EDE6D6`. Click in the empty space at the top of the
 canvas, type **T-REX** and press **Tab** to commit. Black Ops One has the
@@ -170,9 +169,8 @@ toes point up and to the right, toward the sign. Press **⌘D**.
 Marquee the print again and press **⌘C**, then **⌘D**. Now build the trail
 one step at a time:
 
-1. Press **⌘V**. The copy pastes in place on a new layer.
-2. With the **Move** tool, drag it to the next spot, then press **⌘D**.
-3. Draw a marquee around it and rotate it a few degrees, then press **⌘D**.
+1. Press **⌘V**. The copy pastes in place on a new layer, selected, with the **Move** tool active.
+2. Drag it to the next spot and rotate it a few degrees, then press **⌘D**.
 
 Place two steps at the lower left, each about 100–130 px further up and to
 the right than the last. The trail then disappears behind the sign and comes
@@ -247,9 +245,8 @@ with the same black ink as the dinosaur. Close the drawer.
 
 Click the **T-REX** layer and **Add Layer**, then name it **Overspray**. It
 sits under the Sign group. Pick the **Spray** tool (J) with amber and set
-**Size 100**, **Density 30**, **Opacity 100** and **Softness 100**. On Spray,
-Softness 100 gives the *hardest* dots, and hard, full-strength dots are
-something a screen printer can actually print.
+**Size 100**, **Density 30**, **Opacity 100** and **Softness 0**. Hard,
+full-strength dots are something a screen printer can actually print.
 
 Press down in the **middle of the sign**. The plate hides any paint that
 builds up there while you hold still. Then trace just outside the diamond's

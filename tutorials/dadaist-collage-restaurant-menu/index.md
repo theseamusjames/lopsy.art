@@ -2,7 +2,7 @@
 title: Design a Dadaist Collage Restaurant Menu
 description: Make a Dada sausage-stand menu in Lopsy with giant scattered red letters, torn paper slips, a found engraving, a rubber stamp and print wear.
 published: 2026-09-30 20:10
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: restaurant menu, dada, collage, typography, text on path, magic wand, blend modes, transforms, groups
@@ -62,39 +62,34 @@ texture every ink above the paper, so the whole sheet looks printed at once.
 
 ![A red Ultra W being scaled up with a Command-drag on its corner handle](02-giant-w.webp)
 
-Choose **New Group** in the Layers panel and name it `Red Letters`. Click
-**Add Layer** while the group is selected, so an empty layer named
-`Red Anchor` lands inside it. New text goes directly above the active layer,
-so this anchor keeps every letter in the group.
+Choose **New Group** in the Layers panel and name it `Red Letters`. With the
+group selected, click **Add Layer** and name the new layer `Red Anchor`. Type
+every red letter with this layer selected, so they all land in the group.
 
-Pick the **Text** tool ([[T]]). Choose **Ultra** in the font browser, set
-**Size** `500` and the colour `#C43A2B`, click in the canvas, type `W` and
-press [[Tab]]. Click **Rasterize Layer** in the Layers footer.
-
-Text tops out at 500 px, so scale the raster instead. Draw a **Rectangular
-Marquee** a few pixels larger than the W, switch to the **Move** tool ([[V]]),
-hold [[Cmd]] and drag the bottom-right handle out to about 160%. Holding
-[[Cmd]] keeps the proportions. Press [[Cmd+D]] to commit.
+Pick the **Text** tool ([[T]]). Choose **Ultra** in the font browser, type
+`800` into the **Size** field (the slider stops at 500) and set the colour to
+`#C43A2B`. Click in the canvas, type `W` and press [[Tab]]. Click **Rasterize
+Layer** in the Layers footer.
 
 ## Tilt it
 
 ![The W inside a rotated transform box, tipped seven degrees](03-rotate-w.webp)
 
-Marquee the W again. With the **Move** tool, hover just outside the top-right
-corner until the cursor turns into a crosshair, then drag to rotate it about
+Marquee the W. Switch to the **Move** tool ([[V]]), hover just outside the
+top-right corner until the cursor turns into a crosshair, then drag to rotate it about
 −7°. Press [[Cmd+D]] and drag the W so its top-left sits around (40, 300).
 
 ## Scatter the rest of WURST
 
 ![Five red letters W, U upside down, R on its side, S and T scattered over the newsprint](04-scatter-wurst.webp)
 
-Make each remaining letter the same way: type it with `Red Anchor` selected,
-rasterize, scale, rotate and move it.
+Make each remaining letter the same way: select `Red Anchor`, type the letter
+at its size, rasterize it, then rotate and move it.
 
-- **U**: 125%, rotated 180° so it hangs upside down, at (960, 640)
-- **R**: 135%, rotated −90° so it lies on its back, at (50, 1080)
-- **S**: 110%, rotated 12°, at (560, 1480)
-- **T**: 85%, rotated −16°, at (1060, 1270)
+- **U**: Size `625`, rotated 180° so it hangs upside down, at (960, 640)
+- **R**: Size `675`, rotated −90° so it lies on its back, at (50, 1080)
+- **S**: Size `550`, rotated 12°, at (560, 1480)
+- **T**: Size `425`, rotated −16°, at (1060, 1270)
 
 Turned upside down, Ultra's slab feet almost close the U's counter, so it
 reads as a keyhole. Marquee from (1120, 950) to (1228, 1110) on the **U**
@@ -154,16 +149,14 @@ Click the top ruler at **54** and **1446** to drop margin guides.
 3. In **Special Elite** at `30`, type `KLEINE DADA WURSTBUDE  *  HANNOVER  *  MERZ 1923  *  SPEISEKARTE NR. 1`. Special Elite has no ✶ glyph, so use typewriter asterisks.
 4. Open the **Text** panel and raise **Letter spacing** until the line spans the guides exactly. Here that was `4.3`. Centre it between the rules.
 
-> **Tip:** Select a raster layer such as **Rules** before you change any Text panel value. With a text layer selected, the panel restyles that layer.
-
 ## Overprint a slogan across the W
 
 ![The rotated slogan DADA IST GEGEN DIE ZUKUNFT inside a rotation box across the W](09-rotated-slogan.webp)
 
-Type `DADA IST GEGEN DIE ZUKUNFT!` ("Dada is against the future") in
-**Anton** at `74`, then click **Rasterize Layer**. Marquee it and rotate it
-about −7° with the rotate handle so its baseline follows the tilt of the W.
-Press [[Cmd+D]]. Black type over the red reads cleanly and gives the giant
+Select **Rules**, choose **Anton** at `74`, and type
+`DADA IST GEGEN DIE ZUKUNFT!` ("Dada is against the future"). Then click
+**Rasterize Layer**. Marquee it and rotate it about −7° with the rotate
+handle so its baseline follows the tilt of the W. Press [[Cmd+D]]. Black type over the red reads cleanly and gives the giant
 letter a job.
 
 ## Hang a slogan upside down
@@ -185,8 +178,8 @@ clear space above the counter and below the pig scrap.
 
 Each menu section is printed on its own scrap of paper. Inside **Collage**, add
 a layer named `Slip Beilagen`, marquee from (60, 1572) to (600, 1909) and fill
-it with `#F3ECD9`. In the Text panel, set **Line height** to `1.7` so every
-row is 51 px apart.
+it with `#F3ECD9`. In the Text panel, set **Letter spacing** back to `0` and
+**Line height** to `1.7`, so every row is 51 px apart.
 
 1. **Prices:** drag an area box from x 470 to 560, 110 px below the slip's top. Use **Special Elite** `30` with **Align Right**, and type `0,40`, `0,50` and `0,10` on separate lines.
 2. **Dishes:** drag a second box from x 100 to 470, starting at the same height. Use **Old Standard TT** `30` with **Align Left**, and type `Sauerkraut, lautpoetisch`, `Kartoffelsalat gegen Kunst` and `Senf! Senf! Senf!`.
@@ -201,10 +194,9 @@ its price.
 
 Select the slip layer, turn on **Underline** in the options bar, and type
 `II. BEILAGEN` in **Bowlby One SC** at `50`, 40 px in from the top-left.
-Turn underline off again, then add `Das Kraut wird laut vorgelesen.` in
-Special Elite `22`, 12 px below the last dish.
-
-> **Tip:** Click a blank part of the canvas for each new point text. A click inside another text layer's box edits that layer instead.
+Select the slip layer again and turn underline off. Then add
+`Das Kraut wird laut vorgelesen.` in Special Elite `22`, clicking on blank
+paper 12 px below the last dish.
 
 Lasso a zigzag rectangle 2 px inside the slip, choose **Select → Inverse**
 and press [[Delete]]. Then click each text row, starting with the one
@@ -255,9 +247,9 @@ On **Rules**, draw two more Size `4` Pencil rules, from (56, 1951) to
 matches the top.
 
 Set the first line of the *Ursonate*, `Fümms bö wö tää zää Uu, pögiff, kwii
-Ee.`, in **UnifrakturMaguntia** at `54`. Add `— K. SCHWITTERS, URSONATE` in
-Special Elite `22`. Centre the pair between the guides and the two rules, and
-line up the attribution with the Fraktur baseline.
+Ee.`, in **UnifrakturMaguntia** at `54`. Select **Rules** again and add
+`— K. SCHWITTERS, URSONATE` in Special Elite `22`. Centre the pair between
+the guides and the two rules, and line up the attribution with the Fraktur baseline.
 
 ## Cut the stamp rings
 
@@ -288,9 +280,10 @@ a path radius a little inside the outer ring keeps them between the two rings.
 
 ![The assembled stamp with DADA and Nr. 7 centred inside the lettered ring](19-stamp-assembled.webp)
 
-Centre `DADA` in Bowlby One SC `38` and `Nr. 7` in Special Elite `20` inside
-the inner ring. Merge the three text layers down into **Stamp**, rotate it
-−14°, and set it to **Multiply** at 88% so it overprints like ink. In the
+Select **Stamp** and type `DADA` in Bowlby One SC `38` on blank paper beside
+the stamp. Select **Stamp** again and type `Nr. 7` in Special Elite `20` the
+same way. Centre both inside the inner ring with the **Move** tool. Merge
+the three text layers down into **Stamp**, rotate it −14°, and set it to **Multiply** at 88% so it overprints like ink. In the
 Paths panel, click the path's row to hide its outline.
 
 ## Place it where it reads

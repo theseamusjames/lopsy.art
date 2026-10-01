@@ -2,7 +2,7 @@
 title: Make a Vaporwave Billboard with a Marble Bust
 description: Build a vaporwave billboard in Lopsy from a public-domain statue photo, a perspective pool, Voronoi caustics, chrome type and a Windows 95 pop-up.
 published: 2026-09-30 18:10
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: vaporwave, billboard, photo cutout, gradient map, perspective transform, pattern fill, text effects, retro
@@ -215,15 +215,12 @@ Drag the first palm's row below `Temple` so the temple sits in front of it. Then
 
 **Katakana.**
 
-1. Turn on the **Toggle vertical text** button.
+1. Click `Headline Chrome` and turn on the **Toggle vertical text** button.
 2. Type or paste `ローマのプール` in **Dela Gothic One** at 56 px. A Japanese input method works in the text tool.
-3. Turn vertical off again with a raster layer selected.
-
-Vertical text currently keeps the long-vowel mark ー horizontal. Rasterize the layer, marquee each ー, click **Rotate 90° CW** in the Move options bar, and press [[Cmd+D]].
 
 Give the column a 5 px hard drop shadow and a pale `#FFE3F6` Color Overlay.
 
-**VHS labels.** In **VT323**, type `PLAY ▶` at 48 px at the top left and `SEP. 30 1995  11:59 PM` at 40 px, 60 px up from the bottom edge.
+**VHS labels.** Click `Headline Chrome`, turn vertical text off, and type `PLAY ▶` in **VT323** at 48 px at the top left. Click `Headline Chrome` again and type `SEP. 30 1995  11:59 PM` at 40 px, 60 px up from the bottom edge.
 
 1. Rasterize both labels.
 2. Run **Filter → Chromatic Aberration…** with Amount 1. Higher amounts split the thin pixel strokes into rainbow blocks.
@@ -243,7 +240,7 @@ Click **New Group** and name it `Win95`. Turn on **View → Show Grid**, set the
 
 Drag a `#000080` → `#1084D0` gradient across the title bar. Bevel the three title buttons and the two dialog buttons the same way. Give `DIVE IN` an extra black outline, because it's the default button.
 
-**Text.** Use VT323: a white `AQUA_PLAZA.EXE` title at 34 px, two black body lines at 48 px, and 36 px button labels centred in their buttons.
+**Text.** Use VT323. Pick each colour before you click, and set the size while the caret is still in the text: a white `AQUA_PLAZA.EXE` title at 34 px, two black body lines at 48 px, and 36 px button labels centred in their buttons.
 
 **Cursor.** Draw a white arrow with a 3 px black **Stroke** and rest its tip on the lower-right of the DIVE IN button. Give the window a hard 14 px **Drop Shadow**.
 
@@ -265,6 +262,6 @@ The Pencil has no anti-aliasing, so the icon stays sharp at any zoom.
 
 **Scanlines.** Fill a 2 px `#0B0420` strip in an 8 × 6 selection and choose **Define Pattern**. On a top-level `Scanlines` layer, **Fill with Pattern** across the whole canvas and set the layer to 14% opacity.
 
-**Vignette.** Add a root **Vignette** adjustment of 28 last.
+**Vignette.** Add a root **Vignette** adjustment of 28.
 
 Finally, save with **File → Save Project** and export with **File → Quick Export PNG**.

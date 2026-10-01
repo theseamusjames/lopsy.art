@@ -2,7 +2,7 @@
 title: Design a Glitch Art Christmas Card
 description: Make a glitch-art Christmas card in Lopsy with an RGB-split reindeer zoetrope, a pixel moon, datamosh slices, CRT scanlines and a 24-cell advent bar.
 published: 2026-09-30 12:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: glitch art, christmas card, holiday card, rgb split, pixel art, scanlines, pixel stretch, layer effects, blend modes, groups, typography
@@ -145,29 +145,28 @@ Keep adding pieces in the same colour:
 ![A marquee around one reindeer copy with the Move tool's corner handle dragged inward to scale it down](09-scale-frame.webp)
 
 Press [[⌘D]] to drop the last selection. With **Reindeer** selected, click
-**Duplicate Layer** four times. Each copy lands 10 px right of and below the
-one it came from, which doesn't matter because you'll move them all later.
-Rename the top layer **Hero** and the four below it, top to bottom,
+**Duplicate Layer** four times. Each copy lands exactly on top of the one
+it came from. You'll move them all later. Rename the top layer **Hero** and the four below it, top to bottom,
 **Frame 4**, **Frame 3**, **Frame 2** and **Frame 1**. Frame 4 is the newest
 ghost, closest to the hero.
 
-For each frame, click its row first so you're scaling the right copy:
+For each frame, click its row, then:
 
 1. Draw a marquee a little larger than the reindeer.
 2. Switch to the **Move** tool.
 3. Hold [[⌘]] and drag the bottom-right handle inward to scale the copy
    uniformly. Aim for roughly **85%**, **72%**, **60%** and **50%** of the
    hero's size for Frames 4 → 1.
-4. Press [[⌘D]] to commit.
+4. Rotate it before you commit, as in the next step.
 
 ## Rotate each frame
 
 ![The rotation handle being dragged on a scaled reindeer copy](10-rotate-frame.webp)
 
-Marquee the scaled frame again and drag the round handle just outside the top-right
-corner to rotate it clockwise by a few degrees: about **2°** for Frame 4,
+While the scale is still live, drag the round handle just outside the
+top-right corner to rotate the frame clockwise by a few degrees: about **2°** for Frame 4,
 then **4°**, **6°** and **8°**. Older frames should flatten out, as if they're still on the upswing
-of the leap. Press [[⌘D]] after each rotation.
+of the leap. Press [[⌘D]] to commit, then scale and rotate the next frame.
 
 ## Space the frames along an arc
 
@@ -333,8 +332,7 @@ group, so the lines run over everything and flatten it like a CRT screen.
 
 ![MERRY & BRIGHT typed in cream Anton over the sky, with the Text options bar showing Anton at 264 px](23-title-typed.webp)
 
-Click **Snow Coarse**, so the new text doesn't restyle any other layer, and
-set the foreground to `#F4ECD8`. Pick the **Text** tool, set the font to
+Click **Snow Coarse** and set the foreground to `#F4ECD8`. Pick the **Text** tool, set the font to
 **Anton** and Size to **264** in the options bar, and set **Line height** to
 **0.95** in the Text panel. Click in the sky, type **MERRY**, press [[Enter]], then type
 **& BRIGHT**.
@@ -389,8 +387,8 @@ bar, so their right edges sit on the right margin guide:
 
 - **ADVENT_ZOETROPE.GIF:** 40 px cream, on the left margin with its top on
   the header guide.
-- **REC 12.24.2026:** 40 px red, on the right margin, level with it. Draw a
-  16 px red square just left of it as a recording light.
+- **REC 12.24.2026:** 40 px red, on the right margin, level with it. On a new
+  layer, fill a 16 px red square just left of it as a recording light.
 - **FRAME 05/05:** 40 px cream, right-aligned under REC.
 - **LOADING JOY...:** 84 px cream on the left margin, about 50 px below the
   horizon guide.
@@ -399,17 +397,16 @@ bar, so their right edges sit on the right margin guide:
   margin, near the bottom of the card. Leave room above it for the loading
   bar.
 
-Before each new block, click a layer that isn't text, so the new settings
-don't restyle a block you've already set. Nudge each block into place with
+Start each block by clicking a layer that isn't text, then set its size
+and colour and click to type. Nudge each block into place with
 the **Move** tool and the arrow keys.
 
 ## Build the advent loading bar
 
 ![A marquee over one cell of the progress bar with the 8 px grid showing](27-advent-bar.webp)
 
-Turn on **View → Show Grid** to check alignment. Showing the grid also
-turns on **Snap**, and these cells don't fall on grid lines, so untick
-**Snap** in the options bar.
+Turn on **View → Show Grid** to check alignment, and untick **Snap** in the
+options bar. These cells don't fall on grid lines.
 
 Add an **Advent Bar** layer. The bar is **56 px** tall, sits between
 LOADING JOY... and the greeting, and runs from margin guide to margin guide.

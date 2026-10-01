@@ -2,7 +2,7 @@
 title: Design a Cyberpunk Neon Dragon Logo
 description: Build a glitchy cyberpunk bar logo in Lopsy with Sunburst rays, a neon dragon silhouette, RGB-split type, vertical Japanese text and HUD details.
 published: 2026-09-28 09:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: cyberpunk, logo, neon, glitch, synthwave, japanese, vertical text, typography, layer effects, filters
@@ -184,10 +184,8 @@ will sit on these calm panels instead of on the rays.
 
 ![DRAGON in large white Audiowide capitals under the sun, IZAKAYA in tracked yellow capitals below it, and a cyan monospace footer line](11-type.webp)
 
-Click in empty canvas for each new line, so the Text tool starts a new layer
-instead of editing one you've already set. Keep a **raster** layer (like
-*Sun*) selected when you change fonts: with a text layer selected, changing
-the font restyles that layer.
+For each line, select *Sun*, set up the text, then click in empty canvas
+below the sun and type:
 
 - **Footer:** Share Tech Mono, size 44, `#05D9E8`, letter spacing 0. Type `EST. 2077  //  NEO-SHINJUKU  SECTOR 07  //  OPEN TILL DAWN`.
 - **IZAKAYA:** Michroma, size 84, `#F9F002`, letter spacing 46.
@@ -207,7 +205,7 @@ keys ([[Shift]] + arrow moves 10 px):
 
 ![DRAGON with a cyan copy peeking out on the upper left and a hard magenta offset on the lower right](12-rgb-split.webp)
 
-1. Select *DRAGON* and click **Duplicate Layer**. The copy lands 10 px down and right, so press [[Shift+Up]] and [[Shift+Left]] with the **Move** tool to line the two up exactly.
+1. Select *DRAGON* and click **Duplicate Layer**. The copy sits exactly on top of the original.
 2. On the **copy** (the top layer), add a **Drop Shadow**: `#FF2BD6`, Offset X 8, Offset Y 4, **Blur 0**, **Opacity 100**. That gives a hard magenta offset.
 3. Select the **original** underneath and nudge it 8 px left and 4 px up.
 4. Give the original a **Color Overlay** in `#00F0FF`.
@@ -216,8 +214,9 @@ keys ([[Shift]] + arrow moves 10 px):
 
 ![A zoomed view of DRAGON with a marquee around a 30 px strip through the D, R and A that has been shifted right, tearing the letters slightly](13-glitch-slice.webp)
 
-Select each DRAGON layer and click **Rasterize Layer**. Then click the copy
-and **Merge Down** (the merge bakes the shadow and overlay in). Rename it
+Select the original DRAGON and click **Rasterize Layer Style** in its
+effects drawer, so the cyan becomes pixels. Then click the copy and
+**Merge Down** (the merge bakes the magenta shadow in). Rename it
 *DRAGON title*.
 
 Now tear it in two places:
@@ -238,9 +237,7 @@ With *Sun* selected, pick the Text tool:
 2. Set the foreground to magenta `#FF2A6D`, click near the top of the left shade panel, and paste `ドラゴン居酒屋` with [[Cmd+V]]. Commit with [[Tab]] and set **Letter spacing** 18 in the Text panel.
 3. Do the same at the top of the right shade panel with `焼鳥・拉麺・酒` in `#05D9E8`.
 
-Turn the toggle off again afterwards. Selecting a vertical text layer loads
-its settings into the tool, so check the toggle before you create horizontal
-text.
+Then select *Sun* again and turn the toggle off.
 
 ## Frame it with HUD brackets and rules
 
@@ -261,7 +258,7 @@ then [[Cmd+Shift]]-click on the right one so the line snaps level.
 
 Give the layer an **Outer Glow** (`#05D9E8`, Size 18, Spread 10, Opacity 70).
 
-Add the top labels:
+Add the top labels, selecting *HUD Brackets* before you set up each one:
 
 - **Left:** `NODE_07 // RAMEN . YAKITORI . SAKE` in Share Tech Mono 36, `#FF2A6D`, letter spacing 3, with its left edge on the left margin guide.
 - **Right:** `*DI2077*` in **Libre Barcode 39**, size 96, `#05D9E8`, with its right edge on the right margin guide.
@@ -287,7 +284,7 @@ layer:
 2. **Select → Shrink…** by 9, press **Delete**, then fill the inside `#0C0818`.
 3. Add an **Outer Glow** (`#FF2A6D`, Size 24, Spread 10, Opacity 80).
 
-Add two texts:
+Add two texts, selecting *Sign Frame* before you set up each one:
 
 - `OPEN 24H`: Share Tech Mono 28, `#FFE14D`, letter spacing 5. Glow `#FFE14D`, Size 10, Opacity 60.
 - `営業中`: DotGothic16 54, `#FF2A6D`, letter spacing 7, pasted in. Glow `#FF2A6D`, Size 14, Opacity 70.

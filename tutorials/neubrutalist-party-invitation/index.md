@@ -2,7 +2,7 @@
 title: Design a Neubrutalist Party Invitation
 description: Build a neubrutalist pool-party invitation in Lopsy with chunky outlines, hard offset shadows, rotated stickers, a flat axolotl mascot and snapped info cards.
 published: 2026-09-26 10:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 50
 tags: neubrutalism, invitation, poster design, layer effects, stickers, text effects, illustration, groups
@@ -31,15 +31,15 @@ The palette is five flat colours plus near-black:
 - Acid lime `#C6FF3D`
 - Sun yellow `#FFD93D`
 
-Almost every shape in this piece is a **rounded rectangle**. The Shape
-tool's polygons are always regular, so you'll build rounded rectangles from
-selections instead: marquee the full rectangle, choose **Select → Shrink…**
-by the corner radius, then **Select → Grow…** by the same amount, and fill.
-Growing rounds every corner in one go.
+Almost every shape in this piece is a **rounded rectangle**, drawn with the
+**Shape** tool (U). In the options bar, set **Shape** to **Rectangle** and
+**Output** to **Pixels**, set the **Corner Radius**, click the **Fill**
+swatch and type the colour into its hex field, and remove the stroke (the
+outlines come from a Stroke effect instead). Then click (don't drag) where
+the shape's centre should go and type its **Width** and **Height**. The
+Shape tool draws from the centre out.
 
-> **Tip:** For a pill, where the radius is half the height, shrink and grow
-> by one pixel less. Shrinking by the full half-height would leave nothing
-> selected.
+> **Tip:** For a pill, set the Corner Radius to half the height.
 
 ## Create the invitation document
 
@@ -95,10 +95,10 @@ draw anything else.
 
 ![A pink rounded rectangle with a thick black inside stroke and a solid black shadow offset down and right, with the Layer Effects drawer open](04-title-card-stroke-shadow.webp)
 
-Add a layer called `Title Card` and set the foreground to `#FF7EC8`. Build
-a 940 × 330 rounded rectangle with a 28 px radius, 70 px in from each side
-(just outside the margin guides) and about 210 px from the top, using
-the method from the intro.
+Add a layer called `Title Card`. Using the method from the intro, draw a
+940 × 330 rounded rectangle in `#FF7EC8` with a 28 px radius, 70 px in from
+each side (just outside the margin guides) and about 210 px from the top.
+Its centre is at about **540, 375**.
 
 Open the layer's effects and set:
 
@@ -158,9 +158,9 @@ same centre, so the type stays locked to its band.
 ![A lime pill with black RSVP BY OCT 10 / @AXOPARTY type near the bottom of the invitation, with a black outline and offset shadow](07-lime-rsvp-pill.webp)
 
 Click **Add Layer** twice. Name the first layer `Bubbles` and leave it
-empty for now. Name the second `RSVP Pill`. Build a 920 × 92 pill with a
-46 px radius (half the height), centred across the page and sitting just
-above the bottom margin guide, and fill it with lime `#C6FF3D`. Give it an
+empty for now. Name the second `RSVP Pill`. Draw a 920 × 92 pill in lime
+`#C6FF3D` with a 46 px radius (half the height), centred across the page
+and sitting just above the bottom margin guide. Give it an
 inside **Stroke** of `6` and a **Drop Shadow** of `10` / `10`.
 
 Type `RSVP BY OCT 10  /  @AXOPARTY` in **Archivo Black** at size `44` in
@@ -180,15 +180,14 @@ a smaller shadow (`8` / `8`):
   `34`.
 - **No Running**: a cobalt 264 × 58 rounded rectangle (radius 16), up and
   to the right of the tag, just right of the centre guide. Add
-  `NO RUNNING!` in **Rubik Mono One** at `24` in cream, rasterize it, and
-  **Merge Down** onto the sticker.
+  `NO RUNNING!` in **Rubik Mono One** at `24` in cream and **Merge Down**
+  onto the sticker.
 - **Starburst**: with the **Lasso**, drag an 18-pointed star over the
   slab's top-right corner. Go round a centre point through 36 corners in
   straight runs, alternating between the tips, about 122 px out, and the
   valleys, about 95 px out, and let go back at the start. Fill it with
   `#FFD93D`. Add `BYO` (Archivo Black, `52`) and
-  `FLOATIE!` (`30`), rasterize both, and Merge Down one text layer onto
-  the other.
+  `FLOATIE!` (`30`), and Merge Down one text layer onto the other.
 
 ## Rotate the stickers
 
@@ -203,11 +202,6 @@ shadow with a little to spare. Then drag the rotate handle and press
 - No Running: **+6°**
 - Starburst: **+12°**
 
-> **Tip:** Merge Down bakes the lower layer's stroke and shadow into its
-> pixels, so the No Running sticker's shadow is now real pixels. Make the
-> marquee big enough to include the shadow, or a thin strip of it stays
-> behind when you rotate.
-
 ## Blow bubbles with copy, paste and scale
 
 ![A small copy of a pale blue bubble with transform handles being scaled down next to the original](10-paste-and-scale-bubble.webp)
@@ -220,11 +214,10 @@ with pale blue `#D6E6FF`. Add a 13 × 11 white highlight near its top left.
 Now make smaller copies:
 
 1. Marquee the bubble, press [[Cmd+C]], then [[Cmd+V]]. The copy is pasted in
-   place on a new layer.
-2. Marquee it again, switch to the **Move** tool, and [[Cmd]]-drag the
-   bottom-right handle inward to about 66%. Press [[Cmd+D]].
-3. Marquee the smaller bubble, drag it up and to the right, press
-   [[Cmd+D]], and choose **Layer → Merge Down**.
+   place on a new layer, selected, with the **Move** tool active.
+2. [[Cmd]]-drag the bottom-right handle inward to about 66%, then drag the
+   smaller bubble up and to the right.
+3. Press [[Cmd+D]] and choose **Layer → Merge Down**.
 
 Repeat at 45% and 60% to get a rising trail: one bubble beside the head and
 one between the gills.
@@ -275,18 +268,17 @@ water.
 ![Three rounded rectangles in lime, yellow and pink stacked on the right with the 16 px grid visible, and small black tabs on their top edges](13-info-cards-snap-grid.webp)
 
 Click `Bubbles` again and create a **New Group** called `Info Cards`.
-Choose **View → Show Grid**. The grid defaults to 16 px, with **Snap**
-turned on. Marquee corners snap to the grid lines, so the cards line up
-perfectly.
+Choose **View → Show Grid** (16 px) to check the spacing as you go.
 
-Add three layers and build a 416 × 128 card (radius 16) on each, stacked
+Add three layers and draw a 416 × 128 card (radius 16) on each, stacked
 one grid square (16 px) apart on the right-hand side, with their right
 edges on the right margin guide. Start the top card a little over halfway
 down the page:
 
-- `Card When`: lime, at the top
-- `Card Where`: yellow, in the middle, shifted one grid square to the left
-- `Card Wear`: pink, at the bottom
+- `Card When`: lime, at the top, centred at **812, 768**
+- `Card Where`: yellow, in the middle, shifted one grid square to the left,
+  centred at **796, 912**
+- `Card Wear`: pink, at the bottom, centred at **812, 1056**
 
 The shifted middle card breaks up the stack. Hide the grid again, then add
 a black 112 × 36 tab (radius 10) to each card at its top-left, 18 px in and
@@ -305,11 +297,9 @@ so the text lands in the group:
 3. The label in **Space Mono** Bold `20` in cream, centred on the tab, e.g.
    `WHEN`.
 
-Create them **bottom line first**. A Text-tool click on or just under an
-existing line of text edits that line instead of starting a new one.
+Create them **bottom line first**, each in empty space above the last.
 
-Rasterize all three, click the top text layer and press **Merge Down**
-three times so everything ends up in the card layer. The card is the
+Click the top text layer and press **Merge Down** three times so everything ends up in the card layer. The card is the
 bottom layer of its group, so that's as far as the merges go. Then give
 the card an inside **Stroke** of `5` and a **Drop Shadow** of `10` / `10`.
 

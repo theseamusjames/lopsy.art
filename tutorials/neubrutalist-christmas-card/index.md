@@ -2,7 +2,7 @@
 title: Design a Neubrutalist Christmas Card
 description: Make a neubrutalist holiday card in Lopsy with an upside-down Christmas tree in a retro app window, halftone dots, hard shadows and chunky type.
 published: 2026-09-29 18:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: christmas card, holiday card, neubrutalism, greeting card, typography, layer effects, halftone, shapes, transforms, pattern fill, grid
@@ -45,8 +45,6 @@ Turn on **View → Show Grid**, drag the **Grid** slider in the options bar to *
 Drag a rectangular marquee for the window: from about 100 px in from the left edge and a little under a quarter of the way down, to about 100 px in from the right edge and about 470 px above the bottom. The grid's lines are centred on the page, so Snap pulls both sides onto matching lines and the window ends up exactly centred. Fill it black.
 
 Now untick Snap and select a rectangle exactly 8 px inside that one. The easiest way is the exact-corner dialog: press [[Cmd+D]], click once (no drag) with the **Rectangular Marquee**, and enter **From** `110`, `474` and **To** `1390`, `1618`. Fill it cream `#FFF4E2`. That gives the window its 8 px outline. Finish with the standard Drop Shadow.
-
-> **Tip:** Draw the border as pixels rather than with the Stroke effect. The Drop Shadow is built from the layer's own pixels, not from its effects, so a shadow on a stroked layer would start inside the outline and leave a notch.
 
 ## Tile graph paper into the window
 
@@ -96,7 +94,7 @@ Add a `Bauble` layer above `Tier 3`. Draw the string with a 6 px **Brush**: clic
 
 ![A second bauble pasted and dragged to the top-right corner of the first tier, then recoloured yellow with the Paint Bucket](09-paste-bauble.webp)
 
-Marquee the bauble, press [[Cmd+C]] and then [[Cmd+V]]. The copy lands in place on a new `Pasted Layer`. Press [[Cmd+D]], then drag it with the **Move** tool to the next tier corner. Pick a new foreground colour and click the ball with the **Paint Bucket**: it only floods the flat fill, so the outline and highlight stay.
+Marquee the bauble, press [[Cmd+C]] and then [[Cmd+V]]. The copy lands in place on a new `Pasted Layer`, selected, with the **Move** tool active. Drag it to the next tier corner and press [[Cmd+D]]. Pick a new foreground colour and click the ball with the **Paint Bucket**: it only floods the flat fill, so the outline and highlight stay.
 
 Place six baubles in all, one at each tier corner, in pink, yellow, blue and one holiday red `#E8202A`. Then select the top `Pasted Layer` and use **Layer → Merge Down** five times to fold them into one layer. Rename it `Ornaments`.
 
@@ -156,9 +154,9 @@ With the letter selection still active, click `Headline Shadow`, set the foregro
 
 Add a `Greetings Box` layer. Under SEASON'S, fill a black box 150 px tall that starts in line with the tree's widest corner and ends on the window's right edge, then a yellow one 8 px inside it. Lining the box up with the tree ties the headline to the picture below.
 
-Type `GREETINGS` in Archivo Black at **140 px**, well below the other text so the click doesn't land inside another text layer. Move it to the centre of the box.
+Click in empty canvas below the other text and type `GREETINGS` in Archivo Black at **140 px**. Move it to the centre of the box.
 
-Click **Rasterize Layer**, then **Layer → Merge Down** onto the box. Marquee the merged slab and drag the rotation handle to **−1.2°**. A small tilt reads as a sticker slapped on. A bigger one would crowd the window below it. Commit with [[Cmd+D]] and add the standard Drop Shadow.
+Choose **Layer → Merge Down** to merge it onto the box. Marquee the merged slab and drag the rotation handle to **−1.2°**. A small tilt reads as a sticker slapped on. A bigger one would crowd the window below it. Commit with [[Cmd+D]] and add the standard Drop Shadow.
 
 ## Add a sparkle
 
@@ -178,7 +176,7 @@ Marquee it, then [[Cmd]]-drag the rotation handle to **180°** and press [[Cmd+D
 
 ![A round yellow FLIP ME! sticker overlapping the right end of the blue box, caught mid-rotation](20-flip-sticker.webp)
 
-On a `Flip Sticker` layer, draw a yellow Shape-tool circle about 184 px across, with the 8 px black stroke. Type `FLIP` and `ME!` on two lines in Archivo Black at **54 px**, then rasterize it. Point text doesn't centre each line, so marquee the `ME!` line and drag it until both lines are centred. Merge it into the circle.
+On a `Flip Sticker` layer, draw a yellow Shape-tool circle about 184 px across, with the 8 px black stroke. Set the Text tool's **Align** to **Center**, click at the circle's centre and type `FLIP` and `ME!` on two lines in Archivo Black at **54 px**. Move it so the two lines sit in the middle of the circle, then merge it down into the circle.
 
 Marquee the sticker, hold [[Cmd]], and drag the bottom-right handle out to scale it up about 17%. Then rotate it **−12°**. Place it at the right end of the blue box, centred on the box's height, so it overlaps the box by about 45 px and its right edge sits in line with the window's right edge. Then add the standard shadow.
 
