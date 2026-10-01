@@ -93,7 +93,7 @@ test('#822: paste, move the pasted piece, Flip Horizontal mirrors it in place', 
   await page.keyboard.press('Control+d');
   await page.waitForTimeout(150);
 
-  // Copy a marquee around it and paste: the selection stays live.
+  // Copy a marquee around it and paste: the paste's pixels are selected.
   await selectTool(page, 'marquee-rect');
   await drag(page, 20, 20, 200, 140);
   await page.keyboard.press('Control+c');
@@ -129,8 +129,8 @@ test('#822: paste, move the pasted piece, Flip Horizontal mirrors it in place', 
     };
     return store.getState().selection.bounds;
   });
-  // The marquee (20..200) moved with the piece.
-  expect(selection).toMatchObject({ x: 320, width: 180 });
+  // The pasted block's selection (40..160) moved with the piece.
+  expect(selection).toMatchObject({ x: 340, width: 120 });
   const selCentre = selection!.x + selection!.width / 2;
 
   await page.getByRole('button', { name: 'Flip Horizontal' }).click();

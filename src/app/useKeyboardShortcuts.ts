@@ -15,7 +15,7 @@ import { fillActiveLayerMask } from './fill-layer-mask';
 import { useToolSettingsStore } from './tool-settings-store';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
-import { pasteOrOpenBlob } from './paste-or-open';
+import { pasteOrOpenBlob, pasteInternalClipboard } from './paste-or-open';
 import {
   invalidateInternalClipboardPriority,
   isInternalClipboardNewer,
@@ -59,7 +59,7 @@ export function scheduleFallbackPaste(): void {
   cancelFallbackPaste();
   fallbackPasteTimer = setTimeout(() => {
     fallbackPasteTimer = null;
-    useEditorStore.getState().paste();
+    pasteInternalClipboard();
   }, 200);
 }
 
@@ -78,15 +78,16 @@ function cancelFallbackPaste(): void {
  * PNG so they can be pasted into other apps. That PNG carries no position, so
  * routing it through `pasteOrOpenBlob` drops the new layer at 0,0 — losing the
  * location the content was copied from. The internal clipboard, by contrast,
- * records the copy offset and pastes in place. `tryPasteInternalCopy` uses it
- * when the incoming image matches the internal clipboard's dimensions and
- * pixels; otherwise this is a genuinely external image and we open it normally.
+ * records the copy offset and pastes in place. We use it when the incoming
+ * image matches the internal clipboard's dimensions and pixels; otherwise this
+ * is a genuinely external image and we open it normally.
  */
 async function pasteImageBlob(blob: Blob, name: string): Promise<void> {
-  const handledInternally = await useEditorStore.getState().tryPasteInternalCopy(blob);
-  if (!handledInternally) {
-    await pasteOrOpenBlob(blob, name);
+  if (await useEditorStore.getState().matchesInternalClipboard(blob)) {
+    pasteInternalClipboard();
+    return;
   }
+  await pasteOrOpenBlob(blob, name);
 }
 
 interface KeyboardShortcutDeps {
@@ -325,7 +326,7 @@ export function useKeyboardShortcuts({
       // clipboard, so clipboardData would hold the previous image (#960).
       if (isInternalClipboardNewer() && useEditorStore.getState().clipboard) {
         e.preventDefault();
-        useEditorStore.getState().paste();
+        pasteInternalClipboard();
         return;
       }
 
@@ -375,13 +376,13 @@ export function useKeyboardShortcuts({
             }
           }
           // No external image — fall back to internal clipboard
-          useEditorStore.getState().paste();
+          pasteInternalClipboard();
         }).catch(() => {
-          useEditorStore.getState().paste();
+          pasteInternalClipboard();
         });
       } else {
         // Browser doesn't support clipboard.read() — use internal clipboard
-        useEditorStore.getState().paste();
+        pasteInternalClipboard();
       }
     };
 

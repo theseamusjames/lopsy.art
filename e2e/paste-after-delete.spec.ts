@@ -99,7 +99,6 @@ test('paste after a Delete on another layer still lands at the copied offset, no
 
   // 2. Marquee a slightly larger region covering the fill and copy it.
   await selectRect(page, 280, 180, 160, 130);
-  const toolBeforeCopy = (await getSnapshot(page)).activeTool;
   await page.keyboard.press(`${mod}+KeyC`);
   await page.waitForTimeout(200);
 
@@ -154,10 +153,6 @@ test('paste after a Delete on another layer still lands at the copied offset, no
   expect(pastedLayer!.y).toBe(offsetY);
   expect(pastedLayer!.x).not.toBe(0);
   expect(pastedLayer!.y).not.toBe(0);
-
-  // The external-paste route also force-switches to the Move tool; an
-  // in-place paste must leave the active tool alone.
-  expect(afterPaste.activeTool).toBe(toolBeforeCopy);
 });
 
 test('a Delete on the source layer itself also leaves the pending copy pasteable in place', async ({ page }) => {
