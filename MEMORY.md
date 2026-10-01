@@ -442,3 +442,19 @@ The Move tool's several-layers transform (`app/interactions/layer-transform.ts`,
 `dropFloat` ends it, so every site that bakes the Move float (history push,
 other tool's press, ⌘D, undo) bakes it too without knowing about it. The JS
 side (`live`) is only trusted while `hasLayerTransform(engine)` agrees.
+
+## GPU timing in Playwright, and comparing the live canvas with an export
+
+Headless Chromium on this Mac has **no WebGL2 at all** without ANGLE flags;
+`--use-gl=angle --use-angle=metal` gives the real GPU (Apple M4 Max), the
+config's default `--use-angle=swiftshader` gives SwiftShader. For frame cost,
+time `__readCompositedPixels()` (forced recomposite + full readback) or drain
+the engine's own context with a 1×1 `readPixels` in a rAF callback — rAF
+intervals alone hide GPU time. See `e2e/effect-cache-perf.spec.ts`.
+
+The exported PNG is tagged with the document's colour profile (Display P3),
+so decoding it through `<img>` converts the colours and it will not match the
+canvas readback. Decode with
+`createImageBitmap(blob, { colorSpaceConversion: 'none' })` to get the stored
+values; live and export then agree within ±2 per channel
+(`e2e/effect-cache-invalidation.spec.ts`).

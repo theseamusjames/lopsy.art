@@ -260,6 +260,7 @@ double-check that a global exists before using it — don't assume.
 | `__readCompositedPixels()` | Async. Triggers a fresh render and returns the full WebGL canvas as `{width, height, pixels[]}`. The buffer is bottom-up — flip y when projecting doc coords. |
 | `__readLayerPixels(layerId?)` | Async. Syncs layers and returns a single layer's GPU texture as `{width, height, pixels[]}`. Returns `{width: 0, height: 0, pixels: []}` if the layer isn't tracked by the engine. |
 | `__gpuSnapshotCount()` | Number of undo snapshot textures the engine currently holds. Compare against the distinct handles in `undoStack`/`redoStack` to catch snapshot leaks (#1005). |
+| `__effectCacheStats()` | The live compositor's per-layer effect cache: `{entries, images, bytes, budgetBytes, hits, misses}`. `bytes` is the VRAM its cached images hold. `__readCompositedPixels` forces a recomposite but does not invalidate the cache, so a second read is served from it — compare that against an export to catch stale effects (`effect-cache-invalidation.spec.ts`). |
 
 **What is NOT exposed:** there is no `__engineState`, `__wasmBridge`,
 `__wasmEngine`, or `__imageAdjustmentsModule`. Several historical tests

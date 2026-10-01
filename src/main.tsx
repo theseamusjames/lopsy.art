@@ -9,7 +9,7 @@ import { useShortcutStore } from './app/store/shortcut-store';
 import { useDockStore } from './panels/dock/dock-store';
 import { pixelDataManager } from './engine/pixel-data-manager';
 import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
-import { render as renderWasm, markAllDirty, readLayerPixels, getLayerTextureDimensions, initWasm, isFontLoaded, liveGpuSnapshotCount } from './engine-wasm/wasm-bridge';
+import { render as renderWasm, markAllDirty, readLayerPixels, getLayerTextureDimensions, initWasm, isFontLoaded, liveGpuSnapshotCount, effectCacheStats } from './engine-wasm/wasm-bridge';
 import {
   syncDocumentSize,
   syncBackgroundColor,
@@ -32,6 +32,14 @@ import './styles/reset.css';
 
 // Dev-only debug hooks exposed on `window` for e2e tests.
 type ReadPixelsResult = { width: number; height: number; pixels: number[] } | null;
+interface EffectCacheStats {
+  entries: number;
+  images: number;
+  bytes: number;
+  budgetBytes: number;
+  hits: number;
+  misses: number;
+}
 
 declare global {
   interface Window {
@@ -46,6 +54,7 @@ declare global {
     __readCompositedPixels?: () => Promise<ReadPixelsResult>;
     __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
     __gpuSnapshotCount?: () => number;
+    __effectCacheStats?: () => EffectCacheStats | null;
     __isFontLoaded?: (family: string) => boolean;
     __saveProject?: () => Promise<void>;
     __loadProject?: (file: File) => Promise<void>;
@@ -158,6 +167,12 @@ if (import.meta.env.DEV) {
   window.__gpuSnapshotCount = () => {
     const engine = getEngine();
     return engine ? liveGpuSnapshotCount(engine) : 0;
+  };
+  window.__effectCacheStats = () => {
+    const engine = getEngine();
+    if (!engine) return null;
+    const [entries = 0, images = 0, bytes = 0, budgetBytes = 0, hits = 0, misses = 0] = effectCacheStats(engine);
+    return { entries, images, bytes, budgetBytes, hits, misses };
   };
   window.__readLayerPixels = (layerId?: string) => {
     return new Promise<ReadPixelsResult>((resolve) => {
