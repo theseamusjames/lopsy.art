@@ -79,22 +79,55 @@ export function commitCurrentPath(): void {
   uiState.clearPath();
 }
 
+function strokeOntoLayer(layerId: string, docAnchors: readonly PathAnchor[], closed: boolean): void {
+  const ts = useToolSettingsStore.getState();
+  rasterizePathToLayer(docAnchors, closed, layerId, ts.settings.path.strokeWidth, ts.foregroundColor);
+}
+
+/** The active layer's id when a path stroke may write to it, else null. */
+function strokeTargetLayerId(): string | null {
+  const doc = useEditorStore.getState().document;
+  const activeLayer = doc.layers.find((l) => l.id === doc.activeLayerId);
+  if (!doc.activeLayerId || !guardPixelWrite(activeLayer)) return null;
+  return doc.activeLayerId;
+}
+
 /**
  * Enter with the Pen tool: keep the in-progress path in the Paths panel and
  * stroke it onto the active layer with the options-bar stroke width and the
  * foreground colour (#976).
  */
-export function strokeCurrentPath(): void {
+function strokeCurrentPath(): void {
   const draft = useUIStore.getState().pathDraft;
-  const doc = useEditorStore.getState().document;
-  const activeLayerId = doc.activeLayerId;
-  const activeLayer = doc.layers.find((l) => l.id === activeLayerId);
-  const canStroke = !!draft && draft.anchors.length >= 2 && !!activeLayerId
-    && guardPixelWrite(activeLayer);
-  const docAnchors = canStroke ? draftAnchorsInDocSpace(draft.anchors) : [];
+  const layerId = draft && draft.anchors.length >= 2 ? strokeTargetLayerId() : null;
+  const docAnchors = draft && layerId ? draftAnchorsInDocSpace(draft.anchors) : [];
   const isClosed = draft?.closed ?? false;
   commitCurrentPath();
-  if (!canStroke) return;
-  const ts = useToolSettingsStore.getState();
-  rasterizePathToLayer(docAnchors, isClosed, activeLayerId, ts.settings.path.strokeWidth, ts.foregroundColor);
+  if (!layerId) return;
+  strokeOntoLayer(layerId, docAnchors, isClosed);
+}
+
+/**
+ * Stroke the selected stored path the same way Enter strokes a draft. A
+ * click on the first anchor commits the closed path straight to the Paths
+ * panel (and selects it), so this is what lets Enter stroke a closed shape
+ * (#1084).
+ */
+function strokeSelectedPath(): void {
+  const { paths, selectedPathId } = useEditorStore.getState();
+  const path = paths.find((p) => p.id === selectedPathId);
+  if (!path || path.anchors.length < 2) return;
+  const layerId = strokeTargetLayerId();
+  if (!layerId) return;
+  strokeOntoLayer(layerId, path.anchors, path.closed);
+}
+
+/** Enter with the Pen tool: stroke the in-progress path, else the selected one. */
+export function strokePathOnEnter(): void {
+  const anchorCount = useUIStore.getState().pathDraft?.anchors.length ?? 0;
+  if (anchorCount >= 2) {
+    strokeCurrentPath();
+    return;
+  }
+  if (anchorCount === 0) strokeSelectedPath();
 }
