@@ -15,6 +15,7 @@ import {
 import { reconcileLayerBoundsWithEngine } from '../../reconcile-layer-bounds';
 import { growFloatToCover } from '../../interactions/float-growth';
 import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
+import { commitLiveFloat, withLiveFloatKept } from '../../interactions/live-float';
 import styles from './TransformControls.module.css';
 
 /**
@@ -35,7 +36,8 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   const activeLayerId = editorState.document.activeLayerId;
   if (!activeLayerId) return;
 
-  editorState.pushHistory('Transform');
+  // The float, pending transform included, is handled below.
+  withLiveFloatKept(() => editorState.pushHistory('Transform'));
 
   // A float left behind by a Move drag holds its lifted pixels at their
   // pre-drag position, while the selection (and the pixels the user sees)
@@ -96,14 +98,9 @@ export function TransformControls() {
 
   const handleModeChange = (mode: TransformMode) => {
     if (!transform) return;
-    // Commit any active transform before switching modes
-    const engine = getEngine();
-    if (engine && hasFloat(engine)) {
-      const activeLayerId = useEditorStore.getState().document.activeLayerId;
-      if (activeLayerId) {
-        selectLayerAlpha(activeLayerId);
-      }
-    }
+    // Commit any active transform before switching modes; the selection
+    // takes on the transformed outline rather than the whole layer's alpha.
+    commitLiveFloat();
     // Create fresh transform state with the new mode
     const sel = useEditorStore.getState().selection;
     if (sel.active && sel.bounds) {

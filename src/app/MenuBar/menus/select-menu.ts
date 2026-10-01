@@ -3,6 +3,7 @@ import { useUIStore } from '../../ui-store';
 import { createRectSelection, invertSelection } from '../../../selection/selection';
 import { selectionToPath } from '../../../selection/selection-to-path';
 import { createTransformState } from '../../../tools/transform/transform';
+import { commitLiveFloat } from '../../interactions/live-float';
 import type { MenuDef } from './types';
 
 export type SelectDialogId = 'grow' | 'shrink' | 'feather';
@@ -21,6 +22,9 @@ export function selectAll(): void {
 }
 
 export function invertSelectionAction(): void {
+  // Invert what is on screen: a pending Move-tool scale or rotate has to
+  // reach the mask first, and the float it leaves must not outlive the swap.
+  commitLiveFloat();
   const state = useEditorStore.getState();
   const sel = state.selection;
   if (!sel.active || !sel.mask) return;
