@@ -9,7 +9,8 @@ import { getSelectionMaskValue, selectionCombineMode } from '../../selection/sel
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
 import { createTransformState } from '../transform/transform';
-import { snapPositionToGrid } from '../move/move';
+import { snapDragPoint } from '../common/drag-snap';
+import { dragSnapOptions } from '../../app/interactions/drag-snap-options';
 import {
   constrainMarqueeSize,
   createRectSelection,
@@ -85,15 +86,9 @@ export const marqueeStrategy: SelectionToolStrategy = {
       return;
     }
 
-    const editorState = useEditorStore.getState();
-    let mStart = state.startPoint;
-    let mEnd = canvasPos;
-    const uiMarquee = useUIStore.getState();
-    if (uiMarquee.showGrid && uiMarquee.snapToGrid) {
-      const { width: dw, height: dh } = editorState.document;
-      mStart = snapPositionToGrid(mStart.x, mStart.y, uiMarquee.gridSize, dw, dh);
-      mEnd = snapPositionToGrid(mEnd.x, mEnd.y, uiMarquee.gridSize, dw, dh);
-    }
+    const snapOptions = dragSnapOptions();
+    const mStart = snapDragPoint(state.startPoint, snapOptions);
+    const mEnd = snapDragPoint(canvasPos, snapOptions);
     const toolSettings = useToolSettingsStore.getState();
     const { w, h } = constrainMarqueeSize(
       mEnd.x - mStart.x,

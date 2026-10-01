@@ -40,6 +40,7 @@ const DOC_H = 100;
 
 const editorState = {
   document: { width: DOC_W, height: DOC_H, layers: [] as unknown[] },
+  viewport: { zoom: 1 },
   selection: {
     active: false,
     mask: null as Uint8ClampedArray | null,
@@ -62,6 +63,9 @@ const uiState = {
   showGrid: false,
   snapToGrid: false,
   gridSize: 10,
+  showGuides: true,
+  snapToGuides: true,
+  guides: [] as Array<{ id: string; orientation: 'horizontal' | 'vertical'; position: number }>,
 };
 vi.mock('../../app/ui-store', () => ({
   useUIStore: { getState: () => uiState },
@@ -138,12 +142,16 @@ beforeEach(() => {
   editorState.setSelection.mockClear();
   editorState.clearSelection.mockClear();
   editorState.pushHistoryMetadata.mockClear();
+  editorState.viewport = { zoom: 1 };
   uiState.setTransform.mockClear();
   uiState.openModal.mockClear();
   editorState.document = { width: DOC_W, height: DOC_H, layers: [] };
   editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
   uiState.showGrid = false;
   uiState.snapToGrid = false;
+  uiState.showGuides = true;
+  uiState.snapToGuides = true;
+  uiState.guides = [];
   ts.aspectRatioLocked = false;
   ts.settings.marquee.feather = 0;
   setMarqueePreview(null);
@@ -292,6 +300,50 @@ describe('marquee onMove — creating a selection', () => {
     expect(rectPreview()).toEqual({ x: 10, y: 10, width: 20, height: 20 });
   });
 
+  it('lands each drag edge on a guide within 8 screen px', () => {
+    uiState.guides = [
+      { id: 'v', orientation: 'vertical', position: 40 },
+      { id: 'h', orientation: 'horizontal', position: 30 },
+    ];
+    marqueeStrategy.onMove!(makeState({ startPoint: { x: 12, y: 12 } }), { x: 35, y: 34 }, false);
+    expect(rectPreview()).toEqual({ x: 12, y: 12, width: 28, height: 18 });
+  });
+
+  it('measures the guide reach on screen, so it shrinks in document px as you zoom in', () => {
+    uiState.guides = [{ id: 'v', orientation: 'vertical', position: 40 }];
+    editorState.viewport = { zoom: 4 };
+    marqueeStrategy.onMove!(makeState({ startPoint: { x: 10, y: 10 } }), { x: 35, y: 30 }, false);
+    expect(rectPreview().width).toBe(25); // 5 doc px = 20 screen px away: no snap
+    marqueeStrategy.onMove!(makeState({ startPoint: { x: 10, y: 10 } }), { x: 38.5, y: 30 }, false);
+    expect(rectPreview().width).toBe(30); // 1.5 doc px = 6 screen px: snaps
+  });
+
+  it('snaps the start corner to a guide too', () => {
+    uiState.guides = [{ id: 'h', orientation: 'horizontal', position: 8 }];
+    marqueeStrategy.onMove!(makeState({ startPoint: { x: 10, y: 13 } }), { x: 30, y: 30 }, false);
+    expect(rectPreview()).toEqual({ x: 10, y: 8, width: 20, height: 22 });
+  });
+
+  it('ignores guides when Snap to Guides is off or guides are hidden', () => {
+    uiState.guides = [{ id: 'v', orientation: 'vertical', position: 40 }];
+    uiState.snapToGuides = false;
+    marqueeStrategy.onMove!(makeState(), { x: 37, y: 30 }, false);
+    expect(rectPreview().width).toBe(27);
+    uiState.snapToGuides = true;
+    uiState.showGuides = false;
+    marqueeStrategy.onMove!(makeState(), { x: 37, y: 30 }, false);
+    expect(rectPreview().width).toBe(27);
+  });
+
+  it('prefers a nearby guide over the grid', () => {
+    uiState.showGrid = true;
+    uiState.snapToGrid = true;
+    uiState.gridSize = 10;
+    uiState.guides = [{ id: 'v', orientation: 'vertical', position: 33 }];
+    marqueeStrategy.onMove!(makeState({ startPoint: { x: 10, y: 10 } }), { x: 36, y: 31 }, false);
+    // x goes to the guide (33); y has no guide and snaps to the grid (30).
+    expect(rectPreview()).toEqual({ x: 10, y: 10, width: 23, height: 20 });
+  });
 });
 
 describe('marquee onMove — moving an existing selection', () => {

@@ -639,7 +639,10 @@ Group effects and adjustment layers apply to everything inside the group.
 **Guides and grid.** **View → Show Grid** turns snapping on the first time,
 which quantizes marquee drags. Untick **Snap** in the options bar before
 drawing thin or precise shapes; it then stays off when you hide and show the
-grid again. A single click on a ruler drops a guide.
+grid again. A single click on a ruler drops a guide (Cmd/Ctrl-click drops
+it on the nearest half, third, quarter… of the canvas). Marquee edges that
+end within 8 screen px of a guide snap onto it; turn this off with
+**View → Snap to Guides** if you need an edge just beside a guide.
 
 ## Behaviours that trip up agents
 
