@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import '../../test/canvas-mock';
 import { describe, it, expect } from 'vitest';
-import { resolveGapDrop, currentDropTarget } from './useLayerDnd';
+import {
+  resolveGapDrop,
+  currentDropTarget,
+  autoScrollStep,
+  AUTO_SCROLL_ZONE_PX,
+  AUTO_SCROLL_MAX_STEP_PX,
+} from './useLayerDnd';
 import { computeDropLayer } from '../../app/store/actions/drop-layer';
 import { buildFlatDisplayList, findParentGroup, getDescendantIds, isGroupLayer } from '../../layers/group-utils';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
@@ -287,5 +293,48 @@ describe('collapsed groups and layerOrder divergence (#797, #824)', () => {
     const next = drag(doc, 'Background', 1, 1)!;
     expect(panel(next)).toEqual(['Project', ' Background', ' Poly', ' G', ' Dot', ' HELLO', ' Layer 1']);
     assertTreeMatchesOrder(next);
+  });
+});
+
+describe('autoScrollStep', () => {
+  const top = 100;
+  const bottom = 500;
+
+  it('does not scroll with the pointer outside both edge zones', () => {
+    expect(autoScrollStep(300, top, bottom)).toBe(0);
+    expect(autoScrollStep(top + AUTO_SCROLL_ZONE_PX, top, bottom)).toBe(0);
+    expect(autoScrollStep(bottom - AUTO_SCROLL_ZONE_PX, top, bottom)).toBe(0);
+  });
+
+  it('scrolls up near the top edge, faster the closer the pointer gets', () => {
+    const inner = autoScrollStep(top + AUTO_SCROLL_ZONE_PX - 1, top, bottom);
+    const mid = autoScrollStep(top + AUTO_SCROLL_ZONE_PX / 2, top, bottom);
+    const edge = autoScrollStep(top, top, bottom);
+    expect(inner).toBe(-1);
+    expect(mid).toBe(-AUTO_SCROLL_MAX_STEP_PX / 2);
+    expect(edge).toBe(-AUTO_SCROLL_MAX_STEP_PX);
+  });
+
+  it('scrolls down near the bottom edge, faster the closer the pointer gets', () => {
+    expect(autoScrollStep(bottom - AUTO_SCROLL_ZONE_PX + 1, top, bottom)).toBe(1);
+    expect(autoScrollStep(bottom - AUTO_SCROLL_ZONE_PX / 2, top, bottom)).toBe(AUTO_SCROLL_MAX_STEP_PX / 2);
+    expect(autoScrollStep(bottom, top, bottom)).toBe(AUTO_SCROLL_MAX_STEP_PX);
+  });
+
+  it('keeps the maximum speed with the pointer past either edge', () => {
+    expect(autoScrollStep(top - 200, top, bottom)).toBe(-AUTO_SCROLL_MAX_STEP_PX);
+    expect(autoScrollStep(bottom + 200, top, bottom)).toBe(AUTO_SCROLL_MAX_STEP_PX);
+  });
+
+  it('shrinks the zones on a short list so the middle never scrolls', () => {
+    // 80px list: zones are 20px each, leaving 40px in the middle.
+    expect(autoScrollStep(140, 100, 180)).toBe(0);
+    expect(autoScrollStep(121, 100, 180)).toBe(0);
+    expect(autoScrollStep(119, 100, 180)).toBeLessThan(0);
+    expect(autoScrollStep(161, 100, 180)).toBeGreaterThan(0);
+  });
+
+  it('does not scroll a list with no height', () => {
+    expect(autoScrollStep(100, 100, 100)).toBe(0);
   });
 });
