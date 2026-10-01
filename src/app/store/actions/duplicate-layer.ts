@@ -1,38 +1,9 @@
-import type { DocumentState, Layer } from '../../../types';
+import type { DocumentState } from '../../../types';
 import type { ActionResult } from '../types';
-import {
-  duplicateLayer as duplicateLayerModel,
-  duplicateOffsetForLayer,
-} from '../../../layers/layer-model';
+import { duplicateLayer as duplicateLayerModel } from '../../../layers/layer-model';
 import { findParentGroup, addToGroup, isGroupLayer, getDescendantIds } from '../../../layers/group-utils';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import { duplicateLayerTexture, getLayerContentBounds } from '../../../engine-wasm/wasm-bridge';
-
-function shiftLayer(layer: Layer, dx: number, dy: number): Layer {
-  if (dx === 0 && dy === 0) return layer;
-  return { ...layer, x: layer.x + dx, y: layer.y + dy } as Layer;
-}
-
-/**
- * Return a layer descriptor with its content-cropped bounds patched in
- * over the store's transiently-expanded ones. Used only for the
- * duplicate-offset clamp so a raster whose texture was expanded to full
- * document size (crop-on-leave / expand-on-return lifecycle) still gets
- * the documented +10/+10 shift on Duplicate Layer (#835).
- */
-function layerWithContentBounds(layer: Layer): Layer {
-  if (layer.type !== 'raster') return layer;
-  const engine = getEngine();
-  if (!engine) return layer;
-  const bounds = getLayerContentBounds(engine, layer.id);
-  if (!bounds || bounds.length < 4) return layer;
-  const cx = bounds[0]!;
-  const cy = bounds[1]!;
-  const cw = bounds[2]!;
-  const ch = bounds[3]!;
-  if (cw <= 0 || ch <= 0) return layer;
-  return { ...layer, x: cx, y: cy, width: cw, height: ch };
-}
+import { duplicateLayerTexture } from '../../../engine-wasm/wasm-bridge';
 
 /**
  * Duplicate the active layer (or a group and all descendants) on the GPU.
@@ -42,6 +13,12 @@ function layerWithContentBounds(layer: Layer): Layer {
  * layer id. No JS-side pixel buffer is read or produced (#746) — the
  * caller does not need to `resolveAllPixelData` before, and does not
  * need to `syncPixelDataToGpu` after.
+ *
+ * The copy lands exactly over its source, at the same `x` / `y`.
+ *
+ * The copy replaces the whole selection (#804): a source left in
+ * `selectedLayerIds` would ride along as a multi-selected sibling on the
+ * next nudge or Move drag.
  */
 export function computeDuplicateLayer(
   doc: DocumentState,
@@ -61,20 +38,27 @@ export function computeDuplicateLayer(
     const descIds = getDescendantIds(doc.layers, activeId);
     const allIds = [activeId, ...descIds];
 
-    const { dx, dy } = duplicateOffsetForLayer(layerWithContentBounds(layer), doc.width, doc.height);
-
     for (const id of allIds) {
       const orig = doc.layers.find((l) => l.id === id);
       if (!orig) continue;
-      const dup = shiftLayer(duplicateLayerModel(orig), dx, dy);
+      const dup = duplicateLayerModel(orig);
       idMap.set(id, dup.id);
       newLayers.push(dup);
-      const orderIdx = newOrder.indexOf(id);
-      newOrder.splice(orderIdx + 1, 0, dup.id);
       if (engine && !isGroupLayer(orig)) {
         duplicateLayerTexture(engine, id, dup.id);
       }
     }
+
+    // The copy goes in as one contiguous block, in the source's own stacking
+    // order, directly above the source subtree. Splicing each copy after its
+    // own source interleaved the two groups in the panel and compositor (#805).
+    const subtree = new Set(allIds);
+    const copyBlock = doc.layerOrder.flatMap((id) => {
+      const dupId = subtree.has(id) ? idMap.get(id) : undefined;
+      return dupId ? [dupId] : [];
+    });
+    const sourceTop = doc.layerOrder.reduce((top, id, i) => (subtree.has(id) ? i : top), -1);
+    newOrder.splice(sourceTop + 1, 0, ...copyBlock);
 
     // Remap children references in duplicated groups
     for (const [, dupId] of idMap) {
@@ -86,27 +70,25 @@ export function computeDuplicateLayer(
       }
     }
 
-    // Add duplicated group to parent
     const parentGroup = findParentGroup(doc.layers, activeId);
     const dupRootId = idMap.get(activeId)!;
-    if (parentGroup) {
-      const parentIdx = newLayers.findIndex((l) => l.id === parentGroup.id);
-      if (parentIdx >= 0 && isGroupLayer(newLayers[parentIdx]!)) {
-        const p = newLayers[parentIdx]!;
-        if (isGroupLayer(p)) {
-          newLayers[parentIdx] = { ...p, children: [...p.children, dupRootId] };
-        }
-      }
-    }
+    const layers = parentGroup
+      ? addToGroup(newLayers, dupRootId, parentGroup.id, newOrder)
+      : newLayers;
 
     return {
-      document: { ...doc, layers: newLayers, layerOrder: newOrder, activeLayerId: dupRootId },
+      document: {
+        ...doc,
+        layers,
+        layerOrder: newOrder,
+        activeLayerId: dupRootId,
+        selectedLayerIds: [dupRootId],
+      },
     };
   }
 
   // Simple layer duplication
-  const { dx, dy } = duplicateOffsetForLayer(layerWithContentBounds(layer), doc.width, doc.height);
-  const newLayer = shiftLayer(duplicateLayerModel(layer), dx, dy);
+  const newLayer = duplicateLayerModel(layer);
   const newId = newLayer.id;
   const orderIdx = doc.layerOrder.indexOf(activeId);
   newOrder.splice(orderIdx + 1, 0, newId);
@@ -120,10 +102,16 @@ export function computeDuplicateLayer(
   // Add to same parent group
   const parentGroup = findParentGroup(doc.layers, activeId);
   if (parentGroup) {
-    layers = addToGroup(layers, newId, parentGroup.id);
+    layers = addToGroup(layers, newId, parentGroup.id, newOrder);
   }
 
   return {
-    document: { ...doc, layers, layerOrder: newOrder, activeLayerId: newId },
+    document: {
+      ...doc,
+      layers,
+      layerOrder: newOrder,
+      activeLayerId: newId,
+      selectedLayerIds: [newId],
+    },
   };
 }

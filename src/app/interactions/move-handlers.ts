@@ -392,12 +392,9 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // delta. Each sibling captures its starting position (after crop) so we
   // can apply identical deltas without re-reading the document each move.
   //
-  // Skip this for an option-drag duplicate: duplicateLayer makes the new copy
-  // active but leaves the pre-duplicate selection (the originals) in
-  // selectedLayerIds, so treating those as siblings would drag the originals
-  // along with the copy (regresses option-drag-duplicate and
-  // delete-inverted-selection).
-  const selectedIds = didDuplicate ? [] : (editorState.document.selectedLayerIds ?? []);
+  // Read the live selection: an option-drag duplicate above replaced it with
+  // just the copy, and `editorState` still holds the originals.
+  const selectedIds = useEditorStore.getState().document.selectedLayerIds ?? [];
   const siblings: SiblingMoveTarget[] = [];
   for (const sid of selectedIds) {
     if (sid === activeLayerId) continue;
