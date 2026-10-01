@@ -161,6 +161,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       <div
         ref={listRef}
         className={styles.list}
+        data-testid="layer-list"
       >
         {displayList.map(({ layer, depth }, ri) => (
           <LayerRow
