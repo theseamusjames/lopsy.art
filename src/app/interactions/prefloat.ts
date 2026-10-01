@@ -107,6 +107,19 @@ export function commitUnmovedPrefloat(): void {
   clearJsPixelData(layerId);
 }
 
+/**
+ * Called whenever a new selection mask is installed. A prefloat lifted the
+ * pixels under one exact mask; once the selection is anything else
+ * (Shrink, Grow, Feather, Inverse, a nudged outline, a new marquee) the
+ * float no longer describes it, and leaving it live made Delete treat the
+ * modified selection as a moved float and clear the whole layer (#1076).
+ * Put the pixels back so the new selection behaves like any other.
+ */
+export function commitPrefloatIfSelectionChanged(mask: Uint8ClampedArray): void {
+  if (!prefloat || prefloat.mask === mask) return;
+  commitUnmovedPrefloat();
+}
+
 export function consumePrefloat(layerId: string, currentMask: Uint8ClampedArray | null): PrefloatState | null {
   if (!prefloat) return null;
   if (prefloat.layerId !== layerId) return null;

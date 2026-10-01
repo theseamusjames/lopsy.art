@@ -1,5 +1,5 @@
 import type { Rect } from '../../types';
-import { cancelPrefloat } from '../interactions/prefloat';
+import { cancelPrefloat, commitPrefloatIfSelectionChanged } from '../interactions/prefloat';
 import { EMPTY_SELECTION, type SelectionData, type SliceCreator } from './types';
 
 export interface SelectionSlice {
@@ -13,6 +13,7 @@ export const createSelectionSlice: SliceCreator<SelectionSlice> = (set, get) => 
   selection: EMPTY_SELECTION,
 
   setSelection: (bounds: Rect, mask: Uint8ClampedArray, maskWidth: number, maskHeight: number) => {
+    commitPrefloatIfSelectionChanged(mask);
     set({
       selection: { active: true, bounds, mask, maskWidth, maskHeight },
       renderVersion: get().renderVersion + 1,
