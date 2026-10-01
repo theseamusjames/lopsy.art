@@ -166,7 +166,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Size**: 1 - 500 px (base range; auto-scaled by document size; default 40) — **this is the diameter of the spray cloud, not of the marks it makes.** It is halved into a scatter radius, and dots land inside that circle at `dist = √random × radius`, which spreads them at uniform *area* density rather than bunching them toward the center.
 - **Density**: 1 - 100 (default 20) — a raw **count of dots per emission**, not a dots-per-area rate. Since Size grows the cloud's area quadratically while the count stays fixed, raising Size at a constant Density makes the spray progressively **thinner**, not bigger-and-equally-solid.
 - **Opacity**: 1 - 100% (default 60) — a ceiling that individual dots reach only by chance: each dot gets `opacity × (0.4 + 0.6 × random) × (1 − 0.3 × dist/radius)`, so dots carry 40 - 100% of the setting, and dots at the rim are scaled by a further 0.7.
-- **Softness**: 0 - 100% (default 30) — **the label is inverted.** The value is `settings.spray.hardness`, and it reaches the brush dab shader's `u_hardness` with no transformation (`hardness = hardnessPct / 100`, passed through `applyBrushDab`'s sixth parameter and assigned to the uniform verbatim). In `circleStamp`, a *higher* `u_hardness` means a *larger* fully-opaque core — everything inside `t ≤ u_hardness` is painted at full strength — so **Softness 100 paints the hardest possible dots and Softness 0 the softest.** The [Brush](#brush) exposes the identical field, normalization and uniform under the label "Hardness" and is the one that reads correctly; only the Spray options bar names it backwards. The default of 30 is soft-ish, which is consistent with either reading — likely why the inversion has gone unnoticed.
+- **Softness**: 0 - 100% (default 70) — higher paints softer dots. It is stored as `settings.spray.softness` and reaches the brush dab shader's `u_hardness` as `1 − softness / 100` (`sprayDabHardness` in `spray.ts`), so Softness 0 stamps fully opaque dots out to their rim and Softness 100 fades each dot from its center (`circleStamp` paints everything inside `t ≤ u_hardness` at full strength). It is the [Brush](#brush)'s Hardness turned around: Brush Hardness 30 and Spray Softness 70 give the same dot. The slider used to pass its value through as `u_hardness` unchanged, so **Softness 100 painted the hardest dots**; the default moved from 30 to 70 with the fix so the default spray looks the same as before. Tool settings are not saved between sessions or in `.lopsy` projects, so there was nothing stored to migrate (fixed in this change).
 - **The grain scales with Size, but only above Size 100.** Each dot's radius is drawn uniformly from `[max(1, 0.02 × R), max(2, 0.12 × R)]`, rounded to a whole pixel, and stamped as a dab of diameter `2 × radius`. **`R` here is the cloud radius (`Size / 2`), not Size**, so above the floors a dot's diameter is **2 - 12 % of the Size value** — half what the `0.02` / `0.12` coefficients read like. (At Size 200 the dots span 4 - 24 px, which is where the tempting "4 - 24 %" comes from: it is a percentage of the radius, not of Size.) Because it is the *radius* that gets rounded, every dot's diameter is an even number of pixels. The texture keeps its proportions as Size changes. The two floors break that at small sizes: the upper bound is pinned at 2 px until Size reaches 34, and the lower bound at 1 px until Size reaches 100. Below Size 34 every dot is a 1 - 2 px speck whatever Size says, and Size only spreads the same specks over a wider circle.
 - Shortcut: `J`
 - Holding the cursor still keeps emitting dots on a 166 ms timer (~6 Hz) so paint accumulates over time, mimicking an airbrush. Dragging emits a fresh cloud each time the pointer has travelled `max(1, 0.3 × Size)` px, so consecutive clouds overlap by about 70% of their width at every Size.
@@ -223,7 +223,7 @@ The two interpolators also place dabs differently along a segment that *is* long
 
 | Profile | Formula (`t` = dist ÷ radius) | Used by | At the rim |
 |---------|------------------------------|---------|------------|
-| **Plateau + smoothstep** | `1` for `t ≤ h`, else `1 − smoothstep(0,1,(t−h)/(1−h))` | Brush (circular tip, `h` = Hardness), Spray (same shader, "Softness"), Eraser (`h` = 0.8, rasterized on the CPU) | **0** |
+| **Plateau + smoothstep** | `1` for `t ≤ h`, else `1 − smoothstep(0,1,(t−h)/(1−h))` | Brush (circular tip, `h` = Hardness), Spray (same shader, `h` = 1 − Softness), Eraser (`h` = 0.8, rasterized on the CPU) | **0** |
 | **Hardness-floored quadratic** | `h + (1 − h)(1 − t²)` | Dodge / Burn and Sponge (`h` = 0.5), Clone Stamp (`h` = 0.8), Quick Mask and layer-mask dabs (`h` = the Brush's Hardness, or 0.8 for the eraser) | **`h` — never zero** |
 | **Plain quadratic** | `1 − t²` | Healing Brush | **0** |
 | **Quartic** | `(1 − t²)²` | Smudge | **0** |
@@ -418,7 +418,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Contiguous**: on/off
 - **Graduated**: on/off — when enabled, the wand uses a gradient-aware flood fill that produces partial-coverage selection edges across smooth color transitions, instead of a hard threshold cut
 - **Feather**: 0 - 250 px (shared marquee feather slider; applied after the wand fill)
-- **Shift+click**: adds the new region to the existing selection; **Alt/Option+click**: subtracts it (both combine against the current selection mask via `combineSelections`). Clicking with no modifier replaces the selection, and an Alt-subtract that empties the selection clears it.
+- **Shift+click**: adds the new region to the existing selection; **Alt/Option+click**: subtracts it (both combine against the current selection mask via `combineSelections`). Clicking with no modifier replaces the selection, and an Alt-subtract that empties the selection clears it. Every wand press is a wand click, including one on the selection's transform handles — those belong to the Move tool and the drag-out selection tools (see [Who responds to the handles](#who-responds-to-the-handles)).
 
 ### Quick Selection
 - **Size**: 1 - 100 px (default 20) — **the weakest Size control in the app, and the only one that is a radius rather than a diameter.** It is passed straight in as `radius`, where every paint tool's Size is a diameter the dab shaders halve (`radius = u_size * 0.5`), so Quick Selection's 50 spans twice what a Brush's 50 does. What it actually changes is only the **seed-color sampling box**: `sampleSeedColor` averages a square of half-extent `max(1, round(size / 3))` around the sample point to decide what color to grow from. It is also the one Size slider with no document scaling — the ceiling is a flat 100 px.
@@ -500,18 +500,23 @@ state over it.
 ### Who responds to the handles
 
 - **Move tool** — the only tool that transforms *pixels* through the handles.
-- **Selection tools** (rectangular/elliptical marquee, lasso, magnetic lasso,
-  wand) — grabbing a handle scales the **selection outline only**, leaving
+- **Drag-out selection tools** (rectangular/elliptical marquee, lasso,
+  magnetic lasso) — grabbing a handle scales the **selection outline only**, leaving
   pixels untouched. Only the 8 scale handles respond; rotation handles are
   ignored, so a drag on one falls through and starts a brand-new selection.
   The rebuilt mask is a rectangle or an ellipse depending on which marquee
   tool is active, and the rebuild is coalesced to one allocation + GPU upload
   per animation frame (a full-document mask on a 4K canvas is ~16 MB, so a
   raw pointer-event-rate rebuild would thrash).
-- **Every other tool** (fill, eyedropper, text, …) ignores the handles
-  entirely and dispatches to its own handler. This is deliberate: at low zoom
-  over a small selection the handle hit-radius can cover the whole selection
-  and would otherwise swallow every click (#222).
+- **Every other tool** (Magic Wand, fill, eyedropper, text, …) ignores the
+  handles entirely and dispatches to its own handler, and the canvas keeps
+  that tool's cursor over them. This is deliberate: at low zoom over a small
+  selection the handle hit-radius can cover the whole selection and would
+  otherwise swallow every click (#222). The **Magic Wand** joined this group
+  because it is a click tool: a Shift- or Alt-click on a neighbouring region
+  within 8 screen px of a corner or edge midpoint used to grab the scale
+  handle and do nothing, instead of adding or subtracting that region (fixed
+  in this change).
 
 ### Handles
 
@@ -529,7 +534,9 @@ state over it.
   thin selection's rotate circles are therefore grabbable over their whole
   drawn circle (#1000).
 - **Cursors**: `nwse-resize` / `nesw-resize` on the corners, `ns-resize` /
-  `ew-resize` on the edge midpoints, `crosshair` on the rotation handles.
+  `ew-resize` on the edge midpoints, `crosshair` on the rotation handles —
+  only under the Move tool and the drag-out selection tools, the ones a press
+  on a handle reaches.
 - **Drawing**: a blue (`#00aaff`) quad through the four corners, white filled
   squares (6 px) on the scale handles, white filled circles (5 px radius) on
   the rotation handles. All sizes divide by zoom, so the chrome stays the same
@@ -891,7 +898,7 @@ What keeps this defensible rather than a plain defect is that the two tools hand
 
 **The ceilings are what the difference actually costs.** Coverage is `clamp(stamp × u_exposure, 0, 1)` and `stamp` is exactly 1.0 at the dab center, so the slider maximum is reached literally. Dodge at Exposure 100 therefore writes coverage 1.0, and `rgb += (1 − rgb) × 1` / `rgb ×= (1 − 1)` drives those pixels to **pure white or pure black in one stroke** — the tool's top setting is a wipe, not a strong nudge. Sponge at Strength 100 tops out at 0.25, so one stroke can never move saturation by more than 25 points and a full desaturation takes **four separate strokes** however far the slider is pushed.
 
-The third control in this family is [Spray's "Softness"](#spray), which is the Brush's `hardness` field under a name that inverts its meaning. Between them, the three non-brush dab tools that borrow brush plumbing all rename the control they borrow.
+The third control in this family is [Spray's "Softness"](#spray), which drives the Brush's `hardness` uniform turned around (`1 − softness`), so it reads the right way up under its own name. Between them, the three non-brush dab tools that borrow brush plumbing all rename the control they borrow.
 
 ---
 
@@ -1558,7 +1565,7 @@ A row of icon buttons pinned below the list. Three entries are **conditional**, 
 - **Plain click**: selects only the clicked layer (standard behavior)
 - **Cmd/Ctrl+click**: toggles a layer in/out of the current multi-selection without changing which layer is "active"
 - **Shift+click**: selects the contiguous range from the active layer to the clicked layer
-- **Cmd/Ctrl+A**: selects every layer in the document (the root group is excluded). The handler fires when focus is inside the Layers panel **or when nothing is focused at all** (`document.body`), which is the normal state while drawing. Because the global Edit shortcut for the same chord is a separate `document` listener, in that focus-less case `⌘A` runs **both** actions at once — it selects all layers *and* runs Select All on the canvas. A text input swallows the chord, and **so does live text editing (#844, fixed in #867)**: the on-canvas editor leaves focus on `document.body`, so `⌘A` used to select every layer as well as the text, and that selection outlived the commit — the next nudge or Move drag moved every layer, Background included. The panel's listener now returns early while `textEditing` is set, leaving `⌘A` to the text editor. (Matched lower-case only, so `⇧⌘A` is not the same binding.)
+- **Cmd/Ctrl+A** with keyboard focus inside the Layers panel (for example a layer's drag grip, reached with Tab): selects every layer in the document (the root group is excluded). The global Select All shortcut listens on `window` in the capture phase, so the same press also runs Select All on the canvas. Anywhere else ⌘A is the canvas's Select All alone. With nothing focused (`document.body`, the normal state while drawing and after clicking a layer's row) the panel used to select every layer as well, so the next Move drag — or a nudge once the marquee was gone — moved Background along with the active layer (fixed in this change). Live text editing keeps ⌘A for the text (#844, fixed in #867). (Matched lower-case only, so `⇧⌘A` is not the same binding.) The mouse route to the same multi-selection is to click the top layer and Shift+click the bottom one.
 - **Delete / Backspace** (Layers panel focused): removes every selected layer. The global Delete handler is not suppressed, so this also runs the canvas delete on the active layer in the same keystroke — clearing the selected pixels if a marquee is active, or removing the active layer if not. Two history entries can result from one press.
 - Selected layers can be grouped or reordered together. The active layer remains the target for painting, filters, and adjustments — but **not for the Move tool**, which drags (and arrow-key nudges) every selected unlocked layer at once. See [Move](#move).
 
@@ -1862,7 +1869,7 @@ All three are undoable and auto-switch the target group from pass-through to nor
 - **Major lines every 4 cells**: minor lines draw at `rgba(128, 128, 128, 0.25)` and every fourth at `0.5`, both `1 / zoom` document units wide so they stay a constant 1 screen px at any magnification.
 - **The grid is the first thing drawn on the overlay canvas**, ahead of marching ants, guides, snap lines, transform handles and the brush cursor — so it paints over the artwork but every other piece of overlay chrome paints over it.
 - **Grid size**: default 16 px, changed from a slider in the [options bar](#options-bar) that appears only while the grid is shown — the sole place in the app that can set it. The slider steps through a list of power-of-two stops derived from the document's longest side, so the choices differ per document and the stored size is never re-clamped when the document changes; see the options bar for the stop table and the resulting readout/needle mismatch.
-- **Snap to grid**: on/off (auto-enabled with grid). Every consumer requires **both** Snap to Grid and Show Grid, so hiding the grid silently disables snapping while leaving View → Snap to Grid checked.
+- **Snap to grid**: on/off (turned on by Show Grid until the user toggles Snap themselves; after that the grid never changes it — see the Options Bar's [Snap](#options-bar) checkbox). Every consumer requires **both** Snap to Grid and Show Grid, so hiding the grid silently disables snapping while leaving View → Snap to Grid checked.
 - **Cmd/Ctrl + `'`**: toggle grid visibility from anywhere in the app
 
 ### Rulers
@@ -1964,8 +1971,7 @@ The vertical rail down the far left of the editor body, outside the dock host, a
   The grouping is by role rather than by the registry's own order, and it is maintained by hand in the toolbox rather than derived from the tool registry.
 - **Active tool** is highlighted; clicking a button selects that tool directly (it does not route through the shortcut system).
 - **Every button is a real `<button>`** carrying the same string as both `aria-label` and native `title`, so hovering gives a tooltip and each button is its own tab stop. The rail declares `role="toolbar"` but ships **no arrow-key handler or roving tabindex**, so it does not implement the ARIA toolbar keyboard pattern — reaching the last tool means tabbing through everything before it.
-- **The shortcut letters in those labels are hard-coded literals** (`Brush (B)`, `Eraser (E)`, …), not reads of the shortcut store. Rebinding a tool in the Keyboard Shortcuts modal changes what the key does but **not what the toolbox tooltip claims** — rebind Brush to `K` and its button still advertises `(B)`. The four tools with no default key (Gradient, Elliptical Marquee, Magnetic Lasso, Quick Selection) correctly show a bare label.
-  - **Except one: the Quick Selection button advertises `(Q)`, and that is wrong.** Quick Selection has no `shortcut` in the registry and is not a customizable action, while `Q` is bound to *toggle Quick Mask* — which is the button sitting in the very next group of the same rail, labelled `Enter Quick Mask (Q)`. Two buttons in one toolbar claim the same key; pressing `Q` always toggles Quick Mask and never selects Quick Selection.
+- **The shortcut letters in those labels are hard-coded literals** (`Brush (B)`, `Eraser (E)`, …), not reads of the shortcut store. Rebinding a tool in the Keyboard Shortcuts modal changes what the key does but **not what the toolbox tooltip claims** — rebind Brush to `K` and its button still advertises `(B)`. The four tools with no default key (Gradient, Elliptical Marquee, Magnetic Lasso, Quick Selection) show a bare label. `Q` belongs to the Quick Mask toggle at the bottom of the rail (`Enter Quick Mask (Q)`); the Quick Selection button used to advertise `(Q)` too, although pressing it only ever toggled Quick Mask (#1078, fixed in this change).
 - **No foreground / background swatches.** The toolbox stylesheet still carries `.colors` / `.colorStack` / `.foreground` / `.background` rules from an earlier layout, but nothing renders them — color editing lives in the [Color panel](#color-panel) alone.
 
 ### Options Bar
@@ -1983,7 +1989,7 @@ The 32 px horizontal strip directly under the menu bar, sharing the app header w
 - **Grid size** — appears whenever View → Show Grid is on, and this is the **only place in the app that can change the grid size**. There is no menu item and no preference for it, so the grid has to be visible to be resized.
   - The slider is an **index into a computed list of stops**, not a pixel value. The stops are the powers of two from 2 to 1024, kept when a stop is at most **half the document's longest side** and at least **`floor(longest side ÷ 500)`** — so both the available spacings and the slider's travel change with the document. A 1000 px document offers `2, 4, 8, 16, 32, 64, 128, 256`; by 1500 px the 2 px stop is gone; at 4000 px the list is `8 … 1024`; at the 16384 px maximum only `32 … 1024` survive; and below 4 px the list would be empty, so it falls back to a single 1 px stop.
   - **The readout can disagree with the needle.** The grid size is never re-clamped — it defaults to 16 px and nothing re-derives it when the document changes — so whenever 16 is not a stop (any document whose longest side is under 32 px, and also the 16384 px maximum) the label still reads `16px` and the grid still draws at 16 px, while the needle rests on the nearest stop instead. Touching the slider is what reconciles the two, by snapping the value onto that stop.
-- **Snap** — a checkbox mirroring View → Snap to Grid, shown under the same Show Grid condition. Turning the grid **on** force-enables snapping; turning it off leaves the flag exactly as it was. All eight places that consult it — the three Move-drag paths (whole layer, floating selection, pending transform), arrow-key nudges, marquee drags, and the three transform paths — require **both** flags, so **View → Snap to Grid can sit checked while doing nothing at all**, which is the state you land in by enabling the grid and then hiding it again.
+- **Snap** — a checkbox mirroring View → Snap to Grid, shown under the same Show Grid condition. Turning the grid **on** enables snapping only until the user makes a Snap choice of their own: once Snap has been toggled — this checkbox or View → Snap to Grid, grid shown or not — showing and hiding the grid leave it exactly as the user left it. Turning the grid off never changes it. Showing the grid used to force Snap back on every time, so an unticked Snap returned after a hide/show and arrow-key nudges started jumping a grid cell (fixed in this change). The choice lasts for the session; UI state is not saved. All eight places that consult it — the three Move-drag paths (whole layer, floating selection, pending transform), arrow-key nudges, marquee drags, and the three transform paths — require **both** flags, so **View → Snap to Grid can sit checked while doing nothing at all**, which is the state you land in by enabling the grid and then hiding it again.
 - **Dim pattern** and **Wrap** — the two [seamless-pattern](#seamless-pattern-preview) checkboxes, shown whenever Show Seamless Pattern is on. A divider separates them from the grid controls only when both groups are present.
 
 **Settings the bar shares between tools.** Two controls read as per-tool but are backed by single global values, so setting one wherever it is convenient changes it everywhere else it appears:
@@ -2039,7 +2045,7 @@ Right-clicking the canvas opens a small menu with:
 The menu is suppressed on coarse-pointer devices (touch) so long-press doesn't accidentally open it.
 
 ### Single-Key Shortcuts
-Nineteen tools carry a default single-letter shortcut, and that is the complete set — every tool in the registry with a `shortcut` field: `V` move, `B` brush, `N` pencil, `E` eraser, `G` fill, `I` eyedropper, `S` clone stamp, `H` healing brush, `O` dodge & burn, `Y` sponge, `R` smudge, `M` rectangular marquee, `L` lasso, `W` magic wand, `U` shape, `T` text, `C` crop, `P` path, `J` spray. (Four of the 23 registered tools carry no letter and can only be reached from the [toolbox](#toolbox): **Gradient**, **Elliptical Marquee**, **Magnetic Lasso**, and **Quick Selection** — note that the toolbox nevertheless labels Quick Selection `(Q)`, a key that belongs to Quick Mask.) On top of those, the editor ships these global keys:
+Nineteen tools carry a default single-letter shortcut, and that is the complete set — every tool in the registry with a `shortcut` field: `V` move, `B` brush, `N` pencil, `E` eraser, `G` fill, `I` eyedropper, `S` clone stamp, `H` healing brush, `O` dodge & burn, `Y` sponge, `R` smudge, `M` rectangular marquee, `L` lasso, `W` magic wand, `U` shape, `T` text, `C` crop, `P` path, `J` spray. (Four of the 23 registered tools carry no letter and can only be reached from the [toolbox](#toolbox): **Gradient**, **Elliptical Marquee**, **Magnetic Lasso**, and **Quick Selection**. `Q` toggles Quick Mask.) On top of those, the editor ships these global keys:
 
 - **`X`** — swap foreground and background colors
 - **`D`** — reset foreground/background to the defaults (black / white)

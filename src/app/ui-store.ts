@@ -157,6 +157,8 @@ interface UIState {
    *  operate on the original pixels, not on the already-wrapped result. */
   wrapSeamlessPattern: boolean;
   snapToGrid: boolean;
+  /** Set once the user toggles Snap to Grid; Show Grid then stops turning it on. */
+  hasUserToggledSnapToGrid: boolean;
   snapToLayers: boolean;
   /** Temporary snap alignment lines shown during move/transform. */
   snapLines: readonly SnapLine[];
@@ -335,6 +337,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   dimSeamlessPattern: true,
   wrapSeamlessPattern: false,
   snapToGrid: false,
+  hasUserToggledSnapToGrid: false,
   snapToLayers: false,
   snapLines: [],
   gridSize: 16,
@@ -424,7 +427,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
   toggleGrid: () => set((state) => {
     const showGrid = !state.showGrid;
-    return showGrid ? { showGrid, snapToGrid: true } : { showGrid };
+    if (!showGrid || state.hasUserToggledSnapToGrid) return { showGrid };
+    return { showGrid, snapToGrid: true };
   }),
   togglePixelGrid: () => set((state) => ({ showPixelGrid: !state.showPixelGrid })),
   toggleRulers: () => set((state) => ({ showRulers: !state.showRulers })),
@@ -433,7 +437,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleSeamlessPattern: () => set((state) => ({ showSeamlessPattern: !state.showSeamlessPattern })),
   toggleDimSeamlessPattern: () => set((state) => ({ dimSeamlessPattern: !state.dimSeamlessPattern })),
   toggleWrapSeamlessPattern: () => set((state) => ({ wrapSeamlessPattern: !state.wrapSeamlessPattern })),
-  toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
+  toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid, hasUserToggledSnapToGrid: true })),
   toggleSnapToLayers: () => set((state) => ({ snapToLayers: !state.snapToLayers })),
   setSnapLines: (lines) => set({ snapLines: lines }),
   clearSnapLines: () => set({ snapLines: [] }),

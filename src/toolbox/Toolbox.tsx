@@ -84,7 +84,7 @@ const toolGroups: ToolDef[][] = [
     { id: 'lasso', icon: <Lasso size={ICON_SIZE} />, label: 'Lasso (L)' },
     { id: 'lasso-magnetic', icon: <Magnet size={ICON_SIZE} />, label: 'Magnetic Lasso' },
     { id: 'wand', icon: <Wand2 size={ICON_SIZE} />, label: 'Magic Wand (W)' },
-    { id: 'quick-select', icon: <MousePointerClick size={ICON_SIZE} />, label: 'Quick Selection (Q)' },
+    { id: 'quick-select', icon: <MousePointerClick size={ICON_SIZE} />, label: 'Quick Selection' },
   ],
   [
     { id: 'brush', icon: <Paintbrush size={ICON_SIZE} />, label: 'Brush (B)' },

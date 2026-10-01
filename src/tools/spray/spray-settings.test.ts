@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { clampSpraySetting, DEFAULT_SPRAY_SETTINGS } from './spray-settings';
 
 describe('spray-settings', () => {
-  it('defaults match the legacy flat-store spray defaults', () => {
+  it('defaults paint the same dots as the old hardness-30 default', () => {
     expect(DEFAULT_SPRAY_SETTINGS).toEqual({
       size: 40,
       density: 20,
       opacity: 60,
-      hardness: 30,
+      softness: 70,
     });
   });
 
@@ -39,11 +39,11 @@ describe('spray-settings', () => {
     expect(clampSpraySetting('opacity', 999)).toBe(100);
   });
 
-  it('clamps hardness into [0, 100] — surfaced as "Softness" with min 0', () => {
-    expect(clampSpraySetting('hardness', -10)).toBe(0);
-    expect(clampSpraySetting('hardness', 0)).toBe(0);
-    expect(clampSpraySetting('hardness', 50)).toBe(50);
-    expect(clampSpraySetting('hardness', 100)).toBe(100);
-    expect(clampSpraySetting('hardness', 999)).toBe(100);
+  it('clamps softness into [0, 100]', () => {
+    expect(clampSpraySetting('softness', -10)).toBe(0);
+    expect(clampSpraySetting('softness', 0)).toBe(0);
+    expect(clampSpraySetting('softness', 50)).toBe(50);
+    expect(clampSpraySetting('softness', 100)).toBe(100);
+    expect(clampSpraySetting('softness', 999)).toBe(100);
   });
 });
