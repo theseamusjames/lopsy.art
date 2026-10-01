@@ -42,7 +42,7 @@ import {
   selectionBounds,
 } from '../../selection/selection';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
-import { scalesSelectionOutlineFromHandles } from './handle-tools';
+import { pressGrabsHandle, scalesSelectionOutlineFromHandles } from './handle-tools';
 
 /**
  * Hit-test transform handles on mousedown and set up interaction state.
@@ -63,8 +63,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   const activeTool = uiState.activeTool;
 
   if (scalesSelectionOutlineFromHandles(activeTool)) {
-    // Shift / Alt start a shape to add or subtract, wherever the press lands.
-    if (ctx.shiftKey || ctx.altKey) return null;
+    if (!pressGrabsHandle(activeTool, ctx)) return null;
     return handleSelectionTransformDown(ctx, currentTransform);
   }
 

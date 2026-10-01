@@ -112,6 +112,29 @@ test.describe('Selection add / subtract / intersect modifiers', () => {
     expect(await alphaAt(page, 80, 200)).toBe(0);
   });
 
+  test('holding Shift or Alt over a handle swaps the resize cursor for the tool cursor', async ({ page }) => {
+    const container = page.locator('[data-testid="canvas-container"]');
+    await page.keyboard.press('m');
+    await drag(page, [{ x: 50, y: 50 }, { x: 150, y: 150 }]);
+    // Rest the pointer on the bottom-right scale handle.
+    const handle = await docToScreen(page, 150, 150);
+    await page.mouse.move(handle.x - 1, handle.y - 1);
+    await page.mouse.move(handle.x, handle.y);
+    await expect(container).toHaveClass(/canvasNwseResize/);
+
+    // No pointer movement from here on: the keys alone change the cursor.
+    await page.keyboard.down('Shift');
+    await expect(container).toHaveClass(/canvasCrosshair/);
+    await expect(container).not.toHaveClass(/canvasNwseResize/);
+    await page.keyboard.up('Shift');
+    await expect(container).toHaveClass(/canvasNwseResize/);
+
+    await page.keyboard.down('Alt');
+    await expect(container).toHaveClass(/canvasCrosshair/);
+    await page.keyboard.up('Alt');
+    await expect(container).toHaveClass(/canvasNwseResize/);
+  });
+
   test('Shift+Alt with the Elliptical Marquee keeps only the overlap', async ({ page }) => {
     await page.keyboard.press('m');
     await drag(page, [{ x: 50, y: 50 }, { x: 200, y: 200 }]);
