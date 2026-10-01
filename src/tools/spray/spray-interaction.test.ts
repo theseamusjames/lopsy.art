@@ -23,7 +23,7 @@ vi.mock('../../app/editor-store', () => ({
 
 const ts = {
   settings: {
-    spray: { size: 40, density: 12, opacity: 60, hardness: 30 },
+    spray: { size: 40, density: 12, opacity: 60, softness: 70 },
   },
   foregroundColor: { r: 255, g: 0, b: 0, a: 1 },
   addRecentColor: vi.fn(),
@@ -65,7 +65,7 @@ beforeEach(() => {
   editorState.notifyRender.mockClear();
   ts.addRecentColor.mockClear();
   ts.foregroundColor = { r: 255, g: 0, b: 0, a: 1 };
-  ts.settings = { spray: { size: 40, density: 12, opacity: 60, hardness: 30 } };
+  ts.settings = { spray: { size: 40, density: 12, opacity: 60, softness: 70 } };
 });
 
 afterEach(() => {

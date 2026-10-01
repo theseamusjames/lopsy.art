@@ -643,9 +643,10 @@ while a layer inside it is active. A new layer is always inserted directly
 above the active layer, and inside the group if the active layer is a group.
 Group effects and adjustment layers apply to everything inside the group.
 
-**Guides and grid.** **View → Show Grid** turns snapping on, which quantizes
-marquee drags. Switch it off again before drawing thin or precise shapes. A
-single click on a ruler drops a guide.
+**Guides and grid.** **View → Show Grid** turns snapping on the first time,
+which quantizes marquee drags. Untick **Snap** in the options bar before
+drawing thin or precise shapes; it then stays off when you hide and show the
+grid again. A single click on a ruler drops a guide.
 
 ## Behaviours that trip up agents
 
@@ -668,8 +669,9 @@ These are by design, and the helpers already handle most of them:
   Escape cancels, and plain Enter inserts a newline. Changing font or size
   with a text layer active restyles *that* layer, so set them before you
   click.
-- **`Cmd+A` while editing text also selects every layer.** Don't use it
-  there.
+- **`Cmd+A` selects the canvas, not the layers.** It selects every layer
+  only while keyboard focus is inside the Layers panel, which `h.blur()`
+  clears. While editing text it selects the text.
 - **Escape** cancels text editing and commits a live transform. **`Cmd+D`**
   (the key, not the Select menu item) deselects and commits a transform.
 - **Menus close by clicking their title again**, not with Escape.
