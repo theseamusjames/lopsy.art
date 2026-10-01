@@ -275,7 +275,9 @@ That one thin paper ring is all the seal needs to feel stamped.
 
 ![The words LONGEST NIGHT 21 DECEMBER bent around the seal's ring in cream capitals](28-ring-text.webp)
 
-Pick the **Text** tool, set the foreground to paper, choose **Oswald** at **Size 30**, click near the seal and type `LONGEST NIGHT · 21 DECEMBER · `. While the text is still open, pick the path in the **Path** dropdown in the options bar. The words bend around the circle. Commit the text.
+Pick the **Text** tool, set the foreground to paper, choose **Oswald** at **Size 28**, click near the seal and type `LONGEST NIGHT · 21 DECEMBER · `. While the text is still open, pick the path in the **Path** dropdown in the options bar. The words bend around the circle. Commit the text.
+
+Text on a path only runs as far as its letters do, so at the default spacing the words cover about two thirds of the ring. Open the **Text** panel on the right, select the text layer and set **Letter spacing** to **6** so the phrase wraps the whole circle and the closing dot meets the first letter.
 
 If the words don't meet at the join, add or remove a space at the end.
 
@@ -348,6 +350,8 @@ Looking at the whole piece from a distance is the best editing tool you have.
 
 - Select `Paper Fibers` and lower its opacity to **8%**.
 - Select `Moon Halo` and bring it back down to **18%**.
-- SOLSTICE and its copy sit slightly left of URSA. Select each and tap the right arrow with the Move tool until the left edges line up.
+- SOLSTICE and its copy sit slightly left of URSA and a little narrower. Select each, set **Letter spacing** to **2.4** in the Text panel, then nudge it with the Move tool until both words share the same left and right edges.
+- Move the credit line and its colour swatches so they sit level with each other and the same distance from the headline and the crop marks.
+- Drop the seal and its ring text about 50 px so the badge is centred on the two-line headline.
 
 Then choose **File → Quick Export PNG**.
