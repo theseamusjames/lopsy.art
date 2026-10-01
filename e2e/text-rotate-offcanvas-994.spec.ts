@@ -3,11 +3,14 @@
  * must keep every glyph. #818 grew the float to cover the transformed
  * content for raster layers only, so a text layer's float stayed at the
  * canvas-plus-layer rect and the part of the turned text past the bottom
- * edge was clipped away when ⌘D baked it in.
+ * edge was clipped away when ⌘D baked it in. Text now turns through its
+ * own Move-tool handles and keeps the turn as a transform that re-renders
+ * the glyphs, so nothing can be clipped; this keeps the scenario covered.
  */
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { createDocument, docToScreen, selectTool, setForegroundColor, setToolOption, waitForStore } from './helpers';
+import { findTransformHandle } from './text-edit-helpers';
 
 interface Ink { minX: number; minY: number; maxX: number; maxY: number; count: number }
 
@@ -31,14 +34,6 @@ async function activeLayerInk(page: Page): Promise<Ink & { type: string }> {
       }
     }
     return { minX, minY, maxX, maxY, count, type: layer.type };
-  });
-}
-
-async function readBox(page: Page): Promise<{ x: number; y: number; width: number; height: number; rotation: number }> {
-  return page.evaluate(() => {
-    const ui = (window as unknown as { __uiStore: { getState: () => { transform: { rotation: number; originalBounds: { x: number; y: number; width: number; height: number } } | null } } }).__uiStore;
-    const t = ui.getState().transform!;
-    return { ...t.originalBounds, rotation: t.rotation };
   });
 }
 
@@ -74,26 +69,32 @@ test.describe('rotating a text layer across the canvas edge (#994)', { tag: '@ch
     await page.waitForTimeout(300);
     await selectTool(page, 'move');
 
-    // Top-right rotation handle sits 20 px outside the box corner. Drag it a
-    // quarter turn counter-clockwise about the box centre, snapping with ⌘.
-    const box = await readBox(page);
-    const cx = box.x + box.width / 2;
-    const cy = box.y + box.height / 2;
-    const hx = box.x + box.width + 20;
-    const hy = box.y - 20;
-    const radius = Math.hypot(hx - cx, hy - cy);
-    const target = Math.atan2(hy - cy, hx - cx) - Math.PI / 2;
-    const start = await docToScreen(page, hx, hy);
-    const end = await docToScreen(page, cx + radius * Math.cos(target), cy + radius * Math.sin(target));
+    // The text's own top-right rotation handle sits 20 px outside its line
+    // box. Drag it a quarter turn counter-clockwise about the word's centre,
+    // snapping with ⌘.
+    const cx = (flat.minX + flat.maxX) / 2;
+    const cy = (flat.minY + flat.maxY) / 2;
+    const start = await findTransformHandle(page, 'rotate-top-right', { x: flat.maxX + 20, y: flat.minY - 25 }, 40);
+    const centre = await docToScreen(page, cx, cy);
+    const radius = Math.hypot(start.x - centre.x, start.y - centre.y);
+    const a0 = Math.atan2(start.y - centre.y, start.x - centre.x);
     await page.keyboard.down('Meta');
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
-    await page.mouse.move(end.x, end.y, { steps: 20 });
+    for (let i = 1; i <= 20; i++) {
+      const a = a0 - (Math.PI / 2) * (i / 20);
+      await page.mouse.move(centre.x + radius * Math.cos(a), centre.y + radius * Math.sin(a));
+    }
     await page.mouse.up();
     await page.keyboard.up('Meta');
     await page.waitForTimeout(200);
-    const turned = await readBox(page);
-    expect(turned.rotation).toBeCloseTo(-Math.PI / 2, 3);
+    const transform = await page.evaluate(() => {
+      const store = (window as unknown as { __editorStore: { getState: () => { document: { activeLayerId: string; layers: Array<{ id: string; transform?: { a: number; b: number } }> } } } }).__editorStore;
+      const doc = store.getState().document;
+      return doc.layers.find((l) => l.id === doc.activeLayerId)!.transform!;
+    });
+    expect(transform.a).toBeCloseTo(0, 3);
+    expect(transform.b).toBeCloseTo(-1, 3);
     // The upright word spans ~cy ± flatW/2, well past the 1080 bottom edge.
     expect(cy + flatW / 2).toBeGreaterThan(1080 + 20);
 

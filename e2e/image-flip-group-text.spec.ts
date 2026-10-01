@@ -6,9 +6,10 @@
  *   placeholder texture, so nothing changed. It now mirrors every descendant
  *   about the group's combined content bounds, as one undo step.
  * - On a TEXT layer it mirrored the rendered glyph texture, which the next
- *   re-render from the stored string threw away. Like Edit → Fill and the
- *   filters, it now refuses a live text layer with a toast and no history
- *   row; rasterized, the same layer flips and stays flipped.
+ *   re-render from the stored string threw away. A text layer now keeps its
+ *   flip in its transform (#1117), so it flips and stays live. A group that
+ *   holds live text still refuses with a toast, since the group flip mirrors
+ *   textures.
  */
 import { test, expect, type Page } from './fixtures';
 import {
@@ -106,6 +107,59 @@ function mirrorMismatches(a: LayerAlpha, b: LayerAlpha): number {
   return n;
 }
 
+/** `a` cropped to its opaque texels, so textures with different padding compare. */
+function inkCrop(a: LayerAlpha): LayerAlpha {
+  let minX = Infinity, minY = Infinity, maxX = -1, maxY = -1;
+  for (let y = 0; y < a.height; y++) {
+    for (let x = 0; x < a.width; x++) {
+      if (a.alpha[y * a.width + x]! > 128) {
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+    }
+  }
+  if (maxX < 0) return { width: 0, height: 0, alpha: [] };
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  const alpha: number[] = [];
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) alpha.push(a.alpha[y * a.width + x]!);
+  }
+  return { width, height, alpha };
+}
+
+/** Total alpha in each column of `a`. */
+function columnProfile(a: LayerAlpha): number[] {
+  const out = new Array<number>(a.width).fill(0);
+  for (let y = 0; y < a.height; y++) {
+    for (let x = 0; x < a.width; x++) out[x]! += a.alpha[y * a.width + x]!;
+  }
+  return out;
+}
+
+/** Best Pearson correlation of `p` against `q` shifted by up to ±2 entries. */
+function profileCorrelation(p: number[], q: number[]): number {
+  let best = -1;
+  for (let shift = -2; shift <= 2; shift++) {
+    const shifted = shift >= 0 ? q.slice(shift) : [...new Array<number>(-shift).fill(0), ...q];
+    best = Math.max(best, correlationAt(p, shifted));
+  }
+  return best;
+}
+
+function correlationAt(p: number[], q: number[]): number {
+  const n = Math.min(p.length, q.length);
+  const mp = p.slice(0, n).reduce((s, v) => s + v, 0) / n;
+  const mq = q.slice(0, n).reduce((s, v) => s + v, 0) / n;
+  let num = 0, dp = 0, dq = 0;
+  for (let i = 0; i < n; i++) {
+    num += (p[i]! - mp) * (q[i]! - mq);
+    dp += (p[i]! - mp) ** 2;
+    dq += (q[i]! - mq) ** 2;
+  }
+  return num / Math.sqrt(dp * dq);
+}
+
 const WHITE: [number, number, number] = [255, 255, 255];
 const RED: [number, number, number] = [255, 0, 0];
 const GREEN: [number, number, number] = [0, 255, 0];
@@ -194,7 +248,7 @@ test.describe('Image → Flip on groups and text layers', () => {
     expectNear(await compositeAt(page, 330, 220), WHITE);
   });
 
-  test('Flip on a live text layer is refused with a toast; rasterized, it flips', async ({ page }) => {
+  test('Flip on a live text layer mirrors it and keeps it live; rasterized, it flips', async ({ page }) => {
     await page.keyboard.press('t');
     const before = new Set((await layerSummaries(page)).map((l) => l.id));
     const pos = await docToScreen(page, 80, 120);
@@ -208,7 +262,7 @@ test.describe('Image → Flip on groups and text layers', () => {
     const textId = textLayer!.id;
 
     await page.keyboard.press('v');
-    const glyphs = await readLayerAlpha(page, textId);
+    const glyphs = inkCrop(await readLayerAlpha(page, textId));
     expect(opaqueCount(glyphs)).toBeGreaterThan(100);
     // The glyphs are not left-right symmetric, so a mirror is detectable.
     expect(mirrorMismatches(glyphs, glyphs)).toBeGreaterThan(50);
@@ -216,13 +270,29 @@ test.describe('Image → Flip on groups and text layers', () => {
 
     await imageMenu(page, 'Flip Horizontal');
 
-    const toast = page.locator('[role="status"]').filter({ hasText: 'Text layers must be rasterized before they can be flipped.' });
-    await expect(toast).toBeVisible();
-    expect((await getEditorState(page)).undoStackLength).toBe(undoBefore);
-    const unchanged = await readLayerAlpha(page, textId);
-    expect(unchanged.width).toBe(glyphs.width);
-    expect(unchanged.alpha).toEqual(glyphs.alpha);
+    expect((await getEditorState(page)).undoStackLength).toBe(undoBefore + 1);
+    const flippedLayer = (await getEditorState(page)).document.layers.find((l) => l.id === textId) as unknown as {
+      type: string; transform?: { a: number; d: number };
+    };
+    expect(flippedLayer.type).toBe('text');
+    expect(flippedLayer.transform?.a).toBeCloseTo(-1, 6);
+    expect(flippedLayer.transform?.d).toBeCloseTo(1, 6);
+    // Re-rendered through the flip, the glyphs are the mirror image (give or
+    // take resampled edge texels).
+    const mirrored = inkCrop(await readLayerAlpha(page, textId));
+    expect(Math.abs(mirrored.width - glyphs.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(mirrored.height - glyphs.height)).toBeLessThanOrEqual(1);
+    // The per-column ink profile reads backwards: it matches the original
+    // reversed, not as it was. (Profiles, not texels: the re-render through
+    // the flip resamples the glyphs, softening 1–2 px strokes.)
+    const asMirror = profileCorrelation(columnProfile(glyphs).reverse(), columnProfile(mirrored));
+    const asOriginal = profileCorrelation(columnProfile(glyphs), columnProfile(mirrored));
+    // Measured: ~0.88 against the reversed profile, ~0.06 against the original.
+    expect(asMirror).toBeGreaterThan(0.75);
+    expect(asOriginal).toBeLessThan(0.4);
 
+    await page.keyboard.press('ControlOrMeta+z');
+    await page.waitForTimeout(300);
     await page.locator('[aria-label="Rasterize Layer"]').click();
     await page.waitForTimeout(300);
     expect((await layerSummaries(page)).find((l) => l.id === textId)?.type).toBe('raster');

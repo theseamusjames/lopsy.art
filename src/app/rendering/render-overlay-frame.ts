@@ -7,11 +7,14 @@ import { renderGrid, renderPixelGrid, renderRulers } from './render-grid';
 import { DEFAULT_DPI } from './ruler-units';
 import { renderSelectionAnts, renderTransformHandles, renderMarqueeDraftAnts, drawTransformHandles } from './render-selection';
 import { getLayerTransformBox } from '../interactions/layer-transform';
+import { getTextTransformTarget } from '../interactions/text-transform-handlers';
 import { getMarqueePreview } from '../../tools/marquee/marquee-preview';
 import { createTransformState, type TransformState } from '../../tools/transform/transform';
 import { renderMeshWarpOverlay } from './render-mesh-warp';
 import { renderPathOverlay, renderLassoPreview, renderCropPreview, renderGradientPreview, renderPaintLinePreview, renderBrushCursor, renderStampSourcePreview, renderSymmetryCenter, renderPerspectiveCropOverlay } from './render-overlays';
-import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds } from './render-text-overlay';
+import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds, renderTextHoverFrame } from './render-text-overlay';
+import { measureTextFrame } from '../../engine-wasm/engine-sync';
+import { frameCorners } from '../../tools/text/text-transform';
 import { hitTestTextLayer } from '../../tools/text/text-hit-test';
 import { engineRenderedSize } from '../../tools/text/text-geometry';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './render-guides';
@@ -70,6 +73,9 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
   const guideColor = uiState.guideColor;
   const textEditing = uiState.textEditing;
 
+  // The Move tool's handles around a live text layer replace the selection's.
+  const textTransformTarget = getTextTransformTarget();
+
   const editingLayerIsPathText = textEditing
     && layers.some((l) => l.id === textEditing.layerId && l.type === 'text' && (l as TextLayer).pathId);
 
@@ -116,9 +122,12 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
     }
   } else {
     renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, transform);
-    renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
+    if (!textTransformTarget) renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
     const layerBox = selection.active ? null : getLayerTransformBox();
     if (layerBox) drawTransformHandles(overlayCtx, layerBox, viewport.zoom);
+  }
+  if (textTransformTarget) {
+    drawTransformHandles(overlayCtx, textTransformTarget.state, viewport.zoom);
   }
 
   const meshWarp = uiState.meshWarp;
@@ -147,8 +156,13 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
     renderTextDragOverlay(overlayCtx, textDrag, viewport.zoom);
   }
   if (activeTool === 'text' && !textEditing && !textDrag) {
-    const hoveredText = hitTestTextLayer(layers, cursorPosition, engineRenderedSize(engine));
-    if (hoveredText) {
+    const hoveredText = hitTestTextLayer(
+      layers, cursorPosition, engineRenderedSize(engine), (l) => measureTextFrame(engine, l),
+    );
+    const hoveredFrame = hoveredText?.transform ? measureTextFrame(engine, hoveredText) : null;
+    if (hoveredFrame) {
+      renderTextHoverFrame(overlayCtx, frameCorners(hoveredFrame), viewport.zoom);
+    } else if (hoveredText) {
       const dims = getLayerTextureDimensions(engine, hoveredText.id);
       const texW = dims?.[0] ?? hoveredText.width ?? hoveredText.text.length * hoveredText.fontSize * 0.6;
       const texH = dims?.[1] ?? hoveredText.fontSize * hoveredText.lineHeight * (hoveredText.text.split('\n').length || 1);

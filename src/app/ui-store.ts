@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { RulerUnit } from './rendering/ruler-units';
 import type { Color, Point, Rect, ToolId } from '../types';
 import type { TransformHandle, TransformMode, TransformState } from '../tools/transform/transform';
+import type { TextMatrix } from '../tools/text/text-transform';
 import type { MarqueeShape } from '../tools/marquee/marquee-region';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
@@ -24,7 +25,16 @@ export interface TextEditingState {
   selectionAnchor: number | null;
   isNew: boolean;
   originalVisible: boolean;
+  /**
+   * The edited layer's transform, when it has one. `bounds.x`/`bounds.y`
+   * are then the anchor in document space and layout space maps to the
+   * document through this matrix, so the text is edited in place.
+   */
+  matrix?: TextMatrix | null;
 }
+
+/** Transform modes a live text layer supports; distort/perspective need pixels. */
+export type TextTransformMode = 'free' | 'skew';
 
 export interface TextDragState {
   startX: number;
@@ -189,6 +199,8 @@ interface UIState {
   layerTransform: TransformState | null;
   /** Mode the multi-layer transform box starts in. */
   layerTransformMode: TransformMode;
+  /** What the Move tool's handles do to a text layer: scale/rotate or skew. */
+  textTransformMode: TextTransformMode;
   meshWarp: MeshWarpSession | null;
   tiltShift: TiltShiftSession | null;
   liquify: LiquifySession | null;
@@ -269,6 +281,7 @@ interface UIState {
   setActiveTransformHandle: (handle: TransformHandle | null) => void;
   setLayerTransform: (transform: TransformState | null) => void;
   setLayerTransformMode: (mode: TransformMode) => void;
+  setTextTransformMode: (mode: TextTransformMode) => void;
   setMeshWarp: (session: MeshWarpSession | null) => void;
   updateMeshWarpGrid: (grid: MeshWarpGrid) => void;
   setMeshWarpDragging: (idx: number | null) => void;
@@ -362,6 +375,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   activeTransformHandle: null,
   layerTransform: null,
   layerTransformMode: 'free',
+  textTransformMode: 'free',
   meshWarp: null,
   tiltShift: null,
   liquify: null,
@@ -487,6 +501,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   setActiveTransformHandle: (handle) => set({ activeTransformHandle: handle }),
   setLayerTransform: (layerTransform) => set({ layerTransform }),
   setLayerTransformMode: (layerTransformMode) => set({ layerTransformMode }),
+  setTextTransformMode: (mode) => set({ textTransformMode: mode }),
   setMeshWarp: (session) => set({ meshWarp: session }),
   updateMeshWarpGrid: (grid) =>
     set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, grid } } : {})),

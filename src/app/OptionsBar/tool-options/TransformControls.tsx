@@ -8,6 +8,10 @@ import {
   resolveLayerTransformTargets,
   selectionWantsLayerTransform,
 } from '../../../tools/transform/multi-layer-transform';
+import type { TextMatrix } from '../../../tools/text/text-transform';
+import type { TextTransformMode } from '../../ui-store';
+import { getTextTransformTarget, refusePartialTextMove } from '../../interactions/text-transform-handlers';
+import { transformTextLayerInDocument } from '../../text-layer-transform';
 import { createTransformState, isShapeChangingTransform, mapRectThroughInverse } from '../../../tools/transform/transform';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import {
@@ -40,6 +44,7 @@ import styles from './TransformControls.module.css';
 export function applyGpuTransform(invMatrix: Float32Array): void {
   const engine = getEngine();
   if (!engine) return;
+  if (applyToLiveText(invMatrix)) return;
 
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
@@ -85,6 +90,29 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   selectLayerAlpha(activeLayerId);
 }
 
+/**
+ * Flip / rotate a live text layer by editing its transform instead of lifting
+ * its pixels. Returns true when the request was handled — applied, or
+ * refused because the selection holds only part of the text.
+ */
+function applyToLiveText(invMatrix: Float32Array): boolean {
+  const target = getTextTransformTarget();
+  if (target) {
+    // The buttons pass the inverse; flips and quarter turns are
+    // orthonormal, so the forward map is its transpose.
+    const forward: TextMatrix = {
+      a: invMatrix[0] ?? 1,
+      b: invMatrix[3] ?? 0,
+      c: invMatrix[1] ?? 0,
+      d: invMatrix[4] ?? 1,
+    };
+    transformTextLayerInDocument(target.layer.id, forward, 'Transform');
+    if (useEditorStore.getState().selection.active) selectLayerAlpha(target.layer.id);
+    return true;
+  }
+  return refusePartialTextMove();
+}
+
 export function rotateSelection(dir: 'cw' | 'ccw'): void {
   const matrix = dir === 'cw'
     ? new Float32Array([0, -1, 0, 1, 0, 0, 0, 0, 1])
@@ -127,15 +155,28 @@ function useWantsLayerTransform(): boolean {
   return selectionWantsLayerTransform(layers, ids) && resolveLayerTransformTargets(layers, ids).length > 0;
 }
 
+const TEXT_MODES: { id: TextTransformMode; label: string }[] = [
+  { id: 'free', label: 'Free' },
+  { id: 'skew', label: 'Skew' },
+];
+
 export function TransformControls() {
   const selectionActive = useEditorStore((s) => s.selection.active);
+  const isLiveTextActive = useEditorStore((s) => {
+    const layer = s.document.layers.find((l) => l.id === s.document.activeLayerId);
+    return layer?.type === 'text' && !layer.pathId;
+  });
   const transform = useUIStore((s) => s.transform);
   const setTransform = useUIStore((s) => s.setTransform);
   const layerTransformMode = useUIStore((s) => s.layerTransformMode);
   const setLayerTransformMode = useUIStore((s) => s.setLayerTransformMode);
   const isLayerBox = useWantsLayerTransform();
+  const textMode = useUIStore((s) => s.textTransformMode);
+  const setTextMode = useUIStore((s) => s.setTextTransformMode);
+  // Several selected layers get the shared box; one text layer gets its own.
+  const showsTextModes = isLiveTextActive && !isLayerBox;
 
-  if (!selectionActive && !isLayerBox) return null;
+  if (!selectionActive && !isLayerBox && !isLiveTextActive) return null;
 
   const currentMode = isLayerBox ? layerTransformMode : (transform?.mode ?? 'free');
 
@@ -181,7 +222,23 @@ export function TransformControls() {
           onClick={() => handleFlip('vertical')}
         />
       </div>
-      {(transform || isLayerBox) && (
+      {showsTextModes && (
+        <div className={styles.modeGroup}>
+          {TEXT_MODES.map(({ id, label }) => (
+            <button
+              key={id}
+              className={`${styles.modeButton} ${textMode === id ? styles.active : ''}`}
+              onClick={() => setTextMode(id)}
+              type="button"
+              aria-pressed={textMode === id}
+              aria-label={`Transform mode: ${label}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {(transform || isLayerBox) && !showsTextModes && (
         <div className={styles.modeGroup}>
           {MODES.map(({ id, label }) => (
             <button

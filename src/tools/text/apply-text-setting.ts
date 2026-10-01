@@ -18,6 +18,7 @@ import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../..
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 import type { TextSettings } from './text-settings';
 import type { TextAlign, TextLayer } from '../../types';
+import { placementProps } from './text-transform';
 
 /** TextSettings keys that map onto a TextLayer property, and how. */
 const SETTING_TO_LAYER = {
@@ -118,14 +119,14 @@ function rerenderLayer(oldLayer: TextLayer, newLayer: TextLayer): Anchored | nul
   if (dragAnchor && dragAnchor.layerId === newLayer.id) {
     const pos = placeTextLayerAtAnchor(engine, newLayer, dragAnchor.anchorX, dragAnchor.anchorY);
     if (pos) {
-      editor.updateTextLayerProperties(newLayer.id, { x: pos.x, y: pos.y });
+      editor.updateTextLayerProperties(newLayer.id, placementProps(pos));
       return { x: pos.x, y: pos.y, anchorX: dragAnchor.anchorX, anchorY: dragAnchor.anchorY };
     }
     return null;
   }
 
   const result = rerenderCommittedTextLayerAnchored(engine, oldLayer, newLayer);
-  if (result) editor.updateTextLayerProperties(newLayer.id, { x: result.x, y: result.y });
+  if (result) editor.updateTextLayerProperties(newLayer.id, placementProps(result));
   return result;
 }
 
@@ -183,7 +184,7 @@ function refreshTextAfterFontLoad(
       // Force a re-shape (see above), then re-render anchored with the real font.
       resetTextLayerLayout(engine, layer.id);
       const pos = placeTextLayerAtAnchor(engine, layer, target.anchorX, target.anchorY);
-      if (pos) editor.updateTextLayerProperties(layer.id, { x: pos.x, y: pos.y });
+      if (pos) editor.updateTextLayerProperties(layer.id, placementProps(pos));
     }
   }
 
@@ -206,7 +207,7 @@ function refreshTextAfterFontLoad(
       // double-count the alignment render offset for centered/right-aligned
       // area text (#888).
       const pos = refreshCommittedTextLayerFont(engine, l as TextLayer);
-      if (pos) editor.updateTextLayerProperties(l.id, { x: pos.x, y: pos.y });
+      if (pos) editor.updateTextLayerProperties(l.id, placementProps(pos));
     }
   }
 

@@ -148,7 +148,7 @@ export function renderTransformHandles(
   drawTransformHandles(ctx, transform, zoom);
 }
 
-/** The handle box and its 12 handles, for a selection or a multi-layer transform. */
+/** The handle box and its 12 handles, for a selection, a multi-layer transform or a text layer. */
 export function drawTransformHandles(
   ctx: CanvasRenderingContext2D,
   transform: TransformState,

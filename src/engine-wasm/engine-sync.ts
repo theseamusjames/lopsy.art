@@ -94,6 +94,8 @@ import {
   setTextLayerContent,
   renderTextLayer,
   renderTextLayerToTexture,
+  renderTextLayerTransformed,
+  textLayoutBounds,
   uploadLayerPixels,
   removeTextLayerState,
   getGlyphPositions,
@@ -103,6 +105,20 @@ import type { SelectionData } from '../app/store/types';
 import type { BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import type { Color } from '../types';
 import type { TextLayer } from '../types/layers';
+import type { Point } from '../types';
+import {
+  isIdentityMatrix,
+  matrixOf,
+  rasterScaleFor,
+  scaleTextPropsJson,
+  textAnchorOf,
+  textTransformFor,
+  type TextFrame,
+  type TextMatrix,
+  type TextPlacement,
+} from '../tools/text/text-transform';
+
+export type { TextPlacement };
 import type { StoredPath } from '../types/paths';
 import { pathTextFont, renderTextOnPath } from '../tools/text/render-text-on-path';
 import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from '../tools/text/point-text-align';
@@ -1080,7 +1096,7 @@ export function syncTextLayers(
   letterSpacing: number,
   paragraphSpacing: number,
   vertical: boolean,
-  onPositionChange: (layerId: string, x: number, y: number) => void,
+  onPositionChange: (layerId: string, placement: TextPlacement) => void,
 ): void {
   const tracked = getTracked(engine);
 
@@ -1119,8 +1135,19 @@ export function syncTextLayers(
     vertical,
   });
 
-  const cacheKey = `${layerId}\0${bounds.x}\0${bounds.y}\0${propsJson}`;
+  const matrix = textEditing.matrix ?? null;
+  const matrixKey = matrix ? `${matrix.a},${matrix.b},${matrix.c},${matrix.d}` : '';
+  const cacheKey = `${layerId}\0${bounds.x}\0${bounds.y}\0${matrixKey}\0${propsJson}`;
   if (tracked.editingTextKey === cacheKey) return;
+
+  if (matrix) {
+    const anchor = { x: bounds.x, y: bounds.y };
+    const pos = renderTextTransformedToTexture(engine, layerId, propsJson, anchor, matrix);
+    if (!pos) return;
+    onPositionChange(layerId, { ...pos, transform: textTransformFor(matrix, anchor, pos.x, pos.y) });
+    tracked.editingTextKey = cacheKey;
+    return;
+  }
 
   setTextLayerContent(engine, layerId, propsJson);
 
@@ -1135,12 +1162,102 @@ export function syncTextLayers(
   const desiredX = bounds.x + offsetX;
   const desiredY = bounds.y + offsetY;
 
-  onPositionChange(layerId, desiredX, desiredY);
+  onPositionChange(layerId, { x: desiredX, y: desiredY });
   tracked.editingTextKey = cacheKey;
 }
 
+
+/**
+ * Lay out `propsJson` and place the glyphs through `matrix` at document
+ * `anchor`, uploading the result to the layer texture. Glyphs are always
+ * rasterized upright from the props and resampled once, so the transform
+ * never compounds. Returns the texture's document top-left, or null when
+ * there is nothing to draw.
+ */
+export function renderTextTransformedToTexture(
+  engine: Engine,
+  layerId: string,
+  propsJson: string,
+  anchor: Point,
+  matrix: TextMatrix,
+): { x: number; y: number } | null {
+  // The unscaled layout backs caret, selection and hit-test geometry.
+  setTextLayerContent(engine, layerId, propsJson);
+  if (isIdentityMatrix(matrix)) {
+    const r = renderTextLayerToTexture(engine, layerId, anchor.x, anchor.y);
+    if (r.length !== 4) return null;
+    return { x: anchor.x + r[2]!, y: anchor.y + r[3]! };
+  }
+  // Halve the raster density if the engine refuses the size.
+  for (let scale = rasterScaleFor(matrix); scale >= 0.25; scale /= 2) {
+    const r = renderTextLayerTransformed(
+      engine, layerId, scaleTextPropsJson(propsJson, scale), scale,
+      matrix.a, matrix.b, matrix.c, matrix.d, anchor.x, anchor.y,
+    );
+    if (r.length === 4) return { x: r[2]!, y: r[3]! };
+  }
+  return null;
+}
+
+/** Re-render a transformed text layer from its props with its anchor at `anchor`. */
+function placeTransformedTextLayer(engine: Engine, layer: TextLayer, anchor: Point): TextPlacement | null {
+  const matrix = matrixOf(layer.transform);
+  const pos = renderTextTransformedToTexture(engine, layer.id, textLayerPropsJson(layer), anchor, matrix);
+  if (!pos) return null;
+  return { ...pos, transform: textTransformFor(matrix, anchor, pos.x, pos.y) };
+}
+
+/**
+ * Re-render every transformed text layer at its stored anchor and matrix —
+ * after a document-wide change (Image Size, Rotate Canvas) rewrote their
+ * placement. Returns the updated layer list and the ids it re-rendered.
+ */
+export function rerenderTransformedTextLayers(
+  engine: Engine,
+  layers: readonly Layer[],
+): { layers: Layer[]; changedIds: string[] } {
+  const changedIds: string[] = [];
+  const next = layers.map((l): Layer => {
+    if (l.type !== 'text' || !l.transform || l.pathId) return l;
+    const anchor = textAnchorOf(l)!;
+    const pos = placeTransformedTextLayer(engine, l, anchor);
+    if (!pos) return l;
+    changedIds.push(l.id);
+    return { ...l, x: pos.x, y: pos.y, transform: pos.transform };
+  });
+  return { layers: next, changedIds };
+}
+
+const textFrameCache = new WeakMap<TextLayer, TextFrame | null>();
+
+/**
+ * The layout frame of a committed text layer — anchor, matrix and layout box
+ * — measured with the engine. Upright layers recover their anchor from the
+ * render offset (`x = anchor + offset`). Cached per layer object, which the
+ * store replaces on every change.
+ */
+export function measureTextFrame(engine: Engine, layer: TextLayer): TextFrame | null {
+  if (textFrameCache.has(layer)) return textFrameCache.get(layer) ?? null;
+  const frame = computeTextFrame(engine, layer);
+  textFrameCache.set(layer, frame);
+  return frame;
+}
+
+function computeTextFrame(engine: Engine, layer: TextLayer): TextFrame | null {
+  if (layer.pathId || layer.text.trim().length === 0) return null;
+  setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
+  const b = textLayoutBounds(engine, layer.id);
+  if (b.length !== 4 || !(b[2]! > 0) || !(b[3]! > 0)) return null;
+  const box = { x: b[0]!, y: b[1]!, width: b[2]!, height: b[3]! };
+  const anchor = textAnchorOf(layer);
+  if (anchor) return { anchor, matrix: matrixOf(layer.transform), box };
+  const r = renderTextLayer(engine, layer.id);
+  if (r.length !== 4) return null;
+  return { anchor: { x: layer.x - r[2]!, y: layer.y - r[3]! }, matrix: matrixOf(undefined), box };
+}
+
 /** Serialize a committed text layer's properties into the engine props JSON. */
-function textLayerPropsJson(layer: TextLayer): string {
+export function textLayerPropsJson(layer: TextLayer): string {
   return JSON.stringify({
     text: layer.text,
     fontFamily: layer.fontFamily,
@@ -1206,7 +1323,15 @@ export function rerenderCommittedTextLayerAnchored(
   engine: Engine,
   oldLayer: TextLayer,
   newLayer: TextLayer,
-): { x: number; y: number; anchorX: number; anchorY: number } | null {
+): (TextPlacement & { anchorX: number; anchorY: number }) | null {
+  // A transformed layer stores its anchor; no measuring needed.
+  const storedAnchor = textAnchorOf(oldLayer) ?? textAnchorOf(newLayer);
+  if (storedAnchor && newLayer.transform) {
+    const placed = placeTransformedTextLayer(engine, newLayer, storedAnchor);
+    if (!placed) return null;
+    return { ...placed, anchorX: storedAnchor.x, anchorY: storedAnchor.y };
+  }
+
   // Recover the anchor from the current (old) content's render offset.
   setTextLayerContent(engine, oldLayer.id, textLayerPropsJson(oldLayer));
   const oldBounds = renderTextLayer(engine, oldLayer.id);
@@ -1216,7 +1341,7 @@ export function rerenderCommittedTextLayerAnchored(
 
   const pos = placeTextLayerAtAnchor(engine, newLayer, anchorX, anchorY);
   if (!pos) return null;
-  return { x: pos.x, y: pos.y, anchorX, anchorY };
+  return { ...pos, anchorX, anchorY };
 }
 
 /**
@@ -1249,7 +1374,12 @@ export function alignChangeAnchorShift(engine: Engine, layer: TextLayer, newAlig
 export function refreshCommittedTextLayerFont(
   engine: Engine,
   layer: TextLayer,
-): { x: number; y: number } | null {
+): TextPlacement | null {
+  const storedAnchor = textAnchorOf(layer);
+  if (storedAnchor) {
+    resetTextLayerLayout(engine, layer.id);
+    return placeTransformedTextLayer(engine, layer, storedAnchor);
+  }
   setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
   const oldBounds = renderTextLayer(engine, layer.id);
   const anchorX = oldBounds.length === 4 ? layer.x - oldBounds[2]! : layer.x;
@@ -1268,7 +1398,8 @@ export function placeTextLayerAtAnchor(
   layer: TextLayer,
   anchorX: number,
   anchorY: number,
-): { x: number; y: number } | null {
+): TextPlacement | null {
+  if (layer.transform) return placeTransformedTextLayer(engine, layer, { x: anchorX, y: anchorY });
   setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
   // #757: renderTextLayerToTexture rasterizes and uploads in one WASM call.
   const bounds = renderTextLayerToTexture(engine, layer.id, anchorX, anchorY);

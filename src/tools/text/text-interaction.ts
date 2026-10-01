@@ -1,6 +1,6 @@
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
-import type { Point, TextLayer } from '../../types';
+import type { Layer, Point, TextLayer } from '../../types';
 import { useUIStore, type TextEditingState } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
@@ -16,8 +16,18 @@ import {
   renderTextLayer,
   renderTextLayerToTexture,
   textHitPosition,
+  textLayoutBounds,
   getLayerTextureDimensions,
 } from '../../engine-wasm/wasm-bridge';
+import { measureTextFrame, renderTextTransformedToTexture } from '../../engine-wasm/engine-sync';
+import {
+  docToLayout,
+  frameContains,
+  matrixOf,
+  textAnchorOf,
+  textTransformFor,
+  type TextMatrix,
+} from './text-transform';
 import { utf8ToUtf16 } from '../../engine-wasm/text-offset';
 import {
   captureLayerGpu,
@@ -133,12 +143,55 @@ export function resetTextInteractionState(): void {
   preEdit = null;
 }
 
+/** Map a document point into the edited text's layout space. */
+function editingLayoutPoint(editing: TextEditingState, canvasPos: Point): Point {
+  const anchor = { x: editing.bounds.x, y: editing.bounds.y };
+  if (editing.matrix) {
+    const local = docToLayout({ anchor, matrix: editing.matrix }, canvasPos);
+    if (local) return local;
+  }
+  return { x: canvasPos.x - anchor.x, y: canvasPos.y - anchor.y };
+}
+
 /** Map a document-space point to a UTF-16 offset in the edited text via the engine. */
-function hitTestOffset(layerId: string, text: string, boundsX: number, boundsY: number, canvasPos: Point): number {
+function hitTestOffset(editing: TextEditingState, canvasPos: Point): number {
   const engine = getEngine();
-  if (!engine) return text.length;
-  const byte = textHitPosition(engine, layerId, canvasPos.x - boundsX, canvasPos.y - boundsY);
-  return byte >= 0 ? utf8ToUtf16(text, byte) : text.length;
+  if (!engine) return editing.text.length;
+  const local = editingLayoutPoint(editing, canvasPos);
+  const byte = textHitPosition(engine, editing.layerId, local.x, local.y);
+  return byte >= 0 ? utf8ToUtf16(editing.text, byte) : editing.text.length;
+}
+
+/** Slack (document px) around the edited text that still counts as a click inside it. */
+const EDIT_HIT_SLOP = 2;
+
+/**
+ * True when a click lands on the text being edited. Transformed text is tested
+ * against its layout box in layout space, so a click in the empty corners of
+ * a rotated layer's texture still commits.
+ */
+function isInsideEditedText(editing: TextEditingState, layer: TextLayer, canvasPos: Point): boolean {
+  const engine = getEngine();
+  if (!engine) return false;
+  if (editing.matrix) {
+    const b = textLayoutBounds(engine, editing.layerId);
+    if (b.length !== 4 || !(b[2]! > 0) || !(b[3]! > 0)) return false;
+    const frame = {
+      anchor: { x: editing.bounds.x, y: editing.bounds.y },
+      matrix: editing.matrix,
+      box: { x: b[0]!, y: b[1]!, width: b[2]!, height: b[3]! },
+    };
+    return frameContains(frame, canvasPos, EDIT_HIT_SLOP);
+  }
+  // Hit-test against the live GPU texture bounds — during editing the layer's
+  // `text` field is still empty (the buffer lives in `textEditing`), so
+  // hitTestTextLayer would compute a zero-width box.
+  const dims = getLayerTextureDimensions(engine, editing.layerId);
+  const texW = dims && dims.length >= 2 ? dims[0]! : 0;
+  const texH = dims && dims.length >= 2 ? dims[1]! : 0;
+  return texW > 1 && texH > 1
+    && canvasPos.x >= layer.x - EDIT_HIT_SLOP && canvasPos.x <= layer.x + texW + EDIT_HIT_SLOP
+    && canvasPos.y >= layer.y - EDIT_HIT_SLOP && canvasPos.y <= layer.y + texH + EDIT_HIT_SLOP;
 }
 
 /**
@@ -167,6 +220,11 @@ export function committedTextLayerName(
 ): string {
   const isAutoNamed = isNew || currentName === textLayerNameFromContent(previousText);
   return isAutoNamed ? textLayerNameFromContent(nextText) : currentName;
+}
+
+function currentTransformOf(layers: readonly Layer[], layerId: string): TextLayer['transform'] {
+  const layer = layers.find((l) => l.id === layerId);
+  return layer?.type === 'text' ? layer.transform : undefined;
 }
 
 /** Commit the current text editing session: render text to pixels and update the layer. */
@@ -206,6 +264,7 @@ export function commitTextEditing(): void {
   const areaWidth = editing.bounds.width;
   let finalX = editing.bounds.x;
   let finalY = editing.bounds.y;
+  let finalTransform = currentTransformOf(editorState.document.layers, editing.layerId);
 
   // Check if this text layer is bound to a path — if so, skip the normal
   // WASM text render (syncPathTextLayers handles the texture) and keep the
@@ -240,16 +299,26 @@ export function commitTextEditing(): void {
         strikethrough: text.strikethrough,
         vertical: text.vertical,
       });
-      setTextLayerContent(engine, editing.layerId, propsJson);
-      // #757: single WASM call renders + uploads without the JS round-trip.
-      const boundsResult = renderTextLayerToTexture(
-        engine, editing.layerId, editing.bounds.x, editing.bounds.y,
-      );
-      if (boundsResult.length === 4) {
-        const offsetX = boundsResult[2]!;
-        const offsetY = boundsResult[3]!;
-        finalX = editing.bounds.x + offsetX;
-        finalY = editing.bounds.y + offsetY;
+      if (editing.matrix) {
+        const anchor = { x: editing.bounds.x, y: editing.bounds.y };
+        const pos = renderTextTransformedToTexture(engine, editing.layerId, propsJson, anchor, editing.matrix);
+        if (pos) {
+          finalX = pos.x;
+          finalY = pos.y;
+          finalTransform = textTransformFor(editing.matrix, anchor, pos.x, pos.y);
+        }
+      } else {
+        setTextLayerContent(engine, editing.layerId, propsJson);
+        // #757: single WASM call renders + uploads without the JS round-trip.
+        const boundsResult = renderTextLayerToTexture(
+          engine, editing.layerId, editing.bounds.x, editing.bounds.y,
+        );
+        if (boundsResult.length === 4) {
+          const offsetX = boundsResult[2]!;
+          const offsetY = boundsResult[3]!;
+          finalX = editing.bounds.x + offsetX;
+          finalY = editing.bounds.y + offsetY;
+        }
       }
     } else {
       // Fallback: use position set by the last syncTextLayers call if engine unavailable.
@@ -283,6 +352,7 @@ export function commitTextEditing(): void {
     width: areaWidth,
     x: finalX,
     y: finalY,
+    transform: finalTransform,
     visible: true,
     underline: textForLayer.underline,
     strikethrough: textForLayer.strikethrough,
@@ -308,20 +378,9 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     const editingLayer = editorState.document.layers.find(
       (l): l is TextLayer => l.id === editing.layerId && l.type === 'text',
     );
-    // Hit-test against the live GPU texture bounds — during editing the layer's
-    // `text` field is still empty (the buffer lives in `textEditing`), so
-    // hitTestTextLayer would compute a zero-width box.
-    const engine = getEngine();
-    const dims = editingLayer && engine ? getLayerTextureDimensions(engine, editing.layerId) : null;
-    const texW = dims && dims.length >= 2 ? dims[0]! : 0;
-    const texH = dims && dims.length >= 2 ? dims[1]! : 0;
-    const insideEditing = !!editingLayer && texW > 1 && texH > 1
-      && canvasPos.x >= editingLayer.x - 2 && canvasPos.x <= editingLayer.x + texW + 2
-      && canvasPos.y >= editingLayer.y - 2 && canvasPos.y <= editingLayer.y + texH + 2;
-
-    if (editingLayer && insideEditing) {
+    if (editingLayer && isInsideEditedText(editing, editingLayer, canvasPos)) {
       editingGesture = true;
-      const pos = hitTestOffset(editing.layerId, editing.text, editing.bounds.x, editing.bounds.y, canvasPos);
+      const pos = hitTestOffset(editing, canvasPos);
 
       const t = now();
       const isDoubleClick = (ctx.clickDetail ?? 0) >= 2
@@ -377,6 +436,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     editorState.document.layers,
     canvasPos,
     hitEngine ? engineRenderedSize(hitEngine) : undefined,
+    hitEngine ? (layer) => measureTextFrame(hitEngine, layer) : undefined,
   );
   if (hitLayer) {
     loadTextSettingsFromLayer(hitLayer);
@@ -399,8 +459,16 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     // vs 2px), which would give wrong anchor recovery.
     let boundsX = hitLayer.x;
     let boundsY = hitLayer.y;
+    let matrix: TextMatrix | null = null;
     const reEditEngine = getEngine();
-    if (reEditEngine && hitLayer.text.trim().length > 0) {
+    const storedAnchor = textAnchorOf(hitLayer);
+    if (storedAnchor) {
+      // A transformed layer keeps its anchor, so the text is edited in place
+      // with its rotation / scale instead of snapping upright.
+      boundsX = storedAnchor.x;
+      boundsY = storedAnchor.y;
+      matrix = matrixOf(hitLayer.transform);
+    } else if (reEditEngine && hitLayer.text.trim().length > 0) {
       const reEditPropsJson = JSON.stringify({
         text: hitLayer.text,
         fontFamily: hitLayer.fontFamily,
@@ -436,6 +504,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
       selectionAnchor: null,
       isNew: false,
       originalVisible: hitLayer.visible,
+      matrix,
     };
     beginEditSession(editingState, hitLayer);
     editorState.notifyRender();
@@ -472,7 +541,7 @@ export function handleTextMove(state: InteractionState, canvasPos: Point): void 
       dragSelectState.active = false;
       return;
     }
-    const pos = hitTestOffset(editing.layerId, editing.text, editing.bounds.x, editing.bounds.y, canvasPos);
+    const pos = hitTestOffset(editing, canvasPos);
     uiState.updateTextEditingSelection(editing.text, pos, dragSelectState.anchorPos);
     useEditorStore.getState().notifyRender();
     return;

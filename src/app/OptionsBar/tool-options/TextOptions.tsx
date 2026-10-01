@@ -8,6 +8,7 @@ import { useFontEntry } from '../../local-fonts-store';
 import { extractFamilyName } from '../../../utils/font-loader';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { rerenderCommittedTextLayer, invalidatePathTextCache, textLayerAnchor } from '../../../engine-wasm/engine-sync';
+import { textAnchorOf } from '../../../tools/text/text-transform';
 import {
   applyTextSetting,
   applyTextFontFamily,
@@ -70,17 +71,19 @@ export function TextOptions() {
       if (val) {
         // Unbinding re-renders at prePathX/Y as the text anchor, so store the
         // anchor — not the texture's top-left, which sits a render offset
-        // (half the block for centred text) away from it.
+        // (half the block for centred text) away from it. The path places
+        // every glyph, so a transform has nothing left to do and is dropped.
         const engine = getEngine();
         const anchor = editingLayer.prePathX !== undefined ? null
           : textEditing ? { x: textEditing.bounds.x, y: textEditing.bounds.y }
-          : engine ? textLayerAnchor(engine, editingLayer) : null;
+          : textAnchorOf(editingLayer) ?? (engine ? textLayerAnchor(engine, editingLayer) : null);
         updateTextLayerProperties(editingLayerId, {
           pathId: val,
           prePathX: editingLayer.prePathX ?? anchor?.x ?? editingLayer.x,
           prePathY: editingLayer.prePathY ?? anchor?.y ?? editingLayer.y,
           pathAnchorX: undefined,
           pathAnchorY: undefined,
+          transform: undefined,
         });
       } else {
         const restoreX = editingLayer.prePathX ?? editingLayer.x;

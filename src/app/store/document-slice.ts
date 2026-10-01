@@ -8,7 +8,7 @@ import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInser
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
-import { flushLayerSync } from '../../engine-wasm/engine-sync';
+import { flushLayerSync, rerenderTransformedTextLayers } from '../../engine-wasm/engine-sync';
 import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
 import { cancelPrefloat } from '../interactions/prefloat';
 import { releaseSnapshotsForDocumentReset } from './history-slice';
@@ -106,6 +106,27 @@ function applyActionResult(
     );
   }
   set(storeDelta);
+}
+
+/**
+ * Re-render transformed text layers after a document-wide change rewrote
+ * their placement, marking them dirty so the next snapshot copies the new
+ * textures.
+ */
+function rerenderTransformedText(
+  get: () => import('./types').EditorState,
+  set: (partial: Partial<import('./types').EditorState>) => void,
+): void {
+  const engine = getEngine();
+  if (!engine) return;
+  const s = get();
+  const { layers, changedIds } = rerenderTransformedTextLayers(engine, s.document.layers);
+  if (changedIds.length === 0) return;
+  set({
+    document: { ...s.document, layers },
+    dirtyLayerIds: new Set([...s.dirtyLayerIds, ...changedIds]),
+    renderVersion: s.renderVersion + 1,
+  });
 }
 
 /**
@@ -847,6 +868,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+    rerenderTransformedText(get, set);
   },
 
   convertColorMode: (newMode, options) => {

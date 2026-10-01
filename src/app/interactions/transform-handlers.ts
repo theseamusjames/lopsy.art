@@ -85,7 +85,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     return null;
   }
 
-  const hit = hitTestMoveHandles(canvasPos, currentTransform, editorState.viewport.zoom);
+  const hit = hitTestTransformHandle(canvasPos, currentTransform, editorState.viewport.zoom);
 
   if (!hit) {
     return null;
@@ -189,13 +189,13 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 }
 
 /**
- * The Move tool's handle under `canvasPos`, if any. Caps the handle radius so
- * a click near the centre of a small box can't hit multiple handles at once:
- * the 8/zoom screen-space heuristic breaks at low zoom because the doc-space
- * radius can exceed the box's half-extent, making every click on it register
- * as a handle hit.
+ * Hit-test the Move tool's transform handles at `zoom`. The radius is capped
+ * so a click near the centre of a small box can't hit several handles at
+ * once: the 8/zoom screen-space heuristic breaks at low zoom because the
+ * doc-space radius can exceed the box's half-extent, making every click on
+ * it register as a handle hit.
  */
-function hitTestMoveHandles(canvasPos: Point, transform: TransformState, zoom: number): TransformHandle | null {
+export function hitTestTransformHandle(canvasPos: Point, transform: TransformState, zoom: number): TransformHandle | null {
   const bounds = getTransformedBounds(transform);
   const halfMin = Math.min(bounds.width, bounds.height) / 2;
   const handleRadius = Math.max(1, Math.min(8 / zoom, halfMin * 0.8));
@@ -219,7 +219,7 @@ function handleLayerTransformDown(ctx: InteractionContext): InteractionState | n
   const box = getLayerTransformBox();
   if (!box) return null;
   const editorState = useEditorStore.getState();
-  const hit = hitTestMoveHandles(canvasPos, box, editorState.viewport.zoom);
+  const hit = hitTestTransformHandle(canvasPos, box, editorState.viewport.zoom);
   if (!hit) return null;
 
   const startAngle = isRotateHandle(hit) ? computeRotation(canvasPos, box) - box.rotation : 0;

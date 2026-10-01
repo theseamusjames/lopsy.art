@@ -312,10 +312,11 @@ test.describe('Text — add, move, layer, duplicate', () => {
     await selectMoveTool(page);
     await page.waitForTimeout(50);
 
-    // Drag from doc (150, 120) to doc (400, 300) using real mouse events.
-    // The move tool operates on the active layer.
-    const dragStart = await docToScreen(page, 150, 120);
-    const dragEnd = await docToScreen(page, 400, 300);
+    // Drag the text body by (+250, +180) using real mouse events. Start
+    // inside the text, clear of its corner and edge transform handles — the
+    // click point (150, 120) is the text box's top-left handle.
+    const dragStart = await docToScreen(page, 175, 135);
+    const dragEnd = await docToScreen(page, 425, 315);
     await page.mouse.move(dragStart.x, dragStart.y);
     await page.mouse.down();
     await page.mouse.move(dragEnd.x, dragEnd.y, { steps: 15 });
@@ -459,8 +460,9 @@ test.describe('Text — add, move, layer, duplicate', () => {
     await selectMoveTool(page);
     await page.waitForTimeout(50);
 
-    // Drag the duplicate from its position (same as original) to doc (500, 400).
-    const dupStartScreen = await docToScreen(page, duplicateLayer!.x + 10, duplicateLayer!.y + 10);
+    // Drag the duplicate by its body (clear of the text's corner and edge
+    // transform handles) to doc (500, 400).
+    const dupStartScreen = await docToScreen(page, duplicateLayer!.x + 40, duplicateLayer!.y + 15);
     const dupEndScreen = await docToScreen(page, 500, 400);
     await page.mouse.move(dupStartScreen.x, dupStartScreen.y);
     await page.mouse.down();

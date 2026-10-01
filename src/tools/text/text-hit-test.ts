@@ -1,4 +1,5 @@
 import type { TextLayer, Layer, Point } from '../../types';
+import { frameContains, type TextFrame } from './text-transform';
 
 export interface RenderedSize {
   width: number;
@@ -11,6 +12,9 @@ export interface RenderedSize {
  * padding, positioned at the layer's `x`/`y`.
  */
 export type RenderedSizeLookup = (layerId: string) => RenderedSize | null;
+
+/** Looks up a text layer's layout frame (anchor, matrix, layout box), or null. */
+export type TextFrameLookup = (layer: TextLayer) => TextFrame | null;
 
 /** Slack around the rendered ink box so clicks on antialiased edges still hit. */
 const RENDERED_HIT_SLOP = 4;
@@ -73,10 +77,18 @@ export function hitTestTextLayer(
   layers: readonly Layer[],
   canvasPos: Point,
   getRenderedSize?: RenderedSizeLookup,
+  getFrame?: TextFrameLookup,
 ): TextLayer | null {
   for (let i = layers.length - 1; i >= 0; i--) {
     const layer = layers[i]!;
     if (layer.type !== 'text' || !layer.visible || layer.locked) continue;
+    // A transformed layer's texture is the axis-aligned box around rotated
+    // glyphs; test its own layout box so empty corners don't capture clicks.
+    const frame = layer.transform ? getFrame?.(layer) ?? null : null;
+    if (frame) {
+      if (frameContains(frame, canvasPos, RENDERED_HIT_SLOP)) return layer;
+      continue;
+    }
     const size = getRenderedSize?.(layer.id) ?? null;
     const rect = hasUsableSize(size) ? renderedHitRect(layer, size) : estimatedHitRect(layer);
     if (

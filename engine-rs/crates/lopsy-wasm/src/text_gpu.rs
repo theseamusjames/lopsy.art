@@ -219,6 +219,13 @@ fn render_glyph_unhinted<'a>(
     }).as_ref()
 }
 
+/// Key of the scaled layout a transformed text layer rasterizes from. It is
+/// kept apart from the layer's own key so caret and hit-test geometry stay in
+/// unscaled layout space.
+pub fn raster_key(layer_id: &str) -> String {
+    format!("{layer_id}\u{1}raster")
+}
+
 fn hash_str(s: &str) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -1269,9 +1276,11 @@ impl TextRendererState {
             .unwrap_or_default()
     }
 
-    /// Remove all state for a deleted text layer.
+    /// Remove all state for a deleted text layer, including the scaled
+    /// layout a transformed layer rasterizes from.
     pub fn remove_text_layer(&mut self, layer_id: &str) {
         self.text_layers.remove(layer_id);
+        self.text_layers.remove(&raster_key(layer_id));
     }
 }
 

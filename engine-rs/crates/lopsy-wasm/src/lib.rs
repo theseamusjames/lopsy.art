@@ -21,6 +21,7 @@ pub mod overlay_renderer;
 pub mod glyph_atlas;
 pub mod text_gpu;
 pub mod vertical_forms;
+pub mod text_transform_gpu;
 pub mod woff2;
 pub mod variable_instance;
 pub mod api;

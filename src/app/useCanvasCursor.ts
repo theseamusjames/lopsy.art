@@ -9,6 +9,8 @@ import type { ToolId, Point } from '../types';
 import { showsGrabCursor, type PointerMode } from './pointer-mode';
 import { pressGrabsHandle, usesTransformHandles } from './interactions/handle-tools';
 import { getLayerTransformBox } from './interactions/layer-transform';
+import { getTextTransformTarget } from './interactions/text-transform-handlers';
+import { hitTestTransformHandle } from './interactions/transform-handlers';
 import styles from './App.module.css';
 
 function isPathEditMode(): boolean {
@@ -191,10 +193,16 @@ export function useCanvasCursor(
       const editorState = useEditorStore.getState();
       // With no marquee the Move tool's handles frame the selected layers.
       const currentTransform = editorState.selection.active ? uiState.transform : getLayerTransformBox();
+      const textTarget = getTextTransformTarget();
 
-      // Only the tools a handle press reaches get the resize cursor; the
-      // rest (Wand, Fill, …) get the press, so they keep their own cursor.
-      if (currentTransform && usesTransformHandles(uiState.activeTool)) {
+      if (textTarget) {
+        const hit = hitTestTransformHandle(canvasPos, textTarget.state, editorState.viewport.zoom);
+        if (hit !== uiState.activeTransformHandle) {
+          uiState.setActiveTransformHandle(hit);
+        }
+      } else if (currentTransform && usesTransformHandles(uiState.activeTool)) {
+        // Only the tools a handle press reaches get the resize cursor; the
+        // rest (Wand, Fill, …) get the press, so they keep their own cursor.
         const handleRadius = 8 / editorState.viewport.zoom;
         const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
         if (hit !== uiState.activeTransformHandle) {

@@ -2,6 +2,8 @@ import type { MutableRefObject } from 'react';
 import type { Point, ToolId, Layer, Rect } from '../../types';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
 import type { SelectionCombineMode } from '../../selection/selection';
+import type { LayerHistoryBefore } from '../store/layer-gpu-capture';
+import type { TextFrame } from '../../tools/text/text-transform';
 
 /**
  * Discriminated union describing which canvas gesture is active.
@@ -67,6 +69,20 @@ export type CanvasGesture =
       /** Transforms every selected layer through the multi-layer session
        *  (no marquee) instead of the active layer's floated selection. */
       isLayerTransform: boolean;
+    }
+  | {
+      /**
+       * Move-tool handle drag on a live text layer. Edits the layer's
+       * transform and re-renders its glyphs; no pixels are lifted.
+       */
+      kind: 'textTransform';
+      handle: TransformHandle;
+      /** Where the text sat when the drag began; every step starts from it. */
+      startFrame: TextFrame;
+      /** The layer as the drag found it; becomes the history entry's "before". */
+      before: LayerHistoryBefore;
+      /** Rebuild the layer-alpha selection on release (it was active at the start). */
+      reselectAlpha: boolean;
     };
 
 /**

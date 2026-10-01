@@ -116,6 +116,7 @@ export function deserializeLayer(s: SerializedLayer, formatVersion: number = SUP
       ...(s.prePathY !== undefined && { prePathY: s.prePathY }),
       ...(s.pathAnchorX !== undefined && { pathAnchorX: s.pathAnchorX }),
       ...(s.pathAnchorY !== undefined && { pathAnchorY: s.pathAnchorY }),
+      ...(s.textTransform !== undefined && { transform: s.textTransform }),
     };
     return layer;
   }
