@@ -77,7 +77,7 @@ import type { Color } from '../../types';
 const ts = {
   settings: {
     shape: {
-      mode: 'ellipse' as 'ellipse' | 'polygon',
+      mode: 'ellipse' as 'rectangle' | 'ellipse' | 'polygon',
       output: 'pixels' as 'pixels' | 'path',
       fillColor: { r: 255, g: 0, b: 0, a: 1 } as Color | null,
       strokeColor: { r: 0, g: 0, b: 255, a: 0.5 } as Color | null,
@@ -249,6 +249,15 @@ describe('shape move', () => {
     ts.settings.shape.mode = 'polygon';
     handleShapeMove(makeState(), { x: 80, y: 70 });
     expect(renderShape.mock.calls[0]![2]).toBe(1);
+  });
+
+  it('renders rectangles with mode 2 at the full drag box (#794)', () => {
+    ts.settings.shape.mode = 'rectangle';
+    handleShapeMove(makeState({ startPoint: { x: 50, y: 50 } }), { x: 200, y: 75 });
+    const args = renderShape.mock.calls[0]!;
+    expect(args[2]).toBe(2);
+    expect(args[5]).toBe(300);
+    expect(args[6]).toBe(50);
   });
 
   it('meta key constrains the shape to a circle', () => {
@@ -429,6 +438,29 @@ describe('shape up — path output', () => {
     expect(anchors[0]!.point.x).toBeCloseTo(50);
     expect(anchors[0]!.point.y).toBeCloseTo(30);
     expect(anchors[0]!.handleIn).toBeNull();
+  });
+
+  it('adds a rectangle path whose corners are the drag box, not a diamond (#794)', () => {
+    ts.settings.shape.mode = 'rectangle';
+    handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 200, y: 75 });
+    const [anchors, closed] = editorState.addPath.mock.calls[0]! as [PathAnchor[], boolean];
+    expect(closed).toBe(true);
+    expect(anchors.map((a) => a.point)).toEqual([
+      { x: -100, y: 25 },
+      { x: 200, y: 25 },
+      { x: 200, y: 75 },
+      { x: -100, y: 75 },
+    ]);
+  });
+
+  it('rounds the rectangle path corners with the corner radius', () => {
+    ts.settings.shape.mode = 'rectangle';
+    ts.settings.shape.cornerRadius = 10;
+    handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 200, y: 75 });
+    const [anchors] = editorState.addPath.mock.calls[0]! as [PathAnchor[]];
+    expect(anchors).toHaveLength(8);
+    expect(anchors[0]!.point).toEqual({ x: -90, y: 25 });
+    expect(anchors[1]!.point).toEqual({ x: 190, y: 25 });
   });
 
   it('drops a path that the meta constraint collapsed to nothing', () => {

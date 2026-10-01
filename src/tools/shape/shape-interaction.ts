@@ -14,15 +14,17 @@ import {
   endShapePreview as gpuEndShapePreview,
   getLayerEngineBounds,
 } from '../../engine-wasm/wasm-bridge';
-import { ellipseToPathAnchors, polygonToPathAnchors } from './shape';
+import { ellipseToPathAnchors, polygonToPathAnchors, rectangleToPathAnchors } from './shape';
 import type { ShapeMode } from './shape';
 import type { PathAnchor } from '../path/path';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 
 const CLICK_THRESHOLD = 4;
 
+const SHAPE_TYPE_IDS: Record<ShapeMode, number> = { ellipse: 0, polygon: 1, rectangle: 2 };
+
 function shapeModeToU32(mode: ShapeMode): number {
-  return mode === 'ellipse' ? 0 : 1;
+  return SHAPE_TYPE_IDS[mode];
 }
 
 /** Snap an edge point so the bounding rectangle preserves the locked aspect. */
@@ -238,6 +240,8 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
     let anchors: PathAnchor[];
     if (shape.mode === 'ellipse') {
       anchors = ellipseToPathAnchors(cx, cy, rx, ry);
+    } else if (shape.mode === 'rectangle') {
+      anchors = rectangleToPathAnchors(cx, cy, rx, ry, shape.cornerRadius);
     } else {
       anchors = polygonToPathAnchors(cx, cy, rx, ry, shape.polygonSides);
     }
