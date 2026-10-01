@@ -1675,14 +1675,16 @@ after itself, by calling `clearSelection()` once the crop lands.
   into it; `x` / `y` are never touched. A layer smaller than the canvas
   therefore flips in place rather than moving to the opposite side of the
   document.
-- **Known defect — a layer smaller than the document fills with a squashed
-  copy of the composite (#795; fixed in #808, reverted by #839).**
-  `flip_texture` renders the flipped `w × h` image into the top-left of the
-  document-sized `scratch_a` texture, then blits the **whole** scratch — stale
-  content included — back into the `w × h` layer texture with a full-quad
-  draw, shrinking it to fit. A freshly pasted 120 × 120 layer flipped straight
-  after the paste therefore shows a miniature of the entire document. Only a
-  layer exactly the document's size comes out right.
+- **Any texture size mirrors exactly, pasted layers included (#795, fixed in
+  #1050).** `flip_texture` first sizes `scratch_a` / `scratch_b` to the
+  layer's own `w × h` (`ensure_scratch_size`), renders the flipped image into
+  `scratch_a`, and copies it back with a full-quad draw, so the copy is 1:1
+  and touches nothing but the layer's own pixels. Before, scratch was left
+  document-sized by the last composite and the copy back shrank all of it —
+  stale composite included — into the layer: a freshly pasted 120 × 120 layer
+  came out as a miniature of the whole document, and a paste wider or taller
+  than the canvas was squashed by `texture / document` and shifted. A live
+  marquee (such as the one a paste leaves) does not limit the menu flip.
 
 ### Canvas Size and Crop reset every raster layer to full canvas
 
