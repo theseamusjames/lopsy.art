@@ -10,6 +10,9 @@ import { guardPixelWrite } from '../../layers/paint-target';
 /**
  * Stroke a path onto a layer. Anchors are in document space —
  * they are translated to layer-local coordinates before rasterizing.
+ * Refuses (with the usual toast) a layer that can't take pixel writes:
+ * a text layer's glyphs would be replaced by the stroke, and a group
+ * would get an empty history entry (#1067). Returns whether it stroked.
  */
 export function rasterizePathToLayer(
   anchors: readonly PathAnchor[],
@@ -17,8 +20,10 @@ export function rasterizePathToLayer(
   layerId: string,
   strokeWidth: number,
   color: Color,
-): void {
+): boolean {
   const editorState = useEditorStore.getState();
+  const target = editorState.document.layers.find((l) => l.id === layerId);
+  if (!guardPixelWrite(target)) return false;
   editorState.pushHistory('Stroke Path');
   const imageData = editorState.getOrCreateLayerPixelData(layerId);
   const buf = PixelBuffer.fromImageData(imageData);
@@ -44,6 +49,7 @@ export function rasterizePathToLayer(
   rasterizePath(buf, localAnchors, closed, color, strokeWidth);
 
   editorState.updateLayerPixelData(layerId, buf.toImageData());
+  return true;
 }
 
 function draftAnchorsInDocSpace(anchors: readonly PathAnchor[]): PathAnchor[] {
