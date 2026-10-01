@@ -1,11 +1,14 @@
 /**
- * Image → Flip Horizontal / Vertical on groups:
+ * Image → Flip Horizontal / Vertical on the two layer types it used to get
+ * wrong:
  *
  * - On a GROUP it pushed a history row and flipped the group's own 1×1
  *   placeholder texture, so nothing changed. It now mirrors every descendant
  *   about the group's combined content bounds, as one undo step.
- * - A group holding a live text layer is refused with a toast: the text's
- *   texture is re-rendered from its string, so a mirror would not stick.
+ * - On a TEXT layer it mirrored the rendered glyph texture, which the next
+ *   re-render from the stored string threw away. Like Edit → Fill and the
+ *   filters, it now refuses a live text layer with a toast and no history
+ *   row; rasterized, the same layer flips and stays flipped.
  */
 import { test, expect, type Page } from './fixtures';
 import {
@@ -71,6 +74,36 @@ interface LayerSummary { id: string; type: string; children?: string[] }
 
 async function layerSummaries(page: Page): Promise<LayerSummary[]> {
   return (await getEditorState(page)).document.layers as unknown as LayerSummary[];
+}
+
+interface LayerAlpha { width: number; height: number; alpha: number[] }
+
+async function readLayerAlpha(page: Page, layerId: string): Promise<LayerAlpha> {
+  return page.evaluate(async (lid) => {
+    const read = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id: string) => Promise<{ width: number; height: number; pixels: number[] }>;
+    const r = await read(lid);
+    const alpha: number[] = [];
+    for (let i = 3; i < r.pixels.length; i += 4) alpha.push(r.pixels[i]!);
+    return { width: r.width, height: r.height, alpha };
+  }, layerId);
+}
+
+function opaqueCount(a: LayerAlpha): number {
+  return a.alpha.filter((v) => v > 128).length;
+}
+
+/** Texels whose opaque/transparent state differs between `a` and `b` mirrored left-right. */
+function mirrorMismatches(a: LayerAlpha, b: LayerAlpha): number {
+  let n = 0;
+  for (let y = 0; y < a.height; y++) {
+    for (let x = 0; x < a.width; x++) {
+      const av = a.alpha[y * a.width + x]! > 128;
+      const bv = b.alpha[y * b.width + (b.width - 1 - x)]! > 128;
+      if (av !== bv) n++;
+    }
+  }
+  return n;
 }
 
 const WHITE: [number, number, number] = [255, 255, 255];
@@ -159,6 +192,51 @@ test.describe('Image → Flip on groups and text layers', () => {
     expectNear(await compositeAt(page, 330, 60), BLUE);
     expectNear(await compositeAt(page, 150, 60), WHITE);
     expectNear(await compositeAt(page, 330, 220), WHITE);
+  });
+
+  test('Flip on a live text layer is refused with a toast; rasterized, it flips', async ({ page }) => {
+    await page.keyboard.press('t');
+    const before = new Set((await layerSummaries(page)).map((l) => l.id));
+    const pos = await docToScreen(page, 80, 120);
+    await page.mouse.click(pos.x, pos.y);
+    await page.waitForTimeout(100);
+    await page.keyboard.type('Flip Lp');
+    await page.keyboard.press('Shift+Enter');
+    await page.waitForTimeout(400);
+    const textLayer = (await layerSummaries(page)).find((l) => !before.has(l.id));
+    expect(textLayer?.type).toBe('text');
+    const textId = textLayer!.id;
+
+    await page.keyboard.press('v');
+    const glyphs = await readLayerAlpha(page, textId);
+    expect(opaqueCount(glyphs)).toBeGreaterThan(100);
+    // The glyphs are not left-right symmetric, so a mirror is detectable.
+    expect(mirrorMismatches(glyphs, glyphs)).toBeGreaterThan(50);
+    const undoBefore = (await getEditorState(page)).undoStackLength;
+
+    await imageMenu(page, 'Flip Horizontal');
+
+    const toast = page.locator('[role="status"]').filter({ hasText: 'Text layers must be rasterized before they can be flipped.' });
+    await expect(toast).toBeVisible();
+    expect((await getEditorState(page)).undoStackLength).toBe(undoBefore);
+    const unchanged = await readLayerAlpha(page, textId);
+    expect(unchanged.width).toBe(glyphs.width);
+    expect(unchanged.alpha).toEqual(glyphs.alpha);
+
+    await page.locator('[aria-label="Rasterize Layer"]').click();
+    await page.waitForTimeout(300);
+    expect((await layerSummaries(page)).find((l) => l.id === textId)?.type).toBe('raster');
+    const raster = await readLayerAlpha(page, textId);
+    const rasterUndo = (await getEditorState(page)).undoStackLength;
+
+    await imageMenu(page, 'Flip Horizontal');
+    await page.screenshot({ path: 'e2e/screenshots/image-flip-rasterized-text.png' });
+
+    expect((await getEditorState(page)).undoStackLength).toBe(rasterUndo + 1);
+    const flipped = await readLayerAlpha(page, textId);
+    expect(flipped.width).toBe(raster.width);
+    expect(flipped.height).toBe(raster.height);
+    expect(mirrorMismatches(raster, flipped)).toBe(0);
   });
 
   test('Flip on a group holding a live text layer is refused with a toast', async ({ page }) => {

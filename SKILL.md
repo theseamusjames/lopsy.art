@@ -583,8 +583,8 @@ foreground colour at (x, y), the top-left of the line box. The glyph ink
 starts noticeably lower than y. Any Google Font can be picked by exact family
 name. Wait until the font has downloaded before judging a screenshot: the
 first render can show the fallback. The layer is named after its text (first
-16 characters). Text stays editable, but pixel tools, filters and masks
-refuse it until you click **Rasterize Layer**. That button appears in the
+16 characters). Text stays editable, but pixel tools, filters, Image →
+Flip and masks refuse it until you click **Rasterize Layer**. That button appears in the
 Layers panel toolbar when a text layer is active.
 
 **Layer effects.** `h.effect(layer, name, settings, color)` with `name` one

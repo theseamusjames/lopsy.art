@@ -21,6 +21,7 @@ import { notifyInfo } from '../../notifications-store';
 import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 import { clearJsPixelData } from '../../store/clear-js-pixel-data';
 
+const TEXT_FLIP_REFUSAL = 'Text layers must be rasterized before they can be flipped.';
 const GROUP_TEXT_FLIP_REFUSAL = 'Rasterize the text layers in this group before flipping it.';
 
 function flipLabel(axis: FlipAxis): string {
@@ -37,6 +38,13 @@ export function flipActiveLayer(axis: FlipAxis): void {
 
   const layer = state.document.layers.find((l) => l.id === activeId);
   if (!layer) return;
+  // A text layer's texture is re-rendered from its string, so a mirrored
+  // texture would snap back on the next re-render. Refuse it the way the
+  // other pixel writers do (guardPixelWrite) rather than rasterizing it.
+  if (layer.type === 'text') {
+    notifyInfo(TEXT_FLIP_REFUSAL);
+    return;
+  }
   if (layer.type === 'group') {
     flipGroup(engine, layer, axis);
     return;
