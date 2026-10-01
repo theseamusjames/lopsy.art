@@ -13,13 +13,13 @@ shareAlt: A wall of posters and covers Claude designed in Lopsy, including a kin
 
 *I love AI and I use it all the time, but everything in this article was written by me with my dumb, imprecise monkey fingers.*
 
-I built lopsy.art to replace photoshop in my daily life. It’s not a 1-for-1 replacement, but it provides everything I need for my casual image editing needs. And the best part: I can add any feature I dream up and make it work exactly the way I want it to. I love it.
+I built lopsy.art to replace photoshop in my daily life. It’s not a 1-for-1 replacement, but it provides everything I need for my casual image editing needs. And the best part: I can add any [feature I dream up](https://github.com/theseamusjames/lopsy.art/pull/719) and make it work exactly the way I want it to. I love it.
 
 But of course there are bugs. A lot of bugs. It has an engine written in rust, compiled in WASM, rendered in a React app, and the whole thing was written by Claude. I’ve offered a lot of guidance on best practices and systems (like using sparse arrays to lower the memory footprint, contracting/expanding layers to their content size when not active, floating selections for independent editing and compositing, and many more), but the implementations are all straight from the agent.
 
 With that, there’s a particularly pernicious class of bug that’s hard to spot: the kind that only appears in sequence. Undo, for example. You might undo once and it works. You might undo twice and it works. But maybe a bunch of undos in a row on a particular sequence of actions causes redo to fail. Your regular e2e won’t catch that.
 
-So to combat that, I let Claude build unique, randomized compositions completely from scratch, using the available tools the way a user would through Playwright.
+So to combat that, I let Claude build unique, randomized compositions completely from scratch, using the available tools the way a user would [through Playwright](https://lopsy.art/SKILL.md).
 
 First, I give Claude a `/random` skill that allows for actual random selection (because LLMs are really bad at choosing randomly on their own, particularly for the same prompt). Then I use the skill to choose two letters randomly – these will be initials for the name of its creation. Then it chooses a style like art nouveau or neobrutalist and a project type like album cover or holiday card.
 
