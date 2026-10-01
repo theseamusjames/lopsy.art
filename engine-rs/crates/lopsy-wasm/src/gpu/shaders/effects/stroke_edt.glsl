@@ -10,6 +10,9 @@ uniform vec2 u_texelSize;   // 1/layerWidth, 1/layerHeight
 uniform vec2 u_srcOffset;   // layer position in document pixels
 uniform vec2 u_srcSize;     // layer texture size in pixels
 uniform vec2 u_docSize;     // document size in pixels
+// 1 = output the layer's silhouette grown by the outside part of the stroke
+// (alpha only), which the drop shadow and outer glow are cast from.
+uniform int u_silhouette;
 out vec4 fragColor;
 
 void main() {
@@ -106,8 +109,14 @@ void main() {
         }
     }
 
-    if (isStroke) {
-        fragColor = vec4(u_strokeColor.rgb, u_strokeColor.a * u_opacity);
+    float strokeA = u_strokeColor.a * u_opacity;
+    if (u_silhouette == 1) {
+        // The stroke draws over the layer, so the two combine source-over.
+        // Only the part outside the layer's opaque core can grow the outline.
+        float a = (isStroke && !isOpaque) ? strokeA + srcA * (1.0 - strokeA) : srcA;
+        fragColor = vec4(0.0, 0.0, 0.0, a);
+    } else if (isStroke) {
+        fragColor = vec4(u_strokeColor.rgb, strokeA);
     } else {
         fragColor = vec4(0.0);
     }

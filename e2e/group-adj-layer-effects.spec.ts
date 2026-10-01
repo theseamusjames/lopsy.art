@@ -187,9 +187,12 @@ async function locateEffects(page: Page, layerId: string): Promise<{ stroke: [nu
       strokeX = xs[i]!;
     }
   });
-  // Glow: just outside the 6px stroke ring, the yellow halo over the white
-  // background — full red and green, blue pulled well below 255.
-  const glowIdx = row.findIndex((p, i) => xs[i]! >= strokeX + 6 && p.r > 240 && p.g > 240 && p.b < 215);
+  // Glow: outside the 6px stroke ring, the yellow halo over the white
+  // background — full red and green, blue pulled below 255. The halo starts
+  // at the ring's outer edge; probe its paler outer part, because the
+  // export is decoded to sRGB while the canvas reads back Display P3, and
+  // that conversion moves a saturated yellow's blue by ~20 levels.
+  const glowIdx = row.findIndex((p, i) => xs[i]! >= strokeX + 6 && p.r > 240 && p.g > 240 && p.b >= 190 && p.b < 215);
   expect(bluest, 'stroke ring must be visible before any adjustment').toBeGreaterThan(100);
   expect(glowIdx, 'glow halo must be visible before any adjustment').toBeGreaterThanOrEqual(0);
   return { stroke: [strokeX, DISC.cy], glow: [xs[glowIdx]!, DISC.cy] };
