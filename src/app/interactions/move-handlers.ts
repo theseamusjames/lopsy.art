@@ -30,6 +30,7 @@ import type {
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
+import { claimLiveFloat, withLiveFloatKept } from './live-float';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 
 interface QuickMaskSnapshot {
@@ -208,7 +209,9 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     pendingWholeLayerMoveLabel = 'Move';
   } else {
     cancelPrefloat();
-    editorState.pushHistory(altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
+    withLiveFloatKept(() => {
+      editorState.pushHistory(altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
+    });
   }
 
   // Quick-mask mode + active marquee: snapshot the painted quick-mask
@@ -360,6 +363,8 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     // Clear persistentTransformRef — transform is committed
     persistentTransformRef.current = null;
     const floatRef = floatingSelectionRef.current!;
+    const ownedMask = useEditorStore.getState().selection.mask;
+    if (ownedMask) claimLiveFloat(activeLayerId, ownedMask);
     const baseFloat: InteractionState = {
       drawing: true,
       lastPoint: canvasPos,
@@ -709,6 +714,7 @@ export function handleMoveUp(
       width: moveGesture.originalBounds.width,
       height: moveGesture.originalBounds.height,
     };
+    if (state.layerId) claimLiveFloat(state.layerId, newMask);
     edState.setSelection(newBounds, newMask, docW, docH);
   }
 
@@ -833,6 +839,7 @@ export function handleNudgeMove(
       width: origBounds.width,
       height: origBounds.height,
     };
+    claimLiveFloat(activeId, newMask);
     editor.setSelection(newBounds, newMask, docW, docH);
     useUIStore.getState().setTransform(createTransformState(newBounds));
     editor.notifyRender();

@@ -12,6 +12,7 @@ import { clearMaskGpuDirty, markAllMasksGpuDirty } from '../../engine-wasm/mask-
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 import { cancelPrefloat } from '../interactions/prefloat';
+import { commitLiveFloatBeforeEdit } from '../interactions/live-float';
 import { snapshotGpuMasks, withCurrentMaskStaleness, restoreMasksAfterUndo } from './mask-history';
 import { useUIStore } from '../ui-store';
 import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
@@ -561,6 +562,10 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   pushHistory: (label = 'Edit', before) => {
+    // The edit that follows writes the layer the Move tool may still be
+    // floating; left live, that float re-composites over the edit on the
+    // next drag.
+    commitLiveFloatBeforeEdit();
     // Masks are captured as GPU snapshot handles below, so a mask readback
     // still queued from the previous stroke does not have to be drained
     // first — that synchronous drain stalled every mask stroke start (#780).

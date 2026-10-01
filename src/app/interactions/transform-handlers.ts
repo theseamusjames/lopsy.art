@@ -32,6 +32,7 @@ import {
 import { isLayerAlphaSelection, selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { growFloatToCover } from './float-growth';
+import { claimLiveFloat, withLiveFloatKept } from './live-float';
 import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
 import type { Point } from '../../types';
 import {
@@ -100,7 +101,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     ? computeRotation(canvasPos, currentTransform) - currentTransform.rotation
     : 0;
 
-  editorState.pushHistory('Transform');
+  withLiveFloatKept(() => editorState.pushHistory('Transform'));
 
   // Clear floating selection ref when entering transform mode.
   floatingSelectionRef.current = null;
@@ -188,6 +189,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     originalSelectionMaskHeight: persistent?.maskHeight ?? 0,
   };
 
+  if (persistent && sel.mask) claimLiveFloat(activeLayerId, sel.mask);
   uiState.setActiveTransformHandle(hit);
 
   return newState;

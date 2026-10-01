@@ -46,6 +46,7 @@ import {
   handleLiquifyMove,
 } from './interactions/liquify-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
+import { registerFloatSession } from './interactions/live-float';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
 import { createTransformState } from '../tools/transform/transform';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
@@ -144,6 +145,8 @@ export function useCanvasInteraction(
 
   // Clean up the hold timer on unmount
   useEffect(() => cancelHoldTimer, [cancelHoldTimer]);
+
+  useEffect(() => registerFloatSession(floatingSelectionRef, persistentTransformRef), []);
 
   const pixelUnderPointer = useCallback(
     (e: ToolEvent): Point | undefined => {

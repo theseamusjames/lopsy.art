@@ -15,6 +15,7 @@ import {
 import { reconcileLayerBoundsWithEngine } from '../../reconcile-layer-bounds';
 import { growFloatToCover } from '../../interactions/float-growth';
 import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
+import { withLiveFloatKept } from '../../interactions/live-float';
 import styles from './TransformControls.module.css';
 
 /**
@@ -35,7 +36,8 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   const activeLayerId = editorState.document.activeLayerId;
   if (!activeLayerId) return;
 
-  editorState.pushHistory('Transform');
+  // The float, pending transform included, is handled below.
+  withLiveFloatKept(() => editorState.pushHistory('Transform'));
 
   // A float left behind by a Move drag holds its lifted pixels at their
   // pre-drag position, while the selection (and the pixels the user sees)
