@@ -5,7 +5,7 @@ import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { strokeCurrentPath } from './useCanvasInteraction';
 import { getEngine } from '../engine-wasm/engine-state';
 import { clearSelectedPixels, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
-import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
+import { commitLiveFloat } from './interactions/live-float';
 import { isUnmovedPrefloat, commitUnmovedPrefloat } from './interactions/prefloat';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
@@ -412,14 +412,16 @@ function handleDeleteKey(): void {
     const engine = getEngine();
     if (!engine) return;
 
-    // Commit any active transform/move float and rebuild the selection
-    // mask from actual pixel alpha before clearing.
+    // Commit any active transform/move float before clearing. The selection
+    // on screen is kept — the moved marquee, or the outline a pending
+    // transform has carried the pixels to. Rebuilding it from the active
+    // layer's alpha cleared every pixel on the layer (#801).
     // A ⌘-click prefloat that hasn't moved already matches the selection;
     // rebuilding from the active layer's alpha would clear all of it (#1055).
     if (isUnmovedPrefloat(sel.mask)) {
       commitUnmovedPrefloat();
     } else if (hasFloat(engine)) {
-      selectLayerAlpha(activeId);
+      commitLiveFloat();
     }
 
     // Re-read selection after potential mask rebuild

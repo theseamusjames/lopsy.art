@@ -327,6 +327,42 @@ test.describe('follow-up actions on a live Move float', { tag: '@chromium' }, ()
     expect(await colorAt(page, 280, 105)).toBe('clear');
   });
 
+  test('Delete after a Move drag clears only the moved piece', async ({ page }) => {
+    await blackBlock(page, 0, 0, 400, 300);
+    await page.keyboard.press('Control+d');
+    await marquee(page, 140, 100, 260, 200);
+    await selectTool(page, 'move');
+    await drag(page, [200, 150], [260, 150]);
+
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: 'e2e/screenshots/move-float-delete-after-drag.png' });
+
+    // The hole the drag left (x 140-200) and the moved piece (x 200-320)
+    // are clear; the rest of the layer is untouched.
+    expect(await colorAt(page, 150, 150)).toBe('clear');
+    expect(await colorAt(page, 300, 150)).toBe('clear');
+    expect(await colorAt(page, 30, 30)).toBe('black');
+    expect(await colorAt(page, 380, 280)).toBe('black');
+    expect(await colorAt(page, 260, 90)).toBe('black');
+    expect(await selectionBounds(page)).toEqual({ x: 200, y: 100, width: 120, height: 100 });
+  });
+
+  test('Delete after rotating a piece clears just that piece', async ({ page }) => {
+    await blackBlock(page, 40, 40, 100, 100);
+    await blackBlock(page, 250, 40, 310, 100);
+    await marquee(page, 40, 40, 100, 100);
+    await selectTool(page, 'move');
+    await rotateBox(page, { x: 40, y: 40, width: 60, height: 60 }, 30);
+
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: 'e2e/screenshots/move-float-delete-after-rotate.png' });
+
+    expect(await opaqueCount(page, 0, 0, 160, 160)).toBe(0);
+    expect(await opaqueCount(page, 250, 40, 310, 100)).toBe(3600);
+  });
+
   test('a Fill after rotating a piece fills the rotated outline', async ({ page }) => {
     // The fill's marquee stays up around the block.
     await blackBlock(page, 40, 40, 100, 100);
