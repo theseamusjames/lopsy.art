@@ -668,8 +668,9 @@ These are by design, and the helpers already handle most of them:
   Escape cancels, and plain Enter inserts a newline. Changing font or size
   with a text layer active restyles *that* layer, so set them before you
   click.
-- **`Cmd+A` while editing text also selects every layer.** Don't use it
-  there.
+- **`Cmd+A` selects the canvas, not the layers.** It selects every layer
+  only while keyboard focus is inside the Layers panel, which `h.blur()`
+  clears. While editing text it selects the text.
 - **Escape** cancels text editing and commits a live transform. **`Cmd+D`**
   (the key, not the Select menu item) deselects and commits a transform.
 - **Menus close by clicking their title again**, not with Escape.
