@@ -9,6 +9,9 @@ uniform int u_position;           // 0=outside (dilated orig), 1=inside (dilated
 uniform vec2 u_origOffset;        // original layer position in document pixels
 uniform vec2 u_origSize;          // original layer texture size
 uniform vec2 u_docSize;
+// 1 = output the layer's silhouette grown by the stroke (alpha only), which
+// the drop shadow and outer glow are cast from.
+uniform int u_silhouette;
 out vec4 fragColor;
 void main() {
     float dilatedA = texture(u_dilatedTex, v_uv).a;
@@ -32,8 +35,12 @@ void main() {
         isStroke = isDilated && isOpaque;
     }
 
-    if (isStroke) {
-        fragColor = vec4(u_strokeColor.rgb, u_strokeColor.a * u_opacity);
+    float strokeA = u_strokeColor.a * u_opacity;
+    if (u_silhouette == 1) {
+        float a = isStroke ? strokeA + origA * (1.0 - strokeA) : origA;
+        fragColor = vec4(0.0, 0.0, 0.0, a);
+    } else if (isStroke) {
+        fragColor = vec4(u_strokeColor.rgb, strokeA);
     } else {
         fragColor = vec4(0.0);
     }
