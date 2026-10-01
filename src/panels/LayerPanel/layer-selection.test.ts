@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../app/interactions/prefloat', () => ({
   schedulePrefloat: vi.fn(),
+  cancelPrefloat: vi.fn(),
+  commitPrefloatIfSelectionChanged: vi.fn(),
 }));
 
 const { selectLayerAlpha } = await import('./layer-selection');
