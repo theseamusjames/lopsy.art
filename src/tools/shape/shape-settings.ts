@@ -20,7 +20,7 @@ import type { ShapeMode, ShapeOutput } from './shape';
  * with two nullable-color fields and two tagged-union enums in one
  * shape.
  *
- * The `mode` field rejects invalid strings (`'rectangle'`, `'line'`,
+ * The `mode` field rejects invalid strings (`'line'`, `'arrow'`,
  * etc.) by falling back to `'ellipse'` rather than letting a
  * `@ts-ignore` bypass leave the GPU shader rendering a polygon with
  * stale `sides` — the same guard the legacy `setShapeMode` carried
@@ -53,7 +53,7 @@ export function clampShapeSetting<K extends keyof ShapeSettings>(
 ): ShapeSettings[K] {
   if (key === 'mode') {
     const m = value as string;
-    if (m !== 'ellipse' && m !== 'polygon') return 'ellipse' as ShapeSettings[K];
+    if (m !== 'rectangle' && m !== 'ellipse' && m !== 'polygon') return 'ellipse' as ShapeSettings[K];
     return value;
   }
   if (key === 'output') {
