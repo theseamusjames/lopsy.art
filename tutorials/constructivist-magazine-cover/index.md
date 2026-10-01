@@ -2,7 +2,7 @@
 title: Design a Constructivist Magazine Cover in Lopsy
 description: Make a Lissitzky-style magazine cover in Lopsy with a red wedge, a pattern-filled honeycomb disc, a geometric bee, rotated type and a halftone print texture.
 published: 2026-09-26 15:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: magazine cover, constructivism, editorial design, pattern fill, halftone, text effects, selections, transforms
@@ -190,11 +190,11 @@ drag a **Rectangular Marquee** snugly around it.
 
 ![Three small bees lined up under the red wedge, heading toward the hive](14-pasted-swarm.webp)
 
-Press [[Cmd+C]] then [[Cmd+V]]. The paste lands in place on a new layer.
-Drag it up and to the right with the Move tool, about 140 px right and 90 px
-up, so it follows the wedge. Repeat from the Swarm layer and drag the second
-copy twice as far. Then select the top
-pasted layer and choose **Layer → Merge Down** twice to fold both copies
+Press [[Cmd+C]] then [[Cmd+V]]. The paste lands in place on a new layer,
+selected, with the **Move** tool active. Drag it up and to the right, about
+140 px right and 90 px up, so it follows the wedge. Press [[Cmd+V]] again
+and drag the second copy twice as far. Press [[Cmd+D]], then, with the top
+pasted layer active, choose **Layer → Merge Down** twice to fold both copies
 back into Swarm.
 
 ## Set the UPRISING headline
@@ -211,7 +211,8 @@ caps just below the lower horizontal guide.
 
 ![A rotated transform box around cream DRONE text near the top of the page, turned about 22 degrees counter-clockwise](16-rotate-drone.webp)
 
-Set **Anton 168** in cream `#EAE0C8`. Click in the empty masthead area,
+Click the **Swarm** row, then set **Anton 168** in cream `#EAE0C8`. Click
+in the empty masthead area,
 type **DRONE** and commit. On the paper it's almost invisible for now.
 Select the DRONE layer, marquee tightly around the word, and drag the
 **rotate handle** just outside the top-right corner until it turns
@@ -233,19 +234,21 @@ height. Keep a little red visible above the "NE" and below the "D".
 
 ![APIARY in big black Russo One capitals, a red issue box on the right, and a thick and a thin black rule underneath](18-masthead-rules.webp)
 
-Set **APIARY** in **Russo One 200**, ink black, and move it to the top-left
+Click the **Swarm** row again. Set **APIARY** in **Russo One 200**, ink
+black, and move it to the top-left
 corner: on the left margin guide, about 64 px from the top. On a
-**Masthead Rules** layer, marquee-fill three shapes:
+**Masthead Rules** layer, add three shapes:
 
-- a red issue box, **260 × 140**, with its right edge on the right margin guide and its top level with APIARY's
-- a **12 px** black rule from margin to margin, a little above the masthead guide
-- a **4 px** rule 8 px below it, ending just above the guide
+- a red issue box: marquee **260 × 140**, with its right edge on the right margin guide and its top level with APIARY's, and fill it
+- a **12 px** black rule from margin to margin, a little above the masthead guide: pick the **Pencil** at **Size 12**, click on the left margin guide, then [[Cmd+Shift]]-click on the right one for a level line
+- a **4 px** rule 8 px below it, ending just above the guide, drawn the same way at **Size 4**
 
 ## Add the issue number and taglines
 
 ![The red issue box reading No. 7 and OCT 1926 40 cents, with JOURNAL OF THE WORKING HIVE in black and WORKERS OF ALL HIVES, UNITE! in red under the rules](19-issue-box-taglines.webp)
 
-Paste **№7** into the issue box in **Russo One 104**, cream. Pasting with
+Click the **Masthead Rules** row before you set up each line. Paste **№7**
+into the issue box in **Russo One 104**, cream. Pasting with
 [[Cmd+V]] is the easiest way to type the № sign. Below it, set
 **OCT·1926·40¢** in **Rubik Mono One 21**. Under the rules, add
 **JOURNAL OF THE WORKING HIVE** in black and
@@ -311,7 +314,7 @@ the bee.
 Check the cover for near-misses:
 
 - **Leg tip.** Erase the tip of the bee's front leg (Eraser, Size 34) so it no longer kisses the disc.
-- **Eye.** Circle-select the bee's eye on the Bands layer and fill it red. A flat red dot is more on-style than a cartoon highlight.
+- **Eye.** On the Bands layer, click the bee's eye once with a hard red Brush sized to fit it. A flat red dot is more on-style than a cartoon highlight.
 - **Swarm.** Marquee the lowest small bee and press [[Delete]] so UPRISING has room. Then move the Swarm layer so the last two bees sit under the wedge.
 - **Halftone.** Move the halftone layer about 45 px left so the dots stay inside the page.
 - **Coverlines.** Nudge the text a few pixels to even out the slab's margins.

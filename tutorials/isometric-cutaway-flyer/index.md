@@ -2,7 +2,7 @@
 title: Make an Isometric Cutaway Flyer with Glowing Mushrooms
 description: Build a floating isometric slice of earth with a lit grow cave, skewed type and an extruded 3D title in Lopsy, then set the event details on a snapped grid.
 published: 2026-09-30 23:50
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: flyer, isometric, poster, typography, layer effects, glow, transform, skew, selections, gradients
@@ -71,7 +71,7 @@ A recess in the left face shows three inner surfaces: the back wall, the floor, 
 1. Add a `Cave` layer above `Soil Left`. Lasso the opening at (272, 756), (548, 894), (548, 1074), (272, 936) and fill it `#3A1E1B` for the back wall.
 2. Lasso the sliver along the left edge that slants up to the right and fill it `#57302A` for the side wall. Fill the strip along the bottom `#86492F` for the floor.
 3. On a `Shelves` layer, lasso two planks parallel to the opening's top edge. Fill each plank's top `#C9925E` and its front edge `#7E5030`.
-4. Back on `Cave`, fill two 6 px posts in `#4A2A1A` at x 346 and x 530. The planks cover them where they cross.
+4. Back on `Cave`, draw two posts in `#4A2A1A` at x 346 and x 530 with the **Pencil** at **Size 6**: click at the top of each, then [[Cmd+Shift]]-click at the floor for a straight vertical. The planks cover them where they cross.
 
 Depth in isometric pushes things *up and to the right*. A back wall 34 units deep shows up 68 px higher than the opening, so only its lower part is visible.
 
@@ -80,8 +80,8 @@ Depth in isometric pushes things *up and to the right*. A back wall 34 units dee
 ![A marquee around a row of small cream button mushrooms on the upper shelf, with an identical row already on the lower shelf](04-copy-the-shelf-crop.webp)
 
 1. On a `Shelf Crop` layer, draw eight small button mushrooms along the upper shelf. Lasso each stem as a tapered quad in `#D8C09A`, then each cap as a half-dome in `#F4E4C4`.
-2. Marquee the row from (330, 785) to (552, 942). Press [[Cmd+C]], wait a moment, then press [[Cmd+V]]. The paste lands in place on a new layer.
-3. With the **Move** tool, press [[Shift]]+[[Down]] four times and [[Down]] six times. That's 46 px, exactly one shelf lower.
+2. Marquee the row from (330, 785) to (552, 942). Press [[Cmd+C]], then [[Cmd+V]]. The paste lands in place on a new layer, selected, with the **Move** tool active.
+3. Nudge it **46 px** down with the arrow keys ([[Shift]] moves 10 px per press). That's exactly one shelf lower.
 4. Choose **Layer → Merge Down**.
 
 ## Light the cave
@@ -106,7 +106,7 @@ Depth in isometric pushes things *up and to the right*. A back wall 34 units dee
 
 ![Thin glowing mint threads branching down through the right face's topsoil, with small pebbles scattered through the lower bands of both faces](06-mycelium-and-pebbles.webp)
 
-1. On a `Pebbles` layer, scatter small elliptical marquee fills a shade lighter than each band. Keep them out of the cave.
+1. On a `Pebbles` layer, scatter pebbles a shade lighter than each band: single clicks with a small, hard **Brush**. Keep them out of the cave.
 2. On a `Mycelium` layer, set the **Brush** to **Size 2** and **Hardness 90** in `#B6FFE6`. Drag branching, wandering strokes down from the right face's top edge. Start some right under where the fly agarics will stand, so the threads read as their roots. Carry a few deep into the bedrock, and wrap one around the front corner under the cave.
 3. Add an **Outer Glow** in `#3FF0B8` at **Size 12**, **Opacity 70**.
 4. Where strokes knot together, thin them out with the **Eraser** at Size 16.
@@ -120,12 +120,10 @@ Text on the right face has to follow that face's plane. The baseline climbs 1 px
 
 1. In an empty patch of sky, type `DEEP CELLAR FARMS  ·  EST. 1926` in **Bebas Neue** at **30 px**, then click **Rasterize Layer**.
 2. Marquee around it, switch to the **Move** tool, and click **Skew** in the options bar.
-3. Drag the right-edge handle straight up by a quarter of the text's width (about 75 px for this line). Press [[Cmd+D]].
+3. Drag the right-edge handle straight up by half the text's width (about 150 px for this line), so the slope is 1:2. Press [[Cmd+D]].
 4. Name the layer `Farm Sign` and move it so its bottom-left corner sits at (642, 1065) on the right face.
 5. Add a **Color Overlay** of `#F2C48A` and a hard **Drop Shadow** in `#2A1410`: **Offset 2 / 2**, **Blur 0**, **Opacity 80**. This gives a carved look.
 6. Drag `Farm Sign` above `Mycelium`. Then lasso a band about 26 px above and below the lettering and delete it on `Mycelium`, so no threads cross the words.
-
-> **Tip:** At the moment a Skew handle moves the edge twice as far as the pointer ([#1074](https://github.com/theseamusjames/lopsy.art/issues/1074)). That's why the drag is a quarter of the width rather than half. Check that the slope ends up at 1:2.
 
 ## Shade and texture the faces
 
@@ -170,23 +168,21 @@ Make the grass layer active and click **New Group** for a `Topside` group.
 
 1. [[Cmd]]-click the top ruler near the middle to drop a guide at exactly half the width.
 2. Click the left ruler at y 100 and y 357 to mark the title band.
-3. Type `MUSHROOM` in **Titan One** at **162 px** and `UNDERGROUND` at **125 px**, both in `#FFF1D6`. Those sizes make both lines exactly **974 px** wide.
+3. Click the `Aura` row before you set up each line. Type `MUSHROOM` in **Titan One** at **162 px** and `UNDERGROUND` at **125 px**, both in `#FFF1D6`. Those sizes make both lines exactly **974 px** wide.
 4. Move them so they're centred on the guide, with ink tops at **y 100** and **y 256**.
 
-> **Tip:** Type each line in empty sky, then move it. A text click inside another text layer's box edits that layer instead.
+> **Tip:** Type each line in empty sky, then move it into place.
 
 ## Extrude the title in 3D
 
 ![The same title now with a solid dark red isometric extrusion stepping down and to the right from every letter, outlined and softly shadowed](12-extrude-the-title.webp)
 
 First, make a flat red copy of both lines:
-1. Select each text line and click **Duplicate Layer**.
-2. **Click the copy's row before doing anything else** ([#804](https://github.com/theseamusjames/lopsy.art/issues/804)). Otherwise, the next nudge moves the original too.
-3. Rasterize each copy and move it back by −10 / −10, onto its source line.
-4. Drag both copies under the text, then **Merge Down** into one layer named `Title Depth`.
+1. Select each text line and click **Duplicate Layer**. Each copy lands exactly on its source line.
+2. Drag both copies under the text, then **Merge Down** into one layer named `Title Depth`. Merge Down rasterizes the text for you.
 
 Then build the depth by doubling:
-1. Duplicate `Title Depth`, click the copy's row, and move it by **(+2, +1)**. That's the isometric direction.
+1. Duplicate `Title Depth` and move the copy by **(+2, +1)**. That's the isometric direction.
 2. Merge it down.
 3. Repeat with **(+4, +2)**, **(+8, +4)** and **(+6, +3)**.
 
@@ -194,7 +190,7 @@ Four merges give a solid extrusion 20 px across and 10 px down.
 
 Finish it:
 1. Add a **Color Overlay** of `#A3291F` and click **Rasterize Layer Style** to bake it in.
-2. Add a **Stroke** (Width 4, `#1C1030`) and a soft **Drop Shadow** (8 / 12, Blur 18, 65%).
+2. Add a **Stroke** (Width 4, `#1C1030`) and a soft **Drop Shadow** (4 / 8, Blur 18, 65%).
 
 ## Set the event details on a grid
 
@@ -202,17 +198,17 @@ Finish it:
 
 **Panel.**
 1. Press [[Cmd+']] to show the grid and set **Grid size** to **8 px**. Snap turns on with it.
-2. Drag a marquee from about (114, 1323) to (1086, 1517). It snaps to exactly (112, 1320) – (1088, 1520).
-3. Run **Select → Shrink** by 14, then **Select → Grow** by 14 to round the corners.
-4. Fill it `#140C28` on a `Footer Panel` layer at **78%**, and add a 2 px `#7FF3C9` **Stroke**.
+2. Add a `Footer Panel` layer. Pick the **Shape** tool and set **Shape** to **Rectangle**, **Output** to **Pixels** and **Corner Radius** to `14`. Set the Fill to `#140C28` and remove the stroke.
+3. Click (don't drag) at (600, 1420) and enter **976 × 200**. The panel lands exactly on the grid, from (112, 1320) to (1088, 1520).
+4. Set the layer to **78%** and add a 2 px `#7FF3C9` **Stroke**.
 
 **Lines.** Centre each line on x 600, leaving 23 px above the first line and below the last:
 1. `FUNGI FARM OPEN HOUSE` in **Bebas Neue** 60 px, mint, letter spacing 6, ink top at y 1343.
 2. `SATURDAY · NOVEMBER 14 · 4–9 PM` in **Bebas Neue** 40 px, cream, letter spacing 3, ink top at y 1402.
-3. `grow-cave tours  ·  spore tasting  ·  lantern walk` in **Courier Prime** 22 px, cream, ink top at y 1448.
+3. `grow-cave tours  ·  spore tasting  ·  lantern walk` in **Courier Prime** 22 px, cream, letter spacing 0, ink top at y 1448.
 4. `127 CELLAR LANE  ·  FREE ENTRY  ·  ALL AGES` in **Courier Prime Bold** 22 px, mint, letter spacing 2, ink top at y 1483.
 
-Set the letter spacing in the **Text** panel while each line is still the active layer.
+Click the `Footer Panel` row before you set up each line. Letter spacing is in the **Text** panel.
 
 ## Release the spores
 

@@ -2,7 +2,7 @@
 title: Design a Neubrutalist Christmas Card
 description: Make a neubrutalist holiday card in Lopsy with an upside-down Christmas tree in a retro app window, halftone dots, hard shadows and chunky type.
 published: 2026-09-29 18:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: christmas card, holiday card, neubrutalism, greeting card, typography, layer effects, halftone, shapes, transforms, pattern fill, grid
@@ -46,13 +46,11 @@ Drag a rectangular marquee for the window: from about 100 px in from the left ed
 
 Now untick Snap and select a rectangle exactly 8 px inside that one. The easiest way is the exact-corner dialog: press [[Cmd+D]], click once (no drag) with the **Rectangular Marquee**, and enter **From** `110`, `474` and **To** `1390`, `1618`. Fill it cream `#FFF4E2`. That gives the window its 8 px outline. Finish with the standard Drop Shadow.
 
-> **Tip:** Draw the border as pixels rather than with the Stroke effect. The Drop Shadow is built from the layer's own pixels, not from its effects, so a shadow on a stroked layer would start inside the outline and leave a notch.
-
 ## Tile graph paper into the window
 
 ![The Pattern Fill dialog previewing a 40 pixel tan grid inside the window](04-grid-paper-pattern.webp)
 
-Make the tile on a temporary layer, in a 40 × 40 square at the top-left corner of the canvas. Fill a 3 px tan (`#E6D3B6`) vertical line 30 px in from the left of the square, and a 3 px horizontal line 18 px down from its top. Select the 40 × 40 square (**From** `0`, `0` **To** `40`, `40`) and choose **Edit → Define Pattern**, then delete the temporary layer.
+Make the tile on a temporary layer, in a 40 × 40 square at the top-left corner of the canvas. Pick the **Pencil** ([[N]]) at **Size 3** in tan (`#E6D3B6`) and zoom in close. Draw a vertical line that covers the pixel columns 30–32 from the left, running the full height of the square, and a horizontal line that covers rows 18–20 from the top: click one end, then [[Cmd+Shift]]-click the other so the line stays straight. The Pencil has hard edges, so each line is exactly 3 px wide. Select the 40 × 40 square (**From** `0`, `0` **To** `40`, `40`) and choose **Edit → Define Pattern**, then delete the temporary layer.
 
 Add a `Grid Paper` layer and select the window's inside below the title bar: **From** `110`, `578` **To** `1390`, `1618`. Choose **Edit → Fill with Pattern…**. Patterns tile from the top-left of the document, so those odd line offsets land a grid line exactly on each inside edge of the window. Full cells from border to border make the paper look deliberate.
 
@@ -96,7 +94,7 @@ Add a `Bauble` layer above `Tier 3`. Draw the string with a 6 px **Brush**: clic
 
 ![A second bauble pasted and dragged to the top-right corner of the first tier, then recoloured yellow with the Paint Bucket](09-paste-bauble.webp)
 
-Marquee the bauble, press [[Cmd+C]] and then [[Cmd+V]]. The copy lands in place on a new `Pasted Layer`. Press [[Cmd+D]], then drag it with the **Move** tool to the next tier corner. Pick a new foreground colour and click the ball with the **Paint Bucket**: it only floods the flat fill, so the outline and highlight stay.
+Marquee the bauble, press [[Cmd+C]] and then [[Cmd+V]]. The copy lands in place on a new `Pasted Layer`, selected, with the **Move** tool active. Drag it to the next tier corner and press [[Cmd+D]]. Pick a new foreground colour and click the ball with the **Paint Bucket**: it only floods the flat fill, so the outline and highlight stay.
 
 Place six baubles in all, one at each tier corner, in pink, yellow, blue and one holiday red `#E8202A`. Then select the top `Pasted Layer` and use **Layer → Merge Down** five times to fold them into one layer. Rename it `Ornaments`.
 
@@ -148,7 +146,7 @@ Type `SEASON'S` in **Archivo Black** at **188 px**. Then move it so the letters 
 
 ![SEASON'S with a solid pink copy of the letters offset 16 pixels down and to the right behind it](16-headline-shadow.webp)
 
-With the letter selection still active, click `Headline Shadow`, set the foreground to pink `#FF5FA2`, and choose **Edit → Fill**. Press [[Cmd+D]], then move the layer 16 px right and 16 px down. With the **Move** tool, [[Shift]]+arrow nudges 10 px and a plain arrow nudges 1 px, so one [[Shift]]+[[Right]] and six [[Right]] presses, then the same downwards, land it exactly. A coloured shadow like this is a neubrutalist favourite. It follows the same 16 / 16 rule as the black shadows.
+With the letter selection still active, click `Headline Shadow`, set the foreground to pink `#FF5FA2`, and choose **Edit → Fill**. Press [[Cmd+D]], then nudge the layer 16 px right and 16 px down with the **Move** tool's arrow keys ([[Shift]]+arrow moves 10 px, a plain arrow 1 px). A coloured shadow like this is a neubrutalist favourite. It follows the same 16 / 16 rule as the black shadows.
 
 ## Stick GREETINGS on a tilted slab
 
@@ -156,9 +154,9 @@ With the letter selection still active, click `Headline Shadow`, set the foregro
 
 Add a `Greetings Box` layer. Under SEASON'S, fill a black box 150 px tall that starts in line with the tree's widest corner and ends on the window's right edge, then a yellow one 8 px inside it. Lining the box up with the tree ties the headline to the picture below.
 
-Type `GREETINGS` in Archivo Black at **140 px**, well below the other text so the click doesn't land inside another text layer. Move it to the centre of the box.
+Click in empty canvas below the other text and type `GREETINGS` in Archivo Black at **140 px**. Move it to the centre of the box.
 
-Click **Rasterize Layer**, then **Layer → Merge Down** onto the box. Marquee the merged slab and drag the rotation handle to **−1.2°**. A small tilt reads as a sticker slapped on. A bigger one would crowd the window below it. Commit with [[Cmd+D]] and add the standard Drop Shadow.
+Choose **Layer → Merge Down** to merge it onto the box. Marquee the merged slab and drag the rotation handle to **−1.2°**. A small tilt reads as a sticker slapped on. A bigger one would crowd the window below it. Commit with [[Cmd+D]] and add the standard Drop Shadow.
 
 ## Add a sparkle
 
@@ -178,7 +176,7 @@ Marquee it, then [[Cmd]]-drag the rotation handle to **180°** and press [[Cmd+D
 
 ![A round yellow FLIP ME! sticker overlapping the right end of the blue box, caught mid-rotation](20-flip-sticker.webp)
 
-On a `Flip Sticker` layer, draw a yellow Shape-tool circle about 184 px across, with the 8 px black stroke. Type `FLIP` and `ME!` on two lines in Archivo Black at **54 px**, then rasterize it. Point text doesn't centre each line, so marquee the `ME!` line and drag it until both lines are centred. Merge it into the circle.
+On a `Flip Sticker` layer, draw a yellow Shape-tool circle about 184 px across, with the 8 px black stroke. Set the Text tool's **Align** to **Center**, click at the circle's centre and type `FLIP` and `ME!` on two lines in Archivo Black at **54 px**. Move it so the two lines sit in the middle of the circle, then merge it down into the circle.
 
 Marquee the sticker, hold [[Cmd]], and drag the bottom-right handle out to scale it up about 17%. Then rotate it **−12°**. Place it at the right end of the blue box, centred on the box's height, so it overlaps the box by about 45 px and its right edge sits in line with the window's right edge. Then add the standard shadow.
 

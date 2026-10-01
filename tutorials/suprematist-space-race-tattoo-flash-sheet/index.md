@@ -2,7 +2,7 @@
 title: Suprematist Space-Race Tattoo Flash Sheet
 description: Design a Suprematist tattoo flash sheet about the Soviet space race in Lopsy, with outlined shapes, rotated type, pen-stroked lines and stipple dotwork.
 published: 2026-09-30 23:10
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: tattoo flash, suprematism, transforms, selections, typography, pen tool, stipple
@@ -26,7 +26,7 @@ Palette (typed as hex in Lopsy):
 
 Fonts: **Russo One** for the headline and №7, and **Tenor Sans** for the subtitle and labels.
 
-The document is **1500 × 2100 px**. Keep the width a multiple of 4.
+The document is **1500 × 2100 px**.
 
 ## Set up the sheet with guides and a snapped frame
 
@@ -102,9 +102,9 @@ The **108 Minutes** piece is Gagarin's single orbit, built around Malevich's bla
 ![Three red squares shrinking along the orbit ring behind the capsule, with the newest pasted copy in a transform box being scaled down from its corner](06-motion-trail-copy-scale.webp)
 
 1. Draw the **Vostok Dot**: a 42 px red square with a 5 px outline, sitting on the ring.
-2. Marquee it, press [[Cmd+C]], wait a moment and press [[Cmd+V]]. The copy is pasted in place as a new layer.
-3. Marquee the copy. With the **Move** tool, hold [[Cmd]] and drag the bottom-right corner in to about **66%**. [[Cmd]] keeps the aspect ratio. Press [[Cmd+D]].
-4. Drag the copy back along the ring.
+2. Marquee it, press [[Cmd+C]] and then [[Cmd+V]]. The copy is pasted in place as a new layer, selected, with the **Move** tool active.
+3. Hold [[Cmd]] and drag the bottom-right corner in to about **66%**. [[Cmd]] keeps the aspect ratio.
+4. Drag the copy back along the ring and press [[Cmd+D]].
 5. Repeat for a third copy at about **42%**. The shrinking squares read as speed.
 
 ## Make Lissitzky's two squares fly over a curved horizon
@@ -116,7 +116,7 @@ The **108 Minutes** piece is Gagarin's single orbit, built around Malevich's bla
 1. **Horizon:** on a **Horizon** layer, fill an ink circle 1120 px across, centred well below the design.
    - Select the same circle **18 px lower** and press [[Delete]]. What's left is a crescent that tapers toward its ends.
    - Marquee-delete everything more than 285 px left or right of the centre.
-2. **Lines:** on **Two Lines**, lasso a 12 px ink diagonal and an 8 px red one. Keep them clear of each other and of the square corners, so no three shapes meet at one point.
+2. **Lines:** on **Two Lines**, draw a 12 px ink diagonal and an 8 px red one with a hard **Brush** (Hardness 100): click at one end, then [[Shift]]-click at the other. Keep them clear of each other and of the square corners, so no three shapes meet at one point.
 3. **Red square:** draw a 150 px red square with an outline, axis-aligned. Rotate it **18°** with the Move tool's rotation handle.
 4. **Black square:** add a 104 px black square tilted −12°.
 
@@ -167,7 +167,7 @@ Real flash sheets fill the gaps with small motifs.
    - A red **five-point star** with an outline.
    - A black **cross**.
    - A small ochre square with an outline.
-2. If a small shape ends up in the wrong place, move it with a marquee, [[Cmd+X]] and [[Cmd+V]], then drag the pasted layer onto the gutter axis. The pasted layer lands in place above the layer you cut from.
+2. If a small shape ends up in the wrong place, marquee it and drag it onto the gutter axis with the **Move** tool. Only the selected pixels move.
 
 ## Set the title to the angle of the bar
 
@@ -177,15 +177,13 @@ Real flash sheets fill the gaps with small motifs.
    - **VOSTOK:** Russo One **230**, ink.
    - **MISSIONS:** Russo One **48**, paper colour, **letter spacing 22**.
    - **Subtitle:** Tenor Sans **30**, letter spacing 3. The text is `ВОСТОК · SUPREMATIST FLASH · 1957 – 1963`.
-   - **№7:** Russo One **80**, paper colour.
+   - **№7:** Russo One **80**, paper colour, letter spacing 0.
 2. Click **Rasterize Layer** on each one. Marquee it, and rotate it **−4.43°** with the Move tool (the №7 gets **+6°**). Commit each with [[Cmd+D]].
 3. Seat each piece:
    - **VOSTOK:** move it so the letter feet sink about **12 px** into the red bar.
    - **MISSIONS:** centre it inside the bar, about 40 px from the bar's end.
    - **Subtitle:** right-align it under the bar, about 17 px below it.
    - **№7:** centre it in the black square.
-
-> **Tip:** Set letter spacing back to 0 before you create the next text. The Text panel carries the last value over to new type.
 
 ## Centre two-line labels on the column axes
 
@@ -194,8 +192,8 @@ Real flash sheets fill the gaps with small motifs.
 Each design gets a number and name in Tenor Sans **30** ink. Below it goes the date and price in Tenor Sans **24** red, with letter spacing 2.
 
 1. Put all the labels in a **Labels** group.
-2. Create the red line **before** the ink line above it. A text-tool click just below an existing line would edit that line instead of starting a new one.
-3. Point text ignores alignment, so centre each label by eye (or by its width) on the column guide.
+2. Click the *Labels* group row, then set up the ink lines: Tenor Sans **30**, letter spacing **0**, and **Align center** in the Text panel. Type each name line with a click on its column guide, so it centres on the guide.
+3. Click the *Labels* row again, switch to Tenor Sans **24** red with letter spacing **2**, and type the date-and-price lines the same way.
 4. Put the tops on the label-row guides. That gives every design the same 60 px gap above its label.
 
 For example, `01  SPUTNIK-1` over `4 OCT 1957  ·  $90`. Use curly quotes for `GAGARIN’S` and `‘SHARIK’`.

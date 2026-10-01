@@ -2,7 +2,7 @@
 title: Make a Stencil Street Art Billboard
 description: Paint a Banksy-style stencil billboard in Lopsy with a cinder-block wall, spray-paint overspray, a bandit koala, dripping stencil type and paper tape.
 published: 2026-09-26 09:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: stencil, street art, graffiti, spray paint, billboard, text effects, layer effects, poster design
@@ -138,7 +138,7 @@ layer called `Overspray` and choose **Select → Inverse**, so you can only
 paint *outside* the circle.
 
 Pick the **Spray** tool and set **Size** `70`, **Density** `45`,
-**Opacity** `55` and **Softness** `60`. Drag two steady laps around the disc,
+**Opacity** `55` and **Softness** `40`. Drag two steady laps around the disc,
 just outside its edge. Paint builds up wherever the nozzle lingers, so keep
 moving, and start each lap at the bottom, where the koala will cover it.
 
@@ -193,7 +193,8 @@ together. Lasso two thin slivers across the mask tails and press
 ![A bone eye with an ink pupil pasted and dragged to the right, with its transform box still active](14-copy-paste-eye.webp)
 
 Add a layer called `Eyes`. Fill a bone ellipse about 74 × 46 px on the left
-of the head, inside the mask band. Then fill a 28 px ink pupil against its
+of the head, inside the mask band. For the pupil, pick the **Brush** at
+**Size** `28` and **Hardness** `100` in ink and click once against the eye's
 right side, so he's giving shifty side-eye.
 
 Marquee around the eye, press [[Cmd+C]] then [[Cmd+V]]. Use the **Move**
@@ -231,21 +232,18 @@ marquee fills:
 
 ![The spray can inside a transform box being enlarged from its bottom-right corner](17-scale-spray-can.webp)
 
-Select the can with a marquee and Move-drag it about 80 px to the right,
-then press [[Cmd+D]]. Marquee it again and hold [[Cmd]] while you drag the
-bottom-right handle outward to about **130%**. The [[Cmd]] key keeps the
-proportions locked. Press [[Cmd+D]] to commit.
-
-> **Tip:** Commit each transform with [[Cmd+D]] before you start the next
-> one. Scale, commit, then rotate.
+Select the can with a marquee and Move-drag it about 80 px to the right.
+Then hold [[Cmd]] while you drag the bottom-right handle outward to about
+**130%**. The [[Cmd]] key keeps the proportions locked. Don't commit yet.
+You'll tilt it in the same transform.
 
 ## Tilt the can
 
 ![The enlarged spray can rotated about 22 degrees clockwise inside a rotated transform box](18-rotate-spray-can.webp)
 
-Marquee the can once more. Drag the round rotation handle just outside the
-top-right corner clockwise, about **22°**, so the nozzle points at the
-headline. Press [[Cmd+D]].
+Drag the round rotation handle just outside the top-right corner
+clockwise, about **22°**, so the nozzle points at the headline. Press
+[[Cmd+D]] to commit.
 
 ## Add the paw and claws
 
@@ -259,17 +257,13 @@ of the can. Fill three small ink triangles across the top of it for claws.
 
 ![ROGUE in black and KOALA in orange, set in bold Stardos Stencil on the right side of the wall](20-stencil-title-type.webp)
 
-Click the `Overspray` row so the type lands outside the group. Pick the
-**Text** tool and set **Stardos Stencil**, **Bold**, **Size** `195`.
+Click the `Overspray` row. Pick the **Text** tool and set
+**Stardos Stencil**, **Bold**, **Size** `195`.
 
 Type `KOALA` first, in orange, clicking about 190 px to the right of the
 disc, a little under a third of the way down. Then click the `Overspray` row
-again and type `ROGUE` in ink, clicking at the same left edge, right at the
-top of the wall.
-
-> **Tip:** Create the lower line first. A text layer's click area reaches
-> below its glyphs, so clicking just under `ROGUE` would edit it instead of
-> starting new text.
+again, switch the colour to ink and type `ROGUE`, clicking at the same left
+edge, right at the top of the wall.
 
 ## Stretch the letters taller
 
@@ -278,8 +272,9 @@ top of the wall.
 Real stencil lettering is often condensed. Click `ROGUE` and click
 **Rasterize Layer**, so the stretch stays put. Marquee tightly around the
 word and drag the **bottom-middle** handle down about 28 px, making it about
-120% taller. Press [[Cmd+D]], then Move-drag the word so its top sits about
+120% taller. Then drag inside the box to move the word so its top sits about
 36 px below the top edge, with its left edge about 175 px right of the disc.
+Press [[Cmd+D]].
 
 Repeat for `KOALA`, placing it right under `ROGUE` with the same left edge
 and a small gap between the words.
@@ -295,7 +290,8 @@ misregistered spray pass.
 Add a `Drips` layer above `ROGUE`. Set the **Brush** to **Size** `9` and
 **Hardness** `100`. Drag three drips of uneven length straight down from the
 bottoms of the letters: 22, 72 and 46 px. Let the longest run into `KOALA`.
-Fill a small ellipse at the end of each drip for the bead of paint. Add one
+Raise the Size a little and click once at the end of each drip for the bead
+of paint. Add one
 orange drip from `KOALA` that reaches the tape line.
 
 ## Spray the type edges and the nozzle mist
@@ -337,9 +333,8 @@ counter-clockwise. Press [[Cmd+D]]. Give `Tape` a soft **Drop Shadow**:
 ![A short darker strip of tape crossing the left end of the tagline tape at an angle](26-cross-tape.webp)
 
 Add a `Cross Tape` layer. Fill a 44 × 110 strip with `#E6D7B3` and tear its
-top and bottom the same way. Rotate it about **28°**, commit, and nudge it
-over the left end of the tape with [[Shift+Right]]. Give it the same soft
-shadow.
+top and bottom the same way. Rotate it about **28°**, drag it over the left
+end of the tape and commit. Give it the same soft shadow.
 
 ## Spray a footer bar
 
@@ -356,14 +351,14 @@ bar's left end and paste `FREE ENTRY · ALL AGES · BYO CAN`.
 
 ![A big green rk! tag in a graffiti hand, scaled up and being rotated counter-clockwise over the right end of the tape](28-graffiti-tag-rotate.webp)
 
-Set the Text tool to **Sedgwick Ave Display**, **Size** `96`, green
-`#2F6F55`. Type `rk!` in the empty space near the right end of the tape, then
+Click the `Footer Bar` row, then set the Text tool to
+**Sedgwick Ave Display**, **Size** `96`, green `#2F6F55`. Type `rk!` in the empty space near the right end of the tape, then
 click **Rasterize Layer** so the scale and rotation stick.
 
 Marquee it and [[Cmd]]-drag the top-left handle out to about **180%**.
-Commit, marquee again and rotate it about **12°** counter-clockwise. Commit,
-then Move-drag it so it overlaps the lower-right corner of the tape. Taggers
-always hit on top of other work.
+Rotate it about **12°** counter-clockwise, then drag it so it overlaps the
+lower-right corner of the tape, and commit. Taggers always hit on top of
+other work.
 
 ## Outline the tag
 

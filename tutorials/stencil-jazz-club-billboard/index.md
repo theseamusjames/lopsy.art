@@ -2,7 +2,7 @@
 title: Make a Multi-Layer Stencil Jazz Club Billboard
 description: Spray a two-screen stencil billboard in Lopsy with a halftone moon, a black cat on a xylophone, misregistered key-plate shadows and dripping stencil type.
 published: 2026-09-26 11:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: stencil, street art, spray paint, billboard, jazz poster, halftone, quick mask, text effects, poster design
@@ -48,9 +48,9 @@ Open [Lopsy](/) and choose **File → New**. Set **Width** `1800` and
 
 Click the **Background** row and pick the **Gradient** tool. It has no
 keyboard shortcut, so pick it from the toolbox. Set **Type** to **Linear**
-and click **Advanced…**. Click the left stop and use the hue strip and color
-square to pick a deep navy (about `#0E1230`). Click the right stop and pick
-a dusky violet (about `#2A2360`). Click **Done**.
+and click **Advanced…**. Click the left stop and type `0E1230`, a deep
+navy, into the hex field. Click the right stop and type `2A2360`, a dusky
+violet. Click **Done**.
 
 ## Drag the sky
 
@@ -79,10 +79,11 @@ to that exact fraction. Then plain-click two more guides for the type block:
 one a little right of the centre guide (about 980 px) for its left edge, and
 one about 60 px in from the right edge for its right edge.
 
-Click **Add Layer** and name the layer `Seams`. With the **Rectangular
-Marquee**, drag a thin strip, about 6 px wide, down the full height of the
-canvas over each of the three sheet guides. Fill each strip with `#0A0C1E`
-using **Edit → Fill**. Set `Seams` to `70%`.
+Click **Add Layer** and name the layer `Seams`. Pick the **Pencil** ([[N]])
+at **Size** `6` with the foreground set to `#0A0C1E`. For each of the three
+sheet guides, click on the guide at the top edge, then hold [[Cmd+Shift]] and
+click on it at the bottom edge for a straight vertical seam. Set `Seams` to
+`70%`.
 
 ## Paint a radial selection in Quick Mask
 
@@ -175,8 +176,8 @@ Click the `Stage Glow` row and add a layer named `Stars`. Pick the
 Click once each in four spots across the sky to the right of the moon: two
 near the top between the first and centre guides, one just left of the
 centre guide a little lower, and one just right of it about halfway down.
-Give each one a hard core by filling a tiny ellipse, about 8 px across, at
-its center. Then drop the spray to Size `24` and Density `3`, and click a
+Give each one a hard core: switch to the **Brush** at **Size** `8` and
+**Hardness** `100` and click once at its center. Then go back to the Spray at Size `24` and Density `3`, and click a
 few times across the sky for stray paint dust.
 
 ## Start the xylophone group with rails
@@ -221,9 +222,10 @@ again. These bridges split every bar into two stencil islands.
 ![Thin pink and teal paint drips with round beads running down from four of the bars](17-bar-paint-drips.webp)
 
 Press [[Cmd+D]]. Pick the **Brush** at **Size** `7` and **Hardness** `100`.
-Draw straight lines 18–55 px long down from the bottom edge of bars 1, 4, 5
-and 7, each in its bar's color. End each drip with a small filled ellipse
-as the bead. Too much paint pooling at the bottom is the classic spray-can
+Draw straight drips 18–55 px long down from the bottom edge of bars 1, 4, 5
+and 7, each in its bar's color: click at the bar's edge, then
+[[Cmd+Shift]]-click straight below. End each drip with a bead: raise the
+Size a little and click once at the bottom. Too much paint pooling at the bottom is the classic spray-can
 tell.
 
 ## Make a misregistered key plate
@@ -231,8 +233,7 @@ tell.
 ![The Layer Effects drawer with Color Overlay set to near-black on the Key Plate layer, showing a dark offset copy behind the bars](18-key-plate-color-overlay.webp)
 
 Switch to the **Move** tool and choose **Layer → Duplicate Layer** twice.
-Each copy lands offset by 10 px, so nudge it back into line with the
-[[Shift]]+arrow keys, which move 10 px per press. Rename the three layers,
+Each copy lands exactly on top of the one below. Rename the three layers,
 from the bottom up: `Key Plate`, `Overspray` and `Bars`.
 
 Click `Key Plate` and nudge it 6 px right and 4 px down with the arrow
@@ -280,8 +281,8 @@ about 16 × 4 px, across the tail.
 
 Add a layer named `Mallet A`. With a cream 8 px Brush, click about 180 px
 above the left edge of the last bar, then [[Shift]]-click straight down at
-the bar's top to draw a straight handle. Fill a teal circle, about 40 px
-across, at its bottom end for the head. Do
+the bar's top to draw a straight handle. Switch to teal, set the Brush **Size** to
+`40` and click once at its bottom end for the head. Do
 the same on `Mallet B` about 30 px to the left, with a pink head.
 
 Marquee `Mallet A` loosely, switch to the Move tool, and drag the rotate
@@ -302,8 +303,9 @@ of `#0E0B1A`, **Offset X** `6`, **Offset Y** `4`, **Blur** `0` and
 ![A cream eighth note floating above the mallets](25-eighth-note.webp)
 
 Add a layer named `Note`. Lasso a tilted oval head in the open sky above
-the middle bars and fill it cream. Marquee a thin stem, about 7 × 108 px, up
-from its right side, then lasso the curved flag. Give it the same hard black
+the middle bars and fill it cream. With a cream 7 px Brush, click at its right
+side and [[Cmd+Shift]]-click about 108 px straight up for the stem, then lasso
+the curved flag and fill it. Give it the same hard black
 Drop Shadow, at **Offset X** `5` and **Offset Y** `4`.
 
 ## Copy and paste a second note
@@ -311,23 +313,22 @@ Drop Shadow, at **Offset X** `5` and **Offset Y** `4`.
 ![The pasted note with a live marquee around it, moved up and to the left](26-copy-paste-note.webp)
 
 Marquee the note, press [[Cmd+C]] and then [[Cmd+V]]. The paste lands in
-place on a new layer: rename it `Note 2`. Marquee it again and drag it up
-and to the left, until it sits near the top of the canvas, just right of the
-first guide. Press [[Cmd+D]].
+place on a new layer, selected and ready to move: rename it `Note 2`. Drag
+it up and to the left, until it sits near the top of the canvas, just right
+of the first guide.
 
 ## Scale the pasted note
 
 ![The second note inside a transform box being scaled down from its bottom-right corner](27-scale-note.webp)
 
-Marquee `Note 2` again and hold [[Cmd]] while you drag its bottom-right
-corner handle inward to about 75%. Holding [[Cmd]] keeps the proportions.
-Press [[Cmd+D]].
+Hold [[Cmd]] while you drag the bottom-right corner handle of `Note 2`
+inward to about 75%. Holding [[Cmd]] keeps the proportions.
 
 ## Rotate and recolor it
 
 ![The smaller note tilted 14 degrees inside a rotated transform box](28-rotate-note.webp)
 
-Marquee it once more, rotate it 14° clockwise and press [[Cmd+D]]. Add a
+Rotate it 14° clockwise and press [[Cmd+D]]. Add a
 **Color Overlay** of `#19C7B4` and the black Drop Shadow. Then tilt the
 first note 12° the other way so the pair drifts up out of the mallets.
 
@@ -335,8 +336,7 @@ first note 12° the other way so the pair drifts up out of the mallets.
 
 ![The word XYLOPHONE in cream Allerta Stencil across the top right](29-xylophone-title.webp)
 
-Click `Moon Shade` first. With a raster layer active, changing the text
-options won't restyle an existing text layer. Pick the **Text** tool, set
+Click `Moon Shade` first. Pick the **Text** tool, set
 **Size** `128` and the font to **Allerta Stencil**, and set the foreground
 to cream. Click on the left type guide, just below the top edge, type
 `XYLOPHONE` and press [[Tab]]. It fills the space between the two type
@@ -348,10 +348,9 @@ guides.
 
 Click `Moon Shade` again. Set the font to **Sirin Stencil** at Size `165`
 and the foreground to `#FF2E88`. Click in empty space lower down, type
-`NOCTURNE` and press [[Tab]]. With the Move tool, nudge it up with
-[[Shift+Up]] (10 px per press) and the arrow keys until its top sits a
-narrow gap, about 22 px, under XYLOPHONE and its left edge lines up with
-XYLOPHONE's.
+`NOCTURNE` and press [[Tab]]. With the Move tool, drag it up until its top
+sits a narrow gap, about 22 px, under XYLOPHONE and its left edge lines up
+with XYLOPHONE's on the left type guide. Fine-tune with the arrow keys.
 
 Click **Rasterize Layer** in the Layers panel footer. You'll paint on the
 word next, and a raster layer keeps the stretch for good. Marquee the word
@@ -362,8 +361,9 @@ and drag the right-middle handle out to the right type guide. Press
 
 ![Pink paint drips hanging from the bottoms of the N, C, U and E in NOCTURNE](31-title-drips.webp)
 
-On the rasterized `NOCTURNE` layer, use the 8 px pink Brush plus ellipse
-beads to hang drips from the N, C, U and E. Make them different lengths,
+On the rasterized `NOCTURNE` layer, use the 8 px pink Brush the same way
+as the bar drips, a straight line plus a one-click bead, to hang drips from
+the N, C, U and E. Make them different lengths,
 from about 26 to 62 px.
 
 ## Misregister the title inks
@@ -394,9 +394,7 @@ cream a little below the script, and `THE BLUE MALLET CLUB  ·  9 CANAL ST` in
 teal about 75 px under that. Nudge both so they start on the same left edge
 as the title, and keep at least 60 px clear of the canvas's right edge.
 
-> **Tip:** A click inside an existing text layer's box edits that layer.
-> Click for the second line well below the first, and paste characters like
-> `·` and `–` with [[Cmd+V]].
+> **Tip:** Paste characters like `·` and `–` with [[Cmd+V]].
 
 ## Marquee the ticket stub
 

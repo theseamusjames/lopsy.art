@@ -2,7 +2,7 @@
 title: Design a Ukiyo-e Great Wave Album Cover
 description: Make a Hokusai-style woodblock album cover in Lopsy with a curling great wave, seigaiha sea pattern, paper lanterns, vertical Japanese type and a hanko seal.
 published: 2026-09-27 21:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: ukiyo-e, album cover, woodblock, japanese, patterns, vertical text, typography, layer effects
@@ -172,7 +172,7 @@ On a *Foam* layer, use `#F2EDE1` for:
 
 - **The foam band.** Lasso a band along the top of the crest that starts thin on the back slope, grows to about 40 px, and has a scalloped inner edge.
 - **The claws.** Lasso a dozen or more curved, tapering fingers off the front of the crest. Give them different lengths (40–100 px) and bend angles, each ending in a small hook back toward the wave. Identical teeth look like a comb.
-- **The spray.** Fill about 45 small Elliptical Marquee circles (radius 3–10 px) in a loose cloud outside the claws.
+- **The spray.** Pick the **Brush** at Hardness 100 and click about 45 round droplets, Size 6–20, in a loose cloud outside the claws.
 
 Trim to the frame and add a 2 px Stroke.
 
@@ -203,24 +203,24 @@ only, using Lasso and Rect Marquee fills:
 
 For the character, select the **Text** tool. Pick **Shippori Mincho B1**,
 ExtraBold (800), size 62, colour `#3A1208`. Click in empty space and paste
-**灯** ("light"). Press [[Tab]] to commit, click **Rasterize Layer**, drag the
-glyph onto the centre of the front face, and choose **Layer → Merge Down**.
+**灯** ("light"). Press [[Tab]] to commit, drag the glyph onto the centre of
+the front face with the **Move** tool, and choose **Layer → Merge Down**. The
+merge rasterizes the text for you.
 
 ## Clone and scale the flotilla
 
 ![A pasted copy of the lantern being scaled down with the Move tool's transform handles, overlapping another lantern in the sea](11-scale-lantern-copies.webp)
 
 Marquee the lantern and press [[Cmd+C]], then [[Cmd+V]]. The copy pastes in
-place on a new layer.
+place on a new layer, already selected, with the **Move** tool ready.
 
-1. Drag it to its spot with the **Move** tool.
-2. Marquee it, hold [[Cmd]] and drag the bottom-right corner handle to scale it uniformly. Press [[Cmd+D]] to commit.
-3. Tilt a few by 3–5° with the rotate handle just outside the top-right corner, then [[Cmd+D]].
+1. Drag it to its spot.
+2. Hold [[Cmd]] and drag the bottom-right corner handle to scale it uniformly.
+3. Tilt a few by 3–5° with the rotate handle just outside the top-right corner.
+4. Press [[Cmd+D]] to commit.
 
 Make seven copies at 72%, 55%, 45%, 40%, 36%, 30% and 24%. Place the smallest
 near the horizon and the largest toward the viewer.
-
-> **Tip:** Press [[Cmd+D]] after every move, scale or rotate before you start the next one. Committing each transform keeps the handles and the preview in step with the pixels.
 
 ## Merge the lanterns and make them glow
 
@@ -260,7 +260,9 @@ four groups: *Night Sky*, *Night Sea*, *Great Wave* and *Lantern Float*.
 
 **Band.** On a *Band* layer, fill a 140 px tall strip in `#E8D5AE` below the
 picture, lined up with the frame's sides and leaving a gap of about 20 px
-under it. Draw 2 px `#1A2340` rules just inside its top and bottom edges.
+under it. For the 2 px `#1A2340` rules just inside its top and bottom edges,
+pick the **Pencil** at Size 2, click at one end and [[Cmd+Shift]]-click the
+other.
 
 **Cartouche.** On a *Cartouche* layer, marquee a tall 136 × 480 px box in the
 top-left corner of the picture, about 40 px in from the frame, and fill it
@@ -301,8 +303,8 @@ rough-carved rather than ruled.
 Fill it `#C23A22`. For the inner keyline, shrink 5 and fill `#F6EEDC`, then
 shrink 2 and fill `#C23A22` again.
 
-Add vertical text **海月** at size 32 in `#F6EEDC`. Rasterize it, centre it
-on the seal and Merge Down.
+Add vertical text **海月** at size 32 in `#F6EEDC`. Centre it on the seal and
+Merge Down.
 
 To rotate the seal by −2°, marquee it and drag just outside the top-right
 corner with the **Move** tool, then press [[Cmd+D]]. A stamp that's slightly
@@ -331,8 +333,9 @@ The band name should lead:
 - **KURAGE:** Shippori Mincho B1 ExtraBold, size 56, letter spacing 12
 - **ABYSSAL LANTERNS:** Medium (500), size 34, letter spacing 10
 
-Both are `#1A2340`. Create each one in empty space so the text tool doesn't
-grab the other layer, then line them up:
+Both are `#1A2340` and horizontal, so turn **Vertical** off. Before you set
+up each one, click the *Band* layer, then click in empty space on the band
+to type it. Then line them up:
 
 1. Centre KURAGE's caps vertically between the band's rules.
 2. Put ABYSSAL LANTERNS on the same baseline. With the Move tool, press [[Up]] or [[Down]] until the bottoms of the capitals line up.

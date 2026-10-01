@@ -2,7 +2,7 @@
 title: Make a Vaporwave Sunset Billboard
 description: Design a synthwave roadside billboard in your browser with a striped retro sun, neon grid, palm silhouettes, a neon sign and glowing script type in Lopsy.
 published: 2026-09-24
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 45
 tags: vaporwave, synthwave, text effects, layer effects, gradients, poster design
@@ -75,10 +75,6 @@ Drag a thin horizontal band across the lower half of the sun and press
 [[Delete]]. Repeat about seven times, making each band a little thicker and
 the gaps a little wider as you go down. That's the classic 80s sunset look.
 
-> **Tip:** If the grid is showing, turn off **Snap** in the options bar
-> first. Snapping rounds each marquee to the grid, so a very thin band can
-> end up with no height at all.
-
 Finally, open the Sun layer's **Layer Effects** (the sparkle icon) and turn on
 **Outer Glow** in `#FF4FB0`, Size `70`.
 
@@ -93,8 +89,10 @@ edge.
 
 Add a `Grid Lines` layer. Pick the **Brush** with Size `3`, Hardness `100` and
 color `#FF4DF0`. Draw straight lines fanning out from a vanishing point under
-the sun to the bottom edge. Then draw horizontal lines that get farther apart
-as they come toward the viewer.
+the sun to the bottom edge: click the vanishing point, then [[Shift]]-click
+the bottom edge, and repeat for each line. Then draw horizontal lines that
+get farther apart as they come toward the viewer. Click at the left edge and
+[[Cmd+Shift]]-click at the right edge to keep each one level.
 
 Give the layer an **Outer Glow** in `#FF2BD6`, Size `14`. For depth, use the
 **Eraser** at 45% opacity to soften the crowded lines at the horizon.
@@ -105,18 +103,17 @@ Give the layer an **Outer Glow** in `#FF2BD6`, Size `14`. For depth, use the
 
 Add a `Palm` layer and set the color to `#1A0432`. Paint a slightly curved
 trunk with a Size `18` brush. For the fronds, raise **Fade** to about `150`
-so each stroke tapers to a point, then sweep arcs out and down from the top of
+so each stroke fades out toward its tip, then sweep arcs out and down from the top of
 the trunk.
 
 ## Duplicate, move and scale a second palm
 
 ![A marquee around a copy of the palm, with scale handles, being shrunk beside the sun](08-scale-palm-copy.webp)
 
-Click **Duplicate Layer**, then click the copy's row. Marquee around the palm,
-press [[V]] for **Move**, and drag the copy to the other side of the sun.
-Press [[Cmd+D]] to commit the move, then marquee the copy again. Drag a
-corner handle while holding [[Cmd]] to scale it down evenly, and press
-[[Cmd+D]] to commit.
+Click **Duplicate Layer**. The copy becomes the active layer. Marquee around
+the palm, press [[V]] for **Move**, and drag the copy to the other side of
+the sun. Then drag a corner handle while holding [[Cmd]] to scale it down
+evenly, and press [[Cmd+D]] to commit.
 
 Select both palms and choose **Layer → Group Layers**. You can then move them
 together by selecting the group and dragging.
@@ -126,11 +123,11 @@ together by selecting the group and dragging.
 ![A rounded dark sign board with a glowing pale-pink neon flamingo outline standing on one leg](09-neon-flamingo-sign.webp)
 
 Add a `Sign Board` layer. Press [[U]] for the **Shape** tool, choose
-**Polygon** with **Sides** `4` and **Corner Radius** `26`, set the Fill to
-`#150430` and add a cyan Stroke. Drag out a rounded square board near the
+**Rectangle** with **Corner Radius** `26`, set the Fill to `#150430` and add
+a cyan Stroke. Hold [[Cmd]] and drag out a rounded square board near the
 left edge of the canvas, filling most of the height above the horizon.
 
-On a new layer above it, draw a simple flamingo with a Size `7` brush in
+On a new layer above it named `Flamingo Neon`, draw a simple flamingo with a Size `7` brush in
 `#FFE6F7`: an oval body, an S-curved neck, a hooked beak, and one straight leg
 with the other tucked up like a 4. Give it an **Outer Glow** in `#FF1FB4`,
 Size `26`, and a thin pink **Inner Glow**. The pale core with a hot glow is
@@ -145,7 +142,7 @@ color `#FF4FA8`. Click in empty sky and type `Flamingo`, then press [[Tab]] to
 commit.
 
 In **Layer Effects**, add a white **Stroke** (Width `5`) and a hard cyan
-**Drop Shadow** (`#26D9FF`, offset `9`/`9`, Blur `0`). The offset shadow is a
+**Drop Shadow** (`#26D9FF`, offset `4`/`4`, Blur `0`). The offset shadow is a
 signature synthwave detail.
 
 ## Tilt the headline
@@ -160,9 +157,10 @@ corner) about 6° counterclockwise. Press [[Cmd+D]] to commit.
 
 ![The word HOTEL in white Bungee letters sitting on the striped sun under the Flamingo script](12-hotel-lettering.webp)
 
-Drag the headline so it sits centered over the sun. Then type `HOTEL` in
-**Bungee** at Size `96` in white. In the **Text** panel, set **Letter
-spacing** to `36`. Center it under the script.
+Drag the headline so it sits centered over the sun. Select the
+`Flamingo Neon` layer, then set up the text: **Bungee**, Size `96`, white.
+Click below the script, type `HOTEL` and press [[Tab]]. In the **Text** panel, set
+**Letter spacing** to `36`. Center it under the script.
 
 Add a dark **Drop Shadow** (`#2A0845`, offset `7`, Blur `0`) and a cyan
 **Outer Glow** (`#00E5FF`). Solid white letters stay readable from a moving
@@ -172,10 +170,11 @@ car in a way thin outlined type can't.
 
 ![Yellow katakana set vertically in a narrow column beside the neon sign](13-vertical-katakana.webp)
 
-Japanese text is a staple of the style. Choose **Dela Gothic One**, Size `30`,
-color `#FFE36B`, and click the **Vertical text** toggle (the stacked A over B)
-in the options bar. Click beside the sign and paste `フラミンゴ・ホテル`.
-
+Japanese text is a staple of the style. Select the `Flamingo Neon` layer
+again, then set up the text: **Dela Gothic One**, Size `30`, color `#FFE36B`,
+**Letter spacing** `0` in the Text panel, and click the **Vertical text**
+toggle (the stacked A over B) in the options bar. Click beside the sign and
+paste `フラミンゴ・ホテル`.
 
 ## Recolor the sign frame
 
@@ -186,8 +185,10 @@ for the **Magic Wand**, and click the frame. Set the foreground color to
 `#FF4FD8` and choose **Edit → Fill**, then press [[Cmd+D]]. Add an **Outer
 Glow** to the board.
 
-Finally, type `OPEN` in the board's top-left corner, in a hollow display face
-such as **Bungee Outline**. Give it a red **Color Overlay** and a glow, so it
+Finally, click the **Vertical text** toggle again to go back to horizontal
+type, and set up the text: **Monoton** (a hollow, multi-line display face),
+Size `46`, color `#7FF9FF`, **Letter spacing** `22`. Type `OPEN` in the
+board's top-left corner. Give it a red **Color Overlay** and a glow, so it
 reads like a vacancy light.
 
 ## Add the info band

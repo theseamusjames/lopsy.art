@@ -164,6 +164,11 @@ pub struct EngineInner {
     /// mode 0 is passthrough.
     pub doc_color_mode: u32,
     pub needs_recomposite: bool,
+    /// Only the final blit is stale (viewport or another screen-space
+    /// uniform changed); the composite texture is current. Anything that
+    /// writes the composite texture outside `composite` must set
+    /// `needs_recomposite` instead.
+    pub needs_present: bool,
     // Brush state
     pub stroke_textures: HashMap<String, TextureHandle>,
     pub stroke_opacity: HashMap<String, f32>,
@@ -304,6 +309,15 @@ pub struct EngineInner {
     // snapshots via blit (~1ms) instead of readback+compress (~100ms).
     pub snapshot_textures: Vec<Option<SnapshotTexture>>,
     pub snapshot_free_list: Vec<u32>,
+    /// Per-layer content generation: a fresh value from
+    /// `next_content_gen` every time `mark_layer_dirty` reports the layer's
+    /// pixels or mask changed. Never reused, so a layer deleted and
+    /// re-added can't match an old cache key.
+    pub layer_content_gen: HashMap<String, u64>,
+    pub next_content_gen: u64,
+    /// The live compositor's cache of each layer's effect images; see
+    /// `effect_cache_gpu.rs`.
+    pub effect_cache: crate::effect_cache_gpu::EffectCache,
 }
 
 pub struct SnapshotTexture {
@@ -369,6 +383,7 @@ impl EngineInner {
             bg_color: [1.0, 1.0, 1.0, 1.0],
             doc_color_mode: 0,
             needs_recomposite: true,
+            needs_present: true,
             stroke_textures: HashMap::new(),
             stroke_opacity: HashMap::new(),
             stroke_use_brush_texture: HashMap::new(),
@@ -451,6 +466,9 @@ impl EngineInner {
             text_renderer: None,
             snapshot_textures: Vec::new(),
             snapshot_free_list: Vec::new(),
+            layer_content_gen: HashMap::new(),
+            next_content_gen: 1,
+            effect_cache: crate::effect_cache_gpu::new_cache(),
         })
     }
 
@@ -491,7 +509,7 @@ impl EngineInner {
 
     pub fn set_viewport(&mut self, zoom: f64, pan_x: f64, pan_y: f64, screen_w: f64, screen_h: f64) {
         self.viewport = ViewportState::new(zoom, pan_x, pan_y, screen_w, screen_h);
-        self.needs_recomposite = true;
+        self.needs_present = true;
     }
 
     pub fn set_background_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
@@ -507,9 +525,24 @@ impl EngineInner {
         self.needs_recomposite = true;
     }
 
-    pub fn mark_layer_dirty(&mut self, _layer_id: &str) {
+    /// Report that `layer_id`'s pixels or mask changed. Every layer and
+    /// mask texture writer calls this with the id it wrote; the effect cache
+    /// relies on it to know a layer's cached effects are stale.
+    pub fn mark_layer_dirty(&mut self, layer_id: &str) {
         self.needs_recomposite = true;
         self.group_pre_adj_valid = false;
+        let generation = self.next_content_gen;
+        self.next_content_gen += 1;
+        match self.layer_content_gen.get_mut(layer_id) {
+            Some(g) => *g = generation,
+            None => {
+                self.layer_content_gen.insert(layer_id.to_string(), generation);
+            }
+        }
+    }
+
+    pub fn layer_content_gen(&self, layer_id: &str) -> u64 {
+        self.layer_content_gen.get(layer_id).copied().unwrap_or(0)
     }
 
     /// Expand a lazy 1x1 layer texture to full document size.
@@ -666,6 +699,8 @@ impl EngineInner {
         for (_, tex) in self.layer_masks.drain() {
             self.texture_pool.release(tex);
         }
+        crate::effect_cache_gpu::clear(self);
+        self.layer_content_gen.clear();
         // Stroke textures
         for (_, tex) in self.stroke_textures.drain() {
             self.texture_pool.release(tex);

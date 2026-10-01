@@ -2,7 +2,7 @@
 title: Design a Constructivist Zine Cover in Lopsy
 description: Make a constructivist zine cover in Lopsy with a clock-eyed kino-eye, a rotated gear, a factory skyline, misregistered diagonal type and halftone texture.
 published: 2026-09-25 16:13
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: zine cover, constructivism, poster design, text effects, layer effects, selections, transforms, halftone
@@ -63,14 +63,13 @@ and press [[Cmd+D]] to deselect.
 
 ![Three black wedge-shaped rays of different widths radiating from one point to the right edge of the canvas](03-three-rays.webp)
 
-Lasso and fill two more wedges from the same point. The second one meets the
-right edge about a quarter of the way down and is about 70 px wide there. The
-last, thinner one runs almost level with the starting point and is about
-60 px wide at the edge. Rays of different widths look more dynamic than evenly spaced ones.
+Lasso two more wedges from the same point, holding [[Shift]] as you start
+the second so it adds to the first. One meets the right edge about a quarter
+of the way down and is about 70 px wide there. The other, thinner one runs
+almost level with the starting point and is about 60 px wide at the edge.
+Rays of different widths look more dynamic than evenly spaced ones.
 
-> **Tip:** The lasso always replaces the selection, so fill each wedge before
-> you draw the next one. Click well inside a thin wedge. A bucket click outside
-> the selection does nothing.
+Choose **Edit → Fill** to fill both wedges at once, then press [[Cmd+D]].
 
 ## Draw the red sun
 
@@ -78,12 +77,12 @@ last, thinner one runs almost level with the starting point and is about
 
 Click **Add Layer** and name it `Red Sun`. Pick the **Elliptical Marquee**,
 hold [[Cmd]] and drag a perfect circle 600 px across, centred on the point
-where the rays meet but sitting about 40 px lower.
+where the rays meet but sitting about 40 px lower. Set the foreground to
+`#C62828` and fill it with the Paint Bucket. Press [[Cmd+D]].
 
 > **Tip:** You'll need this exact circle again in a moment. With nothing
 > selected, a single click (no drag) with the Elliptical Marquee opens a
-> dialog for exact corners: **From** `340`, `210` and **To** `940`, `810`. Set the foreground to `#C62828` and fill it with the Paint
-Bucket. Press [[Cmd+D]].
+> dialog for exact corners: **From** `340`, `210` and **To** `940`, `810`.
 
 The circle hides where the rays start, so they now seem to come out from
 behind the sun.
@@ -185,20 +184,17 @@ Rectangular Marquee to type it exactly: **From** `156`, `718` and **To**
 `204`, `1142`.) Fill it black. That bar is two opposite teeth. Press
 [[Cmd+C]] to copy it and [[Cmd+D]] to deselect.
 
-Press [[Cmd+V]]. The copy is pasted in place on a new layer. Draw the same
-marquee over it, press [[V]] for **Move**, hold [[Cmd]] and drag a round
-rotation handle. [[Cmd]] snaps the rotation to 15° steps, so stop at **30°**.
+Press [[Cmd+V]]. The copy is pasted in place on a new layer, already selected
+with the **Move** tool active. Hold [[Cmd]] and drag a round rotation
+handle. [[Cmd]] snaps the rotation to 15° steps, so stop at **30°**.
 Press [[Cmd+D]] to commit.
 
 ## Finish the ring of teeth
 
 ![A black twelve-point star of bars crossing at one centre on the left side of the canvas](14-gear-teeth.webp)
 
-Repeat the paste, marquee and rotate for **60°, 90°, 120° and 150°**. Six
-crossed bars give you twelve evenly spaced teeth.
-
-> **Tip:** Draw the marquee again after every paste. Without a selection, a
-> drag on the canvas moves the layer instead of rotating it.
+Repeat the paste and rotate for **60°, 90°, 120° and 150°**. Six crossed
+bars give you twelve evenly spaced teeth.
 
 ## Add the hub and axle hole
 
@@ -297,11 +293,12 @@ The chimneys stand in front of the sun, which gives the cover its depth.
 
 ![Close-up of small cream circles rising from each chimney top over the red sun](23-steam-puffs.webp)
 
-Add a `Steam` layer at the top of the Factory group. Above each chimney, fill
-two or three cream circles with the Elliptical Marquee. Start at about 20 px
-across and make each one bigger as it rises up and to the left.
+Add a `Steam` layer at the top of the Factory group. Pick the **Brush** at
+**Hardness** `100` in cream, and click two or three round puffs above each
+chimney. Start at **Size** `20` and go up about 8 px for each puff as it
+rises up and to the left.
 
-Flat, stepped puffs suit the style better than soft, brushed smoke, and cream
+Flat, hard-edged puffs suit the style better than soft, airbrushed smoke, and cream
 on red is the cover's strongest contrast.
 
 ## Set INDUSTRIAL vertically
@@ -324,8 +321,8 @@ top of the page down to a clear gap above the gear's top tooth.
 ![A cream 07 in Anton outlined in black, with the Stroke effect set to 8 pixels in the Layer Effects panel](25-outline-07-stroke.webp)
 
 Set the Size to `180` and the foreground to cream. Click at the very top of
-the page, just right of INDUSTRIAL, and type `07`, then press [[Tab]] and rasterize it. Open its **Layer Effects** and turn
-on **Stroke** with **Width** `8`.
+the page, just right of INDUSTRIAL, and type `07`, then press [[Tab]]. Open its **Layer Effects** and turn on
+**Stroke** with **Width** `8`.
 
 The number is cream on cream, so all you see is the black outline. It's clearly
 readable but stays lighter than INDUSTRIAL.
@@ -341,20 +338,15 @@ box's left edge:
 
 1. `THE NIGHT SHIFT ZINE` in cream **Russo One** at Size `30`, near the top
    of the box.
-2. `ISSUE 07 / AUTUMN 2026 / 3 AM` in **Space Mono** Regular at Size `22`, in a
-   brighter red `#E0463A`, below it.
-
-Rasterize each line when you finish it.
-
-> **Tip:** Wait for the canvas to show the new font before you click
-> **Rasterize Layer**. Rasterizing bakes in whatever face is on screen, and a
-> font you've just picked can take a moment to download.
+2. Select `Masthead` again, then set `ISSUE 07 / AUTUMN 2026 / 3 AM` in
+   **Space Mono** Regular at Size `22`, in a brighter red `#E0463A`, below
+   it.
 
 ## Rotate the slogan
 
 ![WE DO NOT SLEEP. WE PRODUCE. in red Bebas Neue inside rotation handles, turned to match the diagonal band](27-rotate-tagline.webp)
 
-Switch to **Bebas Neue** at Size `64` in red. Click in the cream triangle
+Select `Masthead` and switch to **Bebas Neue** at Size `64` in red. Click in the cream triangle
 under the band, on the right, and type
 `WE DO NOT SLEEP.`, press [[Enter]], and type `WE PRODUCE.`. Press [[Tab]] and
 rasterize the layer.

@@ -2,7 +2,7 @@
 title: Design a Technical Illustration Christmas Card
 description: Draw an exploded isometric gingerbread house in Lopsy, as a vintage assembly drawing with balloons, an X-ray detail view, a parts list and a title block.
 published: 2026-09-29 23:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: christmas card, holiday card, technical illustration, isometric, exploded view, greeting card, transforms, pattern fill, typography, groups
@@ -62,10 +62,10 @@ Rename **Layer 1** to `Sheet Border` and set the foreground to ink `#2A1C12`. Ea
 
 ![A 150 by 150 grid tile at 100% zoom, with thin blue-grey lines every 30 px and a darker two-pixel line on its top and left edges, selected by a marquee](02-grid-tile.webp)
 
-Add a layer called `Grid` above Background and press [[Cmd+1]] to zoom to 100%, so you can place 1 px lines. On an empty spot:
+Add a layer called `Grid` above Background and press [[Cmd+1]] to zoom to 100%, so you can place 1 px lines. Pick the **Pencil** ([[N]]): it draws hard, pixel-exact lines. Click where a line starts, then hold [[Cmd+Shift]] and click where it ends for a dead-straight horizontal or vertical. On an empty spot:
 
-- **Minor lines:** with foreground `#8FAFC2`, fill 1 px-wide marquees every 30 px inside a 150 × 150 square.
-- **Major lines:** with foreground `#5F86A0`, fill a 2 px line along the square's top edge and another along its left edge.
+- **Minor lines:** at **Size 1** in `#8FAFC2`, draw lines every 30 px across a 150 × 150 square, both ways.
+- **Major lines:** at **Size 2** in `#5F86A0`, draw a line along the square's top edge and another along its left edge.
 
 Marquee exactly the 150 × 150 square and choose **Edit → Define Pattern**. Then press [[Delete]] to clear the tile.
 
@@ -104,13 +104,13 @@ The trees are three-point triangles in green `#3D7A4A` with white chevrons for s
 Add a layer called `Side Wall`. Don't draw it in perspective. Draw it **straight on**, the way it would look on the kitchen counter before assembly:
 
 - a 410 × 225 tan `#B9773F` rectangle
-- two windows: an ink frame, a glass fill `#F3B23E` and 4 px muntins
+- two windows: an ink frame, a glass fill `#F3B23E` and 4 px ink muntins
 - green `#3D7A4A` shutters and white icing sills
 - a dark arched doorway: an ink arch, then a `#3A2215` arch inset 5 px
 - a row of white piping dots down each edge
 - a wavy white snow skirt along the bottom
 
-Everything is marquee, ellipse and lasso fills. Draw it roughly where the wall will stand, over the back-left half of the board, so the distort in the next step only has to bend it.
+The blocks are marquee, ellipse and lasso fills. Draw the muntins with the **Pencil** at **Size 4** (click, then [[Cmd+Shift]]-click), and click the piping dots one by one with a small, hard white **Brush**. Draw it roughly where the wall will stand, over the back-left half of the board, so the distort in the next step only has to bend it.
 
 ## Distort the elevation onto its isometric face
 
@@ -123,8 +123,6 @@ Marquee the whole elevation, switch to the **Move** tool ([[V]]) and click **Dis
 3. Keep both sides vertical. The top and bottom edges should now slope down to the right at 30°, parallel to the board's front-left edge.
 
 The windows, shutters and doorway all come along in correct isometric. Press [[Cmd+D]] to commit.
-
-> **Tip:** The marching ants stay rectangular in Distort mode (that's by design). Only the blue handle box shows the new shape, so judge the result from the pixels.
 
 ## Build the gable wall and door the same way
 
@@ -144,7 +142,7 @@ The **door** is its own layer. Draw it as a brown `#7E4523` arch with plank line
 On a temporary layer, zoom in and fill a **28 × 48** rectangle with `#CB8C52`. Then:
 
 1. Lasso half-rings (lower half of a 14 px circle, 3 px thick) in `#7A4524`. Put them at the top-centre and at mid-height on both side edges. The side-edge ones are cut in half, so the scallops stagger when the tile repeats.
-2. Add a 2.5 px white icing dot inside each scale.
+2. Click a 2.5 px white icing dot inside each scale with a hard **Brush**.
 
 Marquee exactly the 28 × 48 tile and choose **Edit → Define Pattern**. Delete the temporary layer.
 
@@ -205,8 +203,6 @@ Group the layers into sub-assemblies. For each group, click the first layer, [[S
 
 Collapse those three groups. Then click **Base**, [[Shift]]-click **Chimney** and group everything into **House**.
 
-> **Tip:** Always collapse sub-groups before you [[Shift]]-click a range. An expanded group's child rows join the range too, and grouping would pull them out of their sub-assembly.
-
 ## Explode the house with group moves
 
 ![The exploded house: the roof assembly lifted well above the walls, the chimney floating above the roof, the door pulled out in front of the doorway and the board dropped below](14-exploded-view.webp)
@@ -253,7 +249,7 @@ Section views mark cut material with **45° hatching**:
 1. **Section layer:** fill an L of two wall slabs in `#5C97B4`. Clip it to the circle: [[Cmd]]-drag an ellipse marquee about 17 px inside the disc's edge (radius 163), then **Select → Inverse** and [[Delete]].
 2. **Hatch tile:** make a **16 × 16** pattern tile holding three thin white diagonal bands: one through the middle from bottom-left to top-right, and one clipping each of the other two corners. The corner pieces meet up with the next tile, so the lines join seamlessly.
 3. **Hatch layer:** [[Cmd]]-click the Section thumbnail to select the slabs. On a new `Hatch` layer, use **Fill with Pattern…** with the 16 × 16 tile, then set the layer to **70%**.
-4. **Icing layer:** fill a white circle of radius 34 in the inside corner. [[Cmd]]-click the Section thumbnail again, click the `Icing` row so [[Delete]] clears only the selection, and press [[Delete]]. The walls cut it back to a quarter-round **icing bead**.
+4. **Icing layer:** fill a white circle of radius 34 in the inside corner. [[Cmd]]-click the Section thumbnail again and press [[Delete]]. The walls cut it back to a quarter-round **icing bead**.
 5. **Ring:** add a thin white ring just inside the disc's edge (radius about 166).
 
 Label the section in **B612 Mono** 16 px white, each label with a short leader.
@@ -265,9 +261,9 @@ Label the section in **B612 Mono** 16 px white, each label with a short leader.
 Every engineering sheet ends in a **title block** in its bottom-right corner:
 
 1. On a `Table Fill` layer, fill paper-coloured rectangles behind the parts list and the title block. Keep them *inside* the frame, so the thick border still shows.
-2. On a `Table Rules` layer, draw the rules with filled marquees: 3 px for the outer lines and header, 1 px between rows.
+2. On a `Table Rules` layer, draw the rules with the **Pencil** in ink, clicking each start and [[Cmd+Shift]]-clicking each end: **Size 3** for the outer lines and header, **Size 1** between rows.
 
-Set the type in **B612 Mono**:
+Set the type in **B612 Mono**. Select *Table Rules* before you set up each new block:
 
 - **Parts list:** 21 px with **Line height 1.62**, so each 34 px row holds one line. Make the QTY column an **area text** box (drag with the Text tool) set to **Align center**, so `12` and `2` centre in their cells.
 - **Title block:** 24 px bold for the title, and 19 px and 17 px for the cells.
@@ -278,10 +274,10 @@ The jokes live here too: DRAWN S. CLAUS, CHECKED MRS. CLAUS, SCALE NTS.
 
 ![Close-up of the right column: a red letter-spaced kicker, the two-line serif headline Some Assembly Required., the red handwritten line Merry Christmas! Instructions not included., the X-ray detail and a four-line notes list](19-headline-and-notes.webp)
 
-Every block in the right column shares one left edge, the left edge of the detail circle. Click the top ruler there to drop a guide, then nudge each block to it with the arrow keys.
+Every block in the right column shares one left edge, the left edge of the detail circle. Click the top ruler there to drop a guide, then nudge each block to it with the arrow keys. Select *Table Rules* before you set up each new block.
 
 - **Kicker:** `ASSEMBLY INSTRUCTIONS — MODEL XMAS-26` in **B612 Mono** Bold 19, red, with **Letter spacing 3**.
-- **Headline:** `Some Assembly` / `Required.` in **Old Standard TT** Bold 104 with **Line height 1.02**.
+- **Headline:** `Some Assembly` / `Required.` in **Old Standard TT** Bold 104 with **Letter spacing 0** and **Line height 1.02**.
 - **Greeting:** `Merry Christmas! Instructions not included.` in **Architects Daughter** 34, red. It's the drafter's handwriting.
 - **Notes:** B612 Mono 18 at Line height 1.7, beside the detail circle. For example, *4. DO NOT EAT BEFORE 25.12.*
 - **Caption:** `DETAIL A · X-RAY · SCALE 3:1` under the circle. Add **Letter spacing 0.6** so it spans the circle's full width.
@@ -303,9 +299,7 @@ Step back and check the balance. Here the lifted chimney crowded the ridge, and 
 
 Balloons are **27 px** red rings, made with an ellipse fill, **Shrink** by 3 and [[Delete]]. The numbers are **B612 Mono** Bold 24, centred with arrow nudges.
 
-> **Tip:** If Shrink leaves the inside of such a small circle looking squared off, delete the middle with a second circle instead: [[Cmd]]-drag a 21 px ellipse marquee centred inside the ring and press [[Delete]].
-
-Keep the leaders consistent. Every leader is a **1.8 px** ink line at the isometric angle, **30°**, and ends in a 4 px dot on the part. With the **Brush**, click the start of a leader, then hold [[Shift]]+[[Cmd]] and click its end to snap the line to 15° steps. Parallel leaders make the sheet look engineered rather than scribbled. Number the balloons in the same order as the parts list.
+Keep the leaders consistent. Every leader is a **1.8 px** ink line at the isometric angle, **30°**, and ends in a 4 px dot on the part (one click of the Brush at Size 4). With the **Brush**, click the start of a leader, then hold [[Shift]]+[[Cmd]] and click its end to snap the line to 15° steps. Parallel leaders make the sheet look engineered rather than scribbled. Number the balloons in the same order as the parts list.
 
 ## Add a dimension with a rotated label
 

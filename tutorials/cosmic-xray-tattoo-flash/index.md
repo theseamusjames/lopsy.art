@@ -2,7 +2,7 @@
 title: Design a Holographic X-Ray Tattoo Flash Sheet
 description: Make a COSMIC X-RAY tattoo flash sheet in Lopsy with x-ray skull, hand, heart and planet designs, holographic foil gradients and a Rye title banner.
 published: 2026-09-28
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: holographic, iridescent, tattoo flash, tattoo design, x-ray, skeleton, space, gradients, lasso, text effects
@@ -80,8 +80,6 @@ leaves a 14 px foil band.
 For the inner rule, select a rectangle about 54 px in from each edge, fill it
 with `#F4F0FF`, choose **Select → Shrink…** with **3 px**, and press
 [[Delete]]. Add an **Outer Glow** in `#22E8FF` (**Size 18**, **Opacity 55**).
-Then click **Rasterize Layer Style** to bake it in: glows are recalculated
-every time the canvas redraws, and a flash sheet ends up with a lot of them.
 
 > **Tip:** For even margins, click the canvas once with the marquee (don't
 > drag) while nothing is selected. A dialog opens where you can type exact
@@ -103,7 +101,7 @@ of each row, at roughly 600 and 1130.
 
 Turn on **View → Show Grid** and set the **Grid** slider in the options bar
 to **8px** for later alignment. Turn it off again while you draw freehand
-shapes, because the grid also switches on snapping.
+shapes, so they don't snap to it.
 
 ## Cut the ribbon's swallowtails
 
@@ -129,8 +127,7 @@ Add a **Banner** layer. Marquee a band about 860 × 126 px, centred across
 the sheet and sitting a little higher than the tails, so its ends overlap
 their inner ends by about 40 px and the tails peek out below. Drag the five-stop foil gradient across it. Give it a 7 px ink **Stroke**, a white
 **Inner Glow** (**Size 14**, **Opacity 70**) for a chrome edge, and a
-`#FF3FD8` **Outer Glow** (**Size 30**, **Opacity 60**). Rasterize the style on
-both ribbon layers.
+`#FF3FD8` **Outer Glow** (**Size 30**, **Opacity 60**).
 
 ## Set the title in Rye
 
@@ -155,11 +152,11 @@ Press [[Tab]] to commit.
 
 ![The dark title centred in the ribbon with even space above, below and at both ends, a thin white outline and a hard violet shadow](10-title-seated.webp)
 
-Switch to **Move** (V) and nudge the title with the arrow keys (hold
-[[Shift]] for 10 px) until the letters sit in the middle of the band, with
-the same space at both ends and the same space above and below the caps.
+Switch to **Move** (V) and drag the title until the letters sit in the
+middle of the band, with the same space at both ends and the same space above
+and below the caps. Fine-tune with the arrow keys.
 Add a white **Stroke** with **Width 3** and a `#2A124F` **Drop Shadow** with
-**Offset X 4**, **Offset Y 4**, **Blur 0** and **Opacity 55**. The white keyline separates
+**Offset X 1**, **Offset Y 1**, **Blur 0** and **Opacity 55**. The white keyline separates
 the ink from the foil, and the hard offset shadow reads as a printed sticker.
 
 ## Launch a comet
@@ -201,8 +198,9 @@ On a **Skull Ink** layer, use the **Elliptical Marquee** to fill two
 74 × 66 eye sockets with ink, one each side of the column guide, about
 100 px apart and just above the cheekbones. Lasso a small spade shape
 between and below them for the nose. Marquee a 108 × 34 mouth centred under
-the nose and fill it. Then fill two rows of 13 px `#F4F0FF` squares, 17 px
-apart, across the mouth for the teeth.
+the nose and fill it. For the teeth, pick the **Pencil** (N) at **Size 13** in
+`#F4F0FF`. Each click leaves a 13 px square, so click two rows of them across
+the mouth, 17 px apart.
 
 ## Trace the x-ray sutures
 
@@ -215,8 +213,9 @@ last one, so you can build the zig-zag coronal suture across the crown, the
 temple curves, and arcs over the brows and cheekbones point by point. Give
 the layer a `#22E8FF` **Outer Glow** (**Size 16**, **Opacity 90**).
 
-On a **Skull Eyes** layer, fill a 26 px cyan circle in each socket with a
-small white catch-light, and add a cyan **Outer Glow** (**Size 26**).
+On a **Skull Eyes** layer, click once in each socket with the hard Brush at
+**Size 26** in cyan, then add a small white catch-light to each with a
+smaller white click. Add a cyan **Outer Glow** (**Size 26**).
 
 > **Tip:** Hold the pointer still for about 1.5 s mid-stroke and Lopsy
 > smooths the stroke into a clean line or curve, which also ends it.
@@ -229,9 +228,9 @@ small white catch-light, and add a cyan **Outer Glow** (**Size 26**).
 Select **Banner Tails** so new layers land outside the skull, and add a
 **Hand Flesh** layer. Lasso a palm on the right column guide, a little below
 the top row guide, then lasso a capsule for each finger (pointing up) and the
-thumb (angled out to the lower left), filling each with `#4A22B8`. The overlaps
-merge into one hand. [[Cmd]]-click the layer thumbnail to select its shape,
-and drag a diagonal `#7B4DFF` → `#3A1C8C` → `#1C0E4A` gradient from the
+thumb (angled out to the lower left), holding [[Shift]] as you start each one
+so it adds to the selection. Fill it with `#4A22B8`. The overlaps merge into
+one hand. With the hand still selected, drag a diagonal `#7B4DFF` → `#3A1C8C` → `#1C0E4A` gradient from the
 upper left, the same light direction as the skull. Add a 7 px ink **Stroke**
 and a `#FF3FD8` **Outer Glow** (**Size 30**, **Opacity 85**).
 
@@ -239,9 +238,11 @@ and a `#FF3FD8` **Outer Glow** (**Size 30**, **Opacity 85**).
 
 ![Pastel holographic finger bones in three segments per finger, metacarpals and small round wrist bones inside the violet hand](16-hand-bones.webp)
 
-On a **Hand Bones** layer, lasso-fill thin white capsules: three phalanges
-per finger with a 6 px gap at every joint, four metacarpals fanning to the
-wrist, three thumb bones, and seven small round carpals. [[Cmd]]-click the
+On a **Hand Bones** layer, paint the bones with a hard white Brush a little
+narrower than a finger. A click at one end of a bone and a [[Shift]]-click at
+the other paints a round-ended capsule. Paint three phalanges per finger with
+a 6 px gap at every joint, four metacarpals fanning to the wrist and three
+thumb bones, then single-click seven small round carpals at the wrist. [[Cmd]]-click the
 thumbnail and refill the bones with the pastel foil, then give them a 3 px
 ink **Stroke** and a cyan **Outer Glow**. The dark gaps are what make it read
 as an x-ray rather than a glove.
@@ -263,7 +264,7 @@ Glow** and a pale yellow **Outer Glow**.
 
 ![The Layers panel with the skull layers inside a 01 Skull & Comet group and the hand layers inside a 02 Hand & Moon group](18-design-groups.webp)
 
-Rasterize the layer styles you've finished. Click **Comet Tail**,
+Click **Comet Tail**,
 [[Shift]]-click **Skull Eyes** and choose **Layer → Group Layers**. Name the
 group **01 Skull & Comet**. Do the same for **Moon** to **Hand Bones** as
 **02 Hand & Moon**. Each flash design is now one unit you can move.
@@ -306,17 +307,16 @@ Add an ink **Stroke** and a warm **Outer Glow**. Group the heart layers as
 
 ![A pastel sphere burned darker along its lower right, with soft violet latitude bands clipped to the sphere](22-planet-bands.webp)
 
-Click **Banner Tails** so the planet starts outside group 03, and add a
-**Planet** layer. Fill a 236 px circle, centred where the right column guide
+Click **Banner Tails** and add a **Planet** layer. Fill a 236 px circle, centred where the right column guide
 crosses the lower row guide, with a **Radial** gradient from the upper left: white, `#B8F7FF`, `#C9B6FF`, `#FF3FD8`,
 `#3A1C8C`. Pick **Dodge/Burn** (O), set **Mode: Burn**, **Exposure 16** and
 **Size 110**, and drag once along the lower-right edge to turn the sphere away
 from the light.
 
 On a **Planet Bands** layer, lasso four slanted bands across the planet in
-`#7B4DFF`. To clip them, click the **Planet** row, [[Cmd]]-click its
-thumbnail, click back on **Planet Bands**, choose **Select → Inverse** and
-press [[Delete]]. Set the bands to **Multiply** at **45%**.
+`#7B4DFF`. To clip them, [[Cmd]]-click the **Planet** row's thumbnail
+while **Planet Bands** stays active, choose **Select → Inverse** and press
+[[Delete]]. Set the bands to **Multiply** at **45%**.
 
 ## Tilt the ring
 
@@ -337,9 +337,9 @@ rotation handle to tilt the ring about **18°** anticlockwise.
 
 ![The ring's back arc erased where it passes behind the planet, while the front arc stays in front](24-ring-back-erase.webp)
 
-Now the ring needs to pass *behind* the planet. Click the **Planet** row,
-[[Cmd]]-click its thumbnail, then click back on the **Ring** row. The
-planet's shape is now the selection, and the Ring layer is active. Pick the
+Now the ring needs to pass *behind* the planet. With the **Ring** layer
+active, [[Cmd]]-click the **Planet** row's thumbnail. The planet's shape is
+now the selection. Pick the
 **Eraser** (E) at **Size 30**, click at the left end of the ring's upper arc,
 and [[Shift]]-click along it to the right end. The selection keeps the eraser
 inside the disc, so only the back arc over the planet disappears.
@@ -348,10 +348,9 @@ Add an ink **Stroke** and a cyan **Outer Glow** to the ring. Add a 44 px
 **Moonlet** at its upper right. Then group **Planet** to **Moonlet** as
 **04 Ringed Planet**.
 
-> **Tip:** Load the selection *from the Planet row*, then switch layers.
-> Clicking another row settles the loaded shape into a plain selection, so
-> the eraser, Delete and Fill all respect it. Use the same order whenever you
-> borrow one layer's shape to trim another.
+> **Tip:** [[Cmd]]-clicking another layer's thumbnail loads its shape
+> without switching layers. Use it whenever you borrow one layer's shape to
+> trim another.
 
 ## Number the designs
 
@@ -361,9 +360,9 @@ Flash numbers let a client say "number 3, please". Add a **Badge 1** layer,
 fill a 54 px circle in the top-left corner, just inside the frame below the
 ribbon, with the pastel foil, and give it an ink
 **Stroke** and a cyan **Outer Glow**. Rasterize the style so the effects travel
-with the pixels. Then marquee the badge, press [[Cmd+C]], [[Cmd+V]] (it
-pastes in place on a new layer) and [[Cmd+D]], and drag the copy with
-**Move** to the upper left of the hand. Paste two more copies for the heart
+with the pixels. Then marquee the badge and press [[Cmd+C]] and [[Cmd+V]].
+The copy pastes in place on a new layer, already selected with the **Move**
+tool active, so drag it to the upper left of the hand. Paste two more copies for the heart
 and the planet. Each badge sits just above and to the left of its own
 design.
 
@@ -376,16 +375,15 @@ until it's centred on its badge.
 
 On a **Sparkle** layer, lasso a four-point star with concave sides, about
 68 px across, in the empty gap in the middle of the sheet, and fill it white.
-Marquee it, then [[Cmd+C]] and [[Cmd+V]]. [[Cmd]]-click the pasted layer's
-thumbnail and rotate it **45°** with the Move tool's rotation handle. Hold
+Marquee it, then press [[Cmd+C]] and [[Cmd+V]]. Rotate the pasted copy
+**45°** with the Move tool's rotation handle. Hold
 [[Cmd]] while you drag and the rotation snaps in 15° steps.
 
 ## Scale the copy and merge it
 
 ![The rotated copy inside a smaller box being scaled down from its bottom-right handle](27-glint-scale.webp)
 
-Press [[Cmd+D]], [[Cmd]]-click the thumbnail again, and [[Cmd]]-drag the
-bottom-right handle inward to about **80%**. [[Cmd]] keeps the scale uniform.
+Now [[Cmd]]-drag the bottom-right handle inward to about **80%**. [[Cmd]] keeps the scale uniform.
 Press [[Cmd+D]], nudge the copy back to the original's centre and choose
 **Layer → Merge Down**. Add a white **Outer Glow** (**Size 22**,
 **Opacity 95**) and rasterize it.
@@ -408,7 +406,7 @@ Every sheet needs its series line. On a **Footer Plate** layer, lasso two
 small notched ends in `#7B4DFF`, then marquee a 540 × 62 plate centred at
 the bottom of the sheet, just above the inner rule, and fill it with the
 pastel foil. The notched ends poke out at either side. Give it a 4 px ink **Stroke** and a pink
-**Outer Glow**, and rasterize it. Set `FLASH  No. 13   ~   X-RAY  SERIES` in
+**Outer Glow**. Set `FLASH  No. 13   ~   X-RAY  SERIES` in
 **Rye 30**, ink, and nudge it to the centre of the plate. On a plate, the line
 stays readable over the busiest part of the star field.
 

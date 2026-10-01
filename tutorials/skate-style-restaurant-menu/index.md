@@ -2,7 +2,7 @@
 title: Design a Skate-Style Restaurant Menu
 description: Make a skatepark burger-shack menu in Lopsy with a checkerboard pattern, a tilted skateboard-deck logo, a burger drawn in a group, stickers and aligned prices.
 published: 2026-09-25 18:41
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: restaurant menu, skate, typography, layer effects, groups, selections, transforms, pattern fill
@@ -86,8 +86,8 @@ the band exactly.
 ![A second checkerboard band moved to the bottom edge of the canvas with its marquee still active](04-paste-bottom-checker.webp)
 
 With the band still selected, press [[Cmd+C]] and then [[Cmd+V]]. The paste
-lands in place on a new layer. Press [[V]] for the **Move** tool and drag it
-straight down until it sits flush on the bottom edge. Rename it
+lands in place on a new layer, selected, with the **Move** tool active. Drag
+it straight down until it sits flush on the bottom edge. Rename it
 `Checker Bottom`.
 
 > **Tip:** Click **Align bottom** in the Move tool's options bar to drop it
@@ -107,16 +107,14 @@ it to a fraction of the page such as the half.
 
 ![An orange rectangle with an elliptical marquee on its left end, ready to fill the rounded nose](06-deck-marquee-ellipse.webp)
 
-Click **Add Layer** and name it `Deck`. Set the foreground to orange `#FF5A1F`.
+Click **Add Layer** and name it `Deck`. Press [[U]] for the **Shape** tool.
+Set **Shape** to **Rectangle**, **Output** to **Pixels** and **Corner
+Radius** to `120`. Set the Fill to orange `#FF5A1F` and remove the stroke.
 
-The round ends have to meet the straight edges exactly, so use the corner
-dialog again (click once with each marquee while nothing is selected):
-
-1. **Rectangular Marquee** from `190, 210` to `710, 450`. Use **Edit → Fill**, then press [[Cmd+D]].
-2. **Elliptical Marquee** from `70, 210` to `310, 450`, a 240 px circle overlapping the left end. Fill it. That's the nose.
-3. Another circle from `590, 210` to `830, 450`, and fill it for the tail.
-
-> **Tip:** The Shape tool's four-sided polygon draws a square, so a marquee rectangle with two circle caps is the quickest way to a long deck shape.
+Click (don't drag) at `450, 330` and enter **760 × 240**. The Shape tool
+draws from the centre, so the deck runs from 70 to 830 across and from 210
+to 450 down. A corner radius of half the height turns both ends into
+perfect half circles: the nose and the tail.
 
 ## Punch the bolt holes
 
@@ -142,12 +140,12 @@ Press [[Cmd+D]] to commit and deselect.
 
 ## Give the deck a stroke and a hard shadow
 
-![The Layer Effects drawer with Drop Shadow in teal at offset 16 and 18, blur 0, under a deck with a cream outline](09-deck-stroke-shadow.webp)
+![The Layer Effects drawer with a hard teal Drop Shadow, blur 0, under a deck with a cream outline](09-deck-stroke-shadow.webp)
 
 Open the deck's effects with the ✦ button on its layer row.
 
 - Tick **Stroke**. Set the colour to cream `#F4EBD3` and **Width** to `7`.
-- Tick **Drop Shadow**. Set the colour to teal `#1FB5A6`, **Offset X** `16`, **Offset Y** `18`, **Blur** `0` and **Opacity** `100`.
+- Tick **Drop Shadow**. Set the colour to teal `#1FB5A6`, **Offset X** `9`, **Offset Y** `11`, **Blur** `0` and **Opacity** `100`.
 
 A zero-blur shadow is the retro sticker look. The stroke also rings each bolt
 hole, like hardware.
@@ -180,7 +178,7 @@ With the Move tool, drag the word up onto the deck so it sits in the middle.
 In its effects, add:
 
 - **Stroke** in ink `#111114`, **Width** `7`
-- **Drop Shadow** in ink, offset `7` / `9`, **Blur** `0`, **Opacity** `100`
+- **Drop Shadow** in ink, offset `0` / `2`, **Blur** `0`, **Opacity** `100`
 
 The black outline keeps the cream letters clear of the orange and the bolt
 holes behind them.
@@ -242,22 +240,21 @@ Select **EATS**, add a layer named `Sticker`, and [[Cmd]]-drag a circle about
 130 px across on the left margin, left of the burger and just under the
 deck's nose. Fill it with pink `#FF4F8B`.
 
-Type the label in **Rubik Mono One** `15`, ink, **Line height** `1.2`. Click
-inside the circle, a little in from its left edge and just above its middle,
-and type three spaces, `NO`, [[Enter]], `SCOOTERS`, then [[Tab]].
-The spaces centre the short word, because every letter in a mono font is the
-same width.
+Type the label in **Rubik Mono One** `15`, ink, **Line height** `1.2`, and
+set **Align** to **Center**. Click on the circle's vertical centre line, just
+above its middle, and type `NO`, [[Enter]], `SCOOTERS`, then [[Tab]]. Each
+line centres on the point you clicked.
 
 Choose **Layer → Merge Down** to merge the words into the circle. Marquee the
 sticker, rotate it **12° counter-clockwise** with the **Move** tool and press
-[[Cmd+D]]. Then add a **Stroke** in cream `6` and an
-ink **Drop Shadow** at `5` / `6`, blur `0`.
+[[Cmd+D]]. Then add a **Stroke** in cream `6`.
 
 ## Add the tagline and stars
 
 ![A cream Space Mono tagline across the top with a mustard lasso star on each side, the right star rotated](18-tagline-stars.webp)
 
-Set **Space Mono** **Bold** `17`, cream, **Letter spacing** `4`. Click just
+Set **Space Mono** **Bold** `17`, cream, **Letter spacing** `4` and
+**Align** **Left**. Click just
 under the top checkerboard and type
 `SKATEPARK SNACK SHACK · EST. 1998 · PIER 9`. If the middle dots won't type,
 paste the line in with [[Cmd+V]]. Commit it and click **Align center
@@ -265,27 +262,27 @@ horizontally** in the Move tool's options bar to centre it.
 
 Add a layer named `Star L`. With the Lasso, draw a five-point star about 32 px
 across just left of the tagline, and fill it with mustard. Press [[Cmd+C]] and
-[[Cmd+V]], rename the paste `Star R`, and drag it to the same height just
-right of the tagline.
+[[Cmd+V]]. The paste lands selected, with the **Move** tool active. Rename it
+`Star R` and drag it to the same height just right of the tagline.
 
-A paste in place has no selection, so marquee around the star again before you
-rotate it. Turn it about **24° clockwise** so the pair doesn't look copy-pasted,
-then press [[Cmd+D]].
+Then turn it about **24° clockwise** with a rotation handle, so the pair
+doesn't look copy-pasted, and press [[Cmd+D]].
 
 ## Set the footer and a graffiti tag
 
 ![The footer hours in Rubik Mono One and a pink Sedgwick Ave Display tag reading EAT & SHRED tilted above the bottom checkerboard](19-footer-graffiti-tag.webp)
 
-Set the footer now, before the menu columns (see the tip in the menu columns step).
+Set the footer in two lines. Click the **Star R** row before you set up
+each one:
 
 - `OPEN DAWN 'TIL STREETLIGHTS` in Rubik Mono One `19`, cream, **Letter spacing** `1`, clicked on the left margin guide just below the footer guide.
-- `cash / card  -  pier 9 skatepark  -  helmets optional` in Space Mono **Regular** `13`, `#B9B09C`, clicked just below the first line.
+- `cash / card  -  pier 9 skatepark  -  helmets optional` in Space Mono **Regular** `13`, `#B9B09C`, **Letter spacing** `0`, clicked just below the first line.
 
-For the tag, set **Sedgwick Ave Display** `56` in pink. Click in empty space
+For the tag, click **Star R** again and set **Sedgwick Ave Display** `56`
+in pink. Click in empty space
 and type `eat & shred`. Rasterize it, rotate it **8° counter-clockwise**, and
 drop it at the bottom right, over the footer and just above the bottom
-checkerboard. A **Stroke** in `#1C1C1F` `4` plus an ink shadow at `4` / `4`
-makes it look like a sticker on the wall.
+checkerboard. Add a **Stroke** in `#1C1C1F` `4`.
 
 ## Tape up the section headers
 
@@ -321,25 +318,25 @@ at the same height. Set **Spacing** back to `10` afterwards.
 Each column is two multi-line text layers. The item names are one layer and
 the descriptions another, spaced to the same 82 px rhythm:
 
-- **Descriptions:** Space Mono Regular `15`, `#B9B09C`, **Line height** `1.4`, **Paragraph spacing** `61`.
-- **Names:** Space Mono Bold `24`, cream, **Line height** `3.42`, **Paragraph spacing** `0`.
+- **Descriptions:** Space Mono Regular `15`, `#B9B09C`, **Letter spacing** `0`, **Line height** `1.4`, **Paragraph spacing** `61`.
+- **Names:** Space Mono Bold `24`, cream, **Letter spacing** `0`, **Line height** `3.42`, **Paragraph spacing** `0`.
 
 Start the names just under the dotted rule, on the left margin guide for the
 left column and just right of the gutter for the right one. Start each
 description block about 58 px lower than its names, so every description
 sits about 14 px under its name and each pair reads as one item.
 
-Create the right column first, descriptions then names, and then the left
-column the same way.
+In each column, create the descriptions first and then the names. Click the
+**Rules** row before you set up each block.
 
-> **Tip:** A Text-tool click on an existing text layer edits that layer instead of starting a new one. Making the descriptions before the names, and the right column before the left, keeps each click in clear space.
+> **Tip:** The tall names block spans the descriptions, so making the descriptions first keeps each Text-tool click on empty canvas.
 
 ## Right-align the prices
 
 ![A right-aligned area text box being typed with the prices 9, 11, 12 and 10 in yellow Permanent Marker](23-right-aligned-prices.webp)
 
-Point text ignores alignment, so the prices use **area text**. Set
-**Permanent Marker** `34`, mustard, **Line height** `2.41`, and set **Align**
+The prices use **area text**, so they right-align to the edge of a box.
+Click the **Rules** row, then set **Permanent Marker** `34`, mustard, **Line height** `2.41`, and set **Align**
 to **Right**. Then *drag* a box with the Text tool, about 90 px wide, level
 with the first item name and ending just short of the gutter. Type the four
 prices on separate lines and press [[Tab]].

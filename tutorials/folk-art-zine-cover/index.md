@@ -2,7 +2,7 @@
 title: Design a Folk Art Zine Cover
 description: Make an alpine folk art zine cover in Lopsy with radial-symmetry sunbursts, crossed alphorns, a painted medallion, woodtype titles and halftone.
 published: 2026-09-25 16:16
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: zine cover, folk art, typography, radial symmetry, layer effects, selections, transforms, halftone
@@ -123,18 +123,12 @@ horn neatly without spilling onto the paper.
 Give the horn an outline first so that both copies get it. Open **Alphorn L**'s
 effects, tick **Stroke**, and set **Width** `2`, position **outside**, colour ink.
 
-Click **Duplicate Layer** and rename the copy `Alphorn R`. The copy lands
-10 px right and 10 px down, so pick the **Move** tool ([[V]]) and press
-[[Shift+Left]] and [[Shift+Up]] once each to put it exactly on top of the
-original.
+Click **Duplicate Layer** and rename the copy `Alphorn R`. The copy sits
+exactly on top of the original.
 
 Marquee a snug box around the whole horn, from the mouthpiece to the bell
 rim. Press [[V]] and click **Flip Horizontal** in the options bar. The bell
-now points left.
-
-> **Tip:** The Flip button keeps keyboard focus after you click it, so pressing [[Enter]] clicks it again and flips the horn back. Commit with [[Cmd+D]], or click the status bar first.
-
-Press [[Cmd+D]].
+now points left. Press [[Cmd+D]].
 
 ## Rotate the horns into an X
 
@@ -273,8 +267,9 @@ end. Draw its mirror image on the right. Add two small fold triangles in
 `#4A0E0A` in the corners where the band's lower edge meets each tail.
 
 Add a layer named `Ribbon Band`. Fill the 556 × 64 rectangle with red, then
-add two 2 px cream rules just inside its top and bottom edges (about 8 px
-in), stopping 14 px short of each end.
+draw two cream rules with the **Pencil** ([[N]]) at **Size** `2`, just inside
+its top and bottom edges (about 8 px in). Click 14 px in from one end and
+[[Cmd+Shift]]-click 14 px in from the other.
 
 Finally, open the band's effects, tick **Drop Shadow**, and set **Offset X**
 `4`, **Offset Y** `5`, **Blur** `4`, colour ink and **Opacity** about `40`.
@@ -293,8 +288,7 @@ With **Ribbon Band** still selected, press [[T]] for the **Text** tool:
 
 ![A small ink tagline Lieder, Wanderwege, Geschichten between the medallion and the ribbon](17-tagline.webp)
 
-Click **Ribbon Band** again so the new type doesn't restyle the issue line.
-Keep **Special Elite**, but set **Size** to `17` and the foreground to ink.
+Click **Ribbon Band** again. Keep **Special Elite**, but set **Size** to `17` and the foreground to ink.
 
 Copy `LIEDER  ·  WANDERWEGE  ·  GESCHICHTEN` to your clipboard. Click an empty
 spot and **paste** it with [[Cmd+V]]. The middle dots are easiest to paste
@@ -319,7 +313,7 @@ on the page.
 Open **YODEL**'s effects:
 
 - **Stroke:** **Width** `3`, **outside**, cream.
-- **Drop Shadow:** **Offset X** and **Offset Y** `5`, **Blur** `0`, colour ink, **Opacity** `75`.
+- **Drop Shadow:** **Offset X** and **Offset Y** `2`, **Blur** `0`, colour ink, **Opacity** `75`.
 
 The hard, unblurred shadow gives the title the slightly raised look of printed
 woodtype.
@@ -335,7 +329,7 @@ title.
 Add a layer named `Ornaments`:
 
 - two red lasso hearts about 38 px wide, one either side of the subtitle
-- two 3 px ochre rules, 120 px long, under the subtitle, with a 60 px gap between them on the centre guide
+- two ochre rules under the subtitle, each 120 px long, with a 60 px gap between them on the centre guide. Draw each with the Pencil at **Size** `3`: click one end, then [[Cmd+Shift]]-click the other.
 - a tiny ochre heart in that gap
 
 ## Grow a vine in the margin
@@ -378,15 +372,12 @@ of tiny ochre and brown dots in the centre.
 
 ![A wide marquee centred on the 450 guide around the left vine, ready for Flip Horizontal](23-mirror-vine.webp)
 
-Duplicate **Vine L** and rename the copy `Vine R`. With the Move tool, press
-[[Shift+Left]] and [[Shift+Up]] once each to undo the duplicate's 10 px
-offset. Then marquee from the inside edge of the frame on the left to the
+Duplicate **Vine L** and rename the copy `Vine R`. Then marquee from the inside edge of the frame on the left to the
 inside edge on the right, tall enough to take in the whole vine. The frame
 is symmetrical, so this box is centred on the centre guide, and a flip
 mirrors the vine exactly into the right margin.
 
-Press [[V]], click **Flip Horizontal**, click the status bar, and press
-[[Cmd+D]].
+Press [[V]], click **Flip Horizontal**, and press [[Cmd+D]].
 
 ## Fake a slight misregistration
 
@@ -395,7 +386,7 @@ Press [[V]], click **Flip Horizontal**, click the status bar, and press
 Screen prints and risographs never line up perfectly. To fake that:
 
 1. Duplicate **Frame** and rename the copy `Frame Misprint`.
-2. The copy lands 10 px right and 10 px down. With the Move tool (and Snap off), press [[Shift+Left]] and [[Shift+Up]] once each to put it back over the original, then press the right arrow **3** times and the down arrow **2** times.
+2. With the Move tool, press the right arrow **3** times and the down arrow **2** times.
 3. Set the copy's blend mode to **Multiply** and its opacity to `30%`.
 
 You get a faint darker edge, like a second plate that slipped.

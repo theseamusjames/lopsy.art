@@ -2,7 +2,7 @@
 title: Design a Baroque Perfume Billboard with Photo Peonies
 description: Build a Dutch still-life perfume billboard in Lopsy with lassoed peony photos, a gradient crystal flacon, a pearl color brush and gilded baroque type.
 published: 2026-09-30 23:40
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 150
 tags: billboard, baroque, still life, photo editing, lasso, transform, gradients, custom brush, typography, group adjustments, dodge and burn
@@ -69,10 +69,10 @@ The transparent end stop is what makes this a glow: the gradient composites over
 
 ![A wide fluted bronze bowl on a short stem and foot standing on the ledge, with stems rising from it and dark olive peony leaves scattered around where the bouquet will go](04-foliage-bronze-tazza.webp)
 
-1. On `Foliage`, lasso about a dozen pointed peony leaves around where the bouquet will sit. Drag an olive gradient (`#71823C` → `#1A240E`) across each leaf, pale side toward the light. Then fill a thin midrib down each one.
+1. On `Foliage`, lasso about a dozen pointed peony leaves around where the bouquet will sit. Drag an olive gradient (`#71823C` → `#1A240E`) across each leaf, pale side toward the light. Then paint a thin midrib down each one with a small hard **Brush**.
 2. On `Stems`, lasso narrow tapering ribbons from the bowl's mouth up to where each flower will sit, and fill them `#34421C`.
 3. On `Urn`, lasso the bowl (about 400 px wide, rim at y 440), the knop, the stem and the foot. Fill each with the bronze gradient, dragged across its width. Add a dark ellipse for the mouth and a **Drop Shadow** (12, 6, blur 16).
-4. On `Urn Flutes`, fill thirteen thin vertical strips across the bowl `#2A1A0A`. Blur them **5**, clip them to the bowl, and set the layer to **Multiply** at **40%**. That gives the bowl its gadroons.
+4. On `Urn Flutes`, draw thirteen thin vertical lines across the bowl in `#2A1A0A` with the **Pencil**: click at the top of each and [[Cmd+Shift]]-click at the bottom to keep it upright. Blur them **5**, clip them to the bowl, and set the layer to **Multiply** at **40%**. That gives the bowl its gadroons.
 5. On `Urn Shine`, fill one pale strip on the left of the bowl, blur it **6**, clip it, and set it to **Screen** at 70%.
 
 Most of this ends up behind flowers. It still has to be there, or the bouquet floats.
@@ -90,8 +90,6 @@ Most of this ends up behind flowers. It still has to be there, or the bouquet fl
 
 Pick the **Lasso** and trace just outside the petals. The leaves are dark and busy, so **Quick Selection** tends to leak into them. A careful lasso gives a cleaner edge, and it's what an old master's silhouette needs anyway.
 
-> **Tip:** The toolbox labels Quick Selection "(Q)", but [[Q]] toggles Quick Mask ([#1078](https://github.com/theseamusjames/lopsy.art/issues/1078)). Click the Quick Selection button instead of pressing the key.
-
 ## Cut the peony out
 
 ![The crimson peony cut out cleanly against the dark umber ground, with its leaves and background removed](07-peony-cut-out.webp)
@@ -105,8 +103,8 @@ Pick the **Lasso** and trace just outside the petals. The leaves are dark and bu
 
 1. Draw a rectangular marquee just outside the flower and switch to the **Move** tool.
 2. Hold [[Cmd]] and drag the bottom-right handle inward. [[Cmd]] keeps the proportions, and the opposite corner stays pinned.
-3. Stop at about **81%**: the crimson bloom goes from 418 to 338 px wide. Press [[Cmd+D]].
-4. Drag the flower so its centre sits at about **(545, 300)**, right over the tazza.
+3. Stop at about **81%**: the crimson bloom goes from 418 to 338 px wide.
+4. Drag inside the box so the flower's centre sits at about **(545, 300)**, right over the tazza, and press [[Cmd+D]].
 
 ## Rotate and arrange the bouquet
 
@@ -153,7 +151,7 @@ Build each part with a lasso fill or gradient on its own layer, bottom to top:
 1. **Shadow:** an ellipse under and right of the bottle, **Feather** 12, filled black at 75%. Add a smaller amber ellipse on **Screen** for the light that shines through the juice.
 2. **Glass:** the bottle body (about 286 × 330 px, shoulders at y 330). Drag a gradient that's dark and nearly opaque at both edges and almost clear in the middle, so the wall behind shows through.
 3. **Liquid:** the body from y 392 down, filled `#3A1A06` → `#D8962E` → `#241004`, plus a pale meniscus band on top. Amber, not crimson: the bottle has to separate from the red peony.
-4. **Facets:** three hairlines following the curve, on **Screen** at 38%.
+4. **Facets:** three hairlines following the curve. Drag a few **Pen** anchors along it and press [[Enter]] to stroke each at a thin width, then set the layer to **Screen** at 38%.
 5. **Highlights:** two long streaks on the lit side and a warm rim on the right. Blur them **7**, clip them to the body, and set **Screen** at 75%.
 6. **Gold:** the collar, teardrop stopper, finial and label ring, all filled with the gold gradient. Then an oxblood oval for the label.
 7. **Monogram:** type `DP` in **Cinzel Decorative Bold**, 52 px, gold, centred on the label.
@@ -190,14 +188,14 @@ Keep the path on the ledge until it reaches the edge. Pearls hanging in mid-air 
 ![The type block on the right half with a vertical guide at x 1670: Maison Verdelet · Paris in small capitals, a gold swash script Duchess, PEONY in decorative capitals, a scroll ornament on a horizontal guide, and Eau de Parfum](16-gold-type-guides.webp)
 
 1. Click the top ruler at **x 1670** for a vertical guide, and the left ruler at **y 480** for the ornament's baseline.
-2. Create each text in empty canvas and then move it, bottom line first. Big text boxes swallow nearby clicks.
+2. Click `Pearls` before you set up each text. Create it in empty canvas and then move it into place, bottom line first.
    - **Eau de Parfum:** **Cormorant SC SemiBold** 32 px, letter spacing 12
    - **PEONY:** **Cinzel Decorative Bold** 112 px, spacing 16
-   - **Duchess:** **Monsieur La Doulaise** 212 px
+   - **Duchess:** **Monsieur La Doulaise** 212 px, spacing 0
    - **Maison Verdelet · Paris:** Cormorant SC SemiBold 24 px, spacing 6
 3. Centre each on x 1670. Leave about 45 px between the script and PEONY, and keep the D's swash more than 100 px from the right edge.
 4. To gild the two titles, [[Cmd]]-click the text layer's thumbnail to load its shape as a selection. Add a layer above it and drag a vertical five-stop gold gradient from the top of the letters to the bottom. Hide the original text.
-5. Give both gold layers a **Drop Shadow** (3, 6, blur 8, 85%). Add a **Stroke** of 1 px `#E6C270` to the script so its hairlines hold up at a distance.
+5. Give the PEONY gold layer a **Drop Shadow** (3, 6, blur 8, 85%). Give the script's gold layer a **Stroke** of 1 px `#E6C270`, so its hairlines hold up at a distance, and a **Drop Shadow** of (2, 5, blur 8, 85%).
 6. Draw the scroll ornament as lasso ribbons: a centre lozenge, tapering rules and C-scroll volutes, mirrored. Fill it gold and gradient it the same way.
 
 ## Inlay the retail line in the ledge
