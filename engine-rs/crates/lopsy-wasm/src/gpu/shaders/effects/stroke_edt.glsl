@@ -10,6 +10,7 @@ uniform vec2 u_texelSize;   // 1/layerWidth, 1/layerHeight
 uniform vec2 u_srcOffset;   // layer position in document pixels
 uniform vec2 u_srcSize;     // layer texture size in pixels
 uniform vec2 u_docSize;     // document size in pixels
+uniform float u_layerOpacity; // opacity the layer itself is composited with
 out vec4 fragColor;
 
 void main() {
@@ -96,18 +97,22 @@ void main() {
     }
 
     bool isStroke = false;
-    if (minDistSq <= thresholdSq) {
-        if (u_position == 0) {
-            isStroke = !isOpaque;
-        } else if (u_position == 1) {
-            isStroke = isOpaque;
-        } else {
-            isStroke = true;
-        }
+    float coverage = 1.0;
+    if (u_position == 0) {
+        // An outside stroke is composited behind its layer, so it also runs
+        // under the layer's partly covered edge pixels (otherwise the
+        // backdrop shows through them as a seam between the shape and its
+        // stroke) and is knocked out by the layer's coverage, as the hard
+        // drop shadow is.
+        bool isEdge = isOpaque && srcA < 0.999 && minDistSq <= 2.0;
+        isStroke = (!isOpaque && minDistSq <= thresholdSq) || isEdge;
+        coverage = (1.0 - srcA) / max(1.0 - srcA * u_layerOpacity, 1e-4);
+    } else if (minDistSq <= thresholdSq) {
+        isStroke = u_position == 1 ? isOpaque : true;
     }
 
     if (isStroke) {
-        fragColor = vec4(u_strokeColor.rgb, u_strokeColor.a * u_opacity);
+        fragColor = vec4(u_strokeColor.rgb, u_strokeColor.a * u_opacity * coverage);
     } else {
         fragColor = vec4(0.0);
     }

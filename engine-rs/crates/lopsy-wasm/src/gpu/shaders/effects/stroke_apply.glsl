@@ -9,16 +9,21 @@ uniform int u_position;           // 0=outside (dilated orig), 1=inside (dilated
 uniform vec2 u_origOffset;        // original layer position in document pixels
 uniform vec2 u_origSize;          // original layer texture size
 uniform vec2 u_docSize;
+uniform int u_knockout;           // 1 = outside stroke drawn behind the layer
+uniform float u_layerOpacity;     // opacity the layer itself is composited with
 out vec4 fragColor;
+
+float origAlphaAt(vec2 uv) {
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;
+    return texture(u_origTex, uv).a;
+}
+
 void main() {
     float dilatedA = texture(u_dilatedTex, v_uv).a;
 
     vec2 docPos = v_uv * u_docSize;
     vec2 origUV = (docPos - u_origOffset) / u_origSize;
-    float origA = 0.0;
-    if (origUV.x >= 0.0 && origUV.x <= 1.0 && origUV.y >= 0.0 && origUV.y <= 1.0) {
-        origA = texture(u_origTex, origUV).a;
-    }
+    float origA = origAlphaAt(origUV);
 
     bool isOpaque = origA >= 0.5;
     bool isDilated = dilatedA >= 0.5;
@@ -32,8 +37,25 @@ void main() {
         isStroke = isDilated && isOpaque;
     }
 
+    float coverage = 1.0;
+    if (u_knockout == 1) {
+        // Behind the layer: also under its partly covered edge pixels, and
+        // knocked out by its coverage (see stroke_edt.glsl).
+        bool isEdge = false;
+        if (isOpaque && origA < 0.999) {
+            vec2 texel = 1.0 / u_origSize;
+            for (int y = -1; y <= 1; y++) {
+                for (int x = -1; x <= 1; x++) {
+                    if (origAlphaAt(origUV + vec2(float(x), float(y)) * texel) < 0.5) isEdge = true;
+                }
+            }
+        }
+        isStroke = isStroke || isEdge;
+        coverage = (1.0 - origA) / max(1.0 - origA * u_layerOpacity, 1e-4);
+    }
+
     if (isStroke) {
-        fragColor = vec4(u_strokeColor.rgb, u_strokeColor.a * u_opacity);
+        fragColor = vec4(u_strokeColor.rgb, u_strokeColor.a * u_opacity * coverage);
     } else {
         fragColor = vec4(0.0);
     }

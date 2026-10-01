@@ -914,7 +914,7 @@ Contents, top to bottom:
 
 ### Shared behavior
 
-- **Render order is fixed** and unrelated to the list order: outer glow → drop shadow → the layer itself (color overlay applied inline to its RGB) → inner glow → stroke. Outer glow is drawn *before* the drop shadow, so an overlapping shadow sits on top of the glow.
+- **Render order is fixed** and unrelated to the list order: outer glow → drop shadow → an `outside` stroke → the layer itself (color overlay applied inline to its RGB) → inner glow → an `inside` or `center` stroke. Outer glow is drawn *before* the drop shadow, so an overlapping shadow sits on top of the glow.
 - **Colors use the browser's native color input**, not Lopsy's shared color picker. The swatch round-trips through 6-digit hex, so an effect color's **alpha is preserved but cannot be edited from the panel** — it stays at whatever the effect already held.
 - **Size-like sliders auto-scale with the document**: the maximum is `max(base, min(5000, round(1.5 × longest side)))`, while the *drag* range is pinned to a usable window so precise tuning stays practical on large canvases. The text field accepts the full scaled maximum.
 - **History is coarse.** Toggling pushes `Enable <Effect>` / `Disable <Effect>`; starting a slider drag pushes `Edit <Effect>` so undo returns to the pre-drag value; the Blend dropdown pushes `Change Blend Mode`. Color swatches and the stroke Position buttons push nothing at all (see *Gaps*).
@@ -953,6 +953,8 @@ Defaults: disabled, black at full alpha, width 2, position `outside`.
 - **Position**: buttons rendered in the order **outside / center / inside**.
 
 The stroke is a **hard, aliased outline**: the shader classifies each pixel as opaque or not at an alpha threshold of 0.5 and paints stroke pixels at full color, so edges on anti-aliased or soft-edged content come out jagged rather than smooth.
+
+An **`outside` stroke is drawn behind the layer**, not on top of it, and it also runs under the layer's partly covered edge pixels — the ones at or above the 0.5 threshold that touch a pixel below it — knocked out by the layer's coverage the same way as the hard drop shadow (`(1 − a) / (1 − a·opacity)`). The layer's anti-aliased edge therefore blends into the stroke colour rather than the backdrop. Before, the stroke only covered pixels below the threshold and was drawn over the layer, so the edge pixels between 0.5 and 1 were neither stroked nor opaque and showed the backdrop as a hairline seam between the shape and its stroke — a dark ring between a pale shape and a pale stroke on a dark background (fixed in this change). `inside` and `center` strokes still draw on top.
 
 Two implementations run depending on width. At an effective half-width of **10 px or less** a brute-force per-pixel distance search runs in a single pass; above that the engine switches to a separable dilation of the alpha at radius `ceil(half-width)`. A `center` stroke on the dilation path is drawn as two passes — the outside half, then the inside half — each composited separately.
 
