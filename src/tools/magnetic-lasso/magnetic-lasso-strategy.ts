@@ -23,7 +23,8 @@ import {
   type MagneticLassoState,
   type SnapFn,
 } from './magnetic-lasso';
-import { createPolygonMask, selectionBounds, commitFeatheredSelection } from '../../app/interactions/selection-handlers';
+import { createPolygonMask, selectionBounds, commitSelectionShape, hasCombinableSelection } from '../../app/interactions/selection-handlers';
+import { selectionCombineMode } from '../../selection/selection';
 
 let magneticLassoTrace: MagneticLassoState | null = null;
 
@@ -81,6 +82,7 @@ export const magneticLassoStrategy: SelectionToolStrategy = {
       startPoint: ctx.canvasPos,
       layerStartX: 0,
       layerStartY: 0,
+      selectionCombineMode: selectionCombineMode(ctx, hasCombinableSelection()),
       ...DEFAULT_TRANSFORM_FIELDS,
     };
   },
@@ -97,7 +99,7 @@ export const magneticLassoStrategy: SelectionToolStrategy = {
     updateMagneticLassoPreview(trace);
   },
 
-  onUp(): void {
+  onUp(state: InteractionState): void {
     const engine = getEngine();
     if (magneticLassoTrace && engine) {
       const snap = makeMagneticSnapFn();
@@ -112,7 +114,7 @@ export const magneticLassoStrategy: SelectionToolStrategy = {
         const mask = createPolygonMask(polyline, docW, docH);
         const bounds = selectionBounds(mask, docW, docH);
         if (bounds) {
-          commitFeatheredSelection(bounds, mask, docW, docH);
+          commitSelectionShape(bounds, mask, docW, docH, state.selectionCombineMode ?? 'replace');
         }
       }
     }

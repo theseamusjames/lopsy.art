@@ -637,19 +637,28 @@ above the active layer, and inside the group if the active layer is a group.
 Group effects and adjustment layers apply to everything inside the group.
 
 **Guides and grid.** **View → Show Grid** turns snapping on the first time,
-which quantizes marquee drags. Untick **Snap** in the options bar before
+which quantizes marquee and Shape drags (a shape's centre and corner both
+snap, so its edges land on grid lines). Untick **Snap** in the options bar before
 drawing thin or precise shapes; it then stays off when you hide and show the
-grid again. A single click on a ruler drops a guide.
+grid again. A single click on a ruler drops a guide (Cmd/Ctrl-click drops
+it on the nearest half, third, quarter… of the canvas). Marquee edges that
+end within 8 screen px of a guide snap onto it, and so do Shape drags; turn this off with
+**View → Snap to Guides** if you need an edge just beside a guide.
 
 ## Behaviours that trip up agents
 
 These are by design, and the helpers already handle most of them:
 
-- **Selections replace, they don't add.** The marquee, ellipse and lasso
-  always start a new selection. Only the Magic Wand (Shift = add) and Quick
-  Selection combine. Build multi-part shapes one fill at a time.
-- **A marquee drag that starts inside an existing selection moves the
-  outline** instead of making a new one. Deselect first (`h.rect` does).
+- **Shift adds to a selection, Alt subtracts, Shift+Alt intersects.** This
+  works with the marquee, ellipse, lasso, magnetic lasso and Magic Wand. The
+  `h.rect` / `h.ellipse` / `h.lasso` helpers deselect first, so build a
+  multi-part selection with the tool and a modifier instead. For example,
+  `await h.tool('lasso'); await h.drag([...tri2, tri2[0]], { steps: 1, modifiers: ['Shift'] });`
+  after `h.lasso(tri1)`, then one `h.fill()` fills both. Each combine is one
+  undo step.
+- **A plain marquee drag that starts inside an existing selection moves the
+  outline** instead of making a new one. Deselect first (`h.rect` does), or
+  hold Shift / Alt to combine.
 - **Blur before pressing keys.** Focus stays on the last control you
   clicked. A focused button activates again on Enter, and a focused dropdown
   keeps the arrow keys. `h.key()` and `h.tool()` blur first. Do the same in
