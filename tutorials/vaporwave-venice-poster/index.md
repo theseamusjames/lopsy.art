@@ -184,8 +184,10 @@ Click `Moon Dots` and add two layers: `Towers`, then `Palace` above it.
 
 1. On `Palace`, marquee a full-width band about 220 px tall sitting on the
    horizon and fill it with `#F3E9FF`.
-2. Crenellate the roofline with the **Lasso**: make one small triangle every
-   60 px along the band's top edge and **Edit → Fill** each one.
+2. Crenellate the roofline with the **Lasso**: draw one small triangle every
+   60 px along the band's top edge. Hold [[Shift]] as you start each triangle
+   after the first, so it adds to the selection. Then choose **Edit → Fill**
+   once to fill them all.
 3. Fill a band about 85 px tall with pink `#FBD0E8`, starting just under the
    top edge. That's the Doge's Palace pink upper wall.
 
@@ -193,7 +195,10 @@ Click `Moon Dots` and add two layers: `Towers`, then `Palace` above it.
 
 ![The palace with tall windows, a row of small upper loggia arches and a row of large lower arches in purple](13-palace-arches.webp)
 
-Each arch is a rectangle plus a circle on top, filled with the same colour:
+Each arch is a rectangle plus a circle on top, filled with the same colour.
+Marquee the rectangle, then switch to the **Elliptical Marquee** and hold
+[[Shift]] as you drag the circle, so one fill covers both. You can build a
+whole row this way and fill it once:
 
 - **Wall windows:** six tall windows in `#9C7FD6`, each a 40 × 45 rectangle
   under a 40 px circle.

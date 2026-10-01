@@ -240,14 +240,16 @@ teal disc, lasso a long, tapering tail that angles up and to the right,
 about 190 px long, from its tip up to where the body will start. Fill it
 with `#5B2C17`.
 
-Add a layer named `Body`. The Lasso always replaces the selection, so build
-the body from three fills on the same layer, all in `#C9743A`:
+Add a layer named `Body`. Build the body as one selection from three
+shapes. Lasso the first, then hold [[Shift]] as you start each of the others
+so they add to it:
 
 1. A tilted oval for the body, about 270 × 155 px, just left of the vertical guide in the upper part of the teal disc. Tip it up toward the head, and let its underside rest on the record's top edge.
 2. A round head, about 106 px across, up and to the right of the body, near the top of the teal disc.
 3. A smaller oval for the neck between them that joins the two and leaves a slight dip along the back.
 
-Now [[Cmd]]-click the Body thumbnail to load all three as one selection.
+Fill the selection with `#C9743A`. The three pieces fill as one body, and
+the selection stays active.
 
 ## Paint the body and tail
 

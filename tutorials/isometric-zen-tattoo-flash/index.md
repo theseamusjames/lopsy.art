@@ -314,9 +314,7 @@ The strokes only trace silhouettes. The edges where two faces meet need
 drawing, so add an **Ink** layer above each island. Using a 3 px hard brush,
 Shift-click the top diamond's front edges, the front vertical corner and the
 rock's centre ridge. On the pagoda, a 2 px **Pagoda Ink** layer traces each
-roof's eave and front hip. When a design is lined, you can click **Rasterize
-Layer Style** in each layer's effects drawer to bake the effects into its
-pixels. That keeps a sheet with dozens of styled layers responsive.
+roof's eave and front hip.
 
 ## Group the four designs
 
@@ -400,10 +398,10 @@ On a **Seal** layer, [[Cmd]]-drag a **64 × 64** square marquee at the right
 end of the footer, level with the text, and fill it `#D8452B`. **Shrink** by
 4 px and fill paper, then **Shrink** by 2 px and fill vermilion again. That
 leaves a cream keyline. Type `ZEN` in Dela Gothic One at 14 px in paper and
-centre it on the seal. Then [[Cmd]]-click the Seal thumbnail and drag a
-rotation handle about −6°, as if the stamp was pressed by hand. Press
-[[Cmd+D]], then turn the ZEN layer by the same amount and nudge it back to
-the middle of the seal.
+centre it on the seal. Then click the **Seal** row, [[Cmd]]-click the ZEN
+row and press [[Cmd+D]] so nothing is marqueed. With the **Move** tool, drag
+a rotation handle about −6°, as if the stamp was pressed by hand, and press
+[[Cmd+D]]. ZEN turns with the seal and stays in its middle.
 
 ## Shade the sun with dotwork
 

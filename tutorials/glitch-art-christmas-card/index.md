@@ -419,7 +419,8 @@ exactly, so each cell starts about 53.7 px after the last.
 > Add 53.7 to both X values for every cell after it, rounding to whole
 > pixels.
 
-Fill 23 cells cream. For the 24th, first fill a cyan cell 6 px up and to the
+Fill 23 cells cream. If you drag them, hold [[Shift]] as you start each cell
+after the first, and one fill covers them all. For the 24th, first fill a cyan cell 6 px up and to the
 right, then a red `#FF2A4D` cell on top. Christmas Eve is the one cell that's
 still flickering. Group all the type layers as **Type**.
 
@@ -467,7 +468,7 @@ layer an **Outer Glow** in cream (Size 28, Opacity 45).
 
 ![The Layer Effects drawer on the Moon layer with Outer Glow set to a warm cream, Size 60 and Opacity 55](31-moon-glow.webp)
 
-Leave the heavy effects until last. On **Moon**, turn on **Outer Glow** with
+On **Moon**, turn on **Outer Glow** with
 `#FFD9A8` (Size **60**, Spread **0**, Opacity **55**). On **Nose**, add an
 **Outer Glow** in `#FF2A4D` (Size **22**, Spread **10**, Opacity **90**).
 Rudolph now lights the frame.

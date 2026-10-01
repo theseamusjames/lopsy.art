@@ -63,14 +63,13 @@ and press [[Cmd+D]] to deselect.
 
 ![Three black wedge-shaped rays of different widths radiating from one point to the right edge of the canvas](03-three-rays.webp)
 
-Lasso and fill two more wedges from the same point. The second one meets the
-right edge about a quarter of the way down and is about 70 px wide there. The
-last, thinner one runs almost level with the starting point and is about
-60 px wide at the edge. Rays of different widths look more dynamic than evenly spaced ones.
+Lasso two more wedges from the same point, holding [[Shift]] as you start
+the second so it adds to the first. One meets the right edge about a quarter
+of the way down and is about 70 px wide there. The other, thinner one runs
+almost level with the starting point and is about 60 px wide at the edge.
+Rays of different widths look more dynamic than evenly spaced ones.
 
-> **Tip:** The lasso always replaces the selection, so fill each wedge before
-> you draw the next one. Click well inside a thin wedge. A bucket click outside
-> the selection does nothing.
+Choose **Edit → Fill** to fill both wedges at once, then press [[Cmd+D]].
 
 ## Draw the red sun
 

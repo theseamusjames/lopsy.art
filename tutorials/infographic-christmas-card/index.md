@@ -411,9 +411,9 @@ click opens the size dialog), then add effects:
 - **Drop Shadow**: 0 / 3, Blur 10, Opacity 50
 
 Set `n = 1` in Plex Mono Bold 28. Select *Badge Disc* again and set `TREE`
-in Bold 16 with Letter spacing 3. Rotate each one **−8°**:
+in Bold 16 with Letter spacing 3. Rotate both **−8°** at once:
 
-1. [[Cmd]]-click the text layer's thumbnail.
+1. With `TREE` selected, [[Cmd]]-click the `n = 1` row and press [[Cmd+D]] so nothing is marqueed.
 2. Press [[V]], drag a rotation handle counter-clockwise, and press [[Cmd+D]].
 
 Then drag both lines onto the disc, stacked along the tilt: `n = 1` above

@@ -145,16 +145,11 @@ Only the front half is left on top of the planet.
 
 ![The Move tool rotating the front ring with a live selection box, with the corner rotation handles visible](08-rotate-rings.webp)
 
-Use the same marquee on both ring layers so they turn around the same
-centre. Draw a **Rectangular Marquee** that just contains the ring, and
-switch to the **Move** tool. Drag just outside a corner handle to rotate
-about **−16°**, then press [[Cmd+D]] to commit. Repeat on the other ring
-layer with the same marquee and angle.
-
-> **Tip:** To draw the identical box twice, click once with the Rectangular
-> Marquee instead of dragging (with nothing selected). A dialog opens where you
-> can type the corners, for example **From** `530, 345` **To** `1150, 515`.
-> Enter the same numbers for the second layer.
+Rotate both ring layers at once so they turn around the same centre. Click
+*RingBack* and [[Cmd]]-click *RingFront* so both are selected, press
+[[Cmd+D]] so nothing is marqueed, and switch to the **Move** tool. One box
+frames the whole ring. Drag just outside a corner handle to rotate about
+**−16°**, then press [[Cmd+D]] to commit.
 
 ## Build a chrome flying saucer
 

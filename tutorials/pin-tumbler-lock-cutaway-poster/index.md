@@ -263,7 +263,7 @@ Drafting conventions to follow:
 
 ![A 120% close-up of Fig. 1 with crisp 2 px ink outlines on every part, and leader lines that stay visible over the dark chambers thanks to a thin paper-coloured halo](17-ink-outlines-and-leader-halos.webp)
 
-Save the effects for last, because they make every later edit slower.
+Finish with the outlines, the leader halos and the paper grain:
 
 - **Ink outlines:** on every part layer (housing, plug, cap & cam, pins, key and faces), open ✦ and turn on **Stroke**: ink `#1F1D1A`, **Width 2**, **Position** set to **outside**.
 - **Leader halos:** on the **Leaders** layer, add a **Stroke** in the paper colour instead. The halo keeps the black leaders readable where they cross the dark chambers.

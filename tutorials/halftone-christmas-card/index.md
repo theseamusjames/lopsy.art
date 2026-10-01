@@ -119,8 +119,9 @@ which read as the moon's seas.
 ![Cream four-point sparkle stars across the sky and a large gold sunburst star in the upper middle with sixteen tapered rays](06-sunburst-guiding-star.webp)
 
 Add a *Stars* layer. With the **Lasso** ([[L]]), draw small four-point
-sparkles (concave diamonds 10 – 18 px across) and fill each one with
-`#FFF3D6`. Scatter about twenty. Put a few in the empty upper left and keep
+sparkles (concave diamonds 10 – 18 px across), holding [[Shift]] as you
+start each one after the first. Scatter about twenty, then fill them all
+with `#FFF3D6`. Put a few in the empty upper left and keep
 them away from the moon.
 
 For the guiding star:

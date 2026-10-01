@@ -159,13 +159,12 @@ front of the ring crosses the outline, and press [[Delete]] in each.
 
 ![The planet layer inside a rotated transform box, turned 14 degrees counter-clockwise to match the ring](10-rotate-planet.webp)
 
-Rotate each layer with the same marquee so they share a pivot. Press
-[[Cmd+D]], then click once with the **Rectangular Marquee** and enter
-**From** `190`, `530` and **To** `1010`, `990`. That's an 820 × 460 box
-centred on the planet. Select the **Move** tool, drag the rotate handle
-outside the top-right corner **14°** counter-clockwise, and press [[Cmd+D]]
-to commit. Click the other layer and repeat with the identical marquee.
-The gaps you cut line up perfectly again.
+Rotate both layers in one go so they share a pivot. Click the *Planet* row,
+[[Cmd]]-click *Ring*, and press [[Cmd+D]] so nothing is marqueed. Select the
+**Move** tool. One box frames the planet and ring together, centred on the
+planet. Drag the rotate handle outside the top-right corner **14°**
+counter-clockwise, and press [[Cmd+D]] to commit. The gaps you cut line up
+perfectly again.
 
 ## Smooth the tube edges
 

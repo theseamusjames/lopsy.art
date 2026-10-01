@@ -117,7 +117,7 @@ Click **New Group**, name it *Dragon*, and add a layer called *Horns* inside
 it. Set the foreground to `#0C0818`.
 
 The dragon faces right, with its head filling the sun. Lasso two long, thin
-horns and fill each one:
+horns, holding [[Shift]] as you start the second, and fill both at once:
 
 - The bases sit on top of the head, a little left of the centre guide and about 220 px above the 800 guide.
 - The tips sweep back and up to the upper left, past the sun's edge. One ends near the top of the sun, the other about 150 px lower.
@@ -291,17 +291,11 @@ Add two texts, selecting *Sign Frame* before you set up each one:
 
 Centre both on the frame with 14 px of padding above and below.
 
-Rasterize the two texts. Then tilt all three layers by the same amount:
+Rasterize the two texts. Then tilt all three layers together:
 
-1. Select a layer and draw a Rectangular Marquee about 20 px outside the frame on every side.
-2. With **Move**, drag the rotate handle just off the top-right corner about **−6°** (anticlockwise).
+1. Click *Sign Frame* and [[Shift]]-click `OPEN 24H` so all three layers are selected. Press [[Cmd+D]] so nothing is marqueed.
+2. With **Move**, one box frames the whole sign. Drag the rotate handle just off the top-right corner about **−6°** (anticlockwise).
 3. Press [[Cmd+D]].
-
-Repeat with the identical marquee and rotation on the other two layers.
-
-> **Tip:** To get the identical marquee each time, click once with the
-> Rectangular Marquee (with nothing selected) and type the same **From** and
-> **To** corners into the dialog.
 
 ## Fade the neck and add scanlines
 

@@ -59,12 +59,11 @@ press [[Cmd+D]] to deselect.
 
 ![Alternating kraft and cream rays radiating across the whole canvas from a point in the lower left](03-kraft-sunburst.webp)
 
-Repeat the wedge all the way round. Skip one 10° slice each time, so you get
-18 kraft rays with cream gaps between them. Keep the rays low contrast. They're
+Lasso the rest of the wedges all the way round, holding [[Shift]] as you
+start each one so they add up into a single selection. Skip one 10° slice
+each time, so you get 18 kraft rays with cream gaps between them. Then choose
+**Edit → Fill** once and press [[Cmd+D]]. Keep the rays low contrast. They're
 background texture, and the strong red is saved for the disc and the headline.
-
-> **Tip:** Each new lasso replaces the selection, so fill each wedge before
-> you draw the next one.
 
 > **Tip:** For a quicker, perfectly even version, set the foreground to kraft
 > and choose **Filter → Sunburst…** on the *Rays* layer. **Rays** `18`,

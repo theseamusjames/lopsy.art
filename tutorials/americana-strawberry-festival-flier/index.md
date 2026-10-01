@@ -133,9 +133,11 @@ shading with one ink. You'll widen this crescent in a later step.
 
 ![One of seventy small teardrop lasso selections on the berry, with the gold seeds already filled above it](07-seed-lasso.webp)
 
-On a *Seeds* layer, lasso small teardrops one at a time and fill each with
-`#F4D06A`, about seventy in all. Put them in staggered rows, and make them
-narrower and closer together toward the sides so the berry reads as round.
+On a *Seeds* layer, lasso small teardrops, about seventy in all. Work a row
+at a time: hold [[Shift]] as you start each teardrop after the first, so the
+whole row is one selection, then fill it with `#F4D06A`. Put the rows in a
+staggered pattern, and make the seeds narrower and closer together toward the
+sides so the berry reads as round.
 
 Then open **Layer effects ✦** and turn on **Drop Shadow**: colour `#7A1320`,
 Offset X **2**, Offset Y **3**, Blur **0**, Spread **1**. The hard shadow
@@ -146,7 +148,8 @@ becomes the little pocket each seed sits in.
 ![Ten pointed green sepals radiating from the top of the berry with pale green veins and a crisp navy shadow](08-calyx.webp)
 
 On a *Calyx* layer, lasso ten pointed sepals radiating from the base of the
-stem, and fill them with `#3F7F38`. Fill a small ellipse over the hub to close
+stem, holding [[Shift]] as you start each one after the first. Fill them all
+at once with `#3F7F38`. Fill a small ellipse over the hub to close
 the centre.
 
 - **Brush** at size **4** in `#7DB262`: draw one vein down the middle of each sepal.

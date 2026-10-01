@@ -155,8 +155,9 @@ Click **Iris**, then click **New Group** and name it **Dragonfly**. Add a
 2. **Shrink 5** and fill it with the gold gradient.
 3. **Shrink 11** and press **Delete**. You're left with a hollow wire.
 
-Then lasso the veins as thin strips and fill each one gold: three long
-veins from base to tip, and seven cross veins. Give the layer a **Drop
+Then lasso the veins as thin strips, holding [[Shift]] as you start each one
+after the first, and fill them all gold at once: three long veins from base
+to tip, and seven cross veins. Give the layer a **Drop
 Shadow** in `#3A2A10` (**Offset** 3 / 4, **Blur 4**, **Opacity 40**) so the
 metal sits slightly above the paper.
 

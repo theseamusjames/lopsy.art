@@ -136,22 +136,16 @@ Type `XTRAVAGANZA` in **Archivo Black** at size `104` in cream `#FFF1DC`.
 Drag it with the **Move** tool until it's centred on the band, then click
 **Rasterize Layer** in the Layers footer.
 
-Now tilt both layers the same way:
+Now tilt both layers together:
 
-1. Click the `Xtra Band` row and draw a marquee a few pixels larger than
-   the band on every side.
-2. Switch to the **Move** tool and drag the rotate handle (just outside the
-   top-right corner) until the band tilts about **−3°**. Press [[Cmd+D]] to
-   commit.
-3. Click the `XTRAVAGANZA` row, draw the *same* marquee and rotate it by the
-   same amount, then press [[Cmd+D]].
+1. Click the `Xtra Band` row and [[Shift]]-click the `XTRAVAGANZA` row so
+   both are selected. Press [[Cmd+D]] so nothing is marqueed.
+2. Switch to the **Move** tool. One transform box frames the band and its
+   type. Drag the rotate handle (just outside the top-right corner) until
+   the band tilts about **−3°**. Press [[Cmd+D]] to commit.
 
-Using an identical marquee for both layers means they pivot around the
-same centre, so the type stays locked to its band.
-
-> **Tip:** To repeat a marquee exactly, click once with the Rectangular
-> Marquee (with nothing selected) and type the corners. For this band,
-> **From** `36`, `516` and **To** `1044`, `654` works for both layers.
+Both layers turn around the band's centre, so the type stays locked to its
+band.
 
 ## Add the RSVP pill
 
@@ -194,9 +188,10 @@ a smaller shadow (`8` / `8`):
 ![The yellow starburst selected with rotation handles, being turned clockwise over the corner of the pink slab](09-rotate-starburst.webp)
 
 Rotate each sticker and its text together, the same way you did the band:
-the same marquee for both layers, big enough to cover the sticker and its
-shadow with a little to spare. Then drag the rotate handle and press
-[[Cmd+D]].
+click the sticker's row, [[Cmd]]-click its text row and press [[Cmd+D]].
+Then drag the **Move** tool's rotate handle and press [[Cmd+D]]. No Running
+is already one layer, so marquee it with a little room for its shadow and
+rotate that.
 
 - Invite tag: **−4°**
 - No Running: **+6°**

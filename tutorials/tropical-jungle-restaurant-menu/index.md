@@ -61,10 +61,8 @@ readout as you hover, so you can place them by eye:
   (where the dome meets the straight sides) and **1602** (the bottom).
 
 Turn on **View → Show Grid**. Snap switches on with it, so your marquees
-land on the 16 px lattice.
-
-> **Tip:** Guides are reference lines only. Marquees snap to the grid, not
-> to guides, so these guides sit on grid lines.
+land on the 16 px lattice. Marquees also snap to the guides, so the arch's
+corners lock onto them.
 
 ## Draw the dome of the arch
 

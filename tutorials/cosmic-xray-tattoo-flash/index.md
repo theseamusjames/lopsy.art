@@ -80,8 +80,6 @@ leaves a 14 px foil band.
 For the inner rule, select a rectangle about 54 px in from each edge, fill it
 with `#F4F0FF`, choose **Select → Shrink…** with **3 px**, and press
 [[Delete]]. Add an **Outer Glow** in `#22E8FF` (**Size 18**, **Opacity 55**).
-Then click **Rasterize Layer Style** to bake it in: glows are recalculated
-every time the canvas redraws, and a flash sheet ends up with a lot of them.
 
 > **Tip:** For even margins, click the canvas once with the marquee (don't
 > drag) while nothing is selected. A dialog opens where you can type exact
@@ -129,8 +127,7 @@ Add a **Banner** layer. Marquee a band about 860 × 126 px, centred across
 the sheet and sitting a little higher than the tails, so its ends overlap
 their inner ends by about 40 px and the tails peek out below. Drag the five-stop foil gradient across it. Give it a 7 px ink **Stroke**, a white
 **Inner Glow** (**Size 14**, **Opacity 70**) for a chrome edge, and a
-`#FF3FD8` **Outer Glow** (**Size 30**, **Opacity 60**). Rasterize the style on
-both ribbon layers.
+`#FF3FD8` **Outer Glow** (**Size 30**, **Opacity 60**).
 
 ## Set the title in Rye
 
@@ -231,9 +228,9 @@ smaller white click. Add a cyan **Outer Glow** (**Size 26**).
 Select **Banner Tails** so new layers land outside the skull, and add a
 **Hand Flesh** layer. Lasso a palm on the right column guide, a little below
 the top row guide, then lasso a capsule for each finger (pointing up) and the
-thumb (angled out to the lower left), filling each with `#4A22B8`. The overlaps
-merge into one hand. [[Cmd]]-click the layer thumbnail to select its shape,
-and drag a diagonal `#7B4DFF` → `#3A1C8C` → `#1C0E4A` gradient from the
+thumb (angled out to the lower left), holding [[Shift]] as you start each one
+so it adds to the selection. Fill it with `#4A22B8`. The overlaps merge into
+one hand. With the hand still selected, drag a diagonal `#7B4DFF` → `#3A1C8C` → `#1C0E4A` gradient from the
 upper left, the same light direction as the skull. Add a 7 px ink **Stroke**
 and a `#FF3FD8` **Outer Glow** (**Size 30**, **Opacity 85**).
 
@@ -267,7 +264,7 @@ Glow** and a pale yellow **Outer Glow**.
 
 ![The Layers panel with the skull layers inside a 01 Skull & Comet group and the hand layers inside a 02 Hand & Moon group](18-design-groups.webp)
 
-Rasterize the layer styles you've finished. Click **Comet Tail**,
+Click **Comet Tail**,
 [[Shift]]-click **Skull Eyes** and choose **Layer → Group Layers**. Name the
 group **01 Skull & Comet**. Do the same for **Moon** to **Hand Bones** as
 **02 Hand & Moon**. Each flash design is now one unit you can move.
@@ -409,7 +406,7 @@ Every sheet needs its series line. On a **Footer Plate** layer, lasso two
 small notched ends in `#7B4DFF`, then marquee a 540 × 62 plate centred at
 the bottom of the sheet, just above the inner rule, and fill it with the
 pastel foil. The notched ends poke out at either side. Give it a 4 px ink **Stroke** and a pink
-**Outer Glow**, and rasterize it. Set `FLASH  No. 13   ~   X-RAY  SERIES` in
+**Outer Glow**. Set `FLASH  No. 13   ~   X-RAY  SERIES` in
 **Rye 30**, ink, and nudge it to the centre of the plate. On a plate, the line
 stays readable over the busiest part of the star field.
 

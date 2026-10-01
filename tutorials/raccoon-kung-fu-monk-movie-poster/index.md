@@ -258,8 +258,8 @@ them upward. Add an orange **Outer Glow** (`#FF6A1A`, **Size 10**,
 **Opacity 90**) and set the layer to **Screen**.
 
 Last, click **Rasterize Layer Style** at the bottom of the layer effects
-drawer to bake the glow into pixels. Live effects are redrawn every frame,
-and the poster has plenty of them.
+drawer to bake the glow into the layer's pixels. The glow then blends in
+**Screen** mode along with the sparks.
 
 ## Ground the fighter in the scene
 

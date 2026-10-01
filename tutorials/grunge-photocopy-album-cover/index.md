@@ -40,7 +40,7 @@ Create a **1500 × 1500** document. Make sure **Unit** is **Pixels** before you 
 
 Turn on **View → Show Grid**, choose the **Move** tool, and in the options bar set **Grid** to **32 px** and tick **Snap**. Click the top ruler at about **110** and **1390**, and the left ruler at about **334** and **1326**. These four guides frame a 1280 × 992 photo print, and each one sits on a grid line.
 
-On a `Print` layer, marquee from guide to guide. Guides don't pull on anything themselves, but Snap pulls the marquee's corners onto the grid lines underneath them. Fill the marquee with mustard `#C99A2E`. This is the ink colour that shows through the halftone later.
+On a `Print` layer, marquee from guide to guide. The marquee's corners snap onto the guides. Fill the marquee with mustard `#C99A2E`. This is the ink colour that shows through the halftone later.
 
 > **Tip:** You can also type the rectangle. With nothing selected, click once with the **Rectangular Marquee** and enter From 110, 334 To 1390, 1326.
 

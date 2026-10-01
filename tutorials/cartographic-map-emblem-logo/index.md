@@ -89,9 +89,6 @@ In the effects drawer, add these effects:
 - **Inner Glow**, Size `46`, Opacity `45`, `#9C7A45`, for an aged rim.
 - **Drop Shadow** with Offset Y `7`, Blur `26`, Opacity `45`, `#3A2A14`.
 
-Click **Rasterize Layer Style** so the effects become pixels. Baked effects
-keep a big document fast.
-
 ## Draw the degree bars with Sunburst
 
 ![The Sunburst filter drawing 72 cream wedges over a dark ink disc inside the plate](04-sunburst-degree-bars.webp)
@@ -113,8 +110,7 @@ Half of every slot turns cream, so you get alternating wedges.
 
 Select a centred disc of radius 380 (From `220`, `220` to `980`, `980`) and
 press [[Delete]]. Only an 8 px band of alternating bars is left, like the
-degree border of an old chart. Deselect, add a `2` px ink **Stroke**, and
-rasterize the layer style.
+degree border of an old chart. Deselect and add a `2` px ink **Stroke**.
 
 ## Fill the sea
 
@@ -131,7 +127,7 @@ stops:
 Start the drag on the compass guide, just below the centre line, and drag
 straight right to the neatline, so the water is lightest where the rose will
 sit. Deselect. Add an **Inner Glow** of Size `40`, Opacity `55` in
-`#12272D` to darken the edge, then rasterize.
+`#12272D` to darken the edge.
 
 ## Fan out the rhumb lines
 
@@ -340,8 +336,6 @@ Select the top `Rose Cardinal` and give it effects:
 - **Stroke** `1` px in cream.
 - **Drop Shadow** with Offset `2`, `3`, Blur `6`, Opacity `60`, `#050D14`.
 
-Rasterize the layer style.
-
 ## Add the red north point and hub
 
 ![The finished compass rose: a red north point, a cream-ringed hub and a serif N above the star](20-north-point-hub.webp)
@@ -387,8 +381,7 @@ In `#B8322A`, click in the sea low on the chart, right of centre. Then
 fjord, stopping just short of its head.
 
 Set Spacing back to `10` and draw a 30 px **X** at the fjord's head. Give
-the layer a `2` px cream **Stroke** so the dots read against the water, then
-rasterize.
+the layer a `2` px cream **Stroke** so the dots read against the water.
 
 Add `Summit` and fill a small triangle, about 24 px wide, in the hills to
 the right of the main fjord with `#1E1812`. Under it, set `Skårtind 1834 m`
@@ -403,7 +396,7 @@ Click `Summit Label`, outside the Compass Rose group.
 1. Add `Ribbon Tails` and lasso two swallow-tailed ends. Each one sits
    26 px lower than the band and reaches 84 px past it. Fill them `#6E1F1A`.
 2. Fill the small fold triangles `#4A150F`.
-3. Add a `3` px ink **Stroke** and rasterize.
+3. Add a `3` px ink **Stroke**.
 
 Add `Ribbon` and marquee the band across the lower third: about 808 × 116 px,
 centred on the vertical centre guide, with its ends just inside the plate's
