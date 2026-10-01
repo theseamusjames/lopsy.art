@@ -423,3 +423,15 @@ with `TexturePool::delete(gl, handle)`, and make per-move growth geometric
 `WebGL2RenderingContext.prototype` createTexture / deleteTexture /
 texImage2D / texStorage2D (tracking the bound texture per unit) — see
 `e2e/transform-float-growth-vram-1019.spec.ts`.
+
+## Vertical text glyph forms live in the renderer, not the shaper
+
+cosmic-text 0.12 shapes horizontally and has no feature switches, so the
+OpenType `vert` feature never runs. `render_text_layer_software` swaps each
+vertical glyph for its `vert` alternate itself (`vertical_forms.rs`, a GSUB
+single-substitution lookup) and otherwise applies the UAX #50 fallback from
+`lopsy_core::vertical_orientation` (Tr → quarter turn, 、。 → upper right) as
+a swash render transform; layout, caret and hit-testing are untouched (#1080).
+`tests/fixtures/LopsyVerticalTest.ttf` is a synthetic font (ー with a `vert`
+alternate, 「 and 。 without) — e2e serves it as a catalog family by routing
+that family's jsDelivr TTF URL (`e2e/text-vertical-forms-1080.spec.ts`).

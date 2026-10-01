@@ -7,10 +7,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use cosmic_text::fontdb;
 use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Stretch, Style, SwashCache, SwashImage, Weight, Wrap};
+use lopsy_core::vertical_orientation::{vertical_form_transform, VerticalGlyphForm};
 use swash::scale::{ScaleContext, Render, Source, StrikeWith};
-use swash::zeno::{Format, Vector};
+use swash::zeno::{Format, Transform, Vector};
 
 use crate::glyph_atlas::GlyphAtlas;
+use crate::vertical_forms::{vertical_glyph, VerticalAlternateCache};
 
 pub struct TextLayerState {
     pub buffer: Buffer,
@@ -135,23 +137,35 @@ pub struct TextRendererState {
     pub glyph_atlas: GlyphAtlas,
     pub text_layers: HashMap<String, TextLayerState>,
     scale_context: ScaleContext,
-    unhinted_cache: HashMap<CacheKey, Option<SwashImage>>,
+    unhinted_cache: HashMap<(CacheKey, VerticalGlyphForm), Option<SwashImage>>,
+    vertical_alternates: VerticalAlternateCache,
     /// (lowercased family, style, weight) combinations already tried for
     /// variable-font instancing, so a failure is not retried every layout.
     instanced_weights: HashSet<(String, Style, u16)>,
 }
 
+/// Rasterize a glyph without hinting, drawn in `form` (see
+/// [`VerticalGlyphForm`]; horizontal text always passes `Upright`).
 fn render_glyph_unhinted<'a>(
     font_system: &mut FontSystem,
     scale_ctx: &mut ScaleContext,
-    cache: &'a mut HashMap<CacheKey, Option<SwashImage>>,
+    cache: &'a mut HashMap<(CacheKey, VerticalGlyphForm), Option<SwashImage>>,
     cache_key: CacheKey,
+    form: VerticalGlyphForm,
 ) -> Option<&'a SwashImage> {
-    cache.entry(cache_key).or_insert_with(|| {
+    cache.entry((cache_key, form)).or_insert_with(|| {
         let font = font_system.get_font(cache_key.font_id)?;
+        let font_size = f32::from_bits(cache_key.font_size_bits);
+        let advance = font
+            .as_swash()
+            .glyph_metrics(&[])
+            .scale(font_size)
+            .advance_width(cache_key.glyph_id);
+        let transform = vertical_form_transform(form, advance, font_size)
+            .map(|[xx, xy, yx, yy, x, y]| Transform::new(xx, xy, yx, yy, x, y));
         let mut scaler = scale_ctx
             .builder(font.as_swash())
-            .size(f32::from_bits(cache_key.font_size_bits))
+            .size(font_size)
             .hint(false)
             .build();
         let offset = Vector::new(cache_key.x_bin.as_float(), cache_key.y_bin.as_float());
@@ -162,6 +176,7 @@ fn render_glyph_unhinted<'a>(
         ])
         .format(Format::Alpha)
         .offset(offset)
+        .transform(transform)
         .render(&mut scaler, cache_key.glyph_id)
     }).as_ref()
 }
@@ -189,6 +204,7 @@ impl TextRendererState {
             text_layers: HashMap::new(),
             scale_context: ScaleContext::new(),
             unhinted_cache: HashMap::new(),
+            vertical_alternates: HashMap::new(),
             instanced_weights: HashSet::new(),
         }
     }
@@ -941,6 +957,7 @@ impl TextRendererState {
         // Collect glyph layout data before rendering (avoids borrow conflicts).
         struct GlyphLayout {
             cache_key: CacheKey,
+            form: VerticalGlyphForm,
             x: i32,
             y: i32,
         }
@@ -985,8 +1002,17 @@ impl TextRendererState {
                         (target_x - glyph.x, target_baseline),
                         1.0,
                     );
+                    let c = run.text[glyph.start..].chars().next().unwrap_or(' ');
+                    let (glyph_id, form) = vertical_glyph(
+                        &mut self.font_system,
+                        &mut self.vertical_alternates,
+                        glyph.font_id,
+                        glyph.glyph_id,
+                        c,
+                    );
                     glyph_layouts.push(GlyphLayout {
-                        cache_key: phys.cache_key,
+                        cache_key: CacheKey { glyph_id, ..phys.cache_key },
+                        form,
                         x: phys.x,
                         y: phys.y,
                     });
@@ -1013,6 +1039,7 @@ impl TextRendererState {
                     if gx_end > run_x_end { run_x_end = gx_end; }
                     glyph_layouts.push(GlyphLayout {
                         cache_key: phys.cache_key,
+                        form: VerticalGlyphForm::Upright,
                         x: phys.x,
                         y: phys.y,
                     });
@@ -1042,6 +1069,7 @@ impl TextRendererState {
                 &mut self.scale_context,
                 &mut self.unhinted_cache,
                 gl.cache_key,
+                gl.form,
             ).cloned();
             glyph_images.push(img);
         }
@@ -1775,6 +1803,87 @@ mod tests {
             ink.push(opaque_pixels(&mut renderer, &id));
         }
         assert!(ink.windows(2).all(|w| w[1] > w[0]), "coverage must grow with weight: {ink:?}");
+    }
+
+    /// Synthetic 1000-unit test font: ー (U+30FC) is a horizontal bar on the
+    /// ideographic centre line with a `vert` alternate that is a full-height
+    /// vertical stroke; 「 (U+300C) is a corner in the upper right of the em
+    /// box and 。 (U+3002) a block in its lower-left quadrant, neither with a
+    /// vertical alternate.
+    fn vertical_forms_font() -> &'static [u8] {
+        include_bytes!("../tests/fixtures/LopsyVerticalTest.ttf")
+    }
+
+    /// Ink bounding box `[left, top, right, bottom]` in layout space (the
+    /// render's offset applied) of the pixels with alpha > 127.
+    fn ink_box(renderer: &mut TextRendererState, layer_id: &str) -> [i32; 4] {
+        let (px, w, _, ox, oy) = renderer.render_text_layer_software(layer_id).expect("renders");
+        let mut b = [i32::MAX, i32::MAX, i32::MIN, i32::MIN];
+        for (i, p) in px.chunks(4).enumerate() {
+            if p[3] <= 127 {
+                continue;
+            }
+            let (x, y) = ((i as u32 % w) as i32 + ox, (i as u32 / w) as i32 + oy);
+            b = [b[0].min(x), b[1].min(y), b[2].max(x + 1), b[3].max(y + 1)];
+        }
+        assert!(b[0] < b[2], "no ink rendered");
+        b
+    }
+
+    /// 100 px type in the test font, one 140 px-wide column centred on x = 70
+    /// whose first row runs y = 0..100 with its baseline at y = 100.
+    fn render_vertical_forms(text: &str, vertical: bool) -> [i32; 4] {
+        let mut renderer = make_renderer();
+        renderer
+            .load_font_as(vertical_forms_font(), Some("Lopsy Vertical Test"))
+            .expect("loads");
+        let props = format!(
+            r#"{{"text":"{text}","fontFamily":"'Lopsy Vertical Test', serif","fontSize":100,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"paragraphSpacing":0,"textAlign":"left","areaWidth":null,"vertical":{vertical}}}"#
+        );
+        renderer.set_text_content("t", &props).expect("ok");
+        ink_box(&mut renderer, "t")
+    }
+
+    #[test]
+    fn vertical_long_vowel_mark_uses_the_fonts_vertical_alternate() {
+        let [l, t, r, b] = render_vertical_forms("ー", false);
+        assert!(r - l > 4 * (b - t), "horizontal ー is a wide bar: {:?}", [l, t, r, b]);
+
+        let [l, t, r, b] = render_vertical_forms("ー", true);
+        assert!(b - t > 4 * (r - l), "vertical ー must be a tall stroke (#1080): {:?}", [l, t, r, b]);
+        assert!(((l + r) / 2 - 70).abs() <= 2, "stroke centred on the column: {l}..{r}");
+    }
+
+    #[test]
+    fn vertical_bracket_without_an_alternate_turns_a_quarter_clockwise() {
+        // Upright, 「 is taller than wide and starts 84 px above the baseline.
+        let [l, t, r, b] = render_vertical_forms("「", false);
+        assert!(b - t > r - l, "{:?}", [l, t, r, b]);
+        assert!(t < 30, "{t}");
+
+        // Turned clockwise about the em box's centre it becomes ﹁: wider than
+        // tall and in the lower part of its row.
+        let [l, t, r, b] = render_vertical_forms("「", true);
+        assert!(r - l > b - t, "vertical 「 must lie on its side: {:?}", [l, t, r, b]);
+        assert!(t > 50, "vertical 「 sits in the lower half of its row: top {t}");
+    }
+
+    #[test]
+    fn vertical_full_stop_without_an_alternate_moves_to_the_upper_right() {
+        let [l, t, r, b] = render_vertical_forms("。", false);
+        assert!(r <= 70 && b > 90, "upright 。 sits low-left: {:?}", [l, t, r, b]);
+
+        let [l, t, r, b] = render_vertical_forms("。", true);
+        assert!(l >= 70, "vertical 。 sits right of the column centre: {:?}", [l, t, r, b]);
+        assert!(b <= 60, "vertical 。 sits in the upper part of its row: {:?}", [l, t, r, b]);
+    }
+
+    #[test]
+    fn vertical_latin_letters_stay_upright() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("h", &vertical_props("I")).expect("ok");
+        let [l, t, r, b] = ink_box(&mut renderer, "h");
+        assert!(b - t > 2 * (r - l), "an upright I is a tall stroke: {:?}", [l, t, r, b]);
     }
 
     #[test]
