@@ -52,8 +52,8 @@ await page.locator('[data-tool-id="gradient"]').click();
 | Marquee Rect | `m` | Lasso | `l` |
 | Magic Wand | `w` | | |
 
-Gradient, Elliptical Marquee, and Magnetic Lasso have **no** keyboard
-shortcut — use `[data-tool-id="..."]` for these.
+Gradient, Elliptical Marquee, Magnetic Lasso, and Quick Selection have
+**no** keyboard shortcut (`q` toggles Quick Mask) — use `[data-tool-id="..."]` for these.
 
 ### How to perform common UI actions
 
