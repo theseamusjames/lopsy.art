@@ -532,9 +532,15 @@ state over it.
   squares (6 px) on the scale handles, white filled circles (5 px radius) on
   the rotation handles. All sizes divide by zoom, so the chrome stays the same
   on-screen size at any magnification.
-- The **marching ants follow translate, rotate, and scale** but *not* skew and
-  *not* the distort/perspective corner offsets — in those three modes the
-  handle box deforms while the ants outline does not.
+- The **marching ants follow the pending transform in every mode** —
+  translate, rotate, scale, skew and the distort/perspective corners. The
+  selection outline is mapped point by point through the same map as the
+  floated pixels (the affine chain, or the corner homography;
+  `tools/transform/transform-point.ts`) and cached per transform, so the ants
+  trace the transformed piece rather than the original outline. (They used
+  to be drawn through a Canvas 2D translate / rotate / scale only, so in
+  Skew, Distort and Perspective the handle box deformed while the ants
+  stayed put; fixed in this change.)
 
 ### Modes
 
