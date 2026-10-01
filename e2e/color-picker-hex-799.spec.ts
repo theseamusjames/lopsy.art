@@ -90,6 +90,33 @@ test.describe('ColorPicker hex field (#799)', () => {
     await expect(hex).toHaveValue(`${toHex(dragged.r)}${toHex(dragged.g)}${toHex(dragged.b)}`);
   });
 
+  test('Gradient Editor: Escape in the hex field discards the edit without closing the dialog', async ({ page }) => {
+    await page.locator('[data-tool-id="gradient"]').click();
+    await page.getByTestId('gradient-advanced-btn').click();
+    const dialog = page.getByRole('dialog', { name: 'Gradient Editor' });
+    await expect(dialog).toBeVisible();
+    const hex = dialog.getByRole('textbox', { name: 'Hex color', exact: true });
+
+    await dialog.getByTestId('gradient-stop-1').click();
+    await hex.click();
+    await hex.fill('ABCDEF');
+    await hex.press('Escape');
+    await expect(dialog).toBeVisible();
+    await expect(hex).toHaveValue('FFFFFF');
+    await expect(hex).toBeFocused();
+    expect((await gradientToolStops(page))[1]).toEqual({ r: 255, g: 255, b: 255 });
+
+    // With focus elsewhere in the dialog (a stop handle), Escape still closes it.
+    await dialog.getByTestId('gradient-stop-0').click();
+    await expect(dialog.getByTestId('gradient-stop-0')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    expect(await gradientToolStops(page)).toEqual([
+      { r: 0, g: 0, b: 0 },
+      { r: 255, g: 255, b: 255 },
+    ]);
+  });
+
   test('Gradient Map: typed hex recolours the selected stop', async ({ page }) => {
     await page.locator('[aria-label="New Group"]').click();
     const groupId = (await getEditorState(page)).document.activeLayerId!;
@@ -169,6 +196,25 @@ test.describe('ColorPicker hex field (#799)', () => {
       return store.getState().guideColor;
     });
     expect(guideColor).toMatchObject({ r: 255, g: 0, b: 0xaa });
+
+    // Escape mid-edit discards the edit; the picker (closed by a document-level
+    // Escape listener) stays open.
+    await hex.fill('123456');
+    await hex.press('Escape');
+    await expect(picker).toBeVisible();
+    await expect(hex).toHaveValue('FF00AA');
+
+    // With the field unfocused, Escape closes the picker as before.
+    await picker.getByRole('slider', { name: 'Hue' }).focus();
+    await page.keyboard.press('Escape');
+    await expect(picker).toHaveCount(0);
+    const afterClose = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__uiStore as {
+        getState: () => { guideColor: Rgb };
+      };
+      return store.getState().guideColor;
+    });
+    expect(afterClose).toMatchObject({ r: 255, g: 0, b: 0xaa });
   });
 
   test('Color panel keeps a single hex field', async ({ page }) => {

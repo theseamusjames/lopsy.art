@@ -419,11 +419,14 @@ export function ColorPicker({ color, onChange, compact = false, grayscale = fals
       if (e.key === 'Enter') {
         e.preventDefault();
         commitHex();
-      } else if (e.key === 'Escape') {
+      } else if (e.key === 'Escape' && liveDraft) {
+        // The key only discards the edit; it must not also reach the host
+        // dialog's or popover's Escape-to-close handler.
+        e.stopPropagation();
         setHexDraft(null);
       }
     },
-    [commitHex],
+    [commitHex, liveDraft],
   );
 
   const hexField = showHex && !compact ? (
