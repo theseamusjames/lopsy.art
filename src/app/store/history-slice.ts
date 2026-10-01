@@ -284,6 +284,22 @@ function mergeMetadataLayerPositions(
 const NO_DIRTY_LAYERS: Set<string> = new Set();
 
 /**
+ * The entry whose GPU handles the next snapshot may share: the newest pixel
+ * entry on `stack`. Metadata entries carry no handles and touch no pixels,
+ * and they leave `dirtyLayerIds` and the mask dirty set accumulating since
+ * that pixel entry, so its handles still describe every layer and mask not
+ * marked dirty since. Stopping at a metadata top re-snapshotted every layer
+ * on the first pixel edit after Add Layer / Rename / Opacity (#1066).
+ */
+function latestPixelSnapshot(stack: readonly HistorySnapshot[]): HistorySnapshot | undefined {
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const entry = stack[i];
+    if (entry?.kind === 'pixels') return entry;
+  }
+  return undefined;
+}
+
+/**
  * GPU handles describing the live document, for the entry undo/redo pushes
  * onto the opposite stack.
  *
@@ -424,13 +440,14 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         selectedPathId: state.selectedPathId,
       };
     } else {
-      const gpuSnapshots = snapshotLiveLayers(state, state.undoStack[S - 1]);
+      const reuseBase = latestPixelSnapshot(state.undoStack);
+      const gpuSnapshots = snapshotLiveLayers(state, reuseBase);
       firstSnapshot = {
         kind: 'pixels',
         document: state.document,
         selection: historySelection(state.selection),
         gpuSnapshots,
-        maskSnapshots: liveMaskSnapshots(state.document.layers, state.undoStack[S - 1]),
+        maskSnapshots: liveMaskSnapshots(state.document.layers, reuseBase),
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
@@ -582,7 +599,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
     flushLayerSync(state);
 
-    const prevSnapshot = state.undoStack[state.undoStack.length - 1];
+    const prevSnapshot = latestPixelSnapshot(state.undoStack);
     const gpuSnapshots = snapshotGpuLayers(
       state.document.layers, state.document.layerOrder, state.dirtyLayerIds, prevSnapshot, before,
     );
