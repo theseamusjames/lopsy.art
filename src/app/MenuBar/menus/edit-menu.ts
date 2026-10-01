@@ -7,6 +7,7 @@ import { fillWithColor } from '../../../engine-wasm/wasm-bridge';
 import { syncLayerAfterFullSize } from '../../sync-layer-after-full-size';
 import { guardPixelWrite } from '../../../layers/paint-target';
 import { fillActiveLayerMask } from '../../fill-layer-mask';
+import { pasteInternalClipboard } from '../../paste-or-open';
 import { definePattern } from '../pattern-actions';
 import { defineBrush } from '../brush-actions';
 import type { FilterDialogId } from '../filter-actions';
@@ -60,7 +61,7 @@ export function createEditMenu(showFilterDialog: (id: FilterDialogId) => void): 
       { label: 'Cut', shortcut: '⌘X', action: () => useEditorStore.getState().cut() },
       { label: 'Copy', shortcut: '⌘C', action: () => useEditorStore.getState().copy() },
       { label: 'Copy Merged', shortcut: '⇧⌘C', action: () => useEditorStore.getState().copyMerged() },
-      { label: 'Paste', shortcut: '⌘V', action: () => useEditorStore.getState().paste() },
+      { label: 'Paste', shortcut: '⌘V', action: () => pasteInternalClipboard() },
       { separator: true, label: '' },
       { label: 'Fill', shortcut: '⇧F5', action: () => fillSelection() },
       { label: 'Fill with Pattern...', action: () => showFilterDialog('pattern-fill') },
