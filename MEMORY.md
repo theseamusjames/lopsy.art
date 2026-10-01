@@ -433,3 +433,19 @@ a swash render transform; layout, caret and hit-testing are untouched (#1080).
 `tests/fixtures/LopsyVerticalTest.ttf` is a synthetic font (ー with a `vert`
 alternate, 「 and 。 without) — e2e serves it as a catalog family by routing
 that family's jsDelivr TTF URL (`e2e/text-vertical-forms-1080.spec.ts`).
+
+## GPU timing in Playwright, and comparing the live canvas with an export
+
+Headless Chromium on this Mac has **no WebGL2 at all** without ANGLE flags;
+`--use-gl=angle --use-angle=metal` gives the real GPU (Apple M4 Max), the
+config's default `--use-angle=swiftshader` gives SwiftShader. For frame cost,
+time `__readCompositedPixels()` (forced recomposite + full readback) or drain
+the engine's own context with a 1×1 `readPixels` in a rAF callback — rAF
+intervals alone hide GPU time. See `e2e/effect-cache-perf.spec.ts`.
+
+The exported PNG is tagged with the document's colour profile (Display P3),
+so decoding it through `<img>` converts the colours and it will not match the
+canvas readback. Decode with
+`createImageBitmap(blob, { colorSpaceConversion: 'none' })` to get the stored
+values; live and export then agree within ±2 per channel
+(`e2e/effect-cache-invalidation.spec.ts`).
