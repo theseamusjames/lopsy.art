@@ -463,6 +463,17 @@ describe('shape up — path output', () => {
     expect(anchors[1]!.point).toEqual({ x: 190, y: 25 });
   });
 
+  it('rounds polygon path corners with the corner radius, like the Pixels output', () => {
+    ts.settings.shape.mode = 'polygon';
+    ts.settings.shape.polygonSides = 6;
+    ts.settings.shape.cornerRadius = 5;
+    handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 80, y: 70 });
+    const [anchors] = editorState.addPath.mock.calls[0]! as [PathAnchor[]];
+    // Two anchors (arc start and end) per rounded hexagon corner.
+    expect(anchors).toHaveLength(12);
+    expect(anchors[0]!.handleOut).not.toBeNull();
+  });
+
   it('drops a path that the meta constraint collapsed to nothing', () => {
     // Horizontal drag with meta: ry 0 forces rx to 0 as well.
     handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 55, y: 50 }, true);

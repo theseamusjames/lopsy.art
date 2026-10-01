@@ -243,7 +243,7 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
     } else if (shape.mode === 'rectangle') {
       anchors = rectangleToPathAnchors(cx, cy, rx, ry, shape.cornerRadius);
     } else {
-      anchors = polygonToPathAnchors(cx, cy, rx, ry, shape.polygonSides);
+      anchors = polygonToPathAnchors(cx, cy, rx, ry, shape.polygonSides, shape.cornerRadius);
     }
     editorState.addPath(anchors, true);
     editorState.notifyRender();
