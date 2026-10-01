@@ -30,7 +30,7 @@ import type {
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
-import { claimLiveFloat, withLiveFloatKept } from './live-float';
+import { claimLiveFloat, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 
 interface QuickMaskSnapshot {
@@ -193,6 +193,10 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     persistentTransformRef,
   } = ctx;
   let { activeLayerId } = ctx;
+
+  // A float left over from before an edit, a selection change or a layer
+  // switch no longer shows what is on screen; lift afresh instead.
+  releaseStaleMoveFloat(activeLayerId);
 
   // Check for pre-built snapshot from prefloat before falling back to pushHistory.
   const prebuilt = !altKey && sel.active && sel.mask

@@ -66,6 +66,8 @@ import {
   commitLiveFloat,
   commitLiveFloatBeforeEdit,
   forgetLiveFloat,
+  isLiveFloatCurrent,
+  releaseStaleMoveFloat,
   withLiveFloatKept,
 } from './live-float';
 
@@ -136,7 +138,7 @@ describe('live Move float', () => {
     withLiveFloatKept(() => commitLiveFloatBeforeEdit());
 
     expect(bridge.dropFloat).not.toHaveBeenCalled();
-    expect(floating.current).not.toBeNull();
+    expect(isLiveFloatCurrent('layer-1')).toBe(true);
   });
 
   it('carries a pending rotation into the selection when it bakes', () => {
@@ -163,5 +165,46 @@ describe('live Move float', () => {
     expect(bridge.dropFloat).toHaveBeenCalledTimes(1);
     expect(editor.selection.mask).toBe(replaced);
     expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
+  describe('releaseStaleMoveFloat', () => {
+    it('keeps a float that still matches the selection and layer', () => {
+      liveMoveFloat(selectBox(BOX));
+      releaseStaleMoveFloat('layer-1');
+      expect(bridge.dropFloat).not.toHaveBeenCalled();
+      expect(floating.current).not.toBeNull();
+    });
+
+    it('bakes the float once the selection was replaced (Select All, Inverse, Grow…)', () => {
+      liveMoveFloat(selectBox(BOX));
+      selectBox({ x: 0, y: 0, width: 20, height: 20 });
+      releaseStaleMoveFloat('layer-1');
+      expect(bridge.dropFloat).toHaveBeenCalledTimes(1);
+      expect(floating.current).toBeNull();
+    });
+
+    it('bakes the float once another layer is active (Add Layer)', () => {
+      liveMoveFloat(selectBox(BOX));
+      editor.document.activeLayerId = 'layer-2';
+      releaseStaleMoveFloat('layer-2');
+      expect(bridge.dropFloat).toHaveBeenCalledTimes(1);
+      expect(floating.current).toBeNull();
+    });
+
+    it('forgets refs whose float the engine already dropped (undo)', () => {
+      liveMoveFloat(selectBox(BOX));
+      bridge.state.isFloating = false;
+      releaseStaleMoveFloat('layer-1');
+      expect(bridge.dropFloat).not.toHaveBeenCalled();
+      expect(floating.current).toBeNull();
+      expect(isLiveFloatCurrent('layer-1')).toBe(false);
+    });
+
+    it('leaves a float the Move tool does not own (a prefloat) for its own code', () => {
+      selectBox(BOX);
+      bridge.state.isFloating = true;
+      releaseStaleMoveFloat('layer-1');
+      expect(bridge.dropFloat).not.toHaveBeenCalled();
+    });
   });
 });

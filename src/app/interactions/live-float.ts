@@ -51,6 +51,29 @@ export function claimLiveFloat(layerId: string, mask: Uint8ClampedArray): void {
   owner = { layerId, mask };
 }
 
+/** Whether the Move tool's float is still the one on screen for `layerId`. */
+export function isLiveFloatCurrent(layerId: string): boolean {
+  if (!owner) return false;
+  const engine = getEngine();
+  if (!engine || !hasFloat(engine)) return false;
+  const state = useEditorStore.getState();
+  return owner.layerId === layerId
+    && state.document.activeLayerId === layerId
+    && state.selection.mask === owner.mask;
+}
+
+/**
+ * Bake a Move-tool float that no longer matches what is on screen, so the
+ * caller lifts the current selection afresh. A float that still matches is
+ * left alone.
+ */
+export function releaseStaleMoveFloat(layerId: string): void {
+  const hasSession = owner !== null
+    || session?.floating.current != null
+    || session?.persistent.current != null;
+  if (hasSession && !isLiveFloatCurrent(layerId)) commitMoveFloat();
+}
+
 /**
  * Run `fn` (the Move tool's own history push) without baking the float it is
  * about to keep using.

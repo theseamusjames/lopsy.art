@@ -173,6 +173,69 @@ test.describe('follow-up actions on a live Move float', { tag: '@chromium' }, ()
     }
   });
 
+  test('Inverse after a drag makes the next drag move the rest of the layer', async ({ page }) => {
+    await blackBlock(page, 40, 40, 100, 100);
+    await blackBlock(page, 250, 40, 310, 100);
+    await marquee(page, 30, 30, 110, 110);
+    await selectTool(page, 'move');
+    await drag(page, [70, 70], [130, 70]);
+    expect(await colorAt(page, 150, 70)).toBe('black');
+
+    await page.keyboard.press('Control+Shift+i');
+    await page.waitForTimeout(150);
+    await drag(page, [280, 70], [280, 130]);
+    await page.screenshot({ path: 'e2e/screenshots/move-float-inverse-then-drag.png' });
+
+    // The first block stays at x 100-160, y 40-100; the second block moves
+    // down to y 100-160.
+    expect(await colorAt(page, 130, 50)).toBe('black');
+    expect(await colorAt(page, 130, 130)).toBe('clear');
+    expect(await colorAt(page, 280, 50)).toBe('clear');
+    expect(await colorAt(page, 280, 130)).toBe('black');
+  });
+
+  test('Select All after a drag makes the next drag move everything', async ({ page }) => {
+    await blackBlock(page, 40, 40, 100, 100);
+    await blackBlock(page, 250, 40, 310, 100);
+    await marquee(page, 30, 30, 110, 110);
+    await selectTool(page, 'move');
+    await drag(page, [70, 70], [130, 70]);
+
+    await page.keyboard.press('Control+a');
+    await page.waitForTimeout(150);
+    await drag(page, [200, 200], [200, 230]);
+    await page.screenshot({ path: 'e2e/screenshots/move-float-select-all-then-drag.png' });
+
+    // Both blocks moved down 30: y 70-130.
+    expect(await colorAt(page, 130, 50)).toBe('clear');
+    expect(await colorAt(page, 130, 120)).toBe('black');
+    expect(await colorAt(page, 280, 50)).toBe('clear');
+    expect(await colorAt(page, 280, 120)).toBe('black');
+    const sel = await selectionBounds(page);
+    expect(sel?.width).toBe(400);
+    expect(sel?.height).toBe(300);
+  });
+
+  test('Add Layer after a drag leaves the floated piece where it was', async ({ page }) => {
+    await blackBlock(page, 40, 40, 140, 120);
+    const firstLayer = await activeLayerId(page);
+    await selectTool(page, 'move');
+    await drag(page, [90, 80], [150, 80]);
+
+    await page.locator('[aria-label="Add Layer"]').click();
+    await page.waitForTimeout(150);
+    const newLayer = await activeLayerId(page);
+    expect(newLayer).not.toBe(firstLayer);
+
+    await drag(page, [150, 80], [150, 110]);
+    await page.screenshot({ path: 'e2e/screenshots/move-float-add-layer-then-drag.png' });
+
+    // The block on the first layer stays at x 100-200, y 40-120.
+    expect(await colorAt(page, 150, 45, firstLayer)).toBe('black');
+    expect(await colorAt(page, 150, 135, firstLayer)).toBe('clear');
+    expect(await colorAt(page, 150, 80, newLayer)).toBe('clear');
+  });
+
   test('a drag after Merge Down moves the merged pixels', async ({ page }) => {
     await page.locator('[aria-label="Add Layer"]').click();
     await page.waitForTimeout(150);

@@ -49,6 +49,7 @@ import { setSelectionMask, featherSelectionMask, readSelectionMask } from '../..
 import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
+import { commitLiveFloat } from '../interactions/live-float';
 import { BrandLinks } from '../../components/BrandLinks/BrandLinks';
 import styles from './MenuBar.module.css';
 
@@ -248,6 +249,9 @@ export function MenuBar() {
   const handleSelectDialogApply = useCallback((values: Record<string, number>) => {
     if (!selectDialog) return;
     const amount = values['amount'] ?? 1;
+    // Grow, shrink or feather the outline on screen, including a pending
+    // Move-tool scale or rotate.
+    commitLiveFloat();
     const editor = useEditorStore.getState();
     const sel = editor.selection;
     if (!sel.active || !sel.mask) { setSelectDialog(null); return; }
