@@ -15,6 +15,10 @@ struct TextureEntry {
 /// for resize ping-pong without retaining N×layer-count zombies.
 const MAX_FREE_PER_SIZE: usize = 2;
 
+/// Floats converted per `tex_sub_image_2d` call when uploading u8 data to a
+/// float texture (16 MB of f32).
+const UPLOAD_BAND_FLOATS: usize = 4 * 1024 * 1024;
+
 pub struct TexturePool {
     /// `None` slots are tombstones for textures that were evicted (deleted
     /// in `release` because the free pool for their size was already
@@ -341,8 +345,17 @@ impl TexturePool {
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
 
         if self.use_float {
-            let f32_data: Vec<f32> = data.iter().map(|&b| b as f32 / 255.0).collect();
-            tex_sub_image_2d_f32(gl, x, y, w, h, &f32_data)?;
+            // Convert a band of rows at a time: the f32 copy is 4x the u8
+            // source, which for a large text raster would be over a gigabyte.
+            let row_len = w as usize * 4;
+            let band_rows = (UPLOAD_BAND_FLOATS / row_len.max(1)).max(1);
+            let mut band: Vec<f32> = Vec::with_capacity(band_rows.min(h as usize) * row_len);
+            for (i, rows) in data[..row_len * h as usize].chunks(band_rows * row_len).enumerate() {
+                band.clear();
+                band.extend(rows.iter().map(|&b| b as f32 / 255.0));
+                let band_y = y + (i * band_rows) as i32;
+                tex_sub_image_2d_f32(gl, x, band_y, w, (rows.len() / row_len) as u32, &band)?;
+            }
         } else {
             gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
                 WebGl2RenderingContext::TEXTURE_2D,

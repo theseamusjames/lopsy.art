@@ -7,7 +7,7 @@ import { FontPicker } from '../../../components/FontPicker/FontPicker';
 import { useFontEntry } from '../../local-fonts-store';
 import { extractFamilyName } from '../../../utils/font-loader';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import { rerenderCommittedTextLayer, invalidatePathTextCache } from '../../../engine-wasm/engine-sync';
+import { rerenderCommittedTextLayer, invalidatePathTextCache, textLayerAnchor } from '../../../engine-wasm/engine-sync';
 import {
   applyTextSetting,
   applyTextFontFamily,
@@ -15,6 +15,7 @@ import {
   beginTextLayerHistory,
   endTextLayerHistory,
 } from '../../../tools/text/apply-text-setting';
+import { textSizeTypedMax, TEXT_SIZE_SLIDER_MAX } from '../../../tools/text/text-settings';
 import type { TextLayer, FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 import decorationStyles from './TextOptions.module.css';
@@ -42,6 +43,10 @@ export function TextOptions() {
   const textStrikethrough = useToolSettingsStore((s) => s.settings.text.strikethrough);
   const textVertical = useToolSettingsStore((s) => s.settings.text.vertical);
 
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
+  const sizeMax = textSizeTypedMax(docWidth, docHeight);
+
   const fontEntry = useFontEntry(extractFamilyName(textFontFamily));
 
   const availableWeights = fontEntry?.weights ?? [400, 700];
@@ -63,10 +68,17 @@ export function TextOptions() {
       const val = e.target.value;
       beginTextLayerHistory();
       if (val) {
+        // Unbinding re-renders at prePathX/Y as the text anchor, so store the
+        // anchor — not the texture's top-left, which sits a render offset
+        // (half the block for centred text) away from it.
+        const engine = getEngine();
+        const anchor = editingLayer.prePathX !== undefined ? null
+          : textEditing ? { x: textEditing.bounds.x, y: textEditing.bounds.y }
+          : engine ? textLayerAnchor(engine, editingLayer) : null;
         updateTextLayerProperties(editingLayerId, {
           pathId: val,
-          prePathX: editingLayer.prePathX ?? editingLayer.x,
-          prePathY: editingLayer.prePathY ?? editingLayer.y,
+          prePathX: editingLayer.prePathX ?? anchor?.x ?? editingLayer.x,
+          prePathY: editingLayer.prePathY ?? anchor?.y ?? editingLayer.y,
           pathAnchorX: undefined,
           pathAnchorY: undefined,
         });
@@ -93,7 +105,7 @@ export function TextOptions() {
         }
       }
     },
-    [editingLayerId, editingLayer, updateTextLayerProperties],
+    [editingLayerId, editingLayer, textEditing, updateTextLayerProperties],
   );
 
   return (
@@ -102,7 +114,8 @@ export function TextOptions() {
         label="Size"
         value={textFontSize}
         min={1}
-        max={500}
+        max={sizeMax}
+        sliderMax={TEXT_SIZE_SLIDER_MAX}
         onDragStart={beginTextLayerHistory}
         onCommit={endTextLayerHistory}
         onChange={(v) => applyTextSetting('fontSize', v)}
