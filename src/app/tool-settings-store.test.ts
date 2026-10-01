@@ -13,14 +13,19 @@ describe('setShapeSetting mode — issue #236 (invalid modes render incorrectly)
     expect(useToolSettingsStore.getState().settings.shape.mode).toBe('polygon');
   });
 
-  it('collapses invalid values like "rectangle" to ellipse instead of silently storing them', () => {
+  it('accepts rectangle', () => {
+    useToolSettingsStore.getState().setShapeSetting('mode', 'rectangle');
+    expect(useToolSettingsStore.getState().settings.shape.mode).toBe('rectangle');
+  });
+
+  it('collapses invalid values like "triangle" to ellipse instead of silently storing them', () => {
     useToolSettingsStore.getState().setShapeSetting('mode', 'polygon');
     // The setter is typed as ShapeMode but JS callers (and TS @ts-ignore
     // bypasses) can pass anything. The slice must collapse invalid values
     // to the documented default ('ellipse') so the GPU dispatch doesn't
-    // render a polygon with stale `sides` when a caller asked for
-    // "rectangle" — same guard as the quick-select slice.
-    (useToolSettingsStore.getState().setShapeSetting as (k: 'mode', m: string) => void)('mode', 'rectangle');
+    // render a polygon with stale `sides` when a caller asked for an
+    // unknown shape — same guard as the quick-select slice.
+    (useToolSettingsStore.getState().setShapeSetting as (k: 'mode', m: string) => void)('mode', 'triangle');
     expect(useToolSettingsStore.getState().settings.shape.mode).toBe('ellipse');
   });
 
