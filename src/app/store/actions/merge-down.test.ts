@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   engine: null as object | null,
   updateLayer: vi.fn<(engine: unknown, json: string) => void>(),
   mergeLayers: vi.fn(),
+  rasterizeLayerEffects: vi.fn((..._args: unknown[]) => new Uint8Array(4 * 4 * 4)),
 }));
 
 // #746: computeMergeDown must not read the JS pixel map — it is a
@@ -20,7 +21,7 @@ vi.mock('../../../engine-wasm/engine-state', () => ({
 
 vi.mock('../../../engine-wasm/wasm-bridge', () => ({
   mergeLayers: mocks.mergeLayers,
-  rasterizeLayerEffects: () => new Uint8Array(4 * 4 * 4),
+  rasterizeLayerEffects: mocks.rasterizeLayerEffects,
   updateLayer: mocks.updateLayer,
   uploadLayerPixels: () => {},
 }));
@@ -345,6 +346,28 @@ describe('computeMergeDown with effects (#1007)', () => {
     const desc = JSON.parse(mocks.updateLayer.mock.calls[0]![1]) as { id: string; opacity: number };
     expect(desc.id).toBe(topId);
     expect(desc.opacity).toBe(1);
+  });
+
+  it('bakes the upper layer\'s mask with its effects and drops it from the merge', () => {
+    mocks.engine = {};
+    mocks.updateLayer.mockClear();
+    mocks.rasterizeLayerEffects.mockClear();
+    const doc = makeDoc();
+    const topId = doc.activeLayerId!;
+    const effects = { ...DEFAULT_EFFECTS, dropShadow: { ...DEFAULT_EFFECTS.dropShadow, enabled: true } };
+    const mask = { id: 'm', enabled: true, width: 4, height: 4, data: new Uint8ClampedArray(16) };
+    const withMask: DocumentState = {
+      ...doc,
+      layers: doc.layers.map((l) => (l.id === topId ? { ...l, effects, mask } : l)),
+    };
+
+    computeMergeDown(withMask);
+    mocks.engine = null;
+
+    expect(mocks.rasterizeLayerEffects).toHaveBeenCalledWith(expect.anything(), topId, true);
+    const desc = JSON.parse(mocks.updateLayer.mock.calls[0]![1]) as { id: string; mask: unknown };
+    expect(desc.id).toBe(topId);
+    expect(desc.mask ?? null).toBeNull();
   });
 });
 

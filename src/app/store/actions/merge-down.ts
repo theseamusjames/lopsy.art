@@ -90,9 +90,11 @@ export function computeMergeDown(
     // `rasterizeLayerEffects` bakes the layer's opacity into the pixels
     // (effects keep their own opacity, as in the live composite), so the
     // baked descriptor goes to opacity 1 or `mergeLayers` would apply it
-    // a second time (#1007).
+    // a second time (#1007). It also bakes the mask into the content and
+    // the effects' silhouette, as the compositor applies it (#977), so the
+    // descriptor drops the mask rather than applying it twice.
     if (hasEnabledEffects(topLayer.effects)) {
-      const rasterized = rasterizeLayerEffects(engine, activeId);
+      const rasterized = rasterizeLayerEffects(engine, activeId, true);
       if (rasterized && rasterized.length > 0) {
         uploadLayerPixels(engine, activeId, rasterized, doc.width, doc.height, 0, 0);
         const cleared = { ...topLayer, x: 0, y: 0, width: doc.width, height: doc.height, opacity: 1, effects: DEFAULT_EFFECTS, mask: null };
