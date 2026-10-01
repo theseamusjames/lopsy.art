@@ -155,9 +155,9 @@ Press [[Tab]] to commit.
 
 ![The dark title centred in the ribbon with even space above, below and at both ends, a thin white outline and a hard violet shadow](10-title-seated.webp)
 
-Switch to **Move** (V) and nudge the title with the arrow keys (hold
-[[Shift]] for 10 px) until the letters sit in the middle of the band, with
-the same space at both ends and the same space above and below the caps.
+Switch to **Move** (V) and drag the title until the letters sit in the
+middle of the band, with the same space at both ends and the same space above
+and below the caps. Fine-tune with the arrow keys.
 Add a white **Stroke** with **Width 3** and a `#2A124F` **Drop Shadow** with
 **Offset X 4**, **Offset Y 4**, **Blur 0** and **Opacity 55**. The white keyline separates
 the ink from the foil, and the hard offset shadow reads as a printed sticker.
@@ -201,8 +201,9 @@ On a **Skull Ink** layer, use the **Elliptical Marquee** to fill two
 74 × 66 eye sockets with ink, one each side of the column guide, about
 100 px apart and just above the cheekbones. Lasso a small spade shape
 between and below them for the nose. Marquee a 108 × 34 mouth centred under
-the nose and fill it. Then fill two rows of 13 px `#F4F0FF` squares, 17 px
-apart, across the mouth for the teeth.
+the nose and fill it. For the teeth, pick the **Pencil** (N) at **Size 13** in
+`#F4F0FF`. Each click leaves a 13 px square, so click two rows of them across
+the mouth, 17 px apart.
 
 ## Trace the x-ray sutures
 
@@ -215,8 +216,9 @@ last one, so you can build the zig-zag coronal suture across the crown, the
 temple curves, and arcs over the brows and cheekbones point by point. Give
 the layer a `#22E8FF` **Outer Glow** (**Size 16**, **Opacity 90**).
 
-On a **Skull Eyes** layer, fill a 26 px cyan circle in each socket with a
-small white catch-light, and add a cyan **Outer Glow** (**Size 26**).
+On a **Skull Eyes** layer, click once in each socket with the hard Brush at
+**Size 26** in cyan, then add a small white catch-light to each with a
+smaller white click. Add a cyan **Outer Glow** (**Size 26**).
 
 > **Tip:** Hold the pointer still for about 1.5 s mid-stroke and Lopsy
 > smooths the stroke into a clean line or curve, which also ends it.
@@ -239,9 +241,11 @@ and a `#FF3FD8` **Outer Glow** (**Size 30**, **Opacity 85**).
 
 ![Pastel holographic finger bones in three segments per finger, metacarpals and small round wrist bones inside the violet hand](16-hand-bones.webp)
 
-On a **Hand Bones** layer, lasso-fill thin white capsules: three phalanges
-per finger with a 6 px gap at every joint, four metacarpals fanning to the
-wrist, three thumb bones, and seven small round carpals. [[Cmd]]-click the
+On a **Hand Bones** layer, paint the bones with a hard white Brush a little
+narrower than a finger. A click at one end of a bone and a [[Shift]]-click at
+the other paints a round-ended capsule. Paint three phalanges per finger with
+a 6 px gap at every joint, four metacarpals fanning to the wrist and three
+thumb bones, then single-click seven small round carpals at the wrist. [[Cmd]]-click the
 thumbnail and refill the bones with the pastel foil, then give them a 3 px
 ink **Stroke** and a cyan **Outer Glow**. The dark gaps are what make it read
 as an x-ray rather than a glove.
@@ -314,9 +318,9 @@ crosses the lower row guide, with a **Radial** gradient from the upper left: whi
 from the light.
 
 On a **Planet Bands** layer, lasso four slanted bands across the planet in
-`#7B4DFF`. To clip them, click the **Planet** row, [[Cmd]]-click its
-thumbnail, click back on **Planet Bands**, choose **Select → Inverse** and
-press [[Delete]]. Set the bands to **Multiply** at **45%**.
+`#7B4DFF`. To clip them, [[Cmd]]-click the **Planet** row's thumbnail
+while **Planet Bands** stays active, choose **Select → Inverse** and press
+[[Delete]]. Set the bands to **Multiply** at **45%**.
 
 ## Tilt the ring
 
@@ -337,9 +341,9 @@ rotation handle to tilt the ring about **18°** anticlockwise.
 
 ![The ring's back arc erased where it passes behind the planet, while the front arc stays in front](24-ring-back-erase.webp)
 
-Now the ring needs to pass *behind* the planet. Click the **Planet** row,
-[[Cmd]]-click its thumbnail, then click back on the **Ring** row. The
-planet's shape is now the selection, and the Ring layer is active. Pick the
+Now the ring needs to pass *behind* the planet. With the **Ring** layer
+active, [[Cmd]]-click the **Planet** row's thumbnail. The planet's shape is
+now the selection. Pick the
 **Eraser** (E) at **Size 30**, click at the left end of the ring's upper arc,
 and [[Shift]]-click along it to the right end. The selection keeps the eraser
 inside the disc, so only the back arc over the planet disappears.
@@ -348,10 +352,9 @@ Add an ink **Stroke** and a cyan **Outer Glow** to the ring. Add a 44 px
 **Moonlet** at its upper right. Then group **Planet** to **Moonlet** as
 **04 Ringed Planet**.
 
-> **Tip:** Load the selection *from the Planet row*, then switch layers.
-> Clicking another row settles the loaded shape into a plain selection, so
-> the eraser, Delete and Fill all respect it. Use the same order whenever you
-> borrow one layer's shape to trim another.
+> **Tip:** [[Cmd]]-clicking another layer's thumbnail loads its shape
+> without switching layers. Use it whenever you borrow one layer's shape to
+> trim another.
 
 ## Number the designs
 

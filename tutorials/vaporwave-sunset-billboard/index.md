@@ -93,8 +93,10 @@ edge.
 
 Add a `Grid Lines` layer. Pick the **Brush** with Size `3`, Hardness `100` and
 color `#FF4DF0`. Draw straight lines fanning out from a vanishing point under
-the sun to the bottom edge. Then draw horizontal lines that get farther apart
-as they come toward the viewer.
+the sun to the bottom edge: click the vanishing point, then [[Shift]]-click
+the bottom edge, and repeat for each line. Then draw horizontal lines that
+get farther apart as they come toward the viewer. Click at the left edge and
+[[Cmd+Shift]]-click at the right edge to keep each one level.
 
 Give the layer an **Outer Glow** in `#FF2BD6`, Size `14`. For depth, use the
 **Eraser** at 45% opacity to soften the crowded lines at the horizon.
@@ -105,18 +107,17 @@ Give the layer an **Outer Glow** in `#FF2BD6`, Size `14`. For depth, use the
 
 Add a `Palm` layer and set the color to `#1A0432`. Paint a slightly curved
 trunk with a Size `18` brush. For the fronds, raise **Fade** to about `150`
-so each stroke tapers to a point, then sweep arcs out and down from the top of
+so each stroke fades out toward its tip, then sweep arcs out and down from the top of
 the trunk.
 
 ## Duplicate, move and scale a second palm
 
 ![A marquee around a copy of the palm, with scale handles, being shrunk beside the sun](08-scale-palm-copy.webp)
 
-Click **Duplicate Layer**, then click the copy's row. Marquee around the palm,
-press [[V]] for **Move**, and drag the copy to the other side of the sun.
-Press [[Cmd+D]] to commit the move, then marquee the copy again. Drag a
-corner handle while holding [[Cmd]] to scale it down evenly, and press
-[[Cmd+D]] to commit.
+Click **Duplicate Layer**. The copy becomes the active layer. Marquee around
+the palm, press [[V]] for **Move**, and drag the copy to the other side of
+the sun. Then drag a corner handle while holding [[Cmd]] to scale it down
+evenly, and press [[Cmd+D]] to commit.
 
 Select both palms and choose **Layer → Group Layers**. You can then move them
 together by selecting the group and dragging.

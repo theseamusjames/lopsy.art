@@ -71,7 +71,7 @@ A recess in the left face shows three inner surfaces: the back wall, the floor, 
 1. Add a `Cave` layer above `Soil Left`. Lasso the opening at (272, 756), (548, 894), (548, 1074), (272, 936) and fill it `#3A1E1B` for the back wall.
 2. Lasso the sliver along the left edge that slants up to the right and fill it `#57302A` for the side wall. Fill the strip along the bottom `#86492F` for the floor.
 3. On a `Shelves` layer, lasso two planks parallel to the opening's top edge. Fill each plank's top `#C9925E` and its front edge `#7E5030`.
-4. Back on `Cave`, fill two 6 px posts in `#4A2A1A` at x 346 and x 530. The planks cover them where they cross.
+4. Back on `Cave`, draw two posts in `#4A2A1A` at x 346 and x 530 with the **Pencil** at **Size 6**: click at the top of each, then [[Cmd+Shift]]-click at the floor for a straight vertical. The planks cover them where they cross.
 
 Depth in isometric pushes things *up and to the right*. A back wall 34 units deep shows up 68 px higher than the opening, so only its lower part is visible.
 
@@ -80,8 +80,8 @@ Depth in isometric pushes things *up and to the right*. A back wall 34 units dee
 ![A marquee around a row of small cream button mushrooms on the upper shelf, with an identical row already on the lower shelf](04-copy-the-shelf-crop.webp)
 
 1. On a `Shelf Crop` layer, draw eight small button mushrooms along the upper shelf. Lasso each stem as a tapered quad in `#D8C09A`, then each cap as a half-dome in `#F4E4C4`.
-2. Marquee the row from (330, 785) to (552, 942). Press [[Cmd+C]], wait a moment, then press [[Cmd+V]]. The paste lands in place on a new layer.
-3. With the **Move** tool, press [[Shift]]+[[Down]] four times and [[Down]] six times. That's 46 px, exactly one shelf lower.
+2. Marquee the row from (330, 785) to (552, 942). Press [[Cmd+C]], then [[Cmd+V]]. The paste lands in place on a new layer.
+3. With the **Move** tool, nudge it **46 px** down with the arrow keys ([[Shift]] moves 10 px per press). That's exactly one shelf lower.
 4. Choose **Layer → Merge Down**.
 
 ## Light the cave
@@ -106,7 +106,7 @@ Depth in isometric pushes things *up and to the right*. A back wall 34 units dee
 
 ![Thin glowing mint threads branching down through the right face's topsoil, with small pebbles scattered through the lower bands of both faces](06-mycelium-and-pebbles.webp)
 
-1. On a `Pebbles` layer, scatter small elliptical marquee fills a shade lighter than each band. Keep them out of the cave.
+1. On a `Pebbles` layer, scatter pebbles a shade lighter than each band: single clicks with a small, hard **Brush**. Keep them out of the cave.
 2. On a `Mycelium` layer, set the **Brush** to **Size 2** and **Hardness 90** in `#B6FFE6`. Drag branching, wandering strokes down from the right face's top edge. Start some right under where the fly agarics will stand, so the threads read as their roots. Carry a few deep into the bedrock, and wrap one around the front corner under the cave.
 3. Add an **Outer Glow** in `#3FF0B8` at **Size 12**, **Opacity 70**.
 4. Where strokes knot together, thin them out with the **Eraser** at Size 16.
@@ -181,7 +181,7 @@ Make the grass layer active and click **New Group** for a `Topside` group.
 
 First, make a flat red copy of both lines:
 1. Select each text line and click **Duplicate Layer**.
-2. **Click the copy's row before doing anything else** ([#804](https://github.com/theseamusjames/lopsy.art/issues/804)). Otherwise, the next nudge moves the original too.
+2. **Click the copy's row before doing anything else.** Otherwise, the next nudge moves the original too.
 3. Rasterize each copy and move it back by −10 / −10, onto its source line.
 4. Drag both copies under the text, then **Merge Down** into one layer named `Title Depth`.
 

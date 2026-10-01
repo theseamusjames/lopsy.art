@@ -256,8 +256,8 @@ at once. Turn Symmetry off when you're done.
 
 Add a layer **Craw Detail**. With the Brush at Size **4** in dark red `#7A1E12`,
 draw a curved line across each tail segment, lines on the fan, and a happy
-smiling mouth. Fill two small **14 px** elliptical marquees with `#1B0D08` for
-the eyes.
+smiling mouth. For the eyes, set the Brush to Size **14**, Hardness **100**
+and colour `#1B0D08`, and click once for each eye.
 
 Add a layer **Craw Shine** and paint short cream `#F6D9B0` highlight strokes on
 the body, both claws and the tail at Size **6**. Naive sign art always has one
@@ -379,8 +379,9 @@ To 952, 1240.
   edges like old varnished board.
 - Add a **Drop Shadow** of `#1A0E06` at **6 / 8**, Blur **0**, Opacity **80**.
 
-On a layer **Nails**, fill a **14 px** dark `#3B3632` ellipse in each corner and
-add a **5 px** light-grey glint to each one.
+On a layer **Nails**, pick the **Brush** at Hardness **100**. Click once in
+each corner at Size **14** in dark `#3B3632`, then add a light-grey glint to
+each nail with a single click at Size **5**.
 
 ## Set the items, prices and dot leaders
 

@@ -52,16 +52,16 @@ Create a **1500 × 2250** px document (a 2:3 poster) with a **White** background
 
 ![A zoomed-in view at 645% showing two 32 by 32 tiles of diagonal black lines (one leaning each way), a short orange dash and an L of blue-grey grid line, with a marquee around the first tile](02-hatch-and-dash-tiles.webp)
 
-Three repeating textures do most of the drafting work. Add a temporary layer called `Tiles`, zoom in to about 600% on an empty corner, and draw them with fills:
+Three repeating textures do most of the drafting work. Add a temporary layer called `Tiles`, zoom in to about 600% on an empty corner, and draw them:
 
-- **Housing hatch:** a 32 × 32 square with 3 px ink lines at 45°, one every 16 px. Drag the Lasso round each diagonal band and fill it. Where a band runs off the square, it has to come back in on the opposite edge, or the tiles won't meet.
+- **Housing hatch:** a 32 × 32 square with 3 px ink lines at 45°, one every 16 px. Marquee the square first, so the selection keeps the lines inside it. Pick the **Brush** at Size 3 and Hardness 100 in ink. For each line, click just outside the square and [[Cmd+Shift]]-click past the opposite side, so the line snaps to 45° and runs right across. Space the lines 16 px apart along the edge, and include the short ones that only clip a corner, so each line leaving the square comes back in on the opposite edge and the tiles meet.
 - **Plug hatch:** the same tile mirrored, with the lines leaning the other way. Adjacent parts in a section drawing are always hatched in opposite directions.
 - **Dash:** a 16 × 4 orange block inside a 24 × 4 marquee. The 8 px transparent tail becomes the gap.
-- **Grid:** a 24 × 24 square with a 1 px `#9FB4BC` line along its top and left edges.
+- **Grid:** a 24 × 24 square with a 1 px `#9FB4BC` line along its top and left edges. Draw it with the **Pencil** ([[N]]) at Size 1: click the bottom-left corner, [[Shift]]-click the top-left, then [[Shift]]-click the top-right.
 
 Marquee each tile exactly and choose **Edit → Define Pattern**. Then delete the `Tiles` layer.
 
-> **Tip:** Tiles have to be exact, so type them instead of dragging. With nothing selected, a single click (no drag) with the **Rectangular Marquee** opens a dialog with **From X / Y** and **To X / Y** fields. For perfectly straight hatch bands, draw each one with the **Pen**, click **Commit path**, then use **Path to Selection** in the Paths panel.
+> **Tip:** Tiles have to be exact, so type them instead of dragging. With nothing selected, a single click (no drag) with the **Rectangular Marquee** opens a dialog with **From X / Y** and **To X / Y** fields.
 
 ## Tile the grid paper
 
@@ -246,9 +246,9 @@ Choose **View → Show Grid** and set **Grid** to **4px** in the options bar. Sh
 
 The table's other lines go on their own layers:
 
-- **Table rules:** 1 px lines between the rows, on a `Table Rules` layer at **40%**.
-- **Title block:** a 48 px-tall box with a 2 px outline, as wide as the heavy rule, near the bottom of the sheet under the parts list. Split it into three cells: `DWG. LO-07`, `SCALE 4:1` and `SHEET 1 OF 1`.
-- **Band rules:** full-width 3 px rules on the title guide, in the gap between the two figures, and on the bottom-band guide.
+- **Table rules:** 1 px lines between the rows, on a `Table Rules` layer at **40%**. Use the **Pencil** at Size 1: click at one end of each line and [[Cmd+Shift]]-click at the other to keep it level.
+- **Title block:** a 48 px-tall box with a 2 px outline, as wide as the heavy rule, near the bottom of the sheet under the parts list. Draw the outline with the Pencil at Size 2, clicking one corner and [[Shift]]-clicking round the other three and back to the start, then add two short vertical lines to split it into three cells: `DWG. LO-07`, `SCALE 4:1` and `SHEET 1 OF 1`.
+- **Band rules:** full-width 3 px Pencil rules on the title guide, in the gap between the two figures, and on the bottom-band guide.
 
 ## Add balloons and leaders
 
@@ -257,7 +257,7 @@ The table's other lines go on their own layers:
 Drafting conventions to follow:
 
 - **Numbers run in reading order.** Balloons **1–5** sit in a row above Fig. 1: housing, retainer strip, spring, driver pin, key pin. **6** is the plug, **7** the key and **8** the cam.
-- **Leaders are angled** between 30° and 60°. They must never run along a spring or an edge. Each is a 3 px ink line ending in a 5 px dot on its part.
+- **Leaders are angled** between 30° and 60°. They must never run along a spring or an edge. Each is a 3 px ink line ending in a 5 px dot on its part. Draw them on a `Leaders` layer with a hard **Brush**: at Size 3, click at the balloon and [[Shift]]-click on the part, then click once at Size 5 for the dot.
 - **Balloons** are ink circles 46 px across with a 40 px paper centre, on a layer directly **below** the number text. Each number is **Bebas 32**, centred in its balloon. Nudge with the arrow keys until it sits in the middle.
 - **The pitch dimension** has 2 px extension lines on the centres of pins 1 and 2, arrowheads on the line, and `.156" PITCH` set outside the extension lines so it doesn't crowd them.
 

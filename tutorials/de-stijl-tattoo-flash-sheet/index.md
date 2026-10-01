@@ -387,7 +387,8 @@ with its bottom level with the last line of the hours.
 
 Add a layer **Construction Lines** just above Background, under everything.
 Use the Brush at size **3**, hardness **100**, in black. Click once, then
-[[Shift]]-click the far end to draw a straight line. Draw:
+[[Shift]]-click the far end to draw a straight line. Hold [[Cmd+Shift]] as you
+click to snap it to an exact vertical, horizontal or 45°. Draw:
 
 - A vertical, a horizontal and a 45° diagonal through the hero
 - A cross through the rose
@@ -426,8 +427,8 @@ set it to **Overlay** at **50%**.
 ![The finished flash sheet on the canvas after nudging the rose down and the snake group up](29-polish-nudges.webp)
 
 Check each design against its cell's edges before you export. Here the rose
-sat too close to the rule above it, so select the **03 Rose** group and nudge
-it down about 24 px ([[Shift+Down]] twice, then [[Down]] four times). The
+sat too close to the rule above it, so select the **03 Rose** group and drag
+it down about 24 px with the Move tool. The
 snake's bottom bar crowded its price label, so nudge the whole
 **01 Rattlesnake Moon** group up 20 px.
 

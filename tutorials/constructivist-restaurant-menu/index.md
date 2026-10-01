@@ -81,7 +81,7 @@ The worker's face and arms are nearly as pale as the sky. The Magic Wand would e
 
 1. Zoom in on the worker ([[Ctrl]] + scroll wheel).
 2. With the **Lasso**, trace just inside the lit skin: the hair, the forehead, the nose, the lips, the chin and neck, the top of the shoulder and the lower hand. Follow the dark hair and clothing edges wherever they touch sky.
-3. Press [[Cmd+C]], wait a second, then press [[Cmd+V]]. An internal copy pastes back in place, on a new layer above the photo.
+3. Press [[Cmd+C]], then [[Cmd+V]]. The copy pastes back in place, on a new layer above the photo.
 4. Rename the new layer `Figure`.
 
 However hard the wand bites the photo below, the face now survives on the `Figure` layer.
@@ -93,7 +93,7 @@ However hard the wand bites the photo below, the face now survives on the `Figur
 Constructivist photomontage cuts photos with a ruler, not around the subject. Lift the city onto its own slab:
 
 1. On `Icarus`, lasso a four-sided shape with corners at **(330, 716)**, **(1215, 598)**, **(1215, 1095)** and **(330, 1095)**. The top edge climbs at the same angle the black band will use.
-2. Press [[Cmd+C]], wait, then [[Cmd+V]], and rename the new layer `City`.
+2. Press [[Cmd+C]], then [[Cmd+V]], and rename the new layer `City`.
 
 The haze on the horizon has no clean edge, so a ruled cut is both easier and more authentic than tracing it.
 
@@ -120,7 +120,7 @@ Then zoom along the cable and the legs. Lasso any leftover specks of haze *above
 
 Every grey in the photo now maps onto your two printing colours, so the photo's whites are the paper, not a cold grey.
 
-> **Tip:** The stop colour picker doesn't have a hex field. Pick the colours on the hue strip and the saturation/brightness square, and check the swatch next to *Stop N of M*. After you switch stops, the picker's cursors can still show the previous stop's colour until you click ([#1071](https://github.com/theseamusjames/lopsy.art/issues/1071)). Stop colour changes also aren't undo steps yet ([#1052](https://github.com/theseamusjames/lopsy.art/issues/1052)), so a stray [[Cmd+Z]] removes the whole Gradient Map node.
+> **Tip:** The stop colour picker doesn't have a hex field. Pick the colours on the hue strip and the saturation/brightness square, and check the swatch next to *Stop N of M*. After you switch stops, the picker's cursors can still show the previous stop's colour until you click ([#1071](https://github.com/theseamusjames/lopsy.art/issues/1071)).
 
 Finally, select `City` and run **Brightness/Contrast** at **−22 / +34**. The skyline gets real blacks, so it reads as a slab and not as haze.
 
@@ -137,7 +137,7 @@ The feather hides the edge of the change.
 
 1. Add a layer called `Band` and drag it above the `Photo` group.
 2. Lasso a strip whose top edge runs from **(−20, 1093)** to **(1220, 927)** and whose bottom edge runs from **(−20, 1263)** to **(1220, 1097)**. Start the lasso on the canvas; points can then run past the edges. Fill it with ink.
-3. Add a layer called `Keyline` and fill a **10 px** strip along the band's top edge with red.
+3. Add a layer called `Keyline`. Pick the **Brush** at Size **10** and Hardness **100** in red. Click on the left edge of the canvas just above the band's top edge (at about y **1085**), then [[Shift]]-click on the right edge the same distance above it (about y **925**). That lays a **10 px** strip along the band's top edge.
 
 The slope is **−7.6°** (it rises 2 px for every 15 px across). The city's top edge, the band and every rotated word share this one angle.
 
@@ -193,9 +193,10 @@ A black shadow disappears into the dark city. A paper-coloured one reads like a 
 2. Turn on **View → Show Grid**, set **Grid** to **4 px**, and tick **Snap**.
 3. Snap two red bars from **(60, 1276)** to **(572, 1324)** and from **(628, 1276)** to **(1140, 1324)**.
 4. On a `Rules` layer, snap these in ink:
-   - a **4 px** column rule down the centre, from y **1276** to **1680**,
    - a **68 px** footer bar across the bottom, and
    - a nameplate bar from **(60, 60)** to **(450, 104)**. It ends exactly at the sun's left edge.
+
+   Then draw the **4 px** column rule down the centre guide with the **Pencil** ([[N]]) at Size 4: click at y **1276** and [[Cmd+Shift]]-click at y **1680**.
 5. Hide the grid and untick **Snap** before you place any type. With snap on, arrow nudges jump a whole grid cell.
 
 ## Set the dishes and align the prices

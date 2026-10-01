@@ -26,7 +26,7 @@ Palette (typed as hex in Lopsy):
 
 Fonts: **Russo One** for the headline and №7, and **Tenor Sans** for the subtitle and labels.
 
-The document is **1500 × 2100 px**. Keep the width a multiple of 4.
+The document is **1500 × 2100 px**.
 
 ## Set up the sheet with guides and a snapped frame
 
@@ -102,7 +102,7 @@ The **108 Minutes** piece is Gagarin's single orbit, built around Malevich's bla
 ![Three red squares shrinking along the orbit ring behind the capsule, with the newest pasted copy in a transform box being scaled down from its corner](06-motion-trail-copy-scale.webp)
 
 1. Draw the **Vostok Dot**: a 42 px red square with a 5 px outline, sitting on the ring.
-2. Marquee it, press [[Cmd+C]], wait a moment and press [[Cmd+V]]. The copy is pasted in place as a new layer.
+2. Marquee it, press [[Cmd+C]] and then [[Cmd+V]]. The copy is pasted in place as a new layer.
 3. Marquee the copy. With the **Move** tool, hold [[Cmd]] and drag the bottom-right corner in to about **66%**. [[Cmd]] keeps the aspect ratio. Press [[Cmd+D]].
 4. Drag the copy back along the ring.
 5. Repeat for a third copy at about **42%**. The shrinking squares read as speed.
@@ -116,7 +116,7 @@ The **108 Minutes** piece is Gagarin's single orbit, built around Malevich's bla
 1. **Horizon:** on a **Horizon** layer, fill an ink circle 1120 px across, centred well below the design.
    - Select the same circle **18 px lower** and press [[Delete]]. What's left is a crescent that tapers toward its ends.
    - Marquee-delete everything more than 285 px left or right of the centre.
-2. **Lines:** on **Two Lines**, lasso a 12 px ink diagonal and an 8 px red one. Keep them clear of each other and of the square corners, so no three shapes meet at one point.
+2. **Lines:** on **Two Lines**, draw a 12 px ink diagonal and an 8 px red one with a hard **Brush** (Hardness 100): click at one end, then [[Shift]]-click at the other. Keep them clear of each other and of the square corners, so no three shapes meet at one point.
 3. **Red square:** draw a 150 px red square with an outline, axis-aligned. Rotate it **18°** with the Move tool's rotation handle.
 4. **Black square:** add a 104 px black square tilted −12°.
 
@@ -167,7 +167,7 @@ Real flash sheets fill the gaps with small motifs.
    - A red **five-point star** with an outline.
    - A black **cross**.
    - A small ochre square with an outline.
-2. If a small shape ends up in the wrong place, move it with a marquee, [[Cmd+X]] and [[Cmd+V]], then drag the pasted layer onto the gutter axis. The pasted layer lands in place above the layer you cut from.
+2. If a small shape ends up in the wrong place, marquee it and drag it onto the gutter axis with the **Move** tool. Only the selected pixels move.
 
 ## Set the title to the angle of the bar
 

@@ -130,11 +130,7 @@ original.
 
 Marquee a snug box around the whole horn, from the mouthpiece to the bell
 rim. Press [[V]] and click **Flip Horizontal** in the options bar. The bell
-now points left.
-
-> **Tip:** The Flip button keeps keyboard focus after you click it, so pressing [[Enter]] clicks it again and flips the horn back. Commit with [[Cmd+D]], or click the status bar first.
-
-Press [[Cmd+D]].
+now points left. Press [[Cmd+D]].
 
 ## Rotate the horns into an X
 
@@ -273,8 +269,9 @@ end. Draw its mirror image on the right. Add two small fold triangles in
 `#4A0E0A` in the corners where the band's lower edge meets each tail.
 
 Add a layer named `Ribbon Band`. Fill the 556 × 64 rectangle with red, then
-add two 2 px cream rules just inside its top and bottom edges (about 8 px
-in), stopping 14 px short of each end.
+draw two cream rules with the **Pencil** ([[N]]) at **Size** `2`, just inside
+its top and bottom edges (about 8 px in). Click 14 px in from one end and
+[[Cmd+Shift]]-click 14 px in from the other.
 
 Finally, open the band's effects, tick **Drop Shadow**, and set **Offset X**
 `4`, **Offset Y** `5`, **Blur** `4`, colour ink and **Opacity** about `40`.
@@ -335,7 +332,7 @@ title.
 Add a layer named `Ornaments`:
 
 - two red lasso hearts about 38 px wide, one either side of the subtitle
-- two 3 px ochre rules, 120 px long, under the subtitle, with a 60 px gap between them on the centre guide
+- two ochre rules under the subtitle, each 120 px long, with a 60 px gap between them on the centre guide. Draw each with the Pencil at **Size** `3`: click one end, then [[Cmd+Shift]]-click the other.
 - a tiny ochre heart in that gap
 
 ## Grow a vine in the margin
@@ -385,8 +382,7 @@ inside edge on the right, tall enough to take in the whole vine. The frame
 is symmetrical, so this box is centred on the centre guide, and a flip
 mirrors the vine exactly into the right margin.
 
-Press [[V]], click **Flip Horizontal**, click the status bar, and press
-[[Cmd+D]].
+Press [[V]], click **Flip Horizontal**, and press [[Cmd+D]].
 
 ## Fake a slight misregistration
 

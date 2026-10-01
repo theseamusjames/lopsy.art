@@ -276,7 +276,7 @@ then press [[Cmd+D]].
 
 ![The footer hours in Rubik Mono One and a pink Sedgwick Ave Display tag reading EAT & SHRED tilted above the bottom checkerboard](19-footer-graffiti-tag.webp)
 
-Set the footer now, before the menu columns (see the tip in the menu columns step).
+Set the footer in two lines:
 
 - `OPEN DAWN 'TIL STREETLIGHTS` in Rubik Mono One `19`, cream, **Letter spacing** `1`, clicked on the left margin guide just below the footer guide.
 - `cash / card  -  pier 9 skatepark  -  helmets optional` in Space Mono **Regular** `13`, `#B9B09C`, clicked just below the first line.
@@ -329,10 +329,9 @@ left column and just right of the gutter for the right one. Start each
 description block about 58 px lower than its names, so every description
 sits about 14 px under its name and each pair reads as one item.
 
-Create the right column first, descriptions then names, and then the left
-column the same way.
+In each column, create the descriptions first and then the names.
 
-> **Tip:** A Text-tool click on an existing text layer edits that layer instead of starting a new one. Making the descriptions before the names, and the right column before the left, keeps each click in clear space.
+> **Tip:** A Text-tool click on an existing text layer edits that layer instead of starting a new one. The tall names block covers the descriptions, so making the descriptions first keeps each click in clear space.
 
 ## Right-align the prices
 

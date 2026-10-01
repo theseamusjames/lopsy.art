@@ -52,7 +52,7 @@ Now add guides for an 80 px safe margin and a centre line:
 The ruler shows a readout as you hover. Guides only drop while
 **View → Show Guides** is ticked.
 
-## Draw a sunburst with the Lasso
+## Draw a sunburst
 
 ![A long lasso wedge running from a point behind the headline out past the left edge of the canvas, with seven peach rays already filled](02-sunburst-lasso.webp)
 
@@ -61,15 +61,15 @@ line, about a fifth of the way down the page. That's where the O of HOT will
 sit. Split the circle into 28 equal slices and fill every other one with
 `#F4CF9C`. That's 14 rays.
 
-For each ray, use the **Lasso** to press at the centre, drag out to the canvas
-edge, trace along the edge, and come back to the centre before you let go. Then choose
-**Edit → Fill**. Let the far points run about 40 px past the canvas edge, so
-no ray ends in a sliver.
+Set the foreground to `#F4CF9C` and choose **Filter → Sunburst…**. It draws
+the whole burst in one go, in the foreground colour. Set **Rays** to 14,
+**Width** to 50 (so rays and gaps are equal), **Taper** to 0, **Center X** to
+50 and **Center Y** to about 20, and leave **Length** at 100 or more so the
+rays reach the corners.
 
-> **Tip:** **Filter → Sunburst…** draws the whole burst in one go, in the
-> foreground colour. Set **Rays** to 14, **Width** to 50, **Taper** to 0,
-> **Center X** to 50 and **Center Y** to about 20, and leave **Length** at 100
-> or more so the rays reach the corners.
+> **Tip:** To cut the rays by hand instead, use the **Lasso** for each one:
+> press at the centre, drag out past the canvas edge, trace along it, and come
+> back to the centre before you let go. Then choose **Edit → Fill**.
 
 ## Fade the rays with a layer mask
 
@@ -143,10 +143,10 @@ as the bottom of the gradient. Starting just inside a letter's bottom edge,
 paint ten vertical drips at sizes **16–26 px**, 38 to 98 px long. Click at
 the top of each drip and [[Shift]]-click at the bottom to keep it straight.
 
-Finish each drip with an Elliptical Marquee blob about 1.6 times the brush
-width and **Edit → Fill**. Put the drips where letters have flat feet: two or
-three under each H stem, the O's curve and the T's stem. Vary the lengths so
-they don't look like a comb.
+Finish each drip with a single click at the bottom, with the Size raised to
+about 1.6 times the drip's width, for a round drop. Put the drips where
+letters have flat feet: two or three under each H stem, the O's curve and the
+T's stem. Vary the lengths so they don't look like a comb.
 
 ## Add a keyline and a hard shadow
 
@@ -185,10 +185,9 @@ Set **Letter spacing** to 58 and type **SOCIAL** in **Anton** at **300 px**
 in ink. Adjust the tracking until the word spans the margins exactly, then
 centre it a little below Sauce. Rasterize it.
 
-If the grid is showing, untick **Snap** first, because snapping would round a
-thin marquee to the grid. Draw a **5 px** tall Rectangular Marquee right
-across the middle of the letters' cap height and press [[Delete]]. This one clean cut gives an "inline" wood-type look. Two
-cuts looked like a glitch.
+Draw a **5 px** tall Rectangular Marquee right across the middle of the
+letters' cap height and press [[Delete]]. This one clean cut gives an
+"inline" wood-type look. Two cuts looked like a glitch.
 
 ## Offset a red plate under SOCIAL
 
@@ -235,9 +234,11 @@ word on one baseline, a comfortable gap below SOCIAL.
 
 ![A thin capsule under the heat words filled with a green to olive to orange to red to black gradient, with small Space Mono labels at each end](14-heat-scale-bar.webp)
 
-On *Scale Bar*, build a **16 px** tall capsule just under the words,
-running from margin to margin. Use a Rectangular Marquee plus a circle at
-each end, filled in ink. Magic Wand it, then drag a **Linear** gradient from
+On *Scale Bar*, draw a **16 px** tall capsule just under the words,
+running from margin to margin. Pick the **Brush** at Size **16** and Hardness
+**100** in ink, click 8 px inside the left margin guide, and
+[[Cmd+Shift]]-click 8 px inside the right one. The round brush gives the bar
+its rounded ends. Magic Wand it, then drag a **Linear** gradient from
 the left margin to the right one, using the five heat colours as stops: 0,
 25, 50, 72 and 100%.
 
@@ -317,8 +318,8 @@ draw a marquee over the bottom of the drip on the *HOT* layer and scrub it
 out with the **Eraser** at **Size 60**. The marquee keeps the eraser off
 everything else.
 
-Fill a new ellipse drop about 22 px higher. The stroke and shadow re-wrap the
-new end automatically.
+Deselect, then click a new drop with the hard Brush about 22 px higher, at the
+same size as before. The stroke and shadow re-wrap the new end automatically.
 
 ## Add a fine print grain
 

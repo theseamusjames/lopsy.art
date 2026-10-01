@@ -63,7 +63,7 @@ The soft bokeh background is easy to select and the bird is not, so select the b
 
 ![The cut-out kingfisher on cream paper with a generous lasso outline around the bird and twig, ready to invert and delete everything outside it](04-cut-out-and-clean-edges.webp)
 
-1. Press [[Cmd+C]], wait a second, and press [[Cmd+V]]. The paste lands in place on a new layer above the photo. Name it `Kingfisher` and hide `Photo`.
+1. Press [[Cmd+C]], then [[Cmd+V]]. The paste lands in place on a new layer above the photo. Name it `Kingfisher` and hide `Photo`.
 2. The feathered selection leaves a faint 1 px line along the photo's old edges. Draw a generous **Lasso** around the bird and twig, choose **Select → Inverse**, and press [[Delete]].
 
 ## Patch the beak from the photo
@@ -104,7 +104,7 @@ Do the same for any other holes, such as the gap under the chin.
 
 To trim any leftover grey fringe, reuse that same wand selection. Choose **Select → Grow…** 2 px, then press [[Delete]] on each bird layer. Clean up stray wing-tip pixels with a small **Eraser**.
 
-> **Tip:** Don't trim a fringe by ⌘-clicking a layer's own thumbnail and then using Shrink, Inverse and Delete. That wipes the whole layer ([#1076](https://github.com/theseamusjames/lopsy.art/issues/1076)). The wand route above is safe.
+> **Tip:** Don't trim a fringe by ⌘-clicking a layer's own thumbnail and then using Shrink, Inverse and Delete. A known bug makes that wipe the whole layer. The wand route above is safe.
 
 ## Fade the twig with a layer mask
 

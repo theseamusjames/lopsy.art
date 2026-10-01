@@ -157,7 +157,7 @@ layer inside it called *Palm A*. Use plum `#2A1433` for everything.
 
 1. **Trunk:** lasso a long, gently curved taper from off the bottom-left edge (about 70 px wide) up to a crown a little over a quarter of the way across and just under a third of the way down, where it's about 26 px wide.
 2. **Fronds:** lasso eight arched crescents radiating from the crown. Each one has a smooth top edge and a saw-toothed lower edge of leaflets that hang down and sweep toward the tip. Make them 240–440 px long, and let the side fronds droop further than the top ones.
-3. **Coconuts:** fill three small overlapping circles under the crown in `#3E1C3F`.
+3. **Coconuts:** with a hard **Brush** (Size about 24) in `#3E1C3F`, click three overlapping dabs under the crown.
 
 Hanging leaflets on arched stems are what make it read as a coconut palm. If
 the leaflets stick out straight on both sides, it looks like a pine branch.
@@ -213,7 +213,7 @@ Turn on **Outer Glow**: colour `#FF9A48`, **Size** 40, **Spread** 5,
 
 1. Duplicate the Bungalow layer and rename the copy *Reflection*. The copy lands 10 px right and 10 px down.
 2. Marquee around the hut and click **Flip Vertical** in the Move options. Press [[Cmd+D]].
-3. With the Move tool, press [[Shift+Left]] once to line the stilts back up. Then use the arrow keys ([[Shift]] moves 10 px) to nudge the flipped copy down until its top meets the bottoms of the stilts.
+3. With the Move tool, drag the flipped copy so its stilts line up with the originals and its top meets the bottoms of the stilts.
 4. Marquee everything from about 75 px below the stilt tips to the bottom edge, **Feather** it by **40**, and press [[Delete]]. Only the stilt reflections are left, and they fade out before the title area.
 5. Run **Filter → Motion Blur…** with an **Angle** of 90 and a **Distance** of 18. Set the layer to **40%** and drag it below Bungalow.
 
@@ -238,7 +238,7 @@ silhouette.
 Collapse Island. Select Glitter, click **New Group**, name it *Type*, and drag
 its row above Island. Inside Type, add a layer called *Top Band*.
 
-1. Fill a rectangle across the full width, from the top edge down to an eighth of the height (200 px), with `#F4E6C8`. Then fill a 6 px rule along its bottom edge with `#24102E`.
+1. Fill a rectangle across the full width, from the top edge down to an eighth of the height (200 px), with `#F4E6C8`. For the rule along its bottom edge, pick the **Pencil** ([[N]]) at Size 6 in `#24102E`, click at the left edge 3 px above the band's bottom, and [[Cmd+Shift]]-click at the right edge.
 2. Build the badge near the left end of the band, about 160 px in from the left edge and low enough to hang over the rule. Stack three **Elliptical Marquee** fills on the same centre: red `#C8323A` about 164 px across, cream at 144 px, and red again at 136 px. The result is a red disc with a thin cream ring.
 
 > **Tip:** Circles that share a centre are easiest with typed corners. Deselect before each one, click once with the Elliptical Marquee, and enter From 78, 68 To 242, 232 for the outer disc, From 88, 78 To 232, 222 for the cream, and From 92, 82 To 228, 218 for the inner red.

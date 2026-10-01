@@ -194,7 +194,7 @@ band runs off both sides. Fill it black. Then add these on the same layer:
 
 - a black rectangle across the bottom of the page, about the last 190 px, for the event details;
 - a black banner across the top that rises about **6°**;
-- thin red rules just above the diagonal band and just below the top banner.
+- thin red rules just above the diagonal band and just below the top banner. Draw each with a hard red **Brush** about 8 px wide: click at the left edge of the canvas, then [[Shift]]-click at the right edge for a straight line.
 
 ## Check the composition
 
@@ -304,10 +304,6 @@ Type `FREE`, press [[Enter]], type `SCONES!` in cream **Russo One** at Size
 `36`, and rasterize. Marquee just the `FREE` line and nudge it right until it's
 centred over `SCONES!`. Merge the text down into `Badge`, marquee the badge
 and rotate it **+12°** so it looks hand-stamped. Press [[Cmd+D]].
-
-> **Tip:** Click another layer's row and check that the badge is still tilted.
-> If it has snapped back upright, press [[Cmd+Z]] and then [[Cmd+Shift+Z]] to
-> bring the rotation back before you carry on.
 
 ## Add paper grain
 

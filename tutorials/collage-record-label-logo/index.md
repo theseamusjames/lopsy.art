@@ -139,7 +139,7 @@ printed dot texture.
 
 1. Add a layer named `Sky Dots`. Choose **Filter → Clouds…** with a **Scale** of `4`.
 2. Choose **Filter → Halftone…** and set **Dot Size** to `12` and **Angle** to `30`.
-3. [[Cmd]]-click the **Teal Disc** thumbnail, click the `Sky Dots` row, and choose **Select → Inverse**. Press [[Delete]], then [[Cmd+D]].
+3. [[Cmd]]-click the **Teal Disc** thumbnail (`Sky Dots` stays the active layer) and choose **Select → Inverse**. Press [[Delete]], then [[Cmd+D]].
 4. In Sky Dots' effects, turn on **Color Overlay** with `#6FB3A8`, and set the layer opacity to **30%**.
 
 The dark dots turn into soft, lighter teal mottling that stays inside the
@@ -192,7 +192,7 @@ Opacity `50`).
 **Shine:** Add a layer named `Vinyl Shine`. Use the Brush at **Size** `5`,
 **Hardness** `100`, **Opacity** `45` in white, and drag two short arcs in the
 upper left and two in the lower right, following the grooves. [[Cmd]]-click
-the Vinyl thumbnail, click `Vinyl Shine`, choose **Select → Inverse**, press
+the Vinyl thumbnail, choose **Select → Inverse**, press
 [[Delete]] and deselect. Set the blend mode to **Screen**. Thin, hard arcs look
 like printed shine. A soft airbrush blob looks digital.
 
@@ -292,7 +292,7 @@ pale edges read as overlapping feathers.
 - **Legs:** Click `Tail` and add a layer named `Legs`, so it sits under the body. Use the Brush at Size `6` in `#3B2A1A` and [[Shift]]-click two legs from the belly down to the record's top rim. Add three short toes on each at Size `5`.
 - **Crest:** Above `Wing`, add a layer named `Crest` and lasso a small ragged tuft of three or four points rising from the back of the crown. Fill with `#7A3A1E`. Keep it short and flush with the head. A tall single spike looks like a horn.
 - **Beak:** Add a layer named `Beak` and lasso one piece with an open V that starts inside the face, so it stays attached. Fill with `#E2A93B`, then brush a 3 px gape line in `#9C6A18`.
-- **Eye:** Add a layer named `Eye` and fill a 15 px elliptical marquee with `#1C1A18`. Click a 4 px `#FFF6E6` highlight dab near the top right.
+- **Eye:** Add a layer named `Eye`, press [[Cmd+D]], and click once with a hard Brush at Size `15` in `#1C1A18`. Click a 4 px `#FFF6E6` highlight dab near the top right.
 
 ## Lift the lark off the page
 
@@ -310,12 +310,12 @@ name the group `Lark`.
 
 ![A single black eighth note with a cream outline floating to the right of the singing lark](20-music-note.webp)
 
-With `Eye` selected, add a layer named `Note 1`. Build the note from three
-Lasso fills in `#1C1A18`:
+With `Eye` selected, add a layer named `Note 1`. Build the note in
+`#1C1A18`:
 
-1. A tilted oval head, about 34 × 24 px, in the open space to the right of the lark's beak, level with its head.
-2. A 6 px-wide stem from the head straight up, about 80 px tall.
-3. A curved flag from the top of the stem sweeping down to the right.
+1. Lasso a tilted oval head, about 34 × 24 px, in the open space to the right of the lark's beak, level with its head. Fill it and deselect.
+2. For the stem, use a hard Brush at Size `6`. Click at the right side of the head, then [[Cmd+Shift]]-click about 80 px straight above it.
+3. Lasso a curved flag from the top of the stem sweeping down to the right, and fill it.
 
 Give it a 4 px cream **Stroke** and a small **Drop Shadow** (`2` / `4`,
 Blur `5`, Opacity `40`) so it matches the other paper pieces.

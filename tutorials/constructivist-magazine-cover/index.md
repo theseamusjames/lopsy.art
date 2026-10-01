@@ -235,11 +235,11 @@ height. Keep a little red visible above the "NE" and below the "D".
 
 Set **APIARY** in **Russo One 200**, ink black, and move it to the top-left
 corner: on the left margin guide, about 64 px from the top. On a
-**Masthead Rules** layer, marquee-fill three shapes:
+**Masthead Rules** layer, add three shapes:
 
-- a red issue box, **260 × 140**, with its right edge on the right margin guide and its top level with APIARY's
-- a **12 px** black rule from margin to margin, a little above the masthead guide
-- a **4 px** rule 8 px below it, ending just above the guide
+- a red issue box: marquee **260 × 140**, with its right edge on the right margin guide and its top level with APIARY's, and fill it
+- a **12 px** black rule from margin to margin, a little above the masthead guide: pick the **Pencil** at **Size 12**, click on the left margin guide, then [[Cmd+Shift]]-click on the right one for a level line
+- a **4 px** rule 8 px below it, ending just above the guide, drawn the same way at **Size 4**
 
 ## Add the issue number and taglines
 
@@ -311,7 +311,7 @@ the bee.
 Check the cover for near-misses:
 
 - **Leg tip.** Erase the tip of the bee's front leg (Eraser, Size 34) so it no longer kisses the disc.
-- **Eye.** Circle-select the bee's eye on the Bands layer and fill it red. A flat red dot is more on-style than a cartoon highlight.
+- **Eye.** On the Bands layer, click the bee's eye once with a hard red Brush sized to fit it. A flat red dot is more on-style than a cartoon highlight.
 - **Swarm.** Marquee the lowest small bee and press [[Delete]] so UPRISING has room. Then move the Swarm layer so the last two bees sit under the wedge.
 - **Halftone.** Move the halftone layer about 45 px left so the dots stay inside the page.
 - **Coverlines.** Nudge the text a few pixels to even out the slab's margins.

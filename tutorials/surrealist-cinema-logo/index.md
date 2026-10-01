@@ -51,7 +51,7 @@ Press [[Cmd+D]] to deselect.
 > **Tip:** To center the disc exactly, click once with the Elliptical Marquee
 > while nothing is selected, and type the corners `216, 146` to `784, 714`.
 
-## Draw the keyhole with the Lasso and a 1 px feather
+## Draw the keyhole with the Lasso
 
 ![A navy disc with a white circle for the top of the keyhole, a lasso trapezoid below it, and the Feather Selection dialog set to 1 px](02-keyhole-lasso-feather.webp)
 
@@ -67,8 +67,6 @@ you'll use to cut other layers, and you'll delete it at the end.
    the lower half of the circle, then a wider base about 190 px wide, around
    200 px further down. Keep both edges centered on the vertical guide, then
    let go back at the start point to close it.
-3. Choose **Select → Feather…**, set **Radius** to `1` and click **Apply**.
-   The 1 px feather smooths the stair-stepped diagonal edges.
 
 ## Fill the keyhole stencil
 

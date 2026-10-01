@@ -218,7 +218,8 @@ Give it the same three effects in hot pink `#FF2D95`: Inner Glow Size
 Script neon looks livelier with a slight upward lean. Marquee around the word,
 switch to **Move**, and drag the rotate handle **7°** counter-clockwise. Press
 [[Cmd+D]], then use the arrow keys to nudge it until the pink core is centred
-on the centre guide with its top on the 145 guide. The text stays editable.
+on the centre guide with its top on the 145 guide. Get the wording right
+before you tilt it, because a later text edit redraws the word straight.
 
 ## Track out SKATE NIGHT
 
@@ -245,9 +246,11 @@ Add a layer called *Skate*. Trace the boot with the **Lasso**: a tall cuff, a
 curved instep down to a rounded toe, and a flat sole. Fill it with lilac
 `#F1E4FF`, then **Shrink 9** and press [[Delete]] to leave the outline.
 
-Add two wheel rings (48 px circles, **Shrink 9**). Fill short 8 px stubs
-joining each wheel to the sole. Fill capsules for two laces and a side
-stripe: a rectangle with a circle at each end.
+Add two wheel rings (48 px circles, **Shrink 9**), then deselect. Pick a
+hard **Brush** in lilac. At Size `8`, click on each wheel and [[Shift]]-click
+up to the sole for a short stub. At Size `9`, draw two laces across the cuff
+and a side stripe along the boot the same way. The round brush tip gives
+each one the rounded ends of a bent tube.
 
 ## Light the skate
 
@@ -262,15 +265,15 @@ counter-clockwise with the **Move** tool so the toe kicks up, then press
 
 ![Date, hours and address lines in Righteous next to the skate, with equal spacing between the lines](20-info-text.webp)
 
-Create the lines **bottom-up** in empty canvas, so a new click doesn't land
-inside an existing text box:
+Create each line in empty canvas, so a new click doesn't land inside an
+existing text box:
 
 - `THE ORBIT RINK · 1200 GALAXY AVE`: Righteous **36** px, `#EDE3FF`
 - `8PM – 1AM · ALL AGES`: Righteous **46** px, `#FFE0F2`
 - `FRIDAY · OCT 17`: Righteous **76** px, `#FFF0CC`, Letter spacing **6**
 
-> **Tip:** Type characters such as `·` and `–` by pasting them with
-> [[Cmd+V]].
+> **Tip:** On a Mac, type `·` with [[Option+Shift+9]] and `–` with
+> [[Option+Hyphen]].
 
 Line up the left edges, and nudge until the gaps between the lines are equal
 (about 28 px). The block should sit centred on the skate icon. Give each line

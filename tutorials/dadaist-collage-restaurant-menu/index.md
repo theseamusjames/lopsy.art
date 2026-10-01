@@ -150,7 +150,7 @@ Create a `Type` group above **Collage** with an empty `Type Base` layer inside.
 Click the top ruler at **54** and **1446** to drop margin guides.
 
 1. With **Holtwood One SC** at size `206` and colour `#1A1714`, type `URSONATE` and move it to x 54, y 46.
-2. Add a layer named `Rules`. Marquee from (54, 222) to (1446, 230), **Edit → Fill**, then do the same from (54, 276) to (1446, 280).
+2. Add a layer named `Rules` and pick the **Pencil** ([[N]]). Its square tip is centred on each click, so start and stop half a tip inside the guides. At **Size** `8`, click (58, 226) and [[Cmd+Shift]]-click (1442, 226) for a thick rule. At **Size** `4`, draw a thin rule from (56, 278) to (1444, 278).
 3. In **Special Elite** at `30`, type `KLEINE DADA WURSTBUDE  *  HANNOVER  *  MERZ 1923  *  SPEISEKARTE NR. 1`. Special Elite has no ✶ glyph, so use typewriter asterisks.
 4. Open the **Text** panel and raise **Letter spacing** until the line spans the guides exactly. Here that was `4.3`. Centre it between the rules.
 
@@ -242,17 +242,17 @@ In **Noto Sans Symbols 2** at `130`, paste the glyph `☞` into a new text
 layer and rasterize it. Put it at about (245, 965), pointing at the Würste
 heading.
 
-For a matching fist on the other side, marquee it, press [[Cmd+C]], wait a
-couple of seconds for the clipboard to update, and press [[Cmd+V]]. The copy
-lands in place above the original. Choose **Image → Flip Horizontal**, rename
+For a matching fist on the other side, marquee it, press [[Cmd+C]] and then
+[[Cmd+V]]. The copy lands in place above the original. Choose **Image → Flip Horizontal**, rename
 it `Hand Left` and drag it to about (1078, 1150) so it points back at the slip.
 
 ## Close with a sound-poem footer
 
 ![The finished type layer with both fists, the slips and the Fraktur footer between two rules](16-fists-footer.webp)
 
-On **Rules**, fill two more bars from (54, 1949) to (1446, 1953) and from
-(54, 2049) to (1446, 2053). The bottom margin then matches the top.
+On **Rules**, draw two more Size `4` Pencil rules, from (56, 1951) to
+(1444, 1951) and from (56, 2051) to (1444, 2051). The bottom margin then
+matches the top.
 
 Set the first line of the *Ursonate*, `Fümms bö wö tää zää Uu, pögiff, kwii
 Ee.`, in **UnifrakturMaguntia** at `54`. Add `— K. SCHWITTERS, URSONATE` in
@@ -261,7 +261,7 @@ line up the attribution with the Fraktur baseline.
 
 ## Cut the stamp rings
 
-![A blue ring stamp under construction: an outer ring and an inner ring on bare paper](17-stamp-rings.webp)
+![The stamp under construction on bare paper: a blue disc with a slightly smaller circular marquee inside it, before the middle is cleared to leave the outer ring](17-stamp-rings.webp)
 
 Add a layer named `Stamp` and set the foreground to `#2B3E9C`. It's easiest
 to build the stamp large on empty paper (hide the groups for a moment), then
@@ -327,8 +327,6 @@ At the top of the **Type** group, add a layer named `Wear` and fill it with
 Specks inside small type change letters (an `l` becomes `!`). [[Cmd]]-click
 each slip's thumbnail, choose **Select → Grow…** `4`, and **Edit → Fill**
 **Wear** with black. Do the same with marquees over the strip and the footer.
-
-> **Tip:** Don't Magic Wand the specks themselves. A selection of thousands of tiny islands can freeze the editor while its outline redraws, so the blend-mode route is faster.
 
 ## Break up the pattern
 

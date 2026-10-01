@@ -73,8 +73,8 @@ Add a layer named `Temple` and set FG to `#2A1458`.
 1. Draw the temple from rectangles and lasso polygons, filling each with **Edit → Fill**: steps, eight tapered columns with capitals, the entablature and a triangular pediment.
 2. Add low colonnades that run out to both edges of the canvas.
 3. Open the layer effects and add **Inner Glow** in `#FF6AD5` (Size 9, Spread 10, Opacity 85). The sun now rims every edge.
-4. The temple first covered too much of the sun. Marquee the whole temple, switch to the **Move** tool and drag the top-middle handle down until the height is about 80%. Press [[Cmd+D]] to commit. That lets the striped sun rise above the roof.
-5. Fill a 44 px frieze band in `#3F2082`. Add 2 px fillet lines in `#5A33A8` along its top and bottom edges.
+4. Marquee the whole temple, switch to the **Move** tool and drag the top-middle handle down until the height is about 80%. Press [[Cmd+D]] to commit. That lets the striped sun rise above the roof.
+5. Fill a 44 px frieze band in `#3F2082`. Deselect, and draw 2 px fillet lines in `#5A33A8` along its top and bottom edges with the **Pencil** at Size 2: click at one end, then [[Cmd+Shift]]-click at the other for a dead-level line.
 
 ## Tile the pool and push it into perspective
 
@@ -83,7 +83,7 @@ Add a layer named `Temple` and set FG to `#2A1458`.
 Make a pool tile:
 
 1. Add a layer and fill a 64 × 64 square with `#35C9E2`.
-2. Paint a 3 px `#E4FCFF` grout line along its top and left edges, with a 3 px `#5AD8EC` line just inside.
+2. Deselect, and with the **Pencil** at Size 3 draw a `#E4FCFF` grout line along its top and left edges, with a `#5AD8EC` line just inside. Click at one end of each line and [[Cmd+Shift]]-click at the other.
 3. Select the tile and choose **Edit → Define Pattern**.
 4. Clear the tile, name the layer `Pool Floor`, and select everything below the horizon (0, 640 → 2400, 1100).
 5. Choose **Edit → Fill with Pattern…** and pick the tile.
@@ -190,7 +190,7 @@ Paste the palm photo. Its sky is clean blue, so here the wand works well:
 
 Add a **Color Overlay** in `#2A1458` and a thin pink **Inner Glow** so the palm turns into a backlit silhouette. Scale it to 60%.
 
-Click **Duplicate Layer**, click the copy's row, scale the copy to 78%, and drag it right.
+Click **Duplicate Layer**, scale the copy to 78%, and drag it right.
 
 Drag the first palm's row below `Temple` so the temple sits in front of it. Then give that palm a slightly lighter overlay (`#4A2384`) so the two silhouettes don't merge.
 
@@ -216,7 +216,7 @@ Drag the first palm's row below `Temple` so the temple sits in front of it. Then
 **Katakana.**
 
 1. Turn on the **Toggle vertical text** button.
-2. Paste `ローマのプール` in **Dela Gothic One** at 56 px. Paste rather than type, because CJK can't be typed into the text tool.
+2. Type or paste `ローマのプール` in **Dela Gothic One** at 56 px. A Japanese input method works in the text tool.
 3. Turn vertical off again with a raster layer selected.
 
 Vertical text currently keeps the long-vowel mark ー horizontal. Rasterize the layer, marquee each ー, click **Rotate 90° CW** in the Move options bar, and press [[Cmd+D]].

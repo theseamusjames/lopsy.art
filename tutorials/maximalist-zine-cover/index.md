@@ -236,8 +236,8 @@ Select **YOLK Face** and create an **Egg** group. Build it from the bottom up:
 
 ![Two white highlight ellipses on the yolk inside a rotated transform box](15-rotate-highlight.webp)
 
-On a **Shine** layer, fill a white 90 × 50 ellipse and a small dot on the
-upper left of the yolk. Marquee them and drag the rotate handle to **−28°** so
+On a **Shine** layer, fill a white 90 × 50 ellipse on the upper left of the
+yolk, and click a small dot beside it with a hard white **Brush**. Marquee them and drag the rotate handle to **−28°** so
 the highlight follows the curve of the yolk. Press [[Cmd+D]] to commit.
 
 ## Wrap the poem around the yolk
@@ -270,8 +270,9 @@ the highlight follows the curve of the yolk. Press [[Cmd+D]] to commit.
 
 Maximalism needs editorial density, not just decoration.
 
-1. On a **Cover Pills** layer, build two rounded navy rectangles. Fill two
-   overlapping marquee rectangles, then fill four ellipse marquees for the
+1. On a **Cover Pills** layer, build two rounded navy rectangles. Marquee
+   each one, choose **Select → Shrink…** by the corner radius, then
+   **Select → Grow…** by the same amount, and fill. Growing rounds the
    corners.
 2. Add a 4 px cream Stroke and a tomato hard shadow.
 3. Set the cover lines in Rubik Mono One, with Chango for the punchlines in

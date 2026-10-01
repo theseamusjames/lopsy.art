@@ -101,7 +101,7 @@ built animals from a few bold, flat shapes, and the fan tail is the biggest.
 
 1. Add a *Tail* layer. Pick a point about three-fifths of the way across and three-fifths of the way down the card, where the turkey's rump will sit. Lasso eleven long feathers that radiate from it like a half-open fan, each narrow at the centre, about 295 px long and rounded at the tip. Spread them from just below the left horizontal round to just below the right. Fill them in turn with brick `#A8381F`, ochre, cobalt `#2B4A8E` and umber `#6B4424`, and leave a sliver of cardboard between neighbours.
 2. Add *Tail Tips*. Lasso a rounded cap over the outer 50 px of every feather and fill it with ink. The umber feathers get ochre caps. Make each cap a little wider than its feather, so none of the feather colour peeks around it.
-3. Drop a chalk `#EDE3CC` dot, 20 px across, into each feather just inside its cap, using the **Elliptical Marquee** and **Edit → Fill**.
+3. Drop a chalk `#EDE3CC` dot into each feather just inside its cap: one click each with the **Brush** ([[B]]) at **Size 20**, **Hardness 100**.
 
 ## Paint the body, wing, legs and head
 
@@ -136,7 +136,7 @@ features.
 Select *Grain* and add these layers above it:
 
 - **Dog:** lasso a long, low dog running right in the lower left corner, about 265 px long. Brush the four legs and an upright tail, and lasso an ochre collar. It's a little big and in the wrong place for now. You'll fix that with the transform handles next.
-- **Pie:** brush a short umber ground stroke in the gap between the man and the turkey, about three-quarters of the way down. Lasso a pie tin in umber on it and a domed crust in ochre. Add a row of small ochre circles along the rim for the crimp, three brick steam vents and two wavy chalk wisps of steam.
+- **Pie:** brush a short umber ground stroke in the gap between the man and the turkey, about three-quarters of the way down. Lasso a pie tin in umber on it and a domed crust in ochre. Click a row of small ochre brush dots along the rim for the crimp, three brick steam vents and two wavy chalk wisps of steam.
 - **Stars** and **Dots:** Finster packed his skies. Scatter four clusters through the empty space, each one big ochre star (about 38 px across) with two small ones and three chalk dots.
 
 ## Scale the dog down

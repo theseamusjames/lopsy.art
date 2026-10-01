@@ -177,7 +177,9 @@ frame's top-left corner to the centre guide. Tilt each one to follow the
 string's slope, and fill them in turn with red, navy and `#FBF4E4`.
 
 Add two red stripe wedges to each cream pennant and a small star to each
-navy one. Then fill a thin lasso for the string and give the layer the 5 / 5 navy
+navy one. Then draw the string with a navy **Brush** at Size **4**: click at
+the frame corner, then [[Shift]]-click along the tops of the pennants to the
+centre guide, so straight segments join them. Give the layer the 5 / 5 navy
 shadow.
 
 ## Copy and flip the swag
@@ -296,8 +298,10 @@ and drag it down into place:
 - `ADMISSION 25¢ • KIDS UNDER 12 FREE` in **Fjalla One 38**, cream, centred in the band.
 
 On an *Ornaments* layer, lasso red stars either side of the tagline. Draw a
-thin two-part navy rule between the events and the venue line, with a red star
-at its centre, and add cream stars at the ends of the band.
+thin two-part navy rule between the events and the venue line with the
+**Pencil** ([[N]]) at Size **3**. For each half, click at its outer end and
+[[Cmd+Shift]]-click at its inner end so it snaps level, leaving a gap in the
+middle. Put a red star in the gap, and add cream stars at the ends of the band.
 
 ## Loosen the top with group and selection nudges
 
@@ -307,7 +311,7 @@ The pennant tips and the tagline were crowding each other.
 
 1. Click the *Bunting* **group** row, switch to the Move tool, and press [[Shift+Down]] once to move it 10 px. The whole garland moves together.
 2. Nudge the *Annual* text down **8**.
-3. On *Ornaments*, marquee just the two tagline stars and press [[Down]] eight times. With a selection active, the arrows move only the selected pixels.
+3. On *Ornaments*, marquee just the two tagline stars and nudge them **8** px down with the arrow keys. With a selection active, the arrows move only the selected pixels.
 
 ## Deepen the halftone shade
 

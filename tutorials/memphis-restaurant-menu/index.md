@@ -73,7 +73,8 @@ corner of the canvas:
    `#161616`.
 2. Paint three short squiggles at different angles. Two full S-curves
    about 50–60 px long and one half-wave work well.
-3. Add five dots of 8–14 px with small **Elliptical Marquee** fills.
+3. Add five dots with single clicks of the same brush, changing **Size**
+   between `8` and `14` as you go.
 4. Press [[Cmd+D]], then select exactly the 160 × 160 tile. With nothing
    selected, a single click (no drag) with the **Rectangular Marquee**
    opens a dialog where you can type **From** `0`, `0` and **To** `160`,
@@ -217,7 +218,8 @@ Deselect, then choose **Layer → Merge Down** to merge the pockets into
 Add three more layers above the disc:
 
 - **Syrup:** lasso a wavy pink blob over the upper half, with three
-  finger-shaped drips. Round each drip with a small circle fill.
+  finger-shaped drips. Round off each drip with one click of a hard Brush
+  as wide as the drip.
 - **Butter:** lasso a small square pat, about 68 px across and tilted
   slightly, in pale yellow `#FFF3B0`.
 - **Blueberries:** three cobalt circles of 30–40 px in the lower right.
@@ -229,16 +231,18 @@ outline weight makes the illustration read as a single sticker.
 
 ![Pink, cream, cobalt, mustard and black sprinkles rotated at different angles around the waffle](11-pasted-rotated-sprinkles.webp)
 
-Add a `Sprinkle` layer and build one pink capsule, 64 × 18: a rectangle
-plus a circle fill at each end. Marquee it and press [[Cmd+C]]. Then
-rotate the original about 40° with the Move tool and press [[Cmd+D]].
+Add a `Sprinkle` layer and paint one pink capsule, 64 × 18. Pick the
+**Brush** at **Size** `18`, **Hardness** `100`, click once, then
+[[Cmd+Shift]]-click 46 px to the right. The round brush tip gives the
+capsule its rounded ends. Marquee it and press [[Cmd+C]]. Then rotate the
+original about 40° with the Move tool and press [[Cmd+D]].
 
 For each extra sprinkle:
 
 1. Press [[Cmd+V]]. The copy lands in place on a new layer.
-2. Drag it with the **Move** tool to a spot around the waffle.
-3. Marquee it, rotate it to a new angle, and press [[Cmd+D]].
-4. Recolour it with a **Color Overlay** effect in cobalt, cream, mustard
+2. Drag it with the **Move** tool to a spot around the waffle, rotate it to
+   a new angle with the handle just outside a corner, and press [[Cmd+D]].
+3. Recolour it with a **Color Overlay** effect in cobalt, cream, mustard
    or ink.
 
 Five copies around the rim is plenty. Scattered confetti is very Memphis,
@@ -284,10 +288,16 @@ Add a `Card Details` layer and fill:
 
 - A mustard band, 92 px tall, across the top of the left card.
 - A pink band, 92 px tall, across the top of the right card.
-- A 6 px ink rule under each band.
 - A black 64 px footer band along the bottom of the right card.
+
+Then draw the rest with hard brushes:
+
+- A 6 px ink rule under each band: the **Pencil** at **Size** `6`, a click
+  at one edge of the card and a [[Cmd+Shift]]-click at the other.
 - A 460 × 44 pink pill near the bottom of the left card, 30 px in from
-  each side. Build it from a rectangle plus a circle at each end.
+  each side. Use the **Brush** at **Size** `44`, **Hardness** `100`: click
+  52 px in from the left edge and [[Cmd+Shift]]-click 52 px in from the
+  right.
 
 ## Set the menu items with area text
 
@@ -363,8 +373,8 @@ mistakes. In this piece that meant four fixes:
 - **MAMBO:** nudged 12 px left so the **O** clears the mint circle.
 
 > **Tip:** With the **Move** tool, the arrow keys nudge the active layer
-> 1 px and [[Shift]]+arrow nudges 10 px, so six [[Shift]]+[[Left]] presses
-> move the half circle exactly 60 px.
+> 1 px and [[Shift]]+arrow nudges 10 px, which is handy for exact moves like
+> these.
 
 ## Export the menu
 

@@ -82,7 +82,7 @@ Set the type with the Text tool, centring each line with **Align center horizont
 - **Plate number:** "PLATE XVI." in **Cormorant SC** SemiBold, 38 px, in plate red.
 - **Subtitle:** Cormorant SC Medium, 44 px.
 
-Under the subtitle, draw a thick and a thin rule the same width as the subtitle, and a small diamond lassoed at the centre.
+Under the subtitle, draw a thick and a thin rule the same width as the subtitle with the **Pencil**: click at one end and [[Cmd+Shift]]-click the other so the rule stays level. Lasso a small diamond at the centre.
 
 ## Draw dashed gridlines with a pattern
 
@@ -100,7 +100,7 @@ tile, and From **700, 500** To **1664, 2040** for the chart area.
 
 A pattern fill tiles from the document's top-left corner. Because 700 ÷ 116 leaves 4, the dash at 4 px in the tile lands exactly on the zero line and then every 116 px after it.
 
-Draw the zero line and the x-axis as 4 px marquee fills. Add ticks every 58 px, with a long tick every 116. Label 0, 4,000, 8,000, 12,000 and 16,000 in Cormorant SC.
+Draw the zero line down the **700** guide and the x-axis along the **2040** guide with the **Pencil** at Size 4 in sepia: click at one end and [[Cmd+Shift]]-click the other. Add short Pencil ticks on the axis every 58 px, with a long tick every 116. Label 0, 4,000, 8,000, 12,000 and 16,000 in Cormorant SC.
 
 > **Tip:** Cormorant's old-style figures have different heights. Place every label from the same text anchor, not by its top edge, or "8,000" will sit lower than "4,000".
 
@@ -142,7 +142,7 @@ Press [[Cmd+D]] to commit, then drag each skull into the skull column, centred l
 
 Set every skull layer to **Multiply** in the effects drawer. White multiplies to nothing, so the paper shows through, and the grey engravings sit on it like printed ink.
 
-The human engraving has much thinner lines than the lithographs. To thicken them, run **Layer → Duplicate Layer** and click the copy's row. Duplicate places the copy 10 px right and 10 px down, so with the Move tool press [[Shift+Left]] and [[Shift+Up]] once each to put it back, then [[Right]] once. It now sits exactly **1 px to the right** of the original. Keep it on Multiply too.
+The human engraving has much thinner lines than the lithographs. To thicken them, run **Layer → Duplicate Layer** and click the copy's row. Duplicate places the copy 10 px right and 10 px down, so with the Move tool nudge it 9 px left and 10 px up with the arrow keys. It now sits exactly **1 px to the right** of the original. Keep it on Multiply too.
 
 ## Tone the set to one sepia
 
@@ -176,7 +176,7 @@ This is the honest way to show the small bars. In an **Enlarged Inset** group:
 2. **Knock out the main grid:** on the Gridlines layer, marquee the inset box and Delete, so the two scales never mix.
 3. **Inset grid:** the inset scale is 8 × 0.058 = **0.464 px/N**, so 250 N is 116 px again. Put the inset's zero line 32 px inside the box. Then define a second 116 px dash tile with its dash 80 px in: 892 ÷ 116 leaves 80, so the dashes land on that zero line and every 116 px after it. Pattern-fill it inside the box.
 4. **Inset frame and axis:** add the frame, its own axis and ticks, and labels 0, 500, 1,000 and 1,500.
-5. **Leaders:** draw two thin lassoed lines from the strip's corners to the inset's corners, at 60%.
+5. **Leaders:** on a layer at 60%, draw two thin lines with a small, hard **Brush** from the strip's corners to the inset's corners: click one corner and [[Shift]]-click the other.
 
 Title the inset "Fig. 6 · The mammals at eight times the scale", centred on the plot area.
 

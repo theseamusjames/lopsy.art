@@ -118,7 +118,7 @@ To trim the stripes to the body, [[Cmd]]-click the *Abdomen* thumbnail to
 load its shape as a selection. Then **click the Abdomen row and click back on
 Stripes**. Choose **Select → Inverse** ([[Shift+Cmd+I]]) and press [[Delete]].
 
-> **Tip:** Don't skip the click away and back. Switching rows turns the loaded shape into a plain selection, so Delete removes only the stripe ends outside the body.
+> **Tip:** Don't skip the click away and back. Without it, Delete can clear more than the stripe ends outside the body.
 
 ## Add the head, thorax and antennae
 

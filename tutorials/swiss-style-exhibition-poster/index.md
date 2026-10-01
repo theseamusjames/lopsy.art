@@ -22,8 +22,8 @@ In this tutorial you'll use that approach for an invented exhibition about
 the deep sea called **deep blue**. A red sounding line drops through the gap
 between two letters, into a tunnel of offset blue discs, and ends at a
 glowing probe. You'll work with a grid and guides, elliptical marquees, a
-feathered selection turned into halftone dots, shape-tool rings, copy and
-paste, a rotation transform and a grain overlay.
+feathered selection turned into halftone dots, shape-tool rings, Pencil
+ticks, a rotation transform and a grain overlay.
 
 The palette:
 
@@ -126,10 +126,9 @@ towards the centre, a classic Swiss print detail.
 
 The halftone mustn't spill onto the paper. [[Cmd]]-click the `Disc 1`
 thumbnail in the Layers panel to load the big circle as a selection (or draw
-the same circle again with the **Elliptical Marquee**). Then click the
-`Halftone Shade` row, even though it's already active. That settles the
-loaded selection, so the next [[Delete]] clears only what's selected. Press
-[[Cmd+Shift+I]] to invert the selection, press [[Delete]], and deselect.
+the same circle again with the **Elliptical Marquee**). `Halftone Shade`
+stays the active layer. Press [[Cmd+Shift+I]] to invert the selection, press
+[[Delete]], and deselect.
 
 ## Multiply the halftone
 
@@ -163,18 +162,14 @@ the glow colour to `#FF3D1F`, and set **Size** `40`, **Spread** `10` and
 
 ![Three thin red concentric rings around the probe, fading from solid to faint](11-sonar-ping-rings.webp)
 
-Add a layer named `Ping 1`. Press [[U]] for the **Shape** tool and choose
-**Ellipse**. Click the **Fill** swatch and choose **Remove fill**, then click
-**Add stroke color** and type `FF3D1F` in its hex field. Set **Width** to `2`,
-hold [[Cmd]], and drag from the probe centre out 64 px, two grid squares, for
-a perfect circle. The Shape tool draws from the center out.
+Add a layer named `Ping 1`. The foreground is still signal red. With the
+**Elliptical Marquee**, hold [[Cmd]] and drag a circle 128 px across, four
+grid squares, centred on the probe. Choose **Edit → Fill**, then
+**Select → Shrink…** by `2` and press [[Delete]]. That leaves a 2 px ring.
 
-Add `Ping 2` and `Ping 3` the same way, with **Width** `1` and radii of 128 and
-192 (four and six grid squares). Set their opacities to `70%` and `40%`, so
-the signal fades as it spreads.
-
-> **Tip:** For exact rings, click the probe centre without dragging. A dialog
-> asks for the size: `128 × 128`, `256 × 256` and `384 × 384`.
+Add `Ping 2` and `Ping 3` the same way, 256 and 384 px across (eight and
+twelve grid squares), and shrink by `1` for thinner rings. Set their
+opacities to `70%` and `40%`, so the signal fades as it spreads.
 
 ## Knock out the second word
 
@@ -188,31 +183,28 @@ uses the same Archivo Black at 420 px, flush left under `deep`.
 Because the word is paper-coloured, it looks like a hole cut through the
 discs. It also sits above the rings, so the **e** cleanly cuts the outer ping.
 
-## Paste the first depth tick
+## Draw the first depth ticks
 
 ![A small black tick mark being duplicated with copy and paste and dragged down the left margin](13-paste-depth-tick.webp)
 
 With `blue` active, click **New Group** and name it `Depth Scale`, then add a
-layer named `Ticks`. Untick **Snap** first, because the grid would collapse
-a 4 px marquee.
+layer named `Ticks`. Untick **Snap**, so the small pieces from here on land
+exactly where you put them.
 
 The scale starts at the baseline of `deep` (0 m) and ends at the probe
 (10 935 m, the depth of the Challenger Deep), so every 2 000 m is about
-155 px. Marquee a 40 × 4 px tick on the left margin guide, level with the
-baseline of `deep`, and fill it with `#111111`. Marquee slightly around it,
-press [[Cmd+C]] and [[Cmd+V]], then move the pasted tick 155 px down with the
-**Move** tool [[V]].
-
-> **Tip:** Arrow keys make the spacing exact. With the Move tool, press
-> [[Shift+Down]] 15 times (10 px each) and [[Down]] 5 times.
+155 px. Pick the **Pencil** ([[N]]) at **Size** `4` in `#111111`. Level with
+the baseline of `deep` (about 448 on the left ruler), click just right of the
+left margin guide and [[Cmd+Shift]]-click 40 px further right for a 40 px
+tick. Draw the next tick the same way, 155 px lower, at about 603.
 
 ## Finish the tick column
 
 ![Six black ticks evenly spaced down the left margin from the baseline of deep](14-depth-ticks.webp)
 
-Paste and move four more ticks, each another 155 px lower. The last one
-sits just above the probe. Then choose **Layer → Merge Down** five times to
-fold all the pasted layers back into `Ticks`.
+Draw four more ticks, each another 155 px lower: at about 759, 914, 1070
+and 1225. The last one sits just above the probe. All six ticks are on the
+one `Ticks` layer.
 
 ## Label the scale
 

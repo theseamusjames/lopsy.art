@@ -252,8 +252,9 @@ then fill eight Rectangular Marquee bars in `#05D9E8`. Each is 16 px thick and
 The grid keeps all four corners identical. Hide the grid again and untick
 **View → Snap to Grid**.
 
-On the same layer, fill two 3 px rules that run from the left margin guide to
-the right one:
+On the same layer, draw two 3 px rules from the left margin guide to the
+right one with the **Pencil** ([[N]]) at **Size 3**: click on the left guide,
+then [[Cmd+Shift]]-click on the right one so the line snaps level.
 
 - one about 50 px below the top margin, under the label row you're about to add
 - one about 100 px above the bottom margin, over the footer

@@ -60,9 +60,11 @@ about 1010, which leaves a deeper margin at the bottom for the caption.
 
 ![The whole canvas covered in thin horizontal ruled lines after a pattern fill](02-rule-the-sky.webp)
 
-Next, make the tile. On a scratch layer, fill a **48 × 2 px** black bar, then
-marquee it together with **5 px** of empty space beneath it (48 × 7 in
-total). Choose **Edit → Define Pattern**, then delete the scratch layer.
+Next, make the tile. On a scratch layer, zoom in on the top-left corner and
+pick the **Pencil** ([[N]]) at Size **2** in black. Click at the left edge
+and [[Cmd+Shift]]-click 48 px to the right for a 2 px line. Marquee it
+together with **5 px** of empty space beneath it (48 × 7 in total). Choose
+**Edit → Define Pattern**, then delete the scratch layer.
 
 1. Add a layer called **Sky** and fill it white with no selection active.
 2. Add a layer called **Sky Rule**. With nothing selected, choose **Edit →
@@ -73,8 +75,7 @@ total). Choose **Edit → Define Pattern**, then delete the scratch layer.
 
 > **Tip:** Tile sizes need to be exact. Press [[Cmd+D]], then click (don't
 > drag) with the **Rectangular Marquee** to type the corners into the
-> Rectangular Selection dialog. From 0, 0 To 48, 2 gives the bar, and From
-> 0, 0 To 48, 7 gives the whole tile.
+> Rectangular Selection dialog. From 0, 0 To 48, 7 gives the whole tile.
 
 ## Add a radial tone
 
@@ -115,8 +116,8 @@ threshold and disappear. Where it's dark, they come back full strength.
 
 ![Finer hairline rules inside a large circle around the moon, with a clear ring gap and a bare disc at the center](05-moon-halo-rings.webp)
 
-Define a second tile with a **1 px** line (48 × 1 px of ink over 6 px of
-space). Then:
+Define a second tile the same way with a **1 px** line: a Size 1 Pencil line
+48 px long over 6 px of space. Then:
 
 1. Add a layer called **Halo Lines** and pattern-fill it with the 1 px tile.
 2. Use the **Elliptical Marquee** to draw a circle about 516 px across,
@@ -171,9 +172,9 @@ Click **Apply**, then merge the three bands into one **Sea** layer.
 
 ![A single dark horizon rule with a broken, glittering moon path erased into the sea lines beneath the moon](08-moonlit-glitter-path.webp)
 
-Engravings don't have soft haze. Marquee a strip 3 px tall right along the
-horizon, across the whole plate, and fill it with `#2E2117` for a hard
-horizon.
+Engravings don't have soft haze. Pick the **Pencil** at Size **3** in
+`#2E2117`. Click on the horizon at the left edge of the plate, then
+[[Cmd+Shift]]-click on it at the right edge for a hard horizon rule.
 
 Then select **Sea** and pick the **Eraser** at Size **6** and Opacity
 **100**. Cut short horizontal dashes down the sea, in a column directly
@@ -292,8 +293,6 @@ For more birds:
    just outside a corner to bank it about 20°, then press [[Cmd+D]].
 
 > **Tip:** Commit each change with [[Cmd+D]] before you start the next one.
-> If you drag a piece into place and then want to scale it, commit the move
-> first and marquee it again, so the handles show the scale as you drag.
 
 ## Add sea stacks and surf
 
@@ -332,8 +331,10 @@ the frame, so no line work peeks past the rule.
 Period plates carry a plate number and an engraver's credit under the
 corners, and a centred title below.
 
-1. On a **Rule** layer, fill a 1 px line about 240 px long, centred on the
-   page, a little way below the plate.
+1. On a **Rule** layer, draw a 1 px line about 240 px long with the
+   **Pencil** at Size **1**, centred on the page a little way below the
+   plate: click at about 330 on the top ruler, then [[Cmd+Shift]]-click
+   240 px to the right.
 2. With the **Text** tool, set the subtitle in **Pinyon Script** at 30 px in
    `#2E2117`: *Moonrise over the northern headland*.
 3. Set the title in **Cormorant SC SemiBold** at 52 px: **The Juniper

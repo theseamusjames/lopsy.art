@@ -523,9 +523,10 @@ Guides make these easy to hit: click the top ruler at about 160, 470, 530 and
 840, and the left ruler at about 900 and 1085.
 
 > **Tip:** Clicking inside an existing text box edits it. Create each block
-> in empty space at the bottom of the page, then press [[Shift]]+arrow keys
-> with the Move tool. Each press moves exactly 10 px, so the names, prices and
-> descriptions stay on the same baselines.
+> in empty space at the bottom of the page, then drag it into place with the
+> Move tool. [[Cmd]]-click the names, prices and descriptions rows of a
+> section in the Layers panel and drag them together, so they stay on the
+> same baselines.
 
 ## Add a divider and footer
 

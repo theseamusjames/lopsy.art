@@ -214,7 +214,8 @@ together.
 
 ![The word Nomad typed in large red Shrikhand at the top of the canvas](13-shrikhand-headline.webp)
 
-Click **Dune Dots**, so the new text is anchored on a raster layer. Press
+Click **Dune Dots**, so the new text lands above it and outside the Spit
+group. Press
 [[T]] for **Text**, then set:
 
 - **Size** `190`
@@ -364,9 +365,9 @@ capitals.
 Marquee the chilli and press [[Cmd+C]], then [[Cmd+V]]. The paste lands in
 place on a new layer.
 
-1. **Move** the paste about 24 px to the right, then press [[Cmd+D]].
-2. Marquee it again. Drag just outside the top-right corner (the cursor turns
-   into a crosshair) to rotate it about 22°, then press [[Cmd+D]].
+1. **Move** the paste about 24 px to the right.
+2. Drag just outside the top-right corner of its box (the cursor turns into a
+   crosshair) to rotate it about 22°, then press [[Cmd+D]].
 3. Choose **Layer → Merge Down** to fold it into `Chili`.
 
 Two chillies mean *extra hot*.
@@ -395,9 +396,6 @@ Marquee around the badge and switch to **Move**. Drag the rotate handle
 anticlockwise about 12°, then press [[Cmd+D]]. A slight tilt makes it feel
 slapped on after printing.
 
-> **Tip:** If the badge ever snaps back upright on screen, press [[Cmd+Z]] and
-> then [[Cmd+Shift+Z]] to bring the rotation back before you export.
-
 ## Select the menu layers
 
 ![Eight menu layers highlighted in the Layers panel after Cmd-clicking each row](26-select-menu-layers.webp)
@@ -410,9 +408,9 @@ layers: both item columns, both price columns, the other description layer,
 
 ![The menu layers gathered in a collapsed Menu group, nudged up 6 px](27-menu-group.webp)
 
-Choose **Layer → Group Layers** and rename the group `Menu`. Press [[V]], then
-[[↑]] six times. That lifts the whole menu 6 px, so the space above and below
-the columns is even.
+Choose **Layer → Group Layers** and rename the group `Menu`. Press [[V]] and
+nudge the group up 6 px with [[↑]], so the space above and below the columns
+is even.
 
 ## Add paper grain and ink texture
 

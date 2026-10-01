@@ -83,7 +83,7 @@ A pale halo usually survives around the edges. Click the background again, run *
 
 Turn **Snap** off for this step. Marquee around the chair and switch to the **Move** tool. Hold [[Cmd]] and drag the bottom-right handle to scale it to about **240%**. Then drag the rotation handle outside the corner to tip it back about **5°**, as if it's already sagging into the sand. Press [[Cmd+D]] to commit.
 
-Move the chair so its seat sits just above the middle of the dunes. Do this **before** you run any Fill on it, while the whole chair is still on-canvas.
+Move the chair so its seat sits just above the middle of the dunes.
 
 ## Photocopy the chair
 
@@ -123,12 +123,10 @@ Now lay sand over the cut, so the chair sinks *into* the dunes instead of stoppi
 
 ![Three broken cream elliptical ripple rings spreading out from the sunken chair](10-ripples.webp)
 
-On a `Ripples` layer behind the chair, draw three rings, **largest first**. For each: elliptical marquee, fill, **Select → Shrink…** by the ring width, then [[Delete]]:
-- 570 × 82, 3 px wide.
-- 470 × 62, 4 px wide.
-- 380 × 45, 5 px wide.
-
-If you draw the small ring first, the next fill covers it.
+On a `Ripples` layer behind the chair, draw three nested rings with the **Shape** tool ([[U]]). Set **Shape** to **Ellipse** and **Output** to **Pixels**, remove the fill, and give it a stroke in any colour. Click once to type each ring's size, or drag it, and set the stroke **Width** for each:
+- 570 × 82, Width 3.
+- 470 × 62, Width 4.
+- 380 × 45, Width 5.
 
 Break the rings into arcs with a few dabs of a 46 px **Eraser**. Then give the layer a cream **Color Overlay** (`#EDE0BC`) and set its opacity to **88%**, so the rings catch the light on the dark sand.
 
@@ -147,8 +145,6 @@ For the misregistered second plate:
 1. **Duplicate** the title, add a rust **Color Overlay** `#A0441C`, and set it to **Multiply**.
 2. Drag it under the black copy.
 3. Nudge it with the arrow keys so it ends up **8 px left and 6 px up** from the black copy. The duplicate starts 10 px right and 10 px down, so that's 18 px left and 16 px up in all ([[Shift]] + arrow moves 10 px). A down-right offset would read as a drop shadow.
-
-> **Tip:** When you wand a speck, zoom in and click the **top-left part** of it, or pick a speck at least 2 px wide. On a 1 px speck it's easy to catch the black pixel next to it instead.
 
 ## Sink QUICKSAND into the foreground
 

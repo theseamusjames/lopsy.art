@@ -200,8 +200,10 @@ Each arch is a rectangle plus a circle on top, filled with the same colour:
 - **Upper loggia:** small arches every 50 px, 26 px wide.
 - **Lower arcade:** large 58 px arches every 86 px in deeper `#7E5DC4`.
 
-Finish with a white 8 px cornice along the bottom of the pink wall and a thin
-`#7A4FB0` line on the horizon. The line gives the palace a clean base.
+Finish with a white 8 px cornice along the bottom of the pink wall. Then pick
+the **Pencil** ([[N]]) at about **Size** `4` in `#7A4FB0`, click on the
+horizon guide at the left edge and [[Cmd+Shift]]-click at the right edge for a
+dead-level line. The line gives the palace a clean base.
 
 ## Add domes and the campanile
 
@@ -211,7 +213,8 @@ On `Towers`, which sits behind the palace:
 
 - **Domes:** three teal `#3FC6C8` domes made from elliptical fills, with a
   small lasso triangle on each for the onion point. Add gold `#FFE08A`
-  finials: a thin rectangle plus a small circle.
+  finials: a short upright Pencil line ([[Shift]]-click from the base to the
+  top), topped with a single click of a hard Brush.
 - **Campanile:** a pink `#F48CC0` shaft, about 96 px wide, near the right
   edge of the poster, with two darker
   pilaster strips, a lavender belfry with three arches, a lasso-filled teal
@@ -238,8 +241,8 @@ crescent that sits low in the middle and rises at both ends, and fill it with
 near-black purple `#1B0E3A`. Add:
 
 - a small circle for the stern curl
-- a lasso blade for the bow **ferro**, with six short 6 px teeth made from
-  marquee rectangles
+- a lasso blade for the bow **ferro**, with six short teeth drawn as 6 px
+  Pencil lines (click, then [[Shift]]-click)
 
 ## Add the gondolier
 
@@ -371,15 +374,17 @@ the type. Enable **Outer Glow** in white, **Size** `18`, **Opacity** `90`.
 Click `Type Anchor` and add a `Window` layer. Marquee a 520 × 175 box in the
 lower right of the poster, starting just left of the centre guide and
 finishing about 25 px above the bottom edge. Fill it with lavender
-`#DCD3F5`. Fake the bevel with 3 px
-fills: white on the top and left edges, dark `#4B3A86` on the bottom and
-right.
+`#DCD3F5`. Fake the bevel with the **Pencil** at **Size** `3` in white:
+click the bottom-left corner, then [[Cmd+Shift]]-click the top-left and the
+top-right corners. Switch to dark `#4B3A86` and keep going: [[Cmd+Shift]]-click
+the bottom-right corner and then the bottom-left. Keep every click a pixel or
+two inside the box, so the lines don't hang over its edge.
 
 Then add the details:
 
 - a navy-to-pink gradient title bar
-- three small bevelled buttons, with a bar, a box and two lasso slashes for
-  the × symbol
+- three small bevelled buttons, with a bar, a box and two crossed Pencil
+  lines for the × symbol
 - a progress bar with ten pink blocks
 - an OK button
 

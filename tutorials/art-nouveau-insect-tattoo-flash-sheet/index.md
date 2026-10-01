@@ -182,8 +182,8 @@ windows held by gold.
 
 ![A symmetric marquee around both wing pairs while the duplicated enamel is flipped to the right side](11-duplicate-flip.webp)
 
-Switch to the **Move** tool, click **Duplicate Layer**, click the copy's row
-and rename it **DF Wing Enamel R**. Draw a **Rectangular Marquee** around
+Switch to the **Move** tool, click **Duplicate Layer**, and rename the copy
+**DF Wing Enamel R**. Draw a **Rectangular Marquee** around
 both wing pairs that is exactly symmetric about the body, which sits on the
 sheet's centre line. Then click **Flip Horizontal** in the options bar: the
 flip happens about the marquee's centre. Press [[Cmd+D]].
@@ -199,7 +199,7 @@ once each to cancel it. The two sides then match exactly.
 
 ![Glassy teal wings with soft light edges on every cell and the halo rings visible through them](12-translucent-wings.webp)
 
-Click the right copy's row and choose **Layer → Merge Down**, then rename
+With the right copy still active, choose **Layer → Merge Down**, then rename
 the result **DF Wing Enamel**. Add an **Inner Glow** in white (**Size 6**,
 **Spread 0**, **Opacity 45**). Every cell gets a bright glassy rim. Set the
 row's opacity to **72%**. The halo's beads and rays now glow through the

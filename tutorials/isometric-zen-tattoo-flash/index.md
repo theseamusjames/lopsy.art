@@ -391,8 +391,10 @@ tool's options restyle *that* layer. Set **Zen Kaku Gothic New**, weight
 **700**, **Size 18**, and type `FLOATING ISLAND FLASH  ·  SHEET NO. 07` in
 ink. Give it **Letter spacing 3 px** and centre it on the centre guide, just
 above the bottom border (**Align center horizontally** in the Move options
-bar does the horizontal part). On **Footer Rules**, fill 3 px rules either
-side, matching the border's hairline weight, with a 22 px gap to the text.
+bar does the horizontal part). On **Footer Rules**, pick the **Pencil** at
+**Size 3** in ink and draw a rule either side of the text: click one end,
+then [[Cmd+Shift]]-click the other so it snaps level. Leave a 22 px gap to
+the text. The 3 px weight matches the border's hairline.
 
 ## Stamp the seal
 

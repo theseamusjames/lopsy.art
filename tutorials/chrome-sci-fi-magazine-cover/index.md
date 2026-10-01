@@ -74,7 +74,7 @@ Click the top ruler about 60 px in from each side (at `60` and `1140`) to add ve
 
 ![The rasterized masthead's letters selected with marching ants, filled with a blue-sky-over-copper chrome gradient](07-chrome-gradient.webp)
 
-Click **Rasterize Layer**. Add a new layer named `Masthead Chrome`. Then [[Cmd]]-click the `Masthead Type` thumbnail to load the letters as a selection.
+Rename the `APOGEE` text layer `Masthead Type` and click **Rasterize Layer**. Add a new layer named `Masthead Chrome`. Then [[Cmd]]-click the `Masthead Type` thumbnail to load the letters as a selection.
 
 Pick the **Gradient** tool, open **Advanced…**, and build the chrome stops:
 
@@ -101,9 +101,9 @@ Open the **Layer effects** on `Masthead Chrome` and turn on:
 - **Drop Shadow**, black, Offset 0 / 10, Blur 18, Opacity 80
 - **Outer Glow**, `#4FA8FF`, Size 40, Opacity 30, for a faint glow in space
 
-Hide `Masthead Type`. For the specular highlight, add a layer named `Masthead Specular`, marquee a 2 px strip across the whole word, right on the chrome's white horizon line, and fill it white. Zoom in to place it exactly.
+Hide `Masthead Type`. For the specular highlight, add a layer named `Masthead Specular` and pick the **Pencil** at Size 2 in white. Zoom in, click on the chrome's white horizon line just left of the A, then [[Cmd+Shift]]-click just past the last E for a dead-level line across the whole word.
 
-To keep the line inside the letters, [[Cmd]]-click the `Masthead Type` thumbnail to load the letters as a selection. Then click the `Masthead Specular` row, choose **Select → Inverse**, and press [[Delete]]. Clicking the row before you delete makes sure [[Delete]] clears only the area outside the letters. Finish with a small white **Outer Glow** (Size 6).
+To keep the line inside the letters, [[Cmd]]-click the `Masthead Type` thumbnail to load the letters as a selection, choose **Select → Inverse**, and press [[Delete]]. Finish with a small white **Outer Glow** (Size 6).
 
 ## Draw the chrome hull
 
@@ -133,7 +133,7 @@ Add an `Exhaust` layer and drag it below `Fins Back`. Lasso a plume from each no
 
 Apply **Gaussian Blur** 3, add an **Outer Glow** in `#2FA8FF` (Size 40, Opacity 70), and set the layer to **Screen**.
 
-On a `Speed Lines` layer below the exhaust, lasso five long, thin white slivers parallel to the hull. Blur them with **Gaussian Blur** 1.5, then apply **Filter → Motion Blur…** with **Angle 337** and **Distance 40**. Set the layer to **Screen** at 80%.
+On a `Speed Lines` layer below the exhaust, draw five long, thin white lines parallel to the hull with a small, hard **Brush**: click at one end of each line and [[Shift]]-click the other. Blur them with **Gaussian Blur** 1.5, then apply **Filter → Motion Blur…** with **Angle 337** and **Distance 40**. Set the layer to **Screen** at 80%.
 
 > **Tip:** Lopsy measures Motion Blur angles clockwise, so a line that climbs to the right at 23° needs an angle of 337°.
 
@@ -141,9 +141,9 @@ On a `Speed Lines` layer below the exhaust, lasso five long, thin white slivers 
 
 ![Four chrome-rimmed portholes on their own layer, with a pasted copy of them being dragged along the hull](12-paste-portholes.webp)
 
-First, give the hull a specular line. Add a `Hull Specular` layer above `Hull`, lasso a 3 px sliver along the chrome's horizon line, fill it white, and add a white **Outer Glow** (Size 8, Opacity 70).
+First, give the hull a specular line. Add a `Hull Specular` layer above `Hull`. With the **Brush** at Size 3 and Hardness 100 in white, click on the chrome's horizon line near the tail and [[Shift]]-click on it near the nose. Add a white **Outer Glow** (Size 8, Opacity 70).
 
-A liner needs a row of windows. On a new `Livery` layer above the hull, lasso a thin orange stripe that tapers to a point near the nose. Fill it with an orange gradient (`#FFC08A` → `#FF5A1F` → `#7A1404`), and add a cream pinstripe just above it.
+A liner needs a row of windows. On a new `Livery` layer above the hull, lasso a thin orange stripe that tapers to a point near the nose. Fill it with an orange gradient (`#FFC08A` → `#FF5A1F` → `#7A1404`), and brush a thin cream pinstripe just above it (click, then [[Shift]]-click).
 
 Add a `Portholes` layer. Use the **Elliptical Marquee** to draw four chrome rims (radius 13, `#DCE6F4`) with dark insets (radius 11, `#1B2233`) along the upper hull.
 
@@ -153,7 +153,7 @@ Marquee all four and press [[Cmd+C]] and then [[Cmd+V]]. The copy pastes in plac
 
 ![Glowing amber porthole glass, a glassy canopy dome near the nose, and a chrome fin swept down across the hull](13-portholes-fin.webp)
 
-On a `Porthole Glass` layer, fill amber `#FFC46B` circles inside each rim, and add an orange **Outer Glow** (`#FF8A2A`, Size 10).
+On a `Porthole Glass` layer, click an amber `#FFC46B` dot inside each rim with a hard **Brush** sized a little smaller than the dark insets, and add an orange **Outer Glow** (`#FF8A2A`, Size 10).
 
 For the `Canopy`, lasso a dome on top of the hull near the nose. Fill it with a glass gradient (`#B8F0FF` → `#3A7CC0` → `#0D1F45` → `#03060F`), then add a small pale crescent highlight.
 
@@ -239,7 +239,7 @@ Type `SPECIAL` and `ISSUE` in Michroma 12 px, and `100th` in Barlow Condensed Ex
 
 ![The merged badge in a rotated transform box, tilted about 12 degrees](23-badge-rotate.webp)
 
-Click **Rasterize Layer** on each of the three text layers. Then choose **Layer → Merge Down** three times from the top one to fold them into `Badge`.
+Click the top text layer and choose **Layer → Merge Down** three times to fold all three into `Badge`. Merging rasterizes the text as it goes.
 
 Marquee the badge, drag the rotation handle to tilt it about −12°, and press [[Cmd+D]]. The tilt gives it the slapped-on-sticker look of a newsstand special.
 

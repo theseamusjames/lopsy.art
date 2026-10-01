@@ -70,8 +70,8 @@ feel, so leave them.
 
 ![The Threshold dialog previewing scattered white star specks on black over the whole canvas](03-star-threshold.webp)
 
-Add a layer called *Stars*. Draw a marquee over the whole page, fill it with
-mid-grey `#808080`, and press [[Cmd+D]].
+Add a layer called *Stars* and fill it with mid-grey `#808080`
+(**Edit → Fill** with nothing selected).
 
 1. Choose **Filter → Add Noise…** with **Amount 100**, **Mono** and
    **Gaussian**.
@@ -121,9 +121,9 @@ gradient of `#050818`, transparent up to about 42% and 95% opaque at the
 edge. Start from the lit upper-left and drag toward the lower-right. Set it
 to **Multiply**.
 
-One pass is too gentle, so **Layer → Duplicate Layer** it. Duplicates can
-land offset by 10 px, so check the copy's position and nudge it back with
-[[Shift+Arrow]] keys if needed.
+One pass is too gentle, so **Layer → Duplicate Layer** it. The copy lands
+10 px right and 10 px down, so deselect and press [[Shift+Left]] and
+[[Shift+Up]] once each with the **Move** tool to put it back.
 
 Finally, give *Planet* an **Outer Glow** in `#6FF0D8` (Size 44, Opacity 55).
 
@@ -341,8 +341,8 @@ Use centre-aligned area text boxes that span the safe zone, from the left guide 
   title yellow.
 - **Credits:** Fjalla One 25 px, two lines.
 
-Create the lowest text box first and work upward, starting each new box in
-clear space so the click doesn't open an earlier one for editing. Space the
+Start each new box in clear space, so the click doesn't open an earlier one
+for editing. Space the
 blocks evenly, about 24 px apart, and keep the last line above the bottom
 guide.
 
@@ -350,9 +350,8 @@ guide.
 
 ![A close-up of the sky showing a visible diagonal halftone dot pattern over the color bands](22-halftone.webp)
 
-Duplicate *Sky* as *SkyDots*. Check the copy lines up exactly with *Sky*,
-with no strip of the old layer showing at an edge, and nudge it back if it has
-shifted. Run
+Duplicate *Sky* as *SkyDots*. A full-page layer has no room to shift, so the
+copy lands exactly on top of *Sky*. Run
 **Filter → Halftone…** with Dot Size **12**, Angle **45** and Softness
 **1**, then set it to **Multiply** at **30%**. The dots read as coarse
 printing without fighting the art.

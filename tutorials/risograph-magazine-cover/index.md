@@ -52,7 +52,7 @@ The horizon in the photo falls about 3° to the left. While the transform is sti
 1. Move the pointer just outside the top-right corner until it becomes a rotate cursor.
 2. Drag clockwise until the horizon is level.
 3. Press [[Cmd+D]] to commit the transform.
-4. With the Move tool still active, nudge the photo **60 px left** and **120 px down**. [[Shift]]+arrow moves 10 px per press. This leaves the whale in the lower half and fills the bottom edge with sea.
+4. With the Move tool still active, drag the photo about **60 px left** and **120 px down**. This leaves the whale in the lower half and fills the bottom edge with sea.
 
 Rename the layer `Photo`.
 
@@ -64,9 +64,7 @@ Rename the layer `Photo`.
 2. Click the sky once. It selects cleanly, because the whale's head sits just below the horizon.
 3. Press [[Delete]].
 
-The rotated photo's soft top edge can leave a faint line of pixels behind. To clear them, marquee everything above **y 856** and delete again. Start the drag on the canvas and release it on the grey pasteboard, not on a ruler.
-
-> **Tip:** A marquee drag that ends over a ruler stops tracking at the ruler's edge ([#1060](https://github.com/theseamusjames/lopsy.art/issues/1060)). Release on the grey pasteboard instead.
+The rotated photo's soft top edge can leave a faint line of pixels behind. To clear them, marquee everything above **y 856** and delete again.
 
 ## Trace the whale and lighten the sea
 
@@ -163,7 +161,7 @@ The nudge pulls off-canvas pixels in from the left edge. Marquee the first 9 px 
 Keep everything on a **65 / 1135 px** margin.
 
 - **Masthead:** `MERIDIAN` in **Dela Gothic One** at **157 px**, `#FF48B0`, with its ink box from x 65 to 1135 and its top at y 60.
-- **Rule:** on a `Rules` layer, fill a 3 px marquee from (65, 196) to (1135, 199) with blue.
+- **Rule:** on a `Rules` layer, take the **Pencil** ([[N]]) at **Size 3** in blue, click at (65, 197) and [[Cmd+Shift]]-click at (1135, 197) for a straight, level rule.
 - **Dateline:** **Space Mono Bold** at 19 px, blue. Put `NO. 14 / WINTER 2026` on the left margin and `OCEANS, CURRENTS & LONG JOURNEYS / $14` flush right, both with their tops at y 213.
 - **Headline:** `The Long Swim` in **Gloock** at **151 px**, blue, spanning the full measure with its top at y 300.
 
@@ -194,7 +192,7 @@ Align it flush right to 1135, with its top at y 540.
 1. Type `PHOTOGRAPH: NOAA / HIHWNMS - PUBLIC DOMAIN` in Space Mono 13 px.
 2. Click **Rasterize Layer** at the bottom of the Layers panel.
 3. Marquee it and switch to the **Move** tool.
-4. Hold [[Shift]] while you drag the rotate handle, so the angle snaps to exactly −90°.
+4. Hold [[Cmd]] while you drag the rotate handle, so the angle snaps to exactly −90°.
 5. Press [[Cmd+D]], then nudge it into the left margin at x 34.
 
 ## Stick on a rotated badge

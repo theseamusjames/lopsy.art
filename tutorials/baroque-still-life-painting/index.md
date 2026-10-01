@@ -58,8 +58,9 @@ Click **Create**.
    - **Ledge Front:** the front face, `#3A2B1E` to `#0A0705`.
    - **Ledge Top:** the top surface. Run the gradient left to right from warm
      `#B09472` to dark `#2A2018`, so the light fades across it.
-   - **Edge Highlight:** a 3 px strip along the ledge's front edge. It gives
-     the stone a crisp lit lip.
+   - **Edge Highlight:** a 3 px line along the ledge's front edge. Draw it
+     with the **Brush** at Size `3` in a pale stone colour: click one end,
+     then [[Shift]]-click the other. It gives the stone a crisp lit lip.
 
 ## Give the stone a grain
 
@@ -258,9 +259,7 @@ and let the whole handle project past the front edge.
 
 1. On a temporary layer, fill a 20 × 26 ellipse with `#2A030A`.
 2. Draw a slightly smaller ellipse, about 16 × 22, centred inside it, and
-   fill it with a radial gradient: `#C23A4E` → `#82102A` → `#3A0410`. At
-   this tiny size a fresh marquee keeps a rounder shape than
-   **Select → Shrink**.
+   fill it with a radial gradient: `#C23A4E` → `#82102A` → `#3A0410`.
 3. Add a tiny `#FFF4F0` highlight.
 4. Marquee the seed and choose **Edit → Define Color Brush…**. Name it
    `Garnet Seed`, then delete the temporary layer.
@@ -367,10 +366,9 @@ Add three more layers in `Stone Niche`:
 
 The blur left a soft halo around the artichoke. To trim it:
 
-1. Magic Wand the empty wall on the `Artichoke` layer and press **⇧⌘I** to
-   invert.
-2. Shrink the selection by 2 px, invert again with **⇧⌘I**, and press
-   **Delete**.
+1. Magic Wand the empty wall on the `Artichoke` layer.
+2. Choose **Select → Grow…** by 2 px, so the selection reaches into the
+   halo, and press **Delete**.
 
 Then add two more layers and clip them the same way as before (Magic Wand
 the empty wall on `Artichoke`, then **Delete** on each layer):

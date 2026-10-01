@@ -92,7 +92,7 @@ Drag a rectangular marquee just outside the ring, switch to the **Move** tool, a
 
 ![The tilted loop with a small knot ring at its right end, a rope curving down the right side, and a microphone with a round head and a long handle at its end](08-cord-and-microphone.webp)
 
-1. **Honda knot:** on `Lasso Tube`, marquee a 52 px circle centred at (1318, 262), fill it, **Shrink 11**, then Delete. The hole cuts through the loop, so the rope looks like it passes through the knot.
+1. **Honda knot:** on `Lasso Tube`, marquee a 52 px circle centred at (1318, 262), fill it, **Shrink 11**, then Delete and deselect. The hole cuts through the loop, so the rope looks like it passes through the knot.
 2. **Cord:** with the Pen at width **12**, click (1330, 287), drag smooth points through (1410, 400), (1458, 560), (1438, 760) and (1370, 860), click (1281, 826), and press [[Enter]].
 3. **Microphone:** on a new layer `Mic Tube`, make an 88 px ring centred at (1315, 594) the same way (Shrink 11). Add two short Pen grille lines at width 9 across it, keeping a gap at each end. Then draw a closed four-point handle from (1288, 646) down to (1268, 810) / (1294, 814) and back up to (1336, 652), and stroke it from the Paths panel at **11**. Finish with a small filled ellipse at the bottom as an end cap where the cord plugs in.
 
@@ -180,7 +180,7 @@ Reset **Letter spacing** to **0** first, because the 34 from COWBOY carries over
 - `EVERY THURSDAY`: **Tilt Neon** 96, `#CFFBFF`, top at **1281**, halfway between the raceway and the board. Pen two small sparkles beside it at x 372 and 1228.
 - `1407 RAILROAD AVE · NO COVER · BOOTS WELCOME`: **Rye** 32, `#D8CBAA`, top at **1872**
 
-Paste the `·` characters from the clipboard. Typed non-ASCII characters can drop out.
+On a Mac, type the `·` characters with [[Option+Shift+9]].
 
 ## Clip the tubes to the wall
 
@@ -231,7 +231,7 @@ Run **Gaussian Blur 70** and set the layer to **Screen** at **85%**. The black d
 
 ![The Bloom dialog with Threshold 58, Soft Knee 55, Radius 50 and Intensity 130 over the poster](23-bloom-pass.webp)
 
-1. Hide `Saloon Board` and run **Edit → Copy Merged**. Wait a couple of seconds, then paste at the top of `Hat Sign` and name the layer `Bloom`. Show the board again.
+1. Hide `Saloon Board` and run **Edit → Copy Merged**, then paste at the top of `Hat Sign` and name the layer `Bloom`. Show the board again.
 2. Run **Filter → Bloom** (Threshold **58**, Soft Knee **55**, Radius **50**, Intensity **130**). Set the layer to **Lighten** at **65%**.
 3. Marquee the board area (236, 1416)–(1364, 1796) on `Bloom` and press [[Delete]]. The copy was made with the board hidden, so it holds bricks there, and Lighten would show them through the dark red paint.
 

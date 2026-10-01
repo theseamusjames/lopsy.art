@@ -20,7 +20,7 @@ can point and pick. This one is a steampunk sheet of seven Victorian
 curiosities: a winged pocket watch, an airship, a clockwork heart, an Edison
 bulb, a pair of cogs, a goggled top hat and a skeleton key.
 
-It's mostly drawn. Every shape is a **Lasso** or **Elliptical Marquee**
+It's mostly drawn. Almost every shape is a **Lasso** or **Elliptical Marquee**
 selection filled with ink and then with colour. The only photo is a
 public-domain 1741 engraving of watch parts by Antoine Thiout, from
 [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Antoine_Thiout_engraving_1741.jpg).
@@ -32,9 +32,9 @@ One recipe draws every piece, from back to front:
 2. Choose **Select → Shrink…**, enter 5–7 px, and fill the smaller selection with its colour. That leaves an even black outline between overlapping parts.
 3. For metal, fill with a gradient instead of a flat colour.
 
-For tiny round parts such as rivets and bulb dots, skip the Shrink and draw
-the smaller colour circle directly with the **Elliptical Marquee**. It keeps
-very small circles perfectly round.
+For tiny round parts such as rivets and bulb dots, skip the selections and
+click with a hard **Brush** (Hardness 100): an ink dot first (about Size 16
+for a rivet), then a smaller dot of colour on top (about Size 10).
 
 The palette:
 

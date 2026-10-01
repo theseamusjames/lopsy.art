@@ -96,7 +96,7 @@ Give the four drips different lengths (2–5 passes) and brush sizes (60–80) s
 Add these layers inside the Sun group, above **Sun Core**:
 
 - **Sun Shade**
-  1. [[Cmd]]-click the Sun Core thumbnail to load its shape, then click the **Sun Shade** row so the selection belongs to the new layer.
+  1. [[Cmd]]-click the Sun Core thumbnail to load its shape. **Sun Shade** stays the active layer.
   2. Drag a radial gradient from the upper left of the ball. It stays clear to about 60%, then goes brown and dark at the rim.
   3. Remove the shading from the drips: with the **Elliptical Marquee**, select a circle slightly smaller than the ball, choose **Select → Inverse**, **Feather** 30 and press [[Delete]].
   4. Set the layer to **Multiply**.
@@ -107,7 +107,7 @@ Add these layers inside the Sun group, above **Sun Core**:
 
   Curved window reflections sell a sphere far better than a blurry oval.
 - **Drip Light**
-  1. [[Cmd]]-click the Sun Core thumbnail, click the **Drip Light** row, and fill the shape with `#E0A030`.
+  1. [[Cmd]]-click the Sun Core thumbnail and fill the shape with `#E0A030`.
   2. Marquee everything above the drips, **Feather** it 45 px, and press [[Delete]], so only the drips stay filled.
   3. Set the layer to **Screen** at 40% so the drips match the bright ball.
 - **Drip Glints**: lasso tapered vertical streaks down each drip, one bright and the rest thinner, plus a tiny hard white glint near each drip's bulb.
@@ -131,7 +131,7 @@ Finally, give Sun Core a dark **Inner Glow** (`#3A2200`, **Size** 40, **Opacity*
 ![Zoomed view of the drips with teardrop droplets under each tip, one selected with transform handles while being moved](08-falling-drops.webp)
 
 1. On a **Droplets** layer, build one teardrop under a drip tip: fill a small circle made with the **Elliptical Marquee**, then lasso a small triangle on top of it and fill that too.
-2. [[Cmd]]-click the layer's thumbnail, then click the **Droplets** row. Drag a radial gradient from `#FFF4D0` through gold to `#4A2E08`, lit from the upper left. Add a white dot highlight.
+2. [[Cmd]]-click the layer's thumbnail to select the drop. Drag a radial gradient from `#FFF4D0` through gold to `#4A2E08`, lit from the upper left. Add a white dot highlight.
 3. Marquee the drop, then press [[Cmd+C]] and [[Cmd+V]].
 4. Marquee the pasted drop and [[Cmd]]-drag a corner handle to scale it down to 70–86%. Press [[Cmd+D]] to commit, then drag it under the next drip tip with the **Move** tool and fine-tune with the arrow keys.
 5. Choose **Layer → Merge Down** to fold it back into Droplets. Repeat for the other drips.
@@ -145,7 +145,7 @@ Leave 20–30 px between each tip and its drop. For one drip, draw a drop still 
 ![YELLOW DWARF in tall Anton capitals with a gold chrome gradient and horizon band, drips on the Y, D and F, above a two-line serif deck](09-chrome-headline.webp)
 
 1. Click a raster layer (**Droplets**) so the new type doesn't edit the masthead. Type **YELLOW DWARF** in **Anton** at 206 px, about two-thirds of the way down the cover, so it spans the margins exactly. Name the layer **Headline** and click **Rasterize Layer**.
-2. [[Cmd]]-click its thumbnail, then click the **Headline** row. Drag a vertical linear gradient over the cap height with these stops:
+2. [[Cmd]]-click its thumbnail to select the letters. Drag a vertical linear gradient over the cap height with these stops:
    - `#FFF6D0` → `#F6C850` at 22% → `#B8740E` at 46%
    - a dark horizon line at `#2A1003` 50%
    - `#7A3E08` at 57% → `#F2B838` at 78% → `#FFE9A8` at 100%
@@ -196,7 +196,7 @@ Let the badge overlap the sphere's edge, like a sticker on the photo, with its r
 ![The complete HELIOS cover with the ALSO INSIDE band and a barcode at the bottom, film grain and a soft vignette](12-bottom-band-barcode.webp)
 
 1. Set **ALSO INSIDE** in gold `#F2B630` **Barlow Condensed** Bold at 26 px on the left margin. Under it, add two lines of 30 px cream Instrument Serif, ending about 60 px above the bottom edge: *Planet Nine's last hiding place · Sunspot cycle 25 peaks* and *Why the sky isn't violet · Building a star in a bottle*.
-2. For the barcode, choose **View → Show Grid** and set **Grid** to 4px; Snap turns on with it. On the right margin, marquee a cream box whose top lines up with the ALSO INSIDE caps and fill it. Untick **Snap** in the options bar, then fill thin dark bars of varying widths. Add the digits `9 770147 202611` in IBM Plex Mono 13 px under the bars.
+2. For the barcode, choose **View → Show Grid** and set **Grid** to 4px; Snap turns on with it. On the right margin, marquee a cream box whose top lines up with the ALSO INSIDE caps and fill it. Untick **Snap** in the options bar, then draw the bars with the **Pencil** in a dark colour, changing its **Size** between 2 and 6 px as you go: click at the top of each bar and [[Cmd+Shift]]-click at the bottom for a dead-vertical line. Add the digits `9 770147 202611` in IBM Plex Mono 13 px under the bars.
 3. Add a **Grain** layer on top: fill it grey `#808080`, run **Filter → Add Noise…** (**Amount** 40, **Mono**, **Gaussian**), and set it to **Overlay** at 22%.
 4. Finish with a **Vignette** over the whole cover: click the **✦** button on the top **Project** group, choose **Add Adjustment → Vignette** and set it to 35.
 

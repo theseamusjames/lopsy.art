@@ -169,9 +169,6 @@ corner to rotate it clockwise by a few degrees: about **2°** for Frame 4,
 then **4°**, **6°** and **8°**. Older frames should flatten out, as if they're still on the upswing
 of the leap. Press [[⌘D]] after each rotation.
 
-> **Tip:** Always commit a scale or rotation with [[⌘D]] *before* you drag
-> the piece somewhere else.
-
 ## Space the frames along an arc
 
 ![Four cream ghost frames stepping down to the lower left from the hero on the moon](11-frames-placed.webp)
@@ -257,8 +254,8 @@ moon, but Normal keeps a sharp red and cyan edge on the black silhouette.
 
 ![A small red dot on the tip of the black reindeer's muzzle](17-red-nose.webp)
 
-Add a **Nose** layer. Draw a 19 px elliptical marquee on the tip of the muzzle
-and fill it with `#FF2A4D`. This is the one warm spot in the scene; you'll
+Add a **Nose** layer. Pick the **Brush** at Size **19** and Hardness **100**,
+set the foreground to `#FF2A4D` and click once on the tip of the muzzle. This is the one warm spot in the scene; you'll
 give it a glow in the last steps.
 
 ## Group the zoetrope
@@ -355,9 +352,9 @@ later, which sits 10 px further left, like a misregistered print.
 Glitch slices only work when the title stays readable, so make just two:
 
 1. Marquee a thin band, about **18 px** tall, right across **MERRY** a
-   little above the middle of the letters. With the **Move** tool, press
-   [[Shift+→]] once and [[→]] six times to shift it **16 px** right. Press
-   [[⌘D]].
+   little above the middle of the letters. With the **Move** tool, nudge it
+   **16 px** right with the arrow keys ([[Shift+→]] moves 10 px, [[→]] 1 px).
+   Press [[⌘D]].
 2. Marquee a **16 px** band across **BRIGHT**, again a little above the
    middle. Start it just right of the **&** so the ampersand stays whole,
    and run it past the end of the word. Shift it **14 px** left and press
@@ -441,8 +438,8 @@ composite:
    the nearest ghost frame on the left and end it a little inside the moon's
    right edge. Press [[⇧⌘C]] (**Edit → Copy Merged**).
 2. Press [[⌘V]]. The band pastes in place as a new layer.
-3. With the **Move** tool, press [[Shift+→]] four times to shift it
-   **40 px** right, then press [[⌘D]].
+3. With the **Move** tool, nudge it **40 px** right with the arrow keys,
+   then press [[⌘D]].
 
 ## Add a second tear
 

@@ -308,8 +308,8 @@ disappears on a pale background.
 
 ![A copy of the crystal moved to the right of the can, inside a scale box being dragged smaller from its bottom-right corner](16-scale-crystal-copy.webp)
 
-1. Choose **Layer → Duplicate Layer** and click the copy's row. Rename it
-   **Crystal B**.
+1. Choose **Layer → Duplicate Layer**. The copy becomes the active layer.
+   Rename it **Crystal B**.
 2. With the Move tool, drag it to the right of the can, a little below the
    ring's middle.
 3. Marquee it and hold [[Cmd]] while you drag the bottom-right handle
@@ -347,10 +347,8 @@ lively without feeling random.
 **Bubbles.** On a **Bubbles** layer, make six rings in three sizes:
 
 1. Marquee a circle and fill it with `#8C7AE6`.
-2. Select a circle about 14% smaller on the same centre and press
-   [[Delete]]. On the bigger bubbles, **Select → Shrink…** by about 14% of
-   the radius does the same job; on small ones, drawing the inner circle
-   yourself keeps it round.
+2. Choose **Select → Shrink…** by about 14% of the radius and press
+   [[Delete]].
 3. Add a small white ellipse at the upper left for the highlight.
 
 Keep the bubbles off the ring line and away from the can's edges, so

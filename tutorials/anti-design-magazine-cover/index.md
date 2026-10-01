@@ -83,7 +83,9 @@ Click the **New Group** button and call it **Bench Photo**. Inside it, add
 the slab and drag a vertical `#D4D0C6` → `#85827A` gradient through it. Add
 **Pavement**: directly below the wall, fill an **800 × 260** rectangle of the
 same width with `#9A968C`, overlapping the wall's bottom edge slightly. Then
-draw 4 px strips in `#3A3833` every 52 px down and every 80 px across.
+rule the paving joints with the **Pencil** ([[N]]) at **Size 4** in `#3A3833`:
+a line every 52 px down and every 80 px across. Click at one end of each line
+and [[Cmd+Shift]]-click at the other so it snaps straight.
 
 Marquee the pavement, pick the **Move** tool and click **Perspective** in
 the options bar. Drag the bottom-right corner **300 px** to the right. The
@@ -102,9 +104,11 @@ back to 0. Set the layer to **Multiply** at 60%.
 On a **Bench** layer, draw the frame with marquee fills: 16 px uprights,
 18 px legs and small feet. Add three 26 px back slats and a 28 px front seat
 slat, with a lighter lasso trapezoid for the seat top. The hostile part
-goes on a **Hoops** layer. For each divider, fill a 76 × 128 ellipse,
-delete a 46 × 98 ellipse inside it, then delete the bottom half with a
-rectangle. That leaves an arch that stops anyone lying down.
+goes on a **Hoops** layer. For each divider, click with the **Shape** tool
+([[U]]) set to an ellipse with a black **Stroke** of **15** and no **Fill**,
+and type **61 × 113**. The stroke straddles the edge, so the ring is 76 × 128
+outside and 46 × 98 inside. Then marquee the bottom half and delete it. That
+leaves an arch that stops anyone lying down.
 
 ## Duplicate the spikes with copy and paste
 

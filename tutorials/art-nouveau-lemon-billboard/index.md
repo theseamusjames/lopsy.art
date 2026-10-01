@@ -126,14 +126,15 @@ thin inner rule.
 > opens a dialog for exact corners. From `14, 14` To `2086, 706` gives the
 > outer border.
 
-For the corner ornaments, fill three stacked ellipse marquees at each corner
-of the inner rule:
+For the corner ornaments, pick the **Brush** at Hardness `100` and stack
+three dots on each corner of the inner rule, one click each:
 
-- a dark 30 px circle
-- a lemon `#F2C230` 18 px circle
-- a dark 8 px centre
+- a dark dot at Size `30`
+- a lemon `#F2C230` dot at Size `18`
+- a dark centre at Size `8`
 
-Add two smaller dots at the middle of the top and bottom rules.
+Zoom in so each dot lands centred on the one before. Add two smaller dots at
+the middle of the top and bottom rules.
 
 ## Build the nimbus with Radial Symmetry
 

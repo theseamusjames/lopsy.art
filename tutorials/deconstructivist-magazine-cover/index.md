@@ -66,9 +66,8 @@ centre. That divides the wall into 700 × 350 px boards.
 
 Each board gets six tie holes in two rows of three. Space them evenly: about
 a sixth, half and five-sixths of the way across the board, and a quarter and
-three-quarters of the way down it. For each hole, [[Cmd]]-drag a 14 px circle
-with the **Elliptical Marquee** and fill it. Set the layer to **Multiply** at
-**45 %**.
+three-quarters of the way down it. Set the Brush **Size** to **14** and
+click once for each hole. Set the layer to **Multiply** at **45 %**.
 
 ## Tilt the blue plane
 
@@ -147,12 +146,12 @@ shells, it cuts straight through them.
 Deconstructivist planes don't line up; they slip. Select **Blue Plane** and
 lasso everything below the band: press outside the left edge of the page and
 drag straight along a line 20 px above the band's lower edge to outside the
-right edge, then run down past the bottom of the page and back, and let go. Switch to the **Move** tool and nudge **32 px right** and
-**19 px down** ([[Shift+Right]] three times, [[Right]] twice, [[Shift+Down]] once,
-[[Down]] nine times).
+right edge, then run down past the bottom of the page and back, and let go. Switch to the **Move** tool and nudge it **32 px right**
+and **19 px down** with the arrow keys. Hold [[Shift]] to move 10 px per
+press.
 
 The selection moves with the pixels, so re-draw the same lasso before
-nudging **Shell A**, **Shell B** and **Shell Seam** by the same amount.
+moving **Shell A**, **Shell B** and **Shell Seam** by the same amount.
 
 ## Set and scale the masthead
 
@@ -171,8 +170,8 @@ with the top and left margin guides.
 
 Marquee an **8 px** strip straight across the middle of the word, a little
 wider than it, and press [[Delete]] to open a gap. Then marquee everything
-above the cut and nudge it **24 px right** with the Move tool (two
-[[Shift+Right]] presses, then four [[Right]]). Press [[Cmd+D]]. The word still reads as RIFT, but it's visibly torn.
+above the cut and nudge it **24 px right** with the Move tool and the arrow
+keys. Press [[Cmd+D]]. The word still reads as RIFT, but it's visibly torn.
 
 ## Set the headline
 
@@ -346,7 +345,7 @@ the same edge as the cover lines and XENAKIS. Select the three barcode layers
 the same way and nudge them **14 px up** so the label's bottom sits on the
 lowest formwork seam. Finally, on
 **Formwork**, delete the tie holes that sit under type or peek through the
-masthead gap: an **Elliptical Marquee** over each one, then [[Delete]].
+masthead gap: click each one with the **Eraser** at about **Size 24**.
 
 ## Ink the lines that leave the plane
 

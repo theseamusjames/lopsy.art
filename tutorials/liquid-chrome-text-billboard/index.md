@@ -259,8 +259,7 @@ Draw an elliptical marquee just around the sphere, then press [[Cmd+C]] and
 the bottom-right corner handle toward the top left, holding [[Cmd]] to keep it
 round, until the copy is about 38 px wide.
 
-Press [[Cmd+D]] to commit the scale before you rotate or move the droplet.
-Finishing each transform before you start the next keeps them predictable.
+Press [[Cmd+D]] to commit the scale.
 
 ## Rotate the droplet
 

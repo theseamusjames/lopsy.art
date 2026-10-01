@@ -120,7 +120,7 @@ Now build the rim in three passes, keeping the selection active between them:
 
 ![The top of the heart face filled with a vertical gradient from white through pink to deep cherry, with the lower half still dark](07-sky-reflection.webp)
 
-Add a layer called *Sky*. Load the heart shape again: [[Cmd]]-click the *Heart Rim* thumbnail, then click the *Sky* row so the selection is ready to paint into. **Shrink** it by **17 px** so the face sits inside the rim. You'll load the face this way several more times.
+Add a layer called *Sky*. Load the heart shape again: [[Cmd]]-click the *Heart Rim* thumbnail. That loads its shape as a selection, and *Sky* stays the active layer. **Shrink** it by **17 px** so the face sits inside the rim. You'll load the face this way several more times.
 
 Drag a vertical gradient from just inside the top of the lobes down to a little under halfway down the heart, with these stops:
 
@@ -138,7 +138,7 @@ Give *Sky* an **Inner Glow** in `#5A0F2E` (**Size** 34, **Opacity** 70). The edg
 
 ![A lasso selection following a gently curved horizon line across the middle of the heart, over a ground gradient that fills the whole face](08-curved-horizon-lasso.webp)
 
-Add a layer called *Ground* above *Sky*. Load the face as before ([[Cmd]]-click the *Heart Rim* thumbnail, click the *Ground* row, **Shrink 17**), and drag a vertical gradient from slightly above where the sky gradient ended down to the tip:
+Add a layer called *Ground* above *Sky*. Load the face as before ([[Cmd]]-click the *Heart Rim* thumbnail, **Shrink 17**), and drag a vertical gradient from slightly above where the sky gradient ended down to the tip:
 
 - `#1A0610` 0
 - `#3A0A1E` 12%
@@ -158,8 +158,8 @@ A dead-straight horizon is what makes chrome look like a sticker.
 
 On the *Ground* layer:
 
-1. Set the foreground to `#FFD6E6` and lasso a thin ribbon, about 6 px tall, just **above** the horizon line and a little wider than the face. Fill it.
-2. To trim the ribbon's ends, load the face ([[Cmd]]-click the *Heart Rim* thumbnail, click the *Ground* row, **Shrink 17**), choose **Select → Inverse**, and press [[Delete]].
+1. Set the foreground to `#FFD6E6` and pick the **Brush** at **Size 6**, **Hardness 100**. Paint one stroke just **above** the horizon line, following its curve, from a little outside the face on one side to a little outside it on the other.
+2. To trim the stroke's ends, load the face ([[Cmd]]-click the *Heart Rim* thumbnail, **Shrink 17**), choose **Select → Inverse**, and press [[Delete]].
 
 The bright line against the near-black ground is the strongest chrome cue on the whole card.
 
@@ -167,7 +167,7 @@ The bright line against the near-black ground is the strongest chrome cue on the
 
 ![The chrome heart with two white window-pane reflections on each lobe and a soft dark shadow along the lower left inside edge](10-windows-and-core-shadow.webp)
 
-Add a layer called *Core Shadow*. Lasso a crescent about 45 px wide just inside the **lower-left** edge, from the horizon down to the tip. Choose **Select → Feather…** with **18**, and fill with `#1A0610`. Trim it to the face with the same trick: [[Cmd]]-click the *Heart Rim* thumbnail, click the *Core Shadow* row, **Shrink 17**, **Select → Inverse**, [[Delete]]. Set the layer's opacity to **65%**.
+Add a layer called *Core Shadow*. Lasso a crescent about 45 px wide just inside the **lower-left** edge, from the horizon down to the tip. Choose **Select → Feather…** with **18**, and fill with `#1A0610`. Trim it to the face with the same trick: [[Cmd]]-click the *Heart Rim* thumbnail, **Shrink 17**, **Select → Inverse**, [[Delete]]. Set the layer's opacity to **65%**.
 
 Add a layer called *Windows*. Lasso two curved "window pane" bands on the upper left of the left lobe, following its curve. On the right lobe, lasso two smaller ones.
 
@@ -235,7 +235,6 @@ The Text panel still holds the greeting's letter spacing. Set it back to **0** f
 
 1. With *Script* selected, click **Rasterize Layer** in the Layers panel footer.
 2. [[Cmd]]-click the layer's thumbnail. That loads the letters' alpha as a selection.
-3. Click the *Script* row once more, even though it's already active, so the selection is settled before you paint into it.
 
 ## Chrome the script
 
@@ -314,7 +313,7 @@ Click the top layer (*Greeting*) and add a layer called *Frame*.
 
 A bolt that sneaks behind the frame looks timid. Make it break through instead:
 
-1. [[Cmd]]-click the *Bolt Back* thumbnail to load the bolt's outline, then click the *Frame* row. Clicking the row first matters: it makes the next [[Delete]] clear only the selection.
+1. [[Cmd]]-click the *Bolt Back* thumbnail to load the bolt's outline. *Frame* stays the active layer.
 2. Choose **Select → Grow…** with **16**, then press [[Delete]].
 
 The frame now stops short on both sides of the bolt. Hide the grid and choose **Edit → Clear Guides** when you're done.
@@ -339,7 +338,7 @@ Finally, select the *Script*, *XOXO*, *Mini Bolts* and *Greeting* rows (click th
 
 Step back and look at the heart. If it reads as pink candy rather than metal, it needs darker darks.
 
-Load the face again ([[Cmd]]-click the *Heart Rim* thumbnail, click the *Sky* row, **Shrink 17**) and redraw the *Sky* gradient over the same span as before, so it plunges almost to black just above the horizon:
+Click the *Sky* row, load the face again ([[Cmd]]-click the *Heart Rim* thumbnail, **Shrink 17**) and redraw the *Sky* gradient over the same span as before, so it plunges almost to black just above the horizon:
 
 - `#FFFFFF` 0
 - `#FFE1EC` 30%
@@ -360,7 +359,7 @@ Two small clean-ups at the same time:
 Pacifico leaves a wide gap before the apostrophe, so *You're* reads as *You 're*.
 
 1. On the *Script* layer, marquee just the word **You**.
-2. With the **Move** tool, press [[Shift+Right]] once and [[Right]] twice to move it 12 px and close the gap. Press [[Cmd+D]].
+2. With the **Move** tool, nudge it 12 px to the right with the arrow keys to close the gap. Press [[Cmd+D]].
 3. Click **Align center horizontally** so the headline is centred again.
 
 ## Export the card

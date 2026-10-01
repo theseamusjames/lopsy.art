@@ -107,7 +107,7 @@ glow without any blur.
 ![A cream moon with a red crescent peeking out at its lower left and a dotted crater pattern across its face](05-misregistered-moon.webp)
 
 1. Add a *Moon Misprint* layer. Hold [[Cmd]] as you drag the **Elliptical Marquee** to make a 200 px circle, centred a little left of and below the middle of the halo, and fill it with red `#C9362B`.
-2. Add a *Moon* layer. Keep the marquee tool and nudge the selection 10 px right and 9 px up with the arrow keys ([[Shift+Right]] once, then [[Up]] nine times), so it sits on the halo's centre. Fill it with the paper color `#F3EAD6`. The red plate now shows as a thin crescent at the lower left.
+2. Add a *Moon* layer. Keep the marquee tool and nudge the selection 10 px right and 9 px up with the arrow keys ([[Shift]]+arrow moves 10 px), so it sits on the halo's centre. Fill it with the paper color `#F3EAD6`. The red plate now shows as a thin crescent at the lower left.
 3. Add *Moon Craters*. With the moon's circle still selected, choose **Select → Shrink…** by **6**. Run **Filter → Clouds…** at **Scale 5**, then **Halftone** at **Dot Size 10**, **Angle 15**.
 4. Deselect, add a **Color Overlay** of `#C9B68C`, and set the layer to **70%**.
 
@@ -180,9 +180,9 @@ copy is pasted in place on a new layer. Name it *Cottage Teal*.
 
 1. [[Cmd]]-click its thumbnail to select it. The transform handles appear.
 2. Press [[V]] and click **Flip Horizontal** in the options bar. The chimney moves to the left.
-3. Drag from inside the selection 520 px to the right, then press [[Cmd+D]] to commit the flip and the move. [[Cmd]]-click the thumbnail again for fresh handles.
+3. Drag from inside the selection 520 px to the right.
 4. Hold [[Cmd]] and drag the top-left corner handle 20 px in to scale it evenly to about 87%.
-5. Press [[Cmd+D]] to commit.
+5. Press [[Cmd+D]] to commit the flip, move and scale.
 
 ## Recolor the copy with the Magic Wand
 
@@ -203,8 +203,6 @@ Paste twice more:
 
 - *Cottage Cream*: move it 165 px left, scale it to 75%, and wand-recolor the walls `#EFE6D2`.
 - *Cottage Tilted*: move it 690 px right and scale it to 70%. Keep it red.
-
-As before, commit each move with [[Cmd+D]] before you reselect and scale.
 
 Select the tilted cottage's pixels and drag the top-right **rotation handle**
 (the circle outside the corner) about 6°. A slightly crooked house gives the

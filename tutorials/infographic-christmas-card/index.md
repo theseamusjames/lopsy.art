@@ -57,11 +57,13 @@ Rename **Layer 1** to *Graph Paper* by double-clicking its name.
 ![The top-left corner of the canvas with a 100 by 100 pixel marquee around a tile of thin grid lines](02-graph-paper-tile.webp)
 
 On *Graph Paper*, draw a 100 × 100 px tile in the top-left corner of the
-canvas. Zoom in and use the Rectangular Marquee ([[M]]) and Paint Bucket to
-fill thin strips, measured from the tile's top-left corner:
+canvas. Zoom in and use the **Pencil** ([[N]]): click at one end of each
+line, then [[Cmd+Shift]]-click at the other end for a dead-straight line.
+Each line runs the full 100 px of the tile, measured from its top-left
+corner:
 
-- **Minor lines**, `#6F8F80`, 1 px wide: vertical at 0, 25 and 75 px, horizontal at 5, 30 and 55 px.
-- **Major lines**, `#F3E9D2`, 2 px wide: vertical at 50 px, horizontal at 80 px.
+- **Minor lines**, `#6F8F80`, Size 1: vertical at 0, 25 and 75 px, horizontal at 5, 30 and 55 px.
+- **Major lines**, `#F3E9D2`, Size 2: vertical at 50 px, horizontal at 80 px.
 
 The major lines sit off-centre in the tile on purpose. Once it tiles, they
 land exactly on the chart's 10 cm ticks either side of the centre line and on
@@ -69,10 +71,9 @@ the top edge of every bar.
 
 Select the whole tile and choose **Edit → Define Pattern**.
 
-> **Tip:** A tile needs pixel-exact strips. With nothing selected, *click*
-> (don't drag) with the Rectangular Marquee to open a dialog where you type
-> the corners, for example **From 0, 5 To 100, 6** for the first horizontal
-> minor line and **From 0, 0 To 100, 100** for the whole tile.
+> **Tip:** A tile needs to be pixel-exact. With nothing selected, *click*
+> (don't drag) with the Rectangular Marquee ([[M]]) to open a dialog where
+> you type the corners: **From 0, 0 To 100, 100** selects the whole tile.
 
 > **Tip:** Here the alignment is baked into the tile itself. In Fill with Pattern, Row / Column Stagger offset alternate rows or columns like bricks, while Horizontal / Vertical Offset shift the whole grid's origin; leave all four at 0 for this tile.
 
@@ -137,7 +138,7 @@ Keep the width list handy. The tier table later on quotes the same numbers.
 
 ![The tree with a brown trunk under the bottom bar and a cream axis line across the card with major and minor tick marks](07-trunk-axis.webp)
 
-1. **Highlights:** add a *Bar Highlights* layer and fill a 3 px white strip along the top of every bar. Set the layer to **15%**.
+1. **Highlights:** add a *Bar Highlights* layer. With the **Pencil** ([[N]]) at **Size 3** in white, click just inside the top-left corner of each bar and [[Cmd+Shift]]-click just inside its top-right corner, so a 3 px line runs along the bar's top edge. Set the layer to **15%**.
 2. **Trunk:** add a *Trunk* layer. Marquee a block 100 px wide, centred on the centre line, from just under the bottom bar down to the axis guide, and fill it with `#5E4030`. You'll warm it up later.
 3. **Axis:** add an *Axis* layer and pick the **Pencil** ([[N]]) at **Size 3** in `#F3E9D2`. Click where the left margin guide meets the axis guide, then [[Shift]]-click where the right margin guide meets it for a dead-straight baseline.
 

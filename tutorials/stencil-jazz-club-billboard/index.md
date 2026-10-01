@@ -79,10 +79,11 @@ to that exact fraction. Then plain-click two more guides for the type block:
 one a little right of the centre guide (about 980 px) for its left edge, and
 one about 60 px in from the right edge for its right edge.
 
-Click **Add Layer** and name the layer `Seams`. With the **Rectangular
-Marquee**, drag a thin strip, about 6 px wide, down the full height of the
-canvas over each of the three sheet guides. Fill each strip with `#0A0C1E`
-using **Edit → Fill**. Set `Seams` to `70%`.
+Click **Add Layer** and name the layer `Seams`. Pick the **Pencil** ([[N]])
+at **Size** `6` with the foreground set to `#0A0C1E`. For each of the three
+sheet guides, click on the guide at the top edge, then hold [[Cmd+Shift]] and
+click on it at the bottom edge for a straight vertical seam. Set `Seams` to
+`70%`.
 
 ## Paint a radial selection in Quick Mask
 
@@ -175,8 +176,8 @@ Click the `Stage Glow` row and add a layer named `Stars`. Pick the
 Click once each in four spots across the sky to the right of the moon: two
 near the top between the first and centre guides, one just left of the
 centre guide a little lower, and one just right of it about halfway down.
-Give each one a hard core by filling a tiny ellipse, about 8 px across, at
-its center. Then drop the spray to Size `24` and Density `3`, and click a
+Give each one a hard core: switch to the **Brush** at **Size** `8` and
+**Hardness** `100` and click once at its center. Then go back to the Spray at Size `24` and Density `3`, and click a
 few times across the sky for stray paint dust.
 
 ## Start the xylophone group with rails
@@ -221,9 +222,10 @@ again. These bridges split every bar into two stencil islands.
 ![Thin pink and teal paint drips with round beads running down from four of the bars](17-bar-paint-drips.webp)
 
 Press [[Cmd+D]]. Pick the **Brush** at **Size** `7` and **Hardness** `100`.
-Draw straight lines 18–55 px long down from the bottom edge of bars 1, 4, 5
-and 7, each in its bar's color. End each drip with a small filled ellipse
-as the bead. Too much paint pooling at the bottom is the classic spray-can
+Draw straight drips 18–55 px long down from the bottom edge of bars 1, 4, 5
+and 7, each in its bar's color: click at the bar's edge, then
+[[Cmd+Shift]]-click straight below. End each drip with a bead: raise the
+Size a little and click once at the bottom. Too much paint pooling at the bottom is the classic spray-can
 tell.
 
 ## Make a misregistered key plate
@@ -280,8 +282,8 @@ about 16 × 4 px, across the tail.
 
 Add a layer named `Mallet A`. With a cream 8 px Brush, click about 180 px
 above the left edge of the last bar, then [[Shift]]-click straight down at
-the bar's top to draw a straight handle. Fill a teal circle, about 40 px
-across, at its bottom end for the head. Do
+the bar's top to draw a straight handle. Switch to teal, set the Brush **Size** to
+`40` and click once at its bottom end for the head. Do
 the same on `Mallet B` about 30 px to the left, with a pink head.
 
 Marquee `Mallet A` loosely, switch to the Move tool, and drag the rotate
@@ -302,8 +304,9 @@ of `#0E0B1A`, **Offset X** `6`, **Offset Y** `4`, **Blur** `0` and
 ![A cream eighth note floating above the mallets](25-eighth-note.webp)
 
 Add a layer named `Note`. Lasso a tilted oval head in the open sky above
-the middle bars and fill it cream. Marquee a thin stem, about 7 × 108 px, up
-from its right side, then lasso the curved flag. Give it the same hard black
+the middle bars and fill it cream. With a cream 7 px Brush, click at its right
+side and [[Cmd+Shift]]-click about 108 px straight up for the stem, then lasso
+the curved flag and fill it. Give it the same hard black
 Drop Shadow, at **Offset X** `5` and **Offset Y** `4`.
 
 ## Copy and paste a second note
@@ -348,10 +351,9 @@ guides.
 
 Click `Moon Shade` again. Set the font to **Sirin Stencil** at Size `165`
 and the foreground to `#FF2E88`. Click in empty space lower down, type
-`NOCTURNE` and press [[Tab]]. With the Move tool, nudge it up with
-[[Shift+Up]] (10 px per press) and the arrow keys until its top sits a
-narrow gap, about 22 px, under XYLOPHONE and its left edge lines up with
-XYLOPHONE's.
+`NOCTURNE` and press [[Tab]]. With the Move tool, drag it up until its top
+sits a narrow gap, about 22 px, under XYLOPHONE and its left edge lines up
+with XYLOPHONE's on the left type guide. Fine-tune with the arrow keys.
 
 Click **Rasterize Layer** in the Layers panel footer. You'll paint on the
 word next, and a raster layer keeps the stretch for good. Marquee the word
@@ -362,8 +364,9 @@ and drag the right-middle handle out to the right type guide. Press
 
 ![Pink paint drips hanging from the bottoms of the N, C, U and E in NOCTURNE](31-title-drips.webp)
 
-On the rasterized `NOCTURNE` layer, use the 8 px pink Brush plus ellipse
-beads to hang drips from the N, C, U and E. Make them different lengths,
+On the rasterized `NOCTURNE` layer, use the 8 px pink Brush the same way
+as the bar drips, a straight line plus a one-click bead, to hang drips from
+the N, C, U and E. Make them different lengths,
 from about 26 to 62 px.
 
 ## Misregister the title inks

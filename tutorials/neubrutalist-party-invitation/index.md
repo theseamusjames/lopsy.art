@@ -33,14 +33,13 @@ The palette is five flat colours plus near-black:
 
 Almost every shape in this piece is a **rounded rectangle**. The Shape
 tool's polygons are always regular, so you'll build rounded rectangles from
-selections instead: fill a rectangle inset by the corner radius
-horizontally, fill another inset vertically, then fill a circle with a
-diameter of twice the radius in each corner. It takes six quick fills and
-gives you a crisp, exact shape.
+selections instead: marquee the full rectangle, choose **Select → Shrink…**
+by the corner radius, then **Select → Grow…** by the same amount, and fill.
+Growing rounds every corner in one go.
 
-> **Tip:** There's a quicker way. Marquee the full rectangle, choose
-> **Select → Shrink…** by the corner radius, then **Select → Grow…** by
-> the same amount, and fill. Growing rounds every corner in one go.
+> **Tip:** For a pill, where the radius is half the height, shrink and grow
+> by one pixel less. Shrinking by the full half-height would leave nothing
+> selected.
 
 ## Create the invitation document
 
@@ -59,12 +58,12 @@ Click the **Background** row, set the foreground to cream `#FFF1DC` and
 choose **Edit → Fill**. Then double-click `Layer 1` and rename it
 `Dot Grid`.
 
-1. With the **Elliptical Marquee**, draw an 8 px circle in the middle of
-   the top-left 40 × 40 corner of the canvas and fill it with `#1A1A1A`.
-2. Press [[Cmd+D]]. With the **Rectangular Marquee**, select exactly that
-   40 × 40 square: a single click (no drag) opens a dialog where you type
-   **From** `0`, `0` and **To** `40`, `40`. Choose **Edit → Define
-   Pattern**.
+1. Pick the **Brush** at **Size 8**, **Hardness 100**, in `#1A1A1A`, and
+   click once in the middle of the top-left 40 × 40 corner of the canvas
+   (at about 20, 20) to leave a single dot.
+2. With the **Rectangular Marquee**, select exactly that 40 × 40 square:
+   a single click (no drag) opens a dialog where you type **From** `0`,
+   `0` and **To** `40`, `40`. Choose **Edit → Define Pattern**.
 3. Press [[Cmd+D]], choose **Edit → Fill with Pattern…**, pick the new
    40 × 40 pattern and click **Apply**.
 
@@ -99,7 +98,7 @@ draw anything else.
 Add a layer called `Title Card` and set the foreground to `#FF7EC8`. Build
 a 940 × 330 rounded rectangle with a 28 px radius, 70 px in from each side
 (just outside the margin guides) and about 210 px from the top, using
-either method from the intro.
+the method from the intro.
 
 Open the layer's effects and set:
 
@@ -256,7 +255,8 @@ On a new `Face` layer:
 
 - Blush: two 50 × 30 ellipses in `#FF6FAE`.
 - Eyes: two 34 × 42 black ovals.
-- Highlights: a 12 px white dot in each eye.
+- Highlights: one click in each eye with a white **Brush** at size `12`,
+  hardness `100`.
 - Smile: a **Brush** arc at size `7`, hardness `100`.
 
 Add a `Pool` layer on top. With the **Lasso**, press just inside the left edge,

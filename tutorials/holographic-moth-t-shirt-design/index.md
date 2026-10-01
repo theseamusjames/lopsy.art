@@ -347,8 +347,9 @@ Marquee a thin strip, about 4 px wide, on the centre line from the top edge
 down to the top of the ball. Draw a **Linear** gradient from transparent
 `#B9A8E8` at the top edge to solid `#B9A8E8` about two-thirds of the way down
 the strip. The chain disappears into the darkness instead of stopping at the
-canvas edge. Also drop a hard **12 px** white dot into the center of the
-hotspot on **Ball Shine**, so the highlight has a sharp core.
+canvas edge. Also click once in the centre of the hotspot on **Ball Shine**
+with a white **Brush** at **Size 12**, **Hardness 100**, so the highlight
+has a sharp core.
 
 ## Smooth the thorax and add fur
 

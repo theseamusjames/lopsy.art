@@ -52,7 +52,7 @@ Now untick Snap and select a rectangle exactly 8 px inside that one. The easiest
 
 ![The Pattern Fill dialog previewing a 40 pixel tan grid inside the window](04-grid-paper-pattern.webp)
 
-Make the tile on a temporary layer, in a 40 × 40 square at the top-left corner of the canvas. Fill a 3 px tan (`#E6D3B6`) vertical line 30 px in from the left of the square, and a 3 px horizontal line 18 px down from its top. Select the 40 × 40 square (**From** `0`, `0` **To** `40`, `40`) and choose **Edit → Define Pattern**, then delete the temporary layer.
+Make the tile on a temporary layer, in a 40 × 40 square at the top-left corner of the canvas. Pick the **Pencil** ([[N]]) at **Size 3** in tan (`#E6D3B6`) and zoom in close. Draw a vertical line that covers the pixel columns 30–32 from the left, running the full height of the square, and a horizontal line that covers rows 18–20 from the top: click one end, then [[Cmd+Shift]]-click the other so the line stays straight. The Pencil has hard edges, so each line is exactly 3 px wide. Select the 40 × 40 square (**From** `0`, `0` **To** `40`, `40`) and choose **Edit → Define Pattern**, then delete the temporary layer.
 
 Add a `Grid Paper` layer and select the window's inside below the title bar: **From** `110`, `578` **To** `1390`, `1618`. Choose **Edit → Fill with Pattern…**. Patterns tile from the top-left of the document, so those odd line offsets land a grid line exactly on each inside edge of the window. Full cells from border to border make the paper look deliberate.
 
@@ -148,7 +148,7 @@ Type `SEASON'S` in **Archivo Black** at **188 px**. Then move it so the letters 
 
 ![SEASON'S with a solid pink copy of the letters offset 16 pixels down and to the right behind it](16-headline-shadow.webp)
 
-With the letter selection still active, click `Headline Shadow`, set the foreground to pink `#FF5FA2`, and choose **Edit → Fill**. Press [[Cmd+D]], then move the layer 16 px right and 16 px down. With the **Move** tool, [[Shift]]+arrow nudges 10 px and a plain arrow nudges 1 px, so one [[Shift]]+[[Right]] and six [[Right]] presses, then the same downwards, land it exactly. A coloured shadow like this is a neubrutalist favourite. It follows the same 16 / 16 rule as the black shadows.
+With the letter selection still active, click `Headline Shadow`, set the foreground to pink `#FF5FA2`, and choose **Edit → Fill**. Press [[Cmd+D]], then nudge the layer 16 px right and 16 px down with the **Move** tool's arrow keys ([[Shift]]+arrow moves 10 px, a plain arrow 1 px). A coloured shadow like this is a neubrutalist favourite. It follows the same 16 / 16 rule as the black shadows.
 
 ## Stick GREETINGS on a tilted slab
 

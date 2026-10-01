@@ -248,10 +248,9 @@ Delete clears everything nearer the coast.
 
 Set the layer to `75%` opacity.
 
-> **Tip:** Load the coast from `Land`'s own row: click `Land`, [[Cmd]]-click
-> its thumbnail, then click back on the layer you're working on before you
-> Grow. Clicking back on the row first means [[Delete]] clears only the grown
-> area, not the whole layer.
+> **Tip:** To load the coast, [[Cmd]]-click `Land`'s thumbnail. The layer
+> you're working on stays active, so Fill and [[Delete]] act on it, not on
+> `Land`.
 
 ## Clip everything to the sea disc
 
@@ -351,12 +350,13 @@ Rasterize the layer style.
 Add `Rose North` and refill the north point's two halves in `#C8503E` and
 `#7A2118`.
 
-Build the hub from three circles on the compass point. At this size, draw
-each circle fresh rather than shrinking the last one, so they stay round:
+Deselect, then build the hub from three dots on the compass point
+(420, 624). Pick the
+**Brush** at Hardness `100` and click once on the point for each:
 
-1. A radius 9 disc (From `411`, `615` to `429`, `633`) in `#1E1812`.
-2. A radius 7 disc (From `413`, `617` to `427`, `631`) in cream.
-3. A radius 3 disc (From `417`, `621` to `423`, `627`) in red.
+1. Size `18` in `#1E1812`.
+2. Size `14` in cream.
+3. Size `6` in red.
 
 Finally, set an **N** in IM Fell English SC at `34` px in `#F4E9CE`. Nudge
 it so it's centred 22 px above the north tip.

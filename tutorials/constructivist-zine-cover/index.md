@@ -78,12 +78,12 @@ last, thinner one runs almost level with the starting point and is about
 
 Click **Add Layer** and name it `Red Sun`. Pick the **Elliptical Marquee**,
 hold [[Cmd]] and drag a perfect circle 600 px across, centred on the point
-where the rays meet but sitting about 40 px lower.
+where the rays meet but sitting about 40 px lower. Set the foreground to
+`#C62828` and fill it with the Paint Bucket. Press [[Cmd+D]].
 
 > **Tip:** You'll need this exact circle again in a moment. With nothing
 > selected, a single click (no drag) with the Elliptical Marquee opens a
-> dialog for exact corners: **From** `340`, `210` and **To** `940`, `810`. Set the foreground to `#C62828` and fill it with the Paint
-Bucket. Press [[Cmd+D]].
+> dialog for exact corners: **From** `340`, `210` and **To** `940`, `810`.
 
 The circle hides where the rays start, so they now seem to come out from
 behind the sun.
@@ -297,11 +297,12 @@ The chimneys stand in front of the sun, which gives the cover its depth.
 
 ![Close-up of small cream circles rising from each chimney top over the red sun](23-steam-puffs.webp)
 
-Add a `Steam` layer at the top of the Factory group. Above each chimney, fill
-two or three cream circles with the Elliptical Marquee. Start at about 20 px
-across and make each one bigger as it rises up and to the left.
+Add a `Steam` layer at the top of the Factory group. Pick the **Brush** at
+**Hardness** `100` in cream, and click two or three round puffs above each
+chimney. Start at **Size** `20` and go up about 8 px for each puff as it
+rises up and to the left.
 
-Flat, stepped puffs suit the style better than soft, brushed smoke, and cream
+Flat, hard-edged puffs suit the style better than soft, airbrushed smoke, and cream
 on red is the cover's strongest contrast.
 
 ## Set INDUSTRIAL vertically
@@ -345,10 +346,6 @@ box's left edge:
    brighter red `#E0463A`, below it.
 
 Rasterize each line when you finish it.
-
-> **Tip:** Wait for the canvas to show the new font before you click
-> **Rasterize Layer**. Rasterizing bakes in whatever face is on screen, and a
-> font you've just picked can take a moment to download.
 
 ## Rotate the slogan
 

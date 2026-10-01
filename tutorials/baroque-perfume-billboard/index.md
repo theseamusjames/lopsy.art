@@ -69,10 +69,10 @@ The transparent end stop is what makes this a glow: the gradient composites over
 
 ![A wide fluted bronze bowl on a short stem and foot standing on the ledge, with stems rising from it and dark olive peony leaves scattered around where the bouquet will go](04-foliage-bronze-tazza.webp)
 
-1. On `Foliage`, lasso about a dozen pointed peony leaves around where the bouquet will sit. Drag an olive gradient (`#71823C` → `#1A240E`) across each leaf, pale side toward the light. Then fill a thin midrib down each one.
+1. On `Foliage`, lasso about a dozen pointed peony leaves around where the bouquet will sit. Drag an olive gradient (`#71823C` → `#1A240E`) across each leaf, pale side toward the light. Then paint a thin midrib down each one with a small hard **Brush**.
 2. On `Stems`, lasso narrow tapering ribbons from the bowl's mouth up to where each flower will sit, and fill them `#34421C`.
 3. On `Urn`, lasso the bowl (about 400 px wide, rim at y 440), the knop, the stem and the foot. Fill each with the bronze gradient, dragged across its width. Add a dark ellipse for the mouth and a **Drop Shadow** (12, 6, blur 16).
-4. On `Urn Flutes`, fill thirteen thin vertical strips across the bowl `#2A1A0A`. Blur them **5**, clip them to the bowl, and set the layer to **Multiply** at **40%**. That gives the bowl its gadroons.
+4. On `Urn Flutes`, draw thirteen thin vertical lines across the bowl in `#2A1A0A` with the **Pencil**: click at the top of each and [[Cmd+Shift]]-click at the bottom to keep it upright. Blur them **5**, clip them to the bowl, and set the layer to **Multiply** at **40%**. That gives the bowl its gadroons.
 5. On `Urn Shine`, fill one pale strip on the left of the bowl, blur it **6**, clip it, and set it to **Screen** at 70%.
 
 Most of this ends up behind flowers. It still has to be there, or the bouquet floats.
@@ -90,7 +90,7 @@ Most of this ends up behind flowers. It still has to be there, or the bouquet fl
 
 Pick the **Lasso** and trace just outside the petals. The leaves are dark and busy, so **Quick Selection** tends to leak into them. A careful lasso gives a cleaner edge, and it's what an old master's silhouette needs anyway.
 
-> **Tip:** The toolbox labels Quick Selection "(Q)", but [[Q]] toggles Quick Mask ([#1078](https://github.com/theseamusjames/lopsy.art/issues/1078)). Click the Quick Selection button instead of pressing the key.
+> **Tip:** If you do try Quick Selection, click its toolbox button. Pressing [[Q]] toggles Quick Mask instead, even though the button's tooltip says "(Q)".
 
 ## Cut the peony out
 
@@ -153,7 +153,7 @@ Build each part with a lasso fill or gradient on its own layer, bottom to top:
 1. **Shadow:** an ellipse under and right of the bottle, **Feather** 12, filled black at 75%. Add a smaller amber ellipse on **Screen** for the light that shines through the juice.
 2. **Glass:** the bottle body (about 286 × 330 px, shoulders at y 330). Drag a gradient that's dark and nearly opaque at both edges and almost clear in the middle, so the wall behind shows through.
 3. **Liquid:** the body from y 392 down, filled `#3A1A06` → `#D8962E` → `#241004`, plus a pale meniscus band on top. Amber, not crimson: the bottle has to separate from the red peony.
-4. **Facets:** three hairlines following the curve, on **Screen** at 38%.
+4. **Facets:** three hairlines following the curve. Drag a few **Pen** anchors along it and press [[Enter]] to stroke each at a thin width, then set the layer to **Screen** at 38%.
 5. **Highlights:** two long streaks on the lit side and a warm rim on the right. Blur them **7**, clip them to the body, and set **Screen** at 75%.
 6. **Gold:** the collar, teardrop stopper, finial and label ring, all filled with the gold gradient. Then an oxblood oval for the label.
 7. **Monogram:** type `DP` in **Cinzel Decorative Bold**, 52 px, gold, centred on the label.

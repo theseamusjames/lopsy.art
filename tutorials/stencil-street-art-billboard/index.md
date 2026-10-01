@@ -193,7 +193,8 @@ together. Lasso two thin slivers across the mask tails and press
 ![A bone eye with an ink pupil pasted and dragged to the right, with its transform box still active](14-copy-paste-eye.webp)
 
 Add a layer called `Eyes`. Fill a bone ellipse about 74 × 46 px on the left
-of the head, inside the mask band. Then fill a 28 px ink pupil against its
+of the head, inside the mask band. For the pupil, pick the **Brush** at
+**Size** `28` and **Hardness** `100` in ink and click once against the eye's
 right side, so he's giving shifty side-eye.
 
 Marquee around the eye, press [[Cmd+C]] then [[Cmd+V]]. Use the **Move**
@@ -235,9 +236,6 @@ Select the can with a marquee and Move-drag it about 80 px to the right,
 then press [[Cmd+D]]. Marquee it again and hold [[Cmd]] while you drag the
 bottom-right handle outward to about **130%**. The [[Cmd]] key keeps the
 proportions locked. Press [[Cmd+D]] to commit.
-
-> **Tip:** Commit each transform with [[Cmd+D]] before you start the next
-> one. Scale, commit, then rotate.
 
 ## Tilt the can
 
@@ -295,7 +293,8 @@ misregistered spray pass.
 Add a `Drips` layer above `ROGUE`. Set the **Brush** to **Size** `9` and
 **Hardness** `100`. Drag three drips of uneven length straight down from the
 bottoms of the letters: 22, 72 and 46 px. Let the longest run into `KOALA`.
-Fill a small ellipse at the end of each drip for the bead of paint. Add one
+Raise the Size a little and click once at the end of each drip for the bead
+of paint. Add one
 orange drip from `KOALA` that reaches the tape line.
 
 ## Spray the type edges and the nozzle mist
