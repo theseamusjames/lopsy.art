@@ -52,8 +52,8 @@ await page.locator('[data-tool-id="gradient"]').click();
 | Marquee Rect | `m` | Lasso | `l` |
 | Magic Wand | `w` | | |
 
-Gradient, Elliptical Marquee, and Magnetic Lasso have **no** keyboard
-shortcut — use `[data-tool-id="..."]` for these.
+Gradient, Elliptical Marquee, Magnetic Lasso, and Quick Selection have
+**no** keyboard shortcut (`q` toggles Quick Mask) — use `[data-tool-id="..."]` for these.
 
 ### How to perform common UI actions
 
@@ -398,17 +398,17 @@ texture and sees nothing.
 `__readCompositedPixels`, which runs the compositor and includes the
 active stroke texture.
 
-### 3. Wand creates a transform overlay that intercepts clicks
+### 3. Selection handles intercept clicks for some tools
 
-After a successful wand selection, `handleSelectionDown` calls
-`setTransform(createTransformState(wandBounds))`, drawing transform
-handles around the selection bounds. `useCanvasInteraction` then calls
-`handleTransformDown` **before** dispatching to the tool handler — so
-the next click near a handle triggers the transform handler, not your
-active tool.
+After a marquee, lasso or wand selection, `setTransform` draws transform
+handles around the selection bounds, and `useCanvasInteraction` calls
+`handleTransformDown` **before** dispatching to the tool handler. With
+the Move tool or a marquee / lasso tool active, a press within 8 screen
+px of a handle grabs it instead of reaching the tool. The Magic Wand and
+every non-selection tool always get the click.
 
-**Fix:** after a wand selection, clear the transform with
-`__uiStore.getState().setTransform(null)` before firing the next click.
+**Fix:** press away from the handles, or clear the transform with
+`Cmd+D` (which also deselects) before the next press.
 
 ### 4. Auto-crop makes `addLayer` + move tool fragile
 

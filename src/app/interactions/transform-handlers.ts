@@ -40,10 +40,7 @@ import {
   selectionBounds,
 } from '../../selection/selection';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
-
-const SELECTION_TOOLS = new Set([
-  'marquee-rect', 'marquee-ellipse', 'lasso', 'lasso-magnetic', 'wand',
-]);
+import { scalesSelectionOutlineFromHandles } from './handle-tools';
 
 /**
  * Hit-test transform handles on mousedown and set up interaction state.
@@ -63,7 +60,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 
   const activeTool = uiState.activeTool;
 
-  if (SELECTION_TOOLS.has(activeTool)) {
+  if (scalesSelectionOutlineFromHandles(activeTool)) {
     return handleSelectionTransformDown(ctx, currentTransform);
   }
 

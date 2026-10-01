@@ -15,7 +15,7 @@ export function SprayOptions() {
       <Slider label="Size" value={spray.size} min={1} max={sizeMax} sliderMax={500} onChange={(v) => setSpraySetting('size', v)} />
       <Slider label="Density" value={spray.density} min={1} max={100} onChange={(v) => setSpraySetting('density', v)} />
       <Slider label="Opacity" value={spray.opacity} min={1} max={100} onChange={(v) => setSpraySetting('opacity', v)} />
-      <Slider label="Softness" value={spray.hardness} min={0} max={100} onChange={(v) => setSpraySetting('hardness', v)} />
+      <Slider label="Softness" value={spray.softness} min={0} max={100} onChange={(v) => setSpraySetting('softness', v)} />
     </>
   );
 }
