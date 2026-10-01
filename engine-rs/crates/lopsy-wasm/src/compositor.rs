@@ -324,12 +324,14 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         let effects_src_handle = masked_effect_handle.unwrap_or(effect_tex_handle);
 
         // --- "Behind" effects: outer glow, drop shadow ---
-        if let Some(ref glow) = outer_glow {
-            render_glow(engine, effects_src_handle, tw, th, glow, 0, layer_x, layer_y, target);
-        }
-        if let Some(ref shadow) = drop_shadow {
-            render_shadow(engine, effects_src_handle, tw, th, shadow, layer_x, layer_y, target);
-        }
+        render_behind_effects(
+            engine,
+            EffectSource { handle: effects_src_handle, x: layer_x, y: layer_y, width: tw, height: th },
+            outer_glow.as_ref(),
+            drop_shadow.as_ref(),
+            stroke_eff.as_ref(),
+            target,
+        );
 
         // --- Color overlay + blend layer onto composite ---
         let overlay_desc = color_overlay.as_ref();
@@ -1049,6 +1051,206 @@ fn render_sponge_preview(
     Some(preview_handle)
 }
 
+/// A texture holding a layer's silhouette, placed at (`x`, `y`) in document
+/// pixels.
+#[derive(Clone, Copy)]
+struct EffectSource {
+    handle: TextureHandle,
+    x: f32,
+    y: f32,
+    width: u32,
+    height: u32,
+}
+
+/// Render the effects drawn behind the layer — outer glow, then drop shadow.
+/// Both are cast by everything the layer shows, so an outside or centre
+/// Stroke grows the silhouette they are built from; built from the layer's
+/// pixels alone, the shadow started inside the outline and peeked out past
+/// it with a notch at the corner, and the glow sat under the stroke.
+fn render_behind_effects(
+    engine: &mut EngineInner,
+    src: EffectSource,
+    outer_glow: Option<&GlowDesc>,
+    drop_shadow: Option<&ShadowDesc>,
+    stroke: Option<&StrokeDesc>,
+    target: Target,
+) {
+    if outer_glow.is_none() && drop_shadow.is_none() {
+        return;
+    }
+    let stroked = stroke.and_then(|s| render_stroke_silhouette(engine, src, s));
+    let cast = stroked.unwrap_or(src);
+    if let Some(glow) = outer_glow {
+        render_glow(engine, cast.handle, cast.width, cast.height, glow, 0, cast.x, cast.y, target);
+    }
+    if let Some(shadow) = drop_shadow {
+        render_shadow(engine, cast.handle, cast.width, cast.height, shadow, cast.x, cast.y, target);
+    }
+    if let Some(s) = stroked {
+        engine.texture_pool.release(s.handle);
+    }
+}
+
+/// Render `src`'s alpha grown by the part of `stroke` outside the layer
+/// into a pooled texture covering the layer plus the stroke's reach — not
+/// the document, so a layer hanging off the canvas still casts its whole
+/// shadow. Uses the same two algorithms `render_stroke` picks between, so
+/// the silhouette matches the drawn ring. Returns `None` (cast from `src`)
+/// when the stroke adds nothing outside the layer or a texture can't be had.
+fn render_stroke_silhouette(engine: &mut EngineInner, src: EffectSource, stroke: &StrokeDesc) -> Option<EffectSource> {
+    let reach = stroke.outside_reach()?;
+    let rect = lopsy_core::layer::stroke_silhouette_rect(
+        lopsy_core::layer::DocRect { x: src.x, y: src.y, width: src.width, height: src.height },
+        reach,
+    );
+    let src_gl = engine.texture_pool.get(src.handle)?.clone();
+    let out = engine.texture_pool.acquire(&engine.gl, rect.width, rect.height).ok()?;
+    let frame = SilhouetteFrame { src: &src_gl, src_w: src.width, src_h: src.height, pad_x: src.x - rect.x, pad_y: src.y - rect.y, w: rect.width, h: rect.height };
+
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    // Units 0 and 1 may hold a texture the pool just handed back as `out`.
+    for unit in [WebGl2RenderingContext::TEXTURE1, WebGl2RenderingContext::TEXTURE0] {
+        engine.gl.active_texture(unit);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
+    let result = if reach <= 10.0 {
+        silhouette_by_distance(engine, &frame, stroke, out).then_some(out)
+    } else {
+        silhouette_by_dilation(engine, &frame, stroke, reach, out)
+    };
+    for unit in [WebGl2RenderingContext::TEXTURE1, WebGl2RenderingContext::TEXTURE0] {
+        engine.gl.active_texture(unit);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
+
+    match result {
+        Some(handle) => Some(EffectSource { handle, x: rect.x, y: rect.y, width: rect.width, height: rect.height }),
+        None => {
+            engine.texture_pool.release(out);
+            None
+        }
+    }
+}
+
+/// The source layer and the padded region a silhouette is rendered into.
+struct SilhouetteFrame<'a> {
+    src: &'a web_sys::WebGlTexture,
+    src_w: u32,
+    src_h: u32,
+    /// The layer's offset inside the region.
+    pad_x: f32,
+    pad_y: f32,
+    w: u32,
+    h: u32,
+}
+
+/// Single-pass silhouette for narrow strokes, via `stroke_edt.glsl`.
+fn silhouette_by_distance(engine: &mut EngineInner, frame: &SilhouetteFrame, stroke: &StrokeDesc, out: TextureHandle) -> bool {
+    let Some(out_gl) = engine.texture_pool.get(out).cloned() else { return false };
+    let position = match stroke.position {
+        lopsy_core::layer::StrokePosition::Inside => 1,
+        lopsy_core::layer::StrokePosition::Outside => 0,
+        lopsy_core::layer::StrokePosition::Center => 2,
+    };
+    engine.render_to_texture(&out_gl, frame.w as i32, frame.h as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.stroke_edt;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(frame.src));
+        if let Some(loc) = shader.location(gl, "u_srcTex") { gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(gl, "u_strokeColor") { gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
+        if let Some(loc) = shader.location(gl, "u_width") { gl.uniform1f(Some(&loc), stroke.width); }
+        if let Some(loc) = shader.location(gl, "u_position") { gl.uniform1i(Some(&loc), position); }
+        if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), stroke.opacity); }
+        if let Some(loc) = shader.location(gl, "u_texelSize") { gl.uniform2f(Some(&loc), 1.0 / frame.src_w as f32, 1.0 / frame.src_h as f32); }
+        if let Some(loc) = shader.location(gl, "u_srcOffset") { gl.uniform2f(Some(&loc), frame.pad_x, frame.pad_y); }
+        if let Some(loc) = shader.location(gl, "u_srcSize") { gl.uniform2f(Some(&loc), frame.src_w as f32, frame.src_h as f32); }
+        if let Some(loc) = shader.location(gl, "u_docSize") { gl.uniform2f(Some(&loc), frame.w as f32, frame.h as f32); }
+        if let Some(loc) = shader.location(gl, "u_silhouette") { gl.uniform1i(Some(&loc), 1); }
+        engine.draw_fullscreen_quad();
+    });
+    true
+}
+
+/// Silhouette for wide strokes: extract alpha, separable dilation, then
+/// `stroke_apply.glsl` folds the ring into the layer's alpha. Ping-pongs
+/// between `out` and one more pooled texture; returns whichever holds the
+/// result and releases the other.
+fn silhouette_by_dilation(
+    engine: &mut EngineInner,
+    frame: &SilhouetteFrame,
+    stroke: &StrokeDesc,
+    reach: f32,
+    out: TextureHandle,
+) -> Option<TextureHandle> {
+    let tmp = engine.texture_pool.acquire(&engine.gl, frame.w, frame.h).ok()?;
+    let (Some(out_gl), Some(tmp_gl)) = (engine.texture_pool.get(out).cloned(), engine.texture_pool.get(tmp).cloned()) else {
+        engine.texture_pool.release(tmp);
+        return None;
+    };
+    let (fw, fh) = (frame.w as f32, frame.h as f32);
+
+    // Layer alpha placed in the padded region → out.
+    engine.render_to_texture(&out_gl, frame.w as i32, frame.h as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.glow;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(frame.src));
+        if let Some(loc) = shader.location(gl, "u_srcTex") { gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(gl, "u_srcOffset") { gl.uniform2f(Some(&loc), frame.pad_x, frame.pad_y); }
+        if let Some(loc) = shader.location(gl, "u_srcSize") { gl.uniform2f(Some(&loc), frame.src_w as f32, frame.src_h as f32); }
+        if let Some(loc) = shader.location(gl, "u_docSize") { gl.uniform2f(Some(&loc), fw, fh); }
+        if let Some(loc) = shader.location(gl, "u_rawAlpha") { gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(gl, "u_hasOrigTex") { gl.uniform1i(Some(&loc), 0); }
+        engine.draw_fullscreen_quad();
+    });
+
+    // Separable dilation: out → tmp (horizontal) → out (vertical).
+    let radius = reach.ceil() as i32;
+    for (read, write, direction) in [(&out_gl, &tmp_gl, (1.0, 0.0)), (&tmp_gl, &out_gl, (0.0, 1.0))] {
+        engine.render_to_texture(write, frame.w as i32, frame.h as i32, |engine| {
+            let gl = &engine.gl;
+            let shader = &engine.shaders.separable_dilate;
+            gl.use_program(Some(&shader.program));
+            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(read));
+            if let Some(loc) = shader.location(gl, "u_tex") { gl.uniform1i(Some(&loc), 0); }
+            if let Some(loc) = shader.location(gl, "u_radius") { gl.uniform1i(Some(&loc), radius); }
+            if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), 0); }
+            if let Some(loc) = shader.location(gl, "u_oobAlpha") { gl.uniform1f(Some(&loc), 0.0); }
+            if let Some(loc) = shader.location(gl, "u_direction") { gl.uniform2f(Some(&loc), direction.0, direction.1); }
+            engine.draw_fullscreen_quad();
+        });
+    }
+
+    // Dilated alpha (out) + layer → silhouette (tmp).
+    engine.render_to_texture(&tmp_gl, frame.w as i32, frame.h as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.stroke_apply;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&out_gl));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(frame.src));
+        if let Some(loc) = shader.location(gl, "u_dilatedTex") { gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(gl, "u_origTex") { gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = shader.location(gl, "u_strokeColor") { gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
+        if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), stroke.opacity); }
+        if let Some(loc) = shader.location(gl, "u_position") { gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(gl, "u_origOffset") { gl.uniform2f(Some(&loc), frame.pad_x, frame.pad_y); }
+        if let Some(loc) = shader.location(gl, "u_origSize") { gl.uniform2f(Some(&loc), frame.src_w as f32, frame.src_h as f32); }
+        if let Some(loc) = shader.location(gl, "u_docSize") { gl.uniform2f(Some(&loc), fw, fh); }
+        if let Some(loc) = shader.location(gl, "u_silhouette") { gl.uniform1i(Some(&loc), 1); }
+        engine.draw_fullscreen_quad();
+    });
+
+    engine.texture_pool.release(out);
+    Some(tmp)
+}
+
 /// Render outer or inner glow.
 fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, glow: &GlowDesc, mode: i32, layer_x: f32, layer_y: f32, target: Target) {
     let doc_w = engine.doc_width as i32;
@@ -1321,6 +1523,7 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_silhouette") { engine.gl.uniform1i(Some(&loc), 0); }
 
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
         engine.gl.viewport(0, 0, doc_w, doc_h);
@@ -1442,6 +1645,7 @@ fn render_stroke_apply(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTextu
     if let Some(loc) = shader.location(&engine.gl, "u_origOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
     if let Some(loc) = shader.location(&engine.gl, "u_origSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_silhouette") { engine.gl.uniform1i(Some(&loc), 0); }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.gl.viewport(0, 0, doc_w, doc_h);
@@ -1556,8 +1760,14 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         };
         let fx_handle = masked_effect_handle.unwrap_or(tex_handle);
 
-        if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 0, *layer_x, *layer_y, target); } }
-        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, fx_handle, tw, th, shadow, *layer_x, *layer_y, target); } }
+        render_behind_effects(
+            engine,
+            EffectSource { handle: fx_handle, x: *layer_x, y: *layer_y, width: tw, height: th },
+            effects.outer_glow.as_ref().filter(|g| g.enabled),
+            effects.drop_shadow.as_ref().filter(|d| d.enabled),
+            effects.stroke.as_ref().filter(|st| st.enabled),
+            target,
+        );
 
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
         if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
@@ -1657,8 +1867,14 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Resul
         let target = main_target(engine);
 
         // Behind effects
-        if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 0, layer_x, layer_y, target); } }
-        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, layer_x, layer_y, target); } }
+        render_behind_effects(
+            engine,
+            EffectSource { handle: tex_handle, x: layer_x, y: layer_y, width: tw, height: th },
+            effects.outer_glow.as_ref().filter(|g| g.enabled),
+            effects.drop_shadow.as_ref().filter(|d| d.enabled),
+            effects.stroke.as_ref().filter(|st| st.enabled),
+            target,
+        );
 
         // Layer content with color overlay (use Normal blend, not the layer's blend mode)
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);

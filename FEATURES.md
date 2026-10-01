@@ -909,6 +909,7 @@ Contents, top to bottom:
 ### Shared behavior
 
 - **Render order is fixed** and unrelated to the list order: outer glow → drop shadow → the layer itself (color overlay applied inline to its RGB) → inner glow → stroke. Outer glow is drawn *before* the drop shadow, so an overlapping shadow sits on top of the glow.
+- **The drop shadow and outer glow are cast by the stroked silhouette.** Although the stroke is drawn last, an enabled `outside` or `center` Stroke grows the outline the two "behind" effects are built from: the shadow is the shape of the layer *plus its stroke*, and the glow starts at the stroke's outer edge instead of under it. Before, both were built from the layer's pixels alone, so a shadow started inside the outline and peeked out past it with a notch at the corner nearest the layer, and a glow narrower than the stroke was hidden completely (fixed in this change). `render_stroke_silhouette` in `compositor.rs` renders the layer's alpha unioned (source-over) with the outside part of the ring into a pooled texture the size of the layer padded by the stroke's reach — not the document, so a layer hanging off the canvas still casts its whole shadow — using the same two algorithms as the drawn stroke (a per-pixel distance search up to 10 px of reach, separable dilation beyond). The live canvas, export and Rasterize Layer Style all go through it. It costs one extra pass (four on the dilation path) at the padded layer size, and only when a stroke and a shadow or outer glow are both enabled; an `inside` stroke never leaves the layer's outline, so it adds no pass. Inner glow is still built from the layer alone.
 - **Colors use the browser's native color input**, not Lopsy's shared color picker. The swatch round-trips through 6-digit hex, so an effect color's **alpha is preserved but cannot be edited from the panel** — it stays at whatever the effect already held.
 - **Size-like sliders auto-scale with the document**: the maximum is `max(base, min(5000, round(1.5 × longest side)))`, while the *drag* range is pinned to a usable window so precise tuning stays practical on large canvases. The text field accepts the full scaled maximum.
 - **History is coarse.** Toggling pushes `Enable <Effect>` / `Disable <Effect>`; starting a slider drag pushes `Edit <Effect>` so undo returns to the pre-drag value; the Blend dropdown pushes `Change Blend Mode`. Color swatches and the stroke Position buttons push nothing at all (see *Gaps*).
@@ -924,7 +925,7 @@ Defaults: disabled, black at 100% color alpha, offset 4 / 4, blur 8, spread 0, o
 
 Final shadow alpha is `silhouette × color alpha × opacity`. Alpha is not editable from the panel, so the color alpha is whatever the layer was created with — **1** since #838, so Opacity 100 now gives a fully opaque shadow (#831, fixed in #838). Before that the default was 0.75, which capped every default drop shadow at 75 % even at Opacity 100. A project saved before #838 keeps that 0.75, because `.lopsy` loading restores each layer's saved `dropShadow` object whole.
 
-The shadow is **knocked out beneath the layer's own opaque pixels only when Blur is 0**. With any blur the knockout pass is skipped, so a blurred shadow renders at full strength behind the layer — visible through a semi-transparent layer, hidden by an opaque one.
+The shadow is **knocked out beneath the silhouette (the layer plus any outside/centre stroke) only when Blur is 0**. With any blur the knockout pass is skipped, so a blurred shadow renders at full strength behind the layer — visible through a semi-transparent layer, hidden by an opaque one.
 
 ### Outer Glow
 Defaults: disabled, pale yellow (255, 255, 100) at full alpha, size 10, spread 0, opacity 0.75.
@@ -934,7 +935,7 @@ Defaults: disabled, pale yellow (255, 255, 100) at full alpha, size 10, spread 0
 - **Spread**: same range, and the same `alpha^(1 − spread/100)` gamma curve as the shadow, not a radius.
 - **Opacity**: 0 – 100% in the UI, stored 0 – 1.
 
-The blurred silhouette is masked by the inverse of the layer's alpha, so the glow appears only outside the layer's own coverage.
+The blurred silhouette is masked by the inverse of the silhouette's alpha — the layer plus any outside/centre stroke — so the glow appears only outside that coverage, starting at the stroke's outer edge.
 
 ### Inner Glow
 Same controls, ranges, and defaults as Outer Glow — the two share one form and one shader, distinguished by a mode flag. The *inverted* layer alpha is blurred and then masked **by** the layer's alpha, so the glow reads inward from the edges.
