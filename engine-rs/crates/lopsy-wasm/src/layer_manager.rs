@@ -36,6 +36,8 @@ pub fn remove_layer(engine: &mut EngineInner, layer_id: &str) {
     if let Some(mask) = engine.layer_masks.remove(layer_id) {
         engine.texture_pool.release(mask);
     }
+    crate::effect_cache_gpu::evict_layer(engine, layer_id);
+    engine.layer_content_gen.remove(layer_id);
     engine.layer_stack.retain(|l| l.id != layer_id);
     engine.needs_recomposite = true;
     engine.group_pre_adj_valid = false;

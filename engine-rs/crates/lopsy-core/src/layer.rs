@@ -10,7 +10,7 @@ pub enum LayerType {
     Adjustment,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GlowDesc {
     pub enabled: bool,
     pub color: [f32; 4],
@@ -19,7 +19,7 @@ pub struct GlowDesc {
     pub opacity: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ShadowDesc {
     pub enabled: bool,
     pub color: [f32; 4],
@@ -30,7 +30,7 @@ pub struct ShadowDesc {
     pub opacity: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StrokeDesc {
     pub enabled: bool,
     pub color: [f32; 4],
