@@ -19,14 +19,15 @@ export interface SpraySettings {
   size: number;
   density: number;
   opacity: number;
-  hardness: number;
+  /** 0–100; higher paints softer dots. See `sprayDabHardness`. */
+  softness: number;
 }
 
 export const DEFAULT_SPRAY_SETTINGS: SpraySettings = {
   size: 40,
   density: 20,
   opacity: 60,
-  hardness: 30,
+  softness: 70,
 };
 
 export function clampSpraySetting<K extends keyof SpraySettings>(
@@ -45,7 +46,7 @@ export function clampSpraySetting<K extends keyof SpraySettings>(
     const n = value as number;
     return Math.max(1, Math.min(100, n)) as SpraySettings[K];
   }
-  if (key === 'hardness') {
+  if (key === 'softness') {
     const n = value as number;
     return Math.max(0, Math.min(100, n)) as SpraySettings[K];
   }

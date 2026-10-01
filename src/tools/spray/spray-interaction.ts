@@ -3,7 +3,7 @@ import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { toDocumentColor } from '../../app/document-color';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { applyBrushDab as gpuBrushDab } from '../../engine-wasm/wasm-bridge';
-import { generateSprayDots } from './spray';
+import { generateSprayDots, sprayDabHardness } from './spray';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
@@ -58,9 +58,9 @@ function sprayAtCurrentPosition(): void {
   if (!engine) return;
 
   const toolSettings = useToolSettingsStore.getState();
-  const { size, density, opacity: opacityPct, hardness: hardnessPct } = toolSettings.settings.spray;
+  const { size, density, opacity: opacityPct, softness } = toolSettings.settings.spray;
   const opacity = opacityPct / 100;
-  const hardness = hardnessPct / 100;
+  const hardness = sprayDabHardness(softness);
   const color = toDocumentColor(cursor.strokeColor ?? toolSettings.foregroundColor);
   const r = color.r / 255;
   const g = color.g / 255;
@@ -100,9 +100,9 @@ export function handleSprayDown(
   const engine = getEngine();
   if (!engine) return state;
 
-  const { size, density, opacity: opacityPct, hardness: hardnessPct } = toolSettings.settings.spray;
+  const { size, density, opacity: opacityPct, softness } = toolSettings.settings.spray;
   const opacity = opacityPct / 100;
-  const hardness = hardnessPct / 100;
+  const hardness = sprayDabHardness(softness);
   const color = strokeColor;
   toolSettings.addRecentColor(color);
   const r = color.r / 255;
@@ -134,9 +134,9 @@ export function handleSprayMove(
   if (!engine) return;
 
   const layerLocalPos = ctx.layerPos;
-  const { size, density, opacity: opacityPct, hardness: hardnessPct } = toolSettings.settings.spray;
+  const { size, density, opacity: opacityPct, softness } = toolSettings.settings.spray;
   const opacity = opacityPct / 100;
-  const hardness = hardnessPct / 100;
+  const hardness = sprayDabHardness(softness);
   const color = toDocumentColor(state.strokeColor ?? toolSettings.foregroundColor);
   const r = color.r / 255;
   const g = color.g / 255;

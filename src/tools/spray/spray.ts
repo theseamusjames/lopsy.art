@@ -2,11 +2,19 @@ export interface SpraySettings {
   readonly size: number;
   readonly density: number;
   readonly opacity: number;
-  readonly hardness: number;
+  readonly softness: number;
 }
 
 export function defaultSpraySettings(): SpraySettings {
-  return { size: 40, density: 20, opacity: 60, hardness: 30 };
+  return { size: 40, density: 20, opacity: 60, softness: 70 };
+}
+
+/**
+ * Softness (0–100, higher = softer) as the brush dab's `u_hardness`
+ * (0–1), whose fully-opaque core grows with the value.
+ */
+export function sprayDabHardness(softnessPct: number): number {
+  return 1 - Math.max(0, Math.min(100, softnessPct)) / 100;
 }
 
 export interface SprayDot {

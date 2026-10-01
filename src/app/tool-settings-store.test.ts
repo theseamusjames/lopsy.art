@@ -767,9 +767,9 @@ describe('per-tool slice: spray (#453)', () => {
     useToolSettingsStore.getState().setSpraySetting('size', 40);
     useToolSettingsStore.getState().setSpraySetting('density', 20);
     useToolSettingsStore.getState().setSpraySetting('opacity', 60);
-    useToolSettingsStore.getState().setSpraySetting('hardness', 30);
+    useToolSettingsStore.getState().setSpraySetting('softness', 70);
     const { spray } = useToolSettingsStore.getState().settings;
-    expect(spray).toEqual({ size: 40, density: 20, opacity: 60, hardness: 30 });
+    expect(spray).toEqual({ size: 40, density: 20, opacity: 60, softness: 70 });
   });
 
   it('setSpraySetting updates one field without disturbing the others', () => {
@@ -779,7 +779,7 @@ describe('per-tool slice: spray (#453)', () => {
     expect(after.density).toBe(75);
     expect(after.size).toBe(before.size);
     expect(after.opacity).toBe(before.opacity);
-    expect(after.hardness).toBe(before.hardness);
+    expect(after.softness).toBe(before.softness);
   });
 
   it('setSpraySetting clamps size into [1, 5000]', () => {
@@ -807,14 +807,13 @@ describe('per-tool slice: spray (#453)', () => {
     expect(useToolSettingsStore.getState().settings.spray.opacity).toBe(100);
   });
 
-  it('setSpraySetting clamps hardness into [0, 100]', () => {
-    // Hardness is exposed in the UI as a "Softness" slider with min 0,
-    // so the slice mirrors that range — distinct from opacity's
-    // [1, 100], where 0 would be a no-op.
-    useToolSettingsStore.getState().setSpraySetting('hardness', -10);
-    expect(useToolSettingsStore.getState().settings.spray.hardness).toBe(0);
-    useToolSettingsStore.getState().setSpraySetting('hardness', 200);
-    expect(useToolSettingsStore.getState().settings.spray.hardness).toBe(100);
+  it('setSpraySetting clamps softness into [0, 100]', () => {
+    // Softness 0 is a valid (hardest) dot, unlike opacity's [1, 100]
+    // where 0 would be a no-op.
+    useToolSettingsStore.getState().setSpraySetting('softness', -10);
+    expect(useToolSettingsStore.getState().settings.spray.softness).toBe(0);
+    useToolSettingsStore.getState().setSpraySetting('softness', 200);
+    expect(useToolSettingsStore.getState().settings.spray.softness).toBe(100);
   });
 
   it('setSpraySetting preserves sibling slices and unrelated fields', () => {
