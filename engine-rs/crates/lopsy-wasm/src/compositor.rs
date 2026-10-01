@@ -328,7 +328,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             render_glow(engine, effects_src_handle, tw, th, glow, 0, layer_x, layer_y, target);
         }
         if let Some(ref shadow) = drop_shadow {
-            render_shadow(engine, effects_src_handle, tw, th, shadow, layer_x, layer_y, target);
+            render_shadow(engine, effects_src_handle, tw, th, shadow, layer_x, layer_y, opacity, target);
         }
 
         // --- Color overlay + blend layer onto composite ---
@@ -1174,7 +1174,7 @@ fn set_glow_uniforms(engine: &EngineInner, glow: &GlowDesc, mode: i32, tw: u32, 
 }
 
 /// Render drop shadow.
-fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, shadow: &ShadowDesc, layer_x: f32, layer_y: f32, target: Target) {
+fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, shadow: &ShadowDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, target: Target) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     let blur_radius = shadow.blur.ceil() as u32;
@@ -1191,6 +1191,7 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
         set_shadow_uniforms(engine, shadow, tw, th, layer_x, layer_y);
         if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_knockout") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_layerOpacity") { engine.gl.uniform1f(Some(&loc), layer_opacity); }
         if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_rawAlpha") { engine.gl.uniform1i(Some(&loc), 0); }
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
         engine.gl.viewport(0, 0, doc_w, doc_h);
@@ -1557,7 +1558,7 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         let fx_handle = masked_effect_handle.unwrap_or(tex_handle);
 
         if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 0, *layer_x, *layer_y, target); } }
-        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, fx_handle, tw, th, shadow, *layer_x, *layer_y, target); } }
+        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, fx_handle, tw, th, shadow, *layer_x, *layer_y, *opacity, target); } }
 
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
         if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
@@ -1658,7 +1659,7 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Resul
 
         // Behind effects
         if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 0, layer_x, layer_y, target); } }
-        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, layer_x, layer_y, target); } }
+        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, layer_x, layer_y, opacity, target); } }
 
         // Layer content with color overlay (use Normal blend, not the layer's blend mode)
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);

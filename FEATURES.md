@@ -924,7 +924,7 @@ Defaults: disabled, black at 100% color alpha, offset 4 / 4, blur 8, spread 0, o
 
 Final shadow alpha is `silhouette × color alpha × opacity`. Alpha is not editable from the panel, so the color alpha is whatever the layer was created with — **1** since #838, so Opacity 100 now gives a fully opaque shadow (#831, fixed in #838). Before that the default was 0.75, which capped every default drop shadow at 75 % even at Opacity 100. A project saved before #838 keeps that 0.75, because `.lopsy` loading restores each layer's saved `dropShadow` object whole.
 
-The shadow is **knocked out beneath the layer's own opaque pixels only when Blur is 0**. With any blur the knockout pass is skipped, so a blurred shadow renders at full strength behind the layer — visible through a semi-transparent layer, hidden by an opaque one.
+The shadow is **knocked out beneath the layer's own pixels only when Blur is 0**. With any blur the knockout pass is skipped, so a blurred shadow renders at full strength behind the layer — visible through a semi-transparent layer, hidden by an opaque one. The knockout scales the shadow by `(1 − a) / (1 − a·opacity)`, where `a` is the layer's (masked) alpha and `opacity` the layer's own opacity, so the layer replaces the shadow by its coverage: an opaque layer at reduced opacity still hides the shadow under it, and an anti-aliased edge over its own shadow is as solid as the two colours (#1089, fixed in this change — the old plain `(1 − a)` knockout counted the edge's coverage twice and let about 25% of the backdrop through a half-covered pixel, a light hairline along every curved or diagonal edge of a hard shadow).
 
 ### Outer Glow
 Defaults: disabled, pale yellow (255, 255, 100) at full alpha, size 10, spread 0, opacity 0.75.
