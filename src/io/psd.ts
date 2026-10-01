@@ -24,8 +24,8 @@ import { resetTrackedState, flushLayerSync } from '../engine-wasm/engine-sync';
 import { isWideGamut } from '../engine/color-space';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import type { Layer, GroupLayer, RasterLayer } from '../types/layers';
-import type { LayerEffects } from '../types/effects';
-import { DEFAULT_EFFECTS, hasEnabledEffects } from '../layers/layer-model';
+import { hasEnabledEffects } from '../layers/layer-model';
+import { parsePsdEffects, serializePsdEffects } from './layer-effects-format';
 import { getMaskDocOrigin } from '../layers/mask-origin';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
 import { materializeAllMaskData } from '../app/mask-data-sync';
@@ -156,7 +156,7 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
       clipToBelow: layer.clipToBelow,
       groupKind,
       effectsJson: hasEnabledEffects(layer.effects)
-        ? JSON.stringify(layer.effects)
+        ? serializePsdEffects(layer.effects)
         : undefined,
     };
 
@@ -207,22 +207,6 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   a.click();
   URL.revokeObjectURL(url);
   useEditorStore.getState().markClean();
-}
-
-function parseEffectsJson(json: string | undefined): LayerEffects {
-  if (!json) return DEFAULT_EFFECTS;
-  try {
-    const parsed = JSON.parse(json) as Partial<LayerEffects>;
-    return {
-      stroke: parsed.stroke ?? DEFAULT_EFFECTS.stroke,
-      dropShadow: parsed.dropShadow ?? DEFAULT_EFFECTS.dropShadow,
-      outerGlow: parsed.outerGlow ?? DEFAULT_EFFECTS.outerGlow,
-      innerGlow: parsed.innerGlow ?? DEFAULT_EFFECTS.innerGlow,
-      colorOverlay: parsed.colorOverlay ?? DEFAULT_EFFECTS.colorOverlay,
-    };
-  } catch {
-    return DEFAULT_EFFECTS;
-  }
 }
 
 // ─── PSD Import ────────────────────────────────────────────────────────
@@ -315,7 +299,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
         x: 0,
         y: 0,
         clipToBelow: false,
-        effects: parseEffectsJson(psdLayer.effectsJson),
+        effects: parsePsdEffects(psdLayer.effectsJson),
         mask: groupMask,
         children: groupInfo?.children ?? [],
         collapsed: psdLayer.groupKind === 2,
@@ -364,7 +348,7 @@ export async function importPsdFile(data: Uint8Array, name: string): Promise<voi
       x: psdLayer.x,
       y: psdLayer.y,
       clipToBelow: psdLayer.clipToBelow,
-      effects: parseEffectsJson(psdLayer.effectsJson),
+      effects: parsePsdEffects(psdLayer.effectsJson),
       mask,
       width: psdLayer.width,
       height: psdLayer.height,

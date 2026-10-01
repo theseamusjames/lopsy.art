@@ -25,7 +25,11 @@ import type { StoredPath } from '../types/paths';
 import { useUIStore, type Guide } from '../app/ui-store';
 
 const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LOPSY\0"
-const FORMAT_VERSION = 1;
+/**
+ * v2: drop shadows and outer glows are cast from the layer plus its Stroke
+ * (`STROKED_SILHOUETTE_VERSION`); v1 effects are migrated on load.
+ */
+export const FORMAT_VERSION = 2;
 
 export interface LopsyManifest {
   readonly version: number;
