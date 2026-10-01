@@ -4,6 +4,7 @@ import {
   createEllipseSelection,
   invertSelection,
   combineSelections,
+  selectionCombineMode,
   selectionBounds,
   isEmptySelection,
   getSelectionEdges,
@@ -75,6 +76,31 @@ describe('combineSelections', () => {
     expect(result[0]).toBe(128);
     expect(result[1]).toBe(0);
     expect(result[2]).toBe(64);
+  });
+});
+
+describe('combineSelections with anti-aliased edges', () => {
+  it('add gives full coverage where two shapes split an edge pixel', () => {
+    // A pixel a shared lasso edge cuts in two: 128 / 255 on one side, the
+    // complementary 127 on the other. Taking the max would leave a seam.
+    const result = combineSelections(new Uint8ClampedArray([128]), new Uint8ClampedArray([127]), 'add');
+    expect(result[0]).toBe(255);
+  });
+});
+
+describe('selectionCombineMode', () => {
+  const none = { shiftKey: false, altKey: false };
+  it('maps Shift to add, Alt to subtract and both to intersect', () => {
+    expect(selectionCombineMode({ shiftKey: true, altKey: false }, true)).toBe('add');
+    expect(selectionCombineMode({ shiftKey: false, altKey: true }, true)).toBe('subtract');
+    expect(selectionCombineMode({ shiftKey: true, altKey: true }, true)).toBe('intersect');
+    expect(selectionCombineMode(none, true)).toBe('replace');
+  });
+
+  it('replaces whatever is held when nothing is selected', () => {
+    expect(selectionCombineMode({ shiftKey: true, altKey: false }, false)).toBe('replace');
+    expect(selectionCombineMode({ shiftKey: false, altKey: true }, false)).toBe('replace');
+    expect(selectionCombineMode({ shiftKey: true, altKey: true }, false)).toBe('replace');
   });
 });
 

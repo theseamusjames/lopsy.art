@@ -16,6 +16,7 @@ vi.mock('../../engine-wasm/wasm-bridge', () => {
     createEllipseSelection: wasmThrow,
     selectionBounds: wasmThrow,
     createPolygonMask: wasmThrow,
+    combineSelections: wasmThrow,
     setSelectionMask: vi.fn(),
     featherSelectionMask: vi.fn(),
     readSelectionMask: vi.fn(),
@@ -51,6 +52,7 @@ const editorState = {
   setSelection: vi.fn(),
   clearSelection: vi.fn(),
   notifyRender: vi.fn(),
+  pushHistoryMetadata: vi.fn(),
 };
 vi.mock('../../app/editor-store', () => ({
   useEditorStore: { getState: () => editorState },
@@ -74,6 +76,7 @@ vi.mock('../../app/tool-settings-store', () => ({
 }));
 
 import { wandStrategy } from './wand-strategy';
+import { readSelectionMask, setSelectionMask } from '../../engine-wasm/wasm-bridge';
 import type { InteractionContext } from '../../app/interactions/interaction-types';
 
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
@@ -114,6 +117,7 @@ describe('wand strategy', () => {
     readLayerPixelsForFill.mockReset();
     editorState.setSelection.mockClear();
     editorState.clearSelection.mockClear();
+    editorState.pushHistoryMetadata.mockClear();
     uiState.setTransform.mockClear();
     engine = { __engine: 'mock' };
     editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
@@ -182,6 +186,65 @@ describe('wand strategy', () => {
     expect(mask[0]).toBe(255); // old selection kept
     expect(mask[2 * DOC_W + 2]).toBe(255); // new region added
     expect(bounds).toEqual({ x: 0, y: 0, width: 4, height: 4 });
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Add to Selection');
+  });
+
+  it('shift+alt-click intersects the wand result with the existing selection', () => {
+    const existing = new Uint8ClampedArray(DOC_W * DOC_H);
+    existing[0] = 255;
+    existing[2 * DOC_W + 2] = 255;
+    editorState.selection = {
+      active: true,
+      mask: existing,
+      bounds: { x: 0, y: 0, width: 3, height: 3 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    wandStrategy.onDown(makeCtx({ shiftKey: true, altKey: true }), 'wand');
+    const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
+      { x: number; y: number; width: number; height: number },
+      Uint8ClampedArray,
+    ];
+    expect(mask[0]).toBe(0); // outside the wand result
+    expect(mask[2 * DOC_W + 2]).toBe(255); // in both
+    expect(mask[3 * DOC_W + 3]).toBe(0); // wand result only
+    expect(bounds).toEqual({ x: 2, y: 2, width: 1, height: 1 });
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Intersect Selection');
+  });
+
+  it('feathers only the added region, not the selection it joins', () => {
+    ts.settings.marquee.feather = 4;
+    const feathered = new Uint8Array(8 + DOC_W * DOC_H);
+    new DataView(feathered.buffer).setUint32(0, DOC_W, true);
+    new DataView(feathered.buffer).setUint32(4, DOC_H, true);
+    feathered[8 + 2 * DOC_W + 2] = 200;
+    feathered[8 + 2 * DOC_W + 1] = 60;
+    vi.mocked(readSelectionMask).mockReturnValue(feathered);
+    const existing = new Uint8ClampedArray(DOC_W * DOC_H);
+    existing[7 * DOC_W + 7] = 255;
+    editorState.selection = {
+      active: true,
+      mask: existing,
+      bounds: { x: 7, y: 7, width: 1, height: 1 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    try {
+      wandStrategy.onDown(makeCtx({ shiftKey: true }), 'wand');
+    } finally {
+      ts.settings.marquee.feather = 0;
+    }
+    const [, mask] = editorState.setSelection.mock.calls[0]! as [unknown, Uint8ClampedArray];
+    // The feathered wand region is added as-is…
+    expect(mask[2 * DOC_W + 2]).toBe(200);
+    expect(mask[2 * DOC_W + 1]).toBe(60);
+    // …and the existing hard-edged pixel is not re-blurred.
+    expect(mask[7 * DOC_W + 7]).toBe(255);
+    // The GPU was handed the wand region alone to feather.
+    const uploads = vi.mocked(setSelectionMask).mock.calls;
+    const uploaded = uploads[uploads.length - 1]![1];
+    expect(uploaded[7 * DOC_W + 7]).toBe(0);
+    expect(uploaded[2 * DOC_W + 2]).toBe(255);
   });
 
   it('alt-click subtracts the wand result from the existing selection', () => {
@@ -235,6 +298,7 @@ describe('wand strategy', () => {
     ];
     // No combine happened — just the wand result.
     expect(bounds).toEqual({ x: 2, y: 2, width: 2, height: 2 });
+    expect(editorState.pushHistoryMetadata).not.toHaveBeenCalled();
   });
 
   it('clears the selection when the wand finds nothing', () => {

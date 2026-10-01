@@ -645,11 +645,16 @@ grid again. A single click on a ruler drops a guide.
 
 These are by design, and the helpers already handle most of them:
 
-- **Selections replace, they don't add.** The marquee, ellipse and lasso
-  always start a new selection. Only the Magic Wand (Shift = add) and Quick
-  Selection combine. Build multi-part shapes one fill at a time.
-- **A marquee drag that starts inside an existing selection moves the
-  outline** instead of making a new one. Deselect first (`h.rect` does).
+- **Shift adds to a selection, Alt subtracts, Shift+Alt intersects.** This
+  works with the marquee, ellipse, lasso, magnetic lasso and Magic Wand. The
+  `h.rect` / `h.ellipse` / `h.lasso` helpers deselect first, so build a
+  multi-part selection with the tool and a modifier instead. For example,
+  `await h.tool('lasso'); await h.drag([...tri2, tri2[0]], { steps: 1, modifiers: ['Shift'] });`
+  after `h.lasso(tri1)`, then one `h.fill()` fills both. Each combine is one
+  undo step.
+- **A plain marquee drag that starts inside an existing selection moves the
+  outline** instead of making a new one. Deselect first (`h.rect` does), or
+  hold Shift / Alt to combine.
 - **Blur before pressing keys.** Focus stays on the last control you
   clicked. A focused button activates again on Enter, and a focused dropdown
   keeps the arrow keys. `h.key()` and `h.tool()` blur first. Do the same in

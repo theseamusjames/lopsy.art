@@ -15,6 +15,7 @@ vi.mock('../../engine-wasm/wasm-bridge', () => {
     createEllipseSelection: wasmThrow,
     selectionBounds: wasmThrow,
     createPolygonMask: wasmThrow,
+    combineSelections: wasmThrow,
     setSelectionMask: vi.fn(),
     featherSelectionMask: vi.fn(),
     readSelectionMask: vi.fn(),
@@ -49,6 +50,7 @@ const editorState = {
   setSelection: vi.fn(),
   clearSelection: vi.fn(),
   notifyRender: vi.fn(),
+  pushHistoryMetadata: vi.fn(),
 };
 vi.mock('../../app/editor-store', () => ({
   useEditorStore: { getState: () => editorState },
@@ -135,6 +137,7 @@ beforeEach(() => {
   dropFloat.mockClear();
   editorState.setSelection.mockClear();
   editorState.clearSelection.mockClear();
+  editorState.pushHistoryMetadata.mockClear();
   uiState.setTransform.mockClear();
   uiState.openModal.mockClear();
   editorState.document = { width: DOC_W, height: DOC_H, layers: [] };
@@ -241,6 +244,7 @@ describe('marquee onMove — creating a selection', () => {
     expect(getMarqueePreview()).toEqual({
       kind: 'rect',
       rect: { x: 10, y: 10, width: 20, height: 15 },
+      isCombining: false,
     });
   });
 
@@ -276,6 +280,7 @@ describe('marquee onMove — creating a selection', () => {
     expect(getMarqueePreview()).toEqual({
       kind: 'ellipse',
       rect: { x: 10, y: 10, width: 20, height: 20 },
+      isCombining: false,
     });
   });
 
@@ -286,6 +291,7 @@ describe('marquee onMove — creating a selection', () => {
     marqueeStrategy.onMove!(makeState({ startPoint: { x: 12, y: 12 } }), { x: 33, y: 28 }, false);
     expect(rectPreview()).toEqual({ x: 10, y: 10, width: 20, height: 20 });
   });
+
 });
 
 describe('marquee onMove — moving an existing selection', () => {
@@ -409,6 +415,119 @@ describe('marquee onUp', () => {
     marqueeStrategy.onUp!(state, { x: 50, y: 50 }, makeUpCtx(50, 50));
     expect(editorState.clearSelection).not.toHaveBeenCalled();
     expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+});
+
+/** A selection holding the rect (x, y, w, h) on the 100 x 100 test document. */
+function selectRect(x: number, y: number, w: number, h: number): Uint8ClampedArray {
+  const mask = new Uint8ClampedArray(DOC_W * DOC_H);
+  for (let yy = y; yy < y + h; yy++) mask.fill(255, yy * DOC_W + x, yy * DOC_W + x + w);
+  editorState.selection = { active: true, mask, bounds: { x, y, width: w, height: h }, maskWidth: DOC_W, maskHeight: DOC_H };
+  return mask;
+}
+
+function lastCommit(): { bounds: { x: number; y: number; width: number; height: number }; mask: Uint8ClampedArray } {
+  const calls = editorState.setSelection.mock.calls;
+  const [bounds, mask] = calls[calls.length - 1]! as [
+    { x: number; y: number; width: number; height: number },
+    Uint8ClampedArray,
+  ];
+  return { bounds, mask };
+}
+
+describe('marquee add / subtract / intersect', () => {
+  it('Shift inside the selection starts a new shape instead of moving the outline', () => {
+    selectRect(0, 0, 50, 50);
+    const state = marqueeStrategy.onDown(makeCtx({ canvasPos: { x: 10, y: 10 }, shiftKey: true }), 'marquee-rect');
+    expect(state?.gesture.kind).not.toBe('move');
+    expect(state?.selectionCombineMode).toBe('add');
+  });
+
+  it('Alt inside the selection starts a subtract shape', () => {
+    selectRect(0, 0, 50, 50);
+    const state = marqueeStrategy.onDown(makeCtx({ canvasPos: { x: 10, y: 10 }, altKey: true }), 'marquee-rect');
+    expect(state?.gesture.kind).not.toBe('move');
+    expect(state?.selectionCombineMode).toBe('subtract');
+  });
+
+  it('a modifier with nothing selected just starts a new selection', () => {
+    const state = marqueeStrategy.onDown(makeCtx({ shiftKey: true, altKey: true }), 'marquee-rect');
+    expect(state?.selectionCombineMode).toBe('replace');
+  });
+
+  it('keeps the existing ants in the preview while combining', () => {
+    marqueeStrategy.onMove!(makeState({ selectionCombineMode: 'add' }), { x: 30, y: 30 }, false);
+    const preview = getMarqueePreview();
+    if (!preview || preview.kind === 'move') throw new Error('expected a rect preview');
+    expect(preview.isCombining).toBe(true);
+  });
+
+  it('Shift-drag adds the rect to the selection as one history step', () => {
+    selectRect(0, 0, 10, 10);
+    setMarqueePreview({ kind: 'rect', rect: { x: 50, y: 50, width: 20, height: 20 } });
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 50, y: 50 }, selectionCombineMode: 'add' }), { x: 70, y: 70 }, makeUpCtx(70, 70));
+    const { bounds, mask } = lastCommit();
+    expect(mask[5 * DOC_W + 5]).toBe(255); // old selection kept
+    expect(mask[60 * DOC_W + 60]).toBe(255); // new rect added
+    expect(mask[30 * DOC_W + 30]).toBe(0); // gap between them stays out
+    expect(bounds).toEqual({ x: 0, y: 0, width: 70, height: 70 });
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledTimes(1);
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Add to Selection');
+  });
+
+  it('Alt-drag cuts a hole in the selection', () => {
+    selectRect(0, 0, 60, 60);
+    setMarqueePreview({ kind: 'rect', rect: { x: 20, y: 20, width: 20, height: 20 } });
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 20, y: 20 }, selectionCombineMode: 'subtract' }), { x: 40, y: 40 }, makeUpCtx(40, 40));
+    const { bounds, mask } = lastCommit();
+    expect(mask[30 * DOC_W + 30]).toBe(0); // hole
+    expect(mask[10 * DOC_W + 10]).toBe(255); // ring kept
+    expect(mask[50 * DOC_W + 50]).toBe(255);
+    expect(bounds).toEqual({ x: 0, y: 0, width: 60, height: 60 });
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Subtract from Selection');
+  });
+
+  it('Shift+Alt-drag keeps only the overlap', () => {
+    selectRect(0, 0, 40, 40);
+    setMarqueePreview({ kind: 'ellipse', rect: { x: 20, y: 20, width: 40, height: 40 } });
+    marqueeStrategy.onUp!(
+      makeState({ tool: 'marquee-ellipse', startPoint: { x: 20, y: 20 }, selectionCombineMode: 'intersect' }),
+      { x: 60, y: 60 },
+      makeUpCtx(60, 60),
+    );
+    const { bounds, mask } = lastCommit();
+    expect(mask[35 * DOC_W + 35]).toBe(255); // in both
+    expect(mask[5 * DOC_W + 5]).toBe(0); // rect only
+    expect(mask[50 * DOC_W + 50]).toBe(0); // ellipse only
+    expect(bounds.x).toBeGreaterThanOrEqual(20);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(40);
+  });
+
+  it('clears the selection when a subtract removes all of it', () => {
+    selectRect(10, 10, 10, 10);
+    setMarqueePreview({ kind: 'rect', rect: { x: 0, y: 0, width: 50, height: 50 } });
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 0, y: 0 }, selectionCombineMode: 'subtract' }), { x: 50, y: 50 }, makeUpCtx(50, 50));
+    expect(editorState.clearSelection).toHaveBeenCalledTimes(1);
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    expect(uiState.setTransform).toHaveBeenLastCalledWith(null);
+  });
+
+  it('a modifier-click keeps the selection and opens no dialog', () => {
+    selectRect(10, 10, 10, 10);
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 50, y: 50 }, selectionCombineMode: 'add' }), { x: 50, y: 50 }, makeUpCtx(50, 50));
+    expect(editorState.clearSelection).not.toHaveBeenCalled();
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    expect(uiState.openModal).not.toHaveBeenCalled();
+    expect(editorState.pushHistoryMetadata).not.toHaveBeenCalled();
+  });
+
+  it('a plain drag still replaces without a history step', () => {
+    selectRect(0, 0, 10, 10);
+    setMarqueePreview({ kind: 'rect', rect: { x: 50, y: 50, width: 20, height: 20 } });
+    marqueeStrategy.onUp!(makeState({ startPoint: { x: 50, y: 50 }, selectionCombineMode: 'replace' }), { x: 70, y: 70 }, makeUpCtx(70, 70));
+    const { mask } = lastCommit();
+    expect(mask[5 * DOC_W + 5]).toBe(0);
+    expect(editorState.pushHistoryMetadata).not.toHaveBeenCalled();
   });
 });
 

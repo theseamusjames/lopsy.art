@@ -63,6 +63,8 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   const activeTool = uiState.activeTool;
 
   if (scalesSelectionOutlineFromHandles(activeTool)) {
+    // Shift / Alt start a shape to add or subtract, wherever the press lands.
+    if (ctx.shiftKey || ctx.altKey) return null;
     return handleSelectionTransformDown(ctx, currentTransform);
   }
 
