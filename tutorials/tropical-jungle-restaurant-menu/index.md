@@ -2,7 +2,7 @@
 title: Design a Tropical Paper-Cut Restaurant Menu
 description: Make a layered paper-cut jungle menu in Lopsy with lasso monstera leaves, palm fronds, hibiscus, cacao pods and a clean three-column price list.
 published: 2026-09-27 13:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: restaurant menu, tropical, paper cut, layer effects, lasso, typography, area text, menu design
@@ -61,10 +61,8 @@ readout as you hover, so you can place them by eye:
   (where the dome meets the straight sides) and **1602** (the bottom).
 
 Turn on **View → Show Grid**. Snap switches on with it, so your marquees
-land on the 16 px lattice.
-
-> **Tip:** Guides are reference lines only. Marquees snap to the grid, not
-> to guides, so these guides sit on grid lines.
+land on the 16 px lattice. Marquees also snap to the guides, so the arch's
+corners lock onto them.
 
 ## Draw the dome of the arch
 
@@ -154,8 +152,9 @@ shape, about as wide as it is tall, with a notch where the stem joins:
 2. Cut seven slits on each side with thin, slightly curved lasso wedges.
    Each slit starts just outside the edge and tapers to a point about
    three-quarters of the way to the midrib. Press **Delete** after each one.
-3. Delete four small oval holes near the midrib, and a hairline down the
-   midrib itself.
+3. Delete four small oval holes near the midrib. Then erase a hairline down
+   the midrib itself with a small **Eraser**: click at the stem, then
+   [[Shift]]-click at the tip.
 
 Place leaves in each corner and one at the bottom centre, rotated so they
 point out from the arch.
@@ -242,14 +241,11 @@ Draw a marquee around the flower, press [[Cmd+C]], then [[Cmd+V]]. The
 copy lands in place on a new layer. Rename it **Hibiscus
 BR**, then:
 
-1. Drag it with the **Move** tool to the bottom-right corner of the arch,
-   and press [[Cmd+D]].
-2. Marquee it again and hold [[Cmd]] while you drag a corner handle to
-   scale it to about 112%. Press [[Cmd+D]].
-3. Marquee it once more and drag just outside the top-right handle to
-   rotate it. Press [[Cmd+D]] to commit.
+1. Drag it with the **Move** tool to the bottom-right corner of the arch.
+2. Hold [[Cmd]] while you drag a corner handle to scale it to about 112%.
+3. Drag just outside the top-right handle to rotate it. Press [[Cmd+D]] to
+   commit.
 
-Committing between moves, scales and rotations keeps each transform clean.
 Rotating each copy also changes the angle of its stamen, so the flowers
 don't look stamped.
 
@@ -270,9 +266,8 @@ symmetrical.
 ![The word Xocolatl typed in dark brown Shrikhand at 112 pixels inside the dome of the arch](16-title.webp)
 
 Create a **Menu** group above **Arch Rule** with a raster layer inside
-called **Ornaments**. New text goes above the active layer, and keeping a
-raster layer active means changing type settings never restyles a text
-layer you've already committed.
+called **Ornaments**. Select **Ornaments** before you set up each new
+piece of type, here and in the steps that follow.
 
 Pick the **Text** tool, choose **Shrikhand**, set **Size** to **112**, and
 set the colour to cacao brown `#3B1A0E`. Click inside the dome, type
@@ -294,9 +289,8 @@ px in coral `#C24A26`. Under that, add the tagline
 `#2A6B4F`. Centre both with **Align center horizontally**, and keep the
 gaps between the three lines tight so they read as one lockup.
 
-> **Tip:** Create each new line of type in an empty area of the canvas,
-> then move it into place. Clicking inside an existing text layer's box
-> edits that layer instead of starting a new one.
+> **Tip:** Start each new line of type in an empty area of the canvas,
+> then move it into place.
 
 ## Set the first section
 
@@ -337,10 +331,11 @@ sections read as separate groups.
 
 ![Thin terracotta rules with small diamond ends flanking each section header](20-header-rules.webp)
 
-On **Ornaments**, draw a **2 px** tall rectangular marquee level with the
-middle of each header. Start it about 110 px inside the arch rule and stop
-it about 22 px short of the header's first letter. Mirror it on the right
-side. Fill both with `#C8553D`. At the outer ends, lasso a small diamond,
+On **Ornaments**, pick the **Pencil** ([[N]]) at **Size 2** in `#C8553D`.
+Draw a rule level with the middle of each header: click about 110 px inside
+the arch rule, then [[Cmd+Shift]]-click about 22 px short of the header's
+first letter, which keeps the line dead horizontal. Mirror it on the right
+side. At the outer ends, lasso a small diamond,
 12 px across, and fill it with the same colour. The rules frame each
 header like a label on a crate.
 
@@ -354,8 +349,7 @@ Centre it horizontally, and nudge it up or down until the space above it
 (to the last description) matches the space below it (to the rule).
 
 Give it a **Color Overlay** of deep leaf green `#0F6B3A`, so it's strong
-enough to hold the bottom of the card. Reset **Letter spacing** to 0
-afterwards.
+enough to hold the bottom of the card.
 
 ## Warm it up with sunlight
 

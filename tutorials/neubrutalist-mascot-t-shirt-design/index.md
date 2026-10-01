@@ -22,7 +22,7 @@ This tutorial builds the chest print for *Jackalope Xpress*, a made-up bike-cour
 - a two-line logotype with a hand-built keyline
 - pill buttons and sticker badges, all sharing one tilt and one shadow
 
-The whole piece uses one outline recipe: **fill the shape black, Shrink the selection 8 px, fill the colour**.
+Every shape gets the same 8 px black outline. The rounded rectangles and pills come straight from the Shape tool with an 8 px ink stroke. Everything you lasso uses one outline recipe: **fill the shape black, Shrink the selection 8 px, fill the colour**.
 
 The palette is eight inks on a sand shirt:
 
@@ -39,18 +39,15 @@ The palette is eight inks on a sand shirt:
 2. Click the top ruler at x **160**, **900** and **1640** for the margins and centre line. Click the left ruler at y **300** and **1160** for the top and bottom of the hero card.
 3. Turn on **View → Show Grid** and set the options-bar **Grid** slider to **8 px**. Snap comes on with the grid, so marquees land on whole grid steps.
 
-## Draw a rounded card with Shrink and Grow
+## Draw a rounded card
 
 ![A rectangular marquee from 380, 330 to 1420, 1130 with rounded corners after Shrink 40 and Grow 40](02-rounded-card-selection.webp)
 
-Rename Layer 1 to `Card` and drag a rectangular marquee from (380, 330) to (1420, 1130). Run **Select → Shrink… 40**, then **Select → Grow… 40**. Growing measures out from the shrunken edge, so the corners come back round with a 40 px radius.
+Rename Layer 1 to `Card`. Pick the **Shape** tool (U) and set **Shape** to **Rectangle**, **Output** to **Pixels** and **Corner Radius** to **36**. Click the **Fill** swatch and type lavender `A98BFF` into its hex field. Add a **Stroke**, type ink `161616` into its hex field and set its **Width** to **8**. Click (don't drag) at the card's centre, (900, 730), and enter **1032 × 792**.
 
-Then apply the outline recipe:
-1. Fill with ink `#161616` (**Edit → Fill**).
-2. **Select → Shrink… 8**.
-3. Fill with lavender `#A98BFF`.
+The Shape tool draws from the centre, and the stroke is centred on the rectangle's edge. So the card's outside edge runs from (380, 330) to (1420, 1130) with 40 px corners, and the lavender inside is 8 px in all round, with 32 px corners.
 
-The 8 px rim left behind is the outline. Use the same 8 px on every shape in the design.
+That 8 px ink rim is the outline. Use the same 8 px on every shape in the design.
 
 ## Fill the card with graph paper
 
@@ -83,16 +80,14 @@ Open the layer effects drawer from the `Card` row, enable **Drop Shadow** and cl
 - Offset X **16**, Offset Y **16**
 - Blur **1**, Spread **0**, Opacity **100**
 
-> **Tip:** Use Blur 1, not 0. At exactly 0 the shadow is cut out under the layer, and curved, anti-aliased edges show a hairline of shirt between the outline and the shadow. At 1 the shadow still looks perfectly hard.
-
 Every shadow in the design is 16 / 16 / 1.
 
 ## Paste a speed line in place
 
 ![A second orange pill pasted and moved left and down, below the first one, beside the card](06-paste-speed-line.webp)
 
-1. Add `Speed Lines`. Select (180, 614)–(650, 666), then **Shrink 25** and **Grow 25** for a fully rounded pill. Fill it ink, **Shrink 8** and fill tangerine `#FF6A2B`.
-2. Marquee around the pill, press [[Cmd+C]], wait a moment and press [[Cmd+V]]. An internal paste lands in place on a new layer. Rename it `Bar 2` and drag it so it starts at (140, 734).
+1. Add `Speed Lines`. With the Shape tool still set up the same way, change the Fill to tangerine `FF6A2B` and **Corner Radius** to **22** (half the height, for a fully rounded pill). Click at (415, 640) and enter **462 × 44**. With the stroke, the pill is 470 × 52 overall.
+2. Marquee around the pill, press [[Cmd+C]], then [[Cmd+V]]. The paste lands in place on a new layer, selected, with the **Move** tool active. Rename it `Bar 2` and drag it so it starts at (140, 734).
 3. Click `Speed Lines` and paste again. Name it `Bar 3` and move it to (220, 854).
 
 ## Merge the speed lines and add the shadow
@@ -127,7 +122,7 @@ Fill an ink circle of radius **50** and a yellow one of radius **26** for the hu
 
 ![Two tan ears with pink insides and black outlines rising out of the wheel at an angle](10-ears.webp)
 
-Click `Wheel` and press **New Group** again. Because a leaf inside `Hero` was active, the new `Mascot` group nests inside `Hero`. Add a layer `Ears`.
+Click `Wheel` and press **New Group** again. The new `Mascot` group nests inside `Hero`. Add a layer `Ears`.
 
 Each ear is a leaf shape:
 - **Lasso** from the base at (780, 660) to the tip at (575, 370), about 140 px wide at its fattest.
@@ -152,7 +147,7 @@ The ears and antlers break out of the wheel. That edge-breaking is what makes th
 
 ![A tan head with zig-zag cheek tufts over a pink polka-dot bandana that hangs below the chin](12-head-and-bandana.webp)
 
-1. **Bandana layer:** lasso the band (750, 948)–(1050, 948)–(1032, 995)–(900, 1078)–(768, 995). Apply the outline recipe in pink, then fill white dots of radius 9.
+1. **Bandana layer:** lasso the band (750, 948)–(1050, 948)–(1032, 995)–(900, 1078)–(768, 995). Apply the outline recipe in pink. With the selection still active, click white polka dots with the **Brush** at Size **18**, Hardness **100**.
 2. **Head layer** (above `Bandana`): lasso a rounded head centred on (900, 795), 400 px wide and 364 px tall. Narrow the chin, and zig-zag the outline at the cheeks between y 800 and 880 for fur tufts. Apply the outline recipe in tan.
 
 The head covers the base of the antlers and the top of the bandana, so both seem to grow out from behind it.
@@ -172,7 +167,7 @@ Still on `Face`:
 - **Teeth:** an outlined white rectangle (876, 900)–(924, 948), with a 5 px brush line down the middle.
 - **Mouth:** a 6 px line from the nose to the teeth.
 - **Blush:** pink ellipses 60 × 34 at (762, 868) and (1038, 868), with no outline.
-- **Eyes:** ink ellipses 50 × 66 at (820, 772) and (980, 772), each with a white glint of radius 8 up and to the right.
+- **Eyes:** ink ellipses 50 × 66 at (820, 772) and (980, 772). Click a white glint up and to the right of each with a hard Brush at Size **16**.
 - **Whiskers:** three 5 px brush lines a side, fanning out from the muzzle edge to about 220 px from centre.
 
 ## Strap on the courier goggles
@@ -196,23 +191,21 @@ Give `Ears`, `Antlers`, `Bandana` and `Head` the same 16 / 16 / 1 shadow. Leave 
 
 Click the `Hero` group row and drag on the canvas with the **Move** tool. The wheel and every mascot layer travel together. That's handy for nudging the composition later.
 
-Here the drag was only a test, so press [[Cmd+Z]]. Undo puts every layer back exactly, and redo then undo again returns the same pixels.
+The hero is already where it belongs, so press [[Cmd+Z]] to put it back.
 
 ## Set JACKALOPE on a lime bar
 
 ![JACKALOPE in black Archivo Black centred on a lime rounded bar with a black outline below the card](18-jackalope-name-bar.webp)
 
-1. Click `Speed Lines` and add `Name Bar`. Select (170, 1214)–(1630, 1434), then **Shrink 28** / **Grow 28**. Apply the outline recipe with lime `#C5F05A`.
+1. Click `Speed Lines` and add `Name Bar`. With the Shape tool, set the Fill to lime `C5F05A` and **Corner Radius** to **24**, click at (900, 1324) and enter **1452 × 212**. With the stroke, the bar is 1460 × 220 overall.
 2. Pick the **Text** tool, choose **Archivo Black**, Size **180** and ink colour. Click in an empty area near the bottom of the canvas and type `JACKALOPE`, then press [[Tab]].
 3. Move it so its letters are centred on (900, 1324). That leaves about 35 px of lime above and below and 120 px at each end.
-
-> **Tip:** Create text in empty canvas and then move it. A click inside an existing text layer's box edits that layer.
 
 ## Space out XPRESS
 
 ![XPRESS in large orange Archivo Black with wide letter spacing below the JACKALOPE bar](19-xpress-letter-spacing.webp)
 
-Type `XPRESS` in Archivo Black **300** in tangerine. With the new layer active, set **Letter spacing** to **18** in the Text panel, then bring the Size down to **298** so it spans 1400 px. Move it so it's centred on x 900, with its top at y 1512.
+Select `Name Bar`, then set up the text: Archivo Black **300** in tangerine. Click in empty canvas and type `XPRESS`. With the new layer active, set **Letter spacing** to **18** in the Text panel, then bring the Size down to **298** so it spans 1400 px. Move it so it's centred on x 900, with its top at y 1512.
 
 The extra spacing matters for the next step. Without it, the 10 px keylines of neighbouring letters run together into muddy black joins.
 
@@ -221,7 +214,7 @@ The extra spacing matters for the next step. Without it, the 10 px keylines of n
 ![Marching ants around every XPRESS letter after the selection was grown by 10 pixels](20-xpress-keyline-grow.webp)
 
 1. Click **Rasterize Layer** in the Layers footer, so XPRESS becomes pixels.
-2. Click `Name Bar`, set Letter spacing back to **0** (so the next text doesn't inherit it), and add a layer `XPRESS Ink`. It lands under XPRESS.
+2. Click `Name Bar` and add a layer `XPRESS Ink`. It lands under XPRESS.
 3. [[Cmd]]-click the XPRESS thumbnail and run **Select → Grow… 10**. Grow measures true distance from the edge, so the keyline is anti-aliased and even all the way round.
 4. Fill with ink and deselect.
 5. Merge XPRESS down into `XPRESS Ink` and rename the result `XPRESS`.
@@ -230,7 +223,7 @@ The extra spacing matters for the next step. Without it, the 10 px keylines of n
 
 ![XPRESS rotated two degrees with transform handles, parallel to the tilted JACKALOPE bar above](21-tilt-the-type.webp)
 
-1. Rasterize `JACKALOPE`, drag its row down so it sits directly above `Name Bar`, and **Merge Down**.
+1. Drag `JACKALOPE`'s row down so it sits directly above `Name Bar`, and **Merge Down**.
 2. For `Name Bar`, and then `XPRESS`: marquee just outside it, drag the rotate handle to **−2°**, and press [[Cmd+D]].
 3. Give both layers the 16 / 16 / 1 shadow.
 
@@ -240,7 +233,7 @@ Card, bar and logotype now share one angle, so the gaps between them stay even.
 
 ![Three outlined pills under XPRESS, the middle one being refilled yellow with marching ants around its inside](22-magic-wand-recolor.webp)
 
-1. Add `Buttons` above `XPRESS`. Build one pink pill at (284, 1829)–(664, 1919): **Shrink 44** / **Grow 44**, then the outline recipe.
+1. Add `Buttons` above `XPRESS`. With the Shape tool, set the Fill to pink `FF84BE` and **Corner Radius** to **41**, click at (474, 1874) and enter **372 × 82**. With the stroke, the pill is 380 × 90 overall.
 2. Copy it and paste it twice as `Btn 2` and `Btn 3`, and move them to x 710 and x 1136.
 3. Click `Btn 2` and take the **Magic Wand** (Tolerance 32, Contiguous on). Click the pink, run **Select → Grow… 1** so the anti-aliased rim is caught too, and fill yellow.
 4. Do the same on `Btn 3` with lime.
@@ -250,15 +243,15 @@ Card, bar and logotype now share one angle, so the gaps between them stay even.
 
 ![PEDAL, DELIVER and REPEAT set in black Rubik Mono One, centred in pink, yellow and lime pills](23-button-labels.webp)
 
-Set `PEDAL`, `DELIVER` and `REPEAT` in **Rubik Mono One 42** in ink. Create each one in empty canvas, then move it so its letters are centred on its pill: x 474, 900 and 1326, all at y 1874.
+Select `Buttons`, then set up the text: **Rubik Mono One 42** in ink, Letter spacing **0**. Set `PEDAL`, `DELIVER` and `REPEAT`, creating each one in empty canvas, then move it so its letters are centred on its pill: x 474, 900 and 1326, all at y 1874.
 
 ## Add the club tab
 
 ![A white BIKE COURIER CLUB pill rotated five degrees over the card's top-left corner, with rotate handles](24-club-tab.webp)
 
-1. Type `BIKE COURIER CLUB` in Rubik Mono One **34**. It's about 490 px wide.
-2. Click `Card` and add a `Tab` layer. Build a white pill (161, 268)–(740, 348) with **Shrink 39** / **Grow 39** and the outline recipe.
-3. Centre the text on (450, 308), rasterize it and Merge Down.
+1. Select `Buttons`, set the Size to **34** and type `BIKE COURIER CLUB` in empty canvas. It's about 490 px wide.
+2. Click `Card` and add a `Tab` layer. With the Shape tool, set the Fill to white `FFFFFF` and **Corner Radius** to **36**, click at (450, 308) and enter **571 × 72**. With the stroke, the tab is 579 × 80 overall.
+3. Centre the text on (450, 308), drag its row directly above `Tab` and Merge Down.
 4. Rotate the tab **−5°** and give it the shadow.
 
 It's tilted a little more than the card, in the same direction, so it reads as a sticker slapped on top.
@@ -273,13 +266,13 @@ Add `Sticker` above `Tab`. Lasso a 14-point star centred on (1450, 330), with it
 
 ![The pink star inside a transform box being scaled up from its bottom-right corner](26-scale-the-star.webp)
 
-The label will need more room. Marquee the star, switch to **Move**, and hold [[Cmd]] while dragging the bottom-right handle out. [[Cmd]] keeps the scale uniform. Stop at about **118%**, press [[Cmd+D]], and drag the star so it's centred on (1450, 330) again.
+The label will need more room. Marquee the star, switch to **Move**, and hold [[Cmd]] while dragging the bottom-right handle out. [[Cmd]] keeps the scale uniform. Stop at about **118%**, drag the star so it's centred on (1450, 330) again, and press [[Cmd+D]].
 
 ## Label and rotate the sticker
 
 ![The NO.07 sticker rotated eight degrees with its transform handles over the card's corner](27-rotate-the-sticker.webp)
 
-1. Type `No.07` in Rubik Mono One **38** (the font draws it in capitals), centre it on the star, rasterize it and Merge Down.
+1. Type `No.07` in Rubik Mono One **38** (the font draws it in capitals), centre it on the star and Merge Down.
 2. Rotate the sticker **−8°** and add the shadow.
 
 ## Trim the bandana corners with the Eraser
@@ -289,7 +282,7 @@ The label will need more room. Marquee the star, switch to **Move**, and hold [[
 The bandana's top corners stuck out past the jaw, and their shadows read as little hooks.
 1. On `Bandana`, pick the **Eraser** at Size **60**. Click at (1052, 925) and [[Shift]]-click (1052, 1010) to cut the right corner off with a straight edge. Do the same at x 748 on the left.
 2. Re-ink each cut edge with an 8 px brush line: (1020, 953) to (1020, 996), and (780, 953) to (780, 996).
-3. The Eraser's soft edge leaves a faint pink fade outside the new line. Lasso a thin box just outside each line, (1023, 930)–(1070, 1015) and its mirror, and press [[Delete]] for a crisp edge.
+3. The Eraser's soft edge leaves a faint pink fade outside the new line. Marquee a thin box just outside each line, (1023, 930)–(1070, 1015) and its mirror, and press [[Delete]] for a crisp edge.
 
 ## Nudge everything up together
 
@@ -297,6 +290,6 @@ The bandana's top corners stuck out past the jaw, and their shadows read as litt
 
 1. Move the `Tab` 45 px left and 25 px down, so it overlaps the card's corner clearly and clears the antler tip.
 2. The bottom margin is a little short, so even it out. Click `Card`, then [[Shift]]-click the `Hero` group row. That selects every layer except Background.
-3. With the **Move** tool, press [[Shift+Up]] twice and [[Up]] five times. The whole design rises 25 px together.
+3. With the **Move** tool, nudge them up **25 px** with the arrow keys ([[Shift]] + arrow moves 10 px). The whole design rises together.
 
 Hide the grid and guides (**View → Show Grid**, **View → Show Guides**) and export. For a print file, hide `Background` first, so the sand stays bare shirt.

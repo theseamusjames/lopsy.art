@@ -2,7 +2,7 @@
 title: Design a Holographic Moth T-Shirt Graphic
 description: Make a MOTH DISCO tee in Lopsy with a pixelated mirror ball, pastel thin-film wings, symmetry-brush veins, a Monoton title and rotated sparkle glints.
 published: 2026-09-26 23:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: holographic, iridescent, t-shirt design, apparel, disco ball, moth illustration, symmetry brush, gradients, text effects, neon
@@ -289,8 +289,8 @@ like a misregistered print.
 
 ![NOCTURNAL, GROOVE, SOCIETY in pale lilac Syncopate Bold centered under the title](21-syncopate-subtitle.webp)
 
-Click the **Sparkles** row so the new text doesn't restyle the title. Set
-**Syncopate**, weight **700**, **Size 52** and color `#E9DDFF`. Type
+Click the **Sparkles** row, then set up the text: **Syncopate**, weight
+**700**, **Size 52** and color `#E9DDFF`. Type
 `NOCTURNAL    GROOVE    SOCIETY` in empty space, then drag it with the
 **Move** tool until it sits low on the canvas with a clear bottom margin of
 about 110 px. Click **Align center horizontally** in the Move options bar to
@@ -313,9 +313,9 @@ reflections.
 ![A pasted copy of the big star with a 45 degree rotation box around it at the upper right of the ball](23-rotate-glint-copy.webp)
 
 Marquee a square around the big star, about 100 × 100. Press [[Cmd+C]], then
-[[Cmd+V]]; the copy pastes in place on its own layer. Marquee the same
-square again, switch to **Move**, hover just outside the top-right corner
-until the cursor becomes a crosshair, and drag around to rotate **45°**.
+[[Cmd+V]]. The copy pastes in place on its own layer, selected, with the
+**Move** tool active. Hover just outside the top-right corner until the
+cursor becomes a crosshair, and drag around to rotate **45°**.
 Holding [[Cmd]] snaps the rotation to 15° steps. Press [[Cmd+D]] to commit.
 
 ## Scale it and merge it into an eight-point star
@@ -347,8 +347,9 @@ Marquee a thin strip, about 4 px wide, on the centre line from the top edge
 down to the top of the ball. Draw a **Linear** gradient from transparent
 `#B9A8E8` at the top edge to solid `#B9A8E8` about two-thirds of the way down
 the strip. The chain disappears into the darkness instead of stopping at the
-canvas edge. Also drop a hard **12 px** white dot into the center of the
-hotspot on **Ball Shine**, so the highlight has a sharp core.
+canvas edge. Also click once in the centre of the hotspot on **Ball Shine**
+with a white **Brush** at **Size 12**, **Hardness 100**, so the highlight
+has a sharp core.
 
 ## Smooth the thorax and add fur
 

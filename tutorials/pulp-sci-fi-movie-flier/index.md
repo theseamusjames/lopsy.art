@@ -2,7 +2,7 @@
 title: Design a 1950s Pulp Sci-Fi Movie Flier
 description: Make a retro drive-in B-movie flier in Lopsy with a flying saucer, ringed planet, perspective title, starburst badge and aged halftone paper.
 published: 2026-09-27 15:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: pulp, retro, flyer design, movie poster, sci-fi, perspective, halftone, typography, layer effects
@@ -70,8 +70,8 @@ feel, so leave them.
 
 ![The Threshold dialog previewing scattered white star specks on black over the whole canvas](03-star-threshold.webp)
 
-Add a layer called *Stars*. Draw a marquee over the whole page, fill it with
-mid-grey `#808080`, and press [[Cmd+D]].
+Add a layer called *Stars* and fill it with mid-grey `#808080`
+(**Edit → Fill** with nothing selected).
 
 1. Choose **Filter → Add Noise…** with **Amount 100**, **Mono** and
    **Gaussian**.
@@ -121,9 +121,8 @@ gradient of `#050818`, transparent up to about 42% and 95% opaque at the
 edge. Start from the lit upper-left and drag toward the lower-right. Set it
 to **Multiply**.
 
-One pass is too gentle, so **Layer → Duplicate Layer** it. Duplicates can
-land offset by 10 px, so check the copy's position and nudge it back with
-[[Shift+Arrow]] keys if needed.
+One pass is too gentle, so **Layer → Duplicate Layer** it. The copy lands
+exactly on top and doubles the shadow.
 
 Finally, give *Planet* an **Outer Glow** in `#6FF0D8` (Size 44, Opacity 55).
 
@@ -146,16 +145,11 @@ Only the front half is left on top of the planet.
 
 ![The Move tool rotating the front ring with a live selection box, with the corner rotation handles visible](08-rotate-rings.webp)
 
-Use the same marquee on both ring layers so they turn around the same
-centre. Draw a **Rectangular Marquee** that just contains the ring, and
-switch to the **Move** tool. Drag just outside a corner handle to rotate
-about **−16°**, then press [[Cmd+D]] to commit. Repeat on the other ring
-layer with the same marquee and angle.
-
-> **Tip:** To draw the identical box twice, click once with the Rectangular
-> Marquee instead of dragging (with nothing selected). A dialog opens where you
-> can type the corners, for example **From** `530, 345` **To** `1150, 515`.
-> Enter the same numbers for the second layer.
+Rotate both ring layers at once so they turn around the same centre. Click
+*RingBack* and [[Cmd]]-click *RingFront* so both are selected, press
+[[Cmd+D]] so nothing is marqueed, and switch to the **Move** tool. One box
+frames the whole ring. Drag just outside a corner handle to rotate about
+**−16°**, then press [[Cmd+D]] to commit.
 
 ## Build a chrome flying saucer
 
@@ -178,8 +172,10 @@ Give *Dome* a soft cyan Outer Glow too.
 
 ![The merged saucer selected and rotated about 12 degrees counter-clockwise with the transform box showing](10-rotate-saucer.webp)
 
-Click *Ports* and choose **Layer → Merge Down**, then do the same on *Body*.
-Merging bakes the glows into the pixels, so the saucer turns as one piece.
+Click *Dome* and click **Rasterize Layer Style**, so its glow stays round
+the dome. Then click *Ports* and choose **Layer → Merge Down**, and do the
+same on *Body*. Merging bakes the port glows into the pixels, so the saucer
+turns as one piece.
 Rename the result *UFO*. Marquee it with a little room to spare, then rotate
 it **−12°** with the Move tool and press [[Cmd+D]].
 
@@ -256,8 +252,8 @@ Create a *Title* group and drag it above *Landscape*. Add a raster layer
 *TitleBase* inside it, and keep it active whenever you create new text.
 
 With the **Text** tool, set **Bowlby One SC** at **184 px** in `#FFD83A`.
-Type `INVADERS`, and in a separate layer, `YUGGOTH!`. Check the Text panel's
-**Letter spacing** is 0, because it remembers the last value you used.
+Set **Letter spacing** to 0 in the Text panel. Type `INVADERS`, and in a
+separate layer, `YUGGOTH!`.
 
 Centre both lines on the middle guide with the **Move** tool (**Align center
 horizontally** in the options bar does it in one click):
@@ -269,10 +265,9 @@ horizontally** in the options bar does it in one click):
 
 ![The merged title inside a Perspective transform box, with the top edge narrower than the bottom so INVADERS seems to rush toward the viewer](17-perspective.webp)
 
-1. Click **Rasterize Layer** on both text layers.
-2. Merge *INVADERS* down onto *YUGGOTH!* and rename the result
-   *TitleBlock*.
-3. Marquee the whole block. Switch to **Move**, click **Perspective** in the
+1. Merge *INVADERS* down onto *YUGGOTH!*. Merge Down turns the text into
+   pixels. Rename the result *TitleBlock*.
+2. Marquee the whole block. Switch to **Move**, click **Perspective** in the
    options bar, and drag the top-right corner inward about 36 px.
 
 The top-left corner follows symmetrically, and INVADERS foreshortens as if
@@ -285,12 +280,10 @@ it were further away. Press [[Cmd+D]] to commit.
 Style the merged block once so both lines match:
 
 - **Stroke:** `#1A0B24`, Width **7**
-- **Drop Shadow:** `#C8102E`, Offset X **14**, Offset Y **19**,
+- **Drop Shadow:** `#C8102E`, Offset X **7**, Offset Y **12**,
   Blur **0**, Spread **0**, Opacity **100**
 
-The shadow is cast from the glyphs, not the outline. The stroke covers the
-first 7 px of it, so offset it well past the stroke width to get a chunky
-extrusion.
+A hard shadow offset well past the outline reads as a chunky extrusion.
 
 ## Tuck in the script "from"
 
@@ -336,23 +329,19 @@ Use centre-aligned area text boxes that span the safe zone, from the left guide 
 
 - **Top line:** **Fjalla One** 36 px, letter spacing 8, in `#F4E6C0`,
   flanked by two small lassoed stars.
-- **Tagline:** **Bangers** 48 px in cream, two lines.
-- **Showtime:** `TONIGHT · 8 PM · 35¢ A CARLOAD` in **Fjalla One** 60 px in
-  title yellow.
-- **Credits:** Fjalla One 25 px, two lines.
+- **Tagline:** **Bangers** 48 px, letter spacing 2, in cream, two lines.
+- **Showtime:** `TONIGHT · 8 PM · 35¢ A CARLOAD` in **Fjalla One** 60 px,
+  letter spacing 4, in title yellow.
+- **Credits:** Fjalla One 25 px, letter spacing 2, two lines.
 
-Create the lowest text box first and work upward, starting each new box in
-clear space so the click doesn't open an earlier one for editing. Space the
-blocks evenly, about 24 px apart, and keep the last line above the bottom
+Start each new box in clear space. Space the blocks evenly, about 24 px apart, and keep the last line above the bottom
 guide.
 
 ## Screen-print the sky with halftone
 
 ![A close-up of the sky showing a visible diagonal halftone dot pattern over the color bands](22-halftone.webp)
 
-Duplicate *Sky* as *SkyDots*. Check the copy lines up exactly with *Sky*,
-with no strip of the old layer showing at an edge, and nudge it back if it has
-shifted. Run
+Duplicate *Sky* as *SkyDots*. Run
 **Filter → Halftone…** with Dot Size **12**, Angle **45** and Softness
 **1**, then set it to **Multiply** at **30%**. The dots read as coarse
 printing without fighting the art.

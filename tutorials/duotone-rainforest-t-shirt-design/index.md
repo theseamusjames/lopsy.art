@@ -2,7 +2,7 @@
 title: Design a Duotone T-Shirt from a Rainforest Photo
 description: Turn a public-domain waterfall photo into a two-ink duotone t-shirt design in Lopsy with a Gradient Map, palm silhouettes, halftone and path text.
 published: 2026-09-30 23:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: t-shirt design, duotone, gradient map, photo editing, halftone, screen print, text on path, layer masks, magic wand, typography
@@ -27,7 +27,7 @@ Every colour in the finished design is one of three:
 - Emerald ink `#0E4D3A`
 - Hibiscus ink `#FF5D73`
 
-Work on a **1600 × 2000 px** document. That's a 4:5 print area, and its width divides by four, which keeps layer masks well behaved.
+Work on a **1600 × 2000 px** document. That's a 4:5 print area.
 
 ## Draw the arch window and its keyline
 
@@ -35,13 +35,11 @@ Work on a **1600 × 2000 px** document. That's a 4:5 print area, and its width d
 
 1. Create a **1600 × 2000** document and fill the Background with the shirt colour `#F2EAD8` (**Edit → Fill** with no selection). Rename it `Shirt`.
 2. Click the top ruler at x **300**, **800** and **1300**, and the left ruler at y **220**, **720** and **1480**, to drop guides.
-3. Turn on **View → Show Grid**, set the grid to **4 px** and leave Snap on, so every marquee lands on whole numbers.
+3. Turn on **View → Show Grid**, set the grid to **4 px** and leave Snap on, so the marquees below snap neatly to their coordinates.
 4. On a new **Arch** layer, fill the emerald `#0E4D3A` into an **Elliptical Marquee** circle from (300, 220) to (1300, 1220), then into a **Rectangular Marquee** from (300, 720) to (1300, 1480). Together they make the arch.
 5. On a new **Keyline** layer, fill a bigger arch the same way (circle radius 524, rectangle 276–1324 wide down to 1504). Then marquee the same shape at radius **515** and press [[Delete]] on each part.
 
 That leaves a 9 px emerald ring with a 15 px gap around the window. The Arch layer is only a stencil, so hide it once the photo is in place.
-
-> **Tip:** Build rings from plain marquees. Loading a layer's shape with a [[Cmd]]-click on its thumbnail and then pressing Delete can clear the whole layer.
 
 ## Paste and scale the waterfall photo
 
@@ -50,7 +48,7 @@ That leaves a 9 px emerald ring with a 15 px gap around the window. The Arch lay
 1. Click **New Group** in the Layers panel and name it `Duotone`.
 2. Copy the La Coca Falls photo (scaled to 1300 px wide) and press [[Cmd+V]]. Lopsy centres the paste inside the group and switches to the **Move** tool.
 3. Hold [[Cmd]] and drag the bottom-right handle out until the photo is about **1690 × 2535**, roughly 130%. Zoom out with [[Cmd+-]] first so the handle stays on screen.
-4. Press [[Cmd+D]] to commit, then drag the photo so the white cascade runs straight down the middle guide. Rename the layer `Falls Photo`.
+4. Drag the photo so the white cascade runs straight down the middle guide, then press [[Cmd+D]] to commit. Rename the layer `Falls Photo`.
 
 Scaling up crops in on the falls, so the cascade fills the whole height of the arch.
 
@@ -90,7 +88,7 @@ The photo now only shows inside the arch. Because the mask is on the group, anyt
 
 Using pairs of stops only 1% apart gives hard edges between the bands, so the result separates cleanly into two screens. Shadows print emerald, mid-tones print pink, and the highlights are bare shirt.
 
-> **Tip:** Place the two break points on the photo's histogram. Here the 25% and 53% quantiles of the photo's greys (61 and 137) became the stops.
+> **Tip:** Set the break points by eye. Drag the 26/27% pair until about a quarter of the photo is emerald, and the 55/56% pair until a little under half of it, the cascade included, turns bone. Every photo needs its own values.
 
 ## Give the falls a source
 
@@ -120,7 +118,7 @@ You now have the left half of a frame of palms.
 
 ![A marquee around the band with the duplicated half flipped horizontally into place, forming a symmetric V of palm fronds](08-mirror-palms.webp)
 
-1. Switch to the **Move** tool and choose **Layer → Duplicate Layer**. The copy lands 10 px right and 10 px down, so press [[Shift+Left]] and [[Shift+Up]] once each to put it back.
+1. Switch to the **Move** tool and choose **Layer → Duplicate Layer**. The copy sits exactly on top of the original.
 2. Marquee a box centred on x 800, from (140, 870) to (1460, 1700).
 3. Click **Flip Horizontal** in the Move options bar. It flips around the marquee's centre, so the copy mirrors exactly onto the right side.
 4. Press [[Cmd+D]], then **Layer → Merge Down**.
@@ -139,7 +137,7 @@ A perfect mirror leaves a tell-tale "inkblot" right at the centre, which here is
 3. On **Palms**, lasso the same outline and delete it, so the patch fills the hole.
 4. Select **Seam Patch** and choose **Layer → Merge Down**.
 
-> **Tip:** Merge Down resets the lower layer's effects and blend mode. Add the Palms effects *after* the merge. Then [[Cmd]]-click the Palms thumbnail and **Edit → Fill** emerald twice to seal the hairline where the two lasso edges meet.
+> **Tip:** Where the two lasso edges meet, a faint hairline can show through. [[Cmd]]-click the Palms thumbnail and **Edit → Fill** emerald twice to seal it.
 
 Give **Palms** a **Color Overlay** in emerald and an outside **Stroke** of **7 px** in shirt `#F2EAD8`. The bone outline separates the fronds from the emerald band behind them.
 
@@ -160,10 +158,10 @@ Finally, round the band's two bottom corners with a small lasso (about a 34 px r
 
 ![The pink Shrikhand El Yunque title with its bone stroke, and a grown selection of the title loaded on the new Title Halo layer ready to fill emerald](11-script-title-halo.webp)
 
-1. Select a raster layer (**Fade**) so the text options don't restyle an existing text layer.
+1. Select **Fade**.
 2. Pick the **Text** tool with **Shrikhand**, **226 px**, colour `#FF5D73`. Click in empty canvas near the top and type `El Yunque`, then press [[Tab]].
 3. Click **Rasterize Layer**. Marquee the title with a few pixels to spare, switch to **Move** and drag just outside the top-right corner to rotate it **−4°**. Press [[Cmd+D]].
-4. Move it so it's centred on x 810 with its lowest ink at y 1647. That gives the "E" about 37 px of emerald below it.
+4. Drag it so it sits a touch right of the centre guide, low on the band, with about 37 px of emerald below the "E".
 5. Add an outside **Stroke** of **10 px** in shirt `#F2EAD8`.
 6. On a new **Title Halo** layer below the title, [[Cmd]]-click the title's thumbnail, run **Select → Grow** **26** and fill it emerald.
 
@@ -186,12 +184,10 @@ The glyphs sit on the outside of the arc, 18 px clear of the keyline all the way
 
 ![The 18°19′N · 65°46′W coordinates label rasterized and rotated 90 degrees with its transform box live near the top of the canvas](13-rotated-side-labels.webp)
 
-1. Set the footer `LA COCA FALLS · EST. 1876` in Bebas Neue **54 px** with letter spacing **12**. Click **Align center horizontally**, then nudge it to y **1826**.
-2. Set `28,000 ACRES` (spacing **22**) and `18°19′N · 65°46′W` (spacing **10.6**) at **44 px**. Adjust the spacing until both are exactly 428 px long, so they read as a pair.
+1. Select **Fade**, then set the footer `LA COCA FALLS · EST. 1876` in Bebas Neue **54 px** with letter spacing **12**. Click **Align center horizontally**, then nudge it to y **1826**.
+2. Select **Fade** again before each label and set `28,000 ACRES` (spacing **22**) and `18°19′N · 65°46′W` (spacing **10.6**) at **44 px**. With those spacings both lines come out the same length, about 428 px, so they read as a pair.
 3. Rasterize each label and rotate it with the Move tool: **−90°** on the left, **+90°** on the right.
-4. Move them to x **206** and x **1362**, spanning y **702–1129**. That centres them on the arch's straight walls, about 40 px from the keyline.
-
-Reset the Text panel's letter spacing to 0 afterwards, because it carries over to the next text.
+4. Drag them beside the arch's straight walls, about 40 px outside the keyline on each side, with their top ends just above the 720 guide where the walls begin (the left one at x 206, the right at x 1362).
 
 ## Perch a coquí on the title
 
@@ -204,7 +200,7 @@ The coquí is the tiny tree frog whose "ko-KEE" call fills El Yunque at night. I
    - an eye bump that breaks the top of the head
    - a folded thigh
    - a front arm
-   - six round toe pads
+   - six round toe pads (quicker as single clicks with a hard **Brush** sized to the pad)
 2. On **Coqui Detail**, fill the eye and the leg and mouth lines emerald, and add a tiny bone highlight in the eye.
 3. Give **Coqui** a **6 px** bone **Stroke**.
 4. Group the two layers and move the group so the feet sit on the top of the "E".
@@ -215,9 +211,9 @@ The coquí is the tiny tree frog whose "ko-KEE" call fills El Yunque at night. I
 ![A close-up of the lower design with clustered bone specks where the ink didn't take, heavier on the left of the band and the title](15-screen-print-wear.webp)
 
 1. Add a **Noise** layer, fill it mid-grey `#808080` and run **Add Noise** at **100**, **Mono**, **Gaussian**.
-2. Run **Gaussian Blur 5**, then **Threshold** at the value that leaves about 8% white. For this noise that was **132**.
+2. Run **Gaussian Blur 5**, then **Threshold** at **132**, which leaves about 8% of the layer white.
 3. Magic-wand a white speck (Contiguous off), click **Add Layer**, fill the selection with the shirt colour and name the layer `Wear`. Delete the Noise layer.
-4. On a **Clouds** layer, run **Clouds** (Scale 3) and **Threshold** it at its 62% quantile. Magic-wand the black, switch to **Wear** and press [[Delete]]. Delete the Clouds layer.
+4. On a **Clouds** layer, run **Clouds** (Scale 3) and **Threshold** it so a little under two-thirds of it turns black. Magic-wand the black, switch to **Wear** and press [[Delete]]. Delete the Clouds layer.
 5. Marquee over the footer, the side labels and the arched text, and delete the wear there so small type stays sharp.
 
 The specks are only on some areas: heavy on the band's left and on "El Yu", light elsewhere. That reads as a worn print rather than a filter laid over the whole design.

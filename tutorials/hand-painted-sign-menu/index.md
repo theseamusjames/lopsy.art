@@ -2,7 +2,7 @@
 title: Paint a Hand-Lettered Roadside Menu Board
 description: Make a weathered, sign-painted crawfish shack menu in Lopsy with peeling paint on plywood, shaded lettering, a naive mascot and dot-leader prices.
 published: 2026-09-26 15:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: vernacular, sign painting, restaurant menu, hand lettering, weathered texture, text effects, layer effects, illustration
@@ -177,9 +177,8 @@ Only a 6 px cream ring is left, inset 14 px from the edge.
 
 ![Huge cream BAYOU lettering in Sancreek centred on the red arched board, with a hard dark brown offset shadow](10-bayou-sign-painter-shade.webp)
 
-Select the **Pinstripe** layer first, so the new type isn't styled from another
-text layer. Pick the **Text** tool, set **Sancreek** at **236 px** in cream
-`#F1E4C0`, click in the upper left of the board and type **BAYOU**. Press
+Select the **Pinstripe** layer, then pick the **Text** tool. Set **Sancreek**
+at **236 px** in cream `#F1E4C0`, click in the upper left of the board and type **BAYOU**. Press
 [[Tab]] to commit.
 
 Use the **Move** tool to centre the word on the board. **Align center
@@ -200,7 +199,7 @@ press [[Tab]].
 Drag it with the **Move** tool so it overlaps the bottom-right corner of the
 sign. Let it hang well below the frame so the overlap reads as deliberate. In its
 effects, add a **Stroke** of cream `#F1E4C0`, Width **4**, Outside, plus a
-**Drop Shadow** of `#2A120C` at **9 / 9**, Blur **0**. The cream keyline
+**Drop Shadow** of `#2A120C` at **5 / 5**, Blur **0**. The cream keyline
 separates the yellow from both the red and the turquoise.
 
 To tilt it, drag a **Rectangular Marquee** around the word and switch to the
@@ -256,8 +255,8 @@ at once. Turn Symmetry off when you're done.
 
 Add a layer **Craw Detail**. With the Brush at Size **4** in dark red `#7A1E12`,
 draw a curved line across each tail segment, lines on the fan, and a happy
-smiling mouth. Fill two small **14 px** elliptical marquees with `#1B0D08` for
-the eyes.
+smiling mouth. For the eyes, set the Brush to Size **14**, Hardness **100**
+and colour `#1B0D08`, and click once for each eye.
 
 Add a layer **Craw Shine** and paint short cream `#F6D9B0` highlight strokes on
 the body, both claws and the tail at Size **6**. Naive sign art always has one
@@ -273,7 +272,7 @@ one layer, **Craw Body**.
 Drag a **Rectangular Marquee** that fully contains the crawfish, legs and
 antennae included, and switch to the **Move** tool. Hold [[Cmd]] and drag the
 bottom-right handle up and in to about **80%**. [[Cmd]] keeps both axes in
-proportion. Press [[Cmd+D]] to commit the scale.
+proportion.
 
 > **Tip:** Make the marquee a pixel or two larger than the artwork. Any pixel
 > row outside the selection stays behind when you transform.
@@ -282,9 +281,9 @@ proportion. Press [[Cmd+D]] to commit the scale.
 
 ![The scaled crawfish inside a rotated transform box, tilted about 16 degrees counter-clockwise](17-rotate-crawfish.webp)
 
-Marquee around the scaled crawfish again, switch to **Move**, and drag just
-outside the top-right corner to rotate it about **−16°**. A tilted mascot looks
-like it's waving at passing cars. Press [[Cmd+D]].
+Still on the **Move** tool, drag just outside the top-right corner to rotate
+the crawfish about **−16°**. A tilted mascot looks like it's waving at passing
+cars. Press [[Cmd+D]] to commit the scale and the rotation.
 
 ## Place it and add a cream keyline
 
@@ -295,18 +294,16 @@ side, below the header, so its tail just reaches the top of where the menu
 boards will go. Show the **Header** group again.
 
 In its layer effects, add **Stroke** in cream `#F1E4C0`, Width **5**,
-**Outside**, and a **Drop Shadow** of `#2A120C` at **11 / 11**, Blur **0**,
-Opacity **90**. Lopsy draws the stroke on top of the shadow, so the shadow
-offset has to be bigger than the stroke width, or the stroke covers it.
+**Outside**, and a **Drop Shadow** of `#2A120C` at **6 / 6**, Blur **0**,
+Opacity **90**.
 
 ## Letter the special
 
 ![Four lines of lettering on the left: FRESH HOT SPICY in small cream slab capitals, BOILED in big mustard slab capitals, CRAWFISH in cream, and a cream $7 a pound script](19-specials-lettering.webp)
 
-Make a group **Specials** with a raster layer **Chilis** inside it, and select
-**Chilis** before you create each line of type, so each new line starts from a
-raster layer. Create the lines **from the bottom up**. A click inside an
-existing text layer's box edits that layer instead of starting a new one.
+Make a group **Specials** with a raster layer **Chilis** inside it. Select
+**Chilis** before you start each line of type, and create the lines **from the
+bottom up**, clicking in empty canvas above the last one.
 
 - **$7 a pound:** Yellowtail, 76 px, cream.
 - **CRAWFISH:** Alfa Slab One, 84 px, cream.
@@ -353,11 +350,10 @@ highlight.
 To make a row of three:
 
 1. Marquee the chili and press [[Cmd+C]], then [[Cmd+V]]. The copy is pasted in
-   place on a new layer.
-2. With the **Move** tool, drag it about 36 px to the right and press
-   [[Cmd+D]].
-3. Marquee the copy and rotate it about **16°**. Press [[Cmd+D]].
-4. Repeat from the original for the third chili, 72 px to the right, rotated
+   place on a new layer, selected and ready to move.
+2. Drag it about 36 px to the right, then drag just outside a corner handle to
+   rotate it about **16°**. Press [[Cmd+D]].
+3. Repeat from the original for the third chili, 72 px to the right, rotated
    about **32°**.
 
 Merge the pasted layers down into **Chilis** and give it a **3 / 3** hard
@@ -379,12 +375,15 @@ To 952, 1240.
   edges like old varnished board.
 - Add a **Drop Shadow** of `#1A0E06` at **6 / 8**, Blur **0**, Opacity **80**.
 
-On a layer **Nails**, fill a **14 px** dark `#3B3632` ellipse in each corner and
-add a **5 px** light-grey glint to each one.
+On a layer **Nails**, pick the **Brush** at Hardness **100**. Click once in
+each corner at Size **14** in dark `#3B3632`, then add a light-grey glint to
+each nail with a single click at Size **5**.
 
 ## Set the items, prices and dot leaders
 
 ![Both boards filled in: red PO'BOYS and THE POT headings with double rules, dark brush-script dishes, red dotted leaders and right-aligned red prices](24-items-dot-leaders.webp)
+
+Select **Nails** before you start each new block of type.
 
 1. **Headings:** Alfa Slab One, **50 px**, sign red, **PO'BOYS** and
    **THE POT**, each with a 3 px hard shadow. Under each, draw two red
@@ -398,9 +397,6 @@ add a **5 px** light-grey glint to each one.
 4. **Leaders:** make one more right-aligned area box between the dishes and the
    prices, in red. Each line is `. . . .` with as many dots as fit after that
    line's dish name.
-
-> **Tip:** Point text ignores alignment. Use drag-created area text boxes
-> whenever you need a right-aligned column.
 
 ## Paint the arrow and snap the plaque to the grid
 
@@ -416,8 +412,9 @@ Add a layer **Plaque** and choose **View → Show Grid**. Showing the grid also
 switches on **Snap**. Drag a marquee about 160 × 112 px beside the arrow's
 point, under the right board. Its corners snap to the 16 px grid. Fill it with
 sign red, then turn the grid off again. Give the plaque an inside cream Stroke (**3 px**) and a hard
-shadow, and letter **SINCE** (Permanent Marker, 26 px, cream) over **1974**
-(Permanent Marker, 48 px, mustard).
+shadow. Select **Plaque** before you set up each line, and letter **SINCE**
+(Permanent Marker, 26 px, cream) over **1974** (Permanent Marker, 48 px,
+mustard).
 
 ## Stamp CASH ONLY
 
@@ -431,8 +428,8 @@ On a layer **Stamp**, fill a **150 px** elliptical marquee in sign red, then use
 3. Shrink **3**, press [[Delete]].
 
 That leaves a bold outer ring and a thin inner ring. Letter **CASH** and
-**ONLY** in Alfa Slab One at **34 px**. Click **Rasterize Layer** on both, then
-**Layer → Merge Down** them into the stamp. Marquee the stamp and rotate it
+**ONLY** in Alfa Slab One at **34 px**, then **Layer → Merge Down** them into
+the stamp. Marquee the stamp and rotate it
 about **−10°**, so it looks slapped on in a hurry.
 
 ## Scuff everything with a grime layer

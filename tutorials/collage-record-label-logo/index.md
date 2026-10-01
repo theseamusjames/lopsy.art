@@ -2,7 +2,7 @@
 title: Design a Cut-Paper Collage Record Label Logo
 description: Build a torn-paper collage logo in Lopsy, with a singing lark on a vinyl record, halftone paper, text on a circular path and a tape tagline.
 published: 2026-09-28 22:40
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 75
 tags: logo design, collage, cut paper, branding, selections, layer effects, text on a path, halftone, typography
@@ -139,7 +139,7 @@ printed dot texture.
 
 1. Add a layer named `Sky Dots`. Choose **Filter → Clouds…** with a **Scale** of `4`.
 2. Choose **Filter → Halftone…** and set **Dot Size** to `12` and **Angle** to `30`.
-3. [[Cmd]]-click the **Teal Disc** thumbnail, click the `Sky Dots` row, and choose **Select → Inverse**. Press [[Delete]], then [[Cmd+D]].
+3. [[Cmd]]-click the **Teal Disc** thumbnail (`Sky Dots` stays the active layer) and choose **Select → Inverse**. Press [[Delete]], then [[Cmd+D]].
 4. In Sky Dots' effects, turn on **Color Overlay** with `#6FB3A8`, and set the layer opacity to **30%**.
 
 The dark dots turn into soft, lighter teal mottling that stays inside the
@@ -153,10 +153,10 @@ When you tear real paper, the white core shows along the edge. In Teal Disc's
 effects:
 
 - **Stroke**: color `#F2EAD8`, **Width** `4`, position **Outside**
-- **Drop Shadow**: `#3A2410`, offsets `6` / `10`, **Blur** `16`, **Opacity** `45`
+- **Drop Shadow**: `#3A2410`, offsets `2` / `6`, **Blur** `16`, **Opacity** `45`
 
 Use deeper shadows for pieces that sit higher in the stack. The disc gets
-10 px, the bird will get 6 px and the tape will get 3 px.
+the deepest, then the bird, then the tape.
 
 ## Build the vinyl record
 
@@ -192,7 +192,7 @@ Opacity `50`).
 **Shine:** Add a layer named `Vinyl Shine`. Use the Brush at **Size** `5`,
 **Hardness** `100`, **Opacity** `45` in white, and drag two short arcs in the
 upper left and two in the lower right, following the grooves. [[Cmd]]-click
-the Vinyl thumbnail, click `Vinyl Shine`, choose **Select → Inverse**, press
+the Vinyl thumbnail, choose **Select → Inverse**, press
 [[Delete]] and deselect. Set the blend mode to **Screen**. Thin, hard arcs look
 like printed shine. A soft airbrush blob looks digital.
 
@@ -240,14 +240,16 @@ teal disc, lasso a long, tapering tail that angles up and to the right,
 about 190 px long, from its tip up to where the body will start. Fill it
 with `#5B2C17`.
 
-Add a layer named `Body`. The Lasso always replaces the selection, so build
-the body from three fills on the same layer, all in `#C9743A`:
+Add a layer named `Body`. Build the body as one selection from three
+shapes. Lasso the first, then hold [[Shift]] as you start each of the others
+so they add to it:
 
 1. A tilted oval for the body, about 270 × 155 px, just left of the vertical guide in the upper part of the teal disc. Tip it up toward the head, and let its underside rest on the record's top edge.
 2. A round head, about 106 px across, up and to the right of the body, near the top of the teal disc.
 3. A smaller oval for the neck between them that joins the two and leaves a slight dip along the back.
 
-Now [[Cmd]]-click the Body thumbnail to load all three as one selection.
+Fill the selection with `#C9743A`. The three pieces fill as one body, and
+the selection stays active.
 
 ## Paint the body and tail
 
@@ -292,16 +294,16 @@ pale edges read as overlapping feathers.
 - **Legs:** Click `Tail` and add a layer named `Legs`, so it sits under the body. Use the Brush at Size `6` in `#3B2A1A` and [[Shift]]-click two legs from the belly down to the record's top rim. Add three short toes on each at Size `5`.
 - **Crest:** Above `Wing`, add a layer named `Crest` and lasso a small ragged tuft of three or four points rising from the back of the crown. Fill with `#7A3A1E`. Keep it short and flush with the head. A tall single spike looks like a horn.
 - **Beak:** Add a layer named `Beak` and lasso one piece with an open V that starts inside the face, so it stays attached. Fill with `#E2A93B`, then brush a 3 px gape line in `#9C6A18`.
-- **Eye:** Add a layer named `Eye` and fill a 15 px elliptical marquee with `#1C1A18`. Click a 4 px `#FFF6E6` highlight dab near the top right.
+- **Eye:** Add a layer named `Eye`, press [[Cmd+D]], and click once with a hard Brush at Size `15` in `#1C1A18`. Click a 4 px `#FFF6E6` highlight dab near the top right.
 
 ## Lift the lark off the page
 
 ![The Layer Effects drawer open on the Body layer showing a drop shadow and a cream stroke, with each lark piece casting a small shadow](19-lark-paper-shadows.webp)
 
-Give **Tail, Body, Wing, Breast, Crest** and **Beak** a **Drop Shadow** in
+Give **Tail, Wing, Breast, Crest** and **Beak** a **Drop Shadow** in
 `#1A1008` with offsets `3` / `6`, **Blur** `8` and **Opacity** `45`. Give Body
-a 3 px cream **Stroke** too, so the whole bird gets the same torn-paper
-outline as the disc.
+a 3 px cream **Stroke**, so the whole bird gets the same torn-paper
+outline as the disc, and a matching shadow at offsets `0` / `3`.
 
 Click `Eye`, [[Shift]]-click `Tail`, choose **Layer → Group Layers**, and
 name the group `Lark`.
@@ -310,14 +312,14 @@ name the group `Lark`.
 
 ![A single black eighth note with a cream outline floating to the right of the singing lark](20-music-note.webp)
 
-With `Eye` selected, add a layer named `Note 1`. Build the note from three
-Lasso fills in `#1C1A18`:
+With `Eye` selected, add a layer named `Note 1`. Build the note in
+`#1C1A18`:
 
-1. A tilted oval head, about 34 × 24 px, in the open space to the right of the lark's beak, level with its head.
-2. A 6 px-wide stem from the head straight up, about 80 px tall.
-3. A curved flag from the top of the stem sweeping down to the right.
+1. Lasso a tilted oval head, about 34 × 24 px, in the open space to the right of the lark's beak, level with its head. Fill it and deselect.
+2. For the stem, use a hard Brush at Size `6`. Click at the right side of the head, then [[Cmd+Shift]]-click about 80 px straight above it.
+3. Lasso a curved flag from the top of the stem sweeping down to the right, and fill it.
 
-Give it a 4 px cream **Stroke** and a small **Drop Shadow** (`2` / `4`,
+Give it a 4 px cream **Stroke** and a small **Drop Shadow** (`0` / `0`,
 Blur `5`, Opacity `40`) so it matches the other paper pieces.
 
 ## Copy, scale and rotate a second note
@@ -349,7 +351,7 @@ whole band tilts up about one degree to the right (the right end sits about
 16 px higher).
 
 Fill with `#1E1B19` and add noise at `10`. Add a 3 px cream **Stroke** and a
-**Drop Shadow** (`4` / `8`, Blur `10`, Opacity `45`).
+**Drop Shadow** (`1` / `5`, Blur `10`, Opacity `45`).
 
 > **Tip:** Overlap the record by about 40 px, not by just a few pixels. A
 > near-miss between two edges looks like a mistake, and a clear overlap looks

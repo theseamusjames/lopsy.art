@@ -2,7 +2,7 @@
 title: Make a Risograph Magazine Cover from a Photo
 description: Turn a whale photo into a two-colour risograph magazine cover in Lopsy with halftone plates, Multiply overprints, misregistration and ink texture.
 published: 2026-09-30 22:40
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: magazine cover, risograph, halftone, overprint, photo editing, blend modes, typography, texture, magic wand, dodge and burn
@@ -52,7 +52,7 @@ The horizon in the photo falls about 3° to the left. While the transform is sti
 1. Move the pointer just outside the top-right corner until it becomes a rotate cursor.
 2. Drag clockwise until the horizon is level.
 3. Press [[Cmd+D]] to commit the transform.
-4. With the Move tool still active, nudge the photo **60 px left** and **120 px down**. [[Shift]]+arrow moves 10 px per press. This leaves the whale in the lower half and fills the bottom edge with sea.
+4. With the Move tool still active, drag the photo about **60 px left** and **120 px down**. This leaves the whale in the lower half and fills the bottom edge with sea.
 
 Rename the layer `Photo`.
 
@@ -64,9 +64,7 @@ Rename the layer `Photo`.
 2. Click the sky once. It selects cleanly, because the whale's head sits just below the horizon.
 3. Press [[Delete]].
 
-The rotated photo's soft top edge can leave a faint line of pixels behind. To clear them, marquee everything above **y 856** and delete again. Start the drag on the canvas and release it on the grey pasteboard, not on a ruler.
-
-> **Tip:** A marquee drag that ends over a ruler stops tracking at the ruler's edge ([#1060](https://github.com/theseamusjames/lopsy.art/issues/1060)). Release on the grey pasteboard instead.
+The rotated photo's soft top edge can leave a faint line of pixels behind. To clear them, marquee everything above **y 856** and delete again.
 
 ## Trace the whale and lighten the sea
 
@@ -119,7 +117,7 @@ Open the layer's effects drawer:
 
 The dots now look like blue ink on paper.
 
-The photo also runs off the canvas, and halftone cells straddling the canvas edge can leave a sliver of dots in the empty sky. Marquee a 10 px strip at each side, above the horizon, and delete it.
+Then clear any stray dots along the canvas edges in the sky: marquee a 10 px strip at each side, above the horizon, and delete it.
 
 ## Separate the pink plate
 
@@ -143,7 +141,7 @@ Keep the plates at different screen angles (blue 15°, pink 75°). That's how re
 2. Because both are **Multiply**, the whale prints indigo where the inks overlap. The sea stays blue with a faint lilac tint.
 3. Select `Pink Plate`, pick the **Move** tool, and nudge it **7 px right** and **4 px down** with the arrow keys. That's the slight miss of a hand-fed second pass. Look for the pink fringe along the whale's back.
 
-The nudge pulls off-canvas pixels in from the left edge. Marquee the first 9 px of the sea on `Pink Plate` and delete them so the edge doesn't show a dense pink stripe.
+Then marquee the first 9 px of the sea on `Pink Plate` and delete them, so the left edge doesn't show a dense pink stripe.
 
 ## Set a yellow sun behind the whale
 
@@ -163,13 +161,13 @@ The nudge pulls off-canvas pixels in from the left edge. Marquee the first 9 px 
 Keep everything on a **65 / 1135 px** margin.
 
 - **Masthead:** `MERIDIAN` in **Dela Gothic One** at **157 px**, `#FF48B0`, with its ink box from x 65 to 1135 and its top at y 60.
-- **Rule:** on a `Rules` layer, fill a 3 px marquee from (65, 196) to (1135, 199) with blue.
+- **Rule:** on a `Rules` layer, take the **Pencil** ([[N]]) at **Size 3** in blue, click at (65, 197) and [[Cmd+Shift]]-click at (1135, 197) for a straight, level rule.
 - **Dateline:** **Space Mono Bold** at 19 px, blue. Put `NO. 14 / WINTER 2026` on the left margin and `OCEANS, CURRENTS & LONG JOURNEYS / $14` flush right, both with their tops at y 213.
 - **Headline:** `The Long Swim` in **Gloock** at **151 px**, blue, spanning the full measure with its top at y 300.
 
 Set the masthead, rule and headline to **Multiply**.
 
-> **Tip:** Create each text layer in an empty patch of canvas and then move it into place. A text click inside an existing text layer's box edits that layer instead.
+> **Tip:** Create each text layer in an empty patch of canvas and then move it into place.
 
 ## Add the deck, route arc and photo credit
 
@@ -194,7 +192,7 @@ Align it flush right to 1135, with its top at y 540.
 1. Type `PHOTOGRAPH: NOAA / HIHWNMS - PUBLIC DOMAIN` in Space Mono 13 px.
 2. Click **Rasterize Layer** at the bottom of the Layers panel.
 3. Marquee it and switch to the **Move** tool.
-4. Hold [[Shift]] while you drag the rotate handle, so the angle snaps to exactly −90°.
+4. Hold [[Cmd]] while you drag the rotate handle, so the angle snaps to exactly −90°.
 5. Press [[Cmd+D]], then nudge it into the left margin at x 34.
 
 ## Stick on a rotated badge
@@ -205,7 +203,7 @@ Align it flush right to 1135, with its top at y 540.
 2. Fill a 172 px circle centred on (1020, 832) with pink. It deliberately overlaps the horizon by about 50 px.
 3. Type `6,000` in **Dela Gothic One** 33 px and `KM ONE WAY` in **Space Mono Bold** 17 px, both in the paper colour.
 4. Centre the two lines as one block on the disc.
-5. Rasterize both, then use **Layer → Merge Down** twice so the sticker is a single layer.
+5. Use **Layer → Merge Down** twice so the sticker is a single layer. Merge Down rasterizes the text for you.
 6. Marquee the disc and rotate it **−12°** with the Move tool's rotate handle. Press [[Cmd+D]].
 7. Set the disc to **Multiply**, so the sea's dots show through its lower edge like real overprinted ink.
 
@@ -229,7 +227,7 @@ Drag the layer above the band in the Layers panel.
 2. Snap a 152 × 100 cream box.
 3. Snap 4, 8 and 12 px bars into it and fill them blue.
 4. Add the digits in Space Mono 11 px.
-5. Turn **Snap** off before you nudge anything. With snap on, every arrow press moves one full grid cell.
+5. Untick **Snap** before you nudge anything, so the arrow keys move 1 px at a time.
 
 ## Add riso ink texture
 

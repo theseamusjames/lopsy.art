@@ -2,7 +2,7 @@
 title: Design an Infographic Christmas Card with a Bar-Chart Tree
 description: Make a data-viz holiday card in Lopsy. Build a bar-chart Christmas tree on graph paper, plot ornaments as data points, then add a legend, axis and script.
 published: 2026-09-28 20:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: holiday card, christmas card, infographic, data visualization, bar chart, typography, graph paper, pattern, layer effects, text, groups
@@ -57,11 +57,13 @@ Rename **Layer 1** to *Graph Paper* by double-clicking its name.
 ![The top-left corner of the canvas with a 100 by 100 pixel marquee around a tile of thin grid lines](02-graph-paper-tile.webp)
 
 On *Graph Paper*, draw a 100 × 100 px tile in the top-left corner of the
-canvas. Zoom in and use the Rectangular Marquee ([[M]]) and Paint Bucket to
-fill thin strips, measured from the tile's top-left corner:
+canvas. Zoom in and use the **Pencil** ([[N]]): click at one end of each
+line, then [[Cmd+Shift]]-click at the other end for a dead-straight line.
+Each line runs the full 100 px of the tile, measured from its top-left
+corner:
 
-- **Minor lines**, `#6F8F80`, 1 px wide: vertical at 0, 25 and 75 px, horizontal at 5, 30 and 55 px.
-- **Major lines**, `#F3E9D2`, 2 px wide: vertical at 50 px, horizontal at 80 px.
+- **Minor lines**, `#6F8F80`, Size 1: vertical at 0, 25 and 75 px, horizontal at 5, 30 and 55 px.
+- **Major lines**, `#F3E9D2`, Size 2: vertical at 50 px, horizontal at 80 px.
 
 The major lines sit off-centre in the tile on purpose. Once it tiles, they
 land exactly on the chart's 10 cm ticks either side of the centre line and on
@@ -69,10 +71,9 @@ the top edge of every bar.
 
 Select the whole tile and choose **Edit → Define Pattern**.
 
-> **Tip:** A tile needs pixel-exact strips. With nothing selected, *click*
-> (don't drag) with the Rectangular Marquee to open a dialog where you type
-> the corners, for example **From 0, 5 To 100, 6** for the first horizontal
-> minor line and **From 0, 0 To 100, 100** for the whole tile.
+> **Tip:** A tile needs to be pixel-exact. With nothing selected, *click*
+> (don't drag) with the Rectangular Marquee ([[M]]) to open a dialog where
+> you type the corners: **From 0, 0 To 100, 100** selects the whole tile.
 
 > **Tip:** Here the alignment is baked into the tile itself. In Fill with Pattern, Row / Column Stagger offset alternate rows or columns like bricks, while Horizontal / Vertical Offset shift the whole grid's origin; leave all four at 0 for this tile.
 
@@ -137,7 +138,7 @@ Keep the width list handy. The tier table later on quotes the same numbers.
 
 ![The tree with a brown trunk under the bottom bar and a cream axis line across the card with major and minor tick marks](07-trunk-axis.webp)
 
-1. **Highlights:** add a *Bar Highlights* layer and fill a 3 px white strip along the top of every bar. Set the layer to **15%**.
+1. **Highlights:** add a *Bar Highlights* layer. With the **Pencil** ([[N]]) at **Size 3** in white, click just inside the top-left corner of each bar and [[Cmd+Shift]]-click just inside its top-right corner, so a 3 px line runs along the bar's top edge. Set the layer to **15%**.
 2. **Trunk:** add a *Trunk* layer. Marquee a block 100 px wide, centred on the centre line, from just under the bottom bar down to the axis guide, and fill it with `#5E4030`. You'll warm it up later.
 3. **Axis:** add an *Axis* layer and pick the **Pencil** ([[N]]) at **Size 3** in `#F3E9D2`. Click where the left margin guide meets the axis guide, then [[Shift]]-click where the right margin guide meets it for a dead-straight baseline.
 
@@ -301,7 +302,7 @@ to commit. Then drag it with the Move tool so its left edge sits on the left
 margin guide, with the cap tops a little below the top margin. At that size
 it runs almost exactly margin to margin.
 
-> **Tip:** Create new text in open space, then drag it into place. A click on or right next to existing text reopens that layer for editing.
+> **Tip:** Create each new line of text in open canvas, then drag it into place with the Move tool.
 
 ## Add a misregistered red shadow
 
@@ -333,12 +334,14 @@ little below the headline: click on the left margin guide, then
 
 Legend swatches should be the real ornaments, not new drawings.
 
-1. On *Baubles Red*, draw an elliptical marquee around one bauble. Press [[Cmd+C]] and then [[Cmd+V]].
-2. Rename the pasted layer *Legend Red* and drag it into the legend row under the rule, against the left margin.
+1. On *Baubles Red*, draw an elliptical marquee around one bauble and press [[Cmd+C]].
+2. Click *Rules* in the *Type* group and press [[Cmd+V]], so the copy lands in *Type* above *Rules*.
+3. Rename the pasted layer *Legend Red* and drag it into the legend row under the rule, against the left margin.
 
 Layer effects don't come along with a paste, so the swatch arrives white. Give
 it the same Color Overlay and Inner Glow as the tree baubles. Do the same for
-the gold bauble and an ice diamond.
+the gold bauble and an ice diamond: copy each one from its own layer, then
+click *Rules* before you paste.
 
 ## Label the legend and move it as a group
 
@@ -363,8 +366,8 @@ whole move.
 
 ![TIER and SPAN, CM headers in gold, with T01 to T10 down the left margin and right-aligned span values 15 to 100 down the right margin, each centered on its bar](24-columns.webp)
 
-1. **Headers:** `TIER` and `SPAN, CM` in Plex Mono SemiBold 16, `#F2B233`, Letter spacing 3, sitting just above the chart-top guide. Put `TIER` on the left margin and right-align `SPAN, CM` to the right margin guide.
-2. **Tier column:** one text layer, `T01` to `T10` on separate lines, in Plex Mono 25 `#9FC7B0`. In the Text panel, set **Line height** to **4**: 25 px × 4 = 100 px, the bar pitch. Nudge it so each label is vertically centered on its bar.
+1. **Headers:** select *Rules*, then set `TIER` and `SPAN, CM` in Plex Mono SemiBold 16, `#F2B233`, Letter spacing 3, sitting just above the chart-top guide. Put `TIER` on the left margin and right-align `SPAN, CM` to the right margin guide.
+2. **Tier column:** select *Rules* again, then set one text layer, `T01` to `T10` on separate lines, in Plex Mono 25 `#9FC7B0`. In the Text panel, set **Line height** to **4**: 25 px × 4 = 100 px, the bar pitch. Nudge it so each label is vertically centered on its bar.
 3. **Span column:** drag out an area-text box, set **Align** to Right, type the ten values (`15`, `25`, `35`, `45`, `50`, `60` … `100`), and give it the same line height. Move it so the right edge sits on the right margin guide.
 
 Right-aligned area text keeps `100` flush with the two-digit values.
@@ -373,18 +376,19 @@ Right-aligned area text keeps `100` flush with the two-digit values.
 
 ![Axis numbers 50 to 0 to 50 centered under each major tick, with the gold caption DISTANCE FROM TRUNK, CM below](25-axis-labels.webp)
 
-Under each major tick, add its value in Plex Mono 18 `#9FC7B0`, centered on
-the tick: `50 40 30 20 10 0 10 20 30 40 50`. Keep the labels' tops level,
-a little below the tick ends.
+Select *Rules*. Under each major tick, add its value in Plex Mono 18
+`#9FC7B0`, centered on the tick: `50 40 30 20 10 0 10 20 30 40 50`. Keep
+the labels' tops level, a little below the tick ends.
 
-Center `DISTANCE FROM TRUNK, CM` on the centre line just below them, in
-SemiBold 16 gold with Letter spacing 3.
+Select *Rules* again and center `DISTANCE FROM TRUNK, CM` on the centre line
+just below them, in SemiBold 16 gold with Letter spacing 3.
 
 ## Add callouts with dotted leaders
 
 ![APEX · 1 GOLD STAR to the right of the star and ROOT · 1 TRUNK to the right of the trunk, each joined by a dotted cream leader](26-callouts.webp)
 
-Add two callouts in Plex Mono SemiBold 16 gold, Letter spacing 2:
+Select *Rules* and add two callouts in Plex Mono SemiBold 16 gold, Letter
+spacing 2:
 
 - `APEX · 1 GOLD STAR`, to the right of the star and level with its centre
 - `ROOT · 1 TRUNK`, to the right of the trunk and level with it
@@ -404,12 +408,12 @@ click opens the size dialog), then add effects:
 
 - **Color Overlay** `#E0452B`
 - **Stroke** 3 px `#F3E9D2`
-- **Drop Shadow**: 0 / 6, Blur 10, Opacity 50
+- **Drop Shadow**: 0 / 3, Blur 10, Opacity 50
 
-Set `n = 1` in Plex Mono Bold 28, and `TREE` in Bold 16 with Letter spacing 3.
-Rotate each one **−8°**:
+Set `n = 1` in Plex Mono Bold 28. Select *Badge Disc* again and set `TREE`
+in Bold 16 with Letter spacing 3. Rotate both **−8°** at once:
 
-1. [[Cmd]]-click the text layer's thumbnail.
+1. With `TREE` selected, [[Cmd]]-click the `n = 1` row and press [[Cmd+D]] so nothing is marqueed.
 2. Press [[V]], drag a rotation handle counter-clockwise, and press [[Cmd+D]].
 
 Then drag both lines onto the disc, stacked along the tilt: `n = 1` above
@@ -419,11 +423,12 @@ center, `TREE` below it.
 
 ![Merry everything. in large cream Fraunces italic centered under the axis caption](28-greeting.webp)
 
-Choose **Fraunces**, then set **Style** to Italic and **Weight** to Regular
-in the Text panel. Set it at Size 136 in `#F3E9D2` and type `Merry
-everything.`. Center it on the centre line, just below the axis caption.
+Select *Rules*, choose **Fraunces**, then set **Style** to Italic and
+**Weight** to Regular in the Text panel. Set it at Size 136 in `#F3E9D2` and
+type `Merry everything.`. Center it on the centre line, just below the axis caption.
 
-Below it, add the sign-off in Plex Mono 18, `#9FC7B0`, Letter spacing 2:
+Select *Rules* again and add the sign-off below it in Plex Mono 18,
+`#9FC7B0`, Letter spacing 2:
 `& A WELL-PLOTTED 2027 · WITH LOVE, THE OKAFOR-GRANT HOUSEHOLD`. Center it
 just above the bottom margin guide.
 

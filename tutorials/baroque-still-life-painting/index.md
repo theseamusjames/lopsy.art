@@ -2,7 +2,7 @@
 title: Paint a Baroque Still Life of Artichokes
 description: Paint a candlelit Spanish Baroque still life in Lopsy with lasso-and-gradient artichoke bracts, a custom seed brush, Smoke, and Multiply shadows.
 published: 2026-09-26 19:40
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 90
 tags: digital painting, baroque, still life, chiaroscuro, custom brushes, transforms, blend modes, filters
@@ -58,8 +58,9 @@ Click **Create**.
    - **Ledge Front:** the front face, `#3A2B1E` to `#0A0705`.
    - **Ledge Top:** the top surface. Run the gradient left to right from warm
      `#B09472` to dark `#2A2018`, so the light fades across it.
-   - **Edge Highlight:** a 3 px strip along the ledge's front edge. It gives
-     the stone a crisp lit lip.
+   - **Edge Highlight:** a 3 px line along the ledge's front edge. Draw it
+     with the **Brush** at Size `3` in a pale stone colour: click one end,
+     then [[Shift]]-click the other. It gives the stone a crisp lit lip.
 
 ## Give the stone a grain
 
@@ -152,33 +153,28 @@ The second artichoke is the first one, turned over:
 
 1. With `Artichoke` selected, draw a rectangular marquee a little larger than
    it.
-2. Press **⌘C**, then **⌘V**, and rename the paste `Artichoke Lying`.
-3. Switch to the **Move** tool and click **Flip Horizontal** in the options
-   bar.
+2. Press **⌘C**, then **⌘V**, and rename the paste `Artichoke Lying`. The
+   paste is selected and the **Move** tool is active.
+3. Click **Flip Horizontal** in the options bar.
 
 Flipping keeps the highlight on the upper left once the artichoke is rotated.
-Press **⌘D**, then drag the copy to the right.
+Drag the copy to the right.
 
 ## Rotate it onto its side
 
 ![The copy mid-rotation, with the rotate handle dragged about 80 degrees counter-clockwise](08-rotate.webp)
 
-1. Draw a marquee around the copy.
-2. With the Move tool, drag the round handle just off the box's top-right
-   corner about **80° counter-clockwise**. The artichoke's top now points
-   left and its stem stub points right.
-3. Press **⌘D** to commit.
-
-Commit each transform with ⌘D before starting the next one.
+With the Move tool, drag the round handle just off the box's top-right
+corner about **80° counter-clockwise**. The artichoke's top now points left
+and its stem stub points right.
 
 ## Scale it down
 
 ![The lying artichoke being scaled with a corner handle while Command is held](09-scale.webp)
 
-1. Draw a fresh marquee around the lying artichoke.
-2. Hold **⌘** and drag the bottom-right corner handle inward to about 75%.
+1. Hold **⌘** and drag the bottom-right corner handle inward to about 75%.
    ⌘ keeps the proportions.
-3. Press **⌘D**.
+2. Press **⌘D** to commit the transform.
 
 A smaller second artichoke also reads as sitting a little further away.
 
@@ -258,18 +254,13 @@ and let the whole handle project past the front edge.
 
 1. On a temporary layer, fill a 20 × 26 ellipse with `#2A030A`.
 2. Draw a slightly smaller ellipse, about 16 × 22, centred inside it, and
-   fill it with a radial gradient: `#C23A4E` → `#82102A` → `#3A0410`. At
-   this tiny size a fresh marquee keeps a rounder shape than
-   **Select → Shrink**.
+   fill it with a radial gradient: `#C23A4E` → `#82102A` → `#3A0410`.
 3. Add a tiny `#FFF4F0` highlight.
 4. Marquee the seed and choose **Edit → Define Color Brush…**. Name it
    `Garnet Seed`, then delete the temporary layer.
 5. Open the brush presets, pick **Garnet Seed**, and set these values:
    - **Shape:** Size `17`, Spacing `80`.
    - **Dynamics:** Scatter `30`, Size Jitter `30`, Angle Jitter `100`.
-
-Set the values *after* picking the preset, because choosing a preset resets
-them.
 
 ## Paint the split pomegranate
 
@@ -367,10 +358,9 @@ Add three more layers in `Stone Niche`:
 
 The blur left a soft halo around the artichoke. To trim it:
 
-1. Magic Wand the empty wall on the `Artichoke` layer and press **⇧⌘I** to
-   invert.
-2. Shrink the selection by 2 px, invert again with **⇧⌘I**, and press
-   **Delete**.
+1. Magic Wand the empty wall on the `Artichoke` layer.
+2. Choose **Select → Grow…** by 2 px, so the selection reaches into the
+   halo, and press **Delete**.
 
 Then add two more layers and clip them the same way as before (Magic Wand
 the empty wall on `Artichoke`, then **Delete** on each layer):
@@ -401,8 +391,7 @@ adjustments. Then:
 2. **Add Adjustment → Photo Filter** and set Density to `10`. It warms the
    whole scene like candle-lit varnish.
 
-Root adjustments sit over the whole painting, so add them last, once
-everything else is in place.
+Root adjustments sit over the whole painting.
 
 Export with **File → Quick Export PNG** and save your layers with
 **File → Save Project**.

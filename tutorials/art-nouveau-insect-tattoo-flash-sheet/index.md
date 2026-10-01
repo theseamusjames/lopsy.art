@@ -2,7 +2,7 @@
 title: Draw an Art Nouveau Insect Tattoo Flash Sheet
 description: Build a Lalique-style JEWELLED INSECTS flash sheet in Lopsy with gold cloisons, translucent plique-à-jour enamel, a radial-symmetry halo and arched type.
 published: 2026-09-29 12:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: art nouveau, tattoo flash, tattoo design, jewellery, insects, gradients, layer effects, text on path, symmetry, lasso
@@ -155,8 +155,9 @@ Click **Iris**, then click **New Group** and name it **Dragonfly**. Add a
 2. **Shrink 5** and fill it with the gold gradient.
 3. **Shrink 11** and press **Delete**. You're left with a hollow wire.
 
-Then lasso the veins as thin strips and fill each one gold: three long
-veins from base to tip, and seven cross veins. Give the layer a **Drop
+Then lasso the veins as thin strips, holding [[Shift]] as you start each one
+after the first, and fill them all gold at once: three long veins from base
+to tip, and seven cross veins. Give the layer a **Drop
 Shadow** in `#3A2A10` (**Offset** 3 / 4, **Blur 4**, **Opacity 40**) so the
 metal sits slightly above the paper.
 
@@ -182,8 +183,8 @@ windows held by gold.
 
 ![A symmetric marquee around both wing pairs while the duplicated enamel is flipped to the right side](11-duplicate-flip.webp)
 
-Switch to the **Move** tool, click **Duplicate Layer**, click the copy's row
-and rename it **DF Wing Enamel R**. Draw a **Rectangular Marquee** around
+Switch to the **Move** tool, click **Duplicate Layer**, and rename the copy
+**DF Wing Enamel R**. Draw a **Rectangular Marquee** around
 both wing pairs that is exactly symmetric about the body, which sits on the
 sheet's centre line. Then click **Flip Horizontal** in the options bar: the
 flip happens about the marquee's centre. Press [[Cmd+D]].
@@ -191,15 +192,11 @@ flip happens about the marquee's centre. Press [[Cmd+D]].
 > **Tip:** The click-for-corners dialog makes the symmetric marquee easy.
 > Any box centred on x 675 works, such as From **125, 420** To **1225, 920**.
 
-Duplicate offsets the copy 10 px right and 10 px down, and the flip mirrors
-that into 10 px left and 10 px down. Press [[Shift+Right]] and [[Shift+Up]]
-once each to cancel it. The two sides then match exactly.
-
 ## Make the wings translucent
 
 ![Glassy teal wings with soft light edges on every cell and the halo rings visible through them](12-translucent-wings.webp)
 
-Click the right copy's row and choose **Layer → Merge Down**, then rename
+With the right copy still active, choose **Layer → Merge Down**, then rename
 the result **DF Wing Enamel**. Add an **Inner Glow** in white (**Size 6**,
 **Spread 0**, **Opacity 45**). Every cell gets a bright glassy rim. Set the
 row's opacity to **72%**. The halo's beads and rays now glow through the
@@ -284,9 +281,9 @@ With the **Pen Tool**, click-drag three anchors along that circle:
 - **Top:** on the centre line, 432 px above the halo centre, just below the middle of the band. Drag the handle straight to the right.
 - **End:** the mirror of the start. Drag the handle down and to the right.
 
-Keep each handle about **100 px** long (roughly a quarter of the radius). Click
-**Commit path** rather than pressing [[Enter]], which would also stroke the
-path onto the active layer.
+Keep each handle about **100 px** long (roughly a quarter of the radius).
+Click ✓ **Commit path** in the options bar. [[Enter]] would also stroke the
+path onto the active layer, and here you only want the path.
 
 ## Bind the title to the arc
 
@@ -304,7 +301,8 @@ make it a little long.
 
 ![The subtitle across the top, three labels under the bottom insects, and two captions curving under the halo on either side of the tail](19-labels-captions.webp)
 
-Use **Federo** at **Size 30** with **Letter spacing 4** for all the small type:
+Click **Iris**, then set up the small type: **Federo** at **Size 30** with
+**Letter spacing 4**.
 
 - **Subtitle:** TATTOO FLASH · SHEET Nº IX in frame teal. Centre it with **Align center horizontally**.
 - **Bottom labels:** II · SCARABÉE, III · CIGALE and IV · ABEILLE, each centred under its insect on the same baseline.
@@ -318,9 +316,9 @@ On a **Sparkles** layer, lasso a four-point star with radius 20. Fill it ink,
 **Shrink 4** and fill it gold, then add a small white centre. It's on its
 own layer, so you can draw it anywhere and move it later.
 
-1. Marquee the star, press [[Cmd+C]], then press [[Cmd+V]].
-2. Marquee the paste. With the **Move** tool, drag the rotation handle just outside the top-right corner through **45°**, then press [[Cmd+D]].
-3. Marquee it again and [[Cmd]]-drag a corner to scale it to about **62%**. Press [[Cmd+D]].
+1. Marquee the star, press [[Cmd+C]], then press [[Cmd+V]]. The paste comes in selected, with the **Move** tool ready.
+2. Drag the rotation handle just outside the top-right corner through **45°**.
+3. [[Cmd]]-drag a corner to scale it to about **62%**. Press [[Cmd+D]].
 4. Re-centre it on the original star and choose **Merge Down**. You now have an eight-point sparkle.
 
 ## Place the sparkles with guides

@@ -2,7 +2,7 @@
 title: Design a Propaganda Poster Style Party Invitation
 description: Build a constructivist propaganda-poster invitation in Lopsy with a sunburst, a pouring teapot, diagonal bands, hard-shadow type and halftone print texture.
 published: 2026-09-25 08:16
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: poster design, propaganda poster, invitation, text effects, layer effects, selections, halftone
@@ -59,12 +59,11 @@ press [[Cmd+D]] to deselect.
 
 ![Alternating kraft and cream rays radiating across the whole canvas from a point in the lower left](03-kraft-sunburst.webp)
 
-Repeat the wedge all the way round. Skip one 10° slice each time, so you get
-18 kraft rays with cream gaps between them. Keep the rays low contrast. They're
+Lasso the rest of the wedges all the way round, holding [[Shift]] as you
+start each one so they add up into a single selection. Skip one 10° slice
+each time, so you get 18 kraft rays with cream gaps between them. Then choose
+**Edit → Fill** once and press [[Cmd+D]]. Keep the rays low contrast. They're
 background texture, and the strong red is saved for the disc and the headline.
-
-> **Tip:** Each new lasso replaces the selection, so fill each wedge before
-> you draw the next one.
 
 > **Tip:** For a quicker, perfectly even version, set the foreground to kraft
 > and choose **Filter → Sunburst…** on the *Rays* layer. **Rays** `18`,
@@ -100,11 +99,11 @@ Add a layer called `Pot` above it. Fill it with these black shapes:
 - a rectangle for the foot below it;
 - a small ellipse for the knob on top.
 
-For the lid, press [[U]] for the **Shape** tool. Set **Shape** to **Polygon**,
-**Sides** to `4` and **Corner Radius** to `14`, then click the Fill swatch and
-enter `1A1A1A`. Shapes draw from the centre out, so start the drag in the middle
-of the lid, just above the body. Four sides always gives a square, so let the
-lower half sink into the black body. Only the rounded top shows as the lid.
+For the lid, press [[U]] for the **Shape** tool. Set **Shape** to **Rectangle**
+and **Corner Radius** to `14`, then click the Fill swatch and type `1A1A1A`
+into its hex field. The Shape tool draws from the centre out, so start the drag
+in the middle of the lid, just above the body. Let the lower half sink into the
+black body. Only the rounded top shows as the lid.
 
 ## Draw the spout
 
@@ -194,7 +193,7 @@ band runs off both sides. Fill it black. Then add these on the same layer:
 
 - a black rectangle across the bottom of the page, about the last 190 px, for the event details;
 - a black banner across the top that rises about **6°**;
-- thin red rules just above the diagonal band and just below the top banner.
+- thin red rules just above the diagonal band and just below the top banner. Draw each with a hard red **Brush** about 8 px wide: click at the left edge of the canvas, then [[Shift]]-click at the right edge for a straight line.
 
 ## Check the composition
 
@@ -248,11 +247,9 @@ colour to `#1A1A1A`.
 
 ![The red TEA headline with a solid black offset shadow down and to the right](19-tea-hard-shadow.webp)
 
-Click **Duplicate Layer**. Duplicate usually puts the copy 10 px right and
-10 px down. With the **Move** tool, nudge it back until it sits exactly on the
-original. [[Shift]]+arrow keys move 10 px at a time, plain arrows 1 px. Rename the original, which is underneath,
-`TEA Shadow`. On `TEA Shadow`, turn on **Color Overlay** in `#1A1A1A` and move
-it **14 px right and 14 px down**.
+Click **Duplicate Layer**. The copy lands exactly on top of the original.
+Rename the original, which is underneath, `TEA Shadow`. On `TEA Shadow`, turn
+on **Color Overlay** in `#1A1A1A` and move it **14 px right and 14 px down**.
 
 This gives a crisp, fully opaque print shadow with its own black outline, so
 the shadow keeps the same chunky letter shapes as the headline.
@@ -279,16 +276,11 @@ breathe.
 ![SATURDAY 18 OCTOBER · 4 PM in large cream Bebas Neue above a smaller typewriter line in the black footer](22-date-and-venue.webp)
 
 An invitation fails if nobody can read the when and the where. Set these two
-lines in cream, and centre each one with **Align center horizontally** in the
-Move tool's options bar:
+lines in cream, lower line first, and centre each one with **Align center
+horizontally** in the Move tool's options bar:
 
 1. Special Elite, Size `28`: `THE ALLOTMENT GARDENS, PLOT 7 · BRING YOUR OWN CUP`, near the bottom of the canvas.
-2. Bebas Neue, Size `72`: `SATURDAY 18 OCTOBER · 4 PM`, above it.
-
-> **Tip:** Type the lower line first. Then click **Add Layer** before you
-> change the font for the next line, and start it in clear space rather than
-> on the first line. A text click on an existing line edits that line, and
-> changing the font while a text layer is active restyles that layer.
+2. Bebas Neue, Size `72`: `SATURDAY 18 OCTOBER · 4 PM`, above it. Select `Bands` first, then set the font and size, and start the line in clear space above the first one.
 
 ## Stamp a FREE SCONES badge
 
@@ -300,14 +292,11 @@ area at the upper left, just under the banner. Then remove the fill, add a
 cream stroke with **Width** `4`, and draw a slightly smaller ring inside the
 red circle from the same centre.
 
-Type `FREE`, press [[Enter]], type `SCONES!` in cream **Russo One** at Size
-`36`, and rasterize. Marquee just the `FREE` line and nudge it right until it's
-centred over `SCONES!`. Merge the text down into `Badge`, marquee the badge
-and rotate it **+12°** so it looks hand-stamped. Press [[Cmd+D]].
-
-> **Tip:** Click another layer's row and check that the badge is still tilted.
-> If it has snapped back upright, press [[Cmd+Z]] and then [[Cmd+Shift+Z]] to
-> bring the rotation back before you carry on.
+Set the text to cream **Russo One** at Size `36` and click **Align center** in
+the Text panel. Click in the middle of the badge, type `FREE`, press [[Enter]]
+and type `SCONES!`. Each line centres on the point you clicked. Merge the text
+down into `Badge`, marquee the badge and rotate it **+12°** so it looks
+hand-stamped. Press [[Cmd+D]].
 
 ## Add paper grain
 

@@ -2,7 +2,7 @@
 title: Design a Deconstructivist Magazine Cover in Lopsy
 description: Build a deconstructivist magazine cover in Lopsy with a split masthead, brush-drawn concrete shells, a faulted blue plane and a two-color headline.
 published: 2026-09-29 16:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 90
 tags: magazine cover, deconstructivism, editorial design, typography, brush, selections, transforms, layer effects
@@ -66,9 +66,8 @@ centre. That divides the wall into 700 × 350 px boards.
 
 Each board gets six tie holes in two rows of three. Space them evenly: about
 a sixth, half and five-sixths of the way across the board, and a quarter and
-three-quarters of the way down it. For each hole, [[Cmd]]-drag a 14 px circle
-with the **Elliptical Marquee** and fill it. Set the layer to **Multiply** at
-**45 %**.
+three-quarters of the way down it. Set the Brush **Size** to **14** and
+click once for each hole. Set the layer to **Multiply** at **45 %**.
 
 ## Tilt the blue plane
 
@@ -147,12 +146,12 @@ shells, it cuts straight through them.
 Deconstructivist planes don't line up; they slip. Select **Blue Plane** and
 lasso everything below the band: press outside the left edge of the page and
 drag straight along a line 20 px above the band's lower edge to outside the
-right edge, then run down past the bottom of the page and back, and let go. Switch to the **Move** tool and nudge **32 px right** and
-**19 px down** ([[Shift+Right]] three times, [[Right]] twice, [[Shift+Down]] once,
-[[Down]] nine times).
+right edge, then run down past the bottom of the page and back, and let go. Switch to the **Move** tool and nudge it **32 px right**
+and **19 px down** with the arrow keys. Hold [[Shift]] to move 10 px per
+press.
 
 The selection moves with the pixels, so re-draw the same lasso before
-nudging **Shell A**, **Shell B** and **Shell Seam** by the same amount.
+moving **Shell A**, **Shell B** and **Shell Seam** by the same amount.
 
 ## Set and scale the masthead
 
@@ -171,8 +170,8 @@ with the top and left margin guides.
 
 Marquee an **8 px** strip straight across the middle of the word, a little
 wider than it, and press [[Delete]] to open a gap. Then marquee everything
-above the cut and nudge it **24 px right** with the Move tool (two
-[[Shift+Right]] presses, then four [[Right]]). Press [[Cmd+D]]. The word still reads as RIFT, but it's visibly torn.
+above the cut and nudge it **24 px right** with the Move tool and the arrow
+keys. Press [[Cmd+D]]. The word still reads as RIFT, but it's visibly torn.
 
 ## Set the headline
 
@@ -220,8 +219,9 @@ right above the headline, so the two read as one cover line.
 
 ![A three-line mono issue block and a four-line serif deck in the top-right column beside the masthead](14-issue-info-deck.webp)
 
-Starting on the 940 guide, set **IBM Plex Mono 500** at **22** for
-three lines: *ISSUE 23 / AUTUMN 2026*, *MUSIC / ARCHITECTURE / NOISE* and
+Click the **Xenakis Lime** row before you set up each block. Starting on
+the 940 guide, set **IBM Plex Mono 500** at **22** for three lines:
+*ISSUE 23 / AUTUMN 2026*, *MUSIC / ARCHITECTURE / NOISE* and
 *EUR 14  USD 16  GBP 12*. Below it, set the deck in **Instrument Serif 44**:
 *He drew the string / glissandi of Metastaseis / as straight lines, then /
 poured them in concrete.* The calm serif against the torn masthead is the
@@ -231,9 +231,11 @@ contrast deconstructivism needs.
 
 ![Three cover lines numbered 52, 78 and 96 in blue Anton stacked in a narrow column above the lime band, grouped as Cover Lines in the Layers panel](15-cover-lines-group.webp)
 
-In the narrow column right of the black shell, set three page numbers in
-**Anton 56** ultramarine, stacked 160 px apart and starting level with the
-shell's apex. Under each, 65 px lower, add a cover line in **IBM Plex Mono 500** at **20**:
+Click the **Xenakis Lime** row again. In the narrow column right of the
+black shell, set three page numbers in **Anton 56** ultramarine, stacked
+160 px apart and starting level with the shell's apex. Then click
+**Xenakis Lime** once more and, under each number, 65 px lower, add a cover
+line in **IBM Plex Mono 500** at **20**:
 *STOCHASTIC / MUSIC, / A PRIMER*, *UPIC: THE / MACHINE THAT / DRAWS SOUND*
 and *CONCRETE / AS A SCORE*. Click the first row, **Shift-click** the last
 and choose **Layer → Group Layers**. Name the group **Cover Lines**, then
@@ -265,8 +267,8 @@ spaced on the left and end bunched on the right, so their crossings trace
 the same curve as the shells. Caption it in **IBM Plex Mono 14** white:
 *METASTASEIS, 1954 / BARS 309-314*.
 
-Add an elevation mark too: **+21.00** in Plex Mono 17 at the black shell's
-apex, with a short Shift-click leader line.
+Add an elevation mark too: click the **Score** row, then set **+21.00** in
+Plex Mono 17 at the black shell's apex, with a short Shift-click leader line.
 
 ## Add print grain
 
@@ -331,9 +333,9 @@ Every letter now has a 6 px gap where the lines stop short. Press
 
 ![The glissando score scaled to 80 percent and moved inward, with even blue margins to the plane edge and the X](24-reseat-score.webp)
 
-Drag the **Score Label** row directly above **Score**, rasterize it and
-choose **Layer → Merge Down**. Marquee the merged score, [[Cmd]]-drag a
-corner down to **80 %**, press [[Cmd+D]] and move it inward so it has about
+Drag the **Score Label** row directly above **Score** and choose
+**Layer → Merge Down**, which rasterizes the text for you. Marquee the
+merged score, [[Cmd]]-drag a corner down to **80 %**, press [[Cmd+D]] and move it inward so it has about
 90 px of blue to the plane's left edge and 45 px to the X.
 
 ## Share one right edge
@@ -346,7 +348,7 @@ the same edge as the cover lines and XENAKIS. Select the three barcode layers
 the same way and nudge them **14 px up** so the label's bottom sits on the
 lowest formwork seam. Finally, on
 **Formwork**, delete the tie holes that sit under type or peek through the
-masthead gap: an **Elliptical Marquee** over each one, then [[Delete]].
+masthead gap: click each one with the **Eraser** at about **Size 24**.
 
 ## Ink the lines that leave the plane
 
