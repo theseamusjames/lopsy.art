@@ -52,14 +52,19 @@ The palette is a handful of warm inks:
 - Glow `#F6D98A`
 - Shade brown `#7A3A10`
 
-## Start with a red page
+## Start a new document
 
-![A new 1100 by 1700 pixel document with the Background layer filled with propaganda red](01-new-document.webp)
+![A new blank 1100 by 1700 pixel document with a white Background layer](01-new-document.webp)
 
 Choose **File → New**, set the units to **Pixels**, make the document
-**1100 × 1700** and click **Create**. Set the foreground colour to `#B82A1C`,
-select the **Background** layer and choose **Edit → Fill**. The whole page
-turns red.
+**1100 × 1700** and click **Create**.
+
+## Fill it red
+
+![The Background layer filled with propaganda red](02-red-background.webp)
+
+Set the foreground colour to `#B82A1C`, select the **Background** layer and
+choose **Edit → Fill**. The whole page turns red.
 
 ## Add the sunburst
 
