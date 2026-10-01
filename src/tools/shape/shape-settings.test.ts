@@ -21,10 +21,9 @@ describe('shape-settings clamps and defaults (#453)', () => {
   it('mode collapses unknown strings to "ellipse" rather than letting a typed-string bypass leave a polygon-with-stale-sides render (#236)', () => {
     expect(clampShapeSetting('mode', 'ellipse')).toBe('ellipse');
     expect(clampShapeSetting('mode', 'polygon')).toBe('polygon');
-    // The shader treats anything-not-ellipse as polygon. A bypass passing
-    // 'rectangle' must not silently render a polygon with whatever sides
-    // value is current — fall back to the documented default instead.
-    expect(clampShapeSetting('mode', 'rectangle' as 'ellipse')).toBe('ellipse');
+    expect(clampShapeSetting('mode', 'rectangle')).toBe('rectangle');
+    // A bypass passing an unsupported mode must not silently render some
+    // other shape with stale settings — fall back to the documented default.
     expect(clampShapeSetting('mode', 'line' as 'ellipse')).toBe('ellipse');
     expect(clampShapeSetting('mode', 'arrow' as 'ellipse')).toBe('ellipse');
   });

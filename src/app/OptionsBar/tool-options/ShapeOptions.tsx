@@ -82,6 +82,7 @@ export function ShapeOptions() {
         onChange={(e) => setShapeSetting('mode', e.target.value as ShapeMode)}
         aria-labelledby="shape-mode-label"
       >
+        <option value="rectangle">Rectangle</option>
         <option value="ellipse">Ellipse</option>
         <option value="polygon">Polygon</option>
       </select>
