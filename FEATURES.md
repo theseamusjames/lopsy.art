@@ -541,9 +541,15 @@ state over it.
   squares (6 px) on the scale handles, white filled circles (5 px radius) on
   the rotation handles. All sizes divide by zoom, so the chrome stays the same
   on-screen size at any magnification.
-- The **marching ants follow translate, rotate, and scale** but *not* skew and
-  *not* the distort/perspective corner offsets — in those three modes the
-  handle box deforms while the ants outline does not.
+- The **marching ants follow the pending transform in every mode** —
+  translate, rotate, scale, skew and the distort/perspective corners. The
+  selection outline is mapped point by point through the same map as the
+  floated pixels (the affine chain, or the corner homography;
+  `tools/transform/transform-point.ts`) and cached per transform, so the ants
+  trace the transformed piece rather than the original outline. (They used
+  to be drawn through a Canvas 2D translate / rotate / scale only, so in
+  Skew, Distort and Perspective the handle box deformed while the ants
+  stayed put; fixed in this change.)
 
 ### Modes
 
@@ -939,8 +945,8 @@ Contents, top to bottom:
 
 ### Shared behavior
 
-- **Render order is fixed** and unrelated to the list order: outer glow → drop shadow → the layer itself (color overlay applied inline to its RGB) → inner glow → stroke. Outer glow is drawn *before* the drop shadow, so an overlapping shadow sits on top of the glow.
-- **The drop shadow and outer glow are cast by the stroked silhouette.** Although the stroke is drawn last, an enabled `outside` or `center` Stroke grows the outline the two "behind" effects are built from: the shadow is the shape of the layer *plus its stroke*, and the glow starts at the stroke's outer edge instead of under it. Before, both were built from the layer's pixels alone, so a shadow started inside the outline and peeked out past it with a notch at the corner nearest the layer, and a glow narrower than the stroke was hidden completely (fixed in this change). `render_stroke_silhouette` in `compositor.rs` renders the layer's alpha unioned (source-over) with the outside part of the ring into a pooled texture the size of the layer padded by the stroke's reach — not the document, so a layer hanging off the canvas still casts its whole shadow — using the same two algorithms as the drawn stroke (a per-pixel distance search up to 10 px of reach, separable dilation beyond). The live canvas, export and Rasterize Layer Style all go through it. It costs one extra pass (four on the dilation path) at the padded layer size, and only when a stroke and a shadow or outer glow are both enabled; an `inside` stroke never leaves the layer's outline, so it adds no pass. Inner glow is still built from the layer alone.
+- **Render order is fixed** and unrelated to the list order: outer glow → drop shadow → an `outside` stroke → the layer itself (color overlay applied inline to its RGB) → inner glow → an `inside` or `center` stroke. Outer glow is drawn *before* the drop shadow, so an overlapping shadow sits on top of the glow.
+- **The drop shadow and outer glow are cast by the stroked silhouette.** An enabled `outside` or `center` Stroke grows the outline the two "behind" effects are built from: the shadow is the shape of the layer *plus its stroke*, and the glow starts at the stroke's outer edge instead of under it. Before, both were built from the layer's pixels alone, so a shadow started inside the outline and peeked out past it with a notch at the corner nearest the layer, and a glow narrower than the stroke was hidden completely (fixed in this change). `render_stroke_silhouette` in `compositor.rs` renders the layer's alpha unioned (source-over) with the outside part of the ring into a pooled texture the size of the layer padded by the stroke's reach — not the document, so a layer hanging off the canvas still casts its whole shadow — using the same two algorithms as the drawn stroke (a per-pixel distance search up to 10 px of reach, separable dilation beyond). The live canvas, export and Rasterize Layer Style all go through it. It costs one extra pass (four on the dilation path) at the padded layer size, and only when a stroke and a shadow or outer glow are both enabled; an `inside` stroke never leaves the layer's outline, so it adds no pass. Inner glow is still built from the layer alone. The outside stroke drawn behind the layer is the stroke ring itself, not the silhouette, so the shadow and glow sit under it.
 - **Colors use the browser's native color input**, not Lopsy's shared color picker. The swatch round-trips through 6-digit hex, so an effect color's **alpha is preserved but cannot be edited from the panel** — it stays at whatever the effect already held.
 - **Size-like sliders auto-scale with the document**: the maximum is `max(base, min(5000, round(1.5 × longest side)))`, while the *drag* range is pinned to a usable window so precise tuning stays practical on large canvases. The text field accepts the full scaled maximum.
 - **History is coarse.** Toggling pushes `Enable <Effect>` / `Disable <Effect>`; starting a slider drag pushes `Edit <Effect>` so undo returns to the pre-drag value; the Blend dropdown pushes `Change Blend Mode`. Color swatches and the stroke Position buttons push nothing at all (see *Gaps*).
@@ -956,7 +962,7 @@ Defaults: disabled, black at 100% color alpha, offset 4 / 4, blur 8, spread 0, o
 
 Final shadow alpha is `silhouette × color alpha × opacity`. Alpha is not editable from the panel, so the color alpha is whatever the layer was created with — **1** since #838, so Opacity 100 now gives a fully opaque shadow (#831, fixed in #838). Before that the default was 0.75, which capped every default drop shadow at 75 % even at Opacity 100. A project saved before #838 keeps that 0.75, because `.lopsy` loading restores each layer's saved `dropShadow` object whole.
 
-The shadow is **knocked out beneath the silhouette (the layer plus any outside/centre stroke) only when Blur is 0**. With any blur the knockout pass is skipped, so a blurred shadow renders at full strength behind the layer — visible through a semi-transparent layer, hidden by an opaque one.
+The shadow is **knocked out beneath the silhouette (the layer plus any outside/centre stroke) only when Blur is 0**. With any blur the knockout pass is skipped, so a blurred shadow renders at full strength behind the layer — visible through a semi-transparent layer, hidden by an opaque one. The knockout scales the shadow by `(1 − a) / (1 − a·opacity)`, where `a` is that silhouette's alpha (the layer's masked alpha when there is no stroke) and `opacity` the layer's own opacity, so the layer replaces the shadow by its coverage: an opaque layer at reduced opacity still hides the shadow under it, and an anti-aliased edge over its own shadow is as solid as the two colours (#1089, fixed in this change — the old plain `(1 − a)` knockout counted the edge's coverage twice and let about 25% of the backdrop through a half-covered pixel, a light hairline along every curved or diagonal edge of a hard shadow).
 
 ### Outer Glow
 Defaults: disabled, pale yellow (255, 255, 100) at full alpha, size 10, spread 0, opacity 0.75.
@@ -979,6 +985,8 @@ Defaults: disabled, black at full alpha, width 2, position `outside`.
 - **Position**: buttons rendered in the order **outside / center / inside**.
 
 The stroke is a **hard, aliased outline**: the shader classifies each pixel as opaque or not at an alpha threshold of 0.5 and paints stroke pixels at full color, so edges on anti-aliased or soft-edged content come out jagged rather than smooth.
+
+An **`outside` stroke is drawn behind the layer**, not on top of it, and it also runs under the layer's partly covered edge pixels — the ones at or above the 0.5 threshold that touch a pixel below it — knocked out by the layer's coverage the same way as the hard drop shadow (`(1 − a) / (1 − a·opacity)`). The layer's anti-aliased edge therefore blends into the stroke colour rather than the backdrop. Before, the stroke only covered pixels below the threshold and was drawn over the layer, so the edge pixels between 0.5 and 1 were neither stroked nor opaque and showed the backdrop as a hairline seam between the shape and its stroke — a dark ring between a pale shape and a pale stroke on a dark background (fixed in this change). `inside` and `center` strokes still draw on top.
 
 Two implementations run depending on width. At an effective half-width of **10 px or less** a brute-force per-pixel distance search runs in a single pass; above that the engine switches to a separable dilation of the alpha at radius `ceil(half-width)`. A `center` stroke on the dilation path is drawn as two passes — the outside half, then the inside half — each composited separately.
 

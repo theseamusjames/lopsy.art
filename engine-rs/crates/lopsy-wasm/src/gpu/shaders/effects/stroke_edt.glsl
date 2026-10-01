@@ -13,6 +13,7 @@ uniform vec2 u_docSize;     // document size in pixels
 // 1 = output the layer's silhouette grown by the outside part of the stroke
 // (alpha only), which the drop shadow and outer glow are cast from.
 uniform int u_silhouette;
+uniform float u_layerOpacity; // opacity the layer itself is composited with
 out vec4 fragColor;
 
 void main() {
@@ -99,24 +100,30 @@ void main() {
     }
 
     bool isStroke = false;
-    if (minDistSq <= thresholdSq) {
-        if (u_position == 0) {
-            isStroke = !isOpaque;
-        } else if (u_position == 1) {
-            isStroke = isOpaque;
-        } else {
-            isStroke = true;
-        }
+    float coverage = 1.0;
+    if (u_position == 0) {
+        // An outside stroke is composited behind its layer, so it also runs
+        // under the layer's partly covered edge pixels (otherwise the
+        // backdrop shows through them as a seam between the shape and its
+        // stroke) and is knocked out by the layer's coverage, as the hard
+        // drop shadow is.
+        bool isEdge = isOpaque && srcA < 0.999 && minDistSq <= 2.0;
+        isStroke = (!isOpaque && minDistSq <= thresholdSq) || isEdge;
+        coverage = (1.0 - srcA) / max(1.0 - srcA * u_layerOpacity, 1e-4);
+    } else if (minDistSq <= thresholdSq) {
+        isStroke = u_position == 1 ? isOpaque : true;
     }
 
     float strokeA = u_strokeColor.a * u_opacity;
     if (u_silhouette == 1) {
-        // The stroke draws over the layer, so the two combine source-over.
-        // Only the part outside the layer's opaque core can grow the outline.
-        float a = (isStroke && !isOpaque) ? strokeA + srcA * (1.0 - strokeA) : srcA;
+        // Stroke and layer combine source-over whichever is in front, so the
+        // silhouette is their alpha union. An outside ring (edge pixels
+        // included) grows it; a centre stroke only outside the opaque core.
+        bool grows = isStroke && (u_position == 0 || !isOpaque);
+        float a = grows ? strokeA + srcA * (1.0 - strokeA) : srcA;
         fragColor = vec4(0.0, 0.0, 0.0, a);
     } else if (isStroke) {
-        fragColor = vec4(u_strokeColor.rgb, strokeA);
+        fragColor = vec4(u_strokeColor.rgb, strokeA * coverage);
     } else {
         fragColor = vec4(0.0);
     }
