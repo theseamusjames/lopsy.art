@@ -643,9 +643,10 @@ while a layer inside it is active. A new layer is always inserted directly
 above the active layer, and inside the group if the active layer is a group.
 Group effects and adjustment layers apply to everything inside the group.
 
-**Guides and grid.** **View → Show Grid** turns snapping on, which quantizes
-marquee drags. Switch it off again before drawing thin or precise shapes. A
-single click on a ruler drops a guide.
+**Guides and grid.** **View → Show Grid** turns snapping on the first time,
+which quantizes marquee drags. Untick **Snap** in the options bar before
+drawing thin or precise shapes; it then stays off when you hide and show the
+grid again. A single click on a ruler drops a guide.
 
 ## Behaviours that trip up agents
 
