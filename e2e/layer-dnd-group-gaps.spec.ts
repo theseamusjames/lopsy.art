@@ -14,6 +14,12 @@ import {
 // - #824: group rows move as a whole block, and nested groups can be
 //   dragged outward to the root.
 
+// Every target row must sit clear of the list's edge auto-scroll zones,
+// or the list scrolls under the pointer before the drop. At the default
+// 720px viewport the panel shows only ~6 rows, so give it room for all
+// of them (auto-scroll itself is covered by layer-dnd-autoscroll.spec.ts).
+test.use({ viewport: { width: 1280, height: 900 } });
+
 interface LayerInfo {
   id: string;
   name: string;
