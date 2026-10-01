@@ -11,6 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished MERRY & BRIGHT glitch card at fit-to-screen zoom, with a black reindeer leaping across a pixelated full moon, a trail of red and cyan ghost frames, and the Layers panel open on the Moon layer
 finished: finished-advent-zoetrope.webp
 finishedAlt: The finished glitch-art Christmas card. A black reindeer with a glowing red nose leaps across a big pixelated cream full moon on a navy-to-violet night sky full of square pixel snowflakes. Behind it a trail of four smaller red-and-cyan ghost frames arcs down to the lower left, each one more corrupted than the last, ending in blocky pixels. MERRY & BRIGHT in heavy cream capitals with red and cyan channel offsets and two horizontal datamosh slices fills the top left, with a pixel star on the right. Pixel pine trees cross the horizon above a black ground with LOADING JOY... 24/24, a 24-cell progress bar whose last cell is red, and SEASON'S GREETINGS & A GLITCH-FREE 2027 in a terminal font.
+project: glitch-art-christmas-card.lopsy
 ---
 
 This card treats Christmas like a corrupted GIF. A reindeer leaps across the
@@ -50,16 +51,19 @@ Rename **Layer 1** to **Sky**. Pick the **Gradient** tool, set **Type** to
 2. `#11113C` at 55%
 3. `#4A1760` at 100%
 
-Drag straight down from the top edge to about **y 1700**, where the ground
-will start. The violet glow then sits just above the horizon.
+Drag straight down from the top edge to about four-fifths of the way down
+(around 1700 on the left ruler), where the ground will start. The violet
+glow then sits just above the horizon.
 
 ## Add guides for the grid
 
-![Blue guides at x 110, 750 and 1390 and at y 60 and 1700 over the gradient sky](03-guides.webp)
+![Blue guides at the left and right margins and the centre, plus a header line near the top and a horizon line near the bottom, over the gradient sky](03-guides.webp)
 
-Click the top ruler at **x 110**, **750** and **1390** to drop vertical
-guides for the margins and centre. Click the left ruler at **y 60** (the
-header line) and **y 1700** (the horizon). Every block of type will hang off
+A single click on a ruler drops a guide there. Click the top ruler about
+**110 px** in from each side for the margins, then [[⌘]]-click it near the
+middle so the guide snaps to the centre. On the left ruler, click about
+**60 px** from the top for the header line, and at the bottom of the
+gradient (about 1700) for the horizon. Every block of type will hang off
 these lines.
 
 ## Draw the moon
@@ -67,10 +71,16 @@ these lines.
 ![A cream moon disc with darker lasso-drawn maria blotches](04-moon-maria.webp)
 
 Click **Add Layer** and rename it **Moon**. With the **Elliptical Marquee**,
-drag a 600 px circle centred on **1075, 955**, and fill it with `#F2E6C9`
-using **Edit → Fill**.
+[[⌘]]-drag a circle about **600 px** across in the upper right: its right
+edge just inside the right margin guide and its top a little under a third
+of the way down. Set the foreground to `#F2E6C9` and choose **Edit → Fill**.
 
-Then add the maria, the moon's dark patches:
+> **Tip:** For an exact circle, press [[⌘D]] and *click* once with the
+> Elliptical Marquee instead of dragging. Type From **775, 655** To
+> **1375, 1255** in the dialog.
+
+Then add the maria, the moon's dark patches. The Lasso draws as you drag,
+so press, drag round each shape and release to close it:
 
 1. Lasso six soft blobs and fill them with `#D2BC92`.
 2. Lasso two lighter patches and fill them with `#E4D2AE`.
@@ -81,21 +91,27 @@ Don't worry about smooth edges. The next step turns everything into pixels.
 
 ![The Pixelate dialog with Block Size 14 turning the moon's edge into blocky pixel steps](05-pixelate-moon.webp)
 
-With **Moon** selected, choose **Filter → Pixelate** and set **Block Size**
-to **14**. The circle becomes a stepped 8-bit disc, and the maria become
+Press [[⌘D]] to drop the selection. With **Moon** selected, choose
+**Filter → Pixelate…** and set **Block Size** to **14**. The circle becomes a stepped 8-bit disc, and the maria become
 chunky tiles. This is the first "low-res" zone of the card.
 
 ## Build a pixel pine treeline
 
 ![A black ground and a row of stepped pixel pine trees along the horizon](06-pixel-pines.webp)
 
-Add a **Treeline** layer. Marquee from **0, 1698** to the bottom-right corner
-and fill it with `#070811` for the ground.
+Add a **Treeline** layer. Marquee from the left edge, just above the
+horizon guide, down to the bottom-right corner, and fill it with `#070811`
+for the ground.
 
-Each pine is one **Lasso** polygon drawn as a staircase: 8 steps that narrow
-as they go up, with a small cap at the tip. Fill each one with the same ink.
-Keep the trees on the left short (under about 190 px), so the reindeer trail
-has room above them. Let the ones on the right grow up to 290 px.
+Each pine is a staircase: 8 steps that narrow as they go up, with a small
+cap at the tip. Drag the **Lasso** round each staircase outline and fill it
+with the same ink. Keep the trees on the left short (under about 190 px), so
+the reindeer trail has room above them. Let the ones on the right grow up to
+290 px.
+
+> **Tip:** For perfectly square steps, build each tree from stacked
+> rectangles instead. Marquee and fill a wide bar for the bottom step, then
+> a narrower one sitting on top of it, and so on up to the cap.
 
 ## Lasso the reindeer's body
 
@@ -128,17 +144,20 @@ Keep adding pieces in the same colour:
 
 ![A marquee around one reindeer copy with the Move tool's corner handle dragged inward to scale it down](09-scale-frame.webp)
 
-With **Reindeer** selected, click **Duplicate Layer** four times. Rename the
-top copy **Hero** and the others **Frame 4**, **Frame 3**, **Frame 2** and
-**Frame 1**. Frame 4 is the newest ghost, closest to the hero.
+Press [[⌘D]] to drop the last selection. With **Reindeer** selected, click
+**Duplicate Layer** four times. Each copy lands 10 px right of and below the
+one it came from, which doesn't matter because you'll move them all later.
+Rename the top layer **Hero** and the four below it, top to bottom,
+**Frame 4**, **Frame 3**, **Frame 2** and **Frame 1**. Frame 4 is the newest
+ghost, closest to the hero.
 
-For each frame:
+For each frame, click its row first so you're scaling the right copy:
 
-1. Draw a marquee a few pixels larger than the reindeer.
+1. Draw a marquee a little larger than the reindeer.
 2. Switch to the **Move** tool.
 3. Hold [[⌘]] and drag the bottom-right handle inward to scale the copy
-   uniformly. Use **85%**, **72%**, **60%** and **50%** of the hero for
-   Frames 4 → 1.
+   uniformly. Aim for roughly **85%**, **72%**, **60%** and **50%** of the
+   hero's size for Frames 4 → 1.
 4. Press [[⌘D]] to commit.
 
 ## Rotate each frame
@@ -146,8 +165,8 @@ For each frame:
 ![The rotation handle being dragged on a scaled reindeer copy](10-rotate-frame.webp)
 
 Marquee the scaled frame again and drag the round handle just outside the top-right
-corner to rotate it clockwise: **2°** for Frame 4, then **4°**, **6°** and
-**8°**. Older frames should flatten out, as if they're still on the upswing
+corner to rotate it clockwise by a few degrees: about **2°** for Frame 4,
+then **4°**, **6°** and **8°**. Older frames should flatten out, as if they're still on the upswing
 of the leap. Press [[⌘D]] after each rotation.
 
 > **Tip:** Always commit a scale or rotation with [[⌘D]] *before* you drag
@@ -157,8 +176,8 @@ of the leap. Press [[⌘D]] after each rotation.
 
 ![Four cream ghost frames stepping down to the lower left from the hero on the moon](11-frames-placed.webp)
 
-Drag each frame with the **Move** tool so the sequence steps down and to the
-left in an arc, each one smaller than the last. Let frames overlap only a
+Click each frame's row and drag it with the **Move** tool so the sequence
+steps down and to the left in an arc, each one smaller than the last. Let frames overlap only a
 little, around a tenth of their area, so each silhouette still reads on its
 own. Keep the last frame fully on the canvas, at least 60 px in from the
 left edge and above the pine tips.
@@ -170,14 +189,15 @@ left edge and above the pine tips.
 Each frame gets a little more broken than the one before:
 
 - **Frame 4:** leave it clean.
-- **Frame 3:** **Filter → Pixel Stretch**, with Amount **22**, Bands **12**,
+- **Frame 3:** **Filter → Pixel Stretch…**, with Amount **22**, Bands **12**,
   Seed **7** and RGB Split **0**.
-- **Frame 2:** **Pixelate** with Block Size **6**, then **Pixel Stretch** with
-  Amount **30**, Bands **9** and Seed **21**.
-- **Frame 1:** **Pixelate** with Block Size **12**, then **Pixel Stretch** with
-  Amount **36**, Bands **7** and Seed **5**.
+- **Frame 2:** **Filter → Pixelate…** with Block Size **6**, then
+  **Pixel Stretch…** with Amount **30**, Bands **9** and Seed **21**.
+- **Frame 1:** **Pixelate…** with Block Size **12**, then **Pixel Stretch…**
+  with Amount **36**, Bands **7** and Seed **5**.
 
-Set RGB Split to 0. The colour comes from the next step.
+Click the frame's row before each filter, and keep RGB Split at 0 every
+time (it defaults to 0.5). The colour comes from the next step.
 
 ## Review the corruption gradient
 
@@ -198,16 +218,18 @@ For each frame:
 3. Open **Layer effects** (✦). Turn on **Color Overlay** with `#FF2A4D` on
    the R layer and `#19E3E3` on the C layer.
 4. Set the blend mode of both layers to **Screen**.
-5. Drag the R layer left and the C layer right. Use **8 px** each way for
-   Frame 4, then 10, 12 and 14 px for the older frames.
+5. With the **Move** tool and nothing selected, nudge the R layer left and
+   the C layer right with the arrow keys ([[→]] moves 1 px, [[Shift+→]]
+   10 px). Use **8 px** each way for Frame 4, then 10, 12 and 14 px for the
+   older frames.
 
 Where red and cyan overlap in Screen mode they add up to near-white. So each
 ghost gets a pale core with a red fringe on the left and a cyan fringe on
 the right, like a 3D anaglyph.
 
-> **Tip:** Use a Color Overlay pair rather than **Chromatic Aberration** on
-> a transparent layer. On a transparent layer that filter only keeps its
-> inner yellow and cyan fringes.
+> **Tip:** **Filter → Chromatic Aberration…** can split a single layer too,
+> but a Color Overlay pair lets you pick the exact red and cyan and set each
+> offset and opacity on its own.
 
 ## Fade the trail
 
@@ -256,15 +278,17 @@ With the group row selected, you can drag the whole animation with the
 
 Click **Treeline** and add a layer called **Snow Fine**:
 
-1. Fill the layer with `#808080`.
-2. **Filter → Add Noise…** with **Amount 100** and **Mono**.
-3. **Filter → Pixelate** with Block Size **6**. The noise becomes 6 px tiles.
-4. **Filter → Threshold** at about **160**, so only about 1% of the tiles
-   stay white.
-5. Set the layer to **Screen**. The black disappears.
+1. With nothing selected, set the foreground to `#808080` and choose
+   **Edit → Fill** to fill the whole layer.
+2. **Filter → Add Noise…** with **Amount 100** and Mode **Mono**.
+3. **Filter → Pixelate…** with Block Size **6**. The noise becomes 6 px tiles.
+4. **Filter → Threshold…** with Level at about **160**, so only about 1% of
+   the tiles stay white.
+5. Set the layer's blend mode to **Screen** in the ✦ drawer. The black
+   disappears.
 
-Repeat on a **Snow Coarse** layer with Block Size **10** and a Threshold of
-about **156**, which leaves a handful of bigger flakes.
+Repeat on a **Snow Coarse** layer with Block Size **10** and a Threshold
+Level of about **156**, which leaves a handful of bigger flakes.
 
 ## Keep the snow off the ground
 
@@ -272,8 +296,9 @@ about **156**, which leaves a handful of bigger flakes.
 
 On both snow layers:
 
-1. Marquee everything below **y 1690** and press [[Delete]].
-2. Do the same for the thin header strip at the top.
+1. Marquee from just above the horizon guide down to the bottom of the
+   card and press [[Delete]].
+2. Do the same for the thin header strip above the header guide.
 
 Then drag **Treeline** above both snow layers in the Layers panel, so the
 pines hide any flakes behind them. The type area stays clean.
@@ -291,12 +316,18 @@ Add a temporary layer. Hold [[Ctrl]] and scroll up to zoom in all the way.
 That's one CRT scanline: 2 px dark, 2 px clear. Delete the temporary layer
 and press [[⌘0]] to fit the canvas again.
 
+> **Tip:** Tiny marquees are easier to type than to drag. With nothing
+> selected, click once (don't drag) with the Rectangular Marquee and enter
+> From **0, 0** To **4, 2** for the bar, then From **0, 0** To **4, 4** for
+> the tile.
+
 ## Fill the card with scanlines
 
 ![The Pattern Fill dialog with Pattern 1 — 4×4 selected and the scanlines previewing across the whole card](22-pattern-fill.webp)
 
-Add a **Scanlines** layer. Choose **Edit → Fill with Pattern…**, pick the
-**4×4** pattern and tick **Preview**. Click **Apply**.
+Press [[⌘D]] so nothing is selected, then add a **Scanlines** layer. Choose
+**Edit → Fill with Pattern…**, pick the **4×4** pattern and tick
+**Preview**. Click **Apply**.
 
 Drop the layer's opacity to **22%**, then drag it above the **Zoetrope**
 group, so the lines run over everything and flatten it like a CRT screen.
@@ -305,13 +336,17 @@ group, so the lines run over everything and flatten it like a CRT screen.
 
 ![MERRY & BRIGHT typed in cream Anton over the sky, with the Text options bar showing Anton at 264 px](23-title-typed.webp)
 
-Click **Snow Coarse**, so the new text doesn't restyle any other layer. Pick
-the **Text** tool with **Anton**, Size **264**, colour `#F4ECD8` and Line
-height **0.95**. Type **MERRY**, press [[Enter]], then type **& BRIGHT**.
+Click **Snow Coarse**, so the new text doesn't restyle any other layer, and
+set the foreground to `#F4ECD8`. Pick the **Text** tool, set the font to
+**Anton** and Size to **264** in the options bar, and set **Line height** to
+**0.95** in the Text panel. Click in the sky, type **MERRY**, press [[Enter]], then type
+**& BRIGHT**.
 
-Click **Rasterize Layer**, then move it so the letters' top-left corner sits
-at **114, 130**. That leaves room for the red copy you'll add next, which
-sits 10 px further left, like a misregistered print.
+Click **Rasterize Layer** in the Layers panel, so you can cut slices out of
+the letters in the next step. Then move the title so its left edge sits a
+few pixels right of the left margin guide and its top is about 130 px down,
+well below the header line. That leaves room for the red copy you'll add
+later, which sits 10 px further left, like a misregistered print.
 
 ## Datamosh the title
 
@@ -319,11 +354,14 @@ sits 10 px further left, like a misregistered print.
 
 Glitch slices only work when the title stays readable, so make just two:
 
-1. Marquee a band across **MERRY** from **y 214 to 232**. With the **Move**
-   tool, press [[Shift+→]] once and [[→]] six times to shift it **16 px**
-   right. Press [[⌘D]].
-2. Marquee **x 300 → 1100, y 488 → 504** across **BRIGHT**, which skips the
-   **&**. Shift it **14 px** left and press [[⌘D]].
+1. Marquee a thin band, about **18 px** tall, right across **MERRY** a
+   little above the middle of the letters. With the **Move** tool, press
+   [[Shift+→]] once and [[→]] six times to shift it **16 px** right. Press
+   [[⌘D]].
+2. Marquee a **16 px** band across **BRIGHT**, again a little above the
+   middle. Start it just right of the **&** so the ampersand stays whole,
+   and run it past the end of the word. Shift it **14 px** left and press
+   [[⌘D]].
 
 Keep the slices thin and the shifts small. At 30 px or more, the shifted
 strokes start to read as doubled letters.
@@ -341,32 +379,51 @@ layers **Title Red** (bottom), **Title Cyan** and **Title** (top):
 Because the slices were cut *before* you duplicated, all three layers glitch
 in the same places. Group them as **Headline**.
 
-> **Tip:** Keep the three layers separate. Don't Merge Down and then cut the
-> result: a merged, moved layer can pick up stray pixels outside the band.
+> **Tip:** Keep the three layers separate rather than merging them. That way
+> you can still adjust each channel's offset or colour at the end.
 
 ## Add the terminal type
 
 ![The Text options bar set to VT323 at 84 px with LOADING JOY... selected at the bottom of the card](26-terminal-type.webp)
 
 Use **VT323**, a pixel terminal face, for everything else. Hang the left
-blocks on the 110 guide and right-align the right blocks to 1390:
+blocks on the left margin guide, and set the right blocks with **Align** set to **Right** in the options
+bar, so their right edges sit on the right margin guide:
 
-- **ADVENT_ZOETROPE.GIF:** 40 px cream, top-left at **110, 60**.
-- **REC 12.24.2026:** 40 px red, right edge on **1390**, top at 60. Draw a
+- **ADVENT_ZOETROPE.GIF:** 40 px cream, on the left margin with its top on
+  the header guide.
+- **REC 12.24.2026:** 40 px red, on the right margin, level with it. Draw a
   16 px red square just left of it as a recording light.
 - **FRAME 05/05:** 40 px cream, right-aligned under REC.
-- **LOADING JOY...:** 84 px cream at **110, 1752**.
-- **24/24:** 84 px cyan, right edge on **1390**, on the same line.
-- **SEASON'S GREETINGS & A GLITCH-FREE 2027:** 52 px cream at **110, 1950**.
+- **LOADING JOY...:** 84 px cream on the left margin, about 50 px below the
+  horizon guide.
+- **24/24:** 84 px cyan, on the right margin, on the same line.
+- **SEASON'S GREETINGS & A GLITCH-FREE 2027:** 52 px cream on the left
+  margin, near the bottom of the card. Leave room above it for the loading
+  bar.
+
+Before each new block, click a layer that isn't text, so the new settings
+don't restyle a block you've already set. Nudge each block into place with
+the **Move** tool and the arrow keys.
 
 ## Build the advent loading bar
 
 ![A marquee over one cell of the progress bar with the 8 px grid showing](27-advent-bar.webp)
 
-Turn on **View → Show Grid** to check alignment. Add an **Advent Bar**
-layer and marquee-fill 24 cells between the 110 and 1390 guides, from
-**y 1836 to 1892**. Each cell is 45.67 px wide with an 8 px gap, so the
-pitch is 1288 ÷ 24 = 53.67 px.
+Turn on **View → Show Grid** to check alignment. Showing the grid also
+turns on **Snap**, and these cells don't fall on grid lines, so untick
+**Snap** in the options bar.
+
+Add an **Advent Bar** layer. The bar is **56 px** tall, sits between
+LOADING JOY... and the greeting, and runs from margin guide to margin guide.
+Marquee-fill 24 cells along it, each about **46 px** wide with an **8 px**
+gap. Twenty-four cells and 23 gaps fill the 1280 px between the margins
+exactly, so each cell starts about 53.7 px after the last.
+
+> **Tip:** To type each cell's corners, press [[⌘D]] and click once with
+> the Rectangular Marquee. Cell 1 runs From **110, 1836** To **156, 1892**.
+> Add 53.7 to both X values for every cell after it, rounding to whole
+> pixels.
 
 Fill 23 cells cream. For the 24th, first fill a cyan cell 6 px up and to the
 right, then a red `#FF2A4D` cell on top. Christmas Eve is the one cell that's
@@ -379,19 +436,23 @@ still flickering. Group all the type layers as **Type**.
 Real datamosh artefacts cut across *everything*, so copy from the whole
 composite:
 
-1. Click the top layer. Marquee **x 560 → 1290, y 1165 → 1187**, below the
-   hero's hooves, and press [[⇧⌘C]] (**Edit → Copy Merged**).
-2. Wait a couple of seconds, then press [[⌘V]]. The band pastes in place as
-   a new layer.
-3. Shift it **40 px** right with the arrow keys.
+1. Click the top layer. Marquee a thin band, about **22 px** tall, across
+   the lower part of the moon just below the hero's hooves. Start it over
+   the nearest ghost frame on the left and end it a little inside the moon's
+   right edge. Press [[⇧⌘C]] (**Edit → Copy Merged**).
+2. Press [[⌘V]]. The band pastes in place as a new layer.
+3. With the **Move** tool, press [[Shift+→]] four times to shift it
+   **40 px** right, then press [[⌘D]].
 
 ## Add a second tear
 
 ![Two thin shifted bands tearing across the lower moon and the ghost trail](29-tears.webp)
 
-Make a second, 6 px band across the bottom of the moon and shift it **28 px**
-left. Trim both bands so they end inside the moon. Glitches that spill into
-the empty sky just look like dead pixels.
+Make a second, 6 px band across the bottom of the moon the same way, shift
+it **28 px** left and press [[⌘D]]. Then trim both bands so they end inside
+the moon: on each band's layer, marquee the part that sticks out past the
+moon's edge and press [[Delete]]. Glitches that spill into the empty sky just
+look like dead pixels.
 
 ## Balance the corner with a pixel star
 
