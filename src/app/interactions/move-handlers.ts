@@ -780,6 +780,11 @@ export function handleNudgeMove(
     const engine = getEngine();
     if (!engine) return;
 
+    // The nudge owns whatever float is live from here on; a prefloat left
+    // registered would be committed by the shifted selection below,
+    // dropping the float this nudge is moving (#1076).
+    cancelPrefloat();
+
     // Float selection on GPU if not already floating
     if (!floatingSelectionRef.current) {
       // Ensure selection mask is on the GPU before floating
