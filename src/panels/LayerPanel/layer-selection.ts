@@ -23,7 +23,13 @@ export function isLayerAlphaSelection(layerId: string, mask: Uint8ClampedArray):
     && layerAlphaSelection.mask === mask;
 }
 
-export function selectLayerAlpha(layerId: string): void {
+export interface SelectLayerAlphaOptions {
+  /** Float the selection ahead of the first drag (default true). */
+  prefloat?: boolean;
+}
+
+export function selectLayerAlpha(layerId: string, options: SelectLayerAlphaOptions = {}): void {
+  const { prefloat = true } = options;
   // Commit any active GPU float so the layer texture has the final pixels
   const engine = getEngine();
   if (engine && hasFloat(engine)) {
@@ -65,7 +71,7 @@ export function selectLayerAlpha(layerId: string): void {
     // Only the active layer can be moved, so a prefloat of another layer
     // is never used — and a live float on it made Delete clear the whole
     // active layer (#801, #1055).
-    if (layer.type !== 'text' && layerId === editorState.document.activeLayerId) {
+    if (prefloat && layer.type !== 'text' && layerId === editorState.document.activeLayerId) {
       schedulePrefloat(layerId, selMask, bounds);
     }
   }
