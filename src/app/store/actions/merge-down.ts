@@ -72,6 +72,19 @@ export function computeMergeDown(
   // below still dropped the active layer, silently destroying its pixels.
   if (bottomLayer.type === 'group') return undefined;
 
+  // #1068: the lower layer's blend mode and effects act against the layers
+  // beneath it, which are not part of the merge, so they cannot be baked
+  // into its pixels — they stay live on the merged layer, as in Photoshop.
+  // Its opacity is baked (the top layer then keeps its full strength)
+  // unless effects are live: they are drawn from the layer's unscaled
+  // alpha, so baking the opacity would weaken them.
+  const keepsBottomOpacity = hasEnabledEffects(bottomLayer.effects);
+  const mergedStyle = {
+    blendMode: bottomLayer.blendMode,
+    opacity: keepsBottomOpacity ? bottomLayer.opacity : 1,
+    effects: bottomLayer.effects,
+  };
+
   const engine = getEngine();
   if (engine) {
     // `rasterizeLayerEffects` bakes the layer's opacity into the pixels
@@ -87,20 +100,11 @@ export function computeMergeDown(
       }
     }
 
-    if (hasEnabledEffects(bottomLayer.effects)) {
-      const rasterized = rasterizeLayerEffects(engine, belowId);
-      if (rasterized && rasterized.length > 0) {
-        uploadLayerPixels(engine, belowId, rasterized, doc.width, doc.height, 0, 0);
-        const cleared = { ...bottomLayer, x: 0, y: 0, width: doc.width, height: doc.height, opacity: 1, effects: DEFAULT_EFFECTS, mask: null };
-        updateLayer(engine, layerToDescJson(cleared, bottomLayer.visible));
-      }
-    }
-
     // GPU-side merge: composite top onto bottom.
     // mergeLayers calls ensure_layer_full_size on the bottom layer,
     // which may reposition it to (0, 0). The JS position update below
     // keeps the store in sync.
-    mergeLayers(engine, activeId, belowId);
+    mergeLayers(engine, activeId, belowId, !keepsBottomOpacity);
   }
 
   // GPU is source of truth for the two touched layers — drop stale JS
@@ -115,9 +119,6 @@ export function computeMergeDown(
   let layers = removeFromParentGroup(doc.layers, activeId);
   layers = layers.filter((l) => l.id !== activeId);
 
-  // mergeLayers bakes both layers' opacities and blend modes into the
-  // merged content, so the result layer resets to opacity 1 / normal blend.
-  //
   // #859: the merged pixels are a raster composite, but a text layer's
   // renderer re-typesets from `text`/`fontFamily`/etc. on every edit and
   // ignores whatever is in its GPU texture — so if either merged layer was
@@ -133,18 +134,16 @@ export function computeMergeDown(
         type: 'raster' as const,
         visible: l.visible,
         locked: l.locked,
-        opacity: 1,
-        blendMode: 'normal' as const,
+        ...mergedStyle,
         x: 0,
         y: 0,
         clipToBelow: l.clipToBelow,
-        effects: DEFAULT_EFFECTS,
         mask: l.mask,
         width: doc.width,
         height: doc.height,
       };
     }
-    return { ...l, effects: DEFAULT_EFFECTS, opacity: 1, blendMode: 'normal' as const, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
+    return { ...l, ...mergedStyle, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
   });
 
   return {

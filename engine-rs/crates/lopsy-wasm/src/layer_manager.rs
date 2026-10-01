@@ -200,10 +200,18 @@ pub fn duplicate_texture(
 
 /// GPU-side merge: composite top layer onto bottom layer using the blend shader.
 /// The result goes into the bottom layer's texture.
+///
+/// The top layer is blended against the bottom layer's pixels alone, with
+/// its own blend mode, opacity and mask. The bottom layer's blend mode is
+/// never baked: it acts against the layers beneath, which are not part of
+/// the merge, so it stays on the surviving layer (#1068). Its opacity is
+/// baked only when `bake_bottom_opacity` is set — a layer with live effects
+/// draws them from its unscaled alpha, so it keeps its opacity instead.
 pub fn merge_layers(
     engine: &mut EngineInner,
     top_id: &str,
     bottom_id: &str,
+    bake_bottom_opacity: bool,
 ) -> Result<(), String> {
     let top_handle = *engine.layer_textures.get(top_id)
         .ok_or_else(|| format!("Top layer {top_id} not found"))?;
@@ -251,8 +259,6 @@ pub fn merge_layers(
     engine.fbo_pool.unbind(&engine.gl);
 
     // Blend bottom into scratch_a (src=bottom, dst=scratch_b cleared → scratch_a)
-    // Use the bottom layer's actual opacity so it's baked into the merged
-    // content. The merged layer will get opacity=1.0 on the JS side.
     let scratch_b_tex = engine.texture_pool.get(engine.scratch_texture_b).cloned()
         .ok_or("scratch_b not found")?;
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
@@ -267,7 +273,8 @@ pub fn merge_layers(
 
         if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), bottom_desc.opacity); }
+        let bottom_opacity = if bake_bottom_opacity { bottom_desc.opacity } else { 1.0 };
+        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), bottom_opacity); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") {
             engine.gl.uniform2f(Some(&loc), bottom_desc.x as f32, bottom_desc.y as f32);
         }
