@@ -302,6 +302,15 @@ pub struct EngineInner {
     // snapshots via blit (~1ms) instead of readback+compress (~100ms).
     pub snapshot_textures: Vec<Option<SnapshotTexture>>,
     pub snapshot_free_list: Vec<u32>,
+    /// Per-layer content generation: a fresh value from
+    /// `next_content_gen` every time `mark_layer_dirty` reports the layer's
+    /// pixels or mask changed. Never reused, so a layer deleted and
+    /// re-added can't match an old cache key.
+    pub layer_content_gen: HashMap<String, u64>,
+    pub next_content_gen: u64,
+    /// The live compositor's cache of each layer's effect images; see
+    /// `effect_cache_gpu.rs`.
+    pub effect_cache: crate::effect_cache_gpu::EffectCache,
 }
 
 pub struct SnapshotTexture {
@@ -448,6 +457,9 @@ impl EngineInner {
             text_renderer: None,
             snapshot_textures: Vec::new(),
             snapshot_free_list: Vec::new(),
+            layer_content_gen: HashMap::new(),
+            next_content_gen: 1,
+            effect_cache: crate::effect_cache_gpu::new_cache(),
         })
     }
 
@@ -504,9 +516,24 @@ impl EngineInner {
         self.needs_recomposite = true;
     }
 
-    pub fn mark_layer_dirty(&mut self, _layer_id: &str) {
+    /// Report that `layer_id`'s pixels or mask changed. Every layer and
+    /// mask texture writer calls this with the id it wrote; the effect cache
+    /// relies on it to know a layer's cached effects are stale.
+    pub fn mark_layer_dirty(&mut self, layer_id: &str) {
         self.needs_recomposite = true;
         self.group_pre_adj_valid = false;
+        let generation = self.next_content_gen;
+        self.next_content_gen += 1;
+        match self.layer_content_gen.get_mut(layer_id) {
+            Some(g) => *g = generation,
+            None => {
+                self.layer_content_gen.insert(layer_id.to_string(), generation);
+            }
+        }
+    }
+
+    pub fn layer_content_gen(&self, layer_id: &str) -> u64 {
+        self.layer_content_gen.get(layer_id).copied().unwrap_or(0)
     }
 
     /// Expand a lazy 1x1 layer texture to full document size.
@@ -663,6 +690,8 @@ impl EngineInner {
         for (_, tex) in self.layer_masks.drain() {
             self.texture_pool.release(tex);
         }
+        crate::effect_cache_gpu::clear(self);
+        self.layer_content_gen.clear();
         // Stroke textures
         for (_, tex) in self.stroke_textures.drain() {
             self.texture_pool.release(tex);

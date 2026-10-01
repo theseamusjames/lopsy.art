@@ -1013,3 +1013,19 @@ pub fn clear_gpu_snapshots(engine: &mut Engine) {
 pub fn live_gpu_snapshot_count(engine: &Engine) -> u32 {
     engine.inner.snapshot_textures.iter().filter(|s| s.is_some()).count() as u32
 }
+
+/// The live compositor's effect cache: `[entries, images, bytes, budget
+/// bytes, hits, misses]`. `bytes` is the VRAM its cached images hold;
+/// hits and misses count per-layer lookups since the engine started.
+#[wasm_bindgen(js_name = "effectCacheStats")]
+pub fn effect_cache_stats(engine: &Engine) -> Vec<f64> {
+    let stats = crate::effect_cache_gpu::stats(&engine.inner);
+    vec![
+        f64::from(stats.entries),
+        f64::from(stats.images),
+        stats.bytes as f64,
+        engine.inner.effect_cache.budget_bytes() as f64,
+        stats.hits as f64,
+        stats.misses as f64,
+    ]
+}

@@ -182,6 +182,8 @@ Output goes to `src/engine-wasm/pkg/` (gitignored generated files). The JS bridg
 
 Each frame: clear composite FBO → for each visible layer: render behind-effects (outer glow, drop shadow) → blend layer texture onto composite (with mask, blend mode, opacity) → blend active stroke texture → render mask edit overlay → render above-effects (inner glow, stroke) → apply image adjustments (exposure/contrast/vignette) → final blit to screen with viewport transform.
 
+Effect images (glows, shadow, stroke) are cached per layer in the live compositor (`effect_cache_gpu.rs`, policy in `lopsy-core/src/effect_cache.rs`) and replayed until the layer's content generation, position, opacity, mask state or effect settings change. The content generation is bumped by `mark_layer_dirty(id)`, so **every layer- or mask-texture writer must call `mark_layer_dirty` with the id it wrote** — a writer that doesn't leaves stale effects on screen. Export and Rasterize Layer Style never use the cache.
+
 ### Undo/Redo and GPU Textures
 
 - `pushHistory()` flushes pending JS pixel data to GPU, then snapshots each layer by **duplicating its GPU texture** — `snapshotLayerGpu()` blits into a pooled texture and returns an opaque `u32` handle. No readback, no compression. Only layers in `dirtyLayerIds` are re-snapshotted; the rest reuse the previous snapshot's handle when position and raster dimensions are unchanged.

@@ -3,6 +3,9 @@ use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
+use crate::effect_cache_gpu::{self as fx_cache, emit_effect, EffectCacheKey, EffectCapture, EffectOut, Phase, Target};
+use lopsy_core::effect_cache as fx_extent;
+use lopsy_core::geometry::Rect;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
 
 /// The document-space origin of a layer's mask texture — where mask texel
@@ -48,6 +51,8 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     // Every scratch pass below renders at the doc viewport and blits the
     // whole scratch texture back; a layer op may have left it layer-sized.
     engine.ensure_scratch_size(doc_w, doc_h)?;
+    let budget = fx_cache::budget_for_document(doc_w, doc_h, fx_cache::bytes_per_texel(engine));
+    engine.effect_cache.set_budget_bytes(budget);
 
     // Reset GL state — brush/shape/selection tools may have left blending enabled.
     // If BLEND is on, the blit passes in blend_onto_composite would blend
@@ -254,6 +259,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             let top_matches = group_stack.last().map(|f| f.id.as_str()) == Some(gid.as_str());
             if top_matches {
                 if group_stack.last().is_some_and(|f| f.skip) {
+                    engine.effect_cache.touch(&layer_id);
                     continue;
                 }
                 group_stack.last().unwrap().target
@@ -268,6 +274,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                     let cache_tex = *engine.group_pre_adj_cache.get(&gid).unwrap();
                     restore_pre_adj_cache(engine, cache_tex, scratch_target);
                     group_stack.push(GroupFrame { id: gid, target: scratch_target, skip: true });
+                    engine.effect_cache.touch(&layer_id);
                     continue;
                 }
                 clear_target(engine, scratch_target);
@@ -315,7 +322,51 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // Effects follow the masked silhouette, not the raw layer alpha (#977).
         let has_shape_effects = outer_glow.is_some() || drop_shadow.is_some()
             || inner_glow.is_some() || stroke_eff.is_some();
-        let masked_effect_handle = match (&mask_arg, has_shape_effects) {
+
+        // Replay the layer's cached effect images when nothing they're built
+        // from has changed. A live brush stroke bypasses the cache: the
+        // effects then trace layer + stroke, which changes every dab.
+        let cache_key = (has_shape_effects && !engine.stroke_textures.contains_key(&layer_id)).then(|| EffectCacheKey {
+            content_gen: engine.layer_content_gen(&layer_id),
+            texture: tex_handle,
+            texture_size: (tw, th),
+            origin: (layer_x as i32, layer_y as i32),
+            mask: mask_arg.as_ref().and_then(|(_, w, h, ox, oy)| {
+                engine.layer_masks.get(&layer_id).map(|&m| (m, *w, *h, *ox, *oy))
+            }),
+            opacity,
+            doc_size: (doc_w, doc_h),
+            outer_glow: outer_glow.clone(),
+            inner_glow: inner_glow.clone(),
+            drop_shadow: drop_shadow.clone(),
+            stroke: stroke_eff.clone(),
+        });
+        let mut stale = Vec::new();
+        let cached = cache_key.as_ref().and_then(|key| {
+            engine.effect_cache.lookup(&layer_id, key, &mut stale).map(|e| (e.behind.clone(), e.above.clone()))
+        });
+        let mut capture = match (&cache_key, &cached) {
+            (Some(_), None) => {
+                let (behind, above) = fx_extent::planned_images(
+                    Rect::new(layer_x as i32, layer_y as i32, tw, th),
+                    fx_extent::ShapeEffects {
+                        outer_glow: outer_glow.as_ref(),
+                        inner_glow: inner_glow.as_ref(),
+                        drop_shadow: drop_shadow.as_ref(),
+                        stroke: stroke_eff.as_ref(),
+                    },
+                    doc_w,
+                    doc_h,
+                );
+                let bpp = fx_cache::bytes_per_texel(engine);
+                let planned = fx_cache::image_bytes(&behind, bpp) + fx_cache::image_bytes(&above, bpp);
+                engine.effect_cache.has_room_for(planned).then(|| EffectCapture::new(std::mem::take(&mut stale)))
+            }
+            _ => None,
+        };
+        fx_cache::delete_textures(engine, stale);
+
+        let masked_effect_handle = match (&mask_arg, has_shape_effects && cached.is_none()) {
             (Some((t, w, h, ox, oy)), true) => render_layer_masked_for_effects(
                 engine, effect_tex_handle, tw, th, layer_x, layer_y, (&**t, *w, *h, *ox, *oy),
             ),
@@ -323,16 +374,22 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         };
         let effects_src_handle = masked_effect_handle.unwrap_or(effect_tex_handle);
 
-        // --- "Behind" effects: outer glow, drop shadow ---
-        render_behind_effects(
-            engine,
-            EffectSource { handle: effects_src_handle, x: layer_x, y: layer_y, width: tw, height: th },
-            outer_glow.as_ref(),
-            drop_shadow.as_ref(),
-            stroke_eff.as_ref(),
-            opacity,
-            target,
-        );
+        // --- "Behind" effects: outer glow, drop shadow, outside stroke ---
+        if let Some((behind, _)) = &cached {
+            for image in behind {
+                fx_cache::blend_cached_effect(engine, image, target);
+            }
+        } else {
+            render_behind_effects(
+                engine,
+                EffectSource { handle: effects_src_handle, x: layer_x, y: layer_y, width: tw, height: th },
+                outer_glow.as_ref(),
+                drop_shadow.as_ref(),
+                stroke_eff.as_ref(),
+                opacity,
+                &mut EffectOut { target, capture: capture.as_mut() },
+            );
+        }
 
         // --- Color overlay + blend layer onto composite ---
         let overlay_desc = color_overlay.as_ref();
@@ -379,12 +436,22 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         }
 
         // --- "On top" effects: inner glow, stroke effect ---
-        if let Some(ref glow) = inner_glow {
-            render_glow(engine, effects_src_handle, tw, th, glow, 1, layer_x, layer_y, target);
-        }
-        if let Some(ref stroke) = stroke_eff {
-            if !is_behind_stroke(stroke) {
-                render_stroke(engine, effects_src_handle, tw, th, stroke, layer_x, layer_y, opacity, target);
+        if let Some((_, above)) = &cached {
+            for image in above {
+                fx_cache::blend_cached_effect(engine, image, target);
+            }
+        } else {
+            if let Some(c) = capture.as_mut() {
+                c.phase = Phase::Above;
+            }
+            let mut out = EffectOut { target, capture: capture.as_mut() };
+            if let Some(ref glow) = inner_glow {
+                render_glow(engine, effects_src_handle, tw, th, glow, 1, layer_x, layer_y, &mut out);
+            }
+            if let Some(ref stroke) = stroke_eff {
+                if !is_behind_stroke(stroke) {
+                    render_stroke(engine, effects_src_handle, tw, th, stroke, layer_x, layer_y, opacity, &mut out);
+                }
             }
         }
 
@@ -394,7 +461,16 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         if let Some(merged) = merged_handle {
             engine.texture_pool.release(merged);
         }
+        if let (Some(key), Some(c)) = (cache_key, capture) {
+            fx_cache::store_capture(engine, &layer_id, key, c);
+        }
     }
+
+    // Layers not drawn through the cache this frame (hidden, deleted,
+    // effects removed) give their images back.
+    let mut unused = Vec::new();
+    engine.effect_cache.end_frame(&mut unused);
+    fx_cache::delete_textures(engine, unused);
 
     // 4. Apply image adjustments (exposure, contrast, etc.) if any are active
     apply_image_adjustments(engine);
@@ -447,17 +523,6 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 // Effect rendering helpers
 // ---------------------------------------------------------------------------
-
-/// A doc-sized texture and the FBO backing it that layer and effect passes
-/// composite into: the main composite, or the group scratch while the
-/// children of a group with adjustments are being rendered. Effects must
-/// follow their layer into the scratch so the group's adjustments apply
-/// over them instead of the scratch covering them (#796).
-#[derive(Clone, Copy)]
-struct Target {
-    tex: TextureHandle,
-    fbo: FramebufferHandle,
-}
 
 fn main_target(engine: &EngineInner) -> Target {
     Target { tex: engine.composite_texture, fbo: engine.composite_fbo }
@@ -796,60 +861,6 @@ fn render_quick_mask_overlay(engine: &mut EngineInner) {
     engine.draw_fullscreen_quad();
 }
 
-/// Blend an effect result (in scratch_a) onto `target` using the blend shader.
-/// Uses the same shader-based compositing as layer blending — no GL blend state needed.
-fn blend_effect_onto_target(engine: &mut EngineInner, target: Target) {
-    let effect_tex = match engine.texture_pool.get(engine.scratch_texture_a) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-    let comp_tex = match engine.texture_pool.get(target.tex) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-    let doc_w = engine.doc_width as f32;
-    let doc_h = engine.doc_height as f32;
-
-    // Use the Normal-mode blend shader: src=effect, dst=composite → render into scratch_b
-    let shader = &engine.shaders.blend_normal;
-    engine.gl.use_program(Some(&shader.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&effect_tex));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
-    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), 0); }
-
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.draw_fullscreen_quad();
-
-    // Break feedback loop: unbind the target texture from TEXTURE1 before
-    // rendering to the FBO it backs.
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
-    // Copy scratch_b → target
-    engine.fbo_pool.bind(&engine.gl, target.fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.gl.use_program(Some(&engine.shaders.blit.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b) {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
-    }
-    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-    engine.draw_fullscreen_quad();
-}
-
 /// Render (layer + pending stroke) into a scratch texture via the
 /// source-over composite shader, matching what `end_stroke` will bake into
 /// the layer. Returns the merged texture handle (caller must release), or
@@ -1082,23 +1093,23 @@ fn render_behind_effects(
     drop_shadow: Option<&ShadowDesc>,
     stroke: Option<&StrokeDesc>,
     layer_opacity: f32,
-    target: Target,
+    out: &mut EffectOut,
 ) {
     if outer_glow.is_some() || drop_shadow.is_some() {
         let stroked = stroke.and_then(|s| render_stroke_silhouette(engine, src, s));
         let cast = stroked.unwrap_or(src);
         if let Some(glow) = outer_glow {
-            render_glow(engine, cast.handle, cast.width, cast.height, glow, 0, cast.x, cast.y, target);
+            render_glow(engine, cast.handle, cast.width, cast.height, glow, 0, cast.x, cast.y, out);
         }
         if let Some(shadow) = drop_shadow {
-            render_shadow(engine, cast.handle, cast.width, cast.height, shadow, cast.x, cast.y, layer_opacity, target);
+            render_shadow(engine, cast.handle, cast.width, cast.height, shadow, cast.x, cast.y, layer_opacity, out);
         }
         if let Some(s) = stroked {
             engine.texture_pool.release(s.handle);
         }
     }
     if let Some(stroke) = stroke.filter(|s| is_behind_stroke(s)) {
-        render_stroke(engine, src.handle, src.width, src.height, stroke, src.x, src.y, layer_opacity, target);
+        render_stroke(engine, src.handle, src.width, src.height, stroke, src.x, src.y, layer_opacity, out);
     }
 }
 
@@ -1269,7 +1280,7 @@ fn silhouette_by_dilation(
 }
 
 /// Render outer or inner glow.
-fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, glow: &GlowDesc, mode: i32, layer_x: f32, layer_y: f32, target: Target) {
+fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, glow: &GlowDesc, mode: i32, layer_x: f32, layer_y: f32, out: &mut EffectOut) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     let blur_radius = glow.size.ceil() as u32;
@@ -1373,7 +1384,8 @@ fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th:
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
     }
 
-    blend_effect_onto_target(engine, target);
+    let src_rect = Rect::new(layer_x as i32, layer_y as i32, tw, th);
+    emit_effect(engine, out, || if mode == 0 { fx_extent::outer_glow_extent(src_rect, glow) } else { fx_extent::inner_glow_extent(src_rect) });
 }
 
 fn set_glow_uniforms(engine: &EngineInner, glow: &GlowDesc, mode: i32, tw: u32, th: u32, layer_x: f32, layer_y: f32) {
@@ -1393,7 +1405,7 @@ fn set_glow_uniforms(engine: &EngineInner, glow: &GlowDesc, mode: i32, tw: u32, 
 }
 
 /// Render drop shadow.
-fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, shadow: &ShadowDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, target: Target) {
+fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, shadow: &ShadowDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, out: &mut EffectOut) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     let blur_radius = shadow.blur.ceil() as u32;
@@ -1492,7 +1504,8 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         engine.draw_fullscreen_quad();
     }
 
-    blend_effect_onto_target(engine, target);
+    let src_rect = Rect::new(layer_x as i32, layer_y as i32, tw, th);
+    emit_effect(engine, out, || fx_extent::drop_shadow_extent(src_rect, shadow));
 }
 
 fn set_shadow_uniforms(engine: &EngineInner, shadow: &ShadowDesc, tw: u32, th: u32, layer_x: f32, layer_y: f32) {
@@ -1517,7 +1530,7 @@ fn is_behind_stroke(stroke: &StrokeDesc) -> bool {
     stroke.position == lopsy_core::layer::StrokePosition::Outside
 }
 
-fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, stroke: &StrokeDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, target: Target) {
+fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, stroke: &StrokeDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, out: &mut EffectOut) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     let position = match stroke.position {
@@ -1525,6 +1538,7 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         lopsy_core::layer::StrokePosition::Outside => 0,
         lopsy_core::layer::StrokePosition::Center => 2,
     };
+    let src_rect = Rect::new(layer_x as i32, layer_y as i32, tw, th);
     let half_w = if position == 2 { stroke.width * 0.5 } else { stroke.width };
 
     let layer_tex = match engine.texture_pool.get(tex_handle).cloned() {
@@ -1580,7 +1594,7 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         // For center stroke: also need the inside half
         if do_outside && do_inside {
             // First half (outside) is in scratch_a, blend it onto composite
-            blend_effect_onto_target(engine, target);
+            emit_effect(engine, out, || fx_extent::stroke_extent(src_rect, stroke));
 
             // Now do inside half: extract inverted alpha, dilate, apply
             render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, true);
@@ -1589,7 +1603,7 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         }
     }
 
-    blend_effect_onto_target(engine, target);
+    emit_effect(engine, out, || fx_extent::stroke_extent(src_rect, stroke));
 }
 
 fn render_stroke_extract_alpha(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTexture, tw: u32, th: u32, layer_x: f32, layer_y: f32, invert: bool) {
@@ -1794,7 +1808,7 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
             effects.drop_shadow.as_ref().filter(|d| d.enabled),
             effects.stroke.as_ref().filter(|st| st.enabled),
             *opacity,
-            target,
+            &mut EffectOut::direct(target),
         );
 
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
@@ -1802,8 +1816,8 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
             blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg, target)?;
         }
 
-        if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 1, *layer_x, *layer_y, target); } }
-        if let Some(ref stroke) = effects.stroke { if stroke.enabled && !is_behind_stroke(stroke) { render_stroke(engine, fx_handle, tw, th, stroke, *layer_x, *layer_y, *opacity, target); } }
+        if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 1, *layer_x, *layer_y, &mut EffectOut::direct(target)); } }
+        if let Some(ref stroke) = effects.stroke { if stroke.enabled && !is_behind_stroke(stroke) { render_stroke(engine, fx_handle, tw, th, stroke, *layer_x, *layer_y, *opacity, &mut EffectOut::direct(target)); } }
         if let Some(masked) = masked_effect_handle {
             engine.texture_pool.release(masked);
         }
@@ -1937,7 +1951,7 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
         effects.drop_shadow.as_ref().filter(|d| d.enabled),
         effects.stroke.as_ref().filter(|st| st.enabled),
         opacity,
-        target,
+        &mut EffectOut::direct(target),
     );
 
     // Layer content with color overlay (use Normal blend, not the layer's blend mode)
@@ -1947,8 +1961,8 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
     }
 
     // On-top effects
-    if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 1, layer_x, layer_y, target); } }
-    if let Some(ref stroke) = effects.stroke { if stroke.enabled && !is_behind_stroke(stroke) { render_stroke(engine, fx_handle, tw, th, stroke, layer_x, layer_y, opacity, target); } }
+    if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 1, layer_x, layer_y, &mut EffectOut::direct(target)); } }
+    if let Some(ref stroke) = effects.stroke { if stroke.enabled && !is_behind_stroke(stroke) { render_stroke(engine, fx_handle, tw, th, stroke, layer_x, layer_y, opacity, &mut EffectOut::direct(target)); } }
 
     if let Some(masked) = masked_effect_handle {
         engine.texture_pool.release(masked);
