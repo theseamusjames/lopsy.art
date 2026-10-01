@@ -1160,6 +1160,18 @@ function textLayerPropsJson(layer: TextLayer): string {
 }
 
 /**
+ * The anchor (layout origin in document space) of a committed text layer,
+ * whose `x`/`y` hold its texture's top-left: `anchor + renderOffset`. Falls
+ * back to `x`/`y` when the layer renders no glyphs.
+ */
+export function textLayerAnchor(engine: Engine, layer: TextLayer): { x: number; y: number } {
+  setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
+  const bounds = renderTextLayer(engine, layer.id);
+  if (bounds.length !== 4) return { x: layer.x, y: layer.y };
+  return { x: layer.x - (bounds[2] ?? 0), y: layer.y - (bounds[3] ?? 0) };
+}
+
+/**
  * Re-render a committed text layer from its stored properties using the WASM
  * text engine and upload the result. `layer.x`/`layer.y` are treated as the
  * text anchor (layout origin in document space); the rendered texture is placed

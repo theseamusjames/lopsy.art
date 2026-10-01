@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { createDocument, getEditorState, setToolOption, waitForStore } from './helpers';
+import { createDocument, docToScreen, getEditorState, setToolOption, waitForStore } from './helpers';
 import { clickAtDoc, getTextEditing, selectTextTool } from './text-edit-helpers';
 
 /** Ink extent of one line of a text layer, in document pixels. */
@@ -178,4 +178,51 @@ test.describe('Point text alignment', () => {
     expect(layer?.text).toBe('WIDE FIRST LINE\nXMID');
     expect(layer?.textAlign).toBe('center');
   });
+
+  for (const align of ['center', 'left'] as const) {
+    test(`binding ${align}-aligned point text to a path and unbinding puts it back where it was`, async ({ page }) => {
+      // An arch with the Pen tool, committed without stroking.
+      await page.keyboard.press('p');
+      const start = await docToScreen(page, 80, 260);
+      const end = await docToScreen(page, 620, 260);
+      await page.mouse.click(start.x, start.y);
+      await page.mouse.click(end.x, end.y);
+      await page.locator('[aria-label="Commit path"]').click();
+      await page.waitForTimeout(150);
+
+      await selectTextTool(page);
+      await pickOptionsBarAlign(page, align);
+      await clickAtDoc(page, 350, 60);
+      await typeTwoLines(page);
+      await commit(page);
+      const layerId = await textLayerId(page);
+      const before = await lineInk(page, layerId);
+      expect(before).toHaveLength(2);
+
+      const pathSelect = page.locator('[aria-label="Text path"]');
+      const pathId = await pathSelect.locator('option').nth(1).getAttribute('value');
+      await pathSelect.selectOption(pathId!);
+      await page.waitForTimeout(400);
+      // Bound: the glyphs follow the arch, so the two-line block is gone.
+      expect(await lineInk(page, layerId)).not.toEqual(before);
+
+      await pathSelect.selectOption('');
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `e2e/screenshots/point-text-align-unbind-${align}.png` });
+
+      const after = await lineInk(page, layerId);
+      expect(after).toHaveLength(2);
+      for (let i = 0; i < 2; i++) {
+        expect(Math.abs(after[i]!.left - before[i]!.left)).toBeLessThanOrEqual(1);
+        expect(Math.abs(after[i]!.right - before[i]!.right)).toBeLessThanOrEqual(1);
+        expect(Math.abs(after[i]!.top - before[i]!.top)).toBeLessThanOrEqual(1);
+      }
+      if (align === 'center') {
+        // Back on the click point, not half the block (or the texture's
+        // render offset) away from it.
+        expect(Math.abs(centre(after[0]!) - 350)).toBeLessThanOrEqual(1);
+        expect(Math.abs(centre(after[1]!) - 350)).toBeLessThanOrEqual(1);
+      }
+    });
+  }
 });
