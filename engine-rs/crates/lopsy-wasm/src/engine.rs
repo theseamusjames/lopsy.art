@@ -244,6 +244,8 @@ pub struct EngineInner {
     pub float_transform_center: [f32; 2],
     pub float_transform_corners: [f32; 8],
     pub float_transform_orig_rect: [f32; 4],
+    // Multi-layer transform session (see layer_transform_gpu)
+    pub layer_transform: Vec<crate::layer_transform_gpu::LayerTransformSlot>,
     // Overlays
     pub grid_visible: bool,
     pub grid_size: f32,
@@ -424,6 +426,7 @@ impl EngineInner {
             float_transform_center: [0.0, 0.0],
             float_transform_corners: [0.0; 8],
             float_transform_orig_rect: [0.0; 4],
+            layer_transform: Vec::new(),
             grid_visible: false,
             grid_size: 1.0,
             rulers_visible: false,
@@ -737,6 +740,7 @@ impl EngineInner {
         self.float_layer_x = 0;
         self.float_layer_y = 0;
         self.float_transform_mode = 0;
+        crate::layer_transform_gpu::end_layer_transform(self);
         // Layer stack and overlays
         self.layer_stack.clear();
         self.transform_overlay = None;

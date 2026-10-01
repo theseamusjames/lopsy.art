@@ -49,6 +49,9 @@ export type CanvasGesture =
        *  transformed float. The drag translates this transform instead of
        *  re-compositing the untransformed float (#948). */
       pendingTransform: TransformState | null;
+      /** The pending multi-layer transform when the drag started inside a
+       *  live one (no marquee, several layers). The drag translates it. */
+      pendingLayerTransform: TransformState | null;
     }
   | { kind: 'tool' }
   | { kind: 'liquify'; lastPoint: Point }
@@ -60,6 +63,9 @@ export type CanvasGesture =
       startState: TransformState;
       startAngle: number;
       selectionOnly: boolean;
+      /** Transforms every selected layer through the multi-layer session
+       *  (no marquee) instead of the active layer's floated selection. */
+      isLayerTransform: boolean;
     };
 
 /**
@@ -111,6 +117,7 @@ export function withMoveGesture(
     quickMaskOriginalHeight?: number;
     siblings?: readonly SiblingMoveTarget[];
     pendingTransform?: TransformState | null;
+    pendingLayerTransform?: TransformState | null;
   },
 ): InteractionState {
   return {
@@ -124,6 +131,7 @@ export function withMoveGesture(
       quickMaskOriginalHeight: payload.quickMaskOriginalHeight ?? 0,
       siblings: payload.siblings ?? [],
       pendingTransform: payload.pendingTransform ?? null,
+      pendingLayerTransform: payload.pendingLayerTransform ?? null,
     },
   };
 }

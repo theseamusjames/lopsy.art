@@ -116,6 +116,7 @@ function makeState(
       startState,
       startAngle: 0,
       selectionOnly: true,
+      isLayerTransform: false,
     },
   };
 }

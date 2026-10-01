@@ -8,6 +8,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat, setSelectionMask } from '../../engine-wasm/wasm-bridge';
 import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
 import { cancelPrefloat, commitUnmovedPrefloat } from './prefloat';
+import { forgetLayerTransform } from './layer-transform';
 
 /**
  * The Move tool keeps the pixels it lifted floating after a drag or handle
@@ -97,6 +98,9 @@ export function commitLiveFloat(): void {
   commitMoveFloat();
   commitUnmovedPrefloat();
   cancelPrefloat();
+  // A multi-layer transform counts as a float in the engine; dropping it
+  // below leaves its layers holding the transformed pixels.
+  forgetLayerTransform();
   const engine = getEngine();
   if (!engine || !hasFloat(engine)) return;
   dropFloat(engine);
@@ -113,6 +117,7 @@ export function commitLiveFloatBeforeEdit(): void {
 /** Forget the Move tool's float without baking it (undo/redo restore the pixels themselves). */
 export function forgetLiveFloat(): void {
   owner = null;
+  forgetLayerTransform();
   if (session) {
     session.floating.current = null;
     session.persistent.current = null;

@@ -475,7 +475,10 @@ The outline is drawn on the 2D overlay canvas, not by the GPU compositor.
 ## Transform
 
 Transform is **selection-bound** — there is no separate transform tool and no
-"free transform the whole layer" mode. The handles are drawn on top of the
+"free transform the whole layer" mode for a single layer. The one exception is
+**several layers at once**: with no marquee and two or more layers selected in
+the Layers panel, the Move tool frames all of them (see
+[Several layers at once](#several-layers-at-once)). The handles are drawn on top of the
 marching ants, and Escape or the `⌘D` key tears both down together (the
 Select-menu Deselect does not — see [Selection Operations](#selection-operations)).
 
@@ -694,6 +697,74 @@ gets baked first.
 - **The float grows in steps, and frees what it replaces (#1019).** Growing to exactly the transformed bounds reallocated the float, its base and the layer texture on almost every move, at a size never seen again, and the texture pool kept every released one (it only trims free textures above two per size) — a 30-step drag at 2048² left ~1.1 GB behind for good. Once an axis has to grow it now grows by at least a quarter of its extent, the slack going to the side that grew (`lopsy_core::float_growth`), and the replaced textures are deleted outright (`TexturePool::delete`); dropping a float whose buffer isn't document-sized deletes it too. The layer can therefore end up with some transparent margin past the content until it is next cropped.
 - **Transformed edges are straight alpha (#815, fixed in #856).** The affine and perspective float shaders resampled with hardware `LINEAR` filtering, bleeding the black RGB of transparent texels into anti-aliased edges — a dark fringe round every rotated or scaled selection. They now sample through `samplePremulBilinear` (`premul_sample.glsl`): four `texelFetch` taps interpolated premultiplied and un-premultiplied on return.
 
+### Several layers at once
+
+With the **Move tool**, **no marquee**, and **two or more layers — or a group —
+selected in the Layers panel** (click / Shift+click / Cmd+click), the same
+handles frame the **union of the selected layers' content**, and a handle drag
+transforms every one of them as if they were one picture. Tutorials that
+repeated an identical marquee + rotation on each layer, or merged first, can
+select the layers and rotate once.
+
+- **Why only without a marquee.** It follows the Move tool's own rule: with no
+  marquee a drag moves every selected layer; with a marquee it moves the
+  active layer's selected pixels and the multi-selection plays no part. So
+  with a marquee the handles keep framing the marquee and transform only the
+  active layer, as before; `⌘D` it away to get the layers' box. (A marquee
+  across several layers would also have to clip every layer to one mask, and
+  a ⌘-click alpha selection would clip the others to the first layer's
+  shape.)
+- **The box** is the union of each selected layer's opaque-content rect, read
+  on the GPU (the `width + height`-texel reduction from #1021) and cached
+  texture-local until the layer's pixels, texture size or history change —
+  so drawing the box and dragging the layers around costs no readback. All
+  12 handles, the hover cursors, the `Cmd` modifiers and grid snapping behave
+  as for a selection.
+- **Shared pivot.** Every layer goes through one `TransformState` whose
+  `originalBounds` is that union: a rotation turns them all about the union's
+  centre, a scale pins the union's opposite edge or corner, and the layers
+  keep their arrangement (a row of three turned 90° stands up as a column
+  through the centre). `tools/transform/multi-layer-transform.ts` holds the
+  pure geometry.
+- **All four modes work** — Free, Skew, Distort and Perspective. The mode
+  buttons, Flip Horizontal / Vertical and Rotate 90° show in the options bar
+  whenever the box does. In Distort / Perspective one homography (union rect →
+  four corners) maps every layer.
+- **Live preview on the GPU.** Grabbing a handle pushes one **"Transform"**
+  history row and lifts each layer's content (with a one-texel transparent
+  border) into its own source texture — `app/interactions/layer-transform.ts`
+  and `layer_transform_gpu.rs`. Every pointer-move re-renders each source
+  straight into its layer texture, cleared and drawn only inside the rect the
+  previous and new results cover; a layer's texture grows (in the same
+  quarter-extent steps as a float, #1019) when the transform carries pixels
+  past it. No readback per move. In the headless test browser a 5-layer rotate on a
+  4096² canvas costs about the same per pointer-move as a plain 5-layer Move
+  drag (the recomposite dominates), and less than a single-layer selection
+  transform over the same box.
+- **The transform stays live after the release**, like the Move tool's float:
+  a second handle drag re-renders the original pixels instead of compounding
+  resampling, and a Move drag or arrow nudge inside it translates the pending
+  transform. The engine counts it as a float, so it is baked by everything
+  that bakes the Move tool's float — Escape, the `⌘D` key, any other tool's
+  canvas press, any edit that records history, undo / redo, a mode switch —
+  and by the next Move gesture once the Layers selection has changed. The
+  layers already hold the transformed pixels; baking only frees the sources.
+- **Flip Horizontal / Vertical and Rotate 90° CW / CCW** apply on top of any
+  pending transform about the box's centre and bake at once, one
+  *Transform* row each. A quarter turn of a box whose width and height differ
+  by an odd number of pixels shifts it half a pixel (down for CW, up for CCW,
+  so CW then CCW round-trips), which keeps every pixel on the grid instead of
+  resampling.
+- **Which layers.** A selected group stands for its descendants. Locked
+  layers, and everything inside a locked group, are left out of the box and
+  stay put, as in a Move drag; if the *active* layer is locked the canvas
+  guard refuses the press and nothing transforms. Hidden selected layers
+  transform too (a Move drag moves them as well). Empty layers are ignored.
+- **One undo step** restores every layer.
+- **Text layers** are treated as by the single-layer transform: their pixels
+  transform and the layer stays `type: 'text'`. **Layer masks** stay where
+  they are, also as with a single-layer transform.
+
 ### Quick transforms
 
 - **Flip Horizontal / Flip Vertical** (options bar, next to the mode buttons)
@@ -715,7 +786,9 @@ gets baked first.
   - **Flip or Rotate 90° straight after a Move drag mirrors the moved pixels in place (#822, fixed in #856).** After a Move drag the float still holds its lifted pixels at their *pre-drag* position while the moved composite sits in the layer texture; the buttons reused that float and applied the matrix about the moved selection's centre, which threw every pixel outside the float buffer — a pasted-then-moved layer ended with 0 opaque pixels. `applyGpuTransform` now drops any float that carries no shape-changing transform (`isShapeChangingTransform`: no rotation, scale, skew or corner offset) and lifts the current, moved selection afresh before transforming it. A float with a pending rotate/scale is not dropped.
 - **Rotate 90° CW / CCW** sit in the Move tool's own options-bar group and are
   **dual-purpose** — with a selection active they rotate the selected content,
-  with no selection they rotate the entire active layer.
+  with no selection they rotate the entire active layer, or — with several
+  layers selected — all of them about their shared centre (see
+  [Several layers at once](#several-layers-at-once)).
   - **The whole-layer turn pivots on the layer's content, not its texture (#969, fixed in #975).** It used to rotate about the centre of the layer's *texture* rect — for a layer already expanded to full canvas size, the canvas centre — so art in one corner swung across the document, and CW → switch layer → CCW did not round-trip because crop-on-leave / expand-on-return moves those bounds. `rotateActiveLayer` now reads the opaque-content rect (`getLayerContentBounds`; an empty layer falls back to the whole texture) and `rotatedTextureOrigin` (`layers/rotate-90.ts`) places the rotated texture so that rect turns in place about its own centre. When the content's width and height differ by an odd number of pixels that centre is on a half pixel: CW rounds the offset down and CCW rounds it up, so a CW followed by a CCW lands back exactly.
   - **The whole-layer branch is raster only, and silent about it**, the same way
     the neighbouring [Fit button](#move) is: `rotateActiveLayer` returns on a
@@ -764,6 +837,7 @@ gets baked first.
   - The guard compares a **document-space** delta (`round(canvasPos − startPoint)`), so a jiggle that stays inside one document pixel — easy at high zoom — still counts as a bare click. Once it clears one document pixel the entry is pushed even if snapping then returns the layer to exactly where it started.
   - **The deferral is specific to the whole-layer case.** An option-drag pushes **"Duplicate Layer"** at pointer-down, a drag with an active marquee pushes its float snapshot at pointer-down, and a Quick Mask drag pushes **"Move"** at pointer-down — all unconditionally, so a bare click under any of those *does* still leave a history entry behind.
 - **A whole-layer grab crops the layer to its content first.** Pointer-down on a raster layer with no marquee calls `cropLayerToContent`, so the drag moves the content rect: grid snapping aligns the content's corner, snap-to-layers uses the content's edges, and the undo entry records the content's position. Until #1021 that crop read the entire texture back and scanned it on the CPU inside the engine — 214–312 ms per grab at 4K — and a full-canvas layer paid it on *every* grab, since its crop never shrinks it. The bounds now come from the GPU reduction described under [Layer Texture Lifecycle](#layer-texture-lifecycle-crop-on-switch-expand-on-return): a grab reads back at most `width + height` pixels, and an already-tight texture is not re-copied.
+- **Several selected layers, no marquee: the handles frame all of them.** Scale, rotate, skew, distort and flip act on every selected unlocked layer about their shared centre, in one undo step — see [Several layers at once](#several-layers-at-once). A drag that starts near a corner or edge of that box grabs the handle rather than moving the layers.
 - **Cmd/Meta+drag (transform handles)**: forces a uniform scale (by averaging the two axis scales) and snaps rotation to 15° increments. Grid + snap-to-grid applies the same rotation snap automatically, and additionally snaps the pointer to grid cells while scaling. The Move tool is the only tool whose handle drags transform pixels — see [Transform](#transform).
 
 ### Paste / Drop behavior
@@ -1588,7 +1662,7 @@ A row of icon buttons pinned below the list. Three entries are **conditional**, 
 - **Shift+click**: selects the contiguous range from the active layer to the clicked layer
 - **Cmd/Ctrl+A** with keyboard focus inside the Layers panel (for example a layer's drag grip, reached with Tab): selects every layer in the document (the root group is excluded). The global Select All shortcut listens on `window` in the capture phase, so the same press also runs Select All on the canvas. Anywhere else ⌘A is the canvas's Select All alone. With nothing focused (`document.body`, the normal state while drawing and after clicking a layer's row) the panel used to select every layer as well, so the next Move drag — or a nudge once the marquee was gone — moved Background along with the active layer (fixed in this change). Live text editing keeps ⌘A for the text (#844, fixed in #867). (Matched lower-case only, so `⇧⌘A` is not the same binding.) The mouse route to the same multi-selection is to click the top layer and Shift+click the bottom one.
 - **Delete / Backspace** (Layers panel focused): removes every selected layer. The global Delete handler is not suppressed, so this also runs the canvas delete on the active layer in the same keystroke — clearing the selected pixels if a marquee is active, or removing the active layer if not. Two history entries can result from one press.
-- Selected layers can be grouped or reordered together. The active layer remains the target for painting, filters, and adjustments — but **not for the Move tool**, which drags (and arrow-key nudges) every selected unlocked layer at once. See [Move](#move).
+- Selected layers can be grouped or reordered together. The active layer remains the target for painting, filters, and adjustments — but **not for the Move tool**, which drags (and arrow-key nudges) every selected unlocked layer at once, and with no marquee transforms them together from the handles. See [Move](#move) and [Several layers at once](#several-layers-at-once).
 
 ### Clipboard
 - **Cut** (`⌘X`) / **Copy** (`⌘C`) / **Paste** (`⌘V`): standard clipboard actions; copy/cut respect the active marquee selection, and a paste selects the pasted pixels and switches to Move (see [Paste / Drop behavior](#paste--drop-behavior)). The Edit-menu items and the keys run the same code.

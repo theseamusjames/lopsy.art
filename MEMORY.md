@@ -433,3 +433,12 @@ a swash render transform; layout, caret and hit-testing are untouched (#1080).
 `tests/fixtures/LopsyVerticalTest.ttf` is a synthetic font (ー with a `vert`
 alternate, 「 and 。 without) — e2e serves it as a catalog family by routing
 that family's jsDelivr TTF URL (`e2e/text-vertical-forms-1080.spec.ts`).
+
+## A multi-layer transform is a "float" to the engine
+
+The Move tool's several-layers transform (`app/interactions/layer-transform.ts`,
+`layer_transform_gpu.rs`) keeps one source texture per layer in
+`EngineInner::layer_transform`. `hasFloat` returns true while it is live and
+`dropFloat` ends it, so every site that bakes the Move float (history push,
+other tool's press, ⌘D, undo) bakes it too without knowing about it. The JS
+side (`live`) is only trusted while `hasLayerTransform(engine)` agrees.
