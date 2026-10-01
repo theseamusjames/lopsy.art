@@ -88,12 +88,13 @@ export function getTextTransformTarget(): TextTransformTarget | null {
   return { layer, frame, state: transformStateFromFrame(frame, ui.textTransformMode) };
 }
 
+export const PARTIAL_TEXT_MOVE_HINT = 'Rasterize the text layer to move or transform part of it.';
+
 /**
- * True when the Move tool would lift only part of a text layer: its pixels
- * would be baked into a texture the next text re-render throws away, so the
- * gesture is refused with a hint instead.
+ * True when the Move tool would lift only part of the active text layer: its
+ * pixels would be baked into a texture the next text re-render throws away.
  */
-export function refusePartialTextMove(): boolean {
+export function isPartialTextMove(): boolean {
   const ui = useUIStore.getState();
   if (ui.activeTool !== 'move' || ui.maskMode === 'quickMask') return false;
   const editor = useEditorStore.getState();
@@ -102,8 +103,15 @@ export function refusePartialTextMove(): boolean {
   const engine = getEngine();
   if (!engine || hasFloat(engine)) return false;
   const frame = layer.pathId ? null : measureTextFrame(engine, layer);
-  if (frame && selectionCoversTextFrame(editor.selection, layer.id, frame)) return false;
-  notifyInfo('Rasterize the text layer to move or transform part of it.');
+  return !(frame && selectionCoversTextFrame(editor.selection, layer.id, frame));
+}
+
+/**
+ * Refuse a partial text-layer move ({@link isPartialTextMove}) with a hint.
+ */
+export function refusePartialTextMove(): boolean {
+  if (!isPartialTextMove()) return false;
+  notifyInfo(PARTIAL_TEXT_MOVE_HINT);
   return true;
 }
 

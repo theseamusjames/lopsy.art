@@ -38,6 +38,7 @@ import {
   renderLayerTransform,
 } from './layer-transform';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
+import { getTextTransformTarget } from './text-transform-handlers';
 
 interface QuickMaskSnapshot {
   pixels: Uint8Array;
@@ -773,6 +774,20 @@ export function handleMoveUp(
   }
 }
 
+function nudgeCoveredTextLayer(layerId: string, x: number, y: number, dx: number, dy: number): void {
+  const editor = useEditorStore.getState();
+  editor.updateLayerPosition(layerId, x, y);
+  const sel = editor.selection;
+  if (sel.mask && sel.bounds) {
+    const { width: docW, height: docH } = editor.document;
+    const { mask, bounds } = translateSelectionMask(sel.mask, sel.bounds, dx, dy, docW, docH);
+    editor.setSelection(bounds, mask, docW, docH);
+    const ui = useUIStore.getState();
+    if (ui.transform) ui.setTransform(createTransformState(bounds));
+  }
+  editor.notifyRender();
+}
+
 export function handleNudgeMove(
   dx: number,
   dy: number,
@@ -788,6 +803,13 @@ export function handleNudgeMove(
   // Undo/redo, an edit or a selection change drops or outdates the float
   // without telling these refs; compositing it then threw `No float base`.
   releaseStaleMoveFloat(activeId);
+
+  // A selection that takes in a whole text layer moves the layer, as a drag
+  // does — floating it baked the glyphs and zeroed the layer's x/y (#1085).
+  if (editor.selection.active && getTextTransformTarget()?.layer.id === activeId) {
+    nudgeCoveredTextLayer(activeId, layer.x + dx, layer.y + dy, dx, dy);
+    return;
+  }
 
   if (!editor.selection.active && isLayerTransformLive()) {
     const pendingLayerTransform = useUIStore.getState().layerTransform;
