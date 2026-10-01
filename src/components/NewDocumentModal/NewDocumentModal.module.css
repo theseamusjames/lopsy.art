@@ -282,6 +282,16 @@
   color: var(--color-text-secondary);
 }
 
+.tipText kbd {
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
 .tipText a {
   color: var(--color-accent);
   text-decoration: underline;
