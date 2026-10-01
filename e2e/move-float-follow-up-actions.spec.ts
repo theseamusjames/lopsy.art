@@ -18,6 +18,7 @@ import {
   getPixelAt,
   selectTool,
   setForegroundColor,
+  undo,
   waitForStore,
 } from './helpers';
 
@@ -327,6 +328,22 @@ test.describe('follow-up actions on a live Move float', { tag: '@chromium' }, ()
     expect(await colorAt(page, 280, 105)).toBe('clear');
   });
 
+  test('arrow keys after undoing a selection drag nudge the selection', async ({ page }) => {
+    await blackBlock(page, 40, 40, 140, 120);
+    await selectTool(page, 'move');
+    await drag(page, [90, 80], [150, 80]);
+    await undo(page);
+    await page.waitForTimeout(150);
+    expect(await colorAt(page, 45, 80)).toBe('black');
+
+    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(150);
+
+    // The block moved from x 40-140 to x 45-145.
+    expect(await colorAt(page, 42, 80)).toBe('clear');
+    expect(await colorAt(page, 143, 80)).toBe('black');
+    expect(await selectionBounds(page)).toEqual({ x: 45, y: 40, width: 100, height: 80 });
+  });
   test('Delete after a Move drag clears only the moved piece', async ({ page }) => {
     await blackBlock(page, 0, 0, 400, 300);
     await page.keyboard.press('Control+d');

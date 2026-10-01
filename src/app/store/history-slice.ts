@@ -12,7 +12,7 @@ import { clearMaskGpuDirty, markAllMasksGpuDirty } from '../../engine-wasm/mask-
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 import { cancelPrefloat } from '../interactions/prefloat';
-import { commitLiveFloatBeforeEdit } from '../interactions/live-float';
+import { commitLiveFloatBeforeEdit, forgetLiveFloat } from '../interactions/live-float';
 import { snapshotGpuMasks, withCurrentMaskStaleness, restoreMasksAfterUndo } from './mask-history';
 import { useUIStore } from '../ui-store';
 import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
@@ -396,6 +396,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     cancelPrefloat();
     const eng0 = getEngine();
     if (eng0 && hasFloat(eng0)) dropFloat(eng0);
+    forgetLiveFloat();
     flushPendingSnapshots();
 
     const state = get();
@@ -485,6 +486,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     cancelPrefloat();
     const eng0 = getEngine();
     if (eng0 && hasFloat(eng0)) dropFloat(eng0);
+    forgetLiveFloat();
     flushPendingSnapshots();
     const state = get();
     const R = state.redoStack.length;

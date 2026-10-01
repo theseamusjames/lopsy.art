@@ -740,6 +740,10 @@ export function handleNudgeMove(
   const layer = editor.document.layers.find((l) => l.id === activeId);
   if (!layer || layer.locked) return;
 
+  // Undo/redo, an edit or a selection change drops or outdates the float
+  // without telling these refs; compositing it then threw `No float base`.
+  releaseStaleMoveFloat(activeId);
+
   const pendingTransform = editor.selection.active ? livePendingTransform(persistentTransformRef) : null;
   if (pendingTransform) {
     applyTranslatedTransform(activeId, translateTransform(pendingTransform, dx, dy));
