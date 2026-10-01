@@ -113,6 +113,35 @@ fn line_x_comp(letter_spacing: f32, n_glyphs: usize, align: &str) -> f32 {
     }
 }
 
+/// Horizontal shift that aligns one visual line of point text about its
+/// anchor: the anchor is the left edge for left / justify, the centre for
+/// center and the right edge for right. `left` / `right` are the line's
+/// extent with letter spacing applied.
+fn point_line_shift(align: &str, left: f32, right: f32) -> f32 {
+    match align {
+        "center" => -(left + right) / 2.0,
+        "right" => -right,
+        _ => 0.0,
+    }
+}
+
+/// Alignment shift for one layout run (`xs` are its glyphs' x with letter
+/// spacing applied). Point text has no box, so cosmic-text aligns each
+/// paragraph within its own width — a no-op — and the lines are aligned
+/// about the anchor here instead. Area and vertical text return 0.
+fn run_align_shift(state: &TextLayerState, xs: &[f32], ws: &[f32]) -> f32 {
+    if state.area_width.is_some() || state.vertical || xs.is_empty() {
+        return 0.0;
+    }
+    let left = xs.iter().copied().fold(f32::INFINITY, f32::min);
+    let right = xs
+        .iter()
+        .zip(ws)
+        .map(|(x, w)| x + w)
+        .fold(f32::NEG_INFINITY, f32::max);
+    point_line_shift(&state.text_align, left, right)
+}
+
 /// Letter-spacing offset for each glyph of a layout run, in run order.
 /// Spacing accumulates in *visual* (left-to-right) order: cosmic-text hands
 /// an RTL run's glyphs in logical order, so glyph 0 is the rightmost on
@@ -142,7 +171,16 @@ pub struct TextRendererState {
     /// (lowercased family, style, weight) combinations already tried for
     /// variable-font instancing, so a failure is not retried every layout.
     instanced_weights: HashSet<(String, Style, u16)>,
+    /// Largest side a rendered layer may have — the GPU's `MAX_TEXTURE_SIZE`,
+    /// set by the API layer. Text larger than this is cropped to it rather
+    /// than producing a raster no texture can hold.
+    pub max_canvas_side: u32,
 }
+
+/// Glyph rasters for em sizes above this are not kept in `unhinted_cache`,
+/// which never evicts: a 900 px glyph's mask is ~0.8 MB, a 3000 px one ~9 MB,
+/// and each glyph can be cached at four subpixel offsets.
+const MAX_CACHED_GLYPH_PX: f32 = 500.0;
 
 /// Rasterize a glyph without hinting, drawn in `form` (see
 /// [`VerticalGlyphForm`]; horizontal text always passes `Upright`).
@@ -206,6 +244,7 @@ impl TextRendererState {
             unhinted_cache: HashMap::new(),
             vertical_alternates: HashMap::new(),
             instanced_weights: HashSet::new(),
+            max_canvas_side: u32::MAX,
         }
     }
 
@@ -525,17 +564,21 @@ impl TextRendererState {
             let n = run.glyphs.len();
             let comp = line_x_comp(ls, n, align);
 
+            let xs: Vec<f32> = run.glyphs.iter().map(|g| g.x).collect();
+            let spacing = letter_spacing_offsets(&xs, ls);
+            let spaced: Vec<f32> = xs.iter().zip(&spacing).map(|(x, s)| x + comp + s).collect();
+            let ws: Vec<f32> = run.glyphs.iter().map(|g| g.w).collect();
+            let shift = run_align_shift(state, &spaced, &ws);
+
             let start_x = if n > 0 {
-                run.glyphs.iter().map(|g| g.x).fold(f32::INFINITY, f32::min) + comp
+                xs.iter().copied().fold(f32::INFINITY, f32::min) + comp + shift
             } else {
                 empty_start_x(line_i)
             };
             lines.push(AdjLine { line_i, line_top, line_height, start_x });
 
-            let xs: Vec<f32> = run.glyphs.iter().map(|g| g.x).collect();
-            let spacing = letter_spacing_offsets(&xs, ls);
             for (i, glyph) in run.glyphs.iter().enumerate() {
-                let x = glyph.x + comp + spacing[i];
+                let x = spaced[i] + shift;
                 glyphs.push(AdjGlyph {
                     global_start: base + glyph.start,
                     global_end: base + glyph.end,
@@ -1030,8 +1073,11 @@ impl TextRendererState {
                 let baseline_y = run.line_y + para_y;
                 let xs: Vec<f32> = run.glyphs.iter().map(|g| g.x).collect();
                 let spacing = letter_spacing_offsets(&xs, ls);
+                let spaced: Vec<f32> = xs.iter().zip(&spacing).map(|(x, s)| x + comp + s).collect();
+                let ws: Vec<f32> = run.glyphs.iter().map(|g| g.w).collect();
+                let shift = run_align_shift(state, &spaced, &ws);
                 for (i, glyph) in run.glyphs.iter().enumerate() {
-                    let extra_x = comp + spacing[i];
+                    let extra_x = comp + spacing[i] + shift;
                     let phys = glyph.physical((extra_x, baseline_y), 1.0);
                     let gx_start = phys.x;
                     let gx_end = phys.x + glyph.w.ceil() as i32;
@@ -1061,18 +1107,21 @@ impl TextRendererState {
         let do_underline = state.underline && !vertical;
         let do_strikethrough = state.strikethrough && !vertical;
 
-        // Render all glyphs without hinting for smooth curves.
-        let mut glyph_images: Vec<Option<SwashImage>> = Vec::with_capacity(glyph_layouts.len());
+        // Render all glyphs without hinting for smooth curves. Large glyphs go
+        // in a per-render map so repeats are still rasterized once.
+        let is_large = |key: &CacheKey| f32::from_bits(key.font_size_bits) > MAX_CACHED_GLYPH_PX;
+        let mut large_glyphs: HashMap<(CacheKey, VerticalGlyphForm), Option<SwashImage>> = HashMap::new();
         for gl in &glyph_layouts {
-            let img = render_glyph_unhinted(
-                &mut self.font_system,
-                &mut self.scale_context,
-                &mut self.unhinted_cache,
-                gl.cache_key,
-                gl.form,
-            ).cloned();
-            glyph_images.push(img);
+            let cache = if is_large(&gl.cache_key) { &mut large_glyphs } else { &mut self.unhinted_cache };
+            render_glyph_unhinted(&mut self.font_system, &mut self.scale_context, cache, gl.cache_key, gl.form);
         }
+        let glyph_images: Vec<Option<&SwashImage>> = glyph_layouts
+            .iter()
+            .map(|gl| {
+                let cache = if is_large(&gl.cache_key) { &large_glyphs } else { &self.unhinted_cache };
+                cache.get(&(gl.cache_key, gl.form)).and_then(|img| img.as_ref())
+            })
+            .collect();
 
         // Pass 1: measure pixel-space bounding box.
         for (gl, img_opt) in glyph_layouts.iter().zip(glyph_images.iter()) {
@@ -1118,8 +1167,9 @@ impl TextRendererState {
 
         let canvas_x = min_x - pad;
         let canvas_y = min_y - pad;
-        let canvas_w = (max_x - min_x + pad * 2).max(1) as u32;
-        let canvas_h = (max_y - min_y + pad * 2).max(1) as u32;
+        // Cropping keeps the top-left, so the offsets callers anchor by hold.
+        let canvas_w = ((max_x - min_x + pad * 2).max(1) as u32).min(self.max_canvas_side);
+        let canvas_h = ((max_y - min_y + pad * 2).max(1) as u32).min(self.max_canvas_side);
 
         let mut pixels = vec![0u8; (canvas_w * canvas_h * 4) as usize];
 
@@ -1892,5 +1942,181 @@ mod tests {
         assert_eq!(snap_weight(500, &[400, 600]), 600);
         assert_eq!(snap_weight(650, &[100, 900, 700]), 700);
         assert_eq!(snap_weight(300, &[]), 300);
+    }
+
+    fn aligned_props(text: &str, align: &str, letter_spacing: f64, area_width: &str) -> String {
+        format!(
+            r#"{{"text":"{text}","fontFamily":"sans-serif","fontSize":20,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":{letter_spacing},"paragraphSpacing":0,"textAlign":"{align}","areaWidth":{area_width}}}"#
+        )
+    }
+
+    /// `(left, right)` advance extent of each visual line, top to bottom.
+    fn line_extents(renderer: &mut TextRendererState, id: &str) -> Vec<(f64, f64)> {
+        let mut lines: Vec<(f64, f64, f64)> = Vec::new();
+        for g in renderer.get_glyph_positions(id).chunks(5) {
+            let (x, top, w) = (g[0], g[1], g[2]);
+            match lines.iter_mut().find(|l| l.0 == top) {
+                Some(l) => {
+                    l.1 = l.1.min(x);
+                    l.2 = l.2.max(x + w);
+                }
+                None => lines.push((top, x, x + w)),
+            }
+        }
+        lines.sort_by(|a, b| a.0.total_cmp(&b.0));
+        lines.into_iter().map(|(_, l, r)| (l, r)).collect()
+    }
+
+    #[test]
+    fn point_text_center_centres_every_line_on_the_anchor() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("c", &aligned_props("Wide first line\\nHi", "center", 0.0, "null")).expect("ok");
+        let lines = line_extents(&mut renderer, "c");
+        assert_eq!(lines.len(), 2);
+        for (l, r) in &lines {
+            assert!(((l + r) / 2.0).abs() < 0.01, "line {l}..{r} is not centred on the anchor");
+        }
+        assert!(lines[0].1 - lines[0].0 > (lines[1].1 - lines[1].0) * 3.0, "first line should be the wide one");
+    }
+
+    #[test]
+    fn point_text_right_ends_every_line_at_the_anchor() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("r", &aligned_props("Wide first line\\nHi", "right", 0.0, "null")).expect("ok");
+        for (l, r) in line_extents(&mut renderer, "r") {
+            assert!(r.abs() < 0.01, "line {l}..{r} should end at the anchor");
+            assert!(l < 0.0);
+        }
+    }
+
+    #[test]
+    fn point_text_left_and_justify_start_every_line_at_the_anchor() {
+        let mut renderer = make_renderer();
+        for align in ["left", "justify"] {
+            renderer.set_text_content(align, &aligned_props("Wide first line\\nHi", align, 0.0, "null")).expect("ok");
+            for (l, _) in line_extents(&mut renderer, align) {
+                assert!(l.abs() < 0.01, "{align}: line should start at the anchor, starts at {l}");
+            }
+        }
+    }
+
+    #[test]
+    fn point_text_center_stays_centred_with_letter_spacing() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("s", &aligned_props("Wide first line\\nHi", "center", 12.0, "null")).expect("ok");
+        for (l, r) in line_extents(&mut renderer, "s") {
+            assert!(((l + r) / 2.0).abs() < 0.01, "spaced line {l}..{r} is not centred");
+        }
+    }
+
+    #[test]
+    fn area_text_alignment_is_unchanged() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("a", &aligned_props("Hi", "center", 0.0, "400")).expect("ok");
+        let (l, r) = line_extents(&mut renderer, "a")[0];
+        assert!(((l + r) / 2.0 - 200.0).abs() < 0.5, "area text centres in its 400px box, got {l}..{r}");
+    }
+
+    #[test]
+    fn point_text_caret_and_hit_test_follow_the_aligned_lines() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("c", &aligned_props("Wide first line\\nHi", "center", 0.0, "null")).expect("ok");
+        let lines = line_extents(&mut renderer, "c");
+        // Offset 16 = start of "Hi" (15 bytes + the newline).
+        let caret = renderer.text_cursor_rect("c", 16).unwrap();
+        assert!((caret[0] as f64 - lines[1].0).abs() < 0.01, "caret {} should sit at line 2's left edge {}", caret[0], lines[1].0);
+        let end = renderer.text_cursor_rect("c", 18).unwrap();
+        assert!((end[0] as f64 - lines[1].1).abs() < 0.01, "end caret should sit at line 2's right edge");
+        // A click just left of the anchor on line 2 lands between "H" and "i"
+        // or before "H" — never at the far end of the line as it did when the
+        // line still started at the anchor.
+        let hit = renderer.text_hit_position("c", (lines[1].0 + 1.0) as f32, caret[1] + 5.0).unwrap();
+        assert_eq!(hit, 16);
+        let rects = renderer.text_selection_rects("c", 16, 18);
+        assert!((rects[0] as f64 - lines[1].0).abs() < 0.01, "selection starts at the aligned line");
+    }
+
+    #[test]
+    fn point_text_empty_line_caret_sits_on_the_anchor() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("e", &aligned_props("Hello\\n", "right", 0.0, "null")).expect("ok");
+        let caret = renderer.text_cursor_rect("e", 6).unwrap();
+        assert!(caret[0].abs() < 0.01, "empty line caret should be on the anchor, got {}", caret[0]);
+    }
+
+    /// Ink centre (x) of the opaque pixels in rows `[y0, y1)`.
+    fn ink_centre(pixels: &[u8], w: u32, y0: u32, y1: u32) -> f64 {
+        let (mut lo, mut hi) = (u32::MAX, 0u32);
+        for y in y0..y1 {
+            for x in 0..w {
+                if pixels[((y * w + x) * 4 + 3) as usize] > 128 {
+                    lo = lo.min(x);
+                    hi = hi.max(x);
+                }
+            }
+        }
+        (lo + hi) as f64 / 2.0
+    }
+
+    #[test]
+    fn point_text_center_renders_lines_with_shared_ink_centre() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("c", &aligned_props("MMMMMMMM\\nII", "center", 0.0, "null")).expect("ok");
+        let (pixels, w, h, ox, _) = renderer.render_text_layer_software("c").expect("rendered");
+        let top = ink_centre(&pixels, w, 0, h / 2);
+        let bottom = ink_centre(&pixels, w, h / 2, h);
+        assert!((top - bottom).abs() <= 2.0, "line ink centres differ: {top} vs {bottom}");
+        // The shared centre is the anchor: texture x of the anchor is -ox.
+        assert!((top + ox as f64).abs() <= 2.0, "ink centre {top} is not on the anchor ({})", -ox);
+    }
+
+    fn sized_props(text: &str, font_size: f64) -> String {
+        format!(
+            r#"{{"text":"{text}","fontFamily":"sans-serif","fontSize":{font_size},"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"textAlign":"left","areaWidth":null}}"#
+        )
+    }
+
+    #[test]
+    fn a_900px_glyph_renders_at_that_size() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("big", &sized_props("H", 900.0)).expect("ok");
+        let (pixels, w, h, _, _) = renderer.render_text_layer_software("big").expect("rendered");
+        let (mut top, mut bottom) = (u32::MAX, 0u32);
+        for y in 0..h {
+            for x in 0..w {
+                if pixels[((y * w + x) * 4 + 3) as usize] > 128 {
+                    top = top.min(y);
+                    bottom = bottom.max(y);
+                }
+            }
+        }
+        // Inter's cap height is 0.727 em: an "H" at 900 px stands ~654 px tall.
+        let cap = (bottom - top + 1) as f64;
+        assert!((cap - 654.0).abs() < 8.0, "900 px H should be ~654 px tall, got {cap}");
+    }
+
+    #[test]
+    fn large_glyphs_are_not_kept_in_the_glyph_cache() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("big", &sized_props("HH", 900.0)).expect("ok");
+        renderer.render_text_layer_software("big").expect("rendered");
+        assert!(renderer.unhinted_cache.is_empty(), "900 px glyphs must not be cached");
+        renderer.set_text_content("small", &sized_props("HH", 40.0)).expect("ok");
+        renderer.render_text_layer_software("small").expect("rendered");
+        assert!(!renderer.unhinted_cache.is_empty(), "small glyphs are still cached");
+    }
+
+    #[test]
+    fn a_raster_wider_than_the_texture_limit_is_cropped_keeping_its_origin() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("t", &sized_props("Wide text", 200.0)).expect("ok");
+        let (_, full_w, full_h, ox, oy) = renderer.render_text_layer_software("t").expect("rendered");
+        assert!(full_w > 256);
+        renderer.max_canvas_side = 256;
+        renderer.set_text_content("t2", &sized_props("Wide text", 200.0)).expect("ok");
+        let (pixels, w, h, ox2, oy2) = renderer.render_text_layer_software("t2").expect("rendered");
+        assert_eq!((w, h), (256, full_h.min(256)));
+        assert_eq!((ox2, oy2), (ox, oy), "cropping must keep the offsets callers anchor by");
+        assert_eq!(pixels.len(), (w * h * 4) as usize);
     }
 }

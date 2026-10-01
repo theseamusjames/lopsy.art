@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_TEXT_SETTINGS,
   clampTextSetting,
+  textSizeTypedMax,
+  TEXT_SIZE_SLIDER_MAX,
   type TextSettings,
 } from './text-settings';
 
@@ -23,12 +25,13 @@ describe('text-settings clamps and defaults (#453)', () => {
     } satisfies TextSettings);
   });
 
-  it('clamps fontSize into [1, 500]', () => {
+  it('clamps fontSize into [1, 5000]', () => {
     expect(clampTextSetting('fontSize', 0)).toBe(1);
     expect(clampTextSetting('fontSize', -5)).toBe(1);
-    expect(clampTextSetting('fontSize', 99999)).toBe(500);
+    expect(clampTextSetting('fontSize', 99999)).toBe(5000);
     expect(clampTextSetting('fontSize', 24)).toBe(24);
-    expect(clampTextSetting('fontSize', 500)).toBe(500);
+    expect(clampTextSetting('fontSize', 900)).toBe(900);
+    expect(clampTextSetting('fontSize', 5000)).toBe(5000);
     expect(clampTextSetting('fontSize', 1)).toBe(1);
   });
 
@@ -80,5 +83,19 @@ describe('text-settings clamps and defaults (#453)', () => {
     expect(clampTextSetting('strikethrough', false)).toBe(false);
     expect(clampTextSetting('vertical', true)).toBe(true);
     expect(clampTextSetting('vertical', false)).toBe(false);
+  });
+});
+
+describe('textSizeTypedMax', () => {
+  it('lets typed sizes pass the slider on a large document, scaled to its long side', () => {
+    expect(TEXT_SIZE_SLIDER_MAX).toBe(500);
+    expect(textSizeTypedMax(1200, 800)).toBe(1800);
+    expect(textSizeTypedMax(2000, 3000)).toBe(4500);
+  });
+
+  it('never drops below the slider range or exceeds the 5000 px store ceiling', () => {
+    expect(textSizeTypedMax(200, 100)).toBe(500);
+    expect(textSizeTypedMax(8000, 8000)).toBe(5000);
+    expect(clampTextSetting('fontSize', textSizeTypedMax(8000, 8000))).toBe(5000);
   });
 });
