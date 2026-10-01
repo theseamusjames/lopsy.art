@@ -84,7 +84,7 @@ const ALLOWLIST = {
   'src/tools/quick-select/quick-select-interaction.test.ts': 3,
   'src/tools/quick-select/quick-select.test.ts': 3,
   'src/tools/text/text-interaction.test.ts': 3,               // #757 drops the JS RGBA fixtures
-  'src/tools/transform/transform.test.ts': 4,         // +2: #818 off-canvas float growth fixtures
+  'src/tools/transform/transform.test.ts': 5,         // +2: #818 off-canvas float growth fixtures, +1: mask resample fixture
   'src/tools/wand/wand-strategy.test.ts': 4,
   'src/utils/bmp-encoder.test.ts': 2,
 

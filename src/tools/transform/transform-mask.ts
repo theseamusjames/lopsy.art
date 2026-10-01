@@ -58,19 +58,48 @@ function inversePoint(px: number, py: number, state: TransformState): Point {
 
 /**
  * Map a destination point back through the quad's projective map to the
- * original bounds. Returns null outside the quad.
+ * original bounds. Returns null outside the quad, where the GPU writes
+ * nothing either.
  */
 function inverseProjective(p: Point, quadToSquare: Homography, ob: Rect): Point | null {
   const uv = applyHomography(quadToSquare, p.x, p.y);
   if (!uv) return null;
   const { x: u, y: v } = uv;
-  if (u < -0.01 || u > 1.01 || v < -0.01 || v > 1.01) return null;
+  if (u < 0 || u > 1 || v < 0 || v > 1) return null;
   return {
     x: ob.x + u * ob.width,
     y: ob.y + v * ob.height,
   };
 }
 
+function maskAt(mask: Uint8ClampedArray, width: number, height: number, x: number, y: number): number {
+  if (x < 0 || y < 0 || x >= width || y >= height) return 0;
+  return mask[y * width + x] ?? 0;
+}
+
+/**
+ * Bilinear sample of the mask at a document point, with texel centres at
+ * +0.5 — the same filter `samplePremulBilinear` applies to the pixels.
+ */
+function sampleMask(mask: Uint8ClampedArray, width: number, height: number, p: Point): number {
+  const px = p.x - 0.5;
+  const py = p.y - 0.5;
+  const x0 = Math.floor(px);
+  const y0 = Math.floor(py);
+  const fx = px - x0;
+  const fy = py - y0;
+  const top = maskAt(mask, width, height, x0, y0) * (1 - fx) + maskAt(mask, width, height, x0 + 1, y0) * fx;
+  const bottom = maskAt(mask, width, height, x0, y0 + 1) * (1 - fx) + maskAt(mask, width, height, x0 + 1, y0 + 1) * fx;
+  return top * (1 - fy) + bottom * fy;
+}
+
+/**
+ * Carry a selection mask through a transform exactly as the GPU carries the
+ * pixels (`transform_affine.glsl` / `transform_perspective.glsl`): each
+ * output pixel centre maps back into the original and the mask is sampled
+ * bilinearly there. The anti-aliased edge then matches the transformed
+ * pixels' alpha, so clearing or filling the result leaves no fringe.
+ */
 export function applyTransformToMask(
   originalMask: Uint8ClampedArray,
   maskWidth: number,
@@ -95,44 +124,30 @@ export function applyTransformToMask(
     c3 = forwardPoint(ob.x, ob.y + ob.height, state);
   }
 
-  const minX = Math.max(0, Math.floor(Math.min(c0.x, c1.x, c2.x, c3.x) - 1));
-  const minY = Math.max(0, Math.floor(Math.min(c0.y, c1.y, c2.y, c3.y) - 1));
-  const maxX = Math.min(maskWidth, Math.ceil(Math.max(c0.x, c1.x, c2.x, c3.x) + 1));
-  const maxY = Math.min(maskHeight, Math.ceil(Math.max(c0.y, c1.y, c2.y, c3.y) + 1));
+  // Bilinear filtering reaches up to a pixel past the transformed box.
+  const minX = Math.max(0, Math.floor(Math.min(c0.x, c1.x, c2.x, c3.x) - 2));
+  const minY = Math.max(0, Math.floor(Math.min(c0.y, c1.y, c2.y, c3.y) - 2));
+  const maxX = Math.min(maskWidth, Math.ceil(Math.max(c0.x, c1.x, c2.x, c3.x) + 2));
+  const maxY = Math.min(maskHeight, Math.ceil(Math.max(c0.y, c1.y, c2.y, c3.y) + 2));
 
-  for (let y = minY; y < maxY; y++) {
-    for (let x = minX; x < maxX; x++) {
-      let orig: Point | null;
-      if (quadToSquare) {
-        orig = inverseProjective({ x, y }, quadToSquare, ob);
-      } else {
-        orig = inversePoint(x, y, state);
-      }
-      if (!orig) continue;
-      const ix = Math.round(orig.x);
-      const iy = Math.round(orig.y);
-      if (ix >= 0 && ix < maskWidth && iy >= 0 && iy < maskHeight) {
-        const val = originalMask[iy * maskWidth + ix] ?? 0;
-        if (val > 0) {
-          result[y * maskWidth + x] = val;
-        }
-      }
-    }
-  }
-
-  // Compute bounds of result
   let bMinX = maskWidth;
   let bMinY = maskHeight;
   let bMaxX = -1;
   let bMaxY = -1;
   for (let y = minY; y < maxY; y++) {
     for (let x = minX; x < maxX; x++) {
-      if ((result[y * maskWidth + x] ?? 0) > 0) {
-        if (x < bMinX) bMinX = x;
-        if (x > bMaxX) bMaxX = x;
-        if (y < bMinY) bMinY = y;
-        if (y > bMaxY) bMaxY = y;
-      }
+      const centre = { x: x + 0.5, y: y + 0.5 };
+      const orig = quadToSquare
+        ? inverseProjective(centre, quadToSquare, ob)
+        : inversePoint(centre.x, centre.y, state);
+      if (!orig) continue;
+      const val = Math.round(sampleMask(originalMask, maskWidth, maskHeight, orig));
+      if (val <= 0) continue;
+      result[y * maskWidth + x] = val;
+      if (x < bMinX) bMinX = x;
+      if (x > bMaxX) bMaxX = x;
+      if (y < bMinY) bMinY = y;
+      if (y > bMaxY) bMaxY = y;
     }
   }
 
