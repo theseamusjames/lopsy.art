@@ -4,6 +4,8 @@ import { toolRegistry } from '../../tools/tool-registry';
 import { useShortcutStore, buildKeyToActionMap, NON_TOOL_ACTION_IDS } from '../store/shortcut-store';
 import { toggleQuickMaskMode } from '../interactions/quick-mask-ops';
 import { scheduleNudge } from './nudge-coalesce';
+import { isPartialTextMove, PARTIAL_TEXT_MOVE_HINT } from '../interactions/text-transform-handlers';
+import { notifyInfo } from '../notifications-store';
 import type { ToolId } from '../../types';
 
 /** Actions that aren't tool selections but live in the single-key namespace. */
@@ -88,6 +90,13 @@ export function handleNudgeShortcut(
   if (tool !== 'move' && !isSelection) return false;
 
   e.preventDefault();
+  // A nudge would float part of a live text layer — the same move a drag
+  // refuses. Refuse it before scheduleNudge pushes an empty history entry
+  // (#1085); hint once per key-hold, not on every auto-repeat.
+  if (tool === 'move' && isPartialTextMove()) {
+    if (!e.repeat) notifyInfo(PARTIAL_TEXT_MOVE_HINT);
+    return true;
+  }
   const ui = useUIStore.getState();
   const step = e.shiftKey ? SHIFT_NUDGE_PX : 1;
   const amount = ui.showGrid && ui.snapToGrid ? ui.gridSize : step;
