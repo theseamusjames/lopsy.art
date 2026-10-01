@@ -96,6 +96,7 @@ import {
   renderTextLayerToTexture,
   uploadLayerPixels,
   removeTextLayerState,
+  getGlyphPositions,
 } from './wasm-bridge';
 import type { PathAnchor, TextEditingState, ChannelVisibility } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
@@ -104,6 +105,7 @@ import type { Color } from '../types';
 import type { TextLayer } from '../types/layers';
 import type { StoredPath } from '../types/paths';
 import { pathTextFont, renderTextOnPath } from '../tools/text/render-text-on-path';
+import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from '../tools/text/point-text-align';
 import { ensureFontFacesLoaded, parseFontFamilyList } from '../utils/font-face-readiness';
 import { getTracked } from './sync-state';
 import { syncLayers } from './sync-layers';
@@ -1196,12 +1198,27 @@ export function rerenderCommittedTextLayerAnchored(
   // Recover the anchor from the current (old) content's render offset.
   setTextLayerContent(engine, oldLayer.id, textLayerPropsJson(oldLayer));
   const oldBounds = renderTextLayer(engine, oldLayer.id);
-  const anchorX = oldBounds.length === 4 ? oldLayer.x - oldBounds[2]! : oldLayer.x;
+  const recoveredX = oldBounds.length === 4 ? oldLayer.x - oldBounds[2]! : oldLayer.x;
+  const anchorX = recoveredX + alignChangeAnchorShift(engine, oldLayer, newLayer.textAlign);
   const anchorY = oldBounds.length === 4 ? oldLayer.y - oldBounds[3]! : oldLayer.y;
 
   const pos = placeTextLayerAtAnchor(engine, newLayer, anchorX, anchorY);
   if (!pos) return null;
   return { x: pos.x, y: pos.y, anchorX, anchorY };
+}
+
+/**
+ * How far a committed text layer's anchor must move when its alignment
+ * changes to `newAlign`, so its lines realign without the block jumping.
+ * Point text is aligned about its anchor (see `point-text-align.ts`); area
+ * and vertical text — and path text, which ignores alignment — never move.
+ */
+export function alignChangeAnchorShift(engine: Engine, layer: TextLayer, newAlign: TextLayer['textAlign']): number {
+  if (newAlign === layer.textAlign || layer.pathId) return 0;
+  if (!isPointTextLayout(layer.width, layer.vertical ?? false)) return 0;
+  setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
+  const width = blockWidthFromGlyphs(getGlyphPositions(engine, layer.id));
+  return alignmentAnchorShift(layer.textAlign, newAlign, width);
 }
 
 /**
