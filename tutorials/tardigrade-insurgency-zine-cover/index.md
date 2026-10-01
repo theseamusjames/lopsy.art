@@ -70,7 +70,7 @@ choose **Edit → Fill**. The whole page turns red.
 
 ![The Sunburst dialog over the red page, with Rays 40, Width 55, Center Y 44 and Taper 0, previewing peach rays fanning out from behind the middle of the page](03-sunburst-settings.webp)
 
-Add a new layer, name it *Sunburst* and set the foreground to `#E9D6A8`.
+Add a new layer, name it *Sunburst* (delete any empty spare layer the app adds above it) and set the foreground to `#E9D6A8`.
 Choose **Filter → Sunburst**. Set **Rays** to **40**, **Width** to **55**,
 **Center Y** to **44** and **Taper** to **0**, so the rays start a little
 above the middle of the page. Click **Apply**.
@@ -84,26 +84,23 @@ the rays stop looking quite so flat.
 
 ## Bring in the Earth
 
-![The NASA Earth photograph pasted onto its own layer, large and centred over the sunburst](05-earth-pasted.webp)
+![The NASA Earth photograph pasted onto its own layer, large and sitting at the top left of the page](05-earth-pasted.webp)
 
-Open the Apollo 17 photograph in your browser, copy it, and press
-[[Cmd+V]] in Lopsy. It lands on a new layer. Rename that layer *Earth*.
+Open the Apollo 17 photograph in your browser, copy it, and press [[Cmd+V]] in Lopsy. It lands on a new layer.
 
 ## Place the Earth
 
 ![The Earth dragged into the upper middle of the page, committed in place](06-earth-placed.webp)
 
 With the **Move** tool, drag the picture so the globe sits in the upper middle
-of the page, leaving room for the tardigrade below it. Press [[Enter]] to
-commit the paste.
+of the page, leaving room for the tardigrade below it. Press [[Enter]] to commit the paste, then double-click the layer name and rename it *Earth*.
 
 ## Cut the Earth out of its space
 
 ![An elliptical marquee drawn tightly around the globe, with marching ants hugging its edge](07-earth-ellipse.webp)
 
 Pick the **Elliptical Marquee** and drag a circle that follows the edge of
-the globe. Hold [[Shift]] for a perfect circle, and nudge until the ants sit
-just inside the limb. Then choose **Select → Inverse**.
+the globe. Hold [[Shift]] for a perfect circle, and keep the ants just inside the edge of the globe. Then choose **Select → Inverse**.
 
 ## Delete the black space
 
@@ -131,7 +128,7 @@ group lets you recolour it as a unit without touching the pixels.
 
 ## Recolour it with a Gradient Map
 
-![The Adjustments menu open with the Planet group selected, offering Gradient Map](11-gradient-map-added.webp)
+![The Gradient Map just added to the Planet group, still on its default black-to-white stops](11-gradient-map-added.webp)
 
 With the *Planet* group selected, open the **Adjustments** panel and add a
 **Gradient Map**. A short tip appears the first time you do this; dismiss it
@@ -141,8 +138,7 @@ with **Got it**.
 
 ![The Gradient Map editor with three colour stops: dark blue-grey on the left, mid blue-grey in the middle and cream on the right](12-gradient-map-stops.webp)
 
-Click the left stop and type `#24394A` into its hex field. Click the right
-stop and type `#F1E3BD`. Click the middle of the gradient bar to add a third
+Click the left stop to open its colour picker and type `#24394A` into the hex field. Do the same for the right stop with `#F1E3BD`. Click the middle of the gradient bar to add a third
 stop, and set it to `#4A6A7C`. Dark tones now map to deep blue-grey, midtones
 to a cooler grey, and highlights to cream.
 
@@ -163,11 +159,10 @@ so you can move or scale the whole character later.
 
 ## Draw the legs
 
-![Four back and front legs drawn as tapered stubby shapes under the body area: the back pair in dark ochre](15-legs-back.webp)
+![Two back legs drawn as stubby shapes in dark ochre, low on the page](15-legs-back.webp)
 
 Add a layer in *Hero* named *Legs back*, set the foreground to `#A8661A` and
-use the **Lasso** to draw two tapered, rounded stumps, wider at the top and
-narrower at the foot. Choose **Edit → Fill**.
+use the **Lasso** to draw two rounded stumps for the back legs. Choose **Edit → Fill**.
 
 ## Draw the front legs
 
@@ -181,8 +176,7 @@ lighter colour reads as nearer the viewer.
 
 ![A rounded oval lassoed with marching ants over the lower half of the page, above the legs](17-body-lasso.webp)
 
-Add a layer named *Body*. With the **Lasso**, draw a fat, rounded oval over the
-legs, around 600 px wide and 370 px tall. Fill it with `#E0A030`.
+Add a layer named *Body*. With the **Lasso**, draw a fat, rounded oval over the legs, wide enough to fill most of the page width. Fill it with `#E0A030`.
 
 ## Outline everything
 
@@ -201,34 +195,31 @@ Add a layer named *Segments*. Hold [[Cmd]] and click the *Body* thumbnail to
 load the body as a selection, so the lines can't spill past its edge. Pick the
 **Brush**, size **7**, hardness **100**, and colour `#1A1511`. For each
 segment, click at the top edge of the body, then [[Shift]]-click at the bottom
-edge. Space the five lines evenly and bow them slightly, so they curve like
-rings around a barrel. Deselect when you're done.
+edge. Space the five lines evenly. For a curved ring, add a middle [[Shift]]-click point so each line bends gently, like hoops around a barrel. Deselect when you're done.
 
 ## Draw the head
 
-![An ochre head lassoed and filled at the right of the body with a black outline](20-head.webp)
+![An ochre head lassoed and filled at the right of the body](20-head.webp)
 
 Add a layer named *Head*, lasso an oval to the right of the body, fill it with
-`#E0A030` and give it the same **Stroke** (`#1A1511`, width **8**).
+`#E0A030` and give it the same **Stroke** effect (`#1A1511`, width **8**).
 
 ## Give it a face
 
 ![A tiny black eye and a larger cream-and-black snout ring on the head](21-face.webp)
 
 Add a layer named *Face*. Use the **Elliptical Marquee** and **Edit → Fill**
-to make a small black eye, and a bigger snout with a cream ring and a black
-centre, at the front of the head.
+to fill a small black eye. For the snout, fill a bigger black oval at the front of the head, switch to cream and fill a smaller oval inside it, then switch back to black for a small pupil.
 
 ## Plant the flag
 
-![A brown pole rising from behind the tardigrade carrying a black flag with a cream star](22-banner.webp)
+![A brown pole beside the head carrying a black flag with a cream star, hanging over the right edge of the globe](22-banner.webp)
 
 Add a layer named *Pole* and draw a tall vertical line with the **Brush** at
 size **13** in `#5A3216`: click at the bottom, then [[Shift]]-click at the top.
 Add a *Flag* layer, and lasso a wavy rectangle at the top of the pole; fill it
 `#1A1511`. Add *Flag star*, lasso a five-pointed star in the middle of the flag
-and fill it `#F1E3BD`. The pole, flag and star all sit about 125 px left of the
-head, so the flag hangs over the middle of the tardigrade.
+and fill it `#F1E3BD`. Keep the pole just left of the head, so the flag hangs over the right edge of the globe.
 
 ## Raise an arm
 
@@ -255,10 +246,9 @@ for each foot click, then [[Shift]]-click a short distance to draw a small claw.
 
 ## Shade the body
 
-![The Gradient tool dragged from the bottom of the body up toward the middle, painting a brown gradient over the body selection](26-shade-gradient.webp)
+![The Gradient tool dragged from the bottom of the body up toward the middle, painting a dark gradient over the body selection](26-shade-gradient.webp)
 
-Add a layer named *Body shade* and load the *Body* as a selection with
-[[Cmd]]-click on its thumbnail. Set the foreground to `#7A3A10` and the
+Add a layer named *Body shade* (make sure it's the selected layer), then load the *Body* as a selection with [[Cmd]]-click on its thumbnail. Set the foreground to `#7A3A10` and the
 background to white. With the **Gradient** tool, drag from the bottom of the
 body up toward the middle.
 
@@ -273,8 +263,7 @@ belly darkens and the body feels round. Deselect.
 
 ![A rectangle marquee dragged slightly past the canvas on every side, then shrunk inward, leaving a thin border selected](28-frame-selection.webp)
 
-Add a new group above *Hero* named *Layout*. Inside it, add
-a layer named *Frame*. Drag a **Rectangular Marquee** larger than the canvas,
+Add a new group above *Hero* named *Layout*. Everything from here on (frame, bands, type and badge) goes in this group. Inside it, add a layer named *Frame*. Drag a **Rectangular Marquee** larger than the canvas,
 choose **Select → Shrink** with **34** px, then **Select → Inverse**.
 
 ## Fill the frame
@@ -286,10 +275,9 @@ have a cream border to keep the type off the edge.
 
 ## Title band
 
-![An ink-black rectangle marquee across the top of the page, from the top-left to just under the planet](30-title-band-marquee.webp)
+![A rectangular marquee across the top of the page, inset a little from the cream frame](30-title-band-marquee.webp)
 
-Add a layer *Title band*. Drag a **Rectangular Marquee** from the top-left
-corner of the frame across to the right edge and about 300 px down. Fill it
+Add a layer *Title band*. Drag a **Rectangular Marquee** across the top of the frame, inset a little from the cream border and tall enough to hold the title. Fill it
 with `#1A1511` and deselect.
 
 ## Set the title
@@ -298,15 +286,13 @@ with `#1A1511` and deselect.
 
 Pick the **Text** tool, choose **Anton**, set the size to **190** and the
 colour to `#F1E3BD`, click in the band and type **TARDIGRADE**. Use the
-align buttons to centre it horizontally, then nudge it up a little with the
-arrow keys so it sits inside the band with even margins.
+align buttons to centre it horizontally, then drag it with the **Move** tool so it sits inside the band with even margins.
 
 ## Subtitle
 
 ![INSURGENCY in black Anton capitals on an ochre bar under the title, overlapping the bottom of the band](32-subtitle.webp)
 
-Add a layer *Sub bar* and fill an ochre `#E0A030` rectangle across the middle
-of the page, so it overlaps the bottom edge of the title band. Then type
+Add a layer *Sub bar* and fill an ochre `#E0A030` rectangle just under the title, narrower than the band and overlapping its bottom edge. Then type
 **INSURGENCY** in **Anton** at **100** px in `#1A1511`, and centre it on the
 bar.
 
@@ -314,18 +300,14 @@ bar.
 
 ![The sub bar and its text selected with a marquee, then rotated about three degrees counter-clockwise with the Move tool's rotate handle](33-slanted-label.webp)
 
-Click **Rasterize Layer** on both the subtitle text and the title text so the
-rotation is baked into pixels. Select the bar and text with a marquee, pick
-the **Move** tool, and drag just outside a corner handle to rotate about
-**−3°**. Press [[Cmd+D]] to commit. A slight tilt makes the lockup feel
+Click **Rasterize Layer** on the subtitle text so the rotation is baked into pixels. Select the bar and its text with a marquee, pick the **Move** tool, and drag just outside a corner handle to rotate about **−3°**. The title stays straight. Press [[Cmd+D]] to commit. A slight tilt makes the lockup feel
 stamped on.
 
 ## Footer band
 
 ![A second black band along the bottom of the page, inside the frame](34-footer-marquee.webp)
 
-Add *Foot band* and fill an ink rectangle across the bottom of the frame, about
-100 px tall.
+Add *Foot band* and fill an ink rectangle across the bottom of the frame, roughly a tenth of the page tall.
 
 ## Slogan
 
@@ -340,15 +322,13 @@ the band.
 ![A tiny line of Space Mono beneath the slogan: WATER BEAR LIBERATION FRONT, EST. 530 MYA, NO. 08](36-footer-details.webp)
 
 Add one more line with **Space Mono Bold** at **16** px in cream: **WATER BEAR
-LIBERATION FRONT // EST. 530 MYA // NO. 08**. Centre it and use the arrow keys
-to seat it neatly under the slogan, with equal space above and below.
+LIBERATION FRONT // EST. 530 MYA // NO. 08**. Centre it and drag it with the **Move** tool so it sits neatly under the slogan, with equal space above and below.
 
 ## Make a badge
 
-![A circular marquee on the left of the page, centred in the open area beside the globe](37-badge-marquee.webp)
+![A circular marquee on the left of the page, just overlapping the edge of the globe](37-badge-marquee.webp)
 
-Add a layer named *Badge*. With the **Elliptical Marquee**, draw a circle about
-180 px across on the left of the page, a little below the title.
+Add a layer named *Badge*. With the **Elliptical Marquee**, draw a circle on the left of the page, a little below the title, big enough to hold a ring of text.
 
 ## Fill the badge
 
@@ -361,8 +341,7 @@ Fill it with `#E0A030`, deselect, and give the layer a **Stroke** effect in
 
 ![A smaller circle inside the badge, selected with an elliptical marquee](39-ring-marquee.webp)
 
-Draw a smaller circle inside the badge, about 132 px across, and choose
-**Select → Selection → Path**. A circular path appears in the Paths panel.
+Draw a smaller circle inside the badge, leaving a margin for the outline, and choose **Select → Selection to Path**. A circular path appears in the Paths panel.
 Deselect.
 
 ## Bind the text to the path
@@ -371,7 +350,7 @@ Deselect.
 
 Pick the **Text** tool, choose **Space Mono Bold** at **17** px in `#1A1511`,
 and type **RESIST · ENDURE · RESIST · ENDURE ·** (with a final space). In the
-Text options, set the **Text path** dropdown to *Path 1*. The words wrap
+Text options, set the **Path** dropdown to *Path 1*. The words wrap
 around the rim of the badge.
 
 ## A star for the middle
@@ -384,24 +363,21 @@ the badge in `#1A1511`. Add *Badge star inner* above it with a smaller cream
 
 ## Drop shadows
 
-![The Layer effects drawer showing a Drop Shadow on the Sub bar, offset down and right with a tight blur](42-shadows.webp)
+![The badge, sub bar and title band with hard drop shadows falling down and to the right](42-shadows.webp)
 
 Open the effects for the *Badge*, *Sub bar* and *Title band* in turn and add a
-**Drop Shadow**: offset about **7 / 8** px, **Blur 1**, `#1A1511` at 85% for
-the badge and bar, and `#5A3216` at 80% for the title band. A hard shadow with
-almost no blur looks like a second ink pass.
+**Drop Shadow**: offset about **7 / 8** px, a tight **Blur**, `#1A1511` at 85% for the badge and bar, and `#5A3216` at 80% for the title band. A crisp, offset shadow looks like a second ink pass.
 
 ## Move the whole hero
 
 ![The Hero group selected and dragged upward with the Move tool](43-hero-drag.webp)
 
-Select the *Hero* group in the Layers panel, pick the **Move** tool and drag
-the tardigrade up about 26 px. Moving the group moves every layer inside it,
+Select the *Hero* group in the Layers panel, pick the **Move** tool and drag the tardigrade up a little, so its feet clear the footer band. Moving the group moves every layer inside it,
 the flag, the beret and the shade included.
 
 ## Undo it
 
-![The History panel after pressing undo: the move is undone and the character is back at its old position](44-undo.webp)
+![The Layers panel after pressing undo: the move is undone and the character is back at its old position](44-undo.webp)
 
 Press [[Cmd+Z]]. The hero snaps back to where it was. Press
 [[Cmd+Shift+Z]] to redo it.
@@ -410,17 +386,13 @@ Press [[Cmd+Z]]. The hero snaps back to where it was. Press
 
 ![After redo the hero is back in the higher position](45-redo.webp)
 
-The move is back. Checking undo and redo on a group move is a quick way to
-confirm nothing was left behind.
+Checking undo and redo on a group move is a quick way to confirm nothing was left behind, flag and beret included.
 
 ## Guides
 
-![A vertical guide down the middle of the page and a horizontal guide at the top of the footer band, both pulled from the rulers](46-guides.webp)
+![A vertical guide down the middle of the page and a horizontal guide at the top of the footer band, both pulled from the rulers, with the title, globe and hero lined up against them](46-guides.webp)
 
-Drag a guide out of the left ruler to the middle of the page, and another out of
-the top ruler to the top of the footer band. Use them to check that the title, the
-planet and the slogan all share one centre line, and that the hero's feet sit
-above the footer.
+Drag a vertical guide out of the left ruler and park it down the middle of the title and the globe, then pull a horizontal guide out of the top ruler and set it through the centre of the globe. Use them to check that the title, the planet and the badge line up, and that the hero sits comfortably below the globe's centre.
 
 That is a complete cover. Choose **File → Quick Export PNG** to save a
 first version, then keep going: the second pass tightens the character and
@@ -431,7 +403,7 @@ adds the print texture.
 ![Dragging a corner handle of the hero's transform box outward while holding Cmd to scale it uniformly](47-hero-scale-drag.webp)
 
 Select the *Hero* group and pick the **Move** tool. Hold [[Cmd]] and drag a
-corner handle outward to scale the whole group by about 1.12×. The character
+corner handle outward to scale the whole group by about a tenth. The character
 now fills the lower half of the page and overlaps the Earth more.
 
 ## Commit the scale
@@ -440,19 +412,17 @@ now fills the lower half of the page and overlaps the Earth more.
 
 Press [[Cmd+D]] to commit.
 
-## Flatten the body colour
+## Select the body
 
 ![The Magic Wand with Tolerance 110 clicking on the body in the Body layer](49-wand-body.webp)
 
-Select *Body*, pick the **Magic Wand**, set **Tolerance** to **110** and click
-the body. The whole body shape is selected.
+Select *Body*, pick the **Magic Wand**, set **Tolerance** to **110** and click the body. The whole body shape is selected, including its outline.
 
 ## Fill the body
 
 ![The body filled with a slightly warmer ochre, #E8A62E](50-body-flat.webp)
 
-Set the foreground to `#E8A62E` and choose **Edit → Fill**. Deselect. The body
-is now a touch warmer than the legs and head, which separates the pieces.
+Set the foreground to `#E8A62E` and choose **Edit → Fill** to give the body a slightly warmer ochre than the legs and head, which separates the pieces. Deselect.
 
 ## Posterize the shading
 
@@ -461,19 +431,17 @@ is now a touch warmer than the legs and head, which separates the pieces.
 Select *Body shade* and choose **Filter → Posterize** with **Levels** at
 **3**, then **Apply**.
 
-## Soften the bands
+## Set the shade opacity
 
 ![The body shade now in hard bands instead of a smooth gradient, with its opacity raised to 55 percent](52-shade-banded.webp)
 
-Raise the layer opacity to **55%**. The soft gradient becomes crisp bands, like
-a three-colour screen print.
+Raise the layer opacity to **55%**. The soft gradient is now crisp bands, like a three-colour screen print.
 
 ## Shade the planet with halftone
 
 ![A black-to-white gradient dragged across an elliptical selection of the planet on a new layer called Earth shade](53-earth-shade-gradient.webp)
 
-Select the *Planet* group, add a layer named *Earth shade*, and make an
-**Elliptical Marquee** exactly over the globe. Set the foreground to black and
+Select the *Earth* layer inside the *Planet* group, add a layer named *Earth shade*, and make an **Elliptical Marquee** that hugs the globe. Set the foreground to black and
 the background to white. Using the **Gradient** tool, drag from the lower right
 of the planet up toward the upper left.
 
@@ -494,9 +462,7 @@ vanish in the light.
 
 ![A big feathered ellipse of pale gold behind the planet](56-glow-fill.webp)
 
-Add a layer named *Earth glow* directly above *Sunburst*. Draw an **Elliptical
-Marquee** with a radius of about 430 px around the planet, set **Feather** to
-**90**, and fill it with `#F6D98A`.
+Add a layer named *Earth glow* directly above *Sunburst*. Draw an **Elliptical Marquee** a good deal larger than the planet, centred on it. Set **Feather** to a big soft value (about **90**), and fill it with `#F6D98A`.
 
 ## Soften the glow
 
@@ -508,8 +474,7 @@ Set the layer's opacity to **70%**. The planet now glows against the rays.
 
 ![A new top layer filled with mid-grey and the Add Noise dialog open, with Amount 70](58-noise.webp)
 
-At the very top of the *Project* group, add a layer named *Paper grain*. Fill it
-with `#808080`, then choose **Filter → Add Noise** with **Amount** at **70**.
+At the very top of the *Project* group, add a layer named *Paper grain*. Deselect, fill it with `#808080`, then choose **Filter → Add Noise** and raise **Amount** to **70**.
 
 ## Overlay the grain
 
