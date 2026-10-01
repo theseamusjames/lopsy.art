@@ -212,6 +212,10 @@ test.describe('Effect cache perf — 4000x4000, 20 styled layers', () => {
     report += `Full recomposite + readback: p50 ${recomposite[2]!.toFixed(1)} ms (min ${recomposite[0]!.toFixed(1)}, max ${recomposite[4]!.toFixed(1)})\n`;
     report += summarize('Brush on plain layer', brushWall, brushFrames) + '\n';
     report += summarize('Wheel pan', panWall, panFrames) + '\n';
+    if (statsAfterBrush && statsAfterPan) {
+      // 20 lookups per full composite; a pan that only re-presents does none.
+      report += `Full composites during the pan: ${((statsAfterPan.hits + statsAfterPan.misses - statsAfterBrush.hits - statsAfterBrush.misses) / LAYERS).toFixed(0)}\n`;
+    }
     report += `Cache: ${JSON.stringify(statsAfterPan)}\n`;
     console.log(report);
     const outDir = path.join(process.cwd(), 'test-results');

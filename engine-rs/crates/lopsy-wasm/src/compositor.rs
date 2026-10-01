@@ -40,10 +40,6 @@ pub(crate) fn mask_doc_origin(engine: &EngineInner, layer_id: &str) -> (f32, f32
 
 /// Main compositing pipeline — called every frame
 pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
-    // Copy viewport state so we don't borrow engine
-    let vp_zoom = engine.viewport.zoom;
-    let vp_pan_x = engine.viewport.pan_x;
-    let vp_pan_y = engine.viewport.pan_y;
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     let bg = engine.bg_color;
@@ -480,7 +476,32 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         render_quick_mask_overlay(engine);
     }
 
-    // 5. Final blit to screen canvas
+    present(engine)?;
+
+    // Every adjusted group encountered this frame either refreshed its
+    // pre-adjustment cache entry or (if `cache_was_valid`) reused an
+    // already-fresh one, so the caches as a whole are now consistent.
+    // Flipping this only here (not per-group mid-loop) keeps a group
+    // recomputed early in the frame from making a still-stale group later
+    // in the same frame think it's safe to read its own stale cache entry.
+    engine.group_pre_adj_valid = true;
+
+    engine.needs_recomposite = false;
+    Ok(())
+}
+
+/// Draw the composite texture to the screen canvas through the viewport
+/// transform. On its own this is the whole frame when only screen-space
+/// state changed (pan, zoom, channel visibility): the composite texture
+/// still holds the current document, so no layer is re-blended.
+pub fn present(engine: &mut EngineInner) -> Result<(), String> {
+    let vp_zoom = engine.viewport.zoom;
+    let vp_pan_x = engine.viewport.pan_x;
+    let vp_pan_y = engine.viewport.pan_y;
+    let doc_w = engine.doc_width;
+    let doc_h = engine.doc_height;
+    let bg = engine.bg_color;
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
     engine.fbo_pool.unbind(&engine.gl);
     let canvas = engine.gl.canvas().ok_or("WebGL canvas missing")?;
     let canvas_el: web_sys::HtmlCanvasElement = canvas.dyn_into().map_err(|_| "canvas is not HtmlCanvasElement")?;
@@ -507,16 +528,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
 
     engine.draw_fullscreen_quad();
-
-    // Every adjusted group encountered this frame either refreshed its
-    // pre-adjustment cache entry or (if `cache_was_valid`) reused an
-    // already-fresh one, so the caches as a whole are now consistent.
-    // Flipping this only here (not per-group mid-loop) keeps a group
-    // recomputed early in the frame from making a still-stale group later
-    // in the same frame think it's safe to read its own stale cache entry.
-    engine.group_pre_adj_valid = true;
-
-    engine.needs_recomposite = false;
+    engine.needs_present = false;
     Ok(())
 }
 
@@ -1833,6 +1845,10 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     composite_layers_for_export(engine)?;
+    // The export render replaced the live composite (no quick mask, no
+    // in-progress strokes), so the next frame must rebuild it rather than
+    // only re-present it.
+    engine.needs_recomposite = true;
 
     let mut pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, doc_w, doc_h)?;
 
@@ -1858,6 +1874,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     composite_layers_for_export(engine)?;
+    engine.needs_recomposite = true;
 
     apply_image_adjustments(engine);
 

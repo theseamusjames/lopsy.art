@@ -92,10 +92,16 @@ pub fn render(engine: &mut Engine) {
     // Every mutation that affects the composite sets needs_recomposite
     // (via mark_layer_dirty or directly). Skipping clean frames keeps
     // cursor moves and overlay-only updates from re-blending every layer.
-    if !engine.inner.needs_recomposite {
+    // Pan, zoom and channel toggles only set needs_present: the composite
+    // texture is still current, so just the final blit runs.
+    let result = if engine.inner.needs_recomposite {
+        compositor::composite(&mut engine.inner)
+    } else if engine.inner.needs_present {
+        compositor::present(&mut engine.inner)
+    } else {
         return;
-    }
-    if let Err(e) = compositor::composite(&mut engine.inner) {
+    };
+    if let Err(e) = result {
         web_sys::console::error_1(&format!("compositor error: {e}").into());
     }
 }

@@ -164,6 +164,11 @@ pub struct EngineInner {
     /// mode 0 is passthrough.
     pub doc_color_mode: u32,
     pub needs_recomposite: bool,
+    /// Only the final blit is stale (viewport or another screen-space
+    /// uniform changed); the composite texture is current. Anything that
+    /// writes the composite texture outside `composite` must set
+    /// `needs_recomposite` instead.
+    pub needs_present: bool,
     // Brush state
     pub stroke_textures: HashMap<String, TextureHandle>,
     pub stroke_opacity: HashMap<String, f32>,
@@ -376,6 +381,7 @@ impl EngineInner {
             bg_color: [1.0, 1.0, 1.0, 1.0],
             doc_color_mode: 0,
             needs_recomposite: true,
+            needs_present: true,
             stroke_textures: HashMap::new(),
             stroke_opacity: HashMap::new(),
             stroke_use_brush_texture: HashMap::new(),
@@ -500,7 +506,7 @@ impl EngineInner {
 
     pub fn set_viewport(&mut self, zoom: f64, pan_x: f64, pan_y: f64, screen_w: f64, screen_h: f64) {
         self.viewport = ViewportState::new(zoom, pan_x, pan_y, screen_w, screen_h);
-        self.needs_recomposite = true;
+        self.needs_present = true;
     }
 
     pub fn set_background_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
