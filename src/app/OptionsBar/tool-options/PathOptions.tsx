@@ -1,6 +1,9 @@
 import { useCallback } from 'react';
+import { Check, X } from 'lucide-react';
 import { useToolSettingsStore } from '../../tool-settings-store';
 import { useEditorStore } from '../../editor-store';
+import { useUIStore } from '../../ui-store';
+import { commitCurrentPath } from '../../interactions/path-stroke';
 import { Slider } from '../../../components/Slider/Slider';
 import { applyBooleanOp } from '../../MenuBar/menus/path-menu';
 import type { BooleanOp } from '../../../tools/path/boolean-ops';
@@ -12,6 +15,7 @@ export function PathOptions() {
   const setPathSetting = useToolSettingsStore((s) => s.setPathSetting);
   const paths = useEditorStore((s) => s.paths);
   const selectedPathId = useEditorStore((s) => s.selectedPathId);
+  const draftAnchorCount = useUIStore((s) => s.pathDraft?.anchors.length ?? 0);
 
   // Boolean ops need exactly 2 paths total with one selected
   const canDoBoolean = paths.length >= 2 && selectedPathId !== null;
@@ -23,6 +27,16 @@ export function PathOptions() {
   const handleStrokeChange = useCallback((width: number) => {
     setPathSetting('strokeWidth', width);
   }, [setPathSetting]);
+
+  const handleCommit = useCallback(() => {
+    commitCurrentPath();
+    useEditorStore.getState().notifyRender();
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    useUIStore.getState().clearPath();
+    useEditorStore.getState().notifyRender();
+  }, []);
 
   return (
     <>
@@ -55,6 +69,31 @@ export function PathOptions() {
           disabled={!canDoBoolean}
           onClick={handleOp}
         />
+      </div>
+
+      <div className={styles.separator} />
+
+      <div className={styles.draftGroup}>
+        <button
+          type="button"
+          className={`${styles.draftBtn} ${styles.commitBtn}`}
+          aria-label="Commit path"
+          title="Commit path"
+          disabled={draftAnchorCount < 2}
+          onClick={handleCommit}
+        >
+          <Check size={14} />
+        </button>
+        <button
+          type="button"
+          className={`${styles.draftBtn} ${styles.cancelBtn}`}
+          aria-label="Cancel path"
+          title="Cancel path"
+          disabled={draftAnchorCount === 0}
+          onClick={handleCancel}
+        >
+          <X size={14} />
+        </button>
       </div>
 
       <span className={optStyles.hint}>Enter to stroke, Esc to cancel</span>
