@@ -698,11 +698,11 @@ describe('per-tool slice: text (#453)', () => {
     expect(after.strikethrough).toBe(before.strikethrough);
   });
 
-  it('setTextSetting clamps fontSize into [1, 500]', () => {
+  it('setTextSetting clamps fontSize into [1, 5000]', () => {
     useToolSettingsStore.getState().setTextSetting('fontSize', 0);
     expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(1);
     useToolSettingsStore.getState().setTextSetting('fontSize', 99999);
-    expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(500);
+    expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(5000);
     useToolSettingsStore.getState().setTextSetting('fontSize', 36);
     expect(useToolSettingsStore.getState().settings.text.fontSize).toBe(36);
   });

@@ -15,6 +15,7 @@ import {
   beginTextLayerHistory,
   endTextLayerHistory,
 } from '../../../tools/text/apply-text-setting';
+import { textSizeTypedMax, TEXT_SIZE_SLIDER_MAX } from '../../../tools/text/text-settings';
 import type { TextLayer, FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 import decorationStyles from './TextOptions.module.css';
@@ -41,6 +42,10 @@ export function TextOptions() {
   const textUnderline = useToolSettingsStore((s) => s.settings.text.underline);
   const textStrikethrough = useToolSettingsStore((s) => s.settings.text.strikethrough);
   const textVertical = useToolSettingsStore((s) => s.settings.text.vertical);
+
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
+  const sizeMax = textSizeTypedMax(docWidth, docHeight);
 
   const fontEntry = useFontEntry(extractFamilyName(textFontFamily));
 
@@ -102,7 +107,8 @@ export function TextOptions() {
         label="Size"
         value={textFontSize}
         min={1}
-        max={500}
+        max={sizeMax}
+        sliderMax={TEXT_SIZE_SLIDER_MAX}
         onDragStart={beginTextLayerHistory}
         onCommit={endTextLayerHistory}
         onChange={(v) => applyTextSetting('fontSize', v)}

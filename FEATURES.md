@@ -311,7 +311,9 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Boolean path operations** (Path options bar buttons + **Path** menu in the menu bar): Unite, Subtract, Intersect, Exclude. Operates between the selected path and the most recently added other path; both source paths are consumed and replaced by the result. Implemented by flattening Bezier paths to polygons, rasterizing to binary masks, combining pixel-wise, then tracing contours with marching squares and refitting Catmull-Rom/Bezier anchors. Buttons are disabled until the document contains at least 2 paths and one is selected.
 
 ### Text Tool
-- **Font size**: 1 - 500 **px** — a pixel size, not points. The engine hands `fontSize` straight to cosmic-text's `Metrics::new` as the em size in document pixels (`text_gpu.rs`), the path-text renderer builds a `…px` CSS font string from the same number, and the Text panel labels the field `px`; the options-bar slider shows no unit at all. `[` / `]` do not change it (see [Single-Key Shortcuts](#single-key-shortcuts)).
+- **Font size**: 1 **px** up to `docScaledMax(500)` — 1.5 × the document's long side, never below 500 or above 5000 — a pixel size, not points. The engine hands `fontSize` straight to cosmic-text's `Metrics::new` as the em size in document pixels (`text_gpu.rs`), the path-text renderer builds a `…px` CSS font string from the same number, and the Text panel labels the field `px`; the options-bar slider shows no unit at all. `[` / `]` do not change it (see [Single-Key Shortcuts](#single-key-shortcuts)).
+  - **Sizes above 500 are typed, not dragged.** Both Size sliders — options bar and Text panel — keep their knob's track at 1 – 500 (`sliderMax`) but accept typed values up to the document-scaled ceiling (`textSizeTypedMax` in `text-settings.ts`, shared by both fields so they always agree); the store clamps any font size to 1 – 5000. On a 1400 × 1000 document a typed 99999 lands on 2100. Before this change both fields and the store stopped at 500.
+  - **Large text renders within the GPU's limits.** A text raster wider or taller than the GPU's `MAX_TEXTURE_SIZE` is cropped to it from its top-left corner (the offsets the layer is anchored by are unchanged) instead of failing the upload; glyphs above 500 px are rasterized once per render rather than entering the engine's never-evicting glyph cache; and uploads into float textures convert in 16 MB row bands rather than one f32 copy four times the raster's size. A 5000 px `HELLO WORLD` on a 4000 × 4000 document under SwiftShader (limit 8192) commits as an 8192 × 3744 layer in about 5 s.
 - **Font family**: chosen from a searchable **font browser** (see below) covering 1,954 families — 14 system faces (Inter, Arial, Helvetica, Georgia, Times New Roman, Courier New, JetBrains Mono, Verdana, Trebuchet MS, Impact, Comic Sans MS, Palatino, Garamond, Brush Script MT) plus 1,940 Google Fonts — and, in Chromium browsers, **every family installed on the machine** (see *Local fonts* below).
 - **Font weight**: the dropdown lists exactly the weights the selected family ships, labelled Thin (100) / ExtraLight (200) / Light (300) / Regular (400) / Medium (500) / SemiBold (600) / Bold (700) / ExtraBold (800) / Black (900) / UltraBlack (1000). Families outside the catalog fall back to Regular + Bold. Switching to a family that lacks the current weight snaps to the numerically nearest one it does have.
 - **Font style**: normal or italic
@@ -808,7 +810,7 @@ The options bars are assembled from one `Slider` component, and several labels a
 
 ### "Size" — eleven sliders, three unit systems
 
-Nine of the eleven share a ceiling formula, `docScaledMax(base) = max(base, min(5000, round(1.5 × longest document side)))`. **The per-tool `base` is almost always dead weight**: it only wins when `1.5 × longest side` falls below it, i.e. on documents whose longest side is under 67 px (Pencil), 134 px (most tools) or 334 px (Spray). On any real canvas — an 800 × 600 document gives 1200 — all nine typed ceilings are *identical*, and the per-tool numbers that look like deliberate tuning have no effect at all.
+Ten of the eleven share a ceiling formula, `docScaledMax(base) = max(base, min(5000, round(1.5 × longest document side)))`. **The per-tool `base` is almost always dead weight**: it only wins when `1.5 × longest side` falls below it, i.e. on documents whose longest side is under 67 px (Pencil), 134 px (most tools) or 334 px (Spray, Text). On any real canvas — an 800 × 600 document gives 1200 — all ten typed ceilings are *identical*, and the per-tool numbers that look like deliberate tuning have no effect at all.
 
 What does differ is the **knob** ceiling. `Slider` computes `knobMax = min(max, sliderMax ?? max)` and puts only that on the drag track, while the numeric input and the arrow keys clamp to the full `max`. So on a large document every one of these sliders can be typed far past the end of its own track.
 
@@ -823,7 +825,7 @@ What does differ is the **knob** ceiling. `Slider` computes `knobMax = min(max, 
 | Dodge / Burn Size | **`brush.size`** | dab diameter, px | `docScaledMax(200)` | 300 |
 | Healing Size | `healing.size` | dab diameter, px | `docScaledMax(200)` | **none set — the whole typed range, up to 5000** |
 | Spray Size | `spray.size` | **cloud** diameter, px | `docScaledMax(500)` | 500 |
-| Text Size | the layer's `fontSize` | **font em size**, px | 500 (flat) | none set — same as typed |
+| Text Size | the layer's `fontSize` | **font em size**, px | `docScaledMax(500)` | 500 |
 | Quick Selection Size | `quickSelect.size` | **seed-box radius**, px | 100 (flat) | none set — same as typed |
 
 Four consequences worth stating plainly:

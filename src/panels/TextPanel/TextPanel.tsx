@@ -1,5 +1,6 @@
 import { AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
+import { useEditorStore } from '../../app/editor-store';
 import { Slider } from '../../components/Slider/Slider';
 import { FontPicker } from '../../components/FontPicker/FontPicker';
 import { useFontEntry } from '../../app/local-fonts-store';
@@ -11,6 +12,7 @@ import {
   beginTextLayerHistory,
   endTextLayerHistory,
 } from '../../tools/text/apply-text-setting';
+import { textSizeTypedMax, TEXT_SIZE_SLIDER_MAX } from '../../tools/text/text-settings';
 import type { FontStyle, TextAlign } from '../../types';
 import styles from './TextPanel.module.css';
 
@@ -37,6 +39,9 @@ const ALIGNMENTS: { value: TextAlign; label: string; Icon: typeof AlignLeft }[] 
 export function TextPanel() {
   const text = useToolSettingsStore((s) => s.settings.text);
   const recentFonts = useToolSettingsStore((s) => s.recentFonts);
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
+  const sizeMax = textSizeTypedMax(docWidth, docHeight);
 
   const fontEntry = useFontEntry(extractFamilyName(text.fontFamily));
   const availableWeights = fontEntry?.weights ?? [400, 700];
@@ -99,7 +104,8 @@ export function TextPanel() {
           label="Size"
           value={text.fontSize}
           min={1}
-          max={500}
+          max={sizeMax}
+          sliderMax={TEXT_SIZE_SLIDER_MAX}
           suffix="px"
           onDragStart={beginTextLayerHistory}
           onCommit={endTextLayerHistory}

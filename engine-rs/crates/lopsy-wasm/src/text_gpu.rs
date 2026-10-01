@@ -168,7 +168,16 @@ pub struct TextRendererState {
     /// (lowercased family, style, weight) combinations already tried for
     /// variable-font instancing, so a failure is not retried every layout.
     instanced_weights: HashSet<(String, Style, u16)>,
+    /// Largest side a rendered layer may have — the GPU's `MAX_TEXTURE_SIZE`,
+    /// set by the API layer. Text larger than this is cropped to it rather
+    /// than producing a raster no texture can hold.
+    pub max_canvas_side: u32,
 }
+
+/// Glyph rasters for em sizes above this are not kept in `unhinted_cache`,
+/// which never evicts: a 900 px glyph's mask is ~0.8 MB, a 3000 px one ~9 MB,
+/// and each glyph can be cached at four subpixel offsets.
+const MAX_CACHED_GLYPH_PX: f32 = 500.0;
 
 fn render_glyph_unhinted<'a>(
     font_system: &mut FontSystem,
@@ -219,6 +228,7 @@ impl TextRendererState {
             scale_context: ScaleContext::new(),
             unhinted_cache: HashMap::new(),
             instanced_weights: HashSet::new(),
+            max_canvas_side: u32::MAX,
         }
     }
 
@@ -1070,17 +1080,21 @@ impl TextRendererState {
         let do_underline = state.underline && !vertical;
         let do_strikethrough = state.strikethrough && !vertical;
 
-        // Render all glyphs without hinting for smooth curves.
-        let mut glyph_images: Vec<Option<SwashImage>> = Vec::with_capacity(glyph_layouts.len());
+        // Render all glyphs without hinting for smooth curves. Large glyphs go
+        // in a per-render map so repeats are still rasterized once.
+        let is_large = |key: &CacheKey| f32::from_bits(key.font_size_bits) > MAX_CACHED_GLYPH_PX;
+        let mut large_glyphs: HashMap<CacheKey, Option<SwashImage>> = HashMap::new();
         for gl in &glyph_layouts {
-            let img = render_glyph_unhinted(
-                &mut self.font_system,
-                &mut self.scale_context,
-                &mut self.unhinted_cache,
-                gl.cache_key,
-            ).cloned();
-            glyph_images.push(img);
+            let cache = if is_large(&gl.cache_key) { &mut large_glyphs } else { &mut self.unhinted_cache };
+            render_glyph_unhinted(&mut self.font_system, &mut self.scale_context, cache, gl.cache_key);
         }
+        let glyph_images: Vec<Option<&SwashImage>> = glyph_layouts
+            .iter()
+            .map(|gl| {
+                let cache = if is_large(&gl.cache_key) { &large_glyphs } else { &self.unhinted_cache };
+                cache.get(&gl.cache_key).and_then(|img| img.as_ref())
+            })
+            .collect();
 
         // Pass 1: measure pixel-space bounding box.
         for (gl, img_opt) in glyph_layouts.iter().zip(glyph_images.iter()) {
@@ -1126,8 +1140,9 @@ impl TextRendererState {
 
         let canvas_x = min_x - pad;
         let canvas_y = min_y - pad;
-        let canvas_w = (max_x - min_x + pad * 2).max(1) as u32;
-        let canvas_h = (max_y - min_y + pad * 2).max(1) as u32;
+        // Cropping keeps the top-left, so the offsets callers anchor by hold.
+        let canvas_w = ((max_x - min_x + pad * 2).max(1) as u32).min(self.max_canvas_side);
+        let canvas_h = ((max_y - min_y + pad * 2).max(1) as u32).min(self.max_canvas_side);
 
         let mut pixels = vec![0u8; (canvas_w * canvas_h * 4) as usize];
 
@@ -1947,4 +1962,53 @@ mod tests {
         assert!((top + ox as f64).abs() <= 2.0, "ink centre {top} is not on the anchor ({})", -ox);
     }
 
+    fn sized_props(text: &str, font_size: f64) -> String {
+        format!(
+            r#"{{"text":"{text}","fontFamily":"sans-serif","fontSize":{font_size},"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"textAlign":"left","areaWidth":null}}"#
+        )
+    }
+
+    #[test]
+    fn a_900px_glyph_renders_at_that_size() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("big", &sized_props("H", 900.0)).expect("ok");
+        let (pixels, w, h, _, _) = renderer.render_text_layer_software("big").expect("rendered");
+        let (mut top, mut bottom) = (u32::MAX, 0u32);
+        for y in 0..h {
+            for x in 0..w {
+                if pixels[((y * w + x) * 4 + 3) as usize] > 128 {
+                    top = top.min(y);
+                    bottom = bottom.max(y);
+                }
+            }
+        }
+        // Inter's cap height is 0.727 em: an "H" at 900 px stands ~654 px tall.
+        let cap = (bottom - top + 1) as f64;
+        assert!((cap - 654.0).abs() < 8.0, "900 px H should be ~654 px tall, got {cap}");
+    }
+
+    #[test]
+    fn large_glyphs_are_not_kept_in_the_glyph_cache() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("big", &sized_props("HH", 900.0)).expect("ok");
+        renderer.render_text_layer_software("big").expect("rendered");
+        assert!(renderer.unhinted_cache.is_empty(), "900 px glyphs must not be cached");
+        renderer.set_text_content("small", &sized_props("HH", 40.0)).expect("ok");
+        renderer.render_text_layer_software("small").expect("rendered");
+        assert!(!renderer.unhinted_cache.is_empty(), "small glyphs are still cached");
+    }
+
+    #[test]
+    fn a_raster_wider_than_the_texture_limit_is_cropped_keeping_its_origin() {
+        let mut renderer = make_renderer();
+        renderer.set_text_content("t", &sized_props("Wide text", 200.0)).expect("ok");
+        let (_, full_w, full_h, ox, oy) = renderer.render_text_layer_software("t").expect("rendered");
+        assert!(full_w > 256);
+        renderer.max_canvas_side = 256;
+        renderer.set_text_content("t2", &sized_props("Wide text", 200.0)).expect("ok");
+        let (pixels, w, h, ox2, oy2) = renderer.render_text_layer_software("t2").expect("rendered");
+        assert_eq!((w, h), (256, full_h.min(256)));
+        assert_eq!((ox2, oy2), (ox, oy), "cropping must keep the offsets callers anchor by");
+        assert_eq!(pixels.len(), (w * h * 4) as usize);
+    }
 }

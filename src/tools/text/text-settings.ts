@@ -1,4 +1,5 @@
 import type { FontStyle, TextAlign } from '../../types';
+import { docScaledMax } from '../../utils/slider-ranges';
 
 /**
  * Per-tool settings slice for the Text tool.
@@ -59,13 +60,26 @@ export const DEFAULT_TEXT_SETTINGS: TextSettings = {
   vertical: false,
 };
 
+/** End of the Size slider's track. Typed values may go further. */
+export const TEXT_SIZE_SLIDER_MAX = 500;
+
+/**
+ * Largest font size the Size fields accept when typed: the same
+ * `docScaledMax` ceiling every pixel-sized Size field uses — 1.5 × the
+ * document's long side, never below the slider's 500 or above 5000 (which
+ * the store clamp enforces whatever the document).
+ */
+export function textSizeTypedMax(docWidth: number, docHeight: number): number {
+  return docScaledMax(docWidth, docHeight, TEXT_SIZE_SLIDER_MAX);
+}
+
 export function clampTextSetting<K extends keyof TextSettings>(
   key: K,
   value: TextSettings[K],
 ): TextSettings[K] {
   if (key === 'fontSize') {
     const n = value as number;
-    return Math.max(1, Math.min(500, n)) as TextSettings[K];
+    return Math.max(1, Math.min(5000, n)) as TextSettings[K];
   }
   if (key === 'lineHeight') {
     const n = value as number;
