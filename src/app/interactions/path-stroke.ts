@@ -92,6 +92,33 @@ function strokeTargetLayerId(): string | null {
   return doc.activeLayerId;
 }
 
+// The path Enter last stroked, so a repeated Enter doesn't stroke it again
+// and double up its anti-aliased edges. Any change to the path list (an
+// edit, a commit, undo / redo), to the selection, or a new draft anchor
+// clears it — after which Enter strokes the selected path once more.
+let enterStrokedPathId: string | null = null;
+let isWatchingStrokeReset = false;
+
+function watchStrokeReset(): void {
+  if (isWatchingStrokeReset) return;
+  isWatchingStrokeReset = true;
+  useEditorStore.subscribe((state, prev) => {
+    if (state.paths !== prev.paths || state.selectedPathId !== prev.selectedPathId) {
+      enterStrokedPathId = null;
+    }
+  });
+  useUIStore.subscribe((state, prev) => {
+    if (state.pathDraft !== prev.pathDraft && (state.pathDraft?.anchors.length ?? 0) > 0) {
+      enterStrokedPathId = null;
+    }
+  });
+}
+
+function rememberEnterStroke(): void {
+  watchStrokeReset();
+  enterStrokedPathId = useEditorStore.getState().selectedPathId;
+}
+
 /**
  * Enter with the Pen tool: keep the in-progress path in the Paths panel and
  * stroke it onto the active layer with the options-bar stroke width and the
@@ -105,6 +132,7 @@ function strokeCurrentPath(): void {
   commitCurrentPath();
   if (!layerId) return;
   strokeOntoLayer(layerId, docAnchors, isClosed);
+  rememberEnterStroke();
 }
 
 /**
@@ -115,11 +143,13 @@ function strokeCurrentPath(): void {
  */
 function strokeSelectedPath(): void {
   const { paths, selectedPathId } = useEditorStore.getState();
+  if (selectedPathId === null || selectedPathId === enterStrokedPathId) return;
   const path = paths.find((p) => p.id === selectedPathId);
   if (!path || path.anchors.length < 2) return;
   const layerId = strokeTargetLayerId();
   if (!layerId) return;
   strokeOntoLayer(layerId, path.anchors, path.closed);
+  rememberEnterStroke();
 }
 
 /** Enter with the Pen tool: stroke the in-progress path, else the selected one. */

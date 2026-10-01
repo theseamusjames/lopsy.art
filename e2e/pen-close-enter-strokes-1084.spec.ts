@@ -94,6 +94,11 @@ test.describe('Pen tool: Enter strokes a path closed on its first anchor (#1084)
     expect(await historyLabels(page)).toEqual([...before, 'Add Path', 'Stroke Path']);
     expect(await pathsState(page)).toEqual([{ anchorCount: 3, closed: true }]);
 
+    // An accidental second Enter doesn't stroke the same path again.
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(300);
+    expect(await historyLabels(page)).toEqual([...before, 'Add Path', 'Stroke Path']);
+
     await page.screenshot({ path: 'e2e/screenshots/pen-close-enter-strokes-1084.png' });
     const layer = await readActiveLayer(page);
     // Midpoints of the two drawn sides and of the closing side (bottom edge).
@@ -113,5 +118,11 @@ test.describe('Pen tool: Enter strokes a path closed on its first anchor (#1084)
     expect(pixelAt(undone, 400, 450)[3]).toBe(0);
     expect(await historyLabels(page)).toEqual([...before, 'Add Path']);
     expect(await pathsState(page)).toEqual([{ anchorCount: 3, closed: true }]);
+
+    // After undoing the stroke, Enter strokes the closed path again.
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(300);
+    expect(await historyLabels(page)).toEqual([...before, 'Add Path', 'Stroke Path']);
+    expectRed(await readActiveLayer(page), 400, 450);
   });
 });

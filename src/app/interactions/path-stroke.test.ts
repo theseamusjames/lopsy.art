@@ -28,21 +28,45 @@ const editorState = {
   selectedPathId: null as string | null,
   pushHistory: vi.fn(),
   pushHistoryMetadata: vi.fn(),
-  addPath: vi.fn(),
+  addPath: vi.fn((anchors: PathAnchor[], closed: boolean) => {
+    setEditor({ paths: [...editorState.paths, { id: 'added', anchors, closed }], selectedPathId: 'added' });
+  }),
   getOrCreateLayerPixelData: vi.fn(() => ({})),
   updateLayerPixelData: vi.fn(),
 };
+type Listener<T> = (state: T, prev: T) => void;
+const editorListeners: Array<Listener<typeof editorState>> = [];
 vi.mock('../editor-store', () => ({
-  useEditorStore: { getState: () => editorState },
+  useEditorStore: {
+    getState: () => editorState,
+    subscribe: (l: Listener<typeof editorState>) => { editorListeners.push(l); },
+  },
 }));
 
+function setEditor(patch: Partial<typeof editorState>): void {
+  const prev = { ...editorState };
+  Object.assign(editorState, patch);
+  for (const l of editorListeners) l(editorState, prev);
+}
+
+type Draft = { anchors: PathAnchor[]; closed: boolean } | null;
 const uiState = {
-  pathDraft: null as { anchors: PathAnchor[]; closed: boolean } | null,
-  clearPath: vi.fn(() => { uiState.pathDraft = null; }),
+  pathDraft: null as Draft,
+  clearPath: vi.fn(() => { setDraft(null); }),
 };
+const uiListeners: Array<Listener<typeof uiState>> = [];
 vi.mock('../ui-store', () => ({
-  useUIStore: { getState: () => uiState },
+  useUIStore: {
+    getState: () => uiState,
+    subscribe: (l: Listener<typeof uiState>) => { uiListeners.push(l); },
+  },
 }));
+
+function setDraft(pathDraft: Draft): void {
+  const prev = { ...uiState };
+  uiState.pathDraft = pathDraft;
+  for (const l of uiListeners) l(uiState, prev);
+}
 
 const toolSettings = {
   settings: { path: { strokeWidth: 12 } },
@@ -65,13 +89,12 @@ describe('strokePathOnEnter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     guardPixelWrite.mockReturnValue(true);
-    uiState.pathDraft = null;
-    editorState.paths = [];
-    editorState.selectedPathId = null;
+    setDraft(null);
+    setEditor({ paths: [], selectedPathId: null });
   });
 
   it('commits and strokes an in-progress draft (#976)', () => {
-    uiState.pathDraft = { anchors: [...triangle], closed: false };
+    setDraft({ anchors: [...triangle], closed: false });
 
     strokePathOnEnter();
 
@@ -120,7 +143,7 @@ describe('strokePathOnEnter', () => {
   it('leaves the selected path alone while a one-anchor draft is in progress', () => {
     editorState.paths = [{ id: 'p1', anchors: [...triangle], closed: true }];
     editorState.selectedPathId = 'p1';
-    uiState.pathDraft = { anchors: [anchor(10, 10)], closed: false };
+    setDraft({ anchors: [anchor(10, 10)], closed: false });
 
     strokePathOnEnter();
 
@@ -137,5 +160,76 @@ describe('strokePathOnEnter', () => {
 
     expect(editorState.pushHistory).not.toHaveBeenCalled();
     expect(rasterizePath).not.toHaveBeenCalled();
+  });
+
+  describe('a repeated Enter', () => {
+    function selectTriangle(): void {
+      setEditor({ paths: [{ id: 'p1', anchors: [...triangle], closed: true }], selectedPathId: 'p1' });
+    }
+
+    it('does not stroke the selected path a second time', () => {
+      selectTriangle();
+
+      strokePathOnEnter();
+      strokePathOnEnter();
+
+      expect(rasterizePath).toHaveBeenCalledTimes(1);
+      expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not re-stroke a draft that Enter just committed and stroked', () => {
+      setDraft({ anchors: [...triangle], closed: false });
+
+      strokePathOnEnter();
+      strokePathOnEnter();
+
+      expect(editorState.selectedPathId).toBe('added');
+      expect(rasterizePath).toHaveBeenCalledTimes(1);
+    });
+
+    it('strokes again once the path is re-selected', () => {
+      selectTriangle();
+      strokePathOnEnter();
+      setEditor({ selectedPathId: null });
+      setEditor({ selectedPathId: 'p1' });
+
+      strokePathOnEnter();
+
+      expect(rasterizePath).toHaveBeenCalledTimes(2);
+    });
+
+    it('strokes again once the path is edited (or the list restored by undo)', () => {
+      selectTriangle();
+      strokePathOnEnter();
+      setEditor({ paths: [{ id: 'p1', anchors: [anchor(0, 0), anchor(50, 50)], closed: false }] });
+
+      strokePathOnEnter();
+
+      expect(rasterizePath).toHaveBeenCalledTimes(2);
+    });
+
+    it('strokes again once a new draft is started and abandoned', () => {
+      selectTriangle();
+      strokePathOnEnter();
+      setDraft({ anchors: [anchor(5, 5)], closed: false });
+      setDraft(null);
+
+      strokePathOnEnter();
+
+      expect(rasterizePath).toHaveBeenCalledTimes(2);
+    });
+
+    it('still strokes a different selected path', () => {
+      selectTriangle();
+      strokePathOnEnter();
+      setEditor({
+        paths: [...editorState.paths, { id: 'p2', anchors: [anchor(0, 0), anchor(50, 50)], closed: false }],
+        selectedPathId: 'p2',
+      });
+
+      strokePathOnEnter();
+
+      expect(rasterizePath).toHaveBeenCalledTimes(2);
+    });
   });
 });
