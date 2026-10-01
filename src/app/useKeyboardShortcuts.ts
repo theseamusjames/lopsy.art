@@ -2,7 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-import { strokeCurrentPath } from './useCanvasInteraction';
+import { strokePathOnEnter } from './interactions/path-stroke';
 import { getEngine } from '../engine-wasm/engine-state';
 import { clearSelectedPixels, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
@@ -246,9 +246,7 @@ export function useKeyboardShortcuts({
 
       if (e.key === 'Enter') {
         const uiState = useUIStore.getState();
-        if (uiState.activeTool === 'path' && (uiState.pathDraft?.anchors.length ?? 0) >= 2) {
-          strokeCurrentPath();
-        }
+        if (uiState.activeTool === 'path') strokePathOnEnter();
         return;
       }
 

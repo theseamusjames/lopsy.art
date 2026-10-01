@@ -55,8 +55,6 @@ import { PAINT_TOOLS, GPU_TOOLS, SELF_HISTORY_PAINT_TOOLS } from '../tools/tool-
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { guardPixelWrite, toolWritesRasterPixels } from '../layers/paint-target';
 
-export { strokeCurrentPath } from './interactions/path-stroke';
-
 import type { Point, Layer } from '../types';
 
 export interface ToolEvent {
