@@ -9,12 +9,15 @@ import {
   invalidateEditingTextCache,
   invalidatePathTextCache,
   resetTextLayerLayout,
+  alignChangeAnchorShift,
 } from '../../engine-wasm/engine-sync';
+import { getGlyphPositions } from '../../engine-wasm/wasm-bridge';
+import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from './point-text-align';
 import { findFontEntry, loadLocalFontToEngine } from '../../app/local-fonts-store';
 import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../../utils/font-loader';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 import type { TextSettings } from './text-settings';
-import type { TextLayer } from '../../types';
+import type { TextAlign, TextLayer } from '../../types';
 
 /** TextSettings keys that map onto a TextLayer property, and how. */
 const SETTING_TO_LAYER = {
@@ -221,6 +224,7 @@ function refreshTextAfterFontLoad(
  * without lag.
  */
 export function applyTextSetting<K extends keyof TextSettings>(key: K, value: TextSettings[K]): void {
+  const previousAlign = useToolSettingsStore.getState().settings.text.align;
   useToolSettingsStore.getState().setTextSetting(key, value);
 
   const layerKey = (SETTING_TO_LAYER as Record<string, keyof TextLayer | undefined>)[key];
@@ -228,10 +232,15 @@ export function applyTextSetting<K extends keyof TextSettings>(key: K, value: Te
   const layer = selectedCommittedTextLayer();
   if (!layer) {
     if (key === 'fontStyle') refreshWhenStyleLoads(null);
+    if (key === 'align') keepEditedBlockInPlace(previousAlign, value as TextAlign);
     return;
   }
 
   const clamped = useToolSettingsStore.getState().settings.text[key];
+  if (key === 'align' && dragAnchor && dragAnchor.layerId === layer.id) {
+    const engine = getEngine();
+    if (engine) dragAnchor.anchorX += alignChangeAnchorShift(engine, layer, clamped as TextAlign);
+  }
   useEditorStore.getState().updateTextLayerProperties(layer.id, { [layerKey]: clamped });
 
   if (dragAnchor && dragAnchor.layerId === layer.id) {
@@ -245,6 +254,27 @@ export function applyTextSetting<K extends keyof TextSettings>(key: K, value: Te
   if (key === 'fontStyle') {
     refreshWhenStyleLoads(anchor ? { id: layer.id, anchorX: anchor.anchorX, anchorY: anchor.anchorY } : null);
   }
+}
+
+/**
+ * Point text is aligned about its anchor, so moving the anchor across the
+ * block keeps the text being edited in place while its lines realign (the
+ * committed-layer equivalent is `alignChangeAnchorShift`).
+ */
+function keepEditedBlockInPlace(from: TextAlign, to: TextAlign): void {
+  const ui = useUIStore.getState();
+  const editing = ui.textEditing;
+  const engine = getEngine();
+  if (!editing || !engine || from === to || editing.text.length === 0) return;
+  if (!isPointTextLayout(editing.bounds.width, useToolSettingsStore.getState().settings.text.vertical)) return;
+  const layer = useEditorStore.getState().document.layers.find((l) => l.id === editing.layerId);
+  if (layer?.type === 'text' && layer.pathId) return;
+
+  const width = blockWidthFromGlyphs(getGlyphPositions(engine, editing.layerId));
+  const shift = alignmentAnchorShift(from, to, width);
+  if (shift === 0) return;
+  ui.updateTextEditingBounds({ ...editing.bounds, x: editing.bounds.x + shift });
+  ui.updateTextEditingSelection(editing.text, editing.cursorPos, editing.selectionAnchor);
 }
 
 /**
