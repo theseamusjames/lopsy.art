@@ -285,11 +285,11 @@ pub fn get_layer_content_bounds(engine: &mut Engine, layer_id: &str) -> Vec<i32>
 }
 
 #[wasm_bindgen(js_name = "rasterizeLayerEffects")]
-pub fn rasterize_layer_effects(engine: &mut Engine, layer_id: &str) -> Vec<u8> {
+pub fn rasterize_layer_effects(engine: &mut Engine, layer_id: &str, bake_mask: bool) -> Vec<u8> {
     // Composite the single layer with effects using the GPU pipeline,
     // then return the document-sized pixel buffer. This ensures the
     // rasterized output exactly matches the live GPU rendering.
-    compositor::composite_single_layer(&mut engine.inner, layer_id).unwrap_or_default()
+    compositor::composite_single_layer(&mut engine.inner, layer_id, bake_mask).unwrap_or_default()
 }
 
 // ============================================================
@@ -303,8 +303,8 @@ pub fn duplicate_layer_texture(engine: &mut Engine, src_id: &str, dst_id: &str) 
 }
 
 #[wasm_bindgen(js_name = "mergeLayers")]
-pub fn merge_layers(engine: &mut Engine, top_id: &str, bottom_id: &str) -> Result<(), JsError> {
-    layer_manager::merge_layers(&mut engine.inner, top_id, bottom_id)
+pub fn merge_layers(engine: &mut Engine, top_id: &str, bottom_id: &str, bake_bottom_opacity: bool) -> Result<(), JsError> {
+    layer_manager::merge_layers(&mut engine.inner, top_id, bottom_id, bake_bottom_opacity)
         .map_err(|e| JsError::new(&e))
 }
 

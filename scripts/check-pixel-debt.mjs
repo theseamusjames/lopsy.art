@@ -41,7 +41,7 @@ const ALLOWLIST = {
   'src/app/store/actions/duplicate-layer.test.ts': 1,
   'src/app/store/actions/flatten-image.test.ts': 1,
   'src/app/store/actions/layer-property-updates.test.ts': 2,
-  'src/app/store/actions/merge-down.test.ts': 2,
+  'src/app/store/actions/merge-down.test.ts': 1,
   'src/app/store/actions/open-image.test.ts': 5,
   'src/app/store/actions/rasterize-style.test.ts': 1,
   'src/app/store/actions/remove-layer-mask.test.ts': 1,
