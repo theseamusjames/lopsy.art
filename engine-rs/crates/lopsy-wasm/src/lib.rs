@@ -2,6 +2,7 @@ pub mod gpu;
 pub mod engine;
 pub mod compositor;
 pub mod layer_manager;
+pub mod layer_transform_gpu;
 pub mod content_bounds_gpu;
 pub mod brush_gpu;
 pub mod filter_gpu;

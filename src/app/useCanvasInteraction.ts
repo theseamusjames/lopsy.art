@@ -30,6 +30,7 @@ import {
   resolveDownGesture,
 } from './interactions/interaction-types';
 import { handleTransformDown, flushSelectionTransform } from './interactions/transform-handlers';
+import { forgetLayerTransform, markLayerTransformDirty } from './interactions/layer-transform';
 import {
   handleMeshWarpDown,
   handleMeshWarpMove,
@@ -613,6 +614,14 @@ export function useCanvasInteraction(
           stateRef.current = { ...INITIAL_INTERACTION_STATE };
           return;
         }
+        if (state.gesture.isLayerTransform) {
+          // The session stays live, like the Move tool's float, so a
+          // further drag resamples the original pixels.
+          useUIStore.getState().setActiveTransformHandle(null);
+          markLayerTransformDirty();
+          stateRef.current = { ...INITIAL_INTERACTION_STATE };
+          return;
+        }
         break;
       case 'idle':
       case 'paint':
@@ -716,11 +725,13 @@ export function useCanvasInteraction(
     persistentTransformRef.current = null;
     floatingSelectionRef.current = null;
 
-    // Drop GPU float — the layer texture already has the committed result
+    // Drop GPU float — the layer texture already has the committed result.
+    // A multi-layer transform ends with it.
     const eng = getEngine();
     if (eng && hasFloat(eng)) {
       dropFloat(eng);
     }
+    forgetLayerTransform();
 
     const editorState = useEditorStore.getState();
     const activeId = editorState.document.activeLayerId;

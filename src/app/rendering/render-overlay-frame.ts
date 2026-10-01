@@ -5,7 +5,8 @@ import { getBrushCursorInfo } from '../useCanvasCursor';
 import { getEngine, getEngineCanvas } from '../../engine-wasm/engine-state';
 import { renderGrid, renderPixelGrid, renderRulers } from './render-grid';
 import { DEFAULT_DPI } from './ruler-units';
-import { renderSelectionAnts, renderTransformHandles, renderMarqueeDraftAnts } from './render-selection';
+import { renderSelectionAnts, renderTransformHandles, renderMarqueeDraftAnts, drawTransformHandles } from './render-selection';
+import { getLayerTransformBox } from '../interactions/layer-transform';
 import { getMarqueePreview } from '../../tools/marquee/marquee-preview';
 import { createTransformState, type TransformState } from '../../tools/transform/transform';
 import { renderMeshWarpOverlay } from './render-mesh-warp';
@@ -116,6 +117,8 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
   } else {
     renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, transform);
     renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
+    const layerBox = selection.active ? null : getLayerTransformBox();
+    if (layerBox) drawTransformHandles(overlayCtx, layerBox, viewport.zoom);
   }
 
   const meshWarp = uiState.meshWarp;

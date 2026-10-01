@@ -1,11 +1,11 @@
 use web_sys::WebGl2RenderingContext;
 use lopsy_core::float_growth::grow_rect_to_cover;
 use lopsy_core::geometry::Rect;
-use lopsy_core::homography;
 use lopsy_core::layer::LayerDesc;
 use crate::compositor::mask_doc_offset;
 use crate::engine::EngineInner;
 use crate::gpu::texture_pool::TextureHandle;
+use crate::layer_transform_gpu::{TransformParams, TransformTargets};
 
 pub fn add_layer(engine: &mut EngineInner, desc: LayerDesc) -> Result<(), String> {
     // Only create a texture if the layer doesn't already have one.
@@ -42,12 +42,14 @@ pub fn remove_layer(engine: &mut EngineInner, layer_id: &str) {
 }
 
 pub fn update_layer(engine: &mut EngineInner, desc: LayerDesc) {
+    // When a float is active on this layer, the engine has expanded
+    // the texture to doc size and updated x/y/width/height to match.
+    // Preserve these so that syncLayers (pushing content dimensions
+    // from the JS model) doesn't corrupt the expanded texture state.
+    // A multi-layer transform re-places its layers' textures the same way.
+    let is_float_layer = engine.float_layer_id.as_deref() == Some(desc.id.as_str())
+        || crate::layer_transform_gpu::is_in_layer_transform(engine, &desc.id);
     if let Some(existing) = engine.layer_stack.iter_mut().find(|l| l.id == desc.id) {
-        // When a float is active on this layer, the engine has expanded
-        // the texture to doc size and updated x/y/width/height to match.
-        // Preserve these so that syncLayers (pushing content dimensions
-        // from the JS model) doesn't corrupt the expanded texture state.
-        let is_float_layer = engine.float_layer_id.as_deref() == Some(desc.id.as_str());
         if is_float_layer {
             let (px, py, pw, ph) = (existing.x, existing.y, existing.width, existing.height);
             *existing = desc;
@@ -1246,6 +1248,7 @@ pub fn drop_float(engine: &mut EngineInner) {
     }
     engine.float_layer_id = None;
     engine.float_transform_mode = 0;
+    crate::layer_transform_gpu::end_layer_transform(engine);
 }
 
 /// Copy `src` (src_w×src_h) into a freshly acquired, transparent dst_w×dst_h
@@ -1508,6 +1511,18 @@ fn composite_float_transformed(
     let tmp = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
     let tmp_tex = engine.texture_pool.get(tmp).cloned()
         .ok_or("Tmp texture not found")?;
+    let params = if engine.float_transform_mode == 1 {
+        TransformParams::Affine {
+            inv_matrix: engine.float_transform_inv_matrix,
+            src_center: engine.float_transform_center,
+            dst_center: [engine.float_transform_corners[0], engine.float_transform_corners[1]],
+        }
+    } else {
+        TransformParams::Perspective {
+            corners: engine.float_transform_corners,
+            orig_rect: engine.float_transform_orig_rect,
+        }
+    };
 
     // Step 1: Render transformed float → tmp (fw×fh, correctly sized).
     // The transform shaders filter bilinearly in premultiplied space via
@@ -1517,67 +1532,13 @@ fn composite_float_transformed(
         engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
         engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
-        if engine.float_transform_mode == 1 {
-            let shader = &engine.shaders.transform_affine;
-            engine.gl.use_program(Some(&shader.program));
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
-            if let Some(loc) = shader.location(&engine.gl, "u_floatTex") {
-                engine.gl.uniform1i(Some(&loc), 0);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_floatSize") {
-                engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
-                engine.gl.uniform2f(Some(&loc), lx, ly);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
-                engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_srcCenter") {
-                engine.gl.uniform2f(Some(&loc), engine.float_transform_center[0], engine.float_transform_center[1]);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_dstCenter") {
-                engine.gl.uniform2f(Some(&loc), engine.float_transform_corners[0], engine.float_transform_corners[1]);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_invMatrix") {
-                engine.gl.uniform_matrix3fv_with_f32_array(
-                    Some(&loc), false, &engine.float_transform_inv_matrix,
-                );
-            }
-        } else {
-            let shader = &engine.shaders.transform_perspective;
-            engine.gl.use_program(Some(&shader.program));
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&float_tex));
-            if let Some(loc) = shader.location(&engine.gl, "u_floatTex") {
-                engine.gl.uniform1i(Some(&loc), 0);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_floatSize") {
-                engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
-                engine.gl.uniform2f(Some(&loc), lx, ly);
-            }
-            if let Some(loc) = shader.location(&engine.gl, "u_layerSize") {
-                engine.gl.uniform2f(Some(&loc), fw as f32, fh as f32);
-            }
-            let c = &engine.float_transform_corners;
-            let corner = |i: usize| [c[i * 2] as f64, c[i * 2 + 1] as f64];
-            let quad_to_square = homography::invert(&homography::square_to_quad(
-                corner(0), corner(1), corner(2), corner(3),
-            ))
-            .map(|m| homography::to_gl_column_major(&m))
-            // Degenerate quad: w = 0 everywhere, so every fragment is rejected.
-            .unwrap_or([0.0; 9]);
-            if let Some(loc) = shader.location(&engine.gl, "u_quadToSquare") {
-                engine.gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, &quad_to_square);
-            }
-            let r = &engine.float_transform_orig_rect;
-            if let Some(loc) = shader.location(&engine.gl, "u_origRect") {
-                engine.gl.uniform4f(Some(&loc), r[0], r[1], r[2], r[3]);
-            }
-        }
+        crate::layer_transform_gpu::bind_transform_program(engine, &params, &TransformTargets {
+            source: &float_tex,
+            source_offset: (lx, ly),
+            source_size: (fw as f32, fh as f32),
+            layer_offset: (lx, ly),
+            layer_size: (fw as f32, fh as f32),
+        });
         engine.draw_fullscreen_quad();
     });
 

@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import type { AlignEdge } from '../../../tools/move/move';
 import { rotateActiveLayer } from '../../MenuBar/menus/image-menu';
-import { TransformControls, rotateSelection } from './TransformControls';
+import { TransformControls, applyLayerTransformStep, rotateSelection } from './TransformControls';
+import { getLayerTransformBox } from '../../interactions/layer-transform';
+import { rotateTransform90 } from '../../../tools/transform/multi-layer-transform';
 import { MeshWarpControls } from './MeshWarpControls';
 import styles from '../OptionsBar.module.css';
 
@@ -25,6 +27,9 @@ export function MoveOptions() {
   const handleRotate = (dir: 'cw' | 'ccw') => {
     if (selectionActive) {
       rotateSelection(dir);
+    } else if (getLayerTransformBox()) {
+      // Several layers selected: turn them together about their shared centre.
+      applyLayerTransformStep((t) => rotateTransform90(t, dir));
     } else {
       rotateActiveLayer(dir);
     }

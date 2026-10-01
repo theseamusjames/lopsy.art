@@ -19,6 +19,7 @@ const makeTransformGesture = (): Extract<CanvasGesture, { kind: 'transform' }> =
   startState: createTransformState({ x: 0, y: 0, width: 100, height: 100 }),
   startAngle: 0,
   selectionOnly: false,
+  isLayerTransform: false,
 });
 
 describe('gestureUsedGpuStroke', () => {

@@ -623,7 +623,12 @@ the pixels, then `h.rotate({ x0, y0, x1, y1 }, degrees)` (positive is
 clockwise) or `h.scale(corner, dx, dy)`, and **commit with `h.deselect()`**.
 Do rotations and scales last on a layer, and never drag inside a live
 rotated box, because that moves or resets it. Move-tool options also offer
-Flip, Rotate 90° and Mesh Warp.
+Flip, Rotate 90° and Mesh Warp. **Several layers at once:** with no marquee
+(`h.deselect()`), select them in the Layers panel (click the top row,
+Shift+click the bottom one, or select their group); the Move tool's handles
+then frame the union of their content, and `h.rotate(box, degrees)` /
+`h.scale(corner, dx, dy)` with that box turn or scale all of them about its
+centre in one undo step. Commit with `h.deselect()` as usual.
 
 **Duplicating.** `h.menu('Layer', 'Duplicate Layer')` makes `<name> copy`
 **directly on top of the original** (same position) and selects only the
