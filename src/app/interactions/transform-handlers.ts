@@ -13,7 +13,7 @@ import {
   getTransformedContentBounds,
   createTransformState,
 } from '../../tools/transform/transform';
-import type { TransformState } from '../../tools/transform/transform';
+import type { TransformHandle, TransformState } from '../../tools/transform/transform';
 import { ROTATE_HANDLE_OFFSET } from '../../tools/transform/transform-handles';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
@@ -43,6 +43,12 @@ import {
 } from '../../selection/selection';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 import { pressGrabsHandle, scalesSelectionOutlineFromHandles } from './handle-tools';
+import {
+  beginLayerTransformSession,
+  getLayerTransformBox,
+  isLayerTransformCurrent,
+  renderLayerTransform,
+} from './layer-transform';
 
 /**
  * Hit-test transform handles on mousedown and set up interaction state.
@@ -56,7 +62,10 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   const currentTransform = uiState.transform;
   const editorState = useEditorStore.getState();
 
-  if (!currentTransform || !editorState.selection.active) {
+  if (!editorState.selection.active) {
+    return handleLayerTransformDown(ctx);
+  }
+  if (!currentTransform) {
     return null;
   }
 
@@ -76,21 +85,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     return null;
   }
 
-  // Cap the handle radius so a click near the centre of a small selection
-  // can't hit multiple handles at once. The 8/zoom screen-space heuristic
-  // breaks at low zoom because the doc-space radius can exceed the
-  // selection's half-extent, making every click on the selection register
-  // as a handle hit.
-  const bounds = getTransformedBounds(currentTransform);
-  const halfMin = Math.min(bounds.width, bounds.height) / 2;
-  const zoom = editorState.viewport.zoom;
-  const handleRadius = Math.max(1, Math.min(8 / zoom, halfMin * 0.8));
-  // Rotate handles sit outside the box, so the interior clamp above only
-  // made them smaller than their drawn circle (#1000). Their own cap keeps
-  // the hit area short of the box corner at low zoom.
-  const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
-  const rotateHandleRadius = Math.max(handleRadius, Math.min(8 / zoom, rotateCornerClearance));
-  const hit = hitTestHandle(canvasPos, currentTransform, handleRadius, rotateHandleRadius);
+  const hit = hitTestMoveHandles(canvasPos, currentTransform, editorState.viewport.zoom);
 
   if (!hit) {
     return null;
@@ -173,6 +168,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
       startState: { ...currentTransform },
       startAngle,
       selectionOnly: false,
+      isLayerTransform: false,
     },
     lastPoint: canvasPos,
     layerId: activeLayerId,
@@ -190,6 +186,74 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   uiState.setActiveTransformHandle(hit);
 
   return newState;
+}
+
+/**
+ * The Move tool's handle under `canvasPos`, if any. Caps the handle radius so
+ * a click near the centre of a small box can't hit multiple handles at once:
+ * the 8/zoom screen-space heuristic breaks at low zoom because the doc-space
+ * radius can exceed the box's half-extent, making every click on it register
+ * as a handle hit.
+ */
+function hitTestMoveHandles(canvasPos: Point, transform: TransformState, zoom: number): TransformHandle | null {
+  const bounds = getTransformedBounds(transform);
+  const halfMin = Math.min(bounds.width, bounds.height) / 2;
+  const handleRadius = Math.max(1, Math.min(8 / zoom, halfMin * 0.8));
+  // Rotate handles sit outside the box, so the interior clamp above only
+  // made them smaller than their drawn circle (#1000). Their own cap keeps
+  // the hit area short of the box corner at low zoom.
+  const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
+  const rotateHandleRadius = Math.max(handleRadius, Math.min(8 / zoom, rotateCornerClearance));
+  return hitTestHandle(canvasPos, transform, handleRadius, rotateHandleRadius);
+}
+
+/**
+ * Move tool, no marquee, several layers selected: a handle grab transforms
+ * all of them about their shared centre (see layer-transform.ts). One
+ * "Transform" history row covers every layer.
+ */
+function handleLayerTransformDown(ctx: InteractionContext): InteractionState | null {
+  const { canvasPos, activeLayerId, floatingSelectionRef, persistentTransformRef } = ctx;
+  const uiState = useUIStore.getState();
+  if (uiState.activeTool !== 'move') return null;
+  const box = getLayerTransformBox();
+  if (!box) return null;
+  const editorState = useEditorStore.getState();
+  const hit = hitTestMoveHandles(canvasPos, box, editorState.viewport.zoom);
+  if (!hit) return null;
+
+  const startAngle = isRotateHandle(hit) ? computeRotation(canvasPos, box) - box.rotation : 0;
+
+  withLiveFloatKept(() => editorState.pushHistory('Transform'));
+  if (!isLayerTransformCurrent()) {
+    commitLiveFloat();
+    if (!beginLayerTransformSession(box)) return null;
+  }
+  floatingSelectionRef.current = null;
+  persistentTransformRef.current = null;
+  uiState.setActiveTransformHandle(hit);
+
+  return {
+    drawing: true,
+    gesture: {
+      kind: 'transform',
+      handle: hit,
+      startState: { ...box },
+      startAngle,
+      selectionOnly: false,
+      isLayerTransform: true,
+    },
+    lastPoint: canvasPos,
+    layerId: activeLayerId,
+    tool: 'move',
+    startPoint: canvasPos,
+    layerStartX: 0,
+    layerStartY: 0,
+    maskMode: false,
+    originalSelectionMask: null,
+    originalSelectionMaskWidth: 0,
+    originalSelectionMaskHeight: 0,
+  };
 }
 
 function handleSelectionTransformDown(
@@ -223,6 +287,7 @@ function handleSelectionTransformDown(
       startState: { ...currentTransform },
       startAngle: 0,
       selectionOnly: true,
+      isLayerTransform: false,
     },
     lastPoint: canvasPos,
     layerId: activeLayerId,
@@ -259,19 +324,49 @@ export function handleTransformMove(
     return;
   }
 
-  const handle = state.gesture.handle;
-  const startState = state.gesture.startState;
+  const newTransform = computeDraggedTransform(state.gesture, state.startPoint, canvasPos, metaKey);
+
+  if (state.gesture.isLayerTransform) {
+    renderLayerTransform(newTransform);
+    return;
+  }
+
+  useUIStore.getState().setTransform(newTransform);
+
+  // Don't update the selection mask during drag — the transform handles
+  // show the correct bounding box, and the mask gets rebuilt from pixel
+  // alpha on commit (via selectLayerAlpha). Updating the mask during drag
+  // causes it to diverge from the GPU-rendered content.
+
+  // Render transform via GPU engine
+  renderTransformedFloat(state.layerId, newTransform);
+  useEditorStore.getState().notifyRender();
+}
+
+/**
+ * The transform a handle drag from `startPoint` to `canvasPos` produces:
+ * distort/perspective corners, skew, scale (grid-snapped when snapping is
+ * on) or rotation (15° steps with Cmd/Meta or grid snap).
+ */
+function computeDraggedTransform(
+  gesture: Extract<CanvasGesture, { kind: 'transform' }>,
+  startPoint: Point,
+  canvasPos: Point,
+  metaKey: boolean,
+): TransformState {
+  const handle = gesture.handle;
+  const startState = gesture.startState;
 
   let newTransform: TransformState;
 
   if (startState.mode === 'distort' && isScaleHandle(handle)) {
-    const result = computeDistort(handle, state.startPoint, canvasPos, startState);
+    const result = computeDistort(handle, startPoint, canvasPos, startState);
     newTransform = { ...startState, corners: result.corners };
   } else if (startState.mode === 'perspective' && isScaleHandle(handle)) {
-    const result = computePerspective(handle, state.startPoint, canvasPos, startState);
+    const result = computePerspective(handle, startPoint, canvasPos, startState);
     newTransform = { ...startState, corners: result.corners };
   } else if (startState.mode === 'skew' && isScaleHandle(handle)) {
-    const result = computeSkew(handle, state.startPoint, canvasPos, startState);
+    const result = computeSkew(handle, startPoint, canvasPos, startState);
     newTransform = {
       ...startState,
       skewX: result.skewX,
@@ -287,7 +382,7 @@ export function handleTransformMove(
       : canvasPos;
     const result = computeScale(
       handle,
-      state.startPoint,
+      startPoint,
       snappedInput,
       startState,
       metaKey,
@@ -301,7 +396,7 @@ export function handleTransformMove(
     };
   } else {
     const currentAngle = computeRotation(canvasPos, startState);
-    const newRotation = currentAngle - state.gesture.startAngle;
+    const newRotation = currentAngle - gesture.startAngle;
     const uiState = useUIStore.getState();
     const shouldSnap = metaKey || (uiState.showGrid && uiState.snapToGrid);
     const snappedRotation = shouldSnap
@@ -313,16 +408,7 @@ export function handleTransformMove(
     };
   }
 
-  useUIStore.getState().setTransform(newTransform);
-
-  // Don't update the selection mask during drag — the transform handles
-  // show the correct bounding box, and the mask gets rebuilt from pixel
-  // alpha on commit (via selectLayerAlpha). Updating the mask during drag
-  // causes it to diverge from the GPU-rendered content.
-
-  // Render transform via GPU engine
-  renderTransformedFloat(state.layerId, newTransform);
-  useEditorStore.getState().notifyRender();
+  return newTransform;
 }
 
 /**

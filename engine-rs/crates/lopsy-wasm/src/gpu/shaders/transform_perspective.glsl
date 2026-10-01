@@ -5,6 +5,9 @@ in vec2 v_uv;
 
 uniform sampler2D u_floatTex;
 uniform vec2 u_floatSize;
+// Document position of the float texture's origin. The Move tool's float
+// shares the layer's rect; a multi-layer transform's source does not.
+uniform vec2 u_floatOffset;
 uniform vec2 u_layerOffset;
 uniform vec2 u_layerSize;
 uniform vec4 u_origRect;   // x, y, w, h
@@ -32,7 +35,7 @@ void main() {
     }
 
     vec2 srcDoc = u_origRect.xy + uv * u_origRect.zw;
-    vec2 floatUV = (srcDoc - u_layerOffset) / u_floatSize;
+    vec2 floatUV = (srcDoc - u_floatOffset) / u_floatSize;
 
     if (floatUV.x < 0.0 || floatUV.x > 1.0 || floatUV.y < 0.0 || floatUV.y > 1.0) {
         fragColor = vec4(0.0);
