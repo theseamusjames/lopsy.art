@@ -361,6 +361,37 @@ describe('applyTransformToMask', () => {
     const { bounds } = applyTransformToMask(mask, 10, 10, state);
     expect(bounds).toBeNull();
   });
+
+  function rectMask(size: number, r: { x: number; y: number; width: number; height: number }): Uint8ClampedArray {
+    const mask = new Uint8ClampedArray(size * size);
+    for (let y = r.y; y < r.y + r.height; y++) {
+      for (let x = r.x; x < r.x + r.width; x++) mask[y * size + x] = 255;
+    }
+    return mask;
+  }
+
+  it('turns a rect a quarter turn onto whole pixels, with no fringe', () => {
+    const box = { x: 4, y: 6, width: 8, height: 4 };
+    const state = { ...createTransformState(box), rotation: Math.PI / 2 };
+    const { mask, bounds } = applyTransformToMask(rectMask(20, box), 20, 20, state);
+    // 8 x 4 about (8, 8) becomes 4 x 8.
+    expect(bounds).toEqual({ x: 6, y: 4, width: 4, height: 8 });
+    expect([...mask].filter((v) => v === 255)).toHaveLength(32);
+    expect([...mask].filter((v) => v > 0 && v < 255)).toHaveLength(0);
+  });
+
+  it('gives a rotated edge the same soft coverage the pixels get (#801)', () => {
+    const box = { x: 20, y: 20, width: 20, height: 20 };
+    const state = { ...createTransformState(box), rotation: Math.PI / 6 };
+    const { mask } = applyTransformToMask(rectMask(60, box), 60, 60, state);
+    expect(mask[30 * 60 + 30]).toBe(255);
+    const soft = [...mask].filter((v) => v > 0 && v < 255).length;
+    expect(soft).toBeGreaterThan(40);
+    // Coverage sums to the square's area.
+    const area = [...mask].reduce((sum, v) => sum + v / 255, 0);
+    expect(area).toBeGreaterThan(390);
+    expect(area).toBeLessThan(410);
+  });
 });
 
 describe('translateTransform (#948)', () => {
