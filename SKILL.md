@@ -317,8 +317,7 @@ const h = {
 
   // ---- gradient ------------------------------------------------------------------
   // stops: [{ pos: 0..1, hex, a?: 0..1 }]. The gradient ignores FG/BG; its stops
-  // are set in the Gradient Editor, whose picker has no hex field, so colours are
-  // clicked onto the hue strip and saturation/brightness square.
+  // are set in the Gradient Editor, by typing each one into its picker's hex field.
   async gradient(type, stops) {
     await h.tool('gradient');
     await page.locator('[aria-labelledby="gradient-type-label"]').selectOption(type);
@@ -350,18 +349,12 @@ const h = {
     await dlg.getByRole('button', { name: 'Done' }).click();
     await sleep(100);
   },
+  // Sets any picker in `scope` (Gradient Editor, Gradient Map drawer, shape
+  // fill/stroke popover, guide colour): type the hex, then click the alpha bar.
   async pickColor(scope, hex, alpha = 1) {
-    const n = parseInt(hex.replace('#', ''), 16);
-    const r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
-    const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
-    let hue = 0;
-    if (d) hue = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    hue = (hue * 60 + 360) % 360;
-    const sat = max ? d / max : 0;
-    const hb = await scope.getByRole('slider', { name: 'Hue' }).boundingBox();
-    if (sat > 0.001) await page.mouse.click(hb.x + Math.min(0.999, hue / 360) * hb.width, hb.y + hb.height / 2);
-    const sv = await scope.getByRole('slider', { name: 'Saturation and brightness' }).boundingBox();
-    await page.mouse.click(sv.x + sat * (sv.width - 0.01), sv.y + (1 - max) * (sv.height - 0.01));
+    const field = scope.locator('[aria-label="Hex color"]');
+    await field.fill(hex.replace('#', ''));
+    await field.press('Enter');
     const ab = await scope.getByRole('slider', { name: 'Opacity' }).boundingBox();
     await page.mouse.click(alpha >= 1 ? ab.x + ab.width - 0.5 : ab.x + alpha * ab.width, ab.y + ab.height / 2);
   },
@@ -584,8 +577,8 @@ foreground colour at (x, y), the top-left of the line box. The glyph ink
 starts noticeably lower than y. Any Google Font can be picked by exact family
 name. Wait until the font has downloaded before judging a screenshot: the
 first render can show the fallback. The layer is named after its text (first
-16 characters). Text stays editable, but pixel tools, filters and masks
-refuse it until you click **Rasterize Layer**. That button appears in the
+16 characters). Text stays editable, but pixel tools, filters, Image →
+Flip and masks refuse it until you click **Rasterize Layer**. That button appears in the
 Layers panel toolbar when a text layer is active.
 
 **Layer effects.** `h.effect(layer, name, settings, color)` with `name` one
@@ -631,7 +624,12 @@ active layer to the canvas.
 degrees)` (positive is clockwise) or `h.scale(corner, dx, dy)`, and **commit
 with `h.deselect()`**. Do rotations and scales last on a pixel layer, and
 never drag inside a live rotated box, because that moves or resets it.
-Move-tool options also offer Flip, Rotate 90° and Mesh Warp.
+Move-tool options also offer Flip, Rotate 90° and Mesh Warp. **Several layers at once:** with no marquee
+(`h.deselect()`), select them in the Layers panel (click the top row,
+Shift+click the bottom one, or select their group); the Move tool's handles
+then frame the union of their content, and `h.rotate(box, degrees)` /
+`h.scale(corner, dx, dy)` with that box turn or scale all of them about its
+centre in one undo step. Commit with `h.deselect()` as usual.
 
 **Text transforms stay live.** With the Move tool and a text layer active,
 handles appear around the text's *line box* with no selection: its top-left
@@ -643,29 +641,39 @@ can transform text at any point. A selection over only part of a text layer
 is refused; Rasterize Layer first for that.
 
 **Duplicating.** `h.menu('Layer', 'Duplicate Layer')` makes `<name> copy`
-**offset by +10, +10 px**, and leaves both layers selected. Click the
-copy's name (`h.selectLayer('<name> copy')`) before moving it, then move it
-where you want it. For repeated elements, it's usually simpler to fill
-each one in place from computed geometry.
+**directly on top of the original** (same position) and selects only the
+copy, so you can move it where you want it straight away. For repeated
+elements, it's usually simpler to fill each one in place from computed
+geometry.
 
 **Groups.** Click `New Group` in the Layers panel toolbar and add layers
 while a layer inside it is active. A new layer is always inserted directly
 above the active layer, and inside the group if the active layer is a group.
 Group effects and adjustment layers apply to everything inside the group.
 
-**Guides and grid.** **View → Show Grid** turns snapping on, which quantizes
-marquee drags. Switch it off again before drawing thin or precise shapes. A
-single click on a ruler drops a guide.
+**Guides and grid.** **View → Show Grid** turns snapping on the first time,
+which quantizes marquee and Shape drags (a shape's centre and corner both
+snap, so its edges land on grid lines). Untick **Snap** in the options bar before
+drawing thin or precise shapes; it then stays off when you hide and show the
+grid again. A single click on a ruler drops a guide (Cmd/Ctrl-click drops
+it on the nearest half, third, quarter… of the canvas). Marquee edges that
+end within 8 screen px of a guide snap onto it, and so do Shape drags; turn this off with
+**View → Snap to Guides** if you need an edge just beside a guide.
 
 ## Behaviours that trip up agents
 
 These are by design, and the helpers already handle most of them:
 
-- **Selections replace, they don't add.** The marquee, ellipse and lasso
-  always start a new selection. Only the Magic Wand (Shift = add) and Quick
-  Selection combine. Build multi-part shapes one fill at a time.
-- **A marquee drag that starts inside an existing selection moves the
-  outline** instead of making a new one. Deselect first (`h.rect` does).
+- **Shift adds to a selection, Alt subtracts, Shift+Alt intersects.** This
+  works with the marquee, ellipse, lasso, magnetic lasso and Magic Wand. The
+  `h.rect` / `h.ellipse` / `h.lasso` helpers deselect first, so build a
+  multi-part selection with the tool and a modifier instead. For example,
+  `await h.tool('lasso'); await h.drag([...tri2, tri2[0]], { steps: 1, modifiers: ['Shift'] });`
+  after `h.lasso(tri1)`, then one `h.fill()` fills both. Each combine is one
+  undo step.
+- **A plain marquee drag that starts inside an existing selection moves the
+  outline** instead of making a new one. Deselect first (`h.rect` does), or
+  hold Shift / Alt to combine.
 - **Blur before pressing keys.** Focus stays on the last control you
   clicked. A focused button activates again on Enter, and a focused dropdown
   keeps the arrow keys. `h.key()` and `h.tool()` blur first. Do the same in
@@ -678,8 +686,9 @@ These are by design, and the helpers already handle most of them:
   Escape cancels, and plain Enter inserts a newline. Changing font or size
   with a text layer active restyles *that* layer, so set them before you
   click.
-- **`Cmd+A` while editing text also selects every layer.** Don't use it
-  there.
+- **`Cmd+A` selects the canvas, not the layers.** It selects every layer
+  only while keyboard focus is inside the Layers panel, which `h.blur()`
+  clears. While editing text it selects the text.
 - **Escape** cancels text editing and commits a live transform. **`Cmd+D`**
   (the key, not the Select menu item) deselects and commits a transform.
 - **Menus close by clicking their title again**, not with Escape.
@@ -713,7 +722,7 @@ CSS class names are hashed in production.
 | Tools | `[data-tool-id="…"]`: `move`, `marquee-rect`, `marquee-ellipse`, `lasso`, `lasso-magnetic`, `wand`, `quick-select`, `brush`, `pencil`, `spray`, `eraser`, `fill`, `gradient`, `stamp`, `healing`, `dodge`, `sponge`, `smudge`, `eyedropper`, `shape`, `text`, `path`, `crop` |
 | Options bar | `role="toolbar"`, with numeric fields as `[aria-label="<Label> value"]` |
 | Foreground colour | `[aria-label="Hex color value"]` in the Color panel (toggle the panel with `button[aria-label="Color"]`) |
-| Colour pickers | `role="slider"` named `Hue`, `Saturation and brightness` and `Opacity` |
+| Colour pickers | `role="slider"` named `Hue`, `Saturation and brightness` and `Opacity`, plus a hex field `[aria-label="Hex color"]` (type 3 or 6 digits, press Enter). The Color panel's own field is `Hex color value` |
 | Layers panel buttons | `Add Layer`, `New Group`, `Duplicate Layer`, `Add Mask`, `Rasterize Layer`, `Delete Layer` (by accessible name) |
 | Layer row | `[data-layer-id]`, identified by its `button[aria-label="Layer effects for <name>"]`; the active row's class contains `_active_` |
 | Row controls | `Hide layer` / `Show layer`, `Lock layer`, `Opacity N% for <name>` (opens a `<name> opacity` range), `Drag to reorder <name>`, `Edit mask for <name>` |

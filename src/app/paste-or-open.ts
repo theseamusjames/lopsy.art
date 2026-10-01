@@ -46,6 +46,25 @@ function fitPastedLayerIfOversized(): void {
   flushLayerSync(useEditorStore.getState());
 }
 
+/**
+ * Paste the internal clipboard in place and select what landed, the same way
+ * an external paste does (#347): the pasted pixels become the selection and
+ * the Move tool is activated, so the transform handles sit on the paste and
+ * respond straight away. Without this the paste had no selection of its own —
+ * at best the copy's marquee carried over — and a handle drag moved it instead.
+ */
+export function pasteInternalClipboard(): void {
+  const pastedId = useEditorStore.getState().paste();
+  if (!pastedId) return;
+  useUIStore.getState().setActiveTool('move');
+  // Register the new layer with the engine now instead of on the next frame,
+  // so the selection is in place before any key that follows the paste.
+  flushLayerSync(useEditorStore.getState());
+  // No prefloat: it would grow the layer to the document at (0, 0), and a
+  // paste in place keeps the copied size and offset. The first drag floats.
+  selectLayerAlpha(pastedId, { prefloat: false });
+}
+
 export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<void> {
   const store = useEditorStore.getState();
 

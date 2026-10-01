@@ -68,6 +68,11 @@ test.describe('Pen tool Enter strokes the path (#976)', () => {
 
     expect(await historyLabels(page)).toEqual([...before, 'Add Path', 'Stroke Path']);
 
+    // A second Enter neither re-commits nor re-strokes the path (#1084).
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(300);
+    expect(await historyLabels(page)).toEqual([...before, 'Add Path', 'Stroke Path']);
+
     const layer = await readActiveLayer(page);
     // Midpoints of both segments sit on the stroke and are red.
     for (const [x, y] of [[200, 150], [400, 160]] as const) {

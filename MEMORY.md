@@ -423,3 +423,40 @@ with `TexturePool::delete(gl, handle)`, and make per-move growth geometric
 `WebGL2RenderingContext.prototype` createTexture / deleteTexture /
 texImage2D / texStorage2D (tracking the bound texture per unit) — see
 `e2e/transform-float-growth-vram-1019.spec.ts`.
+
+## Vertical text glyph forms live in the renderer, not the shaper
+
+cosmic-text 0.12 shapes horizontally and has no feature switches, so the
+OpenType `vert` feature never runs. `render_text_layer_software` swaps each
+vertical glyph for its `vert` alternate itself (`vertical_forms.rs`, a GSUB
+single-substitution lookup) and otherwise applies the UAX #50 fallback from
+`lopsy_core::vertical_orientation` (Tr → quarter turn, 、。 → upper right) as
+a swash render transform; layout, caret and hit-testing are untouched (#1080).
+`tests/fixtures/LopsyVerticalTest.ttf` is a synthetic font (ー with a `vert`
+alternate, 「 and 。 without) — e2e serves it as a catalog family by routing
+that family's jsDelivr TTF URL (`e2e/text-vertical-forms-1080.spec.ts`).
+
+## A multi-layer transform is a "float" to the engine
+
+The Move tool's several-layers transform (`app/interactions/layer-transform.ts`,
+`layer_transform_gpu.rs`) keeps one source texture per layer in
+`EngineInner::layer_transform`. `hasFloat` returns true while it is live and
+`dropFloat` ends it, so every site that bakes the Move float (history push,
+other tool's press, ⌘D, undo) bakes it too without knowing about it. The JS
+side (`live`) is only trusted while `hasLayerTransform(engine)` agrees.
+
+## GPU timing in Playwright, and comparing the live canvas with an export
+
+Headless Chromium on this Mac has **no WebGL2 at all** without ANGLE flags;
+`--use-gl=angle --use-angle=metal` gives the real GPU (Apple M4 Max), the
+config's default `--use-angle=swiftshader` gives SwiftShader. For frame cost,
+time `__readCompositedPixels()` (forced recomposite + full readback) or drain
+the engine's own context with a 1×1 `readPixels` in a rAF callback — rAF
+intervals alone hide GPU time. See `e2e/effect-cache-perf.spec.ts`.
+
+The exported PNG is tagged with the document's colour profile (Display P3),
+so decoding it through `<img>` converts the colours and it will not match the
+canvas readback. Decode with
+`createImageBitmap(blob, { colorSpaceConversion: 'none' })` to get the stored
+values; live and export then agree within ±2 per channel
+(`e2e/effect-cache-invalidation.spec.ts`).

@@ -9,8 +9,8 @@ import {
   floodFillGraduated as wasmFloodFillGraduated,
   readLayerPixelsForFill as wasmReadLayerPixelsForFill,
 } from '../../engine-wasm/wasm-bridge';
-import { selectionBounds, commitFeatheredSelection } from '../../app/interactions/selection-handlers';
-import { combineSelections } from '../../selection/selection';
+import { selectionBounds, commitSelectionShape, hasCombinableSelection } from '../../app/interactions/selection-handlers';
+import { selectionCombineMode } from '../../selection/selection';
 
 export const wandStrategy: SelectionToolStrategy = {
   onDown(ctx: InteractionContext, _tool: SelectionToolId): InteractionState | undefined {
@@ -27,25 +27,11 @@ export const wandStrategy: SelectionToolStrategy = {
       : wasmFloodFill(pixelData, docW, docH, cx, cy, 0, 0, 0, 0, wandTolerance, wandContiguous);
     const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
 
-    // Shift adds to the existing selection, Alt subtracts from it. Without a
-    // modifier (or a matching existing selection) the wand replaces it.
-    const existing = editorState.selection;
-    const existingMask =
-      existing.active &&
-      existing.mask !== null &&
-      existing.maskWidth === docW &&
-      existing.maskHeight === docH
-        ? existing.mask
-        : null;
-    let finalMask = wandMask;
-    if (existingMask && (ctx.shiftKey || ctx.altKey)) {
-      finalMask = combineSelections(existingMask, wandMask, ctx.shiftKey ? 'add' : 'subtract');
-    }
-
-    const finalBounds = selectionBounds(finalMask, docW, docH);
-    if (finalBounds) {
-      commitFeatheredSelection(finalBounds, finalMask, docW, docH);
-    } else {
+    const mode = selectionCombineMode(ctx, hasCombinableSelection());
+    const wandBounds = selectionBounds(wandMask, docW, docH);
+    if (wandBounds) {
+      commitSelectionShape(wandBounds, wandMask, docW, docH, mode);
+    } else if (mode === 'replace') {
       editorState.clearSelection();
     }
     return undefined;

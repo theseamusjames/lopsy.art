@@ -14,7 +14,9 @@ use web_sys::HtmlCanvasElement;
 
 use lopsy_core::layer::LayerDesc;
 
-use crate::{Engine, compositor, layer_manager};
+use lopsy_core::geometry::Rect;
+
+use crate::{Engine, compositor, layer_manager, layer_transform_gpu};
 
 // ============================================================
 // Layer Management
@@ -285,11 +287,11 @@ pub fn get_layer_content_bounds(engine: &mut Engine, layer_id: &str) -> Vec<i32>
 }
 
 #[wasm_bindgen(js_name = "rasterizeLayerEffects")]
-pub fn rasterize_layer_effects(engine: &mut Engine, layer_id: &str) -> Vec<u8> {
+pub fn rasterize_layer_effects(engine: &mut Engine, layer_id: &str, bake_mask: bool) -> Vec<u8> {
     // Composite the single layer with effects using the GPU pipeline,
     // then return the document-sized pixel buffer. This ensures the
     // rasterized output exactly matches the live GPU rendering.
-    compositor::composite_single_layer(&mut engine.inner, layer_id).unwrap_or_default()
+    compositor::composite_single_layer(&mut engine.inner, layer_id, bake_mask).unwrap_or_default()
 }
 
 // ============================================================
@@ -303,8 +305,8 @@ pub fn duplicate_layer_texture(engine: &mut Engine, src_id: &str, dst_id: &str) 
 }
 
 #[wasm_bindgen(js_name = "mergeLayers")]
-pub fn merge_layers(engine: &mut Engine, top_id: &str, bottom_id: &str) -> Result<(), JsError> {
-    layer_manager::merge_layers(&mut engine.inner, top_id, bottom_id)
+pub fn merge_layers(engine: &mut Engine, top_id: &str, bottom_id: &str, bake_bottom_opacity: bool) -> Result<(), JsError> {
+    layer_manager::merge_layers(&mut engine.inner, top_id, bottom_id, bake_bottom_opacity)
         .map_err(|e| JsError::new(&e))
 }
 
@@ -492,7 +494,86 @@ pub fn ensure_float_covers(engine: &mut Engine, x: i32, y: i32, w: u32, h: u32) 
 
 #[wasm_bindgen(js_name = "hasFloat")]
 pub fn has_float(engine: &Engine) -> bool {
-    engine.inner.float_texture.is_some()
+    engine.inner.float_texture.is_some() || !engine.inner.layer_transform.is_empty()
+}
+
+// ============================================================
+// Multi-layer transform (see layer_transform_gpu)
+// ============================================================
+
+/// Lift a layer's content into the multi-layer transform session. Returns its
+/// document rect [x, y, w, h], or [] for an empty layer (left out).
+#[wasm_bindgen(js_name = "beginLayerTransform")]
+pub fn begin_layer_transform(engine: &mut Engine, layer_id: &str) -> Result<Vec<i32>, JsError> {
+    layer_transform_gpu::begin_layer_transform(&mut engine.inner, layer_id)
+        .map(|r| r.map(|r| vec![r.x, r.y, r.width as i32, r.height as i32]).unwrap_or_default())
+        .map_err(|e| JsError::new(&e))
+}
+
+/// Set the document rect the next render of `layer_id` writes, growing its
+/// texture to hold it. Returns the layer's new [x, y, w, h], or [] when the
+/// texture already covered it.
+#[wasm_bindgen(js_name = "prepareLayerTransformTarget")]
+pub fn prepare_layer_transform_target(
+    engine: &mut Engine,
+    layer_id: &str,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<Vec<i32>, JsError> {
+    layer_transform_gpu::prepare_layer_transform_target(&mut engine.inner, layer_id, Rect::new(x, y, w, h))
+        .map(|grown| grown.map(|b| b.to_vec()).unwrap_or_default())
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "compositeLayerTransformAffine")]
+pub fn composite_layer_transform_affine(
+    engine: &mut Engine,
+    inv_matrix: &[f32],
+    src_center_x: f32,
+    src_center_y: f32,
+    dst_center_x: f32,
+    dst_center_y: f32,
+) -> Result<(), JsError> {
+    let mut inv = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+    if inv_matrix.len() >= 9 {
+        inv.copy_from_slice(&inv_matrix[..9]);
+    }
+    let params = layer_transform_gpu::TransformParams::Affine {
+        inv_matrix: inv,
+        src_center: [src_center_x, src_center_y],
+        dst_center: [dst_center_x, dst_center_y],
+    };
+    layer_transform_gpu::composite_layer_transform(&mut engine.inner, &params)
+        .map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "compositeLayerTransformPerspective")]
+pub fn composite_layer_transform_perspective(
+    engine: &mut Engine,
+    corners: &[f32],
+    orig_x: f32,
+    orig_y: f32,
+    orig_w: f32,
+    orig_h: f32,
+) -> Result<(), JsError> {
+    let mut c = [0.0; 8];
+    if corners.len() >= 8 {
+        c.copy_from_slice(&corners[..8]);
+    }
+    let params = layer_transform_gpu::TransformParams::Perspective {
+        corners: c,
+        orig_rect: [orig_x, orig_y, orig_w, orig_h],
+    };
+    layer_transform_gpu::composite_layer_transform(&mut engine.inner, &params)
+        .map_err(|e| JsError::new(&e))
+}
+
+/// Whether a multi-layer transform session is live.
+#[wasm_bindgen(js_name = "hasLayerTransform")]
+pub fn has_layer_transform(engine: &Engine) -> bool {
+    !engine.inner.layer_transform.is_empty()
 }
 
 #[wasm_bindgen(js_name = "compositeFloatAffine")]
@@ -1012,4 +1093,20 @@ pub fn clear_gpu_snapshots(engine: &mut Engine) {
 #[wasm_bindgen(js_name = "liveGpuSnapshotCount")]
 pub fn live_gpu_snapshot_count(engine: &Engine) -> u32 {
     engine.inner.snapshot_textures.iter().filter(|s| s.is_some()).count() as u32
+}
+
+/// The live compositor's effect cache: `[entries, images, bytes, budget
+/// bytes, hits, misses]`. `bytes` is the VRAM its cached images hold;
+/// hits and misses count per-layer lookups since the engine started.
+#[wasm_bindgen(js_name = "effectCacheStats")]
+pub fn effect_cache_stats(engine: &Engine) -> Vec<f64> {
+    let stats = crate::effect_cache_gpu::stats(&engine.inner);
+    vec![
+        f64::from(stats.entries),
+        f64::from(stats.images),
+        stats.bytes as f64,
+        engine.inner.effect_cache.budget_bytes() as f64,
+        stats.hits as f64,
+        stats.misses as f64,
+    ]
 }

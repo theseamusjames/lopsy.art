@@ -2,7 +2,7 @@
 title: Draw a Technical Cutaway Poster of a Pin-Tumbler Lock
 description: Make a 1950s shop-manual cutaway poster of a lock in Lopsy, with pattern-fill section hatching, cloned pins, a rotated face view, callouts and a parts list.
 published: 2026-09-30 10:20
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: poster, technical illustration, cutaway, section view, pattern fill, callouts, typography, transforms, groups
@@ -52,16 +52,16 @@ Create a **1500 × 2250** px document (a 2:3 poster) with a **White** background
 
 ![A zoomed-in view at 645% showing two 32 by 32 tiles of diagonal black lines (one leaning each way), a short orange dash and an L of blue-grey grid line, with a marquee around the first tile](02-hatch-and-dash-tiles.webp)
 
-Three repeating textures do most of the drafting work. Add a temporary layer called `Tiles`, zoom in to about 600% on an empty corner, and draw them with fills:
+Three repeating textures do most of the drafting work. Add a temporary layer called `Tiles`, zoom in to about 600% on an empty corner, and draw them:
 
-- **Housing hatch:** a 32 × 32 square with 3 px ink lines at 45°, one every 16 px. Drag the Lasso round each diagonal band and fill it. Where a band runs off the square, it has to come back in on the opposite edge, or the tiles won't meet.
+- **Housing hatch:** a 32 × 32 square with 3 px ink lines at 45°, one every 16 px. Marquee the square first, so the selection keeps the lines inside it. Pick the **Brush** at Size 3 and Hardness 100 in ink. For each line, click just outside the square and [[Cmd+Shift]]-click past the opposite side, so the line snaps to 45° and runs right across. Space the lines 16 px apart along the edge, and include the short ones that only clip a corner, so each line leaving the square comes back in on the opposite edge and the tiles meet.
 - **Plug hatch:** the same tile mirrored, with the lines leaning the other way. Adjacent parts in a section drawing are always hatched in opposite directions.
 - **Dash:** a 16 × 4 orange block inside a 24 × 4 marquee. The 8 px transparent tail becomes the gap.
-- **Grid:** a 24 × 24 square with a 1 px `#9FB4BC` line along its top and left edges.
+- **Grid:** a 24 × 24 square with a 1 px `#9FB4BC` line along its top and left edges. Draw it with the **Pencil** ([[N]]) at Size 1: click the bottom-left corner, [[Shift]]-click the top-left, then [[Shift]]-click the top-right.
 
 Marquee each tile exactly and choose **Edit → Define Pattern**. Then delete the `Tiles` layer.
 
-> **Tip:** Tiles have to be exact, so type them instead of dragging. With nothing selected, a single click (no drag) with the **Rectangular Marquee** opens a dialog with **From X / Y** and **To X / Y** fields. For perfectly straight hatch bands, draw each one with the **Pen**, click **Commit path**, then use **Path to Selection** in the Paths panel.
+> **Tip:** Tiles have to be exact, so type them instead of dragging. With nothing selected, a single click (no drag) with the **Rectangular Marquee** opens a dialog with **From X / Y** and **To X / Y** fields.
 
 ## Tile the grid paper
 
@@ -149,8 +149,8 @@ Skip gradients here. Flat bands read as printed ink.
 
 Clone the driver pin instead of redrawing it:
 
-1. Marquee it and press [[Cmd+C]], then [[Cmd+V]]. The paste lands in place, on a new layer.
-2. With the **Move** tool ([[V]]), drag it one chamber (140 px) to the right. Finish with the arrow keys: [[Shift+→]] moves 10 px and [[→]] moves 1 px.
+1. Marquee it and press [[Cmd+C]], then [[Cmd+V]]. The paste lands in place on a new layer, selected, with the **Move** tool active.
+2. Drag it one chamber (140 px) to the right. Finish with the arrow keys: [[Shift+→]] moves 10 px and [[→]] moves 1 px.
 3. Press [[Cmd+D]], then choose **Layer → Merge Down**.
 
 Repeat for the other chambers. In the locked view each driver sits at a different height, because it rests on a different length of key pin.
@@ -165,9 +165,7 @@ Finally add a `Shear Line` layer. Marquee a 4 px-tall strip centred on the plug'
 
 ![Fig. 2 roughed in: the same housing and plug with a flat silver key filling the keyway, its top edge cut into V notches of different depths](10-key-in-the-keyway.webp)
 
-Make a second group, `Fig 2 Open`, and rebuild the housing, plug and cavity **600 px lower**, using the same shapes. If you typed the corners, add 600 to every Y value.
-
-> **Tip:** Rebuild the parts rather than duplicating the Fig 1 group. A duplicated group mixes its layers in among the original's, so the two cutaways would print through each other.
+Fig. 2 uses the same housing, plug and cavity. Click the `Fig 1 Locked` group row and choose **Layer → Duplicate Layer**. Rename the copy `Fig 2 Open` and delete its `Springs`, `Driver Pins`, `Key Pins` and `Shear Line` layers. Then click the `Fig 2 Open` row and drag the group **600 px** straight down with the **Move** tool, so the housing's top sits at y 1196. Use the arrow keys for the last few pixels.
 
 The key goes on its own `Key 2` layer, above the plug:
 
@@ -218,9 +216,9 @@ Make a `Type` group and drag it above the figure groups. Create each text in an 
 
 - **Title:** `LOCKED` and `OPEN` in **Bebas Neue 290**, as two separate text layers. Put `LOCKED` flush with the left margin guide and `OPEN` flush with the right one, both with their tops about 124 px from the top of the sheet. Centre an orange `/` in the gap between them.
 - **Subtitle:** `ANATOMY OF THE PIN-TUMBLER CYLINDER` in **Bebas Neue 64**, sitting just above the title guide. Then raise its **Letter spacing** in the Text panel until it runs from margin guide to margin guide. About **14.3** does it.
-- **Kicker:** `SHOP MANUAL · SECTION 4 · PLATE 07` in **IBM Plex Mono Medium 20**, flush with the right margin above the title, about 84 px from the top.
+- **Kicker:** `SHOP MANUAL · SECTION 4 · PLATE 07` in **IBM Plex Mono Medium 20** with **Letter spacing** back to 0, flush with the right margin above the title, about 84 px from the top.
 
-Before you start each new text layer, click a layer that isn't text, so the new settings don't restyle a block you've already set. Nudge each block into place with the **Move** tool and the arrow keys.
+Before you set up each new text layer, click a layer that isn't text. Nudge each block into place with the **Move** tool and the arrow keys.
 
 ## Add captions, notes and the parts list
 
@@ -236,7 +234,7 @@ Set the rest of the text in two faces only:
 For the parts list, use monospace columns. IBM Plex Mono has the same advance width in every weight, so spaces line up the columns exactly:
 
 1. Type a header row, `NO. PART  QTY  MATERIAL`, in **SemiBold 21**.
-2. Set **Line height** to **1.52** in the Text panel. Then type eight rows in **Regular 21**, padding every part name to the same length (e.g. `3   SPRING           5    STAINLESS STEEL`).
+2. Click a layer that isn't text and set **Line height** to **1.52** in the Text panel. Then type eight rows in **Regular 21**, padding every part name to the same length (e.g. `3   SPRING           5    STAINLESS STEEL`).
 
 ## Snap the heavy rule to the grid
 
@@ -246,9 +244,9 @@ Choose **View → Show Grid** and set **Grid** to **4px** in the options bar. Sh
 
 The table's other lines go on their own layers:
 
-- **Table rules:** 1 px lines between the rows, on a `Table Rules` layer at **40%**.
-- **Title block:** a 48 px-tall box with a 2 px outline, as wide as the heavy rule, near the bottom of the sheet under the parts list. Split it into three cells: `DWG. LO-07`, `SCALE 4:1` and `SHEET 1 OF 1`.
-- **Band rules:** full-width 3 px rules on the title guide, in the gap between the two figures, and on the bottom-band guide.
+- **Table rules:** 1 px lines between the rows, on a `Table Rules` layer at **40%**. Use the **Pencil** at Size 1: click at one end of each line and [[Cmd+Shift]]-click at the other to keep it level.
+- **Title block:** a 48 px-tall box with a 2 px outline, as wide as the heavy rule, near the bottom of the sheet under the parts list. Draw the outline with the Pencil at Size 2, clicking one corner and [[Shift]]-clicking round the other three and back to the start, then add two short vertical lines to split it into three cells: `DWG. LO-07`, `SCALE 4:1` and `SHEET 1 OF 1`.
+- **Band rules:** full-width 3 px Pencil rules on the title guide, in the gap between the two figures, and on the bottom-band guide.
 
 ## Add balloons and leaders
 
@@ -257,7 +255,7 @@ The table's other lines go on their own layers:
 Drafting conventions to follow:
 
 - **Numbers run in reading order.** Balloons **1–5** sit in a row above Fig. 1: housing, retainer strip, spring, driver pin, key pin. **6** is the plug, **7** the key and **8** the cam.
-- **Leaders are angled** between 30° and 60°. They must never run along a spring or an edge. Each is a 3 px ink line ending in a 5 px dot on its part.
+- **Leaders are angled** between 30° and 60°. They must never run along a spring or an edge. Each is a 3 px ink line ending in a 5 px dot on its part. Draw them on a `Leaders` layer with a hard **Brush**: at Size 3, click at the balloon and [[Shift]]-click on the part, then click once at Size 5 for the dot.
 - **Balloons** are ink circles 46 px across with a 40 px paper centre, on a layer directly **below** the number text. Each number is **Bebas 32**, centred in its balloon. Nudge with the arrow keys until it sits in the middle.
 - **The pitch dimension** has 2 px extension lines on the centres of pins 1 and 2, arrowheads on the line, and `.156" PITCH` set outside the extension lines so it doesn't crowd them.
 
@@ -265,7 +263,7 @@ Drafting conventions to follow:
 
 ![A 120% close-up of Fig. 1 with crisp 2 px ink outlines on every part, and leader lines that stay visible over the dark chambers thanks to a thin paper-coloured halo](17-ink-outlines-and-leader-halos.webp)
 
-Save the effects for last, because they make every later edit slower.
+Finish with the outlines, the leader halos and the paper grain:
 
 - **Ink outlines:** on every part layer (housing, plug, cap & cam, pins, key and faces), open ✦ and turn on **Stroke**: ink `#1F1D1A`, **Width 2**, **Position** set to **outside**.
 - **Leader halos:** on the **Leaders** layer, add a **Stroke** in the paper colour instead. The halo keeps the black leaders readable where they cross the dark chambers.

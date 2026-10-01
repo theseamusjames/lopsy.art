@@ -41,7 +41,8 @@ export function computeRasterizeStyle(
   if (!engine) return undefined;
 
   // GPU-side: render layer with effects, then replace layer texture
-  const pixels = rasterizeLayerEffects(engine, activeId);
+  // The mask stays on the layer, so it is not baked in as well.
+  const pixels = rasterizeLayerEffects(engine, activeId, false);
   if (!pixels || pixels.length === 0) return undefined;
 
   // Upload rasterized result back to the layer's GPU texture

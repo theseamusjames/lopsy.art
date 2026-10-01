@@ -1,104 +1,95 @@
 import type { Point } from '../../types';
 import type { TransformHandle, TransformState } from './transform';
-import { getTransformedBounds } from './transform';
 
+const MAX_SKEW = Math.PI / 3;
+
+/**
+ * Which shear a skew handle drives, and which side of the box centre its
+ * edge sits on in the box's own (pre-skew) space: `top`/`left` on the
+ * negative side, `bottom`/`right` on the positive. Corners drive the
+ * horizontal shear of their top or bottom edge.
+ */
+const SKEW_HANDLES: Partial<Record<TransformHandle, { axis: 'x' | 'y'; side: 1 | -1 }>> = {
+  'top': { axis: 'x', side: -1 },
+  'top-left': { axis: 'x', side: -1 },
+  'top-right': { axis: 'x', side: -1 },
+  'bottom': { axis: 'x', side: 1 },
+  'bottom-left': { axis: 'x', side: 1 },
+  'bottom-right': { axis: 'x', side: 1 },
+  'left': { axis: 'y', side: -1 },
+  'right': { axis: 'y', side: 1 },
+};
+
+function clampSkew(angle: number): number {
+  return Math.max(-MAX_SKEW, Math.min(MAX_SKEW, angle));
+}
+
+/**
+ * Skew from an edge or corner handle so the dragged edge follows the pointer
+ * 1:1 along the edge while the opposite edge stays pinned.
+ *
+ * The shear is applied about the box centre (`x' = x + y·tan(skewX)`, then
+ * scale), so a change of `Δtan` slides the edge at `y = side·hh` by
+ * `side·hh·Δtan·scaleX` and the opposite edge by the negative of that.
+ * Pinning the opposite edge with a translate makes the dragged edge travel
+ * `2·side·hh·Δtan·scaleX`, which is solved for `Δtan` from the pointer delta.
+ * The vertical shear is the same with `hw`, `scaleY` and `tan(skewY)`.
+ * Accumulating tangents rather than angles keeps a drag that starts from an
+ * already-skewed box linear in the pointer.
+ */
 export function computeSkew(
   handle: TransformHandle,
   startPoint: Point,
   currentPoint: Point,
   state: TransformState,
 ): { skewX: number; skewY: number; translateX: number; translateY: number } {
-  const bounds = getTransformedBounds(state);
-  const cx = bounds.x + bounds.width / 2;
-  const cy = bounds.y + bounds.height / 2;
+  const unchanged = {
+    skewX: state.skewX,
+    skewY: state.skewY,
+    translateX: state.translateX,
+    translateY: state.translateY,
+  };
+  const spec = SKEW_HANDLES[handle];
+  if (!spec) return unchanged;
 
+  // Pointer delta in the box's own, un-rotated axes.
   const cos = Math.cos(-state.rotation);
   const sin = Math.sin(-state.rotation);
+  const dx = currentPoint.x - startPoint.x;
+  const dy = currentPoint.y - startPoint.y;
+  const deltaX = dx * cos - dy * sin;
+  const deltaY = dx * sin + dy * cos;
 
-  function unrotate(p: Point): Point {
-    const dx = p.x - cx;
-    const dy = p.y - cy;
-    return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
-  }
-
-  const startUR = unrotate(startPoint);
-  const currentUR = unrotate(currentPoint);
-  const deltaX = currentUR.x - startUR.x;
-  const deltaY = currentUR.y - startUR.y;
+  const { side } = spec;
+  const hw = state.originalBounds.width / 2;
+  const hh = state.originalBounds.height / 2;
 
   let skewX = state.skewX;
   let skewY = state.skewY;
-
-  const origHW = state.originalBounds.width / 2;
-  const origHH = state.originalBounds.height / 2;
-  const hw = bounds.width / 2;
-  const hh = bounds.height / 2;
-
-  // Track which edge should stay fixed for translate compensation
-  // +1 = bottom/right fixed, -1 = top/left fixed, 0 = center (no compensation)
-  let pinY = 0;
-  let pinX = 0;
-
-  switch (handle) {
-    case 'top':
-      skewX = state.skewX + Math.atan2(deltaX, hh);
-      pinY = 1; // bottom stays fixed
-      break;
-    case 'bottom':
-      skewX = state.skewX + Math.atan2(deltaX, hh);
-      pinY = -1; // top stays fixed
-      break;
-    case 'left':
-      skewY = state.skewY + Math.atan2(deltaY, hw);
-      pinX = 1; // right stays fixed
-      break;
-    case 'right':
-      skewY = state.skewY + Math.atan2(deltaY, hw);
-      pinX = -1; // left stays fixed
-      break;
-    case 'top-left':
-    case 'top-right':
-      skewX = state.skewX + Math.atan2(deltaX, hh);
-      pinY = 1; // bottom stays fixed
-      break;
-    case 'bottom-left':
-    case 'bottom-right':
-      skewX = state.skewX + Math.atan2(deltaX, hh);
-      pinY = -1; // top stays fixed
-      break;
-  }
-
-  skewX = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, skewX));
-  skewY = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, skewY));
-
-  // Compensate translate so the pinned edge stays fixed.
-  // Skew is applied relative to center: x' = x + y*tan(skewX).
-  // The pinned edge at y = pinY * origHH should not move, so add
-  // a pre-rotation offset to cancel the skew shift at that edge.
-  const oldTanX = Math.tan(state.skewX);
-  const newTanX = Math.tan(skewX);
-  const oldTanY = Math.tan(state.skewY);
-  const newTanY = Math.tan(skewY);
-
-  // Compensation in pre-rotation space (after skew+scale)
   let compX = 0;
   let compY = 0;
-  if (pinY !== 0) {
-    // The pinned edge is at y = pinY * origHH in original space.
-    // After skew, its x shifts by pinY * origHH * tan(skewX).
-    // After scale, that shift becomes pinY * origHH * tan(skewX) * scaleX.
-    // We need to cancel the delta of that shift.
-    compX = -pinY * origHH * (newTanX - oldTanX) * state.scaleX;
-  }
-  if (pinX !== 0) {
-    compY = -pinX * origHW * (newTanY - oldTanY) * state.scaleY;
+
+  if (spec.axis === 'x') {
+    const travelPerTan = 2 * hh * state.scaleX;
+    if (Math.abs(travelPerTan) < 1e-9) return unchanged;
+    const oldTan = Math.tan(state.skewX);
+    skewX = clampSkew(Math.atan(oldTan + (side * deltaX) / travelPerTan));
+    compX = side * hh * (Math.tan(skewX) - oldTan) * state.scaleX;
+  } else {
+    const travelPerTan = 2 * hw * state.scaleY;
+    if (Math.abs(travelPerTan) < 1e-9) return unchanged;
+    const oldTan = Math.tan(state.skewY);
+    skewY = clampSkew(Math.atan(oldTan + (side * deltaY) / travelPerTan));
+    compY = side * hw * (Math.tan(skewY) - oldTan) * state.scaleY;
   }
 
-  // Rotate the compensation into post-rotation space (where translateX/Y live)
+  // translateX/Y are applied after rotation, so rotate the compensation forward.
   const fwdCos = Math.cos(state.rotation);
   const fwdSin = Math.sin(state.rotation);
-  const translateX = state.translateX + compX * fwdCos - compY * fwdSin;
-  const translateY = state.translateY + compX * fwdSin + compY * fwdCos;
-
-  return { skewX, skewY, translateX, translateY };
+  return {
+    skewX,
+    skewY,
+    translateX: state.translateX + compX * fwdCos - compY * fwdSin,
+    translateY: state.translateY + compX * fwdSin + compY * fwdCos,
+  };
 }

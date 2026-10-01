@@ -47,6 +47,30 @@ impl FramebufferPool {
         }
     }
 
+    /// Copy the `(x, y, width, height)` region of `src`'s colour attachment
+    /// to `dst_origin` in `dst`'s, texel for texel. Leaves both bound (read
+    /// and draw); callers rebind or `unbind` afterwards.
+    pub fn blit_region(
+        &self,
+        gl: &WebGl2RenderingContext,
+        src: FramebufferHandle,
+        dst: FramebufferHandle,
+        region: (i32, i32, i32, i32),
+        dst_origin: (i32, i32),
+    ) {
+        let (Some(src), Some(dst)) = (self.entries.get(src.0), self.entries.get(dst.0)) else { return };
+        let (x, y, w, h) = region;
+        let (dx, dy) = dst_origin;
+        gl.bind_framebuffer(WebGl2RenderingContext::READ_FRAMEBUFFER, Some(&src.fbo));
+        gl.bind_framebuffer(WebGl2RenderingContext::DRAW_FRAMEBUFFER, Some(&dst.fbo));
+        gl.blit_framebuffer(
+            x, y, x + w, y + h,
+            dx, dy, dx + w, dy + h,
+            WebGl2RenderingContext::COLOR_BUFFER_BIT,
+            WebGl2RenderingContext::NEAREST,
+        );
+    }
+
     pub fn unbind(&self, gl: &WebGl2RenderingContext) {
         gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
     }

@@ -30,6 +30,13 @@ import type {
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
+import { claimLiveFloat, commitLiveFloat, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
+import {
+  isLayerTransformCurrent,
+  isLayerTransformLive,
+  markLayerTransformDirty,
+  renderLayerTransform,
+} from './layer-transform';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 
 interface QuickMaskSnapshot {
@@ -174,6 +181,13 @@ function livePendingTransform(
   return transform;
 }
 
+/** A float drag's delta, snapped to whole grid cells when grid snapping is on. */
+function snapFloatDelta(dx: number, dy: number): Point {
+  const ui = useUIStore.getState();
+  if (!ui.showGrid || !ui.snapToGrid) return { x: dx, y: dy };
+  return snapPositionToGrid(dx, dy, ui.gridSize);
+}
+
 function applyTranslatedTransform(layerId: string | null, transform: TransformState): void {
   useUIStore.getState().setTransform(transform);
   renderTransformedFloat(layerId, transform);
@@ -193,6 +207,35 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   } = ctx;
   let { activeLayerId } = ctx;
 
+  // A float left over from before an edit, a selection change or a layer
+  // switch no longer shows what is on screen; lift afresh instead.
+  releaseStaleMoveFloat(activeLayerId);
+
+  // A drag inside a live multi-layer transform carries it along; any other
+  // drag bakes it first, since its layers' engine bounds are pinned while it
+  // is live.
+  if (isLayerTransformLive()) {
+    const pendingLayerTransform = useUIStore.getState().layerTransform;
+    const isWholeLayerDrag = !altKey && !(sel.active && sel.mask) && !isQuickMaskMode;
+    if (isWholeLayerDrag && pendingLayerTransform && isLayerTransformCurrent()) {
+      cancelPrefloat();
+      pendingWholeLayerMoveLabel = null;
+      withLiveFloatKept(() => editorState.pushHistory('Move'));
+      floatingSelectionRef.current = null;
+      return withMoveGesture({
+        drawing: true,
+        lastPoint: canvasPos,
+        layerId: activeLayerId,
+        tool: 'move',
+        startPoint: canvasPos,
+        layerStartX: 0,
+        layerStartY: 0,
+        ...DEFAULT_TRANSFORM_FIELDS,
+      }, { pendingLayerTransform });
+    }
+    commitLiveFloat();
+  }
+
   // Check for pre-built snapshot from prefloat before falling back to pushHistory.
   const prebuilt = !altKey && sel.active && sel.mask
     ? consumePrefloat(activeLayerId, sel.mask)
@@ -208,7 +251,9 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     pendingWholeLayerMoveLabel = 'Move';
   } else {
     cancelPrefloat();
-    editorState.pushHistory(altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
+    withLiveFloatKept(() => {
+      editorState.pushHistory(altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
+    });
   }
 
   // Quick-mask mode + active marquee: snapshot the painted quick-mask
@@ -360,6 +405,8 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     // Clear persistentTransformRef — transform is committed
     persistentTransformRef.current = null;
     const floatRef = floatingSelectionRef.current!;
+    const ownedMask = useEditorStore.getState().selection.mask;
+    if (ownedMask) claimLiveFloat(activeLayerId, ownedMask);
     const baseFloat: InteractionState = {
       drawing: true,
       lastPoint: canvasPos,
@@ -392,12 +439,9 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // delta. Each sibling captures its starting position (after crop) so we
   // can apply identical deltas without re-reading the document each move.
   //
-  // Skip this for an option-drag duplicate: duplicateLayer makes the new copy
-  // active but leaves the pre-duplicate selection (the originals) in
-  // selectedLayerIds, so treating those as siblings would drag the originals
-  // along with the copy (regresses option-drag-duplicate and
-  // delete-inverted-selection).
-  const selectedIds = didDuplicate ? [] : (editorState.document.selectedLayerIds ?? []);
+  // Read the live selection: an option-drag duplicate above replaced it with
+  // just the copy, and `editorState` still holds the originals.
+  const selectedIds = useEditorStore.getState().document.selectedLayerIds ?? [];
   const siblings: SiblingMoveTarget[] = [];
   for (const sid of selectedIds) {
     if (sid === activeLayerId) continue;
@@ -538,6 +582,12 @@ export function handleMoveMove(
     return;
   }
 
+  if (move?.pendingLayerTransform) {
+    const { x: dx, y: dy } = snapFloatDelta(dragDx, dragDy);
+    renderLayerTransform(translateTransform(move.pendingLayerTransform, dx, dy));
+    return;
+  }
+
   if (move?.pendingTransform) {
     let dx = dragDx;
     let dy = dragDy;
@@ -670,6 +720,10 @@ export function handleMoveUp(
     if (state.layerId) clearJsPixelData(state.layerId);
     return;
   }
+  if (state.gesture.kind === 'move' && state.gesture.pendingLayerTransform) {
+    markLayerTransformDirty();
+    return;
+  }
 
   if (!floatingSelectionRef.current || !state.startPoint) return;
 
@@ -709,6 +763,7 @@ export function handleMoveUp(
       width: moveGesture.originalBounds.width,
       height: moveGesture.originalBounds.height,
     };
+    if (state.layerId) claimLiveFloat(state.layerId, newMask);
     edState.setSelection(newBounds, newMask, docW, docH);
   }
 
@@ -729,6 +784,20 @@ export function handleNudgeMove(
   if (!activeId) return;
   const layer = editor.document.layers.find((l) => l.id === activeId);
   if (!layer || layer.locked) return;
+
+  // Undo/redo, an edit or a selection change drops or outdates the float
+  // without telling these refs; compositing it then threw `No float base`.
+  releaseStaleMoveFloat(activeId);
+
+  if (!editor.selection.active && isLayerTransformLive()) {
+    const pendingLayerTransform = useUIStore.getState().layerTransform;
+    if (pendingLayerTransform && isLayerTransformCurrent()) {
+      renderLayerTransform(translateTransform(pendingLayerTransform, dx, dy));
+      markLayerTransformDirty();
+      return;
+    }
+    commitLiveFloat();
+  }
 
   const pendingTransform = editor.selection.active ? livePendingTransform(persistentTransformRef) : null;
   if (pendingTransform) {
@@ -783,6 +852,11 @@ export function handleNudgeMove(
     const engine = getEngine();
     if (!engine) return;
 
+    // The nudge owns whatever float is live from here on; a prefloat left
+    // registered would be committed by the shifted selection below,
+    // dropping the float this nudge is moving (#1076).
+    cancelPrefloat();
+
     // Float selection on GPU if not already floating
     if (!floatingSelectionRef.current) {
       // Ensure selection mask is on the GPU before floating
@@ -833,6 +907,7 @@ export function handleNudgeMove(
       width: origBounds.width,
       height: origBounds.height,
     };
+    claimLiveFloat(activeId, newMask);
     editor.setSelection(newBounds, newMask, docW, docH);
     useUIStore.getState().setTransform(createTransformState(newBounds));
     editor.notifyRender();

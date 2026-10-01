@@ -93,6 +93,22 @@ impl Rect {
             None
         }
     }
+
+    /// Smallest rect covering both. An empty rect (zero width or height)
+    /// contributes nothing.
+    pub fn union(&self, other: &Rect) -> Rect {
+        if self.width == 0 || self.height == 0 {
+            return *other;
+        }
+        if other.width == 0 || other.height == 0 {
+            return *self;
+        }
+        let x1 = self.x.min(other.x);
+        let y1 = self.y.min(other.y);
+        let x2 = (self.x + self.width as i32).max(other.x + other.width as i32);
+        let y2 = (self.y + self.height as i32).max(other.y + other.height as i32);
+        Rect::new(x1, y1, (x2 - x1) as u32, (y2 - y1) as u32)
+    }
 }
 
 #[cfg(test)]
@@ -150,5 +166,14 @@ mod tests {
 
         let c = Rect::new(200, 200, 10, 10);
         assert!(a.intersect(&c).is_none());
+    }
+
+    #[test]
+    fn test_rect_union() {
+        let a = Rect::new(0, 0, 100, 100);
+        let b = Rect::new(-20, 50, 50, 100);
+        assert_eq!(a.union(&b), Rect::new(-20, 0, 120, 150));
+        assert_eq!(a.union(&Rect::new(500, 500, 0, 0)), a);
+        assert_eq!(Rect::new(500, 500, 0, 10).union(&b), b);
     }
 }

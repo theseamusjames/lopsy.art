@@ -2,7 +2,7 @@
 title: Design a Screen-Print Style Restaurant Menu
 description: Make a three-ink screen-print kebab menu in Lopsy with halftone dots, Multiply overprints, a misregistered headline, dotted price leaders and a rotated badge.
 published: 2026-09-26 01:40
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: restaurant menu, screen print, halftone, blend modes, typography, layer effects, groups, selections, transforms
@@ -214,8 +214,7 @@ together.
 
 ![The word Nomad typed in large red Shrikhand at the top of the canvas](13-shrikhand-headline.webp)
 
-Click **Dune Dots**, so the new text is anchored on a raster layer. Press
-[[T]] for **Text**, then set:
+Click **Dune Dots**. Press [[T]] for **Text**, then set:
 
 - **Size** `190`
 - **Font** **Shrikhand** (search for it in the font menu)
@@ -230,9 +229,9 @@ in the options bar to centre it on the middle guide.
 
 ![The red Nomad headline with a teal copy peeking out 6 px up and to the left](14-misregistered-headline.webp)
 
-Click **Duplicate Layer** in the Layers panel. The copy is selected and lands
-10 px down and right. With **Move**, nudge it back with [[←]] and [[↑]] four
-times each, which leaves it 6 px off the original.
+Click **Duplicate Layer** in the Layers panel. The copy lands exactly on top
+and is selected. With **Move**, nudge it 6 px down and right with [[↓]] and
+[[→]], six times each.
 
 Now select the original **Nomad** layer and give it a teal **Color Overlay**.
 The red copy prints on top, and the teal plate peeks out at the top left, just
@@ -248,8 +247,7 @@ under the headline, centred.
 
 Repeat the misregistration the other way round:
 
-1. **Duplicate Layer**, then press [[Shift+←]] and [[Shift+↑]] to put the
-   copy back in place. [[Shift]]+arrow nudges 10 px.
+1. **Duplicate Layer**. The copy lands exactly on top.
 2. Give the original a tomato **Color Overlay**.
 3. Nudge the original 3 px right and 3 px down.
 
@@ -260,7 +258,7 @@ A thin red edge now shows at the lower right of each letter.
 ![A tomato banner across the page with CHARCOAL-GRILLED • SINCE 1998 • OPEN TILL 3 AM in cream Space Mono Bold](16-tagline-banner.webp)
 
 Add a layer called `Banner`. Below `KEBAB`, marquee a 50 px band right across
-the page between the inner rules and fill it with tomato. Set the Text panel's **Letter spacing** back to `1`, then type
+the page between the inner rules and fill it with tomato. Set the Text panel's **Letter spacing** to `1`, then type
 `CHARCOAL-GRILLED • SINCE 1998 • OPEN TILL 3 AM`. Use **Space Mono**,
 **Bold**, `22` px, in paper cream `#EFE4CC`.
 
@@ -271,27 +269,27 @@ Paste the bullets from the clipboard if your keyboard can't type them. Then
 
 ![Three teal Bebas Neue menu items with Space Mono descriptions under them and right-aligned red prices](17-menu-left-column.webp)
 
-The column is three separate area-text layers, all anchored on
-**Dune Dots**. Create an area-text box by **dragging** with the Text tool.
-Make the descriptions first, so later drags start in clear space rather than
-inside an existing text box.
+The column is three separate area-text layers. Click **Dune Dots** before
+you set up each one, and create each box by **dragging** with the Text tool.
+Make the descriptions first, so the later drags start in clear space.
 
 The item and price boxes start just below the banner, about 10 px under it.
 The description box starts about 76 px lower, so each description tucks under
 its item. All three left boxes start about 30 px inside the inner rule.
 
-1. **Descriptions:** Space Mono Regular, `17` px, teal. Set **Line height**
-   `1.4` and **Paragraph spacing** `76`. Drag a box from about 76 px below the
+1. **Descriptions:** Space Mono Regular, `17` px, teal, **Letter spacing**
+   `0`. Set **Line height** `1.4` and **Paragraph spacing** `76`. Drag a box from about 76 px below the
    banner across to just short of the middle guide (around 405 on the top
    ruler) and type the three lines:
    - `lamb & beef, garlic yogurt`
    - `hand-minced lamb, sumac onion`
    - `saffron, lemon, charred tomato`
-2. **Items:** Bebas Neue, `46` px, teal, **Line height** `2.174` (a 100 px
-   pitch). Drag from just under the banner across to about 390 on the top
+2. **Items:** Bebas Neue, `46` px, teal, **Letter spacing** `1`, **Line
+   height** `2.174` (a 100 px pitch). Drag from just under the banner across to about 390 on the top
    ruler and type `DÖNER WRAP`, `ADANA KEBAB` and `CHICKEN SHISH`, one per
    line.
-3. **Prices:** Bebas Neue, `46` px, tomato, **Align right**. Drag a narrow
+3. **Prices:** Bebas Neue, `46` px, tomato, **Letter spacing** `0`, **Align
+   right**. Drag a narrow
    box, about 60 px wide, at the same height, ending about 30 px short of the
    middle guide. Type `9`, `13` and `12`.
 
@@ -351,22 +349,21 @@ Keep it to two inks, so it reads as part of the print rather than an emoji.
 
 Marquee around the chilli and switch to **Move**. Hold [[Cmd]] to keep its
 proportions and drag the bottom-right handle up and left until the chilli is
-about half size. Press
-[[Cmd+D]] to commit the scale.
+about half size.
 
 Then drag it into the gap after `ADANA KEBAB`, so it lines up with the
-capitals.
+capitals, and press [[Cmd+D]] to commit.
 
 ## Paste and rotate a second chilli
 
 ![A pasted second chilli being rotated 22 degrees with the rotate handle outside the marquee corner](23-paste-rotate-chili.webp)
 
 Marquee the chilli and press [[Cmd+C]], then [[Cmd+V]]. The paste lands in
-place on a new layer.
+place on a new layer, selected and ready to move.
 
-1. **Move** the paste about 24 px to the right, then press [[Cmd+D]].
-2. Marquee it again. Drag just outside the top-right corner (the cursor turns
-   into a crosshair) to rotate it about 22°, then press [[Cmd+D]].
+1. Drag the paste about 24 px to the right.
+2. Drag just outside the top-right corner of its box (the cursor turns into a
+   crosshair) to rotate it about 22°, then press [[Cmd+D]].
 3. Choose **Layer → Merge Down** to fold it into `Chili`.
 
 Two chillies mean *extra hot*.
@@ -384,8 +381,7 @@ mustard.
 
 Drag an area-text box across the disc and type `HOT` / `OFF THE` / `SPIT`,
 one word group per line. Use **Bowlby One**, `26` px, teal, **Align center**
-and **Line height** `1.05`. Centre it on the disc, click **Rasterize Layer**,
-then **Layer → Merge Down**.
+and **Line height** `1.05`. Centre it on the disc, then choose **Layer → Merge Down**.
 
 ## Tilt the badge
 
@@ -394,9 +390,6 @@ then **Layer → Merge Down**.
 Marquee around the badge and switch to **Move**. Drag the rotate handle
 anticlockwise about 12°, then press [[Cmd+D]]. A slight tilt makes it feel
 slapped on after printing.
-
-> **Tip:** If the badge ever snaps back upright on screen, press [[Cmd+Z]] and
-> then [[Cmd+Shift+Z]] to bring the rotation back before you export.
 
 ## Select the menu layers
 
@@ -410,9 +403,9 @@ layers: both item columns, both price columns, the other description layer,
 
 ![The menu layers gathered in a collapsed Menu group, nudged up 6 px](27-menu-group.webp)
 
-Choose **Layer → Group Layers** and rename the group `Menu`. Press [[V]], then
-[[↑]] six times. That lifts the whole menu 6 px, so the space above and below
-the columns is even.
+Choose **Layer → Group Layers** and rename the group `Menu`. Press [[V]] and
+nudge the group up 6 px with [[↑]], so the space above and below the columns
+is even.
 
 ## Add paper grain and ink texture
 

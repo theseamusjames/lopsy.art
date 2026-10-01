@@ -52,14 +52,15 @@ export interface ClipboardSlice {
   copy: () => void;
   copyMerged: () => void;
   cut: () => void;
-  paste: () => void;
+  /** Paste the internal clipboard in place; returns the new layer's id, or null if nothing was pasted. */
+  paste: () => string | null;
   /**
-   * If `blob` is a paste-back of content copied inside the app — same
-   * dimensions AND (near-)identical pixels as the GPU-resident clipboard —
-   * paste it in place at the copied offset and return true. Otherwise return
-   * false so the caller can treat it as an external image.
+   * Whether `blob` is a paste-back of content copied inside the app — same
+   * dimensions AND (near-)identical pixels as the GPU-resident clipboard — so
+   * the caller can paste the internal copy in place instead of treating the
+   * blob as an external image.
    */
-  tryPasteInternalCopy: (blob: Blob) => Promise<boolean>;
+  matchesInternalClipboard: (blob: Blob) => Promise<boolean>;
   pasteImageData: (imageData: ImageData) => void;
   /** Create a layer for pixels already uploaded to the GPU by decodeAndUploadImage. */
   pasteGpuLayer: (layerId: string, width: number, height: number) => void;
@@ -199,9 +200,9 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
   paste: () => {
     const state = get();
     const clip = state.clipboard;
-    if (!clip) return;
+    if (!clip) return null;
     const engine = getEngine();
-    if (!engine) return;
+    if (!engine) return null;
 
     state.pushHistory('Paste');
 
@@ -232,9 +233,10 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
       },
       renderVersion: state.renderVersion + 1,
     });
+    return newLayer.id;
   },
 
-  tryPasteInternalCopy: async (blob: Blob): Promise<boolean> => {
+  matchesInternalClipboard: async (blob: Blob): Promise<boolean> => {
     const clip = get().clipboard;
     if (!clip) return false;
     const engine = getEngine();
@@ -244,18 +246,15 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     if (!decoded || decoded.width !== clip.width || decoded.height !== clip.height) return false;
 
     // read_clipboard_pixels throws when the GPU clipboard texture is gone
-    // (e.g. after the engine was reset by File > New), which also guards
-    // paste() below from operating on a released clipboard.
+    // (e.g. after the engine was reset by File > New), which also keeps the
+    // caller's paste() from operating on a released clipboard.
     let clipPixels: Uint8Array;
     try {
       clipPixels = readClipboardPixels(engine);
     } catch {
       return false;
     }
-    if (!pixelsLikelySame(clipPixels, decoded.data)) return false;
-
-    get().paste();
-    return true;
+    return pixelsLikelySame(clipPixels, decoded.data);
   },
 
   pasteImageData: (imageData: ImageData) => {

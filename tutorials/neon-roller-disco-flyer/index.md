@@ -2,7 +2,7 @@
 title: Design a Neon Sign Roller Disco Flyer
 description: Build a glowing neon sign flyer in Lopsy with tube outlines, Inner and Outer Glow, a patterned brick wall and colored light spill.
 published: 2026-09-27 09:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: neon, flyer design, event flyer, layer effects, text effects, pattern fill, glow, typography
@@ -65,8 +65,8 @@ using the **Rectangular Marquee** and **Edit → Fill**:
 
 ![The Pattern Fill dialog with the new 160 by 80 brick pattern selected and the brick wall previewed across the whole canvas](02-pattern-fill.webp)
 
-Select exactly the tile, **0, 0 → 160, 80**. Turn **Snap** off if the grid
-is on. Choose **Edit → Define Pattern**.
+Select exactly the tile, **0, 0 → 160, 80**. Choose
+**Edit → Define Pattern**.
 
 Press [[Cmd+D]] to deselect, then choose **Edit → Fill with Pattern...**,
 pick the 160 × 80 brick pattern and click **Apply**. With nothing selected,
@@ -159,13 +159,12 @@ front of the ring crosses the outline, and press [[Delete]] in each.
 
 ![The planet layer inside a rotated transform box, turned 14 degrees counter-clockwise to match the ring](10-rotate-planet.webp)
 
-Rotate each layer with the same marquee so they share a pivot. Press
-[[Cmd+D]], then click once with the **Rectangular Marquee** and enter
-**From** `190`, `530` and **To** `1010`, `990`. That's an 820 × 460 box
-centred on the planet. Select the **Move** tool, drag the rotate handle
-outside the top-right corner **14°** counter-clockwise, and press [[Cmd+D]]
-to commit. Click the other layer and repeat with the identical marquee.
-The gaps you cut line up perfectly again.
+Rotate both layers in one go so they share a pivot. Click the *Planet* row,
+[[Cmd]]-click *Ring*, and press [[Cmd+D]] so nothing is marqueed. Select the
+**Move** tool. One box frames the planet and ring together, centred on the
+planet. Drag the rotate handle outside the top-right corner **14°**
+counter-clockwise, and press [[Cmd+D]] to commit. The gaps you cut line up
+perfectly again.
 
 ## Smooth the tube edges
 
@@ -202,11 +201,9 @@ shadow. Everything else in the flyer reuses it.
 
 ![Pink neon Saturn script in the Neonderthaw font at 314 pixels near the top of the flyer](14-saturn-script.webp)
 
-Click *Ring* first. The new text layer is added above the active layer, and
-while a text layer is active, changing the Text settings restyles it. Select
-the **Text** tool and choose **Neonderthaw** (a Google font drawn as single
-tube strokes). Set **314** px and the colour `#FFD3EE`, then click in the
-empty space at the top and type *Saturn*.
+Click *Ring*, then select the **Text** tool and set up the text: choose
+**Neonderthaw** (a Google font drawn as single tube strokes), **314** px and
+the colour `#FFD3EE`. Click in the empty space at the top and type *Saturn*.
 
 Give it the same three effects in hot pink `#FF2D95`: Inner Glow Size
 **4**, Outer Glow Size **30**, Spread **20**.
@@ -218,14 +215,14 @@ Give it the same three effects in hot pink `#FF2D95`: Inner Glow Size
 Script neon looks livelier with a slight upward lean. Marquee around the word,
 switch to **Move**, and drag the rotate handle **7°** counter-clockwise. Press
 [[Cmd+D]], then use the arrow keys to nudge it until the pink core is centred
-on the centre guide with its top on the 145 guide. The text stays editable.
+on the centre guide with its top on the 145 guide. Get the wording right
+before you tilt it, because a later text edit redraws the word straight.
 
 ## Track out SKATE NIGHT
 
 ![The Text panel with Letter spacing set to 10 px for the new SKATE NIGHT line](16-letter-spacing.webp)
 
-Click a raster layer such as *Ring* again, so your new settings don't
-restyle *Saturn*. Type **SKATE NIGHT** in **Tilt Neon** at **150** px in
+Click *Ring* again. Type **SKATE NIGHT** in **Tilt Neon** at **150** px in
 `#D8FBFF`, clicking just above the 1075 guide. In the **Text** panel, set
 **Letter spacing** to **10** px so the capitals don't touch.
 
@@ -245,9 +242,11 @@ Add a layer called *Skate*. Trace the boot with the **Lasso**: a tall cuff, a
 curved instep down to a rounded toe, and a flat sole. Fill it with lilac
 `#F1E4FF`, then **Shrink 9** and press [[Delete]] to leave the outline.
 
-Add two wheel rings (48 px circles, **Shrink 9**). Fill short 8 px stubs
-joining each wheel to the sole. Fill capsules for two laces and a side
-stripe: a rectangle with a circle at each end.
+Add two wheel rings (48 px circles, **Shrink 9**), then deselect. Pick a
+hard **Brush** in lilac. At Size `8`, click on each wheel and [[Shift]]-click
+up to the sole for a short stub. At Size `9`, draw two laces across the cuff
+and a side stripe along the boot the same way. The round brush tip gives
+each one the rounded ends of a bent tube.
 
 ## Light the skate
 
@@ -262,15 +261,16 @@ counter-clockwise with the **Move** tool so the toe kicks up, then press
 
 ![Date, hours and address lines in Righteous next to the skate, with equal spacing between the lines](20-info-text.webp)
 
-Create the lines **bottom-up** in empty canvas, so a new click doesn't land
-inside an existing text box:
+Click *Skate*, then set up the text: **Righteous** with Letter spacing
+**0**. Create each line in empty canvas. Pick its colour, click and type,
+then set its size while the caret is still in the line:
 
-- `THE ORBIT RINK · 1200 GALAXY AVE`: Righteous **36** px, `#EDE3FF`
-- `8PM – 1AM · ALL AGES`: Righteous **46** px, `#FFE0F2`
-- `FRIDAY · OCT 17`: Righteous **76** px, `#FFF0CC`, Letter spacing **6**
+- `THE ORBIT RINK · 1200 GALAXY AVE`: **36** px, `#EDE3FF`
+- `8PM – 1AM · ALL AGES`: **46** px, `#FFE0F2`
+- `FRIDAY · OCT 17`: **76** px, `#FFF0CC`, Letter spacing **6**
 
-> **Tip:** Type characters such as `·` and `–` by pasting them with
-> [[Cmd+V]].
+> **Tip:** On a Mac, type `·` with [[Option+Shift+9]] and `–` with
+> [[Option+Hyphen]].
 
 Line up the left edges, and nudge until the gaps between the lines are equal
 (about 28 px). The block should sit centred on the skate icon. Give each line

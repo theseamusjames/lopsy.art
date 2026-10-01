@@ -13,6 +13,7 @@
  */
 
 import { useEditorStore } from '../editor-store';
+import { withLiveFloatKept } from '../interactions/live-float';
 
 type ApplyFn = (dx: number, dy: number) => void;
 
@@ -64,7 +65,8 @@ export function scheduleNudge(
 ): void {
   heldArrows.add(key);
   if (!isRepeat && !pushedHistory) {
-    useEditorStore.getState().pushHistory('Nudge');
+    // The nudge itself carries on with any live Move float.
+    withLiveFloatKept(() => useEditorStore.getState().pushHistory('Nudge'));
     pushedHistory = true;
   }
   pendingDx += dx;

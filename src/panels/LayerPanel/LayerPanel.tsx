@@ -118,12 +118,13 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       }
 
       if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
-        // While text is being edited, focus stays on document.body (the
-        // on-canvas editor has no DOM input), so the body exception below
-        // would otherwise let this select every layer too (#844). Let the
-        // text editor's own Cmd+A (useKeyboardShortcuts) handle it instead.
+        // Only while the panel has focus. Nothing is focused while drawing
+        // (focus sits on document.body), and there ⌘A is the canvas's
+        // Select All alone: selecting every layer too made the next Move
+        // drag Background along with the active layer.
+        if (!panel.contains(document.activeElement)) return;
+        // Live text editing owns ⌘A even if a panel control kept focus (#844).
         if (useUIStore.getState().textEditing) return;
-        if (!panel.contains(document.activeElement) && document.activeElement !== document.body) return;
         e.preventDefault();
         const allIds = displayList
           .map((entry) => entry.layer.id)
@@ -161,6 +162,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
       <div
         ref={listRef}
         className={styles.list}
+        data-testid="layer-list"
       >
         {displayList.map(({ layer, depth }, ri) => (
           <LayerRow

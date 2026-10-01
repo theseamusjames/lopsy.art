@@ -6,6 +6,7 @@ import { getEngine, getEngineCanvas } from '../../engine-wasm/engine-state';
 import { renderGrid, renderPixelGrid, renderRulers } from './render-grid';
 import { DEFAULT_DPI } from './ruler-units';
 import { renderSelectionAnts, renderTransformHandles, renderMarqueeDraftAnts, drawTransformHandles } from './render-selection';
+import { getLayerTransformBox } from '../interactions/layer-transform';
 import { getTextTransformTarget } from '../interactions/text-transform-handlers';
 import { getMarqueePreview } from '../../tools/marquee/marquee-preview';
 import { createTransformState, type TransformState } from '../../tools/transform/transform';
@@ -114,11 +115,16 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
         renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, moveTransform);
       }
     } else {
+      if (marqueePreview.isCombining) {
+        renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, null);
+      }
       renderMarqueeDraftAnts(overlayCtx, marqueePreview.rect, marqueePreview.kind, viewport.zoom, antPhase);
     }
   } else {
     renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, transform);
     if (!textTransformTarget) renderTransformHandles(overlayCtx, selection, transform, viewport.zoom);
+    const layerBox = selection.active ? null : getLayerTransformBox();
+    if (layerBox) drawTransformHandles(overlayCtx, layerBox, viewport.zoom);
   }
   if (textTransformTarget) {
     drawTransformHandles(overlayCtx, textTransformTarget.state, viewport.zoom);

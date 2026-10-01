@@ -2,7 +2,7 @@
 title: Draw an Isometric Tattoo Flash Sheet of Zen Islands
 description: Make a ZEN ENCLAVES tattoo flash sheet in Lopsy. Four floating isometric islands (torii, pagoda, rock garden, koi pond) on iso drafting paper.
 published: 2026-09-29 12:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 120
 tags: isometric, tattoo flash, tattoo design, japanese, zen garden, pagoda, torii, koi, pattern, lasso, gradients, text, groups
@@ -279,14 +279,10 @@ the water plane rather than standing up in profile. Add two `#F26B2A` spots.
 ![The pasted koi selected with the transform box, being rotated by its top-right rotation handle](21b-koi-rotate-handles.webp)
 
 With **Koi** active, press [[Cmd+C]] then [[Cmd+V]]. Lopsy pastes in place
-as a new layer. Rename it **Koi 2** and drag it across the pond with the
-**Move** tool. [[Cmd]]-click its thumbnail to select its pixels, then drag
-the **rotation handle** (the circle outside the top-right corner) about 75°.
-Press [[Cmd+D]] to commit, so the two koi circle each other.
-
-> **Tip:** On a small selection, grab the rotation handle by its exact
-> centre. Near its edge, the drag can move the selection instead of
-> rotating it.
+as a new layer, with the pasted koi selected and the **Move** tool active.
+Rename it **Koi 2** and drag it across the pond, then drag the **rotation
+handle** (the circle outside the top-right corner) about 75°. Press
+[[Cmd+D]] to commit, so the two koi circle each other.
 
 ## Float lily pads
 
@@ -312,15 +308,13 @@ in `#FFD66B` and add a `#FFC24A` **Outer Glow** (**Size 26**, **Opacity 85**).
 
 This is what makes it read as flash. Give every design layer a 3 px
 `#1C1A24` **Stroke**. On each **Isle** layer, add a flat offset **Drop
-Shadow**: **Offset 10 / 12**, **Blur 0**, **Opacity 20**, in ink.
+Shadow**: **Offset 7 / 9**, **Blur 0**, **Opacity 20**, in ink.
 
 The strokes only trace silhouettes. The edges where two faces meet need
 drawing, so add an **Ink** layer above each island. Using a 3 px hard brush,
 Shift-click the top diamond's front edges, the front vertical corner and the
 rock's centre ridge. On the pagoda, a 2 px **Pagoda Ink** layer traces each
-roof's eave and front hip. When a design is lined, you can click **Rasterize
-Layer Style** in each layer's effects drawer to bake the effects into its
-pixels. That keeps a sheet with dozens of styled layers responsive.
+roof's eave and front hip.
 
 ## Group the four designs
 
@@ -342,9 +336,10 @@ from it. Separate fills on one layer merge into one silhouette. Add a 3 px
 ink **Stroke** and click **Rasterize Layer Style**, so the outline becomes
 pixels that travel with a copy.
 
-Copy and paste the cloud, rename the copy **Cloud 2** and drag it to the
-bottom-right corner. [[Cmd]]-click its thumbnail, then hold [[Cmd]] and drag
-the bottom-right scale handle inward to about **75%**. Press [[Cmd+D]].
+Copy and paste the cloud. The paste arrives selected, with the Move tool
+active. Rename the copy **Cloud 2**, drag it to the bottom-right corner,
+then hold [[Cmd]] and drag the bottom-right scale handle inward to about
+**75%**. Press [[Cmd+D]].
 
 ## Scatter cherry blossoms
 
@@ -386,13 +381,14 @@ then nudge its glyph into the middle of its badge.
 
 ![A footer line reading FLOATING ISLAND FLASH · SHEET NO. 07 in spaced bold capitals with dark rules either side](32-footer.webp)
 
-Select a raster layer (**Badges**) first. With a text layer active, the Text
-tool's options restyle *that* layer. Set **Zen Kaku Gothic New**, weight
-**700**, **Size 18**, and type `FLOATING ISLAND FLASH  ·  SHEET NO. 07` in
+Select the **Badges** layer, then set up the text: **Zen Kaku Gothic New**,
+weight **700**, **Size 18**. Type `FLOATING ISLAND FLASH  ·  SHEET NO. 07` in
 ink. Give it **Letter spacing 3 px** and centre it on the centre guide, just
 above the bottom border (**Align center horizontally** in the Move options
-bar does the horizontal part). On **Footer Rules**, fill 3 px rules either
-side, matching the border's hairline weight, with a 22 px gap to the text.
+bar does the horizontal part). On **Footer Rules**, pick the **Pencil** at
+**Size 3** in ink and draw a rule either side of the text: click one end,
+then [[Cmd+Shift]]-click the other so it snaps level. Leave a 22 px gap to
+the text. The 3 px weight matches the border's hairline.
 
 ## Stamp the seal
 
@@ -402,10 +398,10 @@ On a **Seal** layer, [[Cmd]]-drag a **64 × 64** square marquee at the right
 end of the footer, level with the text, and fill it `#D8452B`. **Shrink** by
 4 px and fill paper, then **Shrink** by 2 px and fill vermilion again. That
 leaves a cream keyline. Type `ZEN` in Dela Gothic One at 14 px in paper and
-centre it on the seal. Then [[Cmd]]-click the Seal thumbnail and drag a
-rotation handle about −6°, as if the stamp was pressed by hand. Press
-[[Cmd+D]], then turn the ZEN layer by the same amount and nudge it back to
-the middle of the seal.
+centre it on the seal. Then click the **Seal** row, [[Cmd]]-click the ZEN
+row and press [[Cmd+D]] so nothing is marqueed. With the **Move** tool, drag
+a rotation handle about −6°, as if the stamp was pressed by hand, and press
+[[Cmd+D]]. ZEN turns with the seal and stays in its middle.
 
 ## Shade the sun with dotwork
 

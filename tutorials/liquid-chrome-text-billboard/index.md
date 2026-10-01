@@ -2,7 +2,7 @@
 title: Make a Liquid Chrome Text Billboard
 description: Build a liquid-metal billboard in Lopsy with dripping chrome type, a mirror-floor reflection, a molten chrome sphere, xenon light streaks and film grain.
 published: 2026-09-25 22:15
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 50
 tags: liquid metal, chrome, text effects, layer effects, gradients, liquify, billboard, poster design
@@ -89,8 +89,7 @@ Pick the **Text** tool. Choose the **Rubik Mono One** font, set **Size** to
 `195` and the color to white. Click near the top left, type `XENON`, and press
 [[Tab]] to commit.
 
-Click the `Xenon Streaks` row before you set up the second line. If a text
-layer is active when you change the size, Lopsy restyles *that* layer. Set Size
+Click the `Xenon Streaks` row before you set up the second line. Set Size
 to `155`, click an empty spot on the right, type `DRIFT` and commit.
 
 Open the **Text** panel and set **Letter spacing** to `40.5`. DRIFT now matches
@@ -146,10 +145,9 @@ Switch to a 20 px brush to add a few shorter drips, and click **Apply**.
 
 ![The chrome headline now has a deep blue offset extrusion with a cyan outline and a blue glow behind it](09-extrude-layer-effects.webp)
 
-With the **Move** tool active, click **Duplicate Layer**. The copy lands 10 px
-right and down, so select it and press [[Shift]]+[[←]] and [[Shift]]+[[↑]] once
-each (Shift nudges 10 px) to put it back. Rename the copy `Chrome Face` and the
-original `Extrude`.
+With the **Move** tool active, click **Duplicate Layer**. The copy lands
+exactly on top of the original and is selected. Rename the copy `Chrome Face`
+and the original `Extrude`.
 
 Select `Extrude` and nudge it 6 px right and 6 px down. In its effects, turn on
 these three:
@@ -172,8 +170,8 @@ like a real lens.
 ![A vertically flipped, motion-blurred copy of the headline overlapping the real headline](11-flip-reflection.webp)
 
 With `Chrome Face` still selected and the Move tool active, duplicate it again.
-Nudge the copy back 10 px up and left, and rename it `Chrome Face`. Rename the
-original underneath `Reflection` and turn off its Inner Glow.
+Rename the copy `Chrome Face`. Rename the original underneath `Reflection` and
+turn off its Inner Glow.
 
 On `Reflection`, choose **Filter → Motion Blur…** with **Angle** `90` and
 **Distance** `24`, then choose **Image → Flip Vertical**. A vertical blur
@@ -255,37 +253,31 @@ Click **Apply**.
 ![A small copy of the sphere at the sphere's top-left corner, with transform handles around it](17-scale-droplet.webp)
 
 Draw an elliptical marquee just around the sphere, then press [[Cmd+C]] and
-[[Cmd+V]]. The pasted layer lands inside `Mercury`. With the Move tool, drag
-the bottom-right corner handle toward the top left, holding [[Cmd]] to keep it
-round, until the copy is about 38 px wide.
-
-Press [[Cmd+D]] to commit the scale before you rotate or move the droplet.
-Finishing each transform before you start the next keeps them predictable.
+[[Cmd+V]]. The pasted layer lands inside `Mercury`, selected, with the Move
+tool active. Drag the bottom-right corner handle toward the top left, holding
+[[Cmd]] to keep it round, until the copy is about 38 px wide.
 
 ## Rotate the droplet
 
 ![The droplet with a rotated transform box, turned about 40 degrees](18-rotate-droplet.webp)
 
-Name the layer `Droplet`. Draw a rectangular marquee around it, switch to the
-Move tool, and drag the rotation handle just outside the top-right corner
-around by about 40°. The wave on the droplet tilts, so it doesn't look like a
-stamped copy. Press [[Cmd+D]].
+Drag the rotation handle just outside the top-right corner around by about
+40°. The wave on the droplet tilts, so it doesn't look like a stamped copy.
 
 ## Use the droplet as a full stop
 
 ![The small chrome droplet sitting on the horizon line right after the T of DRIFT](19-droplet-full-stop.webp)
 
-Draw a marquee around the droplet and drag it to just after the T of DRIFT,
-with its bottom resting on the horizon guide. Press [[Cmd+D]]. It works as a
-full stop and echoes the big sphere.
+Drag inside the box to move the droplet to just after the T of DRIFT, with
+its bottom resting on the horizon guide. Press [[Cmd+D]] and rename the layer
+`Droplet`. It works as a full stop and echoes the big sphere.
 
 ## Set the event details
 
 ![Three right-hand lines: THE NIGHT CIRCUIT in white, the date and location in bold blue monospace, and the URL in spaced lilac](20-event-info-type.webp)
 
-Select `Sphere Halo` first, so no text layer is active while you change the
-settings. Create the three lines from the bottom up, so each click lands in
-empty space:
+Select `Sphere Halo` before you set up each line. Create the three lines
+from the bottom up, so each click lands in empty space:
 
 - `XENONDRIFT.RUN`: **Michroma**, `16`, `#B39BFF`, letter spacing `6`
 - `11.07 / HARBOR LOOP / 22:00`: **Space Mono Bold**, `24`, `#7FD3FF`, letter

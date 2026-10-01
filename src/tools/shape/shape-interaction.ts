@@ -14,15 +14,19 @@ import {
   endShapePreview as gpuEndShapePreview,
   getLayerEngineBounds,
 } from '../../engine-wasm/wasm-bridge';
-import { ellipseToPathAnchors, polygonToPathAnchors } from './shape';
+import { ellipseToPathAnchors, polygonToPathAnchors, rectangleToPathAnchors } from './shape';
 import type { ShapeMode } from './shape';
 import type { PathAnchor } from '../path/path';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
+import { snapDragPoint } from '../common/drag-snap';
+import { dragSnapOptions } from '../../app/interactions/drag-snap-options';
 
 const CLICK_THRESHOLD = 4;
 
+const SHAPE_TYPE_IDS: Record<ShapeMode, number> = { ellipse: 0, polygon: 1, rectangle: 2 };
+
 function shapeModeToU32(mode: ShapeMode): number {
-  return mode === 'ellipse' ? 0 : 1;
+  return SHAPE_TYPE_IDS[mode];
 }
 
 /** Snap an edge point so the bounding rectangle preserves the locked aspect. */
@@ -41,6 +45,34 @@ function constrainToAspectRatio(center: Point, edge: Point, metaKey = false): Po
   return {
     x: center.x + rx * Math.sign(edge.x - center.x || 1),
     y: center.y + ry * Math.sign(edge.y - center.y || 1),
+  };
+}
+
+interface ShapeBox {
+  /** Centre in document space. */
+  readonly cx: number;
+  readonly cy: number;
+  readonly rx: number;
+  readonly ry: number;
+}
+
+/**
+ * The drag's box in document space. The shape grows from its centre, so the
+ * press point (the centre) and the dragged corner both snap to the grid and
+ * to guides — the box's edges then sit on grid lines too, centre ± a whole
+ * number of cells.
+ */
+function shapeBox(state: InteractionState, layerLocalPos: Point, metaKey: boolean): ShapeBox {
+  const start = state.startPoint!;
+  const snap = dragSnapOptions();
+  const center = snapDragPoint({ x: start.x + state.layerStartX, y: start.y + state.layerStartY }, snap);
+  const edge = snapDragPoint({ x: layerLocalPos.x + state.layerStartX, y: layerLocalPos.y + state.layerStartY }, snap);
+  const constrainedEdge = constrainToAspectRatio(center, edge, metaKey);
+  return {
+    cx: center.x,
+    cy: center.y,
+    rx: Math.abs(constrainedEdge.x - center.x),
+    ry: Math.abs(constrainedEdge.y - center.y),
   };
 }
 
@@ -104,9 +136,7 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point, m
   if (!state.startPoint || !state.layerId) return;
 
   const shape = useToolSettingsStore.getState().settings.shape;
-  const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos, metaKey);
-  const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
-  const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
+  const { cx, cy, rx, ry } = shapeBox(state, layerLocalPos, metaKey);
   if (rx < 1 || ry < 1) return;
 
   const engine = getEngine();
@@ -117,8 +147,7 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point, m
   gpuRenderShape(
     engine, state.layerId,
     shapeModeToU32(shape.mode),
-    state.startPoint.x + state.layerStartX,
-    state.startPoint.y + state.layerStartY,
+    cx, cy,
     rx * 2, ry * 2,
     fillColor ? fillColor.r / 255 : 0, fillColor ? fillColor.g / 255 : 0,
     fillColor ? fillColor.b / 255 : 0, fillColor ? fillColor.a : 0,
@@ -195,11 +224,7 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
   }
 
   if (engine && state.layerId && shape.output !== 'path') {
-    const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos, metaKey);
-    const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
-    const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
-    const docCx = state.startPoint.x + state.layerStartX;
-    const docCy = state.startPoint.y + state.layerStartY;
+    const { cx: docCx, cy: docCy, rx, ry } = shapeBox(state, layerLocalPos, metaKey);
     const sw = shape.strokeWidth;
     const { width: docW, height: docH } = useEditorStore.getState().document;
     if (docCx - rx - sw < 0 || docCy - ry - sw < 0
@@ -226,20 +251,17 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
     // Undo the raster preview that was rendered during drag.
     useEditorStore.getState().undo();
 
-    const constrainedEdge = constrainToAspectRatio(state.startPoint, layerLocalPos, metaKey);
-    const rx = Math.abs(constrainedEdge.x - state.startPoint.x);
-    const ry = Math.abs(constrainedEdge.y - state.startPoint.y);
+    const { cx, cy, rx, ry } = shapeBox(state, layerLocalPos, metaKey);
     if (rx < 1 && ry < 1) return;
-
-    const cx = state.startPoint.x + state.layerStartX;
-    const cy = state.startPoint.y + state.layerStartY;
 
     const editorState = useEditorStore.getState();
     let anchors: PathAnchor[];
     if (shape.mode === 'ellipse') {
       anchors = ellipseToPathAnchors(cx, cy, rx, ry);
+    } else if (shape.mode === 'rectangle') {
+      anchors = rectangleToPathAnchors(cx, cy, rx, ry, shape.cornerRadius);
     } else {
-      anchors = polygonToPathAnchors(cx, cy, rx, ry, shape.polygonSides);
+      anchors = polygonToPathAnchors(cx, cy, rx, ry, shape.polygonSides, shape.cornerRadius);
     }
     editorState.addPath(anchors, true);
     editorState.notifyRender();

@@ -3,6 +3,7 @@ import { getEngine } from '../../../engine-wasm/engine-state';
 import {
   flipLayer,
   getLayerContentBounds,
+  getLayerEngineBounds,
   rotateLayer90,
   setDocumentSize,
 } from '../../../engine-wasm/wasm-bridge';
@@ -26,12 +27,18 @@ import type { AdjustmentNode } from '../../../types/adjustment-nodes';
 import type { MenuDef, MenuItem } from './types';
 import type { Engine } from '../../../engine-wasm/wasm-bridge';
 import { rotatedTextureOrigin, type Rect } from '../../../layers/rotate-90';
+import { planGroupFlip, type FlipAxis, type GroupFlipMember } from '../../../layers/flip';
+import { getDescendantIds } from '../../../layers/group-utils';
+import { flushLayerSync } from '../../../engine-wasm/engine-sync';
+import { clearJsPixelData } from '../../store/clear-js-pixel-data';
 
-function isTextLayer(layerId: string): boolean {
-  return useEditorStore.getState().document.layers.some((l) => l.id === layerId && l.type === 'text');
+const GROUP_TEXT_FLIP_REFUSAL = 'Rasterize the text layers in this group before flipping it.';
+
+function flipLabel(axis: FlipAxis): string {
+  return axis === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical';
 }
 
-export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
+export function flipActiveLayer(axis: FlipAxis): void {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
   if (!activeId) return;
@@ -39,15 +46,22 @@ export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   const engine = getEngine();
   if (!engine) return;
 
-  const label = axis === 'horizontal' ? 'Flip Horizontal' : 'Flip Vertical';
-  if (isTextLayer(activeId)) {
-    if (!transformTextLayerInDocument(activeId, axis === 'horizontal' ? FLIP_HORIZONTAL : FLIP_VERTICAL, label)) {
+  const layer = state.document.layers.find((l) => l.id === activeId);
+  if (!layer) return;
+  // A text layer flips through its transform, so it stays editable.
+  if (layer.type === 'text') {
+    const flip = axis === 'horizontal' ? FLIP_HORIZONTAL : FLIP_VERTICAL;
+    if (!transformTextLayerInDocument(activeId, flip, flipLabel(axis))) {
       notifyInfo('Rasterize this text layer to flip it.');
     }
     return;
   }
+  if (layer.type === 'group') {
+    flipGroup(engine, layer, axis);
+    return;
+  }
 
-  state.pushHistory(label);
+  state.pushHistory(flipLabel(axis));
   flipLayer(engine, activeId, axis === 'horizontal');
 
   // GPU is now source of truth — clear stale JS pixel data.
@@ -56,6 +70,49 @@ export function flipActiveLayer(axis: 'horizontal' | 'vertical'): void {
   dirtyIds.add(activeId);
   useEditorStore.setState({ dirtyLayerIds: dirtyIds });
   state.notifyRender();
+}
+
+/**
+ * A group has no pixels of its own, so it flips as a unit: each descendant
+ * texture is mirrored in place and moved to the mirror of its position
+ * within the group's combined content bounds.
+ */
+function flipGroup(engine: Engine, group: GroupLayer, axis: FlipAxis): void {
+  const state = useEditorStore.getState();
+  const byId = new Map(state.document.layers.map((l) => [l.id, l]));
+  const leaves = getDescendantIds(state.document.layers, group.id)
+    .map((id) => byId.get(id))
+    .filter((l): l is Layer => l !== undefined && l.type !== 'group');
+  if (leaves.some((l) => l.type === 'text')) {
+    notifyInfo(GROUP_TEXT_FLIP_REFUSAL);
+    return;
+  }
+  if (leaves.length === 0) return;
+
+  // Push pending store positions and JS pixels to the engine so the texture
+  // rects and content bounds read below are current.
+  flushLayerSync(state);
+  const members: GroupFlipMember[] = leaves.map((l) => {
+    const [, , width = 0, height = 0] = getLayerEngineBounds(engine, l.id);
+    return { id: l.id, texture: { x: l.x, y: l.y, width, height }, content: readContentRect(engine, l.id) };
+  });
+  const origins = planGroupFlip(members, axis);
+  if (origins.size === 0) return;
+
+  state.pushHistory(flipLabel(axis));
+  for (const id of origins.keys()) flipLayer(engine, id, axis === 'horizontal');
+
+  useEditorStore.setState((s) => ({
+    document: {
+      ...s.document,
+      layers: s.document.layers.map((l) => {
+        const origin = origins.get(l.id);
+        return origin ? ({ ...l, x: origin.x, y: origin.y } as Layer) : l;
+      }),
+    },
+    renderVersion: s.renderVersion + 1,
+  }));
+  for (const id of origins.keys()) clearJsPixelData(id);
 }
 
 /** Opaque-content rect of a layer, texture-local; null when the layer is empty. */

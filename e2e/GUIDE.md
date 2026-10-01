@@ -52,8 +52,8 @@ await page.locator('[data-tool-id="gradient"]').click();
 | Marquee Rect | `m` | Lasso | `l` |
 | Magic Wand | `w` | | |
 
-Gradient, Elliptical Marquee, and Magnetic Lasso have **no** keyboard
-shortcut — use `[data-tool-id="..."]` for these.
+Gradient, Elliptical Marquee, Magnetic Lasso, and Quick Selection have
+**no** keyboard shortcut (`q` toggles Quick Mask) — use `[data-tool-id="..."]` for these.
 
 ### How to perform common UI actions
 
@@ -260,6 +260,7 @@ double-check that a global exists before using it — don't assume.
 | `__readCompositedPixels()` | Async. Triggers a fresh render and returns the full WebGL canvas as `{width, height, pixels[]}`. The buffer is bottom-up — flip y when projecting doc coords. |
 | `__readLayerPixels(layerId?)` | Async. Syncs layers and returns a single layer's GPU texture as `{width, height, pixels[]}`. Returns `{width: 0, height: 0, pixels: []}` if the layer isn't tracked by the engine. |
 | `__gpuSnapshotCount()` | Number of undo snapshot textures the engine currently holds. Compare against the distinct handles in `undoStack`/`redoStack` to catch snapshot leaks (#1005). |
+| `__effectCacheStats()` | The live compositor's per-layer effect cache: `{entries, images, bytes, budgetBytes, hits, misses}`. `bytes` is the VRAM its cached images hold. `__readCompositedPixels` forces a recomposite but does not invalidate the cache, so a second read is served from it — compare that against an export to catch stale effects (`effect-cache-invalidation.spec.ts`). |
 
 **What is NOT exposed:** there is no `__engineState`, `__wasmBridge`,
 `__wasmEngine`, or `__imageAdjustmentsModule`. Several historical tests
@@ -398,17 +399,17 @@ texture and sees nothing.
 `__readCompositedPixels`, which runs the compositor and includes the
 active stroke texture.
 
-### 3. Wand creates a transform overlay that intercepts clicks
+### 3. Selection handles intercept clicks for some tools
 
-After a successful wand selection, `handleSelectionDown` calls
-`setTransform(createTransformState(wandBounds))`, drawing transform
-handles around the selection bounds. `useCanvasInteraction` then calls
-`handleTransformDown` **before** dispatching to the tool handler — so
-the next click near a handle triggers the transform handler, not your
-active tool.
+After a marquee, lasso or wand selection, `setTransform` draws transform
+handles around the selection bounds, and `useCanvasInteraction` calls
+`handleTransformDown` **before** dispatching to the tool handler. With
+the Move tool or a marquee / lasso tool active, a press within 8 screen
+px of a handle grabs it instead of reaching the tool. The Magic Wand and
+every non-selection tool always get the click.
 
-**Fix:** after a wand selection, clear the transform with
-`__uiStore.getState().setTransform(null)` before firing the next click.
+**Fix:** press away from the handles, or clear the transform with
+`Cmd+D` (which also deselects) before the next press.
 
 ### 4. Auto-crop makes `addLayer` + move tool fragile
 
@@ -471,13 +472,13 @@ slider range (`-100..100`). For export, compare two exports (with and
 without the adjustment) and assert they differ, rather than asserting
 specific channel values.
 
-### 10. Polygon corner radius is a no-op for `sides=4`
+### 10. Use Rectangle, not Polygon `sides=4`, for rectangles
 
-`shape_fill.glsl`'s `sdPolygon` has degenerate rounding math for
-4-sided polygons — the rounded shape equals the original square. If
-you want to verify rounded rectangles visually, use **ellipse** mode
-instead. `sides=6` works for the polygon SDF and can be used for
-"rounded vertex" tests.
+Polygon always fits a *regular* polygon inside the drag box, so `sides=4`
+is a `min(w, h)` square whatever the drag aspect. To draw or verify a
+(rounded) rectangle, pick **Rectangle** in the Shape dropdown — it fills
+the full drag box and honours Corner Radius (see
+`shape-rectangle.spec.ts`).
 
 ### 11. Tool-settings store expects specific ranges
 

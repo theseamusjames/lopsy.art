@@ -2,7 +2,7 @@
 title: Design a De Stijl Tattoo Flash Sheet
 description: Build a Mondrian-grid tattoo flash sheet in Lopsy with a snake coiled through a moon, a swallow, rose, compass and MOM heart, all from flat geometric planes.
 published: 2026-09-29 09:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 90
 tags: de stijl, mondrian, tattoo flash, tattoo design, geometric, grid, lasso, selections, typography, primary colors
@@ -55,7 +55,7 @@ Choose **File → New**, keep the unit on **Pixels**, and create a
 ![A 4 px grid over the cream page with snap on and a marquee around the lower red block, with red, yellow and blue blocks already filled](02-mondrian-planes-snap.webp)
 
 Choose **View → Show Grid**. In the options bar, drag the **Grid** slider to
-**4px** and tick **Snap**. Every edge of the grid falls on a multiple of
+**4px** and make sure **Snap** is ticked. Every edge of the grid falls on a multiple of
 4 px, so each marquee snaps into place. Then click the rulers to drop guides
 at the main rules: on the top ruler at about **616** and **940**, and on the
 left ruler at about **300** and **1160**. That splits the page into a header,
@@ -225,11 +225,12 @@ they match the rest of the sheet.
 On **Sparkle**, draw a black plus about 68 px across with a blue square in
 the middle. To duplicate it:
 
-1. Marquee it and press [[Cmd+C]], then [[Cmd+V]].
-2. Use the **Move** tool to drag each copy into place. Put one in the empty
-   top-left corner and one to the right of the lower bend.
-3. On the second copy, marquee it and hold [[Cmd]] while you drag a corner
-   handle inward. That scales it uniformly to about two-thirds.
+1. Marquee it and press [[Cmd+C]], then [[Cmd+V]] for each copy. Each paste
+   is selected, with the **Move** tool active.
+2. Drag each copy into place. Put one in the empty top-left corner and one
+   to the right of the lower bend.
+3. On the second copy, hold [[Cmd]] while you drag a corner handle inward.
+   That scales it uniformly to about two-thirds.
 4. Press [[Cmd+D]] to commit.
 
 Then click the top pasted layer and choose **Layer → Merge Down** twice.
@@ -332,11 +333,9 @@ to the title.
 ![TATTOO FLASH — SHEET No.7 in Space Mono Bold aligned to the right edge of RATTLESNAKE and the baseline of MOON](22-tagline.webp)
 
 Make a group **Type** at the top of the stack with a raster layer
-**Type Accents** inside it. Click Type Accents so new text lands in the
-group.
-
-With the Text tool, choose **Space Mono**, weight **Bold (700)**, size
-**30**. Click in the empty header cell and type
+**Type Accents** inside it. Select Type Accents, then with the Text tool
+choose **Space Mono**, weight **Bold (700)**, size **30**. Click in the
+empty header cell and type
 **TATTOO FLASH — SHEET No.7**, then press [[Tab]] to commit. With the Move
 tool, arrow-nudge it until its right edge lines up with the final E of
 RATTLESNAKE and its baseline sits level with the bottom of MOON.
@@ -345,8 +344,8 @@ RATTLESNAKE and its baseline sits level with the bottom of MOON.
 
 ![Small Space Mono labels such as No.1 · $140 in the bottom-left corner of each flash cell](23-price-labels.webp)
 
-Flash needs a number and a price for each design. Type each label in Space
-Mono Bold **22**:
+Flash needs a number and a price for each design. Select **Type Accents**,
+set the Text tool to Space Mono Bold **22** and type each label:
 
 - No.1 · $140, No.2 · $60, No.3 · $80, No.4 · $50, No.5 · $90
 
@@ -357,7 +356,8 @@ bottom rule. Give them all the same inset so they line up down the sheet.
 
 ![WALK-INS WELCOME in Archivo Black above a short red bar and the opening hours, EST. 1917 centred in the red block and AMSTERDAM in the blue block](24-credits-cell.webp)
 
-In the credits cell, type **WALK-INS / WELCOME** in Archivo Black **36**.
+Select **Type Accents** before you set up each new size or font below. In
+the credits cell, type **WALK-INS / WELCOME** in Archivo Black **36**.
 Add a 140 × 12 px red bar on Type Accents, then
 **OPEN DAILY / 12 — 10 PM / NO APPOINTMENT / NEEDED** in Space Mono **21**.
 Stack the three with 26–28 px gaps and centre the block vertically.
@@ -387,7 +387,8 @@ with its bottom level with the last line of the hours.
 
 Add a layer **Construction Lines** just above Background, under everything.
 Use the Brush at size **3**, hardness **100**, in black. Click once, then
-[[Shift]]-click the far end to draw a straight line. Draw:
+[[Shift]]-click the far end to draw a straight line. Hold [[Cmd+Shift]] as you
+click to snap it to an exact vertical, horizontal or 45°. Draw:
 
 - A vertical, a horizontal and a 45° diagonal through the hero
 - A cross through the rose
@@ -426,8 +427,8 @@ set it to **Overlay** at **50%**.
 ![The finished flash sheet on the canvas after nudging the rose down and the snake group up](29-polish-nudges.webp)
 
 Check each design against its cell's edges before you export. Here the rose
-sat too close to the rule above it, so select the **03 Rose** group and nudge
-it down about 24 px ([[Shift+Down]] twice, then [[Down]] four times). The
+sat too close to the rule above it, so select the **03 Rose** group and drag
+it down about 24 px with the Move tool. The
 snake's bottom bar crowded its price label, so nudge the whole
 **01 Rattlesnake Moon** group up 20 px.
 

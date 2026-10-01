@@ -11,6 +11,7 @@ uniform vec2 u_srcOffset;  // layer position in document pixels
 uniform vec2 u_srcSize;    // layer texture size in pixels
 uniform vec2 u_docSize;    // document size in pixels
 uniform int u_knockout;    // 1 = apply knockout
+uniform float u_layerOpacity; // opacity the layer itself is composited with
 uniform int u_rawAlpha;    // 1 = output raw alpha only (pre-blur extraction)
 out vec4 fragColor;
 void main() {
@@ -39,7 +40,14 @@ void main() {
         if (knockoutUV.x >= 0.0 && knockoutUV.x <= 1.0 && knockoutUV.y >= 0.0 && knockoutUV.y <= 1.0) {
             knockoutAlpha = texture(u_srcTex, knockoutUV).a;
         }
-        alpha *= (1.0 - knockoutAlpha);
+        // The layer is composited over this shadow with coverage a·o, so a
+        // plain (1 − a) knockout double-counts a's edge: a + (1 − a)² leaks
+        // backdrop through anti-aliased pixels (#1089). Scaling by
+        // (1 − a) / (1 − a·o) makes the result the layer replacing the shadow
+        // by its coverage, a·o + (1 − a)·shadow: no seam at full opacity, and
+        // still no shadow showing through an opaque but faded layer.
+        float knockoutCoverage = knockoutAlpha * u_layerOpacity;
+        alpha *= (1.0 - knockoutAlpha) / max(1.0 - knockoutCoverage, 1e-4);
     }
 
     fragColor = vec4(u_shadowColor.rgb, alpha * u_shadowColor.a * u_opacity);

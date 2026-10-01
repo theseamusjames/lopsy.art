@@ -1,6 +1,7 @@
 import { traceSelectionContours } from '../../selection/selection';
-import { getHandlePositions } from '../../tools/transform/transform';
+import { getHandlePositions, isShapeChangingTransform } from '../../tools/transform/transform';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
+import { transformPolylines } from '../../tools/transform/transform-point';
 import type { Rect } from '../../types';
 
 export interface SelectionData {
@@ -17,6 +18,11 @@ let cachedMaskRef: Uint8ClampedArray | null = null;
 // thousands of islands (e.g. a non-contiguous wand pick on a noisy texture),
 // stroking per-contour was ~40k stroke() calls/frame — see #923.
 let cachedPath: Path2D | null = null;
+let cachedContours: number[][] = [];
+// The outline mapped through a pending scale / rotate / skew / distort, rebuilt
+// only when the transform object changes (a handle drag), not per frame.
+let cachedTransformRef: TransformState | null = null;
+let cachedTransformedPath: Path2D | null = null;
 
 function buildContourPath(contours: number[][]): Path2D {
   const path = new Path2D();
@@ -39,9 +45,10 @@ export function renderSelectionAnts(
   if (!selection.active || !selection.mask) return;
 
   if (selection.mask !== cachedMaskRef) {
-    const contours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight, selection.bounds);
-    cachedPath = contours.length > 0 ? buildContourPath(contours) : null;
+    cachedContours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight, selection.bounds);
+    cachedPath = cachedContours.length > 0 ? buildContourPath(cachedContours) : null;
     cachedMaskRef = selection.mask;
+    cachedTransformRef = null;
   }
 
   if (!cachedPath) return;
@@ -49,14 +56,18 @@ export function renderSelectionAnts(
   ctx.save();
   ctx.imageSmoothingEnabled = false;
 
-  if (transform) {
-    const ob = transform.originalBounds;
-    const cx = ob.x + ob.width / 2;
-    const cy = ob.y + ob.height / 2;
-    ctx.translate(cx + transform.translateX, cy + transform.translateY);
-    ctx.rotate(transform.rotation);
-    ctx.scale(transform.scaleX, transform.scaleY);
-    ctx.translate(-cx, -cy);
+  let path = cachedPath;
+  if (transform && isShapeChangingTransform(transform)) {
+    // Skew and the distort / perspective homography have no Canvas 2D
+    // equivalent, so the outline is mapped point by point — through the same
+    // map as the floated pixels, so the ants trace the transformed piece.
+    if (transform !== cachedTransformRef) {
+      cachedTransformedPath = buildContourPath(transformPolylines(cachedContours, transform));
+      cachedTransformRef = transform;
+    }
+    path = cachedTransformedPath ?? cachedPath;
+  } else if (transform) {
+    ctx.translate(transform.translateX, transform.translateY);
   }
 
   const lw = 1.5 / zoom;
@@ -67,12 +78,12 @@ export function renderSelectionAnts(
 
   ctx.setLineDash([]);
   ctx.strokeStyle = '#000000';
-  ctx.stroke(cachedPath);
+  ctx.stroke(path);
 
   ctx.setLineDash([dashLen, dashLen]);
   ctx.lineDashOffset = -offset;
   ctx.strokeStyle = '#ffffff';
-  ctx.stroke(cachedPath);
+  ctx.stroke(path);
 
   ctx.restore();
 }
@@ -137,7 +148,7 @@ export function renderTransformHandles(
   drawTransformHandles(ctx, transform, zoom);
 }
 
-/** Draw the transform box, its scale handles and its rotate handles. */
+/** The handle box and its 12 handles, for a selection, a multi-layer transform or a text layer. */
 export function drawTransformHandles(
   ctx: CanvasRenderingContext2D,
   transform: TransformState,

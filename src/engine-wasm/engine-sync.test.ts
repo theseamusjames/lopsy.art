@@ -691,6 +691,42 @@ describe('refreshCommittedTextLayerFont — anchor recovery on web-font load (#8
   });
 });
 
+describe('textLayerAnchor — path bind / unbind round trip', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.renderTextLayer).mockClear();
+    vi.mocked(bridge.renderTextLayerToTexture).mockClear();
+  });
+
+  it('recovers the anchor of centred point text, and unbinding re-renders back onto it', () => {
+    const engine = makeFakeEngine();
+    // Centred point text clicked at (300, 100): its texture's top-left sits
+    // half the 240px block (+ 4px padding) left of the click, and 8px below
+    // the layout top where the ink starts.
+    const layer = {
+      ...createTextLayer({ name: 'Title', text: 'WIDE LINE\nMID' }),
+      textAlign: 'center' as const,
+      x: 176,
+      y: 108,
+    };
+    vi.mocked(bridge.renderTextLayer).mockReturnValueOnce(new Float64Array([248, 90, -124, 8]));
+
+    const anchor = sync.textLayerAnchor(engine, layer);
+    expect(anchor).toEqual({ x: 300, y: 100 });
+
+    // Unbind treats prePathX/Y as the anchor: the texture lands back where it was.
+    vi.mocked(bridge.renderTextLayerToTexture).mockReturnValueOnce(new Float64Array([248, 90, -124, 8]));
+    const pos = sync.rerenderCommittedTextLayer(engine, { ...layer, ...anchor });
+    expect(pos).toEqual({ x: 176, y: 108 });
+  });
+
+  it('falls back to the layer position when nothing renders', () => {
+    const engine = makeFakeEngine();
+    const layer = { ...createTextLayer({ name: 'Empty', text: ' ' }), x: 40, y: 50 };
+    vi.mocked(bridge.renderTextLayer).mockReturnValueOnce(new Float64Array([]));
+    expect(sync.textLayerAnchor(engine, layer)).toEqual({ x: 40, y: 50 });
+  });
+});
+
 describe('syncGroupAdjustments — nested descendants are routed to the group', () => {
   beforeEach(() => {
     vi.mocked(bridge.setGroupAdjustments).mockClear();

@@ -2,7 +2,7 @@
 title: Design a Vaporwave Venice Poster
 description: Make a pastel vaporwave poster in Lopsy with a halftone sun, a perspective checkerboard floor, a neon gondola and a retro Windows-style dialog.
 published: 2026-09-26 13:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: vaporwave, poster design, perspective transform, pattern fill, halftone, layer effects, text effects, retro
@@ -41,8 +41,8 @@ a white background and click **Create**. Double-click `Layer 1` and rename it
 `Sky`.
 
 Pick the **Gradient** tool and click **Advanced…** to open the Gradient
-Editor. Click the handle row to add stops. Select each stop and pick its colour
-on the saturation square and hue strip:
+Editor. Click the handle row to add stops. Select each stop and type its
+colour into the hex field:
 
 - teal `#2EC4C9` at 0 %
 - lavender `#9D8CF0` at about 45 %
@@ -184,8 +184,10 @@ Click `Moon Dots` and add two layers: `Towers`, then `Palace` above it.
 
 1. On `Palace`, marquee a full-width band about 220 px tall sitting on the
    horizon and fill it with `#F3E9FF`.
-2. Crenellate the roofline with the **Lasso**: make one small triangle every
-   60 px along the band's top edge and **Edit → Fill** each one.
+2. Crenellate the roofline with the **Lasso**: draw one small triangle every
+   60 px along the band's top edge. Hold [[Shift]] as you start each triangle
+   after the first, so it adds to the selection. Then choose **Edit → Fill**
+   once to fill them all.
 3. Fill a band about 85 px tall with pink `#FBD0E8`, starting just under the
    top edge. That's the Doge's Palace pink upper wall.
 
@@ -193,15 +195,20 @@ Click `Moon Dots` and add two layers: `Towers`, then `Palace` above it.
 
 ![The palace with tall windows, a row of small upper loggia arches and a row of large lower arches in purple](13-palace-arches.webp)
 
-Each arch is a rectangle plus a circle on top, filled with the same colour:
+Each arch is a rectangle plus a circle on top, filled with the same colour.
+Marquee the rectangle, then switch to the **Elliptical Marquee** and hold
+[[Shift]] as you drag the circle, so one fill covers both. You can build a
+whole row this way and fill it once:
 
 - **Wall windows:** six tall windows in `#9C7FD6`, each a 40 × 45 rectangle
   under a 40 px circle.
 - **Upper loggia:** small arches every 50 px, 26 px wide.
 - **Lower arcade:** large 58 px arches every 86 px in deeper `#7E5DC4`.
 
-Finish with a white 8 px cornice along the bottom of the pink wall and a thin
-`#7A4FB0` line on the horizon. The line gives the palace a clean base.
+Finish with a white 8 px cornice along the bottom of the pink wall. Then pick
+the **Pencil** ([[N]]) at about **Size** `4` in `#7A4FB0`, click on the
+horizon guide at the left edge and [[Cmd+Shift]]-click at the right edge for a
+dead-level line. The line gives the palace a clean base.
 
 ## Add domes and the campanile
 
@@ -211,7 +218,8 @@ On `Towers`, which sits behind the palace:
 
 - **Domes:** three teal `#3FC6C8` domes made from elliptical fills, with a
   small lasso triangle on each for the onion point. Add gold `#FFE08A`
-  finials: a thin rectangle plus a small circle.
+  finials: a short upright Pencil line ([[Shift]]-click from the base to the
+  top), topped with a single click of a hard Brush.
 - **Campanile:** a pink `#F48CC0` shaft, about 96 px wide, near the right
   edge of the poster, with two darker
   pilaster strips, a lavender belfry with three arches, a lasso-filled teal
@@ -238,8 +246,8 @@ crescent that sits low in the middle and rises at both ends, and fill it with
 near-black purple `#1B0E3A`. Add:
 
 - a small circle for the stern curl
-- a lasso blade for the bow **ferro**, with six short 6 px teeth made from
-  marquee rectangles
+- a lasso blade for the bow **ferro**, with six short teeth drawn as 6 px
+  Pencil lines (click, then [[Shift]]-click)
 
 ## Add the gondolier
 
@@ -322,8 +330,7 @@ stay upright. Press [[Cmd+D]] to commit.
 
 Add an empty layer called `Type Anchor`, drag it to the top of the Layers
 panel, and click it. New text lands above the active layer, so this puts the
-type above everything else. It also means changing the text settings never
-restyles a text layer you've already committed.
+type above everything else.
 
 Pick the **Text** tool, set **Size** to `150`, choose **Shrikhand** in the
 font browser and set the colour to `#FF3FA4`. Click near the top-left of the
@@ -338,7 +345,7 @@ Open the headline's effects drawer:
 
 - Enable an outside **Stroke** in white with **Width** `6`.
 - Enable **Drop Shadow** in `#3A1C71` with **Offset X** and **Offset Y**
-  `10`, **Blur** `0` and **Opacity** `100`.
+  `4`, **Blur** `0` and **Opacity** `100`.
 
 The hard purple shadow stands out against the teal sky. A cyan shadow would
 disappear into it.
@@ -371,15 +378,17 @@ the type. Enable **Outer Glow** in white, **Size** `18`, **Opacity** `90`.
 Click `Type Anchor` and add a `Window` layer. Marquee a 520 × 175 box in the
 lower right of the poster, starting just left of the centre guide and
 finishing about 25 px above the bottom edge. Fill it with lavender
-`#DCD3F5`. Fake the bevel with 3 px
-fills: white on the top and left edges, dark `#4B3A86` on the bottom and
-right.
+`#DCD3F5`. Fake the bevel with the **Pencil** at **Size** `3` in white:
+click the bottom-left corner, then [[Cmd+Shift]]-click the top-left and the
+top-right corners. Switch to dark `#4B3A86` and keep going: [[Cmd+Shift]]-click
+the bottom-right corner and then the bottom-left. Keep every click a pixel or
+two inside the box, so the lines don't hang over its edge.
 
 Then add the details:
 
 - a navy-to-pink gradient title bar
-- three small bevelled buttons, with a bar, a box and two lasso slashes for
-  the × symbol
+- three small bevelled buttons, with a bar, a box and two crossed Pencil
+  lines for the × symbol
 - a progress bar with ten pink blocks
 - an OK button
 
@@ -387,8 +396,7 @@ Then add the details:
 
 ![gondola.exe in white VT323 in the title bar, a DotGothic16 line reading ゴンドラ Now drifting to 1989 and an OK label on the button](28-window-text.webp)
 
-Click `Window` before each new text layer, so changing the font doesn't
-restyle the previous one:
+Click `Window` before you set up each text layer:
 
 - `gondola.exe` in **VT323** 28 white, in the title bar
 - `ゴンドラ  Now drifting to 1989...` in **DotGothic16** 26 dark purple

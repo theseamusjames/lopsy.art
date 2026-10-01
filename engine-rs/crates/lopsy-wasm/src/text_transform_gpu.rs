@@ -50,7 +50,7 @@ pub fn render_text_raster_transformed(
     };
 
     // transform_affine maps an output pixel at `doc` to source pixel
-    // `srcCenter + invMatrix · (doc - dstCenter) - layerOffset`; with these
+    // `srcCenter + invMatrix · (doc - dstCenter) - floatOffset`; with these
     // uniforms that is `scale · M⁻¹ · (doc - anchor) - offset`, the raster
     // pixel holding that layout point.
     let inv_matrix: [f32; 9] = [
@@ -80,6 +80,9 @@ pub fn render_text_raster_transformed(
                 eng.gl.uniform2f(Some(&loc), raster.width as f32, raster.height as f32);
             }
             if let Some(loc) = shader.location(&eng.gl, "u_layerOffset") {
+                eng.gl.uniform2f(Some(&loc), rect.x as f32, rect.y as f32);
+            }
+            if let Some(loc) = shader.location(&eng.gl, "u_floatOffset") {
                 eng.gl.uniform2f(Some(&loc), rect.x as f32, rect.y as f32);
             }
             if let Some(loc) = shader.location(&eng.gl, "u_layerSize") {

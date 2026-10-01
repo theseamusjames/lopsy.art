@@ -13,14 +13,13 @@ import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError, describeError } from '../app/notifications-store';
 import { loadDocumentFonts } from '../app/load-document-fonts';
 import type { Layer, RasterLayer, TextLayer, ShapeLayer, GroupLayer } from '../types/layers';
-import type { LayerEffects } from '../types/effects';
 import type { Color } from '../types/color';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
-import { DEFAULT_EFFECTS } from '../layers/layer-model';
-import type { LopsyManifest, SerializedLayer } from './project-save';
+import { FORMAT_VERSION, type LopsyManifest, type SerializedLayer } from './project-save';
+import { effectsForFormatVersion, parseStoredEffects } from './layer-effects-format';
 
 const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LOPSY\0"
-const SUPPORTED_VERSION = 1;
+const SUPPORTED_VERSION = FORMAT_VERSION;
 
 function parseMagicAndVersion(view: DataView): { version: number } | null {
   if (view.byteLength < 12) return null;
@@ -59,19 +58,12 @@ async function decompressBytes(compressed: Uint8Array): Promise<Uint8Array> {
   return result;
 }
 
-function parseEffects(raw: unknown): LayerEffects {
-  if (!raw || typeof raw !== 'object') return DEFAULT_EFFECTS;
-  const e = raw as Partial<LayerEffects>;
-  return {
-    stroke: e.stroke ?? DEFAULT_EFFECTS.stroke,
-    dropShadow: e.dropShadow ?? DEFAULT_EFFECTS.dropShadow,
-    outerGlow: e.outerGlow ?? DEFAULT_EFFECTS.outerGlow,
-    innerGlow: e.innerGlow ?? DEFAULT_EFFECTS.innerGlow,
-    colorOverlay: e.colorOverlay ?? DEFAULT_EFFECTS.colorOverlay,
-  };
-}
-
-export function deserializeLayer(s: SerializedLayer): Layer {
+/**
+ * Rebuild a layer from its manifest entry. `formatVersion` is the file's
+ * header version; effects from files older than the stroked-silhouette
+ * change are migrated so they keep their look.
+ */
+export function deserializeLayer(s: SerializedLayer, formatVersion: number = SUPPORTED_VERSION): Layer {
   const base = {
     id: s.id,
     name: s.name,
@@ -82,7 +74,7 @@ export function deserializeLayer(s: SerializedLayer): Layer {
     x: s.x,
     y: s.y,
     clipToBelow: s.clipToBelow,
-    effects: parseEffects(s.effects),
+    effects: effectsForFormatVersion(parseStoredEffects(s.effects), formatVersion),
     mask: null as null | {
       id: string;
       enabled: boolean;
@@ -227,7 +219,7 @@ export async function loadProject(file: File): Promise<void> {
     // the layer model is complete before we push to the store.
     const newLayers: Layer[] = [];
     for (const s of manifest.layers) {
-      const layer = deserializeLayer(s);
+      const layer = deserializeLayer(s, header.version);
 
       if (s.maskDataIndex >= 0 && s.maskWidth != null && s.maskHeight != null) {
         const maskBlob = blobs[pixelBlobCount + s.maskDataIndex];

@@ -29,9 +29,11 @@ import {
   compositeFloatPerspective,
   dropFloat,
 } from '../../engine-wasm/wasm-bridge';
-import { isLayerAlphaSelection, selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
+import { isLayerAlphaSelection } from '../../panels/LayerPanel/layer-selection';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { growFloatToCover } from './float-growth';
+import { cancelPrefloat } from './prefloat';
+import { claimLiveFloat, commitLiveFloat, isLiveFloatCurrent, withLiveFloatKept } from './live-float';
 import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
 import type { Point } from '../../types';
 import {
@@ -40,10 +42,13 @@ import {
   selectionBounds,
 } from '../../selection/selection';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
-
-const SELECTION_TOOLS = new Set([
-  'marquee-rect', 'marquee-ellipse', 'lasso', 'lasso-magnetic', 'wand',
-]);
+import { pressGrabsHandle, scalesSelectionOutlineFromHandles } from './handle-tools';
+import {
+  beginLayerTransformSession,
+  getLayerTransformBox,
+  isLayerTransformCurrent,
+  renderLayerTransform,
+} from './layer-transform';
 
 /**
  * Hit-test transform handles on mousedown and set up interaction state.
@@ -57,13 +62,17 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   const currentTransform = uiState.transform;
   const editorState = useEditorStore.getState();
 
-  if (!currentTransform || !editorState.selection.active) {
+  if (!editorState.selection.active) {
+    return handleLayerTransformDown(ctx);
+  }
+  if (!currentTransform) {
     return null;
   }
 
   const activeTool = uiState.activeTool;
 
-  if (SELECTION_TOOLS.has(activeTool)) {
+  if (scalesSelectionOutlineFromHandles(activeTool)) {
+    if (!pressGrabsHandle(activeTool, ctx)) return null;
     return handleSelectionTransformDown(ctx, currentTransform);
   }
 
@@ -86,29 +95,20 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     ? computeRotation(canvasPos, currentTransform) - currentTransform.rotation
     : 0;
 
-  editorState.pushHistory('Transform');
+  withLiveFloatKept(() => editorState.pushHistory('Transform'));
 
   // Clear floating selection ref when entering transform mode.
   floatingSelectionRef.current = null;
 
   const engine = getEngine();
 
-  // If there's a GPU float from a previous move (no persistentTransformRef),
-  // commit it first so we start the transform from committed content.
-  if (engine && hasFloat(engine) && !persistentTransformRef.current) {
-    selectLayerAlpha(activeLayerId);
-    // Force-sync mask to GPU
-    const selAfter = useEditorStore.getState().selection;
-    if (selAfter.active && selAfter.mask) {
-      const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
-      setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
-    }
-  }
-
-  // If the float was dropped (e.g., by selectLayerAlpha or cmd+click),
-  // clear stale persistentTransformRef so we re-float.
-  if (engine && !hasFloat(engine)) {
-    persistentTransformRef.current = null;
+  // Only a live transform float carries on into this drag. Any other float
+  // (a Move drag's, a prefloat, one outdated by an edit or a layer switch) is
+  // committed first, keeping the selection that frames the moved pixels, and
+  // that selection is lifted afresh below. Re-selecting the whole layer's
+  // alpha here scaled everything else on the layer along with the piece.
+  if (!persistentTransformRef.current || !isLiveFloatCurrent(activeLayerId)) {
+    commitLiveFloat();
   }
 
   // Re-read selection after potential commit
@@ -151,6 +151,13 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     };
   }
 
+  // The transform owns the live float now. commitLiveFloat above already
+  // released a prefloat when it re-lifted; this also covers a transform that
+  // carries on its own float, since a prefloat left registered would be
+  // committed by the next selection change, dropping the pending
+  // transform's float out from under it (#1076).
+  cancelPrefloat();
+
   const persistent = persistentTransformRef.current;
 
   const newState: InteractionState = {
@@ -161,6 +168,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
       startState: { ...currentTransform },
       startAngle,
       selectionOnly: false,
+      isLayerTransform: false,
     },
     lastPoint: canvasPos,
     layerId: activeLayerId,
@@ -174,6 +182,7 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
     originalSelectionMaskHeight: persistent?.maskHeight ?? 0,
   };
 
+  if (persistent && sel.mask) claimLiveFloat(activeLayerId, sel.mask);
   uiState.setActiveTransformHandle(hit);
 
   return newState;
@@ -196,6 +205,55 @@ export function hitTestTransformHandle(canvasPos: Point, transform: TransformSta
   const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
   const rotateHandleRadius = Math.max(handleRadius, Math.min(8 / zoom, rotateCornerClearance));
   return hitTestHandle(canvasPos, transform, handleRadius, rotateHandleRadius);
+}
+
+/**
+ * Move tool, no marquee, several layers selected: a handle grab transforms
+ * all of them about their shared centre (see layer-transform.ts). One
+ * "Transform" history row covers every layer.
+ */
+function handleLayerTransformDown(ctx: InteractionContext): InteractionState | null {
+  const { canvasPos, activeLayerId, floatingSelectionRef, persistentTransformRef } = ctx;
+  const uiState = useUIStore.getState();
+  if (uiState.activeTool !== 'move') return null;
+  const box = getLayerTransformBox();
+  if (!box) return null;
+  const editorState = useEditorStore.getState();
+  const hit = hitTestTransformHandle(canvasPos, box, editorState.viewport.zoom);
+  if (!hit) return null;
+
+  const startAngle = isRotateHandle(hit) ? computeRotation(canvasPos, box) - box.rotation : 0;
+
+  withLiveFloatKept(() => editorState.pushHistory('Transform'));
+  if (!isLayerTransformCurrent()) {
+    commitLiveFloat();
+    if (!beginLayerTransformSession(box)) return null;
+  }
+  floatingSelectionRef.current = null;
+  persistentTransformRef.current = null;
+  uiState.setActiveTransformHandle(hit);
+
+  return {
+    drawing: true,
+    gesture: {
+      kind: 'transform',
+      handle: hit,
+      startState: { ...box },
+      startAngle,
+      selectionOnly: false,
+      isLayerTransform: true,
+    },
+    lastPoint: canvasPos,
+    layerId: activeLayerId,
+    tool: 'move',
+    startPoint: canvasPos,
+    layerStartX: 0,
+    layerStartY: 0,
+    maskMode: false,
+    originalSelectionMask: null,
+    originalSelectionMaskWidth: 0,
+    originalSelectionMaskHeight: 0,
+  };
 }
 
 function handleSelectionTransformDown(
@@ -229,6 +287,7 @@ function handleSelectionTransformDown(
       startState: { ...currentTransform },
       startAngle: 0,
       selectionOnly: true,
+      isLayerTransform: false,
     },
     lastPoint: canvasPos,
     layerId: activeLayerId,
@@ -265,19 +324,49 @@ export function handleTransformMove(
     return;
   }
 
-  const handle = state.gesture.handle;
-  const startState = state.gesture.startState;
+  const newTransform = computeDraggedTransform(state.gesture, state.startPoint, canvasPos, metaKey);
+
+  if (state.gesture.isLayerTransform) {
+    renderLayerTransform(newTransform);
+    return;
+  }
+
+  useUIStore.getState().setTransform(newTransform);
+
+  // Don't update the selection mask during drag — the transform handles
+  // show the correct bounding box, and the mask gets rebuilt from pixel
+  // alpha on commit (via selectLayerAlpha). Updating the mask during drag
+  // causes it to diverge from the GPU-rendered content.
+
+  // Render transform via GPU engine
+  renderTransformedFloat(state.layerId, newTransform);
+  useEditorStore.getState().notifyRender();
+}
+
+/**
+ * The transform a handle drag from `startPoint` to `canvasPos` produces:
+ * distort/perspective corners, skew, scale (grid-snapped when snapping is
+ * on) or rotation (15° steps with Cmd/Meta or grid snap).
+ */
+function computeDraggedTransform(
+  gesture: Extract<CanvasGesture, { kind: 'transform' }>,
+  startPoint: Point,
+  canvasPos: Point,
+  metaKey: boolean,
+): TransformState {
+  const handle = gesture.handle;
+  const startState = gesture.startState;
 
   let newTransform: TransformState;
 
   if (startState.mode === 'distort' && isScaleHandle(handle)) {
-    const result = computeDistort(handle, state.startPoint, canvasPos, startState);
+    const result = computeDistort(handle, startPoint, canvasPos, startState);
     newTransform = { ...startState, corners: result.corners };
   } else if (startState.mode === 'perspective' && isScaleHandle(handle)) {
-    const result = computePerspective(handle, state.startPoint, canvasPos, startState);
+    const result = computePerspective(handle, startPoint, canvasPos, startState);
     newTransform = { ...startState, corners: result.corners };
   } else if (startState.mode === 'skew' && isScaleHandle(handle)) {
-    const result = computeSkew(handle, state.startPoint, canvasPos, startState);
+    const result = computeSkew(handle, startPoint, canvasPos, startState);
     newTransform = {
       ...startState,
       skewX: result.skewX,
@@ -293,7 +382,7 @@ export function handleTransformMove(
       : canvasPos;
     const result = computeScale(
       handle,
-      state.startPoint,
+      startPoint,
       snappedInput,
       startState,
       metaKey,
@@ -307,7 +396,7 @@ export function handleTransformMove(
     };
   } else {
     const currentAngle = computeRotation(canvasPos, startState);
-    const newRotation = currentAngle - state.gesture.startAngle;
+    const newRotation = currentAngle - gesture.startAngle;
     const uiState = useUIStore.getState();
     const shouldSnap = metaKey || (uiState.showGrid && uiState.snapToGrid);
     const snappedRotation = shouldSnap
@@ -319,16 +408,7 @@ export function handleTransformMove(
     };
   }
 
-  useUIStore.getState().setTransform(newTransform);
-
-  // Don't update the selection mask during drag — the transform handles
-  // show the correct bounding box, and the mask gets rebuilt from pixel
-  // alpha on commit (via selectLayerAlpha). Updating the mask during drag
-  // causes it to diverge from the GPU-rendered content.
-
-  // Render transform via GPU engine
-  renderTransformedFloat(state.layerId, newTransform);
-  useEditorStore.getState().notifyRender();
+  return newTransform;
 }
 
 /**

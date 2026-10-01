@@ -2,10 +2,10 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-import { strokeCurrentPath } from './useCanvasInteraction';
+import { strokePathOnEnter } from './interactions/path-stroke';
 import { getEngine } from '../engine-wasm/engine-state';
 import { clearSelectedPixels, hasFloat, setSelectionMask } from '../engine-wasm/wasm-bridge';
-import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
+import { commitLiveFloat } from './interactions/live-float';
 import { isUnmovedPrefloat, commitUnmovedPrefloat } from './interactions/prefloat';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
 import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
@@ -15,7 +15,7 @@ import { fillActiveLayerMask } from './fill-layer-mask';
 import { useToolSettingsStore } from './tool-settings-store';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
-import { pasteOrOpenBlob } from './paste-or-open';
+import { pasteOrOpenBlob, pasteInternalClipboard } from './paste-or-open';
 import {
   invalidateInternalClipboardPriority,
   isInternalClipboardNewer,
@@ -59,7 +59,7 @@ export function scheduleFallbackPaste(): void {
   cancelFallbackPaste();
   fallbackPasteTimer = setTimeout(() => {
     fallbackPasteTimer = null;
-    useEditorStore.getState().paste();
+    pasteInternalClipboard();
   }, 200);
 }
 
@@ -78,15 +78,16 @@ function cancelFallbackPaste(): void {
  * PNG so they can be pasted into other apps. That PNG carries no position, so
  * routing it through `pasteOrOpenBlob` drops the new layer at 0,0 — losing the
  * location the content was copied from. The internal clipboard, by contrast,
- * records the copy offset and pastes in place. `tryPasteInternalCopy` uses it
- * when the incoming image matches the internal clipboard's dimensions and
- * pixels; otherwise this is a genuinely external image and we open it normally.
+ * records the copy offset and pastes in place. We use it when the incoming
+ * image matches the internal clipboard's dimensions and pixels; otherwise this
+ * is a genuinely external image and we open it normally.
  */
 async function pasteImageBlob(blob: Blob, name: string): Promise<void> {
-  const handledInternally = await useEditorStore.getState().tryPasteInternalCopy(blob);
-  if (!handledInternally) {
-    await pasteOrOpenBlob(blob, name);
+  if (await useEditorStore.getState().matchesInternalClipboard(blob)) {
+    pasteInternalClipboard();
+    return;
   }
+  await pasteOrOpenBlob(blob, name);
 }
 
 interface KeyboardShortcutDeps {
@@ -246,9 +247,7 @@ export function useKeyboardShortcuts({
 
       if (e.key === 'Enter') {
         const uiState = useUIStore.getState();
-        if (uiState.activeTool === 'path' && (uiState.pathDraft?.anchors.length ?? 0) >= 2) {
-          strokeCurrentPath();
-        }
+        if (uiState.activeTool === 'path') strokePathOnEnter();
         return;
       }
 
@@ -325,7 +324,7 @@ export function useKeyboardShortcuts({
       // clipboard, so clipboardData would hold the previous image (#960).
       if (isInternalClipboardNewer() && useEditorStore.getState().clipboard) {
         e.preventDefault();
-        useEditorStore.getState().paste();
+        pasteInternalClipboard();
         return;
       }
 
@@ -375,13 +374,13 @@ export function useKeyboardShortcuts({
             }
           }
           // No external image — fall back to internal clipboard
-          useEditorStore.getState().paste();
+          pasteInternalClipboard();
         }).catch(() => {
-          useEditorStore.getState().paste();
+          pasteInternalClipboard();
         });
       } else {
         // Browser doesn't support clipboard.read() — use internal clipboard
-        useEditorStore.getState().paste();
+        pasteInternalClipboard();
       }
     };
 
@@ -412,14 +411,16 @@ function handleDeleteKey(): void {
     const engine = getEngine();
     if (!engine) return;
 
-    // Commit any active transform/move float and rebuild the selection
-    // mask from actual pixel alpha before clearing.
+    // Commit any active transform/move float before clearing. The selection
+    // on screen is kept — the moved marquee, or the outline a pending
+    // transform has carried the pixels to. Rebuilding it from the active
+    // layer's alpha cleared every pixel on the layer (#801).
     // A ⌘-click prefloat that hasn't moved already matches the selection;
     // rebuilding from the active layer's alpha would clear all of it (#1055).
     if (isUnmovedPrefloat(sel.mask)) {
       commitUnmovedPrefloat();
     } else if (hasFloat(engine)) {
-      selectLayerAlpha(activeId);
+      commitLiveFloat();
     }
 
     // Re-read selection after potential mask rebuild

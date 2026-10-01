@@ -2,7 +2,7 @@
 title: Make a Grunge Photocopy Album Cover
 description: Build a 90s grunge album cover in Lopsy with a halftoned photo, torn print edges, a xeroxed cut-out chair sinking into sand, toner-dropout type and tape.
 published: 2026-09-30 02:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 120
 tags: album cover, grunge, photocopy, halftone, collage, texture, typography, magic wand, threshold, voronoi, layer effects
@@ -40,7 +40,7 @@ Create a **1500 × 1500** document. Make sure **Unit** is **Pixels** before you 
 
 Turn on **View → Show Grid**, choose the **Move** tool, and in the options bar set **Grid** to **32 px** and tick **Snap**. Click the top ruler at about **110** and **1390**, and the left ruler at about **334** and **1326**. These four guides frame a 1280 × 992 photo print, and each one sits on a grid line.
 
-On a `Print` layer, marquee from guide to guide. Guides don't pull on anything themselves, but Snap pulls the marquee's corners onto the grid lines underneath them. Fill the marquee with mustard `#C99A2E`. This is the ink colour that shows through the halftone later.
+On a `Print` layer, marquee from guide to guide. The marquee's corners snap onto the guides. Fill the marquee with mustard `#C99A2E`. This is the ink colour that shows through the halftone later.
 
 > **Tip:** You can also type the rectangle. With nothing selected, click once with the **Rectangular Marquee** and enter From 110, 334 To 1390, 1326.
 
@@ -73,9 +73,7 @@ For the paper fibre that shows where a print tears, add a `Tear Fiber` layer. La
 
 Paste the recliner photo. Pick the **Magic Wand** with **Contiguous** on and **Tolerance 32**. Click the white background and press [[Delete]].
 
-A pale halo usually survives around the edges. Click the background again, run **Select → Grow…** by **2**, and delete once more. This removes the fringe without touching the chair.
-
-> **Tip:** Grow the *background* selection rather than shrinking a selection loaded from the chair's thumbnail. It trims the halo without eating into the chair.
+A pale halo usually survives around the edges. Click the background again, run **Select → Grow…** by **2**, and delete once more. This removes the fringe.
 
 ## Scale and rotate the chair
 
@@ -83,7 +81,7 @@ A pale halo usually survives around the edges. Click the background again, run *
 
 Turn **Snap** off for this step. Marquee around the chair and switch to the **Move** tool. Hold [[Cmd]] and drag the bottom-right handle to scale it to about **240%**. Then drag the rotation handle outside the corner to tip it back about **5°**, as if it's already sagging into the sand. Press [[Cmd+D]] to commit.
 
-Move the chair so its seat sits just above the middle of the dunes. Do this **before** you run any Fill on it, while the whole chair is still on-canvas.
+Move the chair so its seat sits just above the middle of the dunes.
 
 ## Photocopy the chair
 
@@ -101,11 +99,11 @@ The chair is now two flat inks, like a real photocopy.
 ![A cream paper border with irregular straight scissor facets around the black recliner](08-scissor-border.webp)
 
 Draw the border on a `Cutout` layer below the chair, so the chair looks cut out of paper by hand:
-1. Add a temporary `Border Helper` layer and fill it with black. Then select the `Recliner` layer and **Magic Wand** the transparent area around the chair (Contiguous on).
-2. Run **Select → Inverse** and **Grow…** by **13**. Select `Border Helper` and fill the selection white.
+1. Add a temporary `Border Helper` layer and fill it with black. Then [[Cmd]]-click the `Recliner` layer's thumbnail to load the chair's shape.
+2. Run **Select → Grow…** by **13** and fill the selection white.
 3. Deselect, then run **Filter → Voronoi…** on the helper with **Cells 42**, **Edge Width 0**, **Seed 12**, followed by **Threshold 128**. The Voronoi cells break the smooth outline into straight facets, the way scissors cut.
 4. Wand the white shape, select the `Cutout` layer and fill it cream. Delete the helper.
-5. Trim the border back to about 11 px: on `Recliner`, wand the chair's surroundings, then **Select → Inverse**, **Grow 11** and **Select → Inverse** again. Select `Cutout` and press [[Delete]]. That keeps the scissor facets but cuts off the big spikes.
+5. Trim the border back to about 11 px: select `Cutout`, [[Cmd]]-click the `Recliner` thumbnail, then run **Grow 11** and **Select → Inverse**, and press [[Delete]]. That keeps the scissor facets but cuts off the big spikes.
 
 ## Sink the chair into the sand
 
@@ -123,12 +121,10 @@ Now lay sand over the cut, so the chair sinks *into* the dunes instead of stoppi
 
 ![Three broken cream elliptical ripple rings spreading out from the sunken chair](10-ripples.webp)
 
-On a `Ripples` layer behind the chair, draw three rings, **largest first**. For each: elliptical marquee, fill, **Select → Shrink…** by the ring width, then [[Delete]]:
-- 570 × 82, 3 px wide.
-- 470 × 62, 4 px wide.
-- 380 × 45, 5 px wide.
-
-If you draw the small ring first, the next fill covers it.
+On a `Ripples` layer behind the chair, draw three nested rings with the **Shape** tool ([[U]]). Set **Shape** to **Ellipse** and **Output** to **Pixels**, remove the fill, and give it a stroke in any colour. Click once to type each ring's size, or drag it, and set the stroke **Width** for each:
+- 570 × 82, Width 3.
+- 470 × 62, Width 4.
+- 380 × 45, Width 5.
 
 Break the rings into arcs with a few dabs of a 46 px **Eraser**. Then give the layer a cream **Color Overlay** (`#EDE0BC`) and set its opacity to **88%**, so the rings catch the light on the dark sand.
 
@@ -146,9 +142,7 @@ Rasterize it and build the toner dropout:
 For the misregistered second plate:
 1. **Duplicate** the title, add a rust **Color Overlay** `#A0441C`, and set it to **Multiply**.
 2. Drag it under the black copy.
-3. Nudge it with the arrow keys so it ends up **8 px left and 6 px up** from the black copy. The duplicate starts 10 px right and 10 px down, so that's 18 px left and 16 px up in all ([[Shift]] + arrow moves 10 px). A down-right offset would read as a drop shadow.
-
-> **Tip:** When you wand a speck, zoom in and click the **top-left part** of it, or pick a speck at least 2 px wide. On a 1 px speck it's easy to catch the black pixel next to it instead.
+3. With the **Move** tool, nudge it **8 px left and 6 px up** with the arrow keys. A down-right offset would read as a drop shadow.
 
 ## Sink QUICKSAND into the foreground
 
@@ -168,7 +162,7 @@ Lasso everything below a sand line that stays flat under the **Q** (so its tail 
 
 In an `Ephemera` group:
 1. **Tape Band.** Lasso a strip about 820 × 120 with ragged ends, fill it `#D9C690`, and add **Mono noise 14**.
-2. **Band name.** Type `MILDEW PARISH` in **Permanent Marker** at **88 px**. Centre it on the tape, rasterize it and **Merge Down** onto the tape. Rotate the tape −2.5°.
+2. **Band name.** Type `MILDEW PARISH` in **Permanent Marker** at **88 px**. Centre it on the tape and **Merge Down** onto the tape, which rasterizes the text for you. Rotate the tape −2.5°.
 3. **Corner tapes.** Draw one short tape across the photo's top-left corner. Copy it, paste it, and use the **Move** tool's **Flip Horizontal** for the other corner. Set both to **Multiply** at 88%.
 4. **Stamp.** Make two rust `#A0441C` frames with **fill → Shrink → Delete**. Add `PROMO COPY` and `NOT FOR SALE` in **Special Elite**, and merge them into the stamp.
 5. **Stamp ink.** Delete a speckle selection from the stamp for uneven ink, set it to **Multiply**, and rotate it **−6°**. Keep every word of the stamp legible.

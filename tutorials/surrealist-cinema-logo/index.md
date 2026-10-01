@@ -2,7 +2,7 @@
 title: Design a Surrealist Cinema Logo
 description: Make a Magritte-style logo in Lopsy with a keyhole of daytime sky in a night disc, a floating bowler hat, marquee bulbs and curved seal text.
 published: 2026-09-25 23:55
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 45
 tags: logo design, surrealism, selections, layer effects, text on a path, radial symmetry, branding
@@ -51,7 +51,7 @@ Press [[Cmd+D]] to deselect.
 > **Tip:** To center the disc exactly, click once with the Elliptical Marquee
 > while nothing is selected, and type the corners `216, 146` to `784, 714`.
 
-## Draw the keyhole with the Lasso and a 1 px feather
+## Draw the keyhole with the Lasso
 
 ![A navy disc with a white circle for the top of the keyhole, a lasso trapezoid below it, and the Feather Selection dialog set to 1 px](02-keyhole-lasso-feather.webp)
 
@@ -67,8 +67,6 @@ you'll use to cut other layers, and you'll delete it at the end.
    the lower half of the circle, then a wider base about 190 px wide, around
    200 px further down. Keep both edges centered on the vertical guide, then
    let go back at the start point to close it.
-3. Choose **Select → Feather…**, set **Radius** to `1` and click **Apply**.
-   The 1 px feather smooths the stair-stepped diagonal edges.
 
 ## Fill the keyhole stencil
 
@@ -83,12 +81,11 @@ The two white shapes overlap at the neck, so they read as one keyhole.
 
 Click **Add Layer** and name it `Sky`. Pick the **Gradient** tool and click
 **Advanced…**. In the **Gradient Editor**, click the bar at about 55% to add
-a middle stop. Select each stop and pick its color in the square and hue
-strip:
+a middle stop. Select each stop and type its color into the hex field:
 
-1. A deep cerulean, about `#295C9E`, at 0%
-2. A soft sky blue, about `#7CB1D6`, at 55%
-3. A pale haze, about `#DFEDF2`, at 100%
+1. A deep cerulean, `#295C9E`, at 0%
+2. A soft sky blue, `#7CB1D6`, at 55%
+3. A pale haze, `#DFEDF2`, at 100%
 
 Click **Done**, then drag straight down the vertical guide, from the top of
 the keyhole to its bottom. The sky runs from deep blue at the top to pale
@@ -149,8 +146,8 @@ place on a new layer. Rename it `Drifter`.
 
 ![The copied cloud dragged out to the upper right of the disc, with transform handles around it](09-move-escaping-cloud.webp)
 
-Draw the same marquee again over the copy and press [[V]] for the **Move**
-tool. Drag from inside the selection up and to the right, until the cloud
+The paste stays selected and Lopsy switches to the **Move** tool. Drag from
+inside the selection up and to the right, until the cloud
 sits across the top-right edge of the disc, half on the navy and half out
 on the paper.
 
@@ -158,17 +155,13 @@ on the paper.
 
 ![The escaping cloud, now larger, tilted about 10 degrees with the rotation handle](10-rotate-escaping-cloud.webp)
 
-Press [[Cmd+D]] to drop the moved cloud. Draw a marquee around it again, and
-use these steps:
+Keep the cloud selected and stay on the **Move** tool:
 
 1. [[Cmd]]-drag the bottom-right corner handle out until the cloud is
-   about 1.45× its size. [[Cmd]] keeps its proportions. Press [[Cmd+D]].
-2. Marquee the bigger cloud once more. Drag the round **rotation handle**
-   just outside the top-right corner counterclockwise by about 10°.
-3. Press [[Cmd+D]] to commit.
-
-> **Tip:** Commit with [[Cmd+D]] between moving, scaling and rotating. Each
-> transform then starts from a fresh box whose handles match what you see.
+   about 1.45× its size. [[Cmd]] keeps its proportions.
+2. Drag the round **rotation handle** just outside the top-right corner
+   counterclockwise by about 10°.
+3. Press [[Cmd+D]] to commit the move, scale and rotation.
 
 ## Trim the clouds to the keyhole
 
@@ -325,16 +318,16 @@ Floating objects that cast shadows are a staple of surrealism. Click
 
 ![XANADU in heavy navy serif capitals centered under the badge, with CINEMA in thin letterspaced terracotta capitals between two navy rules with red dots](20-wordmark-lockup.webp)
 
-With `Seal Shadow` still active (so you don't restyle another text layer),
-pick the **Text** tool:
+With `Seal Shadow` still active, pick the **Text** tool:
 
 - **XANADU**: font **Playfair Display**, weight **Black**, size `116`.
   Set **Letter spacing** to `4` in the Text panel and the color to
   `#1B2340`. Click in empty canvas, type `XANADU`, press [[Tab]], then
   **Move**-drag it so it's centered on the vertical guide, with its top
   about 55 px below the ring.
-- **CINEMA**: font **Italiana**, size `34`, **Letter spacing** `24`, color
-  `#B84A26`. Center it just under XANADU.
+- **CINEMA**: click `Seal Shadow` again, then set font **Italiana**, size
+  `34`, **Letter spacing** `24`, color `#B84A26`. Center it just under
+  XANADU.
 
 Add a `Rules` layer. With the **Brush** at **Size** `3` and **Hardness**
 `100`, click and then [[Shift]]-click to draw a navy line on each side of
@@ -355,13 +348,13 @@ out handles about 122 px long:
 3. Top left, at about eleven o'clock
 4. Top right, at about one o'clock
 
-Click the ✓ **Commit path** button to store it as a path.
+Click the ✓ **Commit path** button in the options bar to store it as a path.
 
 ## Put the seal text on the path
 
 ![CECI N'EST PAS UN FILM, a star, and EST. MCMXXIX set in navy capitals curving around the upper left of the ring](22-text-on-path.webp)
 
-Click the `Rules` layer so you start from a raster layer. Set the Text tool to
+Click the `Rules` layer, then set the Text tool to
 **Cinzel**, weight **SemiBold**, size `24`, **Letter spacing** `9`, color
 `#1B2340`. Click in empty canvas near the top-left corner and type:
 

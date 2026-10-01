@@ -8,7 +8,10 @@ use crate::text_transform_gpu::{render_text_raster_transformed, TextRaster};
 use lopsy_core::text_transform::{TextMatrix, MAX_TEXT_RASTER_EDGE};
 
 fn ensure_text_renderer(engine: &mut Engine) -> &mut TextRendererState {
-    engine.inner.text_renderer.get_or_insert_with(TextRendererState::new)
+    let max_side = engine.inner.texture_pool.max_size();
+    let tr = engine.inner.text_renderer.get_or_insert_with(TextRendererState::new);
+    tr.max_canvas_side = max_side;
+    tr
 }
 
 /// Load raw font bytes into the engine's fontdb.
@@ -107,15 +110,17 @@ pub fn render_text_layer_to_texture(
         Some(v) => v,
         None => return vec![],
     };
-    // Keep the cache in sync with the render path so callers that still
-    // reach for `getRenderedTextPixels` (or a future re-anchor without a
-    // re-render) see the same bytes.
-    if let Some(state) = tr.text_layers.get_mut(layer_id) {
-        state.rendered_pixels = Some(pixels.clone());
-    }
     let x = (anchor_x + offset_x as f64).round() as i32;
     let y = (anchor_y + offset_y as f64).round() as i32;
-    if layer_manager::upload_pixels(&mut engine.inner, layer_id, &pixels, width, height, x, y).is_err() {
+    let uploaded = layer_manager::upload_pixels(&mut engine.inner, layer_id, &pixels, width, height, x, y).is_ok();
+    // Keep the cache in sync with the render path so callers that still
+    // reach for `getRenderedTextPixels` (or a future re-anchor without a
+    // re-render) see the same bytes. Moved after the upload rather than
+    // cloned: at large font sizes the raster runs to hundreds of MB.
+    if let Some(state) = engine.inner.text_renderer.as_mut().and_then(|t| t.text_layers.get_mut(layer_id)) {
+        state.rendered_pixels = Some(pixels);
+    }
+    if !uploaded {
         return vec![];
     }
     vec![width as f64, height as f64, offset_x as f64, offset_y as f64]

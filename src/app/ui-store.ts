@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { RulerUnit } from './rendering/ruler-units';
 import type { Color, Point, Rect, ToolId } from '../types';
-import type { TransformHandle, TransformState } from '../tools/transform/transform';
+import type { TransformHandle, TransformMode, TransformState } from '../tools/transform/transform';
 import type { TextMatrix } from '../tools/text/text-transform';
 import type { MarqueeShape } from '../tools/marquee/marquee-region';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
@@ -167,7 +167,11 @@ interface UIState {
    *  operate on the original pixels, not on the already-wrapped result. */
   wrapSeamlessPattern: boolean;
   snapToGrid: boolean;
+  /** Set once the user toggles Snap to Grid; Show Grid then stops turning it on. */
+  hasUserToggledSnapToGrid: boolean;
   snapToLayers: boolean;
+  /** Marquee drags land on a visible guide within reach. */
+  snapToGuides: boolean;
   /** Temporary snap alignment lines shown during move/transform. */
   snapLines: readonly SnapLine[];
   gridSize: number;
@@ -190,6 +194,11 @@ interface UIState {
   perspectiveCropDragging: 0 | 1 | 2 | 3 | null;
   transform: TransformState | null;
   activeTransformHandle: TransformHandle | null;
+  /** Pending transform of a live multi-layer transform (Move tool, several
+   *  layers selected, no marquee); null when none is live. */
+  layerTransform: TransformState | null;
+  /** Mode the multi-layer transform box starts in. */
+  layerTransformMode: TransformMode;
   /** What the Move tool's handles do to a text layer: scale/rotate or skew. */
   textTransformMode: TextTransformMode;
   meshWarp: MeshWarpSession | null;
@@ -254,6 +263,7 @@ interface UIState {
   toggleWrapSeamlessPattern: () => void;
   toggleSnapToGrid: () => void;
   toggleSnapToLayers: () => void;
+  toggleSnapToGuides: () => void;
   setSnapLines: (lines: readonly SnapLine[]) => void;
   clearSnapLines: () => void;
   setGridSize: (size: number) => void;
@@ -269,6 +279,8 @@ interface UIState {
   setPerspectiveCropDragging: (idx: 0 | 1 | 2 | 3 | null) => void;
   setTransform: (transform: TransformState | null) => void;
   setActiveTransformHandle: (handle: TransformHandle | null) => void;
+  setLayerTransform: (transform: TransformState | null) => void;
+  setLayerTransformMode: (mode: TransformMode) => void;
   setTextTransformMode: (mode: TextTransformMode) => void;
   setMeshWarp: (session: MeshWarpSession | null) => void;
   updateMeshWarpGrid: (grid: MeshWarpGrid) => void;
@@ -348,7 +360,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   dimSeamlessPattern: true,
   wrapSeamlessPattern: false,
   snapToGrid: false,
+  hasUserToggledSnapToGrid: false,
   snapToLayers: false,
+  snapToGuides: true,
   snapLines: [],
   gridSize: 16,
   guideColor: { r: 0, g: 180, b: 255, a: 1 },
@@ -359,6 +373,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   perspectiveCropDragging: null,
   transform: null,
   activeTransformHandle: null,
+  layerTransform: null,
+  layerTransformMode: 'free',
   textTransformMode: 'free',
   meshWarp: null,
   tiltShift: null,
@@ -438,7 +454,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
   toggleGrid: () => set((state) => {
     const showGrid = !state.showGrid;
-    return showGrid ? { showGrid, snapToGrid: true } : { showGrid };
+    if (!showGrid || state.hasUserToggledSnapToGrid) return { showGrid };
+    return { showGrid, snapToGrid: true };
   }),
   togglePixelGrid: () => set((state) => ({ showPixelGrid: !state.showPixelGrid })),
   toggleRulers: () => set((state) => ({ showRulers: !state.showRulers })),
@@ -447,8 +464,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleSeamlessPattern: () => set((state) => ({ showSeamlessPattern: !state.showSeamlessPattern })),
   toggleDimSeamlessPattern: () => set((state) => ({ dimSeamlessPattern: !state.dimSeamlessPattern })),
   toggleWrapSeamlessPattern: () => set((state) => ({ wrapSeamlessPattern: !state.wrapSeamlessPattern })),
-  toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid })),
+  toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid, hasUserToggledSnapToGrid: true })),
   toggleSnapToLayers: () => set((state) => ({ snapToLayers: !state.snapToLayers })),
+  toggleSnapToGuides: () => set((state) => ({ snapToGuides: !state.snapToGuides })),
   setSnapLines: (lines) => set({ snapLines: lines }),
   clearSnapLines: () => set({ snapLines: [] }),
   setGridSize: (size) => set({ gridSize: size }),
@@ -481,6 +499,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   setPerspectiveCropDragging: (idx) => set({ perspectiveCropDragging: idx }),
   setTransform: (transform) => set({ transform }),
   setActiveTransformHandle: (handle) => set({ activeTransformHandle: handle }),
+  setLayerTransform: (layerTransform) => set({ layerTransform }),
+  setLayerTransformMode: (layerTransformMode) => set({ layerTransformMode }),
   setTextTransformMode: (mode) => set({ textTransformMode: mode }),
   setMeshWarp: (session) => set({ meshWarp: session }),
   updateMeshWarpGrid: (grid) =>

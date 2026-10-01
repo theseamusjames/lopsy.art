@@ -2,7 +2,12 @@ import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
-import type { TransformMode } from '../../../tools/transform/transform';
+import type { TransformMode, TransformState } from '../../../tools/transform/transform';
+import {
+  flipTransform,
+  resolveLayerTransformTargets,
+  selectionWantsLayerTransform,
+} from '../../../tools/transform/multi-layer-transform';
 import type { TextMatrix } from '../../../tools/text/text-transform';
 import type { TextTransformMode } from '../../ui-store';
 import { getTextTransformTarget, refusePartialTextMove } from '../../interactions/text-transform-handlers';
@@ -19,6 +24,14 @@ import {
 import { reconcileLayerBoundsWithEngine } from '../../reconcile-layer-bounds';
 import { growFloatToCover } from '../../interactions/float-growth';
 import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
+import { commitLiveFloat, withLiveFloatKept } from '../../interactions/live-float';
+import {
+  beginLayerTransformSession,
+  getLayerTransformBox,
+  isLayerTransformCurrent,
+  markLayerTransformDirty,
+  renderLayerTransform,
+} from '../../interactions/layer-transform';
 import styles from './TransformControls.module.css';
 
 /**
@@ -40,7 +53,8 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   const activeLayerId = editorState.document.activeLayerId;
   if (!activeLayerId) return;
 
-  editorState.pushHistory('Transform');
+  // The float, pending transform included, is handled below.
+  withLiveFloatKept(() => editorState.pushHistory('Transform'));
 
   // A float left behind by a Move drag holds its lifted pixels at their
   // pre-drag position, while the selection (and the pixels the user sees)
@@ -113,6 +127,34 @@ const MODES: { id: TransformMode; label: string }[] = [
   { id: 'perspective', label: 'Perspective' },
 ];
 
+/**
+ * Run one instant step (flip, quarter turn) on the selected layers' shared
+ * transform — on top of any pending scale or rotate — and bake it, as the
+ * selection's flip buttons do. One "Transform" history row.
+ */
+export function applyLayerTransformStep(step: (t: TransformState) => TransformState): void {
+  const box = getLayerTransformBox();
+  if (!box) return;
+  withLiveFloatKept(() => useEditorStore.getState().pushHistory('Transform'));
+  if (!isLayerTransformCurrent()) {
+    commitLiveFloat();
+    if (!beginLayerTransformSession(box)) return;
+  }
+  renderLayerTransform(step(useUIStore.getState().layerTransform ?? box));
+  markLayerTransformDirty();
+  commitLiveFloat();
+}
+
+/** Whether the Move tool frames the selected layers (no marquee, several layers or a group). */
+function useWantsLayerTransform(): boolean {
+  const selectionActive = useEditorStore((s) => s.selection.active);
+  const layers = useEditorStore((s) => s.document.layers);
+  const selectedIds = useEditorStore((s) => s.document.selectedLayerIds);
+  if (selectionActive) return false;
+  const ids = selectedIds ?? [];
+  return selectionWantsLayerTransform(layers, ids) && resolveLayerTransformTargets(layers, ids).length > 0;
+}
+
 const TEXT_MODES: { id: TextTransformMode; label: string }[] = [
   { id: 'free', label: 'Free' },
   { id: 'skew', label: 'Skew' },
@@ -126,28 +168,44 @@ export function TransformControls() {
   });
   const transform = useUIStore((s) => s.transform);
   const setTransform = useUIStore((s) => s.setTransform);
+  const layerTransformMode = useUIStore((s) => s.layerTransformMode);
+  const setLayerTransformMode = useUIStore((s) => s.setLayerTransformMode);
+  const isLayerBox = useWantsLayerTransform();
   const textMode = useUIStore((s) => s.textTransformMode);
   const setTextMode = useUIStore((s) => s.setTextTransformMode);
+  // Several selected layers get the shared box; one text layer gets its own.
+  const showsTextModes = isLiveTextActive && !isLayerBox;
 
-  if (!selectionActive && !isLiveTextActive) return null;
+  if (!selectionActive && !isLayerBox && !isLiveTextActive) return null;
 
-  const currentMode = transform?.mode ?? 'free';
+  const currentMode = isLayerBox ? layerTransformMode : (transform?.mode ?? 'free');
 
   const handleModeChange = (mode: TransformMode) => {
-    if (!transform) return;
-    // Commit any active transform before switching modes
-    const engine = getEngine();
-    if (engine && hasFloat(engine)) {
-      const activeLayerId = useEditorStore.getState().document.activeLayerId;
-      if (activeLayerId) {
-        selectLayerAlpha(activeLayerId);
-      }
+    if (isLayerBox) {
+      // Bake the pending transform; the box starts again on the result.
+      commitLiveFloat();
+      setLayerTransformMode(mode);
+      return;
     }
+    if (!transform) return;
+    // Commit any active transform before switching modes; the selection
+    // takes on the transformed outline rather than the whole layer's alpha.
+    commitLiveFloat();
     // Create fresh transform state with the new mode
     const sel = useEditorStore.getState().selection;
     if (sel.active && sel.bounds) {
       setTransform(createTransformState(sel.bounds, mode));
     }
+  };
+
+  const handleFlip = (axis: 'horizontal' | 'vertical') => {
+    if (isLayerBox) {
+      applyLayerTransformStep((t) => flipTransform(t, axis));
+      return;
+    }
+    applyGpuTransform(axis === 'horizontal'
+      ? new Float32Array([-1, 0, 0, 0, 1, 0, 0, 0, 1])
+      : new Float32Array([1, 0, 0, 0, -1, 0, 0, 0, 1]));
   };
 
   return (
@@ -156,15 +214,15 @@ export function TransformControls() {
         <IconButton
           icon={<FlipHorizontal2 size={16} />}
           label="Flip Horizontal"
-          onClick={() => applyGpuTransform(new Float32Array([-1, 0, 0, 0, 1, 0, 0, 0, 1]))}
+          onClick={() => handleFlip('horizontal')}
         />
         <IconButton
           icon={<FlipVertical2 size={16} />}
           label="Flip Vertical"
-          onClick={() => applyGpuTransform(new Float32Array([1, 0, 0, 0, -1, 0, 0, 0, 1]))}
+          onClick={() => handleFlip('vertical')}
         />
       </div>
-      {isLiveTextActive && (
+      {showsTextModes && (
         <div className={styles.modeGroup}>
           {TEXT_MODES.map(({ id, label }) => (
             <button
@@ -180,7 +238,7 @@ export function TransformControls() {
           ))}
         </div>
       )}
-      {transform && !isLiveTextActive && (
+      {(transform || isLayerBox) && !showsTextModes && (
         <div className={styles.modeGroup}>
           {MODES.map(({ id, label }) => (
             <button

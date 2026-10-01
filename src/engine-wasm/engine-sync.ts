@@ -98,6 +98,7 @@ import {
   textLayoutBounds,
   uploadLayerPixels,
   removeTextLayerState,
+  getGlyphPositions,
 } from './wasm-bridge';
 import type { PathAnchor, TextEditingState, ChannelVisibility } from '../app/ui-store';
 import type { SelectionData } from '../app/store/types';
@@ -120,6 +121,7 @@ import {
 export type { TextPlacement };
 import type { StoredPath } from '../types/paths';
 import { pathTextFont, renderTextOnPath } from '../tools/text/render-text-on-path';
+import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from '../tools/text/point-text-align';
 import { ensureFontFacesLoaded, parseFontFamilyList } from '../utils/font-face-readiness';
 import { getTracked } from './sync-state';
 import { syncLayers } from './sync-layers';
@@ -1275,6 +1277,18 @@ export function textLayerPropsJson(layer: TextLayer): string {
 }
 
 /**
+ * The anchor (layout origin in document space) of a committed text layer,
+ * whose `x`/`y` hold its texture's top-left: `anchor + renderOffset`. Falls
+ * back to `x`/`y` when the layer renders no glyphs.
+ */
+export function textLayerAnchor(engine: Engine, layer: TextLayer): { x: number; y: number } {
+  setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
+  const bounds = renderTextLayer(engine, layer.id);
+  if (bounds.length !== 4) return { x: layer.x, y: layer.y };
+  return { x: layer.x - (bounds[2] ?? 0), y: layer.y - (bounds[3] ?? 0) };
+}
+
+/**
  * Re-render a committed text layer from its stored properties using the WASM
  * text engine and upload the result. `layer.x`/`layer.y` are treated as the
  * text anchor (layout origin in document space); the rendered texture is placed
@@ -1321,12 +1335,27 @@ export function rerenderCommittedTextLayerAnchored(
   // Recover the anchor from the current (old) content's render offset.
   setTextLayerContent(engine, oldLayer.id, textLayerPropsJson(oldLayer));
   const oldBounds = renderTextLayer(engine, oldLayer.id);
-  const anchorX = oldBounds.length === 4 ? oldLayer.x - oldBounds[2]! : oldLayer.x;
+  const recoveredX = oldBounds.length === 4 ? oldLayer.x - oldBounds[2]! : oldLayer.x;
+  const anchorX = recoveredX + alignChangeAnchorShift(engine, oldLayer, newLayer.textAlign);
   const anchorY = oldBounds.length === 4 ? oldLayer.y - oldBounds[3]! : oldLayer.y;
 
   const pos = placeTextLayerAtAnchor(engine, newLayer, anchorX, anchorY);
   if (!pos) return null;
   return { ...pos, anchorX, anchorY };
+}
+
+/**
+ * How far a committed text layer's anchor must move when its alignment
+ * changes to `newAlign`, so its lines realign without the block jumping.
+ * Point text is aligned about its anchor (see `point-text-align.ts`); area
+ * and vertical text — and path text, which ignores alignment — never move.
+ */
+export function alignChangeAnchorShift(engine: Engine, layer: TextLayer, newAlign: TextLayer['textAlign']): number {
+  if (newAlign === layer.textAlign || layer.pathId) return 0;
+  if (!isPointTextLayout(layer.width, layer.vertical ?? false)) return 0;
+  setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
+  const width = blockWidthFromGlyphs(getGlyphPositions(engine, layer.id));
+  return alignmentAnchorShift(layer.textAlign, newAlign, width);
 }
 
 /**

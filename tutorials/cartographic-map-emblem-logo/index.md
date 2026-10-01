@@ -2,7 +2,7 @@
 title: Design a Cartographic Map Emblem Logo
 description: Build an antique sea-chart logo in Lopsy with contour-tinted fjords, waterlines, rhumb lines, a compass rose, a ribbon wordmark and seal text on a path.
 published: 2026-09-29 01:30
-updated: 2026-09-30
+updated: 2026-10-01
 level: Advanced
 duration: 90
 tags: logo design, cartographic, map, compass rose, vintage, badge, selections, text on a path, sunburst, branding
@@ -87,10 +87,7 @@ In the effects drawer, add these effects:
 
 - **Stroke** `3` px in ink.
 - **Inner Glow**, Size `46`, Opacity `45`, `#9C7A45`, for an aged rim.
-- **Drop Shadow** with Offset Y `10`, Blur `26`, Opacity `45`, `#3A2A14`.
-
-Click **Rasterize Layer Style** so the effects become pixels. Baked effects
-keep a big document fast.
+- **Drop Shadow** with Offset Y `7`, Blur `26`, Opacity `45`, `#3A2A14`.
 
 ## Draw the degree bars with Sunburst
 
@@ -113,8 +110,7 @@ Half of every slot turns cream, so you get alternating wedges.
 
 Select a centred disc of radius 380 (From `220`, `220` to `980`, `980`) and
 press [[Delete]]. Only an 8 px band of alternating bars is left, like the
-degree border of an old chart. Deselect, add a `2` px ink **Stroke**, and
-rasterize the layer style.
+degree border of an old chart. Deselect and add a `2` px ink **Stroke**.
 
 ## Fill the sea
 
@@ -131,7 +127,7 @@ stops:
 Start the drag on the compass guide, just below the centre line, and drag
 straight right to the neatline, so the water is lightest where the rose will
 sit. Deselect. Add an **Inner Glow** of Size `40`, Opacity `55` in
-`#12272D` to darken the edge, then rasterize.
+`#12272D` to darken the edge.
 
 ## Fan out the rhumb lines
 
@@ -188,11 +184,10 @@ On `Land`, lasso a small ragged island about 52 × 30 px in the sea to the
 left of the compass guide and fill it. To make an archipelago:
 
 1. Marquee the island and press [[Cmd+C]], then [[Cmd+V]]. The copy is
-   pasted in place.
-2. Drag the copy with the Move tool.
-3. [[Cmd]]-click its thumbnail to select it, then turn it with a corner
-   rotation handle and resize it with [[Cmd]] held on a corner scale handle.
-   Press [[Cmd+D]] to commit before you move on to the next copy.
+   pasted in place, selected, with the Move tool ready.
+2. Drag the copy into position.
+3. Turn it with a corner rotation handle and resize it with [[Cmd]] held on a
+   corner scale handle. Press [[Cmd+D]] to commit.
 
 Make three copies, scattered through the sea:
 
@@ -248,10 +243,9 @@ Delete clears everything nearer the coast.
 
 Set the layer to `75%` opacity.
 
-> **Tip:** Load the coast from `Land`'s own row: click `Land`, [[Cmd]]-click
-> its thumbnail, then click back on the layer you're working on before you
-> Grow. Clicking back on the row first means [[Delete]] clears only the grown
-> area, not the whole layer.
+> **Tip:** To load the coast, [[Cmd]]-click `Land`'s thumbnail. The layer
+> you're working on stays active, so Fill and [[Delete]] act on it, not on
+> `Land`.
 
 ## Clip everything to the sea disc
 
@@ -326,23 +320,21 @@ Marquee the star, press [[Cmd+C]] and [[Cmd+V]], and name the pasted copy
 
 [[Cmd]]-click its thumbnail, pick the **Move** tool, and drag a corner
 rotation handle with [[Cmd]] held. [[Cmd]] snaps rotation to 15° steps, so
-stop at exactly **45°**. Press [[Cmd+D]] to commit.
+stop at exactly **45°**.
 
 ## Scale the intercardinals to 60%
 
 ![The rotated star being scaled down from a corner handle, now peeking between the main points](19-scale-intercardinal.webp)
 
-[[Cmd]]-click the thumbnail again. Hold [[Cmd]] and drag a corner scale
-handle inward until the star is **60%** of its size. Press [[Cmd+D]], then
+Without deselecting, hold [[Cmd]] and drag a corner scale handle inward
+until the star is **60%** of its size. Press [[Cmd+D]], then
 nudge it back so it's centred on the compass point with the arrow keys
 ([[Shift]]+arrow moves 10 px at a time).
 
 Select the top `Rose Cardinal` and give it effects:
 
 - **Stroke** `1` px in cream.
-- **Drop Shadow** with Offset `3`, `4`, Blur `6`, Opacity `60`, `#050D14`.
-
-Rasterize the layer style.
+- **Drop Shadow** with Offset `2`, `3`, Blur `6`, Opacity `60`, `#050D14`.
 
 ## Add the red north point and hub
 
@@ -351,12 +343,13 @@ Rasterize the layer style.
 Add `Rose North` and refill the north point's two halves in `#C8503E` and
 `#7A2118`.
 
-Build the hub from three circles on the compass point. At this size, draw
-each circle fresh rather than shrinking the last one, so they stay round:
+Deselect, then build the hub from three dots on the compass point
+(420, 624). Pick the
+**Brush** at Hardness `100` and click once on the point for each:
 
-1. A radius 9 disc (From `411`, `615` to `429`, `633`) in `#1E1812`.
-2. A radius 7 disc (From `413`, `617` to `427`, `631`) in cream.
-3. A radius 3 disc (From `417`, `621` to `423`, `627`) in red.
+1. Size `18` in `#1E1812`.
+2. Size `14` in cream.
+3. Size `6` in red.
 
 Finally, set an **N** in IM Fell English SC at `34` px in `#F4E9CE`. Nudge
 it so it's centred 22 px above the north tip.
@@ -373,8 +366,7 @@ Turn on **View → Show Grid**. It switches on **Snap to Grid** as well, and a
 with the Move tool. Every piece travels together and snaps to the grid.
 
 Press [[Cmd+Z]] to put it back, because the rhumb lines are centred on the
-original spot. Then untick **Snap** in the options bar and turn off
-**View → Show Grid**.
+original spot. Then turn off **View → Show Grid**.
 
 ## Plot the route and the summit
 
@@ -389,8 +381,7 @@ In `#B8322A`, click in the sea low on the chart, right of centre. Then
 fjord, stopping just short of its head.
 
 Set Spacing back to `10` and draw a 30 px **X** at the fjord's head. Give
-the layer a `2` px cream **Stroke** so the dots read against the water, then
-rasterize.
+the layer a `2` px cream **Stroke** so the dots read against the water.
 
 Add `Summit` and fill a small triangle, about 24 px wide, in the hills to
 the right of the main fjord with `#1E1812`. Under it, set `Skårtind 1834 m`
@@ -400,12 +391,12 @@ in IM Fell English SC at `18` px.
 
 ![A cream inner rule marquee inside a red ribbon band, with folded tails behind both ends](23-ribbon-inner-rule.webp)
 
-Click `Summit Label` so the new layers stay outside the Compass Rose group.
+Click `Summit Label`, outside the Compass Rose group.
 
 1. Add `Ribbon Tails` and lasso two swallow-tailed ends. Each one sits
    26 px lower than the band and reaches 84 px past it. Fill them `#6E1F1A`.
 2. Fill the small fold triangles `#4A150F`.
-3. Add a `3` px ink **Stroke** and rasterize.
+3. Add a `3` px ink **Stroke**.
 
 Add `Ribbon` and marquee the band across the lower third: about 808 × 116 px,
 centred on the vertical centre guide, with its ends just inside the plate's
@@ -459,7 +450,7 @@ Place five anchors, evenly spaced, from about eleven o'clock over the top to
 about half past one. At each one, press and drag a short way along the
 curve to pull out handles, so the path bends smoothly.
 
-Click ✓ **Commit path**. Select the `UNCHARTED` layer with the Text tool and
+Click ✓ **Commit path** in the options bar. Select the `UNCHARTED` layer with the Text tool and
 pick the path in the options bar's **Path** dropdown. The caps now sit
 midway between the neatline and the plate's inner rule.
 
@@ -471,7 +462,7 @@ old path selected, Pen clicks edit it instead of starting a new one.
 
 ![EXPEDITION CO. · EST. 1893 curving along the bottom of the seal, reading left to right with its letters facing inward](27-bottom-seal-line.webp)
 
-Set `EXPEDITION CO. · EST. 1893` at `25` px with letter spacing `5`. For
+Click `Plate` again and set `EXPEDITION CO. · EST. 1893` at `25` px with letter spacing `5`. For
 text along the bottom, the path must run **left to right**, so its letters
 face inward and read the right way up.
 
@@ -487,7 +478,7 @@ Commit the path and bind the text to it.
 
 ![A small latitude label selected and rotated a quarter turn with Rotate 90° CCW in the Move options bar](28-rotate-coordinates.webp)
 
-Set `69°38'N` and `18°57'E` at `24` px with letter spacing `2`. IM Fell has
+Click `Plate` and set `69°38'N` and `18°57'E` at `24` px with letter spacing `2`. IM Fell has
 no prime sign, so use a straight apostrophe.
 
 - **Latitude:** [[Cmd]]-click the label's thumbnail, pick the **Move** tool

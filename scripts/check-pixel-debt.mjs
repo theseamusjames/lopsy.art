@@ -36,12 +36,14 @@ const ALLOWLIST = {
   'src/app/interactions/move-handlers.test.ts': 1,
   'src/app/interactions/quick-mask-move.test.ts': 2,
   'src/app/interactions/transform-handlers.test.ts': 1,
+  'src/app/interactions/live-float.test.ts': 2,       // selection-mask fixtures
+  'src/app/interactions/prefloat.test.ts': 6,         // #1076 selection-mask fixtures
   'src/app/store/actions/align-layer.test.ts': 2,
   'src/app/store/actions/crop-canvas.test.ts': 1,
   'src/app/store/actions/duplicate-layer.test.ts': 1,
   'src/app/store/actions/flatten-image.test.ts': 1,
   'src/app/store/actions/layer-property-updates.test.ts': 2,
-  'src/app/store/actions/merge-down.test.ts': 2,
+  'src/app/store/actions/merge-down.test.ts': 1,
   'src/app/store/actions/open-image.test.ts': 5,
   'src/app/store/actions/rasterize-style.test.ts': 1,
   'src/app/store/actions/remove-layer-mask.test.ts': 1,
@@ -65,9 +67,10 @@ const ALLOWLIST = {
   'src/app/mask-read-queue.test.ts': 14,                     // +4: rAF quiescence tests for #760
   'src/app/mask-data-sync.test.ts': 1,                       // #780 fixture mask
   'src/app/store/mask-history.test.ts': 1,                   // #780 fixture mask
+  'src/panels/LayerPanel/layer-selection.test.ts': 1,        // layer-alpha fixture for selectLayerAlpha
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
   'src/selection/selection-to-path.test.ts': 2,
-  'src/selection/selection.test.ts': 19,               // +2: #1038 grow/shrink circle and rect fixtures
+  'src/selection/selection.test.ts': 21,               // +2: #1038 grow/shrink circle and rect fixtures, +2: combine-mode fixtures
   'src/test-setup.ts': 1,
   'src/test/canvas-mock.ts': 3,
   'src/tools/brush/brush-from-selection.test.ts': 3,
@@ -78,14 +81,14 @@ const ALLOWLIST = {
   'src/tools/gradient/gradient-interaction.test.ts': 3,        // #732 mask-mode fixture buffer
   'src/tools/magnetic-lasso/magnetic-lasso-strategy.test.ts': 4,
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
-  'src/tools/marquee/marquee-strategy.test.ts': 8,
+  'src/tools/marquee/marquee-strategy.test.ts': 9,      // +1: add/subtract/intersect selection fixture
   'src/tools/move/move.test.ts': 1,
   'src/tools/path/boolean-ops.test.ts': 11,
   'src/tools/quick-select/quick-select-interaction.test.ts': 3,
   'src/tools/quick-select/quick-select.test.ts': 3,
   'src/tools/text/text-interaction.test.ts': 3,               // #757 drops the JS RGBA fixtures
-  'src/tools/transform/transform.test.ts': 4,         // +2: #818 off-canvas float growth fixtures
-  'src/tools/wand/wand-strategy.test.ts': 4,
+  'src/tools/transform/transform.test.ts': 5,         // +2: #818 off-canvas float growth fixtures, +1: mask resample fixture
+  'src/tools/wand/wand-strategy.test.ts': 6,           // +2: intersect and feather-only-new-region fixtures
   'src/utils/bmp-encoder.test.ts': 2,
 
   // ──────────────────────────────────────────────────────────────────────
@@ -109,7 +112,7 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   // Selection mask — explicitly OK per the policy table.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/interactions/selection-handlers.ts': 4,
+  'src/app/interactions/selection-handlers.ts': 5,          // +1: wraps the Rust combine_selections result
   'src/app/MenuBar/MenuBar.tsx': 1,                          // GPU feather readback creates Uint8ClampedArray
   'src/tools/marquee/marquee-strategy.ts': 2,
   'src/tools/wand/wand-strategy.ts': 1,

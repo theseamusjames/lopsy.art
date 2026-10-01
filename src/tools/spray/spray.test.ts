@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateSprayDots, defaultSpraySettings } from './spray';
+import { generateSprayDots, defaultSpraySettings, sprayDabHardness } from './spray';
 
 describe('generateSprayDots', () => {
   it('returns the requested number of dots', () => {
@@ -50,6 +50,24 @@ describe('defaultSpraySettings', () => {
     expect(settings.size).toBeGreaterThan(0);
     expect(settings.density).toBeGreaterThan(0);
     expect(settings.opacity).toBeGreaterThan(0);
-    expect(settings.hardness).toBeGreaterThanOrEqual(0);
+    expect(settings.softness).toBeGreaterThanOrEqual(0);
+  });
+
+  it('defaults to Softness 70, the same dab as the old default hardness 30', () => {
+    expect(sprayDabHardness(defaultSpraySettings().softness)).toBeCloseTo(0.3);
+  });
+});
+
+describe('sprayDabHardness', () => {
+  it('maps higher softness to a lower dab hardness', () => {
+    expect(sprayDabHardness(0)).toBe(1);
+    expect(sprayDabHardness(100)).toBe(0);
+    expect(sprayDabHardness(25)).toBeCloseTo(0.75);
+    expect(sprayDabHardness(80)).toBeLessThan(sprayDabHardness(20));
+  });
+
+  it('clamps out-of-range values', () => {
+    expect(sprayDabHardness(-20)).toBe(1);
+    expect(sprayDabHardness(150)).toBe(0);
   });
 });

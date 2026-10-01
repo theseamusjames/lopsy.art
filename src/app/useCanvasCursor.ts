@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { RefObject } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
@@ -7,6 +7,8 @@ import { hitTestHandle, getCursorForHandle } from '../tools/transform/transform'
 import type { TransformHandle } from '../tools/transform/transform';
 import type { ToolId, Point } from '../types';
 import { showsGrabCursor, type PointerMode } from './pointer-mode';
+import { pressGrabsHandle, usesTransformHandles } from './interactions/handle-tools';
+import { getLayerTransformBox } from './interactions/layer-transform';
 import { getTextTransformTarget } from './interactions/text-transform-handlers';
 import { hitTestTransformHandle } from './interactions/transform-handlers';
 import styles from './App.module.css';
@@ -95,6 +97,38 @@ function getCursorClassForHandle(handle: TransformHandle): string {
   return HANDLE_CURSOR_MAP[cursorValue] ?? styles.canvasPointer ?? '';
 }
 
+interface ComboModifiers {
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}
+
+const NO_MODIFIERS: ComboModifiers = { shiftKey: false, altKey: false };
+
+/**
+ * Shift / Alt as currently held, updated on every key press and release so
+ * the cursor can change while the pointer sits still over a handle.
+ */
+function useComboModifiers(): ComboModifiers {
+  const [modifiers, setModifiers] = useState<ComboModifiers>(NO_MODIFIERS);
+  useEffect(() => {
+    const update = (e: KeyboardEvent) => {
+      setModifiers((prev) => (prev.shiftKey === e.shiftKey && prev.altKey === e.altKey
+        ? prev
+        : { shiftKey: e.shiftKey, altKey: e.altKey }));
+    };
+    const reset = () => setModifiers(NO_MODIFIERS);
+    window.addEventListener('keydown', update, true);
+    window.addEventListener('keyup', update, true);
+    window.addEventListener('blur', reset);
+    return () => {
+      window.removeEventListener('keydown', update, true);
+      window.removeEventListener('keyup', update, true);
+      window.removeEventListener('blur', reset);
+    };
+  }, []);
+  return modifiers;
+}
+
 export function useCanvasCursor(
   containerRef: RefObject<HTMLDivElement | null>,
   pointerMode: PointerMode,
@@ -108,6 +142,7 @@ export function useCanvasCursor(
   const rulerHover = useUIStore((s) => s.rulerHover);
   const selectionActive = useEditorStore((s) => s.selection.active);
   const selectedPathId = useEditorStore((s) => s.selectedPathId);
+  const comboModifiers = useComboModifiers();
 
   // Compute cursor class
   useEffect(() => {
@@ -122,7 +157,7 @@ export function useCanvasCursor(
       cursorClass = styles.canvasGrab ?? '';
     } else if (isLiquifyOpen) {
       cursorClass = styles.canvasNone ?? '';
-    } else if (hoveredHandle) {
+    } else if (hoveredHandle && pressGrabsHandle(activeTool, comboModifiers)) {
       cursorClass = getCursorClassForHandle(hoveredHandle);
     } else if (isPathEditMode()) {
       cursorClass = styles.canvasDefault ?? '';
@@ -149,14 +184,15 @@ export function useCanvasCursor(
     if (cursorClass) {
       container.classList.add(cursorClass);
     }
-  }, [containerRef, pointerMode, activeTool, hoveredHandle, transform, isLiquifyOpen, rulerHover, selectionActive, selectedPathId]);
+  }, [containerRef, pointerMode, activeTool, hoveredHandle, transform, isLiquifyOpen, rulerHover, selectionActive, selectedPathId, comboModifiers]);
 
   // Hit test transform handles on hover
   const updateHoveredHandle = useCallback(
     (canvasPos: Point) => {
       const uiState = useUIStore.getState();
       const editorState = useEditorStore.getState();
-      const currentTransform = uiState.transform;
+      // With no marquee the Move tool's handles frame the selected layers.
+      const currentTransform = editorState.selection.active ? uiState.transform : getLayerTransformBox();
       const textTarget = getTextTransformTarget();
 
       if (textTarget) {
@@ -164,7 +200,9 @@ export function useCanvasCursor(
         if (hit !== uiState.activeTransformHandle) {
           uiState.setActiveTransformHandle(hit);
         }
-      } else if (currentTransform && editorState.selection.active) {
+      } else if (currentTransform && usesTransformHandles(uiState.activeTool)) {
+        // Only the tools a handle press reaches get the resize cursor; the
+        // rest (Wand, Fill, …) get the press, so they keep their own cursor.
         const handleRadius = 8 / editorState.viewport.zoom;
         const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
         if (hit !== uiState.activeTransformHandle) {

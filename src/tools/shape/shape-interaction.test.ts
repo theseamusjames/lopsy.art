@@ -47,6 +47,7 @@ const editorState = {
     height: DOC_H,
     layers: [{ id: 'layer-1', type: 'raster', x: 0, y: 0, width: DOC_W, height: DOC_H }] as MockLayer[],
   },
+  viewport: { zoom: 1 },
   dirtyLayerIds: new Set<string>(),
   pushHistory: vi.fn(),
   notifyRender: vi.fn(),
@@ -67,6 +68,12 @@ import type { ShapeSizeClick } from '../../app/ui-store';
 
 const uiState = {
   setPendingShapeClick: vi.fn(),
+  showGrid: false,
+  snapToGrid: false,
+  gridSize: 16,
+  showGuides: true,
+  snapToGuides: true,
+  guides: [] as Array<{ id: string; orientation: 'horizontal' | 'vertical'; position: number }>,
 };
 vi.mock('../../app/ui-store', () => ({
   useUIStore: { getState: () => uiState },
@@ -77,7 +84,7 @@ import type { Color } from '../../types';
 const ts = {
   settings: {
     shape: {
-      mode: 'ellipse' as 'ellipse' | 'polygon',
+      mode: 'ellipse' as 'rectangle' | 'ellipse' | 'polygon',
       output: 'pixels' as 'pixels' | 'path',
       fillColor: { r: 255, g: 0, b: 0, a: 1 } as Color | null,
       strokeColor: { r: 0, g: 0, b: 255, a: 0.5 } as Color | null,
@@ -164,6 +171,13 @@ beforeEach(() => {
   editorState.addPath.mockClear();
   setState.mockClear();
   uiState.setPendingShapeClick.mockClear();
+  uiState.showGrid = false;
+  uiState.snapToGrid = false;
+  uiState.gridSize = 16;
+  uiState.showGuides = true;
+  uiState.snapToGuides = true;
+  uiState.guides = [];
+  editorState.viewport = { zoom: 1 };
   ts.settings.shape.mode = 'ellipse';
   ts.settings.shape.output = 'pixels';
   ts.settings.shape.fillColor = { r: 255, g: 0, b: 0, a: 1 };
@@ -251,6 +265,15 @@ describe('shape move', () => {
     expect(renderShape.mock.calls[0]![2]).toBe(1);
   });
 
+  it('renders rectangles with mode 2 at the full drag box (#794)', () => {
+    ts.settings.shape.mode = 'rectangle';
+    handleShapeMove(makeState({ startPoint: { x: 50, y: 50 } }), { x: 200, y: 75 });
+    const args = renderShape.mock.calls[0]!;
+    expect(args[2]).toBe(2);
+    expect(args[5]).toBe(300);
+    expect(args[6]).toBe(50);
+  });
+
   it('meta key constrains the shape to a circle', () => {
     handleShapeMove(makeState({ startPoint: { x: 50, y: 50 } }), { x: 80, y: 60 }, true);
     const args = renderShape.mock.calls[0]!;
@@ -300,6 +323,73 @@ describe('shape move', () => {
   it('does nothing without a start point', () => {
     handleShapeMove(makeState({ startPoint: null }), { x: 80, y: 70 });
     expect(renderShape).not.toHaveBeenCalled();
+  });
+});
+
+describe('shape snapping', () => {
+  // The 200 x 200 test document's grid lines sit at 100 ± 16k: … 52, 68, 84, 100 …
+  it('snaps the centre and the dragged corner to the grid, so every edge is on a line', () => {
+    ts.settings.shape.mode = 'rectangle';
+    uiState.showGrid = true;
+    uiState.snapToGrid = true;
+    handleShapeMove(makeState({ startPoint: { x: 66, y: 103 } }), { x: 99, y: 121 });
+    const args = renderShape.mock.calls[0]!;
+    expect(args[3]).toBe(68); // centre x
+    expect(args[4]).toBe(100); // centre y
+    expect(args[5]).toBe(64); // corner 100 → half-width 32
+    expect(args[6]).toBe(32); // corner 116 → half-height 16
+  });
+
+  it('snaps in document space for an offset layer', () => {
+    uiState.showGrid = true;
+    uiState.snapToGrid = true;
+    handleShapeMove(
+      makeState({ startPoint: { x: 16, y: 6 }, layerStartX: 50, layerStartY: 60 }),
+      { x: 48, y: 42 },
+    );
+    const args = renderShape.mock.calls[0]!;
+    expect(args[3]).toBe(68); // 66 → 68
+    expect(args[4]).toBe(68); // 66 → 68
+    expect(args[5]).toBe(64); // corner 98 → 100
+    expect(args[6]).toBe(64); // corner 102 → 100
+  });
+
+  it('leaves the drag alone when Snap to Grid is off', () => {
+    uiState.showGrid = true;
+    handleShapeMove(makeState({ startPoint: { x: 66, y: 103 } }), { x: 99, y: 121 });
+    const args = renderShape.mock.calls[0]!;
+    expect(args[3]).toBe(66);
+    expect(args[5]).toBe(66);
+  });
+
+  it('lands the dragged edge on a guide within reach', () => {
+    uiState.guides = [{ id: 'v', orientation: 'vertical', position: 120 }];
+    handleShapeMove(makeState({ startPoint: { x: 50, y: 50 } }), { x: 115, y: 70 });
+    const args = renderShape.mock.calls[0]!;
+    expect(args[3]).toBe(50);
+    expect(args[5]).toBe(140); // right edge 120
+  });
+
+  it('commits a path along the snapped box', () => {
+    ts.settings.shape.mode = 'rectangle';
+    ts.settings.shape.output = 'path';
+    uiState.showGrid = true;
+    uiState.snapToGrid = true;
+    handleShapeUp(makeState({ startPoint: { x: 66, y: 103 } }), { x: 99, y: 121 });
+    const anchors = editorState.addPath.mock.calls[0]![0] as PathAnchor[];
+    const xs = anchors.map((a) => a.point.x);
+    const ys = anchors.map((a) => a.point.y);
+    expect(Math.min(...xs)).toBe(36);
+    expect(Math.max(...xs)).toBe(100);
+    expect(Math.min(...ys)).toBe(84);
+    expect(Math.max(...ys)).toBe(116);
+  });
+
+  it('a click near a grid point still opens the size dialog at the raw press point', () => {
+    uiState.showGrid = true;
+    uiState.snapToGrid = true;
+    handleShapeUp(makeState({ startPoint: { x: 66, y: 103 } }), { x: 67, y: 104 });
+    expect(uiState.setPendingShapeClick).toHaveBeenCalledWith(expect.objectContaining({ center: { x: 66, y: 103 } }));
   });
 });
 
@@ -429,6 +519,40 @@ describe('shape up — path output', () => {
     expect(anchors[0]!.point.x).toBeCloseTo(50);
     expect(anchors[0]!.point.y).toBeCloseTo(30);
     expect(anchors[0]!.handleIn).toBeNull();
+  });
+
+  it('adds a rectangle path whose corners are the drag box, not a diamond (#794)', () => {
+    ts.settings.shape.mode = 'rectangle';
+    handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 200, y: 75 });
+    const [anchors, closed] = editorState.addPath.mock.calls[0]! as [PathAnchor[], boolean];
+    expect(closed).toBe(true);
+    expect(anchors.map((a) => a.point)).toEqual([
+      { x: -100, y: 25 },
+      { x: 200, y: 25 },
+      { x: 200, y: 75 },
+      { x: -100, y: 75 },
+    ]);
+  });
+
+  it('rounds the rectangle path corners with the corner radius', () => {
+    ts.settings.shape.mode = 'rectangle';
+    ts.settings.shape.cornerRadius = 10;
+    handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 200, y: 75 });
+    const [anchors] = editorState.addPath.mock.calls[0]! as [PathAnchor[]];
+    expect(anchors).toHaveLength(8);
+    expect(anchors[0]!.point).toEqual({ x: -90, y: 25 });
+    expect(anchors[1]!.point).toEqual({ x: 190, y: 25 });
+  });
+
+  it('rounds polygon path corners with the corner radius, like the Pixels output', () => {
+    ts.settings.shape.mode = 'polygon';
+    ts.settings.shape.polygonSides = 6;
+    ts.settings.shape.cornerRadius = 5;
+    handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 80, y: 70 });
+    const [anchors] = editorState.addPath.mock.calls[0]! as [PathAnchor[]];
+    // Two anchors (arc start and end) per rounded hexagon corner.
+    expect(anchors).toHaveLength(12);
+    expect(anchors[0]!.handleOut).not.toBeNull();
   });
 
   it('drops a path that the meta constraint collapsed to nothing', () => {

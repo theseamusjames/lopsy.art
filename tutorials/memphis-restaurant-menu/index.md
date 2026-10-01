@@ -2,7 +2,7 @@
 title: Design a Memphis-Style Restaurant Menu
 description: Make an 80s Memphis Group waffle-bar menu in Lopsy with squiggle pattern fills, flat geometric shapes, hard shadows, rotated confetti and area-text columns.
 published: 2026-09-26 22:00
-updated: 2026-09-30
+updated: 2026-10-01
 level: Intermediate
 duration: 60
 tags: memphis, restaurant menu, pattern fill, layer effects, text effects, illustration, groups, poster design
@@ -73,7 +73,8 @@ corner of the canvas:
    `#161616`.
 2. Paint three short squiggles at different angles. Two full S-curves
    about 50–60 px long and one half-wave work well.
-3. Add five dots of 8–14 px with small **Elliptical Marquee** fills.
+3. Add five dots with single clicks of the same brush, changing **Size**
+   between `8` and `14` as you go.
 4. Press [[Cmd+D]], then select exactly the 160 × 160 tile. With nothing
    selected, a single click (no drag) with the **Rectangular Marquee**
    opens a dialog where you can type **From** `0`, `0` and **To** `160`,
@@ -89,9 +90,8 @@ repeats.
 With the tile still selected, choose **Edit → Define Pattern**. Then press
 [[Delete]] to clear the tile from the layer, and [[Cmd+D]].
 
-[[Cmd]]-click the `Lilac Block` thumbnail in the Layers panel to select
-the block's shape, then click the `Bacterio` row again so the pattern goes
-on that layer. Choose **Edit → Fill with Pattern…**, pick the new
+With `Bacterio` still active, [[Cmd]]-click the `Lilac Block` thumbnail in
+the Layers panel to select the block's shape. Choose **Edit → Fill with Pattern…**, pick the new
 160 × 160 pattern and click **Apply**.
 
 The pattern could go straight onto the lilac block, but keeping it on its
@@ -169,8 +169,8 @@ to the type.
 
 ![A small monospace tagline BELGIAN WAFFLES · MALTS · LATE-NIGHT GROOVES under the title](07-tracked-tagline.webp)
 
-Open the **Text** panel and set **Letter spacing** to `2`. Choose
-**Space Mono** Bold at **22** and type
+Click the `Title` group, then open the **Text** panel and set **Letter
+spacing** to `2`. Choose **Space Mono** Bold at **22** and type
 `BELGIAN WAFFLES · MALTS · LATE-NIGHT GROOVES` (paste it if the `·`
 characters don't come through). Move it so its left edge lines up with
 the left edge of **WAFFLE**, about 40 px under **MAMBO**.
@@ -202,9 +202,8 @@ Rotating the grid keeps it from looking like graph paper.
 
 ![An elliptical selection inverted around the waffle, ready to delete the grid outside the circle](09-clip-grid-to-circle.webp)
 
-[[Cmd]]-click the `Waffle Disc` thumbnail to select the disc, then click the
-`Pockets` row. Clicking the row straight away means the next [[Delete]]
-clears only what's selected. Choose **Select → Shrink…** `18` so the
+With `Pockets` active, [[Cmd]]-click the `Waffle Disc` thumbnail to select
+the disc. Choose **Select → Shrink…** `18` so the
 selection sits just inside the disc's edge, choose **Select → Inverse**, and
 press [[Delete]].
 Deselect, then choose **Layer → Merge Down** to merge the pockets into
@@ -217,7 +216,8 @@ Deselect, then choose **Layer → Merge Down** to merge the pockets into
 Add three more layers above the disc:
 
 - **Syrup:** lasso a wavy pink blob over the upper half, with three
-  finger-shaped drips. Round each drip with a small circle fill.
+  finger-shaped drips. Round off each drip with one click of a hard Brush
+  as wide as the drip.
 - **Butter:** lasso a small square pat, about 68 px across and tilted
   slightly, in pale yellow `#FFF3B0`.
 - **Blueberries:** three cobalt circles of 30–40 px in the lower right.
@@ -229,16 +229,19 @@ outline weight makes the illustration read as a single sticker.
 
 ![Pink, cream, cobalt, mustard and black sprinkles rotated at different angles around the waffle](11-pasted-rotated-sprinkles.webp)
 
-Add a `Sprinkle` layer and build one pink capsule, 64 × 18: a rectangle
-plus a circle fill at each end. Marquee it and press [[Cmd+C]]. Then
-rotate the original about 40° with the Move tool and press [[Cmd+D]].
+Add a `Sprinkle` layer and paint one pink capsule, 64 × 18. Pick the
+**Brush** at **Size** `18`, **Hardness** `100`, click once, then
+[[Cmd+Shift]]-click 46 px to the right. The round brush tip gives the
+capsule its rounded ends. Marquee it and press [[Cmd+C]]. Then rotate the
+original about 40° with the Move tool and press [[Cmd+D]].
 
 For each extra sprinkle:
 
-1. Press [[Cmd+V]]. The copy lands in place on a new layer.
-2. Drag it with the **Move** tool to a spot around the waffle.
-3. Marquee it, rotate it to a new angle, and press [[Cmd+D]].
-4. Recolour it with a **Color Overlay** effect in cobalt, cream, mustard
+1. Press [[Cmd+V]]. The copy lands in place on a new layer, selected and
+   ready to move.
+2. Drag it with the **Move** tool to a spot around the waffle, rotate it to
+   a new angle with the handle just outside a corner, and press [[Cmd+D]].
+3. Recolour it with a **Color Overlay** effect in cobalt, cream, mustard
    or ink.
 
 Five copies around the rim is plenty. Scattered confetti is very Memphis,
@@ -268,7 +271,7 @@ bottom on your two horizontal guides (a 520 × 680 card), and fill it
 white. Give it:
 
 - A black **Stroke** of width `6`.
-- A black **Drop Shadow** with **Offset X** `14`, **Offset Y** `14`,
+- A black **Drop Shadow** with **Offset X** `8`, **Offset Y** `8`,
   **Blur** `0` and **Opacity** `100`.
 
 Add `Right Card` the same way, from about 20 px right of the centre guide
@@ -284,10 +287,16 @@ Add a `Card Details` layer and fill:
 
 - A mustard band, 92 px tall, across the top of the left card.
 - A pink band, 92 px tall, across the top of the right card.
-- A 6 px ink rule under each band.
 - A black 64 px footer band along the bottom of the right card.
+
+Then draw the rest with hard brushes:
+
+- A 6 px ink rule under each band: the **Pencil** at **Size** `6`, a click
+  at one edge of the card and a [[Cmd+Shift]]-click at the other.
 - A 460 × 44 pink pill near the bottom of the left card, 30 px in from
-  each side. Build it from a rectangle plus a circle at each end.
+  each side. Use the **Brush** at **Size** `44`, **Hardness** `100`: click
+  52 px in from the left edge and [[Cmd+Shift]]-click 52 px in from the
+  right.
 
 ## Set the menu items with area text
 
@@ -308,10 +317,8 @@ control the gap between items:
 - **Names:** **Archivo Black** `28`, paragraph spacing `72`, starting level
   with the prices.
 
-Make them in that order: prices, descriptions, then names. A text click
-or drag that lands inside an existing text box edits it instead of
-starting a new layer, so start each new box in space that no text covers
-yet.
+Make them in that order: prices, descriptions, then names, and start
+each new box in space that no text covers yet.
 
 Finish with the footer, `88 SQUIGGLE AVE · OPEN TIL 2AM`, in Space Mono
 Bold `20`, cream, centred in the black band. Then add
@@ -329,8 +336,8 @@ Build the badge above `Card Details`:
    Choose **Select → Shrink…** `5` and press [[Delete]] to leave a ring,
    then **Merge Down**.
 3. Type `SINCE` (Space Mono Bold 22, letter spacing 2) and `1986`
-   (Rammetto One 36) in cream in empty space. Move them onto the badge,
-   **Rasterize** each, and **Merge Down** twice into `Badge`.
+   (Rammetto One 36) in cream in empty space. Move them onto the badge
+   and **Merge Down** twice into `Badge`.
 4. Marquee the badge, rotate it **14°** with the Move tool, and press
    [[Cmd+D]].
 
@@ -363,8 +370,8 @@ mistakes. In this piece that meant four fixes:
 - **MAMBO:** nudged 12 px left so the **O** clears the mint circle.
 
 > **Tip:** With the **Move** tool, the arrow keys nudge the active layer
-> 1 px and [[Shift]]+arrow nudges 10 px, so six [[Shift]]+[[Left]] presses
-> move the half circle exactly 60 px.
+> 1 px and [[Shift]]+arrow nudges 10 px, which is handy for exact moves like
+> these.
 
 ## Export the menu
 

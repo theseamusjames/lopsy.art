@@ -78,10 +78,41 @@ export function invertSelection(mask: Uint8ClampedArray): Uint8ClampedArray {
   return result;
 }
 
+export type SelectionCombineOp = 'add' | 'subtract' | 'intersect';
+export type SelectionCombineMode = 'replace' | SelectionCombineOp;
+
+/**
+ * How a selection gesture combines with the selection already on the
+ * canvas, read from the modifiers held when it starts: Shift adds, Alt
+ * subtracts, both together intersect. With nothing selected there is
+ * nothing to combine with, so every gesture starts a new selection.
+ */
+export function selectionCombineMode(
+  modifiers: { shiftKey: boolean; altKey: boolean },
+  hasSelection: boolean,
+): SelectionCombineMode {
+  if (!hasSelection) return 'replace';
+  if (modifiers.shiftKey && modifiers.altKey) return 'intersect';
+  if (modifiers.shiftKey) return 'add';
+  if (modifiers.altKey) return 'subtract';
+  return 'replace';
+}
+
+export const SELECTION_COMBINE_LABELS: Readonly<Record<SelectionCombineOp, string>> = {
+  add: 'Add to Selection',
+  subtract: 'Subtract from Selection',
+  intersect: 'Intersect Selection',
+};
+
+/**
+ * `add` sums coverage (clamped) rather than taking the max so two
+ * anti-aliased shapes that share an edge — adjacent lasso triangles —
+ * sum to full coverage along it instead of leaving a half-transparent seam.
+ */
 export function combineSelections(
   a: Uint8ClampedArray,
   b: Uint8ClampedArray,
-  mode: 'add' | 'subtract' | 'intersect',
+  mode: SelectionCombineOp,
 ): Uint8ClampedArray {
   const result = new Uint8ClampedArray(a.length);
   for (let i = 0; i < a.length; i++) {
