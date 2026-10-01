@@ -36,6 +36,7 @@ import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { expandLayerToDocSize, cropLayerToContent, hasFloat } from '../engine-wasm/wasm-bridge';
 import { invalidateCachedSnapshot } from './store/history-slice';
 import { handleGpuContextLost, handleGpuContextRestored } from './gpu-context-loss';
+import { backupLayersToCpu, layerBackupTime, restoreLayerBackup } from './gpu-layer-backup';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { scheduleDeferredCrop, cancelDeferredCropIfPending } from './deferred-crop-on-switch';
 
@@ -283,13 +284,15 @@ export function useCanvasRendering(
       e.preventDefault();
       console.error('[Lopsy] WebGL context lost');
       engineReadyRef.current = false;
-      handleGpuContextLost();
+      handleGpuContextLost(layerBackupTime());
     };
     const handleContextRestored = () => {
       console.warn('[Lopsy] WebGL context restored — reinitializing');
       initEngine(canvas)
-        .then((engine) => {
-          handleGpuContextRestored();
+        .then(async (engine) => {
+          const backupTakenAt = layerBackupTime();
+          const restored = await restoreLayerBackup();
+          handleGpuContextRestored(restored > 0 ? backupTakenAt : null);
           engineReadyRef.current = true;
           dirtyRef.current = true;
           markAllLayersDirty(engine);
@@ -298,8 +301,16 @@ export function useCanvasRendering(
           notifyError(`Failed to restore WebGL: ${describeError(err)}`);
         });
     };
+    // Back layer pixels up to the CPU while the user is away, so a context
+    // loss can be recovered from (#973).
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') backupLayersToCpu();
+    };
+    const handleWindowBlur = () => backupLayersToCpu();
     canvas.addEventListener('webglcontextlost', handleContextLost);
     canvas.addEventListener('webglcontextrestored', handleContextRestored);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
 
     initEngine(canvas)
       .then((engine) => {
@@ -326,6 +337,8 @@ export function useCanvasRendering(
       engineReadyRef.current = false;
       canvas.removeEventListener('webglcontextlost', handleContextLost);
       canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
       // Tracked state is keyed by Engine in a WeakMap; destroying the engine
       // drops the JS wrapper, and the WeakMap entry follows. No reset needed.
       destroyEngine();

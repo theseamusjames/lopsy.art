@@ -605,6 +605,18 @@ pub fn upload_layer_pixels_compressed(engine: &mut Engine, layer_id: &str, compr
 
 #[wasm_bindgen(js_name = "readLayerPixelsCompressedU16")]
 pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<u8> {
+    read_layer_blob_u16(engine, layer_id, false)
+}
+
+/// Same blob as `readLayerPixelsCompressedU16`, LZ4-compressed (flags 2).
+/// Used for the CPU-side backup taken when the tab loses focus, which
+/// holds every raster layer at once (#973).
+#[wasm_bindgen(js_name = "readLayerPixelsLz4U16")]
+pub fn read_layer_pixels_lz4_u16(engine: &Engine, layer_id: &str) -> Vec<u8> {
+    read_layer_blob_u16(engine, layer_id, true)
+}
+
+fn read_layer_blob_u16(engine: &Engine, layer_id: &str, is_lz4: bool) -> Vec<u8> {
     let tex = match engine.inner.layer_textures.get(layer_id) {
         Some(&t) => t,
         None => return Vec::new(),
@@ -633,17 +645,23 @@ pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<
         }
         (bytes, rect)
     };
+    let uncompressed_len = raw_bytes.len() as u32;
+    let (flags, payload) = if is_lz4 {
+        (2i32, lopsy_core::compress::lz4_compress(&raw_bytes))
+    } else {
+        (0i32, raw_bytes)
+    };
 
-    let mut result = Vec::with_capacity(32 + raw_bytes.len());
+    let mut result = Vec::with_capacity(32 + payload.len());
     result.extend_from_slice(&rect.x.to_le_bytes());
     result.extend_from_slice(&rect.y.to_le_bytes());
     result.extend_from_slice(&(rect.width as i32).to_le_bytes());
     result.extend_from_slice(&(rect.height as i32).to_le_bytes());
     result.extend_from_slice(&(w as i32).to_le_bytes());
     result.extend_from_slice(&(h as i32).to_le_bytes());
-    result.extend_from_slice(&0i32.to_le_bytes()); // flags: 0 = raw (no compression)
-    result.extend_from_slice(&(raw_bytes.len() as u32).to_le_bytes());
-    result.extend_from_slice(&raw_bytes);
+    result.extend_from_slice(&flags.to_le_bytes()); // 0 = raw, 2 = LZ4
+    result.extend_from_slice(&uncompressed_len.to_le_bytes());
+    result.extend_from_slice(&payload);
     result
 }
 
