@@ -471,13 +471,13 @@ slider range (`-100..100`). For export, compare two exports (with and
 without the adjustment) and assert they differ, rather than asserting
 specific channel values.
 
-### 10. Polygon corner radius is a no-op for `sides=4`
+### 10. Use Rectangle, not Polygon `sides=4`, for rectangles
 
-`shape_fill.glsl`'s `sdPolygon` has degenerate rounding math for
-4-sided polygons — the rounded shape equals the original square. If
-you want to verify rounded rectangles visually, use **ellipse** mode
-instead. `sides=6` works for the polygon SDF and can be used for
-"rounded vertex" tests.
+Polygon always fits a *regular* polygon inside the drag box, so `sides=4`
+is a `min(w, h)` square whatever the drag aspect. To draw or verify a
+(rounded) rectangle, pick **Rectangle** in the Shape dropdown — it fills
+the full drag box and honours Corner Radius (see
+`shape-rectangle.spec.ts`).
 
 ### 11. Tool-settings store expects specific ranges
 

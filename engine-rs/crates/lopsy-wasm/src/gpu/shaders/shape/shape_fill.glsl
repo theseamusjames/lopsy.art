@@ -1,6 +1,7 @@
 #version 300 es
 precision highp float;
 in vec2 v_uv;
+// 0 = ellipse, 1 = regular polygon, 2 = rectangle (fills the whole box).
 uniform int u_shapeType;
 uniform vec2 u_center;
 uniform vec2 u_size;
@@ -141,10 +142,10 @@ void main() {
     float d;
     if (u_shapeType == 0) {
         d = sdEllipse(p, u_size * 0.5);
-    } else if (u_sides >= 3) {
-        d = sdPolygon(p, u_size * 0.5, u_sides, u_cornerRadius);
-    } else {
+    } else if (u_shapeType == 2) {
         d = sdRect(p, u_size * 0.5, u_cornerRadius);
+    } else {
+        d = sdPolygon(p, u_size * 0.5, max(u_sides, 3), u_cornerRadius);
     }
     float fill = 1.0 - smoothstep(-0.5, 0.5, d);
     float halfW = u_strokeWidth * 0.5;
