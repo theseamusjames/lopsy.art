@@ -317,8 +317,7 @@ const h = {
 
   // ---- gradient ------------------------------------------------------------------
   // stops: [{ pos: 0..1, hex, a?: 0..1 }]. The gradient ignores FG/BG; its stops
-  // are set in the Gradient Editor, whose picker has no hex field, so colours are
-  // clicked onto the hue strip and saturation/brightness square.
+  // are set in the Gradient Editor, by typing each one into its picker's hex field.
   async gradient(type, stops) {
     await h.tool('gradient');
     await page.locator('[aria-labelledby="gradient-type-label"]').selectOption(type);
@@ -350,18 +349,12 @@ const h = {
     await dlg.getByRole('button', { name: 'Done' }).click();
     await sleep(100);
   },
+  // Sets any picker in `scope` (Gradient Editor, Gradient Map drawer, shape
+  // fill/stroke popover, guide colour): type the hex, then click the alpha bar.
   async pickColor(scope, hex, alpha = 1) {
-    const n = parseInt(hex.replace('#', ''), 16);
-    const r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
-    const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
-    let hue = 0;
-    if (d) hue = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    hue = (hue * 60 + 360) % 360;
-    const sat = max ? d / max : 0;
-    const hb = await scope.getByRole('slider', { name: 'Hue' }).boundingBox();
-    if (sat > 0.001) await page.mouse.click(hb.x + Math.min(0.999, hue / 360) * hb.width, hb.y + hb.height / 2);
-    const sv = await scope.getByRole('slider', { name: 'Saturation and brightness' }).boundingBox();
-    await page.mouse.click(sv.x + sat * (sv.width - 0.01), sv.y + (1 - max) * (sv.height - 0.01));
+    const field = scope.locator('[aria-label="Hex color"]');
+    await field.fill(hex.replace('#', ''));
+    await field.press('Enter');
     const ab = await scope.getByRole('slider', { name: 'Opacity' }).boundingBox();
     await page.mouse.click(alpha >= 1 ? ab.x + ab.width - 0.5 : ab.x + alpha * ab.width, ab.y + ab.height / 2);
   },
@@ -703,7 +696,7 @@ CSS class names are hashed in production.
 | Tools | `[data-tool-id="…"]`: `move`, `marquee-rect`, `marquee-ellipse`, `lasso`, `lasso-magnetic`, `wand`, `quick-select`, `brush`, `pencil`, `spray`, `eraser`, `fill`, `gradient`, `stamp`, `healing`, `dodge`, `sponge`, `smudge`, `eyedropper`, `shape`, `text`, `path`, `crop` |
 | Options bar | `role="toolbar"`, with numeric fields as `[aria-label="<Label> value"]` |
 | Foreground colour | `[aria-label="Hex color value"]` in the Color panel (toggle the panel with `button[aria-label="Color"]`) |
-| Colour pickers | `role="slider"` named `Hue`, `Saturation and brightness` and `Opacity` |
+| Colour pickers | `role="slider"` named `Hue`, `Saturation and brightness` and `Opacity`, plus a hex field `[aria-label="Hex color"]` (type 3 or 6 digits, press Enter). The Color panel's own field is `Hex color value` |
 | Layers panel buttons | `Add Layer`, `New Group`, `Duplicate Layer`, `Add Mask`, `Rasterize Layer`, `Delete Layer` (by accessible name) |
 | Layer row | `[data-layer-id]`, identified by its `button[aria-label="Layer effects for <name>"]`; the active row's class contains `_active_` |
 | Row controls | `Hide layer` / `Show layer`, `Lock layer`, `Opacity N% for <name>` (opens a `<name> opacity` range), `Drag to reorder <name>`, `Edit mask for <name>` |

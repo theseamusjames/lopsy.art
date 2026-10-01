@@ -4,6 +4,7 @@ import type { HSVColor } from '../../utils/color';
 import { contextOptions } from '../../engine/color-space';
 import type { Color } from '../../types';
 import { syncHsvToColor } from './picker-hsv';
+import { parseHexInput, formatHexInput } from './hex-input';
 import styles from './ColorPicker.module.css';
 
 interface ColorPickerProps {
@@ -13,9 +14,20 @@ interface ColorPickerProps {
   /** Grayscale documents have no chroma to pick — swap the hue/SV surfaces
    *  for a single black-to-white value ramp. */
   grayscale?: boolean;
+  /** Render the hex text field below the bars. The Color panel turns it off
+   *  because it has its own hex field, which also serves Indexed documents
+   *  where the picker isn't shown. Never shown in compact mode. */
+  showHex?: boolean;
 }
 
-export function ColorPicker({ color, onChange, compact = false, grayscale = false }: ColorPickerProps) {
+interface HexDraft {
+  text: string;
+  /** The color's hex when the edit began; a draft is dropped once the color
+   *  changes underneath it (e.g. another gradient stop is selected). */
+  base: string;
+}
+
+export function ColorPicker({ color, onChange, compact = false, grayscale = false, showHex = true }: ColorPickerProps) {
   const svCanvasRef = useRef<HTMLCanvasElement>(null);
   const svContainerRef = useRef<HTMLDivElement>(null);
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -382,6 +394,56 @@ export function ColorPicker({ color, onChange, compact = false, grayscale = fals
     };
   }, [handleSVInteraction, handleHueInteraction, handleAlphaInteraction, handleSpectrumInteraction, handleValueInteraction]);
 
+  const currentHex = formatHexInput(color);
+  const [hexDraft, setHexDraft] = useState<HexDraft | null>(null);
+  const liveDraft = hexDraft !== null && hexDraft.base === currentHex ? hexDraft : null;
+
+  const handleHexChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setHexDraft({ text: e.target.value, base: currentHex });
+    },
+    [currentHex],
+  );
+
+  const commitHex = useCallback(() => {
+    setHexDraft(null);
+    if (!liveDraft) return;
+    const parsed = parseHexInput(liveDraft.text);
+    if (!parsed) return;
+    if (parsed.r === color.r && parsed.g === color.g && parsed.b === color.b) return;
+    onChange({ ...parsed, a: color.a });
+  }, [liveDraft, color, onChange]);
+
+  const handleHexKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitHex();
+      } else if (e.key === 'Escape') {
+        setHexDraft(null);
+      }
+    },
+    [commitHex],
+  );
+
+  const hexField = showHex && !compact ? (
+    <div className={styles.hexRow}>
+      <span className={styles.hexLabel} aria-hidden="true">#</span>
+      <input
+        type="text"
+        className={styles.hexInput}
+        value={liveDraft ? liveDraft.text : currentHex}
+        onChange={handleHexChange}
+        onBlur={commitHex}
+        onKeyDown={handleHexKeyDown}
+        maxLength={7}
+        spellCheck={false}
+        autoComplete="off"
+        aria-label="Hex color"
+      />
+    </div>
+  ) : null;
+
   const svCursorX = `${hsv.s}%`;
   const svCursorY = `${100 - hsv.v}%`;
   const hueCursorX = `${(hsv.h / 360) * 100}%`;
@@ -402,6 +464,7 @@ export function ColorPicker({ color, onChange, compact = false, grayscale = fals
             <div className={styles.alphaCursor} style={{ '--cursor-x': alphaCursorX } as React.CSSProperties} />
           </div>
         )}
+        {hexField}
       </div>
     );
   }
@@ -432,6 +495,7 @@ export function ColorPicker({ color, onChange, compact = false, grayscale = fals
           <div className={styles.alphaCursor} style={{ '--cursor-x': alphaCursorX } as React.CSSProperties} />
         </div>
       )}
+      {hexField}
     </div>
   );
 }
