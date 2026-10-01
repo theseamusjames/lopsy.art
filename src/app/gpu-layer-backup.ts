@@ -1,6 +1,8 @@
 /**
- * CPU-side backup of raster layer pixels, so a WebGL context loss doesn't
- * wipe the document (#973).
+ * CPU-side backup of raster and text layer pixels, so a WebGL context loss
+ * doesn't wipe the document (#973). Text layers are backed up as rendered
+ * pixels too: nothing re-renders them on the fresh engine, whose textures
+ * start out 1×1, so skipping them left every live type layer blank (#1088).
  *
  * Layer pixels live only in GPU textures, and by the time
  * `webglcontextlost` fires there is nothing left to read. So the pixels are
@@ -21,19 +23,18 @@ import { useEditorStore } from './editor-store';
 import { useUIStore } from './ui-store';
 import { materializeAllMaskData } from './mask-data-sync';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
+import type { Layer, RasterLayer, TextLayer } from '../types';
 
 /** Above this the backup is skipped rather than held in memory. */
 const MAX_BACKUP_BYTES = 512 * 1024 * 1024;
 
 export const RESTORING_MESSAGE = 'Restoring your layers after a graphics reset…';
 
-interface LayerBackup {
+export interface LayerBackup {
   /** Null for a layer with no visible content. */
   readonly blob: Uint8Array | null;
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
+  /** The layer as it was when its pixels were read back. */
+  readonly layer: RasterLayer | TextLayer;
 }
 
 export interface HistoryKey {
@@ -95,7 +96,7 @@ export function backupLayersToCpu(): void {
   const layers = new Map<string, LayerBackup>();
   let totalBytes = 0;
   for (const layer of useEditorStore.getState().document.layers) {
-    if (layer.type !== 'raster') continue;
+    if (layer.type !== 'raster' && layer.type !== 'text') continue;
     const blob = readLayerBackupBlob(layer.id);
     totalBytes += blob?.byteLength ?? 0;
     if (totalBytes > MAX_BACKUP_BYTES) {
@@ -103,7 +104,7 @@ export function backupLayersToCpu(): void {
       backup = null;
       return;
     }
-    layers.set(layer.id, { blob, x: layer.x, y: layer.y, width: layer.width, height: layer.height });
+    layers.set(layer.id, { blob, layer });
   }
   backup = { key, takenAt: Date.now(), layers };
 }
@@ -122,10 +123,26 @@ function nextPaint(): Promise<void> {
 }
 
 /**
+ * The layer to pair with its backed-up pixels. A raster layer moved or
+ * resized since the backup goes back to the geometry its pixels had. A text
+ * layer goes back to the model it had then: its x/y are the rendered
+ * texture's top-left, and its text and type settings must describe the
+ * restored glyphs, or the next re-render would place them elsewhere.
+ */
+export function layerForBackup(current: Layer, b: LayerBackup): Layer {
+  if (current.type === 'text' && b.layer.type === 'text') return b.layer;
+  if (current.type !== 'raster' || b.layer.type !== 'raster') return current;
+  const { x, y, width, height } = b.layer;
+  if (current.x === x && current.y === y && current.width === width && current.height === height) return current;
+  return { ...current, x, y, width, height };
+}
+
+/**
  * Re-upload the backup into a fresh engine after a context restore, behind
- * the loading overlay. Layers deleted since the backup are skipped; a layer
- * moved or resized since then goes back to the geometry its pixels had.
- * Returns the number of layers restored.
+ * the loading overlay. Layers deleted since the backup are skipped, as is a
+ * layer whose type changed since (its pixels no longer describe it); see
+ * {@link layerForBackup} for edits made since. Returns the number of layers
+ * restored.
  */
 export async function restoreLayerBackup(): Promise<number> {
   const current = backup;
@@ -139,18 +156,16 @@ export async function restoreLayerBackup(): Promise<number> {
         ...s.document,
         layers: s.document.layers.map((l) => {
           const b = current.layers.get(l.id);
-          if (!b || l.type !== 'raster') return l;
-          if (l.x === b.x && l.y === b.y && l.width === b.width && l.height === b.height) return l;
-          return { ...l, x: b.x, y: b.y, width: b.width, height: b.height };
+          return b ? layerForBackup(l, b) : l;
         }),
       },
     }));
     // The new engine must know every layer before its texture is replaced.
     flushLayerSync(useEditorStore.getState());
     let restored = 0;
-    const ids = new Set(useEditorStore.getState().document.layers.map((l) => l.id));
+    const types = new Map(useEditorStore.getState().document.layers.map((l) => [l.id, l.type]));
     for (const [id, b] of current.layers) {
-      if (!ids.has(id) || !b.blob) continue;
+      if (types.get(id) !== b.layer.type || !b.blob) continue;
       uploadCompressed(id, b.blob);
       clearJsPixelData(id);
       restored++;
