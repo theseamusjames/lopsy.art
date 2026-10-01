@@ -184,7 +184,7 @@ Each frame: clear composite FBO → for each visible layer: render behind-effect
 
 When only the viewport (or channel mask) changed, `render` skips all of that and runs just the final blit (`compositor::present`) from the existing composite texture: those setters set `needs_present`, not `needs_recomposite`. Anything that writes the composite texture outside `composite()` (export, single-layer bake) must set `needs_recomposite`.
 
-Effect images (glows, shadow, stroke) are cached per layer in the live compositor (`effect_cache_gpu.rs`, policy in `lopsy-core/src/effect_cache.rs`) and replayed until the layer's content generation, position, opacity, mask state or effect settings change. The content generation is bumped by `mark_layer_dirty(id)`, so **every layer- or mask-texture writer must call `mark_layer_dirty` with the id it wrote** — a writer that doesn't leaves stale effects on screen. Export and Rasterize Layer Style never use the cache.
+Effect images (glows, shadow, stroke) are cached per layer in the live compositor (`effect_cache_gpu.rs`, policy in `lopsy-core/src/effect_cache.rs`) and replayed until the layer's content generation, position, opacity, mask state or effect settings change. The content generation is bumped by `mark_layer_dirty(id)`, so **every layer- or mask-texture writer must call `mark_layer_dirty` with the id it wrote** — a writer that doesn't leaves stale effects on screen. Export and Rasterize Layer Style never use the cache. The live compositor also scissors each layer blend (`blend_layer_rect_onto_target`) and effect blend (`EffectOut::clip`) to its rectangle — exact because the blend shader passes the destination through outside the source; seamless wrap keeps the full pass.
 
 ### Undo/Redo and GPU Textures
 

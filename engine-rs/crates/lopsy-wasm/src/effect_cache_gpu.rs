@@ -161,15 +161,19 @@ impl EffectCapture {
 }
 
 /// Where an effect pass's image goes: blended onto `target`, and — while
-/// the compositor fills the cache — copied into `capture` as well.
+/// the compositor fills the cache — copied into `capture` as well. With
+/// `clip`, the blend only touches the region the effect can paint.
 pub(crate) struct EffectOut<'a> {
     pub target: Target,
     pub capture: Option<&'a mut EffectCapture>,
+    pub clip: bool,
 }
 
 impl EffectOut<'_> {
+    /// Unclipped, uncached: how export and the single-layer bake draw
+    /// effects, so they stay an independent reference for the live view.
     pub fn direct(target: Target) -> EffectOut<'static> {
-        EffectOut { target, capture: None }
+        EffectOut { target, capture: None, clip: false }
     }
 }
 
@@ -177,41 +181,49 @@ impl EffectOut<'_> {
 /// capturing the part of it inside `extent` (the region the effect can
 /// paint, computed only when capturing) first.
 pub(crate) fn emit_effect(engine: &mut EngineInner, out: &mut EffectOut, extent: impl FnOnce() -> Rect) {
-    if let Some(capture) = out.capture.as_deref_mut() {
-        let clipped = lopsy_core::effect_cache::clip_to_document(extent(), engine.doc_width, engine.doc_height);
-        if let Some(rect) = clipped {
-            capture.record_scratch(engine, rect);
-        }
+    let needs_extent = out.capture.is_some() || out.clip;
+    let clipped = if needs_extent {
+        lopsy_core::effect_cache::clip_to_document(extent(), engine.doc_width, engine.doc_height)
+    } else {
+        None
+    };
+    if let (Some(capture), Some(rect)) = (out.capture.as_deref_mut(), clipped) {
+        capture.record_scratch(engine, rect);
+    }
+    if out.clip && clipped.is_none() {
+        // Nothing of the effect is on the canvas.
+        return;
     }
     let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a).cloned() else { return };
-    blend_effect_image(engine, &scratch, None, out.target);
+    blend_effect_image(engine, &scratch, None, if out.clip { clipped } else { None }, out.target);
 }
 
 /// Blend a cached effect image onto `target`.
 pub(crate) fn blend_cached_effect(engine: &mut EngineInner, image: &CachedEffect, target: Target) {
     let Some(tex) = engine.texture_pool.get(image.handle).cloned() else { return };
-    blend_effect_image(engine, &tex, Some(image.rect), target);
+    blend_effect_image(engine, &tex, Some(image.rect), Some(image.rect), target);
 }
 
-/// Normal-blend an effect image onto `target` via `scratch_b`. `region`
+/// Normal-blend an effect image onto `target` via `scratch_b`. `src_rect`
 /// `None` is a document-sized image; `Some(rect)` is an image covering just
-/// `rect`, and both passes are scissored to it. Outside its source rect the
-/// blend shader returns the destination texel unchanged, so leaving those
-/// texels untouched produces the same target as a full-document pass.
-pub(crate) fn blend_effect_image(engine: &mut EngineInner, src: &WebGlTexture, region: Option<Rect>, target: Target) {
+/// `rect`. With `scissor`, both passes only touch that region: where the
+/// effect image is transparent the blend shader returns the destination
+/// texel unchanged, so leaving those texels alone produces the same target
+/// as a full-document pass.
+pub(crate) fn blend_effect_image(engine: &mut EngineInner, src: &WebGlTexture, src_rect: Option<Rect>, scissor: Option<Rect>, target: Target) {
     let comp_tex = match engine.texture_pool.get(target.tex) {
         Some(t) => t.clone(),
         None => return,
     };
     let doc_w = engine.doc_width as f32;
     let doc_h = engine.doc_height as f32;
-    let (src_x, src_y, src_w, src_h) = match region {
+    let (src_x, src_y, src_w, src_h) = match src_rect {
         Some(r) => (r.x as f32, r.y as f32, r.width as f32, r.height as f32),
         None => (0.0, 0.0, doc_w, doc_h),
     };
 
     let gl = &engine.gl;
-    if let Some(r) = region {
+    if let Some(r) = scissor {
         gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
         gl.scissor(r.x, r.y, r.width as i32, r.height as i32);
     }
@@ -255,7 +267,7 @@ pub(crate) fn blend_effect_image(engine: &mut EngineInner, src: &WebGlTexture, r
     if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") { gl.uniform1i(Some(&loc), 0); }
     engine.draw_fullscreen_quad();
 
-    if region.is_some() {
+    if scissor.is_some() {
         gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
     }
 }

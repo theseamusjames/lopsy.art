@@ -383,7 +383,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                 drop_shadow.as_ref(),
                 stroke_eff.as_ref(),
                 opacity,
-                &mut EffectOut { target, capture: capture.as_mut() },
+                &mut EffectOut { target, capture: capture.as_mut(), clip: true },
             );
         }
 
@@ -407,7 +407,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         };
         let (src_handle, src_w, src_h) = composite_src.unwrap_or((tex_handle, tw, th));
         if let Some(src_tex) = engine.texture_pool.get(src_handle).cloned() {
-            blend_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target)?;
+            blend_layer_rect_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target)?;
         }
 
         // --- Active stroke texture ---
@@ -417,7 +417,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             if let Some(&stroke_handle) = engine.stroke_textures.get(&layer_id) {
                 if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
                     let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
-                    blend_onto_target(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target)?;
+                    blend_layer_rect_onto_target(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target)?;
                 }
             }
         }
@@ -440,7 +440,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             if let Some(c) = capture.as_mut() {
                 c.phase = Phase::Above;
             }
-            let mut out = EffectOut { target, capture: capture.as_mut() };
+            let mut out = EffectOut { target, capture: capture.as_mut(), clip: true };
             if let Some(ref glow) = inner_glow {
                 render_glow(engine, effects_src_handle, tw, th, glow, 1, layer_x, layer_y, &mut out);
             }
@@ -658,6 +658,44 @@ fn blend_onto_composite(
 ) -> Result<(), String> {
     let target = main_target(engine);
     blend_onto_target(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target)
+}
+
+/// `blend_onto_target` for the live compositor, touching only the source's
+/// rectangle (clipped to the document). Outside it the blend shader returns
+/// the destination texel unchanged, so skipping those texels gives the same
+/// target as a full-document pass, at the cost of the layer's area instead
+/// of the document's. With seamless wrap on the layer can land anywhere, so
+/// the full pass runs.
+fn blend_layer_rect_onto_target(
+    engine: &mut EngineInner,
+    src_tex: &web_sys::WebGlTexture,
+    opacity: f32,
+    blend_mode: i32,
+    layer_x: f32,
+    layer_y: f32,
+    tw: u32,
+    th: u32,
+    premultiplied: bool,
+    overlay: Option<&ColorOverlayDesc>,
+    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
+    target: Target,
+) -> Result<(), String> {
+    if engine.seamless_pattern && engine.seamless_wrap {
+        return blend_onto_target(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target);
+    }
+    let x0 = layer_x.floor() as i32;
+    let y0 = layer_y.floor() as i32;
+    let x1 = (layer_x + tw as f32).ceil() as i32;
+    let y1 = (layer_y + th as f32).ceil() as i32;
+    let rect = Rect::new(x0, y0, (x1 - x0).max(0) as u32, (y1 - y0).max(0) as u32);
+    let Some(clip) = fx_extent::clip_to_document(rect, engine.doc_width, engine.doc_height) else {
+        return Ok(());
+    };
+    engine.gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
+    engine.gl.scissor(clip.x, clip.y, clip.width as i32, clip.height as i32);
+    let result = blend_onto_target(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target);
+    engine.gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
+    result
 }
 
 /// Blend a source texture onto `target` using the blend shader variant
