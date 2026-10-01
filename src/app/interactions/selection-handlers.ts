@@ -8,6 +8,10 @@ import {
   createRectSelection as tsCreateRectSelection,
   createEllipseSelection as tsCreateEllipseSelection,
   selectionBounds as tsSelectionBounds,
+  combineSelections as tsCombineSelections,
+  SELECTION_COMBINE_LABELS,
+  type SelectionCombineMode,
+  type SelectionCombineOp,
 } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -18,6 +22,7 @@ import {
   setSelectionMask,
   featherSelectionMask,
   readSelectionMask,
+  combineSelections as wasmCombineSelections,
 } from '../../engine-wasm/wasm-bridge';
 import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
 import { createPolygonMask as tsCreatePolygonMask } from '../../tools/lasso/lasso';
@@ -63,41 +68,128 @@ export function constrainMarqueeSize(
   return { w: w0, h: w0 / ratio };
 }
 
+/**
+ * Feather a freshly built shape mask with the marquees' shared Feather
+ * radius. Returns null when there is nothing to feather (radius 0, no
+ * engine, or the feather wiped the shape out). The feathered bytes are left
+ * in the engine's selection texture.
+ */
+function featherShapeMask(
+  mask: Uint8ClampedArray,
+  docW: number,
+  docH: number,
+): { mask: Uint8ClampedArray; width: number; height: number } | null {
+  const featherRadius = useToolSettingsStore.getState().settings.marquee.feather;
+  if (featherRadius <= 0) return null;
+  const engine = getEngine();
+  if (!engine) return null;
+  const u8Mask = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
+  setSelectionMask(engine, u8Mask, docW, docH);
+  featherSelectionMask(engine, featherRadius);
+  const readback = readSelectionMask(engine);
+  if (readback.length < 8) return null;
+  const dv = new DataView(readback.buffer, readback.byteOffset, readback.byteLength);
+  const width = dv.getUint32(0, true);
+  const height = dv.getUint32(4, true);
+  return {
+    mask: new Uint8ClampedArray(readback.buffer, readback.byteOffset + 8, width * height),
+    width,
+    height,
+  };
+}
+
 export function commitFeatheredSelection(
   bounds: { x: number; y: number; width: number; height: number },
   mask: Uint8ClampedArray,
   docW: number,
   docH: number,
 ): void {
-  const featherRadius = useToolSettingsStore.getState().settings.marquee.feather;
   const editorState = useEditorStore.getState();
-  if (featherRadius > 0) {
-    const engine = getEngine();
-    if (engine) {
-      const u8Mask = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
-      setSelectionMask(engine, u8Mask, docW, docH);
-      featherSelectionMask(engine, featherRadius);
-      const readback = readSelectionMask(engine);
-      if (readback.length >= 8) {
-        const dv = new DataView(readback.buffer, readback.byteOffset, readback.byteLength);
-        const rw = dv.getUint32(0, true);
-        const rh = dv.getUint32(4, true);
-        const feathered = new Uint8ClampedArray(readback.buffer, readback.byteOffset + 8, rw * rh);
-        const newBounds = selectionBounds(feathered, rw, rh);
-        if (newBounds) {
-          editorState.setSelection(newBounds, feathered, rw, rh);
-          // #763: the feathered bytes were just written to the GPU by
-          // featherSelectionMask — record them as the tracked reference so
-          // the next syncSelection skips the echo upload.
-          seedSelectionMaskRef(engine, feathered);
-          useUIStore.getState().setTransform(createTransformState(newBounds));
-          return;
-        }
-      }
+  const feathered = featherShapeMask(mask, docW, docH);
+  if (feathered) {
+    const newBounds = selectionBounds(feathered.mask, feathered.width, feathered.height);
+    if (newBounds) {
+      editorState.setSelection(newBounds, feathered.mask, feathered.width, feathered.height);
+      // #763: the feathered bytes were just written to the GPU by
+      // featherSelectionMask — record them as the tracked reference so
+      // the next syncSelection skips the echo upload.
+      const engine = getEngine();
+      if (engine) seedSelectionMaskRef(engine, feathered.mask);
+      useUIStore.getState().setTransform(createTransformState(newBounds));
+      return;
     }
   }
   editorState.setSelection(bounds, mask, docW, docH);
   useUIStore.getState().setTransform(createTransformState(bounds));
+}
+
+/** The selection mask a new shape can combine with, if one is active. */
+function combinableSelectionMask(docW: number, docH: number): Uint8ClampedArray | null {
+  const sel = useEditorStore.getState().selection;
+  if (!sel.active || !sel.mask || sel.maskWidth !== docW || sel.maskHeight !== docH) return null;
+  return sel.mask;
+}
+
+/** Whether a gesture starting now has a selection to add to or subtract from. */
+export function hasCombinableSelection(): boolean {
+  const { width, height } = useEditorStore.getState().document;
+  return combinableSelectionMask(width, height) !== null;
+}
+
+const COMBINE_MODE_CODE: Readonly<Record<SelectionCombineOp, number>> = {
+  add: 1,
+  subtract: 2,
+  intersect: 3,
+};
+
+export function combineSelectionMasks(
+  existing: Uint8ClampedArray,
+  shape: Uint8ClampedArray,
+  op: SelectionCombineOp,
+): Uint8ClampedArray {
+  try {
+    const result = wasmCombineSelections(
+      new Uint8Array(existing.buffer, existing.byteOffset, existing.byteLength),
+      new Uint8Array(shape.buffer, shape.byteOffset, shape.byteLength),
+      COMBINE_MODE_CODE[op],
+    );
+    return new Uint8ClampedArray(result.buffer, result.byteOffset, result.byteLength);
+  } catch {
+    return tsCombineSelections(existing, shape, op);
+  }
+}
+
+/**
+ * Commit a selection tool's new shape. `replace` installs it as the
+ * selection; the other modes combine it with the current selection as one
+ * undoable step. Feather softens only the new shape, so adding a region
+ * never re-blurs the edges already selected.
+ */
+export function commitSelectionShape(
+  bounds: { x: number; y: number; width: number; height: number },
+  mask: Uint8ClampedArray,
+  docW: number,
+  docH: number,
+  mode: SelectionCombineMode,
+): void {
+  const existing = mode === 'replace' ? null : combinableSelectionMask(docW, docH);
+  if (mode === 'replace' || !existing) {
+    commitFeatheredSelection(bounds, mask, docW, docH);
+    return;
+  }
+  const editorState = useEditorStore.getState();
+  editorState.pushHistoryMetadata(SELECTION_COMBINE_LABELS[mode]);
+  const feathered = featherShapeMask(mask, docW, docH);
+  const shape = feathered && feathered.width === docW && feathered.height === docH ? feathered.mask : mask;
+  const combined = combineSelectionMasks(existing, shape, mode);
+  const combinedBounds = selectionBounds(combined, docW, docH);
+  if (!combinedBounds) {
+    editorState.clearSelection();
+    useUIStore.getState().setTransform(null);
+    return;
+  }
+  editorState.setSelection(combinedBounds, combined, docW, docH);
+  useUIStore.getState().setTransform(createTransformState(combinedBounds));
 }
 
 export function createRectSelection(

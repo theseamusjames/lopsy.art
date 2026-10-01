@@ -207,6 +207,11 @@ describe('snapToGuide', () => {
     const result = snapToGuide(199, [100, 200, 300], 5);
     expect(result).toEqual({ snapped: true, value: 200 });
   });
+
+  it('picks the closer of two guides in reach, whatever their order', () => {
+    expect(snapToGuide(103, [100, 104], 5)).toEqual({ snapped: true, value: 104 });
+    expect(snapToGuide(103, [104, 100], 5)).toEqual({ snapped: true, value: 104 });
+  });
 });
 
 describe('computeFit', () => {

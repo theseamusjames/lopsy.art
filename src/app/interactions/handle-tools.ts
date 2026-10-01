@@ -21,3 +21,16 @@ export function scalesSelectionOutlineFromHandles(tool: ToolId): boolean {
 export function usesTransformHandles(tool: ToolId): boolean {
   return tool === 'move' || SELECTION_OUTLINE_HANDLE_TOOLS.has(tool);
 }
+
+/**
+ * Whether a press on a transform handle grabs it. Shift / Alt with a
+ * drag-out selection tool start a shape to add or subtract instead, so the
+ * handle is skipped — and the cursor should not promise a resize.
+ */
+export function pressGrabsHandle(
+  tool: ToolId,
+  modifiers: { shiftKey: boolean; altKey: boolean },
+): boolean {
+  if (!usesTransformHandles(tool)) return false;
+  return !(scalesSelectionOutlineFromHandles(tool) && (modifiers.shiftKey || modifiers.altKey));
+}

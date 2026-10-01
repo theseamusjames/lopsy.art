@@ -5,16 +5,19 @@ import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { getSelectionMaskValue } from '../../selection/selection';
+import { getSelectionMaskValue, selectionCombineMode } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
 import { createTransformState } from '../transform/transform';
-import { snapPositionToGrid } from '../move/move';
+import { snapDragPoint } from '../common/drag-snap';
+import { dragSnapOptions } from '../../app/interactions/drag-snap-options';
 import {
   constrainMarqueeSize,
   createRectSelection,
   createEllipseSelection,
   commitFeatheredSelection,
+  commitSelectionShape,
+  hasCombinableSelection,
 } from '../../app/interactions/selection-handlers';
 import { getMarqueePreview, setMarqueePreview } from './marquee-preview';
 import { regionFromCorners, type MarqueeShape } from './marquee-region';
@@ -27,7 +30,10 @@ export const marqueeStrategy: SelectionToolStrategy = {
     const cx = Math.round(canvasPos.x);
     const cy = Math.round(canvasPos.y);
     setMarqueePreview(null);
-    if (sel.active && sel.mask && getSelectionMaskValue(sel, cx, cy) > 0) {
+    // A modifier means "draw another shape to combine", so a press inside the
+    // selection starts one rather than dragging the outline.
+    const combineMode = selectionCombineMode(ctx, hasCombinableSelection());
+    if (combineMode === 'replace' && sel.active && sel.mask && getSelectionMaskValue(sel, cx, cy) > 0) {
       const engine = getEngine();
       if (engine && hasFloat(engine)) {
         dropFloat(engine);
@@ -60,6 +66,7 @@ export const marqueeStrategy: SelectionToolStrategy = {
       startPoint: canvasPos,
       layerStartX: 0,
       layerStartY: 0,
+      selectionCombineMode: combineMode,
       ...DEFAULT_TRANSFORM_FIELDS,
     };
   },
@@ -79,15 +86,9 @@ export const marqueeStrategy: SelectionToolStrategy = {
       return;
     }
 
-    const editorState = useEditorStore.getState();
-    let mStart = state.startPoint;
-    let mEnd = canvasPos;
-    const uiMarquee = useUIStore.getState();
-    if (uiMarquee.showGrid && uiMarquee.snapToGrid) {
-      const { width: dw, height: dh } = editorState.document;
-      mStart = snapPositionToGrid(mStart.x, mStart.y, uiMarquee.gridSize, dw, dh);
-      mEnd = snapPositionToGrid(mEnd.x, mEnd.y, uiMarquee.gridSize, dw, dh);
-    }
+    const snapOptions = dragSnapOptions();
+    const mStart = snapDragPoint(state.startPoint, snapOptions);
+    const mEnd = snapDragPoint(canvasPos, snapOptions);
     const toolSettings = useToolSettingsStore.getState();
     const { w, h } = constrainMarqueeSize(
       mEnd.x - mStart.x,
@@ -106,6 +107,7 @@ export const marqueeStrategy: SelectionToolStrategy = {
       setMarqueePreview({
         kind: state.tool === 'marquee-rect' ? 'rect' : 'ellipse',
         rect: { x, y, width: w, height: h },
+        isCombining: (state.selectionCombineMode ?? 'replace') !== 'replace',
       });
     } else {
       setMarqueePreview(null);
@@ -168,7 +170,15 @@ export const marqueeStrategy: SelectionToolStrategy = {
     const dx = Math.abs(upPos.x - state.startPoint.x);
     const dy = Math.abs(upPos.y - state.startPoint.y);
 
+    const combineMode = state.selectionCombineMode ?? 'replace';
     if ((dx < 2 && dy < 2) || !preview || preview.kind === 'move') {
+      // A modifier-click adds or removes nothing, so it keeps the selection.
+      if (combineMode !== 'replace') {
+        if (editorState.selection.bounds) {
+          useUIStore.getState().setTransform(createTransformState(editorState.selection.bounds));
+        }
+        return;
+      }
       // A bare click with nothing selected asks for exact corners instead —
       // there's nothing to deselect, so the click would otherwise be a no-op.
       if (!editorState.selection.active && dx < 2 && dy < 2) {
@@ -187,7 +197,7 @@ export const marqueeStrategy: SelectionToolStrategy = {
     const mask = preview.kind === 'ellipse'
       ? createEllipseSelection(selRect, docW, docH)
       : createRectSelection(selRect, docW, docH);
-    commitFeatheredSelection(selRect, mask, docW, docH);
+    commitSelectionShape(selRect, mask, docW, docH, combineMode);
   },
 };
 
