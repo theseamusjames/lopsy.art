@@ -67,6 +67,7 @@ const ALLOWLIST = {
   'src/app/mask-read-queue.test.ts': 14,                     // +4: rAF quiescence tests for #760
   'src/app/mask-data-sync.test.ts': 1,                       // #780 fixture mask
   'src/app/store/mask-history.test.ts': 1,                   // #780 fixture mask
+  'src/panels/LayerPanel/layer-selection.test.ts': 1,        // layer-alpha fixture for selectLayerAlpha
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
   'src/selection/selection-to-path.test.ts': 2,
   'src/selection/selection.test.ts': 19,               // +2: #1038 grow/shrink circle and rect fixtures

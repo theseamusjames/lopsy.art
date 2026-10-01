@@ -4,7 +4,7 @@
  * synchronously but mirror it to the OS clipboard asynchronously (readback →
  * PNG encode → navigator.clipboard.write). A paste inside that window read the
  * stale image, failed the internal paste-back match, and dropped it at 0,0
- * through the external-image route (switching the tool to Move).
+ * through the external-image route.
  */
 import { test, expect, type Page } from './fixtures';
 import {
@@ -37,7 +37,6 @@ async function editMenu(page: Page, item: string): Promise<void> {
 
 interface Snapshot {
   layers: Array<{ name: string; x: number; y: number; width: number; height: number }>;
-  activeTool: string;
 }
 
 async function snapshot(page: Page): Promise<Snapshot> {
@@ -45,10 +44,7 @@ async function snapshot(page: Page): Promise<Snapshot> {
     const editor = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => { document: { layers: Snapshot['layers'] } };
     };
-    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
-      getState: () => { activeTool: string };
-    };
-    return { layers: editor.getState().document.layers, activeTool: ui.getState().activeTool };
+    return { layers: editor.getState().document.layers };
   });
 }
 
@@ -77,7 +73,6 @@ for (const action of ['Cut', 'Copy'] as const) {
     await page.waitForTimeout(1000);
 
     await dragMarquee(page, 120, 120, 180, 180);
-    const toolBefore = (await snapshot(page)).activeTool;
 
     await page.keyboard.press(`${mod}+Key${action === 'Cut' ? 'X' : 'C'}`);
     await page.keyboard.press(`${mod}+KeyV`);
@@ -92,7 +87,5 @@ for (const action of ['Cut', 'Copy'] as const) {
     expect(pasted[0]!.height).toBe(60);
     expect(pasted[0]!.x).toBe(120);
     expect(pasted[0]!.y).toBe(120);
-    // The external-image route also force-switches to Move.
-    expect(after.activeTool).toBe(toolBefore);
   });
 }
