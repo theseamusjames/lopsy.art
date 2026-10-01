@@ -22,3 +22,4 @@ pub mod dng;
 pub mod raf;
 pub mod psd;
 pub mod text_types;
+pub mod vertical_orientation;
