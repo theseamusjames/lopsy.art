@@ -116,8 +116,18 @@ test.describe('autofix #1052 #1055 #1057 #1060', () => {
     expect(rulerX).toBeGreaterThan(box.x + 20);
     expect(rulerY).toBeLessThan(origin.y);
 
+    // Press on a whole screen pixel: Firefox truncates pointer coordinates
+    // to whole CSS pixels while Chromium keeps the fraction, so the corner
+    // must come from the pixel actually pressed, rounded as the marquee does.
     await page.keyboard.press('m');
-    const start = await docToScreen(page, 700, 500);
+    const requested = await docToScreen(page, 700, 500);
+    const start = { x: Math.round(requested.x), y: Math.round(requested.y) };
+    const unit = await docToScreen(page, 1, 1);
+    const zoom = unit.x - origin.x;
+    const cornerX = Math.round((start.x - origin.x) / zoom);
+    const cornerY = Math.round((start.y - origin.y) / zoom);
+    expect(Math.abs(cornerX - 700)).toBeLessThanOrEqual(2);
+    expect(Math.abs(cornerY - 500)).toBeLessThanOrEqual(2);
     await page.mouse.move(start.x, start.y);
     await page.mouse.down();
     await page.mouse.move(rulerX, rulerY, { steps: 4 });
@@ -130,8 +140,8 @@ test.describe('autofix #1052 #1055 #1057 #1060', () => {
     // released anywhere else outside the canvas.
     expect(bounds!.x).toBeLessThanOrEqual(0);
     expect(bounds!.y).toBeLessThanOrEqual(0);
-    expect(bounds!.x + bounds!.width).toBe(700);
-    expect(bounds!.y + bounds!.height).toBe(500);
+    expect(bounds!.x + bounds!.width).toBe(cornerX);
+    expect(bounds!.y + bounds!.height).toBe(cornerY);
     // A press on the canvas doesn't create a guide.
     const guides = await page.evaluate(() => {
       const ui = (window as unknown as Record<string, unknown>).__uiStore as {
