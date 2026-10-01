@@ -330,6 +330,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             outer_glow.as_ref(),
             drop_shadow.as_ref(),
             stroke_eff.as_ref(),
+            opacity,
             target,
         );
 
@@ -382,7 +383,9 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             render_glow(engine, effects_src_handle, tw, th, glow, 1, layer_x, layer_y, target);
         }
         if let Some(ref stroke) = stroke_eff {
-            render_stroke(engine, effects_src_handle, tw, th, stroke, layer_x, layer_y, target);
+            if !is_behind_stroke(stroke) {
+                render_stroke(engine, effects_src_handle, tw, th, stroke, layer_x, layer_y, opacity, target);
+            }
         }
 
         if let Some(masked) = masked_effect_handle {
@@ -1062,32 +1065,40 @@ struct EffectSource {
     height: u32,
 }
 
-/// Render the effects drawn behind the layer — outer glow, then drop shadow.
-/// Both are cast by everything the layer shows, so an outside or centre
-/// Stroke grows the silhouette they are built from; built from the layer's
-/// pixels alone, the shadow started inside the outline and peeked out past
-/// it with a notch at the corner, and the glow sat under the stroke.
+/// Render the effects drawn behind the layer, in order: outer glow, drop
+/// shadow, then an outside Stroke (inside and centre strokes are drawn on
+/// top of the layer by the caller). The glow and shadow are cast by
+/// everything the layer shows, so an outside or centre Stroke grows the
+/// silhouette they are built from; built from the layer's pixels alone, the
+/// shadow started inside the outline and peeked out past it with a notch at
+/// the corner, and the glow sat under the stroke. The outside stroke itself
+/// runs under the layer's anti-aliased edge and is knocked out by the
+/// layer's coverage, so no backdrop seam shows between shape and outline.
+/// Live compositing, export and Rasterize Layer Style all come through here.
 fn render_behind_effects(
     engine: &mut EngineInner,
     src: EffectSource,
     outer_glow: Option<&GlowDesc>,
     drop_shadow: Option<&ShadowDesc>,
     stroke: Option<&StrokeDesc>,
+    layer_opacity: f32,
     target: Target,
 ) {
-    if outer_glow.is_none() && drop_shadow.is_none() {
-        return;
+    if outer_glow.is_some() || drop_shadow.is_some() {
+        let stroked = stroke.and_then(|s| render_stroke_silhouette(engine, src, s));
+        let cast = stroked.unwrap_or(src);
+        if let Some(glow) = outer_glow {
+            render_glow(engine, cast.handle, cast.width, cast.height, glow, 0, cast.x, cast.y, target);
+        }
+        if let Some(shadow) = drop_shadow {
+            render_shadow(engine, cast.handle, cast.width, cast.height, shadow, cast.x, cast.y, layer_opacity, target);
+        }
+        if let Some(s) = stroked {
+            engine.texture_pool.release(s.handle);
+        }
     }
-    let stroked = stroke.and_then(|s| render_stroke_silhouette(engine, src, s));
-    let cast = stroked.unwrap_or(src);
-    if let Some(glow) = outer_glow {
-        render_glow(engine, cast.handle, cast.width, cast.height, glow, 0, cast.x, cast.y, target);
-    }
-    if let Some(shadow) = drop_shadow {
-        render_shadow(engine, cast.handle, cast.width, cast.height, shadow, cast.x, cast.y, target);
-    }
-    if let Some(s) = stroked {
-        engine.texture_pool.release(s.handle);
+    if let Some(stroke) = stroke.filter(|s| is_behind_stroke(s)) {
+        render_stroke(engine, src.handle, src.width, src.height, stroke, src.x, src.y, layer_opacity, target);
     }
 }
 
@@ -1168,6 +1179,8 @@ fn silhouette_by_distance(engine: &mut EngineInner, frame: &SilhouetteFrame, str
         if let Some(loc) = shader.location(gl, "u_srcSize") { gl.uniform2f(Some(&loc), frame.src_w as f32, frame.src_h as f32); }
         if let Some(loc) = shader.location(gl, "u_docSize") { gl.uniform2f(Some(&loc), frame.w as f32, frame.h as f32); }
         if let Some(loc) = shader.location(gl, "u_silhouette") { gl.uniform1i(Some(&loc), 1); }
+        // Coverage knockout only scales the drawn stroke; the silhouette is the plain union.
+        if let Some(loc) = shader.location(gl, "u_layerOpacity") { gl.uniform1f(Some(&loc), 1.0); }
         engine.draw_fullscreen_quad();
     });
     true
@@ -1244,6 +1257,10 @@ fn silhouette_by_dilation(
         if let Some(loc) = shader.location(gl, "u_origSize") { gl.uniform2f(Some(&loc), frame.src_w as f32, frame.src_h as f32); }
         if let Some(loc) = shader.location(gl, "u_docSize") { gl.uniform2f(Some(&loc), fw, fh); }
         if let Some(loc) = shader.location(gl, "u_silhouette") { gl.uniform1i(Some(&loc), 1); }
+        // Uniforms persist per program: set the edge mode explicitly so an
+        // outside ring covers the anti-aliased edge here just as when drawn.
+        if let Some(loc) = shader.location(gl, "u_knockout") { gl.uniform1i(Some(&loc), is_behind_stroke(stroke) as i32); }
+        if let Some(loc) = shader.location(gl, "u_layerOpacity") { gl.uniform1f(Some(&loc), 1.0); }
         engine.draw_fullscreen_quad();
     });
 
@@ -1376,7 +1393,7 @@ fn set_glow_uniforms(engine: &EngineInner, glow: &GlowDesc, mode: i32, tw: u32, 
 }
 
 /// Render drop shadow.
-fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, shadow: &ShadowDesc, layer_x: f32, layer_y: f32, target: Target) {
+fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, shadow: &ShadowDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, target: Target) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     let blur_radius = shadow.blur.ceil() as u32;
@@ -1393,6 +1410,7 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
         set_shadow_uniforms(engine, shadow, tw, th, layer_x, layer_y);
         if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_knockout") { engine.gl.uniform1i(Some(&loc), 1); }
+        if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_layerOpacity") { engine.gl.uniform1f(Some(&loc), layer_opacity); }
         if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_rawAlpha") { engine.gl.uniform1i(Some(&loc), 0); }
         engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
         engine.gl.viewport(0, 0, doc_w, doc_h);
@@ -1493,7 +1511,13 @@ fn set_shadow_uniforms(engine: &EngineInner, shadow: &ShadowDesc, tw: u32, th: u
 }
 
 /// Render stroke effect using proper hard-edge distance check.
-fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, stroke: &StrokeDesc, layer_x: f32, layer_y: f32, target: Target) {
+/// Outside strokes are composited behind their layer (after the drop shadow),
+/// inside and center strokes on top of it.
+fn is_behind_stroke(stroke: &StrokeDesc) -> bool {
+    stroke.position == lopsy_core::layer::StrokePosition::Outside
+}
+
+fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, stroke: &StrokeDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, target: Target) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     let position = match stroke.position {
@@ -1519,6 +1543,7 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         if let Some(loc) = shader.location(&engine.gl, "u_width") { engine.gl.uniform1f(Some(&loc), stroke.width); }
         if let Some(loc) = shader.location(&engine.gl, "u_position") { engine.gl.uniform1i(Some(&loc), position); }
         if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), stroke.opacity); }
+        if let Some(loc) = shader.location(&engine.gl, "u_layerOpacity") { engine.gl.uniform1f(Some(&loc), layer_opacity); }
         if let Some(loc) = shader.location(&engine.gl, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
@@ -1550,7 +1575,7 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
 
         // Apply stroke: read dilated (scratch_b) + original → scratch_a
         render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y,
-            if do_inside && !do_outside { 1 } else { 0 });
+            if do_inside && !do_outside { 1 } else { 0 }, is_behind_stroke(stroke), layer_opacity);
 
         // For center stroke: also need the inside half
         if do_outside && do_inside {
@@ -1560,7 +1585,7 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
             // Now do inside half: extract inverted alpha, dilate, apply
             render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, true);
             render_stroke_dilate(engine, radius, 0, 1.0);
-            render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y, 1);
+            render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y, 1, false, layer_opacity);
         }
     }
 
@@ -1622,7 +1647,7 @@ fn render_stroke_dilate(engine: &mut EngineInner, radius: i32, mode: i32, oob_al
     engine.draw_fullscreen_quad();
 }
 
-fn render_stroke_apply(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTexture, stroke: &StrokeDesc, tw: u32, th: u32, layer_x: f32, layer_y: f32, apply_position: i32) {
+fn render_stroke_apply(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTexture, stroke: &StrokeDesc, tw: u32, th: u32, layer_x: f32, layer_y: f32, apply_position: i32, knockout: bool, layer_opacity: f32) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
     let shader = &engine.shaders.stroke_apply;
@@ -1642,6 +1667,8 @@ fn render_stroke_apply(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTextu
     if let Some(loc) = shader.location(&engine.gl, "u_strokeColor") { engine.gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), stroke.opacity); }
     if let Some(loc) = shader.location(&engine.gl, "u_position") { engine.gl.uniform1i(Some(&loc), apply_position); }
+    if let Some(loc) = shader.location(&engine.gl, "u_knockout") { engine.gl.uniform1i(Some(&loc), knockout as i32); }
+    if let Some(loc) = shader.location(&engine.gl, "u_layerOpacity") { engine.gl.uniform1f(Some(&loc), layer_opacity); }
     if let Some(loc) = shader.location(&engine.gl, "u_origOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
     if let Some(loc) = shader.location(&engine.gl, "u_origSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
@@ -1766,6 +1793,7 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
             effects.outer_glow.as_ref().filter(|g| g.enabled),
             effects.drop_shadow.as_ref().filter(|d| d.enabled),
             effects.stroke.as_ref().filter(|st| st.enabled),
+            *opacity,
             target,
         );
 
@@ -1775,7 +1803,7 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         }
 
         if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 1, *layer_x, *layer_y, target); } }
-        if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, fx_handle, tw, th, stroke, *layer_x, *layer_y, target); } }
+        if let Some(ref stroke) = effects.stroke { if stroke.enabled && !is_behind_stroke(stroke) { render_stroke(engine, fx_handle, tw, th, stroke, *layer_x, *layer_y, *opacity, target); } }
         if let Some(masked) = masked_effect_handle {
             engine.texture_pool.release(masked);
         }
@@ -1908,6 +1936,7 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
         effects.outer_glow.as_ref().filter(|g| g.enabled),
         effects.drop_shadow.as_ref().filter(|d| d.enabled),
         effects.stroke.as_ref().filter(|st| st.enabled),
+        opacity,
         target,
     );
 
@@ -1919,7 +1948,7 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
 
     // On-top effects
     if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 1, layer_x, layer_y, target); } }
-    if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, fx_handle, tw, th, stroke, layer_x, layer_y, target); } }
+    if let Some(ref stroke) = effects.stroke { if stroke.enabled && !is_behind_stroke(stroke) { render_stroke(engine, fx_handle, tw, th, stroke, layer_x, layer_y, opacity, target); } }
 
     if let Some(masked) = masked_effect_handle {
         engine.texture_pool.release(masked);
