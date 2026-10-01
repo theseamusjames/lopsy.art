@@ -73,12 +73,21 @@ export function computeDuplicateLayer(
       const dup = shiftLayer(duplicateLayerModel(orig), dx, dy);
       idMap.set(id, dup.id);
       newLayers.push(dup);
-      const orderIdx = newOrder.indexOf(id);
-      newOrder.splice(orderIdx + 1, 0, dup.id);
       if (engine && !isGroupLayer(orig)) {
         duplicateLayerTexture(engine, id, dup.id);
       }
     }
+
+    // The copy goes in as one contiguous block, in the source's own stacking
+    // order, directly above the source subtree. Splicing each copy after its
+    // own source interleaved the two groups in the panel and compositor (#805).
+    const subtree = new Set(allIds);
+    const copyBlock = doc.layerOrder.flatMap((id) => {
+      const dupId = subtree.has(id) ? idMap.get(id) : undefined;
+      return dupId ? [dupId] : [];
+    });
+    const sourceTop = doc.layerOrder.reduce((top, id, i) => (subtree.has(id) ? i : top), -1);
+    newOrder.splice(sourceTop + 1, 0, ...copyBlock);
 
     // Remap children references in duplicated groups
     for (const [, dupId] of idMap) {
@@ -90,23 +99,16 @@ export function computeDuplicateLayer(
       }
     }
 
-    // Add duplicated group to parent
     const parentGroup = findParentGroup(doc.layers, activeId);
     const dupRootId = idMap.get(activeId)!;
-    if (parentGroup) {
-      const parentIdx = newLayers.findIndex((l) => l.id === parentGroup.id);
-      if (parentIdx >= 0 && isGroupLayer(newLayers[parentIdx]!)) {
-        const p = newLayers[parentIdx]!;
-        if (isGroupLayer(p)) {
-          newLayers[parentIdx] = { ...p, children: [...p.children, dupRootId] };
-        }
-      }
-    }
+    const layers = parentGroup
+      ? addToGroup(newLayers, dupRootId, parentGroup.id, newOrder)
+      : newLayers;
 
     return {
       document: {
         ...doc,
-        layers: newLayers,
+        layers,
         layerOrder: newOrder,
         activeLayerId: dupRootId,
         selectedLayerIds: [dupRootId],
@@ -130,7 +132,7 @@ export function computeDuplicateLayer(
   // Add to same parent group
   const parentGroup = findParentGroup(doc.layers, activeId);
   if (parentGroup) {
-    layers = addToGroup(layers, newId, parentGroup.id);
+    layers = addToGroup(layers, newId, parentGroup.id, newOrder);
   }
 
   return {

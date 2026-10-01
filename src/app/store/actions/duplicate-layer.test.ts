@@ -2,8 +2,8 @@
 import '../../../test/canvas-mock';
 import { describe, it, expect, vi } from 'vitest';
 import { computeDuplicateLayer } from './duplicate-layer';
-import { createRasterLayer } from '../../../layers/layer-model';
-import type { DocumentState, RasterLayer } from '../../../types';
+import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
+import type { DocumentState, GroupLayer, Layer, RasterLayer } from '../../../types';
 
 // #746: computeDuplicateLayer must not touch the JS pixel map — it
 // runs entirely on the GPU. Any read from a passed pixel map or from
@@ -153,3 +153,89 @@ function newLayer(doc: DocumentState) {
   if (!dup) throw new Error('duplicate not found');
   return dup;
 }
+
+function groupDoc(layers: Layer[], layerOrder: string[], activeId: string): DocumentState {
+  return {
+    id: 'doc-1',
+    name: 'Test',
+    width: 1024,
+    height: 1024,
+    layers,
+    layerOrder,
+    activeLayerId: activeId,
+    selectedLayerIds: [activeId],
+    backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
+    colorMode: 'rgb',
+  };
+}
+
+function raster(name: string): RasterLayer {
+  return createRasterLayer({ name, width: 10, height: 10 });
+}
+
+function groupById(doc: DocumentState, id: string): GroupLayer {
+  const g = doc.layers.find((l) => l.id === id);
+  if (!g || g.type !== 'group') throw new Error(`group ${id} not found`);
+  return g;
+}
+
+// #805: the copy used to be spliced in one id at a time, each straight after
+// its own source, which interleaved copies with originals in layerOrder.
+describe('computeDuplicateLayer (group)', () => {
+  it('inserts the copied subtree as one block directly above the source', () => {
+    const a = raster('A');
+    const b = raster('B');
+    const g = createGroupLayer({ name: 'G', children: [a.id, b.id] });
+    const top = raster('Top');
+    const doc = groupDoc([a, b, g, top], [a.id, b.id, g.id, top.id], g.id);
+
+    const r = result(doc);
+    const copy = groupById(r, r.activeLayerId!);
+    const [aCopy, bCopy] = copy.children;
+    expect(r.layerOrder).toEqual([a.id, b.id, g.id, aCopy, bCopy, copy.id, top.id]);
+    expect(groupById(r, g.id).children).toEqual([a.id, b.id]);
+    expect(r.selectedLayerIds).toEqual([copy.id]);
+  });
+
+  it('keeps a nested sub-group and its children inside the copy', () => {
+    const x = raster('X');
+    const sub = createGroupLayer({ name: 'S', children: [x.id] });
+    const y = raster('Y');
+    const g = createGroupLayer({ name: 'G', children: [sub.id, y.id] });
+    const doc = groupDoc([x, sub, y, g], [x.id, sub.id, y.id, g.id], g.id);
+
+    const r = result(doc);
+    const copy = groupById(r, r.activeLayerId!);
+    const [subCopyId, yCopy] = copy.children as [string, string];
+    const subCopy = groupById(r, subCopyId);
+    expect(subCopy.children).toHaveLength(1);
+    const xCopy = subCopy.children[0]!;
+    expect(r.layerOrder).toEqual([x.id, sub.id, y.id, g.id, xCopy, subCopyId, yCopy, copy.id]);
+  });
+
+  it('places the copy at its stack slot in the parent group', () => {
+    const a = raster('A');
+    const g = createGroupLayer({ name: 'G', children: [a.id] });
+    const z = raster('Z');
+    const parent = createGroupLayer({ name: 'P', children: [g.id, z.id] });
+    const doc = groupDoc([a, g, z, parent], [a.id, g.id, z.id, parent.id], g.id);
+
+    const r = result(doc);
+    const copyId = r.activeLayerId!;
+    expect(groupById(r, parent.id).children).toEqual([g.id, copyId, z.id]);
+  });
+});
+
+describe('computeDuplicateLayer (inside a group)', () => {
+  it('places a layer copy at its stack slot in the parent group', () => {
+    const a = raster('A');
+    const b = raster('B');
+    const parent = createGroupLayer({ name: 'P', children: [a.id, b.id] });
+    const doc = groupDoc([a, b, parent], [a.id, b.id, parent.id], a.id);
+
+    const r = result(doc);
+    const copyId = r.activeLayerId!;
+    expect(r.layerOrder).toEqual([a.id, copyId, b.id, parent.id]);
+    expect(groupById(r, parent.id).children).toEqual([a.id, copyId, b.id]);
+  });
+});
