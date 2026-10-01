@@ -15,7 +15,7 @@ import {
 import { reconcileLayerBoundsWithEngine } from '../../reconcile-layer-bounds';
 import { growFloatToCover } from '../../interactions/float-growth';
 import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
-import { withLiveFloatKept } from '../../interactions/live-float';
+import { commitLiveFloat, withLiveFloatKept } from '../../interactions/live-float';
 import styles from './TransformControls.module.css';
 
 /**
@@ -98,14 +98,9 @@ export function TransformControls() {
 
   const handleModeChange = (mode: TransformMode) => {
     if (!transform) return;
-    // Commit any active transform before switching modes
-    const engine = getEngine();
-    if (engine && hasFloat(engine)) {
-      const activeLayerId = useEditorStore.getState().document.activeLayerId;
-      if (activeLayerId) {
-        selectLayerAlpha(activeLayerId);
-      }
-    }
+    // Commit any active transform before switching modes; the selection
+    // takes on the transformed outline rather than the whole layer's alpha.
+    commitLiveFloat();
     // Create fresh transform state with the new mode
     const sel = useEditorStore.getState().selection;
     if (sel.active && sel.bounds) {

@@ -7,7 +7,6 @@ import {
   beginStroke, endStroke, hasFloat, dropFloat,
   applyBrushDabBatch as gpuBrushDabBatch,
   uploadLayerPixels,
-  setSelectionMask,
   restoreFromGpuSnapshot,
 } from '../engine-wasm/wasm-bridge';
 import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
@@ -46,8 +45,7 @@ import {
   handleLiquifyMove,
 } from './interactions/liquify-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
-import { registerFloatSession } from './interactions/live-float';
-import { selectLayerAlpha } from '../panels/LayerPanel/layer-selection';
+import { commitLiveFloat, registerFloatSession } from './interactions/live-float';
 import { createTransformState } from '../tools/transform/transform';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // PAINT_TOOLS / GPU_TOOLS are derived from the tool registry, so adding a
@@ -343,13 +341,13 @@ export function useCanvasInteraction(
       }
 
       // Commit any active GPU float (from transform or move) before dispatching
-      // to other tools. Without this, tools like gradient read the stale
-      // pre-transform selection mask from the GPU.
+      // to other tools, keeping the selection on screen: the moved marquee,
+      // or the transformed one. Re-selecting the whole layer's alpha here
+      // grew the marquee over everything on the layer, so a Marquee press
+      // dragged that outline instead of starting a new selection.
       // Move handles this itself in handleMoveDown.
       if (activeTool !== 'move' && engine && hasFloat(engine)) {
-        persistentTransformRef.current = null;
-        floatingSelectionRef.current = null;
-        selectLayerAlpha(activeLayerId);
+        commitLiveFloat();
 
         // After dropping the float, the engine may have resized/repositioned
         // the layer texture. Sync JS bounds so that syncLayers doesn't push
@@ -358,12 +356,6 @@ export function useCanvasInteraction(
         if (synced) {
           expandedLayer = synced;
           layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
-        }
-
-        const selAfter = useEditorStore.getState().selection;
-        if (selAfter.active && selAfter.mask) {
-          const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
-          setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
         }
       }
 

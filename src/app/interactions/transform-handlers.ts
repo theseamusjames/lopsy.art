@@ -29,10 +29,10 @@ import {
   compositeFloatPerspective,
   dropFloat,
 } from '../../engine-wasm/wasm-bridge';
-import { isLayerAlphaSelection, selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
+import { isLayerAlphaSelection } from '../../panels/LayerPanel/layer-selection';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { growFloatToCover } from './float-growth';
-import { claimLiveFloat, withLiveFloatKept } from './live-float';
+import { claimLiveFloat, commitLiveFloat, isLiveFloatCurrent, withLiveFloatKept } from './live-float';
 import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
 import type { Point } from '../../types';
 import {
@@ -108,22 +108,13 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 
   const engine = getEngine();
 
-  // If there's a GPU float from a previous move (no persistentTransformRef),
-  // commit it first so we start the transform from committed content.
-  if (engine && hasFloat(engine) && !persistentTransformRef.current) {
-    selectLayerAlpha(activeLayerId);
-    // Force-sync mask to GPU
-    const selAfter = useEditorStore.getState().selection;
-    if (selAfter.active && selAfter.mask) {
-      const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
-      setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
-    }
-  }
-
-  // If the float was dropped (e.g., by selectLayerAlpha or cmd+click),
-  // clear stale persistentTransformRef so we re-float.
-  if (engine && !hasFloat(engine)) {
-    persistentTransformRef.current = null;
+  // Only a live transform float carries on into this drag. Any other float
+  // (a Move drag's, a prefloat, one outdated by an edit or a layer switch) is
+  // committed first, keeping the selection that frames the moved pixels, and
+  // that selection is lifted afresh below. Re-selecting the whole layer's
+  // alpha here scaled everything else on the layer along with the piece.
+  if (!persistentTransformRef.current || !isLiveFloatCurrent(activeLayerId)) {
+    commitLiveFloat();
   }
 
   // Re-read selection after potential commit

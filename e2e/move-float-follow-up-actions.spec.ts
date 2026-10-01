@@ -279,6 +279,54 @@ test.describe('follow-up actions on a live Move float', { tag: '@chromium' }, ()
     expect(await colorAt(page, 90, 135, bottom)).toBe('black');
   });
 
+  test('a Marquee drag after a Move drag starts a new selection', async ({ page }) => {
+    await blackBlock(page, 0, 0, 400, 300);
+    await page.keyboard.press('Control+d');
+    await marquee(page, 140, 100, 260, 200);
+    await selectTool(page, 'move');
+    await drag(page, [200, 150], [260, 150]);
+
+    await marquee(page, 20, 20, 80, 80);
+    expect(await selectionBounds(page)).toEqual({ x: 20, y: 20, width: 60, height: 60 });
+  });
+
+  test('another tool keeps the moved marquee instead of selecting the whole layer', async ({ page }) => {
+    await blackBlock(page, 0, 0, 400, 300);
+    await page.keyboard.press('Control+d');
+    await marquee(page, 140, 100, 260, 200);
+    await selectTool(page, 'move');
+    await drag(page, [200, 150], [260, 150]);
+    expect(await selectionBounds(page)).toEqual({ x: 200, y: 100, width: 120, height: 100 });
+
+    await selectTool(page, 'eyedropper');
+    const p = await docToScreen(page, 30, 30);
+    await page.mouse.click(p.x, p.y);
+    await page.waitForTimeout(100);
+    expect(await selectionBounds(page)).toEqual({ x: 200, y: 100, width: 120, height: 100 });
+  });
+
+  test('scaling right after a drag scales only the moved piece', async ({ page }) => {
+    await blackBlock(page, 40, 40, 100, 100);
+    await blackBlock(page, 250, 40, 310, 100);
+    await marquee(page, 40, 40, 100, 100);
+    await selectTool(page, 'move');
+    await drag(page, [70, 70], [130, 70]);
+
+    // Drag the bottom-right handle (160, 100) out to (190, 130): 90 x 90.
+    await drag(page, [160, 100], [190, 130]);
+    await page.keyboard.press('Control+d');
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: 'e2e/screenshots/move-float-move-then-scale.png' });
+
+    expect(await colorAt(page, 180, 120)).toBe('black');
+    // The second block is untouched: x 250-310, y 40-100.
+    expect(await colorAt(page, 252, 42)).toBe('black');
+    expect(await colorAt(page, 308, 98)).toBe('black');
+    expect(await colorAt(page, 245, 70)).toBe('clear');
+    expect(await colorAt(page, 315, 70)).toBe('clear');
+    expect(await colorAt(page, 280, 105)).toBe('clear');
+  });
+
   test('a Fill after rotating a piece fills the rotated outline', async ({ page }) => {
     // The fill's marquee stays up around the block.
     await blackBlock(page, 40, 40, 100, 100);
@@ -302,5 +350,33 @@ test.describe('follow-up actions on a live Move float', { tag: '@chromium' }, ()
     // Only the anti-aliased rim the soft-edged selection didn't fully take
     // (alpha ≤ 25%) can stay behind.
     expect(await opaqueCount(page, 0, 0, 120, 120, 64)).toBe(0);
+  });
+
+  test('move, scale and rotate a piece in one go', async ({ page }) => {
+    await blackBlock(page, 40, 40, 100, 100);
+    await blackBlock(page, 250, 40, 310, 100);
+    await marquee(page, 40, 40, 100, 100);
+    await selectTool(page, 'move');
+    await drag(page, [70, 70], [130, 130]);
+    // Box now at x 100-160, y 100-160. Bottom-right handle out by 30: 90 x 90.
+    await drag(page, [160, 160], [190, 190]);
+    await rotateBox(page, { x: 100, y: 100, width: 90, height: 90 }, 45, 1.5);
+    await page.keyboard.press('Control+d');
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: 'e2e/screenshots/move-float-move-scale-rotate.png' });
+
+    // A 90 x 90 square turned 45 degrees about (145, 145): solid at the
+    // centre and on the diagonal tips, clear in the box corners.
+    expect(await colorAt(page, 145, 145)).toBe('black');
+    expect(await colorAt(page, 145, 85)).toBe('black');
+    expect(await colorAt(page, 205, 145)).toBe('black');
+    expect(await colorAt(page, 104, 104)).toBe('clear');
+    expect(await colorAt(page, 186, 186)).toBe('clear');
+    // ~8100 px of area, nothing left at the start position or on block 2.
+    const count = await opaqueCount(page, 60, 60, 240, 240);
+    expect(count).toBeGreaterThan(7600);
+    expect(count).toBeLessThan(8700);
+    expect(await opaqueCount(page, 30, 30, 90, 90)).toBeLessThan(10);
+    expect(await opaqueCount(page, 250, 40, 310, 100)).toBe(3600);
   });
 });
