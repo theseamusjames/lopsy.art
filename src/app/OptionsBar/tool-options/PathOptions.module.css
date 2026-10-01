@@ -36,3 +36,42 @@
   background: var(--color-border);
   flex-shrink: 0;
 }
+
+.draftGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.draftBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.draftBtn:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-hover);
+}
+
+.draftBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.commitBtn {
+  color: var(--color-success);
+}
+
+.cancelBtn {
+  color: var(--color-error);
+}
