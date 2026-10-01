@@ -82,6 +82,11 @@ export function createViewMenu(): MenuDef {
         checked: ui.snapToLayers,
         action: () => useUIStore.getState().toggleSnapToLayers(),
       },
+      {
+        label: 'Snap to Guides',
+        checked: ui.snapToGuides,
+        action: () => useUIStore.getState().toggleSnapToGuides(),
+      },
       { separator: true, label: '' },
       {
         label: 'Show Seamless Pattern',

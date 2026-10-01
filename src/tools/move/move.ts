@@ -291,15 +291,18 @@ export function snapPositionToGrid(
   return { x: snappedX, y: snappedY };
 }
 
+/** Snap `position` to the nearest guide within `snapThreshold`, if any. */
 export function snapToGuide(
   position: number,
-  guides: number[],
+  guides: readonly number[],
   snapThreshold: number,
 ): { snapped: boolean; value: number } {
+  let best: number | null = null;
   for (const guide of guides) {
-    if (Math.abs(position - guide) <= snapThreshold) {
-      return { snapped: true, value: guide };
+    const dist = Math.abs(position - guide);
+    if (dist <= snapThreshold && (best === null || dist < Math.abs(position - best))) {
+      best = guide;
     }
   }
-  return { snapped: false, value: position };
+  return best === null ? { snapped: false, value: position } : { snapped: true, value: best };
 }

@@ -13,6 +13,7 @@ vi.mock('../../engine-wasm/wasm-bridge', () => {
     createEllipseSelection: wasmThrow,
     selectionBounds: wasmThrow,
     createPolygonMask: wasmThrow,
+    combineSelections: wasmThrow,
     setSelectionMask: vi.fn(),
     featherSelectionMask: vi.fn(),
     readSelectionMask: vi.fn(),
@@ -34,10 +35,17 @@ vi.mock('../../engine-wasm/engine-state', () => ({
 
 const editorState = {
   document: { width: 12, height: 12, layers: [] as unknown[] },
-  selection: { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 },
+  selection: {
+    active: false,
+    mask: null as Uint8ClampedArray | null,
+    bounds: null as { x: number; y: number; width: number; height: number } | null,
+    maskWidth: 0,
+    maskHeight: 0,
+  },
   setSelection: vi.fn(),
   clearSelection: vi.fn(),
   notifyRender: vi.fn(),
+  pushHistoryMetadata: vi.fn(),
 };
 vi.mock('../../app/editor-store', () => ({
   useEditorStore: { getState: () => editorState },
@@ -118,6 +126,8 @@ describe('lasso strategy', () => {
     uiState.setTransform.mockClear();
     editorState.setSelection.mockClear();
     editorState.clearSelection.mockClear();
+    editorState.pushHistoryMetadata.mockClear();
+    editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
     ts.settings.marquee.feather = 0;
   });
 
@@ -188,5 +198,49 @@ describe('lasso strategy', () => {
     lassoStrategy.onUp!(makeState(), { x: 2, y: 2 }, upCtx);
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(uiState.clearLassoPoints).toHaveBeenCalledTimes(1);
+  });
+
+  /** Select the left triangle below the diagonal from (0,0) to (0,12)/(12,12). */
+  function selectLeftTriangle(): void {
+    uiState.lassoPoints = [{ x: 0, y: 0 }, { x: 12, y: 12 }, { x: 0, y: 12 }];
+    lassoStrategy.onUp!(makeState(), { x: 0, y: 12 }, upCtx);
+    const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
+      { x: number; y: number; width: number; height: number },
+      Uint8ClampedArray,
+    ];
+    editorState.selection = { active: true, mask, bounds, maskWidth: 12, maskHeight: 12 };
+    editorState.setSelection.mockClear();
+  }
+
+  it('onDown reads Shift as add and Alt as subtract once something is selected', () => {
+    expect(lassoStrategy.onDown(makeCtx({ shiftKey: true }), 'lasso')?.selectionCombineMode).toBe('replace');
+    selectLeftTriangle();
+    expect(lassoStrategy.onDown(makeCtx({ shiftKey: true }), 'lasso')?.selectionCombineMode).toBe('add');
+    expect(lassoStrategy.onDown(makeCtx({ altKey: true }), 'lasso')?.selectionCombineMode).toBe('subtract');
+    expect(lassoStrategy.onDown(makeCtx({ shiftKey: true, altKey: true }), 'lasso')?.selectionCombineMode).toBe('intersect');
+  });
+
+  it('Shift-lasso adds a second triangle that fills out the square', () => {
+    selectLeftTriangle();
+    uiState.lassoPoints = [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 12 }];
+    lassoStrategy.onUp!(makeState({ selectionCombineMode: 'add' }), { x: 12, y: 12 }, upCtx);
+    const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
+      { x: number; y: number; width: number; height: number },
+      Uint8ClampedArray,
+    ];
+    expect(bounds).toEqual({ x: 0, y: 0, width: 12, height: 12 });
+    // The two halves tile the square, so every pixel ends up selected.
+    expect(Array.from(mask).every((v) => v === 255)).toBe(true);
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Add to Selection');
+  });
+
+  it('Alt-lasso subtracts the traced area', () => {
+    selectLeftTriangle();
+    uiState.lassoPoints = [{ x: 0, y: 6 }, { x: 6, y: 6 }, { x: 6, y: 12 }, { x: 0, y: 12 }];
+    lassoStrategy.onUp!(makeState({ selectionCombineMode: 'subtract' }), { x: 0, y: 12 }, upCtx);
+    const [, mask] = editorState.setSelection.mock.calls[0]! as [unknown, Uint8ClampedArray];
+    expect(mask[9 * 12 + 3]).toBe(0); // inside the cut-out square
+    expect(mask[9 * 12 + 8]).toBe(255); // rest of the triangle kept
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Subtract from Selection');
   });
 });

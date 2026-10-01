@@ -13,7 +13,12 @@ import type { Rect } from '../../types';
  * overlay-only animation path in the rAF loop picks it up each frame.
  */
 export type MarqueePreview =
-  | { readonly kind: 'rect' | 'ellipse'; readonly rect: Rect }
+  | {
+    readonly kind: 'rect' | 'ellipse';
+    readonly rect: Rect;
+    /** Adding to / subtracting from the selection, which stays outlined. */
+    readonly isCombining?: boolean;
+  }
   | { readonly kind: 'move'; readonly dx: number; readonly dy: number };
 
 let preview: MarqueePreview | null = null;

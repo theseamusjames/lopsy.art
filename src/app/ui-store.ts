@@ -160,6 +160,8 @@ interface UIState {
   /** Set once the user toggles Snap to Grid; Show Grid then stops turning it on. */
   hasUserToggledSnapToGrid: boolean;
   snapToLayers: boolean;
+  /** Marquee drags land on a visible guide within reach. */
+  snapToGuides: boolean;
   /** Temporary snap alignment lines shown during move/transform. */
   snapLines: readonly SnapLine[];
   gridSize: number;
@@ -244,6 +246,7 @@ interface UIState {
   toggleWrapSeamlessPattern: () => void;
   toggleSnapToGrid: () => void;
   toggleSnapToLayers: () => void;
+  toggleSnapToGuides: () => void;
   setSnapLines: (lines: readonly SnapLine[]) => void;
   clearSnapLines: () => void;
   setGridSize: (size: number) => void;
@@ -339,6 +342,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   snapToGrid: false,
   hasUserToggledSnapToGrid: false,
   snapToLayers: false,
+  snapToGuides: true,
   snapLines: [],
   gridSize: 16,
   guideColor: { r: 0, g: 180, b: 255, a: 1 },
@@ -439,6 +443,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleWrapSeamlessPattern: () => set((state) => ({ wrapSeamlessPattern: !state.wrapSeamlessPattern })),
   toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid, hasUserToggledSnapToGrid: true })),
   toggleSnapToLayers: () => set((state) => ({ snapToLayers: !state.snapToLayers })),
+  toggleSnapToGuides: () => set((state) => ({ snapToGuides: !state.snapToGuides })),
   setSnapLines: (lines) => set({ snapLines: lines }),
   clearSnapLines: () => set({ snapLines: [] }),
   setGridSize: (size) => set({ gridSize: size }),

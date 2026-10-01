@@ -124,12 +124,16 @@ pub fn invert_selection(mask: &[u8]) -> Vec<u8> {
 
 /// Combine two selection masks
 /// mode: 0=replace, 1=add(union), 2=subtract, 3=intersect
+///
+/// Add sums coverage (saturating) instead of taking the max: two
+/// anti-aliased shapes that share an edge then sum to full coverage along
+/// it, where a max would leave a half-transparent seam.
 pub fn combine_selections(a: &[u8], b: &[u8], mode: u32) -> Vec<u8> {
     assert_eq!(a.len(), b.len());
     a.iter().zip(b.iter()).map(|(&av, &bv)| {
         match mode {
             0 => bv,
-            1 => av.max(bv),
+            1 => av.saturating_add(bv),
             2 => av.saturating_sub(bv),
             3 => av.min(bv),
             _ => av,
@@ -314,10 +318,10 @@ mod tests {
 
     #[test]
     fn test_combine_add() {
-        let a = vec![100, 0, 200];
-        let b = vec![50, 150, 100];
+        let a = vec![100, 0, 200, 128];
+        let b = vec![50, 150, 100, 127];
         let c = combine_selections(&a, &b, 1);
-        assert_eq!(c, vec![100, 150, 200]);
+        assert_eq!(c, vec![150, 150, 255, 255]);
     }
 
     #[test]

@@ -108,6 +108,9 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
         renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, moveTransform);
       }
     } else {
+      if (marqueePreview.isCombining) {
+        renderSelectionAnts(overlayCtx, selection, viewport.zoom, antPhase, null);
+      }
       renderMarqueeDraftAnts(overlayCtx, marqueePreview.rect, marqueePreview.kind, viewport.zoom, antPhase);
     }
   } else {

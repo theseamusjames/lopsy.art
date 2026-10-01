@@ -1,6 +1,7 @@
 import type { MutableRefObject } from 'react';
 import type { Point, ToolId, Layer, Rect } from '../../types';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
+import type { SelectionCombineMode } from '../../selection/selection';
 
 /**
  * Discriminated union describing which canvas gesture is active.
@@ -198,6 +199,8 @@ export interface InteractionState {
   originalSelectionMask: Uint8ClampedArray | null;
   originalSelectionMaskWidth: number;
   originalSelectionMaskHeight: number;
+  /** Set by the drag-out selection tools from the modifiers held at press. */
+  selectionCombineMode?: SelectionCombineMode;
   strokeDistance?: number;
   spacingRemainder?: number;
   symmetryCenter?: Point;
