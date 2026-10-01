@@ -687,8 +687,8 @@ gets baked first.
     rotation, no undo step, and no feedback. The selection branch has no such
     guard — it composites a rotation matrix through the float pipeline
     regardless of the layer underneath. [Flip Horizontal / Vertical in the Image
-    menu](#flip-horizontal--vertical) is the odd one out: it pushes history before it
-    checks anything at all.
+    menu](#flip-horizontal--vertical) flips a group as a unit but still mirrors a
+    text layer's glyph texture without any check.
 
 ---
 
@@ -1273,7 +1273,7 @@ Lopsy has **no** Adjustment-layer or Fill-layer type. Adjustments are non-destru
 **Pixel writers refuse group and text layers, with a toast (#768, fixed in #770).** A group's own texture is never sampled — the compositor composites a group's children and then `continue`s past the per-layer blend, on the stated assumption that "groups have no texture" — and a text layer's texture is rebuilt by the type rasterizer on every text edit. Before #770 nothing checked a layer's *type* before writing, so a Brush stroke, Bucket Fill, gradient, or shape aimed at a group allocated a document-sized texture nobody drew and still pushed a history row (clearing the redo stack), and paint on a text layer showed until the next text change wiped it. `guardPixelWrite` in `src/layers/paint-target.ts` now refuses both, showing **"Groups can't be painted on. Select a layer inside the group."** or **"Text layers must be rasterized before they can be painted on."** with no history row pushed. Rasterize a text layer first if you mean to paint on it.
 
 - **Where the guard runs.** On the canvas, `handleToolDown` calls it right after the lock check for every tool that writes raster pixels — the eight registry paint tools (Brush, Pencil, Eraser, Clone Stamp, Healing Brush, Dodge / Burn, Sponge, Spray) plus Bucket Fill, Gradient, Shape, and Smudge. The Path tool's **Enter** (stroke the in-progress path) runs it too, since #988. From the menus, Edit → Fill, every filter commit path in `filter-actions.ts` (including Invert, Desaturate, and Find Edges), Fill with Pattern, and **Define Pattern** — a pixel *read*, which is refused on a text layer with the same "must be rasterized" wording.
-- **Not every writer is behind it.** Liquify, Mesh Warp, Tilt-Shift Blur, and Color LUT do not call the guard, and neither do the `Delete`-key clear, Cut, or the image-menu layer flips and rotations.
+- **Not every writer is behind it.** Liquify, Mesh Warp, Tilt-Shift Blur, and Color LUT do not call the guard, and neither do the `Delete`-key clear, Cut, or the image-menu layer rotations. Image → Flip has its own check, for groups only: it refuses a group containing a text layer with a "Rasterize the text layers" toast and flips other groups as a unit (see [Flip Horizontal / Vertical](#flip-horizontal--vertical)).
 - **Known defect — the guard runs before the mask routing, so masks on text layers and groups can no longer be painted.** `toolWritesRasterPixels(activeTool) && !guardPixelWrite(activeLayer)` sits ahead of the branch that decides whether the stroke goes to the layer, to its layer mask (mask edit mode), or to Quick Mask, and it looks only at the tool and the layer type. So with a text layer or a group active, **Quick Mask painting** and **painting that layer's own mask** are both refused with the "rasterized" / "Groups can't be painted on" toast, even though neither writes a single layer pixel. Add Mask still accepts both layer types, so the mask can be created but not edited with the Brush, Pencil, Eraser, Gradient, or Bucket. Verified live on a 400 × 300 document: with a committed text layer active, Quick Mask on, and a white Brush, a drag across the canvas showed the text-layer toast and pushed no `Quick Mask Paint` row (the same drag with the Background active had pushed one); with the root group active the group toast appeared instead; and after **Add Mask** on the text layer and a click on its mask thumbnail (mask edit mode on), a black Brush drag across the type was refused the same way, leaving the stack at `… Text, Add Mask`. The guard also runs ahead of the symmetry-center **Cmd+click**, so that click is refused on those layers while a paint tool is active.
 
 ### Layer Properties
@@ -1601,7 +1601,8 @@ for Crop / Canvas Size / Image Size, `invalidateLayers()` for Rotate Image (was 
   and rotates the raster layers about the document center.
 - **Flip Horizontal / Vertical** (Image menu): mirrors the **active layer**
   along the chosen axis (per-layer, not document-wide, so partial-image flips
-  are possible).
+  are possible) — or, with a group active, everything inside the group as one
+  piece.
 
 ### What each one actually touches
 
@@ -1616,7 +1617,7 @@ every non-raster layer outright.
 | **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | untouched | untouched |
 | **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position, font size, letter spacing, area-text width, and effect dimensions all scaled | untouched | untouched | untouched |
 | **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | **untouched** | untouched | untouched | untouched |
-| **Flip** | mirrored within the layer's own texture | untouched | mirrors the rendered glyph texture | no-op on a group's 1×1 placeholder | untouched | untouched |
+| **Flip** | mirrored within the layer's own texture | untouched (a group's descendants move — see below) | mirrors the rendered glyph texture | a group mirrors its descendants as a unit; a shape layer flips like a raster | untouched | untouched |
 
 **Layer masks are never transformed by any of the five.** The Rust helpers
 (`crop_texture`, `resize_canvas_texture`, `scale_texture`, `rotate_texture_90`,
@@ -1660,29 +1661,43 @@ after itself, by calling `clearSelection()` once the crop lands.
 
 ### Flip Horizontal / Vertical
 
-- **No type guard, and history is pushed first.** `flipActiveLayer` records the
-  *Flip Horizontal* / *Flip Vertical* entry before it looks at anything, then
-  calls `flipLayer` on whatever texture the active layer owns. On a group that
-  is the 1×1 lazy placeholder, so the command adds an undo step and changes
-  nothing visible. On a text layer it mirrors the rendered glyph texture, and
-  the mirror survives until something re-renders the layer from its stored
-  string (any text property edit, a font binary finishing its download, or the
-  layer losing a path binding) — at which point the glyphs silently snap back.
-  Contrast [Rotate 90°](#quick-transforms), which bails out on any non-raster
-  layer *before* pushing history.
+- **Groups are dispatched before history is pushed; nothing else is.**
+  `flipActiveLayer` dispatches on the active layer:
+  - **Raster (and legacy shape) layers** record a *Flip Horizontal* / *Flip
+    Vertical* entry and call `flipLayer` on the layer's texture.
+  - **Text layers** get the same treatment, which mirrors the rendered glyph
+    texture; the mirror survives only until something re-renders the layer
+    from its stored string (any text property edit, a font binary finishing
+    its download, or the layer losing a path binding), at which point the
+    glyphs silently snap back.
+  - **Groups flip as a unit.** A group has no pixels of its own (the command
+    used to flip its 1×1 placeholder and add an undo step that changed
+    nothing). Now every pixel layer inside it, nested groups included, is mirrored
+    in its own texture and moved to the mirror of its position within the
+    group's combined content bounds — the union of each descendant's opaque
+    content (`planGroupFlip` in `src/layers/flip.ts`) — so the group looks
+    mirrored and its overall extent stays put. Hidden and locked descendants
+    flip too; empty ones are skipped and don't widen the bounds. It is one
+    history entry, and a group with no content adds none. A group holding a
+    **live text layer** anywhere inside it is refused whole with **"Rasterize
+    the text layers in this group before flipping it."**, rather than
+    flipping everything but the type.
 - **The mirror is about the layer's own bounding box, not the document.**
   `flip_texture` flips UVs within the existing `w × h` texture and writes back
-  into it; `x` / `y` are never touched. A layer smaller than the canvas
-  therefore flips in place rather than moving to the opposite side of the
-  document.
-- **Known defect — a layer smaller than the document fills with a squashed
-  copy of the composite (#795; fixed in #808, reverted by #839).**
-  `flip_texture` renders the flipped `w × h` image into the top-left of the
-  document-sized `scratch_a` texture, then blits the **whole** scratch — stale
-  content included — back into the `w × h` layer texture with a full-quad
-  draw, shrinking it to fit. A freshly pasted 120 × 120 layer flipped straight
-  after the paste therefore shows a miniature of the entire document. Only a
-  layer exactly the document's size comes out right.
+  into it; for a single layer `x` / `y` are never touched, so a layer smaller
+  than the canvas flips in place rather than moving to the opposite side of
+  the document. A group's descendants do move (see above), and that move is
+  the only thing that changes their `x` / `y`.
+- **Masks do not follow.** Like the other canvas operations, Flip never
+  touches `engine.layer_masks`: a layer's mask keeps its unflipped pixels, and
+  a raster descendant moved by a group flip leaves its document-anchored mask
+  behind.
+- **A layer smaller than the document flips its own pixels (#795, fixed in
+  #1050).** `flip_texture` renders through the scratch texture and copies it
+  back with a full-quad draw. The scratch was left document-sized by the last
+  composite, so a freshly pasted 120 × 120 layer used to come back as a
+  miniature of the whole document; `ensure_scratch_size` now sizes it to the
+  layer first.
 
 ### Canvas Size and Crop reset every raster layer to full canvas
 
