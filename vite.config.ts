@@ -5,7 +5,7 @@ import topLevelAwait from 'vite-plugin-top-level-await';
 import { resolve } from 'path';
 import { statSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { tutorialsPlugin } from './scripts/vite-plugin-tutorials';
+import { sitePlugin } from './scripts/vite-plugin-site';
 import { agentDocsPlugin } from './scripts/vite-plugin-agent-docs';
 
 /**
@@ -75,9 +75,11 @@ export default defineConfig({
     wasm(),
     topLevelAwait(),
     wasmFreshnessCheck(),
-    tutorialsPlugin({
-      contentDir: resolve(__dirname, 'tutorials'),
-      cssFile: resolve(__dirname, 'src/site/tutorials/tutorials.css'),
+    sitePlugin({
+      tutorialsDir: resolve(__dirname, 'tutorials'),
+      blogDir: resolve(__dirname, 'blog'),
+      baseCss: resolve(__dirname, 'src/site/tutorials/tutorials.css'),
+      blogCss: resolve(__dirname, 'src/site/blog/blog.css'),
     }),
     agentDocsPlugin({ root: resolve(__dirname), files: ['SKILL.md', 'FEATURES.md'] }),
   ],

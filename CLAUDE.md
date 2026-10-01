@@ -68,10 +68,14 @@ src/
   styles/           # Global CSS: tokens.css, reset.css, fonts.css
   types/            # Shared TypeScript type definitions
   utils/            # Small pure utility functions
-  site/tutorials/   # Static tutorial page generator (pure: parse, render,
-                    # sitemap). Wired into Vite by scripts/vite-plugin-tutorials.ts.
+  site/tutorials/   # Static tutorial page generator (pure: parse, render).
+                    # Also holds the shared page layout and Markdown subset.
+  site/blog/        # Static blog generator (posts, list page, Atom feed).
+                    # Both are wired into Vite by scripts/vite-plugin-site.ts.
 tutorials/          # Tutorial content: <slug>/index.md + screenshots. Copy
                     # _template/ to start one; see tutorials/README.md.
+blog/               # Blog posts: <slug>/index.md + images. Copy _template/
+                    # to start one; see blog/README.md.
 public/
   fonts/            # Self-hosted woff2 font files
 e2e/                # Playwright end-to-end tests

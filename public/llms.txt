@@ -20,3 +20,4 @@ The source is on GitHub at https://github.com/theseamusjames/lopsy.art, and we a
 ## Learn
 
 - [Tutorials](https://lopsy.art/tutorials/): step-by-step illustrated compositions made in Lopsy.
+- [Blog](https://lopsy.art/blog/): engineering notes on how Lopsy is built (Rust/WebAssembly, WebGL2, TypeScript). Atom feed at https://lopsy.art/blog/feed.xml.

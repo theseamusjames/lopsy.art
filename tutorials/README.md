@@ -81,7 +81,8 @@ stays an ordinary list, so write those as separate items.
   `project`, the steps,
   a call to action, and up to three related tutorials (the ones listed in
   `related` first, then the ones sharing the most tags).
-- `/sitemap.xml`: every tutorial with its `updated` date.
+- `/sitemap.xml`: every tutorial with its `updated` date (shared with the
+  [blog](../blog/README.md)).
 
 Every page gets a canonical URL, Open Graph and Twitter card tags, and
 schema.org JSON-LD (`HowTo` with one `HowToStep` per step, `BreadcrumbList`,
@@ -94,4 +95,4 @@ undocumented in the app itself, with no menu item or dialog.
 
 The generator lives in `src/site/tutorials/`, the page styles in
 `src/site/tutorials/tutorials.css`, and the Vite glue in
-`scripts/vite-plugin-tutorials.ts`.
+`scripts/vite-plugin-site.ts` (which also builds the blog).

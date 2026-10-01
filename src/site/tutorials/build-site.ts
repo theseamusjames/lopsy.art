@@ -5,7 +5,8 @@ import { byNewest, pickRelated } from './related';
 import { type RenderContext, coverImage } from './render-layout';
 import { renderTutorialIndex } from './render-index';
 import { renderTutorialPage } from './render-tutorial';
-import { RELATED_LIMIT, TUTORIALS_PATH, absoluteUrl, tutorialPath } from './site-config';
+import { RELATED_LIMIT, TUTORIALS_PATH, tutorialPath } from './site-config';
+import { type SitemapEntry, latestDate } from '../sitemap';
 import type { ImageSize, SourceTutorial, Tutorial } from './types';
 
 export interface BuildOptions {
@@ -18,6 +19,8 @@ export interface BuildOptions {
 export interface BuildResult {
   /** Output files keyed by path relative to the site root, e.g. `tutorials/index.html`. */
   files: Map<string, string | Uint8Array>;
+  /** Pages for the site-wide sitemap, which the Vite plugin writes once for every section. */
+  sitemapEntries: SitemapEntry[];
   errors: string[];
   warnings: string[];
 }
@@ -61,21 +64,11 @@ function checkProject(tutorial: Tutorial, source: SourceTutorial, errors: string
   }
 }
 
-export function renderSitemap(tutorials: readonly Tutorial[]): string {
-  const latest = tutorials.reduce((max, t) => (t.updated > max ? t.updated : max), '');
-  const entries = [
-    { loc: absoluteUrl('/'), lastmod: '' },
-    { loc: absoluteUrl(TUTORIALS_PATH), lastmod: latest },
-    ...tutorials.map((t) => ({ loc: absoluteUrl(tutorialPath(t.slug)), lastmod: t.updated })),
+export function tutorialSitemapEntries(tutorials: readonly Tutorial[]): SitemapEntry[] {
+  return [
+    { path: TUTORIALS_PATH, lastmod: latestDate(tutorials.map((t) => t.updated)) },
+    ...tutorials.map((t) => ({ path: tutorialPath(t.slug), lastmod: t.updated })),
   ];
-  const urls = entries.map(({ loc, lastmod }) =>
-    `  <url><loc>${loc}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`,
-  );
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.join('\n')}
-</urlset>
-`;
 }
 
 export function buildTutorialSite(options: BuildOptions): BuildResult {
@@ -108,7 +101,7 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
   }
 
   const files = new Map<string, string | Uint8Array>();
-  if (errors.length > 0) return { files, errors, warnings };
+  if (errors.length > 0) return { files, sitemapEntries: [], errors, warnings };
 
   const ctx: RenderContext = {
     css: options.css,
@@ -136,7 +129,6 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
       );
     }
   }
-  files.set('sitemap.xml', renderSitemap(tutorials));
 
-  return { files, errors, warnings };
+  return { files, sitemapEntries: tutorialSitemapEntries(tutorials), errors, warnings };
 }

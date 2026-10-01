@@ -219,14 +219,16 @@ named after its default instance ("Montserrat Thin"); the loader
 registers binaries under the catalog name via `loadFontDataForFamily`.
 
 
-## Tutorials are static pages generated at build time — never add a root 404.html
+## Tutorials and the blog are static pages generated at build time — never add a root 404.html
 
-`/tutorials/` is plain HTML emitted into `dist/` by `scripts/vite-plugin-tutorials.ts`
-from `tutorials/<slug>/index.md` (renderer in `src/site/tutorials/`). In dev the
+`/tutorials/` and `/blog/` are plain HTML emitted into `dist/` by `scripts/vite-plugin-site.ts`
+from `tutorials/<slug>/index.md` and `blog/<slug>/index.md` (renderers in
+`src/site/tutorials/` and `src/site/blog/`; the blog reuses the tutorials'
+layout and Markdown). Both sections share one `/sitemap.xml`. In dev the
 same plugin serves them from memory with drafts included. Cloudflare Pages serves
 `dist/tutorials/<slug>/index.html` at `/tutorials/<slug>/` and treats the whole
 site as an SPA only because there is **no top-level `404.html`** — adding one
-would break deep links into the editor. Canonical tutorial URLs end in `/`.
+would break deep links into the editor. Canonical tutorial and post URLs end in `/`.
 
 ## Layer textures hold straight (non-premultiplied) alpha
 

@@ -1,5 +1,15 @@
 import { escapeHtml } from './markdown';
-import { SITE_NAME, TUTORIALS_PATH, absoluteUrl } from './site-config';
+import {
+  AUTHOR_NAME,
+  AUTHOR_URL,
+  BLOG_FEED_PATH,
+  BLOG_PATH,
+  COPYRIGHT_YEAR,
+  SITE_NAME,
+  SOURCE_URL,
+  TUTORIALS_PATH,
+  absoluteUrl,
+} from './site-config';
 import type { ImageSize, Tutorial, TutorialImage } from './types';
 
 export interface RenderContext {
@@ -21,7 +31,7 @@ export interface DocumentOptions {
   ogImageAlt: string;
   ogImageSize?: ImageSize | null;
   ogType: 'website' | 'article';
-  /** Extra `<meta>` tags, already escaped. */
+  /** Extra `<meta>` / `<link>` tags, already escaped. */
   extraMeta?: string[];
   jsonLd: unknown;
   body: string;
@@ -54,11 +64,11 @@ export function renderImage(
   ctx: RenderContext,
   slug: string,
   image: TutorialImage,
-  options: { isEager?: boolean; sizes?: string; className?: string } = {},
+  options: { isEager?: boolean; sizes?: string; className?: string; basePath?: string } = {},
 ): string {
   const size = ctx.imageSize(slug, image.src);
   const attrs = [
-    `src="${escapeHtml(`${TUTORIALS_PATH}${slug}/${image.src}`)}"`,
+    `src="${escapeHtml(`${options.basePath ?? TUTORIALS_PATH}${slug}/${image.src}`)}"`,
     `alt="${escapeHtml(image.alt)}"`,
     size ? `width="${size.width}" height="${size.height}"` : '',
     options.isEager ? 'fetchpriority="high"' : 'loading="lazy"',
@@ -120,16 +130,44 @@ function renderSiteHeader(): string {
     <a class="brand" href="/" aria-label="${SITE_NAME} home">LOPSY</a>
     <nav class="site-nav" aria-label="Site">
       <a href="${TUTORIALS_PATH}">Tutorials</a>
+      <a href="${BLOG_PATH}">Blog</a>
       <a class="button" href="/">Open Lopsy</a>
     </nav>
   </div>
 </header>`;
 }
 
+/** Lucide's `rss` icon, inline so the footer needs no extra request. */
+const RSS_ICON = '<svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>';
+
 function renderSiteFooter(): string {
   return `<footer class="site-footer">
-  <p>${SITE_NAME} is a free image editor that runs entirely in your browser — no install, no account.</p>
-  <nav aria-label="Footer"><a href="/">Open the editor</a><a href="${TUTORIALS_PATH}">All tutorials</a></nav>
+  <div class="site-footer-inner">
+    <div class="footer-about">
+      <a class="brand" href="/" aria-label="${SITE_NAME} home">LOPSY</a>
+      <p>${SITE_NAME} is a free image editor that runs entirely in your browser — no install, no account.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <div>
+        <p class="footer-heading">Learn</p>
+        <ul>
+          <li><a href="${TUTORIALS_PATH}">Tutorials</a></li>
+          <li><a href="${BLOG_PATH}">Blog</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="footer-heading">${SITE_NAME}</p>
+        <ul>
+          <li><a href="/">Open the editor</a></li>
+          <li><a href="${SOURCE_URL}" rel="noopener">Source code</a></li>
+        </ul>
+      </div>
+    </nav>
+  </div>
+  <div class="footer-bottom">
+    <p>© ${COPYRIGHT_YEAR} <a href="${AUTHOR_URL}" rel="noopener">${AUTHOR_NAME}</a></p>
+    <a class="footer-rss" href="${BLOG_FEED_PATH}">${RSS_ICON}Subscribe via RSS</a>
+  </div>
 </footer>`;
 }
 

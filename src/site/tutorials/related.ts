@@ -4,7 +4,8 @@ function sharedTagCount(a: Tutorial, b: Tutorial): number {
   return a.tags.filter((tag) => b.tags.includes(tag)).length;
 }
 
-export function byNewest(a: Tutorial, b: Tutorial): number {
+/** Newest first; also orders blog posts, which share these fields. */
+export function byNewest(a: Pick<Tutorial, 'publishedAt' | 'title'>, b: Pick<Tutorial, 'publishedAt' | 'title'>): number {
   if (a.publishedAt !== b.publishedAt) return a.publishedAt < b.publishedAt ? 1 : -1;
   return a.title.localeCompare(b.title);
 }

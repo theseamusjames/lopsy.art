@@ -1,6 +1,7 @@
 /*
- * Styles for the static tutorial pages. Inlined into every page by the
- * tutorials Vite plugin, so keep it small. Colors mirror src/styles/tokens.css;
+ * Styles for the static site pages: shared chrome plus the tutorials. Inlined
+ * into every /tutorials/ and /blog/ page by the site Vite plugin (blog pages
+ * add blog.css after it), so keep it small. Colors mirror src/styles/tokens.css;
  * sizes are larger than the editor's because these pages are for reading.
  */
 
@@ -78,7 +79,12 @@ html {
   text-size-adjust: 100%;
 }
 
+/* A full-height column so the footer sits at the bottom of short pages. */
 body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   background: var(--bg);
   color: var(--text);
@@ -439,6 +445,10 @@ kbd {
   font-size: 15px;
 }
 
+.site-nav a {
+  white-space: nowrap;
+}
+
 .site-nav a:not(.button) {
   color: var(--text-muted);
   text-decoration: none;
@@ -449,20 +459,101 @@ kbd {
 }
 
 .site-footer {
-  max-width: var(--wide-width);
-  margin: 64px auto 0;
-  padding: 32px 20px 48px;
+  margin-top: 80px;
   border-top: 1px solid var(--border);
+  background: var(--bg-raised);
   color: var(--text-muted);
   font-size: 15px;
 }
 
-.site-footer nav {
+.site-footer-inner,
+.footer-bottom {
+  max-width: var(--wide-width);
+  margin: 0 auto;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.site-footer-inner {
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 32px 64px;
+  padding-top: 40px;
+  padding-bottom: 32px;
+}
+
+.footer-about {
+  max-width: 340px;
+}
+
+.footer-about p {
+  margin: 8px 0 0;
+}
+
+.site-footer a:not(.brand) {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.site-footer a:not(.brand):hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.footer-links {
+  display: flex;
+  gap: 64px;
+}
+
+.footer-heading {
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.footer-links ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer-links li + li {
+  margin-top: 6px;
+}
+
+.footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding-top: 20px;
+  padding-bottom: 32px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.footer-bottom p {
+  margin: 0;
+}
+
+.site-footer .footer-rss {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footer-rss .icon {
+  color: #f26522;
 }
 
 .page {
+  flex: 1 0 auto;
+  width: 100%;
   max-width: var(--wide-width);
   margin: 0 auto;
   padding: 24px 20px 0;
@@ -808,6 +899,27 @@ kbd {
 
   .lede {
     font-size: 18px;
+  }
+
+  .site-header-inner,
+  .site-footer-inner,
+  .footer-bottom,
+  .page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .site-header-inner {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .footer-links {
+    gap: 48px;
+  }
+
+  .brand {
+    font-size: 32px;
   }
 
   .site-nav {

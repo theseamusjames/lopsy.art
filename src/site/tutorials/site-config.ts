@@ -1,6 +1,13 @@
 export const SITE_ORIGIN = 'https://lopsy.art';
 export const SITE_NAME = 'Lopsy';
 export const TUTORIALS_PATH = '/tutorials/';
+export const BLOG_PATH = '/blog/';
+export const BLOG_FEED_PATH = `${BLOG_PATH}feed.xml`;
+
+export const COPYRIGHT_YEAR = 2026;
+export const AUTHOR_NAME = 'Seamus James';
+export const AUTHOR_URL = 'https://github.com/theseamusjames';
+export const SOURCE_URL = 'https://github.com/theseamusjames/lopsy.art';
 
 /**
  * Query parameter the editor reads on startup to open a `.lopsy` file from a
