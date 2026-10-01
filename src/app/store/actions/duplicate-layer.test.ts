@@ -87,59 +87,15 @@ describe('computeDuplicateLayer', () => {
     expect(r.selectedLayerIds).toEqual([r.activeLayerId]);
   });
 
-  it('offsets a layer that fits comfortably within the canvas', () => {
-    const doc = makeDoc({
-      layerWidth: 100, layerHeight: 100, layerX: 50, layerY: 50,
-      docWidth: 1024, docHeight: 1024,
-    });
+  it.each([
+    { name: 'a layer well inside the canvas', layerX: 50, layerY: 50, layerWidth: 100, layerHeight: 100 },
+    { name: 'a layer at the canvas origin', layerX: 0, layerY: 0, layerWidth: 100, layerHeight: 100 },
+    { name: 'a layer against the far edge', layerX: 924, layerY: 924, layerWidth: 100, layerHeight: 100 },
+    { name: 'a layer larger than the canvas', layerX: -100, layerY: -50, layerWidth: 4000, layerHeight: 3000 },
+  ])('places the copy exactly over $name', (opts) => {
+    const doc = makeDoc(opts);
     const dup = newLayer(doc);
-    expect(dup.x).toBe(60);
-    expect(dup.y).toBe(60);
-  });
-
-  // Regression for issue #348: a wide layer (wider than the canvas) must not
-  // get an offset that pushes its already-clipped edge further off the canvas.
-  it('does not offset a layer wider than the canvas', () => {
-    const doc = makeDoc({
-      layerWidth: 4000, layerHeight: 100, layerX: 0, layerY: 50,
-      docWidth: 1024, docHeight: 1024,
-    });
-    const dup = newLayer(doc);
-    expect(dup.x).toBe(0);
-    // Y axis fits, so it still gets the small visual offset.
-    expect(dup.y).toBe(60);
-  });
-
-  it('does not offset a layer taller than the canvas', () => {
-    const doc = makeDoc({
-      layerWidth: 100, layerHeight: 4000, layerX: 50, layerY: 0,
-      docWidth: 1024, docHeight: 1024,
-    });
-    const dup = newLayer(doc);
-    expect(dup.x).toBe(60);
-    expect(dup.y).toBe(0);
-  });
-
-  it('clamps the offset so the duplicate edge does not pass the canvas edge', () => {
-    // Layer's right edge is 5px from the canvas edge — only 5px of horizontal
-    // shift is allowed before the duplicate would clip.
-    const doc = makeDoc({
-      layerWidth: 100, layerHeight: 100, layerX: 919, layerY: 919,
-      docWidth: 1024, docHeight: 1024,
-    });
-    const dup = newLayer(doc);
-    expect(dup.x).toBe(924);
-    expect(dup.y).toBe(924);
-  });
-
-  it('does not offset when layer is already at the far edge', () => {
-    const doc = makeDoc({
-      layerWidth: 100, layerHeight: 100, layerX: 924, layerY: 924,
-      docWidth: 1024, docHeight: 1024,
-    });
-    const dup = newLayer(doc);
-    expect(dup.x).toBe(924);
-    expect(dup.y).toBe(924);
+    expect({ x: dup.x, y: dup.y }).toEqual({ x: opts.layerX, y: opts.layerY });
   });
 });
 
@@ -195,6 +151,18 @@ describe('computeDuplicateLayer (group)', () => {
     expect(r.layerOrder).toEqual([a.id, b.id, g.id, aCopy, bCopy, copy.id, top.id]);
     expect(groupById(r, g.id).children).toEqual([a.id, b.id]);
     expect(r.selectedLayerIds).toEqual([copy.id]);
+  });
+
+  it('places every layer of the copy exactly over its source', () => {
+    const a: RasterLayer = { ...raster('A'), x: 40, y: 70 };
+    const g = createGroupLayer({ name: 'G', children: [a.id] });
+    const doc = groupDoc([a, g], [a.id, g.id], g.id);
+
+    const r = result(doc);
+    const copy = groupById(r, r.activeLayerId!);
+    const aCopy = r.layers.find((l) => l.id === copy.children[0]);
+    expect({ x: aCopy?.x, y: aCopy?.y }).toEqual({ x: 40, y: 70 });
+    expect({ x: copy.x, y: copy.y }).toEqual({ x: g.x, y: g.y });
   });
 
   it('keeps a nested sub-group and its children inside the copy', () => {

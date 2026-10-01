@@ -104,20 +104,20 @@ test.describe('Duplicate Layer', () => {
     expect(copyId).not.toBe(originalId);
     expect(await selectedLayerIds(page)).toEqual([copyId]);
 
-    // The copy sits at +10/+10: red spans 100..210 on both axes.
+    // The copy lands on top of the original; nudge it 5 px right.
     await page.keyboard.press('v');
     for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
     await settle(page);
     await page.screenshot({ path: 'e2e/screenshots/duplicate-layer-nudge-copy-only.png' });
 
     // The original's left edge stays at x = 100. Had the original been
-    // nudged along with the copy, columns 100..104 would show the white
-    // background (its left edge would be at 105, the copy's at 115).
+    // nudged along with the copy, both would start at x = 105 and columns
+    // 100..104 would show the white background.
     expectNear(await compositeAt(page, 102, 150), RED);
     expectNear(await compositeAt(page, 98, 150), WHITE);
-    // The copy moved 5 px right: it now ends at x = 215.
-    expectNear(await compositeAt(page, 213, 150), RED);
-    expectNear(await compositeAt(page, 217, 150), WHITE);
+    // The copy moved 5 px right: it now ends at x = 205.
+    expectNear(await compositeAt(page, 203, 150), RED);
+    expectNear(await compositeAt(page, 207, 150), WHITE);
   });
 
   test('#805 a duplicated group is one self-contained block above the original', async ({ page }) => {
@@ -144,9 +144,15 @@ test.describe('Duplicate Layer', () => {
     expect(copyGroup.children).toHaveLength(2);
     const [redCopyId, blueCopyId] = copyGroup.children as [string, string];
 
+    // The copy lands exactly over the original; Shift+arrows nudge the
+    // selected copy group 10 px right and 10 px down so the stacking shows.
+    await page.keyboard.press('v');
+    await page.keyboard.press('Shift+ArrowRight');
+    await page.keyboard.press('Shift+ArrowDown');
+    await settle(page);
     await page.screenshot({ path: 'e2e/screenshots/duplicate-group-self-contained.png' });
 
-    // The copy (+10/+10) composites entirely above the original group:
+    // The nudged copy composites entirely above the original group:
     // its red rect (110..310 × 110..260) covers the original blue square
     // (150..250 × 150..200) where the copy's blue (160..260 × 160..210)
     // does not reach. Interleaved, the original blue drew over the copy's red.
@@ -165,5 +171,33 @@ test.describe('Duplicate Layer', () => {
     expect(rows.slice(start, start + 6)).toEqual([
       copyGroupId, blueCopyId, redCopyId, groupId, blueId, redId,
     ]);
+  });
+
+  test('the copy lands exactly over the original', async ({ page }) => {
+    const originalId = await activeLayerId(page);
+    await fillRect(page, 100, 100, 200, 200, RED);
+
+    await page.locator(`[data-layer-id="${originalId}"]`).click();
+    await page.click('button:has-text("Layer")');
+    await page.getByRole('menuitem', { name: /^Duplicate Layer/ }).click();
+    await settle(page);
+
+    const copyId = await activeLayerId(page);
+    expect(copyId).not.toBe(originalId);
+
+    // Hide the original so only the copy draws.
+    await page.locator(`[data-layer-id="${originalId}"]`)
+      .locator('button[aria-label="Hide layer"]')
+      .click();
+    await settle(page);
+    await page.screenshot({ path: 'e2e/screenshots/duplicate-layer-in-place.png' });
+
+    // The copy covers exactly 100..200 on both axes, with no +10/+10 shift.
+    expectNear(await compositeAt(page, 101, 101), RED);
+    expectNear(await compositeAt(page, 198, 198), RED);
+    expectNear(await compositeAt(page, 98, 150), WHITE);
+    expectNear(await compositeAt(page, 150, 98), WHITE);
+    expectNear(await compositeAt(page, 202, 150), WHITE);
+    expectNear(await compositeAt(page, 150, 202), WHITE);
   });
 });
