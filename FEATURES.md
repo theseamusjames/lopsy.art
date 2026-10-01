@@ -549,7 +549,16 @@ gets baked first.
 - **Skew** — edge and corner handles skew instead of scaling, clamped to
   **±60°** on each axis. `left`/`right` produce vertical skew; `top`, `bottom`
   **and all four corners** produce horizontal skew only. The edge opposite the
-  one being dragged is pinned via a translate compensation.
+  one being dragged is pinned via a translate compensation, and **the dragged
+  edge follows the pointer 1:1** in the direction of the drag, for every
+  handle: drag the right handle of a 300 px-wide box up 60 px and its right
+  edge rises 60 px (a 1:5 slope); drag the top handle right and the top edge
+  slides right. Only the pointer's component *along* the edge counts (a corner
+  ignores the vertical part of its drag), measured in the box's own axes so a
+  rotated box shears along its sides. Each drag adds to the shear's tangent,
+  so a second drag on an already-skewed box tracks the pointer too. (Before
+  #1074, fixed in this change, edges travelled twice the pointer distance and
+  the top/left handles moved against the drag.)
 - **Distort** — a corner handle moves that corner alone; an edge handle
   translates both corners of that edge together. No clamping, so corners may
   cross over each other.
