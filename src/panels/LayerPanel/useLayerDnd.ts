@@ -16,6 +16,38 @@ interface DisplayEntry {
  */
 export const DROP_DEPTH_STEP_PX = 16;
 
+/**
+ * Band at the list's top and bottom edge that scrolls it during a row
+ * drag. Two thirds of a 36px row, so the inner half of a row flush with
+ * either edge can still be targeted without the list moving.
+ */
+export const AUTO_SCROLL_ZONE_PX = 24;
+
+/** Scroll step per animation frame with the pointer at or past an edge. */
+export const AUTO_SCROLL_MAX_STEP_PX = 16;
+
+/**
+ * Per-frame scroll step for a row drag with the pointer at `pointerY`
+ * over a list spanning `top`..`bottom` (client px). Negative scrolls up.
+ * The step grows linearly from 1px at the inner edge of a zone to the
+ * maximum at the list edge, and stays at the maximum past it so dragging
+ * over the toolbar or a neighbouring panel keeps scrolling. The zone
+ * shrinks on short lists so the two never overlap.
+ */
+export function autoScrollStep(pointerY: number, top: number, bottom: number): number {
+  const zone = Math.min(AUTO_SCROLL_ZONE_PX, (bottom - top) / 4);
+  if (zone <= 0) return 0;
+  const depthIntoTop = zone - (pointerY - top);
+  if (depthIntoTop > 0) {
+    return -Math.ceil(AUTO_SCROLL_MAX_STEP_PX * Math.min(1, depthIntoTop / zone));
+  }
+  const depthIntoBottom = zone - (bottom - pointerY);
+  if (depthIntoBottom > 0) {
+    return Math.ceil(AUTO_SCROLL_MAX_STEP_PX * Math.min(1, depthIntoBottom / zone));
+  }
+  return 0;
+}
+
 export interface GapDropSlot {
   target: LayerDropTarget;
   /** Display depth of the dropped row — drives the indicator's indent. */
@@ -108,6 +140,35 @@ function isSameTarget(a: LayerDropTarget | null, b: LayerDropTarget): boolean {
   return a !== null && a.parentId === b.parentId && a.belowId === b.belowId;
 }
 
+interface RowHit {
+  /** Gap above display row `gap` (rows.length = below the last row). */
+  gap: number;
+  /** Row whose middle half the pointer is over, when it accepts a drop into it. */
+  intoRow: number | null;
+}
+
+/**
+ * Hit-test client `y` against the rendered rows: the top half of a row
+ * picks the gap above it, the bottom half the gap below, and the middle
+ * half of a row `canDropInto` accepts targets the row itself.
+ */
+function pickRowAt(
+  rows: readonly Element[],
+  y: number,
+  canDropInto: (index: number) => boolean,
+): RowHit {
+  for (const [i, row] of rows.entries()) {
+    const rect = row.getBoundingClientRect();
+    const relY = y - rect.top;
+    const h = rect.height;
+    if (relY < 0) return { gap: i, intoRow: null };
+    if (relY >= h) continue;
+    if (relY > h * 0.25 && relY < h * 0.75 && canDropInto(i)) return { gap: i, intoRow: i };
+    return { gap: relY < h / 2 ? i : i + 1, intoRow: null };
+  }
+  return { gap: rows.length, intoRow: null };
+}
+
 interface UseLayerDndParams {
   displayList: readonly DisplayEntry[];
   layers: readonly Layer[];
@@ -161,37 +222,24 @@ export function useLayerDnd({
     setDropDepth(null);
     setDropIntoGroup(null);
 
-    const onMove = (ev: PointerEvent) => {
+    const pointer = { x: e.clientX, y: e.clientY };
+    let scrollFrame: number | null = null;
+
+    const updateTarget = () => {
       const list = listRef.current;
       const drag = dragRef.current;
       if (!list || !drag) return;
-      const items = list.querySelectorAll(`.${styles.itemWrapper}`);
-      let gap = items.length;
-      let intoGroup: string | null = null;
-
-      for (let i = 0; i < items.length; i++) {
-        const rect = items[i]!.getBoundingClientRect();
-        const relY = ev.clientY - rect.top;
-        const h = rect.height;
-
-        if (relY < 0) {
-          gap = i;
-          break;
-        }
-
-        if (relY < h) {
-          const entry = displayList[i];
-          if (entry && isGroupLayer(entry.layer) && relY > h * 0.25 && relY < h * 0.75
-            && canMoveToGroup(layers, draggedLayer.id, entry.layer.id)) {
-            intoGroup = entry.layer.id;
-          } else if (relY < h / 2) {
-            gap = i;
-          } else {
-            gap = i + 1;
-          }
-          break;
-        }
-      }
+      // Rows scrolled out of view still have client rects above or below
+      // the list; clamping keeps a pointer outside the list from
+      // targeting a row the user cannot see.
+      const listRect = list.getBoundingClientRect();
+      const y = Math.min(Math.max(pointer.y, listRect.top), listRect.bottom - 1);
+      const rows = Array.from(list.querySelectorAll(`.${styles.itemWrapper}`));
+      const rowHit = pickRowAt(rows, y, (i) => {
+        const entry = displayList[i];
+        return !!entry && isGroupLayer(entry.layer) && canMoveToGroup(layers, draggedLayer.id, entry.layer.id);
+      });
+      const intoGroup = rowHit.intoRow !== null ? displayList[rowHit.intoRow]?.layer.id ?? null : null;
 
       if (intoGroup) {
         const target: LayerDropTarget = { parentId: intoGroup, belowId: null };
@@ -206,8 +254,8 @@ export function useLayerDnd({
       }
 
       // The root row is always first; nothing can be dropped above it.
-      gap = Math.max(1, gap);
-      const desiredDepth = draggedEntry.depth + Math.round((ev.clientX - startX) / DROP_DEPTH_STEP_PX);
+      const gap = Math.max(1, rowHit.gap);
+      const desiredDepth = draggedEntry.depth + Math.round((pointer.x - startX) / DROP_DEPTH_STEP_PX);
       const slot = resolveGapDrop(layers, displayList, draggedLayer.id, gap, desiredDepth);
       const isNoop = !slot || isSameTarget(current, slot.target);
       drag.slot = isNoop ? null : slot;
@@ -218,9 +266,37 @@ export function useLayerDnd({
       setDropIntoGroup(null);
     };
 
+    // Runs once per frame while the pointer sits in an edge zone. The
+    // list's scroll listener re-targets, since the rows move under a
+    // pointer that may not.
+    const autoScroll = () => {
+      scrollFrame = null;
+      const list = listRef.current;
+      if (!list || !dragRef.current) return;
+      const rect = list.getBoundingClientRect();
+      const step = autoScrollStep(pointer.y, rect.top, rect.bottom);
+      if (step === 0) return;
+      const before = list.scrollTop;
+      list.scrollTop = before + step;
+      if (list.scrollTop === before) return;
+      scrollFrame = requestAnimationFrame(autoScroll);
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      pointer.x = ev.clientX;
+      pointer.y = ev.clientY;
+      updateTarget();
+      if (scrollFrame === null) scrollFrame = requestAnimationFrame(autoScroll);
+    };
+
+    const scrollTarget = listRef.current;
+
     const onUp = () => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
+      scrollTarget?.removeEventListener('scroll', updateTarget);
+      if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
+      scrollFrame = null;
       const drag = dragRef.current;
       dragRef.current = null;
       setDragIndex(null);
@@ -233,6 +309,7 @@ export function useLayerDnd({
 
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
+    scrollTarget?.addEventListener('scroll', updateTarget);
   }, [layers, layerOrder, displayList, onDropLayer]);
 
   return {
