@@ -1634,10 +1634,53 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
 
 /// Composite a single layer with its effects onto a transparent canvas.
 /// Returns (pixels, offsetX, offsetY, width, height) for the rasterized result.
-pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Result<Vec<u8>, String> {
+/// Render one layer with its effects onto a transparent document-sized
+/// target and read it back.
+///
+/// With `bake_mask`, the layer's enabled mask is applied the way the live
+/// compositor applies it: to the content and, through a masked copy, to the
+/// silhouette the effects trace (#977). Merge Down needs that because the
+/// upper layer's mask goes away with it. Rasterize Layer Style keeps the
+/// mask on the layer, so it bakes the unmasked layer.
+pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mask: bool) -> Result<Vec<u8>, String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     engine.ensure_scratch_size(doc_w, doc_h)?;
+
+    let layer_info = engine.layer_stack.iter().find(|l| l.id == layer_id).map(|layer| {
+        let mask_enabled = layer.mask.as_ref().is_some_and(|m| m.enabled);
+        (layer.id.clone(), layer.layer_type, layer.opacity, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_enabled)
+    });
+    let Some((lid, layer_type, opacity, layer_x, layer_y, layer_w, layer_h, effects, mask_enabled)) = layer_info else {
+        return Err(format!("Layer {layer_id} not found"));
+    };
+    let tex_handle = match engine.layer_textures.get(&lid) { Some(&h) => h, None => return Err("Layer texture not found".to_string()) };
+    let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((layer_w as u32, layer_h as u32));
+
+    let mask_info = if bake_mask && mask_enabled {
+        engine.layer_masks.get(&lid).copied().and_then(|mask_handle| {
+            let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
+            let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
+            let (ox, oy) = mask_doc_offset(layer_type, layer_x, layer_y);
+            Some((mask_gl, mw, mh, ox, oy))
+        })
+    } else {
+        None
+    };
+    let mask_arg = mask_info.as_ref().map(|(t, w, h, ox, oy)| (t, *w, *h, *ox, *oy));
+
+    let has_shape_effects = [
+        effects.outer_glow.as_ref().map(|g| g.enabled),
+        effects.inner_glow.as_ref().map(|g| g.enabled),
+        effects.drop_shadow.as_ref().map(|d| d.enabled),
+        effects.stroke.as_ref().map(|st| st.enabled),
+    ].into_iter().any(|e| e == Some(true));
+    // Rendered before the target is bound: it draws into its own texture.
+    let masked_effect_handle = match (mask_arg, has_shape_effects) {
+        (Some(mask), true) => render_layer_masked_for_effects(engine, tex_handle, tw, th, layer_x, layer_y, mask),
+        _ => None,
+    };
+    let fx_handle = masked_effect_handle.unwrap_or(tex_handle);
 
     // Render to composite FBO with transparent background
     engine.gl.disable(WebGl2RenderingContext::BLEND);
@@ -1646,32 +1689,28 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str) -> Resul
     engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
     engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
-    // Find the layer
-    let layer_info = engine.layer_stack.iter().find(|l| l.id == layer_id).map(|layer| {
-        (layer.id.clone(), layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone())
-    });
+    let target = main_target(engine);
 
-    if let Some((lid, opacity, _blend_mode, layer_x, layer_y, layer_w, layer_h, effects)) = layer_info {
-        let tex_handle = match engine.layer_textures.get(&lid) { Some(&h) => h, None => return Err("Layer texture not found".to_string()) };
-        let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((layer_w as u32, layer_h as u32));
-        let target = main_target(engine);
+    // Behind effects
+    if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 0, layer_x, layer_y, target); } }
+    if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, fx_handle, tw, th, shadow, layer_x, layer_y, target); } }
 
-        // Behind effects
-        if let Some(ref glow) = effects.outer_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 0, layer_x, layer_y, target); } }
-        if let Some(ref shadow) = effects.drop_shadow { if shadow.enabled { render_shadow(engine, tex_handle, tw, th, shadow, layer_x, layer_y, target); } }
+    // Layer content with color overlay (use Normal blend, not the layer's blend mode)
+    let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
+    if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
+        blend_onto_composite(engine, &src_tex, opacity, 0, layer_x, layer_y, tw, th, false, overlay_desc, mask_arg)?;
+    }
 
-        // Layer content with color overlay (use Normal blend, not the layer's blend mode)
-        let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
-        if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
-            blend_onto_composite(engine, &src_tex, opacity, 0, layer_x, layer_y, tw, th, false, overlay_desc, None)?;
-        }
+    // On-top effects
+    if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 1, layer_x, layer_y, target); } }
+    if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, fx_handle, tw, th, stroke, layer_x, layer_y, target); } }
 
-        // On-top effects
-        if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, tex_handle, tw, th, glow, 1, layer_x, layer_y, target); } }
-        if let Some(ref stroke) = effects.stroke { if stroke.enabled { render_stroke(engine, tex_handle, tw, th, stroke, layer_x, layer_y, target); } }
+    if let Some(masked) = masked_effect_handle {
+        engine.texture_pool.release(masked);
     }
 
     // Read pixels
+    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
     let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, doc_w, doc_h)?;
 
     engine.fbo_pool.unbind(&engine.gl);
