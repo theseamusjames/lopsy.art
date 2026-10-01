@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   engine: null as object | null,
   updateLayer: vi.fn<(engine: unknown, json: string) => void>(),
   mergeLayers: vi.fn(),
+  rasterizeLayerEffects: vi.fn((..._args: unknown[]) => new Uint8Array(4 * 4 * 4)),
 }));
 
 // #746: computeMergeDown must not read the JS pixel map — it is a
@@ -20,7 +21,7 @@ vi.mock('../../../engine-wasm/engine-state', () => ({
 
 vi.mock('../../../engine-wasm/wasm-bridge', () => ({
   mergeLayers: mocks.mergeLayers,
-  rasterizeLayerEffects: () => new Uint8Array(4 * 4 * 4),
+  rasterizeLayerEffects: mocks.rasterizeLayerEffects,
   updateLayer: mocks.updateLayer,
   uploadLayerPixels: () => {},
 }));
@@ -345,5 +346,84 @@ describe('computeMergeDown with effects (#1007)', () => {
     const desc = JSON.parse(mocks.updateLayer.mock.calls[0]![1]) as { id: string; opacity: number };
     expect(desc.id).toBe(topId);
     expect(desc.opacity).toBe(1);
+  });
+
+  it('bakes the upper layer\'s mask with its effects and drops it from the merge', () => {
+    mocks.engine = {};
+    mocks.updateLayer.mockClear();
+    mocks.rasterizeLayerEffects.mockClear();
+    const doc = makeDoc();
+    const topId = doc.activeLayerId!;
+    const effects = { ...DEFAULT_EFFECTS, dropShadow: { ...DEFAULT_EFFECTS.dropShadow, enabled: true } };
+    const mask = { id: 'm', enabled: true, width: 4, height: 4, data: new Uint8ClampedArray(16) };
+    const withMask: DocumentState = {
+      ...doc,
+      layers: doc.layers.map((l) => (l.id === topId ? { ...l, effects, mask } : l)),
+    };
+
+    computeMergeDown(withMask);
+    mocks.engine = null;
+
+    expect(mocks.rasterizeLayerEffects).toHaveBeenCalledWith(expect.anything(), topId, true);
+    const desc = JSON.parse(mocks.updateLayer.mock.calls[0]![1]) as { id: string; mask: unknown };
+    expect(desc.id).toBe(topId);
+    expect(desc.mask ?? null).toBeNull();
+  });
+});
+
+describe('computeMergeDown keeps the lower layer\'s style (#1068)', () => {
+  function withBottom(patch: Record<string, unknown>): { doc: DocumentState; bottomId: string } {
+    const doc = makeDoc();
+    const bottomId = doc.layerOrder[0]!;
+    return {
+      bottomId,
+      doc: { ...doc, layers: doc.layers.map((l) => (l.id === bottomId ? { ...l, ...patch } : l)) },
+    };
+  }
+
+  function mergedBottom(doc: DocumentState, bottomId: string) {
+    mocks.engine = {};
+    mocks.mergeLayers.mockClear();
+    mocks.updateLayer.mockClear();
+    const result = computeMergeDown(doc);
+    mocks.engine = null;
+    const merged = result!.document!.layers.find((l) => l.id === bottomId)!;
+    return { merged, mergeArgs: mocks.mergeLayers.mock.calls[0] as unknown[] };
+  }
+
+  it('keeps the lower layer\'s blend mode and bakes its opacity when it has no effects', () => {
+    const { doc, bottomId } = withBottom({ blendMode: 'multiply', opacity: 0.4 });
+    const { merged, mergeArgs } = mergedBottom(doc, bottomId);
+    expect(merged.blendMode).toBe('multiply');
+    expect(merged.opacity).toBe(1);
+    expect(mergeArgs[3]).toBe(true);
+  });
+
+  it('keeps the lower layer\'s effects and opacity live when it has effects', () => {
+    const effects = { ...DEFAULT_EFFECTS, stroke: { ...DEFAULT_EFFECTS.stroke, enabled: true } };
+    const { doc, bottomId } = withBottom({ blendMode: 'screen', opacity: 0.4, effects });
+    const { merged, mergeArgs } = mergedBottom(doc, bottomId);
+    expect(merged.blendMode).toBe('screen');
+    expect(merged.opacity).toBe(0.4);
+    expect(merged.effects.stroke.enabled).toBe(true);
+    expect(mergeArgs[3]).toBe(false);
+    // The lower layer's effects stay live, so nothing is baked into it.
+    expect(mocks.updateLayer).not.toHaveBeenCalledWith(expect.anything(), expect.stringContaining(bottomId));
+  });
+
+  it('keeps the lower text layer\'s style when the merge rasterizes it', () => {
+    const effects = { ...DEFAULT_EFFECTS, dropShadow: { ...DEFAULT_EFFECTS.dropShadow, enabled: true } };
+    const doc = makeDoc();
+    const text = createTextLayer({ name: 'Title', text: 'Hi' });
+    const textDoc: DocumentState = {
+      ...doc,
+      layers: [{ ...text, blendMode: 'overlay', opacity: 0.7, effects }, doc.layers[1]!],
+      layerOrder: [text.id, doc.layerOrder[1]!],
+    };
+    const { merged } = mergedBottom(textDoc, text.id);
+    expect(merged.type).toBe('raster');
+    expect(merged.blendMode).toBe('overlay');
+    expect(merged.opacity).toBe(0.7);
+    expect(merged.effects.dropShadow.enabled).toBe(true);
   });
 });
