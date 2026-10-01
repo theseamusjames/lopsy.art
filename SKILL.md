@@ -633,9 +633,8 @@ rotated box, because that moves or resets it. Move-tool options also offer
 Flip, Rotate 90° and Mesh Warp.
 
 **Duplicating.** `h.menu('Layer', 'Duplicate Layer')` makes `<name> copy`
-**offset by +10, +10 px**, and leaves both layers selected. Click the
-copy's name (`h.selectLayer('<name> copy')`) before moving it, then move it
-where you want it. For repeated elements, it's usually simpler to fill
+**offset by +10, +10 px**, and selects only the copy, so you can move it
+where you want it straight away. For repeated elements, it's usually simpler to fill
 each one in place from computed geometry.
 
 **Groups.** Click `New Group` in the Layers panel toolbar and add layers

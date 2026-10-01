@@ -42,6 +42,10 @@ function layerWithContentBounds(layer: Layer): Layer {
  * layer id. No JS-side pixel buffer is read or produced (#746) — the
  * caller does not need to `resolveAllPixelData` before, and does not
  * need to `syncPixelDataToGpu` after.
+ *
+ * The copy replaces the whole selection (#804): a source left in
+ * `selectedLayerIds` would ride along as a multi-selected sibling on the
+ * next nudge or Move drag.
  */
 export function computeDuplicateLayer(
   doc: DocumentState,
@@ -100,7 +104,13 @@ export function computeDuplicateLayer(
     }
 
     return {
-      document: { ...doc, layers: newLayers, layerOrder: newOrder, activeLayerId: dupRootId },
+      document: {
+        ...doc,
+        layers: newLayers,
+        layerOrder: newOrder,
+        activeLayerId: dupRootId,
+        selectedLayerIds: [dupRootId],
+      },
     };
   }
 
@@ -124,6 +134,12 @@ export function computeDuplicateLayer(
   }
 
   return {
-    document: { ...doc, layers, layerOrder: newOrder, activeLayerId: newId },
+    document: {
+      ...doc,
+      layers,
+      layerOrder: newOrder,
+      activeLayerId: newId,
+      selectedLayerIds: [newId],
+    },
   };
 }

@@ -72,6 +72,21 @@ describe('computeDuplicateLayer', () => {
     expect(newIdx).toBe(origIdx + 1);
   });
 
+  // #804: a lingering pre-duplicate selection made the next nudge or Move
+  // drag treat the original as a multi-selected sibling and move it too.
+  it('leaves only the copy selected', () => {
+    const doc = makeDoc();
+    const other = createRasterLayer({ name: 'Other', width: 10, height: 10 });
+    const multi: DocumentState = {
+      ...doc,
+      layers: [...doc.layers, other],
+      layerOrder: [...doc.layerOrder, other.id],
+      selectedLayerIds: [doc.activeLayerId!, other.id],
+    };
+    const r = result(multi);
+    expect(r.selectedLayerIds).toEqual([r.activeLayerId]);
+  });
+
   it('offsets a layer that fits comfortably within the canvas', () => {
     const doc = makeDoc({
       layerWidth: 100, layerHeight: 100, layerX: 50, layerY: 50,
