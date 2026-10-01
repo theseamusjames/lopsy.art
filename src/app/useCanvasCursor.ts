@@ -7,6 +7,7 @@ import { hitTestHandle, getCursorForHandle } from '../tools/transform/transform'
 import type { TransformHandle } from '../tools/transform/transform';
 import type { ToolId, Point } from '../types';
 import { showsGrabCursor, type PointerMode } from './pointer-mode';
+import { usesTransformHandles } from './interactions/handle-tools';
 import styles from './App.module.css';
 
 function isPathEditMode(): boolean {
@@ -120,7 +121,7 @@ export function useCanvasCursor(
       cursorClass = styles.canvasGrab ?? '';
     } else if (isLiquifyOpen) {
       cursorClass = styles.canvasNone ?? '';
-    } else if (hoveredHandle) {
+    } else if (hoveredHandle && usesTransformHandles(activeTool)) {
       cursorClass = getCursorClassForHandle(hoveredHandle);
     } else if (isPathEditMode()) {
       cursorClass = styles.canvasDefault ?? '';
@@ -156,7 +157,9 @@ export function useCanvasCursor(
       const editorState = useEditorStore.getState();
       const currentTransform = uiState.transform;
 
-      if (currentTransform && editorState.selection.active) {
+      // Only the tools a handle press reaches get the resize cursor; the
+      // rest (Wand, Fill, …) get the press, so they keep their own cursor.
+      if (currentTransform && editorState.selection.active && usesTransformHandles(uiState.activeTool)) {
         const handleRadius = 8 / editorState.viewport.zoom;
         const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
         if (hit !== uiState.activeTransformHandle) {

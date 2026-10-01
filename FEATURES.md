@@ -416,7 +416,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **Contiguous**: on/off
 - **Graduated**: on/off — when enabled, the wand uses a gradient-aware flood fill that produces partial-coverage selection edges across smooth color transitions, instead of a hard threshold cut
 - **Feather**: 0 - 250 px (shared marquee feather slider; applied after the wand fill)
-- **Shift+click**: adds the new region to the existing selection; **Alt/Option+click**: subtracts it (both combine against the current selection mask via `combineSelections`). Clicking with no modifier replaces the selection, and an Alt-subtract that empties the selection clears it.
+- **Shift+click**: adds the new region to the existing selection; **Alt/Option+click**: subtracts it (both combine against the current selection mask via `combineSelections`). Clicking with no modifier replaces the selection, and an Alt-subtract that empties the selection clears it. Every wand press is a wand click, including one on the selection's transform handles — those belong to the Move tool and the drag-out selection tools (see [Who responds to the handles](#who-responds-to-the-handles)).
 
 ### Quick Selection
 - **Size**: 1 - 100 px (default 20) — **the weakest Size control in the app, and the only one that is a radius rather than a diameter.** It is passed straight in as `radius`, where every paint tool's Size is a diameter the dab shaders halve (`radius = u_size * 0.5`), so Quick Selection's 50 spans twice what a Brush's 50 does. What it actually changes is only the **seed-color sampling box**: `sampleSeedColor` averages a square of half-extent `max(1, round(size / 3))` around the sample point to decide what color to grow from. It is also the one Size slider with no document scaling — the ceiling is a flat 100 px.
@@ -498,18 +498,23 @@ state over it.
 ### Who responds to the handles
 
 - **Move tool** — the only tool that transforms *pixels* through the handles.
-- **Selection tools** (rectangular/elliptical marquee, lasso, magnetic lasso,
-  wand) — grabbing a handle scales the **selection outline only**, leaving
+- **Drag-out selection tools** (rectangular/elliptical marquee, lasso,
+  magnetic lasso) — grabbing a handle scales the **selection outline only**, leaving
   pixels untouched. Only the 8 scale handles respond; rotation handles are
   ignored, so a drag on one falls through and starts a brand-new selection.
   The rebuilt mask is a rectangle or an ellipse depending on which marquee
   tool is active, and the rebuild is coalesced to one allocation + GPU upload
   per animation frame (a full-document mask on a 4K canvas is ~16 MB, so a
   raw pointer-event-rate rebuild would thrash).
-- **Every other tool** (fill, eyedropper, text, …) ignores the handles
-  entirely and dispatches to its own handler. This is deliberate: at low zoom
-  over a small selection the handle hit-radius can cover the whole selection
-  and would otherwise swallow every click (#222).
+- **Every other tool** (Magic Wand, fill, eyedropper, text, …) ignores the
+  handles entirely and dispatches to its own handler, and the canvas keeps
+  that tool's cursor over them. This is deliberate: at low zoom over a small
+  selection the handle hit-radius can cover the whole selection and would
+  otherwise swallow every click (#222). The **Magic Wand** joined this group
+  because it is a click tool: a Shift- or Alt-click on a neighbouring region
+  within 8 screen px of a corner or edge midpoint used to grab the scale
+  handle and do nothing, instead of adding or subtracting that region (fixed
+  in this change).
 
 ### Handles
 
@@ -527,7 +532,9 @@ state over it.
   thin selection's rotate circles are therefore grabbable over their whole
   drawn circle (#1000).
 - **Cursors**: `nwse-resize` / `nesw-resize` on the corners, `ns-resize` /
-  `ew-resize` on the edge midpoints, `crosshair` on the rotation handles.
+  `ew-resize` on the edge midpoints, `crosshair` on the rotation handles —
+  only under the Move tool and the drag-out selection tools, the ones a press
+  on a handle reaches.
 - **Drawing**: a blue (`#00aaff`) quad through the four corners, white filled
   squares (6 px) on the scale handles, white filled circles (5 px radius) on
   the rotation handles. All sizes divide by zoom, so the chrome stays the same
