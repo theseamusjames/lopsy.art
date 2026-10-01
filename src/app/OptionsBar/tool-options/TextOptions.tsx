@@ -8,6 +8,7 @@ import { useFontEntry } from '../../local-fonts-store';
 import { extractFamilyName } from '../../../utils/font-loader';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { rerenderCommittedTextLayer, invalidatePathTextCache } from '../../../engine-wasm/engine-sync';
+import { textAnchorOf } from '../../../tools/text/text-transform';
 import {
   applyTextSetting,
   applyTextFontFamily,
@@ -63,12 +64,16 @@ export function TextOptions() {
       const val = e.target.value;
       beginTextLayerHistory();
       if (val) {
+        // The path places every glyph, so a transform has nothing left to
+        // do; keep its anchor as the spot to return to on unbind.
+        const anchor = textAnchorOf(editingLayer);
         updateTextLayerProperties(editingLayerId, {
           pathId: val,
-          prePathX: editingLayer.prePathX ?? editingLayer.x,
-          prePathY: editingLayer.prePathY ?? editingLayer.y,
+          prePathX: editingLayer.prePathX ?? anchor?.x ?? editingLayer.x,
+          prePathY: editingLayer.prePathY ?? anchor?.y ?? editingLayer.y,
           pathAnchorX: undefined,
           pathAnchorY: undefined,
+          transform: undefined,
         });
       } else {
         const restoreX = editingLayer.prePathX ?? editingLayer.x;

@@ -134,7 +134,15 @@ export function renderTransformHandles(
   zoom: number,
 ): void {
   if (!selection.active || !transform) return;
+  drawTransformHandles(ctx, transform, zoom);
+}
 
+/** Draw the transform box, its scale handles and its rotate handles. */
+export function drawTransformHandles(
+  ctx: CanvasRenderingContext2D,
+  transform: TransformState,
+  zoom: number,
+): void {
   const handles = getHandlePositions(transform);
   const handleSize = 6 / zoom;
   const rotHandleSize = 5 / zoom;

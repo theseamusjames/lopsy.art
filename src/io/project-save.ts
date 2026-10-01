@@ -19,7 +19,7 @@ import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke'
 import { flushLayerSync } from '../engine-wasm/engine-sync';
 import { materializeAllMaskData } from '../app/mask-data-sync';
 import { notifyError, describeError } from '../app/notifications-store';
-import type { Layer } from '../types/layers';
+import type { Layer, TextTransform } from '../types/layers';
 import type { DocumentColorMode } from '../types/color-mode';
 import type { StoredPath } from '../types/paths';
 import { useUIStore, type Guide } from '../app/ui-store';
@@ -85,6 +85,7 @@ export interface SerializedLayer {
   readonly prePathY?: number;
   readonly pathAnchorX?: number;
   readonly pathAnchorY?: number;
+  readonly textTransform?: TextTransform;
   // shape
   readonly shapeType?: string;
   readonly fill?: unknown;
@@ -164,6 +165,7 @@ export function serializeLayer(
       prePathY: layer.prePathY,
       pathAnchorX: layer.pathAnchorX,
       pathAnchorY: layer.pathAnchorY,
+      textTransform: layer.transform,
     };
   }
   if (layer.type === 'shape') {

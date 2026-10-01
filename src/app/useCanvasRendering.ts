@@ -199,10 +199,13 @@ function renderFrameGpu(
       toolState.settings.text.letterSpacing,
       toolState.settings.text.paragraphSpacing,
       toolState.settings.text.vertical,
-      (layerId, x, y) => {
+      (layerId, placement) => {
         const layer = layers.find((l) => l.id === layerId);
-        if (layer && (layer.x !== x || layer.y !== y)) {
-          editorState.updateTextLayerProperties(layerId, { x, y });
+        if (!layer || layer.type !== 'text') return;
+        const isTransformChanged = placement.transform !== undefined
+          && JSON.stringify(placement.transform) !== JSON.stringify(layer.transform);
+        if (layer.x !== placement.x || layer.y !== placement.y || isTransformChanged) {
+          editorState.updateTextLayerProperties(layerId, placement);
         }
       },
     );

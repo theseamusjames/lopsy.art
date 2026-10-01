@@ -7,6 +7,8 @@ import { hitTestHandle, getCursorForHandle } from '../tools/transform/transform'
 import type { TransformHandle } from '../tools/transform/transform';
 import type { ToolId, Point } from '../types';
 import { showsGrabCursor, type PointerMode } from './pointer-mode';
+import { getTextTransformTarget } from './interactions/text-transform-handlers';
+import { hitTestTransformHandle } from './interactions/transform-handlers';
 import styles from './App.module.css';
 
 function isPathEditMode(): boolean {
@@ -155,8 +157,14 @@ export function useCanvasCursor(
       const uiState = useUIStore.getState();
       const editorState = useEditorStore.getState();
       const currentTransform = uiState.transform;
+      const textTarget = getTextTransformTarget();
 
-      if (currentTransform && editorState.selection.active) {
+      if (textTarget) {
+        const hit = hitTestTransformHandle(canvasPos, textTarget.state, editorState.viewport.zoom);
+        if (hit !== uiState.activeTransformHandle) {
+          uiState.setActiveTransformHandle(hit);
+        }
+      } else if (currentTransform && editorState.selection.active) {
         const handleRadius = 8 / editorState.viewport.zoom;
         const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
         if (hit !== uiState.activeTransformHandle) {

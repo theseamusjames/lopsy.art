@@ -3,7 +3,9 @@
 use wasm_bindgen::prelude::*;
 use crate::Engine;
 use crate::layer_manager;
-use crate::text_gpu::TextRendererState;
+use crate::text_gpu::{raster_key, TextRendererState};
+use crate::text_transform_gpu::{render_text_raster_transformed, TextRaster};
+use lopsy_core::text_transform::{TextMatrix, MAX_TEXT_RASTER_EDGE};
 
 fn ensure_text_renderer(engine: &mut Engine) -> &mut TextRendererState {
     engine.inner.text_renderer.get_or_insert_with(TextRendererState::new)
@@ -117,6 +119,61 @@ pub fn render_text_layer_to_texture(
         return vec![];
     }
     vec![width as f64, height as f64, offset_x as f64, offset_y as f64]
+}
+
+/// Rasterize a transformed text layer and place it in the layer's texture.
+///
+/// `raster_props_json` holds the layer's props with every length multiplied
+/// by `scale`, so the upright raster is at least as dense as the output and
+/// the resample only ever shrinks it. The raster is then mapped into the
+/// document by `doc = [a c; b d] · p + anchor` (`p` in unscaled layout space).
+///
+/// Returns `[width, height, x, y]` — the texture size and its document
+/// top-left — or an empty array when there is nothing to draw or the
+/// transform is degenerate.
+#[wasm_bindgen(js_name = "renderTextLayerTransformed")]
+#[allow(clippy::too_many_arguments)]
+pub fn render_text_layer_transformed(
+    engine: &mut Engine,
+    layer_id: &str,
+    raster_props_json: &str,
+    scale: f64,
+    a: f64,
+    b: f64,
+    c: f64,
+    d: f64,
+    anchor_x: f64,
+    anchor_y: f64,
+) -> Vec<f64> {
+    let key = raster_key(layer_id);
+    let tr = ensure_text_renderer(engine);
+    if tr.set_text_content(&key, raster_props_json).is_err() {
+        return vec![];
+    }
+    let (pixels, width, height, offset_x, offset_y) = match tr.render_text_layer_software(&key) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    if width > MAX_TEXT_RASTER_EDGE || height > MAX_TEXT_RASTER_EDGE {
+        return vec![];
+    }
+    let raster = TextRaster { pixels: &pixels, width, height, offset_x, offset_y, scale };
+    let m = TextMatrix { a, b, c, d };
+    match render_text_raster_transformed(&mut engine.inner, layer_id, &raster, &m, (anchor_x, anchor_y)) {
+        Ok(rect) => vec![rect.width as f64, rect.height as f64, rect.x as f64, rect.y as f64],
+        Err(_) => vec![],
+    }
+}
+
+/// Layout box of a text layer's current content, `[x, y, width, height]`
+/// relative to its anchor: the union of every line box that holds a glyph.
+/// All zeros when the layer is unknown or empty.
+#[wasm_bindgen(js_name = "textLayoutBounds")]
+pub fn text_layout_bounds(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
+    match engine.inner.text_renderer.as_mut() {
+        Some(tr) => tr.measure_text_bounds(layer_id).to_vec(),
+        None => vec![0.0, 0.0, 0.0, 0.0],
+    }
 }
 
 /// Returns per-glyph positions as a flat f64 array of [x, y, w, h, global_offset]

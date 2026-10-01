@@ -64,6 +64,26 @@ export interface TextLayer extends LayerBase {
    */
   readonly pathAnchorX?: number;
   readonly pathAnchorY?: number;
+  /**
+   * Rotation / scale / skew / flip of the text, kept as data so every
+   * re-render (edit, Text-panel change, font load) re-applies it to freshly
+   * laid-out glyphs instead of losing or compounding it. Absent means upright.
+   */
+  readonly transform?: TextTransform;
+}
+
+/**
+ * Placement of a transformed text layer: layout point `p` lands at document
+ * `[a c; b d] · p + anchor`. The anchor is stored relative to the layer's
+ * `x`/`y` (its texture top-left) so moving the layer carries the text.
+ */
+export interface TextTransform {
+  readonly a: number;
+  readonly b: number;
+  readonly c: number;
+  readonly d: number;
+  readonly anchorX: number;
+  readonly anchorY: number;
 }
 
 export interface ShapeLayer extends LayerBase {

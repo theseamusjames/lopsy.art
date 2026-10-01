@@ -54,6 +54,14 @@ import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 import { PAINT_TOOLS, GPU_TOOLS, SELF_HISTORY_PAINT_TOOLS } from '../tools/tool-registry';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { guardPixelWrite, toolWritesRasterPixels } from '../layers/paint-target';
+import {
+  finishTextBodyMove,
+  handleTextTransformDown,
+  handleTextTransformMove,
+  handleTextTransformUp,
+  refusePartialTextMove,
+  releaseCoveringTextSelection,
+} from './interactions/text-transform-handlers';
 
 export { strokeCurrentPath } from './interactions/path-stroke';
 
@@ -333,6 +341,19 @@ export function useCanvasInteraction(
       // already populates `gesture` with the transform variant's required
       // data (handle, startState, startAngle, selectionOnly), so no
       // post-assignment mutation is needed here.
+      if (activeTool === 'move') {
+        // A live text layer gets its own handles: dragging one edits the
+        // layer's transform and re-renders the glyphs, so the text stays
+        // editable and repeated transforms never compound.
+        const textTransformResult = handleTextTransformDown(ctx);
+        if (textTransformResult) {
+          stateRef.current = textTransformResult;
+          return;
+        }
+        if (refusePartialTextMove()) return;
+        releaseCoveringTextSelection();
+      }
+
       const transformResult = handleTransformDown(ctx);
       if (transformResult) {
         stateRef.current = transformResult;
@@ -435,6 +456,9 @@ export function useCanvasInteraction(
           return;
         case 'transform':
           handleTransformMove(state, canvasPos, e.metaKey);
+          return;
+        case 'textTransform':
+          handleTextTransformMove(state, canvasPos, e.metaKey);
           return;
         case 'idle':
           return;
@@ -610,6 +634,10 @@ export function useCanvasInteraction(
         handleMeshWarpUp();
         stateRef.current = { ...INITIAL_INTERACTION_STATE };
         return;
+      case 'textTransform':
+        handleTextTransformUp(state);
+        stateRef.current = { ...INITIAL_INTERACTION_STATE };
+        return;
       case 'transform':
         if (state.gesture.selectionOnly) {
           // Drain any pointer-move that's still parked in the coalescer's
@@ -654,6 +682,7 @@ export function useCanvasInteraction(
     };
 
     toolHandlers[state.tool]?.up?.(ctx, state);
+    if (state.tool === 'move') finishTextBodyMove();
 
     if (PAINT_TOOLS.has(state.tool)) {
       useUIStore.getState().setIsStroking(false);

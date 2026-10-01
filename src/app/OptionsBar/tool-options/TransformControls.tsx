@@ -3,6 +3,10 @@ import { useUIStore } from '../../ui-store';
 import { IconButton } from '../../../components/IconButton/IconButton';
 import { FlipHorizontal2, FlipVertical2 } from 'lucide-react';
 import type { TransformMode } from '../../../tools/transform/transform';
+import type { TextMatrix } from '../../../tools/text/text-transform';
+import type { TextTransformMode } from '../../ui-store';
+import { getTextTransformTarget, refusePartialTextMove } from '../../interactions/text-transform-handlers';
+import { transformTextLayerInDocument } from '../../text-layer-transform';
 import { createTransformState, isShapeChangingTransform, mapRectThroughInverse } from '../../../tools/transform/transform';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import {
@@ -27,6 +31,7 @@ import styles from './TransformControls.module.css';
 export function applyGpuTransform(invMatrix: Float32Array): void {
   const engine = getEngine();
   if (!engine) return;
+  if (applyToLiveText(invMatrix)) return;
 
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
@@ -71,6 +76,29 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   selectLayerAlpha(activeLayerId);
 }
 
+/**
+ * Flip / rotate a live text layer by editing its transform instead of lifting
+ * its pixels. Returns true when the request was handled — applied, or
+ * refused because the selection holds only part of the text.
+ */
+function applyToLiveText(invMatrix: Float32Array): boolean {
+  const target = getTextTransformTarget();
+  if (target) {
+    // The buttons pass the inverse; flips and quarter turns are
+    // orthonormal, so the forward map is its transpose.
+    const forward: TextMatrix = {
+      a: invMatrix[0] ?? 1,
+      b: invMatrix[3] ?? 0,
+      c: invMatrix[1] ?? 0,
+      d: invMatrix[4] ?? 1,
+    };
+    transformTextLayerInDocument(target.layer.id, forward, 'Transform');
+    if (useEditorStore.getState().selection.active) selectLayerAlpha(target.layer.id);
+    return true;
+  }
+  return refusePartialTextMove();
+}
+
 export function rotateSelection(dir: 'cw' | 'ccw'): void {
   const matrix = dir === 'cw'
     ? new Float32Array([0, -1, 0, 1, 0, 0, 0, 0, 1])
@@ -85,12 +113,23 @@ const MODES: { id: TransformMode; label: string }[] = [
   { id: 'perspective', label: 'Perspective' },
 ];
 
+const TEXT_MODES: { id: TextTransformMode; label: string }[] = [
+  { id: 'free', label: 'Free' },
+  { id: 'skew', label: 'Skew' },
+];
+
 export function TransformControls() {
   const selectionActive = useEditorStore((s) => s.selection.active);
+  const isLiveTextActive = useEditorStore((s) => {
+    const layer = s.document.layers.find((l) => l.id === s.document.activeLayerId);
+    return layer?.type === 'text' && !layer.pathId;
+  });
   const transform = useUIStore((s) => s.transform);
   const setTransform = useUIStore((s) => s.setTransform);
+  const textMode = useUIStore((s) => s.textTransformMode);
+  const setTextMode = useUIStore((s) => s.setTextTransformMode);
 
-  if (!selectionActive) return null;
+  if (!selectionActive && !isLiveTextActive) return null;
 
   const currentMode = transform?.mode ?? 'free';
 
@@ -125,7 +164,23 @@ export function TransformControls() {
           onClick={() => applyGpuTransform(new Float32Array([1, 0, 0, 0, -1, 0, 0, 0, 1]))}
         />
       </div>
-      {transform && (
+      {isLiveTextActive && (
+        <div className={styles.modeGroup}>
+          {TEXT_MODES.map(({ id, label }) => (
+            <button
+              key={id}
+              className={`${styles.modeButton} ${textMode === id ? styles.active : ''}`}
+              onClick={() => setTextMode(id)}
+              type="button"
+              aria-pressed={textMode === id}
+              aria-label={`Transform mode: ${label}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {transform && !isLiveTextActive && (
         <div className={styles.modeGroup}>
           {MODES.map(({ id, label }) => (
             <button

@@ -77,3 +77,43 @@ export async function typeTextAt(page: Page, docX: number, docY: number, text: s
   await page.keyboard.type(text);
   await page.waitForTimeout(80);
 }
+
+/**
+ * Screen point over the Move tool's transform `handle`, found the way a user
+ * finds it: hover a grid around `nearDoc` until the canvas reports that
+ * handle under the pointer. Throws when no point within `spanDoc` document
+ * pixels hits it.
+ */
+export async function findTransformHandle(
+  page: Page,
+  handle: string,
+  nearDoc: { x: number; y: number },
+  spanDoc = 30,
+): Promise<{ x: number; y: number }> {
+  const centre = await docToScreen(page, nearDoc.x, nearDoc.y);
+  const zoom = await page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { viewport: { zoom: number } };
+    };
+    return store.getState().viewport.zoom;
+  });
+  const span = Math.max(8, spanDoc * zoom);
+  const step = 4;
+  for (let r = 0; r <= span; r += step) {
+    for (let dy = -r; dy <= r; dy += step) {
+      for (let dx = -r; dx <= r; dx += step) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const p = { x: centre.x + dx, y: centre.y + dy };
+        await page.mouse.move(p.x, p.y);
+        const hovered = await page.evaluate(() => {
+          const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+            getState: () => { activeTransformHandle: string | null };
+          };
+          return ui.getState().activeTransformHandle;
+        });
+        if (hovered === handle) return p;
+      }
+    }
+  }
+  throw new Error(`No ${handle} handle within ${spanDoc}px of (${nearDoc.x}, ${nearDoc.y})`);
+}

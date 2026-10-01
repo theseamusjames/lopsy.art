@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { RulerUnit } from './rendering/ruler-units';
 import type { Color, Point, Rect, ToolId } from '../types';
 import type { TransformHandle, TransformState } from '../tools/transform/transform';
+import type { TextMatrix } from '../tools/text/text-transform';
 import type { MarqueeShape } from '../tools/marquee/marquee-region';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
@@ -24,7 +25,16 @@ export interface TextEditingState {
   selectionAnchor: number | null;
   isNew: boolean;
   originalVisible: boolean;
+  /**
+   * The edited layer's transform, when it has one. `bounds.x`/`bounds.y`
+   * are then the anchor in document space and layout space maps to the
+   * document through this matrix, so the text is edited in place.
+   */
+  matrix?: TextMatrix | null;
 }
+
+/** Transform modes a live text layer supports; distort/perspective need pixels. */
+export type TextTransformMode = 'free' | 'skew';
 
 export interface TextDragState {
   startX: number;
@@ -180,6 +190,8 @@ interface UIState {
   perspectiveCropDragging: 0 | 1 | 2 | 3 | null;
   transform: TransformState | null;
   activeTransformHandle: TransformHandle | null;
+  /** What the Move tool's handles do to a text layer: scale/rotate or skew. */
+  textTransformMode: TextTransformMode;
   meshWarp: MeshWarpSession | null;
   tiltShift: TiltShiftSession | null;
   liquify: LiquifySession | null;
@@ -257,6 +269,7 @@ interface UIState {
   setPerspectiveCropDragging: (idx: 0 | 1 | 2 | 3 | null) => void;
   setTransform: (transform: TransformState | null) => void;
   setActiveTransformHandle: (handle: TransformHandle | null) => void;
+  setTextTransformMode: (mode: TextTransformMode) => void;
   setMeshWarp: (session: MeshWarpSession | null) => void;
   updateMeshWarpGrid: (grid: MeshWarpGrid) => void;
   setMeshWarpDragging: (idx: number | null) => void;
@@ -346,6 +359,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   perspectiveCropDragging: null,
   transform: null,
   activeTransformHandle: null,
+  textTransformMode: 'free',
   meshWarp: null,
   tiltShift: null,
   liquify: null,
@@ -467,6 +481,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   setPerspectiveCropDragging: (idx) => set({ perspectiveCropDragging: idx }),
   setTransform: (transform) => set({ transform }),
   setActiveTransformHandle: (handle) => set({ activeTransformHandle: handle }),
+  setTextTransformMode: (mode) => set({ textTransformMode: mode }),
   setMeshWarp: (session) => set({ meshWarp: session }),
   updateMeshWarpGrid: (grid) =>
     set((s) => (s.meshWarp ? { meshWarp: { ...s.meshWarp, grid } } : {})),
