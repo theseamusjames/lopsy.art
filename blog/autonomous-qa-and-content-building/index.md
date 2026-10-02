@@ -1,7 +1,7 @@
 ---
 title: Maximum Efficiency: QA and Content
-description: How I have Claude design randomized compositions in Lopsy through the UI to catch sequence bugs, then turn each QA run into a published tutorial.
-summary: Using randomized selection and Claude's incredible design capabilities to automate bug discovery and content creation with the same set of tokens.
+description: By using automated QA to create unique designs with lopsy, I can also produce novel content features from the same tokens to maximize efficiency. 
+summary: Using randomized selection and Claude's incredible design capabilities to automate bug discovery and content creation with the same tokens.
 published: 2026-10-01
 author: Seamus James
 tags: qa, testing, ai, claude, playwright
