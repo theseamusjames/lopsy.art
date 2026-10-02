@@ -22,22 +22,31 @@ With that, there’s a particularly pernicious class of bug that’s hard to spo
 ## Design as Diagnosis
 So to combat that, I let Claude build unique, randomized compositions, using the tool the way a user would [through Playwright](https://lopsy.art/SKILL.md).
 
-First, I give Claude a `/random` skill that allows for actual random selection via node (because LLMs are really bad at choosing randomly on their own, particularly for the same prompt). The skill chooses two letters randomly – these will be initials for the name of its creation. Then it chooses a style like art nouveau or neobrutalist and a project type like album cover or holiday card.
+First, I give Claude a `/random` skill that allows for actual random selection via node (because LLMs are really bad at choosing randomly on their own, particularly for the same prompt). 
+
+Then I use the skill to choose two letters randomly – these will be initials for the name of its creation. By using random letters to guide the ideation, I get far more interesting, less repetitive designs.
+
+Then it chooses a style like art nouveau or neobrutalist and a project type like album cover or holiday card.
 
 And then it just goes.
 
-It creates full compositions using lopsy the way a graphic designer would, drawing with the tools, adding external images and cropping them, laying out text. From concept to completion, it designs the entire project autonomously. 
+It creates full compositions using lopsy the way a graphic designer would, drawing with the tools, adding external images and cropping them, laying out text. From concept to completion, it designs the entire project autonomously in the browser, through the same UI as you or I. 
+
+(The complete prompt is at the bottom of this page).
 
 ## This is trash. Start again.
-There’s an adversarial loop at the end that assumes the role of Art Director and judges the quality of the output. 
+Once the design is complete, an agent assumes the role of Art Director and judges the output qualitatively. 
 
-This allows for two things: token optimization by using a more powerful, more critical model to both assess the result as well as suggest improvements. And second, we have a bounded iterative loop. Continue revising until you satisfy the critics. 
+This allows for two things: token optimization by using a more powerful, more critical model to both assess the result as well as suggest improvements. And second, we have a bounded iterative loop. Continue revising until you satisfy the critics. This can take hours, but the results are impressive.
 
+## This year's model
 This only became possible with the recent class of models. Early experiments were… less successful.
 
 ![An early attempt at a velociraptor in Lopsy: a mustard-yellow blob of overlapping circles with a yellow slit-pupil eye, a thin black mouth line and a thick, blurry brown stripe painted down its back](early-velociraptor.webp "A velociraptor (obviously) created by Opus 4.7 in April 2026.")
 
  Now that models can control software competently, a whole new class of generative capabilities becomes possible. Things like photo retouching or color grading – this is no different than a human moving the knobs and buttons, and the product that comes out the other side isn’t generative in the sense of a nano banana retouch that bears the anomalies and watermark of generative AI.
+
+ ![Lopsy with the finished Copper Lark Records collage logo on the canvas and the Print Grain, tape, wordmark, Ink Strip, Lark and Record layers in the Layers panel](copper-lark-in-lopsy.webp "[Copper Lark Records](/tutorials/collage-record-label-logo/), we've come a long way in 6 months.")
 
 ## Use all parts of the animal
 As it started producing these designs, I was seeing the results and thinking, “That’s awesome, I wonder how it did that.” So to answer that question, I thought, “Well, I could have it give me a step-by-step showing what it’s doing.” Hmm, a step-by-step set of instructions… with screenshots.
@@ -75,7 +84,7 @@ That’s a tutorial.
 ![The finished emblem with a grain layer set to Overlay at 28% opacity in the Layers panel](fjords-29-grain-finishing.webp)
 ![The finished Uncharted Fjords emblem in Lopsy with guides hidden and the Move tool active](fjords-30-finished-in-editor.webp "Every step of the [Uncharted Fjords emblem tutorial](/tutorials/cartographic-map-emblem-logo/).")
 
-And then it hit me: my QA process is now a two-fer. I can have Claude test the product, report bugs that it finds, and then write up that QA as a full tutorial that I can post on lopsy. Instead of wasting all this work on QA runs that may or may not find bugs (hint: they almost always find bugs), these tokens can do double duty and create artifacts that are interesting in their own right.
+And then it hit me: **my QA process is now a two-fer.** I can have Claude test the product, report bugs that it finds, and then write up that QA as a full tutorial that I can post on lopsy. Instead of wasting all this work on QA runs that may or may not find bugs (hint: they almost always find bugs), these tokens can do double duty and create artifacts that are interesting in their own right.
 
 There’s a lot of upside:
 
@@ -85,8 +94,6 @@ There’s a lot of upside:
 - They can be educational for particular techniques. I’ve been pretty surprised with some of the things it’s doing particularly around texture.
 
 I run this as a Claude Routine, so now every 2-4 hours (depending on how many tokens I can spare), my app is improving, my content library is growing, and I get these really fun artifacts to look at. Not all of them are amazing. Some are better than others. But it’s been tremendously valuable as a catalyst for improvement and adds a lot of fun to my day.
-
-![Lopsy with the finished Copper Lark Records collage logo on the canvas and the Print Grain, tape, wordmark, Ink Strip, Lark and Record layers in the Layers panel](copper-lark-in-lopsy.webp "[Copper Lark Records](/tutorials/collage-record-label-logo/), one of Claude’s compositions, open in Lopsy.")
 
 *Here’s my full QA/Autonomous Content building routine.*
 
