@@ -15,25 +15,34 @@ shareAlt: A wall of posters and covers Claude designed in Lopsy, including a kin
 
 I built lopsy.art to replace photoshop in my daily life. It’s not a 1-for-1 replacement, but it provides everything I need for my casual image editing needs. And the best part: I can add any [feature I dream up](https://github.com/theseamusjames/lopsy.art/pull/719) and make it work exactly the way I want it to. I love it.
 
-But of course there are bugs. A lot of bugs. It has an engine written in rust, compiled in WASM, rendered in a React app, and the whole thing was written by Claude. I’ve offered a lot of guidance on best practices and systems (like using sparse arrays to lower the memory footprint, contracting/expanding layers to their content size when not active, floating selections for independent editing and compositing, and many more), but the implementations are all straight from the agent.
+But of course there are bugs. A lot of bugs. The engine is written in rust, compiled in WASM, rendered in a React app, and the whole thing was written by Claude. I’ve offered a lot of guidance on best practices and systems (sparse arrays to lower the memory footprint, contracting/expanding layers to their content size when not active, floating selections for independent editing and compositing, and many more), but the implementations are all straight from the agent.
 
 With that, there’s a particularly pernicious class of bug that’s hard to spot: the kind that only appears in sequence. Undo, for example. You might undo once and it works. You might undo twice and it works. But maybe a bunch of undos in a row on a particular sequence of actions causes redo to fail. Your regular e2e won’t catch that.
 
-So to combat that, I let Claude build unique, randomized compositions completely from scratch, using the available tools the way a user would [through Playwright](https://lopsy.art/SKILL.md).
+## Design as Diagnosis
+So to combat that, I let Claude build unique, randomized compositions, using the tool the way a user would [through Playwright](https://lopsy.art/SKILL.md).
 
-First, I give Claude a `/random` skill that allows for actual random selection (because LLMs are really bad at choosing randomly on their own, particularly for the same prompt). Then I use the skill to choose two letters randomly – these will be initials for the name of its creation. Then it chooses a style like art nouveau or neobrutalist and a project type like album cover or holiday card.
+First, I give Claude a `/random` skill that allows for actual random selection via node (because LLMs are really bad at choosing randomly on their own, particularly for the same prompt). The skill chooses two letters randomly – these will be initials for the name of its creation. Then it chooses a style like art nouveau or neobrutalist and a project type like album cover or holiday card.
 
 And then it just goes.
 
-It creates full compositions using lopsy the way a graphic designer would, drawing with the tools, adding external images and cropping them, laying out text. From concept to completion, it designs the entire project autonomously. There’s an adversarial loop at the end that judges the quality of the output as a critical Art Director and raises the quality substantially through feedback and revision.
+It creates full compositions using lopsy the way a graphic designer would, drawing with the tools, adding external images and cropping them, laying out text. From concept to completion, it designs the entire project autonomously. 
 
-![Lopsy with the finished Copper Lark Records collage logo on the canvas and the Print Grain, tape, wordmark, Ink Strip, Lark and Record layers in the Layers panel](copper-lark-in-lopsy.webp "[Copper Lark Records](/tutorials/collage-record-label-logo/), one of Claude’s compositions, open in Lopsy.")
+## This is trash. Start again.
+There’s an adversarial loop at the end that assumes the role of Art Director and judges the quality of the output. 
 
-This only became possible with the recent class of models. Early experiments were… less successful. But these new models are very capable of controlling software like lopsy which enables a whole new class of generative capabilities. Things like photo retouching or color grading – this is no different than a human moving the knobs and buttons, and the product that comes out the other side isn’t generative in the sense of a nano banana retouch that bears the anomalies and watermark of generative AI.
+This allows for two things: token optimization by using a more powerful, more critical model to both assess the result as well as suggest improvements. And second, we have a bounded iterative loop. Continue revising until you satisfy the critics. 
+
+This only became possible with the recent class of models. Early experiments were… less successful.
 
 ![An early attempt at a velociraptor in Lopsy: a mustard-yellow blob of overlapping circles with a yellow slit-pupil eye, a thin black mouth line and a thick, blurry brown stripe painted down its back](early-velociraptor.webp "A velociraptor (obviously) created by Opus 4.7 in April 2026.")
 
+ Now that models can control software competently, a whole new class of generative capabilities becomes possible. Things like photo retouching or color grading – this is no different than a human moving the knobs and buttons, and the product that comes out the other side isn’t generative in the sense of a nano banana retouch that bears the anomalies and watermark of generative AI.
+
+## Use all parts of the animal
 As it started producing these designs, I was seeing the results and thinking, “That’s awesome, I wonder how it did that.” So to answer that question, I thought, “Well, I could have it give me a step-by-step showing what it’s doing.” Hmm, a step-by-step set of instructions… with screenshots.
+
+That’s a tutorial.
 
 ![A blank 1200 by 1200 document with blue guides at x 420 and 600 and y 130, 600 and 1070](fjords-01-guides-new-document.webp)
 ![The canvas filled with warm parchment and a faint cloudy mottle at 9% opacity](fjords-02-parchment-paper.webp)
@@ -66,11 +75,9 @@ As it started producing these designs, I was seeing the results and thinking, �
 ![The finished emblem with a grain layer set to Overlay at 28% opacity in the Layers panel](fjords-29-grain-finishing.webp)
 ![The finished Uncharted Fjords emblem in Lopsy with guides hidden and the Move tool active](fjords-30-finished-in-editor.webp "Every step of the [Uncharted Fjords emblem tutorial](/tutorials/cartographic-map-emblem-logo/).")
 
-That’s a tutorial.
+And then it hit me: my QA process is now a two-fer. I can have Claude test the product, report bugs that it finds, and then write up that QA as a full tutorial that I can post on lopsy. Instead of wasting all this work on QA runs that may or may not find bugs (hint: they almost always find bugs), these tokens can do double duty and create artifacts that are interesting in their own right.
 
-![A step from the Copper Lark Records tutorial on lopsy.art: instructions for cutting the lark’s wing and scalloping its feathers with exact sizes and colours, above a screenshot of the half-built lark perched on a vinyl record in Lopsy](copper-lark-tutorial-step.webp "The same composition as a [step-by-step tutorial](/tutorials/collage-record-label-logo/#step-17).")
-
-And then it hit me: my QA process is now a two-fer. I can have Claude test the product, report bugs that it finds, and then write up that QA as a full tutorial that I can post on lopsy. There’s a lot of upside:
+There’s a lot of upside:
 
 - I can see what it’s doing when it creates the images (and lo-and-behold it was doing some [weird stuff](https://github.com/theseamusjames/lopsy.art/commit/61b36638966bb4a2941380832552db20bdabf83d)).
 - Create a showcase of what’s possible with the tool
@@ -78,6 +85,8 @@ And then it hit me: my QA process is now a two-fer. I can have Claude test the p
 - They can be educational for particular techniques. I’ve been pretty surprised with some of the things it’s doing particularly around texture.
 
 I run this as a Claude Routine, so now every 2-4 hours (depending on how many tokens I can spare), my app is improving, my content library is growing, and I get these really fun artifacts to look at. Not all of them are amazing. Some are better than others. But it’s been tremendously valuable as a catalyst for improvement and adds a lot of fun to my day.
+
+![Lopsy with the finished Copper Lark Records collage logo on the canvas and the Print Grain, tape, wordmark, Ink Strip, Lark and Record layers in the Layers panel](copper-lark-in-lopsy.webp "[Copper Lark Records](/tutorials/collage-record-label-logo/), one of Claude’s compositions, open in Lopsy.")
 
 *Here’s my full QA/Autonomous Content building routine.*
 
