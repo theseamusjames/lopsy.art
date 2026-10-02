@@ -1,5 +1,5 @@
 ---
-title: Autonomous QA: A content-building two-for-one
+title: Maximum Efficiency: QA and Content
 description: How I have Claude design randomized compositions in Lopsy through the UI to catch sequence bugs, then turn each QA run into a published tutorial.
 summary: Using randomized selection and Claude's incredible design capabilities to automate bug discovery and content creation with the same set of tokens.
 published: 2026-10-01
@@ -11,7 +11,7 @@ share: share.jpg
 shareAlt: A wall of posters and covers Claude designed in Lopsy, including a kingfisher magazine cover, a steampunk tattoo flash sheet, an exploded gingerbread-house drawing, and the Meridian, Rift and Automat covers
 ---
 
-*I love AI and I use it all the time, but everything in this article was written by me with my dumb, imprecise monkey fingers.*
+*I love AI tools and I use them all the time, but everything in this article was written by me with my dumb, imprecise monkey fingers.*
 
 I built lopsy.art to replace photoshop in my daily life. It’s not a 1-for-1 replacement, but it provides everything I need for my casual image editing needs. And the best part: I can add any [feature I dream up](https://github.com/theseamusjames/lopsy.art/pull/719) and make it work exactly the way I want it to. I love it.
 

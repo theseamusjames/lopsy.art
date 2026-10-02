@@ -1,20 +1,18 @@
-# Last run: Nesting Season (mid-century modern editorial magazine cover, 1200x1600)
+# Last run: The Imperial Quail (etching-style birthday card, 1400x1960)
 
-Project type: magazine cover for an imaginary 1957 design quarterly, "aerie". Fully drawn, no photos, in a Charley Harper style. A geometric robin with a twig in its beak sits on a Pen-drawn branch in front of a mustard panel and a teal halftone sun. A butterfly-roof birdhouse hangs on a string, a woven nest holds three eggs, and two atomic starbursts sit in the sky. The masthead is Josefin Sans, the rotated live cover line is in Damion script, and a rotated GARDEN ISSUE badge sits on the sun.
+Project type: a birthday card. It turns a public-domain USFWS photo of a California quail into a Victorian hand-tinted copperplate etching. The quail stands on a post inside a fading oval of ruled lines, on a cream plate with a pressed plate mark. "Many Happy Returns" is in Pinyon Script, with THE IMPERIAL QUAIL in IM Fell English SC between double rules and "Callipepla californica" in IM Fell English italic. Pencil margin notes (1/1, the title and a signature) are in La Belle Aurore. Photo-based, not drawn.
 
 Tools/features used:
-- Ruler guides plus marquee snap-to-guides; Show Grid with snap for the plank (centre-anchored lattice)
-- Add Noise (Mono, Gaussian) on the paper; Soft Light grey-noise grain layer at the top
-- Shape tool ellipses with Cmd-drag from the centre (sun, head, eye, hole, perch, badge); stroke-only ring using Remove fill
-- Gradient + Halftone (12px, 45°) on a Cmd-click thumbnail selection; Multiply at 35%
-- Pen tool curved paths + Enter stroke (20/10/6 px); lasso wedges to taper the branch
-- Lasso leaf + Brush stem + Eraser Shift-click vein; Copy/Paste in place; rotate handle; Color Overlay recolours
-- Elliptical marquee body rotated -14°; breast trimmed by Cmd-click thumb + Select Inverse + Delete
-- Alt-drag subtract (nest bowl); brush strokes clipped to the selection
-- Group move, group corner scale (Cmd-drag), drag-reorder of a layer row, Delete Layer
-- Drop Shadow (hard, Blur 1, tan) on three layers; blend modes Multiply/Darken/Normal tried on the panel
-- Text: Josefin Sans (Bold/Regular/SemiBold), Damion; Align right/center; letter spacing, line height; Text-tool resize; live-text rotation -6° and a font swap; Rasterize + Merge Down + rotate for the badge
-- Undo/redo round trips (leaves, group move, scale); .lopsy reopen export matched pixel-exact
-- No new bugs filed. Art Director passes: v1 6.5 -> v2 7.5 -> v3 8
+- Photo paste via the clipboard, Magic Wand (Shift-add, Contiguous on/off, Tolerance), Lasso with Alt to subtract and Shift to add, Shift+Alt intersect, Select → Inverse/Grow/Shrink/Feather
+- Filters: Desaturate, Hue/Saturation, Brightness/Contrast (with Preview, on a lassoed area), Unsharp Mask, Add Noise, Gaussian Blur, Threshold (the core of the line engraving), Clouds, Emboss
+- **Engraving technique:** Define Pattern stripe tiles (16x10 and 16x6) → Fill with Pattern → blur → rotate the layer (Cmd 15-degree snap) → Mesh Warp to bend the hatch → clip with selections → 50% over a Copy Merged tone layer → Merge Down → Threshold, plus a second crosshatch pass merged on Multiply
+- Linear and radial gradients (Advanced stops with alpha), stretching a radial gradient with the transform edge handles
+- Selection → Path plus Paths-panel Stroke Path for the contour; Eraser with low opacity for fades
+- Blend modes: Lighten (to colour the ink sepia), Multiply (washes and ink), Overlay (paper grain)
+- Brush with Taper (Brushes modal Shape tab) for grass; Duplicate Layer plus a marquee Flip Horizontal; Pencil with Shift-click lines for rules and the plate bevel
+- Text: four Google fonts, letter spacing, italic set before typing, Align center, rotating live text (the signature) with its handle
+- Groups (Plate, Margin Notes), Group Layers from a multi-select, group Move, copy/paste in place to patch, guides from ruler clicks, Region-dialog marquees
+- Undo/redo checks: eraser chain, group move (0 px), 8-step undo/redo round trip (0 px)
+- Bugs: filed #1152 (Style → Italic on an existing text layer never loads the italic face); commented on #1133 (Selection → Path drops islands and keeps the one with the most contour points, not the biggest)
 
-Palette: warm cream paper with charcoal ink, teal, mustard, burnt orange, olive and cream (P3 hexes 417270 / D4A64D / B65A37).
+Palette: cream paper (F4EAD8) and plate tone (E6DCC8) with dark sepia ink (2D1D14), soft hand-tinted washes of slate (8C97A3), chestnut (A0603A), buff (D9B77E) and umber (8A6A4A), pale blue sky (C9D6DC), and graphite pencil (6E6E6E).
