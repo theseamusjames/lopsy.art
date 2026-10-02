@@ -169,8 +169,7 @@ describe('selectionToPaths (#1133)', () => {
     const H = 150;
     const a = createRectSelection({ x: 10, y: 10, width: 40, height: 30 }, W, H);
     const b = createRectSelection({ x: 100, y: 80, width: 60, height: 50 }, W, H);
-    const mask = new Uint8ClampedArray(W * H);
-    for (let i = 0; i < mask.length; i++) mask[i] = Math.max(a[i] ?? 0, b[i] ?? 0);
+    const mask = a.map((v, i) => Math.max(v, b[i] ?? 0));
 
     const paths = selectionToPaths(mask, W, H, 1);
     expect(paths).toHaveLength(2);
