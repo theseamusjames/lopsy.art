@@ -1,7 +1,7 @@
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { createRectSelection, invertSelection } from '../../../selection/selection';
-import { selectionToPath } from '../../../selection/selection-to-path';
+import { selectionToPaths } from '../../../selection/selection-to-path';
 import { createTransformState } from '../../../tools/transform/transform';
 import { commitLiveFloat } from '../../interactions/live-float';
 import type { MenuDef } from './types';
@@ -39,9 +39,9 @@ export function selectionToPathAction(): void {
   const state = useEditorStore.getState();
   const sel = state.selection;
   if (!sel.active || !sel.mask) return;
-  const anchors = selectionToPath(sel.mask, sel.maskWidth, sel.maskHeight);
-  if (anchors.length === 0) return;
-  state.addPath(anchors, true);
+  for (const anchors of selectionToPaths(sel.mask, sel.maskWidth, sel.maskHeight)) {
+    state.addPath(anchors, true);
+  }
 }
 
 export function createSelectMenu(showDialog: (id: SelectDialogId) => void): MenuDef {

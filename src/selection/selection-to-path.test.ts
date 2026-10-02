@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectionToPath } from './selection-to-path';
+import { selectionToPath, selectionToPaths } from './selection-to-path';
 import { createRectSelection, createEllipseSelection, isEmptySelection } from './selection';
 
 // ---------------------------------------------------------------------------
@@ -154,5 +154,31 @@ describe('selectionToPath', () => {
       expect(dxIn).toBeCloseTo(-dxOut, 5);
       expect(dyIn).toBeCloseTo(-dyOut, 5);
     }
+  });
+});
+
+describe('selectionToPaths (#1133)', () => {
+  function bbox(anchors: { point: { x: number; y: number } }[]) {
+    const xs = anchors.map((a) => a.point.x);
+    const ys = anchors.map((a) => a.point.y);
+    return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
+  }
+
+  it('traces every separate region of a selection', () => {
+    const W = 200;
+    const H = 150;
+    const a = createRectSelection({ x: 10, y: 10, width: 40, height: 30 }, W, H);
+    const b = createRectSelection({ x: 100, y: 80, width: 60, height: 50 }, W, H);
+    const mask = new Uint8ClampedArray(W * H);
+    for (let i = 0; i < mask.length; i++) mask[i] = Math.max(a[i] ?? 0, b[i] ?? 0);
+
+    const paths = selectionToPaths(mask, W, H, 1);
+    expect(paths).toHaveLength(2);
+    expect(bbox(paths[0]!)).toEqual({ minX: 10, minY: 10, maxX: 50, maxY: 40 });
+    expect(bbox(paths[1]!)).toEqual({ minX: 100, minY: 80, maxX: 160, maxY: 130 });
+  });
+
+  it('returns no paths for an empty mask', () => {
+    expect(selectionToPaths(makeEmptyMask(20, 20), 20, 20)).toEqual([]);
   });
 });
