@@ -2,16 +2,17 @@ import { Slider } from '../../components/Slider/Slider';
 import type { StrokeEffect } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
 import { docScaledMax } from '../../utils/slider-ranges';
-import { colorToHex, hexToColor } from './color-convert';
+import { EffectColorInput } from './EffectColorInput';
 import styles from './LayerEffectsPanel.module.css';
 
 interface StrokeFormProps {
   stroke: StrokeEffect;
   onChange: (s: StrokeEffect) => void;
+  onColorEditStart?: () => void;
   onDragStart?: () => void;
 }
 
-export function StrokeForm({ stroke, onChange, onDragStart }: StrokeFormProps) {
+export function StrokeForm({ stroke, onChange, onColorEditStart, onDragStart }: StrokeFormProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
   const widthMax = docScaledMax(docWidth, docHeight, 50);
@@ -20,15 +21,12 @@ export function StrokeForm({ stroke, onChange, onDragStart }: StrokeFormProps) {
     <>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
-        <label className={styles.colorSwatch} style={{ '--swatch-color': `rgb(${stroke.color.r}, ${stroke.color.g}, ${stroke.color.b})` } as React.CSSProperties}>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={colorToHex(stroke.color)}
-            aria-label="Stroke color"
-            onChange={(e) => onChange({ ...stroke, color: hexToColor(e.target.value, stroke.color.a) })}
-          />
-        </label>
+        <EffectColorInput
+          color={stroke.color}
+          ariaLabel="Stroke color"
+          onChange={(color) => onChange({ ...stroke, color })}
+          onEditStart={onColorEditStart}
+        />
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>

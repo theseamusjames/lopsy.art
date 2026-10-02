@@ -125,23 +125,23 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
     switch (selectedEffect) {
       case 'dropShadow':
         return shadow ? (
-          <DropShadowForm shadow={shadow} onChange={(s) => updateLive({ dropShadow: s })} onDragStart={beginEffectsDrag} />
+          <DropShadowForm shadow={shadow} onChange={(s) => updateLive({ dropShadow: s })} onColorEditStart={beginEffectsDrag} onDragStart={beginEffectsDrag} />
         ) : null;
       case 'stroke':
         return stroke ? (
-          <StrokeForm stroke={stroke} onChange={(s) => updateLive({ stroke: s })} onDragStart={beginEffectsDrag} />
+          <StrokeForm stroke={stroke} onChange={(s) => updateLive({ stroke: s })} onColorEditStart={beginEffectsDrag} onDragStart={beginEffectsDrag} />
         ) : null;
       case 'outerGlow':
         return outerGlow ? (
-          <GlowForm glow={outerGlow} onChange={(g) => updateLive({ outerGlow: g })} onDragStart={beginEffectsDrag} />
+          <GlowForm glow={outerGlow} onChange={(g) => updateLive({ outerGlow: g })} onColorEditStart={beginEffectsDrag} onDragStart={beginEffectsDrag} />
         ) : null;
       case 'innerGlow':
         return innerGlow ? (
-          <GlowForm glow={innerGlow} onChange={(g) => updateLive({ innerGlow: g })} onDragStart={beginEffectsDrag} />
+          <GlowForm glow={innerGlow} onChange={(g) => updateLive({ innerGlow: g })} onColorEditStart={beginEffectsDrag} onDragStart={beginEffectsDrag} />
         ) : null;
       case 'colorOverlay':
         return colorOverlay ? (
-          <ColorOverlayForm overlay={colorOverlay} onChange={(o) => update({ colorOverlay: o })} />
+          <ColorOverlayForm overlay={colorOverlay} onChange={(o) => update({ colorOverlay: o })} onColorEditStart={beginEffectsDrag} />
         ) : null;
       default:
         return null;

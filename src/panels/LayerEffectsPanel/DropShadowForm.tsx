@@ -2,16 +2,17 @@ import { Slider } from '../../components/Slider/Slider';
 import type { ShadowEffect } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
 import { docScaledMax, docScaledOffset } from '../../utils/slider-ranges';
-import { colorToHex, hexToColor } from './color-convert';
+import { EffectColorInput } from './EffectColorInput';
 import styles from './LayerEffectsPanel.module.css';
 
 interface DropShadowFormProps {
   shadow: ShadowEffect;
   onChange: (s: ShadowEffect) => void;
+  onColorEditStart?: () => void;
   onDragStart?: () => void;
 }
 
-export function DropShadowForm({ shadow, onChange, onDragStart }: DropShadowFormProps) {
+export function DropShadowForm({ shadow, onChange, onColorEditStart, onDragStart }: DropShadowFormProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
   const offsetAbs = docScaledOffset(docWidth, docHeight, 100);
@@ -22,15 +23,12 @@ export function DropShadowForm({ shadow, onChange, onDragStart }: DropShadowForm
     <>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
-        <label className={styles.colorSwatch} style={{ '--swatch-color': `rgb(${shadow.color.r}, ${shadow.color.g}, ${shadow.color.b})` } as React.CSSProperties}>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={colorToHex(shadow.color)}
-            aria-label="Shadow color"
-            onChange={(e) => onChange({ ...shadow, color: hexToColor(e.target.value, shadow.color.a) })}
-          />
-        </label>
+        <EffectColorInput
+          color={shadow.color}
+          ariaLabel="Shadow color"
+          onChange={(color) => onChange({ ...shadow, color })}
+          onEditStart={onColorEditStart}
+        />
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>
