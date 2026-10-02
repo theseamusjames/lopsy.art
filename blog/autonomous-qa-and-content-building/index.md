@@ -34,6 +34,8 @@ It creates full compositions using lopsy the way a graphic designer would, drawi
 
 (The complete prompt is at the bottom of this page).
 
+ ![Lopsy with the finished Quail Etching birthday card on the canvas.](quail-etching.webp "From the [Quail Etching Birthday Card](/tutorials/etching-quail-birthday-card/) tutorial.")
+
 ## This is trash. Start again.
 Once the design is complete, an agent assumes the role of Art Director and judges the output qualitatively. 
 
@@ -48,7 +50,7 @@ This only became possible with the recent class of models. Early experiments wer
 
  ![Lopsy with the finished Copper Lark Records collage logo on the canvas and the Print Grain, tape, wordmark, Ink Strip, Lark and Record layers in the Layers panel](copper-lark-in-lopsy.webp "[Copper Lark Records](/tutorials/collage-record-label-logo/), we've come a long way in 6 months.")
 
-## Use all parts of the animal
+## Waste nothing
 As it started producing these designs, I was seeing the results and thinking, “That’s awesome, I wonder how it did that.” So to answer that question, I thought, “Well, I could have it give me a step-by-step showing what it’s doing.” Hmm, a step-by-step set of instructions… with screenshots.
 
 That’s a tutorial.
