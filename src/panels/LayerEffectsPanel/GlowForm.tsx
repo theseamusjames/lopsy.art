@@ -2,16 +2,17 @@ import { Slider } from '../../components/Slider/Slider';
 import type { GlowEffect } from '../../types';
 import { useEditorStore } from '../../app/editor-store';
 import { docScaledMax } from '../../utils/slider-ranges';
-import { colorToHex, hexToColor } from './color-convert';
+import { EffectColorInput } from './EffectColorInput';
 import styles from './LayerEffectsPanel.module.css';
 
 interface GlowFormProps {
   glow: GlowEffect;
   onChange: (g: GlowEffect) => void;
+  onColorEditStart?: () => void;
   onDragStart?: () => void;
 }
 
-export function GlowForm({ glow, onChange, onDragStart }: GlowFormProps) {
+export function GlowForm({ glow, onChange, onColorEditStart, onDragStart }: GlowFormProps) {
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
   const sizeMax = docScaledMax(docWidth, docHeight, 100);
@@ -21,15 +22,12 @@ export function GlowForm({ glow, onChange, onDragStart }: GlowFormProps) {
     <>
       <div className={styles.row}>
         <span className={styles.fieldLabel}>Color</span>
-        <label className={styles.colorSwatch} style={{ '--swatch-color': `rgb(${glow.color.r}, ${glow.color.g}, ${glow.color.b})` } as React.CSSProperties}>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={colorToHex(glow.color)}
-            aria-label="Glow color"
-            onChange={(e) => onChange({ ...glow, color: hexToColor(e.target.value, glow.color.a) })}
-          />
-        </label>
+        <EffectColorInput
+          color={glow.color}
+          ariaLabel="Glow color"
+          onChange={(color) => onChange({ ...glow, color })}
+          onEditStart={onColorEditStart}
+        />
       </div>
       <div className={styles.row}>
         <div className={styles.sliderWrap}>

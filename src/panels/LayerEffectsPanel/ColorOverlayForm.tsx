@@ -1,25 +1,23 @@
 import type { ColorOverlayEffect } from '../../types';
-import { colorToHex, hexToColor } from './color-convert';
+import { EffectColorInput } from './EffectColorInput';
 import styles from './LayerEffectsPanel.module.css';
 
 interface ColorOverlayFormProps {
   overlay: ColorOverlayEffect;
   onChange: (o: ColorOverlayEffect) => void;
+  onColorEditStart?: () => void;
 }
 
-export function ColorOverlayForm({ overlay, onChange }: ColorOverlayFormProps) {
+export function ColorOverlayForm({ overlay, onChange, onColorEditStart }: ColorOverlayFormProps) {
   return (
     <div className={styles.row}>
       <span className={styles.fieldLabel}>Color</span>
-      <label className={styles.colorSwatch} style={{ '--swatch-color': `rgb(${overlay.color.r}, ${overlay.color.g}, ${overlay.color.b})` } as React.CSSProperties}>
-        <input
-          type="color"
-          className={styles.colorInput}
-          value={colorToHex(overlay.color)}
-          aria-label="Overlay color"
-          onChange={(e) => onChange({ ...overlay, color: hexToColor(e.target.value, overlay.color.a) })}
-        />
-      </label>
+      <EffectColorInput
+        color={overlay.color}
+        ariaLabel="Overlay color"
+        onChange={(color) => onChange({ ...overlay, color })}
+        onEditStart={onColorEditStart}
+      />
     </div>
   );
 }

@@ -29,7 +29,7 @@ import {
   INITIAL_INTERACTION_STATE,
   resolveDownGesture,
 } from './interactions/interaction-types';
-import { handleTransformDown, flushSelectionTransform } from './interactions/transform-handlers';
+import { handleTransformDown, flushSelectionTransform, refuseGroupSelectionTransform } from './interactions/transform-handlers';
 import { forgetLayerTransform, markLayerTransformDirty } from './interactions/layer-transform';
 import {
   handleMeshWarpDown,
@@ -351,6 +351,7 @@ export function useCanvasInteraction(
           return;
         }
         if (refusePartialTextMove()) return;
+        if (refuseGroupSelectionTransform(ctx)) return;
         releaseCoveringTextSelection();
       }
 

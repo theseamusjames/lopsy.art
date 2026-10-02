@@ -25,9 +25,42 @@ export function selectionToPath(
     polylines[0]!,
   );
 
-  const simplified = douglasPeucker(primary, tolerance);
-  if (simplified.length < 2) return [];
+  return contourToAnchors(primary, tolerance);
+}
 
+/**
+ * Convert every contour of a selection mask to its own closed anchor list,
+ * so a selection made of several separate regions (or one with holes)
+ * keeps all of them (#1133). Ordered top-to-bottom, then left-to-right.
+ */
+export function selectionToPaths(
+  mask: Uint8ClampedArray,
+  width: number,
+  height: number,
+  tolerance = 2,
+): PathAnchor[][] {
+  const polylines = traceContourPolylines(mask, width, height);
+  const withOrigin = polylines.map((pts) => ({ pts, origin: topLeftPoint(pts) }));
+  withOrigin.sort((a, b) => a.origin.y - b.origin.y || a.origin.x - b.origin.x);
+  const result: PathAnchor[][] = [];
+  for (const { pts } of withOrigin) {
+    const anchors = contourToAnchors(pts, tolerance);
+    if (anchors.length >= 3) result.push(anchors);
+  }
+  return result;
+}
+
+function topLeftPoint(pts: Point[]): Point {
+  let best = pts[0]!;
+  for (const p of pts) {
+    if (p.y < best.y || (p.y === best.y && p.x < best.x)) best = p;
+  }
+  return best;
+}
+
+function contourToAnchors(polyline: Point[], tolerance: number): PathAnchor[] {
+  const simplified = douglasPeucker(polyline, tolerance);
+  if (simplified.length < 2) return [];
   return catmullRomToAnchors(simplified, true);
 }
 

@@ -2,7 +2,7 @@ import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { getBrushCursorInfo } from '../useCanvasCursor';
-import { getEngine, getEngineCanvas } from '../../engine-wasm/engine-state';
+import { getEngine } from '../../engine-wasm/engine-state';
 import { renderGrid, renderPixelGrid, renderRulers } from './render-grid';
 import { DEFAULT_DPI } from './ruler-units';
 import { renderSelectionAnts, renderTransformHandles, renderMarqueeDraftAnts, drawTransformHandles } from './render-selection';
@@ -18,6 +18,7 @@ import { frameCorners } from '../../tools/text/text-transform';
 import { hitTestTextLayer } from '../../tools/text/text-hit-test';
 import { engineRenderedSize } from '../../tools/text/text-geometry';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './render-guides';
+import { getStampSourceImage } from './stamp-source-image';
 import { renderTiltShiftOverlay } from './render-tilt-shift-overlay';
 import { contextOptions } from '../../engine/color-space';
 import { getDisplayPixelRatio } from './display-pixel-ratio';
@@ -204,9 +205,8 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
       : activeTool === 'sponge' ? toolState.settings.sponge.size
       : brushCursorInfo.size;
     const isStampTool = activeTool === 'stamp' || activeTool === 'healing';
-    const webglCanvas = getEngineCanvas();
-    const showedPreview = isStampTool && webglCanvas && renderStampSourcePreview(
-      overlayCtx, webglCanvas, cursorPosition, size, viewport,
+    const showedPreview = isStampTool && doc.activeLayerId !== null && renderStampSourcePreview(
+      overlayCtx, getStampSourceImage(doc.activeLayerId), cursorPosition, size, viewport,
       doc.width, doc.height, screenW, screenH,
     );
     if (!showedPreview) {

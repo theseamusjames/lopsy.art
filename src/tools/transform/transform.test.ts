@@ -234,6 +234,31 @@ describe('isScaleHandle / isRotateHandle', () => {
 });
 
 describe('computeScale', () => {
+  it('pins the opposite edge of a rotated box (#1138)', () => {
+    const rotation = -Math.PI / 6;
+    const state = { ...createTransformState({ x: 200, y: 250, width: 400, height: 100 }), rotation };
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const edgeMid = (t: { scaleX: number; translateX: number; translateY: number }, side: -1 | 1) => {
+      const half = (400 * t.scaleX) / 2;
+      return {
+        x: 400 + t.translateX + side * half * cos,
+        y: 300 + t.translateY + side * half * sin,
+      };
+    };
+    const start = edgeMid(state, 1);
+    const end = { x: start.x + 150 * cos, y: start.y + 150 * sin };
+    const result = computeScale('right', start, end, state, false);
+    const next = { ...state, ...result };
+    const leftBefore = edgeMid(state, -1);
+    const leftAfter = edgeMid(next, -1);
+    expect(leftAfter.x).toBeCloseTo(leftBefore.x);
+    expect(leftAfter.y).toBeCloseTo(leftBefore.y);
+    const rightAfter = edgeMid(next, 1);
+    expect(rightAfter.x).toBeCloseTo(end.x);
+    expect(rightAfter.y).toBeCloseTo(end.y);
+  });
+
   it('scales right edge', () => {
     const state = createTransformState({ x: 0, y: 0, width: 100, height: 100 });
     const result = computeScale(

@@ -178,6 +178,17 @@ export function removeFromParentGroup(
  * Otherwise fall back to the root group.
  * Always returns a group ID — never null (layers must live inside a group).
  */
+/**
+ * A collapsed group hides its children, so a layer created while one is
+ * active goes directly above it as a sibling; otherwise the new active
+ * layer would have no visible row (#1145). The root group is never
+ * treated as collapsed.
+ */
+function isOpenGroupTarget(layer: Layer, rootGroupId: string | null | undefined): boolean {
+  if (!isGroupLayer(layer)) return false;
+  return layer.id === rootGroupId || !layer.collapsed;
+}
+
 export function getInsertionGroupId(
   layers: readonly Layer[],
   activeLayerId: string | null,
@@ -185,7 +196,7 @@ export function getInsertionGroupId(
 ): string | null {
   if (activeLayerId) {
     const activeLayer = layers.find((l) => l.id === activeLayerId);
-    if (activeLayer && isGroupLayer(activeLayer)) {
+    if (activeLayer && isOpenGroupTarget(activeLayer, rootGroupId)) {
       return activeLayer.id;
     }
     const parent = findParentGroup(layers, activeLayerId);
@@ -211,7 +222,8 @@ export function getInsertionOrderIndex(
   if (!activeLayerId) return layerOrder.length;
   const idx = layerOrder.indexOf(activeLayerId);
   if (idx === -1) return layerOrder.length;
-  const activeIsGroup = layers?.find((l) => l.id === activeLayerId)?.type === 'group';
+  const activeLayer = layers?.find((l) => l.id === activeLayerId);
+  const activeIsGroup = !!activeLayer && isOpenGroupTarget(activeLayer, rootGroupId);
   let insertIdx = activeIsGroup ? idx : idx + 1;
   if (rootGroupId) {
     const rootIdx = layerOrder.indexOf(rootGroupId);
