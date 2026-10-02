@@ -1,10 +1,11 @@
 import { useEditorStore } from '../editor-store';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { readLayerPixels, getLayerTextureDimensions, filterPatternFill, saveFilterPreview, restoreFilterPreview, clearFilterPreview } from '../../engine-wasm/wasm-bridge';
+import { readLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, filterPatternFill, saveFilterPreview, restoreFilterPreview, clearFilterPreview } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { usePatternStore, generateThumbnail } from '../pattern-store';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import type { PatternDefinition, PatternFillSettings } from '../pattern-store';
+import { extractSelectionPattern } from './pattern-extract';
 import { guardPixelWrite } from '../../layers/paint-target';
 import type { Layer } from '../../types';
 
@@ -49,34 +50,15 @@ export function definePattern(): void {
   let height: number;
 
   if (selection.active && selection.bounds && selection.mask) {
-    const { bounds, mask, maskWidth, maskHeight } = selection;
-    const x0 = Math.max(0, Math.round(bounds.x));
-    const y0 = Math.max(0, Math.round(bounds.y));
-    const x1 = Math.min(layerW, Math.round(bounds.x + bounds.width));
-    const y1 = Math.min(layerH, Math.round(bounds.y + bounds.height));
-    width = x1 - x0;
-    height = y1 - y0;
-    if (width <= 0 || height <= 0) return;
-
-    data = new Uint8Array(width * height * 4);
-    for (let row = 0; row < height; row++) {
-      for (let col = 0; col < width; col++) {
-        const srcX = x0 + col;
-        const srcY = y0 + row;
-        const srcIdx = (srcY * layerW + srcX) * 4;
-        const dstIdx = (row * width + col) * 4;
-
-        let maskVal = 0;
-        if (srcX >= 0 && srcX < maskWidth && srcY >= 0 && srcY < maskHeight) {
-          maskVal = (mask[srcY * maskWidth + srcX] ?? 0) / 255;
-        }
-
-        data[dstIdx] = pixels[srcIdx] ?? 0;
-        data[dstIdx + 1] = pixels[srcIdx + 1] ?? 0;
-        data[dstIdx + 2] = pixels[srcIdx + 2] ?? 0;
-        data[dstIdx + 3] = Math.round((pixels[srcIdx + 3] ?? 0) * maskVal);
-      }
-    }
+    const [texX = 0, texY = 0] = getLayerEngineBounds(engine, activeId);
+    const extracted = extractSelectionPattern(
+      { pixels, x: texX, y: texY, width: layerW, height: layerH },
+      { bounds: selection.bounds, mask: selection.mask, maskWidth: selection.maskWidth, maskHeight: selection.maskHeight },
+      state.document.width,
+      state.document.height,
+    );
+    if (!extracted) return;
+    ({ data, width, height } = extracted);
   } else {
     data = new Uint8Array(pixels);
     width = layerW;
