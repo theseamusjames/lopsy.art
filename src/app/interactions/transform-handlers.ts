@@ -17,6 +17,7 @@ import type { TransformHandle, TransformState } from '../../tools/transform/tran
 import { ROTATE_HANDLE_OFFSET } from '../../tools/transform/transform-handles';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
+import { notifyInfo } from '../notifications-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -186,6 +187,25 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
   uiState.setActiveTransformHandle(hit);
 
   return newState;
+}
+
+export const GROUP_SELECTION_TRANSFORM_HINT = 'Deselect to transform the whole group, or select a layer inside it to transform part of it.';
+
+/**
+ * A group has no pixels of its own to lift, so a handle drag on a marquee
+ * with a group active changed nothing yet still recorded a Transform step
+ * (#1130). Refuse it with a hint instead. Returns true when refused.
+ */
+export function refuseGroupSelectionTransform(ctx: InteractionContext): boolean {
+  const ui = useUIStore.getState();
+  if (ui.activeTool !== 'move' || !ui.transform) return false;
+  const editor = useEditorStore.getState();
+  if (!editor.selection.active) return false;
+  const layer = editor.document.layers.find((l) => l.id === ctx.activeLayerId);
+  if (layer?.type !== 'group') return false;
+  if (!hitTestTransformHandle(ctx.canvasPos, ui.transform, editor.viewport.zoom)) return false;
+  notifyInfo(GROUP_SELECTION_TRANSFORM_HINT);
+  return true;
 }
 
 /**
