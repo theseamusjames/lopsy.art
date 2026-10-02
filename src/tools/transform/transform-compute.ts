@@ -30,8 +30,8 @@ export function computeScale(
 
   let newScaleX = state.scaleX;
   let newScaleY = state.scaleY;
-  let newTranslateX = state.translateX;
-  let newTranslateY = state.translateY;
+  let localShiftX = 0;
+  let localShiftY = 0;
 
   const origW = state.originalBounds.width;
   const origH = state.originalBounds.height;
@@ -39,45 +39,52 @@ export function computeScale(
   switch (handle) {
     case 'right':
       newScaleX = state.scaleX + (deltaX / origW);
-      newTranslateX = state.translateX + deltaX / 2;
+      localShiftX = deltaX / 2;
       break;
     case 'left':
       newScaleX = state.scaleX - (deltaX / origW);
-      newTranslateX = state.translateX + deltaX / 2;
+      localShiftX = deltaX / 2;
       break;
     case 'bottom':
       newScaleY = state.scaleY + (deltaY / origH);
-      newTranslateY = state.translateY + deltaY / 2;
+      localShiftY = deltaY / 2;
       break;
     case 'top':
       newScaleY = state.scaleY - (deltaY / origH);
-      newTranslateY = state.translateY + deltaY / 2;
+      localShiftY = deltaY / 2;
       break;
     case 'bottom-right':
       newScaleX = state.scaleX + (deltaX / origW);
       newScaleY = state.scaleY + (deltaY / origH);
-      newTranslateX = state.translateX + deltaX / 2;
-      newTranslateY = state.translateY + deltaY / 2;
+      localShiftX = deltaX / 2;
+      localShiftY = deltaY / 2;
       break;
     case 'bottom-left':
       newScaleX = state.scaleX - (deltaX / origW);
       newScaleY = state.scaleY + (deltaY / origH);
-      newTranslateX = state.translateX + deltaX / 2;
-      newTranslateY = state.translateY + deltaY / 2;
+      localShiftX = deltaX / 2;
+      localShiftY = deltaY / 2;
       break;
     case 'top-right':
       newScaleX = state.scaleX + (deltaX / origW);
       newScaleY = state.scaleY - (deltaY / origH);
-      newTranslateX = state.translateX + deltaX / 2;
-      newTranslateY = state.translateY + deltaY / 2;
+      localShiftX = deltaX / 2;
+      localShiftY = deltaY / 2;
       break;
     case 'top-left':
       newScaleX = state.scaleX - (deltaX / origW);
       newScaleY = state.scaleY - (deltaY / origH);
-      newTranslateX = state.translateX + deltaX / 2;
-      newTranslateY = state.translateY + deltaY / 2;
+      localShiftX = deltaX / 2;
+      localShiftY = deltaY / 2;
       break;
   }
+
+  // The shift is in the box's own axes; the centre lives in document axes,
+  // so rotate it back or the pinned edge drifts on a rotated box.
+  const rotCos = Math.cos(state.rotation);
+  const rotSin = Math.sin(state.rotation);
+  const newTranslateX = state.translateX + localShiftX * rotCos - localShiftY * rotSin;
+  const newTranslateY = state.translateY + localShiftX * rotSin + localShiftY * rotCos;
 
   // Enforce minimum size
   newScaleX = Math.max(0.01, newScaleX);
