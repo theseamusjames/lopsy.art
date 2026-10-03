@@ -6,6 +6,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { toDocumentColor } from '../../app/document-color';
 import { hitTestTextLayer } from './text-hit-test';
+import { getPathTextGlyphBoxes } from './path-text-hit-boxes';
 import { engineRenderedSize } from './text-geometry';
 import { createTextLayer } from '../../layers/layer-model';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
@@ -437,6 +438,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     canvasPos,
     hitEngine ? engineRenderedSize(hitEngine) : undefined,
     hitEngine ? (layer) => measureTextFrame(hitEngine, layer) : undefined,
+    getPathTextGlyphBoxes,
   );
   if (hitLayer) {
     loadTextSettingsFromLayer(hitLayer);

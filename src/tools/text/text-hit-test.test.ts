@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { hitTestTextLayer, type RenderedSize } from './text-hit-test';
 import type { TextLayer } from '../../types';
+import type { PlacedGlyphBox } from './path-text-geometry';
 
 function makeTextLayer(overrides: Partial<TextLayer> = {}): TextLayer {
   return {
@@ -192,5 +193,47 @@ describe('hitTestTextLayer with transformed layers', () => {
 
   it('falls back to the texture box when no frame is available', () => {
     expect(hitTestTextLayer([layer], { x: 370, y: 200 }, bigTexture)).toBe(layer);
+  });
+});
+
+describe('hitTestTextLayer — path-bound text (#1174)', () => {
+  // An arch of three capitals in a 200×120 texture at (100, 300): the outer
+  // two stand rotated near the texture's bottom corners, the middle one
+  // upright at its top. Boxes are relative to the texture's top-left.
+  const cap = { left: -15, right: 15, top: -36, bottom: 0 };
+  const boxes: PlacedGlyphBox[] = [
+    { ...cap, x: 20, y: 115, rotation: -1.2 },
+    { ...cap, x: 100, y: 40, rotation: 0 },
+    { ...cap, x: 180, y: 115, rotation: 1.2 },
+  ];
+  const layer = makeTextLayer({ x: 100, y: 300, pathId: 'path-1' });
+  const texture = (): RenderedSize => ({ width: 200, height: 120 });
+  const lookup = (id: string) => (id === layer.id ? boxes : null);
+
+  it('hits a click on a glyph', () => {
+    expect(hitTestTextLayer([layer], { x: 200, y: 325 }, texture, undefined, lookup)).toBe(layer);
+  });
+
+  it('hits a click just off a glyph, within the slop', () => {
+    expect(hitTestTextLayer([layer], { x: 200, y: 343 }, texture, undefined, lookup)).toBe(layer);
+  });
+
+  it('ignores a click under the arch, inside the texture but off every glyph', () => {
+    expect(hitTestTextLayer([layer], { x: 200, y: 400 }, texture, undefined, lookup)).toBeNull();
+  });
+
+  it('follows the layer when it is moved', () => {
+    const moved = { ...layer, x: 150, y: 320 };
+    expect(hitTestTextLayer([moved], { x: 250, y: 345 }, texture, undefined, lookup)).toBe(moved);
+    expect(hitTestTextLayer([moved], { x: 200, y: 325 }, texture, undefined, lookup)).toBeNull();
+  });
+
+  it('falls back to the texture box before the layer has been rendered', () => {
+    expect(hitTestTextLayer([layer], { x: 200, y: 400 }, texture, undefined, () => null)).toBe(layer);
+  });
+
+  it('ignores glyph boxes on a layer that is not bound to a path', () => {
+    const unbound = { ...layer, pathId: undefined };
+    expect(hitTestTextLayer([unbound], { x: 200, y: 400 }, texture, undefined, lookup)).toBe(unbound);
   });
 });

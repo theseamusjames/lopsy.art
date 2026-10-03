@@ -2,7 +2,9 @@ import { test, expect, type Page } from './fixtures';
 import { createDocument, docToScreen, setToolOption, waitForStore } from './helpers';
 
 // #1161: text on a path ignored Align — glyphs always started at the path's
-// first anchor.
+// first anchor. #1174: path text's texture (and so its Text-tool hit box) was
+// padded by a font size on every side, so a click well below the glyphs
+// re-opened the path text instead of starting a new layer.
 
 interface TextInfo { id: string; text: string; x: number; y: number; pathId?: string }
 
@@ -52,6 +54,16 @@ async function inkExtent(page: Page, layerId: string): Promise<Ink | null> {
       texH: height,
     };
   }, layerId);
+}
+
+async function dragDoc(page: Page, from: [number, number], to: [number, number]): Promise<void> {
+  const a = await docToScreen(page, from[0], from[1]);
+  const b = await docToScreen(page, to[0], to[1]);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(120);
 }
 
 async function clickDoc(page: Page, x: number, y: number): Promise<void> {
@@ -148,5 +160,93 @@ test.describe('#1161 — text on a path honours Align', () => {
     // The run keeps its width whichever way it is aligned.
     expect(Math.abs((right.right - right.left) - runWidth)).toBeLessThan(3);
     expect(Math.abs((left.right - left.left) - runWidth)).toBeLessThan(3);
+  });
+});
+
+test.describe('#1174 — clicks just off path text start a new layer', () => {
+  test.beforeEach(async ({ page, isMobile }) => {
+    test.skip(isMobile, 'text options bar requires desktop viewport');
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 800, 600, true);
+    await page.waitForTimeout(300);
+  });
+
+  test('a click 45 px below path text creates a new text layer', async ({ page }) => {
+    // A gentle arch from (200,450) to (600,450).
+    await page.keyboard.press('p');
+    await dragDoc(page, [200, 450], [260, 420]);
+    await dragDoc(page, [600, 450], [660, 480]);
+    const pathId = await commitPath(page);
+
+    await page.keyboard.press('t');
+    await setToolOption(page, 'Size', 50);
+    await typeText(page, [100, 100], 'NO SMILES');
+    const bound = await bindToPath(page, pathId);
+    const ink = (await inkExtent(page, bound.id))!;
+    await page.screenshot({ path: 'e2e/screenshots/path-text-hit-box-bound.png' });
+    // The glyphs sit on the arch, ending at its baseline around y=450.
+    expect(ink.bottom).toBeGreaterThan(430);
+    expect(ink.bottom).toBeLessThan(465);
+    // The texture — and with it the hover outline — hugs the ink.
+    expect(ink.texH - (ink.bottom - ink.top)).toBeLessThanOrEqual(8);
+    expect(ink.texW - (ink.right - ink.left)).toBeLessThanOrEqual(8);
+
+    await typeText(page, [330, ink.bottom + 45], '$150');
+    await page.screenshot({ path: 'e2e/screenshots/path-text-hit-box-new-layer.png' });
+    const layers = await textLayers(page);
+    expect(layers.map((l) => l.text).sort()).toEqual(['$150', 'NO SMILES']);
+    expect(layers.find((l) => l.text === 'NO SMILES')!.pathId).toBe(pathId);
+    expect(layers.find((l) => l.text === '$150')!.pathId).toBeUndefined();
+  });
+
+  test('a click on the glyphs still edits the path text', async ({ page }) => {
+    await page.keyboard.press('p');
+    await dragDoc(page, [200, 450], [260, 420]);
+    await dragDoc(page, [600, 450], [660, 480]);
+    const pathId = await commitPath(page);
+
+    await page.keyboard.press('t');
+    await setToolOption(page, 'Size', 50);
+    await typeText(page, [100, 100], 'NO SMILES');
+    const bound = await bindToPath(page, pathId);
+    const ink = (await inkExtent(page, bound.id))!;
+
+    // Click inside the first glyph's ink, near the bottom-left of the run.
+    await clickDoc(page, ink.left + 12, ink.bottom - 15);
+    await page.keyboard.press('End');
+    await page.keyboard.type('!');
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(300);
+    const layers = await textLayers(page);
+    expect(layers).toHaveLength(1);
+    expect(layers[0]!.text).toBe('NO SMILES!');
+    expect(layers[0]!.pathId).toBe(pathId);
+  });
+
+  test('a click inside a tall arch, away from every glyph, starts a new layer', async ({ page }) => {
+    // A tall arch: its ink box covers the space under the apex, but no glyph
+    // is there.
+    await page.keyboard.press('p');
+    await dragDoc(page, [150, 500], [150, 300]);
+    await dragDoc(page, [650, 500], [650, 700]);
+    const pathId = await commitPath(page);
+
+    await page.keyboard.press('t');
+    await setToolOption(page, 'Size', 40);
+    await typeText(page, [50, 60], 'OVER THE HILL AND FAR AWAY');
+    const bound = await bindToPath(page, pathId);
+    const ink = (await inkExtent(page, bound.id))!;
+    await page.screenshot({ path: 'e2e/screenshots/path-text-hit-box-arch.png' });
+    // The run climbs the arch from one foot to the other.
+    expect(ink.left).toBeLessThan(200);
+    expect(ink.right).toBeGreaterThan(560);
+    expect(ink.top).toBeLessThan(380);
+    expect(ink.bottom).toBeGreaterThan(470);
+
+    // Under the apex, inside the ink box but ≥ 70 px from any glyph.
+    await typeText(page, [400, 470], 'INSIDE');
+    const layers = await textLayers(page);
+    expect(layers.map((l) => l.text).sort()).toEqual(['INSIDE', 'OVER THE HILL AND FAR AWAY']);
   });
 });

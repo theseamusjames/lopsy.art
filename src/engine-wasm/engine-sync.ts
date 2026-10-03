@@ -121,6 +121,7 @@ import {
 export type { TextPlacement };
 import type { StoredPath } from '../types/paths';
 import { pathTextFont, renderTextOnPath } from '../tools/text/render-text-on-path';
+import { clearPathTextGlyphBoxes, setPathTextGlyphBoxes } from '../tools/text/path-text-hit-boxes';
 import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from '../tools/text/point-text-align';
 import { ensureFontFacesLoaded, parseFontFamilyList } from '../utils/font-face-readiness';
 import { getTracked } from './sync-state';
@@ -1059,10 +1060,12 @@ export function syncPathTextLayers(
       const x = result.x + offsetX;
       const y = result.y + offsetY;
       uploadLayerPixels(engine, layer.id, result.pixels, result.width, result.height, x, y);
+      setPathTextGlyphBoxes(layer.id, result.glyphBoxes);
       onPositionChange(layer.id, x, y, result.x, result.y);
     } else {
       // Empty result — clear the layer texture and park it at the origin.
       uploadLayerPixels(engine, layer.id, new Uint8Array(4), 1, 1, 0, 0);
+      clearPathTextGlyphBoxes(layer.id);
       onPositionChange(layer.id, 0, 0, 0, 0);
     }
     tracked.pathTextKeys.set(layer.id, key);
