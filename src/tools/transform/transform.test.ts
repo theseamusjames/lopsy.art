@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import type { TransformState } from './transform';
+import { createTransformPointMapper } from './transform-point';
 import {
   createTransformState,
+  documentAffineOf,
   getTransformedBounds,
   getTransformedContentBounds,
   mapRectThroughInverse,
@@ -445,5 +448,67 @@ describe('translateTransform (#948)', () => {
     expect(after.x).toBeCloseTo(before.x + 5);
     expect(after.y).toBeCloseTo(before.y + 7);
     expect(after.width).toBeCloseTo(before.width);
+  });
+});
+
+describe('documentAffineOf', () => {
+  const box = { x: 40, y: 20, width: 200, height: 80 };
+  const apply = (f: NonNullable<ReturnType<typeof documentAffineOf>>, x: number, y: number) => ({
+    x: f.a * x + f.c * y + f.e,
+    y: f.b * x + f.d * y + f.f,
+  });
+
+  it('matches the handle chain point for point in Free and Skew', () => {
+    const states: TransformState[] = [
+      { ...createTransformState(box), rotation: 0.4, scaleX: 1.5, scaleY: -0.75, translateX: 12, translateY: -7 },
+      { ...createTransformState(box, 'skew'), skewX: 0.3, skewY: -0.2, rotation: -1.1, translateX: 3 },
+    ];
+    for (const t of states) {
+      const f = documentAffineOf(t)!;
+      const map = createTransformPointMapper(t);
+      for (const [x, y] of [[40, 20], [240, 20], [240, 100], [40, 100], [131, 57]] as const) {
+        const want = map(x, y)!;
+        const got = apply(f, x, y);
+        expect(got.x).toBeCloseTo(want.x, 9);
+        expect(got.y).toBeCloseTo(want.y, 9);
+      }
+    }
+  });
+
+  it('is the identity for an untouched box in every mode', () => {
+    for (const mode of ['free', 'skew', 'distort', 'perspective'] as const) {
+      const f = documentAffineOf(createTransformState(box, mode))!;
+      expect(f.a).toBeCloseTo(1);
+      expect(f.b).toBeCloseTo(0);
+      expect(f.c).toBeCloseTo(0);
+      expect(f.d).toBeCloseTo(1);
+      expect(f.e).toBeCloseTo(0);
+      expect(f.f).toBeCloseTo(0);
+    }
+  });
+
+  it('reads a moved or mirrored corner box as affine', () => {
+    const flipped: TransformState = {
+      ...createTransformState(box, 'perspective'),
+      // Horizontal mirror of the box: TL ↔ TR, BL ↔ BR.
+      corners: [{ x: 200, y: 0 }, { x: -200, y: 0 }, { x: -200, y: 0 }, { x: 200, y: 0 }],
+    };
+    const f = documentAffineOf(flipped)!;
+    expect(f.a).toBeCloseTo(-1);
+    expect(f.d).toBeCloseTo(1);
+    const map = createTransformPointMapper(flipped);
+    const want = map(70, 30)!;
+    const got = apply(f, 70, 30);
+    expect(got.x).toBeCloseTo(want.x, 6);
+    expect(got.y).toBeCloseTo(want.y, 6);
+  });
+
+  it('is null for a real corner distortion or an empty corner box', () => {
+    const dragged: TransformState = {
+      ...createTransformState(box, 'distort'),
+      corners: [{ x: 0, y: 0 }, { x: 15, y: -10 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
+    };
+    expect(documentAffineOf(dragged)).toBeNull();
+    expect(documentAffineOf(createTransformState({ x: 0, y: 0, width: 0, height: 10 }, 'perspective'))).toBeNull();
   });
 });

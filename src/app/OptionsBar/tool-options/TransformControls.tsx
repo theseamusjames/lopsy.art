@@ -30,6 +30,7 @@ import {
   getLayerTransformBox,
   isLayerTransformCurrent,
   markLayerTransformDirty,
+  refuseTextInLayerTransform,
   renderLayerTransform,
 } from '../../interactions/layer-transform';
 import styles from './TransformControls.module.css';
@@ -134,7 +135,7 @@ const MODES: { id: TransformMode; label: string }[] = [
  */
 export function applyLayerTransformStep(step: (t: TransformState) => TransformState): void {
   const box = getLayerTransformBox();
-  if (!box) return;
+  if (!box || refuseTextInLayerTransform(false)) return;
   withLiveFloatKept(() => useEditorStore.getState().pushHistory('Transform'));
   if (!isLayerTransformCurrent()) {
     commitLiveFloat();

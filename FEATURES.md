@@ -776,7 +776,8 @@ select the layers and rotate once.
 - **All four modes work** — Free, Skew, Distort and Perspective. The mode
   buttons, Flip Horizontal / Vertical and Rotate 90° show in the options bar
   whenever the box does. In Distort / Perspective one homography (union rect →
-  four corners) maps every layer.
+  four corners) maps every layer — unless text is among them (see *Text
+  layers stay live* below).
 - **Live preview on the GPU.** Grabbing a handle pushes one **"Transform"**
   history row and lifts each layer's content (with a one-texel transparent
   border) into its own source texture — `app/interactions/layer-transform.ts`
@@ -810,15 +811,30 @@ select the layers and rotate once.
   No box appears in layer-mask edit mode or Quick Mask (`maskMode` must be
   `off`), nor under any tool but Move.
 - **One undo step** restores every layer.
-- **Text layers are not kept live here (unlike the single-layer text handles,
-  #1117; code-read, not live-verified).** The box transforms a text layer's
-  pixels like any other, and the layer stays `type: 'text'` with no stored
-  `transform` — `getTextTransformTarget` returns null when more than one layer
-  is selected. The next re-render of that layer (a text edit, a Text-panel
-  change, a font arriving) lays the glyphs out upright again and the transform
-  is lost: the old #798 failure, still present on this path. To keep text
-  editable, transform it with only that layer selected. **Layer masks** stay
-  where they are, as with a single-layer transform.
+- **Text layers stay live (#1165).** During the drag a text layer's pixels
+  move with the others, but every release (a handle drag, Move drag or nudge
+  inside the box, Flip, Rotate 90°) also stores the box's map on the layer's
+  `transform`, composed with the placement it had when the box lifted it —
+  the anchor goes through the map and the matrix becomes `map · matrix`
+  (`placementThroughTransform` over `documentAffineOf(transform)`), so a
+  second turn adds to the first and a rotation after a scale keeps the scale.
+  Selected text layers, ones inside a selected group and ones in nested
+  groups are all covered. Baking the box (Escape, `⌘D`, another tool, any
+  history push) re-renders each text layer sharp from its props through that
+  transform, and every later re-render (a Text-panel or options-bar change,
+  a font arriving, an edit, reopening a saved `.lopsy`) keeps it. Before, the
+  layer kept no transform and its next re-render laid the glyphs out upright,
+  shifted (the #798 failure on this path). The one Transform row restores the
+  pixels and the transform together.
+  - **What text can't follow is refused up front.** A text matrix can't
+    hold a corner distortion, so a **Distort / Perspective** corner or edge
+    drag over a box holding live text shows *"Rasterize the text layers
+    before distorting them with other layers."* and changes nothing (no
+    history row); Flip and Rotate 90° in those modes still apply. Text on a
+    path is laid along its path on every re-render, so any box transform
+    holding it shows *"Rasterize text on a path before transforming it with
+    other layers."* (A plain Move drag of the layers is not affected.)
+  - **Layer masks** stay where they are, as with a single-layer transform.
 
 ### Quick transforms
 

@@ -30,7 +30,7 @@ import {
   resolveDownGesture,
 } from './interactions/interaction-types';
 import { handleTransformDown, flushSelectionTransform, refuseGroupSelectionTransform } from './interactions/transform-handlers';
-import { forgetLayerTransform, markLayerTransformDirty } from './interactions/layer-transform';
+import { commitLayerTransform, markLayerTransformDirty } from './interactions/layer-transform';
 import {
   handleMeshWarpDown,
   handleMeshWarpMove,
@@ -755,13 +755,13 @@ export function useCanvasInteraction(
     persistentTransformRef.current = null;
     floatingSelectionRef.current = null;
 
+    // A multi-layer transform ends first, so its text layers re-render.
+    commitLayerTransform();
     // Drop GPU float — the layer texture already has the committed result.
-    // A multi-layer transform ends with it.
     const eng = getEngine();
     if (eng && hasFloat(eng)) {
       dropFloat(eng);
     }
-    forgetLayerTransform();
 
     const editorState = useEditorStore.getState();
     const activeId = editorState.document.activeLayerId;

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { getHandlePositions } from '../transform/transform-handles';
+import { createTransformState, type TransformState } from '../transform/transform';
 import {
+  applyDocumentAffine,
   applyDocumentLinear,
   applyMatrix,
   docToLayout,
@@ -15,6 +17,7 @@ import {
   maxScaleOf,
   multiplyMatrix,
   dragTextFrame,
+  placementThroughTransform,
   rotationMatrix,
   placementProps,
   rasterScaleFor,
@@ -316,5 +319,107 @@ describe('scaleTextPropsJson', () => {
   it('keeps point text point text', () => {
     const props = JSON.stringify({ text: 'Hi', fontSize: 10, areaWidth: null });
     expect(JSON.parse(scaleTextPropsJson(props, 3))).toMatchObject({ fontSize: 30, areaWidth: null });
+  });
+});
+
+describe('placing text through a multi-layer transform (#1165)', () => {
+  // The shared box over a rectangle at (200, 200)–(600, 400): centre (400, 300).
+  const box = { x: 200, y: 200, width: 400, height: 200 };
+  const pivot = { x: 400, y: 300 };
+  const turn = (deg: number): TransformState => ({ ...createTransformState(box), rotation: (deg * Math.PI) / 180 });
+  const docPoint = (pl: { anchor: { x: number; y: number }; matrix: TextMatrix }, p: { x: number; y: number }) => {
+    const q = applyMatrix(pl.matrix, p);
+    return { x: q.x + pl.anchor.x, y: q.y + pl.anchor.y };
+  };
+  const rotateAbout = (p: { x: number; y: number }, deg: number) => {
+    const q = applyMatrix(rotation(deg), { x: p.x - pivot.x, y: p.y - pivot.y });
+    return { x: q.x + pivot.x, y: q.y + pivot.y };
+  };
+
+  it('turns upright text about the box centre, not its own', () => {
+    const upright = { anchor: { x: 230, y: 260 }, matrix: IDENTITY_MATRIX };
+    const placed = placementThroughTransform(upright, turn(15))!;
+    expectMatrixClose(placed.matrix, rotation(15));
+    const want = rotateAbout(upright.anchor, 15);
+    expect(placed.anchor.x).toBeCloseTo(want.x, 6);
+    expect(placed.anchor.y).toBeCloseTo(want.y, 6);
+  });
+
+  it('composes a second turn with the stored one', () => {
+    const upright = { anchor: { x: 230, y: 260 }, matrix: IDENTITY_MATRIX };
+    const once = placementThroughTransform(upright, turn(15))!;
+    const twice = placementThroughTransform(once, turn(15))!;
+    expectMatrixClose(twice.matrix, rotation(30));
+    const want = rotateAbout(upright.anchor, 30);
+    expect(twice.anchor.x).toBeCloseTo(want.x, 6);
+    expect(twice.anchor.y).toBeCloseTo(want.y, 6);
+  });
+
+  it('keeps an earlier scale when the box rotates (scale, then rotate)', () => {
+    const scaled = { anchor: { x: 250, y: 240 }, matrix: { a: 2, b: 0, c: 0, d: 0.5 } };
+    const placed = placementThroughTransform(scaled, turn(90))!;
+    // R(90°) · S(2, 0.5): the stretched x axis now points down.
+    expectMatrixClose(placed.matrix, { a: 0, b: 2, c: -0.5, d: 0 });
+    // Every glyph point lands where the box's turn moves it on the canvas.
+    for (const p of [{ x: 0, y: 0 }, { x: 37, y: -12 }, { x: 120, y: 40 }]) {
+      const want = rotateAbout(docPoint(scaled, p), 90);
+      const got = docPoint(placed, p);
+      expect(got.x).toBeCloseTo(want.x, 6);
+      expect(got.y).toBeCloseTo(want.y, 6);
+    }
+  });
+
+  it('carries scale, skew, flip and translation the way the pixels move', () => {
+    const start = { anchor: { x: 260, y: 280 }, matrix: rotation(20) };
+    const t: TransformState = {
+      ...createTransformState(box, 'skew'),
+      scaleX: -1.25,
+      scaleY: 0.8,
+      skewX: 0.2,
+      rotation: 0.3,
+      translateX: 14,
+      translateY: -9,
+    };
+    const placed = placementThroughTransform(start, t)!;
+    const cx = pivot.x;
+    const cy = pivot.y;
+    const forward = (q: { x: number; y: number }) => {
+      // The handle chain: skew, scale, rotate about the centre, then translate.
+      let x = q.x - cx;
+      let y = q.y - cy;
+      x += y * Math.tan(t.skewX);
+      x *= t.scaleX;
+      y *= t.scaleY;
+      const c = Math.cos(t.rotation);
+      const s = Math.sin(t.rotation);
+      return { x: x * c - y * s + cx + t.translateX, y: x * s + y * c + cy + t.translateY };
+    };
+    for (const p of [{ x: 0, y: 0 }, { x: 50, y: 10 }, { x: -5, y: 70 }]) {
+      const want = forward(docPoint(start, p));
+      const got = docPoint(placed, p);
+      expect(got.x).toBeCloseTo(want.x, 6);
+      expect(got.y).toBeCloseTo(want.y, 6);
+    }
+  });
+
+  it('matches applyDocumentLinear for a pure linear map about a pivot', () => {
+    const start = { anchor: { x: 300, y: 250 }, matrix: rotation(-10) };
+    const viaLinear = applyDocumentLinear(start, ROTATE_CW, pivot);
+    const viaAffine = applyDocumentAffine(start, {
+      ...ROTATE_CW,
+      e: pivot.x - (ROTATE_CW.a * pivot.x + ROTATE_CW.c * pivot.y),
+      f: pivot.y - (ROTATE_CW.b * pivot.x + ROTATE_CW.d * pivot.y),
+    });
+    expectMatrixClose(viaAffine.matrix, viaLinear.matrix);
+    expect(viaAffine.anchor.x).toBeCloseTo(viaLinear.anchor.x, 6);
+    expect(viaAffine.anchor.y).toBeCloseTo(viaLinear.anchor.y, 6);
+  });
+
+  it('gives no placement for a corner distortion', () => {
+    const t: TransformState = {
+      ...createTransformState(box, 'perspective'),
+      corners: [{ x: 10, y: 0 }, { x: -10, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
+    };
+    expect(placementThroughTransform({ anchor: { x: 0, y: 0 }, matrix: IDENTITY_MATRIX }, t)).toBeNull();
   });
 });

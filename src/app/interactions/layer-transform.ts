@@ -1,6 +1,15 @@
 import type { Rect } from '../../types';
 import type { TransformState } from '../../tools/transform/transform';
 import {
+  isUsableTextMatrix,
+  matrixOf,
+  placementThroughTransform,
+  textAnchorOf,
+  textTransformFor,
+} from '../../tools/text/text-transform';
+import { measureTextFrame } from '../../engine-wasm/engine-sync';
+import { renderTextLayerPlacement, transformableTextLayer, type TextPlacementTarget } from '../text-layer-transform';
+import {
   createTransformState,
   computeInverseAffineMatrix,
   getCornerPositions,
@@ -9,6 +18,7 @@ import {
   pixelRectCovering,
   resolveLayerTransformTargets,
   selectionWantsLayerTransform,
+  textRefusalForLayerTransform,
   transformedSubRectBounds,
   unionRects,
 } from '../../tools/transform/multi-layer-transform';
@@ -19,6 +29,7 @@ import {
   compositeLayerTransformAffine,
   compositeLayerTransformPerspective,
   getLayerContentBounds,
+  dropFloat,
   getLayerEngineBounds,
   hasLayerTransform,
   prepareLayerTransformTarget,
@@ -28,6 +39,7 @@ import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
+import { notifyInfo } from '../notifications-store';
 
 /**
  * Transforming several selected layers at once with the Move tool's handles.
@@ -42,12 +54,19 @@ import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
  * the original pixels; the engine counts it as a float, so every place that
  * bakes the float before an edit (a history push, another tool's press, ⌘D,
  * undo) ends it too.
+ *
+ * Text layers move as pixels during the drag, but each one also takes the
+ * session's map into its stored text transform on every release, so the
+ * next re-render from its props keeps it (#1165), and committing the
+ * session re-renders it sharp from those props.
  */
 
 interface LiveSession {
   layerIds: readonly string[];
   /** Each layer's content rect when it was lifted (document space). */
   contentRects: ReadonlyMap<string, Rect>;
+  /** Where each live text layer's glyphs sat when it was lifted. */
+  textPlacements: ReadonlyMap<string, TextPlacementTarget>;
 }
 
 let live: LiveSession | null = null;
@@ -131,6 +150,19 @@ export function getLayerTransformBox(): TransformState | null {
   return union ? createTransformState(union, ui.layerTransformMode) : null;
 }
 
+/**
+ * True (after showing why) when the selected layers include text the
+ * transform can't keep live: text on a path, or any text under a corner
+ * distortion (`isDistorting`). See `textRefusalForLayerTransform`.
+ */
+export function refuseTextInLayerTransform(isDistorting: boolean): boolean {
+  const layers = useEditorStore.getState().document.layers;
+  const refusal = textRefusalForLayerTransform(layers, currentLayerTransformTargets(), isDistorting);
+  if (!refusal) return false;
+  notifyInfo(refusal);
+  return true;
+}
+
 /** Whether the engine holds a session for exactly the layers a transform would move now. */
 export function isLayerTransformCurrent(): boolean {
   const engine = getEngine();
@@ -146,13 +178,14 @@ export function beginLayerTransformSession(box: TransformState): boolean {
   const engine = getEngine();
   if (!engine) return false;
   const targets = currentLayerTransformTargets();
+  const textPlacements = measureTextPlacements(engine, targets);
   const contentRects = new Map<string, Rect>();
   for (const id of targets) {
     const [x, y, width = 0, height = 0] = beginLayerTransform(engine, id);
     if (x !== undefined && y !== undefined && width > 0 && height > 0) contentRects.set(id, { x, y, width, height });
   }
   if (contentRects.size === 0) return false;
-  live = { layerIds: targets, contentRects };
+  live = { layerIds: targets, contentRects, textPlacements };
   useUIStore.getState().setLayerTransform(box);
   return true;
 }
@@ -192,10 +225,65 @@ export function renderLayerTransform(transform: TransformState): void {
   useEditorStore.getState().notifyRender();
 }
 
+/** The anchor and matrix of every live (not path) text layer among `targets`. */
+function measureTextPlacements(engine: Engine, targets: readonly string[]): Map<string, TextPlacementTarget> {
+  const placements = new Map<string, TextPlacementTarget>();
+  for (const id of targets) {
+    const layer = transformableTextLayer(id);
+    const frame = layer ? measureTextFrame(engine, layer) : null;
+    if (frame) placements.set(id, { anchor: frame.anchor, matrix: frame.matrix });
+  }
+  return placements;
+}
+
+/**
+ * Store the session's pending map on each of its text layers, composed with
+ * the placement it was lifted at. The pixels already show it; this makes a
+ * re-render from the props agree. Text that the map can't follow (a corner
+ * distortion, refused up front) keeps its last placement.
+ */
+function syncSessionTextTransforms(session: LiveSession): void {
+  const transform = useUIStore.getState().layerTransform;
+  if (!transform || session.textPlacements.size === 0) return;
+  const editor = useEditorStore.getState();
+  for (const [id, start] of session.textPlacements) {
+    const layer = transformableTextLayer(id);
+    const placement = layer ? placementThroughTransform(start, transform) : null;
+    if (!layer || !placement || !isUsableTextMatrix(placement.matrix)) continue;
+    editor.updateTextLayerProperties(id, {
+      transform: textTransformFor(placement.matrix, placement.anchor, layer.x, layer.y),
+    });
+  }
+}
+
 /** The session's layers changed on the GPU: mark them for the next history snapshot and refresh thumbnails. */
 export function markLayerTransformDirty(): void {
   if (!live) return;
   for (const id of live.layerIds) clearJsPixelData(id);
+  syncSessionTextTransforms(live);
+}
+
+/**
+ * Bake a live session: free its sources and re-render its text layers from
+ * their props through their stored transforms, so the glyphs come back sharp
+ * instead of resampled. Forgets a stale session the engine no longer holds.
+ */
+export function commitLayerTransform(): void {
+  const session = live;
+  const engine = getEngine();
+  const isLive = session !== null && engine !== null && hasLayerTransform(engine);
+  forgetLayerTransform();
+  if (!isLive) return;
+  dropFloat(engine);
+  for (const id of session.textPlacements.keys()) {
+    const layer = transformableTextLayer(id);
+    const anchor = layer ? textAnchorOf(layer) : null;
+    if (!layer || !anchor) continue;
+    // A cached JS copy of the resampled glyphs would be re-uploaded over the render.
+    clearJsPixelData(id);
+    renderTextLayerPlacement(layer, { anchor, matrix: matrixOf(layer.transform) });
+  }
+  useEditorStore.getState().notifyRender();
 }
 
 /** Forget the JS side of a session the engine no longer holds. */

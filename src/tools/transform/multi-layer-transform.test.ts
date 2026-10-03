@@ -9,6 +9,9 @@ import {
   resolveLayerTransformTargets,
   rotateTransform90,
   selectionWantsLayerTransform,
+  textRefusalForLayerTransform,
+  DISTORT_TEXT_REFUSAL,
+  PATH_TEXT_REFUSAL,
   transformedSubRectBounds,
   unionRects,
 } from './multi-layer-transform';
@@ -201,5 +204,38 @@ describe('rotateTransform90', () => {
     const p = createTransformPointMapper(t)(0, 0)!;
     expect(p.x).toBeCloseTo(100, 6);
     expect(p.y).toBeCloseTo(0, 6);
+  });
+});
+
+describe('textRefusalForLayerTransform', () => {
+  const text = (id: string, extra: Record<string, unknown> = {}): Layer => ({
+    ...raster(id),
+    type: 'text',
+    text: 'Hi',
+    ...extra,
+  } as unknown as Layer);
+  const layers: Layer[] = [
+    raster('r'),
+    text('t'),
+    text('p', { pathId: 'path-1' }),
+    text('empty', { text: '  ' }),
+  ];
+
+  it('lets live text follow an affine transform', () => {
+    expect(textRefusalForLayerTransform(layers, ['r', 't'], false)).toBeNull();
+  });
+
+  it('refuses a corner distortion over live text', () => {
+    expect(textRefusalForLayerTransform(layers, ['r', 't'], true)).toBe(DISTORT_TEXT_REFUSAL);
+    expect(textRefusalForLayerTransform(layers, ['r'], true)).toBeNull();
+  });
+
+  it('refuses text on a path whatever the transform', () => {
+    expect(textRefusalForLayerTransform(layers, ['r', 'p'], false)).toBe(PATH_TEXT_REFUSAL);
+  });
+
+  it('ignores text layers that are not moved or have no glyphs', () => {
+    expect(textRefusalForLayerTransform(layers, ['r'], false)).toBeNull();
+    expect(textRefusalForLayerTransform(layers, ['r', 'empty'], true)).toBeNull();
   });
 });

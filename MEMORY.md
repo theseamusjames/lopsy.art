@@ -450,6 +450,9 @@ The Move tool's several-layers transform (`app/interactions/layer-transform.ts`,
 `dropFloat` ends it, so every site that bakes the Move float (history push,
 other tool's press, ⌘D, undo) bakes it too without knowing about it. The JS
 side (`live`) is only trusted while `hasLayerTransform(engine)` agrees.
+`commitLiveFloat` calls `commitLayerTransform()` *before* `commitMoveFloat()`:
+the latter runs `forgetLiveFloat()`, which forgets the session without
+baking, and the bake is what re-renders the session's text layers (#1165).
 
 ## GPU timing in Playwright, and comparing the live canvas with an export
 

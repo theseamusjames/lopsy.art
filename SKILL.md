@@ -629,7 +629,10 @@ Move-tool options also offer Flip, Rotate 90° and Mesh Warp. **Several layers a
 Shift+click the bottom one, or select their group); the Move tool's handles
 then frame the union of their content, and `h.rotate(box, degrees)` /
 `h.scale(corner, dx, dy)` with that box turn or scale all of them about its
-centre in one undo step. Commit with `h.deselect()` as usual.
+centre in one undo step. Commit with `h.deselect()` as usual. Text layers
+among them keep the rotation or scale live (later text edits keep it), but
+Distort / Perspective corner drags are refused when text is selected, and so
+is any box transform holding text on a path.
 
 **Text transforms stay live.** With the Move tool and a text layer active,
 handles appear around the text's *line box* with no selection: its top-left

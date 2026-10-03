@@ -8,7 +8,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat, setSelectionMask } from '../../engine-wasm/wasm-bridge';
 import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
 import { cancelPrefloat, commitUnmovedPrefloat } from './prefloat';
-import { forgetLayerTransform } from './layer-transform';
+import { commitLayerTransform, forgetLayerTransform } from './layer-transform';
 
 /**
  * The Move tool keeps the pixels it lifted floating after a drag or handle
@@ -95,12 +95,14 @@ export function withLiveFloatKept(fn: () => void): void {
  * selection the user sees is kept.
  */
 export function commitLiveFloat(): void {
+  // A multi-layer transform counts as a float in the engine; dropping it
+  // leaves its layers holding the transformed pixels, and its text layers
+  // are re-rendered through the transforms they now store. First, since
+  // committing the Move float forgets any session without baking it.
+  commitLayerTransform();
   commitMoveFloat();
   commitUnmovedPrefloat();
   cancelPrefloat();
-  // A multi-layer transform counts as a float in the engine; dropping it
-  // below leaves its layers holding the transformed pixels.
-  forgetLayerTransform();
   const engine = getEngine();
   if (!engine || !hasFloat(engine)) return;
   dropFloat(engine);

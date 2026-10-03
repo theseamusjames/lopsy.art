@@ -125,6 +125,56 @@ function forwardAffine2x2(t: TransformState): [number, number, number, number] {
 }
 
 /**
+ * A document-space affine map in canvas `setTransform` order:
+ * `x' = a·x + c·y + e`, `y' = b·x + d·y + f`.
+ */
+export interface DocumentAffine {
+  readonly a: number;
+  readonly b: number;
+  readonly c: number;
+  readonly d: number;
+  readonly e: number;
+  readonly f: number;
+}
+
+/** How far (document px) a corner may sit off the parallelogram before a corner map counts as non-affine. */
+const PARALLELOGRAM_TOLERANCE = 0.01;
+
+/**
+ * The document-space map `t` applies to the content, when it is affine:
+ * always in Free / Skew, and in Distort / Perspective only while the four
+ * corners still form a parallelogram (untouched, moved, or flipped). Null
+ * for a true corner distortion, or an empty box in a corner mode.
+ */
+export function documentAffineOf(t: TransformState): DocumentAffine | null {
+  const ob = t.originalBounds;
+  if (t.mode === 'distort' || t.mode === 'perspective') {
+    if (ob.width <= 0 || ob.height <= 0) return null;
+    const [tl, tr, br, bl] = getCornerPositions(t);
+    const offX = tr.x + bl.x - tl.x - br.x;
+    const offY = tr.y + bl.y - tl.y - br.y;
+    if (Math.hypot(offX, offY) > PARALLELOGRAM_TOLERANCE) return null;
+    const a = (tr.x - tl.x) / ob.width;
+    const b = (tr.y - tl.y) / ob.width;
+    const c = (bl.x - tl.x) / ob.height;
+    const d = (bl.y - tl.y) / ob.height;
+    return { a, b, c, d, e: tl.x - a * ob.x - c * ob.y, f: tl.y - b * ob.x - d * ob.y };
+  }
+  // forwardAffine2x2 is row-major `[x'; y'] = [m0 m1; m2 m3] · [x; y]`.
+  const [m0, m1, m2, m3] = forwardAffine2x2(t);
+  const cx = ob.x + ob.width / 2;
+  const cy = ob.y + ob.height / 2;
+  return {
+    a: m0,
+    b: m2,
+    c: m1,
+    d: m3,
+    e: cx + t.translateX - (m0 * cx + m1 * cy),
+    f: cy + t.translateY - (m2 * cx + m3 * cy),
+  };
+}
+
+/**
  * Axis-aligned document-space bounds of the transformed content: where the
  * pixels of `originalBounds` land once rotation, scale, skew, translation or
  * per-corner distortion is applied. Unlike `getTransformedBounds` this
