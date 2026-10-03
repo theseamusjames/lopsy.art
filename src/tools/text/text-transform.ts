@@ -1,6 +1,8 @@
 import type { Point, Rect, TextLayer, TextTransform } from '../../types';
 import {
   createTransformState,
+  documentAffineOf,
+  type DocumentAffine,
   type TransformHandle,
   type TransformMode,
   type TransformState,
@@ -213,6 +215,38 @@ export function applyDocumentLinear(
     anchor: { x: rel.x + pivot.x, y: rel.y + pivot.y },
     matrix: multiplyMatrix(f, placement.matrix),
   };
+}
+
+/**
+ * Carry a text placement through a document-space affine map (the Move
+ * tool's shared box over several layers or a group): every glyph lands where
+ * `f` moves that point on the canvas. Composes with whatever matrix the text
+ * already has, so a second turn adds to the first and a rotate after a
+ * scale keeps the scale; the pivot is whatever `f` encodes.
+ */
+export function applyDocumentAffine(
+  placement: { anchor: Point; matrix: TextMatrix },
+  f: DocumentAffine,
+): { anchor: Point; matrix: TextMatrix } {
+  const linear: TextMatrix = { a: f.a, b: f.b, c: f.c, d: f.d };
+  const moved = applyMatrix(linear, placement.anchor);
+  return {
+    anchor: { x: moved.x + f.e, y: moved.y + f.f },
+    matrix: multiplyMatrix(linear, placement.matrix),
+  };
+}
+
+/**
+ * Where a multi-layer transform `t` puts a text layer that sat at
+ * `placement` when the transform began, or null when `t` is not affine
+ * (a Distort / Perspective corner drag) and no text matrix can follow it.
+ */
+export function placementThroughTransform(
+  placement: { anchor: Point; matrix: TextMatrix },
+  t: TransformState,
+): { anchor: Point; matrix: TextMatrix } | null {
+  const f = documentAffineOf(t);
+  return f ? applyDocumentAffine(placement, f) : null;
 }
 
 /** Centre of the frame's layout box in document space. */

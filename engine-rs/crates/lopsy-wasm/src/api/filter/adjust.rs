@@ -15,27 +15,9 @@ pub fn filter_brightness_contrast(
         layer_id,
         |e| &e.shaders.adjustments,
         |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_brightness") {
-                gl.uniform1f(Some(&loc), brightness / 100.0);
-            }
-            if let Some(loc) = shader.location(gl, "u_contrast") {
-                gl.uniform1f(Some(&loc), contrast / 100.0);
-            }
-            if let Some(loc) = shader.location(gl, "u_exposure") {
-                gl.uniform1f(Some(&loc), 0.0);
-            }
-            if let Some(loc) = shader.location(gl, "u_highlights") {
-                gl.uniform1f(Some(&loc), 0.0);
-            }
-            if let Some(loc) = shader.location(gl, "u_shadows") {
-                gl.uniform1f(Some(&loc), 0.0);
-            }
-            if let Some(loc) = shader.location(gl, "u_whites") {
-                gl.uniform1f(Some(&loc), 0.0);
-            }
-            if let Some(loc) = shader.location(gl, "u_blacks") {
-                gl.uniform1f(Some(&loc), 0.0);
-            }
+            crate::compositor::set_standalone_adjustment_uniforms(
+                gl, shader, brightness / 100.0, contrast,
+            );
         },
     );
 }

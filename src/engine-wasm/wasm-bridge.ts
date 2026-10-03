@@ -8,6 +8,8 @@ import init, {
   snapshotLayerGpu,
   snapshotMaskGpu,
   restoreMaskFromGpuSnapshot as rawRestoreMaskFromGpuSnapshot,
+  beginMaskFilterTarget,
+  endMaskFilterTarget as rawEndMaskFilterTarget,
   restoreFromGpuSnapshot,
   releaseGpuSnapshot,
   clearGpuSnapshots,
@@ -327,6 +329,7 @@ export function getWasmMemoryBytes(): number {
 export {
   snapshotLayerGpu,
   snapshotMaskGpu,
+  beginMaskFilterTarget,
   restoreFromGpuSnapshot,
   releaseGpuSnapshot,
   clearGpuSnapshots,
@@ -632,3 +635,4 @@ export const fillMaskWithValue = markingMaskDirty(rawFillMaskWithValue);
 export const renderMaskLinearGradient = markingMaskDirty(rawRenderMaskLinearGradient);
 export const renderMaskRadialGradient = markingMaskDirty(rawRenderMaskRadialGradient);
 export const restoreMaskFromGpuSnapshot = markingMaskDirty(rawRestoreMaskFromGpuSnapshot);
+export const endMaskFilterTarget = markingMaskDirty(rawEndMaskFilterTarget);

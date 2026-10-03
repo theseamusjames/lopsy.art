@@ -104,6 +104,7 @@ import type { PathAnchor, TextEditingState, ChannelVisibility } from '../app/ui-
 import type { SelectionData } from '../app/store/types';
 import type { BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import type { Color } from '../types';
+import { colorSpansProp } from '../tools/text/text-color-spans';
 import type { TextLayer } from '../types/layers';
 import type { Point } from '../types';
 import {
@@ -121,6 +122,7 @@ import {
 export type { TextPlacement };
 import type { StoredPath } from '../types/paths';
 import { pathTextFont, renderTextOnPath } from '../tools/text/render-text-on-path';
+import { clearPathTextGlyphBoxes, setPathTextGlyphBoxes } from '../tools/text/path-text-hit-boxes';
 import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from '../tools/text/point-text-align';
 import { ensureFontFacesLoaded, parseFontFamilyList } from '../utils/font-face-readiness';
 import { getTracked } from './sync-state';
@@ -1019,9 +1021,9 @@ export function syncPathTextLayers(
     if (!path) continue;
 
     // Use live editing text if this layer is being edited
-    const liveText = (textEditing && textEditing.layerId === layer.id)
-      ? textEditing.text
-      : layer.text;
+    const isEditing = textEditing !== null && textEditing.layerId === layer.id;
+    const liveText = isEditing ? textEditing.text : layer.text;
+    const liveSpans = isEditing ? textEditing.colorSpans : layer.colorSpans;
 
     // Build a cheap cache key from layer content + path anchors + handles
     const anchorSummary = path.anchors.map((a) => {
@@ -1039,7 +1041,9 @@ export function syncPathTextLayers(
       layer.color.g,
       layer.color.b,
       layer.color.a,
+      JSON.stringify(liveSpans ?? []),
       layer.letterSpacing,
+      layer.textAlign,
       path.closed,
       anchorSummary,
       docWidth,
@@ -1048,8 +1052,8 @@ export function syncPathTextLayers(
 
     if (tracked.pathTextKeys.get(layer.id) === key) continue;
 
-    const layerWithLiveText = liveText !== layer.text
-      ? { ...layer, text: liveText }
+    const layerWithLiveText = liveText !== layer.text || liveSpans !== layer.colorSpans
+      ? { ...layer, text: liveText, colorSpans: liveSpans }
       : layer;
     const result = renderTextOnPath(layerWithLiveText, path.anchors, path.closed, docWidth, docHeight);
     if (result) {
@@ -1058,10 +1062,12 @@ export function syncPathTextLayers(
       const x = result.x + offsetX;
       const y = result.y + offsetY;
       uploadLayerPixels(engine, layer.id, result.pixels, result.width, result.height, x, y);
+      setPathTextGlyphBoxes(layer.id, result.glyphBoxes);
       onPositionChange(layer.id, x, y, result.x, result.y);
     } else {
       // Empty result — clear the layer texture and park it at the origin.
       uploadLayerPixels(engine, layer.id, new Uint8Array(4), 1, 1, 0, 0);
+      clearPathTextGlyphBoxes(layer.id);
       onPositionChange(layer.id, 0, 0, 0, 0);
     }
     tracked.pathTextKeys.set(layer.id, key);
@@ -1125,6 +1131,7 @@ export function syncTextLayers(
     fontWeight,
     fontStyle,
     color: [color.r / 255, color.g / 255, color.b / 255, color.a],
+    colorSpans: colorSpansProp(textEditing.colorSpans),
     lineHeight,
     letterSpacing,
     paragraphSpacing,
@@ -1265,6 +1272,7 @@ export function textLayerPropsJson(layer: TextLayer): string {
     fontWeight: layer.fontWeight,
     fontStyle: layer.fontStyle,
     color: [layer.color.r / 255, layer.color.g / 255, layer.color.b / 255, layer.color.a],
+    colorSpans: colorSpansProp(layer.colorSpans),
     lineHeight: layer.lineHeight,
     letterSpacing: layer.letterSpacing,
     paragraphSpacing: layer.paragraphSpacing,

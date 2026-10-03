@@ -8,6 +8,7 @@ import { installPaintLinePreviewKeyListener } from '../interactions/paint-line-p
 import { useLocalFontsStore } from '../local-fonts-store';
 import { sizeCanvasToDisplay } from '../rendering/display-pixel-ratio';
 import { installTextSettingsLayerSync } from '../text-settings-layer-sync';
+import { installMaskModeSync } from '../mask-mode-sync';
 
 interface AppEffectsDeps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
@@ -50,6 +51,9 @@ export function useAppEffects({
 
   // #943 — the Text panel shows the selected text layer's properties.
   useEffect(() => installTextSettingsLayerSync(), []);
+
+  // #1150 — mask edit mode ends when the active layer loses its mask.
+  useEffect(() => installMaskModeSync(), []);
 
   // Enumerate the fonts installed on this machine once the editor is up — not
   // at startup, so the New Document modal never triggers the permission

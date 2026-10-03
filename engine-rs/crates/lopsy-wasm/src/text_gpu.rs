@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use cosmic_text::fontdb;
 use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Stretch, Style, SwashCache, SwashImage, Weight, Wrap};
+use lopsy_core::text_color_spans::ColorSpans;
 use lopsy_core::vertical_orientation::{vertical_form_transform, VerticalGlyphForm};
 use swash::scale::{ScaleContext, Render, Source, StrikeWith};
 use swash::zeno::{Format, Transform, Vector};
@@ -17,6 +18,8 @@ use crate::vertical_forms::{vertical_glyph, VerticalAlternateCache};
 pub struct TextLayerState {
     pub buffer: Buffer,
     pub color: [f32; 4],
+    /// Per-range colours over `color` (UTF-8 byte ranges into `text`).
+    pub color_spans: ColorSpans,
     /// Hash of the last serialized props JSON — skip re-layout when unchanged.
     pub props_hash: u64,
     /// RGBA pixel bytes from the most recent software render. Cleared on re-layout.
@@ -241,6 +244,7 @@ impl TextRendererState {
         db.load_font_data(
             include_bytes!("fonts/Inter-Regular.ttf").to_vec(),
         );
+        register_fallback_for_every_style(&mut db);
         let font_system = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
         Self {
             font_system,
@@ -399,8 +403,10 @@ impl TextRendererState {
     ///   "fontWeight": u16, "fontStyle": "normal"|"italic",
     ///   "color": [r, g, b, a], "lineHeight": f32, "letterSpacing": f32,
     ///   "textAlign": "left"|"center"|"right"|"justify",
-    ///   "areaWidth": f32 | null }
+    ///   "areaWidth": f32 | null,
+    ///   "colorSpans": [[start, end, r, g, b, a], ...] }
     /// ```
+    /// `colorSpans` ranges are UTF-16 offsets into `text` (JS string indices).
     pub fn set_text_content(
         &mut self,
         layer_id: &str,
@@ -443,6 +449,7 @@ impl TextRendererState {
         } else {
             [0.0, 0.0, 0.0, 1.0]
         };
+        let color_spans = parse_color_spans(text, &v["colorSpans"]);
         let line_height = v["lineHeight"].as_f64().unwrap_or(1.4) as f32;
         let letter_spacing = v["letterSpacing"].as_f64().unwrap_or(0.0) as f32;
         let paragraph_spacing = v["paragraphSpacing"].as_f64().unwrap_or(0.0) as f32;
@@ -507,6 +514,7 @@ impl TextRendererState {
             TextLayerState {
                 buffer,
                 color,
+                color_spans,
                 props_hash: new_hash,
                 rendered_pixels: None,
                 underline,
@@ -1010,17 +1018,20 @@ impl TextRendererState {
             form: VerticalGlyphForm,
             x: i32,
             y: i32,
+            color: [f32; 4],
         }
-        // Per-run info for underline/strikethrough decoration.
+        // Per-run info for underline/strikethrough decoration: one entry per
+        // stretch of same-coloured glyphs, so decorations take the glyph colour.
         struct RunInfo {
-            /// X of leftmost glyph in this run (integer pixels).
+            /// X of leftmost glyph in this stretch (integer pixels).
             x_start: i32,
-            /// X past rightmost glyph in this run.
+            /// X past rightmost glyph in this stretch.
             x_end: i32,
             /// Baseline y (integer pixels, before canvas_y offset).
             baseline_y: i32,
             /// Font size in pixels.
             font_size: f32,
+            color: [f32; 4],
         }
         let ls = state.letter_spacing;
         let para = state.paragraph_spacing;
@@ -1028,6 +1039,12 @@ impl TextRendererState {
         let font_size = state.buffer.metrics().font_size;
         let line_height_mul = state.line_height;
         let vertical = state.vertical;
+        let base_color = state.color;
+        let line_bases = Self::line_byte_base(&state.buffer);
+        let glyph_color = |line_i: usize, start: usize| -> [f32; 4] {
+            let base = line_bases.get(line_i).copied().unwrap_or(0);
+            state.color_spans.color_at(base + start, base_color)
+        };
         let mut glyph_layouts: Vec<GlyphLayout> = Vec::new();
         let mut run_infos: Vec<RunInfo> = Vec::new();
         if vertical {
@@ -1065,6 +1082,7 @@ impl TextRendererState {
                         form,
                         x: phys.x,
                         y: phys.y,
+                        color: glyph_color(run.line_i, glyph.start),
                     });
                 }
             }
@@ -1072,6 +1090,7 @@ impl TextRendererState {
             for run in state.buffer.layout_runs() {
                 let mut run_x_start = i32::MAX;
                 let mut run_x_end = i32::MIN;
+                let mut run_color: Option<[f32; 4]> = None;
                 // Letter/paragraph spacing applied post-layout (cosmic-text lacks both):
                 // shift each glyph right by comp + letter_spacing × its visual rank
                 // and every run down by paragraph_spacing per hard line break.
@@ -1088,6 +1107,25 @@ impl TextRendererState {
                     let phys = glyph.physical((extra_x, baseline_y), 1.0);
                     let gx_start = phys.x;
                     let gx_end = phys.x + glyph.w.ceil() as i32;
+                    let color = glyph_color(run.line_i, glyph.start);
+                    if let Some(prev) = run_color.filter(|c| *c != color) {
+                        // Colour changes: close the previous stretch where
+                        // this glyph begins (left-to-right), so the
+                        // decoration neither breaks nor overlaps itself.
+                        if run_x_start <= run_x_end {
+                            let x_end = if gx_start >= run_x_start { gx_start } else { run_x_end };
+                            run_infos.push(RunInfo {
+                                x_start: run_x_start,
+                                x_end,
+                                baseline_y: baseline_y.round() as i32,
+                                font_size,
+                                color: prev,
+                            });
+                        }
+                        run_x_start = gx_start;
+                        run_x_end = i32::MIN;
+                    }
+                    run_color = Some(color);
                     if gx_start < run_x_start { run_x_start = gx_start; }
                     if gx_end > run_x_end { run_x_end = gx_end; }
                     glyph_layouts.push(GlyphLayout {
@@ -1095,6 +1133,7 @@ impl TextRendererState {
                         form: VerticalGlyphForm::Upright,
                         x: phys.x,
                         y: phys.y,
+                        color,
                     });
                 }
                 if run_x_start <= run_x_end {
@@ -1103,11 +1142,11 @@ impl TextRendererState {
                         x_end: run_x_end,
                         baseline_y: baseline_y.round() as i32,
                         font_size,
+                        color: run_color.unwrap_or(base_color),
                     });
                 }
             }
         }
-        let color = state.color;
         // Underline/strikethrough decorations only apply to horizontal text
         // for now — the underline pass reads `run_infos`, which we leave empty
         // in vertical mode.
@@ -1192,6 +1231,7 @@ impl TextRendererState {
 
             match img.content {
                 cosmic_text::SwashContent::Mask => {
+                    let color = gl.color;
                     for (idx, &alpha_byte) in img.data.iter().enumerate() {
                         if alpha_byte == 0 { continue; }
                         let bx = idx as i32 % img.placement.width as i32;
@@ -1254,12 +1294,12 @@ impl TextRendererState {
                 if do_underline {
                     // Underline sits just below the baseline (CSS spec: ~10% of font-size below).
                     let ul_y = ri.baseline_y + (ri.font_size * 0.1).ceil() as i32 - canvas_y;
-                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, ul_y, line_w, thickness, color);
+                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, ul_y, line_w, thickness, ri.color);
                 }
                 if do_strikethrough {
                     // Strikethrough sits ~32% of font-size above baseline (mid x-height).
                     let st_y = ri.baseline_y - (ri.font_size * 0.32).ceil() as i32 - canvas_y;
-                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, st_y, line_w, thickness, color);
+                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, st_y, line_w, thickness, ri.color);
                 }
             }
         }
@@ -1284,6 +1324,25 @@ impl TextRendererState {
     }
 }
 
+/// Parse the props' `colorSpans` (`[[start, end, r, g, b, a], ...]`, UTF-16
+/// offsets into `text`). Missing or malformed entries are skipped.
+fn parse_color_spans(text: &str, value: &serde_json::Value) -> ColorSpans {
+    let Some(arr) = value.as_array() else { return ColorSpans::default() };
+    let triples: Vec<(usize, usize, [f32; 4])> = arr
+        .iter()
+        .filter_map(|entry| {
+            let e = entry.as_array()?;
+            let n = |i: usize| e.get(i).and_then(|v| v.as_f64());
+            Some((
+                n(0)? as usize,
+                n(1)? as usize,
+                [n(2)? as f32, n(3)? as f32, n(4)? as f32, n(5).unwrap_or(1.0) as f32],
+            ))
+        })
+        .collect();
+    ColorSpans::from_utf16(text, &triples)
+}
+
 /// The weight nearest to `requested` among `available` (heavier wins a tie),
 /// or `requested` itself when nothing is available.
 pub fn snap_weight(requested: u16, available: &[u16]) -> u16 {
@@ -1292,6 +1351,45 @@ pub fn snap_weight(requested: u16, available: &[u16]) -> u16 {
         .copied()
         .min_by_key(|&w| (w.abs_diff(requested), std::cmp::Reverse(w)))
         .unwrap_or(requested)
+}
+
+/// Family name of the bundled fallback face's style/stretch aliases. Distinct
+/// from "Inter" so a request for Inter itself (whose real italic may be
+/// loaded later) never matches an alias.
+const STYLE_FALLBACK_FAMILY: &str = "Lopsy Fallback";
+
+const ALL_STRETCHES: [Stretch; 9] = [
+    Stretch::UltraCondensed,
+    Stretch::ExtraCondensed,
+    Stretch::Condensed,
+    Stretch::SemiCondensed,
+    Stretch::Normal,
+    Stretch::SemiExpanded,
+    Stretch::Expanded,
+    Stretch::ExtraExpanded,
+    Stretch::UltraExpanded,
+];
+
+/// Per-glyph fallback only walks faces whose style and stretch equal the
+/// request (see [`snap_face_attrs`]), so a glyph missing from an italic or
+/// condensed face found nothing but the bundled upright, normal-width Inter
+/// and drew `.notdef` (#1157, #1164). Register the bundled face once more for
+/// every other style/stretch so each request has a fallback; the glyphs it
+/// supplies are drawn upright. The aliases share the face's bytes.
+fn register_fallback_for_every_style(db: &mut fontdb::Database) {
+    let Some(base) = db.faces().next().cloned() else { return };
+    for style in [Style::Normal, Style::Italic, Style::Oblique] {
+        for stretch in ALL_STRETCHES {
+            if style == base.style && stretch == base.stretch {
+                continue;
+            }
+            let mut info = base.clone();
+            info.families = vec![(STYLE_FALLBACK_FAMILY.to_string(), fontdb::Language::English_UnitedStates)];
+            info.style = style;
+            info.stretch = stretch;
+            db.push_face_info(info);
+        }
+    }
 }
 
 /// cosmic-text only considers faces whose style *and* stretch equal the
@@ -2127,5 +2225,185 @@ mod tests {
         assert_eq!((w, h), (256, full_h.min(256)));
         assert_eq!((ox2, oy2), (ox, oy), "cropping must keep the offsets callers anchor by");
         assert_eq!(pixels.len(), (w * h * 4) as usize);
+    }
+
+    /// Re-register every loaded IM Fell DW Pica SC face as `style`/`stretch`,
+    /// standing in for a family whose static files declare an italic or a
+    /// condensed face (Old Standard TT italic, Barlow Condensed).
+    fn load_im_fell_as(renderer: &mut TextRendererState, style: Style, stretch: Stretch) {
+        renderer.load_font_as(&im_fell_sc(), Some("IM Fell DW Pica SC")).expect("loads");
+        let db = renderer.font_system.db_mut();
+        let ids: Vec<fontdb::ID> = db
+            .faces()
+            .filter(|f| f.families.iter().any(|(n, _)| n == "IM Fell DW Pica SC"))
+            .map(|f| f.id)
+            .collect();
+        for id in ids {
+            let mut info = db.face(id).expect("face").clone();
+            info.style = style;
+            info.stretch = stretch;
+            db.remove_face(id);
+            db.push_face_info(info);
+        }
+    }
+
+    fn styled_props(text: &str, family: &str, style: &str, weight: u16) -> String {
+        family_props(text, family, weight).replace("\"fontStyle\":\"normal\"", &format!("\"fontStyle\":\"{style}\""))
+    }
+
+    /// Glyphs shaped as `.notdef` (glyph 0) — what draws a NO GLYPH box.
+    fn notdef_glyphs(renderer: &TextRendererState, layer_id: &str) -> usize {
+        let state = renderer.text_layers.get(layer_id).expect("layer");
+        state
+            .buffer
+            .layout_runs()
+            .flat_map(|run| run.glyphs.iter())
+            .filter(|g| g.glyph_id == 0)
+            .count()
+    }
+
+    #[test]
+    fn glyphs_missing_from_an_upright_face_fall_back() {
+        let mut renderer = make_renderer();
+        load_im_fell_as(&mut renderer, Style::Normal, Stretch::Normal);
+        renderer
+            .set_text_content("t", &styled_props("A\u{2605}\u{2192}", "IM Fell DW Pica SC", "normal", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "t"), 0);
+    }
+
+    #[test]
+    fn glyphs_missing_from_an_italic_face_fall_back_upright() {
+        let mut renderer = make_renderer();
+        load_im_fell_as(&mut renderer, Style::Italic, Stretch::Normal);
+        for weight in [400u16, 700] {
+            let id = format!("i{weight}");
+            renderer
+                .set_text_content(&id, &styled_props("A\u{2605}\u{2192}", "IM Fell DW Pica SC", "italic", weight))
+                .expect("ok");
+            assert_eq!(notdef_glyphs(&renderer, &id), 0, "weight {weight}");
+            let used = faces_used(&renderer, &id);
+            assert!(used[0].0.eq_ignore_ascii_case("IM Fell DW Pica SC"), "A keeps the family: {used:?}");
+            assert!(used.len() > 1, "the star and arrow come from the fallback face: {used:?}");
+        }
+    }
+
+    #[test]
+    fn glyphs_missing_from_a_condensed_face_fall_back() {
+        let mut renderer = make_renderer();
+        load_im_fell_as(&mut renderer, Style::Normal, Stretch::Condensed);
+        renderer
+            .set_text_content("c", &styled_props("A\u{2153}\u{2605}\u{2192}", "IM Fell DW Pica SC", "normal", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "c"), 0);
+    }
+
+    /// Load a css2 latin subset and return the (style, stretch) it declares.
+    fn load_css2_fixture(renderer: &mut TextRendererState, woff2: &[u8], family: &str) -> (Style, Stretch) {
+        let ttf = crate::woff2::decode_woff2(woff2).expect("decodes");
+        renderer.load_font_as(&ttf, Some(family)).expect("loads");
+        let face = renderer.family_faces(family).next().expect("face");
+        (face.style, face.stretch)
+    }
+
+    #[test]
+    fn im_fell_english_italic_falls_back_for_symbols() {
+        let mut renderer = make_renderer();
+        let attrs = load_css2_fixture(
+            &mut renderer,
+            include_bytes!("../tests/fixtures/IMFellEnglish-Italic-latin.woff2"),
+            "IM Fell English",
+        );
+        assert_eq!(attrs, (Style::Italic, Stretch::Normal), "fixture must be an italic face");
+        renderer
+            .set_text_content("t", &styled_props("Fell \u{2605}\u{2192}", "IM Fell English", "italic", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "t"), 0);
+    }
+
+    #[test]
+    fn barlow_condensed_falls_back_for_symbols() {
+        let mut renderer = make_renderer();
+        let attrs = load_css2_fixture(
+            &mut renderer,
+            include_bytes!("../tests/fixtures/BarlowCondensed-latin.woff2"),
+            "Barlow Condensed",
+        );
+        assert_eq!(attrs, (Style::Normal, Stretch::Condensed), "fixture must be a condensed face");
+        renderer
+            .set_text_content("t", &styled_props("Barlow \u{2153}\u{2605}\u{2192}", "Barlow Condensed", "normal", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "t"), 0);
+    }
+
+    #[test]
+    fn italic_text_in_a_family_that_is_not_loaded_yet_still_shapes() {
+        let mut renderer = make_renderer();
+        renderer
+            .set_text_content("u", &styled_props("Hi \u{2605}", "Not Loaded Yet", "italic", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "u"), 0);
+    }
+
+    fn span_props(text: &str, spans: &str, underline: bool) -> String {
+        format!(
+            r#"{{"text":"{text}","fontFamily":"sans-serif","fontSize":40,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"textAlign":"left","areaWidth":null,"underline":{underline},"colorSpans":{spans}}}"#
+        )
+    }
+
+    /// Column ranges `(red, blue)` of strongly red / strongly blue opaque pixels.
+    fn red_and_blue_columns(pixels: &[u8], w: u32) -> (Vec<u32>, Vec<u32>) {
+        let mut red = Vec::new();
+        let mut blue = Vec::new();
+        for (i, px) in pixels.chunks_exact(4).enumerate() {
+            if px[3] < 200 { continue; }
+            let x = i as u32 % w;
+            if px[0] > 200 && px[2] < 60 { red.push(x); }
+            if px[2] > 200 && px[0] < 60 { blue.push(x); }
+        }
+        (red, blue)
+    }
+
+    #[test]
+    fn color_spans_paint_their_range_and_leave_the_rest_in_the_base_color() {
+        let mut renderer = make_renderer();
+        renderer
+            .set_text_content("c", &span_props("HHHH", "[[2,4,1,0,0,1]]", false))
+            .expect("ok");
+        let (pixels, w, _, _, _) = renderer.render_text_layer_software("c").expect("rendered");
+        let (red, _) = red_and_blue_columns(&pixels, w);
+        assert!(!red.is_empty(), "the spanned glyphs render red");
+        let black_cols: Vec<u32> = pixels
+            .chunks_exact(4)
+            .enumerate()
+            .filter(|(_, p)| p[3] > 200 && p[0] < 40 && p[1] < 40 && p[2] < 40)
+            .map(|(i, _)| i as u32 % w)
+            .collect();
+        assert!(!black_cols.is_empty(), "the unspanned glyphs keep the base colour");
+        let max_black = *black_cols.iter().max().unwrap();
+        let min_red = *red.iter().min().unwrap();
+        assert!(max_black < min_red, "black glyphs (HH) sit left of the red ones");
+    }
+
+    #[test]
+    fn underline_takes_each_stretch_colour() {
+        let mut renderer = make_renderer();
+        renderer
+            .set_text_content("u", &span_props("HHHH", "[[0,2,1,0,0,1],[2,4,0,0,1,1]]", true))
+            .expect("ok");
+        let (pixels, w, h, _, _) = renderer.render_text_layer_software("u").expect("rendered");
+        // The underline is the lowest opaque row band; scan the bottom rows.
+        let mut found_red = false;
+        let mut found_blue = false;
+        for y in (0..h).rev().take(12) {
+            for x in 0..w {
+                let i = ((y * w + x) * 4) as usize;
+                let p = &pixels[i..i + 4];
+                if p[3] < 200 { continue; }
+                if p[0] > 200 && p[2] < 60 { found_red = true; }
+                if p[2] > 200 && p[0] < 60 { found_blue = true; }
+            }
+        }
+        assert!(found_red && found_blue, "underline has a red and a blue stretch");
     }
 }

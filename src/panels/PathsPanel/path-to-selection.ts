@@ -48,6 +48,7 @@ export function pathToSelection(path: StoredPath): void {
     mask[i] = imageData.data[i * 4 + 3] ?? 0;
   }
 
+  editorState.pushHistoryMetadata('Path to Selection');
   editorState.setSelection(
     { x: 0, y: 0, width: docW, height: docH },
     mask,

@@ -32,33 +32,10 @@ pub fn filter_mesh_warp(
         gl, grid_handle, 0, 0, grid_width, grid_height, grid_data,
     );
 
+    // The shader reads grid points with texelFetch and interpolates the
+    // decoded 16-bit offsets itself: hardware filtering would blend the high
+    // and low bytes separately at the texture's own precision (#1160).
     let grid_tex_obj = engine.inner.texture_pool.get(grid_handle).cloned();
-
-    // Set LINEAR filtering on the grid texture for smooth interpolation
-    if let Some(ref t) = grid_tex_obj {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-        gl.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-            WebGl2RenderingContext::LINEAR as i32,
-        );
-        gl.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-            WebGl2RenderingContext::LINEAR as i32,
-        );
-        gl.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_WRAP_S,
-            WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-        );
-        gl.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_WRAP_T,
-            WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-        );
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    }
 
     let gw = grid_width as f32;
     let gh = grid_height as f32;

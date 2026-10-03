@@ -4,8 +4,10 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { saveFilterPreview, restoreFilterPreview, clearFilterPreview, filterTiltShiftBlur } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
+import { isFilteringMask } from './filter-target';
 
 export function beginTiltShiftSession(): void {
+  if (isFilteringMask()) return;
   const activeId = useEditorStore.getState().document.activeLayerId;
   if (!activeId) return;
   const engine = getEngine();

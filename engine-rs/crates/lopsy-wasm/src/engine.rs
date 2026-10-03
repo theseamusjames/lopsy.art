@@ -224,6 +224,8 @@ pub struct EngineInner {
     // Filter preview (stores pre-filter layer content for live preview)
     pub filter_preview_texture: Option<TextureHandle>,
     pub filter_preview_layer_id: Option<String>,
+    /// Set while a filter runs on a layer mask (see `filter_gpu::begin_mask_filter_target`).
+    pub mask_filter_target: Option<crate::filter_gpu::MaskFilterTarget>,
     // Liquify persistent displacement texture (lives for the session)
     pub liquify_disp_texture: Option<TextureHandle>,
     // Gradient preview (stores pre-drag layer content for live preview)
@@ -421,6 +423,7 @@ impl EngineInner {
             shape_preview_h: 0,
             filter_preview_texture: None,
             filter_preview_layer_id: None,
+            mask_filter_target: None,
             liquify_disp_texture: None,
             gradient_preview_texture: None,
             gradient_preview_layer_id: None,

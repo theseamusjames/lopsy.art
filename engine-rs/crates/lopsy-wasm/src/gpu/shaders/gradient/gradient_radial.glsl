@@ -14,6 +14,8 @@ uniform vec2 u_docSize;
 uniform vec2 u_layerOffset;
 out vec4 fragColor;
 void main() {
+    // Texture-local, like u_center: callers subtract the layer origin from
+    // the document-space drag (#1169).
     vec2 pos = v_uv * u_texSize;
     float t = clamp(length(pos - u_center) / u_radius, 0.0, 1.0);
     vec4 gradColor = u_stops[0];

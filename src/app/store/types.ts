@@ -109,7 +109,7 @@ export interface EditorState {
   paths: StoredPath[];
   selectedPathId: string | null;
   addPath: (anchors: readonly PathAnchor[], closed: boolean) => void;
-  removePath: (id: string) => void;
+  removePath: (id: string, skipHistory?: boolean) => void;
   selectPath: (id: string | null) => void;
   renamePath: (id: string, name: string) => void;
   updatePathAnchors: (id: string, anchors: readonly PathAnchor[], closed: boolean) => void;

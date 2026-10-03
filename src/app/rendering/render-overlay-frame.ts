@@ -16,6 +16,7 @@ import { renderTextDragOverlay, renderTextEditOverlay, renderTextHoverBounds, re
 import { measureTextFrame } from '../../engine-wasm/engine-sync';
 import { frameCorners } from '../../tools/text/text-transform';
 import { hitTestTextLayer } from '../../tools/text/text-hit-test';
+import { getPathTextGlyphBoxes } from '../../tools/text/path-text-hit-boxes';
 import { engineRenderedSize } from '../../tools/text/text-geometry';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './render-guides';
 import { getStampSourceImage } from './stamp-source-image';
@@ -159,6 +160,7 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
   if (activeTool === 'text' && !textEditing && !textDrag) {
     const hoveredText = hitTestTextLayer(
       layers, cursorPosition, engineRenderedSize(engine), (l) => measureTextFrame(engine, l),
+      getPathTextGlyphBoxes,
     );
     const hoveredFrame = hoveredText?.transform ? measureTextFrame(engine, hoveredText) : null;
     if (hoveredFrame) {

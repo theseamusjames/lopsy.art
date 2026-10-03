@@ -39,7 +39,13 @@ export interface TextLayer extends LayerBase {
   readonly fontSize: number;
   readonly fontWeight: number;
   readonly fontStyle: FontStyle;
+  /** Base colour of the text; ranges in `colorSpans` override it. */
   readonly color: Color;
+  /**
+   * Per-range colours, sorted and non-overlapping, each differing from
+   * `color`. Absent or empty means the whole text is `color`.
+   */
+  readonly colorSpans?: readonly TextColorSpan[];
   readonly lineHeight: number;
   readonly letterSpacing: number;
   readonly paragraphSpacing: number;
@@ -70,6 +76,13 @@ export interface TextLayer extends LayerBase {
    * laid-out glyphs instead of losing or compounding it. Absent means upright.
    */
   readonly transform?: TextTransform;
+}
+
+/** A colour over the text range `[start, end)` (UTF-16 string indices). */
+export interface TextColorSpan {
+  readonly start: number;
+  readonly end: number;
+  readonly color: Color;
 }
 
 /**

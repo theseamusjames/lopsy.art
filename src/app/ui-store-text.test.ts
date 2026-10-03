@@ -99,3 +99,27 @@ describe('ui-store text editing', () => {
     expect(editing.isNew).toBe(true);
   });
 });
+
+describe('ui-store text colour spans (#1154)', () => {
+  const RED = { r: 255, g: 0, b: 0, a: 1 };
+
+  beforeEach(() => {
+    useUIStore.setState({ textEditing: null, textDrag: null });
+  });
+
+  it('carries colour spans across typing and deletion', () => {
+    useUIStore.getState().startTextEditing(
+      makeEditingState({ text: 'abcd', cursorPos: 4, colorSpans: [{ start: 2, end: 4, color: RED }] }),
+    );
+    useUIStore.getState().updateTextEditingText('XXabcd', 2);
+    expect(useUIStore.getState().textEditing?.colorSpans).toEqual([{ start: 4, end: 6, color: RED }]);
+    useUIStore.getState().updateTextEditingSelection('XXabc', 5, null);
+    expect(useUIStore.getState().textEditing?.colorSpans).toEqual([{ start: 4, end: 5, color: RED }]);
+  });
+
+  it('setTextEditingColorSpans replaces the spans', () => {
+    useUIStore.getState().startTextEditing(makeEditingState({ text: 'ab' }));
+    useUIStore.getState().setTextEditingColorSpans([{ start: 0, end: 1, color: RED }]);
+    expect(useUIStore.getState().textEditing?.colorSpans).toEqual([{ start: 0, end: 1, color: RED }]);
+  });
+});

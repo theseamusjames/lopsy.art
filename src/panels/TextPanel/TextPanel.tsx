@@ -7,6 +7,7 @@ import { useFontEntry } from '../../app/local-fonts-store';
 import { extractFamilyName } from '../../utils/font-loader';
 import {
   applyTextSetting,
+  applyDiscreteTextSetting,
   applyTextFontFamily,
   applyTextWeight,
   beginTextLayerHistory,
@@ -15,6 +16,9 @@ import {
 import { textSizeTypedMax, TEXT_SIZE_SLIDER_MAX } from '../../tools/text/text-settings';
 import type { FontStyle, TextAlign } from '../../types';
 import styles from './TextPanel.module.css';
+import { TextColorControl } from '../../components/TextColorControl/TextColorControl';
+import { useTextColor } from '../../app/hooks/useTextColor';
+import { applyTextColor, beginTextColorPick, endTextColorPick } from '../../tools/text/apply-text-color';
 
 const WEIGHT_LABELS: Record<number, string> = {
   100: 'Thin',
@@ -39,20 +43,13 @@ const ALIGNMENTS: { value: TextAlign; label: string; Icon: typeof AlignLeft }[] 
 export function TextPanel() {
   const text = useToolSettingsStore((s) => s.settings.text);
   const recentFonts = useToolSettingsStore((s) => s.recentFonts);
+  const textColor = useTextColor();
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
   const sizeMax = textSizeTypedMax(docWidth, docHeight);
 
   const fontEntry = useFontEntry(extractFamilyName(text.fontFamily));
   const availableWeights = fontEntry?.weights ?? [400, 700];
-
-  const discrete = <K extends 'fontStyle' | 'align' | 'underline' | 'strikethrough'>(
-    key: K,
-    value: (typeof text)[K],
-  ) => {
-    beginTextLayerHistory();
-    applyTextSetting(key, value);
-  };
 
   return (
     <div className={styles.panel} data-panel="text">
@@ -73,7 +70,7 @@ export function TextPanel() {
           <select
             className={styles.select}
             value={text.fontStyle}
-            onChange={(e) => discrete('fontStyle', e.target.value as FontStyle)}
+            onChange={(e) => applyDiscreteTextSetting('fontStyle', e.target.value as FontStyle)}
             aria-label="Font style"
           >
             <option value="normal">Normal</option>
@@ -100,6 +97,16 @@ export function TextPanel() {
 
       <section className={styles.section}>
         <div className={styles.sectionTitle}>Character</div>
+        <div className={styles.colorRow}>
+          <span className={styles.colorLabel}>Color</span>
+          <TextColorControl
+            color={textColor.color}
+            pickerColor={textColor.pickerColor}
+            onChange={applyTextColor}
+            onPickStart={beginTextColorPick}
+            onPickEnd={endTextColorPick}
+          />
+        </div>
         <Slider
           label="Size"
           value={text.fontSize}
@@ -144,7 +151,7 @@ export function TextPanel() {
               key={value}
               type="button"
               className={`${styles.alignBtn} ${text.align === value ? styles.alignBtnActive : ''}`}
-              onClick={() => discrete('align', value)}
+              onClick={() => applyDiscreteTextSetting('align', value)}
               aria-label={label}
               aria-pressed={text.align === value}
               title={label}
@@ -173,7 +180,7 @@ export function TextPanel() {
           <button
             type="button"
             className={`${styles.decorationBtn} ${text.underline ? styles.decorationBtnActive : ''}`}
-            onClick={() => discrete('underline', !text.underline)}
+            onClick={() => applyDiscreteTextSetting('underline', !text.underline)}
             aria-label="Toggle underline"
             aria-pressed={text.underline}
             title="Underline"
@@ -183,7 +190,7 @@ export function TextPanel() {
           <button
             type="button"
             className={`${styles.decorationBtn} ${text.strikethrough ? styles.decorationBtnActive : ''}`}
-            onClick={() => discrete('strikethrough', !text.strikethrough)}
+            onClick={() => applyDiscreteTextSetting('strikethrough', !text.strikethrough)}
             aria-label="Toggle strikethrough"
             aria-pressed={text.strikethrough}
             title="Strikethrough"

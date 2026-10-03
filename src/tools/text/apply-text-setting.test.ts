@@ -10,6 +10,8 @@ const hoisted = vi.hoisted(() => ({
   invalidatePathTextCache: vi.fn(),
   invalidateEditingTextCache: vi.fn(),
   resetTextLayerLayout: vi.fn(),
+  findFontEntry: vi.fn((_name: string): unknown => null),
+  loadFontBinaryToEngine: vi.fn((_family: string, _weight: number, _isItalic?: boolean) => Promise.resolve(false)),
 }));
 const {
   rerenderCommittedTextLayerAnchored,
@@ -29,13 +31,13 @@ vi.mock('../../engine-wasm/engine-state', () => ({
 }));
 
 vi.mock('../../app/local-fonts-store', () => ({
-  findFontEntry: () => null,
+  findFontEntry: hoisted.findFontEntry,
   loadLocalFontToEngine: () => Promise.resolve(false),
 }));
 vi.mock('../../utils/font-loader', () => ({
   extractFamilyName: (f: string) => f,
   loadGoogleFont: () => Promise.resolve(),
-  loadFontBinaryToEngine: () => Promise.resolve(false),
+  loadFontBinaryToEngine: hoisted.loadFontBinaryToEngine,
 }));
 
 // Zustand-shaped mocks. Values are mutable so tests can vary them.
@@ -117,6 +119,8 @@ vi.mock('../../app/tool-settings-store', () => ({
 // Import after mocks are set up.
 import {
   applyTextSetting,
+  applyDiscreteTextSetting,
+  applyTextWeight,
   beginTextLayerHistory,
   endTextLayerHistory,
 } from './apply-text-setting';
@@ -128,6 +132,10 @@ beforeEach(() => {
   editorState.updateTextLayerProperties.mockClear();
   editorState.pushHistory.mockClear();
   editorState.document.layers = [textLayer];
+  hoisted.findFontEntry.mockReset().mockReturnValue(null);
+  hoisted.loadFontBinaryToEngine.mockClear();
+  toolSettingsHoisted.state.settings.text.fontStyle = 'normal';
+  toolSettingsHoisted.state.settings.text.fontWeight = 400;
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     cb(0);
     return 0;
@@ -200,5 +208,45 @@ describe('apply-text-setting drag anchor caching (#758)', () => {
     const propKeys = editorState.updateTextLayerProperties.mock.calls.map((c) => Object.keys(c[1] as object).join(','));
     const fontSizeUpdates = propKeys.filter((k) => k === 'fontSize').length;
     expect(fontSizeUpdates).toBe(3);
+  });
+});
+
+describe('discrete text settings (#1152)', () => {
+  const googleEntry = { source: 'google', weights: [400, 700], hasItalic: true };
+
+  it('pushes one history entry and loads the italic face for Style → Italic', () => {
+    hoisted.findFontEntry.mockReturnValue(googleEntry);
+    applyDiscreteTextSetting('fontStyle', 'italic');
+
+    expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+    expect(hoisted.loadFontBinaryToEngine).toHaveBeenCalledWith('Inter', 400, true);
+  });
+
+  it('loads the upright face for the current weight on Style → Normal', () => {
+    hoisted.findFontEntry.mockReturnValue(googleEntry);
+    toolSettingsHoisted.state.settings.text.fontStyle = 'italic';
+    toolSettingsHoisted.state.settings.text.fontWeight = 700;
+    applyDiscreteTextSetting('fontStyle', 'normal');
+
+    expect(hoisted.loadFontBinaryToEngine).toHaveBeenCalledWith('Inter', 700, false);
+  });
+
+  it('does not leave a drag anchor behind for the next edit', () => {
+    applyDiscreteTextSetting('align', 'center');
+    rerenderCommittedTextLayerAnchored.mockClear();
+
+    applyTextSetting('fontSize', 120);
+
+    // No cached anchor: the next change measures the old layer again.
+    expect(rerenderCommittedTextLayerAnchored).toHaveBeenCalledTimes(1);
+  });
+
+  it('a weight change loads the face for the current style', () => {
+    hoisted.findFontEntry.mockReturnValue(googleEntry);
+    toolSettingsHoisted.state.settings.text.fontStyle = 'italic';
+    applyTextWeight(700);
+
+    expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+    expect(hoisted.loadFontBinaryToEngine).toHaveBeenCalledWith('Inter', 700, true);
   });
 });

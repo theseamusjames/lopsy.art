@@ -39,7 +39,10 @@ export function selectionToPathAction(): void {
   const state = useEditorStore.getState();
   const sel = state.selection;
   if (!sel.active || !sel.mask) return;
-  for (const anchors of selectionToPaths(sel.mask, sel.maskWidth, sel.maskHeight)) {
+  const paths = selectionToPaths(sel.mask, sel.maskWidth, sel.maskHeight);
+  if (paths.length === 0) return;
+  state.pushHistoryMetadata('Selection to Path');
+  for (const anchors of paths) {
     state.addPath(anchors, true);
   }
 }
