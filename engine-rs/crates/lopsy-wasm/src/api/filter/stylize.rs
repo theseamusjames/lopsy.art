@@ -12,16 +12,7 @@ pub fn filter_pixelate(engine: &mut Engine, layer_id: &str, block_size: u32) {
     if block_size <= 1 {
         return;
     }
-    filter_gpu::apply_filter(
-        &mut engine.inner,
-        layer_id,
-        |e| &e.shaders.pixelate,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_blockSize") {
-                gl.uniform1f(Some(&loc), block_size as f32);
-            }
-        },
-    );
+    filter_gpu::apply_pixelate(&mut engine.inner, layer_id, block_size);
 }
 
 #[wasm_bindgen(js_name = "filterHalftone")]

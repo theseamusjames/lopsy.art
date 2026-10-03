@@ -286,6 +286,20 @@ pub fn apply_separable_blur(
     }
     engine.draw_fullscreen_quad();
 
+    commit_scratch_b(engine, layer_id, &layer_tex, w, h, has_selection);
+}
+
+/// Write a filter result held in scratch B back to the layer — through the
+/// selection mask when there is one. The layer texture must still hold the
+/// original pixels; scratch A is overwritten.
+fn commit_scratch_b(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    layer_tex: &web_sys::WebGlTexture,
+    w: u32,
+    h: u32,
+    has_selection: bool,
+) {
     if has_selection {
         // Save the original layer to scratch A (layer still untouched).
         // We need to drop the `gl` borrow before calling copy_layer_to_scratch,
@@ -299,7 +313,7 @@ pub fn apply_separable_blur(
     } else {
         // Copy scratch B back to layer texture (original path)
         let scratch_tex_b = engine.texture_pool.get(engine.scratch_texture_b).cloned();
-        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+        engine.render_to_texture(layer_tex, w as i32, h as i32, |engine| {
             let gl = &engine.gl;
             gl.use_program(Some(&engine.shaders.blit.program));
             gl.active_texture(WebGl2RenderingContext::TEXTURE0);
@@ -314,6 +328,77 @@ pub fn apply_separable_blur(
     }
 
     engine.mark_layer_dirty(layer_id);
+}
+
+/// Pixelate (#1167): every pixel of the source footprint takes its block's
+/// alpha-weighted mean colour and the mean alpha of the block's covered
+/// pixels. Pass 1 reduces each block to one texel of scratch A (each layer
+/// texel is read once, whatever the block size); pass 2 expands the blocks
+/// into scratch B, masked by the source alpha.
+pub fn apply_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32) {
+    let _ = engine.ensure_layer_full_size(layer_id);
+
+    let has_selection = engine.selection_mask_texture.is_some();
+
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let layer_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+    let blocks_w = w.div_ceil(block_size);
+    let blocks_h = h.div_ceil(block_size);
+
+    // Pass 1: block averages (layer -> scratch A, blocks_w x blocks_h)
+    let scratch_fbo_a = engine.scratch_fbo_a;
+    engine.fbo_pool.bind(&engine.gl, scratch_fbo_a);
+    engine.gl.viewport(0, 0, blocks_w as i32, blocks_h as i32);
+    {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.pixelate_blocks;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = shader.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        if let Some(loc) = shader.location(gl, "u_blockSize") {
+            gl.uniform1i(Some(&loc), block_size as i32);
+        }
+    }
+    engine.draw_fullscreen_quad();
+
+    // Pass 2: expand blocks over the source footprint (-> scratch B, w x h)
+    let scratch_fbo_b = engine.scratch_fbo_b;
+    engine.fbo_pool.bind(&engine.gl, scratch_fbo_b);
+    engine.gl.viewport(0, 0, w as i32, h as i32);
+    {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.pixelate;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = shader.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        if let Some(t) = engine.texture_pool.get(engine.scratch_texture_a) {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
+        }
+        if let Some(loc) = shader.location(gl, "u_blocks") {
+            gl.uniform1i(Some(&loc), 1);
+        }
+        if let Some(loc) = shader.location(gl, "u_blockSize") {
+            gl.uniform1i(Some(&loc), block_size as i32);
+        }
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    }
+    engine.draw_fullscreen_quad();
+
+    commit_scratch_b(engine, layer_id, &layer_tex, w, h, has_selection);
 }
 
 /// Render a single channel of a layer texture as grayscale into a scratch

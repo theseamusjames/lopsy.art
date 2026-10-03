@@ -45,14 +45,14 @@ async function paintThreeBlocks(page: Page): Promise<void> {
 // ---------------------------------------------------------------------------
 // Pixelate filter
 //
-// The shader (engine-rs/.../pixelate.glsl) samples a single pixel at the
-// CENTER of each blockSize×blockSize block and writes it to every pixel in
-// the block. So the meaningful test is:
+// The shaders (engine-rs/.../pixelate_blocks.glsl + pixelate.glsl) give every
+// pixel of a blockSize×blockSize block the block's alpha-weighted mean
+// colour (#1167; it used to point-sample the block centre). So the
+// meaningful test is:
 //
-//   1. Paint content where each blockSize-aligned region has a known color
-//      at its center.
+//   1. Paint content where each blockSize-aligned region has a known color.
 //   2. Apply pixelate with that block size.
-//   3. Verify each block is uniformly the color that was at its center.
+//   3. Verify each block is uniformly the average of its pixels.
 // ---------------------------------------------------------------------------
 
 test.describe('Pixelate / Mosaic Filter', () => {
@@ -143,7 +143,8 @@ test.describe('Pixelate / Mosaic Filter', () => {
     expect(beforeRightEdge.g).toBe(255);
 
     // Apply pixelate with blockSize = 30 — this single block spans the
-    // entire image and samples the centre at x = 15, y = 5 (green).
+    // entire image, so every pixel becomes the average of the three
+    // equal-sized blocks: (255, 255, 255) / 3 = (85, 85, 85).
     await page.click('text=Filter');
     await page.click('text=Pixelate...');
     await expect(page.locator('h2:has-text("Pixelate")')).toBeVisible({ timeout: 3000 });
@@ -155,14 +156,12 @@ test.describe('Pixelate / Mosaic Filter', () => {
     await expect(page.locator('h2:has-text("Pixelate")')).toHaveCount(0, { timeout: 3000 });
     await page.waitForTimeout(200);
 
-    // Now the entire image is uniform — every pixel should match the
-    // sampled centre colour (green).
-    const after = await getPixelAt(page, 0, 0);
-    expect(after.g).toBe(255);
-    expect(after.r).toBe(0);
-    expect(after.b).toBe(0);
-    const afterRight = await getPixelAt(page, 29, 9);
-    expect(afterRight.g).toBe(255);
+    // Now the entire image is uniform grey.
+    for (const [x, y] of [[0, 0], [15, 5], [29, 9]] as const) {
+      const p = await getPixelAt(page, x, y);
+      for (const c of [p.r, p.g, p.b]) expect(Math.abs(c - 85), `px(${x},${y})`).toBeLessThanOrEqual(1);
+      expect(p.a).toBe(255);
+    }
 
     // Undo with the keyboard shortcut — Linux/Win uses Control, macOS uses
     // Meta. Send both for portability.

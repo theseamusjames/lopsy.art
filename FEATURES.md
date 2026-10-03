@@ -1354,6 +1354,7 @@ Add Noise runs through the standard generic filter dialog with live preview and 
 
 ### Pixelate
 - **Pixelate / Mosaic**: block size 2 - 64 px
+  - **Blocks are averaged and the content's footprint is kept (#1167).** Each block takes the alpha-weighted mean colour of its pixels (transparent pixels don't darken it) and the mean alpha of its non-transparent pixels, and that is written only where the source pixel had any coverage — so Pixelate never adds pixels outside the original content or deletes pixels inside it. It used to point-sample each block's centre, so a partial block at the edge of a shape vanished when its centre fell outside the shape and grew to the whole block when it fell inside (a 95 × 40 fill pixelated at 22 came out 88 × 44), and a block's colour was whichever pixel sat at its centre. The grid starts at the layer texture's top-left corner; blocks clipped by the texture edge average only the pixels inside it. Runs in two passes — one fragment per block reduces it to a single texel, then each pixel reads its block's texel — so the cost does not grow with block size.
 
 ### Halftone
 - **Halftone**: dot size 2 - 32 px, density 0.25 - 3 (default 1.0 — scales dot coverage/frequency relative to the cell grid), angle 0 - 180 degrees, softness 0 - 4. Cell luminance is measured on **Rec. 601** weights, unlike every other tonal filter — see the luminance-weighting split under [Color](#color).
