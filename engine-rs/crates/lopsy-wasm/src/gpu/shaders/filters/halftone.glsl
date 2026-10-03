@@ -49,17 +49,24 @@ void main() {
     // Dot radius is proportional to luminance (brighter = smaller dot for CMYK-style)
     // Invert so dark areas get big dots, light areas get small dots
     float maxRadius = u_dotSize * 0.5;
-    float dotRadius = maxRadius * (1.0 - lum);
+    float dotRadius = maxRadius * max(1.0 - lum, 0.0);
 
-    // Apply contrast to sharpen/soften dot edges. smoothstep() is undefined
-    // (GLSL ES spec) when its two edges are equal, which happens at
-    // u_contrast == 0.0 (Softness slider minimum) and made every light cell
-    // render fully opaque instead of a tiny dot on some GPU backends. Floor
-    // the edge separation at a tiny epsilon so the two edges are always
-    // distinct; this is visually indistinguishable from a hard step at
-    // dist == dotRadius and keeps Softness continuous down to 0.
-    float contrastEps = max(u_contrast, 1e-4);
-    float edge = smoothstep(dotRadius + contrastEps, dotRadius - contrastEps, dist);
+    // Softness is the half-width of the ramp centred on the dot radius.
+    // #1177: a ramp wider than the dot reached past the cell centre, so a
+    // zero-radius (pure white) dot still printed a soft dot of radius
+    // ~softness. Narrow the ramp to the dot radius so small dots stay
+    // proportional and white cells stay empty; dots at least `softness`
+    // wide are unchanged.
+    //
+    // smoothstep() is undefined (GLSL ES spec) when its two edges are equal,
+    // which happens at Softness 0 (#878); floor the half-width at a tiny
+    // epsilon so the edges are always distinct, indistinguishable from a
+    // hard step at dist == dotRadius. Dots under 1e-3 px (white, give or
+    // take float rounding of the luminance weights) print nothing.
+    float halfWidth = max(min(u_contrast, dotRadius), 1e-4);
+    float edge = dotRadius > 1e-3
+        ? smoothstep(dotRadius + halfWidth, dotRadius - halfWidth, dist)
+        : 0.0;
 
     // Output: dot color where inside dot, transparent where outside
     fragColor = vec4(c.rgb, c.a * edge);

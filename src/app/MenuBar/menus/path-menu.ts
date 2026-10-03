@@ -5,6 +5,13 @@ import type { MenuDef } from './types';
 
 export type { BooleanOp };
 
+const BOOLEAN_OP_LABELS: Record<BooleanOp, string> = {
+  union: 'Unite Paths',
+  subtract: 'Subtract Paths',
+  intersect: 'Intersect Paths',
+  exclude: 'Exclude Paths',
+};
+
 /**
  * Apply a boolean path operation between the selected path and the most
  * recently created other path. The two source paths are removed and replaced
@@ -34,9 +41,9 @@ export function applyBooleanOp(op: BooleanOp): void {
 
   if (!result.hasArea || result.anchors.length === 0) return;
 
-  // Remove both source paths
-  state.removePath(pathA.id);
-  state.removePath(pathB.id);
+  state.pushHistoryMetadata(BOOLEAN_OP_LABELS[op]);
+  state.removePath(pathA.id, true);
+  state.removePath(pathB.id, true);
 
   // Add the result path (addPath also selects the new path)
   state.addPath(result.anchors, true);

@@ -107,6 +107,134 @@ fn copy_layer_to_scratch(
     engine.draw_fullscreen_quad();
 }
 
+/// What `begin_mask_filter_target` swapped out, so the end call can put it
+/// back.
+pub struct MaskFilterTarget {
+    layer_id: String,
+    layer_texture: Option<crate::gpu::texture_pool::TextureHandle>,
+    layer_rect: Option<(i32, i32, u32, u32)>,
+    mask_origin: (i32, i32),
+    mask_size: (u32, u32),
+}
+
+/// Point a layer's texture slot (and its descriptor's rect) at the layer's
+/// mask, so every filter entry point — which all look the layer up in
+/// `layer_textures` — runs on the mask instead (#1150). The filter
+/// helpers keep working unchanged: selection blending reads the mask's
+/// origin from the descriptor, and preview save/restore follow the slot.
+/// Must be paired with `end_mask_filter_target` before the next frame.
+/// Returns false (and changes nothing) when the layer has no mask.
+pub fn begin_mask_filter_target(engine: &mut EngineInner, layer_id: &str) -> bool {
+    end_mask_filter_target(engine);
+    let mask_handle = match engine.layer_masks.get(layer_id) {
+        Some(&h) => h,
+        None => return false,
+    };
+    let mask_size = engine.texture_pool.get_size(mask_handle).unwrap_or((1, 1));
+    let (ox, oy) = crate::compositor::mask_doc_origin(engine, layer_id);
+    let mask_origin = (ox as i32, oy as i32);
+
+    let layer_texture = engine.layer_textures.insert(layer_id.to_string(), mask_handle);
+    let layer_rect = engine.layer_stack.iter_mut().find(|l| l.id == layer_id).map(|l| {
+        let rect = (l.x, l.y, l.width, l.height);
+        l.x = mask_origin.0;
+        l.y = mask_origin.1;
+        l.width = mask_size.0;
+        l.height = mask_size.1;
+        rect
+    });
+    engine.mask_filter_target = Some(MaskFilterTarget {
+        layer_id: layer_id.to_string(),
+        layer_texture,
+        layer_rect,
+        mask_origin,
+        mask_size,
+    });
+    true
+}
+
+/// Undo `begin_mask_filter_target`. The filtered mask is folded back to
+/// grey (a colour filter's luminance) and, if a filter grew the texture to
+/// cover the document, cropped back to the mask's own rect before it is
+/// returned to `layer_masks`.
+pub fn end_mask_filter_target(engine: &mut EngineInner) {
+    let Some(target) = engine.mask_filter_target.take() else { return };
+    let id = target.layer_id.as_str();
+
+    apply_filter_full_layer(engine, id, |e| &e.shaders.mask_luminance, |_, _| {});
+
+    let (cur_x, cur_y) = engine.layer_stack.iter()
+        .find(|l| l.id == id)
+        .map_or(target.mask_origin, |l| (l.x, l.y));
+    let cur_size = engine.layer_textures.get(id)
+        .and_then(|&h| engine.texture_pool.get_size(h));
+    if (cur_x, cur_y) != target.mask_origin || cur_size != Some(target.mask_size) {
+        let (mw, mh) = target.mask_size;
+        let _ = crate::layer_manager::crop_texture(
+            engine, id, cur_x, cur_y, target.mask_origin.0, target.mask_origin.1, mw, mh,
+        );
+    }
+
+    let mask_handle = match target.layer_texture {
+        Some(h) => engine.layer_textures.insert(id.to_string(), h),
+        None => engine.layer_textures.remove(id),
+    };
+    if let Some(h) = mask_handle {
+        engine.layer_masks.insert(id.to_string(), h);
+    }
+    if let (Some((x, y, w, h)), Some(layer)) = (
+        target.layer_rect,
+        engine.layer_stack.iter_mut().find(|l| l.id == id),
+    ) {
+        layer.x = x;
+        layer.y = y;
+        layer.width = w;
+        layer.height = h;
+    }
+    engine.mark_layer_dirty(id);
+}
+
+/// Write a filter result that a multi-pass filter left in scratch A back
+/// into the layer. With a selection active the untouched layer is copied
+/// into scratch B and the two are mixed through the selection mask, as
+/// `apply_filter` does; otherwise scratch A is blitted over the layer.
+/// Scratch B is overwritten, so callers must be done with it.
+pub(crate) fn commit_scratch_a_to_layer(engine: &mut EngineInner, layer_id: &str) {
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let layer_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    if engine.selection_mask_texture.is_some() {
+        let scratch_fbo_b = engine.scratch_fbo_b;
+        copy_layer_to_scratch(engine, layer_id, scratch_fbo_b);
+        let scratch_a = engine.scratch_texture_a;
+        let scratch_b = engine.scratch_texture_b;
+        blend_with_selection_mask(engine, layer_id, scratch_a, scratch_b);
+    } else {
+        let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+            let gl = &engine.gl;
+            gl.use_program(Some(&engine.shaders.blit.program));
+            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            if let Some(t) = &scratch_tex {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
+            }
+            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+                gl.uniform1i(Some(&loc), 0);
+            }
+            engine.draw_fullscreen_quad();
+        });
+    }
+
+    engine.mark_layer_dirty(layer_id);
+}
+
 /// Apply a shader program to a layer's texture (read from layer, render to scratch, copy back).
 /// The `set_uniforms` closure is called after the shader is bound so you can set custom uniforms.
 ///
@@ -286,6 +414,20 @@ pub fn apply_separable_blur(
     }
     engine.draw_fullscreen_quad();
 
+    commit_scratch_b(engine, layer_id, &layer_tex, w, h, has_selection);
+}
+
+/// Write a filter result held in scratch B back to the layer — through the
+/// selection mask when there is one. The layer texture must still hold the
+/// original pixels; scratch A is overwritten.
+fn commit_scratch_b(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    layer_tex: &web_sys::WebGlTexture,
+    w: u32,
+    h: u32,
+    has_selection: bool,
+) {
     if has_selection {
         // Save the original layer to scratch A (layer still untouched).
         // We need to drop the `gl` borrow before calling copy_layer_to_scratch,
@@ -299,7 +441,7 @@ pub fn apply_separable_blur(
     } else {
         // Copy scratch B back to layer texture (original path)
         let scratch_tex_b = engine.texture_pool.get(engine.scratch_texture_b).cloned();
-        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+        engine.render_to_texture(layer_tex, w as i32, h as i32, |engine| {
             let gl = &engine.gl;
             gl.use_program(Some(&engine.shaders.blit.program));
             gl.active_texture(WebGl2RenderingContext::TEXTURE0);
@@ -314,6 +456,77 @@ pub fn apply_separable_blur(
     }
 
     engine.mark_layer_dirty(layer_id);
+}
+
+/// Pixelate (#1167): every pixel of the source footprint takes its block's
+/// alpha-weighted mean colour and the mean alpha of the block's covered
+/// pixels. Pass 1 reduces each block to one texel of scratch A (each layer
+/// texel is read once, whatever the block size); pass 2 expands the blocks
+/// into scratch B, masked by the source alpha.
+pub fn apply_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32) {
+    let _ = engine.ensure_layer_full_size(layer_id);
+
+    let has_selection = engine.selection_mask_texture.is_some();
+
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let layer_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+    let blocks_w = w.div_ceil(block_size);
+    let blocks_h = h.div_ceil(block_size);
+
+    // Pass 1: block averages (layer -> scratch A, blocks_w x blocks_h)
+    let scratch_fbo_a = engine.scratch_fbo_a;
+    engine.fbo_pool.bind(&engine.gl, scratch_fbo_a);
+    engine.gl.viewport(0, 0, blocks_w as i32, blocks_h as i32);
+    {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.pixelate_blocks;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = shader.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        if let Some(loc) = shader.location(gl, "u_blockSize") {
+            gl.uniform1i(Some(&loc), block_size as i32);
+        }
+    }
+    engine.draw_fullscreen_quad();
+
+    // Pass 2: expand blocks over the source footprint (-> scratch B, w x h)
+    let scratch_fbo_b = engine.scratch_fbo_b;
+    engine.fbo_pool.bind(&engine.gl, scratch_fbo_b);
+    engine.gl.viewport(0, 0, w as i32, h as i32);
+    {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.pixelate;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+        if let Some(loc) = shader.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        if let Some(t) = engine.texture_pool.get(engine.scratch_texture_a) {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
+        }
+        if let Some(loc) = shader.location(gl, "u_blocks") {
+            gl.uniform1i(Some(&loc), 1);
+        }
+        if let Some(loc) = shader.location(gl, "u_blockSize") {
+            gl.uniform1i(Some(&loc), block_size as i32);
+        }
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    }
+    engine.draw_fullscreen_quad();
+
+    commit_scratch_b(engine, layer_id, &layer_tex, w, h, has_selection);
 }
 
 /// Render a single channel of a layer texture as grayscale into a scratch

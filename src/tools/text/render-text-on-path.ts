@@ -14,7 +14,17 @@
 import type { PathAnchor } from '../path/path';
 import type { TextLayer } from '../../types/layers';
 import { buildFontString } from './text';
-import { placeTextOnPath, type GlyphPlacement } from './text-on-path';
+import { unitColors } from './text-color-spans';
+import { placeTextOnPath } from './text-on-path';
+import {
+  PATH_TEXT_INK_PADDING,
+  glyphBoxesBounds,
+  glyphInkRect,
+  offsetGlyphBoxes,
+  placeGlyphBoxes,
+  type GlyphInkRect,
+  type PlacedGlyphBox,
+} from './path-text-geometry';
 import { contextOptions } from '../../engine/color-space';
 
 export interface PathTextRenderResult {
@@ -28,6 +38,8 @@ export interface PathTextRenderResult {
   x: number;
   /** Document-space y of the top-left of the texture. */
   y: number;
+  /** Each inked glyph's box, relative to the texture's top-left. */
+  glyphBoxes: PlacedGlyphBox[];
 }
 
 let scratchCanvas: HTMLCanvasElement | null = null;
@@ -51,46 +63,6 @@ function getScratchContext(minWidth: number, minHeight: number): CanvasRendering
     scratchCtx = scratchCanvas.getContext('2d', contextOptions);
   }
   return scratchCtx;
-}
-
-export function computeBounds(
-  placements: readonly GlyphPlacement[],
-  glyphWidths: readonly number[],
-  fontSize: number,
-  docWidth: number,
-  docHeight: number,
-): { x: number; y: number; w: number; h: number } | null {
-  if (placements.length === 0) return null;
-
-  // Per-glyph padding covers ascender + descender + advance regardless of
-  // rotation. A glyph's tightest bounding radius from its centre is at most
-  // sqrt((advance/2)^2 + fontSize^2); we use a looser fontSize + advance/2
-  // per axis, which is cheap and always safe.
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-
-  for (const p of placements) {
-    const advance = glyphWidths[p.charIndex] ?? fontSize * 0.6;
-    const pad = fontSize + advance / 2;
-    if (p.x - pad < minX) minX = p.x - pad;
-    if (p.y - pad < minY) minY = p.y - pad;
-    if (p.x + pad > maxX) maxX = p.x + pad;
-    if (p.y + pad > maxY) maxY = p.y + pad;
-  }
-
-  // Clip to document — anything outside is never composited anyway.
-  const x0 = Math.max(0, Math.floor(minX));
-  const y0 = Math.max(0, Math.floor(minY));
-  const x1 = Math.min(docWidth, Math.ceil(maxX));
-  const y1 = Math.min(docHeight, Math.ceil(maxY));
-
-  const w = x1 - x0;
-  const h = y1 - y0;
-  if (w <= 0 || h <= 0) return null;
-
-  return { x: x0, y: y0, w, h };
 }
 
 /** The CSS font shorthand path text is measured and drawn with. */
@@ -136,15 +108,21 @@ export function renderTextOnPath(
   measureCtx.textBaseline = 'alphabetic';
 
   const glyphWidths: number[] = [];
+  const inkRects: (GlyphInkRect | null)[] = [];
   for (const char of text) {
     const metrics = measureCtx.measureText(char);
-    glyphWidths.push(metrics.width + letterSpacing);
+    const advance = metrics.width + letterSpacing;
+    glyphWidths.push(advance);
+    inkRects.push(glyphInkRect(metrics, advance));
   }
 
-  const placements = placeTextOnPath(text, glyphWidths, anchors, pathClosed, fontSize);
+  const placements = placeTextOnPath(text, glyphWidths, anchors, pathClosed, fontSize, layer.textAlign);
   if (placements.length === 0) return null;
 
-  const bounds = computeBounds(placements, glyphWidths, fontSize, docWidth, docHeight);
+  // Sizing the texture to the glyphs' ink (not a font size of padding around
+  // each one) keeps the Text tool's hit box and hover outline on the type.
+  const docBoxes = placeGlyphBoxes(placements, inkRects);
+  const bounds = glyphBoxesBounds(docBoxes, PATH_TEXT_INK_PADDING, docWidth, docHeight);
   if (!bounds) return null;
 
   const ctx = getScratchContext(bounds.w, bounds.h);
@@ -156,9 +134,11 @@ export function renderTextOnPath(
   ctx.clearRect(0, 0, bounds.w, bounds.h);
   ctx.font = fontString;
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;
+  const colors = unitColors(text.length, color, layer.colorSpans);
 
   for (const placement of placements) {
+    const c = colors[placement.charIndex] ?? color;
+    ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${c.a})`;
     ctx.save();
     ctx.translate(placement.x - bounds.x, placement.y - bounds.y);
     ctx.rotate(placement.rotation);
@@ -174,6 +154,7 @@ export function renderTextOnPath(
     height: bounds.h,
     x: bounds.x,
     y: bounds.y,
+    glyphBoxes: offsetGlyphBoxes(docBoxes, -bounds.x, -bounds.y),
   };
 }
 

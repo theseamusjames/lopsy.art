@@ -577,7 +577,12 @@ foreground colour at (x, y), the top-left of the line box. The glyph ink
 starts noticeably lower than y. Any Google Font can be picked by exact family
 name. Wait until the font has downloaded before judging a screenshot: the
 first render can show the fallback. The layer is named after its text (first
-16 characters). Text stays editable, but pixel tools, filters, Image →
+16 characters). To recolour text later, click the options bar's
+`[aria-label="Text color"]` swatch and type a hex into the picker's
+`[aria-label="Hex color"]` field: with a text layer selected it recolours
+the whole layer; while editing it recolours the selected characters only
+(select them with Shift+arrows first). A multi-coloured selection shows
+"–". Text stays editable, but pixel tools, filters, Image →
 Flip and masks refuse it until you click **Rasterize Layer**. That button appears in the
 Layers panel toolbar when a text layer is active.
 
@@ -629,7 +634,10 @@ Move-tool options also offer Flip, Rotate 90° and Mesh Warp. **Several layers a
 Shift+click the bottom one, or select their group); the Move tool's handles
 then frame the union of their content, and `h.rotate(box, degrees)` /
 `h.scale(corner, dx, dy)` with that box turn or scale all of them about its
-centre in one undo step. Commit with `h.deselect()` as usual.
+centre in one undo step. Commit with `h.deselect()` as usual. Text layers
+among them keep the rotation or scale live (later text edits keep it), but
+Distort / Perspective corner drags are refused when text is selected, and so
+is any box transform holding text on a path.
 
 **Text transforms stay live.** With the Move tool and a text layer active,
 handles appear around the text's *line box* with no selection: its top-left
@@ -730,6 +738,7 @@ CSS class names are hashed in production.
 | Effects drawer | `[data-testid="effects-drawer"]`, with checkboxes `Enable <Effect>`, blend mode `[aria-labelledby="blend-mode-label"]`, close button `Close effects` |
 | Dialogs | `role="dialog"` named after their title: `New Document`, `Gaussian Blur`, `Gradient Editor`, `Feather Selection`... |
 | Fonts | The options-bar `button[aria-haspopup="listbox"]`, then `Search fonts` and a `role="option"` |
+| Text colour | The options-bar `[aria-label="Text color"]` swatch (`data-mixed="true"` and "–" when the text holds several colours) opens `role="dialog"` `Text color picker` |
 | Canvas | `[data-testid="canvas-container"]` |
 | Status bar | `footer[aria-label="Status bar"]`, showing zoom %, cursor `X: Y:` and document size |
 

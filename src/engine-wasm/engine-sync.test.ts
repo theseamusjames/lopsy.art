@@ -76,7 +76,7 @@ vi.mock('./wasm-bridge', () => ({
 }));
 
 vi.mock('../tools/text/render-text-on-path', () => ({
-  renderTextOnPath: vi.fn(() => ({ pixels: new Uint8Array(4), width: 1, height: 1, x: 0, y: 0 })),
+  renderTextOnPath: vi.fn(() => ({ pixels: new Uint8Array(4), width: 1, height: 1, x: 0, y: 0, glyphBoxes: [] })),
   pathTextFont: vi.fn((layer: { fontFamily: string }) => `normal 400 32px ${layer.fontFamily}`),
 }));
 
@@ -882,7 +882,7 @@ describe('path-bound text and web font loading (#823)', () => {
     const engine = makeFakeEngine();
     vi.mocked(bridge.uploadLayerPixels).mockClear();
     vi.mocked(renderTextOnPathMock).mockReturnValueOnce({
-      pixels: new Uint8Array(4), width: 1, height: 1, x: 23, y: 198,
+      pixels: new Uint8Array(4), width: 1, height: 1, x: 23, y: 198, glyphBoxes: [],
     });
     const moved = { ...makePathText('Inter'), x: 54, y: 218, pathAnchorX: 34, pathAnchorY: 218 };
     const onPositionChange = vi.fn();
@@ -895,7 +895,7 @@ describe('path-bound text and web font loading (#823)', () => {
     fonts.loaded = true;
     const engine = makeFakeEngine();
     vi.mocked(renderTextOnPathMock).mockReturnValueOnce({
-      pixels: new Uint8Array(4), width: 1, height: 1, x: 34, y: 218,
+      pixels: new Uint8Array(4), width: 1, height: 1, x: 34, y: 218, glyphBoxes: [],
     });
     const justBound = { ...makePathText('Inter'), x: 100, y: 100 };
     const onPositionChange = vi.fn();

@@ -11,15 +11,20 @@ import { rerenderCommittedTextLayer, invalidatePathTextCache, textLayerAnchor } 
 import { textAnchorOf } from '../../../tools/text/text-transform';
 import {
   applyTextSetting,
+  applyDiscreteTextSetting,
   applyTextFontFamily,
   applyTextWeight,
   beginTextLayerHistory,
   endTextLayerHistory,
+  pushTextLayerHistory,
 } from '../../../tools/text/apply-text-setting';
 import { textSizeTypedMax, TEXT_SIZE_SLIDER_MAX } from '../../../tools/text/text-settings';
 import type { TextLayer, FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 import decorationStyles from './TextOptions.module.css';
+import { TextColorControl } from '../../../components/TextColorControl/TextColorControl';
+import { useTextColor } from '../../hooks/useTextColor';
+import { applyTextColor, beginTextColorPick, endTextColorPick } from '../../../tools/text/apply-text-color';
 
 const WEIGHT_LABELS: Record<number, string> = {
   100: 'Thin',
@@ -43,6 +48,7 @@ export function TextOptions() {
   const textUnderline = useToolSettingsStore((s) => s.settings.text.underline);
   const textStrikethrough = useToolSettingsStore((s) => s.settings.text.strikethrough);
   const textVertical = useToolSettingsStore((s) => s.settings.text.vertical);
+  const textColor = useTextColor();
 
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
@@ -67,7 +73,7 @@ export function TextOptions() {
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       if (!editingLayerId || !editingLayer || editingLayer.type !== 'text') return;
       const val = e.target.value;
-      beginTextLayerHistory();
+      pushTextLayerHistory();
       if (val) {
         // Unbinding re-renders at prePathX/Y as the text anchor, so store the
         // anchor — not the texture's top-left, which sits a render offset
@@ -138,17 +144,24 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textFontStyle}
-        onChange={(e) => { beginTextLayerHistory(); applyTextSetting('fontStyle', e.target.value as FontStyle); }}
+        onChange={(e) => applyDiscreteTextSetting('fontStyle', e.target.value as FontStyle)}
         aria-label="Font style"
       >
         <option value="normal">Normal</option>
         <option value="italic">Italic</option>
       </select>
+      <TextColorControl
+        color={textColor.color}
+        pickerColor={textColor.pickerColor}
+        onChange={applyTextColor}
+        onPickStart={beginTextColorPick}
+        onPickEnd={endTextColorPick}
+      />
       <label className={styles.label} id="text-align-label">Align</label>
       <select
         className={styles.select}
         value={textAlign}
-        onChange={(e) => { beginTextLayerHistory(); applyTextSetting('align', e.target.value as TextAlign); }}
+        onChange={(e) => applyDiscreteTextSetting('align', e.target.value as TextAlign)}
         aria-labelledby="text-align-label"
       >
         <option value="left">Left</option>
@@ -159,7 +172,7 @@ export function TextOptions() {
       <div className={decorationStyles.decorationGroup}>
         <button
           className={`${decorationStyles.decorationBtn} ${textUnderline ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => { beginTextLayerHistory(); applyTextSetting('underline', !textUnderline); }}
+          onClick={() => applyDiscreteTextSetting('underline', !textUnderline)}
           aria-label="Toggle underline"
           aria-pressed={textUnderline}
           title="Underline"
@@ -168,7 +181,7 @@ export function TextOptions() {
         </button>
         <button
           className={`${decorationStyles.decorationBtn} ${textStrikethrough ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => { beginTextLayerHistory(); applyTextSetting('strikethrough', !textStrikethrough); }}
+          onClick={() => applyDiscreteTextSetting('strikethrough', !textStrikethrough)}
           aria-label="Toggle strikethrough"
           aria-pressed={textStrikethrough}
           title="Strikethrough"
@@ -177,7 +190,7 @@ export function TextOptions() {
         </button>
         <button
           className={`${decorationStyles.decorationBtn} ${textVertical ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => { beginTextLayerHistory(); applyTextSetting('vertical', !textVertical); }}
+          onClick={() => applyDiscreteTextSetting('vertical', !textVertical)}
           aria-label="Toggle vertical text"
           aria-pressed={textVertical}
           title="Vertical text"

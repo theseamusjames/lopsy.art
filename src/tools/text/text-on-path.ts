@@ -1,5 +1,5 @@
 import type { PathAnchor } from '../path/path';
-import type { Point } from '../../types';
+import type { Point, TextAlign } from '../../types';
 
 export interface GlyphPlacement {
   /** Index into the text string this placement belongs to. */
@@ -143,14 +143,38 @@ function sampleAtDistance(table: PathSample[], dist: number): PathSample | null 
 }
 
 /**
+ * Arc-length distance along the path at which a run of `textLength` starts.
+ *
+ * Alignment only distributes the path's slack: left puts the run at the first
+ * anchor, center leaves equal slack at both ends, right ends it at the last
+ * anchor. A run longer than the path has no slack, so every alignment starts
+ * at the first anchor and the overflow is truncated at the end — dropping the
+ * opening words of centred or right-aligned text would read worse. Justify
+ * leaves its single (last) line left-aligned, as the engine does for point
+ * text.
+ */
+export function pathTextStartOffset(
+  pathLength: number,
+  textLength: number,
+  align: TextAlign,
+): number {
+  const slack = Math.max(0, pathLength - textLength);
+  if (align === 'center') return slack / 2;
+  if (align === 'right') return slack;
+  return 0;
+}
+
+/**
  * Place each character of `text` along the path described by `anchors`.
  *
  * `glyphWidths` is an array of advance widths, one entry per character in
  * `text` (in the same order). If the array is shorter than the text the
  * missing characters are each given a width of `fontSize * 0.6`.
  *
- * Characters that would fall beyond the end of the path are omitted from the
- * returned array (truncation, not wrapping).
+ * The run starts at {@link pathTextStartOffset} for `align`. Characters that
+ * would fall beyond the end of the path are omitted from the returned array
+ * (truncation, not wrapping). Hard line breaks do not start a new line — the
+ * whole text is one run along the path.
  */
 export function placeTextOnPath(
   text: string,
@@ -158,13 +182,20 @@ export function placeTextOnPath(
   anchors: readonly PathAnchor[],
   closed: boolean,
   fontSize: number,
+  align: TextAlign = 'left',
 ): GlyphPlacement[] {
   const table = buildPathLookupTable(anchors, closed);
-  if (table.length === 0) return [];
+  const last = table[table.length - 1];
+  if (!last) return [];
+
+  const fallbackWidth = fontSize * 0.6;
+  let textLength = 0;
+  for (let i = 0; i < text.length; i++) {
+    textLength += glyphWidths[i] ?? fallbackWidth;
+  }
 
   const placements: GlyphPlacement[] = [];
-  let dist = 0;
-  const fallbackWidth = fontSize * 0.6;
+  let dist = pathTextStartOffset(last.distance, textLength, align);
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i]!;

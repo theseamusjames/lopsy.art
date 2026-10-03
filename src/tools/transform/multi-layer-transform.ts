@@ -45,6 +45,29 @@ export function resolveLayerTransformTargets(layers: readonly Layer[], selectedI
   return layers.filter((l) => picked.has(l.id)).map((l) => l.id);
 }
 
+export const PATH_TEXT_REFUSAL = 'Rasterize text on a path before transforming it with other layers.';
+export const DISTORT_TEXT_REFUSAL = 'Rasterize the text layers before distorting them with other layers.';
+
+/**
+ * Why a multi-layer transform must not move `targetIds`, or null when it may.
+ * A text layer keeps its transform as a matrix that each re-render applies
+ * afresh, so it can follow any affine map but not a corner distortion
+ * (`isDistorting`); text on a path is laid along its path on every
+ * re-render, so it can follow neither. Moving their pixels would only last
+ * until that next re-render (#1165).
+ */
+export function textRefusalForLayerTransform(
+  layers: readonly Layer[],
+  targetIds: readonly string[],
+  isDistorting: boolean,
+): string | null {
+  const targets = new Set(targetIds);
+  const texts = layers.filter((l) => targets.has(l.id) && l.type === 'text' && l.text.trim().length > 0);
+  if (texts.some((l) => l.type === 'text' && l.pathId)) return PATH_TEXT_REFUSAL;
+  if (isDistorting && texts.length > 0) return DISTORT_TEXT_REFUSAL;
+  return null;
+}
+
 /** Smallest rect covering every rect; null for none. */
 export function unionRects(rects: readonly Rect[]): Rect | null {
   if (rects.length === 0) return null;

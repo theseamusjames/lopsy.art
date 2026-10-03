@@ -191,11 +191,14 @@ pub fn render_linear_gradient(
         }
 
         set_gradient_uniforms(gl, shader, &stops, w, h);
+        // The shader measures texture-local pixels and the endpoints arrive
+        // in document space: take off the layer origin, which is negative
+        // for a layer moved past the top or left edge (#1169).
         if let Some(loc) = shader.location(gl, "u_start") {
-            gl.uniform2f(Some(&loc), start_x as f32, start_y as f32);
+            gl.uniform2f(Some(&loc), start_x as f32 - layer_x, start_y as f32 - layer_y);
         }
         if let Some(loc) = shader.location(gl, "u_end") {
-            gl.uniform2f(Some(&loc), end_x as f32, end_y as f32);
+            gl.uniform2f(Some(&loc), end_x as f32 - layer_x, end_y as f32 - layer_y);
         }
 
         engine.draw_fullscreen_quad();
@@ -287,7 +290,7 @@ pub fn render_radial_gradient(
 
         set_gradient_uniforms(gl, shader, &stops, w, h);
         if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), center_x as f32, center_y as f32);
+            gl.uniform2f(Some(&loc), center_x as f32 - layer_x, center_y as f32 - layer_y);
         }
         if let Some(loc) = shader.location(gl, "u_radius") {
             gl.uniform1f(Some(&loc), radius as f32);

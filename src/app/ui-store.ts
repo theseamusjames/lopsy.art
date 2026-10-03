@@ -3,6 +3,8 @@ import type { RulerUnit } from './rendering/ruler-units';
 import type { Color, Point, Rect, ToolId } from '../types';
 import type { TransformHandle, TransformMode, TransformState } from '../tools/transform/transform';
 import type { TextMatrix } from '../tools/text/text-transform';
+import type { TextColorSpan } from '../types/layers';
+import { remapColorSpansForEdit } from '../tools/text/text-color-spans';
 import type { MarqueeShape } from '../tools/marquee/marquee-region';
 import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
@@ -31,6 +33,17 @@ export interface TextEditingState {
    * document through this matrix, so the text is edited in place.
    */
   matrix?: TextMatrix | null;
+  /**
+   * Per-range colours of the text being edited (over the foreground colour,
+   * which is the base colour while editing). Kept in step with every text
+   * change; commit writes them to the layer.
+   */
+  colorSpans?: readonly TextColorSpan[];
+}
+
+function editedSpans(editing: TextEditingState, text: string): Pick<TextEditingState, 'colorSpans'> {
+  if (!editing.colorSpans?.length || text === editing.text) return {};
+  return { colorSpans: remapColorSpansForEdit(editing.colorSpans, editing.text, text, null) };
 }
 
 /** Transform modes a live text layer supports; distort/perspective need pixels. */
@@ -328,6 +341,7 @@ interface UIState {
     selectionAnchor: number | null,
   ) => void;
   updateTextEditingBounds: (bounds: TextEditingState['bounds']) => void;
+  setTextEditingColorSpans: (colorSpans: readonly TextColorSpan[]) => void;
   commitTextEditing: () => void;
   cancelTextEditing: () => void;
   setTextDrag: (drag: TextDragState | null) => void;
@@ -547,12 +561,14 @@ export const useUIStore = create<UIState>((set, get) => ({
   startTextEditing: (state) => set({ textEditing: state }),
   updateTextEditingText: (text, cursorPos) =>
     set((s) => s.textEditing
-      ? { textEditing: { ...s.textEditing, text, cursorPos, selectionAnchor: null } }
+      ? { textEditing: { ...s.textEditing, ...editedSpans(s.textEditing, text), text, cursorPos, selectionAnchor: null } }
       : {}),
   updateTextEditingSelection: (text, cursorPos, selectionAnchor) =>
     set((s) => s.textEditing
-      ? { textEditing: { ...s.textEditing, text, cursorPos, selectionAnchor } }
+      ? { textEditing: { ...s.textEditing, ...editedSpans(s.textEditing, text), text, cursorPos, selectionAnchor } }
       : {}),
+  setTextEditingColorSpans: (colorSpans) =>
+    set((s) => s.textEditing ? { textEditing: { ...s.textEditing, colorSpans } } : {}),
   updateTextEditingBounds: (bounds) =>
     // Moving/resizing the box drops any active selection.
     set((s) => s.textEditing

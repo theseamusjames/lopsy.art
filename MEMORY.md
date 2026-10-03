@@ -197,7 +197,13 @@ families*. So an italic-only family (Zapfino: fsSelection ITALIC, style
 name "Regular") or a condensed-only one (Impact: usWidthClass 3) silently
 renders in Inter. `text_gpu.rs` snaps the request to the family's
 available faces (`snap_face_attrs`) before shaping; keep that in mind
-before building `Attrs` anywhere else.
+before building `Attrs` anywhere else. The same filter applies to the
+per-glyph fallback chain, so `TextRendererState::new` registers the bundled
+Inter Regular again for every other style/stretch under the family
+"Lopsy Fallback" (`register_fallback_for_every_style`); without it ★ or →
+in italic or condensed text drew NO GLYPH boxes (#1157, #1164), and an
+italic request for a family not loaded yet panicked ("no default font
+found").
 
 Weight is effectively a filter too: `FontFallbackIter` only takes the
 requested family's face when `font_weight_diff == 0`, and family names
@@ -444,6 +450,9 @@ The Move tool's several-layers transform (`app/interactions/layer-transform.ts`,
 `dropFloat` ends it, so every site that bakes the Move float (history push,
 other tool's press, ⌘D, undo) bakes it too without knowing about it. The JS
 side (`live`) is only trusted while `hasLayerTransform(engine)` agrees.
+`commitLiveFloat` calls `commitLayerTransform()` *before* `commitMoveFloat()`:
+the latter runs `forgetLiveFloat()`, which forgets the session without
+baking, and the bake is what re-renders the session's text layers (#1165).
 
 ## GPU timing in Playwright, and comparing the live canvas with an export
 
@@ -460,3 +469,15 @@ canvas readback. Decode with
 `createImageBitmap(blob, { colorSpaceConversion: 'none' })` to get the stored
 values; live and export then agree within ±2 per channel
 (`e2e/effect-cache-invalidation.spec.ts`).
+
+## Running a layer-texture operation on a layer mask
+
+Filters (and anything else keyed on `layer_textures[id]`) can run on a
+layer's mask without a mask variant: `begin_mask_filter_target(id)` swaps the
+mask into the layer's texture slot and sets the descriptor's rect to the
+mask's origin/size, `end_mask_filter_target` folds the result to grey
+luminance, crops it back if a filter grew it, and swaps everything back
+(#1150). The JS side is `runOnFilterTarget` in
+`app/MenuBar/filter-target.ts`; the end call's wasm-bridge wrapper marks the
+mask GPU-dirty for history. Begin and end must bracket synchronous engine
+calls only — a composite frame in between would draw the mask as the layer.

@@ -27,6 +27,8 @@ const getLayerTextureDimensions = vi.fn(() => new Uint32Array([64, 64]));
 const liquifyInitDisplacement = vi.fn();
 const liquifyRender = vi.fn();
 const liquifyRelease = vi.fn();
+const beginMaskFilterTarget = vi.fn(() => true);
+const endMaskFilterTarget = vi.fn();
 
 vi.mock('../../engine-wasm/wasm-bridge', () => ({
   filterInvert,
@@ -43,6 +45,8 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   liquifyInitDisplacement,
   liquifyRender,
   liquifyRelease,
+  beginMaskFilterTarget,
+  endMaskFilterTarget,
 }));
 
 const readLayerCompressed = vi.fn(() => null);
@@ -53,8 +57,17 @@ vi.mock('../../engine-wasm/gpu-pixel-access', () => ({
 }));
 
 const flushLayerSync = vi.fn();
+const uploadLayerMaskIfChanged = vi.fn();
 vi.mock('../../engine-wasm/engine-sync', () => ({
   flushLayerSync,
+  uploadLayerMaskIfChanged,
+}));
+
+const scheduleMaskDataRefresh = vi.fn();
+const markMaskDataStale = vi.fn();
+vi.mock('../mask-data-sync', () => ({
+  scheduleMaskDataRefresh,
+  markMaskDataStale,
 }));
 
 const engine: { __engine: string } = { __engine: 'mock' };
@@ -86,7 +99,10 @@ const editorState = {
     width: 400,
     height: 300,
     activeLayerId: 'layer-1',
-    layers: [{ id: 'layer-1', type: 'raster', x: 125, y: 73, width: 110, height: 51 }],
+    layers: [{
+      id: 'layer-1', type: 'raster', x: 125, y: 73, width: 110, height: 51,
+      mask: null as { data: null; width: number; height: number } | null,
+    }],
   },
   dirtyLayerIds: new Set<string>(),
   pushHistory: vi.fn(),
@@ -115,6 +131,7 @@ const tiltShiftSession = {
   previewActive: true,
 };
 const uiState = {
+  maskMode: 'off' as 'off' | 'layerMask' | 'quickMask',
   liquify: liquifySession as ReturnType<() => typeof liquifySession> | null,
   tiltShift: tiltShiftSession as typeof tiltShiftSession | null,
   setLiquify: vi.fn(),
@@ -166,6 +183,13 @@ beforeEach(() => {
   editorState.notifyRender.mockClear();
   uiState.liquify = liquifySession;
   uiState.tiltShift = tiltShiftSession;
+  uiState.maskMode = 'off';
+  editorState.document.layers[0]!.mask = null;
+  beginMaskFilterTarget.mockClear();
+  endMaskFilterTarget.mockClear();
+  uploadLayerMaskIfChanged.mockClear();
+  scheduleMaskDataRefresh.mockClear();
+  markMaskDataStale.mockClear();
 });
 
 describe('#771 — filter-actions.ts reconciles JS bounds after each engine write', () => {
@@ -330,5 +354,63 @@ describe('#771 — liquify-actions.ts reconciles JS bounds after each engine wri
     expect(callOrder[0]).toBe('restore');
     expect(callOrder[1]).toBe('pushHistory');
     expect(callOrder[2]).toBe('liquifyRender');
+  });
+});
+
+describe('#1150 — in mask edit mode Filter commands write the layer mask', () => {
+  function enterMaskEditMode(): void {
+    editorState.document.layers[0]!.mask = { data: null, width: 2, height: 2 };
+    uiState.maskMode = 'layerMask';
+  }
+
+  it('Invert runs between begin/endMaskFilterTarget and refreshes the mask bytes', async () => {
+    enterMaskEditMode();
+    const { applyInvert } = await import('./filter-actions');
+    applyInvert();
+    expect(editorState.pushHistory).toHaveBeenCalledWith('Invert');
+    expect(uploadLayerMaskIfChanged).toHaveBeenCalledTimes(1);
+    expect(beginMaskFilterTarget).toHaveBeenCalledWith(engine, 'layer-1');
+    expect(filterInvert).toHaveBeenCalledWith(engine, 'layer-1');
+    expect(endMaskFilterTarget).toHaveBeenCalledWith(engine, 'layer-1');
+    const order = (fn: { mock: { invocationCallOrder: number[] } }) => fn.mock.invocationCallOrder[0]!;
+    expect(order(beginMaskFilterTarget)).toBeLessThan(order(filterInvert));
+    expect(order(filterInvert)).toBeLessThan(order(endMaskFilterTarget));
+    expect(scheduleMaskDataRefresh).toHaveBeenCalledWith('layer-1');
+    expect(clearJsPixelData).not.toHaveBeenCalled();
+    expect(syncLayerAfterFullSize).not.toHaveBeenCalled();
+  });
+
+  it('a dialog filter preview marks the mask stale and the commit refreshes it', async () => {
+    enterMaskEditMode();
+    const { beginFilterPreview, previewGenericFilter, applyGenericFilterWithPreview } = await import('./filter-actions');
+    beginFilterPreview();
+    previewGenericFilter('gaussian-blur', { radius: 5 });
+    expect(markMaskDataStale).toHaveBeenCalledWith('layer-1');
+    expect(scheduleMaskDataRefresh).not.toHaveBeenCalled();
+    applyGenericFilterWithPreview('gaussian-blur', { radius: 5 });
+    expect(scheduleMaskDataRefresh).toHaveBeenCalledWith('layer-1');
+    // Every engine call ran on the mask: begin/end are balanced.
+    expect(beginMaskFilterTarget.mock.calls.length).toBe(endMaskFilterTarget.mock.calls.length);
+    expect(beginMaskFilterTarget.mock.calls.length).toBeGreaterThanOrEqual(4);
+    expect(clearJsPixelData).not.toHaveBeenCalled();
+  });
+
+  it('without a mask on the active layer, filters write the layer as before', async () => {
+    uiState.maskMode = 'layerMask';
+    const { applyInvert } = await import('./filter-actions');
+    applyInvert();
+    expect(beginMaskFilterTarget).not.toHaveBeenCalled();
+    expect(filterInvert).toHaveBeenCalledWith(engine, 'layer-1');
+    expect(clearJsPixelData).toHaveBeenCalledWith('layer-1');
+  });
+
+  it('Liquify and Tilt-Shift do not start on a mask', async () => {
+    enterMaskEditMode();
+    const { openLiquify } = await import('./liquify-actions');
+    const { beginTiltShiftSession } = await import('./tilt-shift-actions');
+    openLiquify();
+    beginTiltShiftSession();
+    expect(saveFilterPreview).not.toHaveBeenCalled();
+    expect(filterTiltShiftBlur).not.toHaveBeenCalled();
   });
 });

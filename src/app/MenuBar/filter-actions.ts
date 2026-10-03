@@ -8,14 +8,20 @@ import {
   saveFilterPreview,
   restoreFilterPreview,
   clearFilterPreview,
+  type Engine,
 } from '../../engine-wasm/wasm-bridge';
 import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
-import { guardPixelWrite } from '../../layers/paint-target';
-import type { Layer } from '../../types';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
+import {
+  isFilteringMask,
+  markFilterTargetWritten,
+  resolveFilterTarget,
+  runOnFilterTarget,
+  type FilterTarget,
+} from './filter-target';
 
 export type FilterDialogId =
   | 'gaussian-blur'
@@ -49,18 +55,6 @@ export type FilterDialogId =
   | 'sunburst'
   | 'color-lut';
 
-function getActiveLayerId(): string | null {
-  return useEditorStore.getState().document.activeLayerId;
-}
-
-function getActiveLayer(): Layer | undefined {
-  const state = useEditorStore.getState();
-  const id = state.document.activeLayerId;
-  if (!id) return undefined;
-  return state.document.layers.find((l) => l.id === id);
-}
-
-
 export function getFilterDialogConfig(id: FilterDialogId): FilterDefinition | null {
   return filterRegistry[id] ?? null;
 }
@@ -68,27 +62,21 @@ export function getFilterDialogConfig(id: FilterDialogId): FilterDefinition | nu
 export function applyGenericFilter(id: FilterDialogId, values: Record<string, number>): void {
   const filter = filterRegistry[id];
   if (!filter) return;
-
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
-
-  if (!guardPixelWrite(getActiveLayer())) return;
-
+  const target = resolveFilterTarget();
+  if (!target) return;
   const engine = getEngine();
   if (!engine) return;
 
   useEditorStore.getState().pushHistory(filter.title);
-  filter.applyGpu(engine, activeId, values);
-  syncLayerAfterFullSize(engine, activeId);
-  clearJsPixelData(activeId);
+  runOnFilterTarget(engine, target, () => filter.applyGpu(engine, target.layerId, values));
+  markFilterTargetWritten(engine, target, true);
   useEditorStore.getState().notifyRender();
 }
 
-/** Begin a filter preview session — saves the current layer GPU texture. */
+/** Begin a filter preview session — saves the current layer (or mask) GPU texture. */
 export function beginFilterPreview(): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
-  if (!guardPixelWrite(getActiveLayer())) return;
+  const target = resolveFilterTarget();
+  if (!target) return;
   const engine = getEngine();
   if (!engine) return;
   // Ensure all layer data is synced to the GPU before saving the preview.
@@ -96,28 +84,29 @@ export function beginFilterPreview(): void {
   // has rendered since the last state change.
   const state = useEditorStore.getState();
   flushLayerSync(state);
-  saveFilterPreview(engine, activeId);
+  runOnFilterTarget(engine, target, () => saveFilterPreview(engine, target.layerId));
   // saveFilterPreview calls ensure_layer_full_size on the WASM side to
   // guarantee the preview snapshot is doc-sized. Reconcile JS bounds so a
   // subsequent syncLayers push does not clobber the engine's expanded
   // descriptor with the pre-filter x/y/width/height (#771).
-  syncLayerAfterFullSize(engine, activeId);
+  if (!target.isMask) syncLayerAfterFullSize(engine, target.layerId);
 }
 
 /** Apply a filter for preview without pushing history. */
 export function previewGenericFilter(id: FilterDialogId, values: Record<string, number>): void {
   const filter = filterRegistry[id];
   if (!filter) return;
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
-  if (!guardPixelWrite(getActiveLayer())) return;
+  const target = resolveFilterTarget();
+  if (!target) return;
   const engine = getEngine();
   if (!engine) return;
 
   // Restore original layer content before applying new preview
-  restoreFilterPreview(engine);
-  filter.applyGpu(engine, activeId, values);
-  clearJsPixelData(activeId);
+  runOnFilterTarget(engine, target, () => {
+    restoreFilterPreview(engine);
+    filter.applyGpu(engine, target.layerId, values);
+  });
+  markFilterTargetWritten(engine, target, false);
   useEditorStore.getState().notifyRender();
 }
 
@@ -125,12 +114,13 @@ export function previewGenericFilter(id: FilterDialogId, values: Record<string, 
 export function cancelFilterPreviewSession(): void {
   const engine = getEngine();
   if (!engine) return;
-  restoreFilterPreview(engine);
+  const activeId = useEditorStore.getState().document.activeLayerId;
+  const target: FilterTarget | null = activeId ? { layerId: activeId, isMask: isFilteringMask() } : null;
+  if (target) runOnFilterTarget(engine, target, () => restoreFilterPreview(engine));
+  else restoreFilterPreview(engine);
   clearFilterPreview(engine);
-  const activeId = getActiveLayerId();
-  if (activeId) {
-    clearJsPixelData(activeId);
-  }
+  if (target?.isMask) markFilterTargetWritten(engine, target, true);
+  else if (target) clearJsPixelData(target.layerId);
   useEditorStore.getState().notifyRender();
 }
 
@@ -138,77 +128,54 @@ export function cancelFilterPreviewSession(): void {
 export function applyGenericFilterWithPreview(id: FilterDialogId, values: Record<string, number>): void {
   const filter = filterRegistry[id];
   if (!filter) return;
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
-  if (!guardPixelWrite(getActiveLayer())) return;
+  const target = resolveFilterTarget();
+  if (!target) return;
   const engine = getEngine();
   if (!engine) return;
 
   // Snapshot the current GPU texture (the preview the user is looking at)
-  // so we can restore it after capturing history from the original.
-  const previewPixels = readLayerCompressed(activeId);
-
-  // Restore original so history captures the unfiltered state
-  restoreFilterPreview(engine);
+  // so we can restore it after capturing history from the original, then
+  // restore the original so history captures the unfiltered state.
+  let previewPixels: Uint8Array | null = null;
+  runOnFilterTarget(engine, target, () => {
+    previewPixels = readLayerCompressed(target.layerId);
+    restoreFilterPreview(engine);
+  });
   clearFilterPreview(engine);
 
   useEditorStore.getState().pushHistory(filter.title);
 
-  if (previewPixels) {
-    uploadCompressed(activeId, previewPixels);
-  } else {
-    filter.applyGpu(engine, activeId, values);
-  }
-  syncLayerAfterFullSize(engine, activeId);
+  runOnFilterTarget(engine, target, () => {
+    if (previewPixels) {
+      uploadCompressed(target.layerId, previewPixels);
+    } else {
+      filter.applyGpu(engine, target.layerId, values);
+    }
+  });
+  markFilterTargetWritten(engine, target, true);
+  useEditorStore.getState().notifyRender();
+}
 
-  clearJsPixelData(activeId);
+function applyInstantFilter(label: string, run: (engine: Engine, layerId: string) => void): void {
+  const target = resolveFilterTarget();
+  if (!target) return;
+  const engine = getEngine();
+  if (!engine) return;
+
+  useEditorStore.getState().pushHistory(label);
+  runOnFilterTarget(engine, target, () => run(engine, target.layerId));
+  markFilterTargetWritten(engine, target, true);
   useEditorStore.getState().notifyRender();
 }
 
 export function applyInvert(): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
-
-  if (!guardPixelWrite(getActiveLayer())) return;
-
-  const engine = getEngine();
-  if (!engine) return;
-
-  useEditorStore.getState().pushHistory('Invert');
-  filterInvert(engine, activeId);
-  syncLayerAfterFullSize(engine, activeId);
-  clearJsPixelData(activeId);
-  useEditorStore.getState().notifyRender();
+  applyInstantFilter('Invert', filterInvert);
 }
 
 export function applyDesaturate(): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
-
-  if (!guardPixelWrite(getActiveLayer())) return;
-
-  const engine = getEngine();
-  if (!engine) return;
-
-  useEditorStore.getState().pushHistory('Desaturate');
-  filterDesaturate(engine, activeId);
-  syncLayerAfterFullSize(engine, activeId);
-  clearJsPixelData(activeId);
-  useEditorStore.getState().notifyRender();
+  applyInstantFilter('Desaturate', filterDesaturate);
 }
 
 export function applyFindEdges(): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
-
-  if (!guardPixelWrite(getActiveLayer())) return;
-
-  const engine = getEngine();
-  if (!engine) return;
-
-  useEditorStore.getState().pushHistory('Find Edges');
-  filterFindEdges(engine, activeId);
-  syncLayerAfterFullSize(engine, activeId);
-  clearJsPixelData(activeId);
-  useEditorStore.getState().notifyRender();
+  applyInstantFilter('Find Edges', filterFindEdges);
 }

@@ -1,5 +1,6 @@
 import type { TextLayer, Layer, Point } from '../../types';
 import { frameContains, type TextFrame } from './text-transform';
+import { glyphBoxContains, type PlacedGlyphBox } from './path-text-geometry';
 
 export interface RenderedSize {
   width: number;
@@ -15,6 +16,12 @@ export type RenderedSizeLookup = (layerId: string) => RenderedSize | null;
 
 /** Looks up a text layer's layout frame (anchor, matrix, layout box), or null. */
 export type TextFrameLookup = (layer: TextLayer) => TextFrame | null;
+
+/**
+ * Looks up a path-bound text layer's glyph boxes, relative to the layer's
+ * `x` / `y`, or null when it has not been rendered.
+ */
+export type PathGlyphBoxesLookup = (layerId: string) => readonly PlacedGlyphBox[] | null;
 
 /** Slack around the rendered ink box so clicks on antialiased edges still hit. */
 const RENDERED_HIT_SLOP = 4;
@@ -60,6 +67,15 @@ function estimatedHitRect(layer: TextLayer): HitRect {
   return { left: layer.x, top: layer.y, right: layer.x + width, bottom: layer.y + height };
 }
 
+function pathGlyphsContain(
+  layer: TextLayer,
+  boxes: readonly PlacedGlyphBox[],
+  canvasPos: Point,
+): boolean {
+  const local = { x: canvasPos.x - layer.x, y: canvasPos.y - layer.y };
+  return boxes.some((box) => glyphBoxContains(box, local, RENDERED_HIT_SLOP));
+}
+
 function hasUsableSize(size: RenderedSize | null): size is RenderedSize {
   return !!size && size.width > 1 && size.height > 1;
 }
@@ -72,12 +88,17 @@ function hasUsableSize(size: RenderedSize | null): size is RenderedSize {
  * When `getRenderedSize` supplies the layer's texture size, the hit box is the
  * rendered glyph bounds. The line-box estimate used otherwise reaches roughly
  * 0.7em below capitals, which swallowed clicks meant to start new text (#989).
+ *
+ * Path-bound text with known glyph boxes is hit only on (or within the slop
+ * of) a glyph, so the empty space inside an arch or a circle of text stays
+ * free for new text (#1174).
  */
 export function hitTestTextLayer(
   layers: readonly Layer[],
   canvasPos: Point,
   getRenderedSize?: RenderedSizeLookup,
   getFrame?: TextFrameLookup,
+  getPathGlyphBoxes?: PathGlyphBoxesLookup,
 ): TextLayer | null {
   for (let i = layers.length - 1; i >= 0; i--) {
     const layer = layers[i]!;
@@ -87,6 +108,11 @@ export function hitTestTextLayer(
     const frame = layer.transform ? getFrame?.(layer) ?? null : null;
     if (frame) {
       if (frameContains(frame, canvasPos, RENDERED_HIT_SLOP)) return layer;
+      continue;
+    }
+    const glyphBoxes = layer.pathId ? getPathGlyphBoxes?.(layer.id) ?? null : null;
+    if (glyphBoxes) {
+      if (pathGlyphsContain(layer, glyphBoxes, canvasPos)) return layer;
       continue;
     }
     const size = getRenderedSize?.(layer.id) ?? null;

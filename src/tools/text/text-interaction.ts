@@ -6,6 +6,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { toDocumentColor } from '../../app/document-color';
 import { hitTestTextLayer } from './text-hit-test';
+import { getPathTextGlyphBoxes } from './path-text-hit-boxes';
 import { engineRenderedSize } from './text-geometry';
 import { createTextLayer } from '../../layers/layer-model';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
@@ -36,6 +37,7 @@ import {
   type LayerHistoryBefore,
 } from '../../app/store/layer-gpu-capture';
 import { wordAt } from './text-input';
+import { colorSpansProp, normalizeColorSpans } from './text-color-spans';
 import { extractFamilyName } from '../../utils/font-loader';
 
 const TEXT_DRAG_THRESHOLD = 4;
@@ -260,6 +262,7 @@ export function commitTextEditing(): void {
 
   const toolSettings = useToolSettingsStore.getState();
   const textColor = toDocumentColor(toolSettings.foregroundColor);
+  const colorSpans = normalizeColorSpans(editing.colorSpans, editing.text.length, textColor);
 
   const areaWidth = editing.bounds.width;
   let finalX = editing.bounds.x;
@@ -290,6 +293,7 @@ export function commitTextEditing(): void {
         fontWeight: text.fontWeight,
         fontStyle: text.fontStyle,
         color: [textColor.r / 255, textColor.g / 255, textColor.b / 255, textColor.a],
+        colorSpans: colorSpansProp(colorSpans),
         lineHeight: text.lineHeight,
         letterSpacing: text.letterSpacing,
         paragraphSpacing: text.paragraphSpacing,
@@ -345,6 +349,7 @@ export function commitTextEditing(): void {
     fontWeight: textForLayer.fontWeight,
     fontStyle: textForLayer.fontStyle,
     color: textColor,
+    colorSpans,
     textAlign: textForLayer.align,
     lineHeight: textForLayer.lineHeight,
     letterSpacing: textForLayer.letterSpacing,
@@ -437,6 +442,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     canvasPos,
     hitEngine ? engineRenderedSize(hitEngine) : undefined,
     hitEngine ? (layer) => measureTextFrame(hitEngine, layer) : undefined,
+    getPathTextGlyphBoxes,
   );
   if (hitLayer) {
     loadTextSettingsFromLayer(hitLayer);
@@ -505,6 +511,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
       isNew: false,
       originalVisible: hitLayer.visible,
       matrix,
+      colorSpans: hitLayer.colorSpans ?? [],
     };
     beginEditSession(editingState, hitLayer);
     editorState.notifyRender();

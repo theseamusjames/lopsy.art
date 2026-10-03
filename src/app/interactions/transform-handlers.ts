@@ -36,6 +36,7 @@ import { growFloatToCover } from './float-growth';
 import { cancelPrefloat } from './prefloat';
 import { claimLiveFloat, commitLiveFloat, isLiveFloatCurrent, withLiveFloatKept } from './live-float';
 import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
+import { INITIAL_INTERACTION_STATE } from './interaction-types';
 import type { Point } from '../../types';
 import {
   createRectSelection,
@@ -48,6 +49,7 @@ import {
   beginLayerTransformSession,
   getLayerTransformBox,
   isLayerTransformCurrent,
+  refuseTextInLayerTransform,
   renderLayerTransform,
 } from './layer-transform';
 
@@ -241,6 +243,11 @@ function handleLayerTransformDown(ctx: InteractionContext): InteractionState | n
   const editorState = useEditorStore.getState();
   const hit = hitTestTransformHandle(canvasPos, box, editorState.viewport.zoom);
   if (!hit) return null;
+
+  // A refused grab still claims the press, so it can't fall through to a
+  // Move drag of the layers.
+  const isDistorting = (box.mode === 'distort' || box.mode === 'perspective') && isScaleHandle(hit);
+  if (refuseTextInLayerTransform(isDistorting)) return { ...INITIAL_INTERACTION_STATE };
 
   const startAngle = isRotateHandle(hit) ? computeRotation(canvasPos, box) - box.rotation : 0;
 
