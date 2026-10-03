@@ -335,22 +335,8 @@ pub fn filter_bloom(
     }
     engine.inner.draw_fullscreen_quad();
 
-    // Copy scratch A → layer texture
-    let scratch_a_tex = engine.inner.texture_pool.get(engine.inner.scratch_texture_a).cloned();
-    engine.inner.render_to_texture(&layer_tex, w as i32, h as i32, |eng| {
-        let gl = &eng.gl;
-        gl.use_program(Some(&eng.shaders.blit.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(s) = &scratch_a_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-        }
-        if let Some(loc) = eng.shaders.blit.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        eng.draw_fullscreen_quad();
-    });
-
-    engine.inner.mark_layer_dirty(layer_id);
+    // Bloomed result is in scratch A; confine it to the selection (#1176).
+    filter_gpu::commit_scratch_a_to_layer(&mut engine.inner, layer_id);
 }
 
 #[wasm_bindgen(js_name = "filterVoronoi")]

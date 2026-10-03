@@ -1286,7 +1286,7 @@ Most filters open the same generic **Filter Dialog** — a 380 px floating modal
 
 ### What every filter does to the layer
 
-Independent of which dialog (or none) fronts it, a filter reaches the GPU through one of two helpers in `filter_gpu.rs` — `apply_filter` for the single-pass majority, `apply_separable_blur` for the two-pass ones (Gaussian Blur, Box Blur, Unsharp Mask). Both do the same two things first, and both are visible in the result.
+Independent of which dialog (or none) fronts it, a filter reaches the GPU through one of two helpers in `filter_gpu.rs` — `apply_filter` for the single-pass majority, `apply_separable_blur` for the two-pass ones (Gaussian Blur, Box Blur). Both do the same two things first, and both are visible in the result. Unsharp Mask and Bloom chain their own blur / sharpen / combine passes, but hand their result to the same selection blend (`commit_scratch_a_to_layer`).
 
 - **Filters are confined to the active selection, and feather with it.** The layer is copied aside first, the filter runs across the whole texture into a scratch buffer, and the two are recombined per pixel as `mix(original, filtered, mask)` against the selection mask. Because that is a linear blend on the mask's own value rather than a cut-out, **a feathered or partially-painted selection yields a partially-applied filter** — a 50 %-grey mask region comes back half-filtered, and a feathered marquee edge fades the effect out across the falloff rather than ending it on a hard line. With no selection active the filtered scratch is simply blitted back over the layer. **Two things opt out.** Color-mode conversion deliberately does — it is the only caller of `apply_filter_full_layer`, on the grounds that a partial conversion would strand half a layer in the old color space. **Liquify simply doesn't participate**: its render path never touches the selection mask, so a Liquify session warps the entire layer even with a marquee live. Mesh Warp, which does go through `apply_filter`, is the opposite case — it honors the mask on top of already confining its grid to the selection's bounding box.
 - **A filter grows the layer to at least document size.** `ensure_layer_full_size` runs first, so a layer texture smaller than the scratch never makes the filter sample the scratch's unwritten region. The margin it adds is transparent, and for an edit-in-place filter (blur, adjust, sharpen) nothing looks different.
@@ -1313,6 +1313,7 @@ Independent of which dialog (or none) fronts it, a filter reaches the GPU throug
 
 ### Sharpen
 - **Unsharp Mask**: radius 1 - 50 px (auto-scales with document size), amount 0.1 - 5, threshold 0 - 255
+  - **Confined to the selection (#1176).** Unsharp Mask runs its own Gaussian and sharpen passes instead of going through `apply_filter`, and it used to blit the sharpened result straight over the layer, so a marquee did nothing and the whole layer was sharpened. Bloom had the same bypass. Both now mix their result with the original through the selection mask like every other filter.
 
 ### Color
 - **Brightness / Contrast**: -100 to +100 each

@@ -107,6 +107,47 @@ fn copy_layer_to_scratch(
     engine.draw_fullscreen_quad();
 }
 
+/// Write a filter result that a multi-pass filter left in scratch A back
+/// into the layer. With a selection active the untouched layer is copied
+/// into scratch B and the two are mixed through the selection mask, as
+/// `apply_filter` does; otherwise scratch A is blitted over the layer.
+/// Scratch B is overwritten, so callers must be done with it.
+pub(crate) fn commit_scratch_a_to_layer(engine: &mut EngineInner, layer_id: &str) {
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    let layer_tex = match engine.texture_pool.get(tex_handle) {
+        Some(t) => t.clone(),
+        None => return,
+    };
+
+    if engine.selection_mask_texture.is_some() {
+        let scratch_fbo_b = engine.scratch_fbo_b;
+        copy_layer_to_scratch(engine, layer_id, scratch_fbo_b);
+        let scratch_a = engine.scratch_texture_a;
+        let scratch_b = engine.scratch_texture_b;
+        blend_with_selection_mask(engine, layer_id, scratch_a, scratch_b);
+    } else {
+        let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+            let gl = &engine.gl;
+            gl.use_program(Some(&engine.shaders.blit.program));
+            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            if let Some(t) = &scratch_tex {
+                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
+            }
+            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+                gl.uniform1i(Some(&loc), 0);
+            }
+            engine.draw_fullscreen_quad();
+        });
+    }
+
+    engine.mark_layer_dirty(layer_id);
+}
+
 /// Apply a shader program to a layer's texture (read from layer, render to scratch, copy back).
 /// The `set_uniforms` closure is called after the shader is bound so you can set custom uniforms.
 ///
