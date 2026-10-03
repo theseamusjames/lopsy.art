@@ -2039,8 +2039,39 @@ fn set_adjustment_uniforms(
     adj: &crate::engine::ImageAdjustmentState,
     brightness: f32,
 ) {
-    let shader = &engine.shaders.adjustments;
-    let gl = &engine.gl;
+    set_adjustment_value_uniforms(&engine.gl, &engine.shaders.adjustments, adj, brightness);
+    bind_adjustment_luts(engine, adj);
+}
+
+/// Prepare the bound adjustments program for a one-off use outside the
+/// compositor (the Brightness / Contrast filter). Uniforms are per-program
+/// state that survives between draws, so everything the last composite
+/// frame set — Gradient Map, Curves, Levels, Hue/Sat, … — is reset to the
+/// identity here, from the same list the compositor writes, before the
+/// caller's brightness and contrast are applied (#1163). The unused LUT
+/// samplers are pointed at unit 0, the source texture, so none can alias
+/// the render target.
+pub(crate) fn set_standalone_adjustment_uniforms(
+    gl: &WebGl2RenderingContext,
+    shader: &crate::gpu::shader::ShaderProgram,
+    brightness: f32,
+    contrast: f32,
+) {
+    let adj = crate::engine::ImageAdjustmentState { contrast, ..Default::default() };
+    set_adjustment_value_uniforms(gl, shader, &adj, brightness);
+    for name in ["u_curveLut", "u_levelsLut", "u_gradientLut"] {
+        if let Some(loc) = shader.location(gl, name) { gl.uniform1i(Some(&loc), 0); }
+    }
+}
+
+/// Every non-sampler uniform of `adjustments.glsl`, including the
+/// `u_has*` LUT flags, derived from `adj`.
+fn set_adjustment_value_uniforms(
+    gl: &WebGl2RenderingContext,
+    shader: &crate::gpu::shader::ShaderProgram,
+    adj: &crate::engine::ImageAdjustmentState,
+    brightness: f32,
+) {
     if let Some(loc) = shader.location(gl, "u_brightness") { gl.uniform1f(Some(&loc), brightness); }
     if let Some(loc) = shader.location(gl, "u_contrast")   { gl.uniform1f(Some(&loc), adj.contrast / 100.0); }
     if let Some(loc) = shader.location(gl, "u_exposure")   { gl.uniform1f(Some(&loc), adj.exposure); }
@@ -2086,6 +2117,17 @@ fn set_adjustment_uniforms(
     if let Some(loc) = shader.location(gl, "u_cm_enabled") { gl.uniform1f(Some(&loc), if adj.cm_enabled { 1.0 } else { 0.0 }); }
     // Invert
     if let Some(loc) = shader.location(gl, "u_invert") { gl.uniform1f(Some(&loc), if adj.invert { 1.0 } else { 0.0 }); }
+    let has_levels = adj.has_levels && adj.levels_texture.is_some();
+    if let Some(loc) = shader.location(gl, "u_hasLevels") { gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 }); }
+    let has_curves = adj.has_curves && adj.curves_texture.is_some();
+    if let Some(loc) = shader.location(gl, "u_hasCurves") { gl.uniform1f(Some(&loc), if has_curves { 1.0 } else { 0.0 }); }
+    let has_gradient = adj.has_gradient_map && adj.gradient_map_texture.is_some();
+    if let Some(loc) = shader.location(gl, "u_hasGradientMap") { gl.uniform1f(Some(&loc), if has_gradient { 1.0 } else { 0.0 }); }
+}
+
+/// Bind the Curves / Levels / Gradient Map LUTs that `adj` enables.
+fn bind_adjustment_luts(engine: &mut EngineInner, adj: &crate::engine::ImageAdjustmentState) {
+    let shader = &engine.shaders.adjustments;
     // Levels LUT — bound to TEXTURE2
     let has_levels = adj.has_levels && adj.levels_texture.is_some();
     if has_levels {
@@ -2096,9 +2138,6 @@ fn set_adjustment_uniforms(
             if let Some(loc) = shader.location(&engine.gl, "u_levelsLut") { engine.gl.uniform1i(Some(&loc), 2); }
             engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         }
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasLevels") {
-        engine.gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 });
     }
     // Curves LUT — bound to TEXTURE1
     let has_curves = adj.has_curves && adj.curves_texture.is_some();
@@ -2111,9 +2150,6 @@ fn set_adjustment_uniforms(
             engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         }
     }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasCurves") {
-        engine.gl.uniform1f(Some(&loc), if has_curves { 1.0 } else { 0.0 });
-    }
     // Gradient Map LUT — bound to TEXTURE3
     let has_gradient = adj.has_gradient_map && adj.gradient_map_texture.is_some();
     if has_gradient {
@@ -2124,9 +2160,6 @@ fn set_adjustment_uniforms(
             if let Some(loc) = shader.location(&engine.gl, "u_gradientLut") { engine.gl.uniform1i(Some(&loc), 3); }
             engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
         }
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasGradientMap") {
-        engine.gl.uniform1f(Some(&loc), if has_gradient { 1.0 } else { 0.0 });
     }
 }
 

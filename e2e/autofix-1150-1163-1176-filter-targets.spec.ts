@@ -184,4 +184,60 @@ test.describe('Filter targets: selection, adjustment state, layer mask', () => {
     expect(changed.inside).toBeGreaterThan(192 * 512 * 0.5);
     expect(changed.outside).toBe(0);
   });
+
+  test('#1163 Brightness/Contrast ignores another group\'s Gradient Map', async ({ page }) => {
+    await createDocument(page, 600, 400, false);
+    await page.waitForTimeout(300);
+    const layer1 = (await getEditorState(page)).document.activeLayerId!;
+    await setForegroundColor(page, 128, 128, 128);
+    await dragMarquee(page, 0, 0, 300, 400);
+    await editFill(page);
+    await deselect(page);
+
+    await page.locator('[aria-label="New Group"]').click();
+    await page.waitForTimeout(150);
+    const groupId = (await getEditorState(page)).document.activeLayerId!;
+    const inner = await addLayer(page);
+    await setActiveLayer(page, inner);
+    await dragMarquee(page, 300, 0, 600, 400);
+    await editFill(page);
+    await deselect(page);
+
+    await setActiveLayer(page, groupId);
+    await page.locator(`[data-layer-id="${groupId}"]`).locator('button[aria-label*="effects"]').click();
+    const drawer = page.getByTestId('effects-drawer');
+    await expect(drawer).toBeVisible();
+    await page.locator('[aria-label="Add Adjustment"]').click();
+    const item = page.getByRole('menuitem', { name: 'Gradient Map', exact: true });
+    await item.waitFor({ state: 'visible', timeout: 3000 });
+    await item.click();
+    const hex = drawer.getByRole('textbox', { name: 'Hex color', exact: true });
+    await hex.scrollIntoViewIfNeeded();
+    await drawer.getByTestId('gradient-stop-0').click();
+    await hex.fill('300000');
+    await hex.press('Enter');
+    await drawer.getByTestId('gradient-stop-1').click();
+    await hex.fill('FFD000');
+    await hex.press('Enter');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+
+    // The group's right half is tinted by the gradient map; Layer 1 isn't.
+    const tinted = await compositeAt(page, 450, 200);
+    expect(tinted[0] - tinted[2]).toBeGreaterThan(60);
+    expectNear(await compositeAt(page, 150, 200), [128, 128, 128]);
+
+    await setActiveLayer(page, layer1);
+    await applyFilter(page, 'Brightness/Contrast...', { Brightness: 10, Contrast: 0 });
+    await page.screenshot({ path: 'e2e/screenshots/brightness-contrast-gradient-map-1163.png' });
+
+    // Brightness +10 lifts mid-grey evenly; it stays grey (no gold tint).
+    const px = await getPixelAt(page, 150, 200, layer1);
+    expect(Math.abs(px.r - px.g)).toBeLessThanOrEqual(2);
+    expect(Math.abs(px.g - px.b)).toBeLessThanOrEqual(2);
+    expect(px.r).toBeGreaterThan(135);
+    expect(px.r).toBeLessThan(170);
+    const shown = await compositeAt(page, 150, 200);
+    expect(Math.abs(shown[0] - shown[2])).toBeLessThanOrEqual(3);
+  });
 });
