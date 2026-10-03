@@ -141,7 +141,7 @@ export function renderTextOnPath(
     glyphWidths.push(metrics.width + letterSpacing);
   }
 
-  const placements = placeTextOnPath(text, glyphWidths, anchors, pathClosed, fontSize);
+  const placements = placeTextOnPath(text, glyphWidths, anchors, pathClosed, fontSize, layer.textAlign);
   if (placements.length === 0) return null;
 
   const bounds = computeBounds(placements, glyphWidths, fontSize, docWidth, docHeight);

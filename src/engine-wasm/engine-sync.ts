@@ -1040,6 +1040,7 @@ export function syncPathTextLayers(
       layer.color.b,
       layer.color.a,
       layer.letterSpacing,
+      layer.textAlign,
       path.closed,
       anchorSummary,
       docWidth,
