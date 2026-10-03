@@ -31,45 +31,56 @@ void main() {
     vec2 cellIdx = floor(scaledUV);
     vec2 cellFrac = fract(scaledUV);
 
+    // Pass 1: nearest seed (each seed is jittered inside its own cell).
     float minDist = 1e10;
-    float secondDist = 1e10;
-    vec2 closestCenter = vec2(0.0);
-    vec2 closestCellIdx = vec2(0.0);
-
-    // Search 3x3 neighbourhood
+    vec2 nearestOffset = vec2(0.0);
+    vec2 nearestCell = vec2(0.0);
     for (int y = -1; y <= 1; y++) {
         for (int x = -1; x <= 1; x++) {
             vec2 neighbor = vec2(float(x), float(y));
-            vec2 point = hash2(cellIdx + neighbor, u_seed);
-            vec2 diff = neighbor + point - cellFrac;
-            float d = dot(diff, diff);
-
+            vec2 offset = neighbor + hash2(cellIdx + neighbor, u_seed) - cellFrac;
+            float d = dot(offset, offset);
             if (d < minDist) {
-                secondDist = minDist;
                 minDist = d;
-                closestCenter = cellIdx + neighbor + point;
-                closestCellIdx = cellIdx + neighbor;
-            } else if (d < secondDist) {
-                secondDist = d;
+                nearestOffset = offset;
+                nearestCell = neighbor;
             }
         }
     }
 
-    minDist = sqrt(minDist);
-    secondDist = sqrt(secondDist);
+    // Pass 2 (#1171): true distance to the cell boundary — the distance to
+    // the nearest bisector between the nearest seed and each neighbouring
+    // seed. F2 - F1 (used before) only equals twice that distance on the
+    // line joining the two seeds; away from it the gap shrinks, so edges
+    // flared into wide dark wedges near short borders. The neighbours that
+    // can share a border with the nearest seed lie within a 5x5 block
+    // centred on its cell.
+    float edgeDist = 1e10;
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
+            vec2 neighbor = nearestCell + vec2(float(x), float(y));
+            vec2 offset = neighbor + hash2(cellIdx + neighbor, u_seed) - cellFrac;
+            vec2 between = offset - nearestOffset;
+            if (dot(between, between) < 1e-8) {
+                continue;
+            }
+            edgeDist = min(edgeDist, dot(0.5 * (nearestOffset + offset), normalize(between)));
+        }
+    }
 
     // Sample image color at the Voronoi cell center
+    vec2 closestCell = cellIdx + nearestCell;
+    vec2 closestCenter = closestCell + hash2(closestCell, u_seed);
     vec2 sampleUV = closestCenter / (u_cellCount * vec2(aspect, 1.0));
     sampleUV = clamp(sampleUV, vec2(0.0), vec2(1.0));
     vec4 cellColor = texture(u_tex, sampleUV);
 
-    // Compute edge factor from distance to cell boundary
-    float edgeDist = secondDist - minDist;
     // #936: one cell unit spans height / cellCount px (scaledUV scales the
     // short axis by cellCount), so the px → cell-unit conversion must use
     // the same side. Dividing by the long side thinned edges by the aspect.
     float edgePx = u_edgeWidth / texSize.y * u_cellCount;
-    float edge = 1.0 - smoothstep(0.0, max(edgePx, 0.001), edgeDist);
+    // The line is centred on the boundary, Edge Width px across in total.
+    float edge = 1.0 - smoothstep(0.0, max(edgePx, 0.001), 2.0 * edgeDist);
 
     vec3 edgeColor = vec3(u_edgeR, u_edgeG, u_edgeB);
     vec3 finalColor = mix(cellColor.rgb, edgeColor, edge);
