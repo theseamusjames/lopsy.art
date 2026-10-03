@@ -197,7 +197,13 @@ families*. So an italic-only family (Zapfino: fsSelection ITALIC, style
 name "Regular") or a condensed-only one (Impact: usWidthClass 3) silently
 renders in Inter. `text_gpu.rs` snaps the request to the family's
 available faces (`snap_face_attrs`) before shaping; keep that in mind
-before building `Attrs` anywhere else.
+before building `Attrs` anywhere else. The same filter applies to the
+per-glyph fallback chain, so `TextRendererState::new` registers the bundled
+Inter Regular again for every other style/stretch under the family
+"Lopsy Fallback" (`register_fallback_for_every_style`); without it ★ or →
+in italic or condensed text drew NO GLYPH boxes (#1157, #1164), and an
+italic request for a family not loaded yet panicked ("no default font
+found").
 
 Weight is effectively a filter too: `FontFallbackIter` only takes the
 requested family's face when `font_weight_diff == 0`, and family names

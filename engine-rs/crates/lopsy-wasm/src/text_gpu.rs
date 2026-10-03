@@ -241,6 +241,7 @@ impl TextRendererState {
         db.load_font_data(
             include_bytes!("fonts/Inter-Regular.ttf").to_vec(),
         );
+        register_fallback_for_every_style(&mut db);
         let font_system = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
         Self {
             font_system,
@@ -1294,6 +1295,45 @@ pub fn snap_weight(requested: u16, available: &[u16]) -> u16 {
         .unwrap_or(requested)
 }
 
+/// Family name of the bundled fallback face's style/stretch aliases. Distinct
+/// from "Inter" so a request for Inter itself (whose real italic may be
+/// loaded later) never matches an alias.
+const STYLE_FALLBACK_FAMILY: &str = "Lopsy Fallback";
+
+const ALL_STRETCHES: [Stretch; 9] = [
+    Stretch::UltraCondensed,
+    Stretch::ExtraCondensed,
+    Stretch::Condensed,
+    Stretch::SemiCondensed,
+    Stretch::Normal,
+    Stretch::SemiExpanded,
+    Stretch::Expanded,
+    Stretch::ExtraExpanded,
+    Stretch::UltraExpanded,
+];
+
+/// Per-glyph fallback only walks faces whose style and stretch equal the
+/// request (see [`snap_face_attrs`]), so a glyph missing from an italic or
+/// condensed face found nothing but the bundled upright, normal-width Inter
+/// and drew `.notdef` (#1157, #1164). Register the bundled face once more for
+/// every other style/stretch so each request has a fallback; the glyphs it
+/// supplies are drawn upright. The aliases share the face's bytes.
+fn register_fallback_for_every_style(db: &mut fontdb::Database) {
+    let Some(base) = db.faces().next().cloned() else { return };
+    for style in [Style::Normal, Style::Italic, Style::Oblique] {
+        for stretch in ALL_STRETCHES {
+            if style == base.style && stretch == base.stretch {
+                continue;
+            }
+            let mut info = base.clone();
+            info.families = vec![(STYLE_FALLBACK_FAMILY.to_string(), fontdb::Language::English_UnitedStates)];
+            info.style = style;
+            info.stretch = stretch;
+            db.push_face_info(info);
+        }
+    }
+}
+
 /// cosmic-text only considers faces whose style *and* stretch equal the
 /// request exactly, and it has no cross-style fallback — so a family that
 /// ships only italic faces (Zapfino flags its single face italic) or only
@@ -2127,5 +2167,123 @@ mod tests {
         assert_eq!((w, h), (256, full_h.min(256)));
         assert_eq!((ox2, oy2), (ox, oy), "cropping must keep the offsets callers anchor by");
         assert_eq!(pixels.len(), (w * h * 4) as usize);
+    }
+
+    /// Re-register every loaded IM Fell DW Pica SC face as `style`/`stretch`,
+    /// standing in for a family whose static files declare an italic or a
+    /// condensed face (Old Standard TT italic, Barlow Condensed).
+    fn load_im_fell_as(renderer: &mut TextRendererState, style: Style, stretch: Stretch) {
+        renderer.load_font_as(&im_fell_sc(), Some("IM Fell DW Pica SC")).expect("loads");
+        let db = renderer.font_system.db_mut();
+        let ids: Vec<fontdb::ID> = db
+            .faces()
+            .filter(|f| f.families.iter().any(|(n, _)| n == "IM Fell DW Pica SC"))
+            .map(|f| f.id)
+            .collect();
+        for id in ids {
+            let mut info = db.face(id).expect("face").clone();
+            info.style = style;
+            info.stretch = stretch;
+            db.remove_face(id);
+            db.push_face_info(info);
+        }
+    }
+
+    fn styled_props(text: &str, family: &str, style: &str, weight: u16) -> String {
+        family_props(text, family, weight).replace("\"fontStyle\":\"normal\"", &format!("\"fontStyle\":\"{style}\""))
+    }
+
+    /// Glyphs shaped as `.notdef` (glyph 0) — what draws a NO GLYPH box.
+    fn notdef_glyphs(renderer: &TextRendererState, layer_id: &str) -> usize {
+        let state = renderer.text_layers.get(layer_id).expect("layer");
+        state
+            .buffer
+            .layout_runs()
+            .flat_map(|run| run.glyphs.iter())
+            .filter(|g| g.glyph_id == 0)
+            .count()
+    }
+
+    #[test]
+    fn glyphs_missing_from_an_upright_face_fall_back() {
+        let mut renderer = make_renderer();
+        load_im_fell_as(&mut renderer, Style::Normal, Stretch::Normal);
+        renderer
+            .set_text_content("t", &styled_props("A\u{2605}\u{2192}", "IM Fell DW Pica SC", "normal", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "t"), 0);
+    }
+
+    #[test]
+    fn glyphs_missing_from_an_italic_face_fall_back_upright() {
+        let mut renderer = make_renderer();
+        load_im_fell_as(&mut renderer, Style::Italic, Stretch::Normal);
+        for weight in [400u16, 700] {
+            let id = format!("i{weight}");
+            renderer
+                .set_text_content(&id, &styled_props("A\u{2605}\u{2192}", "IM Fell DW Pica SC", "italic", weight))
+                .expect("ok");
+            assert_eq!(notdef_glyphs(&renderer, &id), 0, "weight {weight}");
+            let used = faces_used(&renderer, &id);
+            assert!(used[0].0.eq_ignore_ascii_case("IM Fell DW Pica SC"), "A keeps the family: {used:?}");
+            assert!(used.len() > 1, "the star and arrow come from the fallback face: {used:?}");
+        }
+    }
+
+    #[test]
+    fn glyphs_missing_from_a_condensed_face_fall_back() {
+        let mut renderer = make_renderer();
+        load_im_fell_as(&mut renderer, Style::Normal, Stretch::Condensed);
+        renderer
+            .set_text_content("c", &styled_props("A\u{2153}\u{2605}\u{2192}", "IM Fell DW Pica SC", "normal", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "c"), 0);
+    }
+
+    /// Load a css2 latin subset and return the (style, stretch) it declares.
+    fn load_css2_fixture(renderer: &mut TextRendererState, woff2: &[u8], family: &str) -> (Style, Stretch) {
+        let ttf = crate::woff2::decode_woff2(woff2).expect("decodes");
+        renderer.load_font_as(&ttf, Some(family)).expect("loads");
+        let face = renderer.family_faces(family).next().expect("face");
+        (face.style, face.stretch)
+    }
+
+    #[test]
+    fn im_fell_english_italic_falls_back_for_symbols() {
+        let mut renderer = make_renderer();
+        let attrs = load_css2_fixture(
+            &mut renderer,
+            include_bytes!("../tests/fixtures/IMFellEnglish-Italic-latin.woff2"),
+            "IM Fell English",
+        );
+        assert_eq!(attrs, (Style::Italic, Stretch::Normal), "fixture must be an italic face");
+        renderer
+            .set_text_content("t", &styled_props("Fell \u{2605}\u{2192}", "IM Fell English", "italic", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "t"), 0);
+    }
+
+    #[test]
+    fn barlow_condensed_falls_back_for_symbols() {
+        let mut renderer = make_renderer();
+        let attrs = load_css2_fixture(
+            &mut renderer,
+            include_bytes!("../tests/fixtures/BarlowCondensed-latin.woff2"),
+            "Barlow Condensed",
+        );
+        assert_eq!(attrs, (Style::Normal, Stretch::Condensed), "fixture must be a condensed face");
+        renderer
+            .set_text_content("t", &styled_props("Barlow \u{2153}\u{2605}\u{2192}", "Barlow Condensed", "normal", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "t"), 0);
+    }
+
+    #[test]
+    fn italic_text_in_a_family_that_is_not_loaded_yet_still_shapes() {
+        let mut renderer = make_renderer();
+        renderer
+            .set_text_content("u", &styled_props("Hi \u{2605}", "Not Loaded Yet", "italic", 400))
+            .expect("ok");
+        assert_eq!(notdef_glyphs(&renderer, "u"), 0);
     }
 }
