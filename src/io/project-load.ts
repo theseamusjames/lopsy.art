@@ -17,6 +17,7 @@ import type { Color } from '../types/color';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
 import { FORMAT_VERSION, type LopsyManifest, type SerializedLayer } from './project-save';
 import { effectsForFormatVersion, parseStoredEffects } from './layer-effects-format';
+import { parseStoredColorSpans } from '../tools/text/text-color-spans';
 
 const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LOPSY\0"
 const SUPPORTED_VERSION = FORMAT_VERSION;
@@ -94,6 +95,7 @@ export function deserializeLayer(s: SerializedLayer, formatVersion: number = SUP
     return layer;
   }
   if (s.type === 'text') {
+    const colorSpans = parseStoredColorSpans(s.colorSpans);
     const layer: TextLayer = {
       ...base,
       type: 'text',
@@ -103,6 +105,7 @@ export function deserializeLayer(s: SerializedLayer, formatVersion: number = SUP
       fontWeight: s.fontWeight ?? 400,
       fontStyle: (s.fontStyle as TextLayer['fontStyle']) ?? 'normal',
       color: (s.color as Color) ?? { r: 0, g: 0, b: 0, a: 1 },
+      ...(colorSpans && { colorSpans }),
       lineHeight: s.lineHeight ?? 1.4,
       letterSpacing: s.letterSpacing ?? 0,
       paragraphSpacing: s.paragraphSpacing ?? 0,

@@ -399,3 +399,22 @@ export function applyTextWeight(weight: number): void {
     );
   });
 }
+
+/**
+ * Apply a property patch that has no tool-setting counterpart (e.g. text
+ * colour, #1154) to the selected committed text layer and re-render it,
+ * coalesced while a grouped edit is open. Does NOT push history — call
+ * {@link beginTextLayerHistory} first. Returns false when no committed text
+ * layer is selected (or one is being edited).
+ */
+export function applyCommittedTextLayerPatch(patch: Partial<TextLayer>): boolean {
+  const layer = selectedCommittedTextLayer();
+  if (!layer) return false;
+  useEditorStore.getState().updateTextLayerProperties(layer.id, patch);
+  if (dragAnchor && dragAnchor.layerId === layer.id) {
+    rerenderCoalesced(layer.id);
+    return true;
+  }
+  rerenderLayer(layer, { ...layer, ...patch } as TextLayer);
+  return true;
+}

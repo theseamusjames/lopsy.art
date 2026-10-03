@@ -76,6 +76,7 @@ export interface SerializedLayer {
   readonly fontWeight?: number;
   readonly fontStyle?: string;
   readonly color?: unknown;
+  readonly colorSpans?: unknown;
   readonly lineHeight?: number;
   readonly letterSpacing?: number;
   readonly paragraphSpacing?: number;
@@ -156,6 +157,7 @@ export function serializeLayer(
       fontWeight: layer.fontWeight,
       fontStyle: layer.fontStyle,
       color: layer.color,
+      ...(layer.colorSpans?.length ? { colorSpans: layer.colorSpans } : {}),
       lineHeight: layer.lineHeight,
       letterSpacing: layer.letterSpacing,
       paragraphSpacing: layer.paragraphSpacing,

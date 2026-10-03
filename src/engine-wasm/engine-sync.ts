@@ -104,6 +104,7 @@ import type { PathAnchor, TextEditingState, ChannelVisibility } from '../app/ui-
 import type { SelectionData } from '../app/store/types';
 import type { BrushTipData, BrushTextureData, BrushTextureBlendMode, SubBrush } from '../types/brush';
 import type { Color } from '../types';
+import { colorSpansProp } from '../tools/text/text-color-spans';
 import type { TextLayer } from '../types/layers';
 import type { Point } from '../types';
 import {
@@ -1020,9 +1021,9 @@ export function syncPathTextLayers(
     if (!path) continue;
 
     // Use live editing text if this layer is being edited
-    const liveText = (textEditing && textEditing.layerId === layer.id)
-      ? textEditing.text
-      : layer.text;
+    const isEditing = textEditing !== null && textEditing.layerId === layer.id;
+    const liveText = isEditing ? textEditing.text : layer.text;
+    const liveSpans = isEditing ? textEditing.colorSpans : layer.colorSpans;
 
     // Build a cheap cache key from layer content + path anchors + handles
     const anchorSummary = path.anchors.map((a) => {
@@ -1040,6 +1041,7 @@ export function syncPathTextLayers(
       layer.color.g,
       layer.color.b,
       layer.color.a,
+      JSON.stringify(liveSpans ?? []),
       layer.letterSpacing,
       layer.textAlign,
       path.closed,
@@ -1050,8 +1052,8 @@ export function syncPathTextLayers(
 
     if (tracked.pathTextKeys.get(layer.id) === key) continue;
 
-    const layerWithLiveText = liveText !== layer.text
-      ? { ...layer, text: liveText }
+    const layerWithLiveText = liveText !== layer.text || liveSpans !== layer.colorSpans
+      ? { ...layer, text: liveText, colorSpans: liveSpans }
       : layer;
     const result = renderTextOnPath(layerWithLiveText, path.anchors, path.closed, docWidth, docHeight);
     if (result) {
@@ -1129,6 +1131,7 @@ export function syncTextLayers(
     fontWeight,
     fontStyle,
     color: [color.r / 255, color.g / 255, color.b / 255, color.a],
+    colorSpans: colorSpansProp(textEditing.colorSpans),
     lineHeight,
     letterSpacing,
     paragraphSpacing,
@@ -1269,6 +1272,7 @@ export function textLayerPropsJson(layer: TextLayer): string {
     fontWeight: layer.fontWeight,
     fontStyle: layer.fontStyle,
     color: [layer.color.r / 255, layer.color.g / 255, layer.color.b / 255, layer.color.a],
+    colorSpans: colorSpansProp(layer.colorSpans),
     lineHeight: layer.lineHeight,
     letterSpacing: layer.letterSpacing,
     paragraphSpacing: layer.paragraphSpacing,

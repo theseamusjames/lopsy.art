@@ -60,6 +60,15 @@ describe('text layer save/load round-trip', () => {
     expect(roundTrip(makeText({ transform })).transform).toEqual(transform);
   });
 
+  it('keeps per-range text colours (#1154)', () => {
+    const colorSpans = [{ start: 0, end: 6, color: { r: 255, g: 0, b: 0, a: 1 } }];
+    expect(roundTrip(makeText({ colorSpans })).colorSpans).toEqual(colorSpans);
+  });
+
+  it('leaves single-colour text without colour spans', () => {
+    expect('colorSpans' in roundTrip(makeText())).toBe(false);
+  });
+
   it('leaves upright text without a transform', () => {
     expect('transform' in roundTrip(makeText())).toBe(false);
   });

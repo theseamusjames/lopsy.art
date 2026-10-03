@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use cosmic_text::fontdb;
 use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, Stretch, Style, SwashCache, SwashImage, Weight, Wrap};
+use lopsy_core::text_color_spans::ColorSpans;
 use lopsy_core::vertical_orientation::{vertical_form_transform, VerticalGlyphForm};
 use swash::scale::{ScaleContext, Render, Source, StrikeWith};
 use swash::zeno::{Format, Transform, Vector};
@@ -17,6 +18,8 @@ use crate::vertical_forms::{vertical_glyph, VerticalAlternateCache};
 pub struct TextLayerState {
     pub buffer: Buffer,
     pub color: [f32; 4],
+    /// Per-range colours over `color` (UTF-8 byte ranges into `text`).
+    pub color_spans: ColorSpans,
     /// Hash of the last serialized props JSON — skip re-layout when unchanged.
     pub props_hash: u64,
     /// RGBA pixel bytes from the most recent software render. Cleared on re-layout.
@@ -400,8 +403,10 @@ impl TextRendererState {
     ///   "fontWeight": u16, "fontStyle": "normal"|"italic",
     ///   "color": [r, g, b, a], "lineHeight": f32, "letterSpacing": f32,
     ///   "textAlign": "left"|"center"|"right"|"justify",
-    ///   "areaWidth": f32 | null }
+    ///   "areaWidth": f32 | null,
+    ///   "colorSpans": [[start, end, r, g, b, a], ...] }
     /// ```
+    /// `colorSpans` ranges are UTF-16 offsets into `text` (JS string indices).
     pub fn set_text_content(
         &mut self,
         layer_id: &str,
@@ -444,6 +449,7 @@ impl TextRendererState {
         } else {
             [0.0, 0.0, 0.0, 1.0]
         };
+        let color_spans = parse_color_spans(text, &v["colorSpans"]);
         let line_height = v["lineHeight"].as_f64().unwrap_or(1.4) as f32;
         let letter_spacing = v["letterSpacing"].as_f64().unwrap_or(0.0) as f32;
         let paragraph_spacing = v["paragraphSpacing"].as_f64().unwrap_or(0.0) as f32;
@@ -508,6 +514,7 @@ impl TextRendererState {
             TextLayerState {
                 buffer,
                 color,
+                color_spans,
                 props_hash: new_hash,
                 rendered_pixels: None,
                 underline,
@@ -1011,17 +1018,20 @@ impl TextRendererState {
             form: VerticalGlyphForm,
             x: i32,
             y: i32,
+            color: [f32; 4],
         }
-        // Per-run info for underline/strikethrough decoration.
+        // Per-run info for underline/strikethrough decoration: one entry per
+        // stretch of same-coloured glyphs, so decorations take the glyph colour.
         struct RunInfo {
-            /// X of leftmost glyph in this run (integer pixels).
+            /// X of leftmost glyph in this stretch (integer pixels).
             x_start: i32,
-            /// X past rightmost glyph in this run.
+            /// X past rightmost glyph in this stretch.
             x_end: i32,
             /// Baseline y (integer pixels, before canvas_y offset).
             baseline_y: i32,
             /// Font size in pixels.
             font_size: f32,
+            color: [f32; 4],
         }
         let ls = state.letter_spacing;
         let para = state.paragraph_spacing;
@@ -1029,6 +1039,12 @@ impl TextRendererState {
         let font_size = state.buffer.metrics().font_size;
         let line_height_mul = state.line_height;
         let vertical = state.vertical;
+        let base_color = state.color;
+        let line_bases = Self::line_byte_base(&state.buffer);
+        let glyph_color = |line_i: usize, start: usize| -> [f32; 4] {
+            let base = line_bases.get(line_i).copied().unwrap_or(0);
+            state.color_spans.color_at(base + start, base_color)
+        };
         let mut glyph_layouts: Vec<GlyphLayout> = Vec::new();
         let mut run_infos: Vec<RunInfo> = Vec::new();
         if vertical {
@@ -1066,6 +1082,7 @@ impl TextRendererState {
                         form,
                         x: phys.x,
                         y: phys.y,
+                        color: glyph_color(run.line_i, glyph.start),
                     });
                 }
             }
@@ -1073,6 +1090,7 @@ impl TextRendererState {
             for run in state.buffer.layout_runs() {
                 let mut run_x_start = i32::MAX;
                 let mut run_x_end = i32::MIN;
+                let mut run_color: Option<[f32; 4]> = None;
                 // Letter/paragraph spacing applied post-layout (cosmic-text lacks both):
                 // shift each glyph right by comp + letter_spacing × its visual rank
                 // and every run down by paragraph_spacing per hard line break.
@@ -1089,6 +1107,25 @@ impl TextRendererState {
                     let phys = glyph.physical((extra_x, baseline_y), 1.0);
                     let gx_start = phys.x;
                     let gx_end = phys.x + glyph.w.ceil() as i32;
+                    let color = glyph_color(run.line_i, glyph.start);
+                    if let Some(prev) = run_color.filter(|c| *c != color) {
+                        // Colour changes: close the previous stretch where
+                        // this glyph begins (left-to-right), so the
+                        // decoration neither breaks nor overlaps itself.
+                        if run_x_start <= run_x_end {
+                            let x_end = if gx_start >= run_x_start { gx_start } else { run_x_end };
+                            run_infos.push(RunInfo {
+                                x_start: run_x_start,
+                                x_end,
+                                baseline_y: baseline_y.round() as i32,
+                                font_size,
+                                color: prev,
+                            });
+                        }
+                        run_x_start = gx_start;
+                        run_x_end = i32::MIN;
+                    }
+                    run_color = Some(color);
                     if gx_start < run_x_start { run_x_start = gx_start; }
                     if gx_end > run_x_end { run_x_end = gx_end; }
                     glyph_layouts.push(GlyphLayout {
@@ -1096,6 +1133,7 @@ impl TextRendererState {
                         form: VerticalGlyphForm::Upright,
                         x: phys.x,
                         y: phys.y,
+                        color,
                     });
                 }
                 if run_x_start <= run_x_end {
@@ -1104,11 +1142,11 @@ impl TextRendererState {
                         x_end: run_x_end,
                         baseline_y: baseline_y.round() as i32,
                         font_size,
+                        color: run_color.unwrap_or(base_color),
                     });
                 }
             }
         }
-        let color = state.color;
         // Underline/strikethrough decorations only apply to horizontal text
         // for now — the underline pass reads `run_infos`, which we leave empty
         // in vertical mode.
@@ -1193,6 +1231,7 @@ impl TextRendererState {
 
             match img.content {
                 cosmic_text::SwashContent::Mask => {
+                    let color = gl.color;
                     for (idx, &alpha_byte) in img.data.iter().enumerate() {
                         if alpha_byte == 0 { continue; }
                         let bx = idx as i32 % img.placement.width as i32;
@@ -1255,12 +1294,12 @@ impl TextRendererState {
                 if do_underline {
                     // Underline sits just below the baseline (CSS spec: ~10% of font-size below).
                     let ul_y = ri.baseline_y + (ri.font_size * 0.1).ceil() as i32 - canvas_y;
-                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, ul_y, line_w, thickness, color);
+                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, ul_y, line_w, thickness, ri.color);
                 }
                 if do_strikethrough {
                     // Strikethrough sits ~32% of font-size above baseline (mid x-height).
                     let st_y = ri.baseline_y - (ri.font_size * 0.32).ceil() as i32 - canvas_y;
-                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, st_y, line_w, thickness, color);
+                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, st_y, line_w, thickness, ri.color);
                 }
             }
         }
@@ -1283,6 +1322,25 @@ impl TextRendererState {
         self.text_layers.remove(layer_id);
         self.text_layers.remove(&raster_key(layer_id));
     }
+}
+
+/// Parse the props' `colorSpans` (`[[start, end, r, g, b, a], ...]`, UTF-16
+/// offsets into `text`). Missing or malformed entries are skipped.
+fn parse_color_spans(text: &str, value: &serde_json::Value) -> ColorSpans {
+    let Some(arr) = value.as_array() else { return ColorSpans::default() };
+    let triples: Vec<(usize, usize, [f32; 4])> = arr
+        .iter()
+        .filter_map(|entry| {
+            let e = entry.as_array()?;
+            let n = |i: usize| e.get(i).and_then(|v| v.as_f64());
+            Some((
+                n(0)? as usize,
+                n(1)? as usize,
+                [n(2)? as f32, n(3)? as f32, n(4)? as f32, n(5).unwrap_or(1.0) as f32],
+            ))
+        })
+        .collect();
+    ColorSpans::from_utf16(text, &triples)
 }
 
 /// The weight nearest to `requested` among `available` (heavier wins a tie),
@@ -2285,5 +2343,67 @@ mod tests {
             .set_text_content("u", &styled_props("Hi \u{2605}", "Not Loaded Yet", "italic", 400))
             .expect("ok");
         assert_eq!(notdef_glyphs(&renderer, "u"), 0);
+    }
+
+    fn span_props(text: &str, spans: &str, underline: bool) -> String {
+        format!(
+            r#"{{"text":"{text}","fontFamily":"sans-serif","fontSize":40,"fontWeight":400,"fontStyle":"normal","color":[0,0,0,1],"lineHeight":1.4,"letterSpacing":0,"textAlign":"left","areaWidth":null,"underline":{underline},"colorSpans":{spans}}}"#
+        )
+    }
+
+    /// Column ranges `(red, blue)` of strongly red / strongly blue opaque pixels.
+    fn red_and_blue_columns(pixels: &[u8], w: u32) -> (Vec<u32>, Vec<u32>) {
+        let mut red = Vec::new();
+        let mut blue = Vec::new();
+        for (i, px) in pixels.chunks_exact(4).enumerate() {
+            if px[3] < 200 { continue; }
+            let x = i as u32 % w;
+            if px[0] > 200 && px[2] < 60 { red.push(x); }
+            if px[2] > 200 && px[0] < 60 { blue.push(x); }
+        }
+        (red, blue)
+    }
+
+    #[test]
+    fn color_spans_paint_their_range_and_leave_the_rest_in_the_base_color() {
+        let mut renderer = make_renderer();
+        renderer
+            .set_text_content("c", &span_props("HHHH", "[[2,4,1,0,0,1]]", false))
+            .expect("ok");
+        let (pixels, w, _, _, _) = renderer.render_text_layer_software("c").expect("rendered");
+        let (red, _) = red_and_blue_columns(&pixels, w);
+        assert!(!red.is_empty(), "the spanned glyphs render red");
+        let black_cols: Vec<u32> = pixels
+            .chunks_exact(4)
+            .enumerate()
+            .filter(|(_, p)| p[3] > 200 && p[0] < 40 && p[1] < 40 && p[2] < 40)
+            .map(|(i, _)| i as u32 % w)
+            .collect();
+        assert!(!black_cols.is_empty(), "the unspanned glyphs keep the base colour");
+        let max_black = *black_cols.iter().max().unwrap();
+        let min_red = *red.iter().min().unwrap();
+        assert!(max_black < min_red, "black glyphs (HH) sit left of the red ones");
+    }
+
+    #[test]
+    fn underline_takes_each_stretch_colour() {
+        let mut renderer = make_renderer();
+        renderer
+            .set_text_content("u", &span_props("HHHH", "[[0,2,1,0,0,1],[2,4,0,0,1,1]]", true))
+            .expect("ok");
+        let (pixels, w, h, _, _) = renderer.render_text_layer_software("u").expect("rendered");
+        // The underline is the lowest opaque row band; scan the bottom rows.
+        let mut found_red = false;
+        let mut found_blue = false;
+        for y in (0..h).rev().take(12) {
+            for x in 0..w {
+                let i = ((y * w + x) * 4) as usize;
+                let p = &pixels[i..i + 4];
+                if p[3] < 200 { continue; }
+                if p[0] > 200 && p[2] < 60 { found_red = true; }
+                if p[2] > 200 && p[0] < 60 { found_blue = true; }
+            }
+        }
+        assert!(found_red && found_blue, "underline has a red and a blue stretch");
     }
 }

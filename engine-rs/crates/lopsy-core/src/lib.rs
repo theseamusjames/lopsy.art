@@ -25,3 +25,4 @@ pub mod psd;
 pub mod text_types;
 pub mod vertical_orientation;
 pub mod text_transform;
+pub mod text_color_spans;

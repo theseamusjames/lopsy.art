@@ -16,6 +16,9 @@ import {
 import { textSizeTypedMax, TEXT_SIZE_SLIDER_MAX } from '../../tools/text/text-settings';
 import type { FontStyle, TextAlign } from '../../types';
 import styles from './TextPanel.module.css';
+import { TextColorControl } from '../../components/TextColorControl/TextColorControl';
+import { useTextColor } from '../../app/hooks/useTextColor';
+import { applyTextColor, beginTextColorPick, endTextColorPick } from '../../tools/text/apply-text-color';
 
 const WEIGHT_LABELS: Record<number, string> = {
   100: 'Thin',
@@ -40,6 +43,7 @@ const ALIGNMENTS: { value: TextAlign; label: string; Icon: typeof AlignLeft }[] 
 export function TextPanel() {
   const text = useToolSettingsStore((s) => s.settings.text);
   const recentFonts = useToolSettingsStore((s) => s.recentFonts);
+  const textColor = useTextColor();
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
   const sizeMax = textSizeTypedMax(docWidth, docHeight);
@@ -93,6 +97,16 @@ export function TextPanel() {
 
       <section className={styles.section}>
         <div className={styles.sectionTitle}>Character</div>
+        <div className={styles.colorRow}>
+          <span className={styles.colorLabel}>Color</span>
+          <TextColorControl
+            color={textColor.color}
+            pickerColor={textColor.pickerColor}
+            onChange={applyTextColor}
+            onPickStart={beginTextColorPick}
+            onPickEnd={endTextColorPick}
+          />
+        </div>
         <Slider
           label="Size"
           value={text.fontSize}

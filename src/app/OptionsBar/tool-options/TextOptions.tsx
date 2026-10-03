@@ -22,6 +22,9 @@ import { textSizeTypedMax, TEXT_SIZE_SLIDER_MAX } from '../../../tools/text/text
 import type { TextLayer, FontStyle, TextAlign } from '../../../types';
 import styles from '../OptionsBar.module.css';
 import decorationStyles from './TextOptions.module.css';
+import { TextColorControl } from '../../../components/TextColorControl/TextColorControl';
+import { useTextColor } from '../../hooks/useTextColor';
+import { applyTextColor, beginTextColorPick, endTextColorPick } from '../../../tools/text/apply-text-color';
 
 const WEIGHT_LABELS: Record<number, string> = {
   100: 'Thin',
@@ -45,6 +48,7 @@ export function TextOptions() {
   const textUnderline = useToolSettingsStore((s) => s.settings.text.underline);
   const textStrikethrough = useToolSettingsStore((s) => s.settings.text.strikethrough);
   const textVertical = useToolSettingsStore((s) => s.settings.text.vertical);
+  const textColor = useTextColor();
 
   const docWidth = useEditorStore((s) => s.document.width);
   const docHeight = useEditorStore((s) => s.document.height);
@@ -146,6 +150,13 @@ export function TextOptions() {
         <option value="normal">Normal</option>
         <option value="italic">Italic</option>
       </select>
+      <TextColorControl
+        color={textColor.color}
+        pickerColor={textColor.pickerColor}
+        onChange={applyTextColor}
+        onPickStart={beginTextColorPick}
+        onPickEnd={endTextColorPick}
+      />
       <label className={styles.label} id="text-align-label">Align</label>
       <select
         className={styles.select}

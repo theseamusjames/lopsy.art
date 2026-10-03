@@ -14,6 +14,7 @@
 import type { PathAnchor } from '../path/path';
 import type { TextLayer } from '../../types/layers';
 import { buildFontString } from './text';
+import { unitColors } from './text-color-spans';
 import { placeTextOnPath } from './text-on-path';
 import {
   PATH_TEXT_INK_PADDING,
@@ -133,9 +134,11 @@ export function renderTextOnPath(
   ctx.clearRect(0, 0, bounds.w, bounds.h);
   ctx.font = fontString;
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;
+  const colors = unitColors(text.length, color, layer.colorSpans);
 
   for (const placement of placements) {
+    const c = colors[placement.charIndex] ?? color;
+    ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${c.a})`;
     ctx.save();
     ctx.translate(placement.x - bounds.x, placement.y - bounds.y);
     ctx.rotate(placement.rotation);
