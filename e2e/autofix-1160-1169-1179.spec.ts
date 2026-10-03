@@ -242,3 +242,137 @@ test.describe('#1169 Gradient follows the drag on an offset layer', () => {
     expect((await getPixelAt(page, 400, 350, id)).a).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// #1160 — Mesh Warp precision
+// ---------------------------------------------------------------------------
+
+/** Opaque-pixel bounding box of a layer in document coordinates. */
+async function opaqueBounds(page: Page, id: string) {
+  return page.evaluate(async (lid) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+    };
+    const layer = store.getState().document.layers.find((l) => l.id === lid);
+    const read = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id: string) => Promise<{ width: number; height: number; pixels: number[] }>;
+    const { width, height, pixels } = await read(lid);
+    let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if ((pixels[(y * width + x) * 4 + 3] ?? 0) < 128) continue;
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }
+    }
+    const ox = layer?.x ?? 0;
+    const oy = layer?.y ?? 0;
+    return { minX: minX + ox, maxX: maxX + ox, minY: minY + oy, maxY: maxY + oy };
+  }, id);
+}
+
+test.describe('#1160 Mesh Warp moves content by the dragged distance', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 2400, 800, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+  });
+
+  for (const dragPx of [9, 10]) {
+    test(`a ${dragPx} px drag of the centre point moves a small square ~${dragPx} px`, async ({ page }) => {
+      const id = await activeLayerId(page);
+      await fillRect(page, 1180, 380, 40, 40);
+      await page.keyboard.press('Control+1');
+      await page.waitForTimeout(200);
+      const before = await opaqueBounds(page, id);
+      expect(before.maxX - before.minX).toBeGreaterThan(35);
+
+      await selectTool(page, 'move');
+      await page.locator('button[aria-label="Activate mesh warp"]').click();
+      await page.locator('select[aria-label="Grid size"]').selectOption('3');
+      await dragDoc(page, { x: 1200, y: 400 }, { x: 1200 + dragPx, y: 400 }, 6);
+      await page.locator('[role="group"][aria-label="Mesh warp controls"] button:has-text("Apply")').click();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `${SHOTS}/mesh-warp-precision-${dragPx}px.png` });
+
+      const after = await opaqueBounds(page, id);
+      const shift = (after.minX + after.maxX) / 2 - (before.minX + before.maxX) / 2;
+      // Before the fix a 9 px drag quantised to 0 px and a 10 px drag to
+      // 2400 / 127 ≈ 18.9 px.
+      expect(Math.abs(shift - dragPx)).toBeLessThanOrEqual(1.5);
+      expect(Math.abs((after.minY + after.maxY) / 2 - (before.minY + before.maxY) / 2)).toBeLessThanOrEqual(1);
+    });
+  }
+});
+
+
+/**
+ * For each doc column in `columns`, the first and last doc row below
+ * y = 400 whose alpha exceeds 127, or null when the column is empty there.
+ */
+async function bandRows(page: Page, id: string, columns: number[]) {
+  return page.evaluate(async ({ lid, columns }) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+    };
+    const layer = store.getState().document.layers.find((l) => l.id === lid);
+    const read = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id: string) => Promise<{ width: number; height: number; pixels: number[] }>;
+    const { width, height, pixels } = await read(lid);
+    const ox = layer?.x ?? 0;
+    const oy = layer?.y ?? 0;
+    return columns.map((docX) => {
+      let top = -1;
+      let bottom = -1;
+      for (let y = Math.max(0, 400 - oy); y < height; y++) {
+        if ((pixels[(y * width + docX - ox) * 4 + 3] ?? 0) <= 127) continue;
+        if (top < 0) top = y + oy;
+        bottom = y + oy;
+      }
+      return top < 0 ? null : { top, bottom };
+    });
+  }, { lid: id, columns });
+}
+
+test.describe('#1160 Mesh Warp inverse under strong compression', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 800, 800, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+  });
+
+  test('a band squashed to a tenth of its height lands where the mesh puts it', async ({ page }) => {
+    const id = await activeLayerId(page);
+    // A 24 px black band across doc y 576..600.
+    await fillRect(page, 100, 576, 600, 24);
+
+    await selectTool(page, 'move');
+    await page.locator('button[aria-label="Activate mesh warp"]').click();
+    await page.locator('select[aria-label="Grid size"]').selectOption('3');
+    // Pull the centre point from y = 400 to 760: next to it the lower cells
+    // shrink to a tenth of their height, squashing the band to ~2.4 px.
+    await dragDoc(page, { x: 400, y: 400 }, { x: 400, y: 760 }, 12);
+    await page.locator('[role="group"][aria-label="Mesh warp controls"] button:has-text("Apply")').click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${SHOTS}/mesh-warp-compressed-band.png` });
+
+    // Only Y moves and the map is bilinear per cell, so every column is an
+    // affine stretch of itself. Column 400 maps the lower half (400..800)
+    // onto 760..800: the band (576..600) belongs at 777.6..780. Columns 200
+    // and 600 sit half-way to the moved point: their centre row lands at
+    // 580, the lower half maps onto 580..800 and the band onto 676.8..690.
+    // The damped fixed-point inverse stopped short in the squashed cells and
+    // drew the tip ~15 px too high.
+    const [left, centre, right] = await bandRows(page, id, [200, 400, 600]);
+    for (const col of [left, right]) {
+      expect(col).not.toBeNull();
+      expect(Math.abs(col!.top - 677)).toBeLessThanOrEqual(2);
+      expect(Math.abs(col!.bottom - 689)).toBeLessThanOrEqual(2);
+    }
+    expect(centre).not.toBeNull();
+    expect(centre!.top).toBeGreaterThanOrEqual(776);
+    expect(centre!.bottom).toBeLessThanOrEqual(781);
+  });
+});

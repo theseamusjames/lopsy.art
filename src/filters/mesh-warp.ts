@@ -23,14 +23,18 @@ export function createIdentityGrid(cols: number, rows: number): MeshWarpGrid {
 }
 
 /**
- * Byte that decodes to exactly zero displacement. `mesh_warp.glsl` decodes
- * `(byte - DISPLACEMENT_CENTER) / DISPLACEMENT_SCALE`, so these constants
- * must stay in sync with the shader. A centre of 127.5 (the naive
- * `(d / 2 + 0.5) * 255`) is not representable and made untouched grid
- * points drift content by half a step (#909).
+ * 16-bit code that decodes to exactly zero displacement. `mesh_warp.glsl`
+ * decodes `(code - DISPLACEMENT_CENTER) / DISPLACEMENT_SCALE`, so these
+ * constants must stay in sync with the shader. The zero must be
+ * representable or untouched grid points drift content (#909).
+ *
+ * Displacements are in bounds-local units (a point never leaves the bounds,
+ * so they span -1..1) at 16 bits each: one step is 1/32767 of the warp
+ * bounds. A single byte per axis moved content in steps of 1/127 of the
+ * bounds — 19 px on a 2400 px wide document (#1160).
  */
-export const DISPLACEMENT_CENTER = 128;
-export const DISPLACEMENT_SCALE = 127;
+export const DISPLACEMENT_CENTER = 32768;
+export const DISPLACEMENT_SCALE = 32767;
 
 export function encodeDisplacement(d: number): number {
   // Round half away from zero so +d and -d encode symmetrically
@@ -40,30 +44,30 @@ export function encodeDisplacement(d: number): number {
   return Math.max(DISPLACEMENT_CENTER - DISPLACEMENT_SCALE, Math.min(DISPLACEMENT_CENTER + DISPLACEMENT_SCALE, encoded));
 }
 
-export function decodeDisplacement(byte: number): number {
-  return (byte - DISPLACEMENT_CENTER) / DISPLACEMENT_SCALE;
+export function decodeDisplacement(code: number): number {
+  return (code - DISPLACEMENT_CENTER) / DISPLACEMENT_SCALE;
 }
 
 /**
- * Encode the grid as forward displacements in texture UV space: content
- * at a point's identity position moves by (R, G) so it follows the
- * dragged handle. Each point's offset from its identity position is
- * scaled by the bounds size (in texture UV).
+ * Encode the grid as forward displacements in bounds-local units: content
+ * at a point's identity position moves by that offset so it follows the
+ * dragged handle. Each texel holds one point: (R, G) are the high and low
+ * bytes of the X code, (B, A) those of the Y code.
  */
-export function encodeGridToRgba(grid: MeshWarpGrid, boundsScaleU: number, boundsScaleV: number): Uint8Array {
+export function encodeGridToRgba(grid: MeshWarpGrid): Uint8Array {
   const { cols, rows, points } = grid;
   const data = new Uint8Array(cols * rows * 4);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const idx = r * cols + c;
       const point = points[idx]!;
-      const dx = (point.x - c / (cols - 1)) * boundsScaleU;
-      const dy = (point.y - r / (rows - 1)) * boundsScaleV;
+      const codeX = encodeDisplacement(point.x - c / (cols - 1));
+      const codeY = encodeDisplacement(point.y - r / (rows - 1));
       const pi = idx * 4;
-      data[pi] = encodeDisplacement(dx);
-      data[pi + 1] = encodeDisplacement(dy);
-      data[pi + 2] = 0;
-      data[pi + 3] = 255;
+      data[pi] = codeX >> 8;
+      data[pi + 1] = codeX & 0xff;
+      data[pi + 2] = codeY >> 8;
+      data[pi + 3] = codeY & 0xff;
     }
   }
   return data;
@@ -88,8 +92,6 @@ export function applyMeshWarpGpu(
   const minV = bounds.y / docH;
   const maxU = (bounds.x + bounds.width) / docW;
   const maxV = (bounds.y + bounds.height) / docH;
-  const scaleU = maxU - minU;
-  const scaleV = maxV - minV;
-  const data = encodeGridToRgba(grid, scaleU, scaleV);
+  const data = encodeGridToRgba(grid);
   filterMeshWarp(engine, layerId, data, grid.cols, grid.rows, minU, minV, maxU, maxV);
 }
