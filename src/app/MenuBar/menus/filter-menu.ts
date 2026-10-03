@@ -2,20 +2,24 @@ import { applyInvert, applyDesaturate, applyFindEdges } from '../filter-actions'
 import { beginTiltShiftSession } from '../tilt-shift-actions';
 import type { FilterDialogId } from '../filter-actions';
 import { openLiquify } from '../liquify-actions';
+import { isFilteringMask } from '../filter-target';
 import type { MenuDef } from './types';
 
 export function createFilterMenu(showFilterDialog: (id: FilterDialogId) => void): MenuDef {
+  // Liquify and Tilt-Shift are on-canvas sessions over the layer's pixels;
+  // every other command runs on the mask in mask edit mode (#1150).
+  const isMaskTarget = isFilteringMask();
   return {
     label: 'Filter',
     items: [
-      { label: 'Liquify...', shortcut: '⌘⇧X', action: () => openLiquify() },
+      { label: 'Liquify...', shortcut: '⌘⇧X', disabled: isMaskTarget, action: () => openLiquify() },
       { separator: true, label: '' },
       { label: 'Gaussian Blur...', action: () => showFilterDialog('gaussian-blur') },
       { label: 'Box Blur...', action: () => showFilterDialog('box-blur') },
       { label: 'Surface Blur...', action: () => showFilterDialog('surface-blur') },
       { label: 'Motion Blur...', action: () => showFilterDialog('motion-blur') },
       { label: 'Radial Blur...', action: () => showFilterDialog('radial-blur') },
-      { label: 'Tilt-Shift Blur...', action: () => beginTiltShiftSession() },
+      { label: 'Tilt-Shift Blur...', disabled: isMaskTarget, action: () => beginTiltShiftSession() },
       { label: 'Unsharp Mask...', action: () => showFilterDialog('unsharp-mask') },
       { separator: true, label: '' },
       { label: 'Find Edges', action: () => applyFindEdges() },

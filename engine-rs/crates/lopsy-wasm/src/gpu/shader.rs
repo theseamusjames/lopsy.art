@@ -51,6 +51,7 @@ pub const ADJUSTMENTS_FRAG: &str = include_str!("shaders/filters/adjustments.gls
 pub const HUE_SAT_FRAG: &str = include_str!("shaders/filters/hue_sat.glsl");
 pub const INVERT_FRAG: &str = include_str!("shaders/filters/invert.glsl");
 pub const CHANNEL_EXTRACT_FRAG: &str = include_str!("shaders/filters/channel_extract.glsl");
+pub const MASK_LUMINANCE_FRAG: &str = include_str!("shaders/filters/mask_luminance.glsl");
 pub const POSTERIZE_FRAG: &str = include_str!("shaders/filters/posterize.glsl");
 pub const THRESHOLD_FRAG: &str = include_str!("shaders/filters/threshold.glsl");
 pub const NOISE_FRAG: &str = include_str!("shaders/filters/noise.glsl");
@@ -343,6 +344,7 @@ pub struct ShaderPrograms {
     pub color_convert: ShaderProgram,
     pub tonemap: ShaderProgram,
     pub channel_extract: ShaderProgram,
+    pub mask_luminance: ShaderProgram,
     pub liquify_dab: ShaderProgram,
     // Text
     pub text_glyph: ShaderProgram,
@@ -476,6 +478,7 @@ impl ShaderPrograms {
             color_convert: compile_program(gl, v, COLOR_CONVERT_FRAG)?,
             tonemap: compile_program(gl, v, TONEMAP_FRAG)?,
             channel_extract: compile_program(gl, v, CHANNEL_EXTRACT_FRAG)?,
+            mask_luminance: compile_program(gl, v, MASK_LUMINANCE_FRAG)?,
             liquify_dab: compile_program(gl, v, LIQUIFY_DAB_FRAG)?,
             // Text
             text_glyph: compile_program(gl, v, TEXT_GLYPH_FRAG)?,

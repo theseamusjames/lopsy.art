@@ -469,3 +469,15 @@ canvas readback. Decode with
 `createImageBitmap(blob, { colorSpaceConversion: 'none' })` to get the stored
 values; live and export then agree within ±2 per channel
 (`e2e/effect-cache-invalidation.spec.ts`).
+
+## Running a layer-texture operation on a layer mask
+
+Filters (and anything else keyed on `layer_textures[id]`) can run on a
+layer's mask without a mask variant: `begin_mask_filter_target(id)` swaps the
+mask into the layer's texture slot and sets the descriptor's rect to the
+mask's origin/size, `end_mask_filter_target` folds the result to grey
+luminance, crops it back if a filter grew it, and swaps everything back
+(#1150). The JS side is `runOnFilterTarget` in
+`app/MenuBar/filter-target.ts`; the end call's wasm-bridge wrapper marks the
+mask GPU-dirty for history. Begin and end must bracket synchronous engine
+calls only — a composite frame in between would draw the mask as the layer.

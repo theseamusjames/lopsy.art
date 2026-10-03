@@ -240,4 +240,79 @@ test.describe('Filter targets: selection, adjustment state, layer mask', () => {
     const shown = await compositeAt(page, 150, 200);
     expect(Math.abs(shown[0] - shown[2])).toBeLessThanOrEqual(3);
   });
+
+  test('#1150 Invert and Clouds in mask edit mode write the mask, not the pixels', async ({ page }) => {
+    await createDocument(page, 800, 600, false);
+    await page.waitForTimeout(300);
+    const layerId = (await getEditorState(page)).document.activeLayerId!;
+    const row = page.locator(`[data-layer-id="${layerId}"]`);
+    const editMask = page.locator('[aria-label="Edit mask for Layer 1"]');
+    await setForegroundColor(page, 255, 0, 0);
+    await editFill(page);
+
+    await page.locator('[aria-label="Add Mask"]').click();
+    await editMask.click();
+    await page.waitForTimeout(100);
+    expect(await maskMode(page)).toBe('layerMask');
+
+    await applyFilter(page, 'Invert');
+    expect(await lastHistoryLabel(page)).toBe('Invert');
+    const px = await getPixelAt(page, 400, 300, layerId);
+    expect([px.r, px.g, px.b, px.a]).toEqual([255, 0, 0, 255]);
+    await expect.poll(() => maskByteAt(page, layerId, 400, 300)).toBe(0);
+
+    // Out of mask edit mode the inverted (black) mask hides the red layer.
+    await row.click();
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: 'e2e/screenshots/mask-filter-invert-1150.png' });
+    expectNear(await compositeAt(page, 400, 300), [255, 255, 255]);
+
+    // Undo restores the white mask, and the red layer shows again.
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(200);
+    expectNear(await compositeAt(page, 400, 300), [255, 0, 0]);
+    await expect.poll(() => maskByteAt(page, layerId, 400, 300)).toBe(255);
+
+    // Clouds writes a grey pattern into the mask; the layer stays solid red.
+    await editMask.click();
+    await page.waitForTimeout(100);
+    await applyFilter(page, 'Clouds...', { Scale: 5 });
+    expect(await lastHistoryLabel(page)).toBe('Clouds');
+    await expect.poll(async () => {
+      const r = await maskRange(page, layerId);
+      return r.max - r.min;
+    }).toBeGreaterThan(60);
+    const after = await getPixelAt(page, 123, 456, layerId);
+    expect([after.r, after.g, after.b, after.a]).toEqual([255, 0, 0, 255]);
+    await row.click();
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: 'e2e/screenshots/mask-filter-clouds-1150.png' });
+  });
+
+  test('#1150 mask edit mode ends when undo removes the mask', async ({ page }) => {
+    await createDocument(page, 400, 300, false);
+    await page.waitForTimeout(300);
+    await page.locator('[aria-label="Add Mask"]').click();
+    await page.locator('[aria-label="Edit mask for Layer 1"]').click();
+    await page.waitForTimeout(100);
+    expect(await maskMode(page)).toBe('layerMask');
+
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(200);
+    await expect(page.locator('[aria-label="Edit mask for Layer 1"]')).toHaveCount(0);
+    expect(await maskMode(page)).toBe('off');
+  });
+
+  test('#1150 Liquify and Tilt-Shift are unavailable in mask edit mode', async ({ page }) => {
+    await createDocument(page, 400, 300, false);
+    await page.waitForTimeout(300);
+    await page.locator('[aria-label="Add Mask"]').click();
+    await page.locator('[aria-label="Edit mask for Layer 1"]').click();
+    await page.waitForTimeout(100);
+
+    await page.click('text=Filter');
+    await expect(page.getByRole('menuitem', { name: /^Liquify/ })).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByRole('menuitem', { name: /^Tilt-Shift Blur/ })).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByRole('menuitem', { name: /^Gaussian Blur/ })).not.toHaveAttribute('aria-disabled', 'true');
+  });
 });

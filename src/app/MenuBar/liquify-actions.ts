@@ -19,10 +19,12 @@ import {
 } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
+import { isFilteringMask } from './filter-target';
 import { MAX_DISP, defaultLiquifySettings } from '../../tools/liquify/liquify';
 import type { LiquifySession } from '../ui-store';
 
 export function openLiquify(): void {
+  if (isFilteringMask()) return;
   const editorStore = useEditorStore.getState();
   const activeId = editorStore.document.activeLayerId;
   if (!activeId) return;

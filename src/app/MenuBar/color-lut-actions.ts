@@ -11,81 +11,93 @@ import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pix
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import type { LutPreset } from '../../filters/color-lut';
+import {
+  isFilteringMask,
+  markFilterTargetWritten,
+  runOnFilterTarget,
+  type FilterTarget,
+} from './filter-target';
 
-function getActiveLayerId(): string | null {
-  return useEditorStore.getState().document.activeLayerId;
+function getFilterTarget(): FilterTarget | null {
+  const activeId = useEditorStore.getState().document.activeLayerId;
+  return activeId ? { layerId: activeId, isMask: isFilteringMask() } : null;
 }
 
 export function beginColorLutPreview(): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
+  const target = getFilterTarget();
+  if (!target) return;
   const engine = getEngine();
   if (!engine) return;
   const state = useEditorStore.getState();
   flushLayerSync(state);
-  saveFilterPreview(engine, activeId);
+  runOnFilterTarget(engine, target, () => saveFilterPreview(engine, target.layerId));
   // saveFilterPreview expands the layer texture to doc size — reconcile
   // JS bounds so the next syncLayers push does not clobber it (#771).
-  syncLayerAfterFullSize(engine, activeId);
+  if (!target.isMask) syncLayerAfterFullSize(engine, target.layerId);
 }
 
 export function previewColorLut(preset: LutPreset, intensity: number): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
+  const target = getFilterTarget();
+  if (!target) return;
   const engine = getEngine();
   if (!engine) return;
 
-  restoreFilterPreview(engine);
-  filterColorLut(engine, activeId, preset.data, preset.size, intensity);
-  clearJsPixelData(activeId);
+  runOnFilterTarget(engine, target, () => {
+    restoreFilterPreview(engine);
+    filterColorLut(engine, target.layerId, preset.data, preset.size, intensity);
+  });
+  markFilterTargetWritten(engine, target, false);
   useEditorStore.getState().notifyRender();
 }
 
 export function cancelColorLutPreview(): void {
   const engine = getEngine();
   if (!engine) return;
-  restoreFilterPreview(engine);
+  const target = getFilterTarget();
+  if (target) runOnFilterTarget(engine, target, () => restoreFilterPreview(engine));
+  else restoreFilterPreview(engine);
   clearFilterPreview(engine);
-  const activeId = getActiveLayerId();
-  if (activeId) {
-    clearJsPixelData(activeId);
-  }
+  if (target?.isMask) markFilterTargetWritten(engine, target, true);
+  else if (target) clearJsPixelData(target.layerId);
   useEditorStore.getState().notifyRender();
 }
 
 export function applyColorLut(preset: LutPreset, intensity: number): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
+  const target = getFilterTarget();
+  if (!target) return;
   const engine = getEngine();
   if (!engine) return;
 
-  const previewPixels = readLayerCompressed(activeId);
-
-  restoreFilterPreview(engine);
+  let previewPixels: Uint8Array | null = null;
+  runOnFilterTarget(engine, target, () => {
+    previewPixels = readLayerCompressed(target.layerId);
+    restoreFilterPreview(engine);
+  });
   clearFilterPreview(engine);
 
   useEditorStore.getState().pushHistory('Color LUT');
 
-  if (previewPixels) {
-    uploadCompressed(activeId, previewPixels);
-  } else {
-    filterColorLut(engine, activeId, preset.data, preset.size, intensity);
-  }
-  syncLayerAfterFullSize(engine, activeId);
-
-  clearJsPixelData(activeId);
+  runOnFilterTarget(engine, target, () => {
+    if (previewPixels) {
+      uploadCompressed(target.layerId, previewPixels);
+    } else {
+      filterColorLut(engine, target.layerId, preset.data, preset.size, intensity);
+    }
+  });
+  markFilterTargetWritten(engine, target, true);
   useEditorStore.getState().notifyRender();
 }
 
 export function applyColorLutDirect(preset: LutPreset, intensity: number): void {
-  const activeId = getActiveLayerId();
-  if (!activeId) return;
+  const target = getFilterTarget();
+  if (!target) return;
   const engine = getEngine();
   if (!engine) return;
 
   useEditorStore.getState().pushHistory('Color LUT');
-  filterColorLut(engine, activeId, preset.data, preset.size, intensity);
-  syncLayerAfterFullSize(engine, activeId);
-  clearJsPixelData(activeId);
+  runOnFilterTarget(engine, target, () => {
+    filterColorLut(engine, target.layerId, preset.data, preset.size, intensity);
+  });
+  markFilterTargetWritten(engine, target, true);
   useEditorStore.getState().notifyRender();
 }

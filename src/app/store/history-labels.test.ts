@@ -58,9 +58,6 @@ describe('pushHistory labels — every call site is labeled', () => {
       'Stroke Path',
       'Transform',
       'Nudge',
-      'Invert',
-      'Desaturate',
-      'Find Edges',
       'Pattern Fill',
       'Bucket Fill',
       'Quick Mask Fill',
@@ -72,8 +69,13 @@ describe('pushHistory labels — every call site is labeled', () => {
     // Some labels are passed indirectly through a variable (e.g. paint
     // handlers branch on tool type) — for those, just check the literal
     // appears in the source. Spray joined this list when its stroke path
-    // moved onto the shared brush/pencil/eraser dispatch (#787).
+    // moved onto the shared brush/pencil/eraser dispatch (#787); Invert,
+    // Desaturate and Find Edges when they shared one layer-or-mask apply
+    // path (#1150).
     const expectedAnywhere = [
+      "'Invert'",
+      "'Desaturate'",
+      "'Find Edges'",
       "'Brush'",
       "'Eraser'",
       "'Pencil'",

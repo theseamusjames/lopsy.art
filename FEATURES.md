@@ -1288,6 +1288,7 @@ Most filters open the same generic **Filter Dialog** — a 380 px floating modal
 
 Independent of which dialog (or none) fronts it, a filter reaches the GPU through one of two helpers in `filter_gpu.rs` — `apply_filter` for the single-pass majority, `apply_separable_blur` for the two-pass ones (Gaussian Blur, Box Blur). Both do the same two things first, and both are visible in the result. Unsharp Mask and Bloom chain their own blur / sharpen / combine passes, but hand their result to the same selection blend (`commit_scratch_a_to_layer`).
 
+- **In mask edit mode a filter runs on the mask (#1150).** See [Editing a Layer Mask](#editing-a-layer-mask).
 - **Filters are confined to the active selection, and feather with it.** The layer is copied aside first, the filter runs across the whole texture into a scratch buffer, and the two are recombined per pixel as `mix(original, filtered, mask)` against the selection mask. Because that is a linear blend on the mask's own value rather than a cut-out, **a feathered or partially-painted selection yields a partially-applied filter** — a 50 %-grey mask region comes back half-filtered, and a feathered marquee edge fades the effect out across the falloff rather than ending it on a hard line. With no selection active the filtered scratch is simply blitted back over the layer. **Two things opt out.** Color-mode conversion deliberately does — it is the only caller of `apply_filter_full_layer`, on the grounds that a partial conversion would strand half a layer in the old color space. **Liquify simply doesn't participate**: its render path never touches the selection mask, so a Liquify session warps the entire layer even with a marquee live. Mesh Warp, which does go through `apply_filter`, is the opposite case — it honors the mask on top of already confining its grid to the selection's bounding box.
 - **A filter grows the layer to at least document size.** `ensure_layer_full_size` runs first, so a layer texture smaller than the scratch never makes the filter sample the scratch's unwritten region. The margin it adds is transparent, and for an edit-in-place filter (blur, adjust, sharpen) nothing looks different.
   - **The scratch grows with the layer (#862, fixed in #883).** `scratch_texture_a` / `_b` used to be sized only at `set_document_size`, but the filter passes bind their FBOs with the viewport at the layer's *current* texture size — which `ensure_layer_covers` grows past the document when content hangs off a canvas edge. Rendering then clipped against the smaller attachment, so Motion Blur (or any `apply_filter` / `apply_separable_blur` filter) on a block moved half off the bottom edge shifted its pixels instead of only softening them (in the repro the top edge jumped from y ≈ 240 to ≈ 267). `ensure_layer_covers` now calls `ensure_scratch_size`, which reallocates both scratch textures to exactly the layer's covered size and re-attaches their FBOs. They are no longer grow-only (#914): a scratch left layer-sized squashed the next composite (#907), so the compositor sizes it back to the document every frame.
@@ -1515,6 +1516,24 @@ luminance, and Delete fills it with the background colour's — within the
 selection, or the whole mask without one — as a *Mask Fill* / *Mask Clear*
 history row. They used to paint or clear the layer's pixels (and refuse a
 group's mask). The fill runs on the GPU (`fill_mask_with_value`).
+
+**Filter menu commands write the mask too (#1150).** In mask edit mode every
+Filter command — Invert, the blurs, Add Noise, Clouds, Brightness / Contrast,
+Posterize, Color LUT and the rest — runs on the active layer's (or group's)
+mask instead of its pixels, confined to the selection like any filter, with
+its usual history row, so ⌘Z restores the mask. Before, Invert turned a red
+layer cyan and left the mask white. The engine swaps the mask into the
+layer's texture slot for the duration of the call
+(`begin_mask_filter_target` / `end_mask_filter_target`), so every filter —
+dialog, preview and instant — works without a mask-specific variant. A mask
+is grey, so a filter that produces colour (Hue / Saturation, Chromatic
+Aberration, Color LUT, a coloured Voronoi edge, …) is folded back to its
+Rec. 709 **luminance**, and any transparency it produces counts as black
+(hidden). **Liquify and Tilt-Shift Blur are greyed out** in the Filter menu
+while a mask is being edited (and ⌘⇧X does nothing): both are on-canvas
+sessions built around the layer's pixels. Mask edit mode also ends by itself
+whenever the active layer loses its mask — ⌘Z of *Add Mask*, for example —
+instead of staying on with nothing to edit.
 
 Mask edit mode reuses the brush, pencil, eraser, gradient, and bucket from the
 toolbox, but **none of the five behaves the way it does on a layer.** Each one

@@ -107,6 +107,93 @@ fn copy_layer_to_scratch(
     engine.draw_fullscreen_quad();
 }
 
+/// What `begin_mask_filter_target` swapped out, so the end call can put it
+/// back.
+pub struct MaskFilterTarget {
+    layer_id: String,
+    layer_texture: Option<crate::gpu::texture_pool::TextureHandle>,
+    layer_rect: Option<(i32, i32, u32, u32)>,
+    mask_origin: (i32, i32),
+    mask_size: (u32, u32),
+}
+
+/// Point a layer's texture slot (and its descriptor's rect) at the layer's
+/// mask, so every filter entry point — which all look the layer up in
+/// `layer_textures` — runs on the mask instead (#1150). The filter
+/// helpers keep working unchanged: selection blending reads the mask's
+/// origin from the descriptor, and preview save/restore follow the slot.
+/// Must be paired with `end_mask_filter_target` before the next frame.
+/// Returns false (and changes nothing) when the layer has no mask.
+pub fn begin_mask_filter_target(engine: &mut EngineInner, layer_id: &str) -> bool {
+    end_mask_filter_target(engine);
+    let mask_handle = match engine.layer_masks.get(layer_id) {
+        Some(&h) => h,
+        None => return false,
+    };
+    let mask_size = engine.texture_pool.get_size(mask_handle).unwrap_or((1, 1));
+    let (ox, oy) = crate::compositor::mask_doc_origin(engine, layer_id);
+    let mask_origin = (ox as i32, oy as i32);
+
+    let layer_texture = engine.layer_textures.insert(layer_id.to_string(), mask_handle);
+    let layer_rect = engine.layer_stack.iter_mut().find(|l| l.id == layer_id).map(|l| {
+        let rect = (l.x, l.y, l.width, l.height);
+        l.x = mask_origin.0;
+        l.y = mask_origin.1;
+        l.width = mask_size.0;
+        l.height = mask_size.1;
+        rect
+    });
+    engine.mask_filter_target = Some(MaskFilterTarget {
+        layer_id: layer_id.to_string(),
+        layer_texture,
+        layer_rect,
+        mask_origin,
+        mask_size,
+    });
+    true
+}
+
+/// Undo `begin_mask_filter_target`. The filtered mask is folded back to
+/// grey (a colour filter's luminance) and, if a filter grew the texture to
+/// cover the document, cropped back to the mask's own rect before it is
+/// returned to `layer_masks`.
+pub fn end_mask_filter_target(engine: &mut EngineInner) {
+    let Some(target) = engine.mask_filter_target.take() else { return };
+    let id = target.layer_id.as_str();
+
+    apply_filter_full_layer(engine, id, |e| &e.shaders.mask_luminance, |_, _| {});
+
+    let (cur_x, cur_y) = engine.layer_stack.iter()
+        .find(|l| l.id == id)
+        .map_or(target.mask_origin, |l| (l.x, l.y));
+    let cur_size = engine.layer_textures.get(id)
+        .and_then(|&h| engine.texture_pool.get_size(h));
+    if (cur_x, cur_y) != target.mask_origin || cur_size != Some(target.mask_size) {
+        let (mw, mh) = target.mask_size;
+        let _ = crate::layer_manager::crop_texture(
+            engine, id, cur_x, cur_y, target.mask_origin.0, target.mask_origin.1, mw, mh,
+        );
+    }
+
+    let mask_handle = match target.layer_texture {
+        Some(h) => engine.layer_textures.insert(id.to_string(), h),
+        None => engine.layer_textures.remove(id),
+    };
+    if let Some(h) = mask_handle {
+        engine.layer_masks.insert(id.to_string(), h);
+    }
+    if let (Some((x, y, w, h)), Some(layer)) = (
+        target.layer_rect,
+        engine.layer_stack.iter_mut().find(|l| l.id == id),
+    ) {
+        layer.x = x;
+        layer.y = y;
+        layer.width = w;
+        layer.height = h;
+    }
+    engine.mark_layer_dirty(id);
+}
+
 /// Write a filter result that a multi-pass filter left in scratch A back
 /// into the layer. With a selection active the untouched layer is copied
 /// into scratch B and the two are mixed through the selection mask, as
