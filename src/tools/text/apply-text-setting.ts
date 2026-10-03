@@ -62,19 +62,29 @@ function selectedCommittedTextLayer(): TextLayer | null {
 }
 
 /**
- * Push one history entry before mutating the selected committed text layer.
- * Call from a control's drag-start / before a discrete change so the pre-change
- * texture is snapshotted (a no-op while editing — commit handles history there).
- *
- * When a drag begins, cache the layer's current anchor so the drag's
- * `applyTextSetting` stream can skip the "measure the old layer to find its
- * offset" rasterization on every pointer-move (#758).
+ * Push one history entry before mutating the selected committed text layer
+ * and return that layer (null while editing — commit handles history there).
+ * Clears any cached drag anchor: this starts a new, non-drag edit.
  */
-export function beginTextLayerHistory(): void {
+export function pushTextLayerHistory(): TextLayer | null {
   dragAnchor = null;
   const layer = selectedCommittedTextLayer();
-  if (!layer) return;
+  if (!layer) return null;
   useEditorStore.getState().pushHistory('Text');
+  return layer;
+}
+
+/**
+ * Start a slider drag: push one history entry so the pre-change texture is
+ * snapshotted, and cache the layer's current anchor so the drag's
+ * `applyTextSetting` stream can skip the "measure the old layer to find its
+ * offset" rasterization on every pointer-move (#758). Must be paired with
+ * {@link endTextLayerHistory}; one-shot changes use
+ * {@link applyDiscreteTextSetting} instead.
+ */
+export function beginTextLayerHistory(): void {
+  const layer = pushTextLayerHistory();
+  if (!layer) return;
 
   const engine = getEngine();
   if (!engine || layer.pathId) return;
@@ -97,6 +107,16 @@ export function beginTextLayerHistory(): void {
 export function endTextLayerHistory(): void {
   rerenderCoalesced.flush();
   dragAnchor = null;
+}
+
+/**
+ * Apply a one-shot setting change (a select or toggle) as its own history
+ * entry. Unlike a slider drag it takes the synchronous re-render path, so a
+ * Style change also loads the face it needs (#1152).
+ */
+export function applyDiscreteTextSetting<K extends keyof TextSettings>(key: K, value: TextSettings[K]): void {
+  pushTextLayerHistory();
+  applyTextSetting(key, value);
 }
 
 /**
@@ -217,7 +237,9 @@ function refreshTextAfterFontLoad(
 /**
  * Set a text tool setting and, when a committed text layer is selected (and not
  * editing), apply the change to that layer immediately (Character-panel style).
- * Does NOT push history — call {@link beginTextLayerHistory} first.
+ * Does NOT push history — use {@link applyDiscreteTextSetting} for a one-shot
+ * change, or bracket a drag with {@link beginTextLayerHistory} /
+ * {@link endTextLayerHistory}.
  *
  * During a slider drag (between `beginTextLayerHistory` and
  * `endTextLayerHistory`) the GPU re-render is coalesced to one per animation
@@ -248,6 +270,9 @@ export function applyTextSetting<K extends keyof TextSettings>(key: K, value: Te
     // In-drag path: coalesce the GPU render to the next animation frame so a
     // 250 Hz pen tablet stops rasterizing multiple times per displayed frame.
     rerenderCoalesced(layer.id);
+    if (key === 'fontStyle') {
+      refreshWhenStyleLoads({ id: layer.id, anchorX: dragAnchor.anchorX, anchorY: dragAnchor.anchorY });
+    }
     return;
   }
 
@@ -330,10 +355,9 @@ export function applyTextFontFamily(family: string): void {
   const { weight, loading } = ensureWeightLoaded(family, ts.settings.text.fontWeight);
   ts.setTextSetting('fontWeight', weight);
 
-  const layer = selectedCommittedTextLayer();
+  const layer = pushTextLayerHistory();
   let anchor: Anchored | null = null;
   if (layer) {
-    useEditorStore.getState().pushHistory('Text');
     useEditorStore.getState().updateTextLayerProperties(layer.id, { fontFamily: family, fontWeight: weight });
     anchor = rerenderLayer(layer, { ...layer, fontFamily: family, fontWeight: weight } as TextLayer);
   }
@@ -359,10 +383,9 @@ export function applyTextWeight(weight: number): void {
   const { weight: resolved, loading } = ensureWeightLoaded(family, weight);
   ts.setTextSetting('fontWeight', resolved);
 
-  const layer = selectedCommittedTextLayer();
+  const layer = pushTextLayerHistory();
   let anchor: Anchored | null = null;
   if (layer) {
-    useEditorStore.getState().pushHistory('Text');
     useEditorStore.getState().updateTextLayerProperties(layer.id, { fontWeight: resolved });
     anchor = rerenderLayer(layer, { ...layer, fontWeight: resolved } as TextLayer);
   }

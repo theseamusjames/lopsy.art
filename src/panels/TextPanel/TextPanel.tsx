@@ -7,6 +7,7 @@ import { useFontEntry } from '../../app/local-fonts-store';
 import { extractFamilyName } from '../../utils/font-loader';
 import {
   applyTextSetting,
+  applyDiscreteTextSetting,
   applyTextFontFamily,
   applyTextWeight,
   beginTextLayerHistory,
@@ -46,14 +47,6 @@ export function TextPanel() {
   const fontEntry = useFontEntry(extractFamilyName(text.fontFamily));
   const availableWeights = fontEntry?.weights ?? [400, 700];
 
-  const discrete = <K extends 'fontStyle' | 'align' | 'underline' | 'strikethrough'>(
-    key: K,
-    value: (typeof text)[K],
-  ) => {
-    beginTextLayerHistory();
-    applyTextSetting(key, value);
-  };
-
   return (
     <div className={styles.panel} data-panel="text">
       <section className={styles.section}>
@@ -73,7 +66,7 @@ export function TextPanel() {
           <select
             className={styles.select}
             value={text.fontStyle}
-            onChange={(e) => discrete('fontStyle', e.target.value as FontStyle)}
+            onChange={(e) => applyDiscreteTextSetting('fontStyle', e.target.value as FontStyle)}
             aria-label="Font style"
           >
             <option value="normal">Normal</option>
@@ -144,7 +137,7 @@ export function TextPanel() {
               key={value}
               type="button"
               className={`${styles.alignBtn} ${text.align === value ? styles.alignBtnActive : ''}`}
-              onClick={() => discrete('align', value)}
+              onClick={() => applyDiscreteTextSetting('align', value)}
               aria-label={label}
               aria-pressed={text.align === value}
               title={label}
@@ -173,7 +166,7 @@ export function TextPanel() {
           <button
             type="button"
             className={`${styles.decorationBtn} ${text.underline ? styles.decorationBtnActive : ''}`}
-            onClick={() => discrete('underline', !text.underline)}
+            onClick={() => applyDiscreteTextSetting('underline', !text.underline)}
             aria-label="Toggle underline"
             aria-pressed={text.underline}
             title="Underline"
@@ -183,7 +176,7 @@ export function TextPanel() {
           <button
             type="button"
             className={`${styles.decorationBtn} ${text.strikethrough ? styles.decorationBtnActive : ''}`}
-            onClick={() => discrete('strikethrough', !text.strikethrough)}
+            onClick={() => applyDiscreteTextSetting('strikethrough', !text.strikethrough)}
             aria-label="Toggle strikethrough"
             aria-pressed={text.strikethrough}
             title="Strikethrough"

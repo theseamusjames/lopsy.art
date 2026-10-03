@@ -11,10 +11,12 @@ import { rerenderCommittedTextLayer, invalidatePathTextCache, textLayerAnchor } 
 import { textAnchorOf } from '../../../tools/text/text-transform';
 import {
   applyTextSetting,
+  applyDiscreteTextSetting,
   applyTextFontFamily,
   applyTextWeight,
   beginTextLayerHistory,
   endTextLayerHistory,
+  pushTextLayerHistory,
 } from '../../../tools/text/apply-text-setting';
 import { textSizeTypedMax, TEXT_SIZE_SLIDER_MAX } from '../../../tools/text/text-settings';
 import type { TextLayer, FontStyle, TextAlign } from '../../../types';
@@ -67,7 +69,7 @@ export function TextOptions() {
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       if (!editingLayerId || !editingLayer || editingLayer.type !== 'text') return;
       const val = e.target.value;
-      beginTextLayerHistory();
+      pushTextLayerHistory();
       if (val) {
         // Unbinding re-renders at prePathX/Y as the text anchor, so store the
         // anchor — not the texture's top-left, which sits a render offset
@@ -138,7 +140,7 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textFontStyle}
-        onChange={(e) => { beginTextLayerHistory(); applyTextSetting('fontStyle', e.target.value as FontStyle); }}
+        onChange={(e) => applyDiscreteTextSetting('fontStyle', e.target.value as FontStyle)}
         aria-label="Font style"
       >
         <option value="normal">Normal</option>
@@ -148,7 +150,7 @@ export function TextOptions() {
       <select
         className={styles.select}
         value={textAlign}
-        onChange={(e) => { beginTextLayerHistory(); applyTextSetting('align', e.target.value as TextAlign); }}
+        onChange={(e) => applyDiscreteTextSetting('align', e.target.value as TextAlign)}
         aria-labelledby="text-align-label"
       >
         <option value="left">Left</option>
@@ -159,7 +161,7 @@ export function TextOptions() {
       <div className={decorationStyles.decorationGroup}>
         <button
           className={`${decorationStyles.decorationBtn} ${textUnderline ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => { beginTextLayerHistory(); applyTextSetting('underline', !textUnderline); }}
+          onClick={() => applyDiscreteTextSetting('underline', !textUnderline)}
           aria-label="Toggle underline"
           aria-pressed={textUnderline}
           title="Underline"
@@ -168,7 +170,7 @@ export function TextOptions() {
         </button>
         <button
           className={`${decorationStyles.decorationBtn} ${textStrikethrough ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => { beginTextLayerHistory(); applyTextSetting('strikethrough', !textStrikethrough); }}
+          onClick={() => applyDiscreteTextSetting('strikethrough', !textStrikethrough)}
           aria-label="Toggle strikethrough"
           aria-pressed={textStrikethrough}
           title="Strikethrough"
@@ -177,7 +179,7 @@ export function TextOptions() {
         </button>
         <button
           className={`${decorationStyles.decorationBtn} ${textVertical ? decorationStyles.decorationBtnActive : ''}`}
-          onClick={() => { beginTextLayerHistory(); applyTextSetting('vertical', !textVertical); }}
+          onClick={() => applyDiscreteTextSetting('vertical', !textVertical)}
           aria-label="Toggle vertical text"
           aria-pressed={textVertical}
           title="Vertical text"
