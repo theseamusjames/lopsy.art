@@ -6,7 +6,8 @@ export interface PathsSlice {
   paths: StoredPath[];
   selectedPathId: string | null;
   addPath: (anchors: readonly PathAnchor[], closed: boolean) => void;
-  removePath: (id: string) => void;
+  /** Records a "Delete Path" history entry unless `skipHistory` is set. */
+  removePath: (id: string, skipHistory?: boolean) => void;
   selectPath: (id: string | null) => void;
   renamePath: (id: string, name: string) => void;
   updatePathAnchors: (id: string, anchors: readonly PathAnchor[], closed: boolean) => void;
@@ -45,7 +46,11 @@ export const createPathsSlice: SliceCreator<PathsSlice> = (set, get) => ({
     });
   },
 
-  removePath: (id) => {
+  removePath: (id, skipHistory = false) => {
+    if (!get().paths.some((p) => p.id === id)) return;
+    // Paths travel inside every history snapshot, so the entry must be pushed
+    // before the removal for undo to bring the path back (#1179).
+    if (!skipHistory) get().pushHistoryMetadata('Delete Path');
     const state = get();
     set({
       paths: state.paths.filter((p) => p.id !== id),
@@ -58,6 +63,9 @@ export const createPathsSlice: SliceCreator<PathsSlice> = (set, get) => ({
   },
 
   renamePath: (id, name) => {
+    const path = get().paths.find((p) => p.id === id);
+    if (!path || path.name === name) return;
+    get().pushHistoryMetadata('Rename Path');
     set({
       paths: get().paths.map((p) => (p.id === id ? { ...p, name } : p)),
     });

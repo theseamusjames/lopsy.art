@@ -263,6 +263,7 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
     } else {
       anchors = polygonToPathAnchors(cx, cy, rx, ry, shape.polygonSides, shape.cornerRadius);
     }
+    editorState.pushHistoryMetadata('Add Path');
     editorState.addPath(anchors, true);
     editorState.notifyRender();
   }

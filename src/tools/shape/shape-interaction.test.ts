@@ -50,6 +50,7 @@ const editorState = {
   viewport: { zoom: 1 },
   dirtyLayerIds: new Set<string>(),
   pushHistory: vi.fn(),
+  pushHistoryMetadata: vi.fn(),
   notifyRender: vi.fn(),
   undo: vi.fn(),
   addPath: vi.fn(),
@@ -169,6 +170,7 @@ beforeEach(() => {
   editorState.notifyRender.mockClear();
   editorState.undo.mockClear();
   editorState.addPath.mockClear();
+  editorState.pushHistoryMetadata.mockClear();
   setState.mockClear();
   uiState.setPendingShapeClick.mockClear();
   uiState.showGrid = false;
@@ -489,6 +491,10 @@ describe('shape up — path output', () => {
     handleShapeUp(makeState({ startPoint: { x: 50, y: 50 } }), { x: 80, y: 70 });
     expect(editorState.undo).toHaveBeenCalledTimes(1);
     expect(editorState.addPath).toHaveBeenCalledTimes(1);
+    // The path gets its own history entry, pushed before it is added (#1179).
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Add Path');
+    expect(editorState.pushHistoryMetadata.mock.invocationCallOrder[0]!)
+      .toBeLessThan(editorState.addPath.mock.invocationCallOrder[0]!);
     const [anchors, closed] = editorState.addPath.mock.calls[0]! as [PathAnchor[], boolean];
     expect(closed).toBe(true);
     expect(anchors).toHaveLength(4);
