@@ -153,3 +153,92 @@ test.describe('#1179 Delete Path is undoable', () => {
     expect(offStroke.a).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// #1169 — Gradient on an offset layer
+// ---------------------------------------------------------------------------
+
+/**
+ * A white band at doc y 300..400 on Layer 1, moved 100 px with Shift+arrow
+ * nudges, then loaded as a selection from the layer thumbnail.
+ */
+async function setUpNudgedBand(page: Page, key: 'ArrowUp' | 'ArrowDown'): Promise<string> {
+  const id = await activeLayerId(page);
+  await setForegroundColor(page, 255, 255, 255);
+  await fillRect(page, 100, 300, 600, 100);
+
+  await selectTool(page, 'move');
+  for (let i = 0; i < 10; i++) {
+    await page.keyboard.press(`Shift+${key}`);
+  }
+  await page.waitForTimeout(200);
+
+  await page.locator(`[data-layer-id="${id}"] [class*="thumbnail"]`).first()
+    .click({ modifiers: ['Control'] });
+  await page.waitForTimeout(200);
+  return id;
+}
+
+async function gradientTool(page: Page, type: 'linear' | 'radial') {
+  await page.locator('[data-tool-id="gradient"]').click();
+  await page.locator('[aria-labelledby="gradient-type-label"]').selectOption(type);
+}
+
+test.describe('#1169 Gradient follows the drag on an offset layer', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 800, 600, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+  });
+
+  test('linear gradient on a layer nudged up (negative offset)', async ({ page }) => {
+    const id = await setUpNudgedBand(page, 'ArrowUp');
+    expect((await layerPos(page, id)).y).toBeLessThan(0);
+
+    await gradientTool(page, 'linear');
+    await dragDoc(page, { x: 400, y: 200 }, { x: 400, y: 300 });
+    await page.screenshot({ path: `${SHOTS}/gradient-negative-offset-linear.png` });
+
+    // Default stops are black → white along the 100 px drag.
+    const top = await getPixelAt(page, 400, 205, id);
+    const mid = await getPixelAt(page, 400, 250, id);
+    const bottom = await getPixelAt(page, 400, 295, id);
+    expect(top.a).toBe(255);
+    expect(top.r).toBeLessThan(40);
+    expect(Math.abs(mid.r - 128)).toBeLessThan(20);
+    expect(bottom.r).toBeGreaterThan(215);
+    // Outside the band (and the selection) the layer stays empty.
+    expect((await getPixelAt(page, 400, 150, id)).a).toBe(0);
+  });
+
+  test('radial gradient on a layer nudged up (negative offset)', async ({ page }) => {
+    const id = await setUpNudgedBand(page, 'ArrowUp');
+    await gradientTool(page, 'radial');
+    await dragDoc(page, { x: 400, y: 250 }, { x: 480, y: 250 });
+    await page.screenshot({ path: `${SHOTS}/gradient-negative-offset-radial.png` });
+
+    // Black at the centre, half-way grey 40 px out, white past the radius.
+    expect((await getPixelAt(page, 400, 250, id)).r).toBeLessThan(25);
+    expect(Math.abs((await getPixelAt(page, 440, 250, id)).r - 128)).toBeLessThan(20);
+    expect(Math.abs((await getPixelAt(page, 400, 290, id)).r - 128)).toBeLessThan(20);
+    expect((await getPixelAt(page, 500, 250, id)).r).toBeGreaterThan(235);
+  });
+
+  test('linear gradient on a layer nudged down (positive offset)', async ({ page }) => {
+    const id = await setUpNudgedBand(page, 'ArrowDown');
+
+    await gradientTool(page, 'linear');
+    await dragDoc(page, { x: 400, y: 400 }, { x: 400, y: 500 });
+    await page.screenshot({ path: `${SHOTS}/gradient-positive-offset-linear.png` });
+
+    const top = await getPixelAt(page, 400, 405, id);
+    const mid = await getPixelAt(page, 400, 450, id);
+    const bottom = await getPixelAt(page, 400, 495, id);
+    expect(top.a).toBe(255);
+    expect(top.r).toBeLessThan(40);
+    expect(Math.abs(mid.r - 128)).toBeLessThan(20);
+    expect(bottom.r).toBeGreaterThan(215);
+    expect((await getPixelAt(page, 400, 350, id)).a).toBe(0);
+  });
+});
