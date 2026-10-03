@@ -71,13 +71,14 @@ async function compositeAt(page: Page, x: number, y: number): Promise<[number, n
   return page.evaluate(async ({ x, y }) => {
     const w = window as unknown as {
       __readCompositedPixels: () => Promise<{ width: number; height: number; pixels: number[] }>;
-      __editorStore: { getState: () => { document: { width: number; height: number } } };
+      __editorStore: { getState: () => { document: { width: number; height: number }; viewport: { zoom: number; panX: number; panY: number } } };
     };
+    // The readback is the bottom-up screen canvas (document plus pasteboard),
+    // so map through the viewport rather than scaling across the canvas.
     const { width, height, pixels } = await w.__readCompositedPixels();
-    const doc = w.__editorStore.getState().document;
-    // The composite is bottom-up and may be larger than the document.
-    const px = Math.round(x * (width / doc.width));
-    const py = height - 1 - Math.round(y * (height / doc.height));
+    const { document: doc, viewport: vp } = w.__editorStore.getState();
+    const px = Math.floor((x + 0.5 - doc.width / 2) * vp.zoom + vp.panX + width / 2);
+    const py = height - 1 - Math.floor((y + 0.5 - doc.height / 2) * vp.zoom + vp.panY + height / 2);
     const i = (py * width + px) * 4;
     return [pixels[i] ?? 0, pixels[i + 1] ?? 0, pixels[i + 2] ?? 0];
   }, { x, y });
