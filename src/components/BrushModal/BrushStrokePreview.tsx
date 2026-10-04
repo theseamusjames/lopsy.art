@@ -47,6 +47,114 @@ function seededRandom(seed: number): () => number {
   };
 }
 
+interface TexturePlacement {
+  scale: number;
+  originX: number;
+  originY: number;
+}
+
+function blankLike(src: OffscreenCanvas): [OffscreenCanvas, OffscreenCanvasRenderingContext2D] {
+  const canvas = new OffscreenCanvas(src.width, src.height);
+  return [canvas, canvas.getContext('2d')!];
+}
+
+function invertAlpha(src: OffscreenCanvas): OffscreenCanvas {
+  const [canvas, ctx] = blankLike(src);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.drawImage(src, 0, 0);
+  return canvas;
+}
+
+// 'lighter' adds premultiplied values and clamps, so two draws give min(2a, 1).
+function doubleAlpha(src: OffscreenCanvas): OffscreenCanvas {
+  const [canvas, ctx] = blankLike(src);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(src, 0, 0);
+  ctx.drawImage(src, 0, 0);
+  return canvas;
+}
+
+function maskedBy(src: OffscreenCanvas, mask: OffscreenCanvas): OffscreenCanvas {
+  const [canvas, ctx] = blankLike(src);
+  ctx.drawImage(src, 0, 0);
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(mask, 0, 0);
+  return canvas;
+}
+
+function whiteWithAlphaOf(src: OffscreenCanvas): OffscreenCanvas {
+  const [canvas, ctx] = blankLike(src);
+  ctx.drawImage(src, 0, 0);
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+// The tiled mask is built on its own canvas and applied once: applying
+// each tile with destination-in would erase everything outside that tile.
+function tiledTextureMask(
+  like: OffscreenCanvas,
+  texture: BrushTextureData,
+  placement: TexturePlacement,
+): OffscreenCanvas {
+  const texCanvas = new OffscreenCanvas(texture.width, texture.height);
+  const texCtx = texCanvas.getContext('2d')!;
+  const imgData = texCtx.createImageData(texture.width, texture.height);
+  for (let j = 0; j < texture.data.length; j++) {
+    imgData.data[j * 4] = 255;
+    imgData.data[j * 4 + 1] = 255;
+    imgData.data[j * 4 + 2] = 255;
+    imgData.data[j * 4 + 3] = texture.data[j] ?? 0;
+  }
+  texCtx.putImageData(imgData, 0, 0);
+
+  const [canvas, ctx] = blankLike(like);
+  const pattern = ctx.createPattern(texCanvas, 'repeat');
+  if (!pattern) return canvas;
+  // Matches brush_dab_footer.glsl: texel (0, 0) sits half a tile before
+  // the stroke origin (fract(rel / tile + 0.5)).
+  const tileW = texture.width * placement.scale;
+  const tileH = texture.height * placement.scale;
+  pattern.setTransform(
+    new DOMMatrix()
+      .translate(placement.originX - tileW / 2, placement.originY - tileH / 2)
+      .scale(placement.scale),
+  );
+  ctx.fillStyle = pattern;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+// Mirrors the per-dab texture blend in brush_dab_footer.glsl. The engine
+// MAX-blends dabs and every mode is monotonic in the dab alpha, so applying
+// the texture to the accumulated stroke gives the same result.
+function applyPreviewTexture(
+  stroke: OffscreenCanvas,
+  texture: BrushTextureData,
+  blendMode: BrushTextureBlendMode,
+  placement: TexturePlacement,
+): OffscreenCanvas {
+  const mask = tiledTextureMask(stroke, texture, placement);
+  if (blendMode === 'multiply') return maskedBy(stroke, mask);
+  if (blendMode === 'subtract') return maskedBy(stroke, invertAlpha(mask));
+
+  // overlay(a, t) = a < 0.5 ? 2at : 1 - 2(1 - a)(1 - t)
+  //              = min(2a, 1) * t + max(2a - 1, 0) * (1 - t)
+  const alpha = whiteWithAlphaOf(stroke);
+  const low = maskedBy(doubleAlpha(alpha), mask);
+  const high = maskedBy(invertAlpha(doubleAlpha(invertAlpha(alpha))), invertAlpha(mask));
+  const [result, ctx] = blankLike(stroke);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(low, 0, 0);
+  ctx.drawImage(high, 0, 0);
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.drawImage(stroke, 0, 0);
+  return result;
+}
+
 export function BrushStrokePreview(props: BrushStrokePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [debouncedProps, setDebouncedProps] = useState(props);
@@ -267,39 +375,17 @@ export function BrushStrokePreview(props: BrushStrokePreviewProps) {
       prevPt = pt;
     }
 
-    // Apply texture mask to the stroke canvas before compositing
-    if (props.texture) {
-      const texData = props.texture;
-      const texScale = props.textureScale / 100;
-      sCtx.save();
-      sCtx.globalCompositeOperation = 'destination-in';
-      const texCanvas = new OffscreenCanvas(texData.width, texData.height);
-      const texCtx = texCanvas.getContext('2d');
-      if (texCtx) {
-        const imgData = texCtx.createImageData(texData.width, texData.height);
-        for (let j = 0; j < texData.data.length; j++) {
-          let v = texData.data[j]!;
-          if (props.textureBlendMode === 'subtract') v = 255 - v;
-          imgData.data[j * 4] = 255;
-          imgData.data[j * 4 + 1] = 255;
-          imgData.data[j * 4 + 2] = 255;
-          imgData.data[j * 4 + 3] = v;
-        }
-        texCtx.putImageData(imgData, 0, 0);
-        const tileW = texData.width * texScale;
-        const tileH = texData.height * texScale;
-        for (let ty = 0; ty < cssH; ty += tileH) {
-          for (let tx = 0; tx < cssW; tx += tileW) {
-            sCtx.drawImage(texCanvas, tx, ty, tileW, tileH);
-          }
-        }
-      }
-      sCtx.restore();
-    }
+    const texturedStroke = props.texture
+      ? applyPreviewTexture(strokeCanvas, props.texture, props.textureBlendMode, {
+          scale: (props.textureScale / 100) * dpr,
+          originX: p0.x * dpr,
+          originY: p0.y * dpr,
+        })
+      : strokeCanvas;
 
     // Composite the stroke canvas onto the preview at base opacity
     ctx.globalAlpha = baseOpacity;
-    ctx.drawImage(strokeCanvas, 0, 0, cssW, cssH);
+    ctx.drawImage(texturedStroke, 0, 0, cssW, cssH);
     ctx.globalAlpha = 1;
   }, [debouncedProps]);
 
