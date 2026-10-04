@@ -581,10 +581,15 @@ state over it.
   tethered to it by a line. Rotation handles are hit-tested **first**, so they
   win where the two overlap.
 - **Hit radius** is `8 / zoom` in document space — constant in screen terms.
-  For the Move tool it is additionally clamped to at most 80% of the
-  selection's smaller half-extent (and at least 1 px) so a click near the
-  middle of a small selection can't register as a handle grab. That clamp
-  applies to the **scale** handles only: rotation handles sit outside the box,
+  For the Move tool, a **scale** handle's circle reaches into the box only
+  as far as a quarter of the box's smaller half-extent (`hitTestBoxHandle`);
+  outside the outline it keeps the full radius. On a normal box that covers
+  the whole circle, but on a small one — a 13px text label at fit zoom —
+  most of the interior is a move zone and the handles are grabbed from just
+  outside the edge (#1200; before, the radius itself was clamped to 80% of
+  the half-extent, which on an 18px line box left a ~4 doc-px move band and
+  dragging the word stretched it). Where scale circles overlap outside a
+  small box, the nearest handle wins. Rotation handles sit outside the box,
   so they keep `8 / zoom` (capped only at 80% of their ~28 doc-px distance
   from the corner, so at very low zoom they still can't reach the box). A
   thin selection's rotate circles are therefore grabbable over their whole

@@ -11,6 +11,7 @@ import {
   computeInverseAffineMatrix,
   getHandlePositions,
   hitTestHandle,
+  hitTestBoxHandle,
   isScaleHandle,
   isRotateHandle,
   computeScale,
@@ -220,6 +221,67 @@ describe('hitTestHandle', () => {
     expect(hitTestHandle(offCentre, state, 6.4)).toBeNull();
     expect(hitTestHandle(offCentre, state, 6.4, 10)).toBe('rotate-top-right');
     expect(hitTestHandle({ x: 208, y: 0 }, state, 6.4, 10)).toBeNull();
+  });
+});
+
+describe('hitTestHandle overlapping circles', () => {
+  it('picks the nearest scale handle, not the first in the list', () => {
+    const state = createTransformState({ x: 0, y: 0, width: 10, height: 10 });
+    expect(hitTestHandle({ x: 10, y: 6 }, state, 8)).toBe('right');
+    expect(hitTestHandle({ x: 11, y: 11 }, state, 8)).toBe('bottom-right');
+  });
+});
+
+describe('hitTestBoxHandle (#1200)', () => {
+  // A 13px point-text label's line box at the ~69% fit zoom of a 1600x1200
+  // document: 8 screen px is 11.6 doc px, more than half the box height.
+  const zoom = 0.69;
+  const label = createTransformState({ x: 100, y: 100, width: 70, height: 18.2 });
+
+  it('treats most of a small box as a move zone', () => {
+    expect(hitTestBoxHandle({ x: 135, y: 105 }, label, zoom)).toBeNull();
+    expect(hitTestBoxHandle({ x: 135, y: 109.1 }, label, zoom)).toBeNull();
+    expect(hitTestBoxHandle({ x: 135, y: 113 }, label, zoom)).toBeNull();
+    // Near a corner, still inside the box: a move, not a corner grab.
+    expect(hitTestBoxHandle({ x: 105, y: 105 }, label, zoom)).toBeNull();
+    let moveRows = 0;
+    for (let dy = 0.5; dy < 18.2; dy += 1) {
+      if (hitTestBoxHandle({ x: 135, y: 100 + dy }, label, zoom) === null) moveRows++;
+    }
+    expect(moveRows).toBeGreaterThanOrEqual(13);
+  });
+
+  it('keeps a thin inside band and the outside of the outline for the handles', () => {
+    expect(hitTestBoxHandle({ x: 135, y: 101 }, label, zoom)).toBe('top');
+    expect(hitTestBoxHandle({ x: 135, y: 92 }, label, zoom)).toBe('top');
+    expect(hitTestBoxHandle({ x: 135, y: 125 }, label, zoom)).toBe('bottom');
+    expect(hitTestBoxHandle({ x: 176, y: 109 }, label, zoom)).toBe('right');
+    expect(hitTestBoxHandle({ x: 100, y: 100 }, label, zoom)).toBe('top-left');
+    expect(hitTestBoxHandle({ x: 94, y: 94 }, label, zoom)).toBe('top-left');
+    expect(hitTestBoxHandle({ x: 135, y: 80 }, label, zoom)).toBeNull();
+  });
+
+  it('keeps the rotation handles outside the corners', () => {
+    const rot = getHandlePositions(label)['rotate-top-right'];
+    expect(hitTestBoxHandle(rot, label, zoom)).toBe('rotate-top-right');
+  });
+
+  it('leaves a normal-size box with full handle circles', () => {
+    const box = createTransformState({ x: 0, y: 0, width: 400, height: 300 });
+    expect(hitTestBoxHandle({ x: 7, y: 150 }, box, 1)).toBe('left');
+    expect(hitTestBoxHandle({ x: 5, y: 5 }, box, 1)).toBe('top-left');
+    expect(hitTestBoxHandle({ x: 200, y: 7 }, box, 1)).toBe('top');
+    expect(hitTestBoxHandle({ x: 200, y: 9 }, box, 1)).toBeNull();
+    expect(hitTestBoxHandle({ x: 200, y: 150 }, box, 1)).toBeNull();
+  });
+
+  it('measures the inside band in the rotated box', () => {
+    const turned = { ...label, rotation: Math.PI / 2 };
+    const centre = { x: 135, y: 109.1 };
+    expect(hitTestBoxHandle(centre, turned, zoom)).toBeNull();
+    // 5 doc px in from the turned "top" edge, which now faces +x.
+    expect(hitTestBoxHandle({ x: centre.x + 9.1 - 5, y: centre.y }, turned, zoom)).toBeNull();
+    expect(hitTestBoxHandle({ x: centre.x + 9.1 - 1, y: centre.y }, turned, zoom)).toBe('top');
   });
 });
 
