@@ -89,8 +89,10 @@ test.describe('Layers panel auto-scrolls while dragging a row', () => {
     await page.mouse.down();
 
     // Hover just inside the list's top edge: the list scrolls up on its own.
+    // The step is per animation frame and the scroll spans ~30 rows; on a
+    // loaded swiftshader runner rAF drops well below 60fps, so allow time.
     await page.mouse.move(x, listBox.y + 4, { steps: 10 });
-    await expect.poll(async () => (await listScroll(page)).top, { timeout: 5000 }).toBe(0);
+    await expect.poll(async () => (await listScroll(page)).top, { timeout: 20000 }).toBe(0);
 
     // The top layer row is now on screen; drop in the gap above it.
     const topBox = (await page.locator(`[data-layer-id="${topLayer}"]`).boundingBox())!;
@@ -189,7 +191,7 @@ test.describe('Layers panel auto-scroll into a group gap', () => {
     await page.mouse.move(x, gripBox.y + gripBox.height / 2);
     await page.mouse.down();
     await page.mouse.move(x, listBox.y + 2, { steps: 10 });
-    await expect.poll(async () => (await listScroll(page)).top, { timeout: 5000 }).toBe(0);
+    await expect.poll(async () => (await listScroll(page)).top, { timeout: 20000 }).toBe(0);
 
     // The gap under the group's last child, dragged one level to the right:
     // the bottom of the group, not below it.
