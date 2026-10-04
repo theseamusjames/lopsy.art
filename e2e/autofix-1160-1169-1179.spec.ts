@@ -174,7 +174,7 @@ async function setUpNudgedBand(page: Page, key: 'ArrowUp' | 'ArrowDown'): Promis
   await page.waitForTimeout(200);
 
   await page.locator(`[data-layer-id="${id}"] [class*="thumbnail"]`).first()
-    .click({ modifiers: ['Control'] });
+    .click({ modifiers: ['ControlOrMeta'] });
   await page.waitForTimeout(200);
   return id;
 }
