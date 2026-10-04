@@ -226,10 +226,11 @@ test.describe('#1174 — clicks just off path text start a new layer', () => {
 
   test('a click inside a tall arch, away from every glyph, starts a new layer', async ({ page }) => {
     // A tall arch: its ink box covers the space under the apex, but no glyph
-    // is there.
+    // is there. Every drag stays on screen: Firefox clamps pointer coords to
+    // the viewport, which bends a handle dragged below it.
     await page.keyboard.press('p');
-    await dragDoc(page, [150, 500], [150, 300]);
-    await dragDoc(page, [650, 500], [650, 700]);
+    await dragDoc(page, [150, 400], [150, 200]);
+    await dragDoc(page, [650, 400], [650, 600]);
     const pathId = await commitPath(page);
 
     await page.keyboard.press('t');
@@ -241,11 +242,11 @@ test.describe('#1174 — clicks just off path text start a new layer', () => {
     // The run climbs the arch from one foot to the other.
     expect(ink.left).toBeLessThan(200);
     expect(ink.right).toBeGreaterThan(560);
-    expect(ink.top).toBeLessThan(380);
-    expect(ink.bottom).toBeGreaterThan(470);
+    expect(ink.top).toBeLessThan(280);
+    expect(ink.bottom).toBeGreaterThan(370);
 
     // Under the apex, inside the ink box but ≥ 70 px from any glyph.
-    await typeText(page, [400, 470], 'INSIDE');
+    await typeText(page, [400, 370], 'INSIDE');
     const layers = await textLayers(page);
     expect(layers.map((l) => l.text).sort()).toEqual(['INSIDE', 'OVER THE HILL AND FAR AWAY']);
   });
