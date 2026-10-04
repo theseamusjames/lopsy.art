@@ -10,6 +10,8 @@ uniform float u_density;
 
 out vec4 fragColor;
 
+//#include premul_sample
+
 void main() {
     vec2 texSize = vec2(textureSize(u_tex, 0));
     vec2 pixelCoord = v_uv * texSize;
@@ -36,8 +38,11 @@ void main() {
     // Clamp UV to avoid sampling outside texture
     sampleUV = clamp(sampleUV, vec2(0.0), vec2(1.0));
 
-    // Sample color at cell center
-    vec4 c = texture(u_tex, sampleUV);
+    // Cell centres can land between texels on an anti-aliased edge. A
+    // straight-alpha LINEAR fetch averages in the transparent neighbours'
+    // black RGB, which darkens lum and blows the dot up past the
+    // silhouette as a faint ghost (#1195).
+    vec4 c = samplePremulBilinear(u_tex, sampleUV);
 
     // Convert to luminance for dot size calculation
     float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
