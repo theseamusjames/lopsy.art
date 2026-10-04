@@ -11,6 +11,7 @@ import {
   featherSelection,
   growSelection,
   shrinkSelection,
+  translateSelectionMask,
 } from './selection';
 
 describe('createRectSelection', () => {
@@ -347,5 +348,29 @@ describe('growSelection / shrinkSelection (#1038)', () => {
       }
     }
     expect(strayOutside).toBe(0);
+  });
+});
+
+describe('translateSelectionMask (#1188)', () => {
+  it('moves the mask and keeps bounds equal to the moved shape', () => {
+    const mask = createRectSelection({ x: 2, y: 3, width: 4, height: 2 }, 20, 10);
+    const out = translateSelectionMask(mask, 20, 10, { x: 2, y: 3, width: 4, height: 2 }, 5, 1);
+    expect(out.bounds).toEqual({ x: 7, y: 4, width: 4, height: 2 });
+    expect(out.mask[4 * 20 + 7]).toBe(255);
+    expect(out.mask[3 * 20 + 2]).toBe(0);
+  });
+
+  it('clips the bounds to the canvas when the move pushes part of it off', () => {
+    const all = createRectSelection({ x: 0, y: 0, width: 20, height: 10 }, 20, 10);
+    const out = translateSelectionMask(all, 20, 10, { x: 0, y: 0, width: 20, height: 10 }, 15, 6);
+    expect(out.bounds).toEqual({ x: 15, y: 6, width: 5, height: 4 });
+    expect(selectionBounds(out.mask, 20, 10)).toEqual(out.bounds);
+  });
+
+  it('returns null bounds and an empty mask when moved fully off the canvas', () => {
+    const mask = createRectSelection({ x: 2, y: 2, width: 4, height: 4 }, 20, 10);
+    const out = translateSelectionMask(mask, 20, 10, { x: 2, y: 2, width: 4, height: 4 }, -10, 0);
+    expect(out.bounds).toBeNull();
+    expect(isEmptySelection(out.mask)).toBe(true);
   });
 });

@@ -165,6 +165,49 @@ export function isEmptySelection(mask: Uint8ClampedArray): boolean {
   return true;
 }
 
+/**
+ * Move a selection mask by (dx, dy). Only `region` (the old bounds) holds
+ * content, so only it is walked. Whatever leaves the document is dropped,
+ * and the returned bounds cover only what stays on it (#1188): bounds
+ * shifted as a whole hung off the canvas, so Copy and Crop worked on a
+ * rectangle the size of the old one.
+ */
+export function translateSelectionMask(
+  mask: Uint8ClampedArray,
+  width: number,
+  height: number,
+  region: Rect,
+  dx: number,
+  dy: number,
+): { mask: Uint8ClampedArray; bounds: Rect | null } {
+  const out = new Uint8ClampedArray(mask.length);
+  const rx0 = Math.max(0, Math.floor(region.x));
+  const ry0 = Math.max(0, Math.floor(region.y));
+  const rx1 = Math.min(width, Math.ceil(region.x + region.width));
+  const ry1 = Math.min(height, Math.ceil(region.y + region.height));
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let sy = ry0; sy < ry1; sy++) {
+    const ty = sy + dy;
+    if (ty < 0 || ty >= height) continue;
+    for (let sx = rx0; sx < rx1; sx++) {
+      const v = mask[sy * width + sx] ?? 0;
+      if (v === 0) continue;
+      const tx = sx + dx;
+      if (tx < 0 || tx >= width) continue;
+      out[ty * width + tx] = v;
+      if (tx < minX) minX = tx;
+      if (tx > maxX) maxX = tx;
+      if (ty < minY) minY = ty;
+      if (ty > maxY) maxY = ty;
+    }
+  }
+  if (maxX < 0) return { mask: out, bounds: null };
+  return { mask: out, bounds: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } };
+}
+
 /** A mask value at or above this counts as inside the selection edge. */
 const EDGE_THRESHOLD = 128;
 
