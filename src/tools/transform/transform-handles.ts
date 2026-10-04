@@ -126,6 +126,49 @@ export function getHandlePositions(
   };
 }
 
+const ROTATE_HANDLES: readonly TransformHandle[] = [
+  'rotate-top-left',
+  'rotate-top-right',
+  'rotate-bottom-right',
+  'rotate-bottom-left',
+];
+
+const SCALE_HANDLES: readonly TransformHandle[] = [
+  'top-left',
+  'top',
+  'top-right',
+  'right',
+  'bottom-right',
+  'bottom',
+  'bottom-left',
+  'left',
+];
+
+function nearestWithin(
+  point: Point,
+  positions: Record<TransformHandle, Point>,
+  handles: readonly TransformHandle[],
+  radius: number,
+): TransformHandle | null {
+  let best: TransformHandle | null = null;
+  let bestDistSq = radius * radius;
+  for (const handle of handles) {
+    const pos = positions[handle];
+    const dx = point.x - pos.x;
+    const dy = point.y - pos.y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq > bestDistSq) continue;
+    best = handle;
+    bestDistSq = distSq;
+  }
+  return best;
+}
+
+/**
+ * Rotation handles are checked first (they sit further out and take
+ * priority where the two overlap). Where scale-handle circles overlap
+ * each other — only on a box under two radii across — the nearest wins.
+ */
 export function hitTestHandle(
   point: Point,
   state: TransformState,
@@ -133,46 +176,88 @@ export function hitTestHandle(
   rotateHandleRadius: number = handleRadius,
 ): TransformHandle | null {
   const positions = getHandlePositions(state);
+  return nearestWithin(point, positions, ROTATE_HANDLES, rotateHandleRadius)
+    ?? nearestWithin(point, positions, SCALE_HANDLES, handleRadius);
+}
 
-  // Check rotation handles first (they're further out and take priority if overlapping)
-  const rotateHandles: TransformHandle[] = [
-    'rotate-top-left',
-    'rotate-top-right',
-    'rotate-bottom-right',
-    'rotate-bottom-left',
-  ];
+/** Screen px radius of a handle's hit circle. */
+export const HANDLE_HIT_RADIUS_PX = 8;
 
-  for (const handle of rotateHandles) {
-    const pos = positions[handle];
-    const dx = point.x - pos.x;
-    const dy = point.y - pos.y;
-    if (dx * dx + dy * dy <= rotateHandleRadius * rotateHandleRadius) {
-      return handle;
+/**
+ * Deepest a scale-handle grab reaches into a box, as a fraction of the
+ * box's smaller half-extent. The rest of the box is a move zone.
+ */
+export const HANDLE_INSIDE_BAND_FRACTION = 0.25;
+
+function distanceToSegment(point: Point, a: Point, b: Point): number {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const lenSq = abx * abx + aby * aby;
+  const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((point.x - a.x) * abx + (point.y - a.y) * aby) / lenSq));
+  return Math.hypot(point.x - (a.x + abx * t), point.y - (a.y + aby * t));
+}
+
+type Edge = readonly [Point, Point];
+
+function isInsideEdges(point: Point, edges: readonly Edge[]): boolean {
+  let isInside = false;
+  for (const [a, b] of edges) {
+    if ((a.y > point.y) !== (b.y > point.y)
+      && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) {
+      isInside = !isInside;
     }
   }
+  return isInside;
+}
 
-  // Check scale handles
-  const scaleHandles: TransformHandle[] = [
-    'top-left',
-    'top',
-    'top-right',
-    'right',
-    'bottom-right',
-    'bottom',
-    'bottom-left',
-    'left',
-  ];
+/**
+ * How far `point` lies inside the box outlined by the corner handles
+ * (distance to the nearest edge), or 0 when it is on or outside it.
+ */
+export function depthInsideBox(point: Point, positions: Record<TransformHandle, Point>): number {
+  const tl = positions['top-left'];
+  const tr = positions['top-right'];
+  const br = positions['bottom-right'];
+  const bl = positions['bottom-left'];
+  const edges: Edge[] = [[tl, tr], [tr, br], [br, bl], [bl, tl]];
+  if (!isInsideEdges(point, edges)) return 0;
+  return Math.min(...edges.map(([a, b]) => distanceToSegment(point, a, b)));
+}
 
-  for (const handle of scaleHandles) {
-    const pos = positions[handle];
-    const dx = point.x - pos.x;
-    const dy = point.y - pos.y;
-    if (dx * dx + dy * dy <= handleRadius * handleRadius) {
-      return handle;
-    }
-  }
+function halfMinExtent(positions: Record<TransformHandle, Point>): number {
+  const tl = positions['top-left'];
+  const tr = positions['top-right'];
+  const br = positions['bottom-right'];
+  const bl = positions['bottom-left'];
+  const width = (Math.hypot(tr.x - tl.x, tr.y - tl.y) + Math.hypot(br.x - bl.x, br.y - bl.y)) / 2;
+  const height = (Math.hypot(bl.x - tl.x, bl.y - tl.y) + Math.hypot(br.x - tr.x, br.y - tr.y)) / 2;
+  return Math.min(width, height) / 2;
+}
 
-  return null;
+/**
+ * Hit-test the Move tool's box handles at `zoom`. A scale handle's circle
+ * is `HANDLE_HIT_RADIUS_PX` screen px around its drawn position, but inside
+ * the box it reaches at most `HANDLE_INSIDE_BAND_FRACTION` of the box's
+ * smaller half-extent: on a small box (a 13px text label at fit zoom) most
+ * of the interior stays a move zone and the handles are grabbed from just
+ * outside the outline (#1200). On a box wider than four handle radii the
+ * band covers the whole circle, so nothing changes there.
+ */
+export function hitTestBoxHandle(point: Point, state: TransformState, zoom: number): TransformHandle | null {
+  const positions = getHandlePositions(state);
+  const radius = HANDLE_HIT_RADIUS_PX / zoom;
+  const halfMin = halfMinExtent(positions);
+  // Rotation handles keep their #1000 radius: at least what the scale
+  // handles had, and short of the corner at low zoom.
+  const clampedRadius = Math.max(1, Math.min(radius, halfMin * 0.8));
+  const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
+  const rotateRadius = Math.max(clampedRadius, Math.min(radius, rotateCornerClearance));
+  const rotateHit = nearestWithin(point, positions, ROTATE_HANDLES, rotateRadius);
+  if (rotateHit) return rotateHit;
+
+  const insideBand = Math.min(radius, halfMin * HANDLE_INSIDE_BAND_FRACTION);
+  if (depthInsideBox(point, positions) > insideBand) return null;
+  return nearestWithin(point, positions, SCALE_HANDLES, radius);
 }
 
 export function isScaleHandle(handle: TransformHandle): boolean {

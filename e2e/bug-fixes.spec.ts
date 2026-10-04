@@ -325,39 +325,7 @@ test.describe('Bug Fix: Selection Constraining Painting', () => {
     const s0 = await getEditorState(page);
     const layerId = s0.document.layers[0]!.id;
 
-    // Create a rectangular selection in the center (50,50 to 150,150)
-    await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          setSelection: (
-            bounds: { x: number; y: number; width: number; height: number },
-            mask: Uint8ClampedArray,
-            maskWidth: number,
-            maskHeight: number,
-          ) => void;
-        };
-      };
-      const w = 100;
-      const h = 100;
-      const mask = new Uint8ClampedArray(w * h);
-      mask.fill(255); // All selected
-      store.getState().setSelection({ x: 50, y: 50, width: w, height: h }, mask, w, h);
-    });
-    await page.waitForTimeout(200);
-
-    // Verify selection is active
-    const selState = await page.evaluate(() => {
-      const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => {
-          selection: { active: boolean; bounds: { x: number; y: number; width: number; height: number } | null };
-        };
-      };
-      return store.getState().selection;
-    });
-    expect(selState.active).toBe(true);
-    expect(selState.bounds).toEqual({ x: 50, y: 50, width: 100, height: 100 });
-
-    // Paint only inside the selection bounds using drawRect
+    // drawRect drags a 50,50 → 150,150 marquee and fills inside it.
     await setActiveLayer(page, layerId);
     await drawRect(page, 50, 50, 100, 100, { r: 0, g: 255, b: 0 });
     await page.waitForTimeout(300);

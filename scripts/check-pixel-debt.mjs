@@ -81,7 +81,7 @@ const ALLOWLIST = {
   'src/tools/gradient/gradient-interaction.test.ts': 3,        // #732 mask-mode fixture buffer
   'src/tools/magnetic-lasso/magnetic-lasso-strategy.test.ts': 4,
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
-  'src/tools/marquee/marquee-strategy.test.ts': 9,      // +1: add/subtract/intersect selection fixture
+  'src/tools/marquee/marquee-strategy.test.ts': 10,      // +1: add/subtract/intersect selection fixture, +1: #1188 move-clip fixture
   'src/tools/move/move.test.ts': 1,
   'src/tools/path/boolean-ops.test.ts': 11,
   'src/tools/quick-select/quick-select-interaction.test.ts': 3,
@@ -114,11 +114,11 @@ const ALLOWLIST = {
   // ──────────────────────────────────────────────────────────────────────
   'src/app/interactions/selection-handlers.ts': 5,          // +1: wraps the Rust combine_selections result
   'src/app/MenuBar/MenuBar.tsx': 1,                          // GPU feather readback creates Uint8ClampedArray
-  'src/tools/marquee/marquee-strategy.ts': 2,
+  'src/tools/marquee/marquee-strategy.ts': 1,
   'src/tools/wand/wand-strategy.ts': 1,
   'src/panels/LayerPanel/layer-selection.ts': 2,
   'src/panels/PathsPanel/path-to-selection.ts': 1,
-  'src/selection/selection.ts': 14,                          // see #442 — feather pass should move to existing GPU helper; +1: #1038 grow/shrink distance grid
+  'src/selection/selection.ts': 15,                          // see #442 — feather pass should move to existing GPU helper; +1: #1038 grow/shrink distance grid; +1: #1188 translateSelectionMask (moved from marquee-strategy.ts)
   'src/tools/lasso/lasso.ts': 1,
   'src/tools/transform/transform-mask.ts': 1,
 

@@ -18,13 +18,48 @@ export const DROP_DEPTH_STEP_PX = 16;
 
 /**
  * Band at the list's top and bottom edge that scrolls it during a row
- * drag. Two thirds of a 36px row, so the inner half of a row flush with
- * either edge can still be targeted without the list moving.
+ * drag — at most two thirds of a 36px row. The band only reaches into
+ * the row the edge cuts through: a row that is fully on screen can be
+ * targeted precisely, so scrolling it out from under a resting pointer
+ * would drop the layer somewhere the user never aimed (#1190).
  */
 export const AUTO_SCROLL_ZONE_PX = 24;
 
+/**
+ * Part of the edge band that scrolls whatever row it covers, so a list
+ * whose edge falls exactly between two rows can still be scrolled without
+ * leaving it.
+ */
+export const AUTO_SCROLL_EDGE_BAND_PX = 8;
+
 /** Scroll step per animation frame with the pointer at or past an edge. */
 export const AUTO_SCROLL_MAX_STEP_PX = 16;
+
+/**
+ * Client y range of the rows the list's edges cut through. `topClipEnd`
+ * is the bottom of the row cut by the top edge, `bottomClipStart` the top
+ * of the row cut by the bottom edge; each equals its edge when no row is
+ * cut there.
+ */
+export interface EdgeClips {
+  topClipEnd: number;
+  bottomClipStart: number;
+}
+
+/** Where the list's edges cut through `rows` (client px). */
+export function edgeClips(
+  rows: readonly { top: number; bottom: number }[],
+  top: number,
+  bottom: number,
+): EdgeClips {
+  let topClipEnd = top;
+  let bottomClipStart = bottom;
+  for (const row of rows) {
+    if (row.top < top && row.bottom > top) topClipEnd = row.bottom;
+    if (row.top < bottom && row.bottom > bottom) bottomClipStart = row.top;
+  }
+  return { topClipEnd, bottomClipStart };
+}
 
 /**
  * Per-frame scroll step for a row drag with the pointer at `pointerY`
@@ -32,18 +67,22 @@ export const AUTO_SCROLL_MAX_STEP_PX = 16;
  * The step grows linearly from 1px at the inner edge of a zone to the
  * maximum at the list edge, and stays at the maximum past it so dragging
  * over the toolbar or a neighbouring panel keeps scrolling. The zone
- * shrinks on short lists so the two never overlap.
+ * shrinks on short lists so the two never overlap, and covers only the
+ * edge band plus the visible part of a row the edge cuts through.
  */
-export function autoScrollStep(pointerY: number, top: number, bottom: number): number {
+export function autoScrollStep(pointerY: number, top: number, bottom: number, clips: EdgeClips): number {
   const zone = Math.min(AUTO_SCROLL_ZONE_PX, (bottom - top) / 4);
   if (zone <= 0) return 0;
-  const depthIntoTop = zone - (pointerY - top);
-  if (depthIntoTop > 0) {
-    return -Math.ceil(AUTO_SCROLL_MAX_STEP_PX * Math.min(1, depthIntoTop / zone));
+  const band = Math.min(AUTO_SCROLL_EDGE_BAND_PX, zone);
+  const topZone = Math.min(zone, Math.max(band, clips.topClipEnd - top));
+  const bottomZone = Math.min(zone, Math.max(band, bottom - clips.bottomClipStart));
+  if (pointerY - top < topZone) {
+    const depth = zone - (pointerY - top);
+    return -Math.ceil(AUTO_SCROLL_MAX_STEP_PX * Math.min(1, depth / zone));
   }
-  const depthIntoBottom = zone - (bottom - pointerY);
-  if (depthIntoBottom > 0) {
-    return Math.ceil(AUTO_SCROLL_MAX_STEP_PX * Math.min(1, depthIntoBottom / zone));
+  if (bottom - pointerY < bottomZone) {
+    const depth = zone - (bottom - pointerY);
+    return Math.ceil(AUTO_SCROLL_MAX_STEP_PX * Math.min(1, depth / zone));
   }
   return 0;
 }
@@ -274,7 +313,9 @@ export function useLayerDnd({
       const list = listRef.current;
       if (!list || !dragRef.current) return;
       const rect = list.getBoundingClientRect();
-      const step = autoScrollStep(pointer.y, rect.top, rect.bottom);
+      const rowRects = Array.from(list.querySelectorAll(`.${styles.itemWrapper}`), (row) => row.getBoundingClientRect());
+      const clips = edgeClips(rowRects, rect.top, rect.bottom);
+      const step = autoScrollStep(pointer.y, rect.top, rect.bottom, clips);
       if (step === 0) return;
       const before = list.scrollTop;
       list.scrollTop = before + step;

@@ -5,7 +5,7 @@ import type { Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
-import { getSelectionMaskValue, selectionCombineMode } from '../../selection/selection';
+import { getSelectionMaskValue, selectionCombineMode, translateSelectionMask } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
 import { createTransformState } from '../transform/transform';
@@ -125,38 +125,21 @@ export const marqueeStrategy: SelectionToolStrategy = {
     const editorState = useEditorStore.getState();
     const { width: docW, height: docH } = editorState.document;
 
-    // Commit a moved selection: translate the original mask by the final
-    // delta. Only the original bounding box holds content, so the copy walks
-    // that region rather than the whole document.
     const move = state.gesture.kind === 'move' ? state.gesture : null;
     if (move?.originalMask && move.originalBounds) {
       if (!preview || preview.kind !== 'move' || (preview.dx === 0 && preview.dy === 0)) {
         return;
       }
-      const { dx, dy } = preview;
-      const orig = move.originalBounds;
-      const srcMask = move.originalMask;
-      const newMask = new Uint8ClampedArray(srcMask.length);
-      const rx0 = Math.max(0, Math.floor(orig.x));
-      const ry0 = Math.max(0, Math.floor(orig.y));
-      const rx1 = Math.min(docW, Math.ceil(orig.x + orig.width));
-      const ry1 = Math.min(docH, Math.ceil(orig.y + orig.height));
-      for (let sy = ry0; sy < ry1; sy++) {
-        const ty = sy + dy;
-        if (ty < 0 || ty >= docH) continue;
-        const srcRow = sy * docW;
-        const dstRow = ty * docW;
-        for (let sx = rx0; sx < rx1; sx++) {
-          const v = srcMask[srcRow + sx]!;
-          if (v === 0) continue;
-          const tx = sx + dx;
-          if (tx < 0 || tx >= docW) continue;
-          newMask[dstRow + tx] = v;
-        }
+      const moved = translateSelectionMask(
+        move.originalMask, docW, docH, move.originalBounds, preview.dx, preview.dy,
+      );
+      if (!moved.bounds) {
+        editorState.clearSelection();
+        useUIStore.getState().setTransform(null);
+        return;
       }
-      const newBounds = { x: orig.x + dx, y: orig.y + dy, width: orig.width, height: orig.height };
-      editorState.setSelection(newBounds, newMask, docW, docH);
-      useUIStore.getState().setTransform(createTransformState(newBounds));
+      editorState.setSelection(moved.bounds, moved.mask, docW, docH);
+      useUIStore.getState().setTransform(createTransformState(moved.bounds));
       return;
     }
 

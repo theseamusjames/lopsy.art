@@ -716,7 +716,6 @@ These are by design, and the helpers already handle most of them:
   not a bug.
 - **Something that looks like a bug may be one.** Search
   <https://github.com/theseamusjames/lopsy.art/issues> for workarounds.
-  FEATURES.md also documents known defects inline, marked "Known defect".
 
 ## UI reference
 

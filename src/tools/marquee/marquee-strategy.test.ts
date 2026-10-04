@@ -450,12 +450,28 @@ describe('marquee onUp', () => {
       { originalMask: src, originalBounds: { x: 0, y: 0, width: 1, height: 1 } },
     );
     marqueeStrategy.onUp!(state, { x: -3, y: -3 }, makeUpCtx(-3, -3));
+    // Nothing is left on the canvas, so there is no selection to keep.
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    expect(editorState.clearSelection).toHaveBeenCalled();
+    expect(uiState.setTransform).toHaveBeenLastCalledWith(null);
+  });
+
+  it('clips the moved bounds to the canvas (#1188)', () => {
+    editorState.document = { width: 10, height: 10, layers: [] };
+    const all = new Uint8ClampedArray(10 * 10).fill(255);
+    setMarqueePreview({ kind: 'move', dx: 6, dy: 7 });
+    const state = withMoveGesture(
+      makeState({ startPoint: { x: 2, y: 2 } }),
+      { originalMask: all, originalBounds: { x: 0, y: 0, width: 10, height: 10 } },
+    );
+    marqueeStrategy.onUp!(state, { x: 8, y: 9 }, makeUpCtx(8, 9));
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
       Uint8ClampedArray,
     ];
-    expect(bounds).toEqual({ x: -3, y: -3, width: 1, height: 1 });
-    expect(mask.every((v) => v === 0)).toBe(true);
+    expect(bounds).toEqual({ x: 6, y: 7, width: 4, height: 3 });
+    expect(mask[7 * 10 + 6]).toBe(255);
+    expect(mask[6 * 10 + 6]).toBe(0);
   });
 
   it('leaves the selection untouched when a move ends with no delta', () => {

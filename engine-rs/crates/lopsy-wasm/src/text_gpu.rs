@@ -10,9 +10,11 @@ use cosmic_text::{Align, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, S
 use lopsy_core::text_color_spans::ColorSpans;
 use lopsy_core::vertical_orientation::{vertical_form_transform, VerticalGlyphForm};
 use swash::scale::{ScaleContext, Render, Source, StrikeWith};
+use swash::shape::ShapeContext;
 use swash::zeno::{Format, Transform, Vector};
 
 use crate::glyph_atlas::GlyphAtlas;
+use crate::ligature_split::{expand_run_glyphs, find_ligature_splits, LigatureSplit};
 use crate::vertical_forms::{vertical_glyph, VerticalAlternateCache};
 
 pub struct TextLayerState {
@@ -47,6 +49,9 @@ pub struct TextLayerState {
     /// Line-height multiplier (kept so vertical layout can compute the column
     /// advance from font_size × line_height without re-parsing props).
     pub line_height: f32,
+    /// Optional ligatures drawn as separate glyphs because letter spacing is
+    /// non-zero (#1185). Empty when letter spacing is 0.
+    pub ligature_splits: Vec<LigatureSplit>,
 }
 
 /// A single laid-out glyph with letter/paragraph spacing applied, in logical
@@ -169,6 +174,7 @@ pub struct TextRendererState {
     pub glyph_atlas: GlyphAtlas,
     pub text_layers: HashMap<String, TextLayerState>,
     scale_context: ScaleContext,
+    shape_context: ShapeContext,
     unhinted_cache: HashMap<(CacheKey, VerticalGlyphForm), Option<SwashImage>>,
     vertical_alternates: VerticalAlternateCache,
     /// (lowercased family, style, weight) combinations already tried for
@@ -252,6 +258,7 @@ impl TextRendererState {
             glyph_atlas: GlyphAtlas::new(),
             text_layers: HashMap::new(),
             scale_context: ScaleContext::new(),
+            shape_context: ShapeContext::new(),
             unhinted_cache: HashMap::new(),
             vertical_alternates: HashMap::new(),
             instanced_weights: HashSet::new(),
@@ -509,6 +516,12 @@ impl TextRendererState {
 
         buffer.shape_until_scroll(&mut self.font_system, false);
 
+        let ligature_splits = if letter_spacing != 0.0 {
+            find_ligature_splits(&mut self.font_system, &mut self.shape_context, &buffer)
+        } else {
+            Vec::new()
+        };
+
         self.text_layers.insert(
             layer_id.to_string(),
             TextLayerState {
@@ -527,6 +540,7 @@ impl TextRendererState {
                 text_align: text_align_val.to_string(),
                 vertical,
                 line_height,
+                ligature_splits,
             },
         );
 
@@ -576,13 +590,14 @@ impl TextRendererState {
             let para_y = para * line_i as f32;
             let line_top = run.line_top + para_y;
             let line_height = run.line_height;
-            let n = run.glyphs.len();
+            let run_glyphs = expand_run_glyphs(run.glyphs, line_i, &state.ligature_splits);
+            let n = run_glyphs.len();
             let comp = line_x_comp(ls, n, align);
 
-            let xs: Vec<f32> = run.glyphs.iter().map(|g| g.x).collect();
+            let xs: Vec<f32> = run_glyphs.iter().map(|g| g.x).collect();
             let spacing = letter_spacing_offsets(&xs, ls);
             let spaced: Vec<f32> = xs.iter().zip(&spacing).map(|(x, s)| x + comp + s).collect();
-            let ws: Vec<f32> = run.glyphs.iter().map(|g| g.w).collect();
+            let ws: Vec<f32> = run_glyphs.iter().map(|g| g.w).collect();
             let shift = run_align_shift(state, &spaced, &ws);
 
             let start_x = if n > 0 {
@@ -592,7 +607,7 @@ impl TextRendererState {
             };
             lines.push(AdjLine { line_i, line_top, line_height, start_x });
 
-            for (i, glyph) in run.glyphs.iter().enumerate() {
+            for (i, glyph) in run_glyphs.iter().enumerate() {
                 let x = spaced[i] + shift;
                 glyphs.push(AdjGlyph {
                     global_start: base + glyph.start,
@@ -647,7 +662,8 @@ impl TextRendererState {
                 start_x: col_left,
             });
 
-            for (j, glyph) in run.glyphs.iter().enumerate() {
+            let run_glyphs = expand_run_glyphs(run.glyphs, col_i, &state.ligature_splits);
+            for (j, glyph) in run_glyphs.iter().enumerate() {
                 let row_top = j as f32 * row_advance;
                 let gx = col_center - glyph.w / 2.0;
                 glyphs.push(AdjGlyph {
@@ -1059,7 +1075,8 @@ impl TextRendererState {
                 let col_i = run.line_i;
                 let col_left = col_i as f32 * col_advance;
                 let col_center = col_left + col_width / 2.0;
-                for (j, glyph) in run.glyphs.iter().enumerate() {
+                let run_glyphs = expand_run_glyphs(run.glyphs, col_i, &state.ligature_splits);
+                for (j, glyph) in run_glyphs.iter().enumerate() {
                     let row_top = j as f32 * row_advance;
                     // Baseline near the bottom of the row so descenders sit in
                     // the row's box; font_size is a close-enough baseline offset.
@@ -1094,15 +1111,16 @@ impl TextRendererState {
                 // Letter/paragraph spacing applied post-layout (cosmic-text lacks both):
                 // shift each glyph right by comp + letter_spacing × its visual rank
                 // and every run down by paragraph_spacing per hard line break.
-                let comp = line_x_comp(ls, run.glyphs.len(), &align);
+                let run_glyphs = expand_run_glyphs(run.glyphs, run.line_i, &state.ligature_splits);
+                let comp = line_x_comp(ls, run_glyphs.len(), &align);
                 let para_y = para * run.line_i as f32;
                 let baseline_y = run.line_y + para_y;
-                let xs: Vec<f32> = run.glyphs.iter().map(|g| g.x).collect();
+                let xs: Vec<f32> = run_glyphs.iter().map(|g| g.x).collect();
                 let spacing = letter_spacing_offsets(&xs, ls);
                 let spaced: Vec<f32> = xs.iter().zip(&spacing).map(|(x, s)| x + comp + s).collect();
-                let ws: Vec<f32> = run.glyphs.iter().map(|g| g.w).collect();
+                let ws: Vec<f32> = run_glyphs.iter().map(|g| g.w).collect();
                 let shift = run_align_shift(state, &spaced, &ws);
-                for (i, glyph) in run.glyphs.iter().enumerate() {
+                for (i, glyph) in run_glyphs.iter().enumerate() {
                     let extra_x = comp + spacing[i] + shift;
                     let phys = glyph.physical((extra_x, baseline_y), 1.0);
                     let gx_start = phys.x;
@@ -2319,6 +2337,71 @@ mod tests {
             .set_text_content("t", &styled_props("Fell \u{2605}\u{2192}", "IM Fell English", "italic", 400))
             .expect("ok");
         assert_eq!(notdef_glyphs(&renderer, "t"), 0);
+    }
+
+    fn im_fell_english_props(text: &str, letter_spacing: f32) -> String {
+        family_props(text, "IM Fell English", 400)
+            .replace("\"letterSpacing\":0", &format!("\"letterSpacing\":{letter_spacing}"))
+    }
+
+    /// (x, w, global_start) of every glyph, from `get_glyph_positions`.
+    fn glyph_boxes(renderer: &mut TextRendererState, layer_id: &str) -> Vec<(f64, f64, usize)> {
+        renderer
+            .get_glyph_positions(layer_id)
+            .chunks(5)
+            .map(|g| (g[0], g[2], g[4] as usize))
+            .collect()
+    }
+
+    #[test]
+    fn letter_spacing_breaks_optional_ligatures() {
+        let mut renderer = make_renderer();
+        load_css2_fixture(
+            &mut renderer,
+            include_bytes!("../tests/fixtures/IMFellEnglish-latin.woff2"),
+            "IM Fell English",
+        );
+
+        renderer.set_text_content("tight", &im_fell_english_props("fi", 0.0)).expect("ok");
+        assert_eq!(glyph_boxes(&mut renderer, "tight").len(), 1, "fixture must ligate fi");
+
+        renderer.set_text_content("wide", &im_fell_english_props("fi", 20.0)).expect("ok");
+        let glyphs = glyph_boxes(&mut renderer, "wide");
+        assert_eq!(glyphs.len(), 2, "letter spacing must draw f and i separately: {glyphs:?}");
+        let (f, i) = (glyphs[0], glyphs[1]);
+        assert_eq!((f.2, i.2), (0, 1));
+        assert!(
+            (i.0 - (f.0 + f.1 + 20.0)).abs() < 0.5,
+            "i must sit one advance plus the spacing after f: {glyphs:?}"
+        );
+
+        let caret = renderer.text_cursor_rect("wide", 1).expect("caret");
+        assert!((caret[0] as f64 - i.0).abs() < 0.01, "caret between f and i: {caret:?}");
+        assert_eq!(renderer.text_hit_position("wide", (i.0 + i.1 * 0.9) as f32, 10.0), Some(2));
+
+        let tight_w = renderer.measure_text_bounds("tight")[2];
+        let wide_w = renderer.measure_text_bounds("wide")[2];
+        assert!(wide_w > tight_w + 15.0, "the gap must show in the bounds: {tight_w} → {wide_w}");
+    }
+
+    #[test]
+    fn letter_spacing_shifts_glyphs_after_a_broken_ligature() {
+        let mut renderer = make_renderer();
+        load_css2_fixture(
+            &mut renderer,
+            include_bytes!("../tests/fixtures/IMFellEnglish-latin.woff2"),
+            "IM Fell English",
+        );
+        renderer.set_text_content("plain", &im_fell_english_props("firefly", 0.0)).expect("ok");
+        assert_eq!(glyph_boxes(&mut renderer, "plain").len(), 5, "fixture must ligate fi and fl");
+        renderer.set_text_content("t", &im_fell_english_props("firefly", 10.0)).expect("ok");
+        let glyphs = glyph_boxes(&mut renderer, "t");
+        let starts: Vec<usize> = glyphs.iter().map(|g| g.2).collect();
+        assert_eq!(starts, vec![0, 1, 2, 3, 4, 5, 6]);
+        for pair in glyphs.windows(2) {
+            let gap = pair[1].0 - (pair[0].0 + pair[0].1);
+            assert!((gap - 10.0).abs() < 1.5, "every gap is the letter spacing (± kerning): {glyphs:?}");
+        }
     }
 
     #[test]

@@ -267,6 +267,7 @@ export function computeInverseAffineMatrix(t: TransformState): Float32Array {
 export {
   getHandlePositions,
   hitTestHandle,
+  hitTestBoxHandle,
   isScaleHandle,
   isRotateHandle,
   getCursorForHandle,
