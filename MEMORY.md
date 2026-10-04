@@ -481,3 +481,13 @@ luminance, crops it back if a filter grew it, and swaps everything back
 `app/MenuBar/filter-target.ts`; the end call's wasm-bridge wrapper marks the
 mask GPU-dirty for history. Begin and end must bracket synchronous engine
 calls only — a composite frame in between would draw the mask as the layer.
+
+## Optional ligatures are broken up after layout, not in the shaper
+
+cosmic-text 0.12 shapes with a fixed, empty feature list, so `liga` is
+always on. With letter spacing ≠ 0, `set_text_content` re-shapes each
+multi-character glyph of a non-joining script with swash (`liga`/`clig`/
+`dlig`/`hlig` off) and stores the result in `TextLayerState::ligature_splits`
+(`ligature_split.rs`, #1185). Every consumer of `run.glyphs` that places or
+draws glyphs must go through `expand_run_glyphs`, or the caret and the render
+disagree about where "f" and "i" are.

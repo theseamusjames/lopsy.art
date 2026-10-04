@@ -20,6 +20,7 @@ pub mod healing_brush_gpu;
 pub mod overlay_renderer;
 pub mod glyph_atlas;
 pub mod text_gpu;
+pub mod ligature_split;
 pub mod vertical_forms;
 pub mod text_transform_gpu;
 pub mod woff2;
