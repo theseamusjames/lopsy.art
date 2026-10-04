@@ -318,4 +318,34 @@ describe('growSelection / shrinkSelection (#1038)', () => {
     const b = selectionBounds(out, w, w)!;
     expect(at(out, w, b.x, b.y)).toBe(0);
   });
+
+  it('fills the old anti-aliased edge solid when growing (#1189)', () => {
+    const w = 60;
+    const r = 12;
+    const amount = 4;
+    const out = growSelection(circleMask(w, w, 30, 30, r), w, w, amount);
+    let partialInside = 0;
+    for (let y = 0; y < w; y++) {
+      for (let x = 0; x < w; x++) {
+        const d = Math.hypot(x + 0.5 - 30, y + 0.5 - 30);
+        if (d <= r + amount - 1.5 && at(out, w, x, y) < 255) partialInside++;
+      }
+    }
+    expect(partialInside).toBe(0);
+  });
+
+  it('leaves no partial coverage outside the shrunk area (#1189)', () => {
+    const w = 60;
+    const r = 15;
+    const amount = 4;
+    const out = shrinkSelection(circleMask(w, w, 30, 30, r), w, w, amount);
+    let strayOutside = 0;
+    for (let y = 0; y < w; y++) {
+      for (let x = 0; x < w; x++) {
+        const d = Math.hypot(x + 0.5 - 30, y + 0.5 - 30);
+        if (d >= r - amount + 1.5 && at(out, w, x, y) > 0) strayOutside++;
+      }
+    }
+    expect(strayOutside).toBe(0);
+  });
 });

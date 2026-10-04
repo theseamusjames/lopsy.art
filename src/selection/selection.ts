@@ -235,8 +235,9 @@ export function growSelection(
     for (let rx = 0; rx < region.width; rx++) {
       const idx = (region.y + ry) * width + region.x + rx;
       const d = Math.sqrt(dist[ry * region.width + rx]!);
-      if (d === 0) continue;
-      // The old edge lies half-way to the nearest inside centre.
+      // The old edge lies half-way to the nearest inside centre. Inside
+      // pixels (d = 0) are at least `amount` + 0.5 from the new edge, so
+      // their partial anti-aliased coverage must be raised too (#1189).
       const coverage = Math.round(edgeCoverage(amount - (d - 0.5)) * 255);
       if (coverage > result[idx]!) result[idx] = coverage;
     }
