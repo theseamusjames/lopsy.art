@@ -12,6 +12,9 @@ Read SPEC.md for the full product specification.
   `public/llms.txt`). Its driver and selectors are tested against
   lopsy.art, so update it when you change a label, aria-label or flow it
   relies on.
+- `FEATURES.md` — the feature catalog. Describe current behaviour only: no
+  bug tracking ("Known defect" notes, issue/PR numbers, "fixed in #N"
+  history). Bugs live in GitHub issues; fix history lives in commits and PRs.
 - `docs/pixel-data-debt.md` — authoritative tracker for places where
   pixel buffers still live on the JS side, with the migration plan
   for each.
