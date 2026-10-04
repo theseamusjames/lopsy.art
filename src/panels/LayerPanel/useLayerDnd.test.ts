@@ -5,7 +5,9 @@ import {
   resolveGapDrop,
   currentDropTarget,
   autoScrollStep,
+  edgeClips,
   AUTO_SCROLL_ZONE_PX,
+  AUTO_SCROLL_EDGE_BAND_PX,
   AUTO_SCROLL_MAX_STEP_PX,
 } from './useLayerDnd';
 import { computeDropLayer } from '../../app/store/actions/drop-layer';
@@ -299,42 +301,77 @@ describe('collapsed groups and layerOrder divergence (#797, #824)', () => {
 describe('autoScrollStep', () => {
   const top = 100;
   const bottom = 500;
+  // Rows cut by both edges, showing 30px each: the full zone applies.
+  const cut = { topClipEnd: top + 30, bottomClipStart: bottom - 30 };
 
   it('does not scroll with the pointer outside both edge zones', () => {
-    expect(autoScrollStep(300, top, bottom)).toBe(0);
-    expect(autoScrollStep(top + AUTO_SCROLL_ZONE_PX, top, bottom)).toBe(0);
-    expect(autoScrollStep(bottom - AUTO_SCROLL_ZONE_PX, top, bottom)).toBe(0);
+    expect(autoScrollStep(300, top, bottom, cut)).toBe(0);
+    expect(autoScrollStep(top + AUTO_SCROLL_ZONE_PX, top, bottom, cut)).toBe(0);
+    expect(autoScrollStep(bottom - AUTO_SCROLL_ZONE_PX, top, bottom, cut)).toBe(0);
   });
 
   it('scrolls up near the top edge, faster the closer the pointer gets', () => {
-    const inner = autoScrollStep(top + AUTO_SCROLL_ZONE_PX - 1, top, bottom);
-    const mid = autoScrollStep(top + AUTO_SCROLL_ZONE_PX / 2, top, bottom);
-    const edge = autoScrollStep(top, top, bottom);
+    const inner = autoScrollStep(top + AUTO_SCROLL_ZONE_PX - 1, top, bottom, cut);
+    const mid = autoScrollStep(top + AUTO_SCROLL_ZONE_PX / 2, top, bottom, cut);
+    const edge = autoScrollStep(top, top, bottom, cut);
     expect(inner).toBe(-1);
     expect(mid).toBe(-AUTO_SCROLL_MAX_STEP_PX / 2);
     expect(edge).toBe(-AUTO_SCROLL_MAX_STEP_PX);
   });
 
   it('scrolls down near the bottom edge, faster the closer the pointer gets', () => {
-    expect(autoScrollStep(bottom - AUTO_SCROLL_ZONE_PX + 1, top, bottom)).toBe(1);
-    expect(autoScrollStep(bottom - AUTO_SCROLL_ZONE_PX / 2, top, bottom)).toBe(AUTO_SCROLL_MAX_STEP_PX / 2);
-    expect(autoScrollStep(bottom, top, bottom)).toBe(AUTO_SCROLL_MAX_STEP_PX);
+    expect(autoScrollStep(bottom - AUTO_SCROLL_ZONE_PX + 1, top, bottom, cut)).toBe(1);
+    expect(autoScrollStep(bottom - AUTO_SCROLL_ZONE_PX / 2, top, bottom, cut)).toBe(AUTO_SCROLL_MAX_STEP_PX / 2);
+    expect(autoScrollStep(bottom, top, bottom, cut)).toBe(AUTO_SCROLL_MAX_STEP_PX);
   });
 
   it('keeps the maximum speed with the pointer past either edge', () => {
-    expect(autoScrollStep(top - 200, top, bottom)).toBe(-AUTO_SCROLL_MAX_STEP_PX);
-    expect(autoScrollStep(bottom + 200, top, bottom)).toBe(AUTO_SCROLL_MAX_STEP_PX);
+    expect(autoScrollStep(top - 200, top, bottom, cut)).toBe(-AUTO_SCROLL_MAX_STEP_PX);
+    expect(autoScrollStep(bottom + 200, top, bottom, cut)).toBe(AUTO_SCROLL_MAX_STEP_PX);
   });
 
   it('shrinks the zones on a short list so the middle never scrolls', () => {
     // 80px list: zones are 20px each, leaving 40px in the middle.
-    expect(autoScrollStep(140, 100, 180)).toBe(0);
-    expect(autoScrollStep(121, 100, 180)).toBe(0);
-    expect(autoScrollStep(119, 100, 180)).toBeLessThan(0);
-    expect(autoScrollStep(161, 100, 180)).toBeGreaterThan(0);
+    const shortCut = { topClipEnd: 130, bottomClipStart: 150 };
+    expect(autoScrollStep(140, 100, 180, shortCut)).toBe(0);
+    expect(autoScrollStep(121, 100, 180, shortCut)).toBe(0);
+    expect(autoScrollStep(119, 100, 180, shortCut)).toBeLessThan(0);
+    expect(autoScrollStep(161, 100, 180, shortCut)).toBeGreaterThan(0);
+  });
+
+  it('never reaches into a row the edge does not cut (#1190)', () => {
+    // The bottom edge cuts a row 15px from its top: only those 15px scroll.
+    const clips = { topClipEnd: top, bottomClipStart: bottom - 15 };
+    expect(autoScrollStep(bottom - 20, top, bottom, clips)).toBe(0);
+    expect(autoScrollStep(bottom - 16, top, bottom, clips)).toBe(0);
+    expect(autoScrollStep(bottom - 14, top, bottom, clips)).toBeGreaterThan(0);
+    // Same at the top edge.
+    const topClips = { topClipEnd: top + 10, bottomClipStart: bottom };
+    expect(autoScrollStep(top + 12, top, bottom, topClips)).toBe(0);
+    expect(autoScrollStep(top + 9, top, bottom, topClips)).toBeLessThan(0);
+  });
+
+  it('keeps a thin band when the edge falls between two rows', () => {
+    const flush = { topClipEnd: top, bottomClipStart: bottom };
+    expect(autoScrollStep(bottom - AUTO_SCROLL_EDGE_BAND_PX, top, bottom, flush)).toBe(0);
+    expect(autoScrollStep(bottom - AUTO_SCROLL_EDGE_BAND_PX + 1, top, bottom, flush)).toBeGreaterThan(0);
+    expect(autoScrollStep(top + AUTO_SCROLL_EDGE_BAND_PX - 1, top, bottom, flush)).toBeLessThan(0);
+    expect(autoScrollStep(bottom + 50, top, bottom, flush)).toBe(AUTO_SCROLL_MAX_STEP_PX);
   });
 
   it('does not scroll a list with no height', () => {
-    expect(autoScrollStep(100, 100, 100)).toBe(0);
+    expect(autoScrollStep(100, 100, 100, { topClipEnd: 100, bottomClipStart: 100 })).toBe(0);
+  });
+});
+
+describe('edgeClips', () => {
+  it('finds the rows the list edges cut through', () => {
+    const rows = [0, 36, 72, 108, 144].map((y) => ({ top: y + 400, bottom: y + 436 }));
+    expect(edgeClips(rows, 420, 531)).toEqual({ topClipEnd: 436, bottomClipStart: 508 });
+  });
+
+  it('reports the edge itself where it falls between rows', () => {
+    const rows = [0, 36, 72].map((y) => ({ top: y + 400, bottom: y + 436 }));
+    expect(edgeClips(rows, 400, 472)).toEqual({ topClipEnd: 400, bottomClipStart: 472 });
   });
 });
