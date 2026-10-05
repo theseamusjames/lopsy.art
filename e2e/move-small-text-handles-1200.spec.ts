@@ -106,22 +106,27 @@ test.describe('Move tool on small point text (#1200)', () => {
     // Fit zoom: 8 screen px is more than half the 18px line box.
     expect(8 / (await zoom(page))).toBeGreaterThan(LINE_BOX_H / 2);
 
+    // Probe whole screen rows from above the label to below it. Firefox
+    // truncates fractional mouse coordinates (the click that placed the
+    // label too), so doc-space steps would hover different points per
+    // browser.
     const cx = await inkCentreX(page);
-    let moveRows = 0;
-    for (let dy = 0.5; dy < LINE_BOX_H; dy += 1) {
-      const p = await docToScreen(page, cx, TEXT_Y + dy);
-      await page.mouse.move(p.x, p.y);
-      if ((await hoveredHandle(page)) === null) moveRows++;
+    const from = await docToScreen(page, cx, TEXT_Y - 6);
+    const to = await docToScreen(page, cx, TEXT_Y + LINE_BOX_H + 6);
+    const x = Math.round(from.x);
+    let rows = '';
+    for (let y = Math.ceil(from.y); y <= Math.floor(to.y); y++) {
+      await page.mouse.move(x, y);
+      const handle = await hoveredHandle(page);
+      rows += handle === null ? 'm' : handle === 'top' ? 't' : handle === 'bottom' ? 'b' : '?';
     }
-    expect(moveRows).toBeGreaterThanOrEqual(12);
-
-    // The edge handles are still there, just outside the outline.
-    const above = await docToScreen(page, cx, TEXT_Y - 4);
-    await page.mouse.move(above.x, above.y);
-    expect(await hoveredHandle(page)).toBe('top');
-    const below = await docToScreen(page, cx, TEXT_Y + LINE_BOX_H + 4);
-    await page.mouse.move(below.x, below.y);
-    expect(await hoveredHandle(page)).toBe('bottom');
+    // The edge handles are still there, just outside the outline, with one
+    // move zone between them.
+    expect(rows).toMatch(/^t+m+b+$/);
+    // Inside bands of a quarter of the half-height leave 75% of the line
+    // box to move; before #1200 the edge handles left about a quarter.
+    const moveRows = rows.split('m').length - 1;
+    expect(moveRows).toBeGreaterThanOrEqual(0.55 * LINE_BOX_H * (await zoom(page)));
   });
 
   test('pressing on the upper half of the capitals moves the label', async ({ page }) => {
