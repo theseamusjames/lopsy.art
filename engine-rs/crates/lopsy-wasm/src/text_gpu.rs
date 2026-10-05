@@ -244,11 +244,16 @@ fn hash_str(s: &str) -> u64 {
 }
 
 impl TextRendererState {
-    /// Create with a FontSystem pre-loaded with the bundled Inter Regular font.
+    /// Create with a FontSystem pre-loaded with the bundled fallback faces:
+    /// Inter Regular, then a Noto Sans Symbols 2 subset holding only the code
+    /// points Inter lacks (geometric shapes, misc symbols, dingbats, arrows…).
     pub fn new() -> Self {
         let mut db = cosmic_text::fontdb::Database::new();
         db.load_font_data(
             include_bytes!("fonts/Inter-Regular.ttf").to_vec(),
+        );
+        db.load_font_data(
+            include_bytes!("fonts/NotoSansSymbols2-Regular.ttf").to_vec(),
         );
         register_fallback_for_every_style(&mut db);
         let font_system = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
@@ -1391,21 +1396,23 @@ const ALL_STRETCHES: [Stretch; 9] = [
 /// Per-glyph fallback only walks faces whose style and stretch equal the
 /// request (see [`snap_face_attrs`]), so a glyph missing from an italic or
 /// condensed face found nothing but the bundled upright, normal-width Inter
-/// and drew `.notdef` (#1157, #1164). Register the bundled face once more for
-/// every other style/stretch so each request has a fallback; the glyphs it
-/// supplies are drawn upright. The aliases share the face's bytes.
+/// and drew `.notdef` (#1157, #1164). Register each bundled face once more for
+/// every other style/stretch so each request has a fallback; the glyphs they
+/// supply are drawn upright. The aliases share the faces' bytes.
 fn register_fallback_for_every_style(db: &mut fontdb::Database) {
-    let Some(base) = db.faces().next().cloned() else { return };
-    for style in [Style::Normal, Style::Italic, Style::Oblique] {
-        for stretch in ALL_STRETCHES {
-            if style == base.style && stretch == base.stretch {
-                continue;
+    let bundled: Vec<fontdb::FaceInfo> = db.faces().cloned().collect();
+    for base in bundled {
+        for style in [Style::Normal, Style::Italic, Style::Oblique] {
+            for stretch in ALL_STRETCHES {
+                if style == base.style && stretch == base.stretch {
+                    continue;
+                }
+                let mut info = base.clone();
+                info.families = vec![(STYLE_FALLBACK_FAMILY.to_string(), fontdb::Language::English_UnitedStates)];
+                info.style = style;
+                info.stretch = stretch;
+                db.push_face_info(info);
             }
-            let mut info = base.clone();
-            info.families = vec![(STYLE_FALLBACK_FAMILY.to_string(), fontdb::Language::English_UnitedStates)];
-            info.style = style;
-            info.stretch = stretch;
-            db.push_face_info(info);
         }
     }
 }
@@ -2426,6 +2433,35 @@ mod tests {
             .set_text_content("u", &styled_props("Hi \u{2605}", "Not Loaded Yet", "italic", 400))
             .expect("ok");
         assert_eq!(notdef_glyphs(&renderer, "u"), 0);
+    }
+
+    const SYMBOLS_MISSING_FROM_INTER: &str = "\u{25B8} \u{25C2} \u{2602} \u{2654} \u{2701}";
+
+    #[test]
+    fn symbols_missing_from_inter_fall_back_to_the_bundled_symbol_face() {
+        let mut renderer = make_renderer();
+        for (id, family, style, weight) in [
+            ("inter", "Inter", "normal", 400),
+            ("bold", "Inter", "normal", 700),
+            ("italic", "Inter", "italic", 400),
+            ("unloaded", "IBM Plex Mono", "normal", 500),
+        ] {
+            let text = format!("A {SYMBOLS_MISSING_FROM_INTER} \u{25B6}");
+            renderer.set_text_content(id, &styled_props(&text, family, style, weight)).expect("ok");
+            assert_eq!(notdef_glyphs(&renderer, id), 0, "{family} {style} {weight}");
+        }
+        let families: Vec<String> = faces_used(&renderer, "inter").into_iter().map(|(f, _)| f).collect();
+        assert!(families.iter().any(|f| f == "Noto Sans Symbols 2"), "{families:?}");
+    }
+
+    #[test]
+    fn the_symbol_fallback_never_replaces_glyphs_inter_has() {
+        let mut renderer = make_renderer();
+        renderer
+            .set_text_content("t", &family_props("Abc 123 \u{2605}\u{2192}\u{25B6}\u{2022}", "Inter", 400))
+            .expect("ok");
+        let families: Vec<String> = faces_used(&renderer, "t").into_iter().map(|(f, _)| f).collect();
+        assert!(families.iter().all(|f| f == "Inter"), "{families:?}");
     }
 
     fn span_props(text: &str, spans: &str, underline: bool) -> String {
