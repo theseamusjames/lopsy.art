@@ -1436,3 +1436,16 @@ export function invalidateEditingTextCache(engine: Engine): void {
 export function resetTextLayerLayout(engine: Engine, layerId: string): void {
   removeTextLayerState(engine, layerId);
 }
+
+/**
+ * Drop a committed text layer's cached layout and measured frame after a
+ * font it uses becomes available, without re-rendering it. For a freshly
+ * opened document the saved pixels already show the real face, so only the
+ * measurements are stale: a layout shaped with the fallback before the font
+ * arrived gives a render offset that doesn't match those pixels, and
+ * transforms recover the anchor from it (`x − offset`, #1213).
+ */
+export function forgetTextLayerLayout(engine: Engine, layer: TextLayer): void {
+  resetTextLayerLayout(engine, layer.id);
+  textFrameCache.delete(layer);
+}

@@ -1,5 +1,17 @@
-import { describe, it, expect } from 'vitest';
-import { collectTextLayerFonts } from './load-document-fonts';
+import { describe, it, expect, vi } from 'vitest';
+import { collectTextLayerFonts, loadDocumentFonts } from './load-document-fonts';
+
+vi.mock('./local-fonts-store', () => ({
+  findFontEntry: (family: string) =>
+    family === 'Missing' ? undefined : { source: 'google', weights: [400], hasItalic: false },
+  loadLocalFontToEngine: () => Promise.resolve(false),
+}));
+
+vi.mock('../utils/font-loader', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/font-loader')>()),
+  loadGoogleFont: () => Promise.resolve(),
+  loadFontBinaryToEngine: (family: string) => Promise.resolve(family !== 'Broken'),
+}));
 import type { Layer } from '../types/layers';
 
 function textLayer(id: string, fontFamily: string, fontWeight: number, fontStyle: 'normal' | 'italic' = 'normal'): Layer {
@@ -25,5 +37,20 @@ describe('collectTextLayerFonts', () => {
 
   it('returns nothing for a document without text layers', () => {
     expect(collectTextLayerFonts([{ id: 'r', type: 'raster' } as unknown as Layer])).toEqual([]);
+  });
+});
+
+describe('loadDocumentFonts', () => {
+  it('reports each family whose face reached the engine, and only those (#1213)', async () => {
+    const loaded: string[] = [];
+    await loadDocumentFonts(
+      [
+        textLayer('a', 'Arvo, serif', 400),
+        textLayer('b', 'Broken, serif', 400),
+        textLayer('c', 'Missing, serif', 400),
+      ],
+      (family) => loaded.push(family),
+    );
+    expect(loaded).toEqual(['Arvo']);
   });
 });
