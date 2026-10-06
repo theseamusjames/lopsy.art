@@ -5,6 +5,10 @@ import {
   applyTwirlDab,
   encodeDisplacementMap,
   encodeDisplacementRegion,
+  encodeDispCode,
+  decodeDispCode,
+  DISP_CENTER,
+  DISP_SCALE,
   MAX_DISP,
   applyDab,
   type LiquifySettings,
@@ -127,8 +131,7 @@ describe('encodeDisplacementMap', () => {
     map.dx[0] = MAX_DISP;
     const out = new Uint8Array(4);
     encodeDisplacementMap(map, out);
-    expect(out[0]).toBe(0xFF);
-    expect(out[1]).toBe(0xFF);
+    expect(out[0]! * 256 + out[1]!).toBe(DISP_CENTER + DISP_SCALE);
   });
 
   it('encodes negative displacement below midpoint', () => {
@@ -136,8 +139,7 @@ describe('encodeDisplacementMap', () => {
     map.dx[0] = -MAX_DISP;
     const out = new Uint8Array(4);
     encodeDisplacementMap(map, out);
-    expect(out[0]).toBe(0x00);
-    expect(out[1]).toBe(0x00);
+    expect(out[0]! * 256 + out[1]!).toBe(DISP_CENTER - DISP_SCALE);
   });
 
   it('round-trips small displacement with sub-pixel precision', () => {
@@ -146,12 +148,10 @@ describe('encodeDisplacementMap', () => {
     map.dy[0] = -7.25;
     const out = new Uint8Array(4);
     encodeDisplacementMap(map, out);
-    const ndx = ((out[0]! * 256 + out[1]!) / 65535);
-    const ndy = ((out[2]! * 256 + out[3]!) / 65535);
-    const decodedDx = (ndx * 2.0 - 1.0) * MAX_DISP;
-    const decodedDy = (ndy * 2.0 - 1.0) * MAX_DISP;
-    expect(decodedDx).toBeCloseTo(3.5, 0);
-    expect(decodedDy).toBeCloseTo(-7.25, 0);
+    const decodedDx = decodeDispCode(out[0]! * 256 + out[1]!);
+    const decodedDy = decodeDispCode(out[2]! * 256 + out[3]!);
+    expect(decodedDx).toBeCloseTo(3.5, 1);
+    expect(decodedDy).toBeCloseTo(-7.25, 1);
   });
 });
 
@@ -253,5 +253,60 @@ describe('bloat/pinch continuity (#945)', () => {
     const centre = 30;
     const sourceSpan = xs[centre + 1]! - xs[centre - 1]!;
     expect(sourceSpan).toBeLessThan(2);
+  });
+});
+
+/**
+ * Round a number to the nearest IEEE half float, as an RGBA16F texture
+ * stores a channel the shader wrote.
+ */
+function toHalf(v: number): number {
+  if (v === 0) return 0;
+  const exp = Math.max(-14, Math.floor(Math.log2(Math.abs(v))));
+  const step = 2 ** (exp - 10);
+  return Math.round(v / step) * step;
+}
+
+/** CPU mirror of liquify_dab.glsl's encodeDisp → texture store → fetchDisp. */
+function shaderRoundTrip(d: number, storeHalf: boolean): number {
+  const code = encodeDispCode(d);
+  const hi = Math.floor(code / 256);
+  const lo = code - hi * 256;
+  const store = (byte: number) => (storeHalf ? toHalf(byte / 255) : byte / 255);
+  const hiByte = Math.floor(store(hi) * 255 + 0.5);
+  const loByte = Math.floor(store(lo) * 255 + 0.5);
+  return decodeDispCode(hiByte * 256 + loByte);
+}
+
+describe('liquify displacement codec (#1212)', () => {
+  it('encodes zero as the exact integer centre, which decodes to exactly zero', () => {
+    expect(encodeDispCode(0)).toBe(DISP_CENTER);
+    expect(decodeDispCode(DISP_CENTER)).toBe(0);
+    expect(Number.isInteger(encodeDispCode(0.0001))).toBe(true);
+  });
+
+  it('encodes +d and -d symmetrically around the centre', () => {
+    for (const d of [0.03125, 0.1, 1.5, 16, 300.7, 2047.9]) {
+      expect(encodeDispCode(d) - DISP_CENTER).toBe(DISP_CENTER - encodeDispCode(-d));
+    }
+  });
+
+  it('is continuous across the zero-crossing: tiny offsets stay tiny', () => {
+    const step = MAX_DISP / DISP_SCALE;
+    for (let d = -3 * step; d <= 3 * step; d += step / 7) {
+      expect(Math.abs(decodeDispCode(encodeDispCode(d)) - d)).toBeLessThanOrEqual(step / 2 + 1e-9);
+    }
+  });
+
+  it.each([false, true])('re-encoding a decoded value is a fixed point (half-float store: %s)', (storeHalf) => {
+    // Every dab decodes and re-encodes every texel inside the brush; any
+    // drift per pass accumulates into seams and a hard ring at the radius.
+    for (let d = -40; d <= 40; d += 0.37) {
+      const once = shaderRoundTrip(d, storeHalf);
+      let v = once;
+      for (let i = 0; i < 50; i++) v = shaderRoundTrip(v, storeHalf);
+      expect(v).toBe(once);
+      expect(Math.abs(once - d)).toBeLessThanOrEqual(MAX_DISP / DISP_SCALE / 2 + 1e-9);
+    }
   });
 });

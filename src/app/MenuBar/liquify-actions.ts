@@ -20,7 +20,7 @@ import {
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import { isFilteringMask } from './filter-target';
-import { MAX_DISP, defaultLiquifySettings } from '../../tools/liquify/liquify';
+import { DISP_CENTER, MAX_DISP, defaultLiquifySettings } from '../../tools/liquify/liquify';
 import type { LiquifySession } from '../ui-store';
 
 export function openLiquify(): void {
@@ -42,12 +42,14 @@ export function openLiquify(): void {
   // JS bounds so the next syncLayers push does not clobber it (#771).
   syncLayerAfterFullSize(engine, activeId);
 
+  const zeroHi = DISP_CENTER >> 8;
+  const zeroLo = DISP_CENTER & 0xff;
   const zeroed = new Uint8Array(width * height * 4);
   for (let i = 0; i < width * height; i++) {
-    zeroed[i * 4] = 128;
-    zeroed[i * 4 + 1] = 0;
-    zeroed[i * 4 + 2] = 128;
-    zeroed[i * 4 + 3] = 0;
+    zeroed[i * 4] = zeroHi;
+    zeroed[i * 4 + 1] = zeroLo;
+    zeroed[i * 4 + 2] = zeroHi;
+    zeroed[i * 4 + 3] = zeroLo;
   }
   liquifyInitDisplacement(engine, zeroed, width, height);
 

@@ -254,6 +254,29 @@ export function applyDab(
 export const MAX_DISP = 2048;
 
 /**
+ * 16-bit code that decodes to exactly zero displacement. `liquify_dab.glsl`
+ * and `liquify_warp.glsl` decode `(code - DISP_CENTER) / DISP_SCALE *
+ * MAX_DISP`, so these constants must stay in sync with the shaders. The
+ * code is always an integer so the high/low byte split is unambiguous: a
+ * fractional zero sat on the carry between (127, 255) and (128, 0) and tore
+ * the field along every zero-crossing on some GPUs (#1212).
+ */
+export const DISP_CENTER = 32768;
+export const DISP_SCALE = 32767;
+
+export function encodeDispCode(d: number): number {
+  // Round half away from zero so +d and -d encode symmetrically, like the
+  // shader's sign(x) * floor(abs(x) + 0.5).
+  const steps = d / MAX_DISP * DISP_SCALE;
+  const code = Math.sign(steps) * Math.floor(Math.abs(steps) + 0.5) + DISP_CENTER;
+  return Math.max(DISP_CENTER - DISP_SCALE, Math.min(DISP_CENTER + DISP_SCALE, code));
+}
+
+export function decodeDispCode(code: number): number {
+  return (code - DISP_CENTER) / DISP_SCALE * MAX_DISP;
+}
+
+/**
  * Encode the full displacement map into a pre-allocated RGBA8 buffer.
  * Called once on session open to initialise the persistent buffer.
  */
@@ -262,8 +285,8 @@ export function encodeDisplacementMap(map: DisplacementMap, out: Uint8Array): vo
   const len = width * height;
 
   for (let i = 0; i < len; i++) {
-    const ndx = Math.max(0, Math.min(65535, Math.round((dx[i]! / MAX_DISP + 1.0) * 0.5 * 65535)));
-    const ndy = Math.max(0, Math.min(65535, Math.round((dy[i]! / MAX_DISP + 1.0) * 0.5 * 65535)));
+    const ndx = encodeDispCode(dx[i]!);
+    const ndy = encodeDispCode(dy[i]!);
     const o = i * 4;
     out[o] = (ndx >> 8) & 0xFF;
     out[o + 1] = ndx & 0xFF;
@@ -290,8 +313,8 @@ export function encodeDisplacementRegion(
     for (let col = 0; col < rw; col++) {
       const mapX = rx + col;
       const idx = mapY * width + mapX;
-      const ndx = Math.max(0, Math.min(65535, Math.round((dx[idx]! / MAX_DISP + 1.0) * 0.5 * 65535)));
-      const ndy = Math.max(0, Math.min(65535, Math.round((dy[idx]! / MAX_DISP + 1.0) * 0.5 * 65535)));
+      const ndx = encodeDispCode(dx[idx]!);
+      const ndy = encodeDispCode(dy[idx]!);
 
       const fullOff = idx * 4;
       encoded[fullOff] = (ndx >> 8) & 0xFF;
