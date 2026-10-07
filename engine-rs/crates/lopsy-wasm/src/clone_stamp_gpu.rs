@@ -1,4 +1,7 @@
+use lopsy_core::dab_rect::dab_rect;
 use web_sys::WebGl2RenderingContext;
+
+use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
 
 pub fn apply_clone_stamp_dab(
@@ -37,59 +40,39 @@ pub fn apply_clone_stamp_dab_batch(
         Some(t) => t.clone(),
         None => return,
     };
-    // This pass renders at the layer's size and blits the whole scratch
-    // back, so scratch must match the layer exactly (see ensure_scratch_size).
-    if engine.ensure_scratch_size(w, h).is_err() { return; }
-    let gl = &engine.gl;
+    // Each dab renders at the layer's size and copies scratch back texel for
+    // texel, so scratch must match the layer exactly (see ensure_scratch_size).
+    if engine.ensure_scratch_size(w, h).is_err() {
+        return;
+    }
 
-    for chunk in points.chunks(2) {
-        if chunk.len() < 2 { break; }
-
-        // Render to scratch A
-        engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-        gl.viewport(0, 0, w as i32, h as i32);
-
-        let shader = &engine.shaders.clone_stamp;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_sourceTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-
-        // Pass dab center and size in pixel coordinates
-        if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), chunk[0] as f32, chunk[1] as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_size") {
-            gl.uniform1f(Some(&loc), size);
-        }
-        if let Some(loc) = shader.location(gl, "u_texSize") {
-            gl.uniform2f(Some(&loc), w as f32, h as f32);
-        }
-
-        // Source offset in pixel coordinates
-        if let Some(loc) = shader.location(gl, "u_sourceOffset") {
-            gl.uniform2f(
-                Some(&loc),
-                source_offset_x as f32,
-                source_offset_y as f32,
-            );
-        }
-
-        engine.draw_fullscreen_quad();
-
-        // Copy scratch A back to layer
-        let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
-        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+    for chunk in points.chunks_exact(2) {
+        let (cx, cy) = (chunk[0] as f32, chunk[1] as f32);
+        // The scissor bounds the destination only: the shader still reads the
+        // source disc at `+ source_offset` from anywhere in the layer.
+        let Some(rect) = dab_rect(cx, cy, size, w, h) else {
+            continue;
+        };
+        scratch_dab_pass(engine, &layer_tex, w, h, rect, |engine| {
             let gl = &engine.gl;
-            gl.use_program(Some(&engine.shaders.blit.program));
+            let shader = &engine.shaders.clone_stamp;
+            gl.use_program(Some(&shader.program));
             gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            if let Some(s) = &scratch_a_tex {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-            }
-            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+            if let Some(loc) = shader.location(gl, "u_sourceTex") {
                 gl.uniform1i(Some(&loc), 0);
+            }
+            if let Some(loc) = shader.location(gl, "u_center") {
+                gl.uniform2f(Some(&loc), cx, cy);
+            }
+            if let Some(loc) = shader.location(gl, "u_size") {
+                gl.uniform1f(Some(&loc), size);
+            }
+            if let Some(loc) = shader.location(gl, "u_texSize") {
+                gl.uniform2f(Some(&loc), w as f32, h as f32);
+            }
+            if let Some(loc) = shader.location(gl, "u_sourceOffset") {
+                gl.uniform2f(Some(&loc), source_offset_x as f32, source_offset_y as f32);
             }
             engine.draw_fullscreen_quad();
         });

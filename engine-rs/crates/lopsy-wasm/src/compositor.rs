@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use web_sys::WebGl2RenderingContext;
+use crate::coverage_stroke_gpu::{self, CoverageTool};
 use crate::engine::EngineInner;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
@@ -395,10 +396,10 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // layer. This way the stroke is non-destructive until `endStroke`
         // bakes it in.
         let composite_src = if engine.stroke_dodge_textures.contains_key(&layer_id) {
-            render_dodge_burn_preview(engine, &layer_id, effect_tex_handle, tw, th)
+            coverage_stroke_gpu::render_preview(engine, &layer_id, effect_tex_handle, tw, th, CoverageTool::DodgeBurn)
                 .map(|h| (h, tw, th))
         } else if engine.stroke_sponge_textures.contains_key(&layer_id) {
-            render_sponge_preview(engine, &layer_id, effect_tex_handle, tw, th)
+            coverage_stroke_gpu::render_preview(engine, &layer_id, effect_tex_handle, tw, th, CoverageTool::Sponge)
                 .map(|h| (h, tw, th))
         } else if merged_handle.is_some() {
             Some((effect_tex_handle, tw, th))
@@ -1000,119 +1001,6 @@ fn render_layer_masked_for_effects(
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
     Some(masked)
-}
-
-/// Render the in-progress dodge/burn stroke into its per-layer preview
-/// texture: `preview = dodge_burn(layer, coverage, mode, exposure=1.0)`.
-/// Returns the preview texture handle, or `None` if no preview slot is
-/// available. Exposure is already baked into the coverage values, so we
-/// pass 1.0 here.
-fn render_dodge_burn_preview(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    layer_handle: TextureHandle,
-    tw: u32,
-    th: u32,
-) -> Option<TextureHandle> {
-    let coverage_handle = *engine.stroke_dodge_textures.get(layer_id)?;
-    let preview_handle = *engine.stroke_dodge_preview_textures.get(layer_id)?;
-    let mode = *engine.stroke_dodge_modes.get(layer_id).unwrap_or(&0);
-
-    // Layer texture may have been resized (ensure_layer_full_size) since
-    // begin_stroke — if coverage/preview are stale, skip preview and let
-    // the raw layer through.
-    if engine.texture_pool.get_size(coverage_handle).map_or(true, |(w, h)| w != tw || h != th) {
-        return None;
-    }
-    if engine.texture_pool.get_size(preview_handle).map_or(true, |(w, h)| w != tw || h != th) {
-        return None;
-    }
-
-    let layer_gl_tex = engine.texture_pool.get(layer_handle)?.clone();
-    let coverage_gl_tex = engine.texture_pool.get(coverage_handle)?.clone();
-    let preview_gl_tex = engine.texture_pool.get(preview_handle)?.clone();
-
-    let gl = &engine.gl;
-    gl.disable(WebGl2RenderingContext::BLEND);
-
-    engine.render_to_texture(&preview_gl_tex, tw as i32, th as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.dodge_burn;
-        gl.use_program(Some(&shader.program));
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_gl_tex));
-        if let Some(loc) = shader.location(gl, "u_layerTex") { gl.uniform1i(Some(&loc), 0); }
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&coverage_gl_tex));
-        if let Some(loc) = shader.location(gl, "u_stampTex") { gl.uniform1i(Some(&loc), 1); }
-
-        if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), mode as i32); }
-        if let Some(loc) = shader.location(gl, "u_exposure") { gl.uniform1f(Some(&loc), 1.0); }
-
-        engine.draw_fullscreen_quad();
-    });
-
-    // Unbind to avoid feedback loops in subsequent passes.
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
-    Some(preview_handle)
-}
-
-fn render_sponge_preview(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    layer_handle: TextureHandle,
-    tw: u32,
-    th: u32,
-) -> Option<TextureHandle> {
-    let coverage_handle = *engine.stroke_sponge_textures.get(layer_id)?;
-    let preview_handle = *engine.stroke_sponge_preview_textures.get(layer_id)?;
-    let mode = *engine.stroke_sponge_modes.get(layer_id).unwrap_or(&0);
-
-    if engine.texture_pool.get_size(coverage_handle).map_or(true, |(w, h)| w != tw || h != th) {
-        return None;
-    }
-    if engine.texture_pool.get_size(preview_handle).map_or(true, |(w, h)| w != tw || h != th) {
-        return None;
-    }
-
-    let layer_gl_tex = engine.texture_pool.get(layer_handle)?.clone();
-    let coverage_gl_tex = engine.texture_pool.get(coverage_handle)?.clone();
-    let preview_gl_tex = engine.texture_pool.get(preview_handle)?.clone();
-
-    let gl = &engine.gl;
-    gl.disable(WebGl2RenderingContext::BLEND);
-
-    engine.render_to_texture(&preview_gl_tex, tw as i32, th as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.sponge;
-        gl.use_program(Some(&shader.program));
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_gl_tex));
-        if let Some(loc) = shader.location(gl, "u_layerTex") { gl.uniform1i(Some(&loc), 0); }
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&coverage_gl_tex));
-        if let Some(loc) = shader.location(gl, "u_stampTex") { gl.uniform1i(Some(&loc), 1); }
-
-        if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), mode as i32); }
-        if let Some(loc) = shader.location(gl, "u_exposure") { gl.uniform1f(Some(&loc), 1.0); }
-
-        engine.draw_fullscreen_quad();
-    });
-
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
-    Some(preview_handle)
 }
 
 /// A texture holding a layer's silhouette, placed at (`x`, `y`) in document

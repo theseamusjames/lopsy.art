@@ -320,6 +320,9 @@ pub struct EngineInner {
     /// The live compositor's cache of each layer's effect images; see
     /// `effect_cache_gpu.rs`.
     pub effect_cache: crate::effect_cache_gpu::EffectCache,
+    /// Texels touched by the in-progress Dodge / Burn or Sponge stroke on
+    /// each layer (`coverage_stroke_gpu.rs`).
+    pub coverage_strokes: HashMap<String, crate::coverage_stroke_gpu::CoverageStroke>,
 }
 
 pub struct SnapshotTexture {
@@ -472,6 +475,7 @@ impl EngineInner {
             layer_content_gen: HashMap::new(),
             next_content_gen: 1,
             effect_cache: crate::effect_cache_gpu::new_cache(),
+            coverage_strokes: HashMap::new(),
         })
     }
 
@@ -720,6 +724,14 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.stroke_dodge_modes.clear();
+        for (_, tex) in self.stroke_sponge_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        for (_, tex) in self.stroke_sponge_preview_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        self.stroke_sponge_modes.clear();
+        self.coverage_strokes.clear();
         // Brush tip
         if let Some(tex) = self.brush_tip_texture.take() {
             self.texture_pool.release(tex);
