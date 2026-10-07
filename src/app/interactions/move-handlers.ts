@@ -1,6 +1,7 @@
 import type { MutableRefObject } from 'react';
 import type { Point, Rect } from '../../types';
 import { snapPositionToGrid } from '../../tools/move/move';
+import { snapBoxToGrid } from '../../tools/move/snap-anchor';
 import { ALIGNMENT_SCREEN_PX, findAlignment, sameGuides } from '../../tools/move/smart-guides';
 import { buildMoveAlignmentContext } from './move-alignment';
 import type { MoveAlignmentContext } from './move-alignment';
@@ -520,9 +521,9 @@ function showAlignmentLines(lines: readonly SnapLine[]): void {
 }
 
 /**
- * Where a whole-layer drag puts the active layer: the grid snaps its
- * origin, then Snap to Layers lands the nearest alignment on its target.
- * Alignment lines show either way.
+ * Where a whole-layer drag puts the active layer: the grid snaps the
+ * chosen anchor of the moving content, then Snap to Layers lands the
+ * nearest alignment on its target. Alignment lines show either way.
  */
 function snapWholeLayerMove(
   proposedX: number,
@@ -539,7 +540,13 @@ function snapWholeLayerMove(
   const boxAt = (box: Rect): Rect => ({ ...box, x: box.x + x - startX, y: box.y + y - startY });
 
   if (ui.showGrid && ui.snapToGrid) {
-    ({ x, y } = snapPositionToGrid(x, y, ui.gridSize, docW, docH));
+    if (alignment) {
+      const shift = snapBoxToGrid(boxAt(alignment.movingBox), ui.snapAnchor, ui.gridSize, docW, docH);
+      x += shift.x;
+      y += shift.y;
+    } else {
+      ({ x, y } = snapPositionToGrid(x, y, ui.gridSize, docW, docH));
+    }
   }
   if (!alignment) {
     showAlignmentLines([]);

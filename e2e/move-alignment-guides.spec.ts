@@ -1,7 +1,8 @@
 /**
  * Move-drag alignment lines (#1224): dragging content close to an edge or
  * centre of other content draws a dark pink line there; with View → Snap to
- * Layers on the drag lands on it.
+ * Layers on the drag lands on it; and the six snap-point buttons beside the
+ * grid's Snap checkbox choose which edge or centre lands on the grid.
  */
 import { test, expect, type Page } from './fixtures';
 import { addLayer, createDocument, docToScreen, drawRect, waitForStore } from './helpers';
@@ -96,7 +97,7 @@ async function dragLayerLeftEdgeTo(page: Page, box: LayerBox, left: number, top:
   await page.waitForTimeout(150);
 }
 
-test.describe('Move alignment lines', () => {
+test.describe('Move alignment lines and snap points', () => {
   let stillId = '';
   let moverId = '';
 
@@ -153,5 +154,47 @@ test.describe('Move alignment lines', () => {
     const after = await layerBox(page, moverId);
     expect(after.x).toBe(160);
     expect(after.y).toBe(200);
+  });
+
+  test('the snap-point buttons choose which edge lands on the grid', async ({ page }) => {
+    // Show Grid turns Snap on. The 16 px grid is centred on the 400 × 300
+    // document: x lines at 200 ± 16k (… 152, 168, 184, 200 …), y lines at
+    // 150 ± 16k (… 182, 198, 214, 230 …).
+    await viewMenu(page, 'Show Grid');
+    await expect(page.getByRole('checkbox', { name: 'Snap', exact: true })).toBeChecked();
+
+    const left = page.getByRole('button', { name: 'Snap left edge to grid' });
+    const centre = page.getByRole('button', { name: 'Snap horizontal center to grid' });
+    const right = page.getByRole('button', { name: 'Snap right edge to grid' });
+    const top = page.getByRole('button', { name: 'Snap top edge to grid' });
+    const bottom = page.getByRole('button', { name: 'Snap bottom edge to grid' });
+    await expect(left).toHaveAttribute('aria-pressed', 'true');
+    await expect(top).toHaveAttribute('aria-pressed', 'true');
+    await page.screenshot({ path: 'e2e/screenshots/move-snap-points-options-bar.png' });
+
+    // Default (left, top): left edge 171 → 168, top 200 → 198.
+    let box = await layerBox(page, moverId);
+    await dragLayerLeftEdgeTo(page, box, 171, 200);
+    box = await layerBox(page, moverId);
+    expect({ x: box.x, y: box.y }).toEqual({ x: 168, y: 198 });
+
+    // Right and bottom: right edge 201 → 200 (x 170), bottom 230 is on a line (y 200).
+    await right.click();
+    await bottom.click();
+    await expect(right).toHaveAttribute('aria-pressed', 'true');
+    await expect(left).toHaveAttribute('aria-pressed', 'false');
+    await dragLayerLeftEdgeTo(page, box, 171, 200);
+    box = await layerBox(page, moverId);
+    expect({ x: box.x, y: box.y }).toEqual({ x: 170, y: 200 });
+
+    // Centre: centre 186 → 184 (x 169).
+    await centre.click();
+    await dragLayerLeftEdgeTo(page, box, 171, 200);
+    box = await layerBox(page, moverId);
+    expect(box.x).toBe(169);
+
+    // Unticking Snap disables the snap points.
+    await page.getByRole('checkbox', { name: 'Snap', exact: true }).uncheck();
+    await expect(left).toBeDisabled();
   });
 });

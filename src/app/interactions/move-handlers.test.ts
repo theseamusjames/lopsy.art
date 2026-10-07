@@ -105,6 +105,7 @@ const uiState = {
   showGrid: false,
   snapToGrid: false,
   snapToLayers: false,
+  snapAnchor: { horizontal: 'left', vertical: 'top' },
   snapLines: [] as unknown[],
   gridSize: 10,
   setTransform: vi.fn(),
@@ -655,7 +656,7 @@ describe('floated-selection moves mark the layer dirty for history (#925)', () =
   });
 });
 
-describe('whole-layer drag — alignment lines', () => {
+describe('whole-layer drag — alignment lines and snap anchor', () => {
   const still: RasterLayer = {
     id: 'still',
     name: 'Still',
@@ -707,6 +708,7 @@ describe('whole-layer drag — alignment lines', () => {
     uiState.showGrid = false;
     uiState.snapToGrid = false;
     uiState.snapToLayers = false;
+    uiState.snapAnchor = { horizontal: 'left', vertical: 'top' };
     uiState.snapLines = [];
     uiState.setSnapLines.mockClear();
     vi.mocked(bridge.cropLayerToContent).mockReset();
@@ -736,5 +738,21 @@ describe('whole-layer drag — alignment lines', () => {
     const state = handleMoveDown(makeContext());
     handleMoveMove(state, { x: 10, y: 22 }, makeFloatRef());
     expect(editorState.updateLayerPosition).toHaveBeenLastCalledWith('mover', 6, 20);
+  });
+
+  it('snaps the chosen anchor to the grid', () => {
+    uiState.showGrid = true;
+    uiState.snapToGrid = true;
+    // 32 px document, 10 px grid centred on 16: lines at 6, 16, 26.
+    const left = handleMoveDown(makeContext());
+    handleMoveMove(left, { x: 23, y: 22 }, makeFloatRef());
+    // Left edge 21 rounds to the line at 26.
+    expect(editorState.updateLayerPosition).toHaveBeenLastCalledWith('mover', 26, expect.any(Number));
+
+    uiState.snapAnchor = { horizontal: 'right', vertical: 'top' };
+    const right = handleMoveDown(makeContext());
+    handleMoveMove(right, { x: 23, y: 22 }, makeFloatRef());
+    // Right edge 25 rounds to 26, so the left edge lands at 22.
+    expect(editorState.updateLayerPosition).toHaveBeenLastCalledWith('mover', 22, expect.any(Number));
   });
 });

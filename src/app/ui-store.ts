@@ -10,6 +10,8 @@ import { DEFAULT_ADJUSTMENTS } from '../filters/image-adjustments';
 import type { ImageAdjustments } from '../filters/image-adjustments';
 import type { MeshWarpGrid } from '../filters/mesh-warp';
 import type { LiquifySettings } from '../tools/liquify/liquify';
+import { DEFAULT_SNAP_ANCHOR } from '../tools/move/snap-anchor';
+import type { HorizontalSnapAnchor, SnapAnchor, VerticalSnapAnchor } from '../tools/move/snap-anchor';
 import { toolRegistry } from '../tools/tool-registry';
 import { setVisiblePanelsSink, togglePanelById } from '../panels/dock/dock-ui-bridge';
 
@@ -188,6 +190,8 @@ interface UIState {
   snapToLayers: boolean;
   /** Marquee drags land on a visible guide within reach. */
   snapToGuides: boolean;
+  /** Which point of the content a Move drag lands on the grid. */
+  snapAnchor: SnapAnchor;
   /** Temporary alignment lines shown while a Move drag lines content up. */
   snapLines: readonly SnapLine[];
   gridSize: number;
@@ -280,6 +284,8 @@ interface UIState {
   toggleSnapToGrid: () => void;
   toggleSnapToLayers: () => void;
   toggleSnapToGuides: () => void;
+  setSnapAnchorHorizontal: (horizontal: HorizontalSnapAnchor) => void;
+  setSnapAnchorVertical: (vertical: VerticalSnapAnchor) => void;
   setSnapLines: (lines: readonly SnapLine[]) => void;
   clearSnapLines: () => void;
   setGridSize: (size: number) => void;
@@ -380,6 +386,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   hasUserToggledSnapToGrid: false,
   snapToLayers: false,
   snapToGuides: true,
+  snapAnchor: DEFAULT_SNAP_ANCHOR,
   snapLines: [],
   gridSize: 16,
   guideColor: { r: 0, g: 180, b: 255, a: 1 },
@@ -484,6 +491,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleSnapToGrid: () => set((state) => ({ snapToGrid: !state.snapToGrid, hasUserToggledSnapToGrid: true })),
   toggleSnapToLayers: () => set((state) => ({ snapToLayers: !state.snapToLayers })),
   toggleSnapToGuides: () => set((state) => ({ snapToGuides: !state.snapToGuides })),
+  setSnapAnchorHorizontal: (horizontal) => set((state) => ({ snapAnchor: { ...state.snapAnchor, horizontal } })),
+  setSnapAnchorVertical: (vertical) => set((state) => ({ snapAnchor: { ...state.snapAnchor, vertical } })),
   setSnapLines: (lines) => set({ snapLines: lines }),
   clearSnapLines: () => set({ snapLines: [] }),
   setGridSize: (size) => set({ gridSize: size }),

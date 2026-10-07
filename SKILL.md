@@ -669,7 +669,10 @@ end within 8 screen px of a guide snap onto it, and so do Shape drags; turn this
 **View → Snap to Guides** if you need an edge just beside a guide.
 A Move drag shows dark pink alignment lines when the layer's edges or centre
 come within 6 screen px of another layer's or the canvas's; turn on
-**View → Snap to Layers** to make the drag land on them.
+**View → Snap to Layers** to make the drag land on them. With the grid on,
+the Move tool's options bar adds snap-point buttons beside **Snap** (for
+example `Snap right edge to grid`) choosing which edge or centre lands on a
+grid line; the default is the left and top edges.
 
 ## Behaviours that trip up agents
 
