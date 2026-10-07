@@ -152,6 +152,7 @@ vi.mock('../pattern-store', () => ({
 
 vi.mock('../../tools/liquify/liquify', () => ({
   MAX_DISP: 100,
+  DISP_CENTER: 32768,
   defaultLiquifySettings: () => ({ brushSize: 40, pressure: 0.5 }),
 }));
 

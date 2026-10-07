@@ -34,15 +34,24 @@ function nearestWeight(weights: readonly number[], weight: number): number {
  * re-render (a size nudge, a re-edit) shapes with whatever the engine has — so
  * without this it falls back to Inter (#962).
  */
-export function loadDocumentFonts(layers: readonly Layer[]): Promise<void> {
-  const loads = collectTextLayerFonts(layers).map((face) => {
-    const entry = findFontEntry(face.family);
-    if (!entry) return Promise.resolve(false);
-    if (entry.source === 'local') return loadLocalFontToEngine(face.family);
-    if (entry.source !== 'google') return Promise.resolve(false);
-    loadGoogleFont(face.family, entry.weights, entry.hasItalic).catch(() => {});
-    const isItalic = face.isItalic && entry.hasItalic;
-    return loadFontBinaryToEngine(face.family, nearestWeight(entry.weights, face.weight), isItalic);
-  });
+export function loadDocumentFonts(
+  layers: readonly Layer[],
+  onFaceLoaded?: (family: string) => void,
+): Promise<void> {
+  const loads = collectTextLayerFonts(layers).map((face) =>
+    loadFace(face).then((isLoaded) => {
+      if (isLoaded) onFaceLoaded?.(face.family);
+    }),
+  );
   return Promise.all(loads).then(() => undefined);
+}
+
+function loadFace(face: DocumentFontFace): Promise<boolean> {
+  const entry = findFontEntry(face.family);
+  if (!entry) return Promise.resolve(false);
+  if (entry.source === 'local') return loadLocalFontToEngine(face.family);
+  if (entry.source !== 'google') return Promise.resolve(false);
+  loadGoogleFont(face.family, entry.weights, entry.hasItalic).catch(() => {});
+  const isItalic = face.isItalic && entry.hasItalic;
+  return loadFontBinaryToEngine(face.family, nearestWeight(entry.weights, face.weight), isItalic);
 }

@@ -16,22 +16,49 @@ out vec4 fragColor;
 const float MAX_DISP = 2048.0;
 const float BLOAT_STRENGTH = 0.5;
 
-vec2 decodeDisp(vec4 c) {
-    float ndx = (c.r * 256.0 + c.g) / 257.0;
-    float ndy = (c.b * 256.0 + c.a) / 257.0;
-    return (vec2(ndx, ndy) * 2.0 - 1.0) * MAX_DISP;
+// 16 bits per axis: (R, G) = high and low byte of the X code, (B, A) those
+// of Y. The code is an exact integer and 32768 is an exact zero, so the
+// carry between the bytes never splits one value two ways. A fractional
+// code put zero displacement on the 127|255 / 128|0 carry, where backends
+// that evaluate floor() and mod() with different precision tore the field
+// along every zero-crossing (#1212). Must match DISP_CENTER / DISP_SCALE in
+// src/tools/liquify/liquify.ts.
+const float DISP_CENTER = 32768.0;
+const float DISP_SCALE = 32767.0;
+
+// Decoded offsets are in units of MAX_DISP.
+vec2 fetchDisp(ivec2 p) {
+    // The pool may store the bytes as RGBA16F; rounding recovers them.
+    vec4 b = floor(texelFetch(u_disp, p, 0) * 255.0 + 0.5);
+    return (vec2(b.r * 256.0 + b.g, b.b * 256.0 + b.a) - DISP_CENTER) / DISP_SCALE;
+}
+
+// Bilinear between decoded texels at `pixel` (texel space, centres at
+// k + 0.5). Hardware filtering would blend the high and low bytes
+// separately at the texture's own precision.
+vec2 sampleDisp(vec2 pixel) {
+    ivec2 size = textureSize(u_disp, 0);
+    vec2 g = clamp(pixel - 0.5, vec2(0.0), vec2(size - 1));
+    ivec2 i0 = ivec2(floor(g));
+    ivec2 i1 = min(i0 + 1, size - 1);
+    vec2 f = g - vec2(i0);
+    vec2 d00 = fetchDisp(i0);
+    vec2 d10 = fetchDisp(ivec2(i1.x, i0.y));
+    vec2 d01 = fetchDisp(ivec2(i0.x, i1.y));
+    vec2 d11 = fetchDisp(i1);
+    return mix(mix(d00, d10, f.x), mix(d01, d11, f.x), f.y);
 }
 
 vec4 encodeDisp(vec2 d) {
-    vec2 n = clamp(d / MAX_DISP * 0.5 + 0.5, 0.0, 1.0);
-    float ex = n.x * 65535.0;
-    float ey = n.y * 65535.0;
-    return vec4(
-        floor(ex / 256.0) / 255.0,
-        mod(ex, 256.0) / 255.0,
-        floor(ey / 256.0) / 255.0,
-        mod(ey, 256.0) / 255.0
+    vec2 steps = d / MAX_DISP * DISP_SCALE;
+    vec2 code = clamp(
+        sign(steps) * floor(abs(steps) + 0.5) + DISP_CENTER,
+        DISP_CENTER - DISP_SCALE,
+        DISP_CENTER + DISP_SCALE
     );
+    vec2 hi = floor(code / 256.0);
+    vec2 lo = code - hi * 256.0;
+    return vec4(hi.x, lo.x, hi.y, lo.y) / 255.0;
 }
 
 float brushWeight(float distSq, float radiusSq) {
@@ -46,15 +73,15 @@ void main() {
     float distSq = dx * dx + dy * dy;
     float radiusSq = u_radius * u_radius;
 
-    vec4 current = texture(u_disp, v_uv);
+    ivec2 texel = ivec2(floor(pixel));
 
     if (distSq >= radiusSq) {
-        fragColor = current;
+        fragColor = texelFetch(u_disp, texel, 0);
         return;
     }
 
     float w = brushWeight(distSq, radiusSq) * u_pressure;
-    vec2 disp = decodeDisp(current);
+    vec2 disp = fetchDisp(texel) * MAX_DISP;
 
     if (u_mode == 0) {
         // liquify_warp.glsl resamples with srcUv = v_uv + disp (backward/pull
@@ -73,8 +100,9 @@ void main() {
         float sn = sin(a);
         float ndx = dx * cs - dy * sn - dx;
         float ndy = dx * sn + dy * cs - dy;
-        disp.x += ndx + (disp.x * cs - disp.y * sn - disp.x);
-        disp.y += ndy + (disp.x * sn + disp.y * cs - disp.y);
+        vec2 prev = disp;
+        disp.x = ndx + prev.x * cs - prev.y * sn;
+        disp.y = ndy + prev.x * sn + prev.y * cs;
     } else if (u_mode == 3 || u_mode == 4) {
         // #945: the per-dab offset is proportional to the distance from the
         // centre (a radial scale), not a constant-length unit vector — a
@@ -86,7 +114,7 @@ void main() {
         // magnifying smoothly instead of accumulating past the fold.
         float k = (u_mode == 3) ? -BLOAT_STRENGTH : BLOAT_STRENGTH;
         vec2 delta = vec2(dx, dy) * (k * w);
-        vec2 prev = decodeDisp(texture(u_disp, (pixel + delta) / u_size));
+        vec2 prev = sampleDisp(pixel + delta) * MAX_DISP;
         disp = delta + prev;
     }
 

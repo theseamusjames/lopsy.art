@@ -8,7 +8,8 @@ import { useEditorStore } from '../app/editor-store';
 import { useUIStore } from '../app/ui-store';
 import { getEngine } from '../engine-wasm/engine-state';
 import { initWasm, uploadLayerPixels, uploadLayerMask } from '../engine-wasm/wasm-bridge';
-import { resetTrackedState, flushLayerSync, syncDocumentSize } from '../engine-wasm/engine-sync';
+import { resetTrackedState, flushLayerSync, syncDocumentSize, forgetTextLayerLayout } from '../engine-wasm/engine-sync';
+import { extractFamilyName } from '../utils/font-loader';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError, describeError } from '../app/notifications-store';
 import { loadDocumentFonts } from '../app/load-document-fonts';
@@ -166,6 +167,21 @@ async function waitForEngine(maxFrames = 60): Promise<ReturnType<typeof getEngin
 /**
  * Load a .lopsy file and restore the document state.
  */
+/**
+ * A reopened document's font arrives after the overlay may already have laid
+ * its text out with the fallback face; drop those layouts so the next
+ * measurement matches the saved pixels (#1213).
+ */
+function forgetFamilyLayouts(family: string): void {
+  const engine = getEngine();
+  if (!engine) return;
+  for (const layer of useEditorStore.getState().document.layers) {
+    if (layer.type !== 'text') continue;
+    if (extractFamilyName((layer as TextLayer).fontFamily) !== family) continue;
+    forgetTextLayerLayout(engine, layer as TextLayer);
+  }
+}
+
 export async function loadProject(file: File): Promise<void> {
   useUIStore.getState().openModal({ kind: 'loading', message: 'Opening project…' });
 
@@ -313,7 +329,7 @@ export async function loadProject(file: File): Promise<void> {
         uploadLayerMask(engine, s.id, maskBytes, layer.mask.width, layer.mask.height);
       }
 
-      void loadDocumentFonts(newLayers);
+      void loadDocumentFonts(newLayers, forgetFamilyLayouts);
     }
 
     useEditorStore.getState().fitToView();
