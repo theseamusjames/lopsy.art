@@ -183,38 +183,40 @@ export function renderGuideColorSwatch(
   ctx.stroke();
 }
 
-const SNAP_LINE_COLOR = 'rgba(255, 0, 220, 0.85)';
+/** Dark pink: distinct from the default cyan guides and from the blue transform UI. */
+const ALIGNMENT_LINE_COLOR = 'rgb(214, 36, 120)';
+const ALIGNMENT_LINE_SCREEN_PX = 1.5;
+/** How far, in screen px, a line runs past the boxes it joins. */
+const ALIGNMENT_LINE_OVERHANG_PX = 6;
 
 /**
- * Render temporary snap alignment lines during move/transform operations.
+ * Render the alignment lines a Move drag shows when content lines up with
+ * other content or the canvas. Each line spans the boxes it joins.
  * Called inside the document-space transform.
  */
 export function renderSnapLines(
   ctx: CanvasRenderingContext2D,
   snapLines: readonly SnapLine[],
-  docWidth: number,
-  docHeight: number,
   zoom: number,
 ): void {
   if (snapLines.length === 0) return;
 
+  const overhang = ALIGNMENT_LINE_OVERHANG_PX / zoom;
   ctx.save();
-  ctx.strokeStyle = SNAP_LINE_COLOR;
-  ctx.lineWidth = 1 / zoom;
+  ctx.strokeStyle = ALIGNMENT_LINE_COLOR;
+  ctx.lineWidth = ALIGNMENT_LINE_SCREEN_PX / zoom;
   ctx.setLineDash([]);
-
+  ctx.beginPath();
   for (const line of snapLines) {
-    ctx.beginPath();
     if (line.orientation === 'vertical') {
-      ctx.moveTo(line.position, 0);
-      ctx.lineTo(line.position, docHeight);
+      ctx.moveTo(line.position, line.start - overhang);
+      ctx.lineTo(line.position, line.end + overhang);
     } else {
-      ctx.moveTo(0, line.position);
-      ctx.lineTo(docWidth, line.position);
+      ctx.moveTo(line.start - overhang, line.position);
+      ctx.lineTo(line.end + overhang, line.position);
     }
-    ctx.stroke();
   }
-
+  ctx.stroke();
   ctx.restore();
 }
 

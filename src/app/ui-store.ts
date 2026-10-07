@@ -153,6 +153,9 @@ export type ModalState =
 export interface SnapLine {
   orientation: 'vertical' | 'horizontal';
   position: number;
+  /** Extent along the line in document pixels: y for a vertical line, x for a horizontal one. */
+  start: number;
+  end: number;
 }
 
 export type ActiveChannel = 'rgb' | 'r' | 'g' | 'b' | 'a';
@@ -185,7 +188,7 @@ interface UIState {
   snapToLayers: boolean;
   /** Marquee drags land on a visible guide within reach. */
   snapToGuides: boolean;
-  /** Temporary snap alignment lines shown during move/transform. */
+  /** Temporary alignment lines shown while a Move drag lines content up. */
   snapLines: readonly SnapLine[];
   gridSize: number;
   guideColor: Color;

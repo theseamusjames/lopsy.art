@@ -4,6 +4,7 @@ import type { TransformHandle, TransformState } from '../../tools/transform/tran
 import type { SelectionCombineMode } from '../../selection/selection';
 import type { LayerHistoryBefore } from '../store/layer-gpu-capture';
 import type { TextFrame } from '../../tools/text/text-transform';
+import type { MoveAlignmentContext } from './move-alignment';
 
 /**
  * Discriminated union describing which canvas gesture is active.
@@ -55,6 +56,8 @@ export type CanvasGesture =
       /** The pending multi-layer transform when the drag started inside a
        *  live one (no marquee, several layers). The drag translates it. */
       pendingLayerTransform: TransformState | null;
+      /** Boxes a whole-layer drag lines up against; null for every other move. */
+      alignment: MoveAlignmentContext | null;
     }
   | { kind: 'tool' }
   | { kind: 'liquify'; lastPoint: Point }
@@ -135,6 +138,7 @@ export function withMoveGesture(
     siblings?: readonly SiblingMoveTarget[];
     pendingTransform?: TransformState | null;
     pendingLayerTransform?: TransformState | null;
+    alignment?: MoveAlignmentContext | null;
   },
 ): InteractionState {
   return {
@@ -149,6 +153,7 @@ export function withMoveGesture(
       siblings: payload.siblings ?? [],
       pendingTransform: payload.pendingTransform ?? null,
       pendingLayerTransform: payload.pendingLayerTransform ?? null,
+      alignment: payload.alignment ?? null,
     },
   };
 }

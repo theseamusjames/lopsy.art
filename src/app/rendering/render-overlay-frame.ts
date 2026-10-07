@@ -220,7 +220,7 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
     renderBrushCursor(overlayCtx, cursorPosition, uiState.liquify.settings.brushSize, viewport.zoom, 'circle', null, 0);
   }
 
-  renderSnapLines(overlayCtx, snapLines, doc.width, doc.height, viewport.zoom);
+  renderSnapLines(overlayCtx, snapLines, viewport.zoom);
 
   if (showGuides) {
     renderGuides(overlayCtx, guides, selectedGuideId, doc.width, doc.height, viewport.zoom, guideColor);
