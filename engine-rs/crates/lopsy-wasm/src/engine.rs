@@ -320,6 +320,9 @@ pub struct EngineInner {
     /// The live compositor's cache of each layer's effect images; see
     /// `effect_cache_gpu.rs`.
     pub effect_cache: crate::effect_cache_gpu::EffectCache,
+    /// 2×1 target the Healing Brush renders its source / destination region
+    /// means into, created on first use (`healing_brush_gpu.rs`).
+    pub healing_mean_target: Option<(TextureHandle, FramebufferHandle)>,
     /// Texels touched by the in-progress Dodge / Burn or Sponge stroke on
     /// each layer (`coverage_stroke_gpu.rs`).
     pub coverage_strokes: HashMap<String, crate::coverage_stroke_gpu::CoverageStroke>,
@@ -475,6 +478,7 @@ impl EngineInner {
             layer_content_gen: HashMap::new(),
             next_content_gen: 1,
             effect_cache: crate::effect_cache_gpu::new_cache(),
+            healing_mean_target: None,
             coverage_strokes: HashMap::new(),
         })
     }

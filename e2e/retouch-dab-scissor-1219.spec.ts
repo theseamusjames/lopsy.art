@@ -253,6 +253,12 @@ test.describe('Retouch tool dabs are scissored to the dab (#1219)', () => {
 
     const r = await recorded(page);
     expectScissoredDabs(r);
+    // Healing a flat source onto a flat destination keeps the destination:
+    // source − source mean + destination mean.
+    const [hr, hg, hb] = rgbAt(after, 600, 250);
+    expect(Math.abs(hr - 30)).toBeLessThanOrEqual(4);
+    expect(Math.abs(hg - 30)).toBeLessThanOrEqual(4);
+    expect(Math.abs(hb - 220)).toBeLessThanOrEqual(4);
     expect(changedOutsideStroke(before, after, a, b)).toBe(0);
   });
 

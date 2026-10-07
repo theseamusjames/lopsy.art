@@ -213,13 +213,14 @@ test.describe('Healing Brush Tool', () => {
       const dw = state.document.width;
       const dh = state.document.height;
       const data = new ImageData(dw, dh);
-      // Fill entire canvas blue
+      // Fill entire canvas blue, with darker 3 px stripes every 8 rows so
+      // the source has a texture for the heal to carry.
       for (let py = 0; py < dh; py++) {
         for (let px = 0; px < dw; px++) {
           const idx = (py * dw + px) * 4;
           data.data[idx] = 0;
           data.data[idx + 1] = 0;
-          data.data[idx + 2] = 200;
+          data.data[idx + 2] = py % 8 < 3 ? 100 : 200;
           data.data[idx + 3] = 255;
         }
       }
@@ -312,11 +313,15 @@ test.describe('Healing Brush Tool', () => {
     expect(beforePixel.r).toBeGreaterThan(100);
     expect(beforePixel.b).toBeLessThan(100);
 
-    // After healing: the pixel should have moved toward the destination blue tone
-    // (healing reduces the red channel and increases blue)
-    const redDiff = beforePixel.r - afterPixel.r;
-    const blueDiff = afterPixel.b - beforePixel.b;
-    // At least some color shift must have occurred
-    expect(redDiff + blueDiff).toBeGreaterThan(0);
+    // Healing is `source − sourceMean + destinationMean`: the red tone of
+    // the destination stays (a plain clone would turn it blue)…
+    expect(afterPixel.r).toBeGreaterThan(150);
+    // …and the source's stripes come with it. The stroke's offset is
+    // (−140, −90), so doc row 150 heals from source row 60 (plain blue) and
+    // row 154 from row 64 (a dark stripe): the plain row gains blue, the
+    // stripe row stays darker.
+    const stripePixel = snapshotPixelAt(after, 200, 154, layerX, layerY);
+    expect(afterPixel.b).toBeGreaterThan(beforePixel.b + 20);
+    expect(afterPixel.b - stripePixel.b).toBeGreaterThan(20);
   });
 });
