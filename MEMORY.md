@@ -491,3 +491,15 @@ multi-character glyph of a non-joining script with swash (`liga`/`clig`/
 (`ligature_split.rs`, #1185). Every consumer of `run.glyphs` that places or
 draws glyphs must go through `expand_run_glyphs`, or the caret and the render
 disagree about where "f" and "i" are.
+
+## Measure a text raster's offset with `textRasterBounds`, not `renderTextLayer`
+
+An upright text layer's `x`/`y` is `anchor + renderOffset`, so recovering
+its anchor needs the offset the rasterizer would use. `textRasterBounds`
+returns the same `[w, h, offset_x, offset_y]` as `renderTextLayer` from the
+shared planning pass (`plan_text_raster`) without allocating or compositing
+the raster. `measureTextFrame` caches it per layer id by props JSON (a move
+replaces the layer object but not its props, #1223); the cache drops out
+when `text-layout-generation.ts` is bumped by the wasm-bridge wrappers for
+`loadFontData*` and `removeTextLayerState`. `__textFrameOffsetMeasureCount()`
+counts the measurements in dev.

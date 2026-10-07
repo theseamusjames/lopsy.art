@@ -72,6 +72,8 @@ vi.mock('./wasm-bridge', () => ({
   renderTextLayer: vi.fn(() => new Int32Array([100, 50, 0, 0])),
   renderTextLayerToTexture: vi.fn(() => new Float64Array([100, 50, 0, 0])),
   getRenderedTextPixels: vi.fn(() => new Uint8Array(100 * 50 * 4)),
+  textLayoutBounds: vi.fn(() => new Float64Array([0, 0, 120, 40])),
+  textRasterBounds: vi.fn(() => new Float64Array([128, 48, -4, 6])),
   removeTextLayerState: vi.fn(),
 }));
 
@@ -90,6 +92,7 @@ const { createGroupLayer, createRasterLayer, createTextLayer } = await import('.
 const { renderTextOnPath: renderTextOnPathMock } = await import('../tools/text/render-text-on-path');
 const { resetFontFaceReadinessForTests } = await import('../utils/font-face-readiness');
 const { DEFAULT_ADJUSTMENTS } = await import('../filters/image-adjustments');
+const { bumpTextLayoutGeneration } = await import('./text-layout-generation');
 
 // A WeakMap key just needs to be an object — Engines are class instances in
 // production, but plain objects suffice here.
@@ -688,6 +691,96 @@ describe('refreshCommittedTextLayerFont — anchor recovery on web-font load (#8
     const pos = sync.refreshCommittedTextLayerFont(engine, layer);
 
     expect(pos).toEqual({ x: 126, y: 200 });
+  });
+});
+
+describe('measureTextFrame — upright frame cached by props (#1223)', () => {
+  beforeEach(() => {
+    vi.mocked(bridge.setTextLayerContent).mockClear();
+    vi.mocked(bridge.textLayoutBounds).mockClear();
+    vi.mocked(bridge.textRasterBounds).mockClear();
+    vi.mocked(bridge.renderTextLayer).mockClear();
+  });
+
+  const uprightLayer = () => ({
+    ...createTextLayer({ name: 'Block', text: 'line one\nline two' }),
+    x: 96,
+    y: 206,
+  });
+
+  it('recovers the anchor from the raster offset without rasterizing', () => {
+    const engine = makeFakeEngine();
+    const frame = sync.measureTextFrame(engine, uprightLayer());
+
+    expect(frame?.anchor).toEqual({ x: 100, y: 200 });
+    expect(frame?.box).toEqual({ x: 0, y: 0, width: 120, height: 40 });
+    expect(bridge.textRasterBounds).toHaveBeenCalledTimes(1);
+    expect(bridge.renderTextLayer).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the cached offset for a moved copy of the layer', () => {
+    const engine = makeFakeEngine();
+    const layer = uprightLayer();
+    sync.measureTextFrame(engine, layer);
+
+    const moves = [{ x: 106, y: 210 }, { x: 140, y: 251 }, { x: 0, y: -3 }];
+    const anchors = moves.map((pos) => sync.measureTextFrame(engine, { ...layer, ...pos })?.anchor);
+
+    expect(anchors).toEqual([{ x: 110, y: 204 }, { x: 144, y: 245 }, { x: 4, y: -9 }]);
+    expect(bridge.textRasterBounds).toHaveBeenCalledTimes(1);
+    expect(bridge.textLayoutBounds).toHaveBeenCalledTimes(1);
+    expect(bridge.setTextLayerContent).toHaveBeenCalledTimes(2);
+  });
+
+  it('measures again when the props change', () => {
+    const engine = makeFakeEngine();
+    const layer = uprightLayer();
+    sync.measureTextFrame(engine, layer);
+    vi.mocked(bridge.textRasterBounds).mockReturnValueOnce(new Float64Array([200, 60, -8, 3]));
+
+    const frame = sync.measureTextFrame(engine, { ...layer, fontSize: 48 });
+
+    expect(frame?.anchor).toEqual({ x: 104, y: 203 });
+    expect(bridge.textRasterBounds).toHaveBeenCalledTimes(2);
+  });
+
+  it('measures again after a font load or a dropped layout', () => {
+    const engine = makeFakeEngine();
+    const layer = uprightLayer();
+    sync.measureTextFrame(engine, layer);
+
+    bumpTextLayoutGeneration();
+    vi.mocked(bridge.textRasterBounds).mockReturnValueOnce(new Float64Array([128, 48, -2, 6]));
+    const sameObject = sync.measureTextFrame(engine, layer);
+    const moved = sync.measureTextFrame(engine, { ...layer, x: 100 });
+
+    expect(sameObject?.anchor).toEqual({ x: 98, y: 200 });
+    expect(moved?.anchor).toEqual({ x: 102, y: 200 });
+    expect(bridge.textRasterBounds).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps separate entries per engine and per layer id', () => {
+    const layer = uprightLayer();
+    sync.measureTextFrame(makeFakeEngine(), layer);
+    sync.measureTextFrame(makeFakeEngine(), { ...layer });
+    const engine = makeFakeEngine();
+    sync.measureTextFrame(engine, { ...layer });
+    sync.measureTextFrame(engine, { ...layer, id: 'other-text' });
+
+    expect(bridge.textRasterBounds).toHaveBeenCalledTimes(4);
+  });
+
+  it('takes a transformed layer\'s stored anchor without measuring an offset', () => {
+    const engine = makeFakeEngine();
+    const layer = {
+      ...uprightLayer(),
+      transform: { a: 0, b: 1, c: -1, d: 0, anchorX: 50, anchorY: 60 },
+    };
+
+    const frame = sync.measureTextFrame(engine, layer);
+
+    expect(frame?.anchor).toEqual({ x: 146, y: 266 });
+    expect(bridge.textRasterBounds).not.toHaveBeenCalled();
   });
 });
 
