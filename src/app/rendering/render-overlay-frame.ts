@@ -19,7 +19,6 @@ import { hitTestTextLayer } from '../../tools/text/text-hit-test';
 import { getPathTextGlyphBoxes } from '../../tools/text/path-text-hit-boxes';
 import { engineRenderedSize } from '../../tools/text/text-geometry';
 import { renderGuides, renderGuidePreview, renderGuideRulerOverlays, renderGuideColorSwatch, renderSnapLines } from './render-guides';
-import { getStampSourceImage } from './stamp-source-image';
 import { renderTiltShiftOverlay } from './render-tilt-shift-overlay';
 import { contextOptions } from '../../engine/color-space';
 import { getDisplayPixelRatio } from './display-pixel-ratio';
@@ -208,8 +207,7 @@ export function renderOverlayFrame(overlayCanvas: HTMLCanvasElement, antPhase: n
       : brushCursorInfo.size;
     const isStampTool = activeTool === 'stamp' || activeTool === 'healing';
     const showedPreview = isStampTool && doc.activeLayerId !== null && renderStampSourcePreview(
-      overlayCtx, getStampSourceImage(doc.activeLayerId), cursorPosition, size, viewport,
-      doc.width, doc.height, screenW, screenH,
+      overlayCtx, cursorPosition, size, viewport, doc.width, doc.height, screenW, screenH,
     );
     if (!showedPreview) {
       renderBrushCursor(overlayCtx, cursorPosition, size, viewport.zoom, brushCursorInfo.shape, brushCursorInfo.tip, brushCursorInfo.angle);

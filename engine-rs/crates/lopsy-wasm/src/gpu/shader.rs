@@ -105,6 +105,7 @@ pub const HEALING_DAB_FRAG: &str = include_str!("shaders/brush/healing_dab.glsl"
 pub const HEALING_MEAN_FRAG: &str = include_str!("shaders/brush/healing_mean.glsl");
 pub const OPACITY_CLAMP_FRAG: &str = include_str!("shaders/brush/opacity_clamp.glsl");
 pub const SPONGE_FRAG: &str = include_str!("shaders/brush/sponge.glsl");
+pub const STAMP_PREVIEW_FRAG: &str = include_str!("shaders/brush/stamp_preview.glsl");
 
 // Gradient
 pub const GRADIENT_LINEAR_FRAG: &str = include_str!("shaders/gradient/gradient_linear.glsl");
@@ -331,6 +332,7 @@ pub struct ShaderPrograms {
     pub healing_mean: ShaderProgram,
     pub opacity_clamp: ShaderProgram,
     pub sponge: ShaderProgram,
+    pub stamp_preview: ShaderProgram,
     // Gradient
     pub gradient_linear: ShaderProgram,
     pub gradient_radial: ShaderProgram,
@@ -465,6 +467,7 @@ impl ShaderPrograms {
             healing_mean: compile_program(gl, v, HEALING_MEAN_FRAG)?,
             opacity_clamp: compile_program(gl, v, OPACITY_CLAMP_FRAG)?,
             sponge: compile_program(gl, v, SPONGE_FRAG)?,
+            stamp_preview: compile_program(gl, v, STAMP_PREVIEW_FRAG)?,
             // Gradient
             gradient_linear: compile_program(gl, v, GRADIENT_LINEAR_FRAG)?,
             gradient_radial: compile_program(gl, v, GRADIENT_RADIAL_FRAG)?,

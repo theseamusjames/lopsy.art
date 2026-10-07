@@ -14,6 +14,7 @@ pub mod quick_mask_gpu;
 pub mod mask_paint_gpu;
 pub mod dab_pass_gpu;
 pub mod coverage_stroke_gpu;
+pub mod stamp_preview_gpu;
 pub mod dodge_burn_gpu;
 pub mod sponge_gpu;
 pub mod smudge_gpu;

@@ -2,8 +2,8 @@ import type { Color, Layer, Point, Rect } from '../../types';
 import type { PathAnchor } from '../../tools/path/path';
 import type { Quad } from '../../tools/crop/perspective-crop';
 import { stampSourceState } from '../../tools/common/stamp-source-state';
+import { stampSourceCenter } from '../../tools/common/stamp-source-preview';
 import { getDisplayPixelRatio } from './display-pixel-ratio';
-import { stampSourceImageRect, type StampSourceImage } from './stamp-source-image';
 
 interface PathOverlaySource {
   anchors: readonly PathAnchor[];
@@ -415,9 +415,13 @@ export function renderBrushCursor(
   ctx.restore();
 }
 
+/**
+ * Ring and source crosshair of the Clone Stamp / Healing Brush preview. The
+ * pixels inside the ring are drawn by the engine (`syncStampSourcePreview`).
+ * Returns false when no source is set, so the caller draws the plain cursor.
+ */
 export function renderStampSourcePreview(
   ctx: CanvasRenderingContext2D,
-  sourceImage: StampSourceImage | null,
   cursorPos: Point,
   brushSize: number,
   viewport: { zoom: number; panX: number; panY: number },
@@ -426,13 +430,8 @@ export function renderStampSourcePreview(
   screenWidth: number,
   screenHeight: number,
 ): boolean {
-  const source = stampSourceState.source;
-  if (!source) return false;
-
-  const offset = stampSourceState.offset;
-  const sourceCenter = offset
-    ? { x: cursorPos.x + offset.x, y: cursorPos.y + offset.y }
-    : source;
+  const sourceCenter = stampSourceCenter(stampSourceState, cursorPos);
+  if (!sourceCenter) return false;
 
   const { zoom, panX, panY } = viewport;
   const half = screenWidth / 2;
@@ -449,22 +448,6 @@ export function renderStampSourcePreview(
   const pixelRatio = getDisplayPixelRatio();
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
 
-  ctx.globalAlpha = 0.7;
-  ctx.beginPath();
-  ctx.arc(cursorSX, cursorSY, radiusScreen, 0, Math.PI * 2);
-  ctx.clip();
-
-  if (sourceImage) {
-    const d = radiusScreen * 2;
-    const src = stampSourceImageRect(sourceImage, sourceCenter, radius);
-    ctx.drawImage(
-      sourceImage.image,
-      src.x, src.y, src.width, src.height,
-      cursorSX - radiusScreen, cursorSY - radiusScreen, d, d,
-    );
-  }
-
-  ctx.globalAlpha = 1;
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();

@@ -20,6 +20,7 @@ import {
   syncMaskEditMode,
   syncBrushTip,
   syncBrushTexture,
+  syncStampSourcePreview,
   syncTextLayers,
   syncPathTextLayers,
   renderEngine,
@@ -31,6 +32,8 @@ import { onFontFacesLoaded } from '../utils/font-face-readiness';
 import { renderOverlayFrame } from './rendering/render-overlay-frame';
 import { canvasPixelRatio, sizeCanvasToDisplay } from './rendering/display-pixel-ratio';
 import { getMarqueePreview } from '../tools/marquee/marquee-preview';
+import { stampPreviewDisc } from '../tools/common/stamp-source-preview';
+import { stampSourceState } from '../tools/common/stamp-source-state';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
 import { expandLayerToDocSize, cropLayerToContent, hasFloat } from '../engine-wasm/wasm-bridge';
@@ -244,6 +247,15 @@ function renderFrameGpu(
   syncMaskEditMode(engine, uiState.maskMode === 'layerMask', doc.activeLayerId);
   syncBrushTip(engine, toolState.activeBrushTip, -toolState.settings.brush.angle * Math.PI / 180, toolState.settings.brush.hardness);
   syncBrushTexture(engine, toolState.settings.brushTexture.data, toolState.settings.brushTexture.scale, toolState.settings.brushTexture.blendMode);
+  const activeTool = uiState.activeTool;
+  syncStampSourcePreview(engine, stampPreviewDisc({
+    isStampTool: activeTool === 'stamp' || activeTool === 'healing',
+    activeLayerId: doc.activeLayerId,
+    isCursorOnCanvas: uiState.cursorOnCanvas,
+    cursor: uiState.cursorPosition,
+    brushSize: activeTool === 'healing' ? toolState.settings.healing.size : toolState.settings.stamp.size,
+    stamp: stampSourceState,
+  }));
 
   renderEngine(engine);
 

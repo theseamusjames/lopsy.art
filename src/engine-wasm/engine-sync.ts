@@ -76,6 +76,8 @@ import {
   clearGradientGuide,
   setBrushCursor,
   clearBrushCursor,
+  setStampSourcePreview,
+  clearStampSourcePreview,
   setTransformOverlay,
   setMaskEditLayer,
   clearMaskEditLayer,
@@ -108,6 +110,7 @@ import type { Color } from '../types';
 import { colorSpansProp } from '../tools/text/text-color-spans';
 import type { TextLayer } from '../types/layers';
 import type { Point } from '../types';
+import type { StampPreviewDisc } from '../tools/common/stamp-source-preview';
 import {
   isIdentityMatrix,
   matrixOf,
@@ -835,6 +838,19 @@ export function syncOverlays(
   } else {
     clearBrushCursor(engine);
   }
+}
+
+/**
+ * The Clone Stamp / Healing Brush source preview is drawn by the engine
+ * from the layer texture, so it costs no readback. The engine ignores a
+ * call that changes nothing.
+ */
+export function syncStampSourcePreview(engine: Engine, disc: StampPreviewDisc | null): void {
+  if (!disc) {
+    clearStampSourcePreview(engine);
+    return;
+  }
+  setStampSourcePreview(engine, disc.layerId, disc.cursor.x, disc.cursor.y, disc.source.x, disc.source.y, disc.radius);
 }
 
 export function syncBrushTip(

@@ -8,7 +8,7 @@
 //! passes, at the cost of the dab's area instead of the layer's.
 
 use crate::brush::circle_dab_scissor_rect;
-use crate::geometry::Rect;
+use crate::geometry::{Rect, ViewportState};
 
 /// Texel rect (clamped to a `tex_w`×`tex_h` texture) bounding every texel a
 /// round dab of diameter `size` centred at (cx, cy) can change, or `None`
@@ -34,6 +34,41 @@ pub fn union_rects(a: Option<Rect>, b: Option<Rect>) -> Option<Rect> {
         (a, None) => a,
         (None, b) => b,
     }
+}
+
+/// Scissor rect (GL convention: origin at the bottom-left) of a
+/// `fb_w`×`fb_h` framebuffer that bounds a disc of `radius` document pixels
+/// centred at doc `center`, as the final blit maps the document onto the
+/// screen: `screen = (doc - doc_size / 2) * zoom + pan + fb_size / 2`, with
+/// screen y growing downwards. One pixel of margin covers rasterization at
+/// the rim. `None` when the disc is entirely off screen.
+pub fn viewport_disc_rect(
+    center: (f64, f64),
+    radius: f64,
+    doc_size: (u32, u32),
+    view: &ViewportState,
+    fb_size: (u32, u32),
+) -> Option<Rect> {
+    let (fb_w, fb_h) = (fb_size.0 as f64, fb_size.1 as f64);
+    let sx = (center.0 - doc_size.0 as f64 / 2.0) * view.zoom + view.pan_x + fb_w / 2.0;
+    let sy = (center.1 - doc_size.1 as f64 / 2.0) * view.zoom + view.pan_y + fb_h / 2.0;
+    let r = radius * view.zoom;
+    if ![sx, sy, r].iter().all(|v| v.is_finite()) || r <= 0.0 {
+        return None;
+    }
+    let x0 = ((sx - r).floor() - 1.0).max(0.0);
+    let x1 = ((sx + r).ceil() + 1.0).min(fb_w);
+    let top = ((sy - r).floor() - 1.0).max(0.0);
+    let bottom = ((sy + r).ceil() + 1.0).min(fb_h);
+    if x1 <= x0 || bottom <= top {
+        return None;
+    }
+    Some(Rect::new(
+        x0 as i32,
+        (fb_h - bottom) as i32,
+        (x1 - x0) as u32,
+        (bottom - top) as u32,
+    ))
 }
 
 /// A growing region of texels touched since it was last taken.
@@ -128,6 +163,70 @@ mod tests {
         assert_eq!(d.get(), Some(Rect::new(0, 5, 15, 11)));
         assert_eq!(d.take(), Some(Rect::new(0, 5, 15, 11)));
         assert_eq!(d.get(), None);
+    }
+
+    fn view(zoom: f64, pan_x: f64, pan_y: f64) -> ViewportState {
+        ViewportState::new(zoom, pan_x, pan_y, 800.0, 600.0)
+    }
+
+    #[test]
+    fn viewport_disc_rect_maps_doc_centre_to_screen_centre() {
+        // Doc centre at zoom 1, no pan: the screen centre (400, 300).
+        let r = viewport_disc_rect(
+            (100.0, 50.0),
+            10.0,
+            (200, 100),
+            &view(1.0, 0.0, 0.0),
+            (800, 600),
+        );
+        assert_eq!(r, Some(Rect::new(389, 289, 22, 22)));
+    }
+
+    #[test]
+    fn viewport_disc_rect_flips_y_and_applies_zoom_and_pan() {
+        // Doc (0, 0) at zoom 2 with pan (-40, 20): screen (400 - 200 - 40,
+        // 300 - 100 + 20) = (160, 220), radius 10 → 20 screen px. In GL
+        // coordinates the top edge 220 - 20 - 1 = 199 becomes 600 - 241 = 359.
+        let r = viewport_disc_rect(
+            (0.0, 0.0),
+            10.0,
+            (200, 100),
+            &view(2.0, -40.0, 20.0),
+            (800, 600),
+        );
+        assert_eq!(r, Some(Rect::new(139, 359, 42, 42)));
+    }
+
+    #[test]
+    fn viewport_disc_rect_clamps_and_rejects_off_screen_discs() {
+        let edge = viewport_disc_rect(
+            (-300.0, 50.0),
+            10.0,
+            (200, 100),
+            &view(1.0, 0.0, 0.0),
+            (800, 600),
+        );
+        assert_eq!(edge, Some(Rect::new(0, 289, 11, 22)));
+        assert_eq!(
+            viewport_disc_rect(
+                (-400.0, 50.0),
+                10.0,
+                (200, 100),
+                &view(1.0, 0.0, 0.0),
+                (800, 600)
+            ),
+            None
+        );
+        assert_eq!(
+            viewport_disc_rect(
+                (100.0, 50.0),
+                0.0,
+                (200, 100),
+                &view(1.0, 0.0, 0.0),
+                (800, 600)
+            ),
+            None
+        );
     }
 
     /// Every texel the dab shaders can change (texel centre within the

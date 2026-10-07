@@ -529,6 +529,7 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
     if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
 
     engine.draw_fullscreen_quad();
+    crate::stamp_preview_gpu::draw(engine, screen_w, screen_h);
     engine.needs_present = false;
     Ok(())
 }
