@@ -26,6 +26,8 @@ import { compositeForExport, getCompositeSize } from './engine-wasm/wasm-bridge'
 import { flushLayerSync } from './engine-wasm/engine-sync';
 import { prefetchFontPreviewsBlob } from './utils/font-loader';
 import { canvasPixelRatio } from './app/rendering/display-pixel-ratio';
+import { layerBackupStats, setLayerBackupMaxBytesForTest } from './app/gpu-layer-backup';
+import type { LayerBackupStats } from './app/layer-backup-runner';
 import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -55,6 +57,8 @@ declare global {
     __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
     __gpuSnapshotCount?: () => number;
     __effectCacheStats?: () => EffectCacheStats | null;
+    __layerBackupStats?: () => LayerBackupStats;
+    __setLayerBackupMaxBytes?: (bytes: number | null) => void;
     __isFontLoaded?: (family: string) => boolean;
     __saveProject?: () => Promise<void>;
     __loadProject?: (file: File) => Promise<void>;
@@ -168,6 +172,8 @@ if (import.meta.env.DEV) {
     const engine = getEngine();
     return engine ? liveGpuSnapshotCount(engine) : 0;
   };
+  window.__layerBackupStats = layerBackupStats;
+  window.__setLayerBackupMaxBytes = setLayerBackupMaxBytesForTest;
   window.__effectCacheStats = () => {
     const engine = getEngine();
     if (!engine) return null;

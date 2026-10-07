@@ -36,7 +36,7 @@ import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 import { expandLayerToDocSize, cropLayerToContent, hasFloat } from '../engine-wasm/wasm-bridge';
 import { invalidateCachedSnapshot } from './store/history-slice';
 import { handleGpuContextLost, handleGpuContextRestored } from './gpu-context-loss';
-import { backupLayersToCpu, layerBackupTime, restoreLayerBackup } from './gpu-layer-backup';
+import { backupLayersToCpu, layerBackupTime, pauseLayerBackup, restoreLayerBackup } from './gpu-layer-backup';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
 import { scheduleDeferredCrop, cancelDeferredCropIfPending } from './deferred-crop-on-switch';
 
@@ -305,15 +305,19 @@ export function useCanvasRendering(
         });
     };
     // Back layer pixels up to the CPU while the user is away, so a context
-    // loss can be recovered from (#973).
+    // loss can be recovered from (#973). A blurred window may still be in
+    // view, so that backup runs in idle slices and stops when focus returns;
+    // a hidden tab is the chance to finish it (#1221).
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') backupLayersToCpu();
+      if (document.visibilityState === 'hidden') backupLayersToCpu('now');
     };
-    const handleWindowBlur = () => backupLayersToCpu();
+    const handleWindowBlur = () => backupLayersToCpu('idle');
+    const handleWindowFocus = () => pauseLayerBackup();
     canvas.addEventListener('webglcontextlost', handleContextLost);
     canvas.addEventListener('webglcontextrestored', handleContextRestored);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
 
     initEngine(canvas)
       .then((engine) => {
@@ -342,6 +346,7 @@ export function useCanvasRendering(
       canvas.removeEventListener('webglcontextrestored', handleContextRestored);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
       // Tracked state is keyed by Engine in a WeakMap; destroying the engine
       // drops the JS wrapper, and the WeakMap entry follows. No reset needed.
       destroyEngine();
