@@ -139,8 +139,11 @@ test.describe('Layers panel auto-scrolls while dragging a row', () => {
     expect((await listScroll(page)).top).toBe(parked);
 
     // Into the bottom zone again, then release: no scrolling after pointer-up.
+    // Wait for two more rows of scroll before releasing: with only ~1 row
+    // scrolled in total, the pointer sits in the top half of the first
+    // hidden row and the drop lands in the gap just above it.
     await page.mouse.move(x, listBox.y + listBox.height - 4, { steps: 4 });
-    await expect.poll(async () => (await listScroll(page)).top, { timeout: 5000 }).toBeGreaterThan(parked);
+    await expect.poll(async () => (await listScroll(page)).top, { timeout: 5000 }).toBeGreaterThan(parked + 36 * 2);
     await page.mouse.up();
     // The drop itself can shift scrollTop once (scroll anchoring as the
     // dragged row leaves the rows above the viewport); after that it holds.
