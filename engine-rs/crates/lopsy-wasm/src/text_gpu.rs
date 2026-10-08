@@ -191,6 +191,51 @@ pub struct TextRendererState {
 /// and each glyph can be cached at four subpixel offsets.
 const MAX_CACHED_GLYPH_PX: f32 = 500.0;
 
+fn is_large_glyph(key: &CacheKey) -> bool {
+    f32::from_bits(key.font_size_bits) > MAX_CACHED_GLYPH_PX
+}
+
+type GlyphImageCache = HashMap<(CacheKey, VerticalGlyphForm), Option<SwashImage>>;
+
+/// One positioned glyph of a text raster.
+struct GlyphLayout {
+    cache_key: CacheKey,
+    form: VerticalGlyphForm,
+    x: i32,
+    y: i32,
+    color: [f32; 4],
+}
+
+/// Per-run info for underline/strikethrough decoration: one entry per
+/// stretch of same-coloured glyphs, so decorations take the glyph colour.
+struct RunInfo {
+    /// X of leftmost glyph in this stretch (integer pixels).
+    x_start: i32,
+    /// X past rightmost glyph in this stretch.
+    x_end: i32,
+    /// Baseline y (integer pixels, before canvas_y offset).
+    baseline_y: i32,
+    /// Font size in pixels.
+    font_size: f32,
+    color: [f32; 4],
+}
+
+/// Everything a text raster needs short of its pixel buffer: the positioned
+/// glyphs and decorations, the large glyph images rasterized for this render
+/// only (small ones live in the renderer's cache), and the canvas rectangle
+/// relative to the anchor.
+struct RasterPlan {
+    glyph_layouts: Vec<GlyphLayout>,
+    run_infos: Vec<RunInfo>,
+    large_glyphs: GlyphImageCache,
+    do_underline: bool,
+    do_strikethrough: bool,
+    canvas_x: i32,
+    canvas_y: i32,
+    canvas_w: u32,
+    canvas_h: u32,
+}
+
 /// Rasterize a glyph without hinting, drawn in `form` (see
 /// [`VerticalGlyphForm`]; horizontal text always passes `Upright`).
 fn render_glyph_unhinted<'a>(
@@ -1012,6 +1057,15 @@ impl TextRendererState {
         }
     }
 
+    /// The size and anchor offset `(width, height, offset_x, offset_y)` that
+    /// [`Self::render_text_layer_software`] would return, without allocating
+    /// or compositing the raster. Shares its planning pass, so the two agree
+    /// exactly.
+    pub fn measure_text_raster(&mut self, layer_id: &str) -> Option<(u32, u32, i32, i32)> {
+        let plan = self.plan_text_raster(layer_id)?;
+        Some((plan.canvas_w, plan.canvas_h, plan.canvas_x, plan.canvas_y))
+    }
+
     /// Rasterize the text layer via swash (software) and return RGBA bytes plus
     /// layout geometry. Returns `None` if the layer doesn't exist or has no glyphs.
     ///
@@ -1022,6 +1076,118 @@ impl TextRendererState {
         &mut self,
         layer_id: &str,
     ) -> Option<(Vec<u8>, u32, u32, i32, i32)> {
+        let RasterPlan {
+            glyph_layouts,
+            run_infos,
+            large_glyphs,
+            do_underline,
+            do_strikethrough,
+            canvas_x,
+            canvas_y,
+            canvas_w,
+            canvas_h,
+        } = self.plan_text_raster(layer_id)?;
+        let glyph_images: Vec<Option<&SwashImage>> = glyph_layouts
+            .iter()
+            .map(|gl| {
+                let cache = if is_large_glyph(&gl.cache_key) { &large_glyphs } else { &self.unhinted_cache };
+                cache.get(&(gl.cache_key, gl.form)).and_then(|img| img.as_ref())
+            })
+            .collect();
+
+        let mut pixels = vec![0u8; (canvas_w * canvas_h * 4) as usize];
+
+        // Pass 2: composite each glyph into the RGBA buffer.
+        for (gl, img_opt) in glyph_layouts.iter().zip(glyph_images.iter()) {
+            let img = match img_opt {
+                Some(i) if i.placement.width > 0 && i.placement.height > 0 => i,
+                _ => continue,
+            };
+
+            let gx = gl.x + img.placement.left;
+            let gy = gl.y - img.placement.top;
+
+            match img.content {
+                cosmic_text::SwashContent::Mask => {
+                    let color = gl.color;
+                    for (idx, &alpha_byte) in img.data.iter().enumerate() {
+                        if alpha_byte == 0 { continue; }
+                        let bx = idx as i32 % img.placement.width as i32;
+                        let by = idx as i32 / img.placement.width as i32;
+                        let px = gx + bx - canvas_x;
+                        let py = gy + by - canvas_y;
+                        if px < 0 || py < 0 || px >= canvas_w as i32 || py >= canvas_h as i32 {
+                            continue;
+                        }
+                        let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
+                        let src_a = (alpha_byte as f32 / 255.0) * color[3];
+                        let dst_a = pixels[base + 3] as f32 / 255.0;
+                        let out_a = src_a + dst_a * (1.0 - src_a);
+                        if out_a > 0.0 {
+                            pixels[base]     = ((color[0] * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                            pixels[base + 1] = ((color[1] * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                            pixels[base + 2] = ((color[2] * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                            pixels[base + 3] = (out_a * 255.0).round() as u8;
+                        }
+                    }
+                }
+                cosmic_text::SwashContent::Color => {
+                    let mut i = 0;
+                    for by in 0..img.placement.height as i32 {
+                        for bx in 0..img.placement.width as i32 {
+                            let r = img.data[i];
+                            let g = img.data[i + 1];
+                            let b = img.data[i + 2];
+                            let a = img.data[i + 3];
+                            i += 4;
+                            if a == 0 { continue; }
+                            let px = gx + bx - canvas_x;
+                            let py = gy + by - canvas_y;
+                            if px < 0 || py < 0 || px >= canvas_w as i32 || py >= canvas_h as i32 {
+                                continue;
+                            }
+                            let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
+                            let src_a = a as f32 / 255.0;
+                            let dst_a = pixels[base + 3] as f32 / 255.0;
+                            let out_a = src_a + dst_a * (1.0 - src_a);
+                            if out_a > 0.0 {
+                                pixels[base]     = ((r as f32 / 255.0 * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                pixels[base + 1] = ((g as f32 / 255.0 * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                pixels[base + 2] = ((b as f32 / 255.0 * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
+                                pixels[base + 3] = (out_a * 255.0).round() as u8;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Pass 3: draw underline and/or strikethrough lines.
+        if do_underline || do_strikethrough {
+            for ri in &run_infos {
+                let thickness = ((ri.font_size * 0.08).ceil() as i32).max(1);
+                let x_rel = ri.x_start - canvas_x;
+                let line_w = (ri.x_end - ri.x_start).max(1);
+                if do_underline {
+                    // Underline sits just below the baseline (CSS spec: ~10% of font-size below).
+                    let ul_y = ri.baseline_y + (ri.font_size * 0.1).ceil() as i32 - canvas_y;
+                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, ul_y, line_w, thickness, ri.color);
+                }
+                if do_strikethrough {
+                    // Strikethrough sits ~32% of font-size above baseline (mid x-height).
+                    let st_y = ri.baseline_y - (ri.font_size * 0.32).ceil() as i32 - canvas_y;
+                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, st_y, line_w, thickness, ri.color);
+                }
+            }
+        }
+
+        Some((pixels, canvas_w, canvas_h, canvas_x, canvas_y))
+    }
+
+    /// Lay out and rasterize the glyphs of a text layer and size the canvas
+    /// they composite into. `None` if the layer is unknown or has no glyphs.
+    fn plan_text_raster(&mut self, layer_id: &str) -> Option<RasterPlan> {
         let state = self.text_layers.get_mut(layer_id)?;
 
         // Padding prevents antialiased edges and descenders from clipping.
@@ -1033,27 +1199,6 @@ impl TextRendererState {
         let mut max_x = i32::MIN;
         let mut max_y = i32::MIN;
 
-        // Collect glyph layout data before rendering (avoids borrow conflicts).
-        struct GlyphLayout {
-            cache_key: CacheKey,
-            form: VerticalGlyphForm,
-            x: i32,
-            y: i32,
-            color: [f32; 4],
-        }
-        // Per-run info for underline/strikethrough decoration: one entry per
-        // stretch of same-coloured glyphs, so decorations take the glyph colour.
-        struct RunInfo {
-            /// X of leftmost glyph in this stretch (integer pixels).
-            x_start: i32,
-            /// X past rightmost glyph in this stretch.
-            x_end: i32,
-            /// Baseline y (integer pixels, before canvas_y offset).
-            baseline_y: i32,
-            /// Font size in pixels.
-            font_size: f32,
-            color: [f32; 4],
-        }
         let ls = state.letter_spacing;
         let para = state.paragraph_spacing;
         let align = state.text_align.clone();
@@ -1178,16 +1323,15 @@ impl TextRendererState {
 
         // Render all glyphs without hinting for smooth curves. Large glyphs go
         // in a per-render map so repeats are still rasterized once.
-        let is_large = |key: &CacheKey| f32::from_bits(key.font_size_bits) > MAX_CACHED_GLYPH_PX;
-        let mut large_glyphs: HashMap<(CacheKey, VerticalGlyphForm), Option<SwashImage>> = HashMap::new();
+        let mut large_glyphs: GlyphImageCache = HashMap::new();
         for gl in &glyph_layouts {
-            let cache = if is_large(&gl.cache_key) { &mut large_glyphs } else { &mut self.unhinted_cache };
+            let cache = if is_large_glyph(&gl.cache_key) { &mut large_glyphs } else { &mut self.unhinted_cache };
             render_glyph_unhinted(&mut self.font_system, &mut self.scale_context, cache, gl.cache_key, gl.form);
         }
         let glyph_images: Vec<Option<&SwashImage>> = glyph_layouts
             .iter()
             .map(|gl| {
-                let cache = if is_large(&gl.cache_key) { &large_glyphs } else { &self.unhinted_cache };
+                let cache = if is_large_glyph(&gl.cache_key) { &large_glyphs } else { &self.unhinted_cache };
                 cache.get(&(gl.cache_key, gl.form)).and_then(|img| img.as_ref())
             })
             .collect();
@@ -1240,94 +1384,17 @@ impl TextRendererState {
         let canvas_w = ((max_x - min_x + pad * 2).max(1) as u32).min(self.max_canvas_side);
         let canvas_h = ((max_y - min_y + pad * 2).max(1) as u32).min(self.max_canvas_side);
 
-        let mut pixels = vec![0u8; (canvas_w * canvas_h * 4) as usize];
-
-        // Pass 2: composite each glyph into the RGBA buffer.
-        for (gl, img_opt) in glyph_layouts.iter().zip(glyph_images.iter()) {
-            let img = match img_opt {
-                Some(i) if i.placement.width > 0 && i.placement.height > 0 => i,
-                _ => continue,
-            };
-
-            let gx = gl.x + img.placement.left;
-            let gy = gl.y - img.placement.top;
-
-            match img.content {
-                cosmic_text::SwashContent::Mask => {
-                    let color = gl.color;
-                    for (idx, &alpha_byte) in img.data.iter().enumerate() {
-                        if alpha_byte == 0 { continue; }
-                        let bx = idx as i32 % img.placement.width as i32;
-                        let by = idx as i32 / img.placement.width as i32;
-                        let px = gx + bx - canvas_x;
-                        let py = gy + by - canvas_y;
-                        if px < 0 || py < 0 || px >= canvas_w as i32 || py >= canvas_h as i32 {
-                            continue;
-                        }
-                        let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
-                        let src_a = (alpha_byte as f32 / 255.0) * color[3];
-                        let dst_a = pixels[base + 3] as f32 / 255.0;
-                        let out_a = src_a + dst_a * (1.0 - src_a);
-                        if out_a > 0.0 {
-                            pixels[base]     = ((color[0] * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                            pixels[base + 1] = ((color[1] * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                            pixels[base + 2] = ((color[2] * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                            pixels[base + 3] = (out_a * 255.0).round() as u8;
-                        }
-                    }
-                }
-                cosmic_text::SwashContent::Color => {
-                    let mut i = 0;
-                    for by in 0..img.placement.height as i32 {
-                        for bx in 0..img.placement.width as i32 {
-                            let r = img.data[i];
-                            let g = img.data[i + 1];
-                            let b = img.data[i + 2];
-                            let a = img.data[i + 3];
-                            i += 4;
-                            if a == 0 { continue; }
-                            let px = gx + bx - canvas_x;
-                            let py = gy + by - canvas_y;
-                            if px < 0 || py < 0 || px >= canvas_w as i32 || py >= canvas_h as i32 {
-                                continue;
-                            }
-                            let base = ((py as u32 * canvas_w + px as u32) * 4) as usize;
-                            let src_a = a as f32 / 255.0;
-                            let dst_a = pixels[base + 3] as f32 / 255.0;
-                            let out_a = src_a + dst_a * (1.0 - src_a);
-                            if out_a > 0.0 {
-                                pixels[base]     = ((r as f32 / 255.0 * src_a + pixels[base]     as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                                pixels[base + 1] = ((g as f32 / 255.0 * src_a + pixels[base + 1] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                                pixels[base + 2] = ((b as f32 / 255.0 * src_a + pixels[base + 2] as f32 / 255.0 * dst_a * (1.0 - src_a)) / out_a * 255.0).round() as u8;
-                                pixels[base + 3] = (out_a * 255.0).round() as u8;
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Pass 3: draw underline and/or strikethrough lines.
-        if do_underline || do_strikethrough {
-            for ri in &run_infos {
-                let thickness = ((ri.font_size * 0.08).ceil() as i32).max(1);
-                let x_rel = ri.x_start - canvas_x;
-                let line_w = (ri.x_end - ri.x_start).max(1);
-                if do_underline {
-                    // Underline sits just below the baseline (CSS spec: ~10% of font-size below).
-                    let ul_y = ri.baseline_y + (ri.font_size * 0.1).ceil() as i32 - canvas_y;
-                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, ul_y, line_w, thickness, ri.color);
-                }
-                if do_strikethrough {
-                    // Strikethrough sits ~32% of font-size above baseline (mid x-height).
-                    let st_y = ri.baseline_y - (ri.font_size * 0.32).ceil() as i32 - canvas_y;
-                    Self::fill_rect(&mut pixels, canvas_w, canvas_h, x_rel, st_y, line_w, thickness, ri.color);
-                }
-            }
-        }
-
-        Some((pixels, canvas_w, canvas_h, canvas_x, canvas_y))
+        Some(RasterPlan {
+            glyph_layouts,
+            run_infos,
+            large_glyphs,
+            do_underline,
+            do_strikethrough,
+            canvas_x,
+            canvas_y,
+            canvas_w,
+            canvas_h,
+        })
     }
 
     /// Return the cached RGBA pixel bytes from the last render, or empty if none.
@@ -2236,6 +2303,37 @@ mod tests {
         renderer.set_text_content("small", &sized_props("HH", 40.0)).expect("ok");
         renderer.render_text_layer_software("small").expect("rendered");
         assert!(!renderer.unhinted_cache.is_empty(), "small glyphs are still cached");
+    }
+
+    #[test]
+    fn measure_text_raster_matches_the_rendered_raster() {
+        let cases = [
+            r#""text":"Hello\nworld, longer line","fontSize":40,"textAlign":"left","areaWidth":null"#,
+            r#""text":"MMMM\nII","fontSize":40,"textAlign":"center","areaWidth":null,"letterSpacing":6"#,
+            r#""text":"right aligned\nx","fontSize":32,"textAlign":"right","areaWidth":null,"paragraphSpacing":12"#,
+            r#""text":"wrapped area text that breaks","fontSize":24,"textAlign":"justify","areaWidth":120"#,
+            r#""text":"Slanted gjpq","fontSize":48,"fontStyle":"italic","textAlign":"left","areaWidth":null"#,
+            r#""text":"Under struck","fontSize":30,"underline":true,"strikethrough":true,"textAlign":"left","areaWidth":null"#,
+            r#""text":"縦書き\nab","fontSize":30,"vertical":true,"textAlign":"left","areaWidth":null"#,
+            r#""text":"Huge","fontSize":700,"textAlign":"left","areaWidth":null"#,
+            r#""text":"spans","fontSize":40,"textAlign":"left","areaWidth":null,"underline":true,"colorSpans":[[0,2,1,0,0,1]]"#,
+        ];
+        let mut renderer = make_renderer();
+        for (i, fields) in cases.iter().enumerate() {
+            let id = format!("m{i}");
+            let props = format!(
+                r#"{{"fontFamily":"sans-serif","fontWeight":400,"color":[0,0,0,1],"lineHeight":1.4,{fields}}}"#
+            );
+            renderer.set_text_content(&id, &props).expect("ok");
+            let measured = renderer.measure_text_raster(&id).expect("measured");
+            let (pixels, w, h, ox, oy) = renderer.render_text_layer_software(&id).expect("rendered");
+            assert_eq!(measured, (w, h, ox, oy), "case {i}: {fields}");
+            assert_eq!(pixels.len(), (w * h * 4) as usize);
+        }
+        renderer.set_text_content("blank", &basic_props("   ")).expect("ok");
+        assert_eq!(renderer.measure_text_raster("blank"), None);
+        assert!(renderer.render_text_layer_software("blank").is_none());
+        assert_eq!(renderer.measure_text_raster("unknown"), None);
     }
 
     #[test]

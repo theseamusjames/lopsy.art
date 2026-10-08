@@ -266,6 +266,16 @@ pub fn get_layer_texture_dimensions(engine: &Engine, layer_id: &str) -> Vec<u32>
     vec![0, 0]
 }
 
+/// The layer's content generation: a value from an engine-wide counter,
+/// replaced each time `mark_layer_dirty` reports a write to the layer's
+/// pixels or mask, and 0 for a layer never written. The context-loss backup
+/// compares it to skip re-reading layers unchanged since their last readback
+/// (#1221). Returned as f64 so JS gets a number, not a BigInt.
+#[wasm_bindgen(js_name = "layerContentGeneration")]
+pub fn layer_content_generation(engine: &Engine, layer_id: &str) -> f64 {
+    engine.inner.layer_content_gen(layer_id) as f64
+}
+
 #[wasm_bindgen(js_name = "getLayerEngineBounds")]
 pub fn get_layer_engine_bounds(engine: &Engine, layer_id: &str) -> Vec<i32> {
     let (x, y) = engine.inner.layer_stack.iter()

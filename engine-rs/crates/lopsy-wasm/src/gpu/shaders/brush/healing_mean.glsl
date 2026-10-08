@@ -2,7 +2,10 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform vec2 u_center;
+// Drawn into a 2x1 target: texel (0, 0) receives the source region's mean,
+// texel (1, 0) the destination region's.
+uniform vec2 u_srcCenter;
+uniform vec2 u_dstCenter;
 uniform float u_radius;
 uniform vec2 u_texSize;
 out vec4 fragColor;
@@ -24,12 +27,13 @@ const vec2 SAMPLES[32] = vec2[32](
 );
 
 void main() {
+    vec2 center = gl_FragCoord.x < 1.0 ? u_srcCenter : u_dstCenter;
     vec3 sum = vec3(0.0);
     float count = 0.0;
 
     for (int i = 0; i < NUM_SAMPLES; i++) {
         vec2 offset = SAMPLES[i] * u_radius;
-        vec2 samplePos = u_center + offset;
+        vec2 samplePos = center + offset;
         vec2 sampleUV = samplePos / u_texSize;
 
         if (sampleUV.x >= 0.0 && sampleUV.x <= 1.0 &&

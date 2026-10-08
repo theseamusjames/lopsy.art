@@ -271,26 +271,19 @@ test.describe('autofix #1130 #1133 #1136 #1138 #1142 #1145 #1146', () => {
       await page.mouse.move(hover.x - 2, hover.y);
       await page.mouse.move(hover.x, hover.y);
       await page.waitForTimeout(250);
-      return page.evaluate(({ x, y }) => {
-        const overlay = Array.from(document.querySelectorAll('canvas'))
-          .find((c) => /overlayCanvas/.test(c.className))!;
-        const rect = overlay.getBoundingClientRect();
-        const ratio = overlay.width / rect.width;
-        const ctx = overlay.getContext('2d')!;
-        const cx = Math.round((x - rect.left) * ratio);
-        const cy = Math.round((y - rect.top) * ratio);
-        // Sample a few pixels off-centre to stay clear of the crosshair.
-        let redAlpha = 0;
-        for (const [dx, dy] of [[8, 8], [-8, 8], [8, -8], [-8, -8]]) {
-          const d = ctx.getImageData(cx + dx!, cy + dy!, 1, 1).data;
-          if ((d[0] ?? 0) > 150 && (d[1] ?? 0) < 80) redAlpha = Math.max(redAlpha, d[3] ?? 0);
-        }
-        return redAlpha;
-      }, hover);
+      // The engine draws the preview disc on the screen canvas, under the
+      // overlay's ring. Count red samples a few pixels off-centre; the
+      // document under the cursor is white.
+      let red = 0;
+      for (const [dx, dy] of [[8, 8], [-8, 8], [8, -8], [-8, -8]]) {
+        const [r, g] = await compositeAt(page, 550 + dx!, 300 + dy!);
+        if (r > 150 && g < 100) red++;
+      }
+      return red;
     };
 
     // Stamping on the Background samples the red square: the preview shows it.
-    expect(await previewRed()).toBeGreaterThan(100);
+    expect(await previewRed()).toBe(4);
 
     // Layer 1 is empty: the stamp paints nothing, and the preview agrees.
     await setActiveLayer(page, layer1);

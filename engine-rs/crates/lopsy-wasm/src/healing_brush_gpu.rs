@@ -1,12 +1,21 @@
-use web_sys::WebGl2RenderingContext;
+use lopsy_core::dab_rect::dab_rect;
+use web_sys::{WebGl2RenderingContext, WebGlTexture};
+
+use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
+use crate::gpu::framebuffer::FramebufferHandle;
 
 /// Apply a healing brush dab entirely on the GPU, preserving FP16 precision.
 ///
-/// Algorithm:
-///  1. Compute mean color of source region (multi-tap shader → 1x1 readback)
-///  2. Compute mean color of destination region
-///  3. Apply healing formula in a fullscreen shader: healed = src - srcMean + dstMean
+/// Algorithm, per dab:
+///  1. Render the mean colour of the source region into texel (0, 0) and of
+///     the destination region into texel (1, 0) of a 2×1 target.
+///  2. Apply `healed = src - srcMean + dstMean` in the dab shader, which
+///     reads both means from that target.
+///
+/// The means never leave the GPU (#1218): reading them back cost two
+/// pipeline-draining `readPixels` per dab, and on RGBA16F targets the
+/// `UNSIGNED_BYTE` read was rejected outright, leaving both means at zero.
 pub fn apply_healing_dab(
     engine: &mut EngineInner,
     layer_id: &str,
@@ -46,104 +55,115 @@ pub fn apply_healing_dab_batch(
         Some(t) => t.clone(),
         None => return,
     };
-    // This pass renders at the layer's size and blits the whole scratch
-    // back, so scratch must match the layer exactly (see ensure_scratch_size).
-    if engine.ensure_scratch_size(w, h).is_err() { return; }
+    // Each dab renders at the layer's size and copies scratch back texel for
+    // texel, so scratch must match the layer exactly (see ensure_scratch_size).
+    if engine.ensure_scratch_size(w, h).is_err() {
+        return;
+    }
+    let Some((mean_tex, mean_fbo)) = ensure_mean_target(engine) else {
+        return;
+    };
 
-    let radius = size * 0.5;
+    let (ox, oy) = (source_offset_x as f32, source_offset_y as f32);
+    for chunk in points.chunks_exact(2) {
+        let (dx, dy) = (chunk[0] as f32, chunk[1] as f32);
+        let Some(rect) = dab_rect(dx, dy, size, w, h) else {
+            continue;
+        };
 
-    for chunk in points.chunks(2) {
-        if chunk.len() < 2 {
-            break;
-        }
-        let dx = chunk[0] as f32;
-        let dy = chunk[1] as f32;
-
-        // --- Pass 1: Compute source mean ---
-        let src_mean = compute_region_mean(
+        render_region_means(
             engine,
             &layer_tex,
+            mean_fbo,
             w,
             h,
-            dx + source_offset_x as f32,
-            dy + source_offset_y as f32,
-            radius,
+            (dx + ox, dy + oy),
+            (dx, dy),
+            size * 0.5,
         );
 
-        // --- Pass 2: Compute destination mean ---
-        let dst_mean = compute_region_mean(engine, &layer_tex, w, h, dx, dy, radius);
-
-        // --- Pass 3: Apply healing dab ---
-        let gl = &engine.gl;
-        engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-        gl.viewport(0, 0, w as i32, h as i32);
-
-        let shader = &engine.shaders.healing_dab;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_layerTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), dx, dy);
-        }
-        if let Some(loc) = shader.location(gl, "u_size") {
-            gl.uniform1f(Some(&loc), size);
-        }
-        if let Some(loc) = shader.location(gl, "u_texSize") {
-            gl.uniform2f(Some(&loc), w as f32, h as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_sourceOffset") {
-            gl.uniform2f(Some(&loc), source_offset_x as f32, source_offset_y as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_opacity") {
-            gl.uniform1f(Some(&loc), opacity);
-        }
-        if let Some(loc) = shader.location(gl, "u_srcMeanRGB") {
-            gl.uniform3f(Some(&loc), src_mean[0], src_mean[1], src_mean[2]);
-        }
-        if let Some(loc) = shader.location(gl, "u_dstMeanRGB") {
-            gl.uniform3f(Some(&loc), dst_mean[0], dst_mean[1], dst_mean[2]);
-        }
-
-        engine.draw_fullscreen_quad();
-
-        // Copy scratch A back to layer texture
-        let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
-        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+        // The scissor bounds the destination only: the shader still reads the
+        // source disc at `+ source_offset` from anywhere in the layer.
+        scratch_dab_pass(engine, &layer_tex, w, h, rect, |engine| {
             let gl = &engine.gl;
-            gl.use_program(Some(&engine.shaders.blit.program));
+            let shader = &engine.shaders.healing_dab;
+            gl.use_program(Some(&shader.program));
+            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mean_tex));
             gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            if let Some(s) = &scratch_a_tex {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-            }
-            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+            if let Some(loc) = shader.location(gl, "u_layerTex") {
                 gl.uniform1i(Some(&loc), 0);
+            }
+            if let Some(loc) = shader.location(gl, "u_meanTex") {
+                gl.uniform1i(Some(&loc), 1);
+            }
+            if let Some(loc) = shader.location(gl, "u_center") {
+                gl.uniform2f(Some(&loc), dx, dy);
+            }
+            if let Some(loc) = shader.location(gl, "u_size") {
+                gl.uniform1f(Some(&loc), size);
+            }
+            if let Some(loc) = shader.location(gl, "u_texSize") {
+                gl.uniform2f(Some(&loc), w as f32, h as f32);
+            }
+            if let Some(loc) = shader.location(gl, "u_sourceOffset") {
+                gl.uniform2f(Some(&loc), ox, oy);
+            }
+            if let Some(loc) = shader.location(gl, "u_opacity") {
+                gl.uniform1f(Some(&loc), opacity);
             }
             engine.draw_fullscreen_quad();
         });
     }
 
+    let gl = &engine.gl;
+    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+
     engine.mark_layer_dirty(layer_id);
 }
 
-/// Compute the mean RGB color of a circular region using the healing_mean shader.
-/// Renders to a 1x1 pixel on scratch_fbo_b and reads back the result.
-fn compute_region_mean(
-    engine: &mut EngineInner,
-    layer_tex: &web_sys::WebGlTexture,
+/// The engine's 2×1 region-mean target, created on first use. It comes from
+/// the texture pool, so it is RGBA16F wherever layers are and RGBA8 on GPUs
+/// without renderable float textures.
+fn ensure_mean_target(engine: &mut EngineInner) -> Option<(WebGlTexture, FramebufferHandle)> {
+    if engine.healing_mean_target.is_none() {
+        let tex = engine.texture_pool.acquire(&engine.gl, 2, 1).ok()?;
+        engine.texture_pool.set_nearest_filter(&engine.gl, tex);
+        let fbo = match engine.fbo_pool.create(&engine.gl) {
+            Ok(f) => f,
+            Err(_) => {
+                engine.texture_pool.release(tex);
+                return None;
+            }
+        };
+        engine
+            .fbo_pool
+            .attach_texture(&engine.gl, fbo, engine.texture_pool.get(tex)?);
+        engine.healing_mean_target = Some((tex, fbo));
+    }
+    let (tex, fbo) = engine.healing_mean_target?;
+    Some((engine.texture_pool.get(tex)?.clone(), fbo))
+}
+
+/// Render the mean RGB of the circle of `radius` around `src_center` into
+/// texel (0, 0) of the mean target and around `dst_center` into texel (1, 0),
+/// with one 2×1 draw of `healing_mean.glsl`. Runs unscissored.
+fn render_region_means(
+    engine: &EngineInner,
+    layer_tex: &WebGlTexture,
+    mean_fbo: FramebufferHandle,
     tex_w: u32,
     tex_h: u32,
-    center_x: f32,
-    center_y: f32,
+    src_center: (f32, f32),
+    dst_center: (f32, f32),
     radius: f32,
-) -> [f32; 3] {
+) {
     let gl = &engine.gl;
-
-    // Render the mean shader to scratch FBO B at 1x1 viewport
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_b);
-    gl.viewport(0, 0, 1, 1);
+    engine.fbo_pool.bind(gl, mean_fbo);
+    gl.viewport(0, 0, 2, 1);
 
     let shader = &engine.shaders.healing_mean;
     gl.use_program(Some(&shader.program));
@@ -152,8 +172,11 @@ fn compute_region_mean(
     if let Some(loc) = shader.location(gl, "u_tex") {
         gl.uniform1i(Some(&loc), 0);
     }
-    if let Some(loc) = shader.location(gl, "u_center") {
-        gl.uniform2f(Some(&loc), center_x, center_y);
+    if let Some(loc) = shader.location(gl, "u_srcCenter") {
+        gl.uniform2f(Some(&loc), src_center.0, src_center.1);
+    }
+    if let Some(loc) = shader.location(gl, "u_dstCenter") {
+        gl.uniform2f(Some(&loc), dst_center.0, dst_center.1);
     }
     if let Some(loc) = shader.location(gl, "u_radius") {
         gl.uniform1f(Some(&loc), radius);
@@ -161,27 +184,5 @@ fn compute_region_mean(
     if let Some(loc) = shader.location(gl, "u_texSize") {
         gl.uniform2f(Some(&loc), tex_w as f32, tex_h as f32);
     }
-
     engine.draw_fullscreen_quad();
-
-    // Read back the 1x1 pixel
-    let mut buf = [0u8; 4];
-    gl.read_pixels_with_opt_u8_array(
-        0,
-        0,
-        1,
-        1,
-        WebGl2RenderingContext::RGBA,
-        WebGl2RenderingContext::UNSIGNED_BYTE,
-        Some(&mut buf),
-    )
-    .ok();
-
-    engine.fbo_pool.unbind(gl);
-
-    [
-        buf[0] as f32 / 255.0,
-        buf[1] as f32 / 255.0,
-        buf[2] as f32 / 255.0,
-    ]
 }

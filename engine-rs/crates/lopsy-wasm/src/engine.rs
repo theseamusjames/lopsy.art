@@ -320,6 +320,15 @@ pub struct EngineInner {
     /// The live compositor's cache of each layer's effect images; see
     /// `effect_cache_gpu.rs`.
     pub effect_cache: crate::effect_cache_gpu::EffectCache,
+    /// 2×1 target the Healing Brush renders its source / destination region
+    /// means into, created on first use (`healing_brush_gpu.rs`).
+    pub healing_mean_target: Option<(TextureHandle, FramebufferHandle)>,
+    /// Texels touched by the in-progress Dodge / Burn or Sponge stroke on
+    /// each layer (`coverage_stroke_gpu.rs`).
+    pub coverage_strokes: HashMap<String, crate::coverage_stroke_gpu::CoverageStroke>,
+    /// Clone Stamp / Healing Brush source preview disc drawn over the
+    /// screen after the final blit (`stamp_preview_gpu.rs`).
+    pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
 }
 
 pub struct SnapshotTexture {
@@ -472,6 +481,9 @@ impl EngineInner {
             layer_content_gen: HashMap::new(),
             next_content_gen: 1,
             effect_cache: crate::effect_cache_gpu::new_cache(),
+            healing_mean_target: None,
+            coverage_strokes: HashMap::new(),
+            stamp_preview: None,
         })
     }
 
@@ -720,6 +732,15 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.stroke_dodge_modes.clear();
+        for (_, tex) in self.stroke_sponge_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        for (_, tex) in self.stroke_sponge_preview_textures.drain() {
+            self.texture_pool.release(tex);
+        }
+        self.stroke_sponge_modes.clear();
+        self.coverage_strokes.clear();
+        self.stamp_preview = None;
         // Brush tip
         if let Some(tex) = self.brush_tip_texture.take() {
             self.texture_pool.release(tex);

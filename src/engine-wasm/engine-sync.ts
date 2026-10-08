@@ -76,6 +76,8 @@ import {
   clearGradientGuide,
   setBrushCursor,
   clearBrushCursor,
+  setStampSourcePreview,
+  clearStampSourcePreview,
   setTransformOverlay,
   setMaskEditLayer,
   clearMaskEditLayer,
@@ -96,6 +98,7 @@ import {
   renderTextLayerToTexture,
   renderTextLayerTransformed,
   textLayoutBounds,
+  textRasterBounds,
   uploadLayerPixels,
   removeTextLayerState,
   getGlyphPositions,
@@ -107,6 +110,7 @@ import type { Color } from '../types';
 import { colorSpansProp } from '../tools/text/text-color-spans';
 import type { TextLayer } from '../types/layers';
 import type { Point } from '../types';
+import type { StampPreviewDisc } from '../tools/common/stamp-source-preview';
 import {
   isIdentityMatrix,
   matrixOf,
@@ -126,6 +130,7 @@ import { clearPathTextGlyphBoxes, setPathTextGlyphBoxes } from '../tools/text/pa
 import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from '../tools/text/point-text-align';
 import { ensureFontFacesLoaded, parseFontFamilyList } from '../utils/font-face-readiness';
 import { getTracked } from './sync-state';
+import { textLayoutGeneration } from './text-layout-generation';
 import { syncLayers } from './sync-layers';
 
 export { resetTrackedState, seedMaskDataRef, seedSelectionMaskRef } from './sync-state';
@@ -835,6 +840,19 @@ export function syncOverlays(
   }
 }
 
+/**
+ * The Clone Stamp / Healing Brush source preview is drawn by the engine
+ * from the layer texture, so it costs no readback. The engine ignores a
+ * call that changes nothing.
+ */
+export function syncStampSourcePreview(engine: Engine, disc: StampPreviewDisc | null): void {
+  if (!disc) {
+    clearStampSourcePreview(engine);
+    return;
+  }
+  setStampSourcePreview(engine, disc.layerId, disc.cursor.x, disc.cursor.y, disc.source.x, disc.source.y, disc.radius);
+}
+
 export function syncBrushTip(
   engine: Engine,
   activeBrushTip: BrushTipData | null,
@@ -1235,32 +1253,95 @@ export function rerenderTransformedTextLayers(
   return { layers: next, changedIds };
 }
 
-const textFrameCache = new WeakMap<TextLayer, TextFrame | null>();
+/** What a text layer's props alone determine about its frame. */
+interface TextPropsMeasure {
+  readonly propsJson: string;
+  /** Layout box relative to the anchor, or null when nothing lays out. */
+  readonly box: TextFrame['box'] | null;
+  /** Anchor → upright texture top-left; measured on first need. */
+  offset?: Point | null;
+}
+
+interface TextMeasureCache {
+  generation: number;
+  /** Last measured props per layer id, so a moved layer reuses them. */
+  readonly byLayerId: Map<string, TextPropsMeasure>;
+}
+
+const textFrameCache = new WeakMap<TextLayer, { generation: number; frame: TextFrame | null }>();
+const textMeasureCaches = new WeakMap<Engine, TextMeasureCache>();
+let textOffsetMeasureCount = 0;
+
+/** How many times {@link measureTextFrame} has measured a render offset (dev e2e probe). */
+export function textFrameOffsetMeasureCount(): number {
+  return textOffsetMeasureCount;
+}
 
 /**
  * The layout frame of a committed text layer — anchor, matrix and layout box
  * — measured with the engine. Upright layers recover their anchor from the
- * render offset (`x = anchor + offset`). Cached per layer object, which the
- * store replaces on every change.
+ * render offset (`x = anchor + offset`).
+ *
+ * The store replaces the layer object on every change, a move included, so
+ * the measurement is cached per layer id by props as well as per object: a
+ * Move drag re-reads the cached offset instead of re-measuring every frame
+ * (#1223). Both caches drop out when a font loads or the engine forgets a
+ * layer's text layout (see `text-layout-generation.ts`).
  */
 export function measureTextFrame(engine: Engine, layer: TextLayer): TextFrame | null {
-  if (textFrameCache.has(layer)) return textFrameCache.get(layer) ?? null;
-  const frame = computeTextFrame(engine, layer);
-  textFrameCache.set(layer, frame);
+  const generation = textLayoutGeneration();
+  const cached = textFrameCache.get(layer);
+  if (cached && cached.generation === generation) return cached.frame;
+  const frame = computeTextFrame(engine, layer, generation);
+  textFrameCache.set(layer, { generation, frame });
   return frame;
 }
 
-function computeTextFrame(engine: Engine, layer: TextLayer): TextFrame | null {
+function computeTextFrame(engine: Engine, layer: TextLayer, generation: number): TextFrame | null {
   if (layer.pathId || layer.text.trim().length === 0) return null;
-  setTextLayerContent(engine, layer.id, textLayerPropsJson(layer));
-  const b = textLayoutBounds(engine, layer.id);
-  if (b.length !== 4 || !(b[2]! > 0) || !(b[3]! > 0)) return null;
-  const box = { x: b[0]!, y: b[1]!, width: b[2]!, height: b[3]! };
+  const measure = measureTextProps(engine, layer, generation);
+  if (!measure.box) return null;
   const anchor = textAnchorOf(layer);
-  if (anchor) return { anchor, matrix: matrixOf(layer.transform), box };
-  const r = renderTextLayer(engine, layer.id);
-  if (r.length !== 4) return null;
-  return { anchor: { x: layer.x - r[2]!, y: layer.y - r[3]! }, matrix: matrixOf(undefined), box };
+  if (anchor) return { anchor, matrix: matrixOf(layer.transform), box: measure.box };
+  if (measure.offset === undefined) measure.offset = measureTextRenderOffset(engine, layer.id, measure.propsJson);
+  if (!measure.offset) return null;
+  return {
+    anchor: { x: layer.x - measure.offset.x, y: layer.y - measure.offset.y },
+    matrix: matrixOf(undefined),
+    box: measure.box,
+  };
+}
+
+function textMeasureCacheFor(engine: Engine, generation: number): TextMeasureCache {
+  const cache = textMeasureCaches.get(engine);
+  if (cache && cache.generation === generation) return cache;
+  const fresh: TextMeasureCache = { generation, byLayerId: new Map() };
+  textMeasureCaches.set(engine, fresh);
+  return fresh;
+}
+
+function measureTextProps(engine: Engine, layer: TextLayer, generation: number): TextPropsMeasure {
+  const cache = textMeasureCacheFor(engine, generation);
+  const propsJson = textLayerPropsJson(layer);
+  const cached = cache.byLayerId.get(layer.id);
+  if (cached && cached.propsJson === propsJson) return cached;
+  setTextLayerContent(engine, layer.id, propsJson);
+  const b = textLayoutBounds(engine, layer.id);
+  const [x = 0, y = 0, width = 0, height = 0] = b;
+  const box = b.length === 4 && width > 0 && height > 0 ? { x, y, width, height } : null;
+  const measure: TextPropsMeasure = { propsJson, box };
+  cache.byLayerId.set(layer.id, measure);
+  return measure;
+}
+
+/** The offset `renderTextLayer` would place the layer's texture at, without rasterizing it. */
+function measureTextRenderOffset(engine: Engine, layerId: string, propsJson: string): Point | null {
+  // The engine may hold other content for the layer since its box was cached.
+  setTextLayerContent(engine, layerId, propsJson);
+  textOffsetMeasureCount += 1;
+  const r = textRasterBounds(engine, layerId);
+  const [, , x = 0, y = 0] = r;
+  return r.length === 4 ? { x, y } : null;
 }
 
 /** Serialize a committed text layer's properties into the engine props JSON. */

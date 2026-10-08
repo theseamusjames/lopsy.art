@@ -491,3 +491,34 @@ multi-character glyph of a non-joining script with swash (`liga`/`clig`/
 (`ligature_split.rs`, #1185). Every consumer of `run.glyphs` that places or
 draws glyphs must go through `expand_run_glyphs`, or the caret and the render
 disagree about where "f" and "i" are.
+
+## Measure a text raster's offset with `textRasterBounds`, not `renderTextLayer`
+
+An upright text layer's `x`/`y` is `anchor + renderOffset`, so recovering
+its anchor needs the offset the rasterizer would use. `textRasterBounds`
+returns the same `[w, h, offset_x, offset_y]` as `renderTextLayer` from the
+shared planning pass (`plan_text_raster`) without allocating or compositing
+the raster. `measureTextFrame` caches it per layer id by props JSON (a move
+replaces the layer object but not its props, #1223); the cache drops out
+when `text-layout-generation.ts` is bumped by the wasm-bridge wrappers for
+`loadFontData*` and `removeTextLayerState`. `__textFrameOffsetMeasureCount()`
+counts the measurements in dev.
+
+## `readPixels(…, UNSIGNED_BYTE)` from an RGBA16F target fails silently
+
+On a float render target WebGL2 only accepts `RGBA`/`FLOAT` (plus the
+implementation's own `IMPLEMENTATION_COLOR_READ_*` pair, `HALF_FLOAT` in
+Chromium). An `UNSIGNED_BYTE` read raises `INVALID_OPERATION`, leaves the
+buffer untouched and logs nothing the e2e console guard catches. The
+Healing Brush read its region means this way for years and got zeros
+(#1218). Keep small per-dab results on the GPU (`texelFetch` from a tiny
+pool texture) instead of reading them back at all.
+
+## E2E: prove a GPU pass is scissored by recording each draw's pixel area
+
+Patch `enable`/`disable` (SCISSOR_TEST), `scissor`, `viewport` and
+`drawArrays` in `page.addInitScript`, and inside the pointer-event bracket
+(see the readPixels note above) record each draw's area: the scissor rect
+∩ viewport when the test is on, else the viewport. Assert the largest is
+dab-sized and that the scissor test is off when the event ends — see
+`e2e/retouch-dab-scissor-1219.spec.ts`.

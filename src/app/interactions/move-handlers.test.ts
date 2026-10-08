@@ -34,6 +34,7 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   readQuickMaskPixels: vi.fn(() => new Uint8Array(8)),
   uploadQuickMaskPixels: vi.fn(),
   cropLayerToContent: vi.fn(() => new Float64Array([0, 0, 0, 0])),
+  getLayerEngineBounds: vi.fn(() => new Int32Array([0, 0, 0, 0])),
   // Spy so the handleMoveDown regression test can assert it is NEVER called
   // (issue #701). The GPU-side crop replaces the JS-side readback path.
   readLayerPixels: vi.fn(() => new Uint8Array()),
@@ -61,6 +62,7 @@ const DOC_W = 32;
 const DOC_H = 32;
 
 const editorState = {
+  viewport: { zoom: 1, panX: 0, panY: 0 },
   document: {
     width: DOC_W,
     height: DOC_H,
@@ -103,6 +105,8 @@ const uiState = {
   showGrid: false,
   snapToGrid: false,
   snapToLayers: false,
+  snapAnchor: { horizontal: 'left', vertical: 'top' },
+  snapLines: [] as unknown[],
   gridSize: 10,
   setTransform: vi.fn(),
   setSnapLines: vi.fn(),
@@ -649,5 +653,106 @@ describe('floated-selection moves mark the layer dirty for history (#925)', () =
 
     expect(vi.mocked(bridge.floatSelection)).not.toHaveBeenCalled();
     expect(vi.mocked(clearJsPixelData)).toHaveBeenCalledWith('layer-1');
+  });
+});
+
+describe('whole-layer drag — alignment lines and snap anchor', () => {
+  const still: RasterLayer = {
+    id: 'still',
+    name: 'Still',
+    type: 'raster',
+    visible: true,
+    locked: false,
+    opacity: 1,
+    blendMode: 'normal',
+    x: 2,
+    y: 2,
+    width: 4,
+    height: 4,
+    clipToBelow: false,
+    effects: DEFAULT_EFFECTS,
+    mask: null,
+  };
+  const mover: RasterLayer = { ...still, id: 'mover', name: 'Mover', x: 20, y: 20 };
+
+  const makeContext = (): InteractionContext => {
+    const canvasPos: Point = { x: 22, y: 22 };
+    return {
+      canvasPos,
+      layerPos: canvasPos,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      activeLayer: mover,
+      activeLayerId: mover.id,
+      clientX: 22,
+      clientY: 22,
+      stateRef: { current: { drawing: false, tool: 'move' } as InteractionState },
+      floatingSelectionRef: { current: null },
+      persistentTransformRef: { current: null },
+      stampSourceRef: { current: null },
+      stampOffsetRef: { current: null },
+      lastPaintPointRef: { current: null as LastPaintPoint | null },
+    };
+  };
+
+  beforeEach(() => {
+    editorState.document.layers = [still, mover];
+    editorState.document.activeLayerId = mover.id;
+    editorState.document.selectedLayerIds = [mover.id];
+    editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
+    // 6 screen px at 3x zoom is a 2 document px reach.
+    editorState.viewport = { zoom: 3, panX: 0, panY: 0 };
+    editorState.updateLayerPosition.mockClear();
+    uiState.maskMode = 'off';
+    uiState.showGrid = false;
+    uiState.snapToGrid = false;
+    uiState.snapToLayers = false;
+    uiState.snapAnchor = { horizontal: 'left', vertical: 'top' };
+    uiState.snapLines = [];
+    uiState.setSnapLines.mockClear();
+    vi.mocked(bridge.cropLayerToContent).mockReset();
+    vi.mocked(bridge.cropLayerToContent).mockImplementation((_engine: unknown, id: string) => {
+      const layer = editorState.document.layers.find((l) => (l as Layer).id === id) as RasterLayer | undefined;
+      if (!layer) return new Float64Array([0, 0, 0, 0]);
+      return new Float64Array([layer.x, layer.y, layer.width, layer.height]);
+    });
+  });
+
+  afterEach(() => {
+    editorState.viewport = { zoom: 1, panX: 0, panY: 0 };
+  });
+
+  it('shows a line where the left edge nears another layer’s right edge, without snapping', () => {
+    const state = handleMoveDown(makeContext());
+    // Left edge to 8: 2 px from the still layer's right edge at 6.
+    handleMoveMove(state, { x: 10, y: 22 }, makeFloatRef());
+    expect(editorState.updateLayerPosition).toHaveBeenLastCalledWith('mover', 8, 20);
+    expect(uiState.setSnapLines).toHaveBeenLastCalledWith([
+      { orientation: 'vertical', position: 6, start: 2, end: 24 },
+    ]);
+  });
+
+  it('snaps onto the line when Snap to Layers is on', () => {
+    uiState.snapToLayers = true;
+    const state = handleMoveDown(makeContext());
+    handleMoveMove(state, { x: 10, y: 22 }, makeFloatRef());
+    expect(editorState.updateLayerPosition).toHaveBeenLastCalledWith('mover', 6, 20);
+  });
+
+  it('snaps the chosen anchor to the grid', () => {
+    uiState.showGrid = true;
+    uiState.snapToGrid = true;
+    // 32 px document, 10 px grid centred on 16: lines at 6, 16, 26.
+    const left = handleMoveDown(makeContext());
+    handleMoveMove(left, { x: 23, y: 22 }, makeFloatRef());
+    // Left edge 21 rounds to the line at 26.
+    expect(editorState.updateLayerPosition).toHaveBeenLastCalledWith('mover', 26, expect.any(Number));
+
+    uiState.snapAnchor = { horizontal: 'right', vertical: 'top' };
+    const right = handleMoveDown(makeContext());
+    handleMoveMove(right, { x: 23, y: 22 }, makeFloatRef());
+    // Right edge 25 rounds to 26, so the left edge lands at 22.
+    expect(editorState.updateLayerPosition).toHaveBeenLastCalledWith('mover', 22, expect.any(Number));
   });
 });

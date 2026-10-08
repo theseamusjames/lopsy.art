@@ -1,10 +1,15 @@
 import type { MutableRefObject } from 'react';
-import type { Point } from '../../types';
-import { snapPositionToGrid, snapPositionToLayers } from '../../tools/move/move';
+import type { Point, Rect } from '../../types';
+import { snapPositionToGrid } from '../../tools/move/move';
+import { snapBoxToGrid } from '../../tools/move/snap-anchor';
+import { ALIGNMENT_SCREEN_PX, findAlignment, sameGuides } from '../../tools/move/smart-guides';
+import { buildMoveAlignmentContext } from './move-alignment';
+import type { MoveAlignmentContext } from './move-alignment';
 import { createTransformState, isShapeChangingTransform, translateTransform } from '../../tools/transform/transform';
 import type { TransformState } from '../../tools/transform/transform';
 import { renderTransformedFloat } from './transform-handlers';
 import { useUIStore } from '../ui-store';
+import type { SnapLine } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
@@ -466,7 +471,8 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // "no snapshot needed" state so consumers can pattern-match on
   // `state.gesture.kind === 'move'` regardless of whether pixels or a
   // marquee are being translated.
-  return withMoveGesture(baseWholeLayer, { siblings });
+  const alignment = buildMoveAlignmentContext([activeLayerId, ...siblings.map((s) => s.id)]);
+  return withMoveGesture(baseWholeLayer, { siblings, alignment });
 }
 
 function cropLayerAndReadPosition(
@@ -504,6 +510,57 @@ function cropLayerAndReadPosition(
   }
   x = newX;
   y = newY;
+  return { x, y };
+}
+
+function showAlignmentLines(lines: readonly SnapLine[]): void {
+  const ui = useUIStore.getState();
+  if (sameGuides(ui.snapLines, lines)) return;
+  if (lines.length === 0) ui.clearSnapLines();
+  else ui.setSnapLines(lines);
+}
+
+/**
+ * Where a whole-layer drag puts the active layer: the grid snaps the
+ * chosen anchor of the moving content, then Snap to Layers lands the
+ * nearest alignment on its target. Alignment lines show either way.
+ */
+function snapWholeLayerMove(
+  proposedX: number,
+  proposedY: number,
+  startX: number,
+  startY: number,
+  alignment: MoveAlignmentContext | null,
+): Point {
+  const ui = useUIStore.getState();
+  const editor = useEditorStore.getState();
+  const { width: docW, height: docH } = editor.document;
+  let x = proposedX;
+  let y = proposedY;
+  const boxAt = (box: Rect): Rect => ({ ...box, x: box.x + x - startX, y: box.y + y - startY });
+
+  if (ui.showGrid && ui.snapToGrid) {
+    if (alignment) {
+      const shift = snapBoxToGrid(boxAt(alignment.movingBox), ui.snapAnchor, ui.gridSize, docW, docH);
+      x += shift.x;
+      y += shift.y;
+    } else {
+      ({ x, y } = snapPositionToGrid(x, y, ui.gridSize, docW, docH));
+    }
+  }
+  if (!alignment) {
+    showAlignmentLines([]);
+    return { x, y };
+  }
+
+  const threshold = ALIGNMENT_SCREEN_PX / editor.viewport.zoom;
+  let found = findAlignment(boxAt(alignment.movingBox), alignment.targets, threshold);
+  if (ui.snapToLayers && (found.dx !== null || found.dy !== null)) {
+    x += Math.round(found.dx ?? 0);
+    y += Math.round(found.dy ?? 0);
+    found = findAlignment(boxAt(alignment.movingBox), alignment.targets, threshold);
+  }
+  showAlignmentLines(found.guides);
   return { x, y };
 }
 
@@ -641,42 +698,13 @@ export function handleMoveMove(
       useEditorStore.getState().pushHistory(pendingWholeLayerMoveLabel);
       pendingWholeLayerMoveLabel = null;
     }
-    let newX = state.layerStartX + dragDx;
-    let newY = state.layerStartY + dragDy;
-    const uiState = useUIStore.getState();
-    if (uiState.showGrid && uiState.snapToGrid) {
-      const { width: docW, height: docH } = useEditorStore.getState().document;
-      const snapped = snapPositionToGrid(newX, newY, uiState.gridSize, docW, docH);
-      newX = snapped.x;
-      newY = snapped.y;
-    }
-    const siblingIds = new Set<string>(move?.siblings?.map((s) => s.id) ?? []);
-    if (uiState.snapToLayers) {
-      const edState = useEditorStore.getState();
-      const movingLayer = edState.document.layers.find((l) => l.id === state.layerId);
-      const otherLayers = edState.document.layers.filter(
-        (l) => l.id !== state.layerId && !siblingIds.has(l.id) && l.visible,
-      );
-      const movingWidth = movingLayer && movingLayer.type !== 'group' ? (movingLayer.width ?? 0) : 0;
-      const movingHeight = movingLayer && movingLayer.type !== 'group' ? ((movingLayer as { height?: number }).height ?? 0) : 0;
-      const snapResult = snapPositionToLayers(
-        newX,
-        newY,
-        movingWidth,
-        movingHeight,
-        otherLayers,
-        5,
-      );
-      newX = snapResult.x;
-      newY = snapResult.y;
-      const lines = [
-        ...snapResult.snapLinesX.map((pos) => ({ orientation: 'vertical' as const, position: pos })),
-        ...snapResult.snapLinesY.map((pos) => ({ orientation: 'horizontal' as const, position: pos })),
-      ];
-      uiState.setSnapLines(lines);
-    } else {
-      uiState.clearSnapLines();
-    }
+    const { x: newX, y: newY } = snapWholeLayerMove(
+      state.layerStartX + dragDx,
+      state.layerStartY + dragDy,
+      state.layerStartX,
+      state.layerStartY,
+      move?.alignment ?? null,
+    );
     // Compute the actual delta applied to the active layer (may differ
     // from dragDx/Dy after snap) and use it for the siblings so they stay
     // rigidly in-formation with the active one.

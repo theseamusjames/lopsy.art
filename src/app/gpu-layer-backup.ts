@@ -7,59 +7,35 @@
  * Layer pixels live only in GPU textures, and by the time
  * `webglcontextlost` fires there is nothing left to read. So the pixels are
  * read back *before* a loss can happen, at the moments the user is away:
- * when the tab is hidden or the window loses focus. The readback is skipped
- * when nothing was edited since the previous backup — every pixel edit
- * pushes a history entry, so an unchanged undo/redo stack means unchanged
- * pixels. Undo itself stays GPU-only (no per-edit readback).
+ * when the tab is hidden or the window loses focus. Nothing is read when
+ * the undo/redo stacks and layer list are unchanged since the last backup,
+ * and only layers whose texture changed are read again (#1221); see
+ * `layer-backup-runner.ts` for how the work is sliced and when it is
+ * skipped. Undo itself stays GPU-only (no per-edit readback).
  *
  * After the context is restored, `restoreLayerBackup` re-uploads the backup
  * behind a loading overlay. Edits made after the last backup are lost.
  */
 
-import { getEngineCanvas } from '../engine-wasm/engine-state';
-import { readLayerBackupBlob, uploadCompressed } from '../engine-wasm/gpu-pixel-access';
+import { getEngine, getEngineCanvas } from '../engine-wasm/engine-state';
+import { readLayerBackupBlob, readLayerContentStamp, uploadCompressed } from '../engine-wasm/gpu-pixel-access';
 import { flushLayerSync } from '../engine-wasm/engine-sync';
 import { useEditorStore } from './editor-store';
 import { useUIStore } from './ui-store';
 import { materializeAllMaskData } from './mask-data-sync';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-import type { Layer, RasterLayer, TextLayer } from '../types';
+import { createLayerBackupRunner } from './layer-backup-runner';
+import type {
+  BackupLayer, BackupMode, HistoryKey, LayerBackup, LayerBackupStats, LayerStamp,
+} from './layer-backup-runner';
+import type { Layer } from '../types';
 
 /** Above this the backup is skipped rather than held in memory. */
 const MAX_BACKUP_BYTES = 512 * 1024 * 1024;
 
 export const RESTORING_MESSAGE = 'Restoring your layers after a graphics reset…';
 
-export interface LayerBackup {
-  /** Null for a layer with no visible content. */
-  readonly blob: Uint8Array | null;
-  /** The layer as it was when its pixels were read back. */
-  readonly layer: RasterLayer | TextLayer;
-}
-
-export interface HistoryKey {
-  readonly undoTop: unknown;
-  readonly undoLength: number;
-  readonly redoTop: unknown;
-  readonly redoLength: number;
-  readonly layers: unknown;
-}
-
-interface BackupSet {
-  readonly key: HistoryKey;
-  readonly takenAt: number;
-  readonly layers: ReadonlyMap<string, LayerBackup>;
-}
-
-let backup: BackupSet | null = null;
-
-export function isSameHistoryKey(a: HistoryKey, b: HistoryKey): boolean {
-  return a.undoTop === b.undoTop
-    && a.undoLength === b.undoLength
-    && a.redoTop === b.redoTop
-    && a.redoLength === b.redoLength
-    && a.layers === b.layers;
-}
+let maxBytesOverride: number | null = null;
 
 function currentHistoryKey(): HistoryKey {
   const s = useEditorStore.getState();
@@ -77,45 +53,76 @@ function isGpuContextLost(): boolean {
   return !gl || gl.isContextLost();
 }
 
-/**
- * Read every raster layer back to the CPU, unless nothing changed since
- * the last backup. A lost context reads back zeros, so no backup is taken
- * (and the last good one is kept) while the context is gone.
- */
-export function backupLayersToCpu(): void {
-  if (isGpuContextLost()) return;
-  const key = currentHistoryKey();
-  if (backup && isSameHistoryKey(backup.key, key)) return;
+function backupLayers(): BackupLayer[] {
+  return useEditorStore.getState().document.layers
+    .filter((l): l is BackupLayer => l.type === 'raster' || l.type === 'text');
+}
 
-  const state = useEditorStore.getState();
-  // Pending JS pixel data isn't on the GPU yet; masks live in JS and may
-  // lag their GPU copy.
-  flushLayerSync(state);
-  materializeAllMaskData();
+function layerStamp(layerId: string): LayerStamp | null {
+  const engine = getEngine();
+  const stamp = readLayerContentStamp(layerId);
+  return engine && stamp ? { engine, ...stamp } : null;
+}
 
-  const layers = new Map<string, LayerBackup>();
-  let totalBytes = 0;
-  for (const layer of useEditorStore.getState().document.layers) {
-    if (layer.type !== 'raster' && layer.type !== 'text') continue;
-    const blob = readLayerBackupBlob(layer.id);
-    totalBytes += blob?.byteLength ?? 0;
-    if (totalBytes > MAX_BACKUP_BYTES) {
-      console.warn('[Lopsy] document too large for a context-loss backup; skipped');
-      backup = null;
-      return;
-    }
-    layers.set(layer.id, { blob, layer });
+function scheduleIdle(callback: () => void): () => void {
+  if (typeof window.requestIdleCallback === 'function') {
+    const handle = window.requestIdleCallback(callback, { timeout: 1000 });
+    return () => window.cancelIdleCallback(handle);
   }
-  backup = { key, takenAt: Date.now(), layers };
+  const handle = window.setTimeout(callback, 0);
+  return () => window.clearTimeout(handle);
+}
+
+const runner = createLayerBackupRunner({
+  isContextLost: isGpuContextLost,
+  prepare: () => {
+    // Pending JS pixel data isn't on the GPU yet; masks live in JS and may
+    // lag their GPU copy.
+    flushLayerSync(useEditorStore.getState());
+    materializeAllMaskData();
+  },
+  historyKey: currentHistoryKey,
+  backupLayers,
+  stamp: layerStamp,
+  readBlob: readLayerBackupBlob,
+  scheduleIdle,
+  now: () => Date.now(),
+  warn: (message) => console.warn(message),
+  maxBytes: () => maxBytesOverride ?? MAX_BACKUP_BYTES,
+});
+
+/**
+ * Bring the backup up to date. `idle` (window blur) reads one layer per idle
+ * callback; `now` (tab hidden) finishes before returning. A lost context
+ * reads back zeros, so nothing is read (and the last good backup is kept)
+ * while the context is gone.
+ */
+export function backupLayersToCpu(mode: BackupMode): void {
+  runner.request(mode);
+}
+
+/** The user is back: stop reading until they leave again. */
+export function pauseLayerBackup(): void {
+  runner.pause();
 }
 
 export function hasLayerBackup(): boolean {
-  return backup !== null;
+  return runner.committed() !== null;
 }
 
 /** Time the current backup was taken, or null without one. */
 export function layerBackupTime(): number | null {
-  return backup?.takenAt ?? null;
+  return runner.committed()?.takenAt ?? null;
+}
+
+/** Readback counters for the dev-only e2e hook. */
+export function layerBackupStats(): LayerBackupStats {
+  return runner.stats();
+}
+
+/** Dev-only: lower the backup cap so e2e tests can reach it; null restores it. */
+export function setLayerBackupMaxBytesForTest(bytes: number | null): void {
+  maxBytesOverride = bytes;
 }
 
 function nextPaint(): Promise<void> {
@@ -138,14 +145,15 @@ export function layerForBackup(current: Layer, b: LayerBackup): Layer {
 }
 
 /**
- * Re-upload the backup into a fresh engine after a context restore, behind
- * the loading overlay. Layers deleted since the backup are skipped, as is a
- * layer whose type changed since (its pixels no longer describe it); see
+ * Re-upload the last committed backup into a fresh engine after a context
+ * restore, behind the loading overlay. A backup pass still in progress is
+ * never used. Layers deleted since the backup are skipped, as is a layer
+ * whose type changed since (its pixels no longer describe it); see
  * {@link layerForBackup} for edits made since. Returns the number of layers
  * restored.
  */
 export async function restoreLayerBackup(): Promise<number> {
-  const current = backup;
+  const current = runner.committed();
   if (!current) return 0;
   const ui = useUIStore.getState();
   ui.openModal({ kind: 'loading', message: RESTORING_MESSAGE });
@@ -178,5 +186,5 @@ export async function restoreLayerBackup(): Promise<number> {
 
 /** Test-only: drop any backup. */
 export function __resetLayerBackupForTest(): void {
-  backup = null;
+  runner.reset();
 }

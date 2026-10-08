@@ -74,6 +74,21 @@ pub fn render_text_layer(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
     }
 }
 
+/// The `[width, height, offset_x, offset_y]` that `renderTextLayer` would
+/// return, measured without compositing the raster or replacing the cached
+/// pixels. Empty when the layer has no visible glyphs.
+#[wasm_bindgen(js_name = "textRasterBounds")]
+pub fn text_raster_bounds(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
+    let tr = match engine.inner.text_renderer.as_mut() {
+        Some(t) => t,
+        None => return vec![],
+    };
+    match tr.measure_text_raster(layer_id) {
+        Some((w, h, ox, oy)) => vec![w as f64, h as f64, ox as f64, oy as f64],
+        None => vec![],
+    }
+}
+
 /// Return the cached RGBA pixel bytes from the last renderTextLayer call.
 /// Returns an empty array if no pixels are cached.
 #[wasm_bindgen(js_name = "getRenderedTextPixels")]

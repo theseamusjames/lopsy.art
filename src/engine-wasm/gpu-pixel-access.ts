@@ -8,6 +8,7 @@
 import {
   readLayerPixels,
   getLayerTextureDimensions,
+  layerContentGeneration,
   readLayerPixelsCompressedU16,
   readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
@@ -86,6 +87,28 @@ export function readLayerBackupBlob(layerId: string): Uint8Array | null {
   if (!data || data.length === 0) return null;
 
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+}
+
+export interface LayerContentStamp {
+  /** Engine-wide write counter value for the layer; 0 when never written. */
+  readonly generation: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * What a layer's texture holds right now, cheaply: its content generation
+ * and its size. Two equal stamps from the same engine mean an unchanged
+ * readback. Null without an engine.
+ */
+export function readLayerContentStamp(layerId: string): LayerContentStamp | null {
+  if (!currentEngine) return null;
+  const dims = getLayerTextureDimensions(currentEngine, layerId);
+  return {
+    generation: layerContentGeneration(currentEngine, layerId),
+    width: dims[0] ?? 0,
+    height: dims[1] ?? 0,
+  };
 }
 
 /**

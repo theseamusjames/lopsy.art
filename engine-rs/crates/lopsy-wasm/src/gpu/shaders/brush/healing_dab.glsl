@@ -7,12 +7,8 @@ uniform float u_size;
 uniform vec2 u_texSize;
 uniform vec2 u_sourceOffset;
 uniform float u_opacity;
-uniform vec2 u_srcMean;
-uniform vec2 u_dstMean;
-// srcMean/dstMean packed as (r, g) in u_srcMean and (b, _) plus (r, g) in u_dstMean
-// Actually we'll pass full vec3 means as two uniforms:
-uniform vec3 u_srcMeanRGB;
-uniform vec3 u_dstMeanRGB;
+// 2x1 region means from healing_mean.glsl: (0, 0) source, (1, 0) destination.
+uniform sampler2D u_meanTex;
 out vec4 fragColor;
 
 void main() {
@@ -42,7 +38,9 @@ void main() {
 
     // Healing: preserve source texture, match destination color
     // healed = source - srcMean + dstMean
-    vec3 healed = source.rgb - u_srcMeanRGB + u_dstMeanRGB;
+    vec3 srcMean = texelFetch(u_meanTex, ivec2(0, 0), 0).rgb;
+    vec3 dstMean = texelFetch(u_meanTex, ivec2(1, 0), 0).rgb;
+    vec3 healed = source.rgb - srcMean + dstMean;
     healed = clamp(healed, 0.0, 1.0);
 
     // Blend healed onto existing using stamp * opacity

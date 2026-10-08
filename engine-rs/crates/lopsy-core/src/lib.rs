@@ -8,6 +8,7 @@ pub mod homography;
 pub mod layer;
 pub mod selection;
 pub mod brush;
+pub mod dab_rect;
 pub mod sparse;
 pub mod pixel_buffer;
 pub mod filters;

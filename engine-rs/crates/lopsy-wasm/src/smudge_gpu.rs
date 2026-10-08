@@ -1,4 +1,7 @@
+use lopsy_core::dab_rect::dab_rect;
 use web_sys::WebGl2RenderingContext;
+
+use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
 
 pub fn apply_smudge_dab(
@@ -11,13 +14,7 @@ pub fn apply_smudge_dab(
     size: f32,
     strength: f32,
 ) {
-    apply_smudge_dab_batch(
-        engine,
-        layer_id,
-        &[prev_x, prev_y, cx, cy],
-        size,
-        strength,
-    );
+    apply_smudge_dab_batch(engine, layer_id, &[prev_x, prev_y, cx, cy], size, strength);
 }
 
 /// Apply a chain of smudge dabs. `points` is a flat array
@@ -33,14 +30,12 @@ pub fn apply_smudge_dab_batch(
     if points.len() < 4 {
         return;
     }
-    // The dispatch writes to a doc-sized scratch FBO with the viewport set
-    // to the layer texture size, then blits the scratch back to the layer.
-    // If the layer is smaller than the scratch, the blit reads garbage
-    // from the scratch's unwritten region — the same root cause as the
-    // filter bounds bug, surfacing as full-width streak artifacts.
+    // Smudge is not a registry paint tool, so no pointer-down `beginStroke`
+    // grows the layer for it. A no-op once the layer covers the document
+    // (it never reallocates per move), and it also sizes scratch to the
+    // layer, which each dab's copy-back needs.
     let _ = engine.ensure_layer_full_size(layer_id);
 
-    let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
@@ -50,61 +45,44 @@ pub fn apply_smudge_dab_batch(
         Some(t) => t.clone(),
         None => return,
     };
+    if engine.ensure_scratch_size(w, h).is_err() {
+        return;
+    }
 
-    let mut prev_x = points[0];
-    let mut prev_y = points[1];
-
-    let mut i = 2;
-    while i + 1 < points.len() {
-        let cx = points[i];
-        let cy = points[i + 1];
-
-        engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-        gl.viewport(0, 0, w as i32, h as i32);
-
-        let shader = &engine.shaders.smudge_dab;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_sourceTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), cx as f32, cy as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_prev") {
-            gl.uniform2f(Some(&loc), prev_x as f32, prev_y as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_size") {
-            gl.uniform1f(Some(&loc), size);
-        }
-        if let Some(loc) = shader.location(gl, "u_strength") {
-            gl.uniform1f(Some(&loc), strength);
-        }
-        if let Some(loc) = shader.location(gl, "u_texSize") {
-            gl.uniform2f(Some(&loc), w as f32, h as f32);
-        }
-
-        engine.draw_fullscreen_quad();
-
-        // Copy scratch A back to layer so subsequent dabs see the updated pixels
-        let scratch_a_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
-        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
+    for pair in points.windows(4).step_by(2) {
+        let (prev_x, prev_y) = (pair[0] as f32, pair[1] as f32);
+        let (cx, cy) = (pair[2] as f32, pair[3] as f32);
+        // Only texels within the radius of the new centre change; the shader
+        // reads the dragged pixels from `- (center - prev)` anywhere in the layer.
+        let Some(rect) = dab_rect(cx, cy, size, w, h) else {
+            continue;
+        };
+        scratch_dab_pass(engine, &layer_tex, w, h, rect, |engine| {
             let gl = &engine.gl;
-            gl.use_program(Some(&engine.shaders.blit.program));
+            let shader = &engine.shaders.smudge_dab;
+            gl.use_program(Some(&shader.program));
             gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            if let Some(s) = &scratch_a_tex {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-            }
-            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
+            if let Some(loc) = shader.location(gl, "u_sourceTex") {
                 gl.uniform1i(Some(&loc), 0);
+            }
+            if let Some(loc) = shader.location(gl, "u_center") {
+                gl.uniform2f(Some(&loc), cx, cy);
+            }
+            if let Some(loc) = shader.location(gl, "u_prev") {
+                gl.uniform2f(Some(&loc), prev_x, prev_y);
+            }
+            if let Some(loc) = shader.location(gl, "u_size") {
+                gl.uniform1f(Some(&loc), size);
+            }
+            if let Some(loc) = shader.location(gl, "u_strength") {
+                gl.uniform1f(Some(&loc), strength);
+            }
+            if let Some(loc) = shader.location(gl, "u_texSize") {
+                gl.uniform2f(Some(&loc), w as f32, h as f32);
             }
             engine.draw_fullscreen_quad();
         });
-
-        prev_x = cx;
-        prev_y = cy;
-        i += 2;
     }
 
     engine.mark_layer_dirty(layer_id);

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { toolRegistry } from '../../tools/tool-registry';
+import { SnapAnchorPicker } from '../../components/SnapAnchorPicker/SnapAnchorPicker';
 import styles from './OptionsBar.module.css';
 
 function computeGridStops(docSize: number): number[] {
@@ -21,6 +22,9 @@ export function OptionsBar() {
   const showGrid = useUIStore((s) => s.showGrid);
   const snapToGrid = useUIStore((s) => s.snapToGrid);
   const toggleSnapToGrid = useUIStore((s) => s.toggleSnapToGrid);
+  const snapAnchor = useUIStore((s) => s.snapAnchor);
+  const setSnapAnchorHorizontal = useUIStore((s) => s.setSnapAnchorHorizontal);
+  const setSnapAnchorVertical = useUIStore((s) => s.setSnapAnchorVertical);
   const gridSize = useUIStore((s) => s.gridSize);
   const setGridSize = useUIStore((s) => s.setGridSize);
   const showSeamlessPattern = useUIStore((s) => s.showSeamlessPattern);
@@ -77,6 +81,14 @@ export function OptionsBar() {
                 />
                 Snap
               </label>
+              {activeTool === 'move' && (
+                <SnapAnchorPicker
+                  anchor={snapAnchor}
+                  onHorizontalChange={setSnapAnchorHorizontal}
+                  onVerticalChange={setSnapAnchorVertical}
+                  disabled={!snapToGrid}
+                />
+              )}
             </>
           )}
           {showGrid && showSeamlessPattern && (

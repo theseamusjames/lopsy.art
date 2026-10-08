@@ -45,7 +45,12 @@ async function compositeAt(page: Page, docX: number, docY: number): Promise<numb
 /** The user switches to another window: the browser fires `blur`. */
 async function leaveWindow(page: Page): Promise<void> {
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-  await page.waitForTimeout(200);
+  // The backup is read in idle slices after the blur (#1221): let it finish.
+  await expect.poll(() => page.evaluate(() => {
+    const stats = (window as unknown as { __layerBackupStats: () => { committed: number; isPassPending: boolean } })
+      .__layerBackupStats();
+    return stats.committed > 0 && !stats.isPassPending;
+  }), { timeout: 10_000 }).toBe(true);
 }
 
 /** Record every loading-overlay message shown, so a brief overlay isn't missed. */

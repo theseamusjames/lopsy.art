@@ -3,7 +3,8 @@
 
 use wasm_bindgen::prelude::*;
 
-use crate::{Engine, overlay_renderer};
+use crate::{Engine, overlay_renderer, stamp_preview_gpu};
+use crate::stamp_preview_gpu::StampPreview;
 
 // ============================================================
 // Tool UI Overlays
@@ -67,6 +68,32 @@ pub fn set_brush_cursor(engine: &mut Engine, x: f64, y: f64, radius: f64) {
 #[wasm_bindgen(js_name = "clearBrushCursor")]
 pub fn clear_brush_cursor(engine: &mut Engine) {
     overlay_renderer::clear_brush_cursor(&mut engine.inner);
+}
+
+/// Show the Clone Stamp / Healing Brush source preview: inside the disc of
+/// `radius` document px at (`cursor_x`, `cursor_y`), `layer_id` as it is at
+/// (`source_x`, `source_y`).
+#[wasm_bindgen(js_name = "setStampSourcePreview")]
+pub fn set_stamp_source_preview(
+    engine: &mut Engine,
+    layer_id: &str,
+    cursor_x: f64,
+    cursor_y: f64,
+    source_x: f64,
+    source_y: f64,
+    radius: f64,
+) {
+    stamp_preview_gpu::set_stamp_preview(&mut engine.inner, Some(StampPreview {
+        layer_id: layer_id.to_string(),
+        cursor: (cursor_x, cursor_y),
+        source: (source_x, source_y),
+        radius,
+    }));
+}
+
+#[wasm_bindgen(js_name = "clearStampSourcePreview")]
+pub fn clear_stamp_source_preview(engine: &mut Engine) {
+    stamp_preview_gpu::set_stamp_preview(&mut engine.inner, None);
 }
 
 #[wasm_bindgen(js_name = "setRulersVisible")]

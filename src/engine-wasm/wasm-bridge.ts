@@ -40,6 +40,7 @@ import init, {
   uploadLayerMask as rawUploadLayerMask,
   removeLayerMask as rawRemoveLayerMask,
   getLayerTextureDimensions,
+  layerContentGeneration,
   getLayerEngineBounds,
   getLayerContentBounds,
   uploadLayerPixelsCompressed,
@@ -239,6 +240,8 @@ import init, {
   clearCropPreview,
   setBrushCursor,
   clearBrushCursor,
+  setStampSourcePreview,
+  clearStampSourcePreview,
   setRulersVisible,
   setSeamlessPattern,
   setChannelMask,
@@ -281,25 +284,27 @@ import init, {
   parsePsd,
   decodeAndUploadPsdLayer,
   getPsdLayerMask,
-  loadFontData,
-  loadFontDataForFamily,
+  loadFontData as rawLoadFontData,
+  loadFontDataForFamily as rawLoadFontDataForFamily,
   setTextLayerContent,
   renderTextLayer,
   renderTextLayerToTexture,
   renderTextLayerTransformed,
   textLayoutBounds,
+  textRasterBounds,
   getRenderedTextPixels,
   getGlyphPositions,
   textHitPosition,
   textCursorRect,
   textSelectionRects,
-  removeTextLayerState,
+  removeTextLayerState as rawRemoveTextLayerState,
   isFontLoaded,
   expandLayerToDocSize,
   cropLayerToContent,
   floodFillGraduated,
 } from './pkg/lopsy_wasm';
 import { markMaskGpuDirty } from './mask-gpu-dirty';
+import { bumpTextLayoutGeneration } from './text-layout-generation';
 
 export type { Engine };
 
@@ -359,6 +364,7 @@ export {
   decodeAndUploadRaf,
   uploadLayerSparsePixels,
   getLayerTextureDimensions,
+  layerContentGeneration,
   getLayerEngineBounds,
   getLayerContentBounds,
   uploadLayerPixelsCompressed,
@@ -551,6 +557,8 @@ export {
   clearCropPreview,
   setBrushCursor,
   clearBrushCursor,
+  setStampSourcePreview,
+  clearStampSourcePreview,
   setRulersVisible,
   setSeamlessPattern,
   setChannelMask,
@@ -592,19 +600,17 @@ export {
   parsePsd,
   decodeAndUploadPsdLayer,
   getPsdLayerMask,
-  loadFontData,
-  loadFontDataForFamily,
   setTextLayerContent,
   renderTextLayer,
   renderTextLayerToTexture,
   renderTextLayerTransformed,
   textLayoutBounds,
+  textRasterBounds,
   getRenderedTextPixels,
   getGlyphPositions,
   textHitPosition,
   textCursorRect,
   textSelectionRects,
-  removeTextLayerState,
   isFontLoaded,
   expandLayerToDocSize,
   cropLayerToContent,
@@ -636,3 +642,18 @@ export const renderMaskLinearGradient = markingMaskDirty(rawRenderMaskLinearGrad
 export const renderMaskRadialGradient = markingMaskDirty(rawRenderMaskRadialGradient);
 export const restoreMaskFromGpuSnapshot = markingMaskDirty(rawRestoreMaskFromGpuSnapshot);
 export const endMaskFilterTarget = markingMaskDirty(rawEndMaskFilterTarget);
+
+/**
+ * Every export that can change how unchanged text props lay out goes through
+ * this wrapper, so props-keyed text measurement caches drop their entries.
+ */
+function bumpingTextLayout<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+  return (...args: A): R => {
+    bumpTextLayoutGeneration();
+    return fn(...args);
+  };
+}
+
+export const loadFontData = bumpingTextLayout(rawLoadFontData);
+export const loadFontDataForFamily = bumpingTextLayout(rawLoadFontDataForFamily);
+export const removeTextLayerState = bumpingTextLayout(rawRemoveTextLayerState);
