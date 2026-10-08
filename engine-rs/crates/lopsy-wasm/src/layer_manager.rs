@@ -685,6 +685,9 @@ pub fn clipboard_copy(
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") {
             engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
         }
+        if let Some(loc) = shader.location(&engine.gl, "u_extendPastCanvas") {
+            engine.gl.uniform1i(Some(&loc), 0);
+        }
         if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") {
             engine.gl.uniform2f(Some(&loc), layer_x, layer_y);
         }
@@ -762,6 +765,9 @@ pub fn clipboard_clear_selected(
         }
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") {
             engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_extendPastCanvas") {
+            engine.gl.uniform1i(Some(&loc), 0);
         }
         if let Some(loc) = shader.location(&engine.gl, "u_docSize") {
             engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
@@ -1032,6 +1038,10 @@ pub fn float_selection(
     let mask_tex_opt = engine.selection_mask_texture
         .and_then(|h| engine.texture_pool.get(h).cloned());
 
+    // A selection reaching a canvas edge carries on past it here (both
+    // passes set `u_extendPastCanvas`), so a shape hanging off that edge is
+    // lifted whole instead of leaving its off-canvas strip behind (#1131).
+    //
     // 1. Extract selected pixels into float_texture (clipboard_copy shader).
     // For expanded text layers, boundsOffset/boundsSize cover the full fw×fh region;
     // clipboard_copy clips to the original layer area, leaving transparent padding.
@@ -1060,6 +1070,7 @@ pub fn float_selection(
             }
             if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), mask_sampler_unit(has_mask)); }
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 }); }
+            if let Some(loc) = shader.location(&engine.gl, "u_extendPastCanvas") { engine.gl.uniform1i(Some(&loc), 1); }
             if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), lx as f32, ly as f32); }
             if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), flw as f32, flh as f32); }
             // Bounds cover the full fw×fh region (new_x, new_y origin for expanded layers)
@@ -1103,6 +1114,7 @@ pub fn float_selection(
             }
             if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), mask_sampler_unit(has_mask)); }
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 }); }
+            if let Some(loc) = shader.location(&engine.gl, "u_extendPastCanvas") { engine.gl.uniform1i(Some(&loc), 1); }
             if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32); }
             if let Some(loc) = shader.location(&engine.gl, "u_layerOffset") { engine.gl.uniform2f(Some(&loc), lx as f32, ly as f32); }
             if let Some(loc) = shader.location(&engine.gl, "u_layerSize") { engine.gl.uniform2f(Some(&loc), flw as f32, flh as f32); }

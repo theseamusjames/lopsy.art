@@ -4,6 +4,10 @@ in vec2 v_uv;
 uniform sampler2D u_layerTex;
 uniform sampler2D u_maskTex;
 uniform int u_hasMask;
+// 1 for the Move tool's float: a selection reaching a canvas edge carries on
+// past it, so content hanging off that edge moves with the rest (#1131).
+// 0 elsewhere: off-canvas texels are outside the selection (#1033).
+uniform int u_extendPastCanvas;
 // Layer texture covers [layerOffset .. layerOffset+layerSize] in document space.
 // The output covers [boundsOffset .. boundsOffset+boundsSize] in document space.
 uniform vec2 u_layerOffset;
@@ -27,8 +31,11 @@ void main() {
     // Apply selection mask if present
     if (u_hasMask == 1) {
         vec2 maskUV = docPos / u_docSize;
-        // Off-canvas texels are outside the selection (#1033).
-        float maskVal = (any(lessThan(maskUV, vec2(0.0))) || any(greaterThan(maskUV, vec2(1.0)))) ? 0.0 : texture(u_maskTex, maskUV).r;
+        vec2 halfTexel = 0.5 / u_docSize;
+        bool isOffCanvas = any(lessThan(maskUV, vec2(0.0))) || any(greaterThan(maskUV, vec2(1.0)));
+        float maskVal = u_extendPastCanvas == 1
+            ? texture(u_maskTex, clamp(maskUV, halfTexel, 1.0 - halfTexel)).r
+            : (isOffCanvas ? 0.0 : texture(u_maskTex, maskUV).r);
         // Take the mask as coverage, min(alpha, mask), mirroring
         // clipboard_clear's alpha - mask so copy + clear conserve the pixel.
         // A product would square alpha for a selection built from the
