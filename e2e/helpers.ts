@@ -803,18 +803,9 @@ export async function addAdjustment(
   const menuLabel = ADJUSTMENT_MENU_LABELS[nodeType];
   if (!menuLabel) throw new Error(`Unknown adjustment type: ${nodeType}`);
 
-  // Click Add Adjustment and select from the menu. The menu opens
-  // upward and may be clipped by the canvas overlay. If the normal
-  // click fails due to the canvas intercepting, dispatch a click
-  // event directly on the menu item.
   await page.locator('[aria-label="Add Adjustment"]').click();
   const menuItem = page.getByRole('menuitem', { name: menuLabel, exact: true });
-  await menuItem.waitFor({ state: 'visible', timeout: 3000 });
-  try {
-    await menuItem.click({ timeout: 2000 });
-  } catch {
-    await menuItem.dispatchEvent('click');
-  }
+  await menuItem.click({ timeout: 3000 });
   await page.waitForTimeout(200);
 
   if (values) {

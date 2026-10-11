@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Eye, EyeOff, X, ChevronDown, ChevronRight, GripVertical, Trash2, Plus } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
@@ -16,6 +17,8 @@ import {
 import { getColorModeCapabilities, isAdjustmentAllowedInMode } from '../../utils/color-mode-capabilities';
 import { BlendModeSelect } from '../../components/BlendModeSelect/BlendModeSelect';
 import { NODE_CONTROLS_MAP } from './controls/node-controls-map';
+import { placeAddMenu, type AddMenuPlacement } from './add-menu-placement';
+import { useEscapeDismiss } from '../../app/shortcuts/escape-dismiss';
 import styles from './AdjustmentsPanel.module.css';
 
 /** Node types available in the Add menu. New types (color-balance, etc.) are
@@ -74,10 +77,13 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
   const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
   const updateLayerBlendMode = useEditorStore((s) => s.updateLayerBlendMode);
 
-  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [addMenu, setAddMenu] = useState<AddMenuPlacement | null>(null);
+  const showAddMenu = addMenu !== null;
   const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const closeAddMenu = useCallback(() => setAddMenu(null), []);
+  useEscapeDismiss(showAddMenu, closeAddMenu);
 
   if (!group) return null;
 
@@ -92,7 +98,7 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
   };
 
   const handleAddNode = (type: AdjustmentNodeType) => {
-    setShowAddMenu(false);
+    setAddMenu(null);
     addAdjustmentNode(group.id, type);
     const updated = useEditorStore.getState().document.layers.find(
       (l) => l.id === group.id && l.type === 'group',
@@ -125,6 +131,14 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
     reorderAdjustmentNodes(group.id, ids);
     setDraggedIndex(null);
     setDragOverIndex(null);
+  };
+
+  const handleToggleAddMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (addMenu) {
+      setAddMenu(null);
+      return;
+    }
+    setAddMenu(placeAddMenu(e.currentTarget.getBoundingClientRect(), window.innerHeight));
   };
 
   const handleDragEnd = () => {
@@ -178,15 +192,24 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
           <button
             type="button"
             className={styles.textBtn}
-            onClick={() => setShowAddMenu(!showAddMenu)}
+            onClick={handleToggleAddMenu}
             aria-label="Add Adjustment"
             aria-expanded={showAddMenu}
           >
             <Plus size={12} className={styles.addIcon} />
             Add Adjustment
           </button>
-          {showAddMenu && (
-            <div className={styles.addMenu} role="menu">
+          {addMenu && createPortal(
+            <div
+              className={`${styles.addMenu} ${addMenu.isAbove ? styles.addMenuAbove : ''}`}
+              role="menu"
+              aria-label="Adjustment types"
+              style={{
+                '--menu-y': `${addMenu.y}px`,
+                '--menu-left': `${addMenu.left}px`,
+                '--menu-max-height': `${addMenu.maxHeight}px`,
+              } as React.CSSProperties}
+            >
               {ADD_MENU_TYPES.filter((type) => isAdjustmentAllowedInMode(type, colorMode)).map((type) => (
                 <button
                   key={type}
@@ -201,7 +224,8 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
                   )}
                 </button>
               ))}
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
         <button

@@ -174,17 +174,21 @@
 }
 
 .addMenu {
-  position: absolute;
-  bottom: calc(100% + var(--space-1));
-  left: 0;
+  position: fixed;
+  top: var(--menu-y);
+  left: var(--menu-left);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   min-width: 180px;
-  max-height: 260px;
+  max-height: var(--menu-max-height);
   overflow-y: auto;
   z-index: var(--z-popover);
   box-shadow: var(--shadow-md);
+}
+
+.addMenuAbove {
+  transform: translateY(-100%);
 }
 
 .addMenuItem {
