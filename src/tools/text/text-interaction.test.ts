@@ -322,7 +322,7 @@ describe('text down — clicking an existing text layer', () => {
   // #1235: the entering click used to leave the caret at the end of the text.
   it('places the caret where the entering click lands, in layout space', () => {
     editorState.document.layers = [makeTextLayer()];
-    renderTextLayer.mockReturnValue(new Float32Array([80, 30, 6, 9]));
+    renderTextLayer.mockReturnValue(Float32Array.from([80, 30, 6, 9]));
     textHitPosition.mockReturnValue(1);
     handleTextDown(makeCtx({ canvasPos: { x: 110, y: 60 } }));
     expect(textHitPosition).toHaveBeenCalledWith(engine, 'text-1', 16, 19);
