@@ -276,6 +276,7 @@ describe('text down — clicking an existing text layer', () => {
       strikethrough: true,
     });
     editorState.document.layers = [layer];
+    textHitPosition.mockReturnValue(2);
     // Hit region: x 100..100+5*36*0.6, y 50..50+36*1.4
     const result = handleTextDown(makeCtx({ canvasPos: { x: 110, y: 60 } }));
     expect(result).toBeUndefined();
@@ -293,7 +294,7 @@ describe('text down — clicking an existing text layer', () => {
       expect.objectContaining({
         layerId: 'text-1',
         text: 'Hello',
-        cursorPos: 5,
+        cursorPos: 2,
         isNew: false,
         originalVisible: true,
       }),
@@ -318,6 +319,26 @@ describe('text down — clicking an existing text layer', () => {
     expect(props.areaWidth).toBeNull();
   });
 
+  // #1235: the entering click used to leave the caret at the end of the text.
+  it('places the caret where the entering click lands, in layout space', () => {
+    editorState.document.layers = [makeTextLayer()];
+    renderTextLayer.mockReturnValue(new Float32Array([80, 30, 6, 9]));
+    textHitPosition.mockReturnValue(1);
+    handleTextDown(makeCtx({ canvasPos: { x: 110, y: 60 } }));
+    expect(textHitPosition).toHaveBeenCalledWith(engine, 'text-1', 16, 19);
+    const editing = uiState.startTextEditing.mock.calls[0]![0];
+    expect(editing.cursorPos).toBe(1);
+    expect(editing.selectionAnchor).toBeNull();
+  });
+
+  it('keeps the caret at the end of path text on entry', () => {
+    editorState.document.layers = [makeTextLayer({ pathId: 'path-1' })];
+    textHitPosition.mockReturnValue(1);
+    handleTextDown(makeCtx({ canvasPos: { x: 110, y: 60 } }));
+    expect(textHitPosition).not.toHaveBeenCalled();
+    expect(uiState.startTextEditing.mock.calls[0]![0].cursorPos).toBe(5);
+  });
+
   it('uses the raw layer position when no engine is available', () => {
     engine = null;
     editorState.document.layers = [makeTextLayer()];
@@ -326,6 +347,7 @@ describe('text down — clicking an existing text layer', () => {
     const editing = uiState.startTextEditing.mock.calls[0]![0];
     expect(editing.bounds.x).toBe(100);
     expect(editing.bounds.y).toBe(50);
+    expect(editing.cursorPos).toBe(5);
   });
 
   it('skips the engine measurement for whitespace-only text', () => {
