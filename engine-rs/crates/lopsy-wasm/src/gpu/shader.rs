@@ -492,8 +492,8 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, BLIT_RESAMPLE_FRAG, TRANSFORM_AFFINE_FRAG,
-        TRANSFORM_PERSPECTIVE_FRAG,
+        inject_defines, preprocess_frag, BLIT_RESAMPLE_FRAG, OIL_PAINT_FRAG,
+        TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
     };
 
     #[test]
@@ -534,5 +534,13 @@ mod tests {
             assert!(out.contains("vec4 samplePremulBilinear("));
             assert!(!out.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
         }
+    }
+
+    #[test]
+    fn oil_paint_clamps_variance_before_pow() {
+        assert!(
+            OIL_PAINT_FRAG.contains("vec3 v = max(var_sum[i] / count[i] - m * m, vec3(0.0));"),
+            "negative variance reaches pow() and turns flat colours black on Metal"
+        );
     }
 }
