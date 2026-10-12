@@ -5,6 +5,9 @@
  *         active, although Path output never writes the layer's pixels.
  * #1255 — Image Size scaled an upright text layer's font size but never
  *         re-rendered it, so the glyphs kept their old pixel size.
+ * #1259 — IM Fell DW Pica drew `·` far past the end of the line: the WOFF2
+ *         decoder read the bbox bitmap unpadded, misaligning composite bboxes.
+ *         The font is served offline from the test fixtures.
  */
 import { test, expect, type Page } from './fixtures';
 import {
@@ -17,6 +20,7 @@ import {
   selectTool,
   setToolOption,
 } from './helpers';
+import { serveFontsOffline } from './font-fixtures';
 
 async function editFill(page: Page): Promise<void> {
   await page.click('button:has-text("Edit")');
@@ -227,5 +231,37 @@ test.describe('Fixes #1251 #1255 #1259 #1262', () => {
     await page.waitForTimeout(400);
     const undone = await inkBounds(page, textId);
     expect(undone).toEqual(before);
+  });
+
+  test('#1259 IM Fell DW Pica draws the middle dot in place', async ({ page }) => {
+    await serveFontsOffline(page);
+    await createDocument(page, 1200, 600, true);
+    await page.waitForTimeout(200);
+    await setForegroundColor(page, 0, 0, 0);
+    await selectTool(page, 'text');
+    await page.locator('button[aria-haspopup="listbox"]').click();
+    await page.locator('input[aria-label="Search fonts"]').fill('IM Fell DW Pica');
+    await page.locator('[role="option"]').filter({ hasText: /^IM Fell DW Pica$/ }).first().click();
+    await page.waitForFunction(
+      (f) => {
+        const fn = (window as unknown as Record<string, unknown>).__isFontLoaded as ((f: string) => boolean) | undefined;
+        return fn ? fn(f) : false;
+      },
+      'IM Fell DW Pica',
+      { timeout: 20000 },
+    );
+    const dotted = await typeText(page, 100, 200, 'ab\u00b7cd', 60);
+    const dottedInk = await inkBounds(page, dotted);
+    await page.locator('[data-tool-id="move"]').click();
+    const bg = (await getEditorState(page)).document.layers.find((l) => l.type !== 'text' && l.type !== 'group');
+    await page.locator(`[data-layer-id="${bg!.id}"]`).click();
+    const plain = await typeText(page, 100, 400, 'abcd', 60);
+    const plainInk = await inkBounds(page, plain);
+
+    const plainWidth = plainInk.x1 - plainInk.x0;
+    const dottedWidth = dottedInk.x1 - dottedInk.x0;
+    // The dot adds about its own advance (~0.3 em), not several em.
+    expect(dottedWidth - plainWidth, `widths ${plainWidth} → ${dottedWidth}`).toBeGreaterThan(5);
+    expect(dottedWidth - plainWidth, `widths ${plainWidth} → ${dottedWidth}`).toBeLessThan(40);
   });
 });
