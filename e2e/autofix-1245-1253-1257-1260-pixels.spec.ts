@@ -1,6 +1,8 @@
 /**
  * #1257 — Oil Paint turned flat colours black on Metal: the quadrant variance
  *         E[s²] − m² rounded slightly negative and pow() of it was NaN.
+ * #1260 — Smudge mixed straight RGB, so red smeared into transparent pixels
+ *         was stored premultiplied (R == A) and composited grey.
  */
 import { test, expect, type Page } from './fixtures';
 import {
@@ -8,6 +10,7 @@ import {
   createDocument,
   getEditorState,
   setForegroundColor,
+  setToolOption,
   docToScreen,
   applyFilter,
 } from './helpers';
@@ -100,5 +103,30 @@ test.describe('Pixel fixes #1245 #1253 #1257 #1260', () => {
       expect(Math.abs(after[c]! - [216, 67, 46][c]!), `channel ${c} of ${after}`).toBeLessThanOrEqual(1);
     }
     expect(after[3]).toBe(255);
+  });
+
+  test('#1260 Smudge into transparency keeps the colour', async ({ page }) => {
+    await createDocument(page, 600, 600, false);
+    await page.waitForTimeout(200);
+    const id = await activeLayerId(page);
+    await fillRect(page, 100, 100, 500, 300, [255, 0, 0]);
+
+    await page.keyboard.press('r');
+    await setToolOption(page, 'Size', 40);
+    await setToolOption(page, 'Strength', 80);
+    await dragOnCanvas(page, 300, 290, 300, 460, 30);
+    await page.waitForTimeout(300);
+
+    const raster = await readLayer(page, id);
+    let smeared = 0;
+    for (let y = 305; y < 460; y++) {
+      const [r, g, b, a] = pixelAtDoc(raster, 300, y);
+      if (a < 20) continue;
+      smeared++;
+      expect(r, `R at y=${y} (alpha ${a})`).toBeGreaterThanOrEqual(250);
+      expect(g).toBeLessThanOrEqual(5);
+      expect(b).toBeLessThanOrEqual(5);
+    }
+    expect(smeared, 'smudge pulled colour below the rectangle').toBeGreaterThan(5);
   });
 });

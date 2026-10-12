@@ -493,7 +493,7 @@ impl ShaderPrograms {
 mod tests {
     use super::{
         inject_defines, preprocess_frag, BLIT_RESAMPLE_FRAG, OIL_PAINT_FRAG,
-        TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
+        SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
     };
 
     #[test]
@@ -528,7 +528,12 @@ mod tests {
 
     #[test]
     fn resampling_shaders_filter_in_premultiplied_space() {
-        for src in [TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, BLIT_RESAMPLE_FRAG] {
+        for src in [
+            TRANSFORM_AFFINE_FRAG,
+            TRANSFORM_PERSPECTIVE_FRAG,
+            BLIT_RESAMPLE_FRAG,
+            SMUDGE_DAB_FRAG,
+        ] {
             let out = preprocess_frag(src);
             assert!(!out.contains("//#include"), "unresolved include");
             assert!(out.contains("vec4 samplePremulBilinear("));
