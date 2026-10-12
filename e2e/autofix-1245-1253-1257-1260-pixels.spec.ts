@@ -5,6 +5,8 @@
  *         was stored premultiplied (R == A) and composited grey.
  * #1253 — Kaleidoscope mirrored around the texture centre, which is not the
  *         canvas centre once a nudged layer hangs past the canvas.
+ * #1245 — Liquify did nothing on a layer smaller than the canvas: the
+ *         displacement map was sized before the texture expanded.
  */
 import { test, expect, type Page } from './fixtures';
 import {
@@ -171,5 +173,48 @@ test.describe('Pixel fixes #1245 #1253 #1257 #1260', () => {
     const cy = (bounds!.y0 + bounds!.y1) / 2;
     expect(Math.abs(cx - 400), `pattern centre x ${cx}`).toBeLessThanOrEqual(3);
     expect(Math.abs(cy - 300), `pattern centre y ${cy}`).toBeLessThanOrEqual(3);
+  });
+
+  test('#1245 Liquify warps a pasted, non-canvas-sized layer on first open', async ({ page }) => {
+    await createDocument(page, 1000, 1000, true);
+    await page.waitForTimeout(200);
+    await fillRect(page, 500, 500, 800, 800, [220, 40, 40]);
+    await fillRect(page, 500, 630, 800, 670, [20, 40, 220]);
+
+    await page.keyboard.press('m');
+    await dragOnCanvas(page, 500, 500, 800, 800);
+    await page.keyboard.press('Control+c');
+    await page.keyboard.press('Control+v');
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Control+d');
+    const state = await getEditorState(page);
+    const pasted = state.document.layers.find((l) => l.id === state.document.activeLayerId);
+    expect(pasted?.name).toBe('Pasted Layer');
+    const id = state.document.activeLayerId;
+    const before = await readLayer(page, id);
+    expect(before.width).toBeLessThan(1000);
+
+    await page.click('text=Filter');
+    await page.click('text=Liquify...');
+    const panel = page.locator('[data-testid="liquify-panel"]');
+    await panel.waitFor({ state: 'visible', timeout: 5000 });
+    await panel.locator('select[aria-label="Liquify mode"]').selectOption('push');
+    await panel.locator('input[aria-label="Brush size"]').fill('150');
+    await panel.locator('input[aria-label="Brush pressure"]').fill('100');
+    await dragOnCanvas(page, 650, 650, 740, 740, 20);
+    await page.locator('[data-testid="liquify-apply"]').click();
+    await panel.waitFor({ state: 'hidden', timeout: 5000 });
+    await page.waitForTimeout(300);
+
+    const after = await readLayer(page, id);
+    let changed = 0;
+    for (let y = 500; y < 800; y++) {
+      for (let x = 500; x < 800; x++) {
+        const a = pixelAtDoc(before, x, y);
+        const b = pixelAtDoc(after, x, y);
+        if (Math.abs(a[0] - b[0]) + Math.abs(a[2] - b[2]) + Math.abs(a[3] - b[3]) > 30) changed++;
+      }
+    }
+    expect(changed, 'pixels moved by the Push drag').toBeGreaterThan(1000);
   });
 });

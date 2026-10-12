@@ -16,6 +16,7 @@ import {
   liquifyInitDisplacement,
   liquifyRender,
   liquifyRelease,
+  getLayerTextureDimensions,
 } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
@@ -35,12 +36,16 @@ export function openLiquify(): void {
   const layer = editorStore.document.layers.find((l) => l.id === activeId);
   if (!layer || layer.type !== 'raster') return;
 
-  const { width, height } = layer;
-
   saveFilterPreview(engine, activeId);
   // saveFilterPreview expands the layer texture to doc size — reconcile
   // JS bounds so the next syncLayers push does not clobber it (#771).
   syncLayerAfterFullSize(engine, activeId);
+
+  // Size the displacement map to the expanded texture the dabs are placed
+  // in, not the layer's pre-expansion bounds (#1245).
+  const dims = getLayerTextureDimensions(engine, activeId);
+  const width = dims[0] ?? layer.width;
+  const height = dims[1] ?? layer.height;
 
   const zeroHi = DISP_CENTER >> 8;
   const zeroLo = DISP_CENTER & 0xff;
