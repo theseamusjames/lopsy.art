@@ -1,7 +1,13 @@
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
-import { selectionBounds } from '../../selection/selection';
+import {
+  selectionBounds,
+  SELECTION_COMBINE_LABELS,
+  type SelectionCombineMode,
+  type SelectionCombineOp,
+} from '../../selection/selection';
+import { combineSelectionMasks } from '../../app/interactions/selection-handlers';
 import { createTransformState } from '../../tools/transform/transform';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
@@ -26,10 +32,12 @@ export function isLayerAlphaSelection(layerId: string, mask: Uint8ClampedArray):
 export interface SelectLayerAlphaOptions {
   /** Float the selection ahead of the first drag (default true). */
   prefloat?: boolean;
+  /** How the layer's alpha combines with the current selection (default replace). */
+  combine?: SelectionCombineMode;
 }
 
 export function selectLayerAlpha(layerId: string, options: SelectLayerAlphaOptions = {}): void {
-  const { prefloat = true } = options;
+  const { prefloat = true, combine = 'replace' } = options;
   // Commit any active GPU float so the layer texture has the final pixels
   const engine = getEngine();
   if (engine && hasFloat(engine)) {
@@ -57,6 +65,11 @@ export function selectLayerAlpha(layerId: string, options: SelectLayerAlphaOptio
       }
     }
   }
+  const sel = editorState.selection;
+  if (combine !== 'replace' && sel.active && sel.mask && sel.maskWidth === docW && sel.maskHeight === docH) {
+    combineWithSelection(sel.mask, selMask, docW, docH, combine);
+    return;
+  }
   const bounds = selectionBounds(selMask, docW, docH);
   if (bounds) {
     editorState.setSelection(bounds, selMask, docW, docH);
@@ -75,6 +88,26 @@ export function selectLayerAlpha(layerId: string, options: SelectLayerAlphaOptio
       schedulePrefloat(layerId, selMask, bounds);
     }
   }
+}
+
+function combineWithSelection(
+  existing: Uint8ClampedArray,
+  layerMask: Uint8ClampedArray,
+  docW: number,
+  docH: number,
+  op: SelectionCombineOp,
+): void {
+  const editorState = useEditorStore.getState();
+  editorState.pushHistoryMetadata(SELECTION_COMBINE_LABELS[op]);
+  const combined = combineSelectionMasks(existing, layerMask, op);
+  const bounds = selectionBounds(combined, docW, docH);
+  if (!bounds) {
+    editorState.clearSelection();
+    useUIStore.getState().setTransform(null);
+    return;
+  }
+  editorState.setSelection(bounds, combined, docW, docH);
+  useUIStore.getState().setTransform(createTransformState(bounds));
 }
 
 export function convertMaskToMarquee(layerId: string): void {

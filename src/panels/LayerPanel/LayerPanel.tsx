@@ -4,6 +4,8 @@ import { IconButton } from '../../components/IconButton/IconButton';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { selectLayerAlpha, convertMaskToMarquee } from './layer-selection';
+import { selectionCombineMode } from '../../selection/selection';
+import { hasCombinableSelection } from '../../app/interactions/selection-handlers';
 import { buildFlatDisplayList } from '../../layers/group-utils';
 import { useLayerDnd } from './useLayerDnd';
 import { LayerRow } from './LayerRow';
@@ -62,7 +64,8 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
   const handleThumbnailCmdClick = useCallback((e: React.MouseEvent, layerId: string) => {
     if (!(e.metaKey || e.ctrlKey)) return;
     e.stopPropagation();
-    selectLayerAlpha(layerId);
+    // Shift adds and Alt subtracts, as with the selection tools (#1251).
+    selectLayerAlpha(layerId, { combine: selectionCombineMode(e, hasCombinableSelection()) });
   }, []);
 
   const handleConvertMaskToMarquee = useCallback((layerId: string) => {
