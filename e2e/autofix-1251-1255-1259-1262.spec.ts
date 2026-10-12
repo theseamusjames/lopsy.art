@@ -1,6 +1,8 @@
 /**
  * #1251 — ⇧⌘-click / ⌥⌘-click on a layer thumbnail replaced the selection
  *         instead of adding the layer's alpha to it or subtracting it.
+ * #1262 — Shape with Output: Path refused to draw while a text layer was
+ *         active, although Path output never writes the layer's pixels.
  */
 import { test, expect, type Page } from './fixtures';
 import {
@@ -10,6 +12,8 @@ import {
   setForegroundColor,
   docToScreen,
   addLayer,
+  selectTool,
+  setToolOption,
 } from './helpers';
 
 async function editFill(page: Page): Promise<void> {
@@ -62,6 +66,31 @@ async function thumbnailClick(page: Page, layerId: string, modifiers: Array<'Met
   await page.waitForTimeout(300);
 }
 
+async function typeText(page: Page, x: number, y: number, text: string, size: number): Promise<string> {
+  await selectTool(page, 'text');
+  await setToolOption(page, 'Size', size);
+  const at = await docToScreen(page, x, y);
+  await page.mouse.click(at.x, at.y);
+  await page.waitForTimeout(150);
+  await page.keyboard.type(text);
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(300);
+  const state = await getEditorState(page);
+  const layer = state.document.layers.find((l) => l.id === state.document.activeLayerId);
+  expect(layer?.type).toBe('text');
+  return state.document.activeLayerId;
+}
+
+async function pathCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { paths: unknown[] };
+    };
+    return store.getState().paths.length;
+  });
+}
+
 test.describe('Fixes #1251 #1255 #1259 #1262', () => {
   test.beforeEach(async ({ page, isMobile }) => {
     test.skip(isMobile, 'menus and marquee drags need the desktop layout');
@@ -99,5 +128,41 @@ test.describe('Fixes #1251 #1255 #1259 #1262', () => {
 
     await thumbnailClick(page, layer1, ['Meta']);
     expect(await selectedPixelCount(page), 'plain ⌘-click still replaces').toBe(200 * 200);
+  });
+
+  test('#1262 Shape with Output: Path draws a path while a text layer is active', async ({ page }) => {
+    await createDocument(page, 1000, 1000, false);
+    await page.waitForTimeout(200);
+    const textId = await typeText(page, 100, 150, 'Hello', 60);
+    const textBefore = await page.evaluate(async (id) => {
+      const read = (window as unknown as Record<string, unknown>).__readLayerPixels as
+        (id?: string) => Promise<{ pixels: number[] }>;
+      return Array.from((await read(id)).pixels);
+    }, textId);
+
+    await selectTool(page, 'shape');
+    await page.locator('select[aria-labelledby="shape-mode-label"]').selectOption('ellipse');
+    await page.locator('select[aria-labelledby="shape-output-label"]').selectOption('path');
+    expect(await pathCount(page)).toBe(0);
+    await dragOnCanvas(page, 500, 600, 700, 800, 10);
+    await page.waitForTimeout(200);
+
+    await expect(page.getByText('Text layers must be rasterized')).toHaveCount(0);
+    expect(await pathCount(page), 'circle path added').toBe(1);
+    const state = await getEditorState(page);
+    expect(state.document.activeLayerId).toBe(textId);
+    const textAfter = await page.evaluate(async (id) => {
+      const read = (window as unknown as Record<string, unknown>).__readLayerPixels as
+        (id?: string) => Promise<{ pixels: number[] }>;
+      return Array.from((await read(id)).pixels);
+    }, textId);
+    expect(textAfter.length).toBe(textBefore.length);
+    expect(textAfter.every((v, i) => v === textBefore[i]), 'text layer pixels untouched').toBe(true);
+
+    // Pixel output on a text layer is still refused.
+    await page.locator('select[aria-labelledby="shape-output-label"]').selectOption('pixels');
+    await dragOnCanvas(page, 200, 600, 400, 800, 10);
+    await expect(page.getByText('Text layers must be rasterized').first()).toBeVisible();
+    expect(await pathCount(page)).toBe(1);
   });
 });

@@ -1,4 +1,5 @@
 import type { Layer, ToolId } from '../types';
+import type { ShapeOutput } from '../tools/shape/shape';
 import { notifyInfo } from '../app/notifications-store';
 import { toolRegistry } from '../tools/tool-registry';
 
@@ -21,7 +22,13 @@ const NON_PAINT_PIXEL_WRITERS: ReadonlySet<ToolId> = new Set<ToolId>([
   'smudge',
 ]);
 
-export function toolWritesRasterPixels(tool: ToolId): boolean {
+export interface ToolWriteOptions {
+  /** The Shape tool's output. Path output adds a path and never keeps pixels (#1262). */
+  shapeOutput?: ShapeOutput;
+}
+
+export function toolWritesRasterPixels(tool: ToolId, options: ToolWriteOptions = {}): boolean {
+  if (tool === 'shape' && options.shapeOutput === 'path') return false;
   if (NON_PAINT_PIXEL_WRITERS.has(tool)) return true;
   return !!toolRegistry[tool]?.isPaint;
 }

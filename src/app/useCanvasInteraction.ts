@@ -197,7 +197,8 @@ export function useCanvasInteraction(
       // to the tool handler. Without this every writer allocates a texture,
       // pushes a history row, and clears the redo stack for a change that
       // is either invisible (group) or wiped by the next re-render (text).
-      if (toolWritesRasterPixels(activeTool) && !guardPixelWrite(activeLayer)) return;
+      const shapeOutput = useToolSettingsStore.getState().settings.shape.output;
+      if (toolWritesRasterPixels(activeTool, { shapeOutput }) && !guardPixelWrite(activeLayer)) return;
 
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;

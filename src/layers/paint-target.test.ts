@@ -166,6 +166,12 @@ describe('toolWritesRasterPixels', () => {
     expect(toolWritesRasterPixels('fill')).toBe(true);
     expect(toolWritesRasterPixels('gradient')).toBe(true);
     expect(toolWritesRasterPixels('shape')).toBe(true);
+    expect(toolWritesRasterPixels('shape', { shapeOutput: 'pixels' })).toBe(true);
+  });
+
+  it('false for the shape tool with path output (#1262)', () => {
+    expect(toolWritesRasterPixels('shape', { shapeOutput: 'path' })).toBe(false);
+    expect(toolWritesRasterPixels('brush', { shapeOutput: 'path' })).toBe(true);
   });
 
   it('false for non-writer tools', () => {
