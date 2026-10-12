@@ -6,16 +6,20 @@ uniform sampler2D u_tex;
 uniform float u_strength;
 uniform float u_zoom;
 uniform float u_fringing;
+uniform vec2 u_center;       // canvas centre in texture UV
+uniform float u_radiusScale; // canvas long side in pixels
 out vec4 fragColor;
 
 // #946: the radius is measured in pixels (normalised by the long side),
 // not UV units — on a non-square layer one UV unit spans a different
 // number of pixels on each axis, which squashed circles into ellipses.
+// #1253: centred on, and normalised by, the canvas rather than the texture,
+// which is larger than the canvas when the layer hangs past an edge.
 vec2 distort(vec2 uv, float k, vec2 aspect) {
-    vec2 d = (uv - 0.5) / u_zoom;
+    vec2 d = (uv - u_center) / u_zoom;
     vec2 dp = d * aspect;
     float r2 = dot(dp, dp);
-    return 0.5 + d * (1.0 + k * r2);
+    return u_center + d * (1.0 + k * r2);
 }
 
 bool inBounds(vec2 uv) {
@@ -24,7 +28,7 @@ bool inBounds(vec2 uv) {
 
 void main() {
     vec2 texSize = vec2(textureSize(u_tex, 0));
-    vec2 aspect = texSize / max(texSize.x, texSize.y);
+    vec2 aspect = texSize / u_radiusScale;
     float k = u_strength;
     if (k > 0.0) {
         k *= 1.0 + 2.0 * k;

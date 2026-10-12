@@ -8,7 +8,7 @@ import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInser
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
-import { flushLayerSync, rerenderTransformedTextLayers } from '../../engine-wasm/engine-sync';
+import { flushLayerSync, rerenderTransformedTextLayers, captureUprightTextAnchors, rerenderTextLayersAt } from '../../engine-wasm/engine-sync';
 import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
 import { cancelPrefloat } from '../interactions/prefloat';
 import { releaseSnapshotsForDocumentReset } from './history-slice';
@@ -121,6 +121,33 @@ function rerenderTransformedText(
   if (!engine) return;
   const s = get();
   const { layers, changedIds } = rerenderTransformedTextLayers(engine, s.document.layers);
+  if (changedIds.length === 0) return;
+  set({
+    document: { ...s.document, layers },
+    dirtyLayerIds: new Set([...s.dirtyLayerIds, ...changedIds]),
+    renderVersion: s.renderVersion + 1,
+  });
+}
+
+/**
+ * Re-render the upright text layers whose anchors were captured before a
+ * resize, at those anchors scaled by the resize.
+ */
+function rerenderResizedUprightText(
+  get: () => import('./types').EditorState,
+  set: (partial: Partial<import('./types').EditorState>) => void,
+  anchors: ReadonlyMap<string, { x: number; y: number }>,
+  scaleX: number,
+  scaleY: number,
+): void {
+  const engine = getEngine();
+  if (!engine || anchors.size === 0) return;
+  const scaled = new Map<string, { x: number; y: number }>();
+  for (const [id, a] of anchors) {
+    scaled.set(id, { x: Math.round(a.x * scaleX), y: Math.round(a.y * scaleY) });
+  }
+  const s = get();
+  const { layers, changedIds } = rerenderTextLayersAt(engine, s.document.layers, scaled);
   if (changedIds.length === 0) return;
   set({
     document: { ...s.document, layers },
@@ -859,6 +886,8 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   resizeImage: (newWidth, newHeight) => {
     const s = get();
     s.pushHistory('Resize Image');
+    const engine = getEngine();
+    const textAnchors = engine ? captureUprightTextAnchors(engine, s.document.layers) : new Map<string, { x: number; y: number }>();
     // GPU-only (scaleLayerTexture per raster layer); no JS readback needed (#710).
     const result = computeResizeImage(
       s.document,
@@ -868,6 +897,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+    rerenderResizedUprightText(get, set, textAnchors, newWidth / s.document.width, newHeight / s.document.height);
     rerenderTransformedText(get, set);
   },
 

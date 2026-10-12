@@ -1253,6 +1253,42 @@ export function rerenderTransformedTextLayers(
   return { layers: next, changedIds };
 }
 
+/**
+ * The anchors of the upright, unbound text layers, measured from the props
+ * they were last rendered with. Taken before a document-wide change rewrites
+ * their props so {@link rerenderTextLayersAt} can redraw them in place.
+ */
+export function captureUprightTextAnchors(engine: Engine, layers: readonly Layer[]): Map<string, Point> {
+  const anchors = new Map<string, Point>();
+  for (const l of layers) {
+    if (l.type !== 'text' || l.transform || l.pathId) continue;
+    anchors.set(l.id, textLayerAnchor(engine, l));
+  }
+  return anchors;
+}
+
+/**
+ * Re-render upright text layers from their current props at the given
+ * anchors, placing each texture at `anchor + renderOffset`. Image Size
+ * rescales their font size, which nothing else redraws (#1255).
+ */
+export function rerenderTextLayersAt(
+  engine: Engine,
+  layers: readonly Layer[],
+  anchors: ReadonlyMap<string, Point>,
+): { layers: Layer[]; changedIds: string[] } {
+  const changedIds: string[] = [];
+  const next = layers.map((l): Layer => {
+    const anchor = anchors.get(l.id);
+    if (!anchor || l.type !== 'text' || l.transform || l.pathId) return l;
+    const pos = rerenderCommittedTextLayer(engine, { ...l, x: anchor.x, y: anchor.y });
+    if (!pos) return l;
+    changedIds.push(l.id);
+    return { ...l, x: pos.x, y: pos.y };
+  });
+  return { layers: next, changedIds };
+}
+
 /** What a text layer's props alone determine about its frame. */
 interface TextPropsMeasure {
   readonly propsJson: string;

@@ -4,6 +4,7 @@
 use wasm_bindgen::prelude::*;
 use web_sys::WebGl2RenderingContext;
 
+use super::full_size_doc_center;
 use crate::Engine;
 use crate::filter_gpu;
 
@@ -45,15 +46,12 @@ pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, densi
 #[wasm_bindgen(js_name = "filterKaleidoscope")]
 pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, rotation_degrees: f32) {
     // Kaleidoscope's polar math needs the texture's pixel dimensions to stay
-    // isotropic on non-square layers (see kaleidoscope.glsl). Resize up front
-    // (apply_filter does this too, but only after we'd already read the size)
-    // so the uniform matches the texture the shader actually runs against.
-    let _ = engine.inner.ensure_layer_full_size(layer_id);
-    let tex_handle = match engine.inner.layer_textures.get(layer_id) {
-        Some(&h) => h,
-        None => return,
+    // isotropic on non-square layers (see kaleidoscope.glsl), and mirrors
+    // around the canvas centre, which moves in UV when the layer hangs past
+    // the canvas. Resize up front so both match the texture the shader runs on.
+    let Some((w, h, cu, cv)) = full_size_doc_center(&mut engine.inner, layer_id) else {
+        return;
     };
-    let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
 
     filter_gpu::apply_filter(
         &mut engine.inner,
@@ -68,6 +66,9 @@ pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, r
             }
             if let Some(loc) = shader.location(gl, "u_size") {
                 gl.uniform2f(Some(&loc), w as f32, h as f32);
+            }
+            if let Some(loc) = shader.location(gl, "u_center") {
+                gl.uniform2f(Some(&loc), cu, cv);
             }
         },
     );
@@ -154,6 +155,10 @@ pub fn filter_lens_distortion(
     let strength = strength.clamp(-1.0, 1.0);
     let zoom = zoom.clamp(0.5, 2.0);
     let fringing = fringing.clamp(0.0, 1.0);
+    let Some((_, _, cu, cv)) = full_size_doc_center(&mut engine.inner, layer_id) else {
+        return;
+    };
+    let doc_long_side = engine.inner.doc_width.max(engine.inner.doc_height).max(1) as f32;
     filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
@@ -167,6 +172,12 @@ pub fn filter_lens_distortion(
             }
             if let Some(loc) = shader.location(gl, "u_fringing") {
                 gl.uniform1f(Some(&loc), fringing);
+            }
+            if let Some(loc) = shader.location(gl, "u_center") {
+                gl.uniform2f(Some(&loc), cu, cv);
+            }
+            if let Some(loc) = shader.location(gl, "u_radiusScale") {
+                gl.uniform1f(Some(&loc), doc_long_side);
             }
         },
     );
