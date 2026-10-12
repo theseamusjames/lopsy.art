@@ -3,6 +3,8 @@
  *         instead of adding the layer's alpha to it or subtracting it.
  * #1262 — Shape with Output: Path refused to draw while a text layer was
  *         active, although Path output never writes the layer's pixels.
+ * #1255 — Image Size scaled an upright text layer's font size but never
+ *         re-rendered it, so the glyphs kept their old pixel size.
  */
 import { test, expect, type Page } from './fixtures';
 import {
@@ -80,6 +82,36 @@ async function typeText(page: Page, x: number, y: number, text: string, size: nu
   const layer = state.document.layers.find((l) => l.id === state.document.activeLayerId);
   expect(layer?.type).toBe('text');
   return state.document.activeLayerId;
+}
+
+async function inkBounds(page: Page, layerId: string): Promise<{ x0: number; y0: number; x1: number; y1: number }> {
+  const b = await page.evaluate(async (lid) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+    };
+    const layer = store.getState().document.layers.find((l) => l.id === lid);
+    const read = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id?: string) => Promise<{ width: number; height: number; pixels: number[] }>;
+    const { width, height, pixels } = await read(lid);
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if ((pixels[(y * width + x) * 4 + 3] ?? 0) < 128) continue;
+        x0 = Math.min(x0, x);
+        y0 = Math.min(y0, y);
+        x1 = Math.max(x1, x + 1);
+        y1 = Math.max(y1, y + 1);
+      }
+    }
+    const ox = layer?.x ?? 0;
+    const oy = layer?.y ?? 0;
+    return { x0: x0 + ox, y0: y0 + oy, x1: x1 + ox, y1: y1 + oy };
+  }, layerId);
+  expect(Number.isFinite(b.x0), 'text layer has ink').toBe(true);
+  return b;
 }
 
 async function pathCount(page: Page): Promise<number> {
@@ -164,5 +196,36 @@ test.describe('Fixes #1251 #1255 #1259 #1262', () => {
     await dragOnCanvas(page, 200, 600, 400, 800, 10);
     await expect(page.getByText('Text layers must be rasterized').first()).toBeVisible();
     expect(await pathCount(page)).toBe(1);
+  });
+
+  test('#1255 Image Size re-renders upright text at its new size', async ({ page }) => {
+    await createDocument(page, 1440, 1640, false);
+    await page.waitForTimeout(200);
+    await setForegroundColor(page, 0, 0, 0);
+    const textId = await typeText(page, 200, 200, 'HELLO', 100);
+    const before = await inkBounds(page, textId);
+
+    await page.click('button:has-text("Image")');
+    await page.getByRole('menuitem', { name: 'Image Size...' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Image Size' });
+    await expect(dialog).toBeVisible();
+    await dialog.locator('input[type="number"]').first().fill('720');
+    await dialog.getByRole('button', { name: 'Apply' }).click();
+    await page.waitForTimeout(400);
+
+    const state = await getEditorState(page);
+    expect(state.document.width).toBe(720);
+    expect(state.document.height).toBe(820);
+    const after = await inkBounds(page, textId);
+    const wBefore = before.x1 - before.x0;
+    const wAfter = after.x1 - after.x0;
+    expect(Math.abs(wAfter - wBefore / 2), `ink width ${wBefore} → ${wAfter}`).toBeLessThanOrEqual(4);
+    expect(Math.abs(after.x0 - before.x0 / 2), `ink left ${before.x0} → ${after.x0}`).toBeLessThanOrEqual(3);
+    expect(Math.abs(after.y0 - before.y0 / 2), `ink top ${before.y0} → ${after.y0}`).toBeLessThanOrEqual(3);
+
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(400);
+    const undone = await inkBounds(page, textId);
+    expect(undone).toEqual(before);
   });
 });

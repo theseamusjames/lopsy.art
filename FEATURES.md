@@ -2008,6 +2008,10 @@ share their number handling and diverge everywhere else.
   and marked dirty (`rerenderTransformedText`). An upright text layer has no
   matrix to take that part, so a non-uniform resize leaves its glyphs
   unstretched while a transformed layer's stretch.
+- **An upright text layer** is re-rendered at its new font size too: its
+  anchor is measured before the resize, scaled by `scaleX` / `scaleY`, and
+  the glyphs are redrawn there (`captureUprightTextAnchors` →
+  `rerenderTextLayersAt`) and marked dirty.
 
 ### Crop tool commit
 
