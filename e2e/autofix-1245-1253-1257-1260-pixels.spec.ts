@@ -3,6 +3,8 @@
  *         E[s²] − m² rounded slightly negative and pow() of it was NaN.
  * #1260 — Smudge mixed straight RGB, so red smeared into transparent pixels
  *         was stored premultiplied (R == A) and composited grey.
+ * #1253 — Kaleidoscope mirrored around the texture centre, which is not the
+ *         canvas centre once a nudged layer hangs past the canvas.
  */
 import { test, expect, type Page } from './fixtures';
 import {
@@ -81,6 +83,23 @@ function pixelAtDoc(r: LayerRaster, dx: number, dy: number): [number, number, nu
   return [r.pixels[i] ?? 0, r.pixels[i + 1] ?? 0, r.pixels[i + 2] ?? 0, r.pixels[i + 3] ?? 0];
 }
 
+function opaqueBounds(r: LayerRaster): { x0: number; y0: number; x1: number; y1: number } | null {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (let y = 0; y < r.height; y++) {
+    for (let x = 0; x < r.width; x++) {
+      if ((r.pixels[(y * r.width + x) * 4 + 3] ?? 0) < 128) continue;
+      x0 = Math.min(x0, x + r.x);
+      y0 = Math.min(y0, y + r.y);
+      x1 = Math.max(x1, x + r.x + 1);
+      y1 = Math.max(y1, y + r.y + 1);
+    }
+  }
+  return Number.isFinite(x0) ? { x0, y0, x1, y1 } : null;
+}
+
 test.describe('Pixel fixes #1245 #1253 #1257 #1260', () => {
   test.beforeEach(async ({ page, isMobile }) => {
     test.skip(isMobile, 'menus and marquee drags need the desktop layout');
@@ -128,5 +147,29 @@ test.describe('Pixel fixes #1245 #1253 #1257 #1260', () => {
       expect(b).toBeLessThanOrEqual(5);
     }
     expect(smeared, 'smudge pulled colour below the rectangle').toBeGreaterThan(5);
+  });
+
+  test('#1253 Kaleidoscope centres on the canvas after an arrow-key nudge', async ({ page }) => {
+    await createDocument(page, 800, 600, true);
+    await page.waitForTimeout(200);
+    const id = await activeLayerId(page);
+    await fillRect(page, 480, 104, 570, 126, [255, 200, 0]);
+
+    await page.keyboard.press('v');
+    for (let i = 0; i < 20; i++) await page.keyboard.press('Shift+ArrowDown');
+    await page.waitForTimeout(200);
+    const nudgedRaster = await readLayer(page, id);
+    expect(opaqueBounds(nudgedRaster)?.y0).toBe(304);
+    // The nudge moves the whole canvas-sized texture, so it hangs past the bottom.
+    expect(nudgedRaster.y + nudgedRaster.height).toBeGreaterThan(600);
+
+    await applyFilter(page, 'Kaleidoscope...', { Segments: 6, Rotation: 0 });
+    await page.waitForTimeout(300);
+    const bounds = opaqueBounds(await readLayer(page, id));
+    expect(bounds, 'layer wiped by kaleidoscope').not.toBeNull();
+    const cx = (bounds!.x0 + bounds!.x1) / 2;
+    const cy = (bounds!.y0 + bounds!.y1) / 2;
+    expect(Math.abs(cx - 400), `pattern centre x ${cx}`).toBeLessThanOrEqual(3);
+    expect(Math.abs(cy - 300), `pattern centre y ${cy}`).toBeLessThanOrEqual(3);
   });
 });
