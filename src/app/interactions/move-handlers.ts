@@ -194,6 +194,20 @@ function snapFloatDelta(dx: number, dy: number): Point {
   return snapPositionToGrid(dx, dy, ui.gridSize);
 }
 
+/**
+ * Where a floated selection sits for a drag of (dragDx, dragDy): its offset
+ * before the drag plus the drag, grid-snapped. The drag composites the pixels
+ * here and the drop rebuilds the selection here — computing them apart left
+ * the selection at the raw offset while the pixels sat on the grid (#1284).
+ */
+function floatDragOffset(
+  float: Pick<FloatingSelection, 'offsetX' | 'offsetY'>,
+  dragDx: number,
+  dragDy: number,
+): Point {
+  return snapFloatDelta(float.offsetX + dragDx, float.offsetY + dragDy);
+}
+
 function applyTranslatedTransform(layerId: string | null, transform: TransformState): void {
   useUIStore.getState().setTransform(transform);
   renderTransformedFloat(layerId, transform);
@@ -647,14 +661,7 @@ export function handleMoveMove(
   }
 
   if (move?.pendingTransform) {
-    let dx = dragDx;
-    let dy = dragDy;
-    const uiSnap = useUIStore.getState();
-    if (uiSnap.showGrid && uiSnap.snapToGrid) {
-      const snapped = snapPositionToGrid(dx, dy, uiSnap.gridSize);
-      dx = snapped.x;
-      dy = snapped.y;
-    }
+    const { x: dx, y: dy } = snapFloatDelta(dragDx, dragDy);
     applyTranslatedTransform(state.layerId, translateTransform(move.pendingTransform, dx, dy));
     return;
   }
@@ -662,15 +669,7 @@ export function handleMoveMove(
   const engine = getEngine();
   if (floatingSelectionRef.current && engine && hasFloat(engine)) {
     // GPU path: composite float at new offset
-    const floatState = floatingSelectionRef.current;
-    let dx = floatState.offsetX + dragDx;
-    let dy = floatState.offsetY + dragDy;
-    const uiSnap = useUIStore.getState();
-    if (uiSnap.showGrid && uiSnap.snapToGrid) {
-      const snapped = snapPositionToGrid(dx, dy, uiSnap.gridSize);
-      dx = snapped.x;
-      dy = snapped.y;
-    }
+    const { x: dx, y: dy } = floatDragOffset(floatingSelectionRef.current, dragDx, dragDy);
 
     compositeFloat(engine, dx, dy);
     useEditorStore.getState().notifyRender();
@@ -764,8 +763,9 @@ export function handleMoveUp(
 
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
   const dragDy = Math.round(canvasPos.y - state.startPoint.y);
-  floatingSelectionRef.current.offsetX += dragDx;
-  floatingSelectionRef.current.offsetY += dragDy;
+  const dropOffset = floatDragOffset(floatingSelectionRef.current, dragDx, dragDy);
+  floatingSelectionRef.current.offsetX = dropOffset.x;
+  floatingSelectionRef.current.offsetY = dropOffset.y;
 
   // Materialize the translated selection mask now that the drag is done.
   // During the drag we only updated bounds to avoid per-move mask copies.
