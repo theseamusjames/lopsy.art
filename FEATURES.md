@@ -1825,7 +1825,7 @@ raster and text layers and skips shape and group layers.
 | **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | untouched | untouched |
 | **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position, font size, letter spacing, area-text width, and effect dimensions all scaled | untouched | untouched | untouched |
 | **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | turned with the canvas through its stored transform and re-rendered, stays live; path-bound or empty text untouched | untouched | untouched | untouched |
-| **Flip** | mirrored within the layer's own texture | untouched (a group's descendants move — see below) | flipped through its transform, stays live; text on a path is **refused** with a toast | a group mirrors its descendants as a unit (refused if it holds a text layer); a shape layer flips like a raster | untouched | untouched |
+| **Flip** | mirrored within the layer's own texture | moved so the content mirrors about its own bounds (see below) | flipped through its transform, stays live; text on a path is **refused** with a toast | a group mirrors its descendants as a unit (refused if it holds a text layer); a shape layer flips like a raster | untouched | untouched |
 
 **Layer masks are never transformed by any of the five.** The Rust helpers
 (`crop_texture`, `resize_canvas_texture`, `scale_texture`, `rotate_texture_90`,
@@ -1863,7 +1863,10 @@ after itself, by calling `clearSelection()` once the crop lands.
 - **The layer type is checked before history is pushed.** `flipActiveLayer`
   dispatches on the active layer:
   - **Raster (and legacy shape) layers** record a *Flip Horizontal* / *Flip
-    Vertical* entry and call `flipLayer` on the layer's texture.
+    Vertical* entry, call `flipLayer` on the layer's texture and move the
+    texture so the content mirrors about its own content bounds
+    (`planLayerFlip` in `src/layers/flip.ts`). An empty layer records
+    nothing.
   - **Text layers flip through their transform** and stay live: the
     flip joins the layer's matrix about the centre of its layout box, as one
     *Flip Horizontal* / *Flip Vertical* entry, so later text edits, font loads and Size changes keep it
@@ -1879,16 +1882,20 @@ after itself, by calling `clearSelection()` once the crop lands.
     **live text layer** anywhere inside it is refused whole with **"Rasterize
     the text layers in this group before flipping it."**, rather than
     flipping everything but the type.
-- **The mirror is about the layer's own bounding box, not the document.**
+- **The mirror is about the layer's own content bounds, not the document.**
   `flip_texture` flips UVs within the existing `w × h` texture and writes back
-  into it; for a single layer `x` / `y` are never touched, so a layer smaller
-  than the canvas flips in place rather than moving to the opposite side of
-  the document. A group's descendants do move (see above), and that move is
-  the only thing that changes their `x` / `y`.
+  into it. The active layer's texture is held at document size (see
+  [Layer Texture Lifecycle](#layer-texture-lifecycle-crop-on-switch-expand-on-return)),
+  so that alone would send content at columns 100..299 of a 1200-wide
+  document to 900..1099. The flip therefore reads the layer's opaque-content
+  rect from the GPU reduction and moves the texture's `x` / `y` so the
+  content mirrors about that rect: a layer smaller than the canvas flips in
+  place rather than moving to the opposite side of the document. A texture
+  already tight to its content (a fresh paste) keeps its `x` / `y`.
 - **Masks do not follow.** Like the other canvas operations, Flip never
   touches `engine.layer_masks`: a layer's mask keeps its unflipped pixels, and
-  a raster descendant moved by a group flip leaves its document-anchored mask
-  behind.
+  its document-anchored mask stays where it was while the content mirrors
+  under it.
 - **Any texture size mirrors exactly, pasted layers included.** `flip_texture` first sizes `scratch_a` / `scratch_b` to the
   layer's own `w × h` (`ensure_scratch_size`), renders the flipped image into
   `scratch_a`, and copies it back with a full-quad draw, so the copy is 1:1

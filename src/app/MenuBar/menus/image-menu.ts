@@ -27,7 +27,7 @@ import type { AdjustmentNode } from '../../../types/adjustment-nodes';
 import type { MenuDef, MenuItem } from './types';
 import type { Engine } from '../../../engine-wasm/wasm-bridge';
 import { rotatedTextureOrigin, type Rect } from '../../../layers/rotate-90';
-import { planGroupFlip, type FlipAxis, type GroupFlipMember } from '../../../layers/flip';
+import { planGroupFlip, planLayerFlip, type FlipAxis, type GroupFlipMember } from '../../../layers/flip';
 import { getDescendantIds } from '../../../layers/group-utils';
 import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 import { clearJsPixelData } from '../../store/clear-js-pixel-data';
@@ -61,15 +61,36 @@ export function flipActiveLayer(axis: FlipAxis): void {
     return;
   }
 
-  state.pushHistory(flipLabel(axis));
-  flipLayer(engine, activeId, axis === 'horizontal');
+  flipRasterLayer(engine, activeId, axis);
+}
 
+/**
+ * The engine mirrors a texture within itself, and the active layer's texture
+ * is document-sized, so the texture is then moved so the content mirrors
+ * about its own bounds instead of jumping across the document.
+ */
+function flipRasterLayer(engine: Engine, layerId: string, axis: FlipAxis): void {
+  const state = useEditorStore.getState();
+  // Push pending store positions and JS pixels so the rects read are current.
+  flushLayerSync(state);
+  const [x = 0, y = 0, width = 0, height = 0] = getLayerEngineBounds(engine, layerId);
+  const origin = planLayerFlip({ x, y, width, height }, readContentRect(engine, layerId), axis);
+  if (!origin) return;
+
+  state.pushHistory(flipLabel(axis));
+  flipLayer(engine, layerId, axis === 'horizontal');
+
+  useEditorStore.setState((s) => ({
+    document: {
+      ...s.document,
+      layers: s.document.layers.map((l) =>
+        l.id === layerId ? ({ ...l, x: origin.x, y: origin.y } as Layer) : l),
+    },
+    renderVersion: s.renderVersion + 1,
+  }));
   // GPU is now source of truth — clear stale JS pixel data.
-  pixelDataManager.remove(activeId);
-  const dirtyIds = new Set(state.dirtyLayerIds);
-  dirtyIds.add(activeId);
-  useEditorStore.setState({ dirtyLayerIds: dirtyIds });
-  state.notifyRender();
+  clearJsPixelData(layerId);
+  useEditorStore.getState().notifyRender();
 }
 
 /**
