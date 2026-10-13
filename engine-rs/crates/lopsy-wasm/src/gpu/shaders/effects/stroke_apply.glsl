@@ -1,11 +1,11 @@
 #version 300 es
 precision highp float;
 in vec2 v_uv;
-uniform sampler2D u_dilatedTex;   // dilated alpha (doc-sized)
+uniform sampler2D u_bandTex;      // alpha 1 within the stroke reach of the seeds (separable_edt.glsl)
 uniform sampler2D u_origTex;      // original layer texture
 uniform vec4 u_strokeColor;
 uniform float u_opacity;
-uniform int u_position;           // 0=outside (dilated orig), 1=inside (dilated inverted)
+uniform int u_position;           // 0=outside (band around orig), 1=inside (band around inverted)
 uniform vec2 u_origOffset;        // original layer position in document pixels
 uniform vec2 u_origSize;          // original layer texture size
 uniform vec2 u_docSize;
@@ -22,22 +22,22 @@ float origAlphaAt(vec2 uv) {
 }
 
 void main() {
-    float dilatedA = texture(u_dilatedTex, v_uv).a;
+    float bandA = texture(u_bandTex, v_uv).a;
 
     vec2 docPos = v_uv * u_docSize;
     vec2 origUV = (docPos - u_origOffset) / u_origSize;
     float origA = origAlphaAt(origUV);
 
     bool isOpaque = origA >= 0.5;
-    bool isDilated = dilatedA >= 0.5;
+    bool isInBand = bandA >= 0.5;
 
     bool isStroke;
     if (u_position == 0) {
-        // Outside: dilated original — stroke where expanded but not originally opaque
-        isStroke = isDilated && !isOpaque;
+        // Outside: band around the opaque pixels, less the pixels themselves
+        isStroke = isInBand && !isOpaque;
     } else {
-        // Inside: dilated inverted — stroke where inversion expanded into opaque area
-        isStroke = isDilated && isOpaque;
+        // Inside: band around the transparent pixels, within the opaque area
+        isStroke = isInBand && isOpaque;
     }
 
     float coverage = 1.0;

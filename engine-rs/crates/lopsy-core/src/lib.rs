@@ -6,6 +6,7 @@ pub mod float_growth;
 pub mod effect_cache;
 pub mod homography;
 pub mod layer;
+pub mod stroke_band;
 pub mod selection;
 pub mod brush;
 pub mod dab_rect;
