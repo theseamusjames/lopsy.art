@@ -302,6 +302,11 @@ npm run wasm:build
 - Use a scope when it adds clarity: `feat(brush): add scatter control`, `fix(compositor): correct mask sampling order`.
 - Keep the subject line under 72 characters. Use the body for details if needed.
 
+## Tutorial PRs
+
+- Every PR that adds or changes a tutorial must open with the complete
+  final image as the first element of the PR description.
+
 ## Dependencies
 
 - Minimize dependencies. Before adding a package, consider if it can be done in < 50 lines of code.
