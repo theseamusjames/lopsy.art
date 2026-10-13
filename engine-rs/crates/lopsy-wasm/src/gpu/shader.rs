@@ -492,7 +492,7 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, BLIT_RESAMPLE_FRAG, OIL_PAINT_FRAG,
+        inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLIT_RESAMPLE_FRAG, OIL_PAINT_FRAG,
         SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
     };
 
@@ -539,6 +539,20 @@ mod tests {
             assert!(out.contains("vec4 samplePremulBilinear("));
             assert!(!out.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
         }
+    }
+
+    #[test]
+    fn photo_filter_runs_after_black_and_white() {
+        let bw = ADJUSTMENTS_FRAG
+            .find("if (u_bw_enabled > 0.5)")
+            .expect("Black & White block");
+        let pf = ADJUSTMENTS_FRAG
+            .find("if (u_pf_density > 0.001)")
+            .expect("Photo Filter block");
+        assert!(
+            bw < pf,
+            "Black & White rebuilds RGB from a grey, so a Photo Filter before it loses its tint"
+        );
     }
 
     #[test]
