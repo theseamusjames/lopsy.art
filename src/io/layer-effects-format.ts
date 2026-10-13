@@ -38,9 +38,6 @@ const PSD_EFFECTS_VERSION_KEY = 'effectsVersion';
 /** Mirrors the engine's blur radius clamp (`blur_radius.min(63)`). */
 const MAX_BLUR_RADIUS = 63;
 
-/** Strokes reaching at most this far are drawn by a per-pixel distance search, wider ones by dilation. */
-const DISTANCE_SEARCH_MAX_REACH = 10;
-
 export function parseStoredEffects(raw: unknown): LayerEffects {
   if (!raw || typeof raw !== 'object') return DEFAULT_EFFECTS;
   const e = raw as Partial<LayerEffects>;
@@ -55,16 +52,16 @@ export function parseStoredEffects(raw: unknown): LayerEffects {
 
 /**
  * Whole pixels the stroke's ring covers outside a straight edge of the
- * layer — what the engine actually draws, not the nominal width. The
- * distance search paints a pixel when its distance to the layer is at most
- * the reach (so `floor`); dilation runs at radius `ceil(reach)`. A stroke
- * that is disabled, inside, zero-width or fully transparent covers nothing.
+ * layer — what the engine actually draws, not the nominal width. At every
+ * width the engine paints a pixel when its distance to the layer is at most
+ * the reach, so a fractional reach rounds down. A stroke that is disabled,
+ * inside, zero-width or fully transparent covers nothing.
  */
 export function strokeSilhouetteReach(stroke: StrokeEffect): number {
   if (!stroke.enabled || stroke.width <= 0 || stroke.color.a <= 0) return 0;
   if (stroke.position === 'inside') return 0;
   const reach = stroke.position === 'center' ? stroke.width / 2 : stroke.width;
-  return reach <= DISTANCE_SEARCH_MAX_REACH ? Math.floor(reach) : Math.ceil(reach);
+  return Math.floor(reach);
 }
 
 /** `alpha^(1 − spread/100)`, as the shadow and glow shaders apply it. */

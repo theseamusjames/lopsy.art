@@ -62,11 +62,12 @@ describe('liquify gesture state', () => {
     expect(startGesture).toEqual({ kind: 'liquify', lastPoint: { x: 100, y: 200 } });
 
     expect(applyDabMock).toHaveBeenCalledTimes(1);
-    const [, cx, cy, size, pressure, dx, dy] = applyDabMock.mock.calls[0] as [
+    const [, cx, cy, radius, pressure, dx, dy] = applyDabMock.mock.calls[0] as [
       unknown, number, number, number, number, number, number,
     ];
     expect([cx, cy]).toEqual([105, 203]);
-    expect(size).toBe(60);
+    // Brush Size 60 is the cursor circle's diameter, so the dab radius is 30.
+    expect(radius).toBe(30);
     expect(pressure).toBe(50);
     expect([dx, dy]).toEqual([5, 3]);
     expect(renderMock).toHaveBeenCalledTimes(1);

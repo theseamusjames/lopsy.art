@@ -80,10 +80,9 @@ describe('strokeSilhouetteReach', () => {
   });
 
   it('rounds a fractional reach the way the engine draws the ring', () => {
-    // ≤ 10 px: distance search paints pixels within the reach → floor.
+    // Pixels within the reach are painted → floor, at every width.
     expect(strokeSilhouetteReach(stroke(5, 'center'))).toBe(2);
-    // > 10 px: dilation at radius ceil(reach).
-    expect(strokeSilhouetteReach(stroke(21, 'center'))).toBe(11);
+    expect(strokeSilhouetteReach(stroke(21, 'center'))).toBe(10);
   });
 
   it('is 0 for inside, disabled, zero-width and transparent strokes', () => {

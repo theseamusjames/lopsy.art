@@ -11,9 +11,25 @@ import {
   DISP_SCALE,
   MAX_DISP,
   applyDab,
+  liquifyBrushRadius,
   type LiquifySettings,
   type LiquifyMode,
 } from './liquify';
+
+describe('liquifyBrushRadius', () => {
+  it('treats Brush Size as the brush circle diameter', () => {
+    expect(liquifyBrushRadius(100)).toBe(50);
+    expect(liquifyBrushRadius(64)).toBe(32);
+    expect(liquifyBrushRadius(5)).toBe(2.5);
+  });
+
+  it('bounds applyDab to the circle radius', () => {
+    const map = createDisplacementMap(200, 200);
+    const settings: LiquifySettings = { mode: 'push', brushSize: 100, pressure: 1 };
+    const rect = applyDab(map, 100, 100, 10, 0, settings);
+    expect(rect).toEqual({ x: 50, y: 50, w: 101, h: 101 });
+  });
+});
 
 describe('createDisplacementMap', () => {
   it('initialises to all zeros', () => {

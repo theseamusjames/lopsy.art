@@ -40,7 +40,7 @@ pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
 pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
 pub const LAYER_MASK_APPLY_FRAG: &str = include_str!("shaders/effects/layer_mask_apply.glsl");
 pub const STROKE_EDT_FRAG: &str = include_str!("shaders/effects/stroke_edt.glsl");
-pub const SEPARABLE_DILATE_FRAG: &str = include_str!("shaders/effects/separable_dilate.glsl");
+pub const SEPARABLE_EDT_FRAG: &str = include_str!("shaders/effects/separable_edt.glsl");
 pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
 pub const COLOR_OVERLAY_FRAG: &str = include_str!("shaders/effects/color_overlay.glsl");
 
@@ -274,7 +274,7 @@ pub struct ShaderPrograms {
     pub glow: ShaderProgram,
     pub shadow: ShaderProgram,
     pub stroke_edt: ShaderProgram,
-    pub separable_dilate: ShaderProgram,
+    pub separable_edt: ShaderProgram,
     pub stroke_apply: ShaderProgram,
     pub color_overlay: ShaderProgram,
     // Filters
@@ -409,7 +409,7 @@ impl ShaderPrograms {
             glow: compile_program(gl, v, GLOW_FRAG)?,
             shadow: compile_program(gl, v, SHADOW_FRAG)?,
             stroke_edt: compile_program(gl, v, STROKE_EDT_FRAG)?,
-            separable_dilate: compile_program(gl, v, SEPARABLE_DILATE_FRAG)?,
+            separable_edt: compile_program(gl, v, SEPARABLE_EDT_FRAG)?,
             stroke_apply: compile_program(gl, v, STROKE_APPLY_FRAG)?,
             color_overlay: compile_program(gl, v, COLOR_OVERLAY_FRAG)?,
             // Filters
@@ -492,8 +492,8 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, BLIT_RESAMPLE_FRAG, OIL_PAINT_FRAG,
-        SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
+        inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLIT_RESAMPLE_FRAG, OIL_PAINT_FRAG,
+        SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
     };
 
     #[test]
@@ -539,6 +539,41 @@ mod tests {
             assert!(out.contains("vec4 samplePremulBilinear("));
             assert!(!out.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
         }
+    }
+
+    #[test]
+    fn photo_filter_runs_after_black_and_white() {
+        let bw = ADJUSTMENTS_FRAG
+            .find("if (u_bw_enabled > 0.5)")
+            .expect("Black & White block");
+        let pf = ADJUSTMENTS_FRAG
+            .find("if (u_pf_density > 0.001)")
+            .expect("Photo Filter block");
+        assert!(
+            bw < pf,
+            "Black & White rebuilds RGB from a grey, so a Photo Filter before it loses its tint"
+        );
+    }
+
+    #[test]
+    fn voronoi_seeds_use_an_exact_integer_hash() {
+        let code: String = VORONOI_FRAG
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect();
+        assert!(
+            !code.contains("sin("),
+            "a sin()-based hash is not reproducible across backends (Metal fast-math)"
+        );
+        assert!(VORONOI_FRAG.contains("uvec2 pcg2d(uvec2 v)"));
+        assert!(
+            VORONOI_FRAG.contains("if (x == 0 && y == 0) {"),
+            "the nearest seed must be skipped by cell index, not by a recomputed position"
+        );
+        assert!(
+            !VORONOI_FRAG.contains("dot(between, between) <"),
+            "position-equality self-skip relies on bit-identical float recomputation"
+        );
     }
 
     #[test]

@@ -756,3 +756,72 @@ describe('whole-layer drag — alignment lines and snap anchor', () => {
     expect(editorState.updateLayerPosition).toHaveBeenLastCalledWith('mover', 22, expect.any(Number));
   });
 });
+
+describe('grid-snapped float moves drop the selection on the snapped offset (#1284)', () => {
+  beforeEach(() => {
+    uiState.maskMode = 'off';
+    uiState.showGrid = true;
+    uiState.snapToGrid = true;
+    uiState.gridSize = 10;
+    vi.mocked(bridge.compositeFloat).mockClear();
+    vi.mocked(bridge.hasFloat).mockReturnValue(true);
+    editorState.setSelection.mockClear();
+    editorState.setSelectionBounds.mockClear();
+  });
+
+  afterEach(() => {
+    uiState.showGrid = false;
+    uiState.snapToGrid = false;
+    vi.mocked(bridge.hasFloat).mockReturnValue(false);
+  });
+
+  function freshFloat(offsetX = 0, offsetY = 0): { current: FloatingSelection | null } {
+    return {
+      current: {
+        offsetX,
+        offsetY,
+        originalMask: makeSquareMask(),
+        originalBounds: { x: 5, y: 5, width: 5, height: 5 },
+        gpuResident: true,
+      },
+    };
+  }
+
+  function lastSelectionCall(): { bounds: unknown; mask: Uint8ClampedArray } {
+    const calls = editorState.setSelection.mock.calls;
+    const call = calls[calls.length - 1] as unknown[];
+    return { bounds: call[0], mask: call[1] as Uint8ClampedArray };
+  }
+
+  it('composites the pixels and rebuilds the selection at the same snapped offset', () => {
+    const floatRef = freshFloat();
+    const state = makeMoveState();
+    const drop = { x: 7, y: 3 };
+
+    handleMoveMove(state, drop, floatRef);
+    expect(vi.mocked(bridge.compositeFloat)).toHaveBeenLastCalledWith(engine, 10, 0);
+
+    handleMoveUp(state, drop, floatRef, makePersistentRef());
+
+    expect(floatRef.current).toMatchObject({ offsetX: 10, offsetY: 0 });
+    const { bounds, mask } = lastSelectionCall();
+    expect(bounds).toEqual({ x: 15, y: 5, width: 5, height: 5 });
+    expect(mask[5 * DOC_W + 15]).toBe(255);
+    expect(mask[9 * DOC_W + 19]).toBe(255);
+    expect(mask[5 * DOC_W + 12]).toBe(0);
+  });
+
+  it('snaps the accumulated offset when a float is dragged a second time', () => {
+    const floatRef = freshFloat(10, 0);
+    const state = makeMoveState();
+    const drop = { x: 4, y: 6 };
+
+    handleMoveMove(state, drop, floatRef);
+    expect(vi.mocked(bridge.compositeFloat)).toHaveBeenLastCalledWith(engine, 10, 10);
+
+    handleMoveUp(state, drop, floatRef, makePersistentRef());
+
+    expect(floatRef.current).toMatchObject({ offsetX: 10, offsetY: 10 });
+    expect(lastSelectionCall().bounds).toEqual({ x: 15, y: 15, width: 5, height: 5 });
+  });
+});
