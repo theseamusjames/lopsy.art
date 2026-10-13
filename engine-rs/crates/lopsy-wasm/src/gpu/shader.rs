@@ -493,7 +493,7 @@ impl ShaderPrograms {
 mod tests {
     use super::{
         inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLIT_RESAMPLE_FRAG, OIL_PAINT_FRAG,
-        SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
+        SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
     };
 
     #[test]
@@ -552,6 +552,27 @@ mod tests {
         assert!(
             bw < pf,
             "Black & White rebuilds RGB from a grey, so a Photo Filter before it loses its tint"
+        );
+    }
+
+    #[test]
+    fn voronoi_seeds_use_an_exact_integer_hash() {
+        let code: String = VORONOI_FRAG
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect();
+        assert!(
+            !code.contains("sin("),
+            "a sin()-based hash is not reproducible across backends (Metal fast-math)"
+        );
+        assert!(VORONOI_FRAG.contains("uvec2 pcg2d(uvec2 v)"));
+        assert!(
+            VORONOI_FRAG.contains("if (x == 0 && y == 0) {"),
+            "the nearest seed must be skipped by cell index, not by a recomputed position"
+        );
+        assert!(
+            !VORONOI_FRAG.contains("dot(between, between) <"),
+            "position-equality self-skip relies on bit-identical float recomputation"
         );
     }
 
