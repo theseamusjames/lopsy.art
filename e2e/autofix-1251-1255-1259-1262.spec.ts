@@ -67,6 +67,44 @@ async function selectedPixelCount(page: Page): Promise<number> {
   });
 }
 
+interface AlphaFootprint {
+  count: number;
+  bounds: { x: number; y: number; width: number; height: number };
+}
+
+// Firefox truncates pointer coordinates to whole CSS pixels, so a marquee
+// dragged between doc coordinates can land a doc pixel short. Compare the
+// selection against what the layer actually holds, not the drag endpoints.
+async function alphaFootprint(page: Page, layerId: string): Promise<AlphaFootprint> {
+  return page.evaluate(async (lid) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: Array<{ id: string; x: number; y: number }> } };
+    };
+    const layer = store.getState().document.layers.find((l) => l.id === lid);
+    const read = (window as unknown as Record<string, unknown>).__readLayerPixels as
+      (id?: string) => Promise<{ width: number; height: number; pixels: number[] }>;
+    const { width, height, pixels } = await read(lid);
+    let count = 0;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if ((pixels[(y * width + x) * 4 + 3] ?? 0) < 128) continue;
+        count++;
+        x0 = Math.min(x0, x);
+        y0 = Math.min(y0, y);
+        x1 = Math.max(x1, x + 1);
+        y1 = Math.max(y1, y + 1);
+      }
+    }
+    const ox = layer?.x ?? 0;
+    const oy = layer?.y ?? 0;
+    return { count, bounds: { x: x0 + ox, y: y0 + oy, width: x1 - x0, height: y1 - y0 } };
+  }, layerId);
+}
+
 async function thumbnailClick(page: Page, layerId: string, modifiers: Array<'Meta' | 'Shift' | 'Alt'>): Promise<void> {
   await page.locator(`[data-layer-id="${layerId}"]`).locator('canvas').first().click({ modifiers });
   await page.waitForTimeout(300);
@@ -141,29 +179,33 @@ test.describe('Fixes #1251 #1255 #1259 #1262', () => {
     await fillRect(page, 100, 100, 300, 300, [255, 0, 0]);
     const layer2 = await addLayer(page);
     await fillRect(page, 500, 200, 700, 400, [0, 0, 255]);
+    const red = await alphaFootprint(page, layer1);
+    const blue = await alphaFootprint(page, layer2);
+    expect(Math.abs(red.count - 200 * 200), `red rect ${red.count}px`).toBeLessThanOrEqual(2 * 200);
+    expect(Math.abs(blue.count - 200 * 200), `blue rect ${blue.count}px`).toBeLessThanOrEqual(2 * 200);
 
     await thumbnailClick(page, layer1, ['Meta']);
-    expect(await selectedPixelCount(page)).toBe(200 * 200);
+    expect(await selectedPixelCount(page)).toBe(red.count);
 
     await thumbnailClick(page, layer2, ['Meta', 'Shift']);
-    expect(await selectedPixelCount(page), 'union of both layers').toBe(2 * 200 * 200);
+    expect(await selectedPixelCount(page), 'union of both layers').toBe(red.count + blue.count);
 
     await thumbnailClick(page, layer1, ['Meta', 'Alt']);
-    expect(await selectedPixelCount(page), 'layer 1 subtracted').toBe(200 * 200);
+    expect(await selectedPixelCount(page), 'layer 1 subtracted').toBe(blue.count);
     const bounds = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => { selection: { bounds: unknown } };
       };
       return store.getState().selection.bounds;
     });
-    expect(bounds).toMatchObject({ x: 500, y: 200, width: 200, height: 200 });
+    expect(bounds).toMatchObject(blue.bounds);
 
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(200);
-    expect(await selectedPixelCount(page), 'undo restores the union').toBe(2 * 200 * 200);
+    expect(await selectedPixelCount(page), 'undo restores the union').toBe(red.count + blue.count);
 
     await thumbnailClick(page, layer1, ['Meta']);
-    expect(await selectedPixelCount(page), 'plain ⌘-click still replaces').toBe(200 * 200);
+    expect(await selectedPixelCount(page), 'plain ⌘-click still replaces').toBe(red.count);
   });
 
   test('#1262 Shape with Output: Path draws a path while a text layer is active', async ({ page }) => {
