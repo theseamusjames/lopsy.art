@@ -1,12 +1,19 @@
 import type { DocumentState, Layer, Rect } from '../../../types';
 import type { SelectionData, ActionResult } from '../types';
-import { computeAlign, getContentBounds, type AlignEdge } from '../../../tools/move/move';
-import { readLayerAsImageData } from '../../../engine-wasm/gpu-pixel-access';
+import { computeAlign, type AlignEdge } from '../../../tools/move/move';
 import { isGroupLayer, getDescendantIds } from '../../../layers/group-utils';
 
+/** Document-space content bounds of a (non-group) layer, or null when it is empty. */
+export type ContentBoundsLookup = (layer: Layer) => Rect | null;
+
+/**
+ * Align the active layer (or the active group's subtree) to a canvas edge or
+ * centre. Only content bounds are needed, never pixels, so the caller supplies
+ * them — the store reads them on the GPU instead of reading layers back (#1291).
+ */
 export function computeAlignLayer(
   doc: DocumentState,
-  layerPixelData: Map<string, ImageData>,
+  contentBoundsOf: ContentBoundsLookup,
   selection: SelectionData,
   renderVersion: number,
   edge: AlignEdge,
@@ -20,19 +27,10 @@ export function computeAlignLayer(
   // their descendants and shift the whole subtree, mirroring how dragging a
   // group moves all its children together.
   if (isGroupLayer(layer)) {
-    return alignGroup(doc, layerPixelData, renderVersion, edge, activeId);
+    return alignGroup(doc, contentBoundsOf, renderVersion, edge, activeId);
   }
 
-  // Try JS pixel data first, fall back to GPU readback
-  const pixelData = layerPixelData.get(activeId) ?? readLayerAsImageData(activeId);
-  if (!pixelData) return undefined;
-
-  let bounds: Rect | null;
-  if (selection.active && selection.bounds) {
-    bounds = selection.bounds;
-  } else {
-    bounds = getContentBounds(pixelData, layer.x, layer.y);
-  }
+  const bounds = selection.active && selection.bounds ? selection.bounds : contentBoundsOf(layer);
   if (!bounds) return undefined;
 
   const pos = computeAlign(edge, bounds, doc.width, doc.height, layer.x, layer.y);
@@ -49,7 +47,7 @@ export function computeAlignLayer(
 
 function alignGroup(
   doc: DocumentState,
-  layerPixelData: Map<string, ImageData>,
+  contentBoundsOf: ContentBoundsLookup,
   renderVersion: number,
   edge: AlignEdge,
   groupId: string,
@@ -63,9 +61,7 @@ function alignGroup(
   for (const id of descendantIds) {
     const child = doc.layers.find((l) => l.id === id);
     if (!child || isGroupLayer(child)) continue;
-    const pixelData = layerPixelData.get(id) ?? readLayerAsImageData(id);
-    if (!pixelData) continue;
-    const b = getContentBounds(pixelData, child.x, child.y);
+    const b = contentBoundsOf(child);
     if (!b) continue;
     minX = Math.min(minX, b.x);
     minY = Math.min(minY, b.y);
