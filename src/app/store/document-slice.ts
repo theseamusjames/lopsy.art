@@ -6,7 +6,8 @@ import { createDefaultNode, createDefaultAdjustments } from '../../filters/adjus
 import { createImageData } from '../../engine/color-space';
 import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil, buildFlatDisplayList, findParentGroup, isAncestorOf, removeFromParentGroup } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
-import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
+import { getContentBounds } from '../../tools/move/move';
+import { layerContentRect } from '../layer-content-rect';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { flushLayerSync, rerenderTransformedTextLayers, captureUprightTextAnchors, rerenderTextLayersAt } from '../../engine-wasm/engine-sync';
 import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
@@ -58,35 +59,18 @@ import {
   computeUpdateMaskData,
 } from './actions/layer-property-updates';
 
-/** Merge dense + sparse + GPU pixel data into a single map for compute
- *  functions. Pulls from the PixelDataManager and falls back to GPU
- *  readback for layers that have no JS data. */
-function resolveAllPixelData(
-  layerIds?: readonly string[],
-  layers?: readonly Layer[],
-): Map<string, ImageData> {
-  const merged = new Map(pixelDataManager.denseMap());
-  for (const [id, entry] of pixelDataManager.sparseMap()) {
-    if (!merged.has(id)) {
-      merged.set(id, sparseToImageData(entry.sparse));
-    }
-  }
-  if (layerIds) {
-    for (const id of layerIds) {
-      if (!merged.has(id)) {
-        // Skip group layers — they have no GPU texture.
-        if (layers) {
-          const layer = layers.find((l) => l.id === id);
-          if (layer && layer.type === 'group') continue;
-        }
-        const gpuData = readLayerAsImageData(id);
-        if (gpuData) {
-          merged.set(id, gpuData);
-        }
-      }
-    }
-  }
-  return merged;
+/**
+ * Document-space content bounds of a layer for Align. JS pixel data, when the
+ * layer still has some, is scanned on the CPU; otherwise the bounds come from
+ * the GPU reduction (cached by content generation), so nothing is read back.
+ */
+function alignContentBounds(layer: Layer): Rect | null {
+  const dense = pixelDataManager.get(layer.id);
+  if (dense) return getContentBounds(dense, layer.x, layer.y);
+  const sparse = pixelDataManager.getSparse(layer.id);
+  if (sparse) return getContentBounds(sparseToImageData(sparse.sparse), layer.x, layer.y);
+  const engine = getEngine();
+  return engine ? layerContentRect(engine, layer.id) : null;
 }
 
 /** Apply an ActionResult: if it carries pixel data, push it to the manager;
@@ -617,11 +601,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     finalizePendingStrokeGlobal();
     const s = get();
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
-    const result = computeAlignLayer(
-      s.document,
-      resolveAllPixelData(s.document.layerOrder, s.document.layers),
-      s.selection, s.renderVersion, edge,
-    );
+    const result = computeAlignLayer(s.document, alignContentBounds, s.selection, s.renderVersion, edge);
     if (!result) return;
     s.pushHistory('Align Layer');
     applyActionResult(set, result);
