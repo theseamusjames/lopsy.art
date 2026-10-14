@@ -18,11 +18,14 @@ pub fn brightness_contrast(data: &mut [u8], width: u32, height: u32, brightness:
 
 /// Apply hue/saturation/lightness adjustment
 /// hue: -180..180, saturation: -100..100, lightness: -100..100
+///
+/// Lightness blends towards black (negative) or white (positive) after the
+/// hue/saturation change, matching the GPU shaders and Photoshop.
 pub fn hue_saturation(data: &mut [u8], width: u32, height: u32, hue: f32, saturation: f32, lightness: f32) {
     let total = (width * height) as usize;
     let hue_shift = hue / 360.0;
     let sat_factor = 1.0 + saturation / 100.0;
-    let light_shift = lightness / 100.0;
+    let light = lightness / 100.0;
 
     for i in 0..total {
         let base = i * 4;
@@ -30,16 +33,19 @@ pub fn hue_saturation(data: &mut [u8], width: u32, height: u32, hue: f32, satura
         let g = data[base + 1] as f32 / 255.0;
         let b = data[base + 2] as f32 / 255.0;
 
-        let (mut h, mut s, mut l) = rgb_to_hsl(r, g, b);
+        let (mut h, mut s, l) = rgb_to_hsl(r, g, b);
         h = (h + hue_shift).rem_euclid(1.0);
         s = (s * sat_factor).clamp(0.0, 1.0);
-        l = (l + light_shift).clamp(0.0, 1.0);
 
         let (nr, ng, nb) = hsl_to_rgb(h, s, l);
-        data[base] = (nr * 255.0 + 0.5) as u8;
-        data[base + 1] = (ng * 255.0 + 0.5) as u8;
-        data[base + 2] = (nb * 255.0 + 0.5) as u8;
+        data[base] = (apply_lightness(nr, light) * 255.0 + 0.5) as u8;
+        data[base + 1] = (apply_lightness(ng, light) * 255.0 + 0.5) as u8;
+        data[base + 2] = (apply_lightness(nb, light) * 255.0 + 0.5) as u8;
     }
+}
+
+fn apply_lightness(c: f32, light: f32) -> f32 {
+    if light < 0.0 { c * (1.0 + light) } else { c + (1.0 - c) * light }
 }
 
 /// Invert colors (keep alpha)
@@ -105,6 +111,33 @@ pub fn threshold(data: &mut [u8], width: u32, height: u32, level: u8) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn negative_lightness_darkens_pale_tints_without_saturating_them() {
+        // #1302: cream #FFF3DC at Lightness -40 must become a darker beige
+        // (~#999284), not a vivid orange.
+        let mut data = vec![0xFF, 0xF3, 0xDC, 255];
+        hue_saturation(&mut data, 1, 1, 0.0, 0.0, -40.0);
+        assert_eq!(&data[..3], &[0x99, 0x92, 0x84]);
+        assert_eq!(data[3], 255);
+    }
+
+    #[test]
+    fn positive_lightness_blends_towards_white() {
+        let mut data = vec![0, 100, 200, 255];
+        hue_saturation(&mut data, 1, 1, 0.0, 0.0, 50.0);
+        assert_eq!(&data[..3], &[128, 178, 228]);
+    }
+
+    #[test]
+    fn full_lightness_reaches_black_and_white() {
+        let mut dark = vec![0xFF, 0xF3, 0xDC, 255];
+        hue_saturation(&mut dark, 1, 1, 0.0, 0.0, -100.0);
+        assert_eq!(&dark[..3], &[0, 0, 0]);
+        let mut light = vec![0x12, 0x34, 0x56, 255];
+        hue_saturation(&mut light, 1, 1, 0.0, 0.0, 100.0);
+        assert_eq!(&light[..3], &[255, 255, 255]);
+    }
 
     #[test]
     fn test_invert() {
