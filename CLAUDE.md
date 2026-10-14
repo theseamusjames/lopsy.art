@@ -230,8 +230,8 @@ Each tool follows this pattern:
 4. `src/tools/<name>/<Name>Options.module.css` — styles for the options bar.
 
 Tool logic modules must not import React, DOM APIs, or any rendering
-code. A small set of pre-rule files still violate this (path/path.ts,
-path/boolean-ops.ts, text/render-text-on-path.ts, brush/preset-io.ts)
+code. A small set of pre-rule files still violate this
+(path/boolean-ops.ts, text/render-text-on-path.ts, brush/preset-io.ts)
 and are tracked for cleanup — new code must not extend the list.
 
 ## Components

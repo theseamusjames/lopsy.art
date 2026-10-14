@@ -37,6 +37,7 @@ const ALLOWLIST = {
   'src/app/interactions/quick-mask-move.test.ts': 2,
   'src/app/interactions/transform-handlers.test.ts': 1,
   'src/app/interactions/live-float.test.ts': 2,       // selection-mask fixtures
+  'src/app/interactions/path-stroke.test.ts': 1,      // #1292 stroke-patch fixture
   'src/app/interactions/prefloat.test.ts': 6,         // #1076 selection-mask fixtures
   'src/app/store/actions/align-layer.test.ts': 2,
   'src/app/store/actions/crop-canvas.test.ts': 1,
