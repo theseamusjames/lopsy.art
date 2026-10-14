@@ -1,15 +1,21 @@
-import { PixelBuffer } from '../../engine/pixel-data';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
-import { rasterizePath } from '../../tools/path/path';
 import type { PathAnchor } from '../../tools/path/path';
 import type { Color } from '../../types';
 import { guardPixelWrite } from '../../layers/paint-target';
+import { getEngine } from '../../engine-wasm/engine-state';
+import { compositePatchOntoLayer } from '../../engine-wasm/wasm-bridge';
+import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
+import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { rasterizePathPatch } from './path-patch';
 
 /**
- * Stroke a path onto a layer. Anchors are in document space —
- * they are translated to layer-local coordinates before rasterizing.
+ * Stroke a path onto a layer. Anchors are in document space. Only the
+ * stroke's bounding box is rasterized, and the GPU composites it over the
+ * layer texture, so nothing is read back and no full-layer buffer is built
+ * or uploaded (#1292). The layer is expanded to cover the canvas first, as a
+ * brush stroke expands it, and the stroke is clipped to the canvas.
  * Refuses (with the usual toast) a layer that can't take pixel writes:
  * a text layer's glyphs would be replaced by the stroke, and a group
  * would get an empty history entry (#1067). Returns whether it stroked.
@@ -24,31 +30,19 @@ export function rasterizePathToLayer(
   const editorState = useEditorStore.getState();
   const target = editorState.document.layers.find((l) => l.id === layerId);
   if (!guardPixelWrite(target)) return false;
+  const engine = getEngine();
+  if (!engine) return false;
   editorState.pushHistory('Stroke Path');
-  const imageData = editorState.getOrCreateLayerPixelData(layerId);
-  const buf = PixelBuffer.fromImageData(imageData);
   useToolSettingsStore.getState().addRecentColor(color);
 
-  // #820 — getOrCreateLayerPixelData may have expanded the layer to
-  // cover the canvas, rewriting layer.x/y. Read the current bounds so
-  // we translate anchors against the buffer we actually got back, not
-  // the cropped bounds we started with.
-  const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
-  const offsetX = layer?.x ?? 0;
-  const offsetY = layer?.y ?? 0;
-  const localAnchors: PathAnchor[] = anchors.map((a) => ({
-    point: { x: a.point.x - offsetX, y: a.point.y - offsetY },
-    handleIn: a.handleIn
-      ? { x: a.handleIn.x - offsetX, y: a.handleIn.y - offsetY }
-      : null,
-    handleOut: a.handleOut
-      ? { x: a.handleOut.x - offsetX, y: a.handleOut.y - offsetY }
-      : null,
-  }));
-
-  rasterizePath(buf, localAnchors, closed, color, strokeWidth);
-
-  editorState.updateLayerPixelData(layerId, buf.toImageData());
+  const { width, height } = editorState.document;
+  const patch = rasterizePathPatch(anchors, closed, color, strokeWidth, { x: 0, y: 0, width, height });
+  if (!patch) return true;
+  const bytes = new Uint8Array(patch.data.buffer, patch.data.byteOffset, patch.data.byteLength);
+  compositePatchOntoLayer(engine, layerId, bytes, patch.x, patch.y, patch.width, patch.height);
+  syncLayerAfterFullSize(engine, layerId);
+  clearJsPixelData(layerId);
+  useEditorStore.getState().notifyRender();
   return true;
 }
 
