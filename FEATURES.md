@@ -1230,7 +1230,7 @@ Available node types (Add menu — labels as they appear in the menu and node he
   - Master is applied first, then per-channel levels. Compiled to a 256×1 LUT and shares the GPU adjustments path with Curves; identity levels bypass the lookup.
   - Note that Levels keeps its R / G / B tabs in **every** color mode — the capability flag meant to hide them outside RGB has no consumer (see Color Modes → Declared but not enforced), so Levels and Curves disagree here.
 - **Invert** — single toggle (no numeric controls); inverts RGB at composite time.
-- **Hue / Saturation** — Hue -180° to +180°, Saturation -100 to +100, Lightness -100 to +100. Operates per-pixel in HSL space.
+- **Hue / Saturation** — Hue -180° to +180°, Saturation -100 to +100, Lightness -100 to +100. Hue and Saturation operate per-pixel in HSL space; Lightness then blends the result towards black (negative, `c × (1 + L)`) or white (positive, `c + (1 − c) × L`), as in Photoshop, so pale tints darken without turning vivid (cream `#FFF3DC` at −40 gives `#999284`).
 - **Color Balance** — tone-range tabs (Shadows, Midtones, Highlights) each with Cyan — Red, Magenta — Green, and Yellow — Blue sliders (-100 to +100). Per-pixel weighting determines how much each tonal range contributes to the shift. The selected tab is view state, not node state: it always opens on **Midtones**, so re-expanding a node does not return to the range you were last editing.
 - **Photo Filter** — a "Filter color" swatch (native color input, default warm amber `#ffa000`), Density 0 - 100 (default 25), and Preserve Luminosity (checkbox, **on** by default). Blends a tinted overlay over the pixel; when Preserve Luminosity is on, the tinted result is re-luminance-matched to the source.
 - **Black & White** — six channel sliders (Reds, Yellows, Greens, Cyans, Blues, Magentas), each -200 to +300, controlling how strongly that hue contributes to the monochrome output luminance. A new node starts at Photoshop's classic mix — Reds 40, Yellows 60, Greens 40, Cyans 60, Blues 20, Magentas 80 — and those are also the per-slider double-click reset targets.
@@ -1304,7 +1304,7 @@ Independent of which dialog (or none) fronts it, a filter reaches the GPU throug
 
 ### Color
 - **Brightness / Contrast**: -100 to +100 each
-- **Hue / Saturation / Lightness**: hue -180 to +180, saturation -100 to +100, lightness -100 to +100
+- **Hue / Saturation / Lightness**: hue -180 to +180, saturation -100 to +100, lightness -100 to +100. Lightness blends towards black or white, the same maths as Filter → Hue/Saturation
 - **Invert**: no parameters
 - **Desaturate**: no parameters
 - **Posterize**: levels 2 - 32
