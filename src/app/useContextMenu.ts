@@ -3,7 +3,8 @@ import type { ContextMenuItem } from '../components/ContextMenu/ContextMenu';
 import { useEditorStore } from './editor-store';
 import { useToolSettingsStore, abrBrushToPreset } from './tool-settings-store';
 import { useUIStore } from './ui-store';
-import { createBrushTipFromSelection } from '../tools/brush/brush-from-selection';
+import { createBrushTipFromSelection, EMPTY_TIP_MESSAGE } from '../tools/brush/brush-from-selection';
+import { notifyInfo } from './notifications-store';
 import { selectAll } from './MenuBar/menus/select-menu';
 
 interface ContextMenuState {
@@ -52,6 +53,10 @@ export function useContextMenu() {
             maskWidth,
             maskHeight,
           });
+          if (!tip) {
+            notifyInfo(EMPTY_TIP_MESSAGE);
+            return;
+          }
 
           const preset = abrBrushToPreset('Custom Brush', tip);
           const toolStore = useToolSettingsStore.getState();

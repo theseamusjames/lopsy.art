@@ -60,6 +60,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Brush from Selection** — **Edit → Define Brush…** (alpha) and **Edit → Define Color Brush…** (RGBA), both disabled without an active selection. Each prompts for a name, then adds the tip as a custom preset and makes it active, sized to the longer edge of the captured bitmap. Two variants:
   - **Grayscale (alpha) capture**: inverts the source so dark pixels paint opaquely (Photoshop convention) and the selection mask crops to the marquee bounds.
   - **Color capture**: preserves full RGBA so the tip stamps the original colors of the selection (useful for stamp-pattern brushes).
+  - **Empty captures are refused.** When nothing in the selection would paint — only white or transparent pixels for the grayscale capture, only transparent pixels for the color capture — no preset is added and a toast explains why (for the grayscale capture: dark pixels paint, white and transparent ones don't). The canvas right-click **Define Brush Preset** refuses the same way.
   - The canvas right-click **Define Brush Preset** is a *separate* path with different behavior — it skips the name prompt (the tip is always called "Custom Brush") and opens the Brushes modal afterwards.
 - **ABR import**: Adobe Brush file support — drops every brush in the file into the preset grid as new tips. Parsing runs in a Web Worker, so a large `.abr` doesn't stall the UI.
 - **Import** (Presets tab): one button handling both formats — `.abr` brush files and `.json` preset libraries.
