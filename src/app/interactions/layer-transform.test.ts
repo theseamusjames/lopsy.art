@@ -5,12 +5,14 @@ const bridge = vi.hoisted(() => {
   const state = {
     engineBounds: new Map<string, number[]>(),
     contentBounds: new Map<string, number[]>(),
+    contentGen: new Map<string, number>(),
     isLive: false,
   };
   return {
     state,
     getLayerEngineBounds: vi.fn((_e: unknown, id: string) => state.engineBounds.get(id) ?? []),
     getLayerContentBounds: vi.fn((_e: unknown, id: string) => state.contentBounds.get(id) ?? []),
+    layerContentGeneration: vi.fn((_e: unknown, id: string) => state.contentGen.get(id) ?? 0),
     hasLayerTransform: vi.fn(() => state.isLive),
     beginLayerTransform: vi.fn((_e: unknown, id: string) => {
       state.isLive = true;
@@ -24,7 +26,8 @@ const bridge = vi.hoisted(() => {
   };
 });
 vi.mock('../../engine-wasm/wasm-bridge', () => bridge);
-vi.mock('../../engine-wasm/engine-state', () => ({ getEngine: () => ({ __engine: 'mock' }) }));
+const mockEngine = vi.hoisted(() => ({ __engine: 'mock' }));
+vi.mock('../../engine-wasm/engine-state', () => ({ getEngine: () => mockEngine }));
 vi.mock('../store/clear-js-pixel-data', () => ({ clearJsPixelData: vi.fn() }));
 vi.mock('../reconcile-layer-bounds', () => ({ reconcileLayerBoundsWithEngine: vi.fn() }));
 
@@ -75,6 +78,7 @@ beforeEach(() => {
   forgetLayerTransform();
   versions.clear();
   bridge.state.isLive = false;
+  bridge.state.contentGen.clear();
   // a: texture at (0, 0), content (10, 20, 30, 40) → doc (10, 20)–(40, 60)
   // b: texture at (100, 50), content (0, 0, 20, 10) → doc (100, 50)–(120, 60)
   bridge.state.engineBounds = new Map([['a', [0, 0, 200, 200]], ['b', [100, 50, 20, 10]]]);
@@ -120,6 +124,29 @@ describe('getLayerTransformBox', () => {
     versions.set('b', 1);
     getLayerTransformBox();
     expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(3);
+  });
+
+  it('reads nothing back for a history step that leaves the pixels alone (#1293)', () => {
+    getLayerTransformBox();
+    expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(2);
+
+    // A visibility toggle, rename or opacity change pushes history only.
+    editor.undoStack.push({});
+    editor.redoStack.length = 0;
+    getLayerTransformBox();
+    expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-reads only the layer whose texture the engine rewrote (#1293)', () => {
+    getLayerTransformBox();
+    expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(2);
+
+    // An undo restore (or any GPU write) bumps the layer's content generation.
+    bridge.state.contentGen.set('a', 7);
+    bridge.state.contentBounds.set('a', [0, 0, 5, 5]);
+    expect(getLayerTransformBox()?.originalBounds).toEqual({ x: 0, y: 0, width: 120, height: 60 });
+    expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(3);
+    expect(bridge.getLayerContentBounds).toHaveBeenLastCalledWith(expect.anything(), 'a');
   });
 });
 
