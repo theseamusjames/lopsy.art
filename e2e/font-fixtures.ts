@@ -21,6 +21,7 @@ const FONT_FIXTURES: Record<string, string> = {
   'IM Fell DW Pica': 'IMFellDWPica-latin.woff2',
   Montserrat: 'Montserrat-wght-latin.woff2',
   'Barlow Condensed': 'BarlowCondensed-latin.woff2',
+  'Permanent Marker': 'PermanentMarker-latin.woff2',
 };
 
 /** css2 family name → latin WOFF2 fixture served for its italic face. */
