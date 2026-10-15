@@ -3,7 +3,7 @@ import type { RefObject } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
 import { useToolSettingsStore } from './tool-settings-store';
-import { hitTestHandle, getCursorForHandle } from '../tools/transform/transform';
+import { getCursorForHandle } from '../tools/transform/transform';
 import type { TransformHandle } from '../tools/transform/transform';
 import type { ToolId, Point } from '../types';
 import { showsGrabCursor, type PointerMode } from './pointer-mode';
@@ -203,8 +203,7 @@ export function useCanvasCursor(
       } else if (currentTransform && usesTransformHandles(uiState.activeTool)) {
         // Only the tools a handle press reaches get the resize cursor; the
         // rest (Wand, Fill, …) get the press, so they keep their own cursor.
-        const handleRadius = 8 / editorState.viewport.zoom;
-        const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
+        const hit = hitTestTransformHandle(canvasPos, currentTransform, editorState.viewport.zoom);
         if (hit !== uiState.activeTransformHandle) {
           uiState.setActiveTransformHandle(hit);
         }

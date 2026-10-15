@@ -285,6 +285,32 @@ describe('hitTestBoxHandle (#1200)', () => {
   });
 });
 
+describe('hitTestBoxHandle at low zoom (#1311)', () => {
+  // An 800x800 selection on a 2400x3200 document at its ~26% fit zoom.
+  const zoom = 0.255;
+  const box = createTransformState({ x: 600, y: 1200, width: 800, height: 800 });
+  const corner = { x: 1400, y: 2000 };
+
+  it('scales from the drawn corner square instead of rotating', () => {
+    expect(hitTestBoxHandle(corner, box, zoom)).toBe('bottom-right');
+    for (let screenPx = -3; screenPx <= 2; screenPx++) {
+      const d = screenPx / zoom;
+      expect(hitTestBoxHandle({ x: corner.x + d, y: corner.y + d }, box, zoom)).toBe('bottom-right');
+    }
+  });
+
+  it('keeps the rotate handle grabbable outside the square', () => {
+    const rot = getHandlePositions(box)['rotate-bottom-right'];
+    expect(hitTestBoxHandle(rot, box, zoom)).toBe('rotate-bottom-right');
+    expect(hitTestBoxHandle({ x: rot.x + 10, y: rot.y + 10 }, box, zoom)).toBe('rotate-bottom-right');
+  });
+
+  it('keeps the rotate handle grabbable at very low zoom', () => {
+    const rot = getHandlePositions(box)['rotate-bottom-right'];
+    expect(hitTestBoxHandle(rot, box, 0.05)).toBe('rotate-bottom-right');
+  });
+});
+
 describe('isScaleHandle / isRotateHandle', () => {
   it('classifies scale handles correctly', () => {
     expect(isScaleHandle('top-left')).toBe(true);
