@@ -364,7 +364,15 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   updateTextLayerProperties: (id, props) => {
     const s = get();
     const result = computeUpdateTextLayerProperties(s.document, id, props);
-    set({ ...result, renderVersion: s.renderVersion + 1 });
+    // A property change re-renders the layer's texture, often without moving
+    // it (a colour change). Marking it dirty makes the next history snapshot
+    // copy the new texture instead of reusing the previous entry's handle,
+    // which made redo restore the old glyphs (#1295).
+    set({
+      ...result,
+      dirtyLayerIds: new Set(s.dirtyLayerIds).add(id),
+      renderVersion: s.renderVersion + 1,
+    });
   },
 
   removeLayer: (id) => {
@@ -759,6 +767,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const result = computeRasterizeStyle(s.document);
     if (!result) return;
     applyActionResult(set, result);
+    // The bake rewrites the texture in place, usually at the same x/y and
+    // size, so without the dirty mark the snapshot undo pushes for redo
+    // reused the pre-bake handle and redo restored unbaked pixels (#1315).
+    const bakedId = s.document.activeLayerId as string;
+    set({ dirtyLayerIds: new Set(get().dirtyLayerIds).add(bakedId) });
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
