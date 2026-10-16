@@ -27,6 +27,26 @@ const binaryCache = new Map<string, ArrayBuffer>();
 // face on every load, so a cache hit only reloads for a new engine instance.
 const loadedIntoEngine = new Map<string, Engine>();
 
+// A stalled CDN request never settles on its own, which would stop the loader
+// from ever reaching the css2 fallback (#1328). The timeout covers the body
+// read too, since the abort signal stays attached to the response stream.
+export const FONT_FETCH_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout<T>(url: string, read: (resp: Response) => Promise<T>): Promise<T | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FONT_FETCH_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    return resp.ok ? await read(resp) : null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function fetchBytesWithTimeout(url: string): Promise<ArrayBuffer | null> {
+  return fetchWithTimeout(url, (resp) => resp.arrayBuffer());
+}
+
 /**
  * Cache `promise` under `key` until it rejects. A failed load must not stay
  * cached, or every later call replays the failure instead of retrying (#997).
@@ -131,8 +151,7 @@ async function fetchTtfFromGithub(family: string, weight: number, isItalic: bool
   const url = resolveTtfUrl(entry, weight, isItalic);
   if (!url) return null;
   try {
-    const resp = await fetch(url);
-    return resp.ok ? resp.arrayBuffer() : null;
+    return await fetchBytesWithTimeout(url);
   } catch {
     return null;
   }
@@ -146,15 +165,13 @@ async function fetchTtfFromGithub(family: string, weight: number, isItalic: bool
 async function fetchFontFromCssApi(family: string, weight: number, isItalic: boolean): Promise<ArrayBuffer | null> {
   try {
     const cssUrl = buildCss2SingleWeightUrl(family, weight, isItalic);
-    const cssResp = await fetch(cssUrl);
-    if (!cssResp.ok) return null;
-    const css = await cssResp.text();
+    const css = await fetchWithTimeout(cssUrl, (resp) => resp.text());
+    if (css === null) return null;
 
     const fontUrl = extractFontUrlPreferLatin(css);
     if (!fontUrl) return null;
 
-    const fontResp = await fetch(fontUrl);
-    return fontResp.ok ? fontResp.arrayBuffer() : null;
+    return await fetchBytesWithTimeout(fontUrl);
   } catch {
     return null;
   }

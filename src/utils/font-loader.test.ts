@@ -369,6 +369,61 @@ describe('loadFontBinaryToEngine fetch behavior', () => {
   });
 });
 
+describe('loadFontBinaryToEngine with a stalled CDN (#1328)', () => {
+  const originalFetch = globalThis.fetch;
+  const fetches: string[] = [];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fetches.length = 0;
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      fetches.push(url);
+      if (url.includes('cdn.jsdelivr.net')) {
+        // Never responds; settles only when the caller's signal aborts.
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        });
+      }
+      if (url.includes('fonts.googleapis.com')) {
+        return Promise.resolve(new Response(CYRILLIC_FIRST_CSS, { status: 200 }));
+      }
+      return Promise.resolve(new Response(new Uint8Array([1, 2, 3]).buffer, { status: 200 }));
+    }) as typeof fetch;
+    vi.doMock('../engine-wasm/engine-state', () => ({
+      getEngine: () => null,
+    }));
+    vi.doMock('../engine-wasm/wasm-bridge', () => ({
+      loadFontDataForFamily: vi.fn(),
+      isFontLoaded: vi.fn(),
+    }));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    globalThis.fetch = originalFetch;
+    vi.resetModules();
+    vi.doUnmock('../engine-wasm/engine-state');
+    vi.doUnmock('../engine-wasm/wasm-bridge');
+  });
+
+  it('falls through to the css2 API once the jsDelivr request times out', async () => {
+    const mod = await import('./font-loader');
+    let settled = false;
+    void mod.loadFontBinaryToEngine('Roboto', 400).then(() => { settled = true; });
+
+    await vi.advanceTimersByTimeAsync(mod.FONT_FETCH_TIMEOUT_MS - 100);
+    expect(fetches.some((u) => u.includes('fonts.googleapis.com/css2'))).toBe(false);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(fetches[0]).toContain('cdn.jsdelivr.net');
+    expect(fetches.some((u) => u.includes('fonts.googleapis.com/css2'))).toBe(true);
+    expect(fetches.some((u) => u.endsWith('latin.woff2'))).toBe(true);
+    expect(settled).toBe(true);
+  });
+});
+
 describe('loadFontBinaryToEngine engine health check', () => {
   const originalFetch = globalThis.fetch;
   let fetchCount = 0;
