@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilterDialog } from '../../components/FilterDialog/FilterDialog';
+import { useEscapeDismiss } from '../shortcuts/escape-dismiss';
 import { PatternFillDialog } from '../../components/PatternFillDialog/PatternFillDialog';
 import { ColorLutDialog } from '../../components/ColorLutDialog/ColorLutDialog';
 import { ExportDialog } from '../../components/ExportDialog/ExportDialog';
@@ -178,6 +179,14 @@ export function MenuBar() {
     window.addEventListener('mousedown', handleClick);
     return () => window.removeEventListener('mousedown', handleClick);
   }, [openMenu]);
+
+  // Escape closes an open menu and does nothing else, so pressing it to
+  // dismiss a menu no longer also drops the selection (#1188).
+  const closeMenu = useCallback(() => {
+    setOpenSubmenu(null);
+    setOpenMenu(null);
+  }, []);
+  useEscapeDismiss(openMenu !== null, closeMenu);
 
   const handlePatternFillApply = useCallback((patternId: string, settings: PatternFillSettings) => {
     if (previewActiveRef.current) {

@@ -6,6 +6,7 @@ import { ColorSwatch } from '../../../components/ColorSwatch/ColorSwatch';
 import { ColorPicker } from '../../../components/ColorPicker/ColorPicker';
 import { useDockStore } from '../../../panels/dock/dock-store';
 import { AspectRatioControl } from './AspectRatioControl';
+import { useEscapeDismiss } from '../../shortcuts/escape-dismiss';
 import type { Color } from '../../../types';
 import type { ShapeMode, ShapeOutput } from '../../../tools/shape/shape';
 import styles from '../OptionsBar.module.css';
@@ -18,10 +19,11 @@ interface ColorPopoverProps {
   color: Color;
   onChange: (color: Color) => void;
   onRemove: () => void;
+  onClose: () => void;
   removeLabel: string;
 }
 
-function ColorPopover({ anchorRef, popoverRef, color, onChange, onRemove, removeLabel }: ColorPopoverProps) {
+function ColorPopover({ anchorRef, popoverRef, color, onChange, onRemove, onClose, removeLabel }: ColorPopoverProps) {
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
@@ -31,8 +33,16 @@ function ColorPopover({ anchorRef, popoverRef, color, onChange, onRemove, remove
     setPos({ top: rect.bottom + 4, left: rect.left });
   }, [anchorRef]);
 
+  // Escape inside the picker closes it; the hex field stops the key itself
+  // while it holds an unsaved draft.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    onClose();
+  };
+
   return createPortal(
-    <div ref={popoverRef} className={styles.colorPopover} style={{ '--popover-top': `${pos.top}px`, '--popover-left': `${pos.left}px` } as React.CSSProperties}>
+    <div ref={popoverRef} className={styles.colorPopover} onKeyDown={handleKeyDown} style={{ '--popover-top': `${pos.top}px`, '--popover-left': `${pos.left}px` } as React.CSSProperties}>
       <ColorPicker color={color} onChange={onChange} />
       <div className={styles.popoverActions}>
         <button className={styles.removeBtn} type="button" onClick={onRemove}>
@@ -72,6 +82,9 @@ export function ShapeOptions() {
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, [openPopover]);
+
+  const handleClosePopover = () => setOpenPopover(null);
+  useEscapeDismiss(openPopover !== null, handleClosePopover);
 
   return (
     <>
@@ -149,6 +162,7 @@ export function ShapeOptions() {
           <ColorPopover
             anchorRef={fillRef}
             popoverRef={popoverRef}
+            onClose={handleClosePopover}
             color={shapeFillColor}
             onChange={(c) => setShapeSetting('fillColor', c)}
             onRemove={() => { setShapeSetting('fillColor', null); setOpenPopover(null); }}
@@ -187,6 +201,7 @@ export function ShapeOptions() {
           <ColorPopover
             anchorRef={strokeRef}
             popoverRef={popoverRef}
+            onClose={handleClosePopover}
             color={shapeStrokeColor}
             onChange={(c) => setShapeSetting('strokeColor', c)}
             onRemove={() => { setShapeSetting('strokeColor', null); setOpenPopover(null); }}

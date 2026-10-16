@@ -11,6 +11,7 @@ import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './s
 import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
 import { isNativeArrowKeyTarget } from './shortcuts/native-control-keys';
 import { isModalDialogOpen } from './shortcuts/modal-guard';
+import { dismissTopPopover } from './shortcuts/escape-dismiss';
 import { fillActiveLayerMask } from './fill-layer-mask';
 import { useToolSettingsStore } from './tool-settings-store';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
@@ -141,6 +142,10 @@ export function useKeyboardShortcuts({
           if (isTextEntry) return;
           (e.target as HTMLInputElement).blur();
         }
+      }
+      if (e.key === 'Escape' && dismissTopPopover()) {
+        e.preventDefault();
+        return;
       }
       if (textEditing) {
         // Keys that drive an IME composition are the IME's; the composed text
