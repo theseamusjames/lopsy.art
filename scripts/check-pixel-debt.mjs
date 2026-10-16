@@ -83,7 +83,7 @@ const ALLOWLIST = {
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
   'src/tools/marquee/marquee-strategy.test.ts': 10,      // +1: add/subtract/intersect selection fixture, +1: #1188 move-clip fixture
   'src/tools/move/move.test.ts': 1,
-  'src/tools/path/boolean-ops.test.ts': 11,
+  'src/tools/path/boolean-ops.test.ts': 1,
   'src/tools/quick-select/quick-select-interaction.test.ts': 3,
   'src/tools/quick-select/quick-select.test.ts': 3,
   'src/tools/text/text-interaction.test.ts': 3,               // #757 drops the JS RGBA fixtures

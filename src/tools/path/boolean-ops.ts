@@ -104,7 +104,7 @@ export function unionBounds(a: Bounds, b: Bounds): Bounds {
   };
 }
 
-/** Rasterize a polygon to a binary ImageData (alpha = 255 inside, 0 outside). */
+/** Rasterize a polygon to a 1-byte-per-pixel mask (255 inside, 0 outside). */
 function rasterizePolygon(
   poly: Point[],
   offsetX: number,
@@ -129,7 +129,7 @@ function rasterizePolygon(
   // Extract alpha channel into a flat byte array (1 byte per pixel)
   const mask = new Uint8ClampedArray(width * height);
   for (let i = 0; i < mask.length; i++) {
-    mask[i] = (imageData.data[i * 4 + 3] ?? 0) > 128 ? 1 : 0;
+    mask[i] = (imageData.data[i * 4 + 3] ?? 0) > 128 ? 255 : 0;
   }
   return mask;
 }
@@ -161,7 +161,7 @@ export function combineMasks(
 // ---------------------------------------------------------------------------
 
 /**
- * Trace every contour of a combined 0/1 mask (outer boundaries, holes and
+ * Trace every contour of a combined 0/255 mask (outer boundaries, holes and
  * separate islands) and fit each with the corner-aware fitter Selection →
  * Path uses, translated back to document space by (offsetX, offsetY).
  * Keeping only the longest contour dropped holes and islands (#1332), and
@@ -176,11 +176,7 @@ export function maskToPaths(
   offsetX: number,
   offsetY: number,
 ): PathAnchor[][] {
-  const selectionMask = new Uint8ClampedArray(mask.length);
-  for (let i = 0; i < mask.length; i++) {
-    selectionMask[i] = (mask[i] ?? 0) > 0 ? 255 : 0;
-  }
-  return selectionToPaths(selectionMask, width, height).map((anchors) =>
+  return selectionToPaths(mask, width, height).map((anchors) =>
     anchors.map((a) => ({
       point: offsetPoint(a.point, offsetX, offsetY),
       handleIn: a.handleIn ? offsetPoint(a.handleIn, offsetX, offsetY) : null,

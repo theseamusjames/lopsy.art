@@ -18,7 +18,12 @@ function rectPath(x: number, y: number, w: number, h: number): PathAnchor[] {
   ];
 }
 
-/** Fill a rectangular region in a flat 1-byte-per-pixel mask. */
+/** A blank flat 1-byte-per-pixel mask. */
+function blankMask(size: number): Uint8ClampedArray {
+  return new Uint8ClampedArray(size);
+}
+
+/** Fill a rectangular region in a flat 1-byte-per-pixel mask with 255. */
 function fillRect(
   mask: Uint8ClampedArray,
   width: number,
@@ -26,7 +31,7 @@ function fillRect(
 ): void {
   for (let row = y; row < y + h; row++) {
     for (let col = x; col < x + w; col++) {
-      mask[row * width + col] = 1;
+      mask[row * width + col] = 255;
     }
   }
 }
@@ -43,8 +48,8 @@ describe('combineMasks', () => {
   let maskB: Uint8ClampedArray;
 
   // Re-create before each group
-  maskA = new Uint8ClampedArray(size);
-  maskB = new Uint8ClampedArray(size);
+  maskA = blankMask(size);
+  maskB = blankMask(size);
   for (let i = 0; i < 5; i++) maskA[i] = 1;     // A: pixels 0-4
   for (let i = 3; i < 8; i++) maskB[i] = 1;     // B: pixels 3-7
 
@@ -124,12 +129,12 @@ function insideAnchors(anchors: PathAnchor[], x: number, y: number): boolean {
 
 describe('maskToPaths', () => {
   it('returns nothing for an empty mask', () => {
-    expect(maskToPaths(new Uint8ClampedArray(100), 10, 10, 0, 0)).toHaveLength(0);
+    expect(maskToPaths(blankMask(100), 10, 10, 0, 0)).toHaveLength(0);
   });
 
   it('traces a filled square in document space via the offset', () => {
     const w = 8, h = 8;
-    const mask = new Uint8ClampedArray(w * h);
+    const mask = blankMask(w * h);
     fillRect(mask, w, 2, 2, 4, 4);
     const paths = maskToPaths(mask, w, h, 100, 50);
     expect(paths).toHaveLength(1);
@@ -144,10 +149,10 @@ describe('maskToPaths', () => {
   // #1332: subtracting an inner circle from an outer one must keep the hole.
   it('keeps a hole as its own path (subtract)', () => {
     const w = 120, h = 120;
-    const outer = new Uint8ClampedArray(w * h);
-    const inner = new Uint8ClampedArray(w * h);
-    fillDisc(outer, w, 60, 60, 50, 1);
-    fillDisc(inner, w, 60, 60, 25, 1);
+    const outer = blankMask(w * h);
+    const inner = blankMask(w * h);
+    fillDisc(outer, w, 60, 60, 50, 255);
+    fillDisc(inner, w, 60, 60, 25, 255);
     const paths = maskToPaths(combineMasks(outer, inner, 'subtract'), w, h, 0, 0);
     expect(paths).toHaveLength(2);
     // Even-odd over both contours: the centre is a hole, the ring is filled.
@@ -159,8 +164,8 @@ describe('maskToPaths', () => {
   // #1332: exclude of two overlapping discs gives two islands.
   it('keeps every island (exclude)', () => {
     const w = 140, h = 80;
-    const a = new Uint8ClampedArray(w * h);
-    const b = new Uint8ClampedArray(w * h);
+    const a = blankMask(w * h);
+    const b = blankMask(w * h);
     fillRect(a, w, 10, 10, 70, 60);
     fillRect(b, w, 60, 10, 70, 60);
     const paths = maskToPaths(combineMasks(a, b, 'exclude'), w, h, 0, 0);
@@ -171,7 +176,7 @@ describe('maskToPaths', () => {
   // outline, not backwards at the neighbours.
   it('fits a long bar with straight edges (no looping handles)', () => {
     const w = 400, h = 40;
-    const mask = new Uint8ClampedArray(w * h);
+    const mask = blankMask(w * h);
     fillRect(mask, w, 10, 10, 360, 15);
     const paths = maskToPaths(mask, w, h, 0, 0);
     expect(paths).toHaveLength(1);
@@ -241,8 +246,8 @@ describe('booleanOp graceful handling (jsdom / canvas-mock environment)', () => 
 describe('booleanOp full pipeline via mask construction', () => {
   it('union of two rect masks produces a contour spanning both', () => {
     const w = 20, h = 20;
-    const maskA = new Uint8ClampedArray(w * h);
-    const maskB = new Uint8ClampedArray(w * h);
+    const maskA = blankMask(w * h);
+    const maskB = blankMask(w * h);
     // Rect A: (1,1) 8x8
     fillRect(maskA, w, 1, 1, 8, 8);
     // Rect B: (11,11) 7x7
@@ -267,8 +272,8 @@ describe('booleanOp full pipeline via mask construction', () => {
 
   it('subtract leaves only pixels in A that are not in B', () => {
     const w = 20, h = 10;
-    const maskA = new Uint8ClampedArray(w * h);
-    const maskB = new Uint8ClampedArray(w * h);
+    const maskA = blankMask(w * h);
+    const maskB = blankMask(w * h);
     // A covers whole row y=1..8, x=1..18
     fillRect(maskA, w, 1, 1, 17, 8);
     // B covers right half x=10..18, y=1..8
@@ -287,8 +292,8 @@ describe('booleanOp full pipeline via mask construction', () => {
 
   it('intersect returns only the overlap region', () => {
     const w = 20, h = 20;
-    const maskA = new Uint8ClampedArray(w * h);
-    const maskB = new Uint8ClampedArray(w * h);
+    const maskA = blankMask(w * h);
+    const maskB = blankMask(w * h);
     // A: (2,2) 10x10
     fillRect(maskA, w, 2, 2, 10, 10);
     // B: (7,7) 10x10
