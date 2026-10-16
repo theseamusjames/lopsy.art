@@ -249,7 +249,6 @@ test.describe('Boolean Path Operations', () => {
 
     const stateBefore = await getPathsState(page);
     expect(stateBefore.paths).toHaveLength(2);
-    const anchorCountBefore = stateBefore.paths[0]!.anchorCount;
 
     // Select path A
     await page.evaluate((id) => {
@@ -268,15 +267,19 @@ test.describe('Boolean Path Operations', () => {
     // Two source paths removed, one result added
     expect(stateAfter.paths).toHaveLength(1);
     expect(stateAfter.paths[0]!.closed).toBe(true);
+    expect(stateAfter.paths[0]!.anchorCount).toBeGreaterThan(0);
 
-    // The result should be different from the original path A
-    // (i.e. the operation actually changed the path)
-    const anchorCountAfter = stateAfter.paths[0]!.anchorCount;
-    // At minimum the result should have anchors
-    expect(anchorCountAfter).toBeGreaterThan(0);
-    // The anchor count should differ from path A's original 4 corners
-    // because the clipping operation produces more edge points
-    expect(anchorCountAfter).not.toBe(anchorCountBefore);
+    // The result is A's left part: x 20..120, the full height.
+    const xs = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { paths: Array<{ anchors: Array<{ point: { x: number; y: number } }> }> };
+      };
+      return store.getState().paths[0]!.anchors.map((a) => a.point.x);
+    });
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(18);
+    expect(Math.min(...xs)).toBeLessThanOrEqual(22);
+    expect(Math.max(...xs)).toBeGreaterThanOrEqual(118);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(122);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'boolean-path-ops-after-subtract.png') });
   });
