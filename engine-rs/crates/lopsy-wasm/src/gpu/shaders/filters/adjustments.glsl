@@ -114,8 +114,11 @@ void main() {
         vec3 hsl = rgb2hsl(c.rgb);
         hsl.x = fract(hsl.x + u_hue_shift / 360.0);
         hsl.y = clamp(hsl.y * (1.0 + u_hsl_saturation / 100.0), 0.0, 1.0);
-        hsl.z = clamp(hsl.z + u_lightness / 100.0, 0.0, 1.0);
         c.rgb = hsl2rgb(hsl);
+        // Lightness blends towards black or white (as Photoshop does) rather
+        // than shifting HSL L, which turns pale tints into vivid colours.
+        float light = u_lightness / 100.0;
+        c.rgb = light < 0.0 ? c.rgb * (1.0 + light) : c.rgb + (1.0 - c.rgb) * light;
     }
 
     // Color Balance: shift colors in each tonal range toward CMY or RGB.

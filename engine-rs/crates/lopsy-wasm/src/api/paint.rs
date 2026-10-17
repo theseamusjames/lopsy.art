@@ -27,6 +27,17 @@ pub fn prewarm_stroke(engine: &mut Engine, layer_id: &str) -> Result<(), JsError
     brush_gpu::prewarm_stroke(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
 }
 
+/// Composite a straight-alpha RGBA patch over a layer at document position
+/// (`x`, `y`) — Stroke Path's GPU write (#1292).
+#[wasm_bindgen(js_name = "compositePatchOntoLayer")]
+pub fn composite_patch_onto_layer(
+    engine: &mut Engine, layer_id: &str,
+    data: &[u8], x: i32, y: i32, width: u32, height: u32,
+) -> Result<(), JsError> {
+    brush_gpu::composite_patch_onto_layer(&mut engine.inner, layer_id, data, x, y, width, height)
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "applyBrushDab")]
 pub fn apply_brush_dab(
     engine: &mut Engine, layer_id: &str,

@@ -1,6 +1,7 @@
 import type { TextLayer, Layer, Point } from '../../types';
 import { frameContains, type TextFrame } from './text-transform';
 import { glyphBoxContains, type PlacedGlyphBox } from './path-text-geometry';
+import { buildLayerIndex, type LayerIndex } from '../../layers/layer-index';
 
 export interface RenderedSize {
   width: number;
@@ -76,13 +77,28 @@ function pathGlyphsContain(
   return boxes.some((box) => glyphBoxContains(box, local, RENDERED_HIT_SLOP));
 }
 
+/**
+ * A layer inside a hidden or locked group can't be seen or edited either, so
+ * clicking where it would be must start new text instead (#1303).
+ */
+function isClickable(index: LayerIndex, layer: Layer): boolean {
+  let current: Layer | undefined = layer;
+  while (current) {
+    if (!current.visible || current.locked) return false;
+    const parentId: string | null = index.parentOf.get(current.id) ?? null;
+    current = parentId ? index.byId.get(parentId) : undefined;
+  }
+  return true;
+}
+
 function hasUsableSize(size: RenderedSize | null): size is RenderedSize {
   return !!size && size.width > 1 && size.height > 1;
 }
 
 /**
  * Find a text layer at the given canvas position.
- * Searches layers from top (last) to bottom (first).
+ * Searches layers from top (last) to bottom (first), skipping layers that are
+ * hidden or locked themselves or through an ancestor group.
  * Returns the text layer if found, or null.
  *
  * When `getRenderedSize` supplies the layer's texture size, the hit box is the
@@ -100,9 +116,12 @@ export function hitTestTextLayer(
   getFrame?: TextFrameLookup,
   getPathGlyphBoxes?: PathGlyphBoxesLookup,
 ): TextLayer | null {
+  let index: LayerIndex | null = null;
   for (let i = layers.length - 1; i >= 0; i--) {
     const layer = layers[i]!;
     if (layer.type !== 'text' || !layer.visible || layer.locked) continue;
+    index ??= buildLayerIndex(layers);
+    if (!isClickable(index, layer)) continue;
     // A transformed layer's texture is the axis-aligned box around rotated
     // glyphs; test its own layout box so empty corners don't capture clicks.
     const frame = layer.transform ? getFrame?.(layer) ?? null : null;

@@ -2,10 +2,17 @@ import { useEditorStore } from '../editor-store';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { readLayerPixels, getLayerTextureDimensions } from '../../engine-wasm/wasm-bridge';
-import { createBrushTipFromSelection, createColorBrushTipFromSelection } from '../../tools/brush/brush-from-selection';
+import {
+  createBrushTipFromSelection,
+  createColorBrushTipFromSelection,
+  EMPTY_COLOR_TIP_MESSAGE,
+  EMPTY_TIP_MESSAGE,
+} from '../../tools/brush/brush-from-selection';
+import { notifyInfo } from '../notifications-store';
 import type { BrushTipData, BrushPreset } from '../../types/brush';
 
 let brushCounter = 0;
+
 
 export function defineBrush(asColor: boolean = false): void {
   const state = useEditorStore.getState();
@@ -58,11 +65,12 @@ export function defineBrush(asColor: boolean = false): void {
     maskOffsetY: layerY,
   };
 
-  let tip: BrushTipData;
-  if (asColor) {
-    tip = createColorBrushTipFromSelection(imageData, selectionInfo);
-  } else {
-    tip = createBrushTipFromSelection(imageData, selectionInfo);
+  const tip: BrushTipData | null = asColor
+    ? createColorBrushTipFromSelection(imageData, selectionInfo)
+    : createBrushTipFromSelection(imageData, selectionInfo);
+  if (!tip) {
+    notifyInfo(asColor ? EMPTY_COLOR_TIP_MESSAGE : EMPTY_TIP_MESSAGE);
+    return;
   }
 
   const name = prompt('Brush name:');

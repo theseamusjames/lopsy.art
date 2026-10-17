@@ -1,5 +1,9 @@
 import type { BrushTipData } from '../../types/brush';
 
+export const EMPTY_TIP_MESSAGE =
+  "The selection has no dark pixels, so the brush would be empty. Dark pixels paint; white and transparent ones don't.";
+export const EMPTY_COLOR_TIP_MESSAGE = 'The selection has no visible pixels, so the brush would be empty.';
+
 export interface SelectionInfo {
   bounds: { x: number; y: number; width: number; height: number };
   mask: Uint8ClampedArray;
@@ -15,11 +19,15 @@ export interface SelectionInfo {
  * Converts the image to grayscale, multiplies by the selection mask,
  * then inverts so dark image areas produce opaque brush strokes
  * (matching Photoshop's "Define Brush Preset" convention).
+ *
+ * Returns null when nothing in the selection would paint (only white or
+ * transparent pixels), so callers can refuse instead of adding a tip that
+ * stamps solid squares (#1306).
  */
 export function createBrushTipFromSelection(
   imageData: ImageData,
   selection: SelectionInfo,
-): BrushTipData {
+): BrushTipData | null {
   const { bounds, mask, maskWidth, maskHeight } = selection;
   const maskOX = selection.maskOffsetX ?? 0;
   const maskOY = selection.maskOffsetY ?? 0;
@@ -37,7 +45,7 @@ export function createBrushTipFromSelection(
   const regionH = y1 - y0;
 
   if (regionW <= 0 || regionH <= 0) {
-    return { width: 1, height: 1, data: new Uint8ClampedArray([255]) };
+    return null;
   }
 
   const raw = new Uint8ClampedArray(regionW * regionH);
@@ -116,7 +124,7 @@ export function createBrushTipFromSelection(
   const croppedH = cropBottom - cropTop + 1;
 
   if (croppedW <= 0 || croppedH <= 0) {
-    return { width: 1, height: 1, data: new Uint8ClampedArray([255]) };
+    return null;
   }
 
   const cropped = new Uint8ClampedArray(croppedW * croppedH);
@@ -132,11 +140,12 @@ export function createBrushTipFromSelection(
 /**
  * Create a color brush tip from the selected region, preserving RGBA data.
  * The result is stored as straight alpha; premultiplication happens on GPU upload.
+ * Returns null when every selected pixel is transparent.
  */
 export function createColorBrushTipFromSelection(
   imageData: ImageData,
   selection: SelectionInfo,
-): BrushTipData {
+): BrushTipData | null {
   const { bounds, mask, maskWidth, maskHeight } = selection;
   const maskOX = selection.maskOffsetX ?? 0;
   const maskOY = selection.maskOffsetY ?? 0;
@@ -153,7 +162,7 @@ export function createColorBrushTipFromSelection(
   const regionH = y1 - y0;
 
   if (regionW <= 0 || regionH <= 0) {
-    return { width: 1, height: 1, data: new Uint8ClampedArray([0, 0, 0, 0]), kind: 'color' };
+    return null;
   }
 
   const raw = new Uint8ClampedArray(regionW * regionH * 4);
@@ -219,7 +228,7 @@ export function createColorBrushTipFromSelection(
   const croppedH = cropBottom - cropTop + 1;
 
   if (croppedW <= 0 || croppedH <= 0) {
-    return { width: 1, height: 1, data: new Uint8ClampedArray([0, 0, 0, 0]), kind: 'color' };
+    return null;
   }
 
   const cropped = new Uint8ClampedArray(croppedW * croppedH * 4);

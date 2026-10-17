@@ -1,15 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PathAnchor } from '../../tools/path/path';
 
-const rasterizePath = vi.fn();
-vi.mock('../../tools/path/path', () => ({
-  rasterizePath: (...args: unknown[]) => rasterizePath(...args),
+const PATCH = { x: 10, y: 20, width: 3, height: 2, data: new Uint8ClampedArray(24) };
+const rasterizePath = vi.fn((..._args: unknown[]) => PATCH as typeof PATCH | null);
+vi.mock('./path-patch', () => ({
+  rasterizePathPatch: (...args: unknown[]) => rasterizePath(...args),
 }));
 
-vi.mock('../../engine/pixel-data', () => ({
-  PixelBuffer: {
-    fromImageData: () => ({ toImageData: () => ({}) }),
-  },
+const compositePatchOntoLayer = vi.fn();
+vi.mock('../../engine-wasm/wasm-bridge', () => ({
+  compositePatchOntoLayer: (...args: unknown[]) => compositePatchOntoLayer(...args),
+}));
+vi.mock('../../engine-wasm/engine-state', () => ({ getEngine: () => ({ __engine: 'mock' }) }));
+const syncLayerAfterFullSize = vi.fn();
+vi.mock('../sync-layer-after-full-size', () => ({
+  syncLayerAfterFullSize: (...args: unknown[]) => syncLayerAfterFullSize(...args),
+}));
+const clearJsPixelData = vi.fn();
+vi.mock('../store/clear-js-pixel-data', () => ({
+  clearJsPixelData: (...args: unknown[]) => clearJsPixelData(...args),
 }));
 
 const guardPixelWrite = vi.fn(() => true);
@@ -23,6 +32,8 @@ const editorState = {
   document: {
     activeLayerId: 'layer-1',
     layers: [{ id: 'layer-1', x: 0, y: 0 }],
+    width: 800,
+    height: 600,
   },
   paths: [] as MockPath[],
   selectedPathId: null as string | null,
@@ -33,6 +44,7 @@ const editorState = {
   }),
   getOrCreateLayerPixelData: vi.fn(() => ({})),
   updateLayerPixelData: vi.fn(),
+  notifyRender: vi.fn(),
 };
 type Listener<T> = (state: T, prev: T) => void;
 const editorListeners: Array<Listener<typeof editorState>> = [];
@@ -79,6 +91,8 @@ vi.mock('../tool-settings-store', () => ({
 
 import { strokePathOnEnter } from './path-stroke';
 
+const CANVAS = { x: 0, y: 0, width: 800, height: 600 };
+
 function anchor(x: number, y: number): PathAnchor {
   return { point: { x, y }, handleIn: null, handleOut: null };
 }
@@ -100,7 +114,7 @@ describe('strokePathOnEnter', () => {
 
     expect(editorState.addPath).toHaveBeenCalledWith(triangle, false);
     expect(editorState.pushHistory).toHaveBeenCalledWith('Stroke Path');
-    expect(rasterizePath).toHaveBeenCalledWith(expect.anything(), triangle, false, toolSettings.foregroundColor, 12);
+    expect(rasterizePath).toHaveBeenCalledWith(triangle, false, toolSettings.foregroundColor, 12, CANVAS);
   });
 
   it('strokes the selected closed path when no draft is in progress (#1084)', () => {
@@ -111,10 +125,10 @@ describe('strokePathOnEnter', () => {
 
     expect(editorState.addPath).not.toHaveBeenCalled();
     expect(editorState.pushHistory).toHaveBeenCalledWith('Stroke Path');
-    expect(rasterizePath).toHaveBeenCalledWith(expect.anything(), triangle, true, toolSettings.foregroundColor, 12);
+    expect(rasterizePath).toHaveBeenCalledWith(triangle, true, toolSettings.foregroundColor, 12, CANVAS);
   });
 
-  it('strokes the selected path in layer-local coordinates', () => {
+  it('rasterizes the path in document space whatever the layer offset', () => {
     editorState.document.layers = [{ id: 'layer-1', x: 50, y: 20 }];
     editorState.paths = [{ id: 'p1', anchors: [anchor(100, 100), anchor(200, 100)], closed: false }];
     editorState.selectedPathId = 'p1';
@@ -122,13 +136,40 @@ describe('strokePathOnEnter', () => {
     strokePathOnEnter();
 
     expect(rasterizePath).toHaveBeenCalledWith(
-      expect.anything(),
-      [anchor(50, 80), anchor(150, 80)],
+      [anchor(100, 100), anchor(200, 100)],
       false,
       toolSettings.foregroundColor,
       12,
+      CANVAS,
     );
     editorState.document.layers = [{ id: 'layer-1', x: 0, y: 0 }];
+  });
+
+  it('composites only the stroke patch on the GPU, without touching JS pixel buffers (#1292)', () => {
+    editorState.paths = [{ id: 'p1', anchors: [...triangle], closed: true }];
+    editorState.selectedPathId = 'p1';
+
+    strokePathOnEnter();
+
+    expect(compositePatchOntoLayer).toHaveBeenCalledTimes(1);
+    const [, layerId, bytes, x, y, w, h] = compositePatchOntoLayer.mock.calls[0]!;
+    expect([layerId, x, y, w, h]).toEqual(['layer-1', 10, 20, 3, 2]);
+    expect((bytes as Uint8Array).byteLength).toBe(24);
+    expect(editorState.getOrCreateLayerPixelData).not.toHaveBeenCalled();
+    expect(editorState.updateLayerPixelData).not.toHaveBeenCalled();
+    expect(syncLayerAfterFullSize).toHaveBeenCalledWith(expect.anything(), 'layer-1');
+    expect(clearJsPixelData).toHaveBeenCalledWith('layer-1');
+  });
+
+  it('writes nothing when the stroke misses the canvas', () => {
+    rasterizePath.mockReturnValueOnce(null);
+    editorState.paths = [{ id: 'p1', anchors: [...triangle], closed: true }];
+    editorState.selectedPathId = 'p1';
+
+    strokePathOnEnter();
+
+    expect(editorState.pushHistory).toHaveBeenCalledWith('Stroke Path');
+    expect(compositePatchOntoLayer).not.toHaveBeenCalled();
   });
 
   it('does nothing with no draft and no selected path', () => {

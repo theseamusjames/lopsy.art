@@ -1,5 +1,4 @@
-import type { Point, PixelSurface } from '../../types';
-import { contextOptions } from '../../engine/color-space';
+import type { Point } from '../../types';
 
 export interface PathAnchor {
   point: Point;
@@ -114,65 +113,59 @@ export function splitSegmentAt(
   return result;
 }
 
-export function rasterizePath(
-  buf: PixelSurface,
-  anchors: PathAnchor[],
+/** The drawing calls {@link tracePath} makes — a Canvas 2D context satisfies it. */
+export interface PathSink {
+  moveTo(x: number, y: number): void;
+  bezierCurveTo(cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number): void;
+}
+
+/** Emit the path's segments as cubic béziers, offset by (`dx`, `dy`). */
+export function tracePath(
+  sink: PathSink,
+  anchors: readonly PathAnchor[],
   closed: boolean,
-  color: { r: number; g: number; b: number; a: number },
-  strokeWidth: number,
+  dx = 0,
+  dy = 0,
 ): void {
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = buf.width;
-  tempCanvas.height = buf.height;
-  const ctx = tempCanvas.getContext('2d', contextOptions);
-  if (!ctx) return;
+  const segment = (from: PathAnchor, to: PathAnchor): void => {
+    const cp1 = from.handleOut ?? from.point;
+    const cp2 = to.handleIn ?? to.point;
+    sink.bezierCurveTo(cp1.x + dx, cp1.y + dy, cp2.x + dx, cp2.y + dy, to.point.x + dx, to.point.y + dy);
+  };
+  const first = anchors[0];
+  if (!first) return;
+  sink.moveTo(first.point.x + dx, first.point.y + dy);
+  for (let i = 1; i < anchors.length; i++) segment(anchors[i - 1]!, anchors[i]!);
+  if (closed && anchors.length >= 2) segment(anchors[anchors.length - 1]!, first);
+}
 
-  ctx.strokeStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;
-  ctx.lineWidth = strokeWidth;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  ctx.beginPath();
-  for (let i = 0; i < anchors.length; i++) {
-    const anchor = anchors[i];
-    if (!anchor) continue;
-    if (i === 0) {
-      ctx.moveTo(anchor.point.x, anchor.point.y);
-    } else {
-      const prev = anchors[i - 1];
-      if (!prev) continue;
-      const cp1 = prev.handleOut ?? prev.point;
-      const cp2 = anchor.handleIn ?? anchor.point;
-      ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, anchor.point.x, anchor.point.y);
+/**
+ * Integer pixel rect covering everything a stroke of `strokeWidth` along the
+ * path can touch, or null for an empty path. A cubic bézier stays inside the
+ * hull of its points and handles, so their bounds padded by half the width
+ * (plus a pixel of anti-aliasing) contain the stroke, round joins and caps
+ * included.
+ */
+export function pathStrokeBounds(
+  anchors: readonly PathAnchor[],
+  strokeWidth: number,
+): { x: number; y: number; width: number; height: number } | null {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const a of anchors) {
+    for (const p of [a.point, a.handleIn, a.handleOut]) {
+      if (!p) continue;
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
     }
   }
-  if (closed && anchors.length >= 2) {
-    const last = anchors[anchors.length - 1];
-    const first = anchors[0];
-    if (last && first) {
-      const cp1 = last.handleOut ?? last.point;
-      const cp2 = first.handleIn ?? first.point;
-      ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, first.point.x, first.point.y);
-    }
-  }
-  ctx.stroke();
-
-  // Composite the stroked path onto the pixel buffer
-  const pathData = ctx.getImageData(0, 0, buf.width, buf.height);
-  for (let i = 0; i < pathData.data.length; i += 4) {
-    const sa = (pathData.data[i + 3] ?? 0) / 255;
-    if (sa <= 0) continue;
-    const px = (i / 4) % buf.width;
-    const py = Math.floor(i / 4 / buf.width);
-    const existing = buf.getPixel(px, py);
-    const outA = sa + existing.a * (1 - sa);
-    if (outA > 0) {
-      buf.setPixel(px, py, {
-        r: Math.round(((pathData.data[i] ?? 0) * sa + existing.r * existing.a * (1 - sa)) / outA),
-        g: Math.round(((pathData.data[i + 1] ?? 0) * sa + existing.g * existing.a * (1 - sa)) / outA),
-        b: Math.round(((pathData.data[i + 2] ?? 0) * sa + existing.b * existing.a * (1 - sa)) / outA),
-        a: outA,
-      });
-    }
-  }
+  if (maxX < minX) return null;
+  const pad = strokeWidth / 2 + 1;
+  const x = Math.floor(minX - pad);
+  const y = Math.floor(minY - pad);
+  return { x, y, width: Math.ceil(maxX + pad) - x, height: Math.ceil(maxY + pad) - y };
 }
