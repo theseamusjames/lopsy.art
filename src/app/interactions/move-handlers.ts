@@ -8,6 +8,7 @@ import type { MoveAlignmentContext } from './move-alignment';
 import { createTransformState, isShapeChangingTransform, translateTransform } from '../../tools/transform/transform';
 import type { TransformState } from '../../tools/transform/transform';
 import { renderTransformedFloat } from './transform-handlers';
+import { growFloatToCover } from './float-growth';
 import { useUIStore } from '../ui-store';
 import type { SnapLine } from '../ui-store';
 import { useEditorStore } from '../editor-store';
@@ -24,6 +25,7 @@ import {
   uploadQuickMaskPixels,
   cropLayerToContent as cropLayerToContentGpu,
 } from '../../engine-wasm/wasm-bridge';
+import type { Engine } from '../../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type {
   InteractionState,
@@ -206,6 +208,24 @@ function floatDragOffset(
   dragDy: number,
 ): Point {
   return snapFloatDelta(float.offsetX + dragDx, float.offsetY + dragDy);
+}
+
+/**
+ * Grow the float so the lifted content still fits at offset (dx, dy).
+ * compositeFloat only writes inside the float's buffer, so without this the
+ * part of a selection dragged past the canvas edge was cut off and lost when
+ * the float dropped (#1337).
+ */
+function growFloatForOffset(
+  engine: Engine,
+  layerId: string | null,
+  float: Pick<FloatingSelection, 'originalBounds'>,
+  dx: number,
+  dy: number,
+): void {
+  if (!layerId) return;
+  const b = float.originalBounds;
+  growFloatToCover(engine, layerId, { x: b.x + dx, y: b.y + dy, width: b.width, height: b.height });
 }
 
 function applyTranslatedTransform(layerId: string | null, transform: TransformState): void {
@@ -671,6 +691,7 @@ export function handleMoveMove(
     // GPU path: composite float at new offset
     const { x: dx, y: dy } = floatDragOffset(floatingSelectionRef.current, dragDx, dragDy);
 
+    growFloatForOffset(engine, state.layerId, floatingSelectionRef.current, dx, dy);
     compositeFloat(engine, dx, dy);
     useEditorStore.getState().notifyRender();
 
@@ -933,6 +954,7 @@ export function handleNudgeMove(
     floatingSelectionRef.current.offsetX = newOffsetX;
     floatingSelectionRef.current.offsetY = newOffsetY;
 
+    growFloatForOffset(engine, activeId, floatingSelectionRef.current, newOffsetX, newOffsetY);
     compositeFloat(engine, newOffsetX, newOffsetY);
     // Same as handleMoveUp: the composite changed the layer texture (#925).
     clearJsPixelData(activeId);

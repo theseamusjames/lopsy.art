@@ -18,7 +18,20 @@ import {
   completeSystemClipboardWrite,
   isSystemClipboardWriteCurrent,
 } from './system-clipboard-sync';
+import { notifyInfo } from '../notifications-store';
 import type { ClipboardData, SliceCreator } from './types';
+import type { Layer } from '../../types';
+
+/**
+ * A group's own texture is never drawn, so copying or cutting it yields an
+ * empty clipboard that a later Paste turns into an empty layer (#1338).
+ * Returns false (after a toast) when the active layer can't be copied from.
+ */
+function guardCopySource(layer: Layer | undefined, action: 'copied' | 'cut'): boolean {
+  if (layer?.type !== 'group') return true;
+  notifyInfo(`Groups can't be ${action} from. Select a layer inside the group, or use Copy Merged.`);
+  return false;
+}
 
 function writeToSystemClipboard(width: number, height: number): void {
   const seq = beginSystemClipboardWrite();
@@ -73,6 +86,8 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     const state = get();
     const activeId = state.document.activeLayerId;
     if (!activeId) return;
+    const activeLayer = state.document.layers.find((l) => l.id === activeId);
+    if (!guardCopySource(activeLayer, 'copied')) return;
     const engine = getEngine();
     if (!engine) return;
 
@@ -161,6 +176,8 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     const state = get();
     const activeId = state.document.activeLayerId;
     if (!activeId) return;
+    const activeLayer = state.document.layers.find((l) => l.id === activeId);
+    if (!guardCopySource(activeLayer, 'cut')) return;
     const engine = getEngine();
     if (!engine) return;
 

@@ -29,6 +29,7 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   floatSelection: vi.fn(() => new Int32Array()),
   restoreFloatBase: vi.fn(),
   compositeFloat: vi.fn(),
+  ensureFloatCovers: vi.fn(() => new Int32Array()),
   hasFloat: vi.fn(() => false),
   setSelectionMask: vi.fn(),
   readQuickMaskPixels: vi.fn(() => new Uint8Array(8)),
@@ -653,6 +654,32 @@ describe('floated-selection moves mark the layer dirty for history (#925)', () =
 
     expect(vi.mocked(bridge.floatSelection)).not.toHaveBeenCalled();
     expect(vi.mocked(clearJsPixelData)).toHaveBeenCalledWith('layer-1');
+  });
+
+  // #1337: the float must cover the moved content before it is composited,
+  // or whatever crosses the canvas edge is cut off when the float drops.
+  it('handleNudgeMove grows the float to the nudged content before compositing', () => {
+    const layer = { id: 'layer-1', type: 'raster', x: 0, y: 0, locked: false };
+    editorState.document.layers = [layer];
+    editorState.document.activeLayerId = 'layer-1';
+    editorState.selection = {
+      active: true,
+      mask: makeSquareMask(),
+      bounds: { x: 5, y: 5, width: 5, height: 5 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    vi.mocked(bridge.ensureFloatCovers).mockClear();
+    vi.mocked(bridge.compositeFloat).mockClear();
+    const floatRef = floatAt(3, 0);
+
+    handleNudgeMove(1, 0, floatRef, makePersistentRef());
+
+    // Content (5,5 5×5) at offset (4,0), plus one pixel of slack.
+    expect(vi.mocked(bridge.ensureFloatCovers)).toHaveBeenCalledWith(engine, 8, 4, 7, 7);
+    const growOrder = vi.mocked(bridge.ensureFloatCovers).mock.invocationCallOrder[0]!;
+    const compositeOrder = vi.mocked(bridge.compositeFloat).mock.invocationCallOrder[0]!;
+    expect(growOrder).toBeLessThan(compositeOrder);
   });
 });
 
