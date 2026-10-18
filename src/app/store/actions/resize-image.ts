@@ -3,6 +3,9 @@ import type { RasterLayer } from '../../../types/layers';
 import type { ActionResult } from '../types';
 import { scaleLayerTexture } from '../../../engine-wasm/wasm-bridge';
 import { mapLayersForTransform, scaleLayerEffects, scaleTextLayerForResize } from './_helpers/layer-transform';
+import { remapDocumentMasks } from './_helpers/remap-layer-masks';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { scaling } from '../../../layers/mask-remap';
 
 export function computeResizeImage(
   doc: DocumentState,
@@ -13,7 +16,7 @@ export function computeResizeImage(
   const scaleX = newWidth / doc.width;
   const scaleY = newHeight / doc.height;
 
-  const newLayers = mapLayersForTransform(doc.layers, {
+  const scaledLayers = mapLayersForTransform(doc.layers, {
     onText: (layer) => scaleTextLayerForResize(layer as TextLayer, scaleX, scaleY) as Layer,
     onRaster: (layer, engine) => {
       // Raster layers are stored cropped to their content bounds, so their
@@ -37,6 +40,7 @@ export function computeResizeImage(
       } as Layer;
     },
   });
+  const newLayers = remapDocumentMasks(getEngine(), doc.layers, scaledLayers, scaling(scaleX, scaleY), newWidth, newHeight);
 
   return {
     document: { ...doc, width: newWidth, height: newHeight, layers: newLayers },

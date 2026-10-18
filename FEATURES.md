@@ -1825,25 +1825,29 @@ raster and text layers and skips shape and group layers.
 
 | | raster pixels | raster geometry | text | shape / group | layer mask | selection |
 |---|---|---|---|---|---|---|
-| **Crop canvas** | cropped to the rect | reset to `(0,0)` at full canvas size | translated by the crop origin | untouched | untouched | untouched by the tool; **Edit → Crop clears it** |
-| **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | untouched | untouched |
-| **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position, font size, letter spacing, area-text width, and effect dimensions all scaled | untouched | untouched | untouched |
-| **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | turned with the canvas through its stored transform and re-rendered, stays live; path-bound or empty text untouched | untouched | untouched | untouched |
-| **Flip** | mirrored within the layer's own texture | moved so the content mirrors about its own bounds (see below) | flipped through its transform, stays live; text on a path is **refused** with a toast | a group mirrors its descendants as a unit (refused if it holds a text layer); a shape layer flips like a raster | untouched | untouched |
+| **Crop canvas** | cropped to the rect | reset to `(0,0)` at full canvas size | translated by the crop origin | untouched | cropped with the layer | untouched by the tool; **Edit → Crop clears it** |
+| **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | moved by the anchor offset | untouched |
+| **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position, font size, letter spacing, area-text width, and effect dimensions all scaled | untouched | scaled with the layer | untouched |
+| **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | turned with the canvas through its stored transform and re-rendered, stays live; path-bound or empty text untouched | untouched | rotated with the layer (shape masks untouched) | untouched |
+| **Flip** | mirrored within the layer's own texture | moved so the content mirrors about its own bounds (see below) | flipped through its transform, stays live; text on a path is **refused** with a toast | a group mirrors its descendants as a unit (refused if it holds a text layer); a shape layer flips like a raster | mirrored with the layer (a text layer's mask is untouched) | untouched |
 
-**Layer masks are never transformed by any of the five.** The Rust helpers
-(`crop_texture`, `resize_canvas_texture`, `scale_texture`, `rotate_texture_90`,
-`flip_texture`) all operate on `engine.layer_textures` and never look at
-`engine.layer_masks`, and on the JS side the `{...layer}` spread carries the
-same `LayerMask` object through, so `sync-layers` — which re-uploads only when
-`layer.mask.data` changes by reference — never pushes a new one. The mask keeps
-its pre-operation pixels *and* its pre-operation dimensions. `blend.glsl`
-samples it at `(docPos − u_maskOffset) / u_maskSize`, i.e. 1:1 document pixels
-anchored at the document origin for raster and group layers (at the layer's own
-`x` / `y` for text and shape layers — see `mask_doc_offset`), and where that UV
-falls outside `0…1` the mask
-is **not applied at all** — so the part of a resized or rotated layer the stale
-mask no longer covers comes back **fully unmasked** rather than hidden.
+**Layer masks follow their layer through all five.** After each operation,
+`remapLayerMaskThrough` (`app/store/actions/_helpers/remap-layer-masks.ts`)
+resamples the mask on the GPU (`remap_layer_mask`, `mask_remap.glsl`) through
+the same document-space map that moved the layer's pixels — a translation for
+Crop and Canvas Size, a scale for Image Size, a quarter turn for Rotate, a
+mirror for Flip (`layers/mask-remap.ts`) — then reads it back once so
+`layer.mask.data` and its dimensions match the new texture. Raster and group
+masks are document-anchored, so they are rebuilt at the new document size; a
+text layer's mask keeps its own extent from the layer's new origin, and a text
+layer that only moves with the document (Crop, Canvas Size) keeps its mask as
+is. Shape layers are left untouched by the document-wide commands, and so are
+their masks. Area the old mask never covered — the strip Canvas Size adds, for
+example — comes out white (revealed), matching how the compositor treats space
+outside a mask. Rotate Layer 90° and Flip of a raster or shape layer, or of a group (the
+group's own mask and its members' masks together), carry masks the same way;
+a text layer turned or flipped through its transform keeps its mask as is.
+Undo restores the old mask at its old size from the history snapshot.
 
 **The selection is never transformed either.** None of the five reads or writes
 `state.selection`, so after a Crop-tool crop or any of the Image-menu commands
@@ -2174,7 +2178,7 @@ The strip across the very top of the window — the first thing in the app shell
 
 **The dialogs the bar owns.** Ten in all, mounted beside the menus and opened by menu commands: the shared [Filter Dialog](#filter-dialog-shared), Pattern Fill, Color LUT, Canvas Size, Image Size, Indexed Color, Keyboard Shortcuts, About, the [Export dialog](#export-dialog-e), and a second instance of the shared filter dialog driving Select → Grow / Shrink / Feather. Opening any of them closes the menu first. Export is reached through a module-level register/unregister callback rather than a direct import — the File menu defines the command while the bar owns the dialog state, and importing either direction would be circular.
 
-- **Grow / Shrink / Feather** each open that shared dialog with a single slider: **Amount 1 – 100 px** for Grow and Shrink, **Radius 1 – 250 px** for Feather, default 1 in both cases. Grow and shrink are CPU mask operations; **feather is the only one that goes to the GPU** — the mask is uploaded, feathered, and read back — and it silently leaves the selection untouched if the engine is not up. Whichever runs, the selection's transform box is rebuilt from the resulting bounds afterwards, and a Shrink that would leave nothing selected keeps the selection unchanged and says so in a toast.
+- **Grow / Shrink / Feather** each open that shared dialog with a single slider: **Amount 1 – 100 px** for Grow and Shrink, **Radius 1 – 250 px** for Feather, default 1 in both cases. Grow and shrink are CPU mask operations; **feather is the only one that goes to the GPU** — the mask is uploaded, feathered, and read back — and it silently leaves the selection untouched if the engine is not up. Whichever runs, the selection's transform box is rebuilt from the resulting bounds afterwards, and a Shrink that would leave nothing selected keeps the selection unchanged and says so in a toast. Each applied Grow, Shrink or Feather is its own undo step (**Grow Selection**, **Shrink Selection**, **Feather Selection** in History), so ⌘Z puts back the selection from before it and leaves earlier edits alone.
 
 ### Toolbox
 

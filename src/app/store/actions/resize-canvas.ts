@@ -2,6 +2,9 @@ import type { DocumentState, Layer } from '../../../types';
 import type { ActionResult } from '../types';
 import { getLayerEngineBounds, resizeCanvasTexture } from '../../../engine-wasm/wasm-bridge';
 import { mapLayersForTransform } from './_helpers/layer-transform';
+import { remapDocumentMasks } from './_helpers/remap-layer-masks';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { translation } from '../../../layers/mask-remap';
 
 export function computeResizeCanvas(
   doc: DocumentState,
@@ -16,7 +19,7 @@ export function computeResizeCanvas(
   const offsetX = Math.round((newWidth - oldW) * anchorX);
   const offsetY = Math.round((newHeight - oldH) * anchorY);
 
-  const newLayers = mapLayersForTransform(doc.layers, {
+  const movedLayers = mapLayersForTransform(doc.layers, {
     onText: (layer) => ({
       ...layer,
       x: Math.round(layer.x + offsetX),
@@ -44,6 +47,9 @@ export function computeResizeCanvas(
       return { ...layer, x: 0, y: 0, width: newWidth, height: newHeight } as Layer;
     },
   });
+  const newLayers = remapDocumentMasks(
+    getEngine(), doc.layers, movedLayers, translation(offsetX, offsetY), newWidth, newHeight,
+  );
 
   return {
     document: { ...doc, width: newWidth, height: newHeight, layers: newLayers },

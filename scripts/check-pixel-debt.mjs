@@ -69,6 +69,7 @@ const ALLOWLIST = {
   'src/app/store/mask-history.test.ts': 1,                   // #780 fixture mask
   'src/panels/LayerPanel/layer-selection.test.ts': 1,        // layer-alpha fixture for selectLayerAlpha
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
+  'src/layers/mask-remap.test.ts': 1,                  // #1357 fixture mask
   'src/selection/selection-to-path.test.ts': 2,
   'src/selection/selection.test.ts': 21,               // +2: #1038 grow/shrink circle and rect fixtures, +2: combine-mode fixtures
   'src/test-setup.ts': 1,
