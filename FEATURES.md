@@ -1827,9 +1827,18 @@ raster and text layers and skips shape and group layers.
 |---|---|---|---|---|---|---|
 | **Crop canvas** | cropped to the rect | reset to `(0,0)` at full canvas size | translated by the crop origin | untouched | cropped with the layer | untouched by the tool; **Edit → Crop clears it** |
 | **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | moved by the anchor offset | untouched |
-| **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position, font size, letter spacing, area-text width, and effect dimensions all scaled | untouched | scaled with the layer | untouched |
+| **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position, font size, letter spacing, area-text width, and effect dimensions all scaled; a path-bound layer's path anchor scales too, so its offset off the path is kept | untouched | scaled with the layer | untouched |
 | **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | turned with the canvas through its stored transform and re-rendered, stays live; path-bound or empty text untouched | untouched | rotated with the layer (shape masks untouched) | untouched |
 | **Flip** | mirrored within the layer's own texture | moved so the content mirrors about its own bounds (see below) | flipped through its transform, stays live; text on a path is **refused** with a toast | a group mirrors its descendants as a unit (refused if it holds a text layer); a shape layer flips like a raster | mirrored with the layer (a text layer's mask is untouched) | untouched |
+
+**Image Size also scales vector paths and guides.** Every stored path's
+anchors and Bézier handles, and every guide's position (vertical guides by the
+X factor, horizontal by Y), are multiplied by the document scale, so text bound
+to a path stays on the scaled path when it is next re-laid. Guides are not
+otherwise part of history; undo / redo restores them only across a step that
+changed the document size, so undoing Image Size un-scales them while undoing
+an unrelated step leaves guides alone. Crop and Canvas Size leave paths and
+guides where they are.
 
 **Layer masks follow their layer through all five.** After each operation,
 `remapLayerMaskThrough` (`app/store/actions/_helpers/remap-layer-masks.ts`)
@@ -2056,7 +2065,7 @@ Histogram details shared by all three: **fully transparent pixels (alpha 0) are 
 
 All three are undoable and auto-switch the target group from pass-through to normal blend mode when adding adjustments (required for the compositor to apply group-level adjustment nodes). Levels and Curves are permitted in every color mode, so none of the three is filtered out by the Image → Mode capability check.
 
-**Caveat in Lab mode**: adjustment nodes are applied to the composite *before* the Lab→RGB decode, which lives only in the final screen blit (`final_blit.glsl`). The layer texture these commands read is likewise still encoded. So in Lab mode all three analyze and stretch the **L / a / b planes as if they were R / G / B** — Auto Tone will stretch the two chroma planes independently rather than correcting tone.
+**Caveat in Lab mode**: the layer texture these commands read is still encoded CIELAB, so in Lab mode all three **measure the L / a / b planes as if they were R / G / B**. The Levels / Curves node they add is applied to decoded sRGB (the adjustment pass decodes Lab first), so the stretch is computed from one space and applied in another.
 
 ---
 
@@ -2636,9 +2645,9 @@ Every paint entry point — brush/pencil/eraser, spray, fill, gradient (per stop
 
 ### Per-mode notes
 
-- **Grayscale** — pixels are baked on the GPU to Rec. 709 luma (`0.2126 R + 0.7152 G + 0.0722 B`). The bake covers the **whole layer even under an active selection**: a mode change must not leave part of a layer in the old space. The picker collapses from the HSV square to a black→white value ramp. This is the **only** monochrome route in the app that is a true luma — Desaturate and the Black & White node both give a different grey for the same pixel, sometimes by more than 100 levels.
+- **Grayscale** — pixels are baked on the GPU to Rec. 709 luma (`0.2126 R + 0.7152 G + 0.0722 B`). The bake covers the **whole layer even under an active selection**: a mode change must not leave part of a layer in the old space. It runs in place on each layer's own texture, keeping its origin and size, so layers cropped to their content stay where they are. The picker collapses from the HSV square to a black→white value ramp. This is the **only** monochrome route in the app that is a true luma — Desaturate and the Black & White node both give a different grey for the same pixel, sometimes by more than 100 levels.
 - **Indexed** — flattens the document, then builds a palette of at most **256 colors** via a median-cut quantizer and snaps every pixel to the nearest entry. The dialog collects **Colors** (2 – 256, default 256) and a **Dither (Floyd–Steinberg)** checkbox (off by default), warns up front when more than one layer will be flattened, and takes **Enter** to convert / **Escape** to cancel. Palette building subsamples on a fixed stride above 262,144 pixels so a 4K canvas stays bounded — the snap itself still visits every pixel. The palette is stored on the document, shown in the Color panel as a swatch grid, and persisted in the `.lopsy` manifest. **Adding a layer is refused** while Indexed is active, with an info toast: *"Indexed mode does not support layers. Convert to RGB first."*
-- **Lab** — the only mode whose layer textures hold something other than sRGB. Pixels are stored as encoded CIELAB (L in R, a in G, b in B), and the engine decodes for display (`u_docColorMode == 1` in `final_blit.glsl`), for the export composite, and for the eyedropper — which decodes *before* averaging its sample square, since the transform is non-linear. The panel's L/a/b sliders drive a TypeScript mirror of the Rust math, used for single colors only so the two can't drift on bulk pixel work. Stored 8-bit, matching Photoshop's 8-bit Lab; a/b quantization costs a few sRGB units at saturated gamut corners.
+- **Lab** — the only mode whose layer textures hold something other than sRGB. Pixels are stored as encoded CIELAB (L in R, a in G, b in B), and the engine decodes for display (`u_docColorMode == 1` in `final_blit.glsl`), for the export composite, and for the eyedropper — which decodes *before* averaging its sample square, since the transform is non-linear. Layer-effect colors (Stroke, Drop Shadow, both Glows, Color Overlay) stay sRGB in the document and are encoded to Lab only when sent to the engine, since the effect shaders write them straight into the encoded composite. The adjustment stack (every node in `adjustments.glsl`) and the Vignette pass decode each pixel to sRGB, adjust it, and re-encode it, so tonal nodes darken or brighten Lab images the same way they do RGB ones; the Brightness / Contrast filter shares that shader and does the same. The panel's L/a/b sliders drive a TypeScript mirror of the Rust math, used for single colors only so the two can't drift on bulk pixel work. Stored 8-bit, matching Photoshop's 8-bit Lab; a/b quantization costs a few sRGB units at saturated gamut corners.
 - **CMYK** — sRGB-backed. The C/M/Y/K sliders are a unit system over sRGB rather than stored ink, and **a CMYK document does not yet render any differently from an RGB one**. The naive ink model is a bijection with sRGB — its round trip is lossless across the whole cube — so there is no gamut to clip; a real difference needs profile-based conversion with ink limits. Native ink storage is blocked on the paint pipeline owning the alpha channel (dabs write coverage there and premultiply by it), leaving no fourth channel free for black.
 
 ### Declared but not enforced
