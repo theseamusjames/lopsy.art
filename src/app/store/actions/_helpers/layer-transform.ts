@@ -76,6 +76,10 @@ export function scaleTextLayerForResize(
     ...layer,
     x,
     y,
+    // The path anchor is in document space like x/y; scaling only one of them
+    // would turn the resize into a bogus user offset off the scaled path.
+    ...(layer.pathAnchorX !== undefined && { pathAnchorX: Math.round(layer.pathAnchorX * scaleX) }),
+    ...(layer.pathAnchorY !== undefined && { pathAnchorY: Math.round(layer.pathAnchorY * scaleY) }),
     ...(layer.transform && { transform: scaleTextTransformForResize(layer, layer.transform, x, y, scaleX, scaleY) }),
     fontSize: roundTo(layer.fontSize * scale, 2),
     letterSpacing: roundTo(layer.letterSpacing * scale, 2),

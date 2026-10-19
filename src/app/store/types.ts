@@ -3,6 +3,7 @@ import type { BlendMode, DocumentColorMode, DocumentState, LayerEffects, Rect, T
 import type { StoredPath } from '../../types/paths';
 import type { PathAnchor } from '../../tools/path/path';
 import type { AlignEdge } from '../../tools/move/move';
+import type { Guide } from '../ui-store';
 
 /**
  * Selection state — discriminated by `active`. When inactive, every
@@ -69,6 +70,10 @@ export type HistorySnapshot =
       label: string;
       paths: readonly StoredPath[];
       selectedPathId: string | null;
+      /** Guides as they were, restored only by a step that changes the
+       *  document size (Image Size scales them). Guides are not otherwise
+       *  part of history, so other undos leave them alone. */
+      guides?: readonly Guide[];
     }
   | {
       readonly kind: 'pixels';
@@ -80,6 +85,10 @@ export type HistorySnapshot =
       maskSnapshots: ReadonlyMap<string, MaskSnapshotEntry>;
       paths: readonly StoredPath[];
       selectedPathId: string | null;
+      /** Guides as they were, restored only by a step that changes the
+       *  document size (Image Size scales them). Guides are not otherwise
+       *  part of history, so other undos leave them alone. */
+      guides?: readonly Guide[];
     };
 
 export interface ClipboardData {
