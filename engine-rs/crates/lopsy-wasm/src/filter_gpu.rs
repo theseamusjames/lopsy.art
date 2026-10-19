@@ -246,7 +246,7 @@ pub fn apply_filter(
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
     set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
 ) {
-    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, true);
+    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, true, true);
 }
 
 /// Like `apply_filter`, but always transforms the whole layer even when a
@@ -258,7 +258,21 @@ pub fn apply_filter_full_layer(
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
     set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
 ) {
-    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, false);
+    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, false, true);
+}
+
+/// Like `apply_filter_full_layer`, for shaders that read only the texel
+/// they write (colour matrices). The layer keeps its texture origin and
+/// size: growing it to the document would re-origin the texture behind the
+/// caller's back, and a caller that then pushes the layer's old cropped
+/// `x`/`y` draws the content at twice its offset (#1367).
+pub fn apply_pointwise_filter_full_layer(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
+    set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
+) {
+    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, false, false);
 }
 
 fn apply_filter_inner(
@@ -267,13 +281,22 @@ fn apply_filter_inner(
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
     set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
     respect_selection: bool,
+    expand_to_document: bool,
 ) {
-    // Scratch FBOs are sized to the document. If the layer texture is
-    // smaller (e.g. a tiny ellipse on a large canvas), pass-2 sampling
-    // would read garbage from the scratch's unwritten region, destroying
-    // the filter output. Expanding the layer to at least doc size
-    // guarantees the scratch and layer dimensions match.
-    let _ = engine.ensure_layer_full_size(layer_id);
+    if expand_to_document {
+        // Scratch FBOs are sized to the document. If the layer texture is
+        // smaller (e.g. a tiny ellipse on a large canvas), pass-2 sampling
+        // would read garbage from the scratch's unwritten region, destroying
+        // the filter output. Expanding the layer to at least doc size
+        // guarantees the scratch and layer dimensions match.
+        let _ = engine.ensure_layer_full_size(layer_id);
+    } else {
+        // The scratch is blitted back over the whole layer, so it must match
+        // the layer texel for texel (see ensure_scratch_size).
+        let Some(size) = engine.layer_textures.get(layer_id)
+            .and_then(|&h| engine.texture_pool.get_size(h)) else { return };
+        if engine.ensure_scratch_size(size.0, size.1).is_err() { return; }
+    }
 
     let has_selection = respect_selection && engine.selection_mask_texture.is_some();
 
