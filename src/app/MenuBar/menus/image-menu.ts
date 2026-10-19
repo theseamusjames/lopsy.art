@@ -31,6 +31,8 @@ import { planGroupFlip, planLayerFlip, type FlipAxis, type GroupFlipMember } fro
 import { getDescendantIds } from '../../../layers/group-utils';
 import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 import { clearJsPixelData } from '../../store/clear-js-pixel-data';
+import { remapDocumentMasks, remapLayerMaskThrough } from '../../store/actions/_helpers/remap-layer-masks';
+import { documentRotation90, layerFlip, layerRotation90, type Affine } from '../../../layers/mask-remap';
 
 const GROUP_TEXT_FLIP_REFUSAL = 'Rasterize the text layers in this group before flipping it.';
 
@@ -80,12 +82,17 @@ function flipRasterLayer(engine: Engine, layerId: string, axis: FlipAxis): void 
   state.pushHistory(flipLabel(axis));
   flipLayer(engine, layerId, axis === 'horizontal');
 
+  const mirror = axis === 'horizontal'
+    ? layerFlip(axis, x, origin.x, width)
+    : layerFlip(axis, y, origin.y, height);
+  const doc = useEditorStore.getState().document;
+  const layers = doc.layers.map((l) => {
+    if (l.id !== layerId) return l;
+    const moved = { ...l, x: origin.x, y: origin.y } as Layer;
+    return remapLayerMaskThrough(engine, l, moved, mirror, doc.width, doc.height);
+  });
   useEditorStore.setState((s) => ({
-    document: {
-      ...s.document,
-      layers: s.document.layers.map((l) =>
-        l.id === layerId ? ({ ...l, x: origin.x, y: origin.y } as Layer) : l),
-    },
+    document: { ...s.document, layers },
     renderVersion: s.renderVersion + 1,
   }));
   // GPU is now source of truth — clear stale JS pixel data.
@@ -123,17 +130,37 @@ function flipGroup(engine: Engine, group: GroupLayer, axis: FlipAxis): void {
   state.pushHistory(flipLabel(axis));
   for (const id of origins.keys()) flipLayer(engine, id, axis === 'horizontal');
 
+  // Every member mirrors about the same line, so any one gives the map that
+  // the group's own mask and its descendants' masks follow.
+  const mirror = groupMirror(members, origins, axis);
+  const maskIds = new Set([group.id, ...getDescendantIds(state.document.layers, group.id)]);
+  const doc = useEditorStore.getState().document;
+  const layers = doc.layers.map((l) => {
+    const origin = origins.get(l.id);
+    const moved = origin ? ({ ...l, x: origin.x, y: origin.y } as Layer) : l;
+    if (!mirror || !maskIds.has(l.id)) return moved;
+    return remapLayerMaskThrough(engine, l, moved, mirror, doc.width, doc.height);
+  });
   useEditorStore.setState((s) => ({
-    document: {
-      ...s.document,
-      layers: s.document.layers.map((l) => {
-        const origin = origins.get(l.id);
-        return origin ? ({ ...l, x: origin.x, y: origin.y } as Layer) : l;
-      }),
-    },
+    document: { ...s.document, layers },
     renderVersion: s.renderVersion + 1,
   }));
   for (const id of origins.keys()) clearJsPixelData(id);
+}
+
+function groupMirror(
+  members: readonly GroupFlipMember[],
+  origins: ReadonlyMap<string, { x: number; y: number }>,
+  axis: FlipAxis,
+): Affine | null {
+  for (const m of members) {
+    const origin = origins.get(m.id);
+    if (!origin) continue;
+    return axis === 'horizontal'
+      ? layerFlip(axis, m.texture.x, origin.x, m.texture.width)
+      : layerFlip(axis, m.texture.y, origin.y, m.texture.height);
+  }
+  return null;
 }
 
 /** Opaque-content rect of a layer, texture-local; null when the layer is empty. */
@@ -170,11 +197,13 @@ export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
   rotateLayer90(engine, activeId, direction === 'cw');
 
   const origin = rotatedTextureOrigin(texture, content, direction);
-  const newLayers = state.document.layers.map((l) =>
-    l.id === activeId && l.type === 'raster'
-      ? { ...l, x: origin.x, y: origin.y, width: l.height, height: l.width } as Layer
-      : l,
-  );
+  const turn = layerRotation90(direction, texture, origin, texture.width, texture.height);
+  const { width: docWidth, height: docHeight } = state.document;
+  const newLayers = state.document.layers.map((l) => {
+    if (l.id !== activeId || l.type !== 'raster') return l;
+    const turned = { ...l, x: origin.x, y: origin.y, width: l.height, height: l.width } as Layer;
+    return remapLayerMaskThrough(engine, l, turned, turn, docWidth, docHeight);
+  });
 
   pixelDataManager.remove(activeId);
   const dirtyIds = new Set(state.dirtyLayerIds);
@@ -262,20 +291,24 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
     } as Layer);
   }
 
+  const maskedLayers = remapDocumentMasks(
+    engine, doc.layers, newLayers, documentRotation90(direction, doc.width, doc.height), newWidth, newHeight,
+  );
+
   // Update document size on the engine
   setDocumentSize(engine, newWidth, newHeight);
 
   // GPU-side rotate invalidates every layer's JS cache. clearAll() is a
   // one-shot (see its call sites in history-slice.ts) and would go silent
   // on a second consecutive rotate — use invalidateLayers() instead (#918).
-  pixelDataManager.invalidateLayers(newLayers.map((l) => l.id));
+  pixelDataManager.invalidateLayers(maskedLayers.map((l) => l.id));
   useEditorStore.setState({
     dirtyLayerIds: new Set([...useEditorStore.getState().dirtyLayerIds, ...textLayerIds]),
     document: {
       ...doc,
       width: newWidth,
       height: newHeight,
-      layers: newLayers,
+      layers: maskedLayers,
     },
     renderVersion: state.renderVersion + 1,
   });

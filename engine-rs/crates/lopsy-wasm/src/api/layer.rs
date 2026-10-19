@@ -338,6 +338,17 @@ pub fn scale_layer_texture(engine: &mut Engine, layer_id: &str, new_w: u32, new_
         .map_err(|e| JsError::new(&e))
 }
 
+/// Resample a layer's mask to `dst_w` x `dst_h` through the inverse affine
+/// map `src = [a c; b d] * dst + (e, f)`, in mask pixels.
+#[wasm_bindgen(js_name = "remapLayerMask")]
+pub fn remap_layer_mask(
+    engine: &mut Engine, layer_id: &str, dst_w: u32, dst_h: u32,
+    a: f32, b: f32, c: f32, d: f32, e: f32, f: f32,
+) -> Result<(), JsError> {
+    layer_manager::remap_layer_mask(&mut engine.inner, layer_id, dst_w, dst_h, [a, b, c, d, e, f])
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "resizeCanvasTexture")]
 pub fn resize_canvas_texture(
     engine: &mut Engine, layer_id: &str,
