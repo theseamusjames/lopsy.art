@@ -9,7 +9,8 @@
  */
 
 import type { Engine } from './wasm-bridge';
-import type { Layer, GroupLayer } from '../types';
+import type { Color, DocumentColorMode, Layer, GroupLayer } from '../types';
+import { encodeColorForEngine } from '../utils/color-mode';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { buildLayerIndex, isEffectivelyVisible, type LayerIndex } from '../layers/layer-index';
 import { BLEND_MODE_TO_PASCAL as BLEND_MODE_MAP } from '../types/blend-mode-tables';
@@ -76,9 +77,20 @@ const LAYER_TYPE_MAP: Record<string, string> = {
   'adjustment': 'Adjustment',
 };
 
+/**
+ * Effect colors are stored as display sRGB, but the effect shaders write them
+ * straight into layer-space textures. In Lab those hold encoded CIELAB, so an
+ * unencoded black stroke would decode as deep blue (#1359).
+ */
+function effectColorToEngine(color: Color, colorMode: DocumentColorMode): number[] {
+  const c = encodeColorForEngine(color, colorMode);
+  return [c.r / 255, c.g / 255, c.b / 255, c.a];
+}
+
 export function layerToDescJson(
   layer: Layer,
   effectiveVisible: boolean,
+  colorMode: DocumentColorMode,
   /** Opacity multiplier from pass-through ancestor groups (1.0 = no change). */
   passThroughOpacityMultiplier = 1.0,
   /** For pass-through groups: send empty children so the Rust compositor
@@ -93,7 +105,7 @@ export function layerToDescJson(
     const c = eff.outerGlow.color;
     effects.outer_glow = {
       enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
+      color: effectColorToEngine(c, colorMode),
       size: eff.outerGlow.size,
       spread: eff.outerGlow.spread,
       opacity: eff.outerGlow.opacity,
@@ -103,7 +115,7 @@ export function layerToDescJson(
     const c = eff.innerGlow.color;
     effects.inner_glow = {
       enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
+      color: effectColorToEngine(c, colorMode),
       size: eff.innerGlow.size,
       spread: eff.innerGlow.spread,
       opacity: eff.innerGlow.opacity,
@@ -113,7 +125,7 @@ export function layerToDescJson(
     const c = eff.dropShadow.color;
     effects.drop_shadow = {
       enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
+      color: effectColorToEngine(c, colorMode),
       offset_x: eff.dropShadow.offsetX,
       offset_y: eff.dropShadow.offsetY,
       blur: eff.dropShadow.blur,
@@ -130,7 +142,7 @@ export function layerToDescJson(
     };
     effects.stroke = {
       enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
+      color: effectColorToEngine(c, colorMode),
       width: eff.stroke.width,
       position: posMap[eff.stroke.position] ?? 'Outside',
       opacity: 1.0,
@@ -140,7 +152,7 @@ export function layerToDescJson(
     const c = eff.colorOverlay.color;
     effects.color_overlay = {
       enabled: true,
-      color: [c.r / 255, c.g / 255, c.b / 255, c.a],
+      color: effectColorToEngine(c, colorMode),
       opacity: 1.0,
     };
   }
@@ -249,8 +261,11 @@ export function syncLayers(
   layers: readonly Layer[],
   layerOrder: readonly string[],
   dirtyLayerIds: Set<string>,
+  colorMode: DocumentColorMode,
 ): void {
   const tracked = getTracked(engine);
+  const isColorModeUnchanged = tracked.layerDescColorMode === colorMode;
+  tracked.layerDescColorMode = colorMode;
   const currentIds = new Set(layers.map((l) => l.id));
 
   // Build a per-sync LayerIndex so ancestor-visibility checks are O(depth)
@@ -306,8 +321,8 @@ export function syncLayers(
     const isKnown = tracked.layerIds.has(layer.id);
 
     let descJson: string | undefined;
-    if (!isKnown || !refUnchanged || !visUnchanged || !opacityMultUnchanged) {
-      descJson = layerToDescJson(layer, effectiveVisible, opacityMultiplier, isPassThrough);
+    if (!isKnown || !refUnchanged || !visUnchanged || !opacityMultUnchanged || !isColorModeUnchanged) {
+      descJson = layerToDescJson(layer, effectiveVisible, colorMode, opacityMultiplier, isPassThrough);
     }
 
     if (!isKnown) {

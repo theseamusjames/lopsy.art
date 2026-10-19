@@ -1928,7 +1928,9 @@ fn set_adjustment_uniforms(
     adj: &crate::engine::ImageAdjustmentState,
     brightness: f32,
 ) {
-    set_adjustment_value_uniforms(&engine.gl, &engine.shaders.adjustments, adj, brightness);
+    set_adjustment_value_uniforms(
+        &engine.gl, &engine.shaders.adjustments, adj, brightness, engine.doc_color_mode,
+    );
     bind_adjustment_luts(engine, adj);
 }
 
@@ -1945,9 +1947,10 @@ pub(crate) fn set_standalone_adjustment_uniforms(
     shader: &crate::gpu::shader::ShaderProgram,
     brightness: f32,
     contrast: f32,
+    doc_color_mode: u32,
 ) {
     let adj = crate::engine::ImageAdjustmentState { contrast, ..Default::default() };
-    set_adjustment_value_uniforms(gl, shader, &adj, brightness);
+    set_adjustment_value_uniforms(gl, shader, &adj, brightness, doc_color_mode);
     for name in ["u_curveLut", "u_levelsLut", "u_gradientLut"] {
         if let Some(loc) = shader.location(gl, name) { gl.uniform1i(Some(&loc), 0); }
     }
@@ -1960,7 +1963,9 @@ fn set_adjustment_value_uniforms(
     shader: &crate::gpu::shader::ShaderProgram,
     adj: &crate::engine::ImageAdjustmentState,
     brightness: f32,
+    doc_color_mode: u32,
 ) {
+    if let Some(loc) = shader.location(gl, "u_docColorMode") { gl.uniform1i(Some(&loc), doc_color_mode as i32); }
     if let Some(loc) = shader.location(gl, "u_brightness") { gl.uniform1f(Some(&loc), brightness); }
     if let Some(loc) = shader.location(gl, "u_contrast")   { gl.uniform1f(Some(&loc), adj.contrast / 100.0); }
     if let Some(loc) = shader.location(gl, "u_exposure")   { gl.uniform1f(Some(&loc), adj.exposure); }
@@ -2134,6 +2139,7 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
         if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_amount") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vignette); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
         engine.draw_fullscreen_quad();
 
         // Copy scratch_a → composite
@@ -2191,6 +2197,7 @@ fn apply_adjustments_to_texture(
         }
         if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_amount") { engine.gl.uniform1f(Some(&loc), adj.vignette); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
         engine.draw_fullscreen_quad();
 
         // Copy scratch_b → dst

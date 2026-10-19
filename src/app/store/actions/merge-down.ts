@@ -98,7 +98,7 @@ export function computeMergeDown(
       if (rasterized && rasterized.length > 0) {
         uploadLayerPixels(engine, activeId, rasterized, doc.width, doc.height, 0, 0);
         const cleared = { ...topLayer, x: 0, y: 0, width: doc.width, height: doc.height, opacity: 1, effects: DEFAULT_EFFECTS, mask: null };
-        updateLayer(engine, layerToDescJson(cleared, topLayer.visible));
+        updateLayer(engine, layerToDescJson(cleared, topLayer.visible, doc.colorMode));
       }
     }
 

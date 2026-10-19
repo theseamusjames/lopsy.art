@@ -32,7 +32,7 @@ export function computeFlattenImage(
     // Register the new layer with the engine BEFORE uploading pixels.
     // This ensures addLayer sees that no texture exists yet and creates a placeholder,
     // then uploadLayerPixels replaces it with the correct-size texture.
-    addLayer(engine, layerToDescJson(flatLayer, true));
+    addLayer(engine, layerToDescJson(flatLayer, true, doc.colorMode));
 
     if (composited && composited.length > 0) {
       uploadLayerPixels(engine, flatLayer.id, composited, width, height, 0, 0);

@@ -51,9 +51,14 @@ uniform float u_invert;
 // Gradient Map: 256x1 RGBA LUT mapping luminosity → colour.
 uniform sampler2D u_gradientLut;
 uniform float u_hasGradientMap;
+// Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Every
+// node below assumes sRGB channels, so Lab pixels are decoded first and
+// re-encoded at the end.
+uniform int u_docColorMode;
 out vec4 fragColor;
 
 //#include hsl
+//#include lab
 
 void main() {
     vec4 c = texture(u_tex, v_uv);
@@ -61,6 +66,8 @@ void main() {
         fragColor = c;
         return;
     }
+    bool isLab = u_docColorMode == 1;
+    if (isLab) c.rgb = labToSrgb(c.rgb);
     c.rgb *= pow(2.0, u_exposure);
     c.rgb = (c.rgb - 0.5) * max(u_contrast + 1.0, 0.0) + 0.5 + u_brightness;
     float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -188,5 +195,6 @@ void main() {
         c.rgb = texture(u_gradientLut, vec2(l3 + ofs, 0.5)).rgb;
     }
 
+    if (isLab) c.rgb = srgbToLab(c.rgb);
     fragColor = vec4(c.rgb, c.a);
 }
