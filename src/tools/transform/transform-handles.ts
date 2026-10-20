@@ -180,6 +180,16 @@ export function hitTestHandle(
     ?? nearestWithin(point, positions, SCALE_HANDLES, handleRadius);
 }
 
+/** Screen px side of the white square drawn for a scale handle. */
+export const SCALE_HANDLE_DRAWN_PX = 6;
+
+const CORNER_HANDLES: readonly TransformHandle[] = [
+  'top-left',
+  'top-right',
+  'bottom-right',
+  'bottom-left',
+];
+
 /** Screen px radius of a handle's hit circle. */
 export const HANDLE_HIT_RADIUS_PX = 8;
 
@@ -247,16 +257,28 @@ export function hitTestBoxHandle(point: Point, state: TransformState, zoom: numb
   const positions = getHandlePositions(state);
   const radius = HANDLE_HIT_RADIUS_PX / zoom;
   const halfMin = halfMinExtent(positions);
-  // Rotation handles keep their #1000 radius: at least what the scale
-  // handles had, and short of the corner at low zoom.
-  const clampedRadius = Math.max(1, Math.min(radius, halfMin * 0.8));
+  const insideBand = Math.min(radius, halfMin * HANDLE_INSIDE_BAND_FRACTION);
+  const isInScaleReach = depthInsideBox(point, positions) <= insideBand;
+  // The drawn corner square scales even where a rotate circle overlaps it: at
+  // low zoom the rotate handle sits only a few screen px outside the corner
+  // (#1311). The square gives way halfway to the rotate handle so that one
+  // stays grabbable at any zoom.
+  const cornerSquareRadius = Math.min(
+    (SCALE_HANDLE_DRAWN_PX / 2) * Math.SQRT2 / zoom,
+    (ROTATE_HANDLE_OFFSET * Math.SQRT2) / 2,
+  );
+  if (isInScaleReach) {
+    const cornerSquareHit = nearestWithin(point, positions, CORNER_HANDLES, cornerSquareRadius);
+    if (cornerSquareHit) return cornerSquareHit;
+  }
+  // Rotation handles keep the full radius on thin boxes (#1000), but never
+  // reach the corner at low zoom.
   const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
-  const rotateRadius = Math.max(clampedRadius, Math.min(radius, rotateCornerClearance));
+  const rotateRadius = Math.max(1, Math.min(radius, rotateCornerClearance));
   const rotateHit = nearestWithin(point, positions, ROTATE_HANDLES, rotateRadius);
   if (rotateHit) return rotateHit;
 
-  const insideBand = Math.min(radius, halfMin * HANDLE_INSIDE_BAND_FRACTION);
-  if (depthInsideBox(point, positions) > insideBand) return null;
+  if (!isInScaleReach) return null;
   return nearestWithin(point, positions, SCALE_HANDLES, radius);
 }
 
