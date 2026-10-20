@@ -198,7 +198,10 @@ test.describe('Document color mode', () => {
       const l = doc.layers.find((x) => x.id === doc.activeLayerId)!;
       return { x: l.x, y: l.y };
     });
-    expect(layerBefore).toEqual({ x: 300, y: 200 });
+    // Firefox truncates pointer coordinates to whole CSS pixels, so the
+    // marquee can land a doc pixel short of (300, 200).
+    expect(Math.abs(layerBefore.x - 300)).toBeLessThanOrEqual(1);
+    expect(Math.abs(layerBefore.y - 200)).toBeLessThanOrEqual(1);
 
     await selectColorMode(page, 'Grayscale');
 
@@ -211,7 +214,7 @@ test.describe('Document color mode', () => {
     const doubled = await readCompositedAtDoc(page, 650, 450);
     expect(Math.min(doubled.r, doubled.g, doubled.b)).toBeGreaterThan(245);
     // The stroke ring just outside the box's left edge is still there.
-    const stroke = await readCompositedAtDoc(page, 297, 275);
+    const stroke = await readCompositedAtDoc(page, layerBefore.x - 3, 275);
     expect(stroke.r).toBeLessThan(245);
     expect(Math.abs(stroke.r - stroke.b)).toBeLessThanOrEqual(2);
   });
