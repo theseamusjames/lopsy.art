@@ -78,8 +78,8 @@ describe('layerToDescJson — issue #225 (effects on text layers)', () => {
     const text: TextLayer = { ...baseTextLayer, effects: effectsWithGlow };
     const raster: RasterLayer = { ...baseRasterLayer, effects: effectsWithGlow };
 
-    const textDesc = JSON.parse(layerToDescJson(text, true));
-    const rasterDesc = JSON.parse(layerToDescJson(raster, true));
+    const textDesc = JSON.parse(layerToDescJson(text, true, 'rgb'));
+    const rasterDesc = JSON.parse(layerToDescJson(raster, true, 'rgb'));
 
     // Both layer types must populate the outer_glow field — the bug report
     // (#225) says effects "do not render on text layers"; the descriptor
@@ -100,7 +100,7 @@ describe('layerToDescJson — issue #225 (effects on text layers)', () => {
         dropShadow: { enabled: true, color: { r: 0, g: 0, b: 0, a: 0.75 }, offsetX: 4, offsetY: 4, blur: 8, spread: 0, opacity: 0.75 },
       },
     };
-    const desc = JSON.parse(layerToDescJson(text, true));
+    const desc = JSON.parse(layerToDescJson(text, true, 'rgb'));
     expect(desc.effects.drop_shadow).toBeDefined();
     expect(desc.effects.drop_shadow.enabled).toBe(true);
     expect(desc.effects.drop_shadow.blur).toBe(8);
@@ -116,7 +116,7 @@ describe('layerToDescJson — issue #225 (effects on text layers)', () => {
         colorOverlay: { enabled: true, color: { r: 100, g: 200, b: 50, a: 1 } },
       },
     };
-    const desc = JSON.parse(layerToDescJson(text, true));
+    const desc = JSON.parse(layerToDescJson(text, true, 'rgb'));
     expect(desc.effects.inner_glow?.enabled).toBe(true);
     expect(desc.effects.stroke?.enabled).toBe(true);
     expect(desc.effects.stroke?.position).toBe('Outside');
@@ -124,12 +124,12 @@ describe('layerToDescJson — issue #225 (effects on text layers)', () => {
   });
 
   it('reports the text layer type as "Text" so the engine deserializes it correctly', () => {
-    const desc = JSON.parse(layerToDescJson(baseTextLayer, true));
+    const desc = JSON.parse(layerToDescJson(baseTextLayer, true, 'rgb'));
     expect(desc.layer_type).toBe('Text');
   });
 
   it('omits effect entries when disabled (engine sees no effect)', () => {
-    const desc = JSON.parse(layerToDescJson(baseTextLayer, true));
+    const desc = JSON.parse(layerToDescJson(baseTextLayer, true, 'rgb'));
     expect(desc.effects.outer_glow).toBeUndefined();
     expect(desc.effects.drop_shadow).toBeUndefined();
   });
@@ -138,7 +138,7 @@ describe('layerToDescJson — issue #225 (effects on text layers)', () => {
 describe('layerToDescJson — issue #239 (floating-point layer positions)', () => {
   it('rounds fractional x/y so the WASM engine can deserialize as i32', () => {
     const layer: RasterLayer = { ...baseRasterLayer, x: 99.794921875, y: 110.341796875 };
-    const desc = JSON.parse(layerToDescJson(layer, true));
+    const desc = JSON.parse(layerToDescJson(layer, true, 'rgb'));
     expect(Number.isInteger(desc.x)).toBe(true);
     expect(Number.isInteger(desc.y)).toBe(true);
     expect(desc.x).toBe(100);
@@ -147,7 +147,7 @@ describe('layerToDescJson — issue #239 (floating-point layer positions)', () =
 
   it('rounds negative fractional positions correctly', () => {
     const layer: RasterLayer = { ...baseRasterLayer, x: -0.4, y: -1.6 };
-    const desc = JSON.parse(layerToDescJson(layer, true));
+    const desc = JSON.parse(layerToDescJson(layer, true, 'rgb'));
     expect(Number.isInteger(desc.x)).toBe(true);
     expect(Number.isInteger(desc.y)).toBe(true);
     expect(desc.x).toBe(0);
@@ -156,7 +156,7 @@ describe('layerToDescJson — issue #239 (floating-point layer positions)', () =
 
   it('passes integer positions through unchanged', () => {
     const layer: RasterLayer = { ...baseRasterLayer, x: 42, y: 7 };
-    const desc = JSON.parse(layerToDescJson(layer, true));
+    const desc = JSON.parse(layerToDescJson(layer, true, 'rgb'));
     expect(desc.x).toBe(42);
     expect(desc.y).toBe(7);
   });
@@ -174,7 +174,7 @@ describe('layerToDescJson — group layer mask serialization', () => {
         height: 300,
       },
     };
-    const desc = JSON.parse(layerToDescJson(group, true));
+    const desc = JSON.parse(layerToDescJson(group, true, 'rgb'));
     expect(desc.mask).not.toBeNull();
     expect(desc.mask.enabled).toBe(true);
     expect(desc.mask.width).toBe(400);
@@ -183,13 +183,13 @@ describe('layerToDescJson — group layer mask serialization', () => {
 
   it('includes null mask field when group has no mask', () => {
     const group = createGroupLayer({ name: 'Group' });
-    const desc = JSON.parse(layerToDescJson(group, true));
+    const desc = JSON.parse(layerToDescJson(group, true, 'rgb'));
     expect(desc.mask).toBeNull();
   });
 
   it('serializes group layer type as "Group"', () => {
     const group = createGroupLayer({ name: 'Group' });
-    const desc = JSON.parse(layerToDescJson(group, true));
+    const desc = JSON.parse(layerToDescJson(group, true, 'rgb'));
     expect(desc.layer_type).toBe('Group');
   });
 });
@@ -214,7 +214,7 @@ describe('syncLayers — group mask upload', () => {
         height: 300,
       },
     };
-    syncLayers(engine, [group], [group.id], new Set());
+    syncLayers(engine, [group], [group.id], new Set(), 'rgb');
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
     const [calledEngine, calledId, , calledW, calledH] = vi.mocked(bridge.uploadLayerMask).mock.calls[0]!;
     expect(calledEngine).toBe(engine);
@@ -246,7 +246,7 @@ describe('syncLayers — group mask upload', () => {
         height: 300,
       },
     };
-    syncLayers(engine, [raster, group], [group.id, raster.id], new Set());
+    syncLayers(engine, [raster, group], [group.id, raster.id], new Set(), 'rgb');
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(2);
     const uploadedIds = vi.mocked(bridge.uploadLayerMask).mock.calls.map((c: unknown[]) => c[1]);
     expect(uploadedIds).toContain(raster.id);
@@ -256,7 +256,7 @@ describe('syncLayers — group mask upload', () => {
   it('does not call uploadLayerMask for a group without a mask', () => {
     const engine = makeFakeEngine();
     const group = createGroupLayer({ name: 'Group' });
-    syncLayers(engine, [group], [group.id], new Set());
+    syncLayers(engine, [group], [group.id], new Set(), 'rgb');
     expect(vi.mocked(bridge.uploadLayerMask)).not.toHaveBeenCalled();
   });
 
@@ -279,7 +279,7 @@ describe('syncLayers — group mask upload', () => {
     // the store stores them, and seedMaskDataRef records the reference.
     seedMaskDataRef(engine, 'r1', readback);
 
-    syncLayers(engine, [raster], [raster.id], new Set());
+    syncLayers(engine, [raster], [raster.id], new Set(), 'rgb');
     expect(vi.mocked(bridge.uploadLayerMask)).not.toHaveBeenCalled();
   });
 
@@ -296,7 +296,7 @@ describe('syncLayers — group mask upload', () => {
     };
 
     seedMaskDataRef(engine, 'r1', seeded);
-    syncLayers(engine, [raster], [raster.id], new Set());
+    syncLayers(engine, [raster], [raster.id], new Set(), 'rgb');
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
   });
 
@@ -313,11 +313,11 @@ describe('syncLayers — group mask upload', () => {
       id: 'r1',
       mask: { id: 'm1', enabled: true, data, width: 64, height: 64 },
     };
-    syncLayers(engine, [raster], [raster.id], new Set());
+    syncLayers(engine, [raster], [raster.id], new Set(), 'rgb');
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
 
     resetTrackedState(engine, { preserveContentRefs: true });
-    syncLayers(engine, [raster], [raster.id], new Set([raster.id]));
+    syncLayers(engine, [raster], [raster.id], new Set([raster.id]), 'rgb');
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledOnce();
   });
 
@@ -331,12 +331,12 @@ describe('syncLayers — group mask upload', () => {
     };
     const unmasked: RasterLayer = { ...masked, mask: null };
 
-    syncLayers(engine, [masked], [masked.id], new Set());
-    syncLayers(engine, [unmasked], [unmasked.id], new Set());
+    syncLayers(engine, [masked], [masked.id], new Set(), 'rgb');
+    syncLayers(engine, [unmasked], [unmasked.id], new Set(), 'rgb');
     expect(vi.mocked(bridge.removeLayerMask)).toHaveBeenCalledOnce();
 
     // Redo of Add Mask brings back the very same `data` reference.
-    syncLayers(engine, [masked], [masked.id], new Set());
+    syncLayers(engine, [masked], [masked.id], new Set(), 'rgb');
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(2);
   });
 });
@@ -361,7 +361,7 @@ describe('syncLayers — tracked-state cleanup on layer removal', () => {
     };
 
     // First sync: layer is present.
-    syncLayers(engine, [raster], [raster.id], new Set([raster.id]));
+    syncLayers(engine, [raster], [raster.id], new Set([raster.id]), 'rgb');
     const tracked = getTracked(engine);
     // Pre-condition: every per-layer Map / Set carries an entry for r1.
     expect(tracked.layerIds.has('r1')).toBe(true);
@@ -379,7 +379,7 @@ describe('syncLayers — tracked-state cleanup on layer removal', () => {
     tracked.pathTextKeys.set('r1', 'fake-key');
 
     // Second sync: layer is gone.
-    syncLayers(engine, [], [], new Set());
+    syncLayers(engine, [], [], new Set(), 'rgb');
 
     // Post-condition: every per-layer Map / Set is empty for r1.
     expect(tracked.layerIds.has('r1')).toBe(false);
@@ -417,25 +417,25 @@ const baseGroup: GroupLayer = {
 
 describe('layerToDescJson — pass-through blend mode', () => {
   it('serializes pass-through group with empty children (no group-scratch routing)', () => {
-    const desc = JSON.parse(layerToDescJson(baseGroup, true, 1.0, true));
+    const desc = JSON.parse(layerToDescJson(baseGroup, true, 'rgb', 1.0, true));
     expect(desc.children).toEqual([]);
   });
 
   it('serializes normal group with its actual children', () => {
     const normalGroup: GroupLayer = { ...baseGroup, blendMode: 'normal' };
-    const desc = JSON.parse(layerToDescJson(normalGroup, true, 1.0, false));
+    const desc = JSON.parse(layerToDescJson(normalGroup, true, 'rgb', 1.0, false));
     expect(desc.children).toEqual(['raster-1']);
   });
 
   it('multiplies opacity by pass-through multiplier in the descriptor', () => {
     const child: RasterLayer = { ...baseRasterLayer, opacity: 0.8 };
-    const desc = JSON.parse(layerToDescJson(child, true, 0.5));
+    const desc = JSON.parse(layerToDescJson(child, true, 'rgb', 0.5));
     expect(desc.opacity).toBeCloseTo(0.4);
   });
 
   it('leaves opacity unchanged when multiplier is 1.0', () => {
     const child: RasterLayer = { ...baseRasterLayer, opacity: 0.7 };
-    const desc = JSON.parse(layerToDescJson(child, true, 1.0));
+    const desc = JSON.parse(layerToDescJson(child, true, 'rgb', 1.0));
     expect(desc.opacity).toBeCloseTo(0.7);
   });
 });
@@ -633,7 +633,7 @@ describe('syncLayers — sticky dirtyLayerIds (#700)', () => {
     // Constant dirty set across five frames — same layer, same data ref.
     const dirty = new Set([layer.id]);
     for (let i = 0; i < 5; i++) {
-      syncLayers(engine, [layer], [layer.id], dirty);
+      syncLayers(engine, [layer], [layer.id], dirty, 'rgb');
     }
 
     expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(1);
@@ -658,7 +658,7 @@ describe('syncLayers — sticky dirtyLayerIds (#700)', () => {
 
     const dirty = new Set([layer.id]);
     for (let i = 0; i < 5; i++) {
-      syncLayers(engine, [layer], [layer.id], dirty);
+      syncLayers(engine, [layer], [layer.id], dirty, 'rgb');
     }
 
     expect(vi.mocked(bridge.uploadLayerSparsePixels)).toHaveBeenCalledTimes(1);
@@ -672,13 +672,13 @@ describe('syncLayers — sticky dirtyLayerIds (#700)', () => {
     const first = makeImageData(0, 16 * 16 * 4, 16, 16);
     pixelDataManager.setDense(layer.id, first);
     const dirty = new Set([layer.id]);
-    syncLayers(engine, [layer], [layer.id], dirty);
+    syncLayers(engine, [layer], [layer.id], dirty, 'rgb');
 
     // Same backing buffer, different ImageData reference (subarray view over
     // a different offset). syncLayers ref-diffs on the ImageData object.
     const second = makeImageData(4, 16 * 16 * 4, 16, 16);
     pixelDataManager.setDense(layer.id, second);
-    syncLayers(engine, [layer], [layer.id], dirty);
+    syncLayers(engine, [layer], [layer.id], dirty, 'rgb');
 
     expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(2);
   });
@@ -691,13 +691,13 @@ describe('syncLayers — sticky dirtyLayerIds (#700)', () => {
     // First: sync layer with clean state so tracked version is set.
     const imageData = makeImageData(0, 16 * 16 * 4, 16, 16);
     pixelDataManager.setDense(layer.id, imageData);
-    syncLayers(engine, [layer], [layer.id], new Set());
+    syncLayers(engine, [layer], [layer.id], new Set(), 'rgb');
     expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(1);
 
     // Second: someone edits the same buffer in place (data ref stable) and
     // flags dirty. The dirty flag alone must still drive an upload.
     imageData.data.fill(200);
-    syncLayers(engine, [layer], [layer.id], new Set([layer.id]));
+    syncLayers(engine, [layer], [layer.id], new Set([layer.id]), 'rgb');
     expect(vi.mocked(bridge.uploadLayerPixels)).toHaveBeenCalledTimes(2);
   });
 
@@ -715,7 +715,7 @@ describe('syncLayers — sticky dirtyLayerIds (#700)', () => {
 
     const dirty = new Set([layer.id]);
     for (let i = 0; i < 3; i++) {
-      syncLayers(engine, [layer], [layer.id], dirty);
+      syncLayers(engine, [layer], [layer.id], dirty, 'rgb');
     }
 
     // Still exactly one upload (perf win preserved) ...
@@ -764,7 +764,7 @@ describe('syncLayers — bounded retries for failing uploads (#595 follow-up)', 
     const layer = makeMaskedLayer('fail-cap', maskData);
 
     for (let i = 0; i < 20; i++) {
-      syncLayers(engine, [layer], [layer.id], new Set());
+      syncLayers(engine, [layer], [layer.id], new Set(), 'rgb');
     }
 
     // 5 attempts (4 individual errors + 1 final summary), then silence.
@@ -780,14 +780,14 @@ describe('syncLayers — bounded retries for failing uploads (#595 follow-up)', 
     });
     const layer = makeMaskedLayer('fail-newdata', maskData);
     for (let i = 0; i < 10; i++) {
-      syncLayers(engine, [layer], [layer.id], new Set());
+      syncLayers(engine, [layer], [layer.id], new Set(), 'rgb');
     }
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(5);
 
     // The user paints on the mask — new data reference resets the budget.
     const edited = makeMaskedLayer('fail-newdata', editedMaskData);
     for (let i = 0; i < 10; i++) {
-      syncLayers(engine, [edited], [edited.id], new Set());
+      syncLayers(engine, [edited], [edited.id], new Set(), 'rgb');
     }
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(10);
   });
@@ -803,14 +803,14 @@ describe('syncLayers — bounded retries for failing uploads (#595 follow-up)', 
     });
     const layer = makeMaskedLayer('fail-transient', maskData);
 
-    syncLayers(engine, [layer], [layer.id], new Set());
-    syncLayers(engine, [layer], [layer.id], new Set());
-    syncLayers(engine, [layer], [layer.id], new Set()); // succeeds
+    syncLayers(engine, [layer], [layer.id], new Set(), 'rgb');
+    syncLayers(engine, [layer], [layer.id], new Set(), 'rgb');
+    syncLayers(engine, [layer], [layer.id], new Set(), 'rgb'); // succeeds
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(3);
 
     // Synced and tracked — no further uploads for the same data.
     for (let i = 0; i < 5; i++) {
-      syncLayers(engine, [layer], [layer.id], new Set());
+      syncLayers(engine, [layer], [layer.id], new Set(), 'rgb');
     }
     expect(vi.mocked(bridge.uploadLayerMask)).toHaveBeenCalledTimes(3);
   });
@@ -836,7 +836,7 @@ describe('syncLayers — bounded retries for failing uploads (#595 follow-up)', 
 
     try {
       for (let i = 0; i < 20; i++) {
-        syncLayers(engine, [layer], [layer.id], new Set());
+        syncLayers(engine, [layer], [layer.id], new Set(), 'rgb');
       }
       expect(vi.mocked(bridge.uploadLayerSparsePixels)).toHaveBeenCalledTimes(5);
     } finally {
@@ -851,10 +851,50 @@ describe('syncLayers — bounded retries for failing uploads (#595 follow-up)', 
       throw new Error('GL_OUT_OF_MEMORY');
     });
     const layer = makeMaskedLayer('fail-removed', maskData);
-    syncLayers(engine, [layer], [layer.id], new Set());
+    syncLayers(engine, [layer], [layer.id], new Set(), 'rgb');
     expect(getTracked(engine).uploadFailures.has('fail-removed:mask')).toBe(true);
 
-    syncLayers(engine, [], [], new Set());
+    syncLayers(engine, [], [], new Set(), 'rgb');
     expect(getTracked(engine).uploadFailures.size).toBe(0);
+  });
+});
+
+describe('layerToDescJson — effect colors per document mode (#1359)', () => {
+  const effects = {
+    ...DEFAULT_EFFECTS,
+    stroke: { enabled: true, color: { r: 0, g: 0, b: 0, a: 1 }, width: 6, position: 'outside' as const },
+    colorOverlay: { enabled: true, color: { r: 255, g: 255, b: 255, a: 1 } },
+  };
+  const layer: RasterLayer = { ...baseRasterLayer, effects };
+
+  it('passes sRGB effect colors through unchanged outside Lab', () => {
+    const desc = JSON.parse(layerToDescJson(layer, true, 'rgb'));
+    expect(desc.effects.stroke.color).toEqual([0, 0, 0, 1]);
+    expect(desc.effects.color_overlay.color).toEqual([1, 1, 1, 1]);
+  });
+
+  it('encodes effect colors as CIELAB in a Lab document', () => {
+    const desc = JSON.parse(layerToDescJson(layer, true, 'lab'));
+    // Black is L=0 with neutral a/b (128/255); white is L=100, neutral a/b.
+    const [sl, sa, sb, salpha] = desc.effects.stroke.color as number[];
+    expect(sl).toBeCloseTo(0, 2);
+    expect(sa).toBeCloseTo(128 / 255, 2);
+    expect(sb).toBeCloseTo(128 / 255, 2);
+    expect(salpha).toBe(1);
+    const [ol, oa, ob] = desc.effects.color_overlay.color as number[];
+    expect(ol).toBeCloseTo(1, 2);
+    expect(Math.abs(oa! - 128 / 255)).toBeLessThan(2 / 255);
+    expect(Math.abs(ob! - 128 / 255)).toBeLessThan(2 / 255);
+  });
+
+  it('re-sends unchanged layers when the document mode changes', () => {
+    const engine = makeFakeEngine();
+    syncLayers(engine, [layer], [layer.id], new Set(), 'rgb');
+    vi.mocked(bridge.updateLayer).mockClear();
+
+    syncLayers(engine, [layer], [layer.id], new Set(), 'lab');
+    expect(vi.mocked(bridge.updateLayer)).toHaveBeenCalledOnce();
+    const desc = JSON.parse(vi.mocked(bridge.updateLayer).mock.calls[0]![1] as string);
+    expect(desc.effects.stroke.color[1]).toBeCloseTo(128 / 255, 2);
   });
 });

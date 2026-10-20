@@ -522,3 +522,22 @@ Patch `enable`/`disable` (SCISSOR_TEST), `scissor`, `viewport` and
 ∩ viewport when the test is on, else the viewport. Assert the largest is
 dab-sized and that the scissor test is off when the event ends — see
 `e2e/retouch-dab-scissor-1219.spec.ts`.
+
+## `apply_filter*` grows the layer to the document — JS must follow or not use it
+
+`apply_filter` / `apply_filter_full_layer` call `ensure_layer_full_size`,
+which re-origins a cropped layer's texture to `min(0, x)`. A caller that
+doesn't then run `syncLayerAfterFullSize` (or otherwise update `x`/`y`/size)
+leaves the store with the old cropped origin, and the next descriptor push
+draws the content at twice its offset (#771, #783, #1367). For per-texel
+shaders (colour matrices) use `apply_pointwise_filter_full_layer`, which
+keeps the texture's geometry and sizes the scratch to it.
+
+## Lab documents: anything written into a texture must be Lab-encoded
+
+In Lab mode every layer texture and the composite hold encoded CIELAB, and
+only `final_blit.glsl` / the export path decode. Colours that JS hands to
+the engine (brush colour via `encodeColorForEngine`, effect colours in
+`layerToDescJson`) must be encoded first, and shaders that do RGB maths on
+the composite (`adjustments.glsl`, `vignette.glsl`) decode/re-encode via
+`//#include lab` (`gpu/shaders/lab_common.glsl`) when `u_docColorMode == 1`.

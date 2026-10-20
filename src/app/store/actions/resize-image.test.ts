@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../../../test/canvas-mock';
 import { describe, it, expect } from 'vitest';
-import { computeResizeImage } from './resize-image';
+import { computeResizeImage, scaleGuidesForResize, scalePathsForResize } from './resize-image';
 import { createRasterLayer, createTextLayer, DEFAULT_EFFECTS } from '../../../layers/layer-model';
 import type { DocumentState } from '../../../types';
 import type { RasterLayer, TextLayer } from '../../../types/layers';
@@ -161,5 +161,52 @@ describe('computeResizeImage', () => {
     const updatedRaster = result.document!.layers.find((l) => l.id === raster.id)! as RasterLayer;
     expect(updatedRaster.effects.stroke.width).toBe(20);
     expect(updatedRaster.effects.dropShadow.blur).toBe(24);
+  });
+});
+
+describe('scalePathsForResize (#1363)', () => {
+  it('scales anchors and their absolute handles by the document scale', () => {
+    const [path] = scalePathsForResize([{
+      id: 'p1',
+      name: 'Path 1',
+      closed: false,
+      anchors: [
+        { point: { x: 100, y: 400 }, handleIn: null, handleOut: { x: 200, y: 300 } },
+        { point: { x: 700, y: 400 }, handleIn: { x: 600, y: 500 }, handleOut: null },
+      ],
+    }], 0.5, 0.25);
+    expect(path!.anchors).toEqual([
+      { point: { x: 50, y: 100 }, handleIn: null, handleOut: { x: 100, y: 75 } },
+      { point: { x: 350, y: 100 }, handleIn: { x: 300, y: 125 }, handleOut: null },
+    ]);
+    expect(path!.id).toBe('p1');
+  });
+});
+
+describe('scaleGuidesForResize (#1363)', () => {
+  it('scales vertical guides by X and horizontal guides by Y', () => {
+    const guides = scaleGuidesForResize([
+      { id: 'v', orientation: 'vertical', position: 400 },
+      { id: 'h', orientation: 'horizontal', position: 300 },
+    ], 0.5, 2);
+    expect(guides).toEqual([
+      { id: 'v', orientation: 'vertical', position: 200 },
+      { id: 'h', orientation: 'horizontal', position: 600 },
+    ]);
+  });
+});
+
+describe('computeResizeImage — path-bound text (#1363)', () => {
+  it('scales the path anchor with x/y so the user offset off the path survives', () => {
+    const { doc } = makeDoc();
+    const text: TextLayer = {
+      ...createTextLayer({ name: 'T', text: 'HI' }),
+      x: 110, y: 380, pathId: 'p1', pathAnchorX: 100, pathAnchorY: 380,
+    };
+    const result = computeResizeImage({ ...doc, width: 800, height: 800, layers: [text], layerOrder: [text.id] }, 0, 400, 400);
+    const scaled = result.document!.layers[0] as TextLayer;
+    expect(scaled.pathAnchorX).toBe(50);
+    expect(scaled.pathAnchorY).toBe(190);
+    expect(scaled.x - scaled.pathAnchorX!).toBe(5);
   });
 });

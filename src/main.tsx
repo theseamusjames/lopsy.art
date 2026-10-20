@@ -100,7 +100,7 @@ if (import.meta.env.DEV) {
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, bg.r, bg.g, bg.b, bg.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH, canvasPixelRatio(canvas, screenW));
-        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
+        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds, doc.colorMode);
         syncGroupAdjustments(engine, doc.layers);
         syncSelection(engine, state.selection);
         // render() skips clean frames; force a recomposite so readPixels
@@ -199,7 +199,7 @@ if (import.meta.env.DEV) {
         syncDocumentSize(engine, doc.width, doc.height);
         syncBackgroundColor(engine, doc.backgroundColor.r, doc.backgroundColor.g, doc.backgroundColor.b, doc.backgroundColor.a);
         syncViewport(engine, state.viewport.zoom, state.viewport.panX, state.viewport.panY, screenW, screenH, canvasPixelRatio(canvas, screenW));
-        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds);
+        syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds, doc.colorMode);
         const id = layerId ?? doc.activeLayerId;
         if (!id) { resolve({ width: 0, height: 0, pixels: [] }); return; }
         const dims = getLayerTextureDimensions(engine, id);

@@ -23,6 +23,9 @@ pub const HSL_COMMON: &str = include_str!("shaders/hsl_common.glsl");
 /// Premultiplied bilinear sampling of straight-alpha textures, spliced in
 /// where `//#include premul_sample` appears.
 pub const PREMUL_SAMPLE: &str = include_str!("shaders/premul_sample.glsl");
+/// Encoded-CIELAB <-> sRGB conversions, spliced in where `//#include lab`
+/// appears.
+pub const LAB_COMMON: &str = include_str!("shaders/lab_common.glsl");
 pub const BLIT_RESAMPLE_FRAG: &str = include_str!("shaders/blit_resample.glsl");
 pub const COMPOSITE_FRAG: &str = include_str!("shaders/composite.glsl");
 pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
@@ -198,6 +201,7 @@ pub fn link_program(
 fn preprocess_frag(src: &str) -> String {
     src.replace("//#include hsl", HSL_COMMON)
         .replace("//#include premul_sample", PREMUL_SAMPLE)
+        .replace("//#include lab", LAB_COMMON)
 }
 
 /// Injects `#define NAME VALUE` lines into a GLSL source. The `#version`
@@ -495,8 +499,8 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLIT_RESAMPLE_FRAG, OIL_PAINT_FRAG,
-        SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
+        inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
+        OIL_PAINT_FRAG, SMUDGE_DAB_FRAG, VIGNETTE_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
     };
 
     #[test]
@@ -542,6 +546,21 @@ mod tests {
             assert!(out.contains("vec4 samplePremulBilinear("));
             assert!(!out.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
         }
+    }
+
+    #[test]
+    fn tonal_passes_work_on_decoded_lab() {
+        // Adjustments and the vignette scale channel values, which only means
+        // "darker" on sRGB; on encoded Lab it drags a/b toward blue (#1365).
+        for src in [ADJUSTMENTS_FRAG, VIGNETTE_FRAG] {
+            let out = preprocess_frag(src);
+            assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
+            assert!(out.contains("uniform int u_docColorMode;"));
+            assert!(out.contains("c.rgb = labToSrgb(c.rgb)"));
+            assert!(out.contains("c.rgb = srgbToLab(c.rgb)"));
+        }
+        let blit = preprocess_frag(FINAL_BLIT_FRAG);
+        assert!(blit.contains("vec3 labToSrgb(vec3 encoded)"));
     }
 
     #[test]

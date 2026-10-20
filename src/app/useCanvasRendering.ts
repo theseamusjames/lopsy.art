@@ -177,7 +177,7 @@ function renderFrameGpu(
   syncViewport(engine, viewport.zoom, viewport.panX, viewport.panY, screenW, screenH, pixelRatio);
   // syncLayers must run before syncTextLayers so any new text layer's GPU texture
   // is created before syncTextLayers tries to fill or upload pixels into it.
-  syncLayers(engine, layers, doc.layerOrder, dirtyLayerIds);
+  syncLayers(engine, layers, doc.layerOrder, dirtyLayerIds, doc.colorMode);
 
   // Check if the currently-editing text layer is bound to a path.
   // If so, skip syncTextLayers (which renders normal horizontal text) and

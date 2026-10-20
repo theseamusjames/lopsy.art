@@ -35,7 +35,7 @@ import { computeRasterizeStyle, canRasterizeLayerStyle } from './actions/rasteri
 import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
 import { computeCropCanvas } from './actions/crop-canvas';
 import { computeResizeCanvas } from './actions/resize-canvas';
-import { computeResizeImage } from './actions/resize-image';
+import { computeResizeImage, scaleGuidesForResize, scalePathsForResize } from './actions/resize-image';
 import { computeConvertColorMode, layersWithPixels, paletteFromBytes, paletteToBytes } from './actions/convert-color-mode';
 import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
 import { getColorModeCapabilities } from '../../utils/color-mode-capabilities';
@@ -897,7 +897,12 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
-    rerenderResizedUprightText(get, set, textAnchors, newWidth / s.document.width, newHeight / s.document.height);
+    const scaleX = newWidth / s.document.width;
+    const scaleY = newHeight / s.document.height;
+    set({ paths: scalePathsForResize(s.paths, scaleX, scaleY) });
+    const ui = useUIStore.getState();
+    useUIStore.setState({ guides: scaleGuidesForResize(ui.guides, scaleX, scaleY) });
+    rerenderResizedUprightText(get, set, textAnchors, scaleX, scaleY);
     rerenderTransformedText(get, set);
   },
 
