@@ -59,6 +59,17 @@ describe('computeMergeDown', () => {
     expect(result.document!.layerOrder).not.toContain(topId);
   });
 
+  // #1374: the merged-away layer must not stay in selectedLayerIds, or the
+  // Layers panel's Delete Layer button deletes nothing.
+  it('selects only the surviving layer after merge', () => {
+    const doc = makeDoc();
+    const topId = doc.activeLayerId!;
+    const belowId = doc.layerOrder[0]!;
+    const result = computeMergeDown({ ...doc, selectedLayerIds: [topId] })!;
+    expect(result.document!.activeLayerId).toBe(belowId);
+    expect(result.document!.selectedLayerIds).toEqual([belowId]);
+  });
+
   // #746: the compute is GPU-only — it invalidates the JS pixel cache
   // for the two touched layers directly, without returning a full-doc
   // pixel map for `applyActionResult` to replay.
