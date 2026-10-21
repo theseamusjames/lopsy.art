@@ -37,7 +37,7 @@ import type {
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
-import { claimLiveFloat, commitLiveFloat, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
+import { claimLiveFloat, commitLiveFloat, deferNudgeMask, flushNudgeMask, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
 import {
   isLayerTransformCurrent,
   isLayerTransformLive,
@@ -235,6 +235,9 @@ function applyTranslatedTransform(layerId: string | null, transform: TransformSt
 }
 
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
+  // A drag that starts while an arrow key is still held needs the mask
+  // where the ants are.
+  flushNudgeMask();
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
   const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
@@ -424,14 +427,17 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       // The float expanded the layer texture; mirror its full rect into the
       // store. update_layer shields the engine only while the float lives —
       // a store left at the pre-float width/height outlives it and feeds
-      // stale bounds to later operations and resyncs (#822).
-      reconcileLayerBoundsWithEngine(engine, activeLayerId);
+      // stale bounds to later operations and resyncs (#822). The pixel
+      // version waits for handleMoveUp: the lifted float composites back at
+      // (0, 0), and a bump here queued a synchronous thumbnail readback that
+      // landed a few hundred ms into the drag (#1383).
+      reconcileLayerBoundsWithEngine(engine, activeLayerId, { shouldBumpVersion: false });
 
       if (altKey) {
         restoreFloatBase(engine, activeLayerId);
       }
 
-      clearJsPixelData(activeLayerId);
+      clearJsPixelData(activeLayerId, { shouldBumpVersion: false });
 
       floatingSelectionRef.current = {
         offsetX: 0,
@@ -936,9 +942,11 @@ export function handleNudgeMove(
 
       floatSelection(engine, activeId);
       compositeFloat(engine, 0, 0);
-      reconcileLayerBoundsWithEngine(engine, activeId);
+      // Leave the pixel version alone until the hold ends (flushNudgeMask):
+      // a bump here queued a synchronous thumbnail readback mid-hold (#1383).
+      reconcileLayerBoundsWithEngine(engine, activeId, { shouldBumpVersion: false });
 
-      clearJsPixelData(activeId);
+      clearJsPixelData(activeId, { shouldBumpVersion: false });
 
       floatingSelectionRef.current = {
         offsetX: 0,
@@ -957,21 +965,10 @@ export function handleNudgeMove(
     growFloatForOffset(engine, activeId, floatingSelectionRef.current, newOffsetX, newOffsetY);
     compositeFloat(engine, newOffsetX, newOffsetY);
     // Same as handleMoveUp: the composite changed the layer texture (#925).
-    clearJsPixelData(activeId);
+    clearJsPixelData(activeId, { shouldBumpVersion: false });
 
-    // Shift selection mask
-    const { width: docW, height: docH } = editor.document;
-    const origMask = floatingSelectionRef.current.originalMask;
-    const newMask = new Uint8ClampedArray(docW * docH);
-    for (let y = 0; y < docH; y++) {
-      for (let x = 0; x < docW; x++) {
-        const srcX = x - newOffsetX;
-        const srcY = y - newOffsetY;
-        if (srcX >= 0 && srcX < docW && srcY >= 0 && srcY < docH) {
-          newMask[y * docW + x] = origMask[srcY * docW + srcX] ?? 0;
-        }
-      }
-    }
+    // Move only the bounds while the key is held, as a drag does; the
+    // translated mask is materialized once when the hold ends (#1382).
     const origBounds = floatingSelectionRef.current.originalBounds;
     const newBounds = {
       x: origBounds.x + newOffsetX,
@@ -979,8 +976,16 @@ export function handleNudgeMove(
       width: origBounds.width,
       height: origBounds.height,
     };
-    claimLiveFloat(activeId, newMask);
-    editor.setSelection(newBounds, newMask, docW, docH);
+    claimLiveFloat(activeId, sel.mask);
+    deferNudgeMask({
+      layerId: activeId,
+      staleMask: sel.mask,
+      originalMask: floatingSelectionRef.current.originalMask,
+      originalBounds: origBounds,
+      offsetX: newOffsetX,
+      offsetY: newOffsetY,
+    });
+    editor.setSelectionBounds(newBounds);
     useUIStore.getState().setTransform(createTransformState(newBounds));
     editor.notifyRender();
   } else {
