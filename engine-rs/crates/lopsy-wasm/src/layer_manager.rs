@@ -1312,7 +1312,7 @@ pub fn drop_float(engine: &mut EngineInner) {
 
 /// Copy `src` (src_w×src_h) into a freshly acquired, transparent dst_w×dst_h
 /// texture with its top-left at (off_x, off_y). Returns the new handle.
-fn copy_into_larger_texture(
+pub(crate) fn copy_into_larger_texture(
     engine: &mut EngineInner,
     src_handle: TextureHandle,
     src_w: u32,

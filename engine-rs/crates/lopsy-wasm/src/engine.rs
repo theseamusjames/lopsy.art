@@ -611,44 +611,16 @@ impl EngineInner {
             return Ok(());
         }
 
-        // Read old texture pixels via CPU readback (handles float textures).
-        let old_tex_gl = self.texture_pool.get(layer_tex).cloned();
-        let old_pixels = if let Some(ref tex) = old_tex_gl {
-            let fbo = self.gl.create_framebuffer();
-            if let Some(ref fbo) = fbo {
-                self.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(fbo));
-                self.gl.framebuffer_texture_2d(
-                    WebGl2RenderingContext::FRAMEBUFFER,
-                    WebGl2RenderingContext::COLOR_ATTACHMENT0,
-                    WebGl2RenderingContext::TEXTURE_2D,
-                    Some(tex),
-                    0,
-                );
-                let result = self.texture_pool.read_rgba(&self.gl, 0, 0, lw, lh);
-                self.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-                self.gl.delete_framebuffer(Some(fbo));
-                result.ok()
-            } else {
-                None
-            }
+        // A GPU blit keeps the growth off the CPU: a readback here was a
+        // synchronous full-texture FLOAT read plus a lossy 8-bit re-upload
+        // on the first stroke after every Move (#1380).
+        let new_tex = if self.texture_pool.get(layer_tex).is_some() && lw > 0 && lh > 0 {
+            crate::layer_manager::copy_into_larger_texture(
+                self, layer_tex, lw, lh, new_w, new_h, layer_x - min_x, layer_y - min_y,
+            )?
         } else {
-            None
+            self.texture_pool.acquire(&self.gl, new_w, new_h)?
         };
-
-        let new_tex = self.texture_pool.acquire(&self.gl, new_w, new_h)?;
-
-        // Re-upload old content at the correct position in the new texture.
-        if let Some(pixels) = old_pixels {
-            let dst_x = layer_x - min_x;
-            let dst_y = layer_y - min_y;
-
-            if lw > 0 && lh > 0 {
-                let _ = self.texture_pool.upload_rgba(
-                    &self.gl, new_tex,
-                    dst_x, dst_y, lw, lh, &pixels,
-                );
-            }
-        }
 
         let old = self.layer_textures.insert(layer_id.to_string(), new_tex);
         if let Some(old_tex) = old {
