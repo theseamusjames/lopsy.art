@@ -611,44 +611,16 @@ impl EngineInner {
             return Ok(());
         }
 
-        // Read old texture pixels via CPU readback (handles float textures).
-        let old_tex_gl = self.texture_pool.get(layer_tex).cloned();
-        let old_pixels = if let Some(ref tex) = old_tex_gl {
-            let fbo = self.gl.create_framebuffer();
-            if let Some(ref fbo) = fbo {
-                self.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(fbo));
-                self.gl.framebuffer_texture_2d(
-                    WebGl2RenderingContext::FRAMEBUFFER,
-                    WebGl2RenderingContext::COLOR_ATTACHMENT0,
-                    WebGl2RenderingContext::TEXTURE_2D,
-                    Some(tex),
-                    0,
-                );
-                let result = self.texture_pool.read_rgba(&self.gl, 0, 0, lw, lh);
-                self.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-                self.gl.delete_framebuffer(Some(fbo));
-                result.ok()
-            } else {
-                None
-            }
+        // A GPU blit keeps the growth off the CPU: a readback here was a
+        // synchronous full-texture FLOAT read plus a lossy 8-bit re-upload
+        // on the first stroke after every Move (#1380).
+        let new_tex = if self.texture_pool.get(layer_tex).is_some() && lw > 0 && lh > 0 {
+            crate::layer_manager::copy_into_larger_texture(
+                self, layer_tex, lw, lh, new_w, new_h, layer_x - min_x, layer_y - min_y,
+            )?
         } else {
-            None
+            self.texture_pool.acquire(&self.gl, new_w, new_h)?
         };
-
-        let new_tex = self.texture_pool.acquire(&self.gl, new_w, new_h)?;
-
-        // Re-upload old content at the correct position in the new texture.
-        if let Some(pixels) = old_pixels {
-            let dst_x = layer_x - min_x;
-            let dst_y = layer_y - min_y;
-
-            if lw > 0 && lh > 0 {
-                let _ = self.texture_pool.upload_rgba(
-                    &self.gl, new_tex,
-                    dst_x, dst_y, lw, lh, &pixels,
-                );
-            }
-        }
 
         let old = self.layer_textures.insert(layer_id.to_string(), new_tex);
         if let Some(old_tex) = old {
@@ -881,6 +853,76 @@ impl EngineInner {
         self.gl.viewport(0, 0, viewport_w, viewport_h);
         setup_and_draw(self);
         self.fbo_pool.unbind(&self.gl);
+    }
+
+    /// Upload a one-byte-per-pixel mask into a pooled texture as
+    /// (v, v, v, 1). The bytes go up as an R8 texture and a GPU pass expands
+    /// them: expanding to RGBA on the CPU and converting to f32 for an
+    /// RGBA16F pool moved 16 bytes per texel, ~400 ms per 4K upload (#1381).
+    /// `mask_data` shorter than `w * h` is zero-padded.
+    pub fn upload_mask_texture(&mut self, mask_data: &[u8], w: u32, h: u32) -> Result<TextureHandle, String> {
+        let len = (w * h) as usize;
+        let padded;
+        let bytes: &[u8] = if mask_data.len() >= len {
+            &mask_data[..len]
+        } else {
+            padded = {
+                let mut v = mask_data.to_vec();
+                v.resize(len, 0);
+                v
+            };
+            &padded
+        };
+
+        let gl = &self.gl;
+        let staging = gl.create_texture().ok_or("Failed to create mask staging texture")?;
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
+        gl.tex_storage_2d(WebGl2RenderingContext::TEXTURE_2D, 1, WebGl2RenderingContext::R8, w as i32, h as i32);
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::NEAREST as i32);
+        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::NEAREST as i32);
+        gl.pixel_storei(WebGl2RenderingContext::UNPACK_FLIP_Y_WEBGL, 0);
+        // Rows of 1-byte texels are not 4-byte aligned unless w is.
+        gl.pixel_storei(WebGl2RenderingContext::UNPACK_ALIGNMENT, 1);
+        let uploaded = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
+            WebGl2RenderingContext::TEXTURE_2D,
+            0, 0, 0,
+            w as i32, h as i32,
+            WebGl2RenderingContext::RED,
+            WebGl2RenderingContext::UNSIGNED_BYTE,
+            Some(bytes),
+        );
+        gl.pixel_storei(WebGl2RenderingContext::UNPACK_ALIGNMENT, 4);
+        if uploaded.is_err() {
+            gl.delete_texture(Some(&staging));
+            return Err("Failed to upload mask bytes".into());
+        }
+
+        let dst = match self.texture_pool.acquire(&self.gl, w, h) {
+            Ok(dst) => dst,
+            Err(e) => {
+                self.gl.delete_texture(Some(&staging));
+                return Err(e);
+            }
+        };
+        let Some(dst_tex) = self.texture_pool.get(dst).cloned() else {
+            self.gl.delete_texture(Some(&staging));
+            self.texture_pool.release(dst);
+            return Err("Mask texture not found".into());
+        };
+        self.gl.disable(WebGl2RenderingContext::BLEND);
+        self.render_to_texture(&dst_tex, w as i32, h as i32, |engine| {
+            let gl = &engine.gl;
+            let shader = &engine.shaders.mask_expand;
+            gl.use_program(Some(&shader.program));
+            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
+            if let Some(loc) = shader.location(gl, "u_tex") {
+                gl.uniform1i(Some(&loc), 0);
+            }
+            engine.draw_fullscreen_quad();
+        });
+        self.gl.delete_texture(Some(&staging));
+        Ok(dst)
     }
 
     /// Read a texture's red channel back as a single-byte-per-pixel

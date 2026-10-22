@@ -103,7 +103,7 @@ const ALLOWLIST = {
   // Tracked mask debt — documented in docs/pixel-data-debt.md §3.
   // Layer-mask CPU paint path; migration to mask_paint_dab.glsl pending.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/interactions/move-handlers.ts': 5,
+  'src/app/interactions/move-handlers.ts': 4,
   'src/app/interactions/quick-mask-move.ts': 1,
   'src/app/store/actions/add-layer-mask.ts': 1,
   'src/app/useCanvasInteraction.ts': 1,                      // mask-buffer copies (nudge path)

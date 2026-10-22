@@ -68,8 +68,9 @@ When diagnosing perf issues, write a benchmark e2e test that reproduces the exac
 
 ## Live tool drags must not rebuild/upload a full-res mask per pointer move
 
-`setSelectionMask` (selection_gpu.rs) allocates `vec![0u8; w*h*4]` (a full
-RGBA texture — 48MB on a 12MP canvas) and uploads it every call. Calling
+`setSelectionMask` (selection_gpu.rs) uploads a full-document texture on
+every call (now as R8 bytes expanded on the GPU by `upload_mask_texture`,
+#1381 — it used to be a CPU RGBA expansion plus f32 bands). Calling
 `setSelection` on each pointer move (as the marquee tool used to) floods the
 WASM bridge and drops to <1fps on large canvases, with seconds of catch-up
 after a fast drag. Fix: drive the live drag from a tiny analytic preview kept
@@ -81,6 +82,13 @@ the preview via the overlay-only path (gated on `getMarqueePreview()`).
 `getSelectionEdges`/`traceSelectionContours` also take an optional `scanBounds`
 so they scan only the selection bbox, not the whole canvas — used by lasso/wand
 which still trace per frame.
+
+The Move tool follows the same rule for selection drags and held arrow-key
+nudges: only `setSelectionBounds` changes mid-gesture, and
+`renderSelectionAnts` translates the traced outline by the shift between the
+bounds it traced at and the current bounds. The nudge's translated mask is
+deferred in `live-float.ts` (`deferNudgeMask`) and written by
+`flushNudgeMask` on keyup, window blur, pointer-down or a float commit (#1382).
 
 ## Undo snapshots use normalized u16, not raw FP16 bits
 

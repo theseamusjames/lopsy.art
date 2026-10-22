@@ -13,6 +13,10 @@ export interface SelectionData {
 }
 
 let cachedMaskRef: Uint8ClampedArray | null = null;
+// The bounds the outline was traced at. A Move drag or a held arrow-key nudge
+// shifts only the bounds and materializes the mask when the gesture ends
+// (#1382), so the ants follow the bounds by this offset until then.
+let cachedBounds: Rect | null = null;
 // Built once per mask (not per frame) so an animated antPhase never re-traces
 // contours or re-issues a beginPath()/stroke() pair per contour. With
 // thousands of islands (e.g. a non-contiguous wand pick on a noisy texture),
@@ -35,6 +39,14 @@ function buildContourPath(contours: number[][]): Path2D {
   return path;
 }
 
+function boundsShift(traced: Rect | null, current: Rect | null | undefined): { x: number; y: number } | null {
+  if (!traced || !current) return null;
+  if (traced.width !== current.width || traced.height !== current.height) return null;
+  const x = current.x - traced.x;
+  const y = current.y - traced.y;
+  return x === 0 && y === 0 ? null : { x, y };
+}
+
 export function renderSelectionAnts(
   ctx: CanvasRenderingContext2D,
   selection: SelectionData,
@@ -48,6 +60,7 @@ export function renderSelectionAnts(
     cachedContours = traceSelectionContours(selection.mask, selection.maskWidth, selection.maskHeight, selection.bounds);
     cachedPath = cachedContours.length > 0 ? buildContourPath(cachedContours) : null;
     cachedMaskRef = selection.mask;
+    cachedBounds = selection.bounds ? { ...selection.bounds } : null;
     cachedTransformRef = null;
   }
 
@@ -55,6 +68,9 @@ export function renderSelectionAnts(
 
   ctx.save();
   ctx.imageSmoothingEnabled = false;
+
+  const shift = boundsShift(cachedBounds, selection.bounds);
+  if (shift) ctx.translate(shift.x, shift.y);
 
   let path = cachedPath;
   if (transform && isShapeChangingTransform(transform)) {
