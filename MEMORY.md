@@ -56,6 +56,18 @@ gestures (the first two entries always get fresh copies) and assert on
 `__readLayerPixels` at each undo step — selection bounds and transform
 handles restore correctly either way.
 
+## Text re-renders must mark the layer dirty too
+
+Committed text layers are re-rendered straight into their GPU texture by
+`apply-text-setting.ts` (`rerenderLayer`, the font-load refresh). The
+"GPU layer writes must also mark the store's `dirtyLayerIds`" rule above
+applies: without `clearJsPixelData(id)`, the snapshot undo takes of the
+live state reuses the previous handle whenever the layer's x/y didn't
+move (text layers skip the width/height check), and redo restores the
+old glyphs (#1370). Strikethrough never moves a text texture's top-left,
+so toggling it is the reliable e2e repro; weight and colour changes
+usually shift x/y by a pixel and hide the bug.
+
 ## Memories should be inlined in MEMORY.md, not in separate files
 
 Keep everything in this single file. No separate memory files in .claude or elsewhere.

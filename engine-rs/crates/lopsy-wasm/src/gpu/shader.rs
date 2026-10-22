@@ -502,7 +502,7 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
+        inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
         OIL_PAINT_FRAG, SMUDGE_DAB_FRAG, VIGNETTE_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
     };
 
@@ -564,6 +564,15 @@ mod tests {
         }
         let blit = preprocess_frag(FINAL_BLIT_FRAG);
         assert!(blit.contains("vec3 labToSrgb(vec3 encoded)"));
+    }
+
+    #[test]
+    fn blend_modes_work_on_decoded_lab() {
+        // Multiply/Screen/… on encoded Lab turned a grey Multiply blue (#1372).
+        let out = preprocess_frag(BLEND_FRAG);
+        assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
+        assert!(out.contains("uniform int u_docColorMode;"));
+        assert!(out.contains("srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(dst.rgb)))"));
     }
 
     #[test]

@@ -154,6 +154,9 @@ export function computeMergeDown(
       layers,
       layerOrder: doc.layerOrder.filter((id) => id !== activeId),
       activeLayerId: belowId,
+      // #1374: the merged-away layer must not linger in the selection, or
+      // Delete Layer (which acts on selectedLayerIds) silently does nothing.
+      selectedLayerIds: [belowId],
     },
   };
 }

@@ -16,6 +16,7 @@ import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from '.
 import { findFontEntry, loadLocalFontToEngine } from '../../app/local-fonts-store';
 import { extractFamilyName, loadGoogleFont, loadFontBinaryToEngine } from '../../utils/font-loader';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
+import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import type { TextSettings } from './text-settings';
 import type { TextAlign, TextLayer } from '../../types';
 import { placementProps } from './text-transform';
@@ -106,6 +107,7 @@ export function beginTextLayerHistory(): void {
  */
 export function endTextLayerHistory(): void {
   rerenderCoalesced.flush();
+  if (dragAnchor) clearJsPixelData(dragAnchor.layerId);
   dragAnchor = null;
 }
 
@@ -133,6 +135,7 @@ function rerenderLayer(oldLayer: TextLayer, newLayer: TextLayer): Anchored | nul
   }
   const engine = getEngine();
   if (!engine) return null;
+  markTextTextureWritten(newLayer.id);
 
   // Fast path during a drag: the anchor was recovered once at drag start,
   // so we can place the new texture without another old-layer rasterization.
@@ -148,6 +151,18 @@ function rerenderLayer(oldLayer: TextLayer, newLayer: TextLayer): Anchored | nul
   const result = rerenderCommittedTextLayerAnchored(engine, oldLayer, newLayer);
   if (result) editor.updateTextLayerProperties(newLayer.id, placementProps(result));
   return result;
+}
+
+/**
+ * The re-render writes the layer's GPU texture behind history's back. Unless
+ * the layer is marked dirty, the snapshot undo takes of the live state
+ * reuses the pre-change handle whenever x/y didn't move, so redo restores
+ * the old glyphs (#1370). Mid-drag the thumbnail bump is skipped (one
+ * readback per frame); `endTextLayerHistory` bumps once at the end.
+ */
+function markTextTextureWritten(layerId: string): void {
+  const isDragging = dragAnchor !== null && dragAnchor.layerId === layerId;
+  clearJsPixelData(layerId, { shouldBumpVersion: !isDragging });
 }
 
 /**
@@ -205,6 +220,7 @@ function refreshTextAfterFontLoad(
       resetTextLayerLayout(engine, layer.id);
       const pos = placeTextLayerAtAnchor(engine, layer, target.anchorX, target.anchorY);
       if (pos) editor.updateTextLayerProperties(layer.id, placementProps(pos));
+      markTextTextureWritten(layer.id);
     }
   }
 
@@ -228,6 +244,7 @@ function refreshTextAfterFontLoad(
       // area text (#888).
       const pos = refreshCommittedTextLayerFont(engine, l as TextLayer);
       if (pos) editor.updateTextLayerProperties(l.id, placementProps(pos));
+      markTextTextureWritten(l.id);
     }
   }
 

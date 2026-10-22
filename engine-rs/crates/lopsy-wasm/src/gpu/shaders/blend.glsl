@@ -39,9 +39,15 @@ uniform int u_hasBrushTexture;
 uniform float u_textureScale;
 uniform int u_textureBlendMode;
 uniform vec2 u_brushTextureSize;
+// Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Every
+// non-Normal formula below assumes sRGB channels, so the blend decodes both
+// sides first and re-encodes its result (#1372). Normal is a plain lerp and
+// needs no decode.
+uniform int u_docColorMode;
 out vec4 fragColor;
 
 //#include hsl
+//#include lab
 
 float lum(vec3 c) { return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
 
@@ -192,7 +198,13 @@ void main() {
     if (sa < 0.001) { fragColor = dst; return; }
     if (da < 0.001) { fragColor = vec4(src.rgb, sa); return; }
 
-    vec3 blended = blendMode(src.rgb, dst.rgb);
+#if BLEND_MODE == 0
+    vec3 blended = src.rgb;
+#else
+    vec3 blended = u_docColorMode == 1
+        ? srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(dst.rgb)))
+        : blendMode(src.rgb, dst.rgb);
+#endif
     float outA = sa + da * (1.0 - sa);
 
     vec3 outRGB = (sa * da * blended + sa * (1.0 - da) * src.rgb + da * (1.0 - sa) * dst.rgb) / outA;

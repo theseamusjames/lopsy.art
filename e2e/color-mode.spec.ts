@@ -21,6 +21,7 @@ import {
   setEffectColor,
   closeEffectsPanel,
   addAdjustment,
+  setBlendMode,
 } from './helpers';
 
 interface PixelSnap {
@@ -340,6 +341,46 @@ test.describe('Document color mode', () => {
     await expect(page.getByTestId('indexed-palette')).toBeVisible();
   });
 
+  test('Indexed conversion keeps every colour of an image with no more colours than the palette (#1375)', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 600, 300, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    // White canvas (~99% of pixels) plus seven small solid swatches: 8 colours.
+    const swatches = [
+      { r: 255, g: 0, b: 0 },
+      { r: 0, g: 255, b: 0 },
+      { r: 0, g: 0, b: 255 },
+      { r: 255, g: 255, b: 0 },
+      { r: 0, g: 255, b: 255 },
+      { r: 255, g: 0, b: 255 },
+      { r: 0, g: 0, b: 0 },
+    ];
+    for (const [i, color] of swatches.entries()) {
+      await drawRect(page, 40 + i * 75, 120, 30, 30, color);
+    }
+    await page.keyboard.press('Control+d');
+
+    await convertToIndexed(page, 8);
+
+    const state = await getEditorState(page);
+    const palette = ((state.document as { indexedPalette?: unknown[] }).indexedPalette ?? []) as
+      { r: number; g: number; b: number }[];
+    // Before the fix five of the eight entries were white and every swatch
+    // turned pale pink or pale cyan.
+    const keys = palette.map((p) => `${p.r},${p.g},${p.b}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys).toContain('255,255,255');
+    for (const [i, color] of swatches.entries()) {
+      expect(keys).toContain(`${color.r},${color.g},${color.b}`);
+      const px = await readCompositedAtDoc(page, 55 + i * 75, 135);
+      for (const ch of ['r', 'g', 'b'] as const) {
+        expect(Math.abs(px[ch] - color[ch]), `swatch ${i} ${ch}`).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
   test('Indexed mode refuses new layers and undo restores the layer stack', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
@@ -503,6 +544,45 @@ test.describe('Document color mode', () => {
       expect(Math.abs(corner[ch] - cornerBefore[ch])).toBeLessThanOrEqual(8);
     }
     expect(corner.r).toBeGreaterThan(corner.b);
+  });
+
+  test('Lab mode composites Multiply / Screen layers as in RGB (#1372)', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 300, 200, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    // Beige background, a grey Multiply box on the left and a grey Screen
+    // box on the right.
+    await drawRect(page, 0, 0, 300, 200, { r: 0xd8, g: 0xb8, b: 0x90 });
+    await addLayer(page);
+    await drawRect(page, 20, 40, 100, 120, { r: 128, g: 128, b: 128 });
+    await setBlendMode(page, 'multiply');
+    await closeEffectsPanel(page);
+    await addLayer(page);
+    await drawRect(page, 180, 40, 100, 120, { r: 128, g: 128, b: 128 });
+    await setBlendMode(page, 'screen');
+    await closeEffectsPanel(page);
+
+    const multiplyBefore = await readCompositedAtDoc(page, 70, 100);
+    const screenBefore = await readCompositedAtDoc(page, 230, 100);
+    // Multiply darkens and Screen lightens the beige, keeping its warm hue.
+    expect(multiplyBefore.r).toBeLessThan(140);
+    expect(multiplyBefore.r).toBeGreaterThan(multiplyBefore.b);
+    expect(screenBefore.r).toBeGreaterThan(225);
+    expect(screenBefore.r).toBeGreaterThan(screenBefore.b);
+
+    await selectColorMode(page, 'Lab Color');
+    expect(await getColorMode(page)).toBe('lab');
+
+    // Before the fix the Multiply box turned saturated blue (0,123,186) and
+    // the Screen box orange (255,158,54).
+    const multiply = await readCompositedAtDoc(page, 70, 100);
+    const screen = await readCompositedAtDoc(page, 230, 100);
+    for (const ch of ['r', 'g', 'b'] as const) {
+      expect(Math.abs(multiply[ch] - multiplyBefore[ch]), `multiply ${ch}`).toBeLessThanOrEqual(6);
+      expect(Math.abs(screen[ch] - screenBefore[ch]), `screen ${ch}`).toBeLessThanOrEqual(6);
+    }
   });
 
   test('Lab mode shows L/a/b sliders instead of R/G/B', async ({ page }) => {

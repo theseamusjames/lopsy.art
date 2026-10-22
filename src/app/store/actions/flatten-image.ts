@@ -49,6 +49,7 @@ export function computeFlattenImage(
       layers: [flatLayer, rootGroup] as Layer[],
       layerOrder: [flatLayer.id, rootGroup.id],
       activeLayerId: flatLayer.id,
+      selectedLayerIds: [flatLayer.id],
       rootGroupId: rootGroup.id,
     },
     layerPixelData: pixelData,

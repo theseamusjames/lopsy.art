@@ -2,6 +2,8 @@
 //! palette building plus nearest-color mapping with optional
 //! Floyd-Steinberg dithering.
 
+use std::collections::HashMap;
+
 /// Above this many candidate pixels, palette building subsamples with a
 /// fixed stride instead of scanning every pixel. Median cut only needs a
 /// statistically representative sample to find good split points, and a
@@ -10,26 +12,36 @@
 /// produces the same sample (deterministic, no RNG).
 const MAX_SAMPLE_PIXELS: usize = 256 * 1024;
 
+/// A distinct colour and how many sampled pixels carry it.
+#[derive(Clone, Copy)]
+struct WeightedColor {
+    rgb: [u8; 3],
+    count: u64,
+}
+
+/// A median-cut box holds distinct colours, never repeated pixels, so a
+/// split can't produce two boxes of the same colour when one colour
+/// dominates the image (#1375).
 struct ColorBox {
-    pixels: Vec<[u8; 3]>,
+    colors: Vec<WeightedColor>,
 }
 
 impl ColorBox {
-    fn channel_range(&self, channel: usize) -> (u8, u8, u8) {
+    fn channel_range(&self, channel: usize) -> u8 {
         let mut lo = u8::MAX;
         let mut hi = u8::MIN;
-        for p in &self.pixels {
-            lo = lo.min(p[channel]);
-            hi = hi.max(p[channel]);
+        for c in &self.colors {
+            lo = lo.min(c.rgb[channel]);
+            hi = hi.max(c.rgb[channel]);
         }
-        (lo, hi, hi.saturating_sub(lo))
+        hi.saturating_sub(lo)
     }
 
     fn widest_channel(&self) -> (usize, u8) {
         let mut best_channel = 0;
         let mut best_range = 0u8;
         for channel in 0..3 {
-            let (_, _, range) = self.channel_range(channel);
+            let range = self.channel_range(channel);
             if range > best_range {
                 best_range = range;
                 best_channel = channel;
@@ -40,34 +52,62 @@ impl ColorBox {
 
     fn average(&self) -> [u8; 4] {
         let mut sum = [0u64; 3];
-        for p in &self.pixels {
-            for c in 0..3 {
-                sum[c] += p[c] as u64;
+        let mut n = 0u64;
+        for c in &self.colors {
+            for ch in 0..3 {
+                sum[ch] += c.rgb[ch] as u64 * c.count;
             }
+            n += c.count;
         }
-        let n = self.pixels.len().max(1) as u64;
+        let n = n.max(1);
         [
-            (sum[0] / n) as u8,
-            (sum[1] / n) as u8,
-            (sum[2] / n) as u8,
+            ((sum[0] + n / 2) / n) as u8,
+            ((sum[1] + n / 2) / n) as u8,
+            ((sum[2] + n / 2) / n) as u8,
             255,
         ]
     }
 
+    /// Splits at the pixel-weighted median of the widest channel, moved to
+    /// the nearest place where that channel's value changes so both halves
+    /// are non-empty and don't share a value on the split axis. Callers only
+    /// split boxes whose widest range is > 0, so such a place exists.
     fn split(mut self) -> (ColorBox, ColorBox) {
         let (channel, _) = self.widest_channel();
-        self.pixels
-            .sort_by_key(|p| p[channel]);
-        let mid = self.pixels.len() / 2;
-        let right = self.pixels.split_off(mid);
-        (ColorBox { pixels: self.pixels }, ColorBox { pixels: right })
+        self.colors.sort_by_key(|c| c.rgb[channel]);
+        let total: u64 = self.colors.iter().map(|c| c.count).sum();
+        let mut acc = 0u64;
+        let mut median = self.colors.len() - 1;
+        for (i, c) in self.colors.iter().enumerate() {
+            acc += c.count;
+            if acc * 2 >= total {
+                median = i;
+                break;
+            }
+        }
+        let is_boundary = |i: usize| {
+            i > 0 && i < self.colors.len() && self.colors[i - 1].rgb[channel] != self.colors[i].rgb[channel]
+        };
+        let after = (median + 1..self.colors.len()).find(|&i| is_boundary(i));
+        let before = (1..=median).rev().find(|&i| is_boundary(i));
+        let mid = match (before, after) {
+            (Some(b), Some(a)) => if median + 1 - b <= a - (median + 1) { b } else { a },
+            (Some(b), None) => b,
+            (None, Some(a)) => a,
+            (None, None) => self.colors.len() / 2,
+        };
+        let right = self.colors.split_off(mid);
+        (ColorBox { colors: self.colors }, ColorBox { colors: right })
     }
 }
 
 /// Build a palette of at most `max_colors` entries from an RGBA8 buffer using
-/// median cut. Fully transparent pixels are ignored. Returns RGBA entries.
+/// median cut. Fully transparent pixels are ignored. Returns RGBA entries
+/// with no duplicates.
 ///
-/// For large inputs, palette building subsamples pixels with a fixed stride
+/// When the image has no more than `max_colors` distinct opaque colours the
+/// palette is exactly those colours, so converting never changes such an
+/// image. Otherwise palette building subsamples pixels with a fixed stride
 /// (see `MAX_SAMPLE_PIXELS`) rather than scanning every pixel; this keeps
 /// build time bounded on multi-megapixel images while remaining
 /// deterministic.
@@ -76,39 +116,72 @@ pub fn median_cut(pixels: &[u8], max_colors: usize) -> Vec<[u8; 4]> {
         return Vec::new();
     }
 
-    let opaque: Vec<[u8; 3]> = collect_opaque_pixels(pixels);
-    if opaque.is_empty() {
+    if let Some(exact) = exact_palette(pixels, max_colors) {
+        return exact;
+    }
+
+    let colors = collect_sampled_colors(pixels);
+    if colors.is_empty() {
         return Vec::new();
     }
 
-    let mut boxes = vec![ColorBox { pixels: opaque }];
+    let mut boxes = vec![ColorBox { colors }];
 
-    loop {
+    while boxes.len() < max_colors {
         let split_index = boxes
             .iter()
             .enumerate()
-            .filter(|(_, b)| b.pixels.len() > 1 && b.widest_channel().1 > 0)
+            .filter(|(_, b)| b.colors.len() > 1 && b.widest_channel().1 > 0)
             .max_by_key(|(_, b)| b.widest_channel().1)
             .map(|(i, _)| i);
 
         let Some(index) = split_index else { break };
-        if boxes.len() >= max_colors {
-            break;
-        }
-
         let box_to_split = boxes.swap_remove(index);
         let (a, b) = box_to_split.split();
         boxes.push(a);
         boxes.push(b);
     }
 
-    boxes.truncate(max_colors);
-    boxes.iter().map(ColorBox::average).collect()
+    let mut palette: Vec<[u8; 4]> = Vec::with_capacity(boxes.len());
+    for entry in boxes.iter().map(ColorBox::average) {
+        if !palette.contains(&entry) {
+            palette.push(entry);
+        }
+    }
+    palette
 }
 
-/// Collects RGB triples from opaque-enough pixels, subsampling with a fixed
-/// stride when the pixel count exceeds `MAX_SAMPLE_PIXELS`.
-fn collect_opaque_pixels(pixels: &[u8]) -> Vec<[u8; 3]> {
+/// Every distinct opaque colour of the full image, in first-seen order, or
+/// None as soon as there are more than `max_colors`. Photographs bail out
+/// within the first few pixels, so the full scan is only paid by images
+/// that really are low-colour.
+fn exact_palette(pixels: &[u8], max_colors: usize) -> Option<Vec<[u8; 4]>> {
+    let mut palette: Vec<[u8; 4]> = Vec::with_capacity(max_colors.min(256));
+    let mut last: Option<[u8; 4]> = None;
+    for chunk in pixels.chunks_exact(4) {
+        if chunk[3] == 0 {
+            continue;
+        }
+        let entry = [chunk[0], chunk[1], chunk[2], 255];
+        if last == Some(entry) {
+            continue;
+        }
+        last = Some(entry);
+        if palette.contains(&entry) {
+            continue;
+        }
+        if palette.len() >= max_colors {
+            return None;
+        }
+        palette.push(entry);
+    }
+    Some(palette)
+}
+
+/// Distinct RGB colours with their pixel counts from opaque-enough pixels,
+/// subsampling with a fixed stride when the pixel count exceeds
+/// `MAX_SAMPLE_PIXELS`. Sorted by packed RGB so the result is deterministic.
+fn collect_sampled_colors(pixels: &[u8]) -> Vec<WeightedColor> {
     let pixel_count = pixels.len() / 4;
     if pixel_count == 0 {
         return Vec::new();
@@ -116,16 +189,25 @@ fn collect_opaque_pixels(pixels: &[u8]) -> Vec<[u8; 3]> {
 
     let stride = (pixel_count / MAX_SAMPLE_PIXELS).max(1);
 
-    let mut out = Vec::with_capacity(pixel_count.min(MAX_SAMPLE_PIXELS));
+    let mut counts: HashMap<u32, u64> = HashMap::new();
     let mut i = 0usize;
     while i < pixel_count {
         let base = i * 4;
         if pixels[base + 3] > 0 {
-            out.push([pixels[base], pixels[base + 1], pixels[base + 2]]);
+            let key = (pixels[base] as u32) << 16 | (pixels[base + 1] as u32) << 8 | pixels[base + 2] as u32;
+            *counts.entry(key).or_insert(0) += 1;
         }
         i += stride;
     }
-    out
+    let mut colors: Vec<WeightedColor> = counts
+        .into_iter()
+        .map(|(key, count)| WeightedColor {
+            rgb: [(key >> 16) as u8, (key >> 8) as u8, key as u8],
+            count,
+        })
+        .collect();
+    colors.sort_by_key(|c| (c.rgb[0], c.rgb[1], c.rgb[2]));
+    colors
 }
 
 /// Index of the nearest palette entry, or None when the palette is empty.
@@ -284,6 +366,83 @@ mod tests {
         ]);
         let palette = median_cut(&data, 16);
         assert_eq!(palette.len(), 2);
+    }
+
+    fn white_canvas_with_swatches(swatches: &[[u8; 3]], extra_white: usize) -> Vec<u8> {
+        let mut data = Vec::new();
+        for _ in 0..extra_white {
+            data.extend_from_slice(&[255, 255, 255, 255]);
+        }
+        for s in swatches {
+            for _ in 0..36 {
+                data.extend_from_slice(&[s[0], s[1], s[2], 255]);
+            }
+        }
+        data
+    }
+
+    // #1375: a white canvas with seven small swatches has 8 colours, so an
+    // 8-colour palette must hold exactly those colours.
+    #[test]
+    fn image_with_at_most_max_colors_keeps_every_colour_exactly() {
+        let swatches = [
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+            [255, 255, 0],
+            [0, 255, 255],
+            [255, 0, 255],
+            [0, 0, 0],
+        ];
+        let mut data = white_canvas_with_swatches(&swatches, 20_000);
+        let palette = median_cut(&data, 8);
+        assert_eq!(palette.len(), 8);
+        assert!(palette.contains(&[255, 255, 255, 255]));
+        for s in &swatches {
+            assert!(palette.contains(&[s[0], s[1], s[2], 255]), "missing {:?}", s);
+        }
+
+        let original = data.clone();
+        apply_palette(&mut data, &palette);
+        assert_eq!(data, original);
+    }
+
+    // #1375: when one colour dominates, splitting at the pixel-count median
+    // kept halving the run of that colour, filling the palette with copies
+    // of it and averaging the rare colours into pastels.
+    #[test]
+    fn dominant_colour_does_not_fill_the_palette_with_duplicates() {
+        let mut swatches = Vec::new();
+        for i in 0..12u8 {
+            swatches.push([i * 20, 255 - i * 20, (i % 3) * 120]);
+        }
+        let data = white_canvas_with_swatches(&swatches, 50_000);
+        let palette = median_cut(&data, 8);
+        assert_eq!(palette.len(), 8);
+        for (i, a) in palette.iter().enumerate() {
+            for b in &palette[i + 1..] {
+                assert_ne!(a, b, "duplicate palette entry");
+            }
+        }
+        let whites = palette.iter().filter(|p| p[0] > 240 && p[1] > 240 && p[2] > 240).count();
+        assert_eq!(whites, 1, "palette {:?}", palette);
+    }
+
+    #[test]
+    fn large_image_with_few_colours_is_exact_despite_subsampling() {
+        let mut data = vec![255u8; 1200 * 1680 * 4];
+        // A 3-pixel-wide red stripe the stride sampler could skip.
+        for y in 0..1680 {
+            for x in 600..603 {
+                let base = (y * 1200 + x) * 4;
+                data[base] = 255;
+                data[base + 1] = 0;
+                data[base + 2] = 0;
+            }
+        }
+        let palette = median_cut(&data, 8);
+        assert_eq!(palette.len(), 2);
+        assert!(palette.contains(&[255, 0, 0, 255]));
     }
 
     #[test]
