@@ -8,7 +8,7 @@ vi.mock('../editor-store', () => ({
   },
 }));
 
-const { scheduleNudge, releaseNudgeKey, _resetNudgeCoalescer } = await import('./nudge-coalesce');
+const { scheduleNudge, releaseNudgeKey, releaseAllNudgeKeys, _resetNudgeCoalescer } = await import('./nudge-coalesce');
 
 describe('nudge-coalesce (#684)', () => {
   let apply: ReturnType<typeof vi.fn<(dx: number, dy: number) => void>>;
@@ -49,6 +49,18 @@ describe('nudge-coalesce (#684)', () => {
 
     expect(apply).toHaveBeenCalledTimes(1);
     expect(apply).toHaveBeenCalledWith(4, 0);
+  });
+
+  it('ends every hold when the window loses focus, since no keyup will arrive', () => {
+    scheduleNudge('ArrowRight', false, 1, 0, apply);
+    scheduleNudge('ArrowDown', false, 0, 1, apply);
+
+    releaseAllNudgeKeys();
+
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply).toHaveBeenCalledWith(1, 1);
+    scheduleNudge('ArrowRight', false, 1, 0, apply);
+    expect(pushHistory).toHaveBeenCalledTimes(2);
   });
 
   it('pushes exactly one history entry per key-hold', () => {

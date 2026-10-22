@@ -8,7 +8,7 @@ import { clearSelectedPixels, hasFloat, setSelectionMask } from '../engine-wasm/
 import { commitLiveFloat } from './interactions/live-float';
 import { isUnmovedPrefloat, commitUnmovedPrefloat } from './interactions/prefloat';
 import { handleToolShortcut, handleSizeShortcut, handleNudgeShortcut } from './shortcuts/tool-shortcuts';
-import { releaseNudgeKey } from './shortcuts/nudge-coalesce';
+import { releaseAllNudgeKeys, releaseNudgeKey } from './shortcuts/nudge-coalesce';
 import { isNativeArrowKeyTarget } from './shortcuts/native-control-keys';
 import { isModalDialogOpen } from './shortcuts/modal-guard';
 import { fillActiveLayerMask } from './fill-layer-mask';
@@ -388,11 +388,13 @@ export function useKeyboardShortcuts({
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('paste', handlePaste);
     window.addEventListener('blur', invalidateInternalClipboardPriority);
+    window.addEventListener('blur', releaseAllNudgeKeys);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('paste', handlePaste);
       window.removeEventListener('blur', invalidateInternalClipboardPriority);
+      window.removeEventListener('blur', releaseAllNudgeKeys);
     };
   }, [setZoom, setPan, viewport.zoom, docWidth, docHeight, canvasRef, setPointerMode, clearPersistentTransform, nudgeMove, nudgeSelection]);
 }

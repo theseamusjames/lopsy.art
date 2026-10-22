@@ -205,7 +205,7 @@ Effect images (glows, shadow, stroke) are cached per layer in the live composito
 ### Layer Masks
 
 - Stored as grayscale `Uint8ClampedArray` in the Zustand layer model (`layer.mask`).
-- Uploaded to GPU as RGBA textures via `uploadLayerMask()`.
+- Uploaded to GPU via `uploadLayerMask()`: the bytes go up as an R8 texture and a GPU pass (`mask_expand.glsl`) expands them into the pooled RGBA mask texture (`EngineInner::upload_mask_texture`). The selection mask uses the same path.
 - Sampled in `blend.glsl` during compositing: mask value multiplies layer alpha.
 - When mask edit mode is active, `compositor.rs` renders a translucent blue overlay.
 

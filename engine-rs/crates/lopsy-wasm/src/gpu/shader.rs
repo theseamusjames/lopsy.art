@@ -35,6 +35,7 @@ pub const CLIPBOARD_CLEAR_FRAG: &str = include_str!("shaders/clipboard_clear.gls
 pub const SELECTION_FILL_FRAG: &str = include_str!("shaders/selection_fill.glsl");
 pub const ROTATE90_FRAG: &str = include_str!("shaders/rotate90.glsl");
 pub const BLIT_REGION_FRAG: &str = include_str!("shaders/blit_region.glsl");
+pub const MASK_EXPAND_FRAG: &str = include_str!("shaders/mask_expand.glsl");
 pub const MASK_REMAP_FRAG: &str = include_str!("shaders/mask_remap.glsl");
 pub const TRANSFORM_AFFINE_FRAG: &str = include_str!("shaders/transform_affine.glsl");
 pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_perspective.glsl");
@@ -273,6 +274,7 @@ pub struct ShaderPrograms {
     pub selection_fill: ShaderProgram,
     pub rotate90: ShaderProgram,
     pub blit_region: ShaderProgram,
+    pub mask_expand: ShaderProgram,
     pub mask_remap: ShaderProgram,
     pub transform_affine: ShaderProgram,
     pub transform_perspective: ShaderProgram,
@@ -409,6 +411,7 @@ impl ShaderPrograms {
             selection_fill: compile_program(gl, v, SELECTION_FILL_FRAG)?,
             rotate90: compile_program(gl, v, ROTATE90_FRAG)?,
             blit_region: compile_program(gl, v, BLIT_REGION_FRAG)?,
+            mask_expand: compile_program(gl, v, MASK_EXPAND_FRAG)?,
             mask_remap: compile_program(gl, v, MASK_REMAP_FRAG)?,
             transform_affine: compile_program(gl, v, TRANSFORM_AFFINE_FRAG)?,
             transform_perspective: compile_program(gl, v, TRANSFORM_PERSPECTIVE_FRAG)?,
