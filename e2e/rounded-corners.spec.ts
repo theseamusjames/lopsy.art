@@ -131,7 +131,7 @@ test.beforeEach(async ({ page }) => {
 // Tests
 //
 // The shape tool's `cornerRadius` uniform feeds the polygon SDF
-// (engine-rs/.../shape_fill.glsl). The cornerRadius math is degenerate
+// (lop-engine/.../shape_fill.glsl). The cornerRadius math is degenerate
 // for the values exercised here on regular polygons, so visual rounding
 // is sourced from the ellipse SDF — which is the only shape mode that
 // guarantees rounded corners on the bounding box.

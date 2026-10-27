@@ -68,7 +68,7 @@ into an `ImageData`, which is then uploaded to a layer texture.
 
 **Why it exists.** The Rust engine has no TrueType/OpenType parser or
 glyph rasterizer. Pulling `ttf-parser` + `rusttype` (or `fontdue`) into
-`lopsy-core` is the only path forward, and it's a substantial project —
+`lop-engine-core` is the only path forward, and it's a substantial project —
 font metrics, shaping, kerning, fallback, subpixel AA.
 
 **Plan.** Issue-tracked as a separate workstream. Until then, text stays

@@ -421,7 +421,7 @@ test.describe('Oversized paste flow', () => {
 
     // Read the fit-sized dimensions in the same JS task as the paste, before
     // the auto-select rAF fires and floatSelection expands the layer texture
-    // (see engine-rs `expand_layer_to_doc_size`).
+    // (see lop-engine `expand_layer_to_doc_size`).
     const dims = await pasteAndReadDimensions(page, 1024, 768, { r: 20, g: 90, b: 220, a: 255 }, 'Copied File');
     expect(dims).not.toBeNull();
     // 1024/768 aspect at 200x200 canvas → width 200, height 150.

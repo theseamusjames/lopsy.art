@@ -2,7 +2,7 @@ import type { Layer, Point } from '../types';
 
 /**
  * Document-space position of a layer mask's texel (0, 0). Mirrors
- * `mask_doc_offset` in engine-rs `compositor.rs`, which is where the
+ * `mask_doc_offset` in lop-engine `compositor.rs`, which is where the
  * compositor samples the mask.
  *
  * Raster and group masks are document-anchored (created doc-sized at the

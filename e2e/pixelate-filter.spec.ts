@@ -45,7 +45,7 @@ async function paintThreeBlocks(page: Page): Promise<void> {
 // ---------------------------------------------------------------------------
 // Pixelate filter
 //
-// The shaders (engine-rs/.../pixelate_blocks.glsl + pixelate.glsl) give every
+// The shaders (lop-engine/.../pixelate_blocks.glsl + pixelate.glsl) give every
 // pixel of a blockSize×blockSize block the block's alpha-weighted mean
 // colour (#1167; it used to point-sample the block centre). So the
 // meaningful test is:

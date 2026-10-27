@@ -2,7 +2,7 @@
  * DNG raw image import — decodes DNG files (including Apple ProRAW) via the
  * Rust-side decoder and uploads pixel data to the GPU.
  *
- * ## Pipeline (Rust side, see engine-rs/crates/lopsy-core/src/dng/)
+ * ## Pipeline (Rust side, see lop-engine/crates/lop-engine-core/src/dng/)
  *
  * 1. Parse TIFF IFD structure, find the full-resolution SubIFD
  * 2. Decompress pixel data (lossless JPEG for ProRAW, also supports deflate)

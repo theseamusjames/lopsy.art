@@ -82,7 +82,7 @@ blog/               # Blog posts: <slug>/index.md + images. Copy _template/
 public/
   fonts/            # Self-hosted woff2 font files
 e2e/                # Playwright end-to-end tests
-engine-rs/          # Rust/WASM rendering engine (see below)
+engine/             # Builds the Rust/WASM engine (lop-engine, a git dependency) into src/engine-wasm/pkg
 ```
 
 ## Styling
@@ -96,102 +96,74 @@ engine-rs/          # Rust/WASM rendering engine (see below)
 ## Architecture
 
 - **Separate logic from UI**. Each tool has a pure logic module (`tool.ts`) that is framework-agnostic — no React, no DOM. React components call into the logic module.
-- **GPU-first rendering via Rust/WASM**. The rendering pipeline is a Rust crate (`engine-rs/`) compiled to WASM via `wasm-pack`. All pixel data lives in GPU textures managed by the Rust engine. JS never touches raw pixels in the render path.
+- **GPU-first rendering via Rust/WASM**. The rendering pipeline is the Rust engine [Lop Engine](https://github.com/theseamusjames/lop-engine) (its own repository), compiled to WASM via `wasm-pack`. All pixel data lives in GPU textures managed by the Rust engine. JS never touches raw pixels in the render path.
 - **State**: Zustand store holds the document model (layers, history, selection, UI). Each frame, `engine-sync.ts` diffs the Zustand state against tracked engine state and pushes only what changed to the WASM engine via typed bridge functions.
 - **No backend**. Everything runs in the browser. No API calls for core functionality.
 - **Web Workers** for heavy computation (filters, image encode/decode). Keep the main thread free.
 
-## Rust/WASM Engine (`engine-rs/`)
+## Rust/WASM Engine ([Lop Engine](https://github.com/theseamusjames/lop-engine))
 
-The rendering engine is split into two crates:
+The rendering engine lives in its own repository,
+[theseamusjames/lop-engine](https://github.com/theseamusjames/lop-engine),
+so other apps can use it. It has two crates:
 
-```
-engine-rs/
-  crates/
-    lopsy-core/       # Pure Rust utilities (no web dependencies)
-      src/
-        blend.rs        # Blend mode math
-        brush.rs        # Brush dab geometry
-        color.rs        # Color space conversions
-        compress.rs     # RLE compression for undo snapshots
-        layer.rs        # Layer descriptor types (GlowDesc, ShadowDesc, etc.)
-        pixel_buffer.rs # crop_to_content_bounds, pixel utilities
-        sparse.rs       # Sparse pixel storage (from_sparse, to_sparse)
-        flood_fill.rs   # Bucket fill algorithm
-        selection.rs    # Selection mask operations
-    lopsy-wasm/       # WebGL2 engine, compiled to WASM
-      src/
-        lib.rs            # #[wasm_bindgen] API surface — all JS-callable functions
-        engine.rs         # EngineInner struct: holds all GPU state
-        compositor.rs     # Per-frame compositing pipeline
-        layer_manager.rs  # Texture upload/read/duplicate for layers
-        brush_gpu.rs      # Brush & eraser dab rendering (GPU)
-        clone_stamp_gpu.rs # Clone stamp per-dab rendering
-        filter_gpu.rs     # GPU filter dispatch (blur, invert, etc.)
-        gradient_gpu.rs   # Linear/radial gradient rendering
-        shape_gpu.rs      # Shape rasterization (rect, ellipse, polygon)
-        selection_gpu.rs  # Selection mask GPU operations
-        dodge_burn_gpu.rs # Dodge/burn tool
-        overlay_renderer.rs # Grid, rulers, marching ants, brush cursor
-        color_mgmt.rs     # ICC profile, wide-gamut support
-        gpu/
-          context.rs      # WebGL2 context wrapper, extension detection
-          texture_pool.rs # Texture allocation, RGBA8/RGBA16F, upload/read
-          framebuffer.rs  # FBO pool for render-to-texture
-          shader.rs       # Shader compilation, program linking
-          shaders/        # GLSL source files (see below)
-```
+- `lop-engine-core` — pure Rust, no web dependencies: blend math, brush
+  geometry, colour spaces, flood fill, selection masks, compression, PSD /
+  DNG / RAF codecs.
+- `lop-engine-wasm` — the WebGL2 engine compiled to WASM: the
+  `#[wasm_bindgen]` API surface, compositor, layer textures, GPU brushes,
+  filters, text, overlays and all GLSL shaders.
 
-### Key GLSL Shaders
+Its `CLAUDE.md` documents the engine internals and the invariants for
+changing them: crate layout, shaders, the compositor pipeline
+(`needs_present` vs `needs_recomposite`), the effect cache (every layer- or
+mask-texture writer must call `mark_layer_dirty`), the snapshot store and
+the blob formats. Read it before you touch engine code.
+
+Lopsy builds the engine through `engine/`, a one-line `cdylib` crate:
 
 ```
-gpu/shaders/
-  blend.glsl              # Layer compositing (all blend modes, mask sampling)
-  final_blit.glsl         # Composite → screen (viewport transform, EDR passthrough)
-  blit.glsl               # Texture-to-texture copy
-  brush/
-    brush_dab.glsl        # Brush dab with selection mask support
-    eraser_dab.glsl       # Eraser dab with selection mask support
-    clone_stamp.glsl      # Per-dab clone with bounds checking
-    dodge_burn.glsl       # Dodge/burn dab
-  effects/
-    glow.glsl             # Inner/outer glow (distance field based)
-    shadow.glsl           # Drop shadow
-    stroke_edt.glsl       # Stroke effect (EDT outline)
-    color_overlay.glsl    # Color overlay
-  filters/
-    adjustments.glsl      # Exposure, contrast, highlights, shadows, whites, blacks
-    vignette.glsl         # Vignette effect
-    gaussian_blur.glsl    # Two-pass Gaussian blur
-    box_blur.glsl         # Box blur
-    invert.glsl, hue_sat.glsl, sharpen.glsl, noise.glsl, posterize.glsl, threshold.glsl
-  gradient/
-    gradient_linear.glsl, gradient_radial.glsl
-  selection/
-    marching_ants.glsl    # Animated selection outline
+engine/
+  Cargo.toml   # git dependency on lop-engine-wasm pinned to a release tag; release profile + wasm-opt flags
+  Cargo.lock   # pins the exact engine commit and every crate version
+  src/lib.rs   # pub use lop_engine_wasm::*;  (re-exports the whole wasm-bindgen API)
 ```
+
+The crate is named `lopsy-wasm`, so the generated package is
+`src/engine-wasm/pkg/lopsy_wasm.*`.
 
 ### Build
 
 ```bash
-cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --out-dir ../../src/engine-wasm/pkg
+npm run wasm:build       # release build → src/engine-wasm/pkg/
+npm run wasm:build:dev   # debug build
 ```
 
 Output goes to `src/engine-wasm/pkg/` (gitignored generated files). The JS bridge in `src/engine-wasm/wasm-bridge.ts` re-exports typed functions from the pkg.
 
+### Changing the engine
+
+1. Make the change in a lop-engine checkout and run its tests
+   (`cargo test --workspace`).
+2. To try it in Lopsy before releasing, point `engine/` at your checkout
+   with a `engine/.cargo/config.toml` (gitignored). Paths are relative to
+   `engine/`:
+   ```toml
+   [patch."https://github.com/theseamusjames/lop-engine"]
+   lop-engine-wasm = { path = "../../lop-engine/crates/lop-engine-wasm" }
+   ```
+   `npm run wasm:build` now builds your checkout. This rewrites
+   `engine/Cargo.lock`; don't commit that.
+3. To ship it, merge and tag a release in lop-engine, bump `tag` in
+   `engine/Cargo.toml`, run `cargo update -p lop-engine-wasm` in `engine/`,
+   rebuild, and commit `engine/Cargo.toml` and `engine/Cargo.lock`
+   together.
+
 ### Data Flow
 
 1. **JS → Engine**: `engine-sync.ts` runs before each frame. It diffs Zustand state against `TrackedState` and calls WASM functions (`addLayer`, `updateLayer`, `uploadLayerPixels`, `setViewport`, etc.) only when values change. `resetTrackedState()` forces a full re-sync (used after undo/redo).
-2. **Engine → GPU**: The Rust engine owns all WebGL2 state. `compositor.rs` runs the per-frame pipeline: clear → iterate layers → blend with effects → apply image adjustments → final blit to screen.
+2. **Engine → GPU**: The Rust engine owns all WebGL2 state. Its compositor runs the per-frame pipeline: clear → iterate layers → blend with effects → apply image adjustments → final blit to screen.
 3. **GPU → JS**: `gpu-pixel-access.ts` provides `readLayerAsImageData()` and `readLayerCompressed()` for when JS needs pixel data (undo snapshots, content bounds, export).
-
-### Compositor Pipeline (`compositor.rs`)
-
-Each frame: clear composite FBO → for each visible layer: render behind-effects (outer glow, drop shadow) → blend layer texture onto composite (with mask, blend mode, opacity) → blend active stroke texture → render mask edit overlay → render above-effects (inner glow, stroke) → apply image adjustments (exposure/contrast/vignette) → final blit to screen with viewport transform.
-
-When only the viewport (or channel mask) changed, `render` skips all of that and runs just the final blit (`compositor::present`) from the existing composite texture: those setters set `needs_present`, not `needs_recomposite`. Anything that writes the composite texture outside `composite()` (export, single-layer bake) must set `needs_recomposite`.
-
-Effect images (glows, shadow, stroke) are cached per layer in the live compositor (`effect_cache_gpu.rs`, policy in `lopsy-core/src/effect_cache.rs`) and replayed until the layer's content generation, position, opacity, mask state or effect settings change. The content generation is bumped by `mark_layer_dirty(id)`, so **every layer- or mask-texture writer must call `mark_layer_dirty` with the id it wrote** — a writer that doesn't leaves stale effects on screen. Export and Rasterize Layer Style never use the cache. The live compositor also scissors each layer blend (`blend_layer_rect_onto_target`) and effect blend (`EffectOut::clip`) to its rectangle — exact because the blend shader passes the destination through outside the source; seamless wrap keeps the full pass.
 
 ### Undo/Redo and GPU Textures
 

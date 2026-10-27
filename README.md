@@ -19,7 +19,7 @@ Lopsy covers the core workflows professionals and creatives rely on — photo re
 
 Everything runs client-side. There is no server, no upload, no account. Your images stay on your machine.
 
-The rendering pipeline is GPU-accelerated via WebGL 2, compiled from Rust to WebAssembly. This keeps brush strokes, compositing, and effects smooth at 60fps even on large canvases with many layers. Heavy operations like filters and image encoding run in Web Workers to keep the interface responsive.
+The rendering pipeline is GPU-accelerated via WebGL 2, compiled from Rust to WebAssembly. This keeps brush strokes, compositing, and effects smooth at 60fps even on large canvases with many layers. The engine lives in its own repository, [Lop Engine](https://github.com/theseamusjames/lop-engine), so other apps can use it too. Heavy operations like filters and image encoding run in Web Workers to keep the interface responsive.
 
 Lopsy supports canvases up to 32,000 x 32,000 pixels, Display P3 wide-gamut color on supported displays, and pen tablet pressure sensitivity.
 

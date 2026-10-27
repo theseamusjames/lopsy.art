@@ -5,7 +5,7 @@
  *
  * Extracted from the old file-menu.ts to keep format glue independent of
  * menu plumbing. Thin enough to stay in one file; the heavy lifting lives
- * in engine-rs/lopsy-core/psd.
+ * in lop-engine/crates/lop-engine-core/src/psd.
  */
 
 import { useEditorStore } from '../app/editor-store';

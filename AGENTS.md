@@ -25,12 +25,14 @@ The codebase has two main parts: a TypeScript frontend and a Rust rendering engi
 - `layers/`, `history/`, `selection/` — Layer model, undo/redo system, and selection operations.
 - `styles/` — Design tokens in CSS custom properties (`tokens.css`). All colors, spacing, radii, and font sizes come from here.
 
-### Rust engine (`engine-rs/`)
+### Rust engine ([lop-engine](https://github.com/theseamusjames/lop-engine))
 
-Two crates:
+The engine lives in its own repository so other apps can use it. It has two crates:
 
-- `lopsy-core` — Pure Rust utilities with no web dependencies: blend mode math, brush geometry, color conversions, flood fill, selection masks, pixel buffer operations.
-- `lopsy-wasm` — The WebGL 2 engine compiled to WASM. Contains the compositor pipeline, layer texture management, GPU brush/shape/gradient/filter rendering, overlay rendering (grid, rulers, marching ants), and all GLSL shaders.
+- `lop-engine-core` — Pure Rust utilities with no web dependencies: blend mode math, brush geometry, color conversions, flood fill, selection masks, pixel buffer operations, PSD/DNG/RAF codecs.
+- `lop-engine-wasm` — The WebGL 2 engine compiled to WASM. Contains the compositor pipeline, layer texture management, GPU brush/shape/gradient/filter rendering, text, overlay rendering (grid, rulers, marching ants), and all GLSL shaders.
+
+Lopsy pulls it in through `engine/`, a tiny crate that depends on a tagged lop-engine release and re-exports it. `npm run wasm:build` compiles it into `src/engine-wasm/pkg/`. Engine changes go to lop-engine as their own PR. Lopsy then bumps the tag in `engine/Cargo.toml` (see "Changing the engine" in `CLAUDE.md`).
 
 The WASM bridge exposes functions like `addLayer`, `updateLayer`, `uploadLayerPixels`, `setViewport`, etc. The compositor runs each frame: iterate layers, blend with effects, apply adjustments, blit to screen.
 

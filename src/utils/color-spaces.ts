@@ -1,6 +1,6 @@
 /**
  * TypeScript mirrors of the engine's color-space math
- * (`lopsy-core/src/lab.rs` and `cmyk.rs`).
+ * (`lop-engine-core/src/lab.rs` and `cmyk.rs`).
  *
  * These exist so the color picker can show L/a/b and C/M/Y/K values for a
  * single color without a WASM round trip. All batch pixel work stays in Rust —

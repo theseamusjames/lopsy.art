@@ -604,7 +604,8 @@ reviewer can follow them without seeing the image.
 4. **Look up the production code path** the test should be exercising.
    Find the store action or handler that does the real work
    (`src/app/store/actions/*`, `src/app/interactions/*-handlers.ts`,
-   `src/tools/*/\*.ts`, `engine-rs/**/*.rs`).
+   `src/tools/*/\*.ts`, and the engine's `crates/**/*.rs` in
+   [lop-engine](https://github.com/theseamusjames/lop-engine)).
 5. **Check the units**. Is the slider in `0..100` or `-1..1`? Is the
    angle in radians or degrees? Is the coordinate doc-space or
    layer-local? The test's assertion values must match the production
@@ -638,13 +639,14 @@ npx playwright test --project=chromium e2e/<file>.spec.ts
 # Run one test by name pattern
 npx playwright test --project=chromium e2e/<file>.spec.ts -g "<test name>"
 
-# Rebuild WASM when engine-rs sources change
+# Rebuild WASM after engine/ changes (e.g. a bumped lop-engine tag)
 npm run wasm:build
 ```
 
 The WASM build **must** be present in `src/engine-wasm/pkg/` or the app
 fails to initialise and every test times out in `waitForStore`. The
-dev server emits a "WASM is stale" warning when the Rust sources are
+dev server emits a "WASM is stale" warning when `engine/` (or a local
+lop-engine checkout patched in through `engine/.cargo/config.toml`) is
 newer than the compiled output — heed it.
 
 ### The dev server port is per-checkout

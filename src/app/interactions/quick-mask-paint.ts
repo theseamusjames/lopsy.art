@@ -4,7 +4,7 @@ export type QuickMaskPaintTool = 'brush' | 'pencil' | 'eraser';
 
 /**
  * Quick-mask paint mode values consumed by the GPU shader
- * (`engine-rs/.../gpu/shaders/brush/quick_mask_dab.glsl`):
+ * (`lop-engine/.../gpu/shaders/brush/quick_mask_dab.glsl`):
  *   0 = paint white into the mask → grow selection → remove overlay
  *   1 = paint black into the mask → shrink selection → add overlay
  *
