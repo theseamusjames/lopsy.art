@@ -27,7 +27,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src/engine-wasm/pkg
-          key: wasm-pkg-${{ hashFiles('engine-rs/**/*.rs', 'engine-rs/**/Cargo.toml', 'engine-rs/**/Cargo.lock', 'engine-rs/**/*.glsl') }}
+          # engine/Cargo.lock pins the lop-engine commit, so it changes whenever the engine does.
+          key: wasm-pkg-${{ hashFiles('engine/Cargo.toml', 'engine/Cargo.lock', 'engine/src/**/*.rs') }}
 
       - name: Cache cargo registry, git, and target
         if: steps.wasm-cache.outputs.cache-hit != 'true'
@@ -36,8 +37,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            engine-rs/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('engine-rs/**/Cargo.lock') }}
+            engine/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('engine/Cargo.lock') }}
           restore-keys: |
             cargo-${{ runner.os }}-
 

@@ -7,7 +7,7 @@
  * for families with no baked repo path, or files over its size limit), which
  * sends the loader down the Google Fonts css2 → WOFF2 path, and the css2 /
  * gstatic endpoints serve the latin subsets checked in under
- * engine-rs/crates/lopsy-wasm/tests/fixtures.
+ * e2e/fixtures/fonts.
  */
 import * as path from 'path';
 import { fileURLToPath } from 'url';

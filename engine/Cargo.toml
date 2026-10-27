@@ -1,0 +1,33 @@
+# Lopsy's build of Lop Engine (https://github.com/theseamusjames/lop-engine).
+# The engine lives in that repository; this crate only re-exports its
+# wasm-bindgen API so `npm run wasm:build` emits src/engine-wasm/pkg/lopsy_wasm.*.
+# To ship an engine change, set `rev` below to the new lop-engine commit and
+# run `cargo update -p lop-engine-wasm` in this directory.
+[package]
+name = "lopsy-wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+# Rust 1.87+ emits bulk-memory / sign-ext / nontrapping-fptoint by
+# default; wasm-opt must be told they are allowed.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O3", "--enable-bulk-memory", "--enable-sign-ext", "--enable-nontrapping-float-to-int", "--enable-mutable-globals"]
+
+[dependencies]
+lop-engine-wasm = { git = "https://github.com/theseamusjames/lop-engine", rev = "2228b2dfb73acf0035b14feb8fc1339b95eb68b2" }
+
+# Profiles only apply from the crate being built, not from dependencies.
+[profile.release]
+opt-level = 3
+# The engine is an upstream crate here, so thin LTO leaves the .wasm ~3%
+# bigger than building lop-engine-wasm directly; fat LTO matches it.
+lto = "fat"
+codegen-units = 1
+# Unwinding cannot cross the WASM boundary anyway — abort keeps the
+# binary smaller and failure behavior explicit.
+panic = "abort"
+strip = true

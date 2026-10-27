@@ -3,15 +3,30 @@ import react from '@vitejs/plugin-react';
 import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import { resolve } from 'path';
-import { statSync, readdirSync } from 'fs';
+import { statSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { sitePlugin } from './scripts/vite-plugin-site';
 import { agentDocsPlugin } from './scripts/vite-plugin-agent-docs';
 
 /**
- * Vite plugin that checks whether the WASM build output is older than any
- * Rust/GLSL source file. Prints a warning at dev-server start so stale
- * builds are immediately obvious.
+ * Crate directories patched in through engine/.cargo/config.toml (a local
+ * lop-engine checkout). Their parent holds both engine crates.
+ */
+function localEngineDirs(engineDir: string): string[] {
+  let config: string;
+  try {
+    config = readFileSync(join(engineDir, '.cargo/config.toml'), 'utf8');
+  } catch {
+    return [];
+  }
+  return [...config.matchAll(/path\s*=\s*"([^"]+)"/g)].map((m) => resolve(engineDir, m[1], '..'));
+}
+
+/**
+ * Vite plugin that checks whether the WASM build output is older than the
+ * engine/ crate (the pinned lop-engine commit) or a locally patched engine
+ * checkout. Prints a warning at dev-server start so stale builds are
+ * immediately obvious.
  */
 function wasmFreshnessCheck(): Plugin {
   return {
@@ -19,7 +34,7 @@ function wasmFreshnessCheck(): Plugin {
     buildStart() {
       const root = resolve(__dirname);
       const wasmFile = join(root, 'src/engine-wasm/pkg/lopsy_wasm_bg.wasm');
-      const srcDir = join(root, 'engine-rs/crates');
+      const engineDir = join(root, 'engine');
 
       let wasmMtime: number;
       try {
@@ -46,7 +61,7 @@ function wasmFreshnessCheck(): Plugin {
             if (stat.isDirectory()) {
               if (entry === 'target' || entry === 'pkg') continue;
               walk(full);
-            } else if (/\.(rs|glsl|toml)$/.test(entry) && stat.mtimeMs > wasmMtime) {
+            } else if (/\.(rs|glsl|toml|lock)$/.test(entry) && stat.mtimeMs > wasmMtime) {
               newerFiles.push(full.replace(root + '/', ''));
             }
           } catch {
@@ -55,7 +70,7 @@ function wasmFreshnessCheck(): Plugin {
         }
       }
 
-      walk(srcDir);
+      for (const dir of [engineDir, ...localEngineDirs(engineDir)]) walk(dir);
 
       if (newerFiles.length > 0) {
         this.warn(

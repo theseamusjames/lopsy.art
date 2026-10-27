@@ -6,12 +6,13 @@ dist
 storybook-static
 
 # Rust build artifacts
-engine-rs/target/
+engine/target/
 src/engine-wasm/pkg/
+# Local lop-engine checkout override (see CLAUDE.md, "Changing the engine")
+engine/.cargo/
 
 # Playwright test artifacts
 test-results/
-engine-rs/test-output/
 tests/screenshots/
 
 .claude/worktrees

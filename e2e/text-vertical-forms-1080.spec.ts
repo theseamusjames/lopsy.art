@@ -12,7 +12,7 @@ import { clickAtDoc, selectTextTool } from './text-edit-helpers';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // A synthetic font: ー is a horizontal bar with a `vert` alternate that is a
 // vertical stroke; 「 is an upright corner bracket with no alternate.
-const TEST_FONT = path.resolve(__dirname, '../engine-rs/crates/lopsy-wasm/tests/fixtures/LopsyVerticalTest.ttf');
+const TEST_FONT = path.resolve(__dirname, 'fixtures/fonts/LopsyVerticalTest.ttf');
 const FAMILY = 'Dela Gothic One';
 
 /** Serve the test font as the catalog's Dela Gothic One TTF, offline. */
