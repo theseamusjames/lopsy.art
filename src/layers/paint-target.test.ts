@@ -6,7 +6,7 @@ vi.mock('../app/notifications-store', () => ({
   notifyInfo: vi.fn(),
 }));
 
-const { canReceiveRasterPaint, guardPixelWrite, toolWritesRasterPixels } =
+const { canReceiveRasterPaint, guardPixelWrite, toolIgnoresLayerLock, toolWritesRasterPixels } =
   await import('./paint-target');
 const { notifyInfo } = await import('../app/notifications-store');
 
@@ -181,6 +181,24 @@ describe('toolWritesRasterPixels', () => {
     ];
     for (const t of NON_WRITERS) {
       expect(toolWritesRasterPixels(t), t).toBe(false);
+    }
+  });
+});
+
+describe('toolIgnoresLayerLock', () => {
+  it('true for selection tools and the eyedropper (#1188)', () => {
+    const EXEMPT: ToolId[] = [
+      'marquee-rect', 'marquee-ellipse', 'lasso', 'lasso-magnetic', 'wand', 'quick-select', 'eyedropper',
+    ];
+    for (const t of EXEMPT) {
+      expect(toolIgnoresLayerLock(t), t).toBe(true);
+    }
+  });
+
+  it('false for tools that write or move the layer', () => {
+    const GUARDED: ToolId[] = ['move', 'brush', 'eraser', 'fill', 'gradient', 'shape', 'text', 'crop', 'path', 'stamp'];
+    for (const t of GUARDED) {
+      expect(toolIgnoresLayerLock(t), t).toBe(false);
     }
   });
 });
