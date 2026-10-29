@@ -5,11 +5,16 @@ import { saveFilterPreview, restoreFilterPreview, clearFilterPreview, filterTilt
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import { isFilteringMask } from './filter-target';
+import { canReceiveRasterPaint, guardPixelWrite } from '../../layers/paint-target';
 
 export function beginTiltShiftSession(): void {
   if (isFilteringMask()) return;
-  const activeId = useEditorStore.getState().document.activeLayerId;
+  const doc = useEditorStore.getState().document;
+  const activeId = doc.activeLayerId;
   if (!activeId) return;
+  // The session expands the layer to the document, which would re-origin a
+  // text layer (#1395).
+  if (!guardPixelWrite(doc.layers.find((l) => l.id === activeId))) return;
   const engine = getEngine();
   if (!engine) return;
 
@@ -69,8 +74,13 @@ export function applyTiltShift(): void {
   const session = useUIStore.getState().tiltShift;
   if (!session) return;
 
-  const activeId = useEditorStore.getState().document.activeLayerId;
+  const doc = useEditorStore.getState().document;
+  const activeId = doc.activeLayerId;
   if (!activeId) return;
+  if (!canReceiveRasterPaint(doc.layers.find((l) => l.id === activeId))) {
+    cancelTiltShift();
+    return;
+  }
   const engine = getEngine();
   if (!engine) return;
 
