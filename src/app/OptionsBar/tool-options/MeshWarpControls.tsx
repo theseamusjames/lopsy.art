@@ -7,6 +7,7 @@ import {
   applyMeshWarp,
   applyMeshWarpWithPreview,
   beginMeshWarpPreview,
+  canStartMeshWarp,
   cancelMeshWarpPreview,
   previewMeshWarp,
 } from '../../MenuBar/mesh-warp-actions';
@@ -32,6 +33,7 @@ export function MeshWarpControls() {
   const selectionBounds = useEditorStore((s) => s.selection.bounds);
 
   const handleActivate = useCallback(() => {
+    if (!canStartMeshWarp()) return;
     const editor = useEditorStore.getState();
     const docW = editor.document.width;
     const docH = editor.document.height;
