@@ -348,15 +348,17 @@ function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
 }
 
 /**
- * Guides are UI state outside history, but Image Size scales them. Crossing a
- * step that changed the document size puts back the guides that step saw, so
- * undoing an Image Size un-scales them; any other step leaves them alone.
+ * Guides are UI state outside history, but Image Size scales them and Rotate
+ * Image turns them. Crossing a step that changed the document size, or a
+ * rotate (which keeps a square document's size), puts back the guides that
+ * step saw; any other step leaves them alone.
  */
 function restoreGuidesAcrossResize(target: HistorySnapshot, current: DocumentState): void {
   if (!target.guides) return;
   const isSizeChange =
     target.document.width !== current.width || target.document.height !== current.height;
-  if (!isSizeChange) return;
+  const isCanvasRotate = target.label.startsWith('Rotate Image');
+  if (!isSizeChange && !isCanvasRotate) return;
   useUIStore.setState({ guides: [...target.guides] });
 }
 
