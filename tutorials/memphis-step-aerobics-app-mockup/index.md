@@ -542,7 +542,7 @@ Be careful with placement. Give each piece some room, because a shape that nearl
 
 ## Group everything and test it
 
-![The layers panel with the App: Schedule, App: Hero, App: Live and Dancer groups collapsed, with the board unchanged](39-groups.webp)
+![The layers panel with the App: Live, App: Hero and App: Schedule groups collapsed, with the board unchanged](39-groups.webp)
 
 Tidy the stack. Click *Phone 1*, [[Shift]]-click the top layer of that phone's screen, and choose **Layer → Group Layers**. Name it *App: Schedule*. Do the same for *App: Hero* and *App: Live*, and group the three dancer layers as *Dancer*. Collapse the groups with the arrows on their rows.
 
