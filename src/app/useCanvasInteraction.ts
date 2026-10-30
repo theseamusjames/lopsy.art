@@ -62,6 +62,7 @@ import {
   refusePartialTextMove,
   releaseCoveringTextSelection,
 } from './interactions/text-transform-handlers';
+import { refuseMaskEditSelectionMove } from './interactions/mask-edit-move-guard';
 
 import type { Point, Layer } from '../types';
 
@@ -353,6 +354,7 @@ export function useCanvasInteraction(
           return;
         }
         if (refusePartialTextMove()) return;
+        if (refuseMaskEditSelectionMove()) return;
         if (refuseGroupSelectionTransform(ctx)) return;
         releaseCoveringTextSelection();
       }

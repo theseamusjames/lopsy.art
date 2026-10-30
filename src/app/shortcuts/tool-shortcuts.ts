@@ -5,6 +5,7 @@ import { useShortcutStore, buildKeyToActionMap, NON_TOOL_ACTION_IDS } from '../s
 import { toggleQuickMaskMode } from '../interactions/quick-mask-ops';
 import { scheduleNudge } from './nudge-coalesce';
 import { isPartialTextMove, PARTIAL_TEXT_MOVE_HINT } from '../interactions/text-transform-handlers';
+import { isMaskEditSelectionMove, MASK_EDIT_MOVE_HINT } from '../interactions/mask-edit-move-guard';
 import { notifyInfo } from '../notifications-store';
 import type { ToolId } from '../../types';
 
@@ -95,6 +96,10 @@ export function handleNudgeShortcut(
   // (#1085); hint once per key-hold, not on every auto-repeat.
   if (tool === 'move' && isPartialTextMove()) {
     if (!e.repeat) notifyInfo(PARTIAL_TEXT_MOVE_HINT);
+    return true;
+  }
+  if (tool === 'move' && isMaskEditSelectionMove()) {
+    if (!e.repeat) notifyInfo(MASK_EDIT_MOVE_HINT);
     return true;
   }
   const ui = useUIStore.getState();

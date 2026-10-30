@@ -1895,6 +1895,13 @@ changed the document size, so undoing Image Size un-scales them while undoing
 an unrelated step leaves guides alone. Crop and Canvas Size leave paths and
 guides where they are.
 
+**Rotate Image also turns vector paths and guides.** Every path anchor and
+handle goes through the same quarter turn as the pixels (CW `(x, y) → (H − y,
+x)`, CCW `(x, y) → (y, W − x)`), and each guide swaps orientation: a vertical
+guide becomes horizontal and vice versa, at the turned position. Undo / redo of
+a Rotate Image restores the guides that step saw, including on a square
+canvas whose size the turn leaves unchanged.
+
 **Layer masks follow their layer through all five.** After each operation,
 `remapLayerMaskThrough` (`app/store/actions/_helpers/remap-layer-masks.ts`)
 resamples the mask on the GPU (`remap_layer_mask`, `mask_remap.glsl`) through
