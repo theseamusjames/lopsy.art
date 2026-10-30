@@ -593,17 +593,20 @@ state over it.
   tethered to it by a line. Rotation handles are hit-tested **first**, so they
   win where the two overlap.
 - **Hit radius** is `8 / zoom` in document space — constant in screen terms.
-  For the Move tool, a **scale** handle's circle reaches into the box only
+  For the Move tool and the drag-out selection tools (hover and press alike),
+  a **scale** handle's circle reaches into the box only
   as far as a quarter of the box's smaller half-extent (`hitTestBoxHandle`);
   outside the outline it keeps the full radius. On a normal box that covers
   the whole circle, but on a small one — a 13px text label at fit zoom —
   most of the interior is a move zone and the handles are grabbed from just
   outside the edge. Where scale circles overlap outside a
   small box, the nearest handle wins. Rotation handles sit outside the box,
-  so they keep `8 / zoom` (capped only at 80% of their ~28 doc-px distance
-  from the corner, so at very low zoom they still can't reach the box). A
-  thin selection's rotate circles are therefore grabbable over their whole
-  drawn circle.
+  so they keep `8 / zoom` (capped at 80% of their ~28 doc-px distance from
+  the corner, so at very low zoom they still can't reach the box). A thin
+  selection's rotate circles are therefore grabbable over their whole drawn
+  circle. The drawn white corner square always scales, even where a rotate
+  circle overlaps it at low zoom; it gives way halfway to the rotate handle,
+  so that one stays grabbable at any zoom.
 - **Cursors**: `nwse-resize` / `nesw-resize` on the corners, `ns-resize` /
   `ew-resize` on the edge midpoints, `crosshair` on the rotation handles —
   only under the Move tool and the drag-out selection tools, the ones a press
