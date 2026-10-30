@@ -561,3 +561,36 @@ the engine (brush colour via `encodeColorForEngine`, effect colours in
 `layerToDescJson`) must be encoded first, and shaders that do RGB maths on
 the composite (`adjustments.glsl`, `vignette.glsl`) decode/re-encode via
 `//#include lab` (`gpu/shaders/lab_common.glsl`) when `u_docColorMode == 1`.
+
+## Never pass objects that reach large typed arrays as React props
+
+In development, React 19.2's performance track diffs every re-rendered
+component's changed props (`addObjectDiffToProperties` in
+`react-dom-client.development.js`) and lists a typed array found within two
+levels of a prop **index by index**, then structured-clones the list into
+`performance.measure`. A `layer` prop reaches `layer.mask.data`, so each mask
+change on an 1800×1200 document cost ~0.5–1.4 GB of transient heap and a few
+in a row crashed the tab with "Data cannot be cloned, out of memory" (#1408).
+Production builds don't do this. Pass ids and read big data with a store
+selector inside the component (hook state isn't diffed), as `LayerRow` /
+`MaskThumbnail` do. `src/panels/LayerPanel/LayerPanel.test.ts` shows how to
+observe the track under Vitest (stub `console.timeStamp` and
+`performance.measure` before importing React). Heap sampling misses this
+garbage unless `includeObjectsCollectedByMajorGC` is on; measure with
+`HeapProfiler.collectGarbage` + `Performance.getMetrics` instead
+(`e2e/mask-heap-1408.spec.ts`).
+
+## A texture left bound to a unit can turn a later draw into a silent no-op
+
+Sampler uniforms persist on a program, and texture units keep whatever was
+last bound. If a unit still holds a texture the pool has since handed to a
+new owner, any draw into that texture by a program whose sampler points at
+the unit is a WebGL feedback loop: Chrome logs `GL_INVALID_OPERATION:
+Feedback loop formed between Framebuffer and active Texture` and the draw
+writes nothing — even when a flag like `u_hasMask == 0` means the sampler is
+never read. A deleted layer's mask left on TEXTURE2 by the compositor broke
+every float composite into the next layer that got its texture (#1414; #964
+was the same shape). Unbind extra units after the draw that used them, and
+point unused samplers at a unit holding the draw's source. The console line
+is the tell: capture console errors in e2e repros of "the operation did
+nothing" bugs.

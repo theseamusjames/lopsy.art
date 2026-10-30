@@ -3,20 +3,23 @@ import { contextOptions } from '../../engine/color-space';
 import { usePixelDataVersion } from '../../engine/usePixelDataVersion';
 import { readLayerThumbnail } from '../../engine-wasm/gpu-pixel-access';
 import { requestThumbnailRead, cancelThumbnailRead } from './thumbnail-read-queue';
-import type { Layer } from '../../types';
 import styles from './LayerPanel.module.css';
 
 const THUMB_SIZE = 24;
 const MAX_RETRIES = 10;
 
-export function LayerThumbnail({ layer }: { layer: Layer }) {
+export interface LayerThumbnailProps {
+  layerId: string;
+}
+
+export function LayerThumbnail({ layerId }: LayerThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Subscribe only to this layer's pixel version — bumps on actual pixel
   // mutation (including stroke-end when clearJsPixelData() removes the
   // JS cache). Subscribing to store-wide renderVersion here used to fire
   // on every brush dab, triggering a full-layer glReadPixels per dab.
-  const pixelVersion = usePixelDataVersion(layer.id);
+  const pixelVersion = usePixelDataVersion(layerId);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -35,7 +38,7 @@ export function LayerThumbnail({ layer }: { layer: Layer }) {
         ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE);
         if (retries < MAX_RETRIES) {
           retries++;
-          requestThumbnailRead(layer.id, () => readLayerThumbnail(layer.id, THUMB_SIZE), paint);
+          requestThumbnailRead(layerId, () => readLayerThumbnail(layerId, THUMB_SIZE), paint);
         }
         return;
       }
@@ -57,13 +60,13 @@ export function LayerThumbnail({ layer }: { layer: Layer }) {
     // in flight (#741). Route through the coalescing idle-time queue so a
     // burst of layer pixel-version bumps (stroke end, layer switch, undo)
     // pays one stall per tick, off the interactive frame.
-    requestThumbnailRead(layer.id, () => readLayerThumbnail(layer.id, THUMB_SIZE), paint);
+    requestThumbnailRead(layerId, () => readLayerThumbnail(layerId, THUMB_SIZE), paint);
 
     return () => {
       cancelled = true;
-      cancelThumbnailRead(layer.id);
+      cancelThumbnailRead(layerId);
     };
-  }, [layer.id, pixelVersion]);
+  }, [layerId, pixelVersion]);
 
   return <canvas ref={canvasRef} className={styles.thumbnailCanvas} />;
 }

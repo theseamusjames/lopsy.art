@@ -1548,6 +1548,13 @@ luminance, and Delete fills it with the background colour's — within the
 selection, or the whole mask without one — as a *Mask Fill* / *Mask Clear*
 history row. The fill runs on the GPU (`fill_mask_with_value`).
 
+**The Move tool does not lift a selection in mask edit mode.** A Move drag
+inside a selection, a transform-handle drag, an arrow-key nudge and the
+options-bar Flip / Rotate 90° buttons are all refused with *"Leave mask edit
+mode to move or transform a selection."* and record nothing: the float they
+would lift carries the layer's pixels, not its mask. With no selection a Move
+drag still moves the whole layer, its mask along with it.
+
 **Filter menu commands write the mask too.** In mask edit mode every
 Filter command — Invert, the blurs, Add Noise, Clouds, Brightness / Contrast,
 Posterize, Color LUT and the rest — runs on the active layer's (or group's)
@@ -1876,7 +1883,7 @@ raster and text layers and skips shape and group layers.
 | **Crop canvas** | cropped to the rect | reset to `(0,0)` at full canvas size | translated by the crop origin | untouched | cropped with the layer | untouched by the tool; **Edit → Crop clears it** |
 | **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | moved by the anchor offset | untouched |
 | **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position, font size, letter spacing, area-text width, and effect dimensions all scaled; a path-bound layer's path anchor scales too, so its offset off the path is kept | untouched | scaled with the layer | untouched |
-| **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | turned with the canvas through its stored transform and re-rendered, stays live; path-bound or empty text untouched | untouched | rotated with the layer (shape masks untouched) | untouched |
+| **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | turned with the canvas through its stored transform and re-rendered, stays live; path-bound text re-lays on its turned path (its offset off the path turns too); empty text untouched | untouched | rotated with the layer (shape masks untouched) | untouched |
 | **Flip** | mirrored within the layer's own texture | moved so the content mirrors about its own bounds (see below) | flipped through its transform, stays live; text on a path is **refused** with a toast | a group mirrors its descendants as a unit (refused if it holds a text layer); a shape layer flips like a raster | mirrored with the layer (a text layer's mask is untouched) | untouched |
 
 **Image Size also scales vector paths and guides.** Every stored path's
@@ -1887,6 +1894,13 @@ otherwise part of history; undo / redo restores them only across a step that
 changed the document size, so undoing Image Size un-scales them while undoing
 an unrelated step leaves guides alone. Crop and Canvas Size leave paths and
 guides where they are.
+
+**Rotate Image also turns vector paths and guides.** Every path anchor and
+handle goes through the same quarter turn as the pixels (CW `(x, y) → (H − y,
+x)`, CCW `(x, y) → (y, W − x)`), and each guide swaps orientation: a vertical
+guide becomes horizontal and vice versa, at the turned position. Undo / redo of
+a Rotate Image restores the guides that step saw, including on a square
+canvas whose size the turn leaves unchanged.
 
 **Layer masks follow their layer through all five.** After each operation,
 `remapLayerMaskThrough` (`app/store/actions/_helpers/remap-layer-masks.ts`)

@@ -33,6 +33,8 @@ import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 import { clearJsPixelData } from '../../store/clear-js-pixel-data';
 import { remapDocumentMasks, remapLayerMaskThrough } from '../../store/actions/_helpers/remap-layer-masks';
 import { documentRotation90, layerFlip, layerRotation90, type Affine } from '../../../layers/mask-remap';
+import { rotateGuidesForCanvas, rotatePathsForCanvas } from '../../store/actions/rotate-image-overlays';
+import { useUIStore } from '../../ui-store';
 
 const GROUP_TEXT_FLIP_REFUSAL = 'Rasterize the text layers in this group before flipping it.';
 
@@ -257,6 +259,10 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
 
   const textLayerIds: string[] = [];
   for (const layer of doc.layers) {
+    if (layer.type === 'text' && layer.pathId) {
+      newLayers.push(turnPathTextOffset(layer, direction));
+      continue;
+    }
     if (layer.type === 'text') {
       const turned = rotateTextLayerWithCanvas(engine, layer, direction, doc.width, doc.height);
       if (turned !== layer) textLayerIds.push(layer.id);
@@ -310,8 +316,24 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
       height: newHeight,
       layers: maskedLayers,
     },
+    paths: rotatePathsForCanvas(state.paths, direction, doc.width, doc.height),
     renderVersion: state.renderVersion + 1,
   });
+  const { guides } = useUIStore.getState();
+  useUIStore.setState({ guides: rotateGuidesForCanvas(guides, direction, doc.width, doc.height) });
+}
+
+/**
+ * Path-bound text re-lays itself on its path once the path turns with the
+ * canvas; turning the layer's offset off the path keeps a nudged layer the
+ * same distance from the path in the rotated frame.
+ */
+function turnPathTextOffset(layer: TextLayer, direction: 'cw' | 'ccw'): TextLayer {
+  if (layer.pathAnchorX === undefined || layer.pathAnchorY === undefined) return layer;
+  const dx = layer.x - layer.pathAnchorX;
+  const dy = layer.y - layer.pathAnchorY;
+  const turned = direction === 'cw' ? { x: -dy, y: dx } : { x: dy, y: -dx };
+  return { ...layer, pathAnchorX: layer.x - turned.x, pathAnchorY: layer.y - turned.y };
 }
 
 function getActiveGroupId(): string | null {
