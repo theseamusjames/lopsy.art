@@ -80,6 +80,7 @@ export default defineConfig({
       blogDir: resolve(__dirname, 'blog'),
       baseCss: resolve(__dirname, 'src/site/tutorials/tutorials.css'),
       blogCss: resolve(__dirname, 'src/site/blog/blog.css'),
+      hostedDir: resolve(__dirname, 'dist-r2'),
     }),
     agentDocsPlugin({ root: resolve(__dirname), files: ['SKILL.md', 'FEATURES.md'] }),
   ],

@@ -42,9 +42,8 @@ function renderFinished(ctx: RenderContext, tutorial: Tutorial): string {
   })}</figure>`;
 }
 
-function renderFollowAlong(tutorial: Tutorial): string {
-  if (!tutorial.project) return '';
-  const projectUrl = tutorialAssetPath(tutorial.slug, tutorial.project);
+function renderFollowAlong(projectUrl: string | null): string {
+  if (!projectUrl) return '';
   return `<aside class="follow-along">
   <a class="button" href="${escapeHtml(openProjectHref(projectUrl))}" target="_blank" rel="noopener">Open Project in ${SITE_NAME}</a>
   <div class="follow-along-message">
@@ -108,6 +107,8 @@ export function renderTutorialPage(
   ctx: RenderContext,
   tutorial: Tutorial,
   related: readonly Tutorial[],
+  /** Where the tutorial's `.lopsy` is served from, or null when it has none. */
+  projectUrl: string | null,
 ): string {
   const path = tutorialPath(tutorial.slug);
   const crumbs: Breadcrumb[] = [
@@ -128,7 +129,7 @@ export function renderTutorialPage(
     <div class="tutorial-meta">${renderMetaList(tutorial, { showStepCount: true })}<p class="date">${dateLine}</p></div>
   </header>
   ${renderFinished(ctx, tutorial)}
-  ${renderFollowAlong(tutorial)}
+  ${renderFollowAlong(projectUrl)}
   ${tutorial.intro ? `<div class="intro">${renderMarkdown(tutorial.intro, { shouldRenderPalettes: true })}</div>` : ''}
   <ol class="steps">
 ${tutorial.steps.map((step, index) => renderStep(ctx, tutorial, step, index)).join('\n')}
