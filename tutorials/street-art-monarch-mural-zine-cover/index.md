@@ -45,7 +45,7 @@ The palette:
 - Buff band `#F2EBDD`, ink `#17131D`, WALLS orange `#F26A1B`, tape `#E4DCC6`, paper `#F4F0E6`
 - Sticker red `#D7263D`, sticker white `#FBFAF5`
 
-You'll need one photo: **"Danaus plexippus MHNT.jpg"** by Didier Descouens on Wikimedia Commons. It shows two pinned monarchs on white. Download it, crop it to just the top butterfly (the male, wings fully open) with a little white around it, and keep the crop handy.
+You'll need one photo: **"Danaus plexippus MHNT.jpg"** by Didier Descouens on Wikimedia Commons. It shows two pinned monarchs on white. Download it and crop it to just the top butterfly (the male, wings fully open) with a little white around it, about 1120 × 750 px. Keep the crop handy.
 
 > **Note:** Shortcuts are written for a Mac. On Windows use [[Ctrl]] for [[Cmd]] and [[Alt]] for [[Option]].
 
@@ -94,7 +94,7 @@ Choose **View → Show Grid**. A **Grid** slider appears at the right of the opt
 
 ![Dark grey mortar lines along every horizontal grid line, with staggered vertical joints, forming a cinderblock wall](05-mortar.webp)
 
-Pick the **Pencil** with **Size** `7` and set the foreground to `#2E2E2E`.
+Pick the **Pencil** with **Size** `7` and set the foreground to `#2E2E2E`. The grid is centred on the page, so the first horizontal line is at about `y 82`, not at the top edge, and the top and bottom rows are part-blocks. Zoom in a little if your clicks don't land on the lines. It's a lot of clicks, but each one is quick.
 
 1. For each horizontal grid line, click at the left edge of the canvas and [[Shift]]-click at the right edge. Shift-click draws a straight line from the last point.
 2. Now the joints between blocks. In the top row, click on a vertical grid line and Shift-click straight down to the next horizontal line. Repeat on **every second** vertical grid line along the row.
@@ -148,7 +148,7 @@ With `Buff Patches` active, click **New Group** at the bottom of the Layers pane
 
 Add a layer called `Sun Dots`. Pick the **Brush** with **Size** `18`, **Hardness** `100` and **Opacity** `100`. Open the Brushes dialog with the brush-tip button at the left of the options bar, and on the **Shape** tab set **Spacing** to `200`. Close the dialog.
 
-At 200% spacing each dab sits two brush-widths from the last, so a stroke becomes a row of dots. Set the foreground to `#FFE7A0` and drag slowly once around the sun, about 44 px outside its edge.
+At 200% spacing each dab sits two brush-widths from the last, so a stroke becomes a row of dots. Set the foreground to `#FFE7A0` and drag slowly once around the sun, about 44 px outside its edge. A freehand ring will wobble a little, and that's fine: it looks hand-sprayed.
 
 Open the Brushes dialog again and put **Spacing** back to `10` before you paint anything else.
 
@@ -176,7 +176,7 @@ Press [[Delete]], then [[Cmd+D]]. Only the butterfly is left.
 
 [[Cmd]]-click the `Reference` thumbnail to select the butterfly's pixels. The Move tool shows transform handles around it.
 
-1. Hold [[Cmd]] and drag the bottom-right corner handle up and in until the butterfly is about 79% of its pasted size, about 860 px wide. [[Cmd]] keeps the proportions.
+1. Hold [[Cmd]] and drag the bottom-right corner handle up and in until the butterfly is about 860 px wide. [[Cmd]] keeps the proportions.
 2. Drag from the middle of the butterfly to move it until its body sits in the centre of the sun, at about `550, 672`.
 
 ## Tilt it into flight
@@ -189,7 +189,7 @@ Press [[Cmd+D]] to commit.
 
 ## Fill the black silhouette
 
-![The whole butterfly shape filled solid near-black, with the faint reference photo underneath](15-silhouette.webp)
+![The whole butterfly shape filled near-black under the 60% reference photo, so it looks brown, with the selection still showing](15-silhouette.webp)
 
 Now you'll trace the photo the way a mural painter works: black base first, colour on top, and the black that shows through becomes the veins.
 
@@ -197,6 +197,8 @@ Now you'll trace the photo the way a mural painter works: black base first, colo
 2. [[Cmd]]-click the `Reference` thumbnail to select the butterfly.
 3. Choose **Select → Grow…** with `4`, then **Select → Shrink…** with `4`. Growing and shrinking by the same amount closes the hairline gaps along the body without changing the outline.
 4. Set the foreground to `#1A1210` and choose **Edit → Fill**. Press [[Cmd+D]].
+
+The `Reference` layer sits on top at 60%, so the black looks brown for now.
 
 ## Select the orange cells
 
@@ -300,7 +302,7 @@ Collapse the `Monarch` group with the arrow on its row and click it. Press [[Cmd
 
 ![A second, smaller monarch at the lower left, tilted the other way](26-second-monarch.webp)
 
-Press [[Cmd+V]] again for another copy and rename it `Small Monarch 2`. Scale it to about 14% (roughly 145 px wide), move it to about `120, 965`, rotate it about 18° clockwise this time, and press [[Cmd+D]].
+Press [[Cmd+V]] again. The new copy lands on top of the big butterfly again, just like the first one. Rename it `Small Monarch 2`. Scale it to about 14% (roughly 145 px wide), move it to about `120, 965`, rotate it about 18° clockwise this time, and press [[Cmd+D]].
 
 ## Dot the flight route
 
@@ -337,7 +339,7 @@ You're about to treat each letter as pixels, so click **Rasterize Layer** at the
 
 ![The letter A selected with a marquee and being rotated slightly with its corner handle](30-letter-bounce.webp)
 
-Graffiti letters never sit on a ruler-straight baseline. Give each one a little movement. For each letter, draw a **Rectangular Marquee** tightly around it (just that letter, a little above and below), then:
+Graffiti letters never sit on a ruler-straight baseline. Give each one a little movement. For each letter, draw a **Rectangular Marquee** tightly around it (just that letter, a little above and below), then switch to the **Move** tool with [[V]] so you get the transform handles and arrow-key nudges. Titan One's letters sit close together; if a box catches part of a neighbour, draw the selection with the **Lasso** instead. Then:
 
 - **M**: rotate about 5° anticlockwise with the rotate handle.
 - **O**: with the **Move** tool, press [[Shift+Up]] once and [[Up]] four times to lift it 14 px.
@@ -368,7 +370,7 @@ Open the effects drawer for `Letters` and turn on **Stroke** with **Width** `7`,
 
 Click `Extrude`. [[Cmd]]-click the `Letters` thumbnail, choose **Select → Grow…** with `7` so the block covers the outline too, set the foreground to `#3A1C71` and choose **Edit → Fill**.
 
-Now stretch it into a block. Pick the **Move** tool, press inside one of the letters, and hold [[Option]] while you drag about 4 px right and 5 px down. Option-dragging a selection moves a copy and leaves the original pixels behind. Do it **three more times**, each time starting inside the copy you just moved. Each drag stamps the last copy in place and pulls a new one, so the purple steps out into a solid 3D block about 20 px deep.
+Now stretch it into a block. Zoom in to about 200% first, so each small drag is big enough to control. Pick the **Move** tool, press inside one of the letters, and hold [[Option]] while you drag about 4 px right and 5 px down. Option-dragging a selection moves a copy and leaves the original pixels behind. Do it **three more times**, each time starting inside the copy you just moved. Each drag stamps the last copy in place and pulls a new one, so the purple steps out into a solid 3D block about 20 px deep.
 
 ## Outline the block
 
@@ -401,14 +403,14 @@ The cloud now looks rounded, like the bubble shading graffiti writers spray in b
 
 Click `Drips`. Pick the **Brush** with **Hardness** and **Opacity** at `100` and the foreground `#E8458B`.
 
-Open the Brushes dialog. **Taper** shrinks a stroke from full size at its start to a point over that many pixels. For each drip, set **Size** and **Taper**, close the dialog, then drag from just inside the cloud straight down. Finish each with a click at the bottom using a brush a little over half the drip's size, for the drop. Make about six, uneven:
+Open the Brushes dialog. **Taper** shrinks a stroke from full size at its start to a point over that many pixels. Set it to about 1.6 times the drip's length, so the drip thins but never quite vanishes. For each drip, set **Size** and **Taper**, close the dialog, then drag from just inside the cloud straight down. Finish each with a click at the bottom using a brush a little over half the drip's size, for the drop. Make about six, uneven:
 
-- at `x 170`: **Size** `30`, about 92 px long, **Taper** `147`
-- at `x 246`: **Size** `20`, about 38 px long, **Taper** `61`
-- at `x 352`: **Size** `34`, about 124 px long, **Taper** `198`
-- at `x 612`: **Size** `24`, about 64 px long, **Taper** `102`
-- at `x 772`: **Size** `20`, about 30 px long, **Taper** `48`
-- at `x 952`: **Size** `28`, about 50 px long, **Taper** `80`
+- at `x 170`: **Size** `30`, about 92 px long
+- at `x 246`: **Size** `20`, about 38 px long
+- at `x 352`: **Size** `34`, about 124 px long
+- at `x 612`: **Size** `24`, about 64 px long
+- at `x 772`: **Size** `20`, about 30 px long
+- at `x 952`: **Size** `28`, about 50 px long
 
 Set **Taper** back to `0` when you're done.
 
@@ -487,8 +489,8 @@ Turn **View → Snap to Guides** back on. Give `Sticker` a **Drop Shadow**: **Of
 Make the three lines from the bottom up, so each click lands in empty space:
 
 1. Foreground `#1A1A1A`, **Rock Salt** at `40`, click at about `780, 1546`, type `Danaus` (the monarch's genus) and press [[Tab]].
-2. Click `Sticker`. Foreground white, **Special Elite** at `21`, click at about `780, 1496`, type `my name is`.
-3. Click `Sticker` again. **Bungee** at `50`, click at about `780, 1436`, type `HELLO`.
+2. Click `Sticker`. Foreground white, **Special Elite** at `21`, click at about `780, 1496`, type `my name is` and press [[Tab]].
+3. Click `Sticker` again. **Bungee** at `50`, click at about `780, 1436`, type `HELLO` and press [[Tab]].
 
 With the **Move** tool, centre each line on the sticker's middle (`x 890`) with the arrow keys. Put the top of HELLO 14 px below the sticker's top edge and `my name is` 7 px under it, and sit `Danaus` halfway down the white area.
 
@@ -502,9 +504,9 @@ Click `Danaus`, [[Shift]]-click `Sticker`, choose **Layer → Group Layers** and
 
 ![Three slightly tilted strips of off-white paper with torn ends at the bottom left, each with a soft shadow](46-paper-strips.webp)
 
-Collapse `Hello Sticker`, click it, and add a layer called `Tape`. Set the foreground to `#F4F0E6`.
+Collapse `Hello Sticker`, click it, and add a layer called `Tape` (for the paper strips; the masking tape is a separate layer up in the masthead). Set the foreground to `#F4F0E6`.
 
-With the **Lasso**, draw three strips 44 px tall with torn, jagged ends, then fill them one at a time:
+With the **Lasso**, draw one strip 44 px tall with torn, jagged ends, choose **Edit → Fill**, deselect, and repeat for the other two:
 
 - from `60, 1482`, about 450 px long, tilted 2° anticlockwise
 - from `82, 1538`, about 500 px long, tilted 1.5° clockwise
@@ -540,7 +542,8 @@ The tag crosses the pink drips, so give it a dark edge to show it was painted ov
 
 1. Click `Shine` and add a layer called `Tag Outline`. It goes under the tag.
 2. [[Cmd]]-click the `migration` thumbnail, choose **Select → Grow…** with `4`, fill with `#1B0B33` and press [[Cmd+D]].
-3. Click `migration` and add a layer called `Tag Drips`. With the **Brush** at **Size** `9`, white, and **Taper** about twice the drip's length, drag four thin drips, 34 to 64 px long, down from the bottoms of the m, a, t and n. Click a 10 px drop at the end of each.
+3. Click `migration` and add a layer called `Tag Drips`. With the **Brush** at **Size** `9`, white, and **Taper** about twice the drip's length (these are thinner, so they can taper further), drag four thin drips, 34 to 64 px long, down from the bottoms of the m, a, t and n. Click a 10 px drop at the end of each.
+4. Set **Taper** back to `0` in the Brushes dialog.
 
 ## Weather the wall
 
@@ -548,12 +551,12 @@ The tag crosses the pink drips, so give it a dark edge to show it was painted ov
 
 Collapse `Piece`, click `Blocks` and add a layer called `Grime`.
 
-1. **Filter → Clouds…** with **Scale** `4`, then **Add Noise…** `20` **Mono**. Set it to **Overlay** at `22%`.
+1. **Filter → Clouds…** with **Scale** `4`, then **Filter → Add Noise…** `20` **Mono**. Set it to **Overlay** at `22%`.
 2. Add a layer called `Dirt`. Pick the **Brush** with **Size** `22`, **Hardness** `0`, **Opacity** `30` and the foreground `#0A0F2A`. Drag seven streaks straight down from the bottom of the masthead, 60 to 210 px long, in two or three clusters.
 3. At **Size** `30` and **Opacity** `45`, drag six more, 70 to 140 px long, down from the mortar line at about `y 1492`.
 4. At **Size** `180` and **Opacity** `60`, make one wavy stroke along the very bottom of the page.
 5. Pick the **Spray** with **Size** `120`, **Density** `30` and **Opacity** `70` and make one wavy pass at about `y 1630`.
-6. Draw a **Rectangular Marquee** across the bottom 220 px. Use a **Linear** gradient from `#0A0F2A` at **0%** opacity to `#0A0F2A` at full opacity, dragged from the top of the marquee to the bottom. Press [[Cmd+D]].
+6. Draw a **Rectangular Marquee** across the bottom 220 px. Pick the **Gradient** tool with **Linear**, and in **Advanced…** set both stops to `#0A0F2A`, then select the left stop and drag its **Opacity** bar all the way to the left. Drag the gradient from the top of the marquee to the bottom and press [[Cmd+D]].
 
 Set `Dirt` to **Multiply** at `75%`.
 
@@ -563,7 +566,7 @@ Set `Dirt` to **Multiply** at `75%`.
 
 Zines are photocopied, and copiers leave specks, mostly toward the edges. Collapse `Zine`, click it, and add a layer called `Toner`. It goes at the very top.
 
-1. Fill it with `#808080`, run **Add Noise…** with **Amount** `100` and **Mono**, then **Filter → Threshold…** with **Level** `40`. You get a few black specks on white.
+1. Set the foreground to `#808080`, press [[Cmd+A]], choose **Edit → Fill** and press [[Cmd+D]]. Run **Filter → Add Noise…** with **Amount** `100` and **Mono**, then **Filter → Threshold…** with **Level** `40`. You get a few black specks on white.
 2. Pick the **Magic Wand** with **Tolerance** `20` and **Contiguous** off, click a white pixel, press [[Delete]] and [[Cmd+D]]. Only the specks are left.
 3. Set the layer to **Multiply** at `40%`.
 4. Click **Add Mask**, then click the mask thumbnail on the layer's row to edit it. Use a **Radial** gradient: black at the left end, black again at about 45%, white at the right end. Drag from the middle of the page, `550, 850`, out about 900 px. The middle of the cover stays clean and the specks collect at the edges.
