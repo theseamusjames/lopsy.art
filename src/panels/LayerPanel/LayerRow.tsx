@@ -18,8 +18,16 @@ function hasActiveEffects(layer: Layer): boolean {
   return false;
 }
 
+/**
+ * Rows take a layer id and read the layer from the store rather than taking
+ * the `Layer` as a prop. In development React's performance track diffs
+ * every component's changed props and walks a typed array index by index;
+ * a `Layer` prop reaches `mask.data`, so each mask change built millions
+ * of entries per component and cloned them into `performance.measure` —
+ * gigabytes of garbage on a large document. Hook state isn't diffed.
+ */
 export interface LayerRowProps {
-  layer: Layer;
+  layerId: string;
   depth: number;
   rowIndex: number;
   isActive: boolean;
@@ -52,7 +60,7 @@ export interface LayerRowProps {
 }
 
 export function LayerRow({
-  layer, depth, rowIndex,
+  layerId, depth, rowIndex,
   isActive, isSelected, isRootGroup, isDragging,
   isDropTarget, isDropTargetEnd, isDropIntoGroup, dropDepth,
   isEditingOpacity, isMaskEditActive, showEffectsDrawer,
@@ -64,6 +72,8 @@ export function LayerRow({
 }: LayerRowProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  const layer = useEditorStore((s) => s.document.layers.find((l) => l.id === layerId));
+  if (!layer) return null;
 
   return (
     <div className={styles.itemWrapper}>
@@ -124,7 +134,7 @@ export function LayerRow({
             className={styles.thumbnail}
             onClick={(e) => onThumbnailCmdClick(e, layer.id)}
           >
-            <LayerThumbnail layer={layer} />
+            <LayerThumbnail layerId={layer.id} />
           </div>
         )}
         {isGroupLayer(layer) && (
@@ -250,7 +260,7 @@ export function LayerRow({
             aria-label={`Edit mask for ${layer.name}`}
             title="Click to edit mask"
           >
-            <MaskThumbnail layer={layer} />
+            <MaskThumbnail layerId={layer.id} />
           </div>
           <span className={styles.maskLabel}>Mask</span>
           <button

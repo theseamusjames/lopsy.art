@@ -1,14 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { contextOptions } from '../../engine/color-space';
-import type { Layer } from '../../types';
+import { useEditorStore } from '../../app/editor-store';
 
-export function MaskThumbnail({ layer }: { layer: Layer }) {
+export interface MaskThumbnailProps {
+  layerId: string;
+}
+
+export function MaskThumbnail({ layerId }: MaskThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mask = layer.mask;
+  // Read from the store, not a prop: see the note on `LayerRowProps`.
+  const mask = useEditorStore(
+    (s) => s.document.layers.find((l) => l.id === layerId)?.mask ?? null,
+  );
 
-  // No store subscription needed — mask data comes via the layer prop.
-  // The parent LayerPanel re-renders when document state changes,
-  // which provides the updated layer object with fresh mask data.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !mask) return;

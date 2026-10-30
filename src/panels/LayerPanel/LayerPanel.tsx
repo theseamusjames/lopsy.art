@@ -170,7 +170,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
         {displayList.map(({ layer, depth }, ri) => (
           <LayerRow
             key={layer.id}
-            layer={layer}
+            layerId={layer.id}
             depth={depth}
             rowIndex={ri}
             isActive={layer.id === activeLayerId}
