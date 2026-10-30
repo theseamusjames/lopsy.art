@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTutorialSite } from './build-site';
+import { type ProjectHost, buildTutorialSite } from './build-site';
 import { SWATCH_SCRIPT } from './swatch';
 import type { SourceTutorial } from './types';
 
@@ -55,8 +55,8 @@ Done.
   };
 }
 
-function build(sources: SourceTutorial[], shouldIncludeDrafts = false) {
-  return buildTutorialSite({ sources, css: 'body{}', shouldIncludeDrafts });
+function build(sources: SourceTutorial[], shouldIncludeDrafts = false, projectHost: ProjectHost | null = null) {
+  return buildTutorialSite({ sources, css: 'body{}', shouldIncludeDrafts, projectHost });
 }
 
 function jsonLd(html: string): { '@graph': Array<Record<string, unknown>> } {
@@ -157,6 +157,21 @@ describe('buildTutorialSite', () => {
 
     const other = result.files.get('tutorials/beta/index.html') as string;
     expect(other).not.toContain('follow-along');
+  });
+
+  it('hands the project file to the host under a content-addressed key and links there', () => {
+    const host: ProjectHost = { origin: 'https://files.example', digest: (bytes) => `d${bytes.length}` };
+    const project = source('alpha', 'project: alpha.lopsy', ['alpha.lopsy']);
+    const result = build([project], false, host);
+    expect(result.errors).toEqual([]);
+    expect(result.files.has('tutorials/alpha/alpha.lopsy')).toBe(false);
+    const bytes = project.assets.get('alpha.lopsy');
+    expect([...result.hostedFiles]).toEqual([[`tutorials/alpha/d${bytes?.length}/alpha.lopsy`, bytes]]);
+    expect(result.warnings.some((w) => w.includes('alpha.lopsy'))).toBe(false);
+
+    const html = result.files.get('tutorials/alpha/index.html') as string;
+    const url = `https://files.example/tutorials/alpha/d${bytes?.length}/alpha.lopsy`;
+    expect(html).toContain(`href="/?open=${encodeURIComponent(url)}"`);
   });
 
   it('fails when the project file is missing or not a .lopsy', () => {

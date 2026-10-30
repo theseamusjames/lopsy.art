@@ -22,6 +22,25 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      # Pages rejects files over 25 MiB, so tutorial projects live in R2. The
+      # build lays them out by bucket key in dist-r2/; keys carry a content
+      # hash, so a key the bucket already serves is already current. Runs
+      # before the Pages deploy so no published link points at a missing file.
+      - name: Upload tutorial projects to R2
+        shell: bash
+        working-directory: dist-r2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          find . -type f | sed 's|^\./||' | sort | while read -r key; do
+            if curl -sfI "https://files.lopsy.art/$key" > /dev/null; then continue; fi
+            echo "Uploading $key"
+            npx --yes wrangler@4.151.3 r2 object put "lopsy-art-projects/$key" --file "$key" --remote \
+              --content-type application/octet-stream \
+              --cache-control "public, max-age=31536000, immutable" < /dev/null
+          done
+
       - name: Create Cloudflare Pages project (if needed)
         uses: cloudflare/wrangler-action@v3
         with:

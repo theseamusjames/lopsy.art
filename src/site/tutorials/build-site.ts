@@ -5,20 +5,31 @@ import { byNewest, pickRelated } from './related';
 import { type RenderContext, coverImage } from './render-layout';
 import { renderTutorialIndex } from './render-index';
 import { renderTutorialPage } from './render-tutorial';
-import { RELATED_LIMIT, TUTORIALS_PATH, tutorialPath } from './site-config';
+import { RELATED_LIMIT, TUTORIALS_PATH, hostedProjectKey, tutorialAssetPath, tutorialPath } from './site-config';
 import { type SitemapEntry, latestDate } from '../sitemap';
 import type { ImageSize, SourceTutorial, Tutorial } from './types';
+
+export interface ProjectHost {
+  /** Public origin of the bucket, e.g. `https://files.lopsy.art`. */
+  origin: string;
+  /** Short content hash of a project file; part of its bucket key. */
+  digest: (bytes: Uint8Array) => string;
+}
 
 export interface BuildOptions {
   sources: readonly SourceTutorial[];
   css: string;
   /** Drafts render in dev so authors can preview them; production builds leave them out. */
   shouldIncludeDrafts: boolean;
+  /** Where `.lopsy` files are hosted. Null publishes them next to their page. */
+  projectHost: ProjectHost | null;
 }
 
 export interface BuildResult {
   /** Output files keyed by path relative to the site root, e.g. `tutorials/index.html`. */
   files: Map<string, string | Uint8Array>;
+  /** Project files for the `projectHost` bucket, keyed by bucket key. */
+  hostedFiles: Map<string, Uint8Array>;
   /** Pages for the site-wide sitemap, which the Vite plugin writes once for every section. */
   sitemapEntries: SitemapEntry[];
   errors: string[];
@@ -64,6 +75,26 @@ function checkProject(tutorial: Tutorial, source: SourceTutorial, errors: string
   }
 }
 
+/** Places the tutorial's project where `host` says and returns the URL the editor opens it from. */
+function publishProject(
+  tutorial: Tutorial,
+  source: SourceTutorial,
+  host: ProjectHost | null,
+  files: Map<string, string | Uint8Array>,
+  hostedFiles: Map<string, Uint8Array>,
+): string | null {
+  const file = tutorial.project;
+  const bytes = file ? source.assets.get(file) : undefined;
+  if (!file || !bytes) return null;
+  if (!host) {
+    files.set(`tutorials/${tutorial.slug}/${file}`, bytes);
+    return tutorialAssetPath(tutorial.slug, file);
+  }
+  const key = hostedProjectKey(tutorial.slug, host.digest(bytes), file);
+  hostedFiles.set(key, bytes);
+  return `${host.origin}/${key}`;
+}
+
 export function tutorialSitemapEntries(tutorials: readonly Tutorial[]): SitemapEntry[] {
   return [
     { path: TUTORIALS_PATH, lastmod: latestDate(tutorials.map((t) => t.updated)) },
@@ -101,7 +132,8 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
   }
 
   const files = new Map<string, string | Uint8Array>();
-  if (errors.length > 0) return { files, sitemapEntries: [], errors, warnings };
+  const hostedFiles = new Map<string, Uint8Array>();
+  if (errors.length > 0) return { files, hostedFiles, sitemapEntries: [], errors, warnings };
 
   const ctx: RenderContext = {
     css: options.css,
@@ -112,13 +144,14 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
   files.set('tutorials/index.html', renderTutorialIndex(ctx, tutorials));
   for (const { tutorial, source } of parsed) {
     const related = pickRelated(tutorial, tutorials, RELATED_LIMIT);
-    files.set(`tutorials/${tutorial.slug}/index.html`, renderTutorialPage(ctx, tutorial, related));
+    const projectUrl = publishProject(tutorial, source, options.projectHost, files, hostedFiles);
+    files.set(`tutorials/${tutorial.slug}/index.html`, renderTutorialPage(ctx, tutorial, related, projectUrl));
     const used = new Set(referencedImages(tutorial));
-    if (tutorial.project) used.add(tutorial.project);
     for (const file of used) {
       const bytes = source.assets.get(file);
       if (bytes) files.set(`tutorials/${tutorial.slug}/${file}`, bytes);
     }
+    if (tutorial.project) used.add(tutorial.project);
     for (const file of source.assets.keys()) {
       if (!used.has(file)) warnings.push(`tutorials/${tutorial.slug}: "${file}" is not used and won't be published.`);
     }
@@ -130,5 +163,5 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
     }
   }
 
-  return { files, sitemapEntries: tutorialSitemapEntries(tutorials), errors, warnings };
+  return { files, hostedFiles, sitemapEntries: tutorialSitemapEntries(tutorials), errors, warnings };
 }
