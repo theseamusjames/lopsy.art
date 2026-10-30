@@ -42,7 +42,9 @@ beforeAll(async () => {
     import('../../app/editor-store'),
     import('./LayerPanel'),
   ]);
-});
+  // Importing the whole panel graph takes well over the default hook
+  // timeout when the full suite runs in parallel.
+}, 60_000);
 
 let root: Root | null = null;
 
