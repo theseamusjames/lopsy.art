@@ -765,6 +765,14 @@ fn blend_onto_target(
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.draw_fullscreen_quad();
 
+    // A mask left on unit 2 outlives its layer: once the layer is deleted the
+    // pool hands the texture to a new owner, and a later draw into it by any
+    // blend program whose u_maskTex still points at unit 2 is a feedback loop
+    // that WebGL drops without writing anything (#1414).
+    if mask_tex.is_some() {
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 

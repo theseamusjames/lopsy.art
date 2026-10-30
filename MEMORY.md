@@ -579,3 +579,18 @@ observe the track under Vitest (stub `console.timeStamp` and
 garbage unless `includeObjectsCollectedByMajorGC` is on; measure with
 `HeapProfiler.collectGarbage` + `Performance.getMetrics` instead
 (`e2e/mask-heap-1408.spec.ts`).
+
+## A texture left bound to a unit can turn a later draw into a silent no-op
+
+Sampler uniforms persist on a program, and texture units keep whatever was
+last bound. If a unit still holds a texture the pool has since handed to a
+new owner, any draw into that texture by a program whose sampler points at
+the unit is a WebGL feedback loop: Chrome logs `GL_INVALID_OPERATION:
+Feedback loop formed between Framebuffer and active Texture` and the draw
+writes nothing — even when a flag like `u_hasMask == 0` means the sampler is
+never read. A deleted layer's mask left on TEXTURE2 by the compositor broke
+every float composite into the next layer that got its texture (#1414; #964
+was the same shape). Unbind extra units after the draw that used them, and
+point unused samplers at a unit holding the draw's source. The console line
+is the tell: capture console errors in e2e repros of "the operation did
+nothing" bugs.
