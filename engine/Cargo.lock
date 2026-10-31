@@ -254,7 +254,7 @@ checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 [[package]]
 name = "lop-engine-core"
 version = "0.1.0"
-source = "git+https://github.com/theseamusjames/lop-engine?rev=2228b2dfb73acf0035b14feb8fc1339b95eb68b2#2228b2dfb73acf0035b14feb8fc1339b95eb68b2"
+source = "git+https://github.com/theseamusjames/lop-engine?tag=v0.1.0#7b384b197e9aab61d3cb1da79c98666c66d97607"
 dependencies = [
  "flate2",
  "lz4_flex",
@@ -266,7 +266,7 @@ dependencies = [
 [[package]]
 name = "lop-engine-wasm"
 version = "0.1.0"
-source = "git+https://github.com/theseamusjames/lop-engine?rev=2228b2dfb73acf0035b14feb8fc1339b95eb68b2#2228b2dfb73acf0035b14feb8fc1339b95eb68b2"
+source = "git+https://github.com/theseamusjames/lop-engine?tag=v0.1.0#7b384b197e9aab61d3cb1da79c98666c66d97607"
 dependencies = [
  "brotli",
  "cosmic-text",

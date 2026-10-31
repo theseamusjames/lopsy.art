@@ -1,8 +1,8 @@
 # Lopsy's build of Lop Engine (https://github.com/theseamusjames/lop-engine).
 # The engine lives in that repository; this crate only re-exports its
 # wasm-bindgen API so `npm run wasm:build` emits src/engine-wasm/pkg/lopsy_wasm.*.
-# To ship an engine change, set `rev` below to the new lop-engine commit and
-# run `cargo update -p lop-engine-wasm` in this directory.
+# To ship an engine change, publish a lop-engine release, set `tag` below to
+# it and run `cargo update -p lop-engine-wasm` in this directory.
 [package]
 name = "lopsy-wasm"
 version = "0.1.0"
@@ -18,7 +18,7 @@ crate-type = ["cdylib"]
 wasm-opt = ["-O3", "--enable-bulk-memory", "--enable-sign-ext", "--enable-nontrapping-float-to-int", "--enable-mutable-globals"]
 
 [dependencies]
-lop-engine-wasm = { git = "https://github.com/theseamusjames/lop-engine", rev = "2228b2dfb73acf0035b14feb8fc1339b95eb68b2" }
+lop-engine-wasm = { git = "https://github.com/theseamusjames/lop-engine", tag = "v0.1.0" }
 
 # Profiles only apply from the crate being built, not from dependencies.
 [profile.release]
