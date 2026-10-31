@@ -46,7 +46,9 @@ void main() {
 
     for (int i = 0; i < 4; i++) {
         vec3 m = mean[i] / count[i];
-        vec3 v = var_sum[i] / count[i] - m * m;
+        // E[s²] − m² rounds slightly negative on flat regions, and pow() of a
+        // negative base is NaN on some backends (Metal), which blacks out the pixel.
+        vec3 v = max(var_sum[i] / count[i] - m * m, vec3(0.0));
         float variance = dot(v, vec3(1.0));
 
         // Weight inversely by variance raised to sharpness power

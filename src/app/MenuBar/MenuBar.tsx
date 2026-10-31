@@ -53,6 +53,12 @@ import { commitLiveFloat } from '../interactions/live-float';
 import { BrandLinks } from '../../components/BrandLinks/BrandLinks';
 import styles from './MenuBar.module.css';
 
+const SELECT_DIALOG_LABELS: Readonly<Record<SelectDialogId, string>> = {
+  grow: 'Grow Selection',
+  shrink: 'Shrink Selection',
+  feather: 'Feather Selection',
+};
+
 export function MenuBar() {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const [openSubmenu, setOpenSubmenu] = useState<number | null>(null);
@@ -285,6 +291,7 @@ export function MenuBar() {
     }
     const newBounds = selectionBounds(newMask, docW, docH);
     if (newBounds) {
+      editor.pushHistoryMetadata(SELECT_DIALOG_LABELS[selectDialog]);
       editor.setSelection(newBounds, newMask, docW, docH);
       useUIStore.getState().setTransform(createTransformState(newBounds));
     } else {
@@ -439,11 +446,7 @@ export function MenuBar() {
       )}
       {selectDialog && (
         <FilterDialog
-          title={
-            selectDialog === 'grow' ? 'Grow Selection' :
-            selectDialog === 'shrink' ? 'Shrink Selection' :
-            'Feather Selection'
-          }
+          title={SELECT_DIALOG_LABELS[selectDialog]}
           params={[{
             key: 'amount',
             label: selectDialog === 'feather' ? 'Radius (px)' : 'Amount (px)',

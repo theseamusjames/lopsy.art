@@ -39,14 +39,17 @@ export function applyBooleanOp(op: BooleanOp): void {
     op,
   );
 
-  if (!result.hasArea || result.anchors.length === 0) return;
+  if (!result.hasArea || result.paths.length === 0) return;
 
   state.pushHistoryMetadata(BOOLEAN_OP_LABELS[op]);
   state.removePath(pathA.id, true);
   state.removePath(pathB.id, true);
 
-  // Add the result path (addPath also selects the new path)
-  state.addPath(result.anchors, true);
+  // Paths hold a single contour, so a hole or a second island becomes its
+  // own path, as Selection → Path does. addPath selects each new path.
+  for (const anchors of result.paths) {
+    state.addPath(anchors, true);
+  }
 }
 
 export function createPathMenu(): MenuDef {

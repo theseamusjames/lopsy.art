@@ -20,6 +20,7 @@ import type { PathAnchor } from '../path/path';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { snapDragPoint } from '../common/drag-snap';
 import { dragSnapOptions } from '../../app/interactions/drag-snap-options';
+import { canReceiveRasterPaint } from '../../layers/paint-target';
 
 const CLICK_THRESHOLD = 4;
 
@@ -76,6 +77,17 @@ function shapeBox(state: InteractionState, layerLocalPos: Point, metaKey: boolea
   };
 }
 
+/**
+ * Whether the drag draws its raster preview into the layer. Path output on a
+ * text or group layer skips it: Path output never keeps pixels, and a preview
+ * there would write into a texture that can't take raster paint (#1262).
+ */
+function drawsRasterPreview(layerId: string | null | undefined): boolean {
+  if (useToolSettingsStore.getState().settings.shape.output !== 'path') return true;
+  const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
+  return canReceiveRasterPaint(layer);
+}
+
 function syncLayerBoundsFromEngine(engine: NonNullable<ReturnType<typeof getEngine>>, layerId: string): void {
   const bounds = getLayerEngineBounds(engine, layerId);
   if (!bounds || bounds.length < 4) return;
@@ -110,15 +122,15 @@ function syncLayerBoundsFromEngine(engine: NonNullable<ReturnType<typeof getEngi
 
 export function handleShapeDown(ctx: InteractionContext): InteractionState {
   const { layerPos, activeLayerId, activeLayer } = ctx;
-  const editorState = useEditorStore.getState();
-  editorState.pushHistory('Shape');
-
   const ts = useToolSettingsStore.getState();
   const shape = ts.settings.shape;
   if (shape.fillColor) ts.addRecentColor(shape.fillColor);
   if (shape.strokeColor) ts.addRecentColor(shape.strokeColor);
-  const engine = getEngine();
-  if (engine) gpuSaveShapePreview(engine, activeLayerId);
+  if (drawsRasterPreview(activeLayerId)) {
+    useEditorStore.getState().pushHistory('Shape');
+    const engine = getEngine();
+    if (engine) gpuSaveShapePreview(engine, activeLayerId);
+  }
 
   return {
     drawing: true,
@@ -138,6 +150,7 @@ export function handleShapeMove(state: InteractionState, layerLocalPos: Point, m
   const shape = useToolSettingsStore.getState().settings.shape;
   const { cx, cy, rx, ry } = shapeBox(state, layerLocalPos, metaKey);
   if (rx < 1 || ry < 1) return;
+  if (!drawsRasterPreview(state.layerId)) return;
 
   const engine = getEngine();
   if (!engine) return;
@@ -204,15 +217,16 @@ export function confirmShapeSize(width: number, height: number, click: ShapeSize
 export function handleShapeUp(state: InteractionState, layerLocalPos: Point, metaKey = false): void {
   if (!state.startPoint) return;
 
+  const hasPreview = drawsRasterPreview(state.layerId);
   const engine = getEngine();
-  if (engine) gpuEndShapePreview(engine);
+  if (engine && hasPreview) gpuEndShapePreview(engine);
 
   const dx = layerLocalPos.x - state.startPoint.x;
   const dy = layerLocalPos.y - state.startPoint.y;
   const shape = useToolSettingsStore.getState().settings.shape;
 
   if (Math.sqrt(dx * dx + dy * dy) < CLICK_THRESHOLD) {
-    useEditorStore.getState().undo();
+    if (hasPreview) useEditorStore.getState().undo();
     if (shape.output === 'path') return;
     useUIStore.getState().setPendingShapeClick({
       center: state.startPoint,
@@ -249,7 +263,7 @@ export function handleShapeUp(state: InteractionState, layerLocalPos: Point, met
 
   if (shape.output === 'path') {
     // Undo the raster preview that was rendered during drag.
-    useEditorStore.getState().undo();
+    if (hasPreview) useEditorStore.getState().undo();
 
     const { cx, cy, rx, ry } = shapeBox(state, layerLocalPos, metaKey);
     if (rx < 1 && ry < 1) return;

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '../../../src/test/canvas-mock';
 import { describe, it, expect } from 'vitest';
-import { combineMasks, traceContours, booleanOp } from './boolean-ops';
+import { combineMasks, maskToPaths, booleanOp } from './boolean-ops';
 import type { PathAnchor } from './path';
 
 // ---------------------------------------------------------------------------
@@ -18,7 +18,12 @@ function rectPath(x: number, y: number, w: number, h: number): PathAnchor[] {
   ];
 }
 
-/** Fill a rectangular region in a flat 1-byte-per-pixel mask. */
+/** A blank flat 1-byte-per-pixel mask. */
+function blankMask(size: number): Uint8ClampedArray {
+  return new Uint8ClampedArray(size);
+}
+
+/** Fill a rectangular region in a flat 1-byte-per-pixel mask with 255. */
 function fillRect(
   mask: Uint8ClampedArray,
   width: number,
@@ -26,7 +31,7 @@ function fillRect(
 ): void {
   for (let row = y; row < y + h; row++) {
     for (let col = x; col < x + w; col++) {
-      mask[row * width + col] = 1;
+      mask[row * width + col] = 255;
     }
   }
 }
@@ -43,8 +48,8 @@ describe('combineMasks', () => {
   let maskB: Uint8ClampedArray;
 
   // Re-create before each group
-  maskA = new Uint8ClampedArray(size);
-  maskB = new Uint8ClampedArray(size);
+  maskA = blankMask(size);
+  maskB = blankMask(size);
   for (let i = 0; i < 5; i++) maskA[i] = 1;     // A: pixels 0-4
   for (let i = 3; i < 8; i++) maskB[i] = 1;     // B: pixels 3-7
 
@@ -98,37 +103,100 @@ describe('combineMasks', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: traceContours (pure logic, no canvas required)
+// Tests: maskToPaths (pure logic, no canvas required)
 // ---------------------------------------------------------------------------
 
-describe('traceContours', () => {
-  it('detects contour around a filled 4x4 square', () => {
+/** Fill a disc of radius r centred at (cx, cy), sampling pixel centres. */
+function fillDisc(mask: Uint8ClampedArray, width: number, cx: number, cy: number, r: number, value: number): void {
+  const height = mask.length / width;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if ((x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 <= r * r) mask[y * width + x] = value;
+    }
+  }
+}
+
+/** Even-odd point-in-polygon over a path's anchor points. */
+function insideAnchors(anchors: PathAnchor[], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = anchors.length - 1; i < anchors.length; j = i++) {
+    const a = anchors[i]!.point;
+    const b = anchors[j]!.point;
+    if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+describe('maskToPaths', () => {
+  it('returns nothing for an empty mask', () => {
+    expect(maskToPaths(blankMask(100), 10, 10, 0, 0)).toHaveLength(0);
+  });
+
+  it('traces a filled square in document space via the offset', () => {
     const w = 8, h = 8;
-    const mask = new Uint8ClampedArray(w * h);
-    // Fill a 4x4 block at (2,2)
+    const mask = blankMask(w * h);
     fillRect(mask, w, 2, 2, 4, 4);
-
-    const contours = traceContours(mask, w, h);
-    expect(contours.length).toBeGreaterThan(0);
-    // Main contour should have enough points to trace the square
-    const main = contours[0]!;
-    expect(main.length).toBeGreaterThan(2);
+    const paths = maskToPaths(mask, w, h, 100, 50);
+    expect(paths).toHaveLength(1);
+    const xs = paths[0]!.map((a) => a.point.x);
+    const ys = paths[0]!.map((a) => a.point.y);
+    expect(Math.min(...xs)).toBe(102);
+    expect(Math.max(...xs)).toBe(106);
+    expect(Math.min(...ys)).toBe(52);
+    expect(Math.max(...ys)).toBe(56);
   });
 
-  it('returns empty for a completely empty mask', () => {
-    const mask = new Uint8ClampedArray(10 * 10);
-    const contours = traceContours(mask, 10, 10);
-    expect(contours).toHaveLength(0);
+  // #1332: subtracting an inner circle from an outer one must keep the hole.
+  it('keeps a hole as its own path (subtract)', () => {
+    const w = 120, h = 120;
+    const outer = blankMask(w * h);
+    const inner = blankMask(w * h);
+    fillDisc(outer, w, 60, 60, 50, 255);
+    fillDisc(inner, w, 60, 60, 25, 255);
+    const paths = maskToPaths(combineMasks(outer, inner, 'subtract'), w, h, 0, 0);
+    expect(paths).toHaveLength(2);
+    // Even-odd over both contours: the centre is a hole, the ring is filled.
+    const parity = (x: number, y: number) => paths.filter((p) => insideAnchors(p, x, y)).length % 2;
+    expect(parity(60, 60)).toBe(0);
+    expect(parity(60, 22)).toBe(1);
   });
 
-  it('returns empty for a completely filled mask (no boundary)', () => {
-    const w = 4, h = 4;
-    const mask = new Uint8ClampedArray(w * h).fill(1);
-    const contours = traceContours(mask, w, h);
-    // Edges of the full mask still produce a contour at the boundary
-    // (the cells at the border have 0-valued neighbours outside the mask)
-    // So we just check we get something or nothing gracefully — no crash.
-    expect(Array.isArray(contours)).toBe(true);
+  // #1332: exclude of two overlapping discs gives two islands.
+  it('keeps every island (exclude)', () => {
+    const w = 140, h = 80;
+    const a = blankMask(w * h);
+    const b = blankMask(w * h);
+    fillRect(a, w, 10, 10, 70, 60);
+    fillRect(b, w, 60, 10, 70, 60);
+    const paths = maskToPaths(combineMasks(a, b, 'exclude'), w, h, 0, 0);
+    expect(paths).toHaveLength(2);
+  });
+
+  // #1331: handles must sit beside their own anchor and point along the
+  // outline, not backwards at the neighbours.
+  it('fits a long bar with straight edges (no looping handles)', () => {
+    const w = 400, h = 40;
+    const mask = blankMask(w * h);
+    fillRect(mask, w, 10, 10, 360, 15);
+    const paths = maskToPaths(mask, w, h, 0, 0);
+    expect(paths).toHaveLength(1);
+    const anchors = paths[0]!;
+    expect(anchors.length).toBe(4);
+    for (let i = 0; i < anchors.length; i++) {
+      const a = anchors[i]!;
+      const next = anchors[(i + 1) % anchors.length]!;
+      const prev = anchors[(i - 1 + anchors.length) % anchors.length]!;
+      const out = a.handleOut!;
+      const inn = a.handleIn!;
+      // handleOut points toward the next anchor, handleIn toward the previous.
+      expect((out.x - a.point.x) * (next.point.x - a.point.x) + (out.y - a.point.y) * (next.point.y - a.point.y)).toBeGreaterThan(0);
+      expect((inn.x - a.point.x) * (prev.point.x - a.point.x) + (inn.y - a.point.y) * (prev.point.y - a.point.y)).toBeGreaterThan(0);
+      // Straight edges: both handles of a segment lie on its chord.
+      const cross = (p: { x: number; y: number }) =>
+        (next.point.x - a.point.x) * (p.y - a.point.y) - (next.point.y - a.point.y) * (p.x - a.point.x);
+      expect(Math.abs(cross(out))).toBeLessThan(1e-6);
+      expect(Math.abs(cross(next.handleIn!))).toBeLessThan(1e-6);
+    }
   });
 });
 
@@ -147,7 +215,7 @@ describe('booleanOp graceful handling (jsdom / canvas-mock environment)', () => 
     const pathB = { anchors: rectPath(50, 50, 100, 100), closed: true };
     const result = booleanOp(pathA, pathB, 'union');
     // jsdom canvas mock → masks are empty → no area is expected
-    expect(result.anchors).toBeInstanceOf(Array);
+    expect(result.paths).toBeInstanceOf(Array);
     expect(typeof result.hasArea).toBe('boolean');
   });
 
@@ -156,7 +224,7 @@ describe('booleanOp graceful handling (jsdom / canvas-mock environment)', () => 
     const pathB = { anchors: rectPath(200, 200, 50, 50), closed: true };
     const result = booleanOp(pathA, pathB, 'intersect');
     expect(result.hasArea).toBe(false);
-    expect(result.anchors).toHaveLength(0);
+    expect(result.paths).toHaveLength(0);
   });
 
   it('result anchors array is always an array (never throws)', () => {
@@ -165,35 +233,35 @@ describe('booleanOp graceful handling (jsdom / canvas-mock environment)', () => 
       const pathA = { anchors: rectPath(0, 0, 80, 80), closed: true };
       const pathB = { anchors: rectPath(40, 40, 80, 80), closed: true };
       const result = booleanOp(pathA, pathB, op);
-      expect(result.anchors).toBeInstanceOf(Array);
+      expect(result.paths).toBeInstanceOf(Array);
     }
   });
 });
 
 // ---------------------------------------------------------------------------
 // Tests: full pipeline with real mask data (bypass canvas rasterization)
-// We construct the combined mask directly and call traceContours + downstream.
+// We construct the combined mask directly and call maskToPaths downstream.
 // ---------------------------------------------------------------------------
 
 describe('booleanOp full pipeline via mask construction', () => {
   it('union of two rect masks produces a contour spanning both', () => {
     const w = 20, h = 20;
-    const maskA = new Uint8ClampedArray(w * h);
-    const maskB = new Uint8ClampedArray(w * h);
+    const maskA = blankMask(w * h);
+    const maskB = blankMask(w * h);
     // Rect A: (1,1) 8x8
     fillRect(maskA, w, 1, 1, 8, 8);
     // Rect B: (11,11) 7x7
     fillRect(maskB, w, 11, 11, 7, 7);
 
     const combined = combineMasks(maskA, maskB, 'union');
-    const contours = traceContours(combined, w, h);
+    const paths = maskToPaths(combined, w, h, 0, 0);
 
-    // Both rects should produce at least one contour
-    expect(contours.length).toBeGreaterThan(0);
+    // Two disjoint rects stay two paths.
+    expect(paths).toHaveLength(2);
 
     // All points should be within bounds
-    for (const contour of contours) {
-      for (const pt of contour) {
+    for (const anchors of paths) {
+      for (const { point: pt } of anchors) {
         expect(pt.x).toBeGreaterThanOrEqual(0);
         expect(pt.x).toBeLessThanOrEqual(w);
         expect(pt.y).toBeGreaterThanOrEqual(0);
@@ -204,8 +272,8 @@ describe('booleanOp full pipeline via mask construction', () => {
 
   it('subtract leaves only pixels in A that are not in B', () => {
     const w = 20, h = 10;
-    const maskA = new Uint8ClampedArray(w * h);
-    const maskB = new Uint8ClampedArray(w * h);
+    const maskA = blankMask(w * h);
+    const maskB = blankMask(w * h);
     // A covers whole row y=1..8, x=1..18
     fillRect(maskA, w, 1, 1, 17, 8);
     // B covers right half x=10..18, y=1..8
@@ -224,8 +292,8 @@ describe('booleanOp full pipeline via mask construction', () => {
 
   it('intersect returns only the overlap region', () => {
     const w = 20, h = 20;
-    const maskA = new Uint8ClampedArray(w * h);
-    const maskB = new Uint8ClampedArray(w * h);
+    const maskA = blankMask(w * h);
+    const maskB = blankMask(w * h);
     // A: (2,2) 10x10
     fillRect(maskA, w, 2, 2, 10, 10);
     // B: (7,7) 10x10

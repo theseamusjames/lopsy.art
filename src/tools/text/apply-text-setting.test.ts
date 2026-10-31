@@ -12,6 +12,7 @@ const hoisted = vi.hoisted(() => ({
   resetTextLayerLayout: vi.fn(),
   findFontEntry: vi.fn((_name: string): unknown => null),
   loadFontBinaryToEngine: vi.fn((_family: string, _weight: number, _isItalic?: boolean) => Promise.resolve(false)),
+  clearJsPixelData: vi.fn((_layerId: string, _options?: { shouldBumpVersion?: boolean }) => {}),
 }));
 const {
   rerenderCommittedTextLayerAnchored,
@@ -24,6 +25,10 @@ vi.mock('../../engine-wasm/engine-sync', () => ({
   invalidatePathTextCache: hoisted.invalidatePathTextCache,
   invalidateEditingTextCache: hoisted.invalidateEditingTextCache,
   resetTextLayerLayout: hoisted.resetTextLayerLayout,
+}));
+
+vi.mock('../../app/store/clear-js-pixel-data', () => ({
+  clearJsPixelData: hoisted.clearJsPixelData,
 }));
 
 vi.mock('../../engine-wasm/engine-state', () => ({
@@ -134,6 +139,7 @@ beforeEach(() => {
   editorState.document.layers = [textLayer];
   hoisted.findFontEntry.mockReset().mockReturnValue(null);
   hoisted.loadFontBinaryToEngine.mockClear();
+  hoisted.clearJsPixelData.mockClear();
   toolSettingsHoisted.state.settings.text.fontStyle = 'normal';
   toolSettingsHoisted.state.settings.text.fontWeight = 400;
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
@@ -248,5 +254,37 @@ describe('discrete text settings (#1152)', () => {
 
     expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
     expect(hoisted.loadFontBinaryToEngine).toHaveBeenCalledWith('Inter', 700, true);
+  });
+});
+
+// #1370: the re-render writes the layer texture behind history's back, so the
+// layer must be marked dirty — otherwise undo's snapshot of the live state
+// reuses the pre-change handle and redo restores the old glyphs.
+describe('committed text re-renders mark the layer dirty (#1370)', () => {
+  it('a weight change marks the layer dirty after pushing history', () => {
+    applyTextWeight(700);
+
+    expect(hoisted.clearJsPixelData).toHaveBeenCalledWith('text-1', { shouldBumpVersion: true });
+    const pushOrder = editorState.pushHistory.mock.invocationCallOrder[0]!;
+    const dirtyOrder = hoisted.clearJsPixelData.mock.invocationCallOrder[0]!;
+    expect(dirtyOrder).toBeGreaterThan(pushOrder);
+  });
+
+  it('a discrete toggle marks the layer dirty', () => {
+    applyDiscreteTextSetting('strikethrough', true);
+    expect(hoisted.clearJsPixelData).toHaveBeenCalledWith('text-1', { shouldBumpVersion: true });
+  });
+
+  it('a slider drag skips the per-frame thumbnail bump but marks dirty once at the end', () => {
+    beginTextLayerHistory();
+    for (let i = 0; i < 5; i++) applyTextSetting('fontSize', 100 + i);
+
+    const calls = hoisted.clearJsPixelData.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every(([, opts]) => opts?.shouldBumpVersion === false)).toBe(true);
+
+    hoisted.clearJsPixelData.mockClear();
+    endTextLayerHistory();
+    expect(hoisted.clearJsPixelData).toHaveBeenLastCalledWith('text-1');
   });
 });

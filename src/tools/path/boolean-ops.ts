@@ -1,5 +1,6 @@
 import type { PathAnchor } from './path';
 import type { Point } from '../../types';
+import { selectionToPaths } from '../../selection/selection-to-path';
 
 export type BooleanOp = 'union' | 'subtract' | 'intersect' | 'exclude';
 
@@ -103,7 +104,7 @@ export function unionBounds(a: Bounds, b: Bounds): Bounds {
   };
 }
 
-/** Rasterize a polygon to a binary ImageData (alpha = 255 inside, 0 outside). */
+/** Rasterize a polygon to a 1-byte-per-pixel mask (255 inside, 0 outside). */
 function rasterizePolygon(
   poly: Point[],
   offsetX: number,
@@ -128,7 +129,7 @@ function rasterizePolygon(
   // Extract alpha channel into a flat byte array (1 byte per pixel)
   const mask = new Uint8ClampedArray(width * height);
   for (let i = 0; i < mask.length; i++) {
-    mask[i] = (imageData.data[i * 4 + 3] ?? 0) > 128 ? 1 : 0;
+    mask[i] = (imageData.data[i * 4 + 3] ?? 0) > 128 ? 255 : 0;
   }
   return mask;
 }
@@ -156,189 +157,36 @@ export function combineMasks(
 }
 
 // ---------------------------------------------------------------------------
-// Marching squares contour tracing
+// Mask → paths
 // ---------------------------------------------------------------------------
 
-type Cell = 0 | 1;
-
-function getCell(mask: Uint8ClampedArray, width: number, x: number, y: number): Cell {
-  if (x < 0 || y < 0 || x >= width || y >= mask.length / width) return 0;
-  return (mask[y * width + x] ?? 0) > 0 ? 1 : 0;
-}
-
-/** Return all contour edge midpoints as a list of polygons (each polygon is a Point[]).
+/**
+ * Trace every contour of a combined 0/255 mask (outer boundaries, holes and
+ * separate islands) and fit each with the corner-aware fitter Selection →
+ * Path uses, translated back to document space by (offsetX, offsetY).
+ * Keeping only the longest contour dropped holes and islands (#1332), and
+ * the old Catmull-Rom fitter attached handles to the wrong anchors, looping
+ * every straight edge (#1331).
  * @internal exported for tests
  */
-export function traceContours(mask: Uint8ClampedArray, width: number, height: number): Point[][] {
-  // Build an edge graph: map from "x,y" string key to adjacent midpoints
-  const edges = new Map<string, Point[]>();
-  const key = (p: Point) => `${p.x},${p.y}`;
-
-  function addEdge(a: Point, b: Point): void {
-    const ka = key(a);
-    const kb = key(b);
-    if (!edges.has(ka)) edges.set(ka, []);
-    if (!edges.has(kb)) edges.set(kb, []);
-    edges.get(ka)!.push(b);
-    edges.get(kb)!.push(a);
-  }
-
-  // Marching squares: iterate 2x2 cells of the mask
-  for (let y = 0; y < height - 1; y++) {
-    for (let x = 0; x < width - 1; x++) {
-      const tl = getCell(mask, width, x, y);
-      const tr = getCell(mask, width, x + 1, y);
-      const bl = getCell(mask, width, x, y + 1);
-      const br = getCell(mask, width, x + 1, y + 1);
-      const sq = tl * 8 + tr * 4 + br * 2 + bl;
-      if (sq === 0 || sq === 15) continue;
-
-      // Midpoints of the four cell edges
-      const top:    Point = { x: x + 0.5, y };
-      const right:  Point = { x: x + 1,   y: y + 0.5 };
-      const bottom: Point = { x: x + 0.5, y: y + 1 };
-      const left:   Point = { x,           y: y + 0.5 };
-
-      switch (sq) {
-        case 1:  addEdge(left, bottom);  break;
-        case 2:  addEdge(right, bottom); break;
-        case 3:  addEdge(left, right);   break;
-        case 4:  addEdge(top, right);    break;
-        case 5:  addEdge(top, left); addEdge(right, bottom); break;
-        case 6:  addEdge(top, bottom);   break;
-        case 7:  addEdge(top, left);     break;
-        case 8:  addEdge(top, left);     break;
-        case 9:  addEdge(top, bottom);   break;
-        case 10: addEdge(top, right); addEdge(left, bottom); break;
-        case 11: addEdge(top, right);    break;
-        case 12: addEdge(left, right);   break;
-        case 13: addEdge(right, bottom); break;
-        case 14: addEdge(left, bottom);  break;
-      }
-    }
-  }
-
-  // Walk the edge graph to form polylines / polygons
-  const visited = new Set<string>();
-  const contours: Point[][] = [];
-
-  for (const [startKey] of edges) {
-    if (visited.has(startKey)) continue;
-    const start = parsePoint(startKey);
-    if (!start) continue;
-    const contour: Point[] = [start];
-    visited.add(startKey);
-
-    let currentKey = startKey;
-    let keepGoing = true;
-
-    while (keepGoing) {
-      keepGoing = false;
-      const nexts = edges.get(currentKey) ?? [];
-      for (const next of nexts) {
-        const nk = key(next);
-        if (!visited.has(nk)) {
-          visited.add(nk);
-          contour.push(next);
-          currentKey = nk;
-          keepGoing = true;
-          break;
-        }
-      }
-    }
-
-    if (contour.length >= 3) {
-      contours.push(contour);
-    }
-  }
-
-  return contours;
+export function maskToPaths(
+  mask: Uint8ClampedArray,
+  width: number,
+  height: number,
+  offsetX: number,
+  offsetY: number,
+): PathAnchor[][] {
+  return selectionToPaths(mask, width, height).map((anchors) =>
+    anchors.map((a) => ({
+      point: offsetPoint(a.point, offsetX, offsetY),
+      handleIn: a.handleIn ? offsetPoint(a.handleIn, offsetX, offsetY) : null,
+      handleOut: a.handleOut ? offsetPoint(a.handleOut, offsetX, offsetY) : null,
+    })),
+  );
 }
 
-function parsePoint(k: string): Point | null {
-  const parts = k.split(',');
-  if (parts.length !== 2) return null;
-  const x = parseFloat(parts[0] ?? '');
-  const y = parseFloat(parts[1] ?? '');
-  if (isNaN(x) || isNaN(y)) return null;
-  return { x, y };
-}
-
-// ---------------------------------------------------------------------------
-// Simplify polyline (Ramer-Douglas-Peucker)
-// ---------------------------------------------------------------------------
-
-function perpendicularDistance(p: Point, a: Point, b: Point): number {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq < 1e-10) {
-    return Math.sqrt((p.x - a.x) ** 2 + (p.y - a.y) ** 2);
-  }
-  const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq;
-  const projX = a.x + t * dx;
-  const projY = a.y + t * dy;
-  return Math.sqrt((p.x - projX) ** 2 + (p.y - projY) ** 2);
-}
-
-function rdp(points: Point[], epsilon: number): Point[] {
-  if (points.length <= 2) return points;
-  let maxDist = 0;
-  let maxIdx = 0;
-  const last = points.length - 1;
-  for (let i = 1; i < last; i++) {
-    const d = perpendicularDistance(points[i]!, points[0]!, points[last]!);
-    if (d > maxDist) { maxDist = d; maxIdx = i; }
-  }
-  if (maxDist > epsilon) {
-    const left = rdp(points.slice(0, maxIdx + 1), epsilon);
-    const right = rdp(points.slice(maxIdx), epsilon);
-    return [...left.slice(0, -1), ...right];
-  }
-  return [points[0]!, points[last]!];
-}
-
-// ---------------------------------------------------------------------------
-// Convert polygon back to PathAnchor[] using Catmull-Rom → Bezier
-// ---------------------------------------------------------------------------
-
-function catmullRomToBezier(
-  p0: Point,
-  p1: Point,
-  p2: Point,
-  p3: Point,
-  alpha = 0.5,
-): { cp1: Point; cp2: Point } {
-  const t = alpha;
-  const cp1: Point = {
-    x: p1.x + (p2.x - p0.x) / 6 * t,
-    y: p1.y + (p2.y - p0.y) / 6 * t,
-  };
-  const cp2: Point = {
-    x: p2.x - (p3.x - p1.x) / 6 * t,
-    y: p2.y - (p3.y - p1.y) / 6 * t,
-  };
-  return { cp1, cp2 };
-}
-
-function polygonToAnchors(poly: Point[]): PathAnchor[] {
-  const n = poly.length;
-  if (n === 0) return [];
-  if (n === 1) return [{ point: poly[0]!, handleIn: null, handleOut: null }];
-
-  // Build anchors with Catmull-Rom tangents
-  const anchors: PathAnchor[] = poly.map((pt, i) => {
-    const prev = poly[(i - 1 + n) % n]!;
-    const next = poly[(i + 1) % n]!;
-    const prev2 = poly[(i - 2 + n) % n]!;
-
-    const { cp1: handleOut } = catmullRomToBezier(prev2, prev, pt, next, 1);
-    const { cp2: handleIn } = catmullRomToBezier(prev, pt, next, poly[(i + 2) % n]!, 1);
-
-    return { point: { ...pt }, handleIn, handleOut };
-  });
-
-  return anchors;
+function offsetPoint(p: Point, dx: number, dy: number): Point {
+  return { x: p.x + dx, y: p.y + dy };
 }
 
 // ---------------------------------------------------------------------------
@@ -346,8 +194,12 @@ function polygonToAnchors(poly: Point[]): PathAnchor[] {
 // ---------------------------------------------------------------------------
 
 export interface BooleanOpResult {
-  /** Resulting path anchors — always a closed path. Empty if no area. */
-  anchors: PathAnchor[];
+  /**
+   * One closed anchor list per contour of the result — the outer boundary,
+   * each hole, and each separate island — ordered top-to-bottom. Empty if
+   * no area.
+   */
+  paths: PathAnchor[][];
   /** True if the result has meaningful area (non-empty). */
   hasArea: boolean;
 }
@@ -360,8 +212,7 @@ export interface BooleanOpResult {
  * 1. Flatten both paths to polygons
  * 2. Rasterize to masks on a temporary canvas
  * 3. Combine masks pixel-wise
- * 4. Trace contours using marching squares
- * 5. Simplify contours and convert back to bezier anchors
+ * 4. Trace every contour and fit bezier anchors to each
  */
 export function booleanOp(
   pathA: { anchors: readonly PathAnchor[]; closed: boolean },
@@ -372,7 +223,7 @@ export function booleanOp(
   const polyB = pathToPolygon(pathB.anchors);
 
   if (polyA.length < 2 || polyB.length < 2) {
-    return { anchors: [], hasArea: false };
+    return { paths: [], hasArea: false };
   }
 
   const boundsA = polygonBounds(polyA);
@@ -387,7 +238,7 @@ export function booleanOp(
   const height = Math.ceil(bounds.maxY - bounds.minY) + pad * 2 + 1;
 
   if (width <= 0 || height <= 0 || width > 4096 || height > 4096) {
-    return { anchors: [], hasArea: false };
+    return { paths: [], hasArea: false };
   }
 
   const maskA = rasterizePolygon(polyA, offsetX, offsetY, width, height);
@@ -399,25 +250,9 @@ export function booleanOp(
   for (let i = 0; i < combined.length; i++) {
     if (combined[i]! > 0) { hasArea = true; break; }
   }
-  if (!hasArea) return { anchors: [], hasArea: false };
+  if (!hasArea) return { paths: [], hasArea: false };
 
-  const contours = traceContours(combined, width, height);
-  if (contours.length === 0) return { anchors: [], hasArea: false };
-
-  // Take the longest contour (the outer boundary)
-  contours.sort((a, b) => b.length - a.length);
-  const mainContour = contours[0]!;
-
-  // Translate back to document space
-  const docContour: Point[] = mainContour.map((p) => ({
-    x: p.x + offsetX,
-    y: p.y + offsetY,
-  }));
-
-  // Simplify
-  const simplified = rdp(docContour, 1.5);
-  if (simplified.length < 3) return { anchors: [], hasArea: false };
-
-  const anchors = polygonToAnchors(simplified);
-  return { anchors, hasArea: true };
+  const paths = maskToPaths(combined, width, height, offsetX, offsetY);
+  if (paths.length === 0) return { paths: [], hasArea: false };
+  return { paths, hasArea: true };
 }

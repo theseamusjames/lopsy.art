@@ -12,14 +12,27 @@ uniform float u_seed;
 
 out vec4 fragColor;
 
-// Hash function for pseudo-random Voronoi cell centers
-vec2 hash2(vec2 p, float seed) {
-    vec3 q = vec3(
-        dot(p, vec2(127.1 + seed, 311.7)),
-        dot(p, vec2(269.5, 183.3 + seed)),
-        dot(p, vec2(419.2 + seed, 371.9))
-    );
-    return fract(sin(q.xy) * 43758.5453);
+// Seed jitter from an integer hash (PCG2D, Jarzynski & Olano 2020) of the
+// integer cell index (#1271). Integer arithmetic is exact on every backend,
+// so a cell's seed is bit-identical in every evaluation. The old
+// `fract(sin(q) * 43758.5453)` hash amplified a one-ulp difference in `q`
+// (from FMA contraction or Metal's fast-math sin) into an unrelated value,
+// so the two passes below disagreed about where a seed was.
+uvec2 pcg2d(uvec2 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    return v;
+}
+
+// Jitter in [0, 1): the top 24 bits convert to float exactly.
+vec2 cellJitter(ivec2 cell, uint seed) {
+    uvec2 h = pcg2d(uvec2(cell) + seed * uvec2(0x9E3779B9u, 0x85EBCA6Bu));
+    return vec2(h >> 8u) * (1.0 / 16777216.0);
 }
 
 void main() {
@@ -28,21 +41,26 @@ void main() {
 
     vec2 uv = v_uv;
     vec2 scaledUV = vec2(uv.x * aspect, uv.y) * u_cellCount;
-    vec2 cellIdx = floor(scaledUV);
-    vec2 cellFrac = fract(scaledUV);
+    vec2 cellBase = floor(scaledUV);
+    ivec2 cellIdx = ivec2(cellBase);
+    vec2 cellFrac = scaledUV - cellBase;
+    uint seed = uint(u_seed + 0.5);
 
     // Pass 1: nearest seed (each seed is jittered inside its own cell).
     float minDist = 1e10;
     vec2 nearestOffset = vec2(0.0);
-    vec2 nearestCell = vec2(0.0);
+    vec2 nearestJitter = vec2(0.0);
+    ivec2 nearestCell = ivec2(0);
     for (int y = -1; y <= 1; y++) {
         for (int x = -1; x <= 1; x++) {
-            vec2 neighbor = vec2(float(x), float(y));
-            vec2 offset = neighbor + hash2(cellIdx + neighbor, u_seed) - cellFrac;
+            ivec2 neighbor = ivec2(x, y);
+            vec2 jitter = cellJitter(cellIdx + neighbor, seed);
+            vec2 offset = vec2(neighbor) + jitter - cellFrac;
             float d = dot(offset, offset);
             if (d < minDist) {
                 minDist = d;
                 nearestOffset = offset;
+                nearestJitter = jitter;
                 nearestCell = neighbor;
             }
         }
@@ -54,23 +72,24 @@ void main() {
     // line joining the two seeds; away from it the gap shrinks, so edges
     // flared into wide dark wedges near short borders. The neighbours that
     // can share a border with the nearest seed lie within a 5x5 block
-    // centred on its cell.
+    // centred on its cell. The nearest seed is skipped by its cell index,
+    // not by comparing recomputed positions (#1271): every other cell's
+    // seed lies in a different unit square, so `between` is never zero.
     float edgeDist = 1e10;
     for (int y = -2; y <= 2; y++) {
         for (int x = -2; x <= 2; x++) {
-            vec2 neighbor = nearestCell + vec2(float(x), float(y));
-            vec2 offset = neighbor + hash2(cellIdx + neighbor, u_seed) - cellFrac;
-            vec2 between = offset - nearestOffset;
-            if (dot(between, between) < 1e-8) {
+            if (x == 0 && y == 0) {
                 continue;
             }
+            ivec2 neighbor = nearestCell + ivec2(x, y);
+            vec2 offset = vec2(neighbor) + cellJitter(cellIdx + neighbor, seed) - cellFrac;
+            vec2 between = offset - nearestOffset;
             edgeDist = min(edgeDist, dot(0.5 * (nearestOffset + offset), normalize(between)));
         }
     }
 
-    // Sample image color at the Voronoi cell center
-    vec2 closestCell = cellIdx + nearestCell;
-    vec2 closestCenter = closestCell + hash2(closestCell, u_seed);
+    // Sample image color at the Voronoi cell center found in pass 1.
+    vec2 closestCenter = vec2(cellIdx + nearestCell) + nearestJitter;
     vec2 sampleUV = closestCenter / (u_cellCount * vec2(aspect, 1.0));
     sampleUV = clamp(sampleUV, vec2(0.0), vec2(1.0));
     vec4 cellColor = texture(u_tex, sampleUV);

@@ -31,7 +31,7 @@ const GRAYSCALE_MATRIX: [f32; 9] = [
 /// conversion must not leave part of a layer in the previous color space.
 #[wasm_bindgen(js_name = "convertLayerToGrayscale")]
 pub fn convert_layer_to_grayscale(engine: &mut Engine, layer_id: &str) {
-    filter_gpu::apply_filter_full_layer(
+    filter_gpu::apply_pointwise_filter_full_layer(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.color_convert,

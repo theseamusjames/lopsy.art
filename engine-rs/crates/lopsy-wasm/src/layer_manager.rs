@@ -315,6 +315,7 @@ pub fn merge_layers(
         }
         if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some((mask_gl_tex, mask_w, mask_h)) = &top_mask_info {
@@ -601,6 +602,51 @@ pub fn flip_texture(
         }
         engine.draw_fullscreen_quad();
     });
+
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
+/// Resample a layer's mask into a new `dst_w` x `dst_h` texture through an
+/// affine map from destination to source mask pixels:
+/// `src = [a c; b d] * dst + (e, f)`. Canvas operations use it so a mask
+/// follows its layer through crop, canvas size, resize, rotate and flip.
+/// A layer without a mask is left alone.
+pub fn remap_layer_mask(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    dst_w: u32,
+    dst_h: u32,
+    inverse: [f32; 6],
+) -> Result<(), String> {
+    let Some(&mask_handle) = engine.layer_masks.get(layer_id) else { return Ok(()) };
+    let (src_w, src_h) = engine.texture_pool.get_size(mask_handle).unwrap_or((1, 1));
+    let src_tex = engine.texture_pool.get(mask_handle).cloned()
+        .ok_or("Mask texture not found")?;
+
+    let new_mask = engine.texture_pool.acquire(&engine.gl, dst_w, dst_h)?;
+    let new_gl_tex = engine.texture_pool.get(new_mask).cloned()
+        .ok_or("New mask texture not found")?;
+
+    let [a, b, c, d, e, f] = inverse;
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&new_gl_tex, dst_w as i32, dst_h as i32, |engine| {
+        let shader = &engine.shaders.mask_remap;
+        engine.gl.use_program(Some(&shader.program));
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_dstSize") { engine.gl.uniform2f(Some(&loc), dst_w as f32, dst_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), src_w as f32, src_h as f32); }
+        if let Some(loc) = shader.location(&engine.gl, "u_linear") {
+            engine.gl.uniform_matrix2fv_with_f32_array(Some(&loc), false, &[a, b, c, d]);
+        }
+        if let Some(loc) = shader.location(&engine.gl, "u_offset") { engine.gl.uniform2f(Some(&loc), e, f); }
+        engine.draw_fullscreen_quad();
+    });
+
+    engine.texture_pool.release(mask_handle);
+    engine.layer_masks.insert(layer_id.to_string(), new_mask);
 
     engine.mark_layer_dirty(layer_id);
     Ok(())
@@ -1237,6 +1283,7 @@ pub fn composite_float(
         if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), mask_sampler_unit(false)); }
         if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), 0); }
         engine.draw_fullscreen_quad();
     });
@@ -1267,7 +1314,7 @@ pub fn drop_float(engine: &mut EngineInner) {
 
 /// Copy `src` (src_w×src_h) into a freshly acquired, transparent dst_w×dst_h
 /// texture with its top-left at (off_x, off_y). Returns the new handle.
-fn copy_into_larger_texture(
+pub(crate) fn copy_into_larger_texture(
     engine: &mut EngineInner,
     src_handle: TextureHandle,
     src_w: u32,
@@ -1575,6 +1622,7 @@ fn composite_float_transformed(
         if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), mask_sampler_unit(false)); }
         engine.draw_fullscreen_quad();
     });
 

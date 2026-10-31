@@ -1,5 +1,5 @@
 import type { HistorySnapshot, SelectionData, SliceCreator } from './types';
-import type { Layer } from '../../types';
+import type { DocumentState, Layer } from '../../types';
 import { EMPTY_HANDLE, restoreLayerGpu, type LayerHistoryBefore } from './layer-gpu-capture';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -348,6 +348,21 @@ function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
 }
 
 /**
+ * Guides are UI state outside history, but Image Size scales them and Rotate
+ * Image turns them. Crossing a step that changed the document size, or a
+ * rotate (which keeps a square document's size), puts back the guides that
+ * step saw; any other step leaves them alone.
+ */
+function restoreGuidesAcrossResize(target: HistorySnapshot, current: DocumentState): void {
+  if (!target.guides) return;
+  const isSizeChange =
+    target.document.width !== current.width || target.document.height !== current.height;
+  const isCanvasRotate = target.label.startsWith('Rotate Image');
+  if (!isSizeChange && !isCanvasRotate) return;
+  useUIStore.setState({ guides: [...target.guides] });
+}
+
+/**
  * The transform-handle overlay (`uiStore.transform`) is a separate store
  * from the undo/redo stack, so restoring a snapshot's `selection` here
  * doesn't touch it. Left alone, the handle box (and its `originalBounds`
@@ -438,6 +453,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
+        guides: useUIStore.getState().guides,
       };
     } else {
       const reuseBase = latestPixelSnapshot(state.undoStack);
@@ -451,6 +467,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
+        guides: useUIStore.getState().guides,
       };
     }
     additions.push(firstSnapshot);
@@ -491,8 +508,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     });
     if (eng) {
       const restored = get();
-      syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
+      syncLayers(
+        eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds,
+        restored.document.colorMode,
+      );
     }
+    restoreGuidesAcrossResize(target, state.document);
     syncTransformAfterHistoryRestore(target.selection);
   },
 
@@ -526,6 +547,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
+        guides: useUIStore.getState().guides,
       };
     } else {
       const gpuSnapshots = snapshotLiveLayers(state, state.redoStack[R - 1]);
@@ -538,6 +560,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
+        guides: useUIStore.getState().guides,
       };
     }
     additions.push(firstSnapshot);
@@ -575,8 +598,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     });
     if (eng) {
       const restored = get();
-      syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
+      syncLayers(
+        eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds,
+        restored.document.colorMode,
+      );
     }
+    restoreGuidesAcrossResize(target, state.document);
     syncTransformAfterHistoryRestore(target.selection);
   },
 
@@ -621,6 +648,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       label,
       paths: state.paths,
       selectedPathId: state.selectedPathId,
+      guides: useUIStore.getState().guides,
     };
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],
@@ -665,6 +693,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       label,
       paths: state.paths,
       selectedPathId: state.selectedPathId,
+      guides: useUIStore.getState().guides,
     };
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],

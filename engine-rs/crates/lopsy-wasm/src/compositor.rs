@@ -737,6 +737,7 @@ fn blend_onto_target(
     if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
     if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
     if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), if premultiplied { 1 } else { 0 }); }
+    if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
     let wrap_on = engine.seamless_pattern && engine.seamless_wrap;
     if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), if wrap_on { 1 } else { 0 }); }
 
@@ -764,6 +765,14 @@ fn blend_onto_target(
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.draw_fullscreen_quad();
 
+    // A mask left on unit 2 outlives its layer: once the layer is deleted the
+    // pool hands the texture to a new owner, and a later draw into it by any
+    // blend program whose u_maskTex still points at unit 2 is a feedback loop
+    // that WebGL drops without writing anything (#1414).
+    if mask_tex.is_some() {
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
@@ -1077,7 +1086,7 @@ fn render_stroke_silhouette(engine: &mut EngineInner, src: EffectSource, stroke:
     let result = if reach <= 10.0 {
         silhouette_by_distance(engine, &frame, stroke, out).then_some(out)
     } else {
-        silhouette_by_dilation(engine, &frame, stroke, reach, out)
+        silhouette_by_band(engine, &frame, stroke, reach, out)
     };
     for unit in [WebGl2RenderingContext::TEXTURE1, WebGl2RenderingContext::TEXTURE0] {
         engine.gl.active_texture(unit);
@@ -1136,11 +1145,12 @@ fn silhouette_by_distance(engine: &mut EngineInner, frame: &SilhouetteFrame, str
     true
 }
 
-/// Silhouette for wide strokes: extract alpha, separable dilation, then
-/// `stroke_apply.glsl` folds the ring into the layer's alpha. Ping-pongs
+/// Silhouette for wide strokes: extract alpha, the two-pass Euclidean band
+/// (`separable_edt.glsl`), then `stroke_apply.glsl` folds the ring into the
+/// layer's alpha. Ping-pongs
 /// between `out` and one more pooled texture; returns whichever holds the
 /// result and releases the other.
-fn silhouette_by_dilation(
+fn silhouette_by_band(
     engine: &mut EngineInner,
     frame: &SilhouetteFrame,
     stroke: &StrokeDesc,
@@ -1171,25 +1181,17 @@ fn silhouette_by_dilation(
         engine.draw_fullscreen_quad();
     });
 
-    // Separable dilation: out → tmp (horizontal) → out (vertical).
-    let radius = reach.ceil() as i32;
-    for (read, write, direction) in [(&out_gl, &tmp_gl, (1.0, 0.0)), (&tmp_gl, &out_gl, (0.0, 1.0))] {
+    // Euclidean band: out → tmp (rows) → out (columns).
+    for (read, write, pass) in [(&out_gl, &tmp_gl, StrokeBandPass::Rows), (&tmp_gl, &out_gl, StrokeBandPass::Columns)] {
         engine.render_to_texture(write, frame.w as i32, frame.h as i32, |engine| {
-            let gl = &engine.gl;
-            let shader = &engine.shaders.separable_dilate;
-            gl.use_program(Some(&shader.program));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(read));
-            if let Some(loc) = shader.location(gl, "u_tex") { gl.uniform1i(Some(&loc), 0); }
-            if let Some(loc) = shader.location(gl, "u_radius") { gl.uniform1i(Some(&loc), radius); }
-            if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), 0); }
-            if let Some(loc) = shader.location(gl, "u_oobAlpha") { gl.uniform1f(Some(&loc), 0.0); }
-            if let Some(loc) = shader.location(gl, "u_direction") { gl.uniform2f(Some(&loc), direction.0, direction.1); }
+            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(read));
+            use_stroke_band_program(engine, pass, reach, false);
             engine.draw_fullscreen_quad();
         });
     }
 
-    // Dilated alpha (out) + layer → silhouette (tmp).
+    // Band (out) + layer → silhouette (tmp).
     engine.render_to_texture(&tmp_gl, frame.w as i32, frame.h as i32, |engine| {
         let gl = &engine.gl;
         let shader = &engine.shaders.stroke_apply;
@@ -1198,7 +1200,7 @@ fn silhouette_by_dilation(
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&out_gl));
         gl.active_texture(WebGl2RenderingContext::TEXTURE1);
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(frame.src));
-        if let Some(loc) = shader.location(gl, "u_dilatedTex") { gl.uniform1i(Some(&loc), 0); }
+        if let Some(loc) = shader.location(gl, "u_bandTex") { gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(gl, "u_origTex") { gl.uniform1i(Some(&loc), 1); }
         if let Some(loc) = shader.location(gl, "u_strokeColor") { gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
         if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), stroke.opacity); }
@@ -1509,11 +1511,10 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
         engine.draw_fullscreen_quad();
     } else {
-        // Large width: use separable dilation for O(r) per pass
+        // Large width: a two-pass Euclidean band, O(r) per pixel per pass.
         // For center strokes, handle outside and inside halves separately.
-        // Outside: dilate original alpha → stroke where dilated && !original
-        // Inside: dilate inverted alpha → stroke where dilated && original
-        let radius = half_w.ceil() as i32;
+        // Outside: band around the opaque pixels → stroke where in band && !original
+        // Inside: band around the transparent pixels → stroke where in band && original
 
         let do_outside = position == 0 || position == 2;
         let do_inside = position == 1 || position == 2;
@@ -1521,12 +1522,11 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         // Extract alpha → scratch_b (or inverted alpha for inside-only)
         render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, do_inside && !do_outside);
 
-        // Separable dilation: scratch_b → scratch_a → scratch_b
-        // For inverted alpha (inner stroke), OOB samples represent "outside the layer" = 1.0
-        let oob_alpha = if do_inside && !do_outside { 1.0 } else { 0.0 };
-        render_stroke_dilate(engine, radius, 0, oob_alpha);
+        // scratch_b → scratch_a → scratch_b. For inverted alpha (inner
+        // stroke), texels beyond the edge are "outside the layer": seeds.
+        render_stroke_band(engine, half_w, do_inside && !do_outside);
 
-        // Apply stroke: read dilated (scratch_b) + original → scratch_a
+        // Apply stroke: read band (scratch_b) + original → scratch_a
         render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y,
             if do_inside && !do_outside { 1 } else { 0 }, is_behind_stroke(stroke), layer_opacity);
 
@@ -1535,9 +1535,9 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
             // First half (outside) is in scratch_a, blend it onto composite
             emit_effect(engine, out, || fx_extent::stroke_extent(src_rect, stroke));
 
-            // Now do inside half: extract inverted alpha, dilate, apply
+            // Now do inside half: extract inverted alpha, band, apply
             render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, true);
-            render_stroke_dilate(engine, radius, 0, 1.0);
+            render_stroke_band(engine, half_w, true);
             render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y, 1, false, layer_opacity);
         }
     }
@@ -1569,35 +1569,44 @@ fn render_stroke_extract_alpha(engine: &mut EngineInner, layer_tex: &web_sys::We
     engine.draw_fullscreen_quad();
 }
 
-fn render_stroke_dilate(engine: &mut EngineInner, radius: i32, mode: i32, oob_alpha: f32) {
+#[derive(Clone, Copy)]
+enum StrokeBandPass {
+    Rows,
+    Columns,
+}
+
+/// Bind `separable_edt.glsl` for one pass of the band within `reach` of the
+/// seeds (texels with alpha ≥ 0.5) in the texture bound to TEXTURE0.
+fn use_stroke_band_program(engine: &EngineInner, pass: StrokeBandPass, reach: f32, is_oob_seed: bool) {
+    let gl = &engine.gl;
+    let shader = &engine.shaders.separable_edt;
+    gl.use_program(Some(&shader.program));
+    if let Some(loc) = shader.location(gl, "u_tex") { gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(gl, "u_pass") { gl.uniform1i(Some(&loc), matches!(pass, StrokeBandPass::Columns) as i32); }
+    if let Some(loc) = shader.location(gl, "u_radius") { gl.uniform1i(Some(&loc), lopsy_core::stroke_band::search_radius(reach) as i32); }
+    if let Some(loc) = shader.location(gl, "u_reachSq") { gl.uniform1f(Some(&loc), reach * reach); }
+    if let Some(loc) = shader.location(gl, "u_oobSeed") { gl.uniform1i(Some(&loc), is_oob_seed as i32); }
+}
+
+/// Replace the seed alpha in scratch_b with the band within `reach` of it
+/// (alpha 1 inside, 0 outside), going through scratch_a.
+fn render_stroke_band(engine: &mut EngineInner, reach: f32, is_oob_seed: bool) {
     let doc_w = engine.doc_width as i32;
     let doc_h = engine.doc_height as i32;
-    let shader = &engine.shaders.separable_dilate;
-    engine.gl.use_program(Some(&shader.program));
-    if let Some(loc) = shader.location(&engine.gl, "u_radius") { engine.gl.uniform1i(Some(&loc), radius); }
-    if let Some(loc) = shader.location(&engine.gl, "u_mode") { engine.gl.uniform1i(Some(&loc), mode); }
-    if let Some(loc) = shader.location(&engine.gl, "u_oobAlpha") { engine.gl.uniform1f(Some(&loc), oob_alpha); }
-
-    // Horizontal: scratch_b → scratch_a
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, doc_w, doc_h);
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b).cloned() {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
+    let passes = [
+        (engine.scratch_texture_b, engine.scratch_fbo_a, StrokeBandPass::Rows),
+        (engine.scratch_texture_a, engine.scratch_fbo_b, StrokeBandPass::Columns),
+    ];
+    for (read, write_fbo, pass) in passes {
+        engine.fbo_pool.bind(&engine.gl, write_fbo);
+        engine.gl.viewport(0, 0, doc_w, doc_h);
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        if let Some(tex) = engine.texture_pool.get(read).cloned() {
+            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
+        }
+        use_stroke_band_program(engine, pass, reach, is_oob_seed);
+        engine.draw_fullscreen_quad();
     }
-    if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_direction") { engine.gl.uniform2f(Some(&loc), 1.0, 0.0); }
-    engine.draw_fullscreen_quad();
-
-    // Vertical: scratch_a → scratch_b
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-    engine.gl.viewport(0, 0, doc_w, doc_h);
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_a).cloned() {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_direction") { engine.gl.uniform2f(Some(&loc), 0.0, 1.0); }
-    engine.draw_fullscreen_quad();
 }
 
 fn render_stroke_apply(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTexture, stroke: &StrokeDesc, tw: u32, th: u32, layer_x: f32, layer_y: f32, apply_position: i32, knockout: bool, layer_opacity: f32) {
@@ -1606,7 +1615,7 @@ fn render_stroke_apply(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTextu
     let shader = &engine.shaders.stroke_apply;
     engine.gl.use_program(Some(&shader.program));
 
-    // TEXTURE0 = dilated result (scratch_b)
+    // TEXTURE0 = band (scratch_b)
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b).cloned() {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
@@ -1615,7 +1624,7 @@ fn render_stroke_apply(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTextu
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(layer_tex));
 
-    if let Some(loc) = shader.location(&engine.gl, "u_dilatedTex") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(loc) = shader.location(&engine.gl, "u_bandTex") { engine.gl.uniform1i(Some(&loc), 0); }
     if let Some(loc) = shader.location(&engine.gl, "u_origTex") { engine.gl.uniform1i(Some(&loc), 1); }
     if let Some(loc) = shader.location(&engine.gl, "u_strokeColor") { engine.gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
     if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), stroke.opacity); }
@@ -1928,7 +1937,9 @@ fn set_adjustment_uniforms(
     adj: &crate::engine::ImageAdjustmentState,
     brightness: f32,
 ) {
-    set_adjustment_value_uniforms(&engine.gl, &engine.shaders.adjustments, adj, brightness);
+    set_adjustment_value_uniforms(
+        &engine.gl, &engine.shaders.adjustments, adj, brightness, engine.doc_color_mode,
+    );
     bind_adjustment_luts(engine, adj);
 }
 
@@ -1945,9 +1956,10 @@ pub(crate) fn set_standalone_adjustment_uniforms(
     shader: &crate::gpu::shader::ShaderProgram,
     brightness: f32,
     contrast: f32,
+    doc_color_mode: u32,
 ) {
     let adj = crate::engine::ImageAdjustmentState { contrast, ..Default::default() };
-    set_adjustment_value_uniforms(gl, shader, &adj, brightness);
+    set_adjustment_value_uniforms(gl, shader, &adj, brightness, doc_color_mode);
     for name in ["u_curveLut", "u_levelsLut", "u_gradientLut"] {
         if let Some(loc) = shader.location(gl, name) { gl.uniform1i(Some(&loc), 0); }
     }
@@ -1960,7 +1972,9 @@ fn set_adjustment_value_uniforms(
     shader: &crate::gpu::shader::ShaderProgram,
     adj: &crate::engine::ImageAdjustmentState,
     brightness: f32,
+    doc_color_mode: u32,
 ) {
+    if let Some(loc) = shader.location(gl, "u_docColorMode") { gl.uniform1i(Some(&loc), doc_color_mode as i32); }
     if let Some(loc) = shader.location(gl, "u_brightness") { gl.uniform1f(Some(&loc), brightness); }
     if let Some(loc) = shader.location(gl, "u_contrast")   { gl.uniform1f(Some(&loc), adj.contrast / 100.0); }
     if let Some(loc) = shader.location(gl, "u_exposure")   { gl.uniform1f(Some(&loc), adj.exposure); }
@@ -2134,6 +2148,7 @@ fn apply_image_adjustments(engine: &mut EngineInner) {
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
         if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_amount") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vignette); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
         engine.draw_fullscreen_quad();
 
         // Copy scratch_a → composite
@@ -2191,6 +2206,7 @@ fn apply_adjustments_to_texture(
         }
         if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
         if let Some(loc) = shader.location(&engine.gl, "u_amount") { engine.gl.uniform1f(Some(&loc), adj.vignette); }
+        if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
         engine.draw_fullscreen_quad();
 
         // Copy scratch_b → dst

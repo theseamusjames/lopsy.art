@@ -429,6 +429,13 @@ fn decode_triplet(flag: usize, data: &[u8], pos: &mut usize) -> Option<(i32, i32
     }
 }
 
+/// Length of the transformed glyf table's bboxBitmap. The spec pads it to a
+/// multiple of 4 bytes (`4 * floor((numGlyphs + 31) / 32)`); reading it as
+/// `ceil(numGlyphs / 8)` misaligns every explicit bounding box after it (#1259).
+fn bbox_bitmap_len(num_glyphs: usize) -> usize {
+    4 * num_glyphs.div_ceil(32)
+}
+
 /// Reconstruct standard glyf and loca tables from WOFF2 transformed glyf data.
 /// Returns `(glyf_bytes, loca_bytes, index_format)`.
 fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> {
@@ -472,7 +479,7 @@ fn reconstruct_glyf_loca(transformed: &[u8]) -> Option<(Vec<u8>, Vec<u8>, u16)> 
         contour_counts.push(val);
     }
 
-    let bbox_bitmap_len = if bb_size > 0 { (num_glyphs + 7) / 8 } else { 0 };
+    let bbox_bitmap_len = if bb_size > 0 { bbox_bitmap_len(num_glyphs) } else { 0 };
     if bb_stream.len() < bbox_bitmap_len {
         return None;
     }
@@ -979,5 +986,35 @@ mod tests {
         let face = db.faces().next().expect("decoded font parses as a face");
         let family = &face.families[0].0;
         assert!(family.eq_ignore_ascii_case("IM Fell DW Pica SC"), "family {family}");
+    }
+
+    #[test]
+    fn bbox_bitmap_is_padded_to_four_bytes() {
+        assert_eq!(bbox_bitmap_len(1), 4);
+        assert_eq!(bbox_bitmap_len(32), 4);
+        assert_eq!(bbox_bitmap_len(33), 8);
+        assert_eq!(bbox_bitmap_len(231), 32);
+    }
+
+    #[test]
+    fn composite_glyph_keeps_its_explicit_bounding_box() {
+        // css2 latin subset of IM Fell DW Pica (231 glyphs). Its middle dot is
+        // a composite of `period`, so its bbox comes from the bbox stream,
+        // which an unpadded bboxBitmap length read 3 bytes early (#1259).
+        use skrifa::raw::{tables::glyf::Glyph, TableProvider};
+        use skrifa::MetadataProvider;
+
+        let woff2: &[u8] = include_bytes!("../tests/fixtures/IMFellDWPica-latin.woff2");
+        let sfnt = decode_woff2(woff2).expect("decodes");
+        let font = skrifa::FontRef::new(&sfnt).expect("parses");
+        let gid = font.charmap().map('\u{00B7}').expect("maps U+00B7");
+        let loca = font.loca(None).expect("loca");
+        let glyf = font.glyf().expect("glyf");
+        let glyph = loca.get_glyf(gid, &glyf).expect("reads").expect("has outline");
+        assert!(matches!(glyph, Glyph::Composite(_)));
+        assert_eq!(
+            (glyph.x_min(), glyph.y_min(), glyph.x_max(), glyph.y_max()),
+            (99, 573, 397, 893)
+        );
     }
 }

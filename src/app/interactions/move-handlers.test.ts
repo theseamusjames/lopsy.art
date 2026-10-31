@@ -29,6 +29,7 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   floatSelection: vi.fn(() => new Int32Array()),
   restoreFloatBase: vi.fn(),
   compositeFloat: vi.fn(),
+  ensureFloatCovers: vi.fn(() => new Int32Array()),
   hasFloat: vi.fn(() => false),
   setSelectionMask: vi.fn(),
   readQuickMaskPixels: vi.fn(() => new Uint8Array(8)),
@@ -128,6 +129,7 @@ import type { InteractionState, FloatingSelection, PersistentTransform, Interact
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import * as bridge from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { flushNudgeMask, forgetLiveFloat } from './live-float';
 import { DEFAULT_EFFECTS } from '../../layers/layer-model';
 import type { Layer, RasterLayer, Point } from '../../types';
 
@@ -625,6 +627,11 @@ describe('floated-selection moves mark the layer dirty for history (#925)', () =
     editorState.setSelection.mockClear();
   });
 
+  afterEach(() => {
+    vi.mocked(bridge.hasFloat).mockReturnValue(false);
+    forgetLiveFloat();
+  });
+
   it('handleMoveUp on a floated selection marks the dragged layer dirty', () => {
     const floatRef = floatAt(0, 0);
     handleMoveUp(makeMoveState(), { x: 4, y: 2 }, floatRef, makePersistentRef());
@@ -652,7 +659,117 @@ describe('floated-selection moves mark the layer dirty for history (#925)', () =
     handleNudgeMove(1, 0, floatRef, makePersistentRef());
 
     expect(vi.mocked(bridge.floatSelection)).not.toHaveBeenCalled();
+    expect(vi.mocked(clearJsPixelData)).toHaveBeenCalledWith('layer-1', { shouldBumpVersion: false });
+  });
+
+  // #1382: a held arrow key rebuilt and re-uploaded the whole-document mask
+  // on every frame. Only the bounds move until the hold ends.
+  it('handleNudgeMove moves only the bounds and flushNudgeMask materializes the mask once', () => {
+    const layer = { id: 'layer-1', type: 'raster', x: 0, y: 0, locked: false };
+    editorState.document.layers = [layer];
+    editorState.document.activeLayerId = 'layer-1';
+    const staleMask = makeSquareMask();
+    editorState.selection = {
+      active: true,
+      mask: staleMask,
+      bounds: { x: 5, y: 5, width: 5, height: 5 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    editorState.setSelectionBounds.mockClear();
+    vi.mocked(bridge.hasFloat).mockReturnValue(true);
+    const floatRef = floatAt(0, 0);
+
+    handleNudgeMove(1, 0, floatRef, makePersistentRef());
+    handleNudgeMove(1, 0, floatRef, makePersistentRef());
+
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    expect(editorState.setSelectionBounds).toHaveBeenLastCalledWith({ x: 7, y: 5, width: 5, height: 5 });
+    expect(vi.mocked(clearJsPixelData)).not.toHaveBeenCalledWith('layer-1');
+
+    flushNudgeMask();
+
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [unknown, Uint8ClampedArray];
+    expect(bounds).toEqual({ x: 7, y: 5, width: 5, height: 5 });
+    expect(mask[5 * DOC_W + 6]).toBe(0);
+    expect(mask[5 * DOC_W + 7]).toBe(255);
+    expect(mask[5 * DOC_W + 11]).toBe(255);
+    expect(mask[5 * DOC_W + 12]).toBe(0);
     expect(vi.mocked(clearJsPixelData)).toHaveBeenCalledWith('layer-1');
+
+    // A second flush has nothing left to write.
+    flushNudgeMask();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushNudgeMask drops the deferred mask when the selection was replaced meanwhile', () => {
+    const layer = { id: 'layer-1', type: 'raster', x: 0, y: 0, locked: false };
+    editorState.document.layers = [layer];
+    editorState.document.activeLayerId = 'layer-1';
+    editorState.selection = {
+      active: true,
+      mask: makeSquareMask(),
+      bounds: { x: 5, y: 5, width: 5, height: 5 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    handleNudgeMove(1, 0, floatAt(0, 0), makePersistentRef());
+    editorState.selection = { ...editorState.selection, mask: makeSquareMask() };
+
+    flushNudgeMask();
+
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+
+  // #1383: the first nudge's lift composites the float back at (0, 0), so a
+  // pixel-version bump there only queued a thumbnail readback mid-hold.
+  it('the first nudge lifts the float without bumping the pixel version', () => {
+    const layer = { id: 'layer-1', type: 'raster', x: 0, y: 0, locked: false };
+    editorState.document.layers = [layer];
+    editorState.document.activeLayerId = 'layer-1';
+    editorState.selection = {
+      active: true,
+      mask: makeSquareMask(),
+      bounds: { x: 5, y: 5, width: 5, height: 5 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+
+    handleNudgeMove(1, 0, { current: null }, makePersistentRef());
+
+    expect(vi.mocked(bridge.floatSelection)).toHaveBeenCalled();
+    for (const call of vi.mocked(clearJsPixelData).mock.calls) {
+      expect(call[1]).toEqual({ shouldBumpVersion: false });
+    }
+    flushNudgeMask();
+    expect(vi.mocked(clearJsPixelData)).toHaveBeenLastCalledWith('layer-1');
+  });
+
+  // #1337: the float must cover the moved content before it is composited,
+  // or whatever crosses the canvas edge is cut off when the float drops.
+  it('handleNudgeMove grows the float to the nudged content before compositing', () => {
+    const layer = { id: 'layer-1', type: 'raster', x: 0, y: 0, locked: false };
+    editorState.document.layers = [layer];
+    editorState.document.activeLayerId = 'layer-1';
+    editorState.selection = {
+      active: true,
+      mask: makeSquareMask(),
+      bounds: { x: 5, y: 5, width: 5, height: 5 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    vi.mocked(bridge.ensureFloatCovers).mockClear();
+    vi.mocked(bridge.compositeFloat).mockClear();
+    const floatRef = floatAt(3, 0);
+
+    handleNudgeMove(1, 0, floatRef, makePersistentRef());
+
+    // Content (5,5 5×5) at offset (4,0), plus one pixel of slack.
+    expect(vi.mocked(bridge.ensureFloatCovers)).toHaveBeenCalledWith(engine, 8, 4, 7, 7);
+    const growOrder = vi.mocked(bridge.ensureFloatCovers).mock.invocationCallOrder[0]!;
+    const compositeOrder = vi.mocked(bridge.compositeFloat).mock.invocationCallOrder[0]!;
+    expect(growOrder).toBeLessThan(compositeOrder);
   });
 });
 
@@ -754,5 +871,74 @@ describe('whole-layer drag — alignment lines and snap anchor', () => {
     handleMoveMove(right, { x: 23, y: 22 }, makeFloatRef());
     // Right edge 25 rounds to 26, so the left edge lands at 22.
     expect(editorState.updateLayerPosition).toHaveBeenLastCalledWith('mover', 22, expect.any(Number));
+  });
+});
+
+describe('grid-snapped float moves drop the selection on the snapped offset (#1284)', () => {
+  beforeEach(() => {
+    uiState.maskMode = 'off';
+    uiState.showGrid = true;
+    uiState.snapToGrid = true;
+    uiState.gridSize = 10;
+    vi.mocked(bridge.compositeFloat).mockClear();
+    vi.mocked(bridge.hasFloat).mockReturnValue(true);
+    editorState.setSelection.mockClear();
+    editorState.setSelectionBounds.mockClear();
+  });
+
+  afterEach(() => {
+    uiState.showGrid = false;
+    uiState.snapToGrid = false;
+    vi.mocked(bridge.hasFloat).mockReturnValue(false);
+  });
+
+  function freshFloat(offsetX = 0, offsetY = 0): { current: FloatingSelection | null } {
+    return {
+      current: {
+        offsetX,
+        offsetY,
+        originalMask: makeSquareMask(),
+        originalBounds: { x: 5, y: 5, width: 5, height: 5 },
+        gpuResident: true,
+      },
+    };
+  }
+
+  function lastSelectionCall(): { bounds: unknown; mask: Uint8ClampedArray } {
+    const calls = editorState.setSelection.mock.calls;
+    const call = calls[calls.length - 1] as unknown[];
+    return { bounds: call[0], mask: call[1] as Uint8ClampedArray };
+  }
+
+  it('composites the pixels and rebuilds the selection at the same snapped offset', () => {
+    const floatRef = freshFloat();
+    const state = makeMoveState();
+    const drop = { x: 7, y: 3 };
+
+    handleMoveMove(state, drop, floatRef);
+    expect(vi.mocked(bridge.compositeFloat)).toHaveBeenLastCalledWith(engine, 10, 0);
+
+    handleMoveUp(state, drop, floatRef, makePersistentRef());
+
+    expect(floatRef.current).toMatchObject({ offsetX: 10, offsetY: 0 });
+    const { bounds, mask } = lastSelectionCall();
+    expect(bounds).toEqual({ x: 15, y: 5, width: 5, height: 5 });
+    expect(mask[5 * DOC_W + 15]).toBe(255);
+    expect(mask[9 * DOC_W + 19]).toBe(255);
+    expect(mask[5 * DOC_W + 12]).toBe(0);
+  });
+
+  it('snaps the accumulated offset when a float is dragged a second time', () => {
+    const floatRef = freshFloat(10, 0);
+    const state = makeMoveState();
+    const drop = { x: 4, y: 6 };
+
+    handleMoveMove(state, drop, floatRef);
+    expect(vi.mocked(bridge.compositeFloat)).toHaveBeenLastCalledWith(engine, 10, 10);
+
+    handleMoveUp(state, drop, floatRef, makePersistentRef());
+
+    expect(floatRef.current).toMatchObject({ offsetX: 10, offsetY: 10 });
+    expect(lastSelectionCall().bounds).toEqual({ x: 15, y: 15, width: 5, height: 5 });
   });
 });

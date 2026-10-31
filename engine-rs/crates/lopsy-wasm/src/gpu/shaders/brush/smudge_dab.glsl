@@ -9,6 +9,8 @@ uniform float u_strength;
 uniform vec2 u_texSize;
 out vec4 fragColor;
 
+//#include premul_sample
+
 void main() {
     vec2 fragPos = v_uv * u_texSize;
     vec4 existing = texture(u_sourceTex, v_uv);
@@ -48,10 +50,18 @@ void main() {
     if (sampleUV.x < 0.0 || sampleUV.x > 1.0 || sampleUV.y < 0.0 || sampleUV.y > 1.0) {
         sampled = existing;
     } else {
-        sampled = texture(u_sourceTex, sampleUV);
+        sampled = samplePremulBilinear(u_sourceTex, sampleUV);
     }
 
-    vec3 rgb = mix(existing.rgb, sampled.rgb, t);
-    float a = mix(existing.a, sampled.a, t);
-    fragColor = vec4(rgb, a);
+    // The layer stores straight alpha. Mixing straight RGB pulls colour
+    // smeared into transparent pixels towards their black RGB (#1260), so
+    // blend premultiplied and un-premultiply the result.
+    vec4 pe = vec4(existing.rgb * existing.a, existing.a);
+    vec4 ps = vec4(sampled.rgb * sampled.a, sampled.a);
+    vec4 m = mix(pe, ps, t);
+    if (m.a < 1e-6) {
+        fragColor = vec4(0.0);
+        return;
+    }
+    fragColor = vec4(m.rgb / m.a, m.a);
 }

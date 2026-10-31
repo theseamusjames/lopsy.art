@@ -20,6 +20,14 @@ export function defaultLiquifySettings(): LiquifySettings {
 }
 
 /**
+ * Brush Size is the diameter of the on-canvas brush circle, so the warp
+ * reaches out to half of it.
+ */
+export function liquifyBrushRadius(brushSize: number): number {
+  return brushSize / 2;
+}
+
+/**
  * Displacement map: parallel Float32Arrays for dx and dy offsets.
  * Indices: y * width + x.
  */
@@ -224,7 +232,7 @@ export function applyDab(
   settings: LiquifySettings,
 ): DirtyRect {
   const { mode, brushSize, pressure } = settings;
-  const radius = brushSize / 2;
+  const radius = liquifyBrushRadius(brushSize);
 
   switch (mode) {
     case 'push':

@@ -23,6 +23,9 @@ pub const HSL_COMMON: &str = include_str!("shaders/hsl_common.glsl");
 /// Premultiplied bilinear sampling of straight-alpha textures, spliced in
 /// where `//#include premul_sample` appears.
 pub const PREMUL_SAMPLE: &str = include_str!("shaders/premul_sample.glsl");
+/// Encoded-CIELAB <-> sRGB conversions, spliced in where `//#include lab`
+/// appears.
+pub const LAB_COMMON: &str = include_str!("shaders/lab_common.glsl");
 pub const BLIT_RESAMPLE_FRAG: &str = include_str!("shaders/blit_resample.glsl");
 pub const COMPOSITE_FRAG: &str = include_str!("shaders/composite.glsl");
 pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
@@ -32,6 +35,8 @@ pub const CLIPBOARD_CLEAR_FRAG: &str = include_str!("shaders/clipboard_clear.gls
 pub const SELECTION_FILL_FRAG: &str = include_str!("shaders/selection_fill.glsl");
 pub const ROTATE90_FRAG: &str = include_str!("shaders/rotate90.glsl");
 pub const BLIT_REGION_FRAG: &str = include_str!("shaders/blit_region.glsl");
+pub const MASK_EXPAND_FRAG: &str = include_str!("shaders/mask_expand.glsl");
+pub const MASK_REMAP_FRAG: &str = include_str!("shaders/mask_remap.glsl");
 pub const TRANSFORM_AFFINE_FRAG: &str = include_str!("shaders/transform_affine.glsl");
 pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_perspective.glsl");
 
@@ -40,7 +45,7 @@ pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
 pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
 pub const LAYER_MASK_APPLY_FRAG: &str = include_str!("shaders/effects/layer_mask_apply.glsl");
 pub const STROKE_EDT_FRAG: &str = include_str!("shaders/effects/stroke_edt.glsl");
-pub const SEPARABLE_DILATE_FRAG: &str = include_str!("shaders/effects/separable_dilate.glsl");
+pub const SEPARABLE_EDT_FRAG: &str = include_str!("shaders/effects/separable_edt.glsl");
 pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
 pub const COLOR_OVERLAY_FRAG: &str = include_str!("shaders/effects/color_overlay.glsl");
 
@@ -197,6 +202,7 @@ pub fn link_program(
 fn preprocess_frag(src: &str) -> String {
     src.replace("//#include hsl", HSL_COMMON)
         .replace("//#include premul_sample", PREMUL_SAMPLE)
+        .replace("//#include lab", LAB_COMMON)
 }
 
 /// Injects `#define NAME VALUE` lines into a GLSL source. The `#version`
@@ -268,13 +274,15 @@ pub struct ShaderPrograms {
     pub selection_fill: ShaderProgram,
     pub rotate90: ShaderProgram,
     pub blit_region: ShaderProgram,
+    pub mask_expand: ShaderProgram,
+    pub mask_remap: ShaderProgram,
     pub transform_affine: ShaderProgram,
     pub transform_perspective: ShaderProgram,
     // Effects
     pub glow: ShaderProgram,
     pub shadow: ShaderProgram,
     pub stroke_edt: ShaderProgram,
-    pub separable_dilate: ShaderProgram,
+    pub separable_edt: ShaderProgram,
     pub stroke_apply: ShaderProgram,
     pub color_overlay: ShaderProgram,
     // Filters
@@ -403,13 +411,15 @@ impl ShaderPrograms {
             selection_fill: compile_program(gl, v, SELECTION_FILL_FRAG)?,
             rotate90: compile_program(gl, v, ROTATE90_FRAG)?,
             blit_region: compile_program(gl, v, BLIT_REGION_FRAG)?,
+            mask_expand: compile_program(gl, v, MASK_EXPAND_FRAG)?,
+            mask_remap: compile_program(gl, v, MASK_REMAP_FRAG)?,
             transform_affine: compile_program(gl, v, TRANSFORM_AFFINE_FRAG)?,
             transform_perspective: compile_program(gl, v, TRANSFORM_PERSPECTIVE_FRAG)?,
             // Effects
             glow: compile_program(gl, v, GLOW_FRAG)?,
             shadow: compile_program(gl, v, SHADOW_FRAG)?,
             stroke_edt: compile_program(gl, v, STROKE_EDT_FRAG)?,
-            separable_dilate: compile_program(gl, v, SEPARABLE_DILATE_FRAG)?,
+            separable_edt: compile_program(gl, v, SEPARABLE_EDT_FRAG)?,
             stroke_apply: compile_program(gl, v, STROKE_APPLY_FRAG)?,
             color_overlay: compile_program(gl, v, COLOR_OVERLAY_FRAG)?,
             // Filters
@@ -492,8 +502,8 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, BLIT_RESAMPLE_FRAG, TRANSFORM_AFFINE_FRAG,
-        TRANSFORM_PERSPECTIVE_FRAG,
+        inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
+        OIL_PAINT_FRAG, SMUDGE_DAB_FRAG, VIGNETTE_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
     };
 
     #[test]
@@ -528,11 +538,83 @@ mod tests {
 
     #[test]
     fn resampling_shaders_filter_in_premultiplied_space() {
-        for src in [TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, BLIT_RESAMPLE_FRAG] {
+        for src in [
+            TRANSFORM_AFFINE_FRAG,
+            TRANSFORM_PERSPECTIVE_FRAG,
+            BLIT_RESAMPLE_FRAG,
+            SMUDGE_DAB_FRAG,
+        ] {
             let out = preprocess_frag(src);
             assert!(!out.contains("//#include"), "unresolved include");
             assert!(out.contains("vec4 samplePremulBilinear("));
             assert!(!out.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
         }
+    }
+
+    #[test]
+    fn tonal_passes_work_on_decoded_lab() {
+        // Adjustments and the vignette scale channel values, which only means
+        // "darker" on sRGB; on encoded Lab it drags a/b toward blue (#1365).
+        for src in [ADJUSTMENTS_FRAG, VIGNETTE_FRAG] {
+            let out = preprocess_frag(src);
+            assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
+            assert!(out.contains("uniform int u_docColorMode;"));
+            assert!(out.contains("c.rgb = labToSrgb(c.rgb)"));
+            assert!(out.contains("c.rgb = srgbToLab(c.rgb)"));
+        }
+        let blit = preprocess_frag(FINAL_BLIT_FRAG);
+        assert!(blit.contains("vec3 labToSrgb(vec3 encoded)"));
+    }
+
+    #[test]
+    fn blend_modes_work_on_decoded_lab() {
+        // Multiply/Screen/… on encoded Lab turned a grey Multiply blue (#1372).
+        let out = preprocess_frag(BLEND_FRAG);
+        assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
+        assert!(out.contains("uniform int u_docColorMode;"));
+        assert!(out.contains("srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(dst.rgb)))"));
+    }
+
+    #[test]
+    fn photo_filter_runs_after_black_and_white() {
+        let bw = ADJUSTMENTS_FRAG
+            .find("if (u_bw_enabled > 0.5)")
+            .expect("Black & White block");
+        let pf = ADJUSTMENTS_FRAG
+            .find("if (u_pf_density > 0.001)")
+            .expect("Photo Filter block");
+        assert!(
+            bw < pf,
+            "Black & White rebuilds RGB from a grey, so a Photo Filter before it loses its tint"
+        );
+    }
+
+    #[test]
+    fn voronoi_seeds_use_an_exact_integer_hash() {
+        let code: String = VORONOI_FRAG
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect();
+        assert!(
+            !code.contains("sin("),
+            "a sin()-based hash is not reproducible across backends (Metal fast-math)"
+        );
+        assert!(VORONOI_FRAG.contains("uvec2 pcg2d(uvec2 v)"));
+        assert!(
+            VORONOI_FRAG.contains("if (x == 0 && y == 0) {"),
+            "the nearest seed must be skipped by cell index, not by a recomputed position"
+        );
+        assert!(
+            !VORONOI_FRAG.contains("dot(between, between) <"),
+            "position-equality self-skip relies on bit-identical float recomputation"
+        );
+    }
+
+    #[test]
+    fn oil_paint_clamps_variance_before_pow() {
+        assert!(
+            OIL_PAINT_FRAG.contains("vec3 v = max(var_sum[i] / count[i] - m * m, vec3(0.0));"),
+            "negative variance reaches pow() and turns flat colours black on Metal"
+        );
     }
 }

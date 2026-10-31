@@ -93,6 +93,13 @@ startup the editor fetches whatever `.lopsy` URL the `open` parameter names
 and opens it (`src/io/project-url.ts`). The parameter is deliberately
 undocumented in the app itself, with no menu item or dialog.
 
+In dev the project is served next to the page. Production builds host it on
+R2 instead (Cloudflare Pages rejects files over 25 MiB): the button links to
+`https://files.lopsy.art/tutorials/<slug>/<hash>/<slug>.lopsy`, the build
+writes those files to `dist-r2/`, and the deploy uploads any the bucket
+doesn't have yet. The content hash in the key means a changed project gets a
+new URL, so nothing needs replacing or purging.
+
 The generator lives in `src/site/tutorials/`, the page styles in
 `src/site/tutorials/tutorials.css`, and the Vite glue in
 `scripts/vite-plugin-site.ts` (which also builds the blog).

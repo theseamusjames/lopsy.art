@@ -7,7 +7,7 @@
  */
 
 import type { Engine } from './wasm-bridge';
-import type { Layer } from '../types';
+import type { DocumentColorMode, Layer } from '../types';
 import type { SparseLayerEntry } from '../app/store/types';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
 import type { BrushTipData, BrushTextureData, BrushTextureBlendMode } from '../types/brush';
@@ -35,6 +35,10 @@ export interface TrackedState {
    *  group's opacity changes, children must be re-synced even though their
    *  own references haven't changed. */
   layerPassThroughOpacity: Map<string, number>;
+  /** Document color mode the cached descriptors were serialized for. Effect
+   *  colors are encoded per mode, so a mode change invalidates every cached
+   *  descriptor even when the layer references are unchanged. */
+  layerDescColorMode: DocumentColorMode | null;
   /** Layer ids currently known to have a mask on the engine side. Used to
    *  decide whether a removeLayerMask call is needed — previously done by
    *  substring-sniffing the cached descriptor JSON, which was fragile. */
@@ -170,6 +174,7 @@ function createTrackedState(): TrackedState {
     layerRefs: new Map(),
     layerEffectiveVisible: new Map(),
     layerPassThroughOpacity: new Map(),
+    layerDescColorMode: null,
     masksOnEngine: new Set(),
     maskDataRefs: new Map(),
     pixelDataVersions: new Map(),

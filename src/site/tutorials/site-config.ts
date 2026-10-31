@@ -44,6 +44,20 @@ export function tutorialAssetPath(slug: string, file: string): string {
   return `${tutorialPath(slug)}${file}`;
 }
 
+/**
+ * Production builds serve tutorial `.lopsy` files from this R2 bucket's public
+ * domain instead of Pages, which rejects any file over 25 MiB.
+ */
+export const PROJECT_FILES_ORIGIN = 'https://files.lopsy.art';
+
+/**
+ * Bucket key for a project file. The content digest makes every version its
+ * own immutable object, so an upload never has to replace (or purge) one.
+ */
+export function hostedProjectKey(slug: string, digest: string, file: string): string {
+  return `tutorials/${slug}/${digest}/${file}`;
+}
+
 /** Editor URL that opens the project at `projectPath` as soon as the app loads. */
 export function openProjectHref(projectPath: string): string {
   return `/?${OPEN_PROJECT_PARAM}=${encodeURIComponent(projectPath)}`;

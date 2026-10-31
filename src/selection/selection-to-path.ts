@@ -7,8 +7,9 @@ const THRESHOLD = 128;
  * Convert a selection mask to an array of PathAnchors by:
  * 1. Running marching squares to extract contour edge segments
  * 2. Chaining segments into ordered polylines
- * 3. Applying Douglas-Peucker simplification
- * 4. Converting polyline points to Bezier anchors via Catmull-Rom → Bezier
+ * 3. Simplifying each closed contour with Douglas-Peucker
+ * 4. Fitting Bezier anchors: corners keep straight handles along their
+ *    edges, curve points get tangent-continuous handles
  */
 export function selectionToPath(
   mask: Uint8ClampedArray,
@@ -58,10 +59,10 @@ function topLeftPoint(pts: Point[]): Point {
   return best;
 }
 
-function contourToAnchors(polyline: Point[], tolerance: number): PathAnchor[] {
-  const simplified = douglasPeucker(polyline, tolerance);
-  if (simplified.length < 2) return [];
-  return catmullRomToAnchors(simplified, true);
+function contourToAnchors(contour: Point[], tolerance: number): PathAnchor[] {
+  const vertexIndices = simplifyClosedContour(contour, tolerance);
+  if (vertexIndices.length < 2) return [];
+  return fitAnchors(contour, vertexIndices);
 }
 
 // ---------------------------------------------------------------------------
@@ -189,34 +190,81 @@ function chainSegments(segs: [number, number, number, number][]): Point[][] {
 }
 
 // ---------------------------------------------------------------------------
-// Douglas-Peucker polyline simplification
+// Closed-contour Douglas-Peucker simplification
 // ---------------------------------------------------------------------------
 
-function douglasPeucker(points: Point[], tolerance: number): Point[] {
-  if (points.length <= 2) return points;
+/**
+ * Simplify a closed contour and return the indices of the kept vertices in
+ * contour order. The contour is split at two mutually distant points rather
+ * than at its arbitrary trace start: those are extreme points of the shape
+ * (corners on a rectangle), so no forced anchor lands mid-edge or right
+ * next to another one (#1276).
+ */
+function simplifyClosedContour(contour: Point[], tolerance: number): number[] {
+  const n = contour.length;
+  if (n < 3) return contour.map((_, i) => i);
 
-  // Find the point with the maximum distance from the line segment endpoints
-  const first = points[0]!;
-  const last = points[points.length - 1]!;
-  let maxDist = 0;
-  let maxIdx = 0;
+  const a = farthestIndex(contour, contour[0]!);
+  const b = farthestIndex(contour, contour[a]!);
+  if (a === b) return [a];
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
 
-  for (let i = 1; i < points.length - 1; i++) {
-    const d = perpendicularDistance(points[i]!, first, last);
-    if (d > maxDist) {
-      maxDist = d;
-      maxIdx = i;
+  const keep = new Uint8Array(n);
+  keep[lo] = 1;
+  keep[hi] = 1;
+  douglasPeuckerRange(contour, lo, hi - lo, tolerance, keep);
+  douglasPeuckerRange(contour, hi, n - hi + lo, tolerance, keep);
+
+  const result: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (keep[i]) result.push(i);
+  }
+  return result;
+}
+
+function farthestIndex(points: Point[], from: Point): number {
+  let best = 0;
+  let bestDist = -1;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i]!;
+    const d = (p.x - from.x) ** 2 + (p.y - from.y) ** 2;
+    if (d > bestDist) {
+      bestDist = d;
+      best = i;
     }
   }
+  return best;
+}
 
-  if (maxDist > tolerance) {
-    const left = douglasPeucker(points.slice(0, maxIdx + 1), tolerance);
-    const right = douglasPeucker(points.slice(maxIdx), tolerance);
-    // Merge (left includes the split point, right starts with it — dedupe)
-    return [...left.slice(0, -1), ...right];
+/** Douglas-Peucker over the cyclic index range [start, start + span]. */
+function douglasPeuckerRange(
+  contour: Point[],
+  start: number,
+  span: number,
+  tolerance: number,
+  keep: Uint8Array,
+): void {
+  const n = contour.length;
+  const stack: [number, number][] = [[start, span]];
+  while (stack.length > 0) {
+    const [s, len] = stack.pop()!;
+    if (len < 2) continue;
+    const first = contour[s % n]!;
+    const last = contour[(s + len) % n]!;
+    let maxDist = 0;
+    let maxOff = 0;
+    for (let k = 1; k < len; k++) {
+      const d = perpendicularDistance(contour[(s + k) % n]!, first, last);
+      if (d > maxDist) {
+        maxDist = d;
+        maxOff = k;
+      }
+    }
+    if (maxDist <= tolerance) continue;
+    keep[(s + maxOff) % n] = 1;
+    stack.push([s, maxOff], [s + maxOff, len - maxOff]);
   }
-
-  return [first, last];
 }
 
 function perpendicularDistance(pt: Point, lineStart: Point, lineEnd: Point): number {
@@ -230,40 +278,103 @@ function perpendicularDistance(pt: Point, lineStart: Point, lineEnd: Point): num
 }
 
 // ---------------------------------------------------------------------------
-// Catmull-Rom → Bezier conversion to build smooth PathAnchors
+// Anchor fitting
 // ---------------------------------------------------------------------------
 
+/** Turning angle (radians) above which a vertex is treated as a corner. */
+const CORNER_ANGLE = (55 * Math.PI) / 180;
+
 /**
- * Convert a polyline to PathAnchors with smooth Bezier handles derived
- * from the Catmull-Rom spline tangents.
+ * How far along the traced contour (in unit boundary steps) to look on each
+ * side of a vertex when measuring its turning angle. Long enough to see past
+ * pixel stair-steps, short enough that a gentle curve doesn't read as a
+ * corner just because the simplifier spaced its anchors far apart.
  */
-function catmullRomToAnchors(pts: Point[], closed: boolean): PathAnchor[] {
-  const n = pts.length;
+const CORNER_PROBE = 8;
+
+const HANDLE_FRACTION = 1 / 3;
+
+/**
+ * Build closed-path anchors from the simplified vertices. Corners get
+ * handles lying on their adjacent edges (so straight runs stay straight);
+ * smooth vertices get collinear handles along the bisected tangent. Every
+ * handle is a third of the segment it belongs to, so it cannot reach past
+ * the neighbouring anchor the way chord-length Catmull-Rom handles do.
+ */
+function fitAnchors(contour: Point[], vertexIndices: number[]): PathAnchor[] {
+  const n = contour.length;
+  const m = vertexIndices.length;
   const anchors: PathAnchor[] = [];
-  const alpha = 1 / 3; // control point distance factor
 
-  for (let i = 0; i < n; i++) {
-    const prev = pts[(i - 1 + n) % n]!;
-    const curr = pts[i]!;
-    const next = pts[(i + 1) % n]!;
+  for (let i = 0; i < m; i++) {
+    const prevIdx = vertexIndices[(i - 1 + m) % m]!;
+    const currIdx = vertexIndices[i]!;
+    const nextIdx = vertexIndices[(i + 1) % m]!;
+    const prev = contour[prevIdx]!;
+    const curr = contour[currIdx]!;
+    const next = contour[nextIdx]!;
 
-    // Catmull-Rom tangents at curr. Both handles anchor to curr;
-    // handleIn points back toward prev (opposite direction of handleOut).
-    const tangentOut: Point = {
-      x: (next.x - prev.x) * alpha,
-      y: (next.y - prev.y) * alpha,
-    };
+    const inX = curr.x - prev.x;
+    const inY = curr.y - prev.y;
+    const outX = next.x - curr.x;
+    const outY = next.y - curr.y;
+    const inLen = Math.hypot(inX, inY);
+    const outLen = Math.hypot(outX, outY);
 
-    // For an open path, clamp first/last anchors to have null handles
-    const isFirst = !closed && i === 0;
-    const isLast = !closed && i === n - 1;
+    const point = { x: curr.x, y: curr.y };
+    if (inLen === 0 || outLen === 0) {
+      anchors.push({ point, handleIn: null, handleOut: null });
+      continue;
+    }
 
+    const stepsBack = (currIdx - prevIdx + n) % n || n;
+    const stepsFwd = (nextIdx - currIdx + n) % n || n;
+    if (isCorner(contour, currIdx, stepsBack, stepsFwd)) {
+      anchors.push({
+        point,
+        handleIn: { x: curr.x - inX * HANDLE_FRACTION, y: curr.y - inY * HANDLE_FRACTION },
+        handleOut: { x: curr.x + outX * HANDLE_FRACTION, y: curr.y + outY * HANDLE_FRACTION },
+      });
+      continue;
+    }
+
+    let tx = inX / inLen + outX / outLen;
+    let ty = inY / inLen + outY / outLen;
+    const tLen = Math.hypot(tx, ty);
+    if (tLen === 0) {
+      anchors.push({ point, handleIn: null, handleOut: null });
+      continue;
+    }
+    tx /= tLen;
+    ty /= tLen;
+    const hIn = inLen * HANDLE_FRACTION;
+    const hOut = outLen * HANDLE_FRACTION;
     anchors.push({
-      point: { x: curr.x, y: curr.y },
-      handleOut: isFirst || isLast ? null : { x: curr.x + tangentOut.x, y: curr.y + tangentOut.y },
-      handleIn: isFirst || isLast ? null : { x: curr.x - tangentOut.x, y: curr.y - tangentOut.y },
+      point,
+      handleIn: { x: curr.x - tx * hIn, y: curr.y - ty * hIn },
+      handleOut: { x: curr.x + tx * hOut, y: curr.y + ty * hOut },
     });
   }
 
   return anchors;
+}
+
+/**
+ * Measure the turn at a vertex from the traced contour itself rather than
+ * from the simplified neighbours: a tight curve simplified to few anchors
+ * turns sharply between them, but its contour bends gradually.
+ */
+function isCorner(contour: Point[], idx: number, stepsBack: number, stepsFwd: number): boolean {
+  const n = contour.length;
+  const back = Math.max(1, Math.min(CORNER_PROBE, stepsBack));
+  const fwd = Math.max(1, Math.min(CORNER_PROBE, stepsFwd));
+  const curr = contour[idx]!;
+  const before = contour[(idx - back + n) % n]!;
+  const after = contour[(idx + fwd) % n]!;
+  const ax = curr.x - before.x;
+  const ay = curr.y - before.y;
+  const bx = after.x - curr.x;
+  const by = after.y - curr.y;
+  const turn = Math.abs(Math.atan2(ax * by - ay * bx, ax * bx + ay * by));
+  return turn > CORNER_ANGLE;
 }
