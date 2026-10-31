@@ -32,7 +32,19 @@ async function readGuides(page: Page): Promise<GuideSnap[]> {
 }
 
 function anchorPoints(paths: PathSnap[]): Array<{ x: number; y: number }> {
-  return paths[0]!.anchors.map((a) => ({ x: Math.round(a.point.x), y: Math.round(a.point.y) }));
+  return paths[0]!.anchors.map((a) => ({ x: a.point.x, y: a.point.y }));
+}
+
+function expectPointsAt(
+  actual: Array<{ x: number; y: number }>,
+  expected: Array<{ x: number; y: number }>,
+  slop: number,
+): void {
+  expect(actual).toHaveLength(expected.length);
+  actual.forEach((p, i) => {
+    expect(Math.abs(p.x - expected[i]!.x)).toBeLessThanOrEqual(slop);
+    expect(Math.abs(p.y - expected[i]!.y)).toBeLessThanOrEqual(slop);
+  });
 }
 
 async function clickDoc(page: Page, x: number, y: number): Promise<void> {
@@ -92,7 +104,10 @@ test.describe('#1401 — Rotate Image turns paths and guides', () => {
     await clickDoc(page, 700, 500);
     await page.locator('[aria-label="Commit path"]').click();
     await page.waitForTimeout(200);
-    expect(anchorPoints(await readPaths(page))).toEqual([{ x: 100, y: 500 }, { x: 700, y: 500 }]);
+    // Firefox truncates pointer coordinates to whole CSS pixels, so the clicks
+    // can land a doc pixel short; later checks compare against where they landed.
+    const anchorsBefore = anchorPoints(await readPaths(page));
+    expectPointsAt(anchorsBefore, [{ x: 100, y: 500 }, { x: 700, y: 500 }], 2);
 
     await menu(page, 'Image', /^Rotate 90° CW/);
     const doc = (await getEditorState(page)).document;
@@ -105,20 +120,21 @@ test.describe('#1401 — Rotate Image turns paths and guides', () => {
       { orientation: 'vertical', position: 600 - h!.position },
     ];
     expect(await readGuides(page)).toEqual(turned);
-    expect(anchorPoints(await readPaths(page))).toEqual([{ x: 100, y: 100 }, { x: 100, y: 700 }]);
+    const anchorsTurned = anchorsBefore.map((p) => ({ x: 600 - p.y, y: p.x }));
+    expectPointsAt(anchorPoints(await readPaths(page)), anchorsTurned, 0.01);
 
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await undo(page);
     await page.waitForTimeout(200);
     expect((await getEditorState(page)).document.width).toBe(800);
     expect(await readGuides(page)).toEqual(guidesBefore);
-    expect(anchorPoints(await readPaths(page))).toEqual([{ x: 100, y: 500 }, { x: 700, y: 500 }]);
+    expectPointsAt(anchorPoints(await readPaths(page)), anchorsBefore, 0.01);
 
     await redo(page);
     await page.waitForTimeout(200);
     expect((await getEditorState(page)).document.width).toBe(600);
     expect(await readGuides(page)).toEqual(turned);
-    expect(anchorPoints(await readPaths(page))).toEqual([{ x: 100, y: 100 }, { x: 100, y: 700 }]);
+    expectPointsAt(anchorPoints(await readPaths(page)), anchorsTurned, 0.01);
   });
 
   test('CCW on a square canvas turns guides, and undo restores them', async ({ page }) => {
