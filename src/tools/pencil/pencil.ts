@@ -34,3 +34,27 @@ export function bresenhamLine(x0: number, y0: number, x1: number, y1: number): P
   }
   return points;
 }
+
+export interface PointerPositions {
+  canvasPos: Point;
+  layerPos: Point;
+  pixelPos?: Point;
+}
+
+/**
+ * Pointer positions are rounded to the nearest integer, so a click in the
+ * right or bottom half of a pixel would land on its neighbour. The Pencil
+ * paints whole pixels, so it uses the pixel under the pointer instead
+ * (`pixelPos`, the floor of the unrounded position), keeping the layer
+ * offset the caller already applied.
+ */
+export function snapToPixelUnderPointer<T extends PointerPositions>(ctx: T): T {
+  const pixel = ctx.pixelPos ?? { x: Math.floor(ctx.canvasPos.x), y: Math.floor(ctx.canvasPos.y) };
+  const offsetX = ctx.canvasPos.x - ctx.layerPos.x;
+  const offsetY = ctx.canvasPos.y - ctx.layerPos.y;
+  return {
+    ...ctx,
+    canvasPos: pixel,
+    layerPos: { x: pixel.x - offsetX, y: pixel.y - offsetY },
+  };
+}
