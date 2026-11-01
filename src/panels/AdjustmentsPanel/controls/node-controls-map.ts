@@ -10,6 +10,7 @@ import { CurvesControls } from './CurvesControls';
 import { LevelsControls } from './LevelsControls';
 import { HueSaturationControls } from './HueSaturationControls';
 import { ColorBalanceControls } from './ColorBalanceControls';
+import { ColorGradingControls } from './ColorGradingControls';
 import { PhotoFilterControls } from './PhotoFilterControls';
 import { BlackWhiteControls } from './BlackWhiteControls';
 import { ChannelMixerControls } from './ChannelMixerControls';
@@ -25,6 +26,7 @@ export const NODE_CONTROLS_MAP: Partial<Record<AdjustmentNodeType, ComponentType
   levels: LevelsControls as ComponentType<NodeControlProps>,
   'hue-saturation': HueSaturationControls as ComponentType<NodeControlProps>,
   'color-balance': ColorBalanceControls as ComponentType<NodeControlProps>,
+  'color-grading': ColorGradingControls as ComponentType<NodeControlProps>,
   'photo-filter': PhotoFilterControls as ComponentType<NodeControlProps>,
   'black-white': BlackWhiteControls as ComponentType<NodeControlProps>,
   'channel-mixer': ChannelMixerControls as ComponentType<NodeControlProps>,

@@ -2020,6 +2020,18 @@ fn set_adjustment_value_uniforms(
     if let Some(loc) = shader.location(gl, "u_cm_enabled") { gl.uniform1f(Some(&loc), if adj.cm_enabled { 1.0 } else { 0.0 }); }
     // Invert
     if let Some(loc) = shader.location(gl, "u_invert") { gl.uniform1f(Some(&loc), if adj.invert { 1.0 } else { 0.0 }); }
+    // Color Grading
+    if let Some(loc) = shader.location(gl, "u_cg_enabled") { gl.uniform1f(Some(&loc), if adj.cg_enabled { 1.0 } else { 0.0 }); }
+    for (name, v) in [
+        ("u_cg_shadows", adj.cg_shadows),
+        ("u_cg_midtones", adj.cg_midtones),
+        ("u_cg_highlights", adj.cg_highlights),
+        ("u_cg_global", adj.cg_global),
+    ] {
+        if let Some(loc) = shader.location(gl, name) { gl.uniform4f(Some(&loc), v[0], v[1], v[2], v[3]); }
+    }
+    if let Some(loc) = shader.location(gl, "u_cg_exponent") { gl.uniform1f(Some(&loc), adj.cg_exponent); }
+    if let Some(loc) = shader.location(gl, "u_cg_width") { gl.uniform1f(Some(&loc), adj.cg_width); }
     let has_levels = adj.has_levels && adj.levels_texture.is_some();
     if let Some(loc) = shader.location(gl, "u_hasLevels") { gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 }); }
     let has_curves = adj.has_curves && adj.curves_texture.is_some();
@@ -2089,6 +2101,7 @@ fn has_any_adjustment(adj: &crate::engine::ImageAdjustmentState) -> bool {
         || adj.cm_enabled
         || adj.invert
         || adj.has_gradient_map
+        || adj.cg_enabled
 }
 
 /// Apply image adjustments (exposure, contrast, highlights, shadows, whites, blacks)

@@ -459,6 +459,28 @@ pub fn set_group_color_balance(
     Ok(())
 }
 
+/// `values` is the block built by `compileColorGrade`: four wheels of
+/// [tint_r, tint_g, tint_b, luminance] (shadows, midtones, highlights,
+/// global), then the tone-mask exponent and width.
+#[wasm_bindgen(js_name = "setGroupColorGrading")]
+pub fn set_group_color_grading(engine: &mut Engine, group_id: &str, values: &[f32]) -> Result<(), JsError> {
+    if values.len() != 18 {
+        return Err(JsError::new("Color grading values must be exactly 18 floats"));
+    }
+    let ga = engine.inner.group_adjustments.get_mut(group_id)
+        .ok_or_else(|| JsError::new("Group not found"))?;
+    let wheel = |i: usize| [values[i], values[i + 1], values[i + 2], values[i + 3]];
+    ga.adjustments.cg_shadows    = wheel(0);
+    ga.adjustments.cg_midtones   = wheel(4);
+    ga.adjustments.cg_highlights = wheel(8);
+    ga.adjustments.cg_global     = wheel(12);
+    ga.adjustments.cg_exponent   = values[16];
+    ga.adjustments.cg_width      = values[17];
+    ga.adjustments.cg_enabled    = true;
+    engine.inner.needs_recomposite = true;
+    Ok(())
+}
+
 #[wasm_bindgen(js_name = "setGroupPhotoFilter")]
 pub fn set_group_photo_filter(engine: &mut Engine, group_id: &str, r: f32, g: f32, b: f32, density: f32, preserve_luminosity: bool) -> Result<(), JsError> {
     let ga = engine.inner.group_adjustments.get_mut(group_id)

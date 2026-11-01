@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getColorModeCapabilities } from './color-mode-capabilities';
+import { getColorModeCapabilities, isAdjustmentAllowedInMode } from './color-mode-capabilities';
 import type { DocumentColorMode } from '../types/color-mode';
 
 describe('getColorModeCapabilities', () => {
@@ -37,5 +37,14 @@ describe('getColorModeCapabilities', () => {
     expect(caps.hasGradients).toBe(false);
     expect(caps.hasAntiAliasing).toBe(false);
     expect(caps.hasColorAdjustments).toBe(false);
+  });
+});
+
+describe('isAdjustmentAllowedInMode', () => {
+  it('offers Color Grading only where colors are independent', () => {
+    expect(isAdjustmentAllowedInMode('color-grading', 'rgb')).toBe(true);
+    for (const mode of ['grayscale', 'lab', 'cmyk', 'indexed'] as const) {
+      expect(isAdjustmentAllowedInMode('color-grading', mode)).toBe(false);
+    }
   });
 });
