@@ -257,7 +257,10 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   const newHeight = doc.width;
   const newLayers: Layer[] = [];
 
-  const textLayerIds: string[] = [];
+  // Every layer whose texture changes must be re-snapshotted on the next
+  // pushHistory: a full-canvas layer on a square document keeps its
+  // position and size, so it would otherwise reuse the pre-rotate handle.
+  const rewrittenLayerIds: string[] = [];
   for (const layer of doc.layers) {
     if (layer.type === 'text' && layer.pathId) {
       newLayers.push(turnPathTextOffset(layer, direction));
@@ -265,7 +268,7 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
     }
     if (layer.type === 'text') {
       const turned = rotateTextLayerWithCanvas(engine, layer, direction, doc.width, doc.height);
-      if (turned !== layer) textLayerIds.push(layer.id);
+      if (turned !== layer) rewrittenLayerIds.push(layer.id);
       newLayers.push(turned);
       continue;
     }
@@ -276,6 +279,7 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
 
     // GPU-side rotate
     rotateLayer90(engine, layer.id, direction === 'cw');
+    rewrittenLayerIds.push(layer.id);
 
     // Rotate layer position around document center
     let newX: number;
@@ -309,7 +313,7 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   // on a second consecutive rotate — use invalidateLayers() instead (#918).
   pixelDataManager.invalidateLayers(maskedLayers.map((l) => l.id));
   useEditorStore.setState({
-    dirtyLayerIds: new Set([...useEditorStore.getState().dirtyLayerIds, ...textLayerIds]),
+    dirtyLayerIds: new Set([...useEditorStore.getState().dirtyLayerIds, ...rewrittenLayerIds]),
     document: {
       ...doc,
       width: newWidth,
