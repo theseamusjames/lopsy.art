@@ -18,6 +18,7 @@ import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
 import { nodesToLegacyAdjustments } from '../filters/adjustment-node-utils';
+import { compileColorGrade, isIdentityColorGrade } from '../filters/color-grading';
 import {
   setDocumentSize,
   setViewport,
@@ -62,6 +63,7 @@ import {
   setGroupInvert,
   setGroupHueSaturation,
   setGroupColorBalance,
+  setGroupColorGrading,
   setGroupPhotoFilter,
   setGroupBlackWhite,
   setGroupChannelMixer,
@@ -608,6 +610,9 @@ function pushGroupToEngine(
     const lut = buildGradientMapLut(gStops);
     setGroupGradientMapLut(engine, group.id, lut);
   }
+  if (adj?.colorGrading && !isIdentityColorGrade(adj.colorGrading)) {
+    setGroupColorGrading(engine, group.id, compileColorGrade(adj.colorGrading));
+  }
   return childrenJson;
 }
 
@@ -631,7 +636,8 @@ function adjIsNonTrivial(adj: ReturnType<typeof nodesToLegacyAdjustments>): bool
     (adj.colorBalanceHighlights ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
     (adj.photoFilterDensity ?? 0) > 1e-6 ||
     !!adj.bwEnabled || !!adj.channelMixerEnabled ||
-    (adj.gradientMapStops?.length ?? 0) >= 2
+    (adj.gradientMapStops?.length ?? 0) >= 2 ||
+    (adj.colorGrading != null && !isIdentityColorGrade(adj.colorGrading))
   );
 }
 

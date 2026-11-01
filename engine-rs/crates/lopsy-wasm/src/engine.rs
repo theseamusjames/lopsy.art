@@ -87,6 +87,14 @@ pub struct ImageAdjustmentState {
     // Gradient Map
     pub gradient_map_texture: Option<TextureHandle>,
     pub has_gradient_map: bool,
+    // Color Grading (per wheel: [tint_r, tint_g, tint_b, luminance], as offsets)
+    pub cg_enabled: bool,
+    pub cg_shadows: [f32; 4],
+    pub cg_midtones: [f32; 4],
+    pub cg_highlights: [f32; 4],
+    pub cg_global: [f32; 4],
+    pub cg_exponent: f32,
+    pub cg_width: f32,
 }
 
 impl Default for ImageAdjustmentState {
@@ -132,6 +140,13 @@ impl Default for ImageAdjustmentState {
             invert: false,
             gradient_map_texture: None,
             has_gradient_map: false,
+            cg_enabled: false,
+            cg_shadows: [0.0; 4],
+            cg_midtones: [0.0; 4],
+            cg_highlights: [0.0; 4],
+            cg_global: [0.0; 4],
+            cg_exponent: 1.0,
+            cg_width: 0.18,
         }
     }
 }

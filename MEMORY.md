@@ -594,3 +594,12 @@ was the same shape). Unbind extra units after the draw that used them, and
 point unused samplers at a unit holding the draw's source. The console line
 is the tell: capture console errors in e2e repros of "the operation did
 nothing" bugs.
+
+## A custom control can't stop the global arrow-key nudge from its own keydown
+
+`useKeyboardShortcuts` listens on `window` in the capture phase, so it runs
+before any React handler and `stopPropagation` in the control is too late.
+A `role="slider"` div that handles arrows would step itself *and* nudge the
+active layer. Put `HANDLES_ARROW_KEYS_ATTR` (`native-control-keys.ts`) on the
+element to opt out, as `ColorWheel` does. Native range, radio and select
+controls are already exempt.

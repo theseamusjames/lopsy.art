@@ -51,6 +51,14 @@ uniform float u_invert;
 // Gradient Map: 256x1 RGBA LUT mapping luminosity → colour.
 uniform sampler2D u_gradientLut;
 uniform float u_hasGradientMap;
+// Color Grading: per-wheel offsets, rgb = tint, a = luminance.
+uniform float u_cg_enabled;
+uniform vec4 u_cg_shadows;
+uniform vec4 u_cg_midtones;
+uniform vec4 u_cg_highlights;
+uniform vec4 u_cg_global;
+uniform float u_cg_exponent;  // Balance: bends luma before the tone masks.
+uniform float u_cg_width;     // Blending: half-width of the mask crossovers.
 // Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Every
 // node below assumes sRGB channels, so Lab pixels are decoded first and
 // re-encoded at the end.
@@ -59,6 +67,18 @@ out vec4 fragColor;
 
 //#include hsl
 //#include lab
+
+// c + offset, easing into 0 and 1 rather than clipping. A hard clip leaves a
+// channel flat and then rising fast, which reads as a line across a smooth
+// ramp. The easing scales with the offset, so a channel left alone is exact.
+vec3 softOffset(vec3 c, vec3 offset) {
+    vec3 floorEase = 0.25 * max(-offset, 0.0);
+    vec3 ceilEase = 0.25 * max(offset, 0.0);
+    vec3 x = c + offset;
+    vec3 eased = 0.5 * (x + sqrt(x * x + 4.0 * floorEase * floorEase));
+    vec3 headroom = 1.0 - eased;
+    return 1.0 - 0.5 * (headroom + sqrt(headroom * headroom + 4.0 * ceilEase * ceilEase));
+}
 
 void main() {
     vec4 c = texture(u_tex, v_uv);
@@ -193,6 +213,18 @@ void main() {
         float l3 = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
         float ofs = 0.5 / 256.0;
         c.rgb = texture(u_gradientLut, vec2(l3 + ofs, 0.5)).rgb;
+    }
+
+    // Color Grading: runs last because Black & White and Gradient Map rebuild
+    // RGB and would discard an earlier tint; a split-toned monochrome is one
+    // of the main reasons to reach for it.
+    if (u_cg_enabled > 0.5) {
+        float tone = pow(clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0), u_cg_exponent);
+        float shadowW    = 1.0 - smoothstep(1.0 / 3.0 - u_cg_width, 1.0 / 3.0 + u_cg_width, tone);
+        float highlightW = smoothstep(2.0 / 3.0 - u_cg_width, 2.0 / 3.0 + u_cg_width, tone);
+        float midtoneW   = 1.0 - shadowW - highlightW;
+        vec4 grade = u_cg_global + u_cg_shadows * shadowW + u_cg_midtones * midtoneW + u_cg_highlights * highlightW;
+        c.rgb = softOffset(c.rgb, grade.rgb + grade.a);
     }
 
     if (isLab) c.rgb = srgbToLab(c.rgb);
