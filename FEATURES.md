@@ -91,6 +91,7 @@ The four jitters are **not implemented the same way**, and the difference shows 
 - **Symmetry**: horizontal, vertical, or both
 - Pixel-perfect Bresenham lines (no anti-aliasing)
 - **Shift+click**: draws a straight pixel-perfect line from the previous stroke endpoint
+- **Paints the pixel under the pointer**: a press anywhere inside a document pixel paints that pixel, as the Magic Wand, Paint Bucket and Eyedropper sample it, rather than rounding to the nearest pixel corner
 
 ### Eraser
 - **Size**: 1 - 200 px (default 10; base range, auto-scaled by document size)
@@ -573,10 +574,16 @@ state over it.
   all: it starts a shape to add or subtract (see
   *Combining selections* under [Selection Operations](#selection-operations)). Only the 8 scale handles respond; rotation handles are
   ignored, so a drag on one falls through and starts a brand-new selection.
-  The rebuilt mask is a rectangle or an ellipse depending on which marquee
-  tool is active, and the rebuild is coalesced to one allocation + GPU upload
-  per animation frame (a full-document mask on a 4K canvas is ~16 MB, so a
-  raw pointer-event-rate rebuild would thrash).
+  The dragged handle's edge or corner moves and the opposite one stays put;
+  the outline never flips and never drops below 1 px. With the
+  [aspect-ratio lock](#options-bar) on, the outline keeps the locked `W : H`:
+  a corner drag fits the box inside the pointer's rectangle, as drawing a
+  locked marquee does, and an edge drag resizes the other side about the
+  box's centre. Without the lock, holding Cmd keeps the box's own shape.
+  While dragging, the outline is drawn from its geometry, like a marquee
+  being drawn; the mask is rebuilt once, on release, as a rectangle or an
+  ellipse depending on which marquee tool is active (a full-document mask on
+  a 4K canvas is ~16 MB, so rebuilding it per pointer move would crawl).
 - **Every other tool** (Magic Wand, fill, eyedropper, text, …) ignores the
   handles entirely and dispatches to its own handler, and the canvas keeps
   that tool's cursor over them. This is deliberate: at low zoom over a small
@@ -681,7 +688,7 @@ gets baked first.
   this path quantizes against an *origin*-anchored lattice, not the
   document-centered one the grid draws, so on most document sizes it does not
   land on the visible grid lines; see [Snapping](#snapping).
-- **Cmd is re-read on every pointer-move of a handle drag** — scale and rotate, on the Move tool's pixel and multi-layer handles, the selection-outline handles and a live text layer's handles alike — so it can be pressed or released partway through; the change shows at the next movement, not on the key, and the release commits the last rendered step whatever the key state then. **Shift and Alt are never read once a handle is grabbed**: no aspect lock, no scale from the centre. (With a drag-out selection tool they only decide, at the press, whether the handle is grabbed at all.)
+- **Cmd is re-read on every pointer-move of a handle drag** — scale and rotate, on the Move tool's pixel and multi-layer handles, the selection-outline handles and a live text layer's handles alike — so it can be pressed or released partway through; the change shows at the next movement, not on the key, and the release commits the last rendered step whatever the key state then. **Shift and Alt are never read once a handle is grabbed**: no Shift aspect lock, no scale from the centre. (The persistent aspect-ratio lock does apply to the selection-outline handles; see [Who responds to the handles](#who-responds-to-the-handles).) (With a drag-out selection tool they only decide, at the press, whether the handle is grabbed at all.)
 - Only `metaKey` is read — this is Cmd on macOS and the Windows/Super key
   elsewhere, **not** Ctrl.
 
