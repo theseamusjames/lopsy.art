@@ -29,6 +29,7 @@ import { parsePsdEffects, serializePsdEffects } from './layer-effects-format';
 import { getMaskDocOrigin } from '../layers/mask-origin';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
 import { materializeAllMaskData } from '../app/mask-data-sync';
+import { bytesOf } from '../utils/byte-view';
 import { BLEND_MODE_TO_PSD_INDEX, BLEND_MODES_BY_PSD_INDEX } from '../types/blend-mode-tables';
 
 const BLEND_MODE_TO_U8 = BLEND_MODE_TO_PSD_INDEX;
@@ -168,7 +169,7 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
 
     // Pack mask data.
     if (layer.mask && layer.mask.data.length > 0) {
-      const maskBytes = new Uint8Array(layer.mask.data.buffer);
+      const maskBytes = bytesOf(layer.mask.data);
       meta.maskWidth = layer.mask.width;
       meta.maskHeight = layer.mask.height;
       const maskOrigin = getMaskDocOrigin(layer);
