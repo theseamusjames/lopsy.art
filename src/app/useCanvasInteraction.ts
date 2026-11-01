@@ -29,7 +29,7 @@ import {
   INITIAL_INTERACTION_STATE,
   resolveDownGesture,
 } from './interactions/interaction-types';
-import { handleTransformDown, flushSelectionTransform, refuseGroupSelectionTransform } from './interactions/transform-handlers';
+import { handleTransformDown, commitSelectionTransform, refuseGroupSelectionTransform } from './interactions/transform-handlers';
 import { commitLayerTransform, markLayerTransformDirty } from './interactions/layer-transform';
 import {
   handleMeshWarpDown,
@@ -639,10 +639,8 @@ export function useCanvasInteraction(
         return;
       case 'transform':
         if (state.gesture.selectionOnly) {
-          // Drain any pointer-move that's still parked in the coalescer's
-          // rAF slot — otherwise the final drag position is dropped if the
-          // browser fires pointer-up before the next frame boundary.
-          flushSelectionTransform();
+          // The drag only moved the marquee preview; build the mask once now.
+          commitSelectionTransform();
           useUIStore.getState().setActiveTransformHandle(null);
           stateRef.current = { ...INITIAL_INTERACTION_STATE };
           return;

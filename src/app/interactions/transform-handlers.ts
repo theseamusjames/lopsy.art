@@ -37,13 +37,15 @@ import { cancelPrefloat } from './prefloat';
 import { claimLiveFloat, commitLiveFloat, isLiveFloatCurrent, withLiveFloatKept } from './live-float';
 import type { InteractionState, InteractionContext, CanvasGesture } from './interaction-types';
 import { INITIAL_INTERACTION_STATE } from './interaction-types';
-import type { Point } from '../../types';
+import type { Point, Rect } from '../../types';
+import { useToolSettingsStore } from '../tool-settings-store';
+import { setMarqueePreview } from '../../tools/marquee/marquee-preview';
+import { marqueeResizeRatio, resizeMarqueeBounds } from '../../tools/marquee/marquee-resize';
 import {
   createRectSelection,
   createEllipseSelection,
   selectionBounds,
 } from '../../selection/selection';
-import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 import { pressGrabsHandle, scalesSelectionOutlineFromHandles } from './handle-tools';
 import {
   beginLayerTransformSession,
@@ -453,59 +455,18 @@ export function renderTransformedFloat(layerId: string | null, transform: Transf
 }
 
 /**
- * The selection-transform mask rebuild (#643) allocates a fresh
- * `docW × docH` `Uint8ClampedArray` and hands it to `setSelection`, and
- * on the next frame `syncSelection` uploads the whole thing to the GPU.
- * On a 4K canvas that's ~16MB per pointer move. Coalescing the mask
- * rebuild + `setSelection` to rAF collapses a burst of pointer events
- * into a single alloc + upload per rendered frame.
+ * A marquee handle resize in progress. The drag only updates the analytic
+ * marquee preview, which the overlay draws from geometry; rebuilding the
+ * document-sized mask and re-uploading it to the GPU on every frame made
+ * resizing crawl on large canvases (#1421, #643). The mask is built once,
+ * when the drag ends (`commitSelectionTransform`).
  */
-type SelectionTransformArgs = {
-  ellipse: boolean;
-  handle: ReturnType<typeof hitTestHandle>;
-  startPoint: Point;
-  snappedInput: Point;
-  startState: TransformState;
-  metaKey: boolean;
-  docW: number;
-  docH: number;
-};
-
-function applySelectionTransform(args: SelectionTransformArgs): void {
-  // Zero-delta drag: pointer hasn't moved from its down position (common
-  // when the user taps a handle without dragging, or when a burst of
-  // pointer events all resolve to the same snapped grid cell). Rebuilding
-  // the full-doc mask in that case would be wasted work.
-  if (args.snappedInput.x === args.startPoint.x && args.snappedInput.y === args.startPoint.y) {
-    return;
-  }
-
-  const result = computeScale(args.handle!, args.startPoint, args.snappedInput, args.startState, args.metaKey);
-  const newTransform: TransformState = {
-    ...args.startState,
-    scaleX: result.scaleX,
-    scaleY: result.scaleY,
-    translateX: result.translateX,
-    translateY: result.translateY,
-  };
-
-  const newBounds = getTransformedBounds(newTransform);
-  if (newBounds.width < 1 || newBounds.height < 1) return;
-
-  const mask = args.ellipse
-    ? createEllipseSelection(newBounds, args.docW, args.docH)
-    : createRectSelection(newBounds, args.docW, args.docH);
-
-  const bounds = selectionBounds(mask, args.docW, args.docH);
-  if (bounds) {
-    const editorState = useEditorStore.getState();
-    editorState.setSelection(bounds, mask, args.docW, args.docH);
-    useUIStore.getState().setTransform(createTransformState(bounds));
-    editorState.notifyRender();
-  }
+interface PendingSelectionResize {
+  rect: Rect;
+  isEllipse: boolean;
 }
 
-const coalescedSelectionTransform = coalesceToAnimationFrame(applySelectionTransform);
+let pendingSelectionResize: PendingSelectionResize | null = null;
 
 function handleSelectionTransformMove(
   state: InteractionState,
@@ -518,24 +479,44 @@ function handleSelectionTransformMove(
   const snappedInput = snapEnabled
     ? { x: Math.round(canvasPos.x / uiSnap.gridSize) * uiSnap.gridSize, y: Math.round(canvasPos.y / uiSnap.gridSize) * uiSnap.gridSize }
     : canvasPos;
+  const startPoint = state.startPoint!;
+  // A tap on a handle without dragging leaves the selection as it was.
+  if (snappedInput.x === startPoint.x && snappedInput.y === startPoint.y && !pendingSelectionResize) return;
 
-  const editorState = useEditorStore.getState();
-  const { width: docW, height: docH } = editorState.document;
-  const activeTool = uiSnap.activeTool;
-
-  coalescedSelectionTransform({
-    ellipse: activeTool === 'marquee-ellipse',
-    handle: gesture.handle,
-    startPoint: state.startPoint!,
-    snappedInput,
-    startState: gesture.startState,
-    metaKey,
-    docW,
-    docH,
+  const start = getTransformedBounds(gesture.startState);
+  const settings = useToolSettingsStore.getState();
+  const ratio = marqueeResizeRatio(start, {
+    isLocked: settings.aspectRatioLocked,
+    ratioW: settings.aspectRatioW,
+    ratioH: settings.aspectRatioH,
+    isProportional: metaKey,
   });
+  const rect = resizeMarqueeBounds(
+    gesture.handle, start, snappedInput.x - startPoint.x, snappedInput.y - startPoint.y, ratio,
+  );
+  const isEllipse = uiSnap.activeTool === 'marquee-ellipse';
+  pendingSelectionResize = { rect, isEllipse };
+  setMarqueePreview({ kind: isEllipse ? 'ellipse' : 'rect', rect });
+  useEditorStore.getState().notifyRender();
 }
 
-/** Test seam: flush any pending selection-transform update. */
-export function flushSelectionTransform(): void {
-  coalescedSelectionTransform.flush();
+/** Ends a marquee handle resize: builds the resized selection mask once. */
+export function commitSelectionTransform(): void {
+  const pending = pendingSelectionResize;
+  pendingSelectionResize = null;
+  if (!pending) return;
+  setMarqueePreview(null);
+  const editorState = useEditorStore.getState();
+  const { width: docW, height: docH } = editorState.document;
+  const mask = pending.isEllipse
+    ? createEllipseSelection(pending.rect, docW, docH)
+    : createRectSelection(pending.rect, docW, docH);
+  const bounds = selectionBounds(mask, docW, docH);
+  if (!bounds) {
+    editorState.notifyRender();
+    return;
+  }
+  editorState.setSelection(bounds, mask, docW, docH);
+  useUIStore.getState().setTransform(createTransformState(bounds));
+  editorState.notifyRender();
 }
