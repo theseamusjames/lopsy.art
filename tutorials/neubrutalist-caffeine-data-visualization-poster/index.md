@@ -362,7 +362,7 @@ shape shows each dose landing on what's left of the last one.
 
 ## Label the axes and the doses
 
-![The chart with hour labels along the bottom, milligram labels up the side, and lilac pills reading 2 SHOTS, 1 SHOT and 2 SHOTS above the peak values 128, 148 and 213](19-chart-labelled.webp)
+![The chart with hour labels along the bottom, milligram labels up the side, and lilac pills reading 2 SHOTS, 1 SHOT and 2 SHOTS above the peak values 126, 146 and 210](19-chart-labelled.webp)
 
 **Baseline.** **Add Layer**, rename it `Baseline`. With the **Pencil** at **Size**
 `6` in Bone, click `182, 1113` and [[Shift]]-click `1392, 1113`.
