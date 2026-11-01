@@ -250,6 +250,10 @@ function snapshotGpuLayers(
  * else in the snapshot (blend mode, opacity, effects, mask, adjustments,
  * order, active layer, etc.) is restored as-is.
  */
+function isPathBoundText(layer: import('../../types').Layer): boolean {
+  return layer.type === 'text' && layer.pathId !== undefined && layer.pathAnchorX !== undefined;
+}
+
 function mergeMetadataLayerPositions(
   snapshot: import('../../types').DocumentState,
   current: import('../../types').DocumentState,
@@ -258,6 +262,11 @@ function mergeMetadataLayerPositions(
   const layers = snapshot.layers.map((snapLayer) => {
     const cur = curById.get(snapLayer.id);
     if (!cur) return snapLayer;
+    // Path-bound text is laid out from its path: `x - pathAnchorX` is the
+    // user's offset from it. The snapshot's anchor comes back with its path,
+    // so its x/y must too, or the gap reads as an offset and the text floats
+    // off the restored path (#1423).
+    if (isPathBoundText(snapLayer)) return snapLayer;
     if (cur.x === snapLayer.x && cur.y === snapLayer.y) {
       const snapW = 'width' in snapLayer ? (snapLayer as { width?: number | null }).width : undefined;
       const snapH = 'height' in snapLayer ? (snapLayer as { height?: number | null }).height : undefined;
