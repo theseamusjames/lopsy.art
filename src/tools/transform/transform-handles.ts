@@ -107,9 +107,6 @@ export function getHandlePositions(
   const leftMid = transformPoint(left, midY, state);
   const rightMid = transformPoint(right, midY, state);
 
-  // Rotation handles offset outside corners
-  const rotOff = ROTATE_HANDLE_OFFSET;
-
   return {
     'top-left': tl,
     'top': topMid,
@@ -119,11 +116,24 @@ export function getHandlePositions(
     'bottom': bottomMid,
     'bottom-left': bl,
     'left': leftMid,
-    'rotate-top-left': transformPoint(left - rotOff, top - rotOff, state),
-    'rotate-top-right': transformPoint(right + rotOff, top - rotOff, state),
-    'rotate-bottom-right': transformPoint(right + rotOff, bottom + rotOff, state),
-    'rotate-bottom-left': transformPoint(left - rotOff, bottom + rotOff, state),
+    'rotate-top-left': rotateHandleOutside(tl, -1, -1, state),
+    'rotate-top-right': rotateHandleOutside(tr, 1, -1, state),
+    'rotate-bottom-right': rotateHandleOutside(br, 1, 1, state),
+    'rotate-bottom-left': rotateHandleOutside(bl, -1, 1, state),
   };
+}
+
+/**
+ * The offset is applied after the transform, not to the original bounds, so
+ * a pending scale doesn't stretch it (#1453): the handle stays
+ * `ROTATE_HANDLE_OFFSET` px out from its corner along the box's own axes.
+ */
+function rotateHandleOutside(corner: Point, sideX: number, sideY: number, state: TransformState): Point {
+  const ox = sideX * ROTATE_HANDLE_OFFSET * (state.scaleX < 0 ? -1 : 1);
+  const oy = sideY * ROTATE_HANDLE_OFFSET * (state.scaleY < 0 ? -1 : 1);
+  const cos = Math.cos(state.rotation);
+  const sin = Math.sin(state.rotation);
+  return { x: corner.x + ox * cos - oy * sin, y: corner.y + ox * sin + oy * cos };
 }
 
 const ROTATE_HANDLES: readonly TransformHandle[] = [
