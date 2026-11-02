@@ -198,37 +198,61 @@ pub fn demosaic_nearest(raw: &[f32], width: u32, height: u32, pattern: &[u8; 36]
 fn median_filter_3x3(plane: &[f32], w: usize, h: usize) -> Vec<f32> {
     let mut out = vec![0.0f32; w * h];
     for row in 0..h {
+        let is_interior_row = row >= 1 && row + 1 < h;
         for col in 0..w {
-            let mut win = [0.0f32; 9];
-            let mut k = 0;
-            for dy in -1i32..=1 {
-                let r = (row as i32 + dy).clamp(0, h as i32 - 1) as usize;
-                for dx in -1i32..=1 {
-                    let c = (col as i32 + dx).clamp(0, w as i32 - 1) as usize;
-                    win[k] = plane[r * w + c];
-                    k += 1;
-                }
-            }
+            let win = if is_interior_row && col >= 1 && col + 1 < w {
+                let up = (row - 1) * w + col;
+                let mid = row * w + col;
+                let dn = (row + 1) * w + col;
+                [
+                    plane[up - 1], plane[up], plane[up + 1],
+                    plane[mid - 1], plane[mid], plane[mid + 1],
+                    plane[dn - 1], plane[dn], plane[dn + 1],
+                ]
+            } else {
+                clamped_window_3x3(plane, w, h, row, col)
+            };
             out[row * w + col] = median9(win);
         }
     }
     out
 }
 
-/// Median of 9 values via partial selection (find the 5th-smallest). ~35
-/// comparisons, allocation-free.
-#[inline]
-fn median9(mut v: [f32; 9]) -> f32 {
-    for i in 0..5 {
-        let mut m = i;
-        for j in (i + 1)..9 {
-            if v[j] < v[m] {
-                m = j;
-            }
+fn clamped_window_3x3(plane: &[f32], w: usize, h: usize, row: usize, col: usize) -> [f32; 9] {
+    let mut win = [0.0f32; 9];
+    let mut k = 0;
+    for dy in -1i32..=1 {
+        let r = (row as i32 + dy).clamp(0, h as i32 - 1) as usize;
+        for dx in -1i32..=1 {
+            let c = (col as i32 + dx).clamp(0, w as i32 - 1) as usize;
+            win[k] = plane[r * w + c];
+            k += 1;
         }
-        v.swap(i, m);
     }
-    v[4]
+    win
+}
+
+/// Median of 9 values via Paeth's 19-exchange sorting network. Returns the
+/// same element a full sort would put in the middle, branch-free.
+#[inline]
+pub(crate) fn median9(v: [f32; 9]) -> f32 {
+    #[inline(always)]
+    fn sort2(p: &mut [f32; 9], a: usize, b: usize) {
+        let (x, y) = (p[a], p[b]);
+        if x > y {
+            p[a] = y;
+            p[b] = x;
+        }
+    }
+    let mut p = v;
+    sort2(&mut p, 1, 2); sort2(&mut p, 4, 5); sort2(&mut p, 7, 8);
+    sort2(&mut p, 0, 1); sort2(&mut p, 3, 4); sort2(&mut p, 6, 7);
+    sort2(&mut p, 1, 2); sort2(&mut p, 4, 5); sort2(&mut p, 7, 8);
+    sort2(&mut p, 0, 3); sort2(&mut p, 5, 8); sort2(&mut p, 4, 7);
+    sort2(&mut p, 3, 6); sort2(&mut p, 1, 4); sort2(&mut p, 2, 5);
+    sort2(&mut p, 4, 7); sort2(&mut p, 4, 2); sort2(&mut p, 6, 4);
+    sort2(&mut p, 4, 2);
+    p[4]
 }
 
 /// Separable box blur on planar RGB-interleaved data. `radius` is the
@@ -440,6 +464,50 @@ fn at(raw: &[f32], w: usize, h: usize, r: i32, c: i32) -> f32 {
 // Green interpolation (4 directions, blended by homogeneity)
 // ─────────────────────────────────────────────────────────────────────
 
+/// Largest |dx| or |dy| any `CellNeighbors` offset reaches (diagonal far
+/// same-colour at step 4). Pixels at least this far from every edge can
+/// index their neighbours directly instead of going through `reflect`.
+const NEIGHBOR_REACH: usize = 4;
+
+/// Fetches `plane` at (row + dy, col + dx): a direct index for interior
+/// pixels, mirrored at the image edge otherwise.
+#[inline(always)]
+fn fetch(plane: &[f32], w: usize, h: usize, row: usize, col: usize, is_interior: bool, off: (i32, i32)) -> f32 {
+    if is_interior {
+        plane[(row as isize + off.1 as isize) as usize * w + (col as isize + off.0 as isize) as usize]
+    } else {
+        at(plane, w, h, row as i32 + off.1, col as i32 + off.0)
+    }
+}
+
+#[inline(always)]
+fn is_interior_px(w: usize, h: usize, row: usize, col: usize, reach: usize) -> bool {
+    row >= reach && row + reach < h && col >= reach && col + reach < w
+}
+
+/// Inverse-gradient blend of the four directional candidates, clamped to the
+/// range of the green neighbours that produced them.
+///
+/// Squaring sharpens the direction preference: a 2× lower gradient → 4×
+/// higher weight. Noise-floor epsilon: large enough that noise-level
+/// gradients do not dominate the directional weighting (which produced
+/// diagonal "worm" artifacts in flat/shadow areas on real sensor data),
+/// while real edges still have gradients well above it and snap correctly.
+#[inline(always)]
+fn blend_candidates(candidates: &[f32; 4], gradients: &[f32; 4], g_min: f32, g_max: f32) -> f32 {
+    let eps = 1e-3f32;
+    let mut g_final = 0.0f32;
+    let mut weight_sum = 0.0f32;
+    for d in 0..4 {
+        let gg = gradients[d];
+        let w_d = 1.0 / (eps + gg * gg);
+        g_final += candidates[d] * w_d;
+        weight_sum += w_d;
+    }
+    g_final /= weight_sum;
+    g_final.clamp(g_min, g_max)
+}
+
 /// Interpolate green at every pixel. Green is known at G positions and
 /// estimated at R/B positions by blending four directional candidates.
 fn interpolate_green(
@@ -451,17 +519,6 @@ fn interpolate_green(
 ) -> Vec<f32> {
     let mut green = vec![0.0f32; w * h];
 
-    // First pass: copy known greens.
-    for row in 0..h {
-        for col in 0..w {
-            if cfa_color(pattern, row, col) == G {
-                green[row * w + col] = raw[row * w + col];
-            }
-        }
-    }
-
-    // Second pass: interpolate green at non-green pixels.
-    //
     // For each direction we compute a candidate green using a
     // distance-weighted average of the two nearest greens along that
     // direction, optionally corrected by the local Laplacian of the known
@@ -470,27 +527,30 @@ fn interpolate_green(
     // inverse-gradient weight: directions with low local gradient (i.e.
     // smooth along that axis) dominate.
     for row in 0..h {
+        let pat_row = &pattern[(row % 6) * 6..(row % 6) * 6 + 6];
+        let cells = &neighbors[row % 6];
         for col in 0..w {
-            let c = cfa_color(pattern, row, col);
-            if c == G {
+            let i = row * w + col;
+            if pat_row[col % 6] == G {
+                green[i] = raw[i];
                 continue;
             }
 
-            let cell = &neighbors[row % 6][col % 6];
-            let center = raw[row * w + col];
+            let cell = &cells[col % 6];
+            let center = raw[i];
+            let is_interior = is_interior_px(w, h, row, col, NEIGHBOR_REACH);
 
             let mut candidates = [0.0f32; 4];
             let mut gradients = [0.0f32; 4];
             let mut g_min_all = f32::MAX;
             let mut g_max_all = f32::MIN;
 
-            // Pre-fetch all per-direction neighbors so we can clamp at the end.
             let mut gp_arr = [0.0f32; 4];
             let mut gn_arr = [0.0f32; 4];
             for d in 0..4 {
                 let dirs = cell.dirs[d];
-                gp_arr[d] = at(raw, w, h, row as i32 + dirs.gp.1, col as i32 + dirs.gp.0);
-                gn_arr[d] = at(raw, w, h, row as i32 + dirs.gn.1, col as i32 + dirs.gn.0);
+                gp_arr[d] = fetch(raw, w, h, row, col, is_interior, dirs.gp);
+                gn_arr[d] = fetch(raw, w, h, row, col, is_interior, dirs.gn);
                 g_min_all = g_min_all.min(gp_arr[d]).min(gn_arr[d]);
                 g_max_all = g_max_all.max(gp_arr[d]).max(gn_arr[d]);
             }
@@ -509,52 +569,30 @@ fn interpolate_green(
                 let total = dp + dn;
                 let mut g_pred = (gp * dn + gn * dp) / total;
 
-                // Laplacian correction only when symmetric (greens equidistant).
-                // The correction term is the second derivative of the known
-                // color channel along this axis; under the constant-hue
-                // assumption, green should follow the same second derivative.
-                // Use a small weight (1/8) because the known channel and green
-                // are at different WB scales — too large a correction biases
-                // the predicted green toward the known channel's scale.
-                if dirs.symmetric && dirs.has_far {
-                    let sp = at(raw, w, h, row as i32 + dirs.same_p.1, col as i32 + dirs.same_p.0);
-                    let sn = at(raw, w, h, row as i32 + dirs.same_n.1, col as i32 + dirs.same_n.0);
-                    let lap = (2.0 * center - sp - sn) * 0.125;
-                    g_pred += lap;
+                let mut grad_color = 0.0;
+                if dirs.has_far {
+                    let sp = fetch(raw, w, h, row, col, is_interior, dirs.same_p);
+                    let sn = fetch(raw, w, h, row, col, is_interior, dirs.same_n);
+                    // Laplacian correction only when symmetric (greens
+                    // equidistant). The correction term is the second
+                    // derivative of the known color channel along this axis;
+                    // under the constant-hue assumption, green should follow
+                    // the same second derivative. Use a small weight (1/8)
+                    // because the known channel and green are at different WB
+                    // scales — too large a correction biases the predicted
+                    // green toward the known channel's scale.
+                    if dirs.symmetric {
+                        g_pred += (2.0 * center - sp - sn) * 0.125;
+                    }
+                    grad_color = (sp - sn).abs();
                 }
 
                 candidates[d] = g_pred;
-
                 // Direction gradient: large = strong edge crossing this axis.
-                let grad_green = (gp - gn).abs();
-                let grad_color = if dirs.has_far {
-                    let sp = at(raw, w, h, row as i32 + dirs.same_p.1, col as i32 + dirs.same_p.0);
-                    let sn = at(raw, w, h, row as i32 + dirs.same_n.1, col as i32 + dirs.same_n.0);
-                    (sp - sn).abs()
-                } else {
-                    0.0
-                };
-                gradients[d] = grad_green + grad_color;
+                gradients[d] = (gp - gn).abs() + grad_color;
             }
 
-            // Inverse-gradient blending. Squaring sharpens the direction
-            // preference: a 2× lower gradient → 4× higher weight.
-            // Noise-floor epsilon: large enough that noise-level gradients do
-            // not dominate the directional weighting (which produced diagonal
-            // "worm" artifacts in flat/shadow areas on real sensor data), while
-            // real edges still have gradients well above it and snap correctly.
-            let eps = 1e-3f32;
-            let mut g_final = 0.0f32;
-            let mut weight_sum = 0.0f32;
-            for d in 0..4 {
-                let gg = gradients[d];
-                let w_d = 1.0 / (eps + gg * gg);
-                g_final += candidates[d] * w_d;
-                weight_sum += w_d;
-            }
-            g_final /= weight_sum;
-
-            green[row * w + col] = g_final.clamp(g_min_all, g_max_all);
+            green[i] = blend_candidates(&candidates, &gradients, g_min_all, g_max_all);
         }
     }
 
@@ -564,6 +602,7 @@ fn interpolate_green(
 /// Re-interpolate green using already-known chroma planes. Same structure as
 /// `interpolate_green` but the Laplacian correction now uses the chroma
 /// (R-G or B-G) gradient at distance 2, which is smoother than raw color.
+#[allow(clippy::too_many_arguments)]
 fn refine_green(
     raw: &[f32],
     prev_green: &[f32],
@@ -577,13 +616,17 @@ fn refine_green(
     let mut green = prev_green.to_vec();
 
     for row in 0..h {
+        let pat_row = &pattern[(row % 6) * 6..(row % 6) * 6 + 6];
+        let cells = &neighbors[row % 6];
         for col in 0..w {
-            let c = cfa_color(pattern, row, col);
+            let c = pat_row[col % 6];
             if c == G {
                 continue;
             }
+            let i = row * w + col;
             let chroma = if c == R { chroma_r } else { chroma_b };
-            let cell = &neighbors[row % 6][col % 6];
+            let cell = &cells[col % 6];
+            let is_interior = is_interior_px(w, h, row, col, NEIGHBOR_REACH);
 
             let mut candidates = [0.0f32; 4];
             let mut gradients = [0.0f32; 4];
@@ -594,12 +637,13 @@ fn refine_green(
             let mut gn_arr = [0.0f32; 4];
             for d in 0..4 {
                 let dirs = cell.dirs[d];
-                gp_arr[d] = at(prev_green, w, h, row as i32 + dirs.gp.1, col as i32 + dirs.gp.0);
-                gn_arr[d] = at(prev_green, w, h, row as i32 + dirs.gn.1, col as i32 + dirs.gn.0);
+                gp_arr[d] = fetch(prev_green, w, h, row, col, is_interior, dirs.gp);
+                gn_arr[d] = fetch(prev_green, w, h, row, col, is_interior, dirs.gn);
                 g_min_all = g_min_all.min(gp_arr[d]).min(gn_arr[d]);
                 g_max_all = g_max_all.max(gp_arr[d]).max(gn_arr[d]);
             }
 
+            let chroma_center = raw[i] - prev_green[i];
             for d in 0..4 {
                 let dirs = cell.dirs[d];
                 let gp = gp_arr[d];
@@ -610,49 +654,28 @@ fn refine_green(
                 let dn = dirs.dist_n.max(1) as f32;
                 let mut g_pred = (gp * dn + gn * dp) / (dp + dn);
 
-                // Chroma-guided refinement: predicted chroma at center =
-                // average of chroma at same-color neighbors. If green is
-                // wrong, the implied center chroma will disagree with the
-                // averaged-neighbor chroma. Nudge green to close the gap.
-                // Only valid when neighbors are symmetric.
-                if dirs.symmetric && dirs.has_far {
-                    let chroma_center = raw[row * w + col] - prev_green[row * w + col];
-                    let chroma_p = at(chroma, w, h, row as i32 + dirs.same_p.1, col as i32 + dirs.same_p.0);
-                    let chroma_n = at(chroma, w, h, row as i32 + dirs.same_n.1, col as i32 + dirs.same_n.0);
-                    let target_chroma = 0.5 * (chroma_p + chroma_n);
-                    let chroma_err = chroma_center - target_chroma;
-                    g_pred -= chroma_err * 0.5;
+                let mut grad_chroma = 0.0;
+                if dirs.has_far {
+                    let chroma_p = fetch(chroma, w, h, row, col, is_interior, dirs.same_p);
+                    let chroma_n = fetch(chroma, w, h, row, col, is_interior, dirs.same_n);
+                    // Chroma-guided refinement: predicted chroma at center =
+                    // average of chroma at same-color neighbors. If green is
+                    // wrong, the implied center chroma will disagree with the
+                    // averaged-neighbor chroma. Nudge green to close the gap.
+                    // Only valid when neighbors are symmetric.
+                    if dirs.symmetric {
+                        let target_chroma = 0.5 * (chroma_p + chroma_n);
+                        let chroma_err = chroma_center - target_chroma;
+                        g_pred -= chroma_err * 0.5;
+                    }
+                    grad_chroma = (chroma_p - chroma_n).abs();
                 }
 
                 candidates[d] = g_pred;
-
-                let grad_green = (gp - gn).abs();
-                let grad_chroma = if dirs.has_far {
-                    let chroma_p = at(chroma, w, h, row as i32 + dirs.same_p.1, col as i32 + dirs.same_p.0);
-                    let chroma_n = at(chroma, w, h, row as i32 + dirs.same_n.1, col as i32 + dirs.same_n.0);
-                    (chroma_p - chroma_n).abs()
-                } else {
-                    0.0
-                };
-                gradients[d] = grad_green + grad_chroma;
+                gradients[d] = (gp - gn).abs() + grad_chroma;
             }
 
-            // Noise-floor epsilon: large enough that noise-level gradients do
-            // not dominate the directional weighting (which produced diagonal
-            // "worm" artifacts in flat/shadow areas on real sensor data), while
-            // real edges still have gradients well above it and snap correctly.
-            let eps = 1e-3f32;
-            let mut g_final = 0.0f32;
-            let mut weight_sum = 0.0f32;
-            for d in 0..4 {
-                let gg = gradients[d];
-                let w_d = 1.0 / (eps + gg * gg);
-                g_final += candidates[d] * w_d;
-                weight_sum += w_d;
-            }
-            g_final /= weight_sum;
-
-            green[row * w + col] = g_final.clamp(g_min_all, g_max_all);
+            green[i] = blend_candidates(&candidates, &gradients, g_min_all, g_max_all);
         }
     }
 
@@ -663,8 +686,91 @@ fn refine_green(
 // Chroma (R-G and B-G) plane interpolation
 // ─────────────────────────────────────────────────────────────────────
 
+/// 5×5 Gaussian-ish weights for chroma interpolation, normalized at each
+/// pixel by the summed weight of the in-bounds neighbours of the required
+/// colour.
+const CHROMA_KERNEL: [[f32; 5]; 5] = [
+    [1.0, 2.0, 3.0, 2.0, 1.0],
+    [2.0, 4.0, 6.0, 4.0, 2.0],
+    [3.0, 6.0, 9.0, 6.0, 3.0],
+    [2.0, 4.0, 6.0, 4.0, 2.0],
+    [1.0, 2.0, 3.0, 2.0, 1.0],
+];
+
+/// The kernel taps that land on `target`-coloured sites, for one cell of the
+/// 6×6 pattern, in kernel scan order (dy outer, dx inner) so the weighted sum
+/// accumulates in exactly the order of the bounds-checked edge path.
+struct ChromaTaps {
+    taps: Vec<(i32, i32, f32)>,
+    weight_sum: f32,
+}
+
+fn build_chroma_taps(pattern: &[u8; 36], target: u8) -> Vec<ChromaTaps> {
+    let mut cells = Vec::with_capacity(36);
+    for r in 0..6i32 {
+        for c in 0..6i32 {
+            let mut taps = Vec::new();
+            let mut weight_sum = 0.0f32;
+            for dy in -2i32..=2 {
+                for dx in -2i32..=2 {
+                    let pr = (r + dy).rem_euclid(6) as usize;
+                    let pc = (c + dx).rem_euclid(6) as usize;
+                    if pattern[pr * 6 + pc] == target {
+                        let kw = CHROMA_KERNEL[(dy + 2) as usize][(dx + 2) as usize];
+                        taps.push((dy, dx, kw));
+                        weight_sum += kw;
+                    }
+                }
+            }
+            cells.push(ChromaTaps { taps, weight_sum });
+        }
+    }
+    cells
+}
+
+/// Weighted average of the known `target` chroma around (row, col), skipping
+/// samples outside the image. Used only within two pixels of the edge.
+#[allow(clippy::too_many_arguments)]
+fn chroma_average_clipped(
+    chroma: &[f32],
+    w: usize,
+    h: usize,
+    pattern: &[u8; 36],
+    target: u8,
+    row: usize,
+    col: usize,
+) -> f32 {
+    let mut sum = 0.0f32;
+    let mut wsum = 0.0f32;
+    for dy in -2i32..=2 {
+        for dx in -2i32..=2 {
+            let nr = row as i32 + dy;
+            let nc = col as i32 + dx;
+            if nr < 0 || nr >= h as i32 || nc < 0 || nc >= w as i32 {
+                continue;
+            }
+            if cfa_color(pattern, nr as usize, nc as usize) == target {
+                let kw = CHROMA_KERNEL[(dy + 2) as usize][(dx + 2) as usize];
+                sum += chroma[nr as usize * w + nc as usize] * kw;
+                wsum += kw;
+            }
+        }
+    }
+    if wsum > 0.0 { sum / wsum } else { 0.0 }
+}
+
+#[inline(always)]
+fn chroma_average_interior(chroma: &[f32], w: usize, row: usize, col: usize, cell: &ChromaTaps) -> f32 {
+    let mut sum = 0.0f32;
+    for &(dy, dx, kw) in &cell.taps {
+        let ni = (row as isize + dy as isize) as usize * w + (col as isize + dx as isize) as usize;
+        sum += chroma[ni] * kw;
+    }
+    if cell.weight_sum > 0.0 { sum / cell.weight_sum } else { 0.0 }
+}
+
 /// Fill the chroma planes (R-G at known R positions, B-G at known B
-/// positions) and bilinearly interpolate the missing values.
+/// positions) and interpolate the missing values.
 ///
 /// X-Trans has R and B distributed sparsely (~22% each), so we use a
 /// weighted-average of nearby known chroma samples within a small window.
@@ -682,9 +788,10 @@ fn interpolate_chroma(
 
     // Step 1: seed known chroma values at R and B CFA positions.
     for row in 0..h {
+        let pat_row = &pattern[(row % 6) * 6..(row % 6) * 6 + 6];
         for col in 0..w {
             let i = row * w + col;
-            let c = cfa_color(pattern, row, col);
+            let c = pat_row[col % 6];
             if c == R {
                 chroma_r[i] = raw[i] - green[i];
             } else if c == B {
@@ -693,69 +800,35 @@ fn interpolate_chroma(
         }
     }
 
-    // Step 2: fill missing chroma via Gaussian-weighted average of known
-    // samples in a 5×5 window. We process R and B chroma in one pass.
-    //
-    // 5×5 Gaussian-ish weights, normalized at each pixel by the count of
-    // valid neighbors of the required color.
-    const KERNEL: [[f32; 5]; 5] = [
-        [1.0, 2.0, 3.0, 2.0, 1.0],
-        [2.0, 4.0, 6.0, 4.0, 2.0],
-        [3.0, 6.0, 9.0, 6.0, 3.0],
-        [2.0, 4.0, 6.0, 4.0, 2.0],
-        [1.0, 2.0, 3.0, 2.0, 1.0],
-    ];
+    // Step 2: fill missing chroma via the weighted average of known samples
+    // in a 5×5 window. R and B chroma are processed in one pass.
+    let taps_r = build_chroma_taps(pattern, R);
+    let taps_b = build_chroma_taps(pattern, B);
 
     let mut out_r = chroma_r.clone();
     let mut out_b = chroma_b.clone();
 
     for row in 0..h {
+        let pat_row = &pattern[(row % 6) * 6..(row % 6) * 6 + 6];
         for col in 0..w {
             let i = row * w + col;
-            let c = cfa_color(pattern, row, col);
+            let c = pat_row[col % 6];
+            let cell = (row % 6) * 6 + col % 6;
+            let is_interior = is_interior_px(w, h, row, col, 2);
 
-            // For R-chroma: if this pixel is R, keep the known value.
-            // Otherwise compute a weighted average of nearby known R-chroma.
             if c != R {
-                let mut sum = 0.0f32;
-                let mut wsum = 0.0f32;
-                for dy in -2i32..=2 {
-                    for dx in -2i32..=2 {
-                        let nr = row as i32 + dy;
-                        let nc = col as i32 + dx;
-                        if nr < 0 || nr >= h as i32 || nc < 0 || nc >= w as i32 {
-                            continue;
-                        }
-                        let ni = nr as usize * w + nc as usize;
-                        if cfa_color(pattern, nr as usize, nc as usize) == R {
-                            let kw = KERNEL[(dy + 2) as usize][(dx + 2) as usize];
-                            sum += chroma_r[ni] * kw;
-                            wsum += kw;
-                        }
-                    }
-                }
-                out_r[i] = if wsum > 0.0 { sum / wsum } else { 0.0 };
+                out_r[i] = if is_interior {
+                    chroma_average_interior(&chroma_r, w, row, col, &taps_r[cell])
+                } else {
+                    chroma_average_clipped(&chroma_r, w, h, pattern, R, row, col)
+                };
             }
-
             if c != B {
-                let mut sum = 0.0f32;
-                let mut wsum = 0.0f32;
-                for dy in -2i32..=2 {
-                    for dx in -2i32..=2 {
-                        let nr = row as i32 + dy;
-                        let nc = col as i32 + dx;
-                        if nr < 0 || nr >= h as i32 || nc < 0 || nc >= w as i32 {
-                            continue;
-                        }
-                        let ni = nr as usize * w + nc as usize;
-                        if cfa_color(pattern, nr as usize, nc as usize) == B {
-                            let kw = KERNEL[(dy + 2) as usize][(dx + 2) as usize];
-                            sum += chroma_b[ni] * kw;
-                            wsum += kw;
-                        }
-                    }
-                }
-                out_b[i] = if wsum > 0.0 { sum / wsum } else { 0.0 };
+                out_b[i] = if is_interior {
+                    chroma_average_interior(&chroma_b, w, row, col, &taps_b[cell])
+                } else {
+                    chroma_average_clipped(&chroma_b, w, h, pattern, B, row, col)
+                };
             }
         }
     }
@@ -847,6 +920,24 @@ mod tests {
     fn median9_finds_the_middle_value() {
         assert_eq!(median9([9.0, 1.0, 5.0, 3.0, 7.0, 2.0, 8.0, 4.0, 6.0]), 5.0);
         assert_eq!(median9([0.5; 9]), 0.5);
+    }
+
+    #[test]
+    fn median9_matches_a_full_sort() {
+        let mut rng: u32 = 0x9e37_79b9;
+        for _ in 0..20_000 {
+            let mut v = [0.0f32; 9];
+            for x in v.iter_mut() {
+                rng ^= rng << 13;
+                rng ^= rng >> 17;
+                rng ^= rng << 5;
+                // Few distinct values so ties are common.
+                *x = (rng % 7) as f32 - 3.0;
+            }
+            let mut sorted = v;
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            assert_eq!(median9(v), sorted[4], "{v:?}");
+        }
     }
 
     #[test]

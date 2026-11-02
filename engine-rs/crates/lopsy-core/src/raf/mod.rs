@@ -22,12 +22,14 @@ pub mod dcp;
 pub mod wb_presets;
 pub mod xtrans;
 
+use serde::{Deserialize, Serialize};
+
 use crate::dng::color;
 use crate::dng::tiff::TiffReader;
 use crate::dng::demosaic;
 
 /// Which demosaic algorithm `read_raf_opts` uses for X-Trans sensors.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum DemosaicMode {
     /// Full Markesteijn multi-pass (production quality).
     Markesteijn,
@@ -71,6 +73,138 @@ pub struct RafImage {
     pub debug_log: Vec<String>,
 }
 
+/// Every per-image decision the local render stage needs, settled once by
+/// `prepare_raf` from the whole frame (CFA phase, white balance, camera
+/// matrix, film simulation). Serializable so a worker rendering one band can
+/// be handed exactly what the others use.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RafRenderParams {
+    /// Mosaic dimensions — the cropped frame before EXIF orientation.
+    pub width: u32,
+    pub height: u32,
+    /// 6×6 CFA (standard 0=R, 1=G, 2=B indices), phase-aligned to row 0.
+    pub cfa: Vec<u8>,
+    pub is_xtrans: bool,
+    pub demosaic: DemosaicMode,
+    pub denoise: bool,
+    pub cam_to_srgb: [f32; 9],
+    pub film_mode: Option<u16>,
+    pub orientation: u16,
+}
+
+impl RafRenderParams {
+    /// Final (displayed) dimensions after EXIF orientation.
+    pub fn oriented_size(&self) -> (u32, u32) {
+        match self.orientation {
+            5..=8 => (self.height, self.width),
+            _ => (self.width, self.height),
+        }
+    }
+}
+
+/// Output of `prepare_raf`: the white-balanced mosaic (`width`×`height`
+/// f32, row-major) plus the parameters to render it.
+pub struct RafMosaic {
+    pub params: RafRenderParams,
+    pub mosaic: Vec<f32>,
+    pub exif_info: RafExifInfo,
+    pub debug_log: Vec<String>,
+}
+
+/// How far (in rows) any `render_rgb` output pixel reaches into the mosaic:
+/// green interpolation 4, then two refine passes of chroma 2 + green 4, the
+/// final chroma 2, three 3×3 chroma medians 3, the separable chroma median 1,
+/// the bilateral 2 and the unsharp mask 1.
+pub const RENDER_REACH_ROWS: u32 = 4 + 2 * (2 + 4) + 2 + 3 + 1 + 2 + 1;
+
+/// Rows of mosaic context rendered above and below each band and then
+/// discarded. At least `RENDER_REACH_ROWS`, so a band's output matches the
+/// whole-frame render exactly, and a multiple of the 6-row CFA period, so
+/// every band's source starts at CFA phase 0.
+pub const BAND_HALO_ROWS: u32 = RENDER_REACH_ROWS.div_ceil(6) * 6;
+
+/// Bands never get shorter than this (except a frame shorter than it), so
+/// the halo stays a modest fraction of the rendered rows.
+const MIN_BAND_ROWS: u32 = 96;
+
+/// A horizontal slice `[y0, y1)` of the (unoriented) frame, rendered from
+/// mosaic rows `[src_y0, src_y1)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RafBand {
+    pub y0: u32,
+    pub y1: u32,
+    pub src_y0: u32,
+    pub src_y1: u32,
+}
+
+/// Split a `height`-row frame into at most `max_bands` bands of near-equal
+/// height whose boundaries fall on the 6-row CFA period.
+pub fn plan_bands(height: u32, max_bands: u32) -> Vec<RafBand> {
+    let periods = height.div_ceil(6).max(1);
+    let max_by_size = (height / MIN_BAND_ROWS).max(1);
+    let count = max_bands.clamp(1, max_by_size).min(periods);
+    (0..count)
+        .map(|i| {
+            let y0 = (periods * i / count * 6).min(height);
+            let y1 = (periods * (i + 1) / count * 6).min(height);
+            RafBand {
+                y0,
+                y1,
+                src_y0: y0.saturating_sub(BAND_HALO_ROWS),
+                src_y1: (y1 + BAND_HALO_ROWS).min(height),
+            }
+        })
+        .collect()
+}
+
+/// One rendered band, already EXIF-oriented, with its rectangle in the
+/// final (oriented) image.
+pub struct RafBandPixels {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    /// RGBA f32, `width`×`height`.
+    pub pixels: Vec<f32>,
+}
+
+/// Render one band. `src` holds mosaic rows `[band.src_y0, band.src_y1)` of
+/// the frame `prepare_raf` produced. The result is bit-identical to the
+/// same rows of a whole-frame render.
+pub fn render_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
+    let w = params.width as usize;
+    let valid = band.src_y0.is_multiple_of(6)
+        && band.src_y0 <= band.y0
+        && band.y0 < band.y1
+        && band.y1 <= band.src_y1
+        && band.src_y1 <= params.height;
+    if !valid {
+        return Err(format!("Invalid RAF band {band:?} for a {}-row frame", params.height));
+    }
+    let src_h = (band.src_y1 - band.src_y0) as usize;
+    if src.len() != w * src_h {
+        return Err(format!("RAF band source has {} values, expected {}", src.len(), w * src_h));
+    }
+
+    let rgb = render_rgb(src, w, src_h, params);
+    let skip = (band.y0 - band.src_y0) as usize * w * 3;
+    let take = (band.y1 - band.y0) as usize * w * 3;
+    let rgba = rgb_to_rgba(&rgb[skip..skip + take]);
+    drop(rgb);
+
+    let band_h = band.y1 - band.y0;
+    let (ow, oh, pixels) =
+        crate::orientation::apply_exif_orientation_owned(params.width, band_h, rgba, params.orientation);
+    let (x, y) = match params.orientation {
+        3 | 4 => (0, params.height - band.y1),
+        5 | 8 => (band.y0, 0),
+        6 | 7 => (params.height - band.y1, 0),
+        _ => (0, band.y0),
+    };
+    Ok(RafBandPixels { x, y, width: ow, height: oh, pixels })
+}
+
 /// Decode a Fujifilm RAF file with production defaults (Markesteijn demosaic,
 /// denoise on). This is the stable public interface called by the WASM bridge;
 /// its behaviour is identical to the pre-opts code.
@@ -84,6 +218,30 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
 /// always bilinear regardless). `opts.denoise` gates the chroma-median
 /// and luma-bilateral post-demosaic passes.
 pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, String> {
+    let RafMosaic { params, mosaic, exif_info, debug_log } = prepare_raf(data, opts)?;
+    let rgb = render_rgb(&mosaic, params.width as usize, params.height as usize, &params);
+    drop(mosaic);
+    let rgba = rgb_to_rgba(&rgb);
+    drop(rgb);
+
+    // ── Apply EXIF orientation ─────────────────────────────────
+    // Most commonly: 1 (no rotation), 6 (rotate 90° CW), 8 (rotate
+    // 90° CCW), 3 (rotate 180°). For 5/6/7/8 the output dimensions
+    // are swapped.
+    let (final_w, final_h, final_pixels) =
+        crate::orientation::apply_exif_orientation_owned(params.width, params.height, rgba, params.orientation);
+
+    Ok(RafImage { width: final_w, height: final_h, pixels: final_pixels, exif_info, debug_log })
+}
+
+/// The decoder's whole-frame stage: parse the container, decompress, crop,
+/// normalize, detect the CFA phase and white-balance the mosaic, and settle
+/// every per-image rendering decision into `RafRenderParams`.
+///
+/// Everything after this (`render_rgb`) only looks at a bounded
+/// neighbourhood of each pixel, so it can run on row bands independently —
+/// see `plan_bands` / `render_band`.
+pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String> {
     let mut debug_log: Vec<String> = Vec::new();
     macro_rules! raf_log {
         ($($arg:tt)*) => { debug_log.push(format!($($arg)*)); };
@@ -318,53 +476,81 @@ pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, Strin
         }
     }
 
-    // ── Demosaic ────────────────────────────────────────────────
-
-    let mut rgb_f32 = if is_xtrans {
-        match opts.demosaic {
-            DemosaicMode::Markesteijn => {
-                raf_log!("[RAF] X-Trans demosaic Markesteijn");
-                xtrans::demosaic_xtrans(&normalized, width, height, &cfa)
-            }
-            DemosaicMode::Nearest => {
-                raf_log!("[RAF] X-Trans demosaic nearest-neighbour (diagnostic)");
-                xtrans::demosaic_nearest(&normalized, width, height, &cfa)
-            }
-        }
-    } else {
-        raf_log!("[RAF] Bayer demosaic");
-        demosaic::bilinear(&normalized, width, height, &cfa[..4])
-    };
-
-    // ── Color matrix ────────────────────────────────────────────
     // Real per-camera camera→sRGB matrix derived from the DNG ColorMatrix1
     // values in `color_matrix_for_model`. Column-scaled (neutralized) so
     // that a neutral input (R=G=B, as produced by the as-shot WB) maps to
     // a neutral output — this preserves off-diagonal saturation structure
     // unlike per-row normalization, which scales each row independently and
     // crushes saturation by up to ~5%.
-
     let cam_to_srgb = color::neutralize_matrix(&color_matrix_for_model(&camera_model));
+
+    let params = RafRenderParams {
+        width,
+        height,
+        cfa: cfa.to_vec(),
+        is_xtrans,
+        demosaic: opts.demosaic,
+        denoise: opts.denoise,
+        cam_to_srgb,
+        film_mode: exif_info.film_mode,
+        orientation: exif_orientation,
+    };
+
+    raf_log!("[RAF] demosaic: {}", match (is_xtrans, opts.demosaic) {
+        (false, _) => "Bayer bilinear",
+        (true, DemosaicMode::Markesteijn) => "X-Trans Markesteijn",
+        (true, DemosaicMode::Nearest) => "X-Trans nearest-neighbour (diagnostic)",
+    });
     raf_log!(
         "[RAF] cam→sRGB (neutralized): [{:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}; {:.3} {:.3} {:.3}]",
         cam_to_srgb[0], cam_to_srgb[1], cam_to_srgb[2],
         cam_to_srgb[3], cam_to_srgb[4], cam_to_srgb[5],
         cam_to_srgb[6], cam_to_srgb[7], cam_to_srgb[8]
     );
+    raf_log!("[RAF] denoise: {}", if opts.denoise {
+        "chroma separable median r=1, luma bilateral r=2 σ=0.03"
+    } else {
+        "skipped"
+    });
+    raf_log!("[RAF] film-sim saturation (linear): {}",
+        base_curves::saturation_for_film_mode(exif_info.film_mode));
+    raf_log!("[RAF] film_mode={:?} → base curve: {} (luminance-preserving)",
+        exif_info.film_mode, base_curves::curve_for_film_mode(exif_info.film_mode).name);
 
-    color::apply_matrix(&mut rgb_f32, &cam_to_srgb);
+    Ok(RafMosaic { params, mosaic: normalized, exif_info, debug_log })
+}
+
+/// The decoder's local stage: demosaic → color matrix → denoise → tone →
+/// gamma → sharpen, from a white-balanced mosaic of `w`×`h` to interleaved
+/// RGB. The mosaic's first row must sit at CFA phase 0 (a multiple of 6 rows
+/// into the frame) so `params.cfa` applies unshifted.
+///
+/// Each output pixel depends only on mosaic pixels within
+/// `RENDER_REACH_ROWS` of it, which is what makes banded rendering exact.
+pub fn render_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) -> Vec<f32> {
+    let cfa: [u8; 36] = params.cfa.as_slice().try_into().unwrap_or(DEFAULT_XTRANS_CFA);
+
+    let mut rgb_f32 = if params.is_xtrans {
+        match params.demosaic {
+            DemosaicMode::Markesteijn => xtrans::demosaic_xtrans(mosaic, w as u32, h as u32, &cfa),
+            DemosaicMode::Nearest => xtrans::demosaic_nearest(mosaic, w as u32, h as u32, &cfa),
+        }
+    } else {
+        demosaic::bilinear(mosaic, w as u32, h as u32, &cfa[..4])
+    };
+
+    color::apply_matrix(&mut rgb_f32, &params.cam_to_srgb);
 
     // ── Chroma denoise ─────────────────────────────────────────
     // Remove the magenta/green speckle that X-Trans demosaicing leaves on
     // real sensor data by median-filtering the color-difference planes.
     // A median erases isolated false-color pixels while preserving edges
     // and real color regions — unlike a box blur it cannot desaturate.
-    if opts.denoise {
+    if params.denoise {
         // The green-sublattice phase misalignment is now fixed at the source,
         // so this is a mild residual chroma noise pass — not a grid-eraser.
         // Radius 1 (3-wide separable median) removes isolated false-color speckle
         // while leaving real color edges and fine detail intact.
-        raf_log!("[RAF] chroma denoise (separable median, radius 1)");
         denoise_chroma(&mut rgb_f32, w, h);
 
         // ── Luma denoise (bilateral, linear space) ──────────────────
@@ -373,10 +559,7 @@ pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, Strin
         // period is now eliminated at the demosaic phase, so a lighter pass
         // suffices. range_sigma ~0.03 bridges only same-level sensor grain;
         // real edges (much larger step) are unaffected.
-        raf_log!("[RAF] luma denoise bilateral (radius=2, range_sigma=0.03)");
         denoise_luma_bilateral(&mut rgb_f32, w, h, 2, 0.03);
-    } else {
-        raf_log!("[RAF] denoise skipped (opts.denoise=false)");
     }
 
     // ── Film-sim saturation (linear space) ─────────────────────
@@ -385,9 +568,7 @@ pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, Strin
     // and gamma — where the luma-preserving boost is strongest. Linear
     // saturation can push the minimum channel slightly negative; that is
     // intentional (later RGBA conversion clamps to [0,1]).
-    let sat = base_curves::saturation_for_film_mode(exif_info.film_mode);
-    raf_log!("[RAF] film-sim saturation (linear): {sat}");
-    apply_saturation(&mut rgb_f32, sat);
+    apply_saturation(&mut rgb_f32, base_curves::saturation_for_film_mode(params.film_mode));
 
     // ── Exposure boost ─────────────────────────────────────────
     // Raw sensor data uses ~30% of the 14-bit range (cameras expose for
@@ -414,9 +595,7 @@ pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, Strin
     //
     // Prefer the film simulation recorded in the makernote when available;
     // fall back to the generic Provia default.
-    let curve = base_curves::curve_for_film_mode(exif_info.film_mode);
-    raf_log!("[RAF] film_mode={:?} → base curve: {} (luminance-preserving)", exif_info.film_mode, curve.name);
-    let curve_lut = base_curves::curve_lut(curve);
+    let curve_lut = base_curves::curve_lut(base_curves::curve_for_film_mode(params.film_mode));
     color::apply_lut(&mut rgb_f32, &curve_lut);
 
     // ── sRGB gamma ──────────────────────────────────────────────
@@ -430,24 +609,18 @@ pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, Strin
     // and is off the demosaic critical path.
     unsharp_mask_luma(&mut rgb_f32, w, h, CAPTURE_SHARPEN_AMOUNT);
 
-    // ── Convert RGB → RGBA ──────────────────────────────────────
+    rgb_f32
+}
 
-    let mut rgba = Vec::with_capacity(pixel_count * 4);
-    for i in 0..pixel_count {
-        rgba.push(rgb_f32[i * 3].clamp(0.0, 1.0));
-        rgba.push(rgb_f32[i * 3 + 1].clamp(0.0, 1.0));
-        rgba.push(rgb_f32[i * 3 + 2].clamp(0.0, 1.0));
+fn rgb_to_rgba(rgb: &[f32]) -> Vec<f32> {
+    let mut rgba = Vec::with_capacity(rgb.len() / 3 * 4);
+    for px in rgb.chunks_exact(3) {
+        rgba.push(px[0].clamp(0.0, 1.0));
+        rgba.push(px[1].clamp(0.0, 1.0));
+        rgba.push(px[2].clamp(0.0, 1.0));
         rgba.push(1.0);
     }
-
-    // ── Apply EXIF orientation ─────────────────────────────────
-    // Most commonly: 1 (no rotation), 6 (rotate 90° CW), 8 (rotate
-    // 90° CCW), 3 (rotate 180°). For 5/6/7/8 the output dimensions
-    // are swapped.
-    let (final_w, final_h, final_pixels) =
-        crate::orientation::apply_exif_orientation(width, height, &rgba, exif_orientation);
-
-    Ok(RafImage { width: final_w, height: final_h, pixels: final_pixels, exif_info, debug_log })
+    rgba
 }
 
 /// Diagnostic accessor: run the decode up to and including per-CFA-channel
@@ -1010,12 +1183,12 @@ fn unsharp_mask_luma(rgb: &mut [f32], w: usize, h: usize, amount: f32) {
         }
     }
     let mut blur = vec![0.0f32; n];
-    for col in 0..w {
-        for row in 0..h {
-            let u = tmp[row.saturating_sub(1) * w + col];
-            let c = tmp[row * w + col];
-            let d = tmp[(row + 1).min(h - 1) * w + col];
-            blur[row * w + col] = (u + 2.0 * c + d) * 0.25;
+    for row in 0..h {
+        let up = row.saturating_sub(1) * w;
+        let mid = row * w;
+        let dn = (row + 1).min(h - 1) * w;
+        for col in 0..w {
+            blur[mid + col] = (tmp[up + col] + 2.0 * tmp[mid + col] + tmp[dn + col]) * 0.25;
         }
     }
 
@@ -1173,12 +1346,17 @@ fn denoise_luma_bilateral(rgb: &mut [f32], w: usize, h: usize, radius: i32, rang
             let mut sum_w = 0.0f32;
             let mut sum_wl = 0.0f32;
 
+            let is_interior = row >= r && row + r < h && col >= r && col + r < w;
             for dy in 0..side {
                 let nr = (row as i32 + dy as i32 - r as i32).clamp(0, h as i32 - 1) as usize;
                 let row_off = nr * w;
                 let sw_off = dy * side;
                 for dx in 0..side {
-                    let nc = (col as i32 + dx as i32 - r as i32).clamp(0, w as i32 - 1) as usize;
+                    let nc = if is_interior {
+                        col + dx - r
+                    } else {
+                        (col as i32 + dx as i32 - r as i32).clamp(0, w as i32 - 1) as usize
+                    };
                     let l_nb = luma[row_off + nc];
                     // Range weight via LUT: only same-level (noisy) neighbours
                     // contribute; across a real edge the weight collapses to 0.
@@ -1281,6 +1459,10 @@ fn median_filter_separable(plane: &[f32], w: usize, h: usize, radius: i32) -> Ve
     for row in 0..h {
         let base = row * w;
         for col in 0..w {
+            if radius == 1 && col >= 1 && col + 1 < w {
+                tmp[base + col] = median3(plane[base + col - 1], plane[base + col], plane[base + col + 1]);
+                continue;
+            }
             for k in -radius..=radius {
                 let c = (col as i32 + k).clamp(0, w as i32 - 1) as usize;
                 buf[(k + radius) as usize] = plane[base + c];
@@ -1289,19 +1471,42 @@ fn median_filter_separable(plane: &[f32], w: usize, h: usize, radius: i32) -> Ve
         }
     }
 
+    // Row-major so each output row reads whole source rows; walking columns
+    // strides the full row width per sample and thrashes the cache.
     let mut out = vec![0.0f32; w * h];
-    for col in 0..w {
-        for row in 0..h {
+    for row in 0..h {
+        let base = row * w;
+        if radius == 1 {
+            let up = row.saturating_sub(1) * w;
+            let dn = (row + 1).min(h - 1) * w;
+            for col in 0..w {
+                out[base + col] = median3(tmp[up + col], tmp[base + col], tmp[dn + col]);
+            }
+            continue;
+        }
+        for col in 0..w {
             for k in -radius..=radius {
                 let r = (row as i32 + k).clamp(0, h as i32 - 1) as usize;
                 buf[(k + radius) as usize] = tmp[r * w + col];
             }
-            out[row * w + col] = median_window(&buf);
+            out[base + col] = median_window(&buf);
         }
     }
     out
 }
 
+/// Middle of three values; returns the same element `median_window` would.
+#[inline(always)]
+fn median3(a: f32, b: f32, c: f32) -> f32 {
+    let (lo, hi) = if b < a { (b, a) } else { (a, b) };
+    if c < lo {
+        lo
+    } else if c < hi {
+        c
+    } else {
+        hi
+    }
+}
 
 /// Blend over-exposed pixels toward neutral gray so that blown highlights
 /// render white instead of pink. The as-shot WB boost makes R and B clip
@@ -1813,6 +2018,44 @@ mod tests {
                     "bright side blurred at ({row},{col}): got {v:.4} expected ≈{bright}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn median3_matches_median_window() {
+        let vals = [-1.0f32, 0.0, 0.5, 0.5, 2.0];
+        for &a in &vals {
+            for &b in &vals {
+                for &c in &vals {
+                    assert_eq!(median3(a, b, c), median_window(&[a, b, c]), "{a} {b} {c}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn render_params_survive_json_exactly_for_every_camera_matrix() {
+        // Workers receive the params as JSON; a float that came back one ulp
+        // off would make their bands differ from the whole-frame render.
+        for model in ["X100VI", "X-T5", "X-T4", "X-T3", "X-T2", "GFX 100S", "X-UNKNOWN"] {
+            let params = RafRenderParams {
+                width: 10,
+                height: 10,
+                cfa: DEFAULT_XTRANS_CFA.to_vec(),
+                is_xtrans: true,
+                demosaic: DemosaicMode::Markesteijn,
+                denoise: true,
+                cam_to_srgb: color::neutralize_matrix(&color_matrix_for_model(model)),
+                film_mode: Some(0x200),
+                orientation: 6,
+            };
+            let json = serde_json::to_string(&params).unwrap();
+            let back: RafRenderParams = serde_json::from_str(&json).unwrap();
+            let bits = |m: &[f32; 9]| m.map(f32::to_bits);
+            assert_eq!(bits(&back.cam_to_srgb), bits(&params.cam_to_srgb), "{model}");
+            assert_eq!(back.cfa, params.cfa);
+            assert_eq!(back.film_mode, params.film_mode);
+            assert_eq!(back.orientation, params.orientation);
         }
     }
 
