@@ -250,13 +250,16 @@ pub fn filter_surface_blur(engine: &mut Engine, layer_id: &str, radius: u32, thr
 #[wasm_bindgen(js_name = "filterRadialBlur")]
 pub fn filter_radial_blur(engine: &mut Engine, layer_id: &str, amount: u32) {
     if amount == 0 { return; }
+    let Some((_, _, cu, cv)) = super::full_size_doc_center(&mut engine.inner, layer_id) else {
+        return;
+    };
     filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.radial_blur,
         |gl, shader| {
             if let Some(loc) = shader.location(gl, "u_center") {
-                gl.uniform2f(Some(&loc), 0.5, 0.5);
+                gl.uniform2f(Some(&loc), cu, cv);
             }
             if let Some(loc) = shader.location(gl, "u_amount") {
                 gl.uniform1i(Some(&loc), amount as i32);

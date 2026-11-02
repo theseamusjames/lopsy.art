@@ -51,9 +51,34 @@ uniform float u_invert;
 // Gradient Map: 256x1 RGBA LUT mapping luminosity → colour.
 uniform sampler2D u_gradientLut;
 uniform float u_hasGradientMap;
+// Color Grading: per-wheel offsets, rgb = tint, a = luminance.
+uniform float u_cg_enabled;
+uniform vec4 u_cg_shadows;
+uniform vec4 u_cg_midtones;
+uniform vec4 u_cg_highlights;
+uniform vec4 u_cg_global;
+uniform float u_cg_exponent;  // Balance: bends luma before the tone masks.
+uniform float u_cg_width;     // Blending: half-width of the mask crossovers.
+// Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Every
+// node below assumes sRGB channels, so Lab pixels are decoded first and
+// re-encoded at the end.
+uniform int u_docColorMode;
 out vec4 fragColor;
 
 //#include hsl
+//#include lab
+
+// c + offset, easing into 0 and 1 rather than clipping. A hard clip leaves a
+// channel flat and then rising fast, which reads as a line across a smooth
+// ramp. The easing scales with the offset, so a channel left alone is exact.
+vec3 softOffset(vec3 c, vec3 offset) {
+    vec3 floorEase = 0.25 * max(-offset, 0.0);
+    vec3 ceilEase = 0.25 * max(offset, 0.0);
+    vec3 x = c + offset;
+    vec3 eased = 0.5 * (x + sqrt(x * x + 4.0 * floorEase * floorEase));
+    vec3 headroom = 1.0 - eased;
+    return 1.0 - 0.5 * (headroom + sqrt(headroom * headroom + 4.0 * ceilEase * ceilEase));
+}
 
 void main() {
     vec4 c = texture(u_tex, v_uv);
@@ -61,6 +86,8 @@ void main() {
         fragColor = c;
         return;
     }
+    bool isLab = u_docColorMode == 1;
+    if (isLab) c.rgb = labToSrgb(c.rgb);
     c.rgb *= pow(2.0, u_exposure);
     c.rgb = (c.rgb - 0.5) * max(u_contrast + 1.0, 0.0) + 0.5 + u_brightness;
     float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -130,7 +157,26 @@ void main() {
         c.rgb = clamp(c.rgb, 0.0, 1.0);
     }
 
+    // Black & White: per-hue weighted grayscale.
+    if (u_bw_enabled > 0.5) {
+        vec3 hsl = rgb2hsl(c.rgb);
+        float h6 = hsl.x * 6.0;
+        float w;
+        if      (h6 < 1.0) w = mix(u_bw_reds,     u_bw_yellows,  h6);
+        else if (h6 < 2.0) w = mix(u_bw_yellows,  u_bw_greens,   h6 - 1.0);
+        else if (h6 < 3.0) w = mix(u_bw_greens,   u_bw_cyans,    h6 - 2.0);
+        else if (h6 < 4.0) w = mix(u_bw_cyans,    u_bw_blues,    h6 - 3.0);
+        else if (h6 < 5.0) w = mix(u_bw_blues,    u_bw_magentas, h6 - 4.0);
+        else               w = mix(u_bw_magentas,  u_bw_reds,     h6 - 5.0);
+        float stdLum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+        float gray = mix(stdLum, clamp(w / 100.0 * hsl.z * 2.0, 0.0, 1.0), hsl.y);
+        c.rgb = vec3(clamp(gray, 0.0, 1.0));
+    }
+
     // Photo Filter: multiply toward a warm/cool colour at given density.
+    // Runs after Black & White, which rebuilds RGB from a grey and would
+    // otherwise discard the tint: a toned monochrome is the only useful
+    // result of combining the two (#1277).
     if (u_pf_density > 0.001) {
         vec3 filtered = c.rgb * u_pf_color;
         vec3 result = mix(c.rgb, filtered, u_pf_density);
@@ -147,22 +193,6 @@ void main() {
             result = clamp(result, 0.0, 1.0);
         }
         c.rgb = result;
-    }
-
-    // Black & White: per-hue weighted grayscale.
-    if (u_bw_enabled > 0.5) {
-        vec3 hsl = rgb2hsl(c.rgb);
-        float h6 = hsl.x * 6.0;
-        float w;
-        if      (h6 < 1.0) w = mix(u_bw_reds,     u_bw_yellows,  h6);
-        else if (h6 < 2.0) w = mix(u_bw_yellows,  u_bw_greens,   h6 - 1.0);
-        else if (h6 < 3.0) w = mix(u_bw_greens,   u_bw_cyans,    h6 - 2.0);
-        else if (h6 < 4.0) w = mix(u_bw_cyans,    u_bw_blues,    h6 - 3.0);
-        else if (h6 < 5.0) w = mix(u_bw_blues,    u_bw_magentas, h6 - 4.0);
-        else               w = mix(u_bw_magentas,  u_bw_reds,     h6 - 5.0);
-        float stdLum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-        float gray = mix(stdLum, clamp(w / 100.0 * hsl.z * 2.0, 0.0, 1.0), hsl.y);
-        c.rgb = vec3(clamp(gray, 0.0, 1.0));
     }
 
     // Channel Mixer: linear combination of input channels per output channel.
@@ -185,5 +215,18 @@ void main() {
         c.rgb = texture(u_gradientLut, vec2(l3 + ofs, 0.5)).rgb;
     }
 
+    // Color Grading: runs last because Black & White and Gradient Map rebuild
+    // RGB and would discard an earlier tint; a split-toned monochrome is one
+    // of the main reasons to reach for it.
+    if (u_cg_enabled > 0.5) {
+        float tone = pow(clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0), u_cg_exponent);
+        float shadowW    = 1.0 - smoothstep(1.0 / 3.0 - u_cg_width, 1.0 / 3.0 + u_cg_width, tone);
+        float highlightW = smoothstep(2.0 / 3.0 - u_cg_width, 2.0 / 3.0 + u_cg_width, tone);
+        float midtoneW   = 1.0 - shadowW - highlightW;
+        vec4 grade = u_cg_global + u_cg_shadows * shadowW + u_cg_midtones * midtoneW + u_cg_highlights * highlightW;
+        c.rgb = softOffset(c.rgb, grade.rgb + grade.a);
+    }
+
+    if (isLab) c.rgb = srgbToLab(c.rgb);
     fragColor = vec4(c.rgb, c.a);
 }

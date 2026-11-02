@@ -162,6 +162,49 @@
   background: var(--color-bg-active);
 }
 
+.gradeWheels,
+.gradeTabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--space-3);
+}
+
+.gradeWheels {
+  padding: var(--space-1);
+}
+
+/* Pulled up so each label reads as belonging to the wheel above it. */
+.gradeTabs {
+  margin-top: calc(var(--space-2) * -1);
+  padding: 0 var(--space-1);
+}
+
+.gradeTab {
+  min-width: 0;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-xs);
+  text-align: center;
+  cursor: pointer;
+}
+
+.gradeTab:hover {
+  background: var(--color-bg-hover);
+}
+
+.gradeTabActive {
+  color: var(--color-text-primary);
+  background: var(--color-bg-active);
+}
+
+.gradeDivider {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
 .textBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;

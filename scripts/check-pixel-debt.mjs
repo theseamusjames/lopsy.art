@@ -37,6 +37,7 @@ const ALLOWLIST = {
   'src/app/interactions/quick-mask-move.test.ts': 2,
   'src/app/interactions/transform-handlers.test.ts': 1,
   'src/app/interactions/live-float.test.ts': 2,       // selection-mask fixtures
+  'src/app/interactions/mask-edit-move-guard.test.ts': 1, // selection-mask fixture
   'src/app/interactions/prefloat.test.ts': 6,         // #1076 selection-mask fixtures
   'src/app/store/actions/align-layer.test.ts': 2,
   'src/app/store/actions/crop-canvas.test.ts': 1,
@@ -67,8 +68,10 @@ const ALLOWLIST = {
   'src/app/mask-read-queue.test.ts': 14,                     // +4: rAF quiescence tests for #760
   'src/app/mask-data-sync.test.ts': 1,                       // #780 fixture mask
   'src/app/store/mask-history.test.ts': 1,                   // #780 fixture mask
+  'src/panels/LayerPanel/LayerPanel.test.ts': 1,             // replacement mask bytes for updateLayerMaskData
   'src/panels/LayerPanel/layer-selection.test.ts': 1,        // layer-alpha fixture for selectLayerAlpha
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
+  'src/layers/mask-remap.test.ts': 1,                  // #1357 fixture mask
   'src/selection/selection-to-path.test.ts': 2,
   'src/selection/selection.test.ts': 21,               // +2: #1038 grow/shrink circle and rect fixtures, +2: combine-mode fixtures
   'src/test-setup.ts': 1,
@@ -83,7 +86,7 @@ const ALLOWLIST = {
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
   'src/tools/marquee/marquee-strategy.test.ts': 10,      // +1: add/subtract/intersect selection fixture, +1: #1188 move-clip fixture
   'src/tools/move/move.test.ts': 1,
-  'src/tools/path/boolean-ops.test.ts': 11,
+  'src/tools/path/boolean-ops.test.ts': 1,
   'src/tools/quick-select/quick-select-interaction.test.ts': 3,
   'src/tools/quick-select/quick-select.test.ts': 3,
   'src/tools/text/text-interaction.test.ts': 3,               // #757 drops the JS RGBA fixtures
@@ -102,7 +105,7 @@ const ALLOWLIST = {
   // Tracked mask debt — documented in docs/pixel-data-debt.md §3.
   // Layer-mask CPU paint path; migration to mask_paint_dab.glsl pending.
   // ──────────────────────────────────────────────────────────────────────
-  'src/app/interactions/move-handlers.ts': 5,
+  'src/app/interactions/move-handlers.ts': 4,
   'src/app/interactions/quick-mask-move.ts': 1,
   'src/app/store/actions/add-layer-mask.ts': 1,
   'src/app/useCanvasInteraction.ts': 1,                      // mask-buffer copies (nudge path)

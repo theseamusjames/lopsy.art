@@ -11,6 +11,7 @@ import {
 import type { TextMatrix } from '../../../tools/text/text-transform';
 import type { TextTransformMode } from '../../ui-store';
 import { getTextTransformTarget, refusePartialTextMove } from '../../interactions/text-transform-handlers';
+import { refuseMaskEditSelectionMove } from '../../interactions/mask-edit-move-guard';
 import { transformTextLayerInDocument } from '../../text-layer-transform';
 import { createTransformState, isShapeChangingTransform, mapRectThroughInverse } from '../../../tools/transform/transform';
 import { getEngine } from '../../../engine-wasm/engine-state';
@@ -46,6 +47,7 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   const engine = getEngine();
   if (!engine) return;
   if (applyToLiveText(invMatrix)) return;
+  if (refuseMaskEditSelectionMove()) return;
 
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;

@@ -1,13 +1,35 @@
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
+import { useUIStore } from '../../app/ui-store';
 import { toDocumentColor } from '../../app/document-color';
+import { markMaskDataStale } from '../../app/mask-data-sync';
+import { getQuickMaskPaintMode } from '../../app/interactions/quick-mask-paint';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { applyBrushDab as gpuBrushDab } from '../../engine-wasm/wasm-bridge';
+import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
+import {
+  applyBrushDab as gpuBrushDab,
+  paintMaskDab as gpuMaskDab,
+  paintQuickMaskDab as gpuQuickMaskDab,
+} from '../../engine-wasm/wasm-bridge';
+import type { Layer } from '../../types';
 import { generateSprayDots, sprayDabHardness } from './spray';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
 const SPRAY_INTERVAL_MS = 166;
+
+/**
+ * Where a spray stroke lands. In a mask mode the canvas skips the shared
+ * paint setup (history push, beginStroke), so painting the layer there left
+ * dots with no undo entry, offset by any layer move (#1342). Mask strokes
+ * paint the mask in document space instead, as the Brush does.
+ */
+type SprayTarget =
+  | { kind: 'layer' }
+  | { kind: 'layerMask'; mode: number }
+  | { kind: 'quickMask'; mode: number };
+
+const LAYER_TARGET: SprayTarget = { kind: 'layer' };
 
 let sprayTimer: ReturnType<typeof setInterval> | null = null;
 // #793 — the airbrush timer used to read `state.lastPoint`, but the
@@ -18,6 +40,7 @@ let sprayTimer: ReturnType<typeof setInterval> | null = null;
 // at module scope instead, and let the timer read from there.
 let sprayCursor: {
   layerId: string;
+  target: SprayTarget;
   point: { x: number; y: number };
   strokeColor: { r: number; g: number; b: number; a: number } | null;
 } | null = null;
@@ -32,6 +55,7 @@ function clearSprayTimer(): void {
 
 function emitSprayDabs(
   engine: NonNullable<ReturnType<typeof getEngine>>,
+  target: SprayTarget,
   layerId: string,
   centerX: number,
   centerY: number,
@@ -46,7 +70,41 @@ function emitSprayDabs(
 ): void {
   const dots = generateSprayDots(centerX, centerY, brushRadius, density, baseOpacity);
   for (const dot of dots) {
-    gpuBrushDab(engine, layerId, dot.x, dot.y, dot.radius * 2, hardness, r, g, b, a, dot.opacity, 1, 0, 0, 0);
+    if (target.kind === 'layerMask') {
+      gpuMaskDab(engine, layerId, dot.x, dot.y, dot.radius * 2, hardness, dot.opacity, target.mode);
+    } else if (target.kind === 'quickMask') {
+      gpuQuickMaskDab(engine, dot.x, dot.y, dot.radius * 2, hardness, dot.opacity, target.mode);
+    } else {
+      gpuBrushDab(engine, layerId, dot.x, dot.y, dot.radius * 2, hardness, r, g, b, a, dot.opacity, 1, 0, 0, 0);
+    }
+  }
+}
+
+/** The spray target for the current mask mode, or null when there is nothing to paint. */
+function resolveSprayTarget(activeLayer: Layer): SprayTarget | null {
+  const maskMode = useUIStore.getState().maskMode;
+  if (maskMode === 'quickMask') {
+    return { kind: 'quickMask', mode: getQuickMaskPaintMode('brush', useToolSettingsStore.getState().foregroundColor) };
+  }
+  if (maskMode === 'layerMask') {
+    // Brush semantics on a layer mask: painting hides.
+    return activeLayer.mask ? { kind: 'layerMask', mode: 1 } : null;
+  }
+  return LAYER_TARGET;
+}
+
+/** History and mask upload that the shared paint setup does for layer strokes. */
+function beginMaskSpray(engine: NonNullable<ReturnType<typeof getEngine>> | null, target: SprayTarget, activeLayer: Layer): void {
+  const editorState = useEditorStore.getState();
+  if (target.kind === 'quickMask') {
+    editorState.pushHistory('Quick Mask Paint');
+    return;
+  }
+  if (target.kind !== 'layerMask' || !activeLayer.mask) return;
+  editorState.pushHistory('Mask Paint');
+  markMaskDataStale(activeLayer.id);
+  if (engine) {
+    uploadLayerMaskIfChanged(engine, activeLayer.id, activeLayer.mask.data, activeLayer.mask.width, activeLayer.mask.height);
   }
 }
 
@@ -66,19 +124,24 @@ function sprayAtCurrentPosition(): void {
   const g = color.g / 255;
   const b = color.b / 255;
 
-  emitSprayDabs(engine, cursor.layerId, cursor.point.x, cursor.point.y, size / 2, density, hardness, r, g, b, color.a, opacity);
+  emitSprayDabs(engine, cursor.target, cursor.layerId, cursor.point.x, cursor.point.y, size / 2, density, hardness, r, g, b, color.a, opacity);
   useEditorStore.getState().notifyRender();
 }
 
 export function handleSprayDown(
   ctx: InteractionContext,
 ): InteractionState | undefined {
-  const { layerPos, activeLayer, activeLayerId } = ctx;
+  const { activeLayer, activeLayerId } = ctx;
   const toolSettings = useToolSettingsStore.getState();
   const editorState = useEditorStore.getState();
+  const target = resolveSprayTarget(activeLayer);
+  if (!target) return undefined;
+  const isMaskTarget = target.kind !== 'layer';
+  // Masks are painted in document space, the layer in layer space.
+  const pos = isMaskTarget ? ctx.canvasPos : ctx.layerPos;
 
-  // NOTE: history + beginStroke are already handled by the shared paint
-  // dispatch in useCanvasInteraction for isPaint tools. A pushHistory
+  // NOTE: for layer strokes, history + beginStroke are already handled by
+  // the shared paint dispatch in useCanvasInteraction for isPaint tools. A pushHistory
   // here would run endStroke first and drop the stroke texture, which is
   // exactly how spray ended up MAX-blending premultiplied dabs straight
   // onto the layer and rendering grey speckles on a transparent layer
@@ -87,7 +150,7 @@ export function handleSprayDown(
   const strokeColor = toDocumentColor(toolSettings.foregroundColor);
   const state: InteractionState = {
     drawing: true,
-    lastPoint: layerPos,
+    lastPoint: pos,
     layerId: activeLayerId,
     tool: 'spray',
     startPoint: null,
@@ -95,9 +158,11 @@ export function handleSprayDown(
     layerStartY: activeLayer.y,
     ...DEFAULT_TRANSFORM_FIELDS,
     strokeColor,
+    maskMode: isMaskTarget,
   };
 
   const engine = getEngine();
+  beginMaskSpray(engine, target, activeLayer);
   if (!engine) return state;
 
   const { size, density, opacity: opacityPct, softness } = toolSettings.settings.spray;
@@ -109,13 +174,14 @@ export function handleSprayDown(
   const g = color.g / 255;
   const b = color.b / 255;
 
-  emitSprayDabs(engine, activeLayerId, layerPos.x, layerPos.y, size / 2, density, hardness, r, g, b, color.a, opacity);
+  emitSprayDabs(engine, target, activeLayerId, pos.x, pos.y, size / 2, density, hardness, r, g, b, color.a, opacity);
   editorState.notifyRender();
 
   clearSprayTimer();
   sprayCursor = {
     layerId: activeLayerId,
-    point: { x: layerPos.x, y: layerPos.y },
+    target,
+    point: { x: pos.x, y: pos.y },
     strokeColor,
   };
   sprayTimer = setInterval(sprayAtCurrentPosition, SPRAY_INTERVAL_MS);
@@ -133,7 +199,8 @@ export function handleSprayMove(
   const engine = getEngine();
   if (!engine) return;
 
-  const layerLocalPos = ctx.layerPos;
+  const target = sprayCursor?.layerId === state.layerId ? sprayCursor.target : LAYER_TARGET;
+  const pos = target.kind === 'layer' ? ctx.layerPos : ctx.canvasPos;
   const { size, density, opacity: opacityPct, softness } = toolSettings.settings.spray;
   const opacity = opacityPct / 100;
   const hardness = sprayDabHardness(softness);
@@ -144,8 +211,8 @@ export function handleSprayMove(
   const brushRadius = size / 2;
   const spacing = Math.max(1, size * 0.3);
 
-  const dx = layerLocalPos.x - state.lastPoint.x;
-  const dy = layerLocalPos.y - state.lastPoint.y;
+  const dx = pos.x - state.lastPoint.x;
+  const dy = pos.y - state.lastPoint.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
 
   // #793 — keep the airbrush timer aimed at the LIVE cursor position,
@@ -154,7 +221,7 @@ export function handleSprayMove(
   // because the interaction dispatcher shallow-copies state and the
   // timer closed over the pre-copy `lastPoint`.
   if (sprayCursor && sprayCursor.layerId === state.layerId) {
-    sprayCursor.point = { x: layerLocalPos.x, y: layerLocalPos.y };
+    sprayCursor.point = { x: pos.x, y: pos.y };
   }
 
   if (dist < spacing) {
@@ -171,10 +238,10 @@ export function handleSprayMove(
     const t = i / steps;
     const x = state.lastPoint.x + dx * t;
     const y = state.lastPoint.y + dy * t;
-    emitSprayDabs(engine, state.layerId, x, y, brushRadius, density, hardness, r, g, b, color.a, opacity);
+    emitSprayDabs(engine, target, state.layerId, x, y, brushRadius, density, hardness, r, g, b, color.a, opacity);
   }
 
-  state.lastPoint = layerLocalPos;
+  state.lastPoint = pos;
   useEditorStore.getState().notifyRender();
 }
 

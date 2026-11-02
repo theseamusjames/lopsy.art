@@ -74,3 +74,24 @@ export function planGroupFlip(
   for (const m of withContent) origins.set(m.id, mirroredTextureOrigin(m.texture, bounds, axis));
   return origins;
 }
+
+/**
+ * New texture origin for flipping a single layer in place: its content is
+ * mirrored about its own opaque-content rect (texture-local), so it stays
+ * where it was however much transparent texture surrounds it — the active
+ * layer's texture is held at document size. Null when the layer is empty.
+ */
+export function planLayerFlip(
+  texture: Rect,
+  content: Rect | null,
+  axis: FlipAxis,
+): { x: number; y: number } | null {
+  if (!content || content.width <= 0 || content.height <= 0) return null;
+  const bounds = {
+    x: texture.x + content.x,
+    y: texture.y + content.y,
+    width: content.width,
+    height: content.height,
+  };
+  return mirroredTextureOrigin(texture, bounds, axis);
+}

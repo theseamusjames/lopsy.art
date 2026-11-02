@@ -606,14 +606,29 @@ test.describe('Brush texture (#346)', () => {
 
     // Count direction changes in the green channel (bg bleedthrough pattern).
     // Smaller texture scale = more texture tiles = more oscillation.
+    // A reversal only counts once the value has moved MIN_SWING away from the
+    // last extreme: dab placement shifts with pointer timing, and the ±1–2
+    // wiggles that leaves on flat stretches otherwise read as extra peaks.
+    const MIN_SWING = 8;
     function countDirectionChanges(arr: number[]) {
       let changes = 0;
-      for (let i = 1; i < arr.length - 1; i++) {
-        const prev = arr[i - 1]!;
-        const curr = arr[i]!;
-        const next = arr[i + 1]!;
-        if ((curr > prev && curr > next) || (curr < prev && curr < next)) {
+      let direction = 0;
+      let extreme = arr[0] ?? 0;
+      for (const v of arr) {
+        if (direction >= 0 && v > extreme) {
+          extreme = v;
+          direction = 1;
+        } else if (direction <= 0 && v < extreme) {
+          extreme = v;
+          direction = -1;
+        } else if (direction === 1 && extreme - v >= MIN_SWING) {
           changes++;
+          extreme = v;
+          direction = -1;
+        } else if (direction === -1 && v - extreme >= MIN_SWING) {
+          changes++;
+          extreme = v;
+          direction = 1;
         }
       }
       return changes;

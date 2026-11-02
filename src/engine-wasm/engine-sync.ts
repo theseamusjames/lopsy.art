@@ -18,6 +18,7 @@ import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
 import { nodesToLegacyAdjustments } from '../filters/adjustment-node-utils';
+import { compileColorGrade, isIdentityColorGrade } from '../filters/color-grading';
 import {
   setDocumentSize,
   setViewport,
@@ -62,6 +63,7 @@ import {
   setGroupInvert,
   setGroupHueSaturation,
   setGroupColorBalance,
+  setGroupColorGrading,
   setGroupPhotoFilter,
   setGroupBlackWhite,
   setGroupChannelMixer,
@@ -608,6 +610,9 @@ function pushGroupToEngine(
     const lut = buildGradientMapLut(gStops);
     setGroupGradientMapLut(engine, group.id, lut);
   }
+  if (adj?.colorGrading && !isIdentityColorGrade(adj.colorGrading)) {
+    setGroupColorGrading(engine, group.id, compileColorGrade(adj.colorGrading));
+  }
   return childrenJson;
 }
 
@@ -631,7 +636,8 @@ function adjIsNonTrivial(adj: ReturnType<typeof nodesToLegacyAdjustments>): bool
     (adj.colorBalanceHighlights ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
     (adj.photoFilterDensity ?? 0) > 1e-6 ||
     !!adj.bwEnabled || !!adj.channelMixerEnabled ||
-    (adj.gradientMapStops?.length ?? 0) >= 2
+    (adj.gradientMapStops?.length ?? 0) >= 2 ||
+    (adj.colorGrading != null && !isIdentityColorGrade(adj.colorGrading))
   );
 }
 
@@ -991,12 +997,15 @@ export function markAllLayersDirty(engine: Engine): void {
  * if JS pixel data hadn't been synced yet via the rAF loop.
  */
 export function flushLayerSync(state: {
-  document: { layers: readonly Layer[]; layerOrder: readonly string[] };
+  document: { layers: readonly Layer[]; layerOrder: readonly string[]; colorMode: DocumentColorMode };
   dirtyLayerIds: Set<string>;
 }): void {
   const engine = getEngine();
   if (!engine) return;
-  syncLayers(engine, state.document.layers, state.document.layerOrder, state.dirtyLayerIds);
+  syncLayers(
+    engine, state.document.layers, state.document.layerOrder, state.dirtyLayerIds,
+    state.document.colorMode,
+  );
 }
 
 /**
@@ -1249,6 +1258,42 @@ export function rerenderTransformedTextLayers(
     if (!pos) return l;
     changedIds.push(l.id);
     return { ...l, x: pos.x, y: pos.y, transform: pos.transform };
+  });
+  return { layers: next, changedIds };
+}
+
+/**
+ * The anchors of the upright, unbound text layers, measured from the props
+ * they were last rendered with. Taken before a document-wide change rewrites
+ * their props so {@link rerenderTextLayersAt} can redraw them in place.
+ */
+export function captureUprightTextAnchors(engine: Engine, layers: readonly Layer[]): Map<string, Point> {
+  const anchors = new Map<string, Point>();
+  for (const l of layers) {
+    if (l.type !== 'text' || l.transform || l.pathId) continue;
+    anchors.set(l.id, textLayerAnchor(engine, l));
+  }
+  return anchors;
+}
+
+/**
+ * Re-render upright text layers from their current props at the given
+ * anchors, placing each texture at `anchor + renderOffset`. Image Size
+ * rescales their font size, which nothing else redraws (#1255).
+ */
+export function rerenderTextLayersAt(
+  engine: Engine,
+  layers: readonly Layer[],
+  anchors: ReadonlyMap<string, Point>,
+): { layers: Layer[]; changedIds: string[] } {
+  const changedIds: string[] = [];
+  const next = layers.map((l): Layer => {
+    const anchor = anchors.get(l.id);
+    if (!anchor || l.type !== 'text' || l.transform || l.pathId) return l;
+    const pos = rerenderCommittedTextLayer(engine, { ...l, x: anchor.x, y: anchor.y });
+    if (!pos) return l;
+    changedIds.push(l.id);
+    return { ...l, x: pos.x, y: pos.y };
   });
   return { layers: next, changedIds };
 }

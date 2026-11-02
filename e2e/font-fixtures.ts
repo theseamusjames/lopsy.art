@@ -18,6 +18,7 @@ const FIXTURES = path.resolve(__dirname, '../engine-rs/crates/lopsy-wasm/tests/f
 const FONT_FIXTURES: Record<string, string> = {
   'IM Fell English': 'IMFellEnglish-latin.woff2',
   'IM Fell DW Pica SC': 'IMFellDWPicaSC-latin.woff2',
+  'IM Fell DW Pica': 'IMFellDWPica-latin.woff2',
   Montserrat: 'Montserrat-wght-latin.woff2',
   'Barlow Condensed': 'BarlowCondensed-latin.woff2',
 };

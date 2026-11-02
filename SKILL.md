@@ -606,7 +606,8 @@ layer), Motion Blur, Radial Blur, Lens Distortion, Chromatic Aberration,
 Kaleidoscope, Voronoi. `Invert`, `Desaturate` and `Find Edges` apply
 straight from the menu with no dialog: use `h.menu('Filter', 'Invert')`.
 **Layer → Adjustment Layer…** opens non-destructive adjustments (curves,
-levels, hue/saturation, colour balance, gradient map, and more) on a group.
+levels, hue/saturation, colour balance, colour grading, gradient map, and
+more) on a group.
 
 **Masks.** With the layer active, click `Add Mask` in the Layers panel
 toolbar, then its `Edit mask for <name>` thumbnail. In mask edit mode the

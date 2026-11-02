@@ -31,6 +31,7 @@ const ADD_MENU_TYPES: AdjustmentNodeType[] = [
   'levels',
   'hue-saturation',
   'color-balance',
+  'color-grading',
   'invert',
   'black-white',
   'photo-filter',

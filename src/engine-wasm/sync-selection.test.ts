@@ -56,6 +56,7 @@ vi.mock('./wasm-bridge', () => ({
   setGroupInvert: vi.fn(),
   setGroupHueSaturation: vi.fn(),
   setGroupColorBalance: vi.fn(),
+  setGroupColorGrading: vi.fn(),
   setGroupPhotoFilter: vi.fn(),
   setGroupBlackWhite: vi.fn(),
   setGroupChannelMixer: vi.fn(),

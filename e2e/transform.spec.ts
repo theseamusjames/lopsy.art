@@ -137,8 +137,10 @@ test.describe('Free Transform', () => {
       store.getState().createDocument(800, 600, false);
     });
     await page.waitForSelector('[data-testid="canvas-container"]');
-    // Wait for canvas to render
-    await page.waitForTimeout(200);
+    // The WASM engine starts asynchronously after the canvas mounts; until it
+    // exists __readCompositedPixels resolves null, so a fixed delay can let a
+    // test take its "before" snapshot of nothing under load.
+    await expect.poll(() => countAllOpaquePixels(page), { timeout: 30_000 }).toBeGreaterThan(0);
   });
 
   test('6 rotations back to origin produce identical pixels', async ({ page }) => {

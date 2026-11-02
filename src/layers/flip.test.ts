@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mirroredTextureOrigin, planGroupFlip, unionRects, type FlipAxis, type GroupFlipMember } from './flip';
+import { mirroredTextureOrigin, planGroupFlip, planLayerFlip, unionRects, type FlipAxis, type GroupFlipMember } from './flip';
 import type { Rect } from './rotate-90';
 
 /**
@@ -133,5 +133,47 @@ describe('planGroupFlip', () => {
   it('returns nothing for a group with no content', () => {
     expect(planGroupFlip([], 'horizontal').size).toBe(0);
     expect(planGroupFlip([{ id: 'e', texture: { x: 0, y: 0, width: 1, height: 1 }, content: null }], 'vertical').size).toBe(0);
+  });
+});
+
+describe('planLayerFlip', () => {
+  // The #1268 repro: a document-sized active-layer texture with a box at
+  // document columns 100..299 and rows 300..599.
+  const docTexture: Rect = { x: 0, y: 0, width: 1200, height: 1800 };
+  const content: Rect = { x: 100, y: 300, width: 200, height: 300 };
+
+  it('returns null for an empty layer', () => {
+    expect(planLayerFlip(docTexture, null, 'horizontal')).toBeNull();
+    expect(planLayerFlip(docTexture, { x: 0, y: 0, width: 0, height: 5 }, 'vertical')).toBeNull();
+  });
+
+  it('keeps a horizontally flipped box at the same columns', () => {
+    const origin = planLayerFlip(docTexture, content, 'horizontal')!;
+    expect(origin).toEqual({ x: -800, y: 0 });
+    expect(flipPixel(docTexture, origin, 100, 300, 'horizontal')).toEqual([299, 300]);
+    expect(flipPixel(docTexture, origin, 299, 599, 'horizontal')).toEqual([100, 599]);
+  });
+
+  it('keeps a vertically flipped box at the same rows', () => {
+    const origin = planLayerFlip(docTexture, content, 'vertical')!;
+    expect(origin).toEqual({ x: 0, y: -900 });
+    expect(flipPixel(docTexture, origin, 100, 300, 'vertical')).toEqual([100, 599]);
+    expect(flipPixel(docTexture, origin, 299, 599, 'vertical')).toEqual([299, 300]);
+  });
+
+  it('leaves a texture tight to its content where it is', () => {
+    const texture: Rect = { x: 140, y: 90, width: 120, height: 120 };
+    const tight: Rect = { x: 0, y: 0, width: 120, height: 120 };
+    expect(planLayerFlip(texture, tight, 'horizontal')).toEqual({ x: 140, y: 90 });
+    expect(planLayerFlip(texture, tight, 'vertical')).toEqual({ x: 140, y: 90 });
+  });
+
+  it('mirrors off-centre content about its own bounds in an offset texture', () => {
+    const texture: Rect = { x: -50, y: 20, width: 400, height: 300 };
+    const local: Rect = { x: 10, y: 40, width: 30, height: 70 };
+    const origin = planLayerFlip(texture, local, 'horizontal')!;
+    // Document-space content spans columns -40..-11; it must stay there.
+    expect(flipPixel(texture, origin, -40, 60, 'horizontal')).toEqual([-11, 60]);
+    expect(flipPixel(texture, origin, -11, 60, 'horizontal')).toEqual([-40, 60]);
   });
 });

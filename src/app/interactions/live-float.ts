@@ -9,6 +9,8 @@ import { hasFloat, dropFloat, setSelectionMask } from '../../engine-wasm/wasm-br
 import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
 import { cancelPrefloat, commitUnmovedPrefloat } from './prefloat';
 import { commitLayerTransform, forgetLayerTransform } from './layer-transform';
+import { translateSelectionMask } from './quick-mask-move';
+import type { Rect } from '../../types';
 
 /**
  * The Move tool keeps the pixels it lifted floating after a drag or handle
@@ -30,8 +32,20 @@ interface FloatOwner {
   mask: Uint8ClampedArray;
 }
 
+/** A held arrow-key nudge's translated selection, not yet written to the store. */
+interface PendingNudgeMask {
+  layerId: string;
+  /** The store's mask during the hold; a different one means the selection was replaced. */
+  staleMask: Uint8ClampedArray;
+  originalMask: Uint8ClampedArray;
+  originalBounds: Rect;
+  offsetX: number;
+  offsetY: number;
+}
+
 let session: FloatSessionRefs | null = null;
 let owner: FloatOwner | null = null;
+let pendingNudgeMask: PendingNudgeMask | null = null;
 let keepDepth = 0;
 let isCommitting = false;
 
@@ -116,9 +130,46 @@ export function commitLiveFloatBeforeEdit(): void {
   commitLiveFloat();
 }
 
+/**
+ * Rebuilding the document-sized mask and re-uploading it on every nudge frame
+ * made a held arrow key run at ~2 fps on a 4K canvas (#1382). While the key
+ * is held only the float and the selection bounds move (the ants follow the
+ * bounds), and flushNudgeMask writes the translated mask once when the hold
+ * ends, as a Move drag does at pointer-up.
+ */
+export function deferNudgeMask(pending: PendingNudgeMask): void {
+  pendingNudgeMask = pending;
+}
+
+/** Write a held nudge's translated mask into the store. No-op when the selection was replaced meanwhile. */
+export function flushNudgeMask(): void {
+  const p = pendingNudgeMask;
+  pendingNudgeMask = null;
+  if (!p) return;
+  const editor = useEditorStore.getState();
+  if (!editor.selection.active || editor.selection.mask !== p.staleMask) return;
+  const { width: docW, height: docH } = editor.document;
+  const { mask, bounds } = translateSelectionMask(
+    p.originalMask,
+    p.originalBounds,
+    p.offsetX,
+    p.offsetY,
+    docW,
+    docH,
+  );
+  if (owner?.mask === p.staleMask) owner = { layerId: p.layerId, mask };
+  editor.setSelection(bounds, mask, docW, docH);
+  useUIStore.getState().setTransform(createTransformState(bounds));
+  // The hold left the pixel version alone so no thumbnail readback landed
+  // mid-hold (#1383); refresh it once now.
+  clearJsPixelData(p.layerId);
+  editor.notifyRender();
+}
+
 /** Forget the Move tool's float without baking it (undo/redo restore the pixels themselves). */
 export function forgetLiveFloat(): void {
   owner = null;
+  pendingNudgeMask = null;
   forgetLayerTransform();
   if (session) {
     session.floating.current = null;
@@ -128,6 +179,7 @@ export function forgetLiveFloat(): void {
 
 function commitMoveFloat(): void {
   if (isCommitting) return;
+  flushNudgeMask();
   isCommitting = true;
   try {
     const committed = owner;

@@ -12,19 +12,14 @@ import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import type { LutPreset } from '../../filters/color-lut';
 import {
-  isFilteringMask,
   markFilterTargetWritten,
+  peekFilterTarget,
+  resolveFilterTarget,
   runOnFilterTarget,
-  type FilterTarget,
 } from './filter-target';
 
-function getFilterTarget(): FilterTarget | null {
-  const activeId = useEditorStore.getState().document.activeLayerId;
-  return activeId ? { layerId: activeId, isMask: isFilteringMask() } : null;
-}
-
 export function beginColorLutPreview(): void {
-  const target = getFilterTarget();
+  const target = resolveFilterTarget();
   if (!target) return;
   const engine = getEngine();
   if (!engine) return;
@@ -37,7 +32,7 @@ export function beginColorLutPreview(): void {
 }
 
 export function previewColorLut(preset: LutPreset, intensity: number): void {
-  const target = getFilterTarget();
+  const target = peekFilterTarget();
   if (!target) return;
   const engine = getEngine();
   if (!engine) return;
@@ -53,7 +48,7 @@ export function previewColorLut(preset: LutPreset, intensity: number): void {
 export function cancelColorLutPreview(): void {
   const engine = getEngine();
   if (!engine) return;
-  const target = getFilterTarget();
+  const target = peekFilterTarget();
   if (target) runOnFilterTarget(engine, target, () => restoreFilterPreview(engine));
   else restoreFilterPreview(engine);
   clearFilterPreview(engine);
@@ -63,7 +58,7 @@ export function cancelColorLutPreview(): void {
 }
 
 export function applyColorLut(preset: LutPreset, intensity: number): void {
-  const target = getFilterTarget();
+  const target = peekFilterTarget();
   if (!target) return;
   const engine = getEngine();
   if (!engine) return;
@@ -89,7 +84,7 @@ export function applyColorLut(preset: LutPreset, intensity: number): void {
 }
 
 export function applyColorLutDirect(preset: LutPreset, intensity: number): void {
-  const target = getFilterTarget();
+  const target = resolveFilterTarget();
   if (!target) return;
   const engine = getEngine();
   if (!engine) return;

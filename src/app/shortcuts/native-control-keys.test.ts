@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { isNativeArrowKeyTarget } from './native-control-keys';
+import { HANDLES_ARROW_KEYS_ATTR, isNativeArrowKeyTarget } from './native-control-keys';
 
 function input(type: string): HTMLInputElement {
   const el = document.createElement('input');
@@ -9,6 +9,13 @@ function input(type: string): HTMLInputElement {
 }
 
 describe('isNativeArrowKeyTarget (#897)', () => {
+  it('defers to a custom control that opts in, for arrow keys only', () => {
+    const el = document.createElement('div');
+    el.setAttribute(HANDLES_ARROW_KEYS_ATTR, '');
+    expect(isNativeArrowKeyTarget(el, 'ArrowLeft')).toBe(true);
+    expect(isNativeArrowKeyTarget(el, 'a')).toBe(false);
+  });
+
   it('defers to a range input for arrow keys', () => {
     const el = input('range');
     expect(isNativeArrowKeyTarget(el, 'ArrowLeft')).toBe(true);

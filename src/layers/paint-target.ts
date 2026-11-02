@@ -1,4 +1,5 @@
 import type { Layer, ToolId } from '../types';
+import type { ShapeOutput } from '../tools/shape/shape';
 import { notifyInfo } from '../app/notifications-store';
 import { toolRegistry } from '../tools/tool-registry';
 
@@ -21,9 +22,35 @@ const NON_PAINT_PIXEL_WRITERS: ReadonlySet<ToolId> = new Set<ToolId>([
   'smudge',
 ]);
 
-export function toolWritesRasterPixels(tool: ToolId): boolean {
+export interface ToolWriteOptions {
+  /** The Shape tool's output. Path output adds a path and never keeps pixels (#1262). */
+  shapeOutput?: ShapeOutput;
+}
+
+export function toolWritesRasterPixels(tool: ToolId, options: ToolWriteOptions = {}): boolean {
+  if (tool === 'shape' && options.shapeOutput === 'path') return false;
   if (NON_PAINT_PIXEL_WRITERS.has(tool)) return true;
   return !!toolRegistry[tool]?.isPaint;
+}
+
+/**
+ * Tools whose canvas press only reads the active layer or edits the
+ * selection. The layer lock guards pixels, so these still work on a locked
+ * layer — otherwise a marquee drawn over a locked layer silently made no
+ * selection and a following Copy Merged copied the whole document (#1188).
+ */
+const LOCK_EXEMPT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>([
+  'marquee-rect',
+  'marquee-ellipse',
+  'lasso',
+  'lasso-magnetic',
+  'wand',
+  'quick-select',
+  'eyedropper',
+]);
+
+export function toolIgnoresLayerLock(tool: ToolId): boolean {
+  return LOCK_EXEMPT_TOOLS.has(tool);
 }
 
 /**

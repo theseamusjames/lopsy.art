@@ -17,6 +17,11 @@ import {
   addLayer,
   openColorPanel,
   expectPointerReachable,
+  configureEffect,
+  setEffectColor,
+  closeEffectsPanel,
+  addAdjustment,
+  setBlendMode,
 } from './helpers';
 
 interface PixelSnap {
@@ -173,6 +178,48 @@ test.describe('Document color mode', () => {
     expect(restored.g).toBeLessThan(60);
   });
 
+  test('Grayscale leaves layers with coloured effects in place (#1367)', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 800, 600, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    // A red box at (300, 200)–(500, 350) with a non-grey Stroke. The layer is
+    // cropped to its content, so its origin is (300, 200), not (0, 0).
+    await drawRect(page, 300, 200, 200, 150, { r: 0xd0, g: 0x20, b: 0x20 });
+    await configureEffect(page, 'Stroke', { Width: 6 });
+    await setEffectColor(page, 'Stroke color', 0xe0, 0xa0, 0x20);
+    await closeEffectsPanel(page);
+
+    const layerBefore = await page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { document: { activeLayerId: string; layers: { id: string; x: number; y: number }[] } };
+      };
+      const doc = store.getState().document;
+      const l = doc.layers.find((x) => x.id === doc.activeLayerId)!;
+      return { x: l.x, y: l.y };
+    });
+    // Firefox truncates pointer coordinates to whole CSS pixels, so the
+    // marquee can land a doc pixel short of (300, 200).
+    expect(Math.abs(layerBefore.x - 300)).toBeLessThanOrEqual(1);
+    expect(Math.abs(layerBefore.y - 200)).toBeLessThanOrEqual(1);
+
+    await selectColorMode(page, 'Grayscale');
+
+    // The box stays put, just grey: Rec.709 luma of #D02020 ≈ 69.
+    const inside = await readCompositedAtDoc(page, 400, 275);
+    expect(Math.abs(inside.r - 69)).toBeLessThanOrEqual(6);
+    expect(Math.abs(inside.r - inside.b)).toBeLessThanOrEqual(2);
+    // Before the fix the content was drawn at 2× its offset — top-left at
+    // (600, 400) — leaving white here and a grey box at (650, 450).
+    const doubled = await readCompositedAtDoc(page, 650, 450);
+    expect(Math.min(doubled.r, doubled.g, doubled.b)).toBeGreaterThan(245);
+    // The stroke ring just outside the box's left edge is still there.
+    const stroke = await readCompositedAtDoc(page, layerBefore.x - 3, 275);
+    expect(stroke.r).toBeLessThan(245);
+    expect(Math.abs(stroke.r - stroke.b)).toBeLessThanOrEqual(2);
+  });
+
   test('painting in Grayscale snaps the color even when a chromatic hex is typed', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
@@ -297,6 +344,46 @@ test.describe('Document color mode', () => {
     await expect(page.getByTestId('indexed-palette')).toBeVisible();
   });
 
+  test('Indexed conversion keeps every colour of an image with no more colours than the palette (#1375)', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 600, 300, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    // White canvas (~99% of pixels) plus seven small solid swatches: 8 colours.
+    const swatches = [
+      { r: 255, g: 0, b: 0 },
+      { r: 0, g: 255, b: 0 },
+      { r: 0, g: 0, b: 255 },
+      { r: 255, g: 255, b: 0 },
+      { r: 0, g: 255, b: 255 },
+      { r: 255, g: 0, b: 255 },
+      { r: 0, g: 0, b: 0 },
+    ];
+    for (const [i, color] of swatches.entries()) {
+      await drawRect(page, 40 + i * 75, 120, 30, 30, color);
+    }
+    await page.keyboard.press('Control+d');
+
+    await convertToIndexed(page, 8);
+
+    const state = await getEditorState(page);
+    const palette = ((state.document as { indexedPalette?: unknown[] }).indexedPalette ?? []) as
+      { r: number; g: number; b: number }[];
+    // Before the fix five of the eight entries were white and every swatch
+    // turned pale pink or pale cyan.
+    const keys = palette.map((p) => `${p.r},${p.g},${p.b}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys).toContain('255,255,255');
+    for (const [i, color] of swatches.entries()) {
+      expect(keys).toContain(`${color.r},${color.g},${color.b}`);
+      const px = await readCompositedAtDoc(page, 55 + i * 75, 135);
+      for (const ch of ['r', 'g', 'b'] as const) {
+        expect(Math.abs(px[ch] - color[ch]), `swatch ${i} ${ch}`).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
   test('Indexed mode refuses new layers and undo restores the layer stack', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
@@ -395,6 +482,110 @@ test.describe('Document color mode', () => {
     expect(Math.abs(after.r - before.r)).toBeLessThanOrEqual(6);
     expect(Math.abs(after.g - before.g)).toBeLessThanOrEqual(6);
     expect(Math.abs(after.b - before.b)).toBeLessThanOrEqual(6);
+  });
+
+  test('Lab mode renders layer effect colors as chosen, not reinterpreted as Lab (#1359)', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 200, 200, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    // Grey box (60..140) with a 6 px black outside stroke (54..60) under a
+    // white Color Overlay.
+    await drawRect(page, 60, 60, 80, 80, { r: 128, g: 128, b: 128 });
+    await configureEffect(page, 'Stroke', { Width: 6 });
+    await setEffectColor(page, 'Stroke color', 0, 0, 0);
+    await page.locator('[aria-label="Stroke position: outside"]').click();
+    await configureEffect(page, 'Color Overlay', {});
+    await setEffectColor(page, 'Overlay color', 255, 255, 255);
+    await closeEffectsPanel(page);
+
+    const strokeBefore = await readCompositedAtDoc(page, 57, 100);
+    const overlayBefore = await readCompositedAtDoc(page, 100, 100);
+    expect(strokeBefore.r + strokeBefore.g + strokeBefore.b).toBeLessThan(30);
+    expect(Math.min(overlayBefore.r, overlayBefore.g, overlayBefore.b)).toBeGreaterThan(245);
+
+    await selectColorMode(page, 'Lab Color');
+    expect(await getColorMode(page)).toBe('lab');
+
+    // Before the fix, black decoded as Lab (0, -128, -128) — saturated blue —
+    // and white as (100, 127, 127) — orange-red.
+    const stroke = await readCompositedAtDoc(page, 57, 100);
+    const overlay = await readCompositedAtDoc(page, 100, 100);
+    for (const ch of ['r', 'g', 'b'] as const) {
+      expect(Math.abs(stroke[ch] - strokeBefore[ch])).toBeLessThanOrEqual(6);
+      expect(Math.abs(overlay[ch] - overlayBefore[ch])).toBeLessThanOrEqual(6);
+    }
+  });
+
+  test('Lab mode root Vignette darkens corners instead of tinting them blue (#1365)', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 300, 200, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    // Warm beige over the whole canvas, then a strong root-stack Vignette.
+    await drawRect(page, 0, 0, 300, 200, { r: 0xd8, g: 0xb8, b: 0x90 });
+    const rootId = await getRootGroupId(page);
+    await addAdjustment(page, rootId, 'vignette', { vignette: 80 });
+    await addAdjustment(page, rootId, 'exposure', { exposure: -0.5 });
+    await closeEffectsPanel(page);
+
+    const centerBefore = await readCompositedAtDoc(page, 150, 100);
+    const cornerBefore = await readCompositedAtDoc(page, 5, 5);
+    // Darkened corner keeps the warm hue: red above blue.
+    expect(cornerBefore.r).toBeLessThan(centerBefore.r - 40);
+    expect(cornerBefore.r).toBeGreaterThan(cornerBefore.b);
+
+    await selectColorMode(page, 'Lab Color');
+    expect(await getColorMode(page)).toBe('lab');
+
+    const center = await readCompositedAtDoc(page, 150, 100);
+    const corner = await readCompositedAtDoc(page, 5, 5);
+    for (const ch of ['r', 'g', 'b'] as const) {
+      expect(Math.abs(center[ch] - centerBefore[ch])).toBeLessThanOrEqual(8);
+      expect(Math.abs(corner[ch] - cornerBefore[ch])).toBeLessThanOrEqual(8);
+    }
+    expect(corner.r).toBeGreaterThan(corner.b);
+  });
+
+  test('Lab mode composites Multiply / Screen layers as in RGB (#1372)', async ({ page }) => {
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 300, 200, false);
+    await page.waitForSelector('[data-testid="canvas-container"]');
+
+    // Beige background, a grey Multiply box on the left and a grey Screen
+    // box on the right.
+    await drawRect(page, 0, 0, 300, 200, { r: 0xd8, g: 0xb8, b: 0x90 });
+    await addLayer(page);
+    await drawRect(page, 20, 40, 100, 120, { r: 128, g: 128, b: 128 });
+    await setBlendMode(page, 'multiply');
+    await closeEffectsPanel(page);
+    await addLayer(page);
+    await drawRect(page, 180, 40, 100, 120, { r: 128, g: 128, b: 128 });
+    await setBlendMode(page, 'screen');
+    await closeEffectsPanel(page);
+
+    const multiplyBefore = await readCompositedAtDoc(page, 70, 100);
+    const screenBefore = await readCompositedAtDoc(page, 230, 100);
+    // Multiply darkens and Screen lightens the beige, keeping its warm hue.
+    expect(multiplyBefore.r).toBeLessThan(140);
+    expect(multiplyBefore.r).toBeGreaterThan(multiplyBefore.b);
+    expect(screenBefore.r).toBeGreaterThan(225);
+    expect(screenBefore.r).toBeGreaterThan(screenBefore.b);
+
+    await selectColorMode(page, 'Lab Color');
+    expect(await getColorMode(page)).toBe('lab');
+
+    // Before the fix the Multiply box turned saturated blue (0,123,186) and
+    // the Screen box orange (255,158,54).
+    const multiply = await readCompositedAtDoc(page, 70, 100);
+    const screen = await readCompositedAtDoc(page, 230, 100);
+    for (const ch of ['r', 'g', 'b'] as const) {
+      expect(Math.abs(multiply[ch] - multiplyBefore[ch]), `multiply ${ch}`).toBeLessThanOrEqual(6);
+      expect(Math.abs(screen[ch] - screenBefore[ch]), `screen ${ch}`).toBeLessThanOrEqual(6);
+    }
   });
 
   test('Lab mode shows L/a/b sliders instead of R/G/B', async ({ page }) => {

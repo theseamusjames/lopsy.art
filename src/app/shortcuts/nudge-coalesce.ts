@@ -13,7 +13,7 @@
  */
 
 import { useEditorStore } from '../editor-store';
-import { withLiveFloatKept } from '../interactions/live-float';
+import { flushNudgeMask, withLiveFloatKept } from '../interactions/live-float';
 
 type ApplyFn = (dx: number, dy: number) => void;
 
@@ -65,6 +65,8 @@ export function scheduleNudge(
 ): void {
   heldArrows.add(key);
   if (!isRepeat && !pushedHistory) {
+    // A hold whose keyup never arrived must not snapshot a deferred mask.
+    flushNudgeMask();
     // The nudge itself carries on with any live Move float.
     withLiveFloatKept(() => useEditorStore.getState().pushHistory('Nudge'));
     pushedHistory = true;
@@ -84,8 +86,23 @@ export function scheduleNudge(
 export function releaseNudgeKey(key: string): void {
   if (!heldArrows.delete(key)) return;
   if (heldArrows.size > 0) return;
+  endHold();
+}
+
+/**
+ * Called when the window loses focus: the keyups for any held arrows will
+ * never arrive, so end the hold now.
+ */
+export function releaseAllNudgeKeys(): void {
+  if (heldArrows.size === 0) return;
+  heldArrows.clear();
+  endHold();
+}
+
+function endHold(): void {
   cancelScheduled();
   run();
+  flushNudgeMask();
   pushedHistory = false;
   pendingApply = null;
 }

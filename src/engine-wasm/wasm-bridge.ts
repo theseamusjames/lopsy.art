@@ -128,6 +128,7 @@ import init, {
   setGroupInvert,
   setGroupHueSaturation,
   setGroupColorBalance,
+  setGroupColorGrading,
   setGroupPhotoFilter,
   setGroupBlackWhite,
   setGroupChannelMixer,
@@ -204,6 +205,7 @@ import init, {
   drawMaskPencilLine as rawDrawMaskPencilLine,
   readMaskTexture,
   fillMask as rawFillMask,
+  remapLayerMask as rawRemapLayerMask,
   fillMaskWithValue as rawFillMaskWithValue,
   renderMaskLinearGradient as rawRenderMaskLinearGradient,
   renderMaskRadialGradient as rawRenderMaskRadialGradient,
@@ -452,6 +454,7 @@ export {
   setGroupInvert,
   setGroupHueSaturation,
   setGroupColorBalance,
+  setGroupColorGrading,
   setGroupPhotoFilter,
   setGroupBlackWhite,
   setGroupChannelMixer,
@@ -637,6 +640,7 @@ export const paintMaskDab = markingMaskDirty(rawPaintMaskDab);
 export const paintMaskDabBatch = markingMaskDirty(rawPaintMaskDabBatch);
 export const drawMaskPencilLine = markingMaskDirty(rawDrawMaskPencilLine);
 export const fillMask = markingMaskDirty(rawFillMask);
+export const remapLayerMask = markingMaskDirty(rawRemapLayerMask);
 export const fillMaskWithValue = markingMaskDirty(rawFillMaskWithValue);
 export const renderMaskLinearGradient = markingMaskDirty(rawRenderMaskLinearGradient);
 export const renderMaskRadialGradient = markingMaskDirty(rawRenderMaskRadialGradient);

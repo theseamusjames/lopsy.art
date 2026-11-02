@@ -226,21 +226,7 @@ pub fn upload_layer_mask(
     engine: &mut Engine, layer_id: &str,
     mask_data: &[u8], width: u32, height: u32,
 ) {
-    let gl = &engine.inner.gl;
-    // Upload mask as RGBA texture
-    let mut rgba = vec![0u8; (width * height * 4) as usize];
-    for i in 0..(width * height) as usize {
-        let v = if i < mask_data.len() { mask_data[i] } else { 0 };
-        rgba[i * 4] = v;
-        rgba[i * 4 + 1] = v;
-        rgba[i * 4 + 2] = v;
-        rgba[i * 4 + 3] = 255;
-    }
-    if let Ok(tex) = engine.inner.texture_pool.acquire(gl, width, height) {
-        let _ = engine.inner.texture_pool.upload_rgba(
-            gl, tex, 0, 0, width, height, &rgba,
-        );
-        // Release old mask if present
+    if let Ok(tex) = engine.inner.upload_mask_texture(mask_data, width, height) {
         if let Some(old) = engine.inner.layer_masks.insert(layer_id.to_string(), tex) {
             engine.inner.texture_pool.release(old);
         }
@@ -335,6 +321,17 @@ pub fn rotate_layer_90(engine: &mut Engine, layer_id: &str, clockwise: bool) -> 
 #[wasm_bindgen(js_name = "scaleLayerTexture")]
 pub fn scale_layer_texture(engine: &mut Engine, layer_id: &str, new_w: u32, new_h: u32) -> Result<(), JsError> {
     layer_manager::scale_texture(&mut engine.inner, layer_id, new_w, new_h)
+        .map_err(|e| JsError::new(&e))
+}
+
+/// Resample a layer's mask to `dst_w` x `dst_h` through the inverse affine
+/// map `src = [a c; b d] * dst + (e, f)`, in mask pixels.
+#[wasm_bindgen(js_name = "remapLayerMask")]
+pub fn remap_layer_mask(
+    engine: &mut Engine, layer_id: &str, dst_w: u32, dst_h: u32,
+    a: f32, b: f32, c: f32, d: f32, e: f32, f: f32,
+) -> Result<(), JsError> {
+    layer_manager::remap_layer_mask(&mut engine.inner, layer_id, dst_w, dst_h, [a, b, c, d, e, f])
         .map_err(|e| JsError::new(&e))
 }
 

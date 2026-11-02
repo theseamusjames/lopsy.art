@@ -1,5 +1,5 @@
 import type { HistorySnapshot, SelectionData, SliceCreator } from './types';
-import type { Layer } from '../../types';
+import type { DocumentState, Layer } from '../../types';
 import { EMPTY_HANDLE, restoreLayerGpu, type LayerHistoryBefore } from './layer-gpu-capture';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
@@ -250,6 +250,10 @@ function snapshotGpuLayers(
  * else in the snapshot (blend mode, opacity, effects, mask, adjustments,
  * order, active layer, etc.) is restored as-is.
  */
+function isPathBoundText(layer: import('../../types').Layer): boolean {
+  return layer.type === 'text' && layer.pathId !== undefined && layer.pathAnchorX !== undefined;
+}
+
 function mergeMetadataLayerPositions(
   snapshot: import('../../types').DocumentState,
   current: import('../../types').DocumentState,
@@ -258,6 +262,11 @@ function mergeMetadataLayerPositions(
   const layers = snapshot.layers.map((snapLayer) => {
     const cur = curById.get(snapLayer.id);
     if (!cur) return snapLayer;
+    // Path-bound text is laid out from its path: `x - pathAnchorX` is the
+    // user's offset from it. The snapshot's anchor comes back with its path,
+    // so its x/y must too, or the gap reads as an offset and the text floats
+    // off the restored path (#1423).
+    if (isPathBoundText(snapLayer)) return snapLayer;
     if (cur.x === snapLayer.x && cur.y === snapLayer.y) {
       const snapW = 'width' in snapLayer ? (snapLayer as { width?: number | null }).width : undefined;
       const snapH = 'height' in snapLayer ? (snapLayer as { height?: number | null }).height : undefined;
@@ -345,6 +354,21 @@ function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
   for (const [layerId, handle] of snapshot.gpuSnapshots) {
     restoreLayerGpu(layerId, handle);
   }
+}
+
+/**
+ * Guides are UI state outside history, but Image Size scales them and Rotate
+ * Image turns them. Crossing a step that changed the document size, or a
+ * rotate (which keeps a square document's size), puts back the guides that
+ * step saw; any other step leaves them alone.
+ */
+function restoreGuidesAcrossResize(target: HistorySnapshot, current: DocumentState): void {
+  if (!target.guides) return;
+  const isSizeChange =
+    target.document.width !== current.width || target.document.height !== current.height;
+  const isCanvasRotate = target.label.startsWith('Rotate Image');
+  if (!isSizeChange && !isCanvasRotate) return;
+  useUIStore.setState({ guides: [...target.guides] });
 }
 
 /**
@@ -438,6 +462,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
+        guides: useUIStore.getState().guides,
       };
     } else {
       const reuseBase = latestPixelSnapshot(state.undoStack);
@@ -451,6 +476,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
+        guides: useUIStore.getState().guides,
       };
     }
     additions.push(firstSnapshot);
@@ -491,8 +517,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     });
     if (eng) {
       const restored = get();
-      syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
+      syncLayers(
+        eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds,
+        restored.document.colorMode,
+      );
     }
+    restoreGuidesAcrossResize(target, state.document);
     syncTransformAfterHistoryRestore(target.selection);
   },
 
@@ -526,6 +556,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
+        guides: useUIStore.getState().guides,
       };
     } else {
       const gpuSnapshots = snapshotLiveLayers(state, state.redoStack[R - 1]);
@@ -538,6 +569,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
         label: target.label,
         paths: state.paths,
         selectedPathId: state.selectedPathId,
+        guides: useUIStore.getState().guides,
       };
     }
     additions.push(firstSnapshot);
@@ -575,8 +607,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     });
     if (eng) {
       const restored = get();
-      syncLayers(eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds);
+      syncLayers(
+        eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds,
+        restored.document.colorMode,
+      );
     }
+    restoreGuidesAcrossResize(target, state.document);
     syncTransformAfterHistoryRestore(target.selection);
   },
 
@@ -621,6 +657,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       label,
       paths: state.paths,
       selectedPathId: state.selectedPathId,
+      guides: useUIStore.getState().guides,
     };
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],
@@ -665,6 +702,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       label,
       paths: state.paths,
       selectedPathId: state.selectedPathId,
+      guides: useUIStore.getState().guides,
     };
     set({
       undoStack: [...state.undoStack.slice(-49), snapshot],

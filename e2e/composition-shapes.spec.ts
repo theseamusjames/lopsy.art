@@ -758,13 +758,13 @@ test.describe('Composition 2: Geometric Design', () => {
     // =====================================================================
     // PHASE 17: FLIP AND ROTATE — Flip the pasted layer
     // =====================================================================
+    const beforeFlip = await snapshot(page);
+
     // Flip horizontal via Image menu
     await page.click('text=Image');
     await page.waitForTimeout(200);
     await page.click('text=Flip Horizontal');
     await page.waitForTimeout(300);
-
-    const beforeFlip = await snapshot(page);
 
     // Flip vertical via Image menu
     await page.click('text=Image');
@@ -772,8 +772,13 @@ test.describe('Composition 2: Geometric Design', () => {
     await page.click('text=Flip Vertical');
     await page.waitForTimeout(300);
 
+    // The pasted piece is the round red ellipse sitting over its source. A
+    // flip mirrors a layer about its own content bounds, so the symmetric
+    // circle stays exactly where it was instead of jumping to the mirror
+    // position across the document.
     const afterFlip = await snapshot(page);
-    expect(pixelDiff(beforeFlip, afterFlip)).toBeGreaterThan(0);
+    expect(afterFlip.pixels.length).toBeGreaterThan(0);
+    expect(pixelDiff(beforeFlip, afterFlip)).toBeLessThan(50);
 
     // Rotate 90° CW via Image menu
     await page.click('text=Image');

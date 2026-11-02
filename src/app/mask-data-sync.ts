@@ -25,7 +25,8 @@ import { requestMaskRead, cancelMaskRead } from './mask-read-queue';
 
 const staleIds = new Set<string>();
 
-function readMask(layerId: string): Uint8ClampedArray | null {
+/** Read a layer's GPU mask back as bytes, sized like the mask texture. */
+export function readMask(layerId: string): Uint8ClampedArray | null {
   const engine = getEngine();
   if (!engine) return null;
   const bytes = readMaskTexture(engine, layerId);

@@ -2,6 +2,7 @@ import type { Curves } from './curves';
 import { IDENTITY_CURVES, isIdentityCurves, applyCurvesToImageData } from './curves';
 import type { Levels } from './levels';
 import { IDENTITY_LEVELS, isIdentityLevels, applyLevelsToImageData } from './levels';
+import type { ColorGrade } from './color-grading';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
 import type { GradientStop } from '../tools/gradient/gradient';
 import { nodesToLegacyAdjustments } from './adjustment-node-utils';
@@ -47,6 +48,8 @@ export interface ImageAdjustments {
   invert?: boolean;
   // Gradient Map stops
   gradientMapStops?: readonly GradientStop[];
+  // Color Grading
+  colorGrading?: ColorGrade;
 }
 
 export const DEFAULT_ADJUSTMENTS: ImageAdjustments = {

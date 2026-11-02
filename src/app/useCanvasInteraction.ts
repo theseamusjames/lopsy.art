@@ -29,7 +29,7 @@ import {
   INITIAL_INTERACTION_STATE,
   resolveDownGesture,
 } from './interactions/interaction-types';
-import { handleTransformDown, flushSelectionTransform, refuseGroupSelectionTransform } from './interactions/transform-handlers';
+import { handleTransformDown, commitSelectionTransform, refuseGroupSelectionTransform } from './interactions/transform-handlers';
 import { commitLayerTransform, markLayerTransformDirty } from './interactions/layer-transform';
 import {
   handleMeshWarpDown,
@@ -53,7 +53,7 @@ import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // new paint or GPU tool is a single-file change at the descriptor.
 import { PAINT_TOOLS, GPU_TOOLS, SELF_HISTORY_PAINT_TOOLS } from '../tools/tool-registry';
 import { pixelDataManager } from '../engine/pixel-data-manager';
-import { guardPixelWrite, toolWritesRasterPixels } from '../layers/paint-target';
+import { guardPixelWrite, toolIgnoresLayerLock, toolWritesRasterPixels } from '../layers/paint-target';
 import {
   finishTextBodyMove,
   handleTextTransformDown,
@@ -62,6 +62,7 @@ import {
   refusePartialTextMove,
   releaseCoveringTextSelection,
 } from './interactions/text-transform-handlers';
+import { refuseMaskEditSelectionMove } from './interactions/mask-edit-move-guard';
 
 import type { Point, Layer } from '../types';
 
@@ -191,13 +192,15 @@ export function useCanvasInteraction(
       if (!activeLayerId) return;
 
       const activeLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
-      if (!activeLayer || activeLayer.locked) return;
+      if (!activeLayer) return;
+      if (activeLayer.locked && !toolIgnoresLayerLock(activeTool)) return;
 
       // #768: refuse pixel writes on group / text layers before dispatching
       // to the tool handler. Without this every writer allocates a texture,
       // pushes a history row, and clears the redo stack for a change that
       // is either invisible (group) or wiped by the next re-render (text).
-      if (toolWritesRasterPixels(activeTool) && !guardPixelWrite(activeLayer)) return;
+      const shapeOutput = useToolSettingsStore.getState().settings.shape.output;
+      if (toolWritesRasterPixels(activeTool, { shapeOutput }) && !guardPixelWrite(activeLayer)) return;
 
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -351,6 +354,7 @@ export function useCanvasInteraction(
           return;
         }
         if (refusePartialTextMove()) return;
+        if (refuseMaskEditSelectionMove()) return;
         if (refuseGroupSelectionTransform(ctx)) return;
         releaseCoveringTextSelection();
       }
@@ -635,10 +639,8 @@ export function useCanvasInteraction(
         return;
       case 'transform':
         if (state.gesture.selectionOnly) {
-          // Drain any pointer-move that's still parked in the coalescer's
-          // rAF slot — otherwise the final drag position is dropped if the
-          // browser fires pointer-up before the next frame boundary.
-          flushSelectionTransform();
+          // The drag only moved the marquee preview; build the mask once now.
+          commitSelectionTransform();
           useUIStore.getState().setActiveTransformHandle(null);
           stateRef.current = { ...INITIAL_INTERACTION_STATE };
           return;

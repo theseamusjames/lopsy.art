@@ -2,6 +2,9 @@ import type { DocumentState, Layer, Rect } from '../../../types';
 import type { ActionResult } from '../types';
 import { cropLayerTexture } from '../../../engine-wasm/wasm-bridge';
 import { mapLayersForTransform } from './_helpers/layer-transform';
+import { remapDocumentMasks } from './_helpers/remap-layer-masks';
+import { getEngine } from '../../../engine-wasm/engine-state';
+import { translation } from '../../../layers/mask-remap';
 
 export function computeCropCanvas(
   doc: DocumentState,
@@ -20,7 +23,7 @@ export function computeCropCanvas(
   const ch = y2 - y1;
   if (cw <= 0 || ch <= 0) return undefined;
 
-  const newLayers = mapLayersForTransform(doc.layers, {
+  const movedLayers = mapLayersForTransform(doc.layers, {
     onText: (layer) => ({
       ...layer,
       x: Math.round(layer.x - cx),
@@ -33,6 +36,7 @@ export function computeCropCanvas(
       return { ...layer, x: 0, y: 0, width: cw, height: ch } as Layer;
     },
   });
+  const newLayers = remapDocumentMasks(getEngine(), doc.layers, movedLayers, translation(-cx, -cy), cw, ch);
 
   return {
     document: { ...doc, width: cw, height: ch, layers: newLayers },

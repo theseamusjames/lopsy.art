@@ -10,13 +10,14 @@ use crate::filter_gpu;
 pub fn filter_brightness_contrast(
     engine: &mut Engine, layer_id: &str, brightness: f32, contrast: f32,
 ) {
+    let doc_color_mode = engine.inner.doc_color_mode;
     filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.adjustments,
         |gl, shader| {
             crate::compositor::set_standalone_adjustment_uniforms(
-                gl, shader, brightness / 100.0, contrast,
+                gl, shader, brightness / 100.0, contrast, doc_color_mode,
             );
         },
     );

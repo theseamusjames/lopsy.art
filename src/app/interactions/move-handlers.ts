@@ -8,6 +8,7 @@ import type { MoveAlignmentContext } from './move-alignment';
 import { createTransformState, isShapeChangingTransform, translateTransform } from '../../tools/transform/transform';
 import type { TransformState } from '../../tools/transform/transform';
 import { renderTransformedFloat } from './transform-handlers';
+import { growFloatToCover } from './float-growth';
 import { useUIStore } from '../ui-store';
 import type { SnapLine } from '../ui-store';
 import { useEditorStore } from '../editor-store';
@@ -24,6 +25,7 @@ import {
   uploadQuickMaskPixels,
   cropLayerToContent as cropLayerToContentGpu,
 } from '../../engine-wasm/wasm-bridge';
+import type { Engine } from '../../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type {
   InteractionState,
@@ -35,7 +37,7 @@ import type {
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
-import { claimLiveFloat, commitLiveFloat, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
+import { claimLiveFloat, commitLiveFloat, deferNudgeMask, flushNudgeMask, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
 import {
   isLayerTransformCurrent,
   isLayerTransformLive,
@@ -194,6 +196,38 @@ function snapFloatDelta(dx: number, dy: number): Point {
   return snapPositionToGrid(dx, dy, ui.gridSize);
 }
 
+/**
+ * Where a floated selection sits for a drag of (dragDx, dragDy): its offset
+ * before the drag plus the drag, grid-snapped. The drag composites the pixels
+ * here and the drop rebuilds the selection here — computing them apart left
+ * the selection at the raw offset while the pixels sat on the grid (#1284).
+ */
+function floatDragOffset(
+  float: Pick<FloatingSelection, 'offsetX' | 'offsetY'>,
+  dragDx: number,
+  dragDy: number,
+): Point {
+  return snapFloatDelta(float.offsetX + dragDx, float.offsetY + dragDy);
+}
+
+/**
+ * Grow the float so the lifted content still fits at offset (dx, dy).
+ * compositeFloat only writes inside the float's buffer, so without this the
+ * part of a selection dragged past the canvas edge was cut off and lost when
+ * the float dropped (#1337).
+ */
+function growFloatForOffset(
+  engine: Engine,
+  layerId: string | null,
+  float: Pick<FloatingSelection, 'originalBounds'>,
+  dx: number,
+  dy: number,
+): void {
+  if (!layerId) return;
+  const b = float.originalBounds;
+  growFloatToCover(engine, layerId, { x: b.x + dx, y: b.y + dy, width: b.width, height: b.height });
+}
+
 function applyTranslatedTransform(layerId: string | null, transform: TransformState): void {
   useUIStore.getState().setTransform(transform);
   renderTransformedFloat(layerId, transform);
@@ -201,6 +235,9 @@ function applyTranslatedTransform(layerId: string | null, transform: TransformSt
 }
 
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
+  // A drag that starts while an arrow key is still held needs the mask
+  // where the ants are.
+  flushNudgeMask();
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
   const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
@@ -390,14 +427,17 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
       // The float expanded the layer texture; mirror its full rect into the
       // store. update_layer shields the engine only while the float lives —
       // a store left at the pre-float width/height outlives it and feeds
-      // stale bounds to later operations and resyncs (#822).
-      reconcileLayerBoundsWithEngine(engine, activeLayerId);
+      // stale bounds to later operations and resyncs (#822). The pixel
+      // version waits for handleMoveUp: the lifted float composites back at
+      // (0, 0), and a bump here queued a synchronous thumbnail readback that
+      // landed a few hundred ms into the drag (#1383).
+      reconcileLayerBoundsWithEngine(engine, activeLayerId, { shouldBumpVersion: false });
 
       if (altKey) {
         restoreFloatBase(engine, activeLayerId);
       }
 
-      clearJsPixelData(activeLayerId);
+      clearJsPixelData(activeLayerId, { shouldBumpVersion: false });
 
       floatingSelectionRef.current = {
         offsetX: 0,
@@ -647,14 +687,7 @@ export function handleMoveMove(
   }
 
   if (move?.pendingTransform) {
-    let dx = dragDx;
-    let dy = dragDy;
-    const uiSnap = useUIStore.getState();
-    if (uiSnap.showGrid && uiSnap.snapToGrid) {
-      const snapped = snapPositionToGrid(dx, dy, uiSnap.gridSize);
-      dx = snapped.x;
-      dy = snapped.y;
-    }
+    const { x: dx, y: dy } = snapFloatDelta(dragDx, dragDy);
     applyTranslatedTransform(state.layerId, translateTransform(move.pendingTransform, dx, dy));
     return;
   }
@@ -662,16 +695,9 @@ export function handleMoveMove(
   const engine = getEngine();
   if (floatingSelectionRef.current && engine && hasFloat(engine)) {
     // GPU path: composite float at new offset
-    const floatState = floatingSelectionRef.current;
-    let dx = floatState.offsetX + dragDx;
-    let dy = floatState.offsetY + dragDy;
-    const uiSnap = useUIStore.getState();
-    if (uiSnap.showGrid && uiSnap.snapToGrid) {
-      const snapped = snapPositionToGrid(dx, dy, uiSnap.gridSize);
-      dx = snapped.x;
-      dy = snapped.y;
-    }
+    const { x: dx, y: dy } = floatDragOffset(floatingSelectionRef.current, dragDx, dragDy);
 
+    growFloatForOffset(engine, state.layerId, floatingSelectionRef.current, dx, dy);
     compositeFloat(engine, dx, dy);
     useEditorStore.getState().notifyRender();
 
@@ -764,8 +790,9 @@ export function handleMoveUp(
 
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
   const dragDy = Math.round(canvasPos.y - state.startPoint.y);
-  floatingSelectionRef.current.offsetX += dragDx;
-  floatingSelectionRef.current.offsetY += dragDy;
+  const dropOffset = floatDragOffset(floatingSelectionRef.current, dragDx, dragDy);
+  floatingSelectionRef.current.offsetX = dropOffset.x;
+  floatingSelectionRef.current.offsetY = dropOffset.y;
 
   // Materialize the translated selection mask now that the drag is done.
   // During the drag we only updated bounds to avoid per-move mask copies.
@@ -915,9 +942,11 @@ export function handleNudgeMove(
 
       floatSelection(engine, activeId);
       compositeFloat(engine, 0, 0);
-      reconcileLayerBoundsWithEngine(engine, activeId);
+      // Leave the pixel version alone until the hold ends (flushNudgeMask):
+      // a bump here queued a synchronous thumbnail readback mid-hold (#1383).
+      reconcileLayerBoundsWithEngine(engine, activeId, { shouldBumpVersion: false });
 
-      clearJsPixelData(activeId);
+      clearJsPixelData(activeId, { shouldBumpVersion: false });
 
       floatingSelectionRef.current = {
         offsetX: 0,
@@ -933,23 +962,13 @@ export function handleNudgeMove(
     floatingSelectionRef.current.offsetX = newOffsetX;
     floatingSelectionRef.current.offsetY = newOffsetY;
 
+    growFloatForOffset(engine, activeId, floatingSelectionRef.current, newOffsetX, newOffsetY);
     compositeFloat(engine, newOffsetX, newOffsetY);
     // Same as handleMoveUp: the composite changed the layer texture (#925).
-    clearJsPixelData(activeId);
+    clearJsPixelData(activeId, { shouldBumpVersion: false });
 
-    // Shift selection mask
-    const { width: docW, height: docH } = editor.document;
-    const origMask = floatingSelectionRef.current.originalMask;
-    const newMask = new Uint8ClampedArray(docW * docH);
-    for (let y = 0; y < docH; y++) {
-      for (let x = 0; x < docW; x++) {
-        const srcX = x - newOffsetX;
-        const srcY = y - newOffsetY;
-        if (srcX >= 0 && srcX < docW && srcY >= 0 && srcY < docH) {
-          newMask[y * docW + x] = origMask[srcY * docW + srcX] ?? 0;
-        }
-      }
-    }
+    // Move only the bounds while the key is held, as a drag does; the
+    // translated mask is materialized once when the hold ends (#1382).
     const origBounds = floatingSelectionRef.current.originalBounds;
     const newBounds = {
       x: origBounds.x + newOffsetX,
@@ -957,8 +976,16 @@ export function handleNudgeMove(
       width: origBounds.width,
       height: origBounds.height,
     };
-    claimLiveFloat(activeId, newMask);
-    editor.setSelection(newBounds, newMask, docW, docH);
+    claimLiveFloat(activeId, sel.mask);
+    deferNudgeMask({
+      layerId: activeId,
+      staleMask: sel.mask,
+      originalMask: floatingSelectionRef.current.originalMask,
+      originalBounds: origBounds,
+      offsetX: newOffsetX,
+      offsetY: newOffsetY,
+    });
+    editor.setSelectionBounds(newBounds);
     useUIStore.getState().setTransform(createTransformState(newBounds));
     editor.notifyRender();
   } else {

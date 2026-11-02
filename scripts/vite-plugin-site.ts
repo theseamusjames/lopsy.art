@@ -6,17 +6,21 @@
  *   dev:   pages render on request (drafts included) and live-reload on save.
  *   build: pages, images, the feed and sitemap.xml are emitted into dist/.
  *          Content errors fail the build; SEO guideline misses print as warnings.
+ *          Tutorial .lopsy files go to `hostedDir` instead, laid out by bucket
+ *          key, for the deploy to upload to R2 (see PROJECT_FILES_ORIGIN).
  *
  * All parsing and rendering lives in src/site/ — this file only touches the
  * filesystem and Vite.
  */
 import type { Plugin, ViteDevServer } from 'vite';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { join, relative } from 'path';
+import { createHash } from 'crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
+import { dirname, join, relative } from 'path';
 import { buildBlog } from '../src/site/blog/build-blog';
 import { renderSitemap } from '../src/site/sitemap';
-import { buildTutorialSite } from '../src/site/tutorials/build-site';
+import { type ProjectHost, buildTutorialSite } from '../src/site/tutorials/build-site';
 import { imageMimeType } from '../src/site/tutorials/image-size';
+import { PROJECT_FILES_ORIGIN } from '../src/site/tutorials/site-config';
 
 interface SitePluginOptions {
   tutorialsDir: string;
@@ -25,6 +29,8 @@ interface SitePluginOptions {
   baseCss: string;
   /** Article styles, inlined after `baseCss` on blog pages only. */
   blogCss: string;
+  /** Build output for the project-file bucket; replaced on every build. */
+  hostedDir: string;
 }
 
 interface SourceEntry {
@@ -35,11 +41,17 @@ interface SourceEntry {
 
 interface SiteBuild {
   files: Map<string, string | Uint8Array>;
+  hostedFiles: Map<string, Uint8Array>;
   errors: string[];
   warnings: string[];
 }
 
 const SECTIONS = ['/tutorials', '/blog'];
+
+const PROJECT_HOST: ProjectHost = {
+  origin: PROJECT_FILES_ORIGIN,
+  digest: (bytes) => createHash('sha256').update(bytes).digest('hex').slice(0, 12),
+};
 
 function loadSources(contentDir: string): SourceEntry[] {
   if (!existsSync(contentDir)) return [];
@@ -76,6 +88,7 @@ function build(options: SitePluginOptions, isDev: boolean): SiteBuild {
     sources: loadSources(options.tutorialsDir),
     css: readCss(options.baseCss),
     shouldIncludeDrafts: isDev,
+    projectHost: isDev ? null : PROJECT_HOST,
   });
   const blog = buildBlog({
     sources: loadSources(options.blogDir),
@@ -87,6 +100,7 @@ function build(options: SitePluginOptions, isDev: boolean): SiteBuild {
   files.set('sitemap.xml', renderSitemap([...tutorials.sitemapEntries, ...blog.sitemapEntries]));
   return {
     files,
+    hostedFiles: tutorials.hostedFiles,
     errors: [...tutorials.errors, ...blog.errors],
     warnings: [...tutorials.warnings, ...blog.warnings],
   };
@@ -156,6 +170,15 @@ function serveSite(server: ViteDevServer, options: SitePluginOptions): void {
   });
 }
 
+function writeHostedFiles(dir: string, files: Map<string, Uint8Array>): void {
+  rmSync(dir, { recursive: true, force: true });
+  for (const [key, bytes] of files) {
+    const path = join(dir, key);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, bytes);
+  }
+}
+
 export function sitePlugin(options: SitePluginOptions): Plugin {
   let isBuild = false;
   return {
@@ -176,6 +199,7 @@ export function sitePlugin(options: SitePluginOptions): Plugin {
       for (const [fileName, source] of result.files) {
         this.emitFile({ type: 'asset', fileName, source });
       }
+      writeHostedFiles(options.hostedDir, result.hostedFiles);
     },
   };
 }

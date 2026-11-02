@@ -56,6 +56,18 @@ gestures (the first two entries always get fresh copies) and assert on
 `__readLayerPixels` at each undo step — selection bounds and transform
 handles restore correctly either way.
 
+## Text re-renders must mark the layer dirty too
+
+Committed text layers are re-rendered straight into their GPU texture by
+`apply-text-setting.ts` (`rerenderLayer`, the font-load refresh). The
+"GPU layer writes must also mark the store's `dirtyLayerIds`" rule above
+applies: without `clearJsPixelData(id)`, the snapshot undo takes of the
+live state reuses the previous handle whenever the layer's x/y didn't
+move (text layers skip the width/height check), and redo restores the
+old glyphs (#1370). Strikethrough never moves a text texture's top-left,
+so toggling it is the reliable e2e repro; weight and colour changes
+usually shift x/y by a pixel and hide the bug.
+
 ## Memories should be inlined in MEMORY.md, not in separate files
 
 Keep everything in this single file. No separate memory files in .claude or elsewhere.
@@ -68,8 +80,9 @@ When diagnosing perf issues, write a benchmark e2e test that reproduces the exac
 
 ## Live tool drags must not rebuild/upload a full-res mask per pointer move
 
-`setSelectionMask` (selection_gpu.rs) allocates `vec![0u8; w*h*4]` (a full
-RGBA texture — 48MB on a 12MP canvas) and uploads it every call. Calling
+`setSelectionMask` (selection_gpu.rs) uploads a full-document texture on
+every call (now as R8 bytes expanded on the GPU by `upload_mask_texture`,
+#1381 — it used to be a CPU RGBA expansion plus f32 bands). Calling
 `setSelection` on each pointer move (as the marquee tool used to) floods the
 WASM bridge and drops to <1fps on large canvases, with seconds of catch-up
 after a fast drag. Fix: drive the live drag from a tiny analytic preview kept
@@ -81,6 +94,13 @@ the preview via the overlay-only path (gated on `getMarqueePreview()`).
 `getSelectionEdges`/`traceSelectionContours` also take an optional `scanBounds`
 so they scan only the selection bbox, not the whole canvas — used by lasso/wand
 which still trace per frame.
+
+The Move tool follows the same rule for selection drags and held arrow-key
+nudges: only `setSelectionBounds` changes mid-gesture, and
+`renderSelectionAnts` translates the traced outline by the shift between the
+bounds it traced at and the current bounds. The nudge's translated mask is
+deferred in `live-float.ts` (`deferNudgeMask`) and written by
+`flushNudgeMask` on keyup, window blur, pointer-down or a float commit (#1382).
 
 ## Undo snapshots use normalized u16, not raw FP16 bits
 
@@ -522,3 +542,64 @@ Patch `enable`/`disable` (SCISSOR_TEST), `scissor`, `viewport` and
 ∩ viewport when the test is on, else the viewport. Assert the largest is
 dab-sized and that the scissor test is off when the event ends — see
 `e2e/retouch-dab-scissor-1219.spec.ts`.
+
+## `apply_filter*` grows the layer to the document — JS must follow or not use it
+
+`apply_filter` / `apply_filter_full_layer` call `ensure_layer_full_size`,
+which re-origins a cropped layer's texture to `min(0, x)`. A caller that
+doesn't then run `syncLayerAfterFullSize` (or otherwise update `x`/`y`/size)
+leaves the store with the old cropped origin, and the next descriptor push
+draws the content at twice its offset (#771, #783, #1367). For per-texel
+shaders (colour matrices) use `apply_pointwise_filter_full_layer`, which
+keeps the texture's geometry and sizes the scratch to it.
+
+## Lab documents: anything written into a texture must be Lab-encoded
+
+In Lab mode every layer texture and the composite hold encoded CIELAB, and
+only `final_blit.glsl` / the export path decode. Colours that JS hands to
+the engine (brush colour via `encodeColorForEngine`, effect colours in
+`layerToDescJson`) must be encoded first, and shaders that do RGB maths on
+the composite (`adjustments.glsl`, `vignette.glsl`) decode/re-encode via
+`//#include lab` (`gpu/shaders/lab_common.glsl`) when `u_docColorMode == 1`.
+
+## Never pass objects that reach large typed arrays as React props
+
+In development, React 19.2's performance track diffs every re-rendered
+component's changed props (`addObjectDiffToProperties` in
+`react-dom-client.development.js`) and lists a typed array found within two
+levels of a prop **index by index**, then structured-clones the list into
+`performance.measure`. A `layer` prop reaches `layer.mask.data`, so each mask
+change on an 1800×1200 document cost ~0.5–1.4 GB of transient heap and a few
+in a row crashed the tab with "Data cannot be cloned, out of memory" (#1408).
+Production builds don't do this. Pass ids and read big data with a store
+selector inside the component (hook state isn't diffed), as `LayerRow` /
+`MaskThumbnail` do. `src/panels/LayerPanel/LayerPanel.test.ts` shows how to
+observe the track under Vitest (stub `console.timeStamp` and
+`performance.measure` before importing React). Heap sampling misses this
+garbage unless `includeObjectsCollectedByMajorGC` is on; measure with
+`HeapProfiler.collectGarbage` + `Performance.getMetrics` instead
+(`e2e/mask-heap-1408.spec.ts`).
+
+## A texture left bound to a unit can turn a later draw into a silent no-op
+
+Sampler uniforms persist on a program, and texture units keep whatever was
+last bound. If a unit still holds a texture the pool has since handed to a
+new owner, any draw into that texture by a program whose sampler points at
+the unit is a WebGL feedback loop: Chrome logs `GL_INVALID_OPERATION:
+Feedback loop formed between Framebuffer and active Texture` and the draw
+writes nothing — even when a flag like `u_hasMask == 0` means the sampler is
+never read. A deleted layer's mask left on TEXTURE2 by the compositor broke
+every float composite into the next layer that got its texture (#1414; #964
+was the same shape). Unbind extra units after the draw that used them, and
+point unused samplers at a unit holding the draw's source. The console line
+is the tell: capture console errors in e2e repros of "the operation did
+nothing" bugs.
+
+## A custom control can't stop the global arrow-key nudge from its own keydown
+
+`useKeyboardShortcuts` listens on `window` in the capture phase, so it runs
+before any React handler and `stopPropagation` in the control is too late.
+A `role="slider"` div that handles arrows would step itself *and* nudge the
+active layer. Put `HANDLES_ARROW_KEYS_ATTR` (`native-control-keys.ts`) on the
+element to opt out, as `ColorWheel` does. Native range, radio and select
+controls are already exempt.

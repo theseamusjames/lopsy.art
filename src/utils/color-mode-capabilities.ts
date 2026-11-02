@@ -7,7 +7,7 @@ import type { AdjustmentNodeType } from '../types/adjustment-nodes';
  * scattered as ad-hoc checks. All booleans are `true` for `rgb`.
  */
 export interface ColorModeCapabilities {
-  /** Color-producing / color-dependent adjustments (hue-sat, color balance, channel mixer, photo filter, gradient map). */
+  /** Color-producing / color-dependent adjustments (hue-sat, color balance, color grading, channel mixer, photo filter, gradient map). */
   readonly hasColorAdjustments: boolean;
   /** Saturation / vibrance adjustment node. */
   readonly hasSaturation: boolean;
@@ -104,6 +104,7 @@ const COLOR_DEPENDENT_ADJUSTMENTS: ReadonlySet<AdjustmentNodeType> = new Set([
   'photo-filter',
   'gradient-map',
   'black-white',
+  'color-grading',
 ]);
 
 export function isAdjustmentAllowedInMode(

@@ -3,6 +3,7 @@ import { migrateFromLegacy, nodesToLegacyAdjustments, createDefaultNode, hasActi
 import type { ImageAdjustments } from './image-adjustments';
 import { IDENTITY_CURVES, IDENTITY_POINTS } from './curves';
 import { IDENTITY_LEVELS } from './levels';
+import { isIdentityColorGrade } from './color-grading';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
 
 const ZERO_ADJ: ImageAdjustments = {
@@ -11,6 +12,31 @@ const ZERO_ADJ: ImageAdjustments = {
   curves: IDENTITY_CURVES,
   levels: IDENTITY_LEVELS,
 };
+
+describe('color grading nodes', () => {
+  const grade = (saturation: number, enabled = true): AdjustmentNode => ({
+    ...createDefaultNode('color-grading'),
+    enabled,
+    midtones: { hue: 30, saturation, luminance: 0 },
+  } as AdjustmentNode);
+
+  it('starts as an identity grade', () => {
+    const node = createDefaultNode('color-grading');
+    if (node.type !== 'color-grading') throw new Error('wrong node type');
+    expect(isIdentityColorGrade(node)).toBe(true);
+    expect(node.blending).toBe(50);
+    expect(node.balance).toBe(0);
+  });
+
+  it('is last-enabled-wins', () => {
+    const flat = nodesToLegacyAdjustments([grade(10), grade(20), grade(30, false)]);
+    expect(flat.colorGrading?.midtones.saturation).toBe(20);
+  });
+
+  it('is absent when no node is enabled', () => {
+    expect(nodesToLegacyAdjustments([grade(10, false)]).colorGrading).toBeUndefined();
+  });
+});
 
 describe('migrateFromLegacy', () => {
   it('returns an empty array for zero/identity adjustments', () => {

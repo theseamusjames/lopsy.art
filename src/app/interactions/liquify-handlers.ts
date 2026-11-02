@@ -10,6 +10,7 @@ import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { liquifyApplyDabGpu, liquifyRender } from '../../engine-wasm/wasm-bridge';
+import { liquifyBrushRadius } from '../../tools/liquify/liquify';
 import type { Point } from '../../types';
 import { INITIAL_INTERACTION_STATE, type InteractionState } from './interaction-types';
 
@@ -70,7 +71,7 @@ export function handleLiquifyMove(state: InteractionState, layerPos: Point): Int
     engine,
     layerPos.x,
     layerPos.y,
-    session.settings.brushSize,
+    liquifyBrushRadius(session.settings.brushSize),
     session.settings.pressure,
     dragDx,
     dragDy,

@@ -205,7 +205,7 @@ Effect images (glows, shadow, stroke) are cached per layer in the live composito
 ### Layer Masks
 
 - Stored as grayscale `Uint8ClampedArray` in the Zustand layer model (`layer.mask`).
-- Uploaded to GPU as RGBA textures via `uploadLayerMask()`.
+- Uploaded to GPU via `uploadLayerMask()`: the bytes go up as an R8 texture and a GPU pass (`mask_expand.glsl`) expands them into the pooled RGBA mask texture (`EngineInner::upload_mask_texture`). The selection mask uses the same path.
 - Sampled in `blend.glsl` during compositing: mask value multiplies layer alpha.
 - When mask edit mode is active, `compositor.rs` renders a translucent blue overlay.
 
@@ -301,6 +301,11 @@ npm run wasm:build
   - `style: fix CSS token usage in layers panel` — formatting, styling, no logic change.
 - Use a scope when it adds clarity: `feat(brush): add scatter control`, `fix(compositor): correct mask sampling order`.
 - Keep the subject line under 72 characters. Use the body for details if needed.
+
+## Tutorial PRs
+
+- Every PR that adds or changes a tutorial must open with the complete
+  final image as the first element of the PR description.
 
 ## Dependencies
 
