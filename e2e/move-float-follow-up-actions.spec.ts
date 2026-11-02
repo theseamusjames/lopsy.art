@@ -108,11 +108,12 @@ async function opaqueCount(page: Page, x0: number, y0: number, x1: number, y1: n
  * its centre. The handle sits 20 px out from the corner before any scale, so
  * `scale` times that after one.
  */
-async function rotateBox(page: Page, box: Rect, degrees: number, scale = 1): Promise<void> {
+async function rotateBox(page: Page, box: Rect, degrees: number): Promise<void> {
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
-  const hx = box.x + box.width + 20 * scale;
-  const hy = box.y - 20 * scale;
+  // The rotate handle sits 20 doc px outside the corner at any scale (#1453).
+  const hx = box.x + box.width + 20;
+  const hy = box.y - 20;
   const radius = Math.hypot(hx - cx, hy - cy);
   const start = Math.atan2(hy - cy, hx - cx);
   const first = await docToScreen(page, hx, hy);
@@ -413,7 +414,7 @@ test.describe('follow-up actions on a live Move float', { tag: '@chromium' }, ()
     await drag(page, [70, 70], [130, 130]);
     // Box now at x 100-160, y 100-160. Bottom-right handle out by 30: 90 x 90.
     await drag(page, [160, 160], [190, 190]);
-    await rotateBox(page, { x: 100, y: 100, width: 90, height: 90 }, 45, 1.5);
+    await rotateBox(page, { x: 100, y: 100, width: 90, height: 90 }, 45);
     await page.keyboard.press('Control+d');
     await page.waitForTimeout(150);
     await page.screenshot({ path: 'e2e/screenshots/move-float-move-scale-rotate.png' });
