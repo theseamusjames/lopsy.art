@@ -3,6 +3,7 @@ import type { ActionResult } from '../types';
 import type { Layer } from '../../../types';
 import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import { createDefaultAdjustments } from '../../../filters/adjustment-node-utils';
+import { isAdjustmentAllowedInMode } from '../../../utils/color-mode-capabilities';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { compositeForExport, uploadLayerPixels, addLayer } from '../../../engine-wasm/wasm-bridge';
 import { layerToDescJson } from '../../../engine-wasm/sync-layers';
@@ -41,7 +42,10 @@ export function computeFlattenImage(
 
   const pixelData = new Map<string, ImageData>();
 
-  const rootGroup = createGroupLayer({ name: 'Project', children: [flatLayer.id], adjustments: createDefaultAdjustments() });
+  const adjustments = createDefaultAdjustments().filter((n) =>
+    isAdjustmentAllowedInMode(n.type, doc.colorMode),
+  );
+  const rootGroup = createGroupLayer({ name: 'Project', children: [flatLayer.id], adjustments });
 
   return {
     document: {

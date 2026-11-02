@@ -14,6 +14,7 @@ import {
   drawRect,
   getRootGroupId,
   addAdjustment,
+  openGroupEffectsPanel,
 } from './helpers';
 
 const DARK = 40;
@@ -86,6 +87,26 @@ test.describe('Color Grading adjustment', () => {
     await drawRect(page, 80, 20, 40, 160, { ...gray(MID), a: 1 });
     await drawRect(page, 140, 20, 40, 160, { ...gray(BRIGHT), a: 1 });
     await page.waitForTimeout(200);
+  });
+
+  test('the default node on the root group changes nothing until a wheel moves', async ({ page }) => {
+    await openGroupEffectsPanel(page, await getRootGroupId(page));
+    const row = page.getByTestId('effects-drawer').locator('div[class*="nodeRow"]', { hasText: 'Color Grading' });
+    await expect(row).toHaveCount(1);
+    await page.screenshot({ path: 'e2e/screenshots/color-grading-default-node.png' });
+
+    let patches = await readPatches(page);
+    expectRgb(patches.dark, gray(DARK), 1);
+    expectRgb(patches.mid, gray(MID), 1);
+    expectRgb(patches.bright, gray(BRIGHT), 1);
+
+    await row.locator('[aria-label="Expand"]').click();
+    await selectRange(page, 'Midtones');
+    await setSlider(page, 'Hue', 240);
+    await setSlider(page, 'Saturation', 25);
+    await page.waitForTimeout(200);
+    patches = await readPatches(page);
+    expect(patches.mid.b).toBeGreaterThan(patches.mid.r + 10);
   });
 
   test('a new node changes nothing', async ({ page }) => {
