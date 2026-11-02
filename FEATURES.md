@@ -1125,6 +1125,7 @@ Effects are edited in the floating **effects drawer**, which is shared with the 
 - **Opening**: the effects button on a row in the Layers panel — a three-way toggle that turns green when the layer has at least one **enabled** effect (see *Layers Panel Row Layout*).
 - **Closing**: the `X` in the drawer header.
 - **Where it sits**: just outside the right dock horizontally (it reads the dock's live width, so dragging the dock's splitter slides the drawer with it), and vertically its **top edge lines up with the top of whichever dock group currently holds the Layers panel** — move Layers into a lower split or a different tab group and the drawer follows it down instead of staying pinned to the top of the sidebar. The anchor is re-measured on dock-layout changes and window resizes, and falls back to the top of the sidebar area whenever Layers is floating, closed, or not yet mounted. Header-dragging offsets the drawer from that anchor; the offset is cleared when the drawer closes.
+- **Height**: the drawer sizes to its contents up to 80% of the window height and stops at the bottom of the sidebar area, with a 200 px floor. For a group the floor is half the window height, so a short adjustments list still opens at a usable size: when the Layers panel sits too low to fit that, the drawer rises above the panel's top edge until it does. Dragging the drawer down shrinks it to the room left, down to 200 px. The resize grip cannot go below the floor.
 - With no layer selected the drawer shows only its header and a **No layer selected** message.
 
 Contents:

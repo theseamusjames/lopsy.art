@@ -103,6 +103,7 @@ export function App() {
   // user has docked it. Null when Layers is floating or not mounted — the
   // drawer falls back to the top of the sidebar area in that case.
   const layersPanelTop = useDockedPanelAnchor('layers');
+  const isActiveLayerGroup = layers.find((l) => l.id === activeLayerId)?.type === 'group';
 
   const { offset: drawerOffset, reset: resetDrawerOffset, dragProps: drawerDragProps } = useDraggablePanel();
   useEffect(() => {
@@ -286,7 +287,7 @@ export function App() {
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div
-              className={styles.effectsDrawer}
+              className={`${styles.effectsDrawer} ${isActiveLayerGroup ? styles.effectsDrawerAdjustments : ''}`}
               data-testid="effects-drawer"
               style={{
                 '--drag-x': `${drawerOffset.x}px`,
@@ -294,7 +295,7 @@ export function App() {
                 '--effects-drawer-top': layersPanelTop !== null ? `${layersPanelTop}px` : '0px',
               } as React.CSSProperties}
             >
-              {activeLayerId && layers.find((l) => l.id === activeLayerId)?.type === 'group'
+              {isActiveLayerGroup
                 ? <AdjustmentsPanel showHeader dragProps={drawerDragProps} />
                 : <LayerEffectsPanel dragProps={drawerDragProps} />
               }
