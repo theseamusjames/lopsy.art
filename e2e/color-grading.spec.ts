@@ -267,6 +267,51 @@ test.describe('Color Grading adjustment', () => {
     expectRgb(await readAt(page, PATCHES.mid), gray(MID), 1);
   });
 
+  test('double-clicking a wheel keeps its hue and undoes in one step (#1455)', async ({ page }) => {
+    await addAdjustment(page, await getRootGroupId(page), 'color-grading', { blending: 0 });
+    await selectRange(page, 'Shadows');
+    await setSlider(page, 'Hue', 220);
+    await setSlider(page, 'Saturation', 40);
+    const drawer = page.getByTestId('effects-drawer');
+    const hueInput = drawer.locator('[aria-label="Hue value"]');
+    const saturationInput = drawer.locator('[aria-label="Saturation value"]');
+    await expect(hueInput).toHaveValue('220');
+    await expect(saturationInput).toHaveValue('40');
+
+    const undoDepth = () => page.evaluate(() => {
+      const store = (window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { undoStack: unknown[] };
+      };
+      return store.getState().undoStack.length;
+    });
+    const before = await undoDepth();
+
+    // The centre, the obvious place to aim for a reset.
+    const target = wheel(page, 'Shadows');
+    const box = await target.boundingBox();
+    if (!box) throw new Error('wheel not visible');
+    await target.dblclick({ position: { x: box.width / 2, y: box.height / 2 } });
+    await page.waitForTimeout(200);
+    await expect(saturationInput).toHaveValue('0');
+    await expect(hueInput).toHaveValue('220');
+    expect(await undoDepth()).toBe(before + 1);
+
+    // Off-centre, where each press would otherwise move the hue.
+    await setSlider(page, 'Saturation', 40);
+    await target.dblclick({ position: { x: box.width * 0.9, y: box.height / 2 } });
+    await page.waitForTimeout(200);
+    await expect(saturationInput).toHaveValue('0');
+    await expect(hueInput).toHaveValue('220');
+
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(200);
+    await expect(saturationInput).toHaveValue('40');
+    await expect(hueInput).toHaveValue('220');
+    // The dark patch is blue again, so the restored grade reached the shader.
+    const dark = await readAt(page, PATCHES.dark);
+    expect(dark.b).toBeGreaterThan(dark.r + 10);
+  });
+
   test('arrow keys on a focused wheel grade instead of nudging the layer', async ({ page }) => {
     await addAdjustment(page, await getRootGroupId(page), 'color-grading');
     await page.keyboard.press('v');
