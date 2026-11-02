@@ -1,5 +1,7 @@
+import { useRef } from 'react';
 import { HANDLES_ARROW_KEYS_ATTR } from '../../app/shortcuts/native-control-keys';
 import { hsvToRgb } from '../../utils/color';
+import { createRepeatPressDetector } from '../../utils/repeat-press';
 import { pointerToWheel, stepWheel, wheelToPuck } from './color-wheel';
 import styles from './ColorWheel.module.css';
 
@@ -19,6 +21,11 @@ interface ColorWheelProps {
 export function ColorWheel({ label, hue, saturation, isActive, onChange, onActivate }: ColorWheelProps) {
   const puck = wheelToPuck(hue, saturation);
   const { r, g, b } = hsvToRgb({ h: hue % 360, s: saturation, v: 100 });
+  // The hue before the first press of a click sequence. Each press of a
+  // double-click moves the puck, so the reset restores this hue rather than
+  // the angle that was clicked (#1455).
+  const pressStartHueRef = useRef(hue);
+  const isRepeatPressRef = useRef<ReturnType<typeof createRepeatPressDetector> | null>(null);
 
   const applyPointer = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -27,12 +34,16 @@ export function ColorWheel({ label, hue, saturation, isActive, onChange, onActiv
       e.clientY - rect.top - rect.height / 2,
       rect.width / 2,
     );
-    onChange(next.hue, next.saturation);
+    // A neutral wheel has no hue to show, so landing on the centre keeps it.
+    onChange(next.saturation === 0 ? hue : next.hue, next.saturation);
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+    isRepeatPressRef.current ??= createRepeatPressDetector();
+    const isRepeat = isRepeatPressRef.current({ time: e.timeStamp, x: e.clientX, y: e.clientY });
+    if (!isRepeat) pressStartHueRef.current = hue;
     applyPointer(e);
   };
 
@@ -68,7 +79,7 @@ export function ColorWheel({ label, hue, saturation, isActive, onChange, onActiv
       onFocus={onActivate}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onDoubleClick={() => onChange(hue, 0)}
+      onDoubleClick={() => onChange(pressStartHueRef.current, 0)}
       onKeyDown={handleKeyDown}
     >
       <div className={styles.puck} />

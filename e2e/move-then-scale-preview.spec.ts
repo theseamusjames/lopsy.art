@@ -92,14 +92,13 @@ test('scaling right after a Move-drag previews live, and the scaled rotate handl
   expect(await overlayAlphaNear(page, 280, 210)).toBeGreaterThan(200);
   expect(await overlayAlphaNear(page, 240, 180)).toBeLessThan(50);
 
-  // The rotate handle sits 20 px outside the corner in pre-transform space,
-  // so after the 1.5x scale it is 30 doc px out.
+  // The rotate handle stays 20 doc px outside the scaled corner (#1453).
   const zoom = await page.evaluate(() => {
     const s = (window as unknown as Record<string, unknown>).__editorStore as { getState: () => { viewport: { zoom: number } } };
     return s.getState().viewport.zoom;
   });
   const corner = await docToScreen(page, 280, 120);
-  const off = 20 * 1.5 * zoom;
+  const off = 20 * zoom;
   await page.mouse.move(corner.x + off, corner.y - off);
   await page.mouse.down();
   await page.mouse.move(corner.x + off + 20, corner.y - off + 40, { steps: 10 });
