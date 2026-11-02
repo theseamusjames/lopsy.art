@@ -2,6 +2,7 @@
 import '../../../test/canvas-mock';
 import { describe, it, expect } from 'vitest';
 import { computeCreateDocument } from './create-document';
+import { isIdentityColorGrade } from '../../../filters/color-grading';
 
 describe('computeCreateDocument', () => {
   it('returns a document with correct dimensions', () => {
@@ -93,6 +94,15 @@ describe('computeCreateDocument — non-RGB modes', () => {
       expect(root?.type).toBe('group');
       const types = root?.type === 'group' ? root.adjustments.map((n) => n.type) : [];
       expect(types).not.toContain('hue-saturation');
+      expect(types).not.toContain('color-grading');
     }
+  });
+
+  it('seeds an RGB document with a default stack that changes nothing', () => {
+    const root = computeCreateDocument(2, 2, false, 'rgb').document!.layers.find((l) => l.type === 'group');
+    const nodes = root?.type === 'group' ? root.adjustments : [];
+    expect(nodes.map((n) => n.type)).toEqual(['levels', 'curves', 'exposure', 'hue-saturation', 'color-grading']);
+    const grade = nodes.find((n) => n.type === 'color-grading');
+    expect(grade?.type === 'color-grading' && isIdentityColorGrade(grade)).toBe(true);
   });
 });

@@ -112,19 +112,26 @@
 }
 
 .effectsDrawer {
-  top: var(--effects-drawer-top, 0px);
+  --effects-drawer-y: var(--effects-drawer-top, 0px);
+  top: var(--effects-drawer-y);
   width: 420px;
   min-width: 280px;
   min-height: 200px;
   /* Anchored to the Layers panel, which can sit low in the dock: cap the
      height at the room left below the drawer's (dragged) top so expanded
      adjustment nodes scroll inside it instead of running off-screen (#953). */
-  max-height: min(
-    80vh,
-    calc(100% - var(--effects-drawer-top, 0px) - var(--drag-y, 0px) - var(--space-2))
-  );
+  --effects-drawer-room: calc(100% - var(--effects-drawer-y) - var(--drag-y, 0px) - var(--space-2));
+  max-height: min(80vh, var(--effects-drawer-room));
   resize: both;
   overflow: auto;
+}
+
+/* The Add Adjustment menu opens upward inside the drawer, so a near-empty
+   list needs the height or the menu clips against the drawer's top. Layers
+   sits around mid-window by default, so rise above that anchor to make room. */
+.effectsDrawerAdjustments {
+  --effects-drawer-y: max(0px, min(var(--effects-drawer-top, 0px), calc(100% - 50vh - var(--space-2))));
+  min-height: max(200px, min(50vh, var(--effects-drawer-room)));
 }
 
 .referenceDrawer {

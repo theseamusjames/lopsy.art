@@ -201,6 +201,7 @@ export function createDefaultAdjustments(): AdjustmentNode[] {
     createDefaultNode('curves'),
     createDefaultNode('exposure'),
     createDefaultNode('hue-saturation'),
+    createDefaultNode('color-grading'),
   ];
 }
 

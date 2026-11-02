@@ -47,4 +47,15 @@ describe('computeFlattenImage', () => {
     // No JS pixel data — compositing happens on GPU
     expect(result.layerPixelData!.size).toBe(0);
   });
+
+  it('seeds the default adjustments allowed in the document color mode', () => {
+    const rootTypes = (colorMode: DocumentState['colorMode']) => {
+      const root = computeFlattenImage({ ...makeDoc(2), colorMode })!.document!.layers[1]!;
+      return root.type === 'group' ? root.adjustments.map((n) => n.type) : [];
+    };
+    expect(rootTypes('rgb')).toEqual(['levels', 'curves', 'exposure', 'hue-saturation', 'color-grading']);
+    for (const mode of ['grayscale', 'lab', 'cmyk'] as const) {
+      expect(rootTypes(mode)).toEqual(['levels', 'curves', 'exposure']);
+    }
+  });
 });
