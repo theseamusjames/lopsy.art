@@ -97,6 +97,10 @@ pub fn render_text_raster_transformed(
             if let Some(loc) = shader.location(&eng.gl, "u_invMatrix") {
                 eng.gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, &inv_matrix);
             }
+            // Uniforms persist per program: clear the float path's source rect.
+            if let Some(loc) = shader.location(&eng.gl, "u_srcRect") {
+                eng.gl.uniform4f(Some(&loc), 0.0, 0.0, 0.0, 0.0);
+            }
             eng.draw_fullscreen_quad();
         });
         engine.mark_layer_dirty(layer_id);

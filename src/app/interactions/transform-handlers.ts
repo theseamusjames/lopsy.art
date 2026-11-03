@@ -451,7 +451,7 @@ export function renderTransformedFloat(layerId: string | null, transform: Transf
   const dstCx = srcCx + transform.translateX;
   const dstCy = srcCy + transform.translateY;
   const invMatrix = computeInverseAffineMatrix(transform);
-  compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dstCx, dstCy);
+  compositeFloatAffine(engine, invMatrix, srcCx, srcCy, dstCx, dstCy, ob.width, ob.height);
 }
 
 /**

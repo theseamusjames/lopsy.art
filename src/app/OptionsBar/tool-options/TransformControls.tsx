@@ -71,7 +71,8 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
     dropFloat(engine);
   }
 
-  if (!hasFloat(engine)) {
+  const isFreshFloat = !hasFloat(engine);
+  if (isFreshFloat) {
     const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
     setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
     floatSelection(engine, activeLayerId);
@@ -84,7 +85,11 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   // Apply transform centered on selection bounds
   const cx = sel.bounds.x + sel.bounds.width / 2;
   const cy = sel.bounds.y + sel.bounds.height / 2;
-  compositeFloatAffine(engine, invMatrix, cx, cy, cx, cy);
+  // A kept float's pixels needn't match the selection's rect, so only a
+  // fresh float passes its source rect for crisp axis-aligned edges.
+  const srcW = isFreshFloat ? sel.bounds.width : 0;
+  const srcH = isFreshFloat ? sel.bounds.height : 0;
+  compositeFloatAffine(engine, invMatrix, cx, cy, cx, cy, srcW, srcH);
 
   // Drop float — layer texture now has the committed result
   dropFloat(engine);
