@@ -266,6 +266,9 @@ pub struct EngineInner {
     pub float_transform_center: [f32; 2],
     pub float_transform_corners: [f32; 8],
     pub float_transform_orig_rect: [f32; 4],
+    /// Document rect of the float's source pixels (x, y, w, h) for the affine
+    /// path; w = 0 when unknown.
+    pub float_transform_src_rect: [f32; 4],
     // Multi-layer transform session (see layer_transform_gpu)
     pub layer_transform: Vec<crate::layer_transform_gpu::LayerTransformSlot>,
     // Overlays
@@ -468,6 +471,7 @@ impl EngineInner {
             float_transform_center: [0.0, 0.0],
             float_transform_corners: [0.0; 8],
             float_transform_orig_rect: [0.0; 4],
+            float_transform_src_rect: [0.0; 4],
             layer_transform: Vec::new(),
             grid_visible: false,
             grid_size: 1.0,

@@ -591,9 +591,12 @@ pub fn composite_float_affine(
     src_center_y: f32,
     dst_center_x: f32,
     dst_center_y: f32,
+    src_width: f32,
+    src_height: f32,
 ) -> Result<(), JsError> {
     layer_manager::composite_float_affine(
         &mut engine.inner, inv_matrix, src_center_x, src_center_y, dst_center_x, dst_center_y,
+        src_width, src_height,
     ).map_err(|e| JsError::new(&e))
 }
 
