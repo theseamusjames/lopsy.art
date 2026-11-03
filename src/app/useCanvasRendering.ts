@@ -380,7 +380,7 @@ export function useCanvasRendering(
   useEffect(() => onFontFacesLoaded((families) => {
     const stale = pathTextLayersUsingFamilies(useEditorStore.getState().document.layers, families);
     if (stale.length === 0) return;
-    for (const id of stale) invalidatePathTextCache(id);
+    for (const id of stale) invalidatePathTextCache(id, { isFontLoad: true });
     dirtyRef.current = true;
   }), []);
 
