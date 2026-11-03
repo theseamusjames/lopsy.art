@@ -112,4 +112,35 @@ test.describe('Reference Image Panel', () => {
     await toggleBtn.click();
     await expect(dropZone).not.toBeVisible();
   });
+
+  test('bottom-right resize handle follows the pointer and keeps the left edge put', async ({ page }) => {
+    await page.locator('button[title="Reference"]').click();
+    const drawer = page.locator('[data-testid="reference-drawer"]');
+    await expect(drawer).toBeVisible();
+
+    const before = await drawer.boundingBox();
+    const handle = await page.locator('[data-testid="reference-resize-handle"]').boundingBox();
+    if (!before || !handle) throw new Error('drawer not laid out');
+
+    const startX = handle.x + handle.width / 2;
+    const startY = handle.y + handle.height / 2;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 75, startY + 50, { steps: 5 });
+    await page.mouse.move(startX + 150, startY + 100, { steps: 5 });
+    await page.mouse.up();
+
+    const after = await drawer.boundingBox();
+    if (!after) throw new Error('drawer gone after resize');
+    expect(after.width).toBeCloseTo(before.width + 150, 0);
+    expect(after.height).toBeCloseTo(before.height + 100, 0);
+    expect(after.x).toBeCloseTo(before.x, 0);
+    expect(after.y).toBeCloseTo(before.y, 0);
+    expect(after.x + after.width).toBeCloseTo(before.x + before.width + 150, 0);
+
+    const grip = await page.locator('[data-testid="reference-resize-handle"]').boundingBox();
+    if (!grip) throw new Error('grip gone after resize');
+    expect(Math.abs(grip.x + grip.width / 2 - (startX + 150))).toBeLessThan(2);
+    expect(Math.abs(grip.y + grip.height / 2 - (startY + 100))).toBeLessThan(2);
+  });
 });
