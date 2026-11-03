@@ -50,6 +50,10 @@ pub struct TransformTargets<'a> {
     pub source_size: (f32, f32),
     pub layer_offset: (f32, f32),
     pub layer_size: (f32, f32),
+    /// Document rect (x, y, w, h) holding the source's pixels. The affine
+    /// shader keeps its bilinear taps inside it and gives axis-aligned edges
+    /// exact coverage, so an edge on a whole pixel stays solid (#1466).
+    pub content_rect: Option<[f32; 4]>,
 }
 
 /// Bind the affine or perspective transform program with its uniforms. The
@@ -72,6 +76,8 @@ pub fn bind_transform_program(engine: &EngineInner, params: &TransformParams, t:
         TransformParams::Affine { inv_matrix, src_center, dst_center } => {
             if let Some(loc) = shader.location(gl, "u_srcCenter") { gl.uniform2f(Some(&loc), src_center[0], src_center[1]); }
             if let Some(loc) = shader.location(gl, "u_dstCenter") { gl.uniform2f(Some(&loc), dst_center[0], dst_center[1]); }
+            let r = t.content_rect.unwrap_or([0.0; 4]);
+            if let Some(loc) = shader.location(gl, "u_srcRect") { gl.uniform4f(Some(&loc), r[0], r[1], r[2], r[3]); }
             if let Some(loc) = shader.location(gl, "u_invMatrix") {
                 gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, inv_matrix);
             }
@@ -232,6 +238,12 @@ pub fn composite_layer_transform(engine: &mut EngineInner, params: &TransformPar
                     source_size: (source_rect.width as f32, source_rect.height as f32),
                     layer_offset: (layer.x as f32, layer.y as f32),
                     layer_size: (layer.width as f32, layer.height as f32),
+                    content_rect: Some([
+                        (source_rect.x + 1) as f32,
+                        (source_rect.y + 1) as f32,
+                        source_rect.width.saturating_sub(2) as f32,
+                        source_rect.height.saturating_sub(2) as f32,
+                    ]),
                 });
                 engine.draw_fullscreen_quad();
             }

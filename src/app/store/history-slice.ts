@@ -290,6 +290,31 @@ function mergeMetadataLayerPositions(
   return { ...snapshot, layers };
 }
 
+/**
+ * The group-wide "Disable adjustments" bypass records no history entry, so a
+ * restore must not carry the snapshot's value for it either: undoing an
+ * adjustment edit made before the bypass would otherwise silently re-enable
+ * the stack (#1461).
+ */
+function keepAdjustmentsBypass(
+  restored: import('../../types').DocumentState,
+  current: import('../../types').DocumentState,
+): import('../../types').DocumentState {
+  const currentEnabled = new Map<string, boolean>();
+  for (const l of current.layers) {
+    if (l.type === 'group') currentEnabled.set(l.id, l.adjustmentsEnabled);
+  }
+  let isChanged = false;
+  const layers = restored.layers.map((l) => {
+    if (l.type !== 'group') return l;
+    const enabled = currentEnabled.get(l.id);
+    if (enabled === undefined || enabled === l.adjustmentsEnabled) return l;
+    isChanged = true;
+    return { ...l, adjustmentsEnabled: enabled };
+  });
+  return isChanged ? { ...restored, layers } : restored;
+}
+
 const NO_DIRTY_LAYERS: Set<string> = new Set();
 
 /**
@@ -502,9 +527,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     // pixel-cache write sees it already empty and skips notifying,
     // leaving LayerThumbnail's cached read stale (#918).
     pixelDataManager.invalidateLayers(target.document.layerOrder);
-    const restoredDocument = target.kind === 'metadata'
-      ? mergeMetadataLayerPositions(target.document, state.document)
-      : target.document;
+    const restoredDocument = keepAdjustmentsBypass(
+      target.kind === 'metadata'
+        ? mergeMetadataLayerPositions(target.document, state.document)
+        : target.document,
+      state.document,
+    );
     set({
       undoStack: state.undoStack.slice(0, S - n),
       redoStack: [...state.redoStack, ...additions],
@@ -592,9 +620,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
     // See undoBy — invalidateLayers() always notifies, unlike clearAll().
     pixelDataManager.invalidateLayers(target.document.layerOrder);
-    const restoredDocument = target.kind === 'metadata'
-      ? mergeMetadataLayerPositions(target.document, state.document)
-      : target.document;
+    const restoredDocument = keepAdjustmentsBypass(
+      target.kind === 'metadata'
+        ? mergeMetadataLayerPositions(target.document, state.document)
+        : target.document,
+      state.document,
+    );
     set({
       redoStack: state.redoStack.slice(0, R - n),
       undoStack: [...state.undoStack, ...additions],

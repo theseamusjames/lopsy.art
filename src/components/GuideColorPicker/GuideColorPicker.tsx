@@ -46,6 +46,19 @@ export function GuideColorPicker() {
     return () => node.removeEventListener('pointerdown', stop);
   }, [open]);
 
+  // The canvas handler only dismisses on pointerdowns inside the canvas, so
+  // opening a menu-bar dropdown would otherwise leave the picker open.
+  useEffect(() => {
+    if (!open) return;
+    const onMenuBarDown = (e: PointerEvent) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('nav[aria-label="Application menu"]')) closeModalOfKind('guideColor');
+    };
+    document.addEventListener('pointerdown', onMenuBarDown, true);
+    return () => document.removeEventListener('pointerdown', onMenuBarDown, true);
+  }, [open, closeModalOfKind]);
+
   // The picker is meaningless when rulers or guides are hidden — those UIs
   // are the only way to interact with guide color.
   if (!open || !showRulers || !showGuides) return null;
