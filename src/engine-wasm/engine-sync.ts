@@ -131,7 +131,7 @@ import { pathTextFont, renderTextOnPath } from '../tools/text/render-text-on-pat
 import { clearPathTextGlyphBoxes, setPathTextGlyphBoxes } from '../tools/text/path-text-hit-boxes';
 import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from '../tools/text/point-text-align';
 import { ensureFontFacesLoaded, parseFontFamilyList } from '../utils/font-face-readiness';
-import { getTracked } from './sync-state';
+import { getTracked, markPathTextFontRedrawn } from './sync-state';
 import { textLayoutGeneration } from './text-layout-generation';
 import { syncLayers } from './sync-layers';
 
@@ -195,7 +195,8 @@ function buildGradientMapLut(
   return lut;
 }
 
-export function invalidatePathTextCache(layerId: string): void {
+export function invalidatePathTextCache(layerId: string, opts?: { isFontLoad?: boolean }): void {
+  if (opts?.isFontLoad) markPathTextFontRedrawn(layerId);
   const engine = getEngine();
   if (!engine) return;
   const tracked = getTracked(engine);
@@ -1101,6 +1102,7 @@ export function syncPathTextLayers(
 
     ensureFontFacesLoaded(pathTextFont(layerWithLiveText), liveText, () => {
       pathTextKeys.delete(layer.id);
+      markPathTextFontRedrawn(layer.id);
       onFontsSettled?.();
     });
   }
