@@ -32,8 +32,6 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   ensureFloatCovers: vi.fn(() => new Int32Array()),
   hasFloat: vi.fn(() => false),
   setSelectionMask: vi.fn(),
-  readQuickMaskPixels: vi.fn(() => new Uint8Array(8)),
-  uploadQuickMaskPixels: vi.fn(),
   cropLayerToContent: vi.fn(() => new Float64Array([0, 0, 0, 0])),
   getLayerEngineBounds: vi.fn(() => new Int32Array([0, 0, 0, 0])),
   // Spy so the handleMoveDown regression test can assert it is NEVER called
@@ -44,6 +42,12 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
 const engine: { __engine: string } | null = { __engine: 'mock' };
 vi.mock('../../engine-wasm/engine-state', () => ({
   getEngine: () => engine,
+}));
+
+vi.mock('./quick-mask-content-move', () => ({
+  beginQuickMaskContentMove: vi.fn(() => true),
+  moveQuickMaskContent: vi.fn(),
+  endQuickMaskContentMove: vi.fn(),
 }));
 
 vi.mock('../../panels/LayerPanel/layer-selection', () => ({
