@@ -46,7 +46,10 @@ The palette:
 - Amber neon `#FFAA22`, amber core `#FFF2CC`
 - Bulbs `#FFF5DA`, bulb glow `#FFB040`
 - Arrow crimson `#8E1424`, arrow trim `#D8C08A`
-- Reader board `#F4ECD6`, board letters `#16131C`, rails `#9C9278`
+- Reader board `#F4ECD6`, board glow `#B9A57A`, board frame `#1C2029`, board letters `#16131C`, rails `#9C9278`
+- Vacancy box `#14161E`, box trim `#3B4252`, unlit tube `#6A6F7A`
+- Telephone pole `#0B0A14`, pole light `#FFB347`
+- Ground light `#FF4A6A` / `#3FFFD0`, vignette `#2A1C44`
 - Footer cream `#FFE7C2`
 
 > **Tip:** On a wide-gamut (Display P3) screen, Lopsy reads typed hex codes as P3 colours. These codes were picked as P3 values, so they match the finished flyer. On an sRGB screen they come out a touch duller.
@@ -128,9 +131,9 @@ Open the **Paths** panel and click **Path to Selection**, then **Delete Path**. 
 
 Click **Add Layer** and name it *Near Mesas*. Set the foreground to the darker `#140F2A`. Trace a lower, nearer ridge the same way, only 30–60 px tall, with a small bump on each side. Fill it and delete the path as before.
 
-Click **Add Layer** and name it *Telephone Pole*. Set the foreground to `#0B0A14`. With the **Pen** tool, set **Stroke** to **16** in the options bar, click at the bottom of the pole (x 1160, just below the horizon, at about y 1332) and click again at the top (y 520). Press [[Enter]] to stroke the path, then delete it in the **Paths** panel. If you leave it selected, your next click would edit it instead of starting a new path.
+Click **Add Layer** and name it *Telephone Pole*. Set the foreground to `#0B0A14`. With the **Pen** tool, set **Stroke** to **16** in the options bar, click at the foot of the pole, 40 px in from the right edge and just below the horizon, then click again straight above it, a little over a quarter of the way down the canvas (about y 520). Press [[Enter]] to stroke the path, then delete it in the **Paths** panel. If you leave it selected, your next click would edit it instead of starting a new path.
 
-In the same way, stroke a **9** px crossarm across the pole at y 556, from x 1118 to x 1204, and a **7** px one at y 592.
+In the same way, stroke a **9** px crossarm across the pole at y 556, from x 1118 to x 1204, and a **7** px one, a little shorter, about 36 px below it.
 
 For the wires set **Stroke** to **2**. Click just off the right edge, then click the left end of the top crossarm. Now press at about x 560, a little lower (y 612), and drag to the left to pull out curve handles. Finally click just off the left edge. Press [[Enter]]. Draw a second wire through the right end of the crossarm, sagging a bit lower. Delete the paths when you're done.
 
@@ -163,7 +166,7 @@ With the **Pen** tool, draw an onion dome centred on the middle guide:
 
 Use **Path to Selection**, delete the path, **Edit → Fill** and deselect.
 
-Click **Add Layer** and name it *Cabinet*. Its top edge rises to the right, from about (124, 476) to (1076, 410), and its bottom edge runs parallel to it, from (124, 868) to (1076, 802). Click the eight corners with the **Pen**, clipping each corner with a 24 px bevel. Use **Path to Selection** as before. Fill the selection with the same teal and deselect.
+Click **Add Layer** and name it *Cabinet*. Its top edge rises to the right, from about (124, 476) to (1076, 410), and its bottom edge runs parallel to it, from (124, 868) to (1076, 802). With the **Pen**, click these eight corners in order, which clips each corner with a small bevel: (100, 502), (124, 476), (1076, 410), (1100, 432), (1100, 776), (1076, 802), (124, 868), (100, 846). Click the first anchor to close it, then use **Path to Selection** and **Delete Path** as before. Fill the selection with the same teal and deselect.
 
 ## Turn the cabinet into painted sheet metal
 
@@ -179,13 +182,15 @@ Give *Dome Backing* exactly the same three effects. The two shapes now read as o
 
 ## Bend the amber dome tubes
 
-![Three amber Pen strokes inside the dome backing: the outline of a smaller onion dome and two curved ribs meeting at the tip, with the last path still selected](11-dome-tube-strokes.webp)
+![Three amber Pen strokes inside the dome backing: the outline of a smaller onion dome and two curved ribs meeting at the tip, with the right rib's path placed and waiting for Enter](11-dome-tube-strokes.webp)
 
 Click *Cabinet*, then click **Add Layer** and name the new layer *Dome Neon*. Set the foreground to amber `#FFAA22`.
 
 Pick the **Pen**, set **Stroke** to **12**, and trace a smaller onion about 30 px inside the backing. Start with a sharp corner at the bottom left, use smooth anchors up and over to a sharp corner at the tip, and come down to a sharp corner at the bottom right. Don't close it: a neon tube ends where it plugs into the cabinet. Press [[Enter]] to stroke it.
 
-Set **Stroke** to **10** and draw two ribs. Each one runs from the cabinet's top edge, bows outward, and comes up to meet just under the tip (left rib through about (530, 372) and (548, 292)). Press [[Enter]] after each one.
+Set **Stroke** to **10** and draw two ribs with smooth anchors. The left rib starts on the cabinet's top edge at about (560, 452), bows out through (530, 372) and (548, 292), and ends just under the tip at (594, 214). The right rib is its mirror image across the centre guide. Press [[Enter]] after each one.
+
+After each [[Enter]], delete the path in the **Paths** panel so your next click starts a fresh path instead of editing the last one.
 
 ## Light the tubes and give them a hot core
 
@@ -208,7 +213,7 @@ You'll use this glow-plus-core recipe for every tube on the sign.
 
 Click **Add Layer** and name it *Moon Neon*.
 
-Pick the **Elliptical Marquee**, click once on the canvas to open the corner dialog, and make a circle **From 806, 122** **To 954, 270**. Now hold [[Alt]] and drag a slightly smaller circle from (850, 110) to (974, 234). It is offset up and to the right, and it bites the crescent out of the first circle.
+Pick the **Elliptical Marquee**, click once on the canvas to open the corner dialog, and make a circle **From 806, 122** **To 954, 270**. Now hold [[Alt]] and drag a slightly smaller circle, about 124 px across, centred about 30 px up and to the right of the first one (from about (850, 110) to (974, 234)). It bites the crescent out of the first circle.
 
 Set the foreground to mint `#22FFB5` and choose **Edit → Fill**. Choose **Select → Shrink…** by **11** px and press [[Delete]]. Only an 11 px ring of glass is left. Deselect.
 
@@ -220,7 +225,7 @@ Give the moon the tube effects in mint: **Outer Glow** `#22FFB5` at **Size 32**,
 
 Click **Add Layer** and name it *Sparkles*. Set the foreground to `#FFF2CC`.
 
-With the **Pen**, click eight sharp corners for a four-point star centred at about (296, 246). The points sit 50 px out and the pinched corners only 13 px from the centre. Close the path, use **Path to Selection**, fill it and deselect.
+With the **Pen**, click eight sharp corners for a four-point star centred at about (296, 246). The points sit 50 px out and the pinched corners only 13 px from the centre. Close the path, use **Path to Selection** and **Delete Path**, fill it and deselect.
 
 Now duplicate it:
 
@@ -232,7 +237,7 @@ Now duplicate it:
 
 ![Four amber-white sparkles around the dome: the original, a medium one below it, a small one at the top and one to the right of the dome](15-sparkles-pasted.webp)
 
-Click the *Sparkles* row again before each copy, so you always copy the big original. Paste two more: one at about (1012, 330) at 50%, and one high above the dome at about (396, 128) at 40%.
+Click the *Sparkles* row and draw the marquee around the big original again before each copy, so you always copy it rather than a small one. Paste two more: one at about (1012, 330) at 50%, and one high above the dome at about (396, 128) at 40%.
 
 Click the top pasted layer and choose **Layer → Merge Down** three times, until all four sparkles are on *Sparkles*. Then give that layer a **Stroke** of **Width 3**, outside, in `#FFAA22`, and an **Outer Glow** in `#FFAA22` at **Size 24**, **Spread 4**, **Opacity 85**.
 
@@ -242,9 +247,9 @@ Click the top pasted layer and choose **Layer → Merge Down** three times, unti
 
 Click the *Dome Core* row first. The Text tool restyles whatever text layer is active, so start each new text from a normal layer.
 
-Pick the **Text** tool. Choose **Yellowtail**, size **180**, set the colour to red `#FF3B2E`, click near the top of the cabinet, type **Hotel**, and press [[Tab]] to commit. Make sure **Letter spacing** in the Text panel is **0**.
+Pick the **Text** tool. Choose **Yellowtail**, size **180**, set the colour to red `#FF3B2E`, click near the top of the cabinet, type **Hotel**, and press [[Tab]] to commit. Make sure **Letter spacing** in the Text panel is **0**. Double-click the layer name and rename it *Hotel*.
 
-Click the *Sparkles* row. Choose **Monoton**, size **160**, colour mint core `#DDFFF1`, click at the left of the cabinet, type **XANADU** and press [[Tab]]. Monoton is drawn as bundles of parallel lines, so it already looks like bent tubing.
+Click the *Sparkles* row. Choose **Monoton**, size **160**, colour mint core `#DDFFF1`, click at the left of the cabinet, type **XANADU** and press [[Tab]]. Rename the layer *XANADU*. Monoton is drawn as bundles of parallel lines, so it already looks like bent tubing.
 
 Click **Rasterize Layer** at the bottom of the Layers panel for each word. Then move them with the **Move** tool. *XANADU* goes centred on the middle guide, with even margins of about 65 px each side. *Hotel* goes just right of centre, with roughly equal space above and below it.
 
@@ -254,9 +259,9 @@ Click **Rasterize Layer** at the bottom of the Layers panel for each word. Then 
 
 The cabinet rises about 4° to the right, so the type should too.
 
-Draw a marquee a little bigger than *XANADU*. With the **Move** tool, press just outside the marquee's top-right corner, where the pointer turns into a rotate arrow, and drag upward until the word lines up with the cabinet's top edge (about 4°). Press [[Cmd+D]] to commit.
+Click the *XANADU* row, then draw a marquee a little bigger than the word. With the **Move** tool, press just outside the marquee's top-right corner, where the pointer turns into a rotate arrow, and drag upward until the word lines up with the cabinet's top edge (about 4°). Press [[Cmd+D]] to commit.
 
-Do the same for *Hotel*, but tilt it a touch more (about 6°). That gives the script a little lift.
+Click the *Hotel* row and do the same, but tilt it a touch more (about 6°). That gives the script a little lift.
 
 ## Make the type glow
 
@@ -282,7 +287,7 @@ With the **Pen**, click the eight corners of an arrow:
 - the head flares out to y 858 and y 1052, with its tip at (1088, 955)
 - the tail is notched in to (180, 955)
 
-Use **Path to Selection**, fill it and deselect. Add effects:
+Use **Path to Selection** and **Delete Path**, fill it and deselect. Add effects:
 
 - **Stroke**: **Width 6**, outside, `#D8C08A`
 - **Inner Glow**: black, **Size 30**, **Opacity 60**
@@ -298,7 +303,7 @@ Set the foreground to `#FFF5DA`. Click at the start of the run, about 17 px insi
 
 Give *Bulbs* an **Outer Glow** in `#FFB040` at **Size 16**, **Spread 10**, **Opacity 95**.
 
-With *Bulbs* still active, pick the **Text** tool. Choose **Tilt Neon**, size **56**, colour `#FFF2CC`, and type **COCKTAILS**. Press [[Tab]], then set **Letter spacing** to **10** in the Text panel. Move it so it's centred on the shaft, with equal space to the bulb rows above and below. Here that's centred at y 955, just left of the arrow's middle so it balances against the head.
+With *Bulbs* still active, pick the **Text** tool. Choose **Tilt Neon**, size **56**, colour `#FFF2CC`, click on the left part of the shaft, and type **COCKTAILS**. Press [[Tab]], rename the layer *Cocktails*, and set **Letter spacing** to **10** in the Text panel. Move it so it sits midway between the two bulb rows, centred on the shaft's straight part rather than on the whole arrow, so it balances against the head.
 
 Give it a **Stroke** of **Width 2**, outside, in `#FFAA22`, an **Outer Glow** in `#FFAA22` at **Size 20**, **Spread 6**, **Opacity 90**, and the tube **Drop Shadow**.
 
@@ -320,11 +325,11 @@ Real reader boards have ledges the letters sit on. Click **Add Layer** and name 
 
 ![FRIDAY LOUNGE NIGHT and LIVE EXOTICA · 9 PM in black condensed capitals, each line sitting on its rail and centred on the board](22-board-letters.webp)
 
-With *Board Rails* active, pick the **Text** tool. Choose **League Gothic**, size **52**, colour `#16131C`, and type **FRIDAY LOUNGE NIGHT**. Press [[Tab]] and set **Letter spacing** to **6**.
+With *Board Rails* active, pick the **Text** tool. Choose **League Gothic**, size **52**, colour `#16131C`, and type **FRIDAY LOUNGE NIGHT**. Press [[Tab]], rename the layer *Board Row 1*, and set **Letter spacing** to **6**.
 
-Click *Board Rails* again and type **LIVE EXOTICA · 9 PM** with the same settings.
+Click *Board Rails* again and type **LIVE EXOTICA · 9 PM** with the same font, size and colour. Press [[Tab]], rename it *Board Row 2*, and set **Letter spacing** to **6** again.
 
-Move each line so it's centred on the middle guide and its letters sit right on their rail. Zoom in to check: the bottoms of the letters should touch the rail without a gap or overlap. That gives the board about 25 px of padding top and bottom.
+Move each line so it's centred on the middle guide and its letters sit right on their rail. Zoom in to check: the bottoms of the letters should touch the rail without a gap or overlap, and the space above the top line should match the space below the bottom rail.
 
 ## Add NO VACANCY with the NO switched off
 
@@ -334,10 +339,10 @@ Click *Board Rails*, then **Add Layer** and name it *Vacancy Box*. Use the marqu
 
 Hang it from the board. Pick the **Pencil**, set **Size 4** and the foreground to `#3B4252`. Draw two short vertical rods from the bottom of the board to the top of the box, 40 px in from each end of the box.
 
-Now set the words in **Tilt Neon**, size **40**, **Letter spacing 4**:
+Now set the words in **Tilt Neon**, size **40**. After each word, press [[Tab]], rename the layer after the word, and set **Letter spacing** to **4**.
 
-- Click *Vacancy Box*, type **NO** in the box colour `#14161E`, and give it a **Stroke** of **Width 2**, outside, in grey `#6A6F7A`. With no glow it reads as a dark glass tube that's switched off.
-- Click *Vacancy Box* again and type **VACANCY** in `#FFE0D6`. Give it a red **Stroke** (**Width 2**, `#FF3B2E`), an **Outer Glow** in `#FF3B2E` at **Size 18**, and the tube **Drop Shadow**.
+- Click *Vacancy Box*, type **NO** in the box colour `#14161E` (rename it *No*), and give it a **Stroke** of **Width 2**, outside, in grey `#6A6F7A`. With no glow it reads as a dark glass tube that's switched off.
+- Click *Vacancy Box* again and type **VACANCY** in `#FFE0D6` (rename it *Vacancy*). Give it a red **Stroke** (**Width 2**, outside, `#FF3B2E`), an **Outer Glow** in `#FF3B2E` at **Size 18**, **Spread 6**, **Opacity 90**, and the tube **Drop Shadow**.
 
 Leave about a word space between the two words and centre the pair in the box.
 
@@ -357,7 +362,7 @@ Set **Blend** to **Screen**.
 
 ## Group the sign
 
-![The Layers panel showing three groups: Neon Head, Reader Board Group and Arrow Group](25-groups.webp)
+![The sign after grouping, with the Layers panel scrolled to the new Arrow Group and its Cocktails, Bulbs and Arrow layers](25-groups.webp)
 
 Groups keep the sign easy to move. Click *XANADU* at the top of the stack, then [[Shift]]-click *Dome Backing*. Choose **Layer → Group Layers** and rename the group *Neon Head*.
 
@@ -379,7 +384,7 @@ Click *Near Mesas*, then **Add Layer** and name it *Asphalt*. Marquee from the h
 
 Click *Poles*, then **Add Layer** and name it *Pole Spill*. [[Cmd]]-click the *Poles* thumbnail and click the *Pole Spill* row. Set the **Brush** to **Size 160**, **Hardness 0**, **Opacity 70**, and the foreground to `#FFB347`. Paint a stroke across both poles just under the arrow, and another near the ground. Deselect and set **Blend** to **Overlay**. The steel now picks up the arrow's warm light.
 
-Click **Add Layer** and name it *Footings*. With the **Elliptical Marquee**'s dialog, make **From 412, 1323** **To 472, 1337** under the left pole. Hold [[Shift]] and drag two more ellipses to add them: one under the right pole and one under the telephone pole. Fill the selection with `#15131F` and deselect.
+Click **Add Layer** and name it *Footings*. With the **Elliptical Marquee**'s dialog, make **From 412, 1323** **To 472, 1337** under the left pole. Hold [[Shift]] and drag two more ellipses to add them: one from about (728, 1323) to (788, 1337) under the right pole, and a slightly smaller one from about (1134, 1324) to (1186, 1336) under the telephone pole. Fill the selection with `#15131F` and deselect.
 
 ## Copy just the sign for its reflection
 
@@ -405,7 +410,7 @@ Now drag the layer straight down until its top edge sits on the footings at y 13
 
 Choose **Filter → Motion Blur…** with **Angle 90** and **Distance 45** to drag the light into vertical streaks. Then add **Filter → Gaussian Blur…** with **Radius 2**. Set the layer's **Blend** to **Screen** and its opacity to **70%**.
 
-Click **Add Mask**, then click the mask thumbnail. Drag a white-to-black linear gradient from the footings (y 1330) down to about y 1710, so the reflection fades into the distance.
+Click **Add Mask**, then click the mask thumbnail. Pick the **Gradient** tool, set it to **Linear**, and in **Advanced…** set two stops again: `#FFFFFF` at the left end and `#000000` at the right. Drag from the footings (y 1330) straight down to about y 1710, so the reflection fades into the distance.
 
 While you're still in the mask, choose **Filter → Add Noise…** (**Amount 40**, **Mono**). Then choose **Filter → Motion Blur…** with **Angle 0** and **Distance 80**. The noise smears sideways into ripples that break up the reflection. Click the layer's name when you're done.
 
@@ -417,9 +422,9 @@ With *Reflection* active, click **Add Layer** and name it *Ground Spill*. Use th
 
 Make a smaller ellipse under the left pole, **From 200, 1290** **To 700, 1390**, feather it by **70** and fill it with `#3FFFD0`. Deselect, set **Blend** to **Screen** and the opacity to **28%**.
 
-Now the footer. Click *Footings* so the new text starts from a normal layer. Pick the **Text** tool with **League Gothic**, size **34**, colour `#FFE7C2`, **Letter spacing 5**. Type **AIR-COOLED ROOMS · HEATED POOL · COLOR TV** and centre it at about y 1646.
+Now the footer. Click *Footings* so the new text starts from a normal layer. Pick the **Text** tool with **League Gothic**, size **34**, colour `#FFE7C2`. Type **AIR-COOLED ROOMS · HEATED POOL · COLOR TV**, press [[Tab]], rename it *Amenities*, and set **Letter spacing** to **5**. Centre it on the middle guide, about 150 px above the bottom edge.
 
-Click *Footings* again, set size **46** and **Letter spacing 8**, and type **2201 DESERT HIGHWAY · XANADU, NEVADA**. Centre it at about y 1700.
+Click *Footings* again, set size **46**, type **2201 DESERT HIGHWAY · XANADU, NEVADA**, press [[Tab]], rename it *Address* and set **Letter spacing** to **8**. Centre it just below the first line, about 100 px above the bottom edge.
 
 ## Darken the edges of the sky
 
@@ -433,7 +438,7 @@ Pick the **Gradient** tool, switch it to **Radial**, and make a three-stop gradi
 
 ![The arrow with every third bulb dimmed, giving the impression of lights chasing around the edge](33-bulb-chase.webp)
 
-Chaser bulbs light in turns, so a photo always catches some of them dim. Click *Bulbs* and pick the **Eraser**. Set **Size 20** and **Opacity 65%**.
+Chaser bulbs light in turns, so a photo always catches some of them dim. Click *Bulbs* and pick the **Eraser**. Set **Size 20** and **Opacity 65%**. The Eraser has no hardness setting, which is fine: a 20 px eraser covers a whole 13 px bulb.
 
 Click every third bulb, working around the arrow. Each click leaves a dimmer bulb with a weaker glow.
 
