@@ -18,7 +18,7 @@ import { ellipseToPathAnchors, polygonToPathAnchors, rectangleToPathAnchors } fr
 import type { ShapeMode } from './shape';
 import type { PathAnchor } from '../path/path';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
-import { snapDragPoint } from '../common/drag-snap';
+import { snapDragBox } from '../common/drag-snap';
 import { dragSnapOptions } from '../../app/interactions/drag-snap-options';
 import { canReceiveRasterPaint } from '../../layers/paint-target';
 
@@ -66,8 +66,11 @@ interface ShapeBox {
 function shapeBox(state: InteractionState, layerLocalPos: Point, metaKey: boolean): ShapeBox {
   const start = state.startPoint!;
   const snap = dragSnapOptions();
-  const center = snapDragPoint({ x: start.x + state.layerStartX, y: start.y + state.layerStartY }, snap);
-  const edge = snapDragPoint({ x: layerLocalPos.x + state.layerStartX, y: layerLocalPos.y + state.layerStartY }, snap);
+  const { start: center, end: edge } = snapDragBox(
+    { x: start.x + state.layerStartX, y: start.y + state.layerStartY },
+    { x: layerLocalPos.x + state.layerStartX, y: layerLocalPos.y + state.layerStartY },
+    snap,
+  );
   const constrainedEdge = constrainToAspectRatio(center, edge, metaKey);
   return {
     cx: center.x,

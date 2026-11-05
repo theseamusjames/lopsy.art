@@ -68,3 +68,31 @@ describe('computeAddLayer children order (#824)', () => {
     expect(nextRoot?.type === 'group' ? nextRoot.children : []).toEqual([bg.id, l1.id, newId, top.id]);
   });
 });
+
+describe('computeAddLayer default names (#1493)', () => {
+  it('numbers past the root group and never repeats a name after a delete', () => {
+    const bg = createRasterLayer({ name: 'Background', width: 10, height: 10 });
+    const l1 = createRasterLayer({ name: 'Layer 1', width: 10, height: 10 });
+    const root = createGroupLayer({ name: 'Project', children: [bg.id, l1.id] });
+    const doc: DocumentState = {
+      ...makeDoc(),
+      layers: [bg, l1, root],
+      layerOrder: [bg.id, l1.id, root.id],
+      activeLayerId: l1.id,
+      rootGroupId: root.id,
+    };
+    const afterAdd = computeAddLayer(doc).document!;
+    const added = afterAdd.layers.find((l) => l.id === afterAdd.activeLayerId)!;
+    expect(added.name).toBe('Layer 2');
+
+    const withoutLayer1: DocumentState = {
+      ...afterAdd,
+      layers: afterAdd.layers.filter((l) => l.id !== l1.id),
+      layerOrder: afterAdd.layerOrder.filter((id) => id !== l1.id),
+      activeLayerId: bg.id,
+    };
+    const afterSecondAdd = computeAddLayer(withoutLayer1).document!;
+    const names = afterSecondAdd.layers.map((l) => l.name);
+    expect(names.filter((n) => n.startsWith('Layer '))).toEqual(['Layer 2', 'Layer 3']);
+  });
+});

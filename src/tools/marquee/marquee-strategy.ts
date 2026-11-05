@@ -9,7 +9,7 @@ import { getSelectionMaskValue, selectionCombineMode, translateSelectionMask } f
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
 import { createTransformState } from '../transform/transform';
-import { snapDragPoint } from '../common/drag-snap';
+import { snapDragBox } from '../common/drag-snap';
 import { dragSnapOptions } from '../../app/interactions/drag-snap-options';
 import {
   constrainMarqueeSize,
@@ -87,8 +87,7 @@ export const marqueeStrategy: SelectionToolStrategy = {
     }
 
     const snapOptions = dragSnapOptions();
-    const mStart = snapDragPoint(state.startPoint, snapOptions);
-    const mEnd = snapDragPoint(canvasPos, snapOptions);
+    const { start: mStart, end: mEnd } = snapDragBox(state.startPoint, canvasPos, snapOptions);
     const toolSettings = useToolSettingsStore.getState();
     const { w, h } = constrainMarqueeSize(
       mEnd.x - mStart.x,

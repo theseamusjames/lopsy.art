@@ -36,6 +36,7 @@ import type {
 } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
+import { applyMaskFollow, beginMaskFollow, endMaskFollow, isMaskFollowActive, translateMasksWithLayers } from './move-layer-masks';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
 import { claimLiveFloat, commitLiveFloat, deferNudgeMask, flushNudgeMask, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
 import {
@@ -238,6 +239,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // A drag that starts while an arrow key is still held needs the mask
   // where the ants are.
   flushNudgeMask();
+  endMaskFollow();
   const editorState = useEditorStore.getState();
   const sel = editorState.selection;
   const isQuickMaskMode = useUIStore.getState().maskMode === 'quickMask';
@@ -737,12 +739,16 @@ export function handleMoveMove(
     const appliedDx = newX - state.layerStartX;
     const appliedDy = newY - state.layerStartY;
     const editor = useEditorStore.getState();
+    if (!isMaskFollowActive() && state.layerId) {
+      beginMaskFollow([state.layerId, ...(move?.siblings ?? []).map((sib) => sib.id)]);
+    }
     editor.updateLayerPosition(state.layerId!, newX, newY);
     if (move?.siblings) {
       for (const sib of move.siblings) {
         editor.updateLayerPosition(sib.id, sib.startX + appliedDx, sib.startY + appliedDy);
       }
     }
+    applyMaskFollow(appliedDx, appliedDy);
   }
 }
 
@@ -756,6 +762,7 @@ export function handleMoveUp(
   // Whole-layer down never followed by a move → no history entry, no state
   // change. Clear the pending label so a subsequent gesture starts fresh.
   pendingWholeLayerMoveLabel = null;
+  endMaskFollow();
 
   // Flush any pending quick-mask translate so the final drop position is
   // materialized on the GPU before we clear the drag target.
@@ -993,12 +1000,15 @@ export function handleNudgeMove(
     // Multi-layer nudge (issue #707) — every other selected, unlocked
     // layer shifts by the same delta so keyboard nudging matches the
     // drag semantics.
+    const movedIds = [activeId];
     const selectedIds = editor.document.selectedLayerIds ?? [];
     for (const sid of selectedIds) {
       if (sid === activeId) continue;
       const l = editor.document.layers.find((x) => x.id === sid);
       if (!l || l.locked) continue;
       editor.updateLayerPosition(sid, l.x + dx, l.y + dy);
+      movedIds.push(sid);
     }
+    translateMasksWithLayers(movedIds, dx, dy);
   }
 }
