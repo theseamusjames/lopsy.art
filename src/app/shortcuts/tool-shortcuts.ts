@@ -91,6 +91,9 @@ export function handleNudgeShortcut(
   if (tool !== 'move' && !isSelection) return false;
 
   e.preventDefault();
+  // An open Mesh Warp session owns the layer: a nudge would move the pixels
+  // out from under its grid, the same way an off-handle drag did (#1508).
+  if (useUIStore.getState().meshWarp) return true;
   // A nudge would float part of a live text layer — the same move a drag
   // refuses. Refuse it before scheduleNudge pushes an empty history entry
   // (#1085); hint once per key-hold, not on every auto-repeat.
