@@ -435,11 +435,15 @@ describe('text up', () => {
     expect(added).toMatchObject({ x: 100, y: 80, width: 60 });
   });
 
-  it('names new layers sequentially from the layer count', () => {
-    editorState.document.layers = [makeTextLayer(), makeTextLayer({ id: 'text-2' })];
+  it('names a new layer one above the highest "Text <n>" in use (#1493)', () => {
+    editorState.document.layers = [
+      makeTextLayer({ name: 'Text 4' }),
+      makeTextLayer({ id: 'text-2', name: 'Hello' }),
+      makeTextLayer({ id: 'text-3', name: 'Text 1' }),
+    ];
     handleTextUp(makeState({ startPoint: { x: 200, y: 200 } }), { x: 200, y: 200 });
     const added = editorState.addTextLayer.mock.calls[0]![0] as TextLayer;
-    expect(added.name).toBe('Text 3');
+    expect(added.name).toBe('Text 5');
   });
 
   it('does nothing without a start point', () => {
