@@ -142,6 +142,31 @@ pub fn upload_pixels_f32(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn upload_pixels_f32_rect(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    texture_width: u32,
+    texture_height: u32,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    data: &[f32],
+) -> Result<(), String> {
+    if x + width > texture_width || y + height > texture_height {
+        return Err(format!(
+            "Rect {width}x{height}+{x}+{y} exceeds the {texture_width}x{texture_height} texture"
+        ));
+    }
+    if data.len() != width as usize * height as usize * 4 {
+        return Err(format!("Expected {} floats for a {width}x{height} rect, got {}", width as usize * height as usize * 4, data.len()));
+    }
+    with_layer_texture(engine, layer_id, texture_width, texture_height, |eng, tex| {
+        eng.texture_pool.upload_rgba_f32(&eng.gl, tex, x as i32, y as i32, width, height, data)
+    })
+}
+
 /// Upload layer pixels directly from an HtmlCanvasElement, avoiding the
 /// getImageData unpremultiply round-trip that causes alpha precision loss.
 pub fn upload_pixels_from_canvas(

@@ -603,3 +603,17 @@ A `role="slider"` div that handles arrows would step itself *and* nudge the
 active layer. Put `HANDLES_ARROW_KEYS_ATTR` (`native-control-keys.ts`) on the
 element to opt out, as `ColorWheel` does. Native range, radio and select
 controls are already exempt.
+
+## Splitting a raw-decode stage into bands: prove the halo, don't guess it
+
+The RAF pipeline after white balance (`render_rgb`) only reads a bounded
+neighbourhood per pixel, so `render_band` renders row bands with
+`BAND_HALO_ROWS` of context and stays bit-identical to a whole-frame
+decode. If you add or widen a stage in `render_rgb`, bump
+`RENDER_REACH_ROWS`. `tests/raf_bands.rs` compares 6-row bands against the
+whole frame on a noisy synthetic RAF (`tests/support/synthetic_raf.rs`), and
+it fails once the halo is below the real reach (12 rows fails, 18 passes),
+so run it after any change there. Anything that needs the whole frame
+(phase detection, gray-world WB, statistics) belongs in `prepare_raf`.
+Workers get the params as the JSON string Rust wrote. Never re-serialize
+it in JS, or the floats can drift by an ulp.

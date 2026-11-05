@@ -1,27 +1,20 @@
 /**
- * RAF (Fujifilm RAW) image import — decodes RAF files via the Rust-side
- * decoder and uploads pixel data to the GPU.
+ * RAF (Fujifilm RAW) image import. The decode runs on a pool of Web Workers
+ * (see raf-decode.ts) and each finished band is uploaded straight into the
+ * layer's GPU texture, so the full-size float image never exists in one
+ * piece on the main thread.
  *
- * The pipeline mirrors the DNG import path: WASM decodes + uploads, then JS
- * sets up the document model and applies default raw adjustments.
- *
- * Currently supports uncompressed RAF only. Compressed RAF files (the default
- * on most Fujifilm cameras) will show a clear error asking the user to set
- * their camera to "Uncompressed" or convert to DNG.
+ * Supports uncompressed and lossless-compressed RAF.
  */
 
 import { useEditorStore } from '../app/editor-store';
 import { useUIStore } from '../app/ui-store';
 import { getEngine } from '../engine-wasm/engine-state';
-import { decodeAndUploadRaf, initWasm } from '../engine-wasm/wasm-bridge';
+import { initWasm, uploadLayerPixelsF32Rect } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState } from '../engine-wasm/engine-sync';
 import { pixelDataManager } from '../engine/pixel-data-manager';
 import { notifyError } from '../app/notifications-store';
-
-interface RafMeta {
-  width: number;
-  height: number;
-}
+import { decodeRafInWorkers } from './raf-decode';
 
 export async function importRafFile(data: Uint8Array, name: string): Promise<void> {
   const ui = useUIStore.getState();
@@ -51,11 +44,21 @@ async function importRafFileInner(data: Uint8Array, name: string): Promise<void>
     return;
   }
 
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  // Yield a frame so the render loop syncs the new 1x1 document before the
+  // decode starts uploading into its layer texture.
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-  const metaJson = decodeAndUploadRaf(engine, activeLayerId, data);
-  const meta: RafMeta = JSON.parse(metaJson);
+  // The decode uploads straight into the GPU texture. Drop the 1x1
+  // placeholder pixels first so engine-sync treats the texture as the
+  // source of truth and never re-uploads the placeholder over it.
+  pixelDataManager.remove(activeLayerId);
+
+  const meta = await decodeRafInWorkers(data, (full, band) => {
+    uploadLayerPixelsF32Rect(
+      engine, activeLayerId, full.width, full.height,
+      band.x, band.y, band.width, band.height, band.pixels,
+    );
+  });
 
   if (meta.width === 0 || meta.height === 0) {
     notifyError('RAF decode returned empty image');
@@ -79,7 +82,9 @@ async function importRafFileInner(data: Uint8Array, name: string): Promise<void>
   // leaves the document with a clean adjustments panel like any other
   // image, so users can start their own edits from a true baseline.
 
-  pixelDataManager.remove(activeLayerId);
+  // The texture changed without touching the JS cache, so tell its
+  // subscribers (the layer thumbnail) to read it back.
+  pixelDataManager.bumpVersion(activeLayerId);
 
   resetTrackedState(engine);
   useEditorStore.getState().fitToView();

@@ -50,6 +50,15 @@ pub fn apply_exif_orientation(w: u32, h: u32, src: &[f32], orientation: u16) -> 
     (out_w, out_h, dst)
 }
 
+/// Like `apply_exif_orientation`, but takes ownership so the common
+/// upright case returns the buffer as-is instead of copying it.
+pub fn apply_exif_orientation_owned(w: u32, h: u32, src: Vec<f32>, orientation: u16) -> (u32, u32, Vec<f32>) {
+    if orientation == 1 || orientation == 0 {
+        return (w, h, src);
+    }
+    apply_exif_orientation(w, h, &src, orientation)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
