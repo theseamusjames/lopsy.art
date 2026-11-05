@@ -36,3 +36,25 @@ export function snapDragPoint(p: Point, options: DragSnapOptions): Point {
     y: gy.snapped ? gy.value : onGrid.y,
   };
 }
+
+export interface SnappedDragBox {
+  readonly start: Point;
+  readonly end: Point;
+}
+
+/**
+ * Snap both corners of a drag-out box. On an axis where both corners would
+ * land on the same guide or grid line although the drag spans it, that axis
+ * keeps the drawn coordinates: a thin box dragged across a guide would
+ * otherwise collapse to zero size and select nothing (#1499).
+ */
+export function snapDragBox(start: Point, end: Point, options: DragSnapOptions): SnappedDragBox {
+  const s = snapDragPoint(start, options);
+  const e = snapDragPoint(end, options);
+  const isXCollapsed = s.x === e.x && start.x !== end.x;
+  const isYCollapsed = s.y === e.y && start.y !== end.y;
+  return {
+    start: { x: isXCollapsed ? start.x : s.x, y: isYCollapsed ? start.y : s.y },
+    end: { x: isXCollapsed ? end.x : e.x, y: isYCollapsed ? end.y : e.y },
+  };
+}

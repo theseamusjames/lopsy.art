@@ -2249,6 +2249,7 @@ Arrow-key nudging is also **not Move-tool-only** — the same `gridSize`-or-1 st
 - **Both ends of the drag snap**, the press point and the dragged corner, each axis on its own: a vertical guide moves an x, a horizontal guide a y. The nearest guide in reach wins.
 - **The reach is 8 screen pixels** (`GUIDE_SNAP_SCREEN_PX`, the same reach as a transform handle), converted to document pixels at the current zoom, so the pull feels the same at every zoom.
 - **A guide beats the grid.** With Snap to Grid on as well, an axis with a guide in reach lands on the guide; an axis without one falls back to the grid lattice.
+- **A snap never collapses the box.** When both ends would land on the same guide or grid line although the drag spans it — a thin strip dragged across a guide — that axis keeps the drawn coordinates (`snapDragBox`), so the marquee selects the strip as drawn instead of nothing.
 - The Shape tool snaps its centre and dragged corner the same way.
 - The typed exact-corners dialog, moving an existing outline, Move drags and the lassos do not snap to guides.
 
