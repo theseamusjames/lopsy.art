@@ -1,4 +1,5 @@
 import type { Layer, Point } from '../types';
+import { getDescendantIds } from './group-utils';
 
 /**
  * Document-space position of a layer mask's texel (0, 0). Mirrors
@@ -25,4 +26,28 @@ export function getNewMaskSize(
 ): { width: number; height: number } {
   if (layer.type === 'shape') return { width: layer.width, height: layer.height };
   return { width: docWidth, height: docHeight };
+}
+
+/**
+ * Ids of the document-anchored masks a whole-layer move of `movedIds` has
+ * to carry along: the moved layers themselves and, for a moved group,
+ * every descendant, since moving a group moves them all. Text and shape
+ * masks already follow `x`/`y` and are left out (#1504).
+ */
+export function getMasksMovedWithLayers(
+  layers: readonly Layer[],
+  movedIds: readonly string[],
+): string[] {
+  const ids = new Set<string>();
+  for (const id of movedIds) {
+    ids.add(id);
+    for (const d of getDescendantIds(layers, id)) ids.add(d);
+  }
+  const result: string[] = [];
+  for (const layer of layers) {
+    if (!ids.has(layer.id) || !layer.mask) continue;
+    if (layer.type !== 'raster' && layer.type !== 'group') continue;
+    result.push(layer.id);
+  }
+  return result;
 }
