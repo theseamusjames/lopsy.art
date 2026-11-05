@@ -9,6 +9,7 @@ import { hitTestTextLayer } from './text-hit-test';
 import { getPathTextGlyphBoxes } from './path-text-hit-boxes';
 import { engineRenderedSize } from './text-geometry';
 import { createTextLayer } from '../../layers/layer-model';
+import { nextDefaultLayerName } from '../../layers/layer-naming';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { loadTextSettingsFromLayer } from '../../app/text-settings-layer-sync';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -593,7 +594,7 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
 
   const text = toolSettings.settings.text;
   const newLayer = createTextLayer({
-    name: `Text ${editorState.document.layers.length + 1}`,
+    name: nextDefaultLayerName(editorState.document.layers, 'Text'),
     text: '',
     fontFamily: text.fontFamily,
     fontSize: text.fontSize,
