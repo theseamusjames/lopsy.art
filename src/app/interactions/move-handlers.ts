@@ -294,11 +294,13 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     // click-releases on the move tool must not record a Move entry (#721).
     cancelPrefloat();
     pendingWholeLayerMoveLabel = 'Move';
-  } else {
+  } else if (!altKey || (sel.active && sel.mask)) {
     cancelPrefloat();
-    withLiveFloatKept(() => {
-      editorState.pushHistory(altKey && !(sel.active && sel.mask) ? 'Duplicate Layer' : 'Move');
-    });
+    withLiveFloatKept(() => editorState.pushHistory('Move'));
+  } else {
+    // Option-drag duplicate: duplicateLayer() records the single
+    // "Duplicate Layer" row itself (#1511).
+    cancelPrefloat();
   }
 
   // Quick-mask mode + active marquee: snapshot the painted quick-mask
@@ -328,8 +330,12 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // Option+drag with no selection: duplicate layer first, then move the copy
   const didDuplicate = altKey && !(sel.active && sel.mask);
   if (didDuplicate) {
-    editorState.duplicateLayer();
+    const layerCount = useEditorStore.getState().document.layers.length;
+    withLiveFloatKept(() => editorState.duplicateLayer());
     const newState = useEditorStore.getState();
+    if (newState.document.layers.length === layerCount) {
+      withLiveFloatKept(() => newState.pushHistory('Move'));
+    }
     activeLayerId = newState.document.activeLayerId ?? activeLayerId;
   }
 
