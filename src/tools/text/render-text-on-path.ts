@@ -60,7 +60,11 @@ function getScratchContext(minWidth: number, minHeight: number): CanvasRendering
     scratchCtx = null;
   }
   if (scratchCtx === null) {
-    scratchCtx = scratchCanvas.getContext('2d', contextOptions);
+    // Every render is read back. Without the hint Chrome starts the canvas
+    // GPU-backed and moves it to the CPU after a few reads, and the two
+    // rasterize large glyphs differently, so the same layer re-rendered
+    // later came out sharper than its first render (#1523).
+    scratchCtx = scratchCanvas.getContext('2d', { ...contextOptions, willReadFrequently: true });
   }
   return scratchCtx;
 }
