@@ -21,8 +21,6 @@ import {
   compositeFloat,
   hasFloat,
   setSelectionMask,
-  readQuickMaskPixels,
-  uploadQuickMaskPixels,
   cropLayerToContent as cropLayerToContentGpu,
 } from '../../engine-wasm/wasm-bridge';
 import type { Engine } from '../../engine-wasm/wasm-bridge';
@@ -35,7 +33,9 @@ import type {
   SiblingMoveTarget,
 } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
-import { translateSelectionMask, translateQuickMaskContent } from './quick-mask-move';
+import { translateSelectionMask } from './quick-mask-move';
+import { beginQuickMaskContentMove, endQuickMaskContentMove, moveQuickMaskContent } from './quick-mask-content-move';
+import { nudgeHeldSelection } from './selection-nudge';
 import { applyMaskFollow, beginMaskFollow, endMaskFollow, isMaskFollowActive, translateMasksWithLayers } from './move-layer-masks';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
 import { claimLiveFloat, commitLiveFloat, deferNudgeMask, flushNudgeMask, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
@@ -48,40 +48,12 @@ import {
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 import { getTextTransformTarget } from './text-transform-handlers';
 
-interface QuickMaskSnapshot {
-  pixels: Uint8Array;
-  width: number;
-  height: number;
-}
-
-function snapshotQuickMaskPixels(): QuickMaskSnapshot | null {
-  const engine = getEngine();
-  if (!engine) return null;
-  const buf = readQuickMaskPixels(engine);
-  if (buf.length <= 8) return null;
-  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-  const width = dv.getInt32(0, true);
-  const height = dv.getInt32(4, true);
-  if (width <= 0 || height <= 0) return null;
-  return { pixels: buf.subarray(8), width, height };
-}
-
 /**
- * The quick-mask move path (issue #642) rebuilds a full document-sized
- * pixel buffer and uploads it to the GPU on every pointer-move. On a 4K
- * canvas a high-frequency pointer (250Hz pen tablet) can fire ~4 events
- * per frame — but only the last position ends up on screen. Coalesce
- * the CPU translate + GPU upload to rAF so we pay it once per rendered
- * frame instead of once per pointer event.
- *
- * Captured args are the current drag offset plus the snapshotted
- * originals from pointer-down (those are immutable for the drag).
+ * The quick-mask content redraw is one GPU pass, but a 250Hz pen tablet can
+ * still fire ~4 pointer events per frame and only the last position ends up
+ * on screen (#642). Coalesce it to rAF.
  */
 interface QuickMaskDragTarget {
-  origPixels: Uint8Array;
-  origMask: Uint8ClampedArray;
-  docW: number;
-  docH: number;
   lastAppliedDx: number;
   lastAppliedDy: number;
 }
@@ -92,17 +64,7 @@ function applyQuickMaskTranslate(dx: number, dy: number): void {
   const t = quickMaskDragTarget;
   if (!t) return;
   if (dx === t.lastAppliedDx && dy === t.lastAppliedDy) return;
-  const engine = getEngine();
-  if (!engine) return;
-  const newPixels = translateQuickMaskContent(
-    t.origPixels,
-    t.origMask,
-    dx,
-    dy,
-    t.docW,
-    t.docH,
-  );
-  uploadQuickMaskPixels(engine, newPixels, t.docW, t.docH);
+  moveQuickMaskContent(dx, dy);
   t.lastAppliedDx = dx;
   t.lastAppliedDy = dy;
   useEditorStore.getState().notifyRender();
@@ -155,6 +117,7 @@ export function flushQuickMaskDrag(): void {
     coalescedQuickMaskTranslate.flush();
     quickMaskDragTarget = null;
   }
+  endQuickMaskContentMove();
   if (quickMaskMaskTarget) {
     coalescedQuickMaskMaskTranslate.flush();
     quickMaskMaskTarget = null;
@@ -305,7 +268,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // pixels so subsequent move events can translate the content with the
   // marquee (issue #315). The layer texture stays untouched.
   if (isQuickMaskMode && sel.active && sel.mask) {
-    const snapshot = snapshotQuickMaskPixels();
+    const hasQuickMaskMove = beginQuickMaskContentMove(sel);
     const base: InteractionState = {
       drawing: true,
       lastPoint: canvasPos,
@@ -319,9 +282,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
     return withMoveGesture(base, {
       originalMask: new Uint8ClampedArray(sel.mask),
       originalBounds: { ...sel.bounds! },
-      quickMaskOriginalPixels: snapshot?.pixels ?? null,
-      quickMaskOriginalWidth: snapshot?.width ?? 0,
-      quickMaskOriginalHeight: snapshot?.height ?? 0,
+      hasQuickMaskMove,
     });
   }
 
@@ -653,29 +614,8 @@ export function handleMoveMove(
     }
     coalescedQuickMaskMaskTranslate(dragDx, dragDy);
 
-    // Quick-mask pixel translate + GPU upload is the hot path (#642) —
-    // coalesce to rAF so a 250Hz pen tablet issues one upload per
-    // rendered frame, not one per pointer event.
-    if (
-      move.quickMaskOriginalPixels
-      && move.quickMaskOriginalWidth === docW
-      && move.quickMaskOriginalHeight === docH
-    ) {
-      if (
-        !quickMaskDragTarget
-        || quickMaskDragTarget.origPixels !== move.quickMaskOriginalPixels
-        || quickMaskDragTarget.docW !== docW
-        || quickMaskDragTarget.docH !== docH
-      ) {
-        quickMaskDragTarget = {
-          origPixels: move.quickMaskOriginalPixels,
-          origMask: move.originalMask,
-          docW,
-          docH,
-          lastAppliedDx: Number.NaN,
-          lastAppliedDy: Number.NaN,
-        };
-      }
+    if (move.hasQuickMaskMove) {
+      quickMaskDragTarget ??= { lastAppliedDx: Number.NaN, lastAppliedDy: Number.NaN };
       coalescedQuickMaskTranslate(dragDx, dragDy);
     }
     edState.notifyRender();
@@ -770,6 +710,7 @@ export function handleMoveUp(
     coalescedQuickMaskTranslate.flush();
     quickMaskDragTarget = null;
   }
+  endQuickMaskContentMove();
   if (quickMaskMaskTarget) {
     coalescedQuickMaskMaskTranslate.flush();
     quickMaskMaskTarget = null;
@@ -900,35 +841,7 @@ export function handleNudgeMove(
   // painted quick-mask content under it (issue #315). The layer texture is
   // untouched — only the quick-mask texture moves.
   if (isQuickMaskMode && sel.active && sel.mask && sel.bounds) {
-    const { width: docW, height: docH } = editor.document;
-    const { mask: newMask, bounds: newBounds } = translateSelectionMask(
-      sel.mask,
-      sel.bounds,
-      dx,
-      dy,
-      docW,
-      docH,
-    );
-
-    const engine = getEngine();
-    if (engine) {
-      const snapshot = snapshotQuickMaskPixels();
-      if (snapshot && snapshot.width === docW && snapshot.height === docH) {
-        const newPixels = translateQuickMaskContent(
-          snapshot.pixels,
-          sel.mask,
-          dx,
-          dy,
-          docW,
-          docH,
-        );
-        uploadQuickMaskPixels(engine, newPixels, docW, docH);
-      }
-    }
-
-    editor.setSelection(newBounds, newMask, docW, docH);
-    useUIStore.getState().setTransform(createTransformState(newBounds));
-    editor.notifyRender();
+    nudgeHeldSelection('quickMask', dx, dy);
     return;
   }
 
@@ -985,6 +898,7 @@ export function handleNudgeMove(
     };
     claimLiveFloat(activeId, sel.mask);
     deferNudgeMask({
+      kind: 'float',
       layerId: activeId,
       staleMask: sel.mask,
       originalMask: floatingSelectionRef.current.originalMask,

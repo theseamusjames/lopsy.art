@@ -32,15 +32,26 @@ interface FloatOwner {
   mask: Uint8ClampedArray;
 }
 
+/**
+ * What a held nudge moves: the Move tool's float, the marquee alone (a
+ * selection tool is active), or the marquee and the quick-mask content
+ * under it.
+ */
+export type NudgeKind = 'float' | 'selection' | 'quickMask';
+
 /** A held arrow-key nudge's translated selection, not yet written to the store. */
-interface PendingNudgeMask {
-  layerId: string;
+export interface PendingNudgeMask {
+  kind: NudgeKind;
+  /** The layer whose float moved; null when no layer pixels moved. */
+  layerId: string | null;
   /** The store's mask during the hold; a different one means the selection was replaced. */
   staleMask: Uint8ClampedArray;
   originalMask: Uint8ClampedArray;
   originalBounds: Rect;
   offsetX: number;
   offsetY: number;
+  /** Runs once when the hold ends, however it ends. */
+  onEnd?: () => void;
 }
 
 let session: FloatSessionRefs | null = null;
@@ -141,11 +152,22 @@ export function deferNudgeMask(pending: PendingNudgeMask): void {
   pendingNudgeMask = pending;
 }
 
+/**
+ * The held nudge of `kind` still framing `mask`, so the next frame of the
+ * hold adds to its offset; null when a new hold should start.
+ */
+export function heldNudgeMask(kind: NudgeKind, mask: Uint8ClampedArray): PendingNudgeMask | null {
+  const p = pendingNudgeMask;
+  if (!p || p.kind !== kind || p.staleMask !== mask) return null;
+  return p;
+}
+
 /** Write a held nudge's translated mask into the store. No-op when the selection was replaced meanwhile. */
 export function flushNudgeMask(): void {
   const p = pendingNudgeMask;
   pendingNudgeMask = null;
   if (!p) return;
+  p.onEnd?.();
   const editor = useEditorStore.getState();
   if (!editor.selection.active || editor.selection.mask !== p.staleMask) return;
   const { width: docW, height: docH } = editor.document;
@@ -157,19 +179,21 @@ export function flushNudgeMask(): void {
     docW,
     docH,
   );
-  if (owner?.mask === p.staleMask) owner = { layerId: p.layerId, mask };
+  if (p.layerId !== null && owner?.mask === p.staleMask) owner = { layerId: p.layerId, mask };
   editor.setSelection(bounds, mask, docW, docH);
   useUIStore.getState().setTransform(createTransformState(bounds));
   // The hold left the pixel version alone so no thumbnail readback landed
   // mid-hold (#1383); refresh it once now.
-  clearJsPixelData(p.layerId);
+  if (p.layerId !== null) clearJsPixelData(p.layerId);
   editor.notifyRender();
 }
 
 /** Forget the Move tool's float without baking it (undo/redo restore the pixels themselves). */
 export function forgetLiveFloat(): void {
   owner = null;
+  const pending = pendingNudgeMask;
   pendingNudgeMask = null;
+  pending?.onEnd?.();
   forgetLayerTransform();
   if (session) {
     session.floating.current = null;
