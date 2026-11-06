@@ -39,7 +39,7 @@ const ALLOWLIST = {
   'src/app/interactions/live-float.test.ts': 2,       // selection-mask fixtures
   'src/app/interactions/mask-edit-move-guard.test.ts': 1, // selection-mask fixture
   'src/app/interactions/prefloat.test.ts': 6,         // #1076 selection-mask fixtures
-  'src/app/store/actions/align-layer.test.ts': 2,
+  'src/app/store/actions/align-layer.test.ts': 3,         // +1: #1517 marquee-over-multi-select fixture mask
   'src/app/store/actions/crop-canvas.test.ts': 1,
   'src/app/store/actions/duplicate-layer.test.ts': 1,
   'src/app/store/actions/flatten-image.test.ts': 1,
