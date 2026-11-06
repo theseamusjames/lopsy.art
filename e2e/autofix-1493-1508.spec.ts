@@ -53,6 +53,15 @@ async function meshWarpBounds(page: Page): Promise<{ x: number; y: number; width
   });
 }
 
+async function selectionBounds(page: Page): Promise<{ x: number; y: number; width: number; height: number } | null> {
+  return page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { selection: { bounds: { x: number; y: number; width: number; height: number } | null } };
+    };
+    return store.getState().selection.bounds;
+  });
+}
+
 test.describe('Autofix #1493, #1508', () => {
   test.beforeEach(({ isMobile }) => {
     test.skip(isMobile, 'needs the desktop menu bar and options bar');
@@ -96,6 +105,15 @@ test.describe('Autofix #1493, #1508', () => {
     await editFill(page);
     await dragDoc(page, 150, 100, 650, 500);
 
+    // Firefox truncates pointer coordinates to whole CSS pixels, so the
+    // marquee can land a doc pixel off 150,100 → 650,500: measure it.
+    const marquee = await selectionBounds(page);
+    expect(marquee, 'marquee selection').not.toBeNull();
+    expect(Math.abs(marquee!.x - 150), JSON.stringify(marquee)).toBeLessThanOrEqual(2);
+    expect(Math.abs(marquee!.y - 100), JSON.stringify(marquee)).toBeLessThanOrEqual(2);
+    expect(Math.abs(marquee!.width - 500), JSON.stringify(marquee)).toBeLessThanOrEqual(3);
+    expect(Math.abs(marquee!.height - 400), JSON.stringify(marquee)).toBeLessThanOrEqual(3);
+
     const layerId = (await getEditorState(page)).document.activeLayerId;
     const undoBefore = (await getEditorState(page)).undoStackLength;
 
@@ -103,7 +121,7 @@ test.describe('Autofix #1493, #1508', () => {
     await page.locator('button:has-text("Mesh Warp")').click();
     await expect(page.locator('[role="group"][aria-label="Mesh warp controls"]')).toBeVisible();
     const sessionBounds = await meshWarpBounds(page);
-    expect(sessionBounds).toEqual({ x: 150, y: 100, width: 500, height: 400 });
+    expect(sessionBounds).toEqual(marquee);
 
     // Doc (400, 300) sits between the 4 × 4 grid's handles (at thirds of the box).
     await dragDoc(page, 400, 300, 460, 360);
