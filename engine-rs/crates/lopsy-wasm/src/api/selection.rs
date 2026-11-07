@@ -214,3 +214,23 @@ pub fn upload_quick_mask_pixels(
     quick_mask_gpu::upload_quick_mask_pixels(&mut engine.inner, data, width, height);
 }
 
+
+/// Snapshot the quick mask and the selection mask on the GPU so a quick-mask
+/// marquee move can redraw each frame without a readback (#1482). Returns
+/// false when there is nothing to move.
+#[wasm_bindgen(js_name = "beginQuickMaskMove")]
+pub fn begin_quick_mask_move(engine: &mut Engine) -> bool {
+    quick_mask_gpu::begin_quick_mask_move(&mut engine.inner)
+}
+
+/// Redraw the quick mask with the marquee's content moved by (dx, dy) from
+/// where it was at `beginQuickMaskMove`.
+#[wasm_bindgen(js_name = "translateQuickMask")]
+pub fn translate_quick_mask(engine: &mut Engine, dx: i32, dy: i32) {
+    quick_mask_gpu::translate_quick_mask(&mut engine.inner, dx, dy);
+}
+
+#[wasm_bindgen(js_name = "endQuickMaskMove")]
+pub fn end_quick_mask_move(engine: &mut Engine) {
+    quick_mask_gpu::end_quick_mask_move(&mut engine.inner);
+}

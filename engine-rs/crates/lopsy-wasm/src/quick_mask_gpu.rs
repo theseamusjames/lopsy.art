@@ -1,5 +1,6 @@
 use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
+use crate::gpu::texture_pool::TextureHandle;
 use crate::gradient_gpu::{GradientStop, set_gradient_uniforms};
 
 /// Flood-fill the quick mask texture. Reads the mask from the GPU, runs a
@@ -93,16 +94,9 @@ pub fn fill_quick_mask(
         }
     }
 
-    // Upload back as RGBA
-    let mut rgba_out = vec![0u8; (w * h * 4) as usize];
-    for i in 0..(w * h) as usize {
-        let v = mask[i];
-        rgba_out[i * 4] = v;
-        rgba_out[i * 4 + 1] = v;
-        rgba_out[i * 4 + 2] = v;
-        rgba_out[i * 4 + 3] = 255;
+    if let Err(e) = engine.expand_mask_bytes_into(&tex, &mask, w, h) {
+        web_sys::console::warn_1(&format!("fill_quick_mask: {e}").into());
     }
-    let _ = engine.texture_pool.upload_rgba(&engine.gl, tex_handle, 0, 0, w, h, &rgba_out);
     engine.needs_recomposite = true;
 }
 
@@ -120,9 +114,15 @@ pub fn enter_quick_mask_mode(engine: &mut EngineInner) {
             Err(_) => return,
         };
         engine.texture_pool.set_nearest_filter(&engine.gl, tex);
-        // Clear to zero (fully unselected)
-        let zero_data = vec![0u8; (w * h * 4) as usize];
-        let _ = engine.texture_pool.upload_rgba(&engine.gl, tex, 0, 0, w, h, &zero_data);
+        // Fully unselected, in the (v, v, v, 1) layout the mask samplers
+        // expect. A clear: uploading a zero buffer went through the
+        // 16-bytes-per-texel CPU path on every Q press (#1481).
+        if let Some(dst_gl) = engine.texture_pool.get(tex).cloned() {
+            engine.render_to_texture(&dst_gl, w as i32, h as i32, |engine| {
+                engine.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+                engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+            });
+        }
         engine.quick_mask_texture = Some(tex);
         engine.needs_recomposite = true;
         return;
@@ -174,6 +174,7 @@ pub fn enter_quick_mask_mode(engine: &mut EngineInner) {
 /// grayscale data. Returns the mask data so the TS side can convert it to
 /// a selection.
 pub fn exit_quick_mask_mode(engine: &mut EngineInner) -> Option<Vec<u8>> {
+    end_quick_mask_move(engine);
     let handle = engine.quick_mask_texture.take()?;
     let (w, h) = engine.texture_pool.get_size(handle)?;
 
@@ -233,8 +234,8 @@ pub fn read_quick_mask_pixels(engine: &EngineInner) -> (u32, u32, Vec<u8>) {
     }
 }
 
-/// Upload single-channel grayscale pixels into the quick mask texture.
-/// Expands to RGBA (replicates the R channel into G/B and sets A=255).
+/// Upload single-channel grayscale pixels into the quick mask texture as
+/// (v, v, v, 1), through the R8 staging + GPU expand path (#1481).
 /// No-op when no quick mask texture is active or when `data.len() != w * h`.
 pub fn upload_quick_mask_pixels(
     engine: &mut EngineInner,
@@ -249,17 +250,108 @@ pub fn upload_quick_mask_pixels(
         None => return,
     };
     if tex_w != w || tex_h != h { return; }
-
-    let mut rgba = vec![0u8; (w * h * 4) as usize];
-    for i in 0..(w * h) as usize {
-        let v = data[i];
-        rgba[i * 4] = v;
-        rgba[i * 4 + 1] = v;
-        rgba[i * 4 + 2] = v;
-        rgba[i * 4 + 3] = 255;
+    let Some(tex) = engine.texture_pool.get(tex_handle).cloned() else { return };
+    if let Err(e) = engine.expand_mask_bytes_into(&tex, data, w, h) {
+        web_sys::console::warn_1(&format!("upload_quick_mask_pixels: {e}").into());
+        return;
     }
-    let _ = engine.texture_pool.upload_rgba(&engine.gl, tex_handle, 0, 0, w, h, &rgba);
     engine.needs_recomposite = true;
+}
+
+fn copy_texture(engine: &mut EngineInner, src: TextureHandle) -> Option<TextureHandle> {
+    let (w, h) = engine.texture_pool.get_size(src)?;
+    let src_tex = engine.texture_pool.get(src).cloned()?;
+    let dst = engine.texture_pool.acquire(&engine.gl, w, h).ok()?;
+    let Some(dst_tex) = engine.texture_pool.get(dst).cloned() else {
+        engine.texture_pool.release(dst);
+        return None;
+    };
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&dst_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        gl.use_program(Some(&engine.shaders.blit.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
+        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        engine.draw_fullscreen_quad();
+    });
+    Some(dst)
+}
+
+/// Start moving the quick-mask content under the marquee: keep GPU copies
+/// of the quick mask and the selection mask as they are now, so each frame
+/// of the move is one GPU pass with no readback or upload (#1482). The
+/// selection mask must already be on the GPU at its pre-move position.
+/// Returns false when there is no quick mask or selection mask to move.
+pub fn begin_quick_mask_move(engine: &mut EngineInner) -> bool {
+    end_quick_mask_move(engine);
+    let (Some(quick), Some(sel)) = (engine.quick_mask_texture, engine.selection_mask_texture) else {
+        return false;
+    };
+    let Some(base) = copy_texture(engine, quick) else { return false };
+    let Some(marquee) = copy_texture(engine, sel) else {
+        engine.texture_pool.release(base);
+        return false;
+    };
+    engine.quick_mask_move_base = Some(base);
+    engine.quick_mask_move_marquee = Some(marquee);
+    true
+}
+
+/// Rewrite the quick mask as the move's starting quick mask with the
+/// marquee's content shifted by (dx, dy) document pixels. No-op outside a
+/// move begun with `begin_quick_mask_move`.
+pub fn translate_quick_mask(engine: &mut EngineInner, dx: i32, dy: i32) {
+    let (Some(quick), Some(base), Some(marquee)) = (
+        engine.quick_mask_texture,
+        engine.quick_mask_move_base,
+        engine.quick_mask_move_marquee,
+    ) else {
+        return;
+    };
+    let Some((w, h)) = engine.texture_pool.get_size(quick) else { return };
+    if engine.texture_pool.get_size(base) != Some((w, h)) { return; }
+    let (Some(dst_tex), Some(base_tex), Some(marquee_tex)) = (
+        engine.texture_pool.get(quick).cloned(),
+        engine.texture_pool.get(base).cloned(),
+        engine.texture_pool.get(marquee).cloned(),
+    ) else {
+        return;
+    };
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&dst_tex, w as i32, h as i32, |engine| {
+        let gl = &engine.gl;
+        let shader = &engine.shaders.quick_mask_translate;
+        gl.use_program(Some(&shader.program));
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&base_tex));
+        if let Some(loc) = shader.location(gl, "u_base") {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&marquee_tex));
+        if let Some(loc) = shader.location(gl, "u_marquee") {
+            gl.uniform1i(Some(&loc), 1);
+        }
+        if let Some(loc) = shader.location(gl, "u_offset") {
+            gl.uniform2i(Some(&loc), dx, dy);
+        }
+        engine.draw_fullscreen_quad();
+        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+    });
+    engine.needs_recomposite = true;
+}
+
+/// Release the copies a quick-mask move kept. Safe to call with no move active.
+pub fn end_quick_mask_move(engine: &mut EngineInner) {
+    if let Some(tex) = engine.quick_mask_move_base.take() {
+        engine.texture_pool.release(tex);
+    }
+    if let Some(tex) = engine.quick_mask_move_marquee.take() {
+        engine.texture_pool.release(tex);
+    }
 }
 
 /// Paint a brush dab on the quick mask texture. Mode 0 = brush (add), 1 = eraser (remove).
