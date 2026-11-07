@@ -44,6 +44,13 @@ uniform vec2 u_brushTextureSize;
 // sides first and re-encodes its result (#1372). Normal is a plain lerp and
 // needs no decode.
 uniform int u_docColorMode;
+// The layer's own behind effects (outer glow, drop shadow, outside stroke)
+// are already in u_dstTex. A non-Normal layer blends with the backdrop as it
+// was *before* them (u_backdropTex), and the result covers the effects by the
+// layer's coverage. Blending against its own knocked-out shadow multiplied
+// the anti-aliased edge into it, a seam darker than the shadow (#1525).
+uniform sampler2D u_backdropTex;
+uniform int u_hasBackdrop;
 out vec4 fragColor;
 
 //#include hsl
@@ -200,14 +207,17 @@ void main() {
 
 #if BLEND_MODE == 0
     vec3 blended = src.rgb;
+    float ba = da;
 #else
+    vec4 backdrop = u_hasBackdrop == 1 ? texture(u_backdropTex, v_uv) : dst;
+    float ba = backdrop.a;
     vec3 blended = u_docColorMode == 1
-        ? srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(dst.rgb)))
-        : blendMode(src.rgb, dst.rgb);
+        ? srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(backdrop.rgb)))
+        : blendMode(src.rgb, backdrop.rgb);
 #endif
     float outA = sa + da * (1.0 - sa);
 
-    vec3 outRGB = (sa * da * blended + sa * (1.0 - da) * src.rgb + da * (1.0 - sa) * dst.rgb) / outA;
+    vec3 outRGB = (sa * ba * blended + sa * (1.0 - ba) * src.rgb + da * (1.0 - sa) * dst.rgb) / outA;
 
     fragColor = vec4(outRGB, outA);
 }
