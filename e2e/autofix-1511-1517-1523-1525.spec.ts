@@ -110,6 +110,15 @@ async function contentBounds(page: Page, layerId: string): Promise<{ left: numbe
   }, layerId);
 }
 
+interface Bounds { left: number; top: number; right: number; bottom: number }
+
+// Firefox truncates clientX/Y to whole pixels, so a marquee drawn between
+// doc coordinates at fit zoom can land a pixel short; tests compare against
+// the measured fill instead of the requested rectangle.
+function shifted(b: Bounds, dx: number, dy: number): Bounds {
+  return { left: b.left + dx, top: b.top + dy, right: b.right + dx, bottom: b.bottom + dy };
+}
+
 /** The composited canvas sampled at every document pixel (top-down, doc space). */
 async function readComposite(page: Page): Promise<Composite> {
   return page.evaluate(async () => {
@@ -163,6 +172,8 @@ test.describe('Autofix #1511, #1517, #1523, #1525', () => {
     const before = await undoLabels(page);
     expect(before[before.length - 1]).toBe('Fill');
     const layerCount = (await layers(page)).length;
+    const original = (await contentBounds(page, await activeLayerId(page)))!;
+    expect(original).not.toBeNull();
 
     await page.keyboard.press('v');
     await page.keyboard.down('Alt');
@@ -175,7 +186,11 @@ test.describe('Autofix #1511, #1517, #1523, #1525', () => {
     expect((await layers(page)).length).toBe(layerCount + 1);
     const copy = (await layers(page)).find((l) => l.name === 'Layer 1 copy');
     expect(copy).toBeDefined();
-    expect(await contentBounds(page, copy!.id)).toEqual({ left: 250, top: 100, right: 350, bottom: 200 });
+    const moved = (await contentBounds(page, copy!.id))!;
+    expect(moved).not.toBeNull();
+    const dx = moved.left - original.left;
+    expect(Math.abs(dx - 150)).toBeLessThanOrEqual(1);
+    expect(moved).toEqual(shifted(original, dx, 0));
 
     // One undo removes the copy and lands on Fill.
     await page.keyboard.press('Control+z');
@@ -188,7 +203,7 @@ test.describe('Autofix #1511, #1517, #1523, #1525', () => {
     await page.waitForTimeout(250);
     expect((await layers(page)).length).toBe(layerCount + 1);
     const redone = (await layers(page)).find((l) => l.name === 'Layer 1 copy')!;
-    expect(await contentBounds(page, redone.id)).toEqual({ left: 250, top: 100, right: 350, bottom: 200 });
+    expect(await contentBounds(page, redone.id)).toEqual(moved);
   });
 
   test('#1517: Align left lines up every selected layer with the leftmost one', async ({ page }) => {
@@ -206,6 +221,12 @@ test.describe('Autofix #1511, #1517, #1523, #1525', () => {
     await page.waitForTimeout(100);
     const boxB = await activeLayerId(page);
     await fillMarquee(page, 500, 350, 600, 450);
+    const a0 = (await contentBounds(page, boxA))!;
+    const b0 = (await contentBounds(page, boxB))!;
+    expect(a0).not.toBeNull();
+    expect(b0).not.toBeNull();
+    expect(b0.left - a0.left).toBeGreaterThan(150);
+    expect(b0.top - a0.top).toBeGreaterThan(150);
 
     await page.locator(`[data-layer-id="${boxA}"]`).click();
     await page.locator(`[data-layer-id="${boxB}"]`).click({ modifiers: ['Shift'] });
@@ -217,20 +238,21 @@ test.describe('Autofix #1511, #1517, #1523, #1525', () => {
     await page.waitForTimeout(300);
     await page.screenshot({ path: 'e2e/screenshots/align-left-multi-1517.png' });
 
-    expect(await contentBounds(page, boxA)).toEqual({ left: 300, top: 100, right: 400, bottom: 200 });
-    expect(await contentBounds(page, boxB)).toEqual({ left: 300, top: 350, right: 400, bottom: 450 });
+    const leftDx = a0.left - b0.left;
+    expect(await contentBounds(page, boxA)).toEqual(a0);
+    expect(await contentBounds(page, boxB)).toEqual(shifted(b0, leftDx, 0));
     expect((await undoLabels(page)).slice(labelsBefore.length)).toEqual(['Align Layer']);
 
     await page.locator('button[aria-label="Align bottom"]').click();
     await page.waitForTimeout(300);
-    expect(await contentBounds(page, boxA)).toEqual({ left: 300, top: 350, right: 400, bottom: 450 });
-    expect(await contentBounds(page, boxB)).toEqual({ left: 300, top: 350, right: 400, bottom: 450 });
+    expect(await contentBounds(page, boxA)).toEqual(shifted(a0, 0, b0.bottom - a0.bottom));
+    expect(await contentBounds(page, boxB)).toEqual(shifted(b0, leftDx, 0));
 
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
-    expect(await contentBounds(page, boxA)).toEqual({ left: 300, top: 100, right: 400, bottom: 200 });
-    expect(await contentBounds(page, boxB)).toEqual({ left: 500, top: 350, right: 600, bottom: 450 });
+    expect(await contentBounds(page, boxA)).toEqual(a0);
+    expect(await contentBounds(page, boxB)).toEqual(b0);
   });
 
   test('#1523: large path text renders the same before and after a Rotate 90° round-trip', async ({ page }) => {
