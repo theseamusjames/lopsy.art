@@ -156,12 +156,16 @@ test.describe('Pixel fixes #1245 #1253 #1257 #1260', () => {
     await page.waitForTimeout(200);
     const id = await activeLayerId(page);
     await fillRect(page, 480, 104, 570, 126, [255, 200, 0]);
+    // Firefox truncates pointer coordinates, so the marquee's top can land a
+    // doc pixel off 104: measure it rather than assume it.
+    const topBefore = opaqueBounds(await readLayer(page, id))?.y0;
+    expect(topBefore, 'rectangle filled').toBeDefined();
 
     await page.keyboard.press('v');
     for (let i = 0; i < 20; i++) await page.keyboard.press('Shift+ArrowDown');
     await page.waitForTimeout(200);
     const nudgedRaster = await readLayer(page, id);
-    expect(opaqueBounds(nudgedRaster)?.y0).toBe(304);
+    expect(opaqueBounds(nudgedRaster)?.y0).toBe(topBefore! + 200);
     // The nudge moves the whole canvas-sized texture, so it hangs past the bottom.
     expect(nudgedRaster.y + nudgedRaster.height).toBeGreaterThan(600);
 
