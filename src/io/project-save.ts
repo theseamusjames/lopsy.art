@@ -16,6 +16,7 @@ import { useEditorStore } from '../app/editor-store';
 import { getEngine } from '../engine-wasm/engine-state';
 import { readLayerAsImageData } from '../engine-wasm/gpu-pixel-access';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
+import { commitLayerTransform } from '../app/interactions/layer-transform';
 import { flushLayerSync } from '../engine-wasm/engine-sync';
 import { materializeAllMaskData } from '../app/mask-data-sync';
 import { notifyError, describeError } from '../app/notifications-store';
@@ -239,6 +240,9 @@ export async function saveProject(): Promise<void> {
 
   try {
     finalizePendingStrokeGlobal();
+    // A live multi-layer transform shows its text resampled; baking it
+    // re-renders that text sharp, which is what the file must hold (#1527).
+    commitLayerTransform();
     // Mask readbacks are lazy (#756, #780); read back any mask whose JS
     // copy lags the GPU so the file contains the current mask.
     materializeAllMaskData();

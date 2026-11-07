@@ -17,6 +17,7 @@ import type { MenuDef } from './types';
 import { exportPsdFile, importPsdFile } from '../../../io/psd';
 import { describeError, notifyError } from '../../notifications-store';
 import { finalizePendingStrokeGlobal } from '../../interactions/pending-stroke';
+import { commitLayerTransform } from '../../interactions/layer-transform';
 import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 
 // Re-export so existing callers (App.tsx, e2e tests) keep working.
@@ -175,6 +176,8 @@ export function exportCanvas(format: ExportFormat): void {
   const engine = getEngine();
   if (!engine) return;
   finalizePendingStrokeGlobal();
+  // A live multi-layer transform shows its text resampled; baking it re-renders the text sharp.
+  commitLayerTransform();
   flushLayerSync(useEditorStore.getState());
   const docName = useEditorStore.getState().document.name;
   exportViaEngine(engine, { format, quality: 92, highQuality: false, filename: docName || 'lopsy' });
@@ -188,6 +191,8 @@ export function exportCanvasWithOptions(options: ExportOptions): void {
   const engine = getEngine();
   if (!engine) return;
   finalizePendingStrokeGlobal();
+  // A live multi-layer transform shows its text resampled; baking it re-renders the text sharp.
+  commitLayerTransform();
   flushLayerSync(useEditorStore.getState());
   exportViaEngine(engine, options);
 }
@@ -214,6 +219,8 @@ export function createExportPreviewSession(): ExportPreviewSession | null {
   const engine = getEngine();
   if (!engine) return null;
   finalizePendingStrokeGlobal();
+  // A live multi-layer transform shows its text resampled; baking it re-renders the text sharp.
+  commitLayerTransform();
   flushLayerSync(useEditorStore.getState());
   const sizeArr = getCompositeSize(engine);
   const width = sizeArr[0] ?? 0;
