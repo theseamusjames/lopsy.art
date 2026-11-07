@@ -834,8 +834,11 @@ select the layers and rotate once.
   transform. The engine counts it as a float, so it is baked by everything
   that bakes the Move tool's float — Escape, the `⌘D` key, any other tool's
   canvas press, any edit that records history, undo / redo, a mode switch —
-  and by the next Move gesture once the Layers selection has changed. The
-  layers already hold the transformed pixels; baking only frees the sources.
+  and by the next Move gesture once the Layers selection has changed. Save
+  Project, Export PSD and every image export bake it too. The layers already
+  hold the transformed pixels; baking frees the sources and re-renders each
+  live text layer sharp from its props through its stored transform, so a
+  saved or exported text layer is the sharp render, not the resampled preview.
 - **Flip Horizontal / Vertical and Rotate 90° CW / CCW** apply on top of any
   pending transform about the box's centre and bake at once, one
   *Transform* row each. A quarter turn of a box whose width and height differ
