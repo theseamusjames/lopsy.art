@@ -224,6 +224,39 @@ describe('hitTestHandle', () => {
   });
 });
 
+describe('rotate handle positions under a pending scale (#1453)', () => {
+  const base = createTransformState({ x: 200, y: 390, width: 400, height: 20 });
+
+  it('stays 20 px outside the corner after a 10x vertical stretch', () => {
+    const state: TransformState = { ...base, scaleY: 10, translateY: 90 };
+    const pos = getHandlePositions(state);
+    expect(pos['rotate-top-right'].x).toBeCloseTo(pos['top-right'].x + 20);
+    expect(pos['rotate-top-right'].y).toBeCloseTo(pos['top-right'].y - 20);
+    expect(pos['rotate-bottom-left'].x).toBeCloseTo(pos['bottom-left'].x - 20);
+    expect(pos['rotate-bottom-left'].y).toBeCloseTo(pos['bottom-left'].y + 20);
+  });
+
+  it('keeps the corner a scale handle after a 10x shrink', () => {
+    const square = createTransformState({ x: 200, y: 200, width: 400, height: 400 });
+    const state: TransformState = { ...square, scaleX: 0.1, scaleY: 0.1 };
+    const pos = getHandlePositions(state);
+    expect(pos['rotate-bottom-right'].x).toBeCloseTo(pos['bottom-right'].x + 20);
+    expect(pos['rotate-bottom-right'].y).toBeCloseTo(pos['bottom-right'].y + 20);
+    expect(hitTestBoxHandle(pos['bottom-right'], state, 1)).toBe('bottom-right');
+  });
+
+  it('stays outside a flipped and rotated box', () => {
+    const state: TransformState = { ...base, scaleX: -3, rotation: Math.PI / 2 };
+    const pos = getHandlePositions(state);
+    const tr = pos['top-right'];
+    const rot = pos['rotate-top-right'];
+    expect(Math.hypot(rot.x - tr.x, rot.y - tr.y)).toBeCloseTo(20 * Math.SQRT2);
+    const centre = { x: 400, y: 400 };
+    expect(Math.hypot(rot.x - centre.x, rot.y - centre.y))
+      .toBeGreaterThan(Math.hypot(tr.x - centre.x, tr.y - centre.y));
+  });
+});
+
 describe('hitTestHandle overlapping circles', () => {
   it('picks the nearest scale handle, not the first in the list', () => {
     const state = createTransformState({ x: 0, y: 0, width: 10, height: 10 });

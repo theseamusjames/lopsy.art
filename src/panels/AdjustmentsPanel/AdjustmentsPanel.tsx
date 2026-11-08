@@ -16,6 +16,7 @@ import {
 import { getColorModeCapabilities, isAdjustmentAllowedInMode } from '../../utils/color-mode-capabilities';
 import { BlendModeSelect } from '../../components/BlendModeSelect/BlendModeSelect';
 import { NODE_CONTROLS_MAP } from './controls/node-controls-map';
+import { createRepeatPressDetector } from '../../utils/repeat-press';
 import styles from './AdjustmentsPanel.module.css';
 
 /** Node types available in the Add menu. New types (color-balance, etc.) are
@@ -247,6 +248,14 @@ function AdjustmentNodeRow({
   const handleArmEdit = () => {
     isEditArmedRef.current = true;
   };
+  // The later presses of a double-click belong to the first press's gesture,
+  // so a double-click reset undoes in one step (#1455).
+  const isRepeatPressRef = useRef<ReturnType<typeof createRepeatPressDetector> | null>(null);
+  const handlePointerDownArm = (e: React.PointerEvent) => {
+    isRepeatPressRef.current ??= createRepeatPressDetector();
+    if (isRepeatPressRef.current({ time: e.timeStamp, x: e.clientX, y: e.clientY })) return;
+    isEditArmedRef.current = true;
+  };
   const handleControlsChange = (params: Partial<AdjustmentNode>) => {
     if (isEditArmedRef.current) {
       isEditArmedRef.current = false;
@@ -295,7 +304,7 @@ function AdjustmentNodeRow({
       {isExpanded && (
         <div
           className={styles.nodeControls}
-          onPointerDownCapture={handleArmEdit}
+          onPointerDownCapture={handlePointerDownArm}
           onBlurCapture={handleArmEdit}
         >
           <NodeControls node={node} onChange={handleControlsChange} />

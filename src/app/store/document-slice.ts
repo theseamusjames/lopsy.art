@@ -722,9 +722,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     // GPU-only (mergeLayers composites on the GPU); the compute
     // function invalidates JS pixel cache for the two touched layers
     // directly. No whole-document round trip (#746).
+    const belowId = s.document.layerOrder[s.document.layerOrder.indexOf(s.document.activeLayerId ?? '') - 1];
     const result = computeMergeDown(s.document);
     if (!result) return;
     applyActionResult(set, result);
+    // #1443: mergeLayers rewrote the lower layer's texture after the
+    // snapshot above, so it must be dirty or the next snapshot (undo's redo
+    // entry) reuses its pre-merge handle whenever its bounds didn't change.
+    if (belowId) set({ dirtyLayerIds: new Set(get().dirtyLayerIds).add(belowId) });
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
@@ -759,6 +764,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const result = computeRasterizeStyle(s.document);
     if (!result) return;
     applyActionResult(set, result);
+    // Baked after the snapshot above; dirty so the redo entry copies it (#1443).
+    const bakedId = s.document.activeLayerId;
+    if (bakedId) set({ dirtyLayerIds: new Set(get().dirtyLayerIds).add(bakedId) });
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 

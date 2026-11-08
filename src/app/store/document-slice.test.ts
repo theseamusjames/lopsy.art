@@ -107,6 +107,15 @@ describe('document-slice action orchestration', () => {
     expect(layerCount()).toBe(initial + 1);
   });
 
+  it('mergeDown marks the merged layer dirty so the redo entry re-snapshots it (#1443)', () => {
+    getState().addLayer();
+    const { layerOrder, activeLayerId } = getState().document;
+    const belowId = layerOrder[layerOrder.indexOf(activeLayerId!) - 1]!;
+    getState().mergeDown();
+    expect(getState().document.activeLayerId).toBe(belowId);
+    expect(getState().dirtyLayerIds.has(belowId)).toBe(true);
+  });
+
   it('flattenImage + undo restores original layers', () => {
     getState().addLayer();
     getState().addLayer();
