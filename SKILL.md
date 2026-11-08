@@ -610,7 +610,9 @@ levels, hue/saturation, colour balance, colour grading, gradient map, and
 more) on a group.
 
 **Masks.** With the layer active, click `Add Mask` in the Layers panel
-toolbar, then its `Edit mask for <name>` thumbnail. In mask edit mode the
+toolbar, then its `Edit mask for <name>` thumbnail. With a selection
+active, `Add Mask` reveals only the selection: everything outside it is
+hidden, and the selection is dropped. In mask edit mode the
 Brush and Pencil always **hide** (paint black) and the Eraser always
 **reveals**, whatever the foreground colour. The Gradient and a
 selection + Fill also work on the mask.

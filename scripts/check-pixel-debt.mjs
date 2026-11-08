@@ -31,6 +31,7 @@ const ALLOWLIST = {
   // paths. These don't ship to users; they only need to round-trip.
   // ──────────────────────────────────────────────────────────────────────
   'src/app/editor-store.test.ts': 5,
+  'src/app/store/document-slice.test.ts': 1,              // #1545 selection-mask fixture
   'src/app/tool-settings-store.test.ts': 5,
   'src/app/interactions/interaction-types.test.ts': 1,
   'src/app/interactions/move-handlers.test.ts': 1,
@@ -40,6 +41,7 @@ const ALLOWLIST = {
   'src/app/interactions/mask-edit-move-guard.test.ts': 1, // selection-mask fixture
   'src/app/interactions/prefloat.test.ts': 6,         // #1076 selection-mask fixtures
   'src/app/interactions/selection-nudge.test.ts': 1,  // #1480 selection-mask fixture
+  'src/app/store/actions/add-layer-mask.test.ts': 2,      // #1545 selection-mask fixtures
   'src/app/store/actions/align-layer.test.ts': 3,         // +1: #1517 marquee-over-multi-select fixture mask
   'src/app/store/actions/crop-canvas.test.ts': 1,
   'src/app/store/actions/duplicate-layer.test.ts': 1,

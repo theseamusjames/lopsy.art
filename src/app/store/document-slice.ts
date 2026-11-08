@@ -821,10 +821,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   addLayerMask: (id) => {
     const s = get();
-    const result = computeAddLayerMask(s.document, s.renderVersion, id);
+    const result = computeAddLayerMask(s.document, s.renderVersion, id, s.selection);
     if (!result) return;
     s.pushHistoryMetadata('Add Mask');
     set(result);
+    // The selection is now the mask; keeping it would leave marching ants
+    // over a selection that no longer does anything (#1545).
+    if (s.selection.active) get().clearSelection();
   },
 
   removeLayerMask: (id) => {

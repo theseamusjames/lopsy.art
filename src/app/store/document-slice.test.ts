@@ -175,6 +175,23 @@ describe('document-slice action orchestration', () => {
     expect(getState().document.layers.find((l) => l.id === activeId)!.mask).not.toBeNull();
   });
 
+  it('addLayerMask with a selection masks to it, deselects, and undo restores both (#1545)', () => {
+    const activeId = getState().document.activeLayerId!;
+    const sel = new Uint8ClampedArray(100);
+    sel[3 * 10 + 3] = 255;
+    getState().setSelection({ x: 3, y: 3, width: 1, height: 1 }, sel, 10, 10);
+    getState().addLayerMask(activeId);
+    const mask = getState().document.layers.find((l) => l.id === activeId)!.mask!;
+    expect(mask.data[33]).toBe(255);
+    expect(mask.data[0]).toBe(0);
+    expect(getState().selection.active).toBe(false);
+    expect(undoLabels()[undoLabels().length - 1]).toBe('Add Mask');
+
+    getState().undo();
+    expect(getState().document.layers.find((l) => l.id === activeId)!.mask).toBeNull();
+    expect(getState().selection.active).toBe(true);
+  });
+
   it('history labels are not duplicated for sequential same-type actions', () => {
     getState().addLayer();
     getState().addLayer();
