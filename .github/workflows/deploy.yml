@@ -5,6 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# The last deploy to finish becomes production, so overlapping runs can put an
+# older commit live. Run one at a time; a queued run is replaced by a newer one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -40,14 +46,6 @@ jobs:
               --content-type application/octet-stream \
               --cache-control "public, max-age=31536000, immutable" < /dev/null
           done
-
-      - name: Create Cloudflare Pages project (if needed)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create lopsy-art --production-branch main
-        continue-on-error: true
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
