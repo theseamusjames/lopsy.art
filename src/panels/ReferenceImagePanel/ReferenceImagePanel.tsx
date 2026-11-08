@@ -222,8 +222,8 @@ export function ReferenceImagePanel() {
     if (!drawer) return;
     const dx = e.clientX - resizeRef.current.startX;
     const dy = e.clientY - resizeRef.current.startY;
-    drawer.style.width = `${Math.max(200, resizeRef.current.origW + dx)}px`;
-    drawer.style.height = `${Math.max(200, resizeRef.current.origH + dy)}px`;
+    drawer.style.setProperty('--ref-width', `${Math.max(200, resizeRef.current.origW + dx)}px`);
+    drawer.style.setProperty('--ref-height', `${Math.max(200, resizeRef.current.origH + dy)}px`);
   }, []);
 
   const handleResizeUp = useCallback(() => {
@@ -366,6 +366,7 @@ export function ReferenceImagePanel() {
       )}
       <div
         className={styles.resizeHandle}
+        data-testid="reference-resize-handle"
         onPointerDown={handleResizeDown}
         onPointerMove={handleResizeMove}
         onPointerUp={handleResizeUp}

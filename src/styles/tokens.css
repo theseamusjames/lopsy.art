@@ -60,6 +60,9 @@
   --z-selection: 20;
   --z-panels: 100;
   --z-toolbar: 200;
+  /* Popovers anchored to the canvas: above panels/toolbars but below the
+     header so menu-bar dropdowns always draw over them. */
+  --z-canvas-popover: 250;
   --z-header: 300;
   --z-popover: 400;
   --z-modal: 500;

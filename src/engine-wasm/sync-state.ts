@@ -242,6 +242,18 @@ export interface ResetOptions {
   preserveContentRefs?: boolean;
 }
 
+/**
+ * Path-text layers redrawn because their web font finished loading. A history
+ * snapshot taken before that redraw holds the fallback-face raster, so a
+ * restore must re-render these instead of trusting the restored texture
+ * (#1457).
+ */
+const fontRedrawnPathText = new Set<string>();
+
+export function markPathTextFontRedrawn(layerId: string): void {
+  fontRedrawnPathText.add(layerId);
+}
+
 export function resetTrackedState(engine: Engine, opts?: ResetOptions): void {
   const fresh = createTrackedState();
   if (opts?.preserveContentRefs) {
@@ -260,6 +272,7 @@ export function resetTrackedState(engine: Engine, opts?: ResetOptions): void {
       // describes; a restore that changes text/font/path still misses the
       // key and re-renders.
       fresh.pathTextKeys = prev.pathTextKeys;
+      for (const id of fontRedrawnPathText) fresh.pathTextKeys?.delete(id);
     }
   }
   trackedByEngine.set(engine, fresh);

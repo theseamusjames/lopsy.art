@@ -1533,12 +1533,20 @@ pub fn composite_float_affine(
     src_center_y: f32,
     dst_center_x: f32,
     dst_center_y: f32,
+    src_width: f32,
+    src_height: f32,
 ) -> Result<(), String> {
     engine.float_transform_mode = 1;
     if inv_matrix.len() >= 9 {
         engine.float_transform_inv_matrix.copy_from_slice(&inv_matrix[..9]);
     }
     engine.float_transform_center = [src_center_x, src_center_y];
+    engine.float_transform_src_rect = [
+        src_center_x - src_width / 2.0,
+        src_center_y - src_height / 2.0,
+        src_width.max(0.0),
+        src_height.max(0.0),
+    ];
     engine.float_transform_corners[0] = dst_center_x;
     engine.float_transform_corners[1] = dst_center_y;
     composite_float_transformed(engine)
@@ -1597,6 +1605,7 @@ fn composite_float_transformed(
     let tmp = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
     let tmp_tex = engine.texture_pool.get(tmp).cloned()
         .ok_or("Tmp texture not found")?;
+    let src_rect = engine.float_transform_src_rect;
     let params = if engine.float_transform_mode == 1 {
         TransformParams::Affine {
             inv_matrix: engine.float_transform_inv_matrix,
@@ -1624,6 +1633,7 @@ fn composite_float_transformed(
             source_size: (fw as f32, fh as f32),
             layer_offset: (lx, ly),
             layer_size: (fw as f32, fh as f32),
+            content_rect: Some(src_rect),
         });
         engine.draw_fullscreen_quad();
     });
