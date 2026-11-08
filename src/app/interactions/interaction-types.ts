@@ -39,12 +39,10 @@ export type CanvasGesture =
       kind: 'move';
       originalMask: Uint8ClampedArray | null;
       originalBounds: Rect | null;
-      /** Quick-mask pixels captured at drag-start so we can translate the
-       *  painted mask content with the marquee (#315). docW*docH bytes,
-       *  single-channel. Null when not moving in quick-mask mode. */
-      quickMaskOriginalPixels: Uint8Array | null;
-      quickMaskOriginalWidth: number;
-      quickMaskOriginalHeight: number;
+      /** Whether the drag carries the painted quick-mask content with the
+       *  marquee (#315), redrawn on the GPU from copies the engine took at
+       *  drag-start (#1482). */
+      hasQuickMaskMove: boolean;
       /** Other selected layers to translate alongside the active one when
        *  the user drags with multiple layers selected (issue #707). Empty
        *  for single-layer moves; only populated on whole-layer moves. */
@@ -132,9 +130,7 @@ export function withMoveGesture(
   payload: {
     originalMask?: Uint8ClampedArray | null;
     originalBounds?: Rect | null;
-    quickMaskOriginalPixels?: Uint8Array | null;
-    quickMaskOriginalWidth?: number;
-    quickMaskOriginalHeight?: number;
+    hasQuickMaskMove?: boolean;
     siblings?: readonly SiblingMoveTarget[];
     pendingTransform?: TransformState | null;
     pendingLayerTransform?: TransformState | null;
@@ -147,9 +143,7 @@ export function withMoveGesture(
       kind: 'move',
       originalMask: payload.originalMask ?? null,
       originalBounds: payload.originalBounds ?? null,
-      quickMaskOriginalPixels: payload.quickMaskOriginalPixels ?? null,
-      quickMaskOriginalWidth: payload.quickMaskOriginalWidth ?? 0,
-      quickMaskOriginalHeight: payload.quickMaskOriginalHeight ?? 0,
+      hasQuickMaskMove: payload.hasQuickMaskMove ?? false,
       siblings: payload.siblings ?? [],
       pendingTransform: payload.pendingTransform ?? null,
       pendingLayerTransform: payload.pendingLayerTransform ?? null,
