@@ -617,3 +617,17 @@ so run it after any change there. Anything that needs the whole frame
 (phase detection, gray-world WB, statistics) belongs in `prepare_raf`.
 Workers get the params as the JSON string Rust wrote. Never re-serialize
 it in JS, or the floats can drift by an ulp.
+
+## History: metadata entries hold no pixels, and removed layers keep theirs
+
+A `kind: 'metadata'` history entry has no GPU handles, because its action
+changed no pixels. Restoring one keeps the live textures. That is only right
+when every step between the live state and that entry was a metadata step,
+so a multi-step jump (`undoBy` / `redoBy`) goes through `planHistoryJump`,
+which takes the pixels from the nearest pixel entry along the path. Also,
+`syncLayers` can leave a removed layer's texture in the engine, and
+`add_layer` reuses an existing texture. A layer that comes back on redo
+therefore shows whatever its texture held when it was removed. Test history
+changes by comparing every row reached by a jump against the same row
+reached one step at a time
+(`e2e/autofix-1543-1545-history-jump-mask-selection.spec.ts`).
