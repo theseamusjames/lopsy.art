@@ -60,6 +60,32 @@ test.describe('Group adjustments drawer size', () => {
     expect(box.y + box.height).toBeLessThanOrEqual(VIEWPORT.height);
   });
 
+  test('keeps the header and footer in view when the list overflows', async ({ page }) => {
+    await openGroupAdjustments(page);
+    const drawer = page.getByTestId('effects-drawer');
+    for (const name of ['Exposure', 'Contrast', 'Levels', 'Channel Mixer', 'Color Grading']) {
+      await drawer.locator('[aria-label="Add Adjustment"]').click();
+      await page.getByRole('menuitem', { name, exact: true }).click();
+    }
+
+    const list = drawer.locator('div[class*="scrollArea"]');
+    await list.hover();
+    await page.mouse.wheel(0, 5000);
+    await page.screenshot({ path: 'e2e/screenshots/group-adjustments-drawer-scrolled.png' });
+
+    expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    expect(await list.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    expect(await drawer.evaluate((el) => el.scrollTop)).toBe(0);
+
+    const drawerBox = (await drawer.boundingBox())!;
+    const headerBox = (await drawer.locator('div[class*="header"]').first().boundingBox())!;
+    const footerBox = (await drawer.locator('[aria-label="Add Adjustment"]').boundingBox())!;
+    expect(headerBox.y).toBeGreaterThanOrEqual(drawerBox.y);
+    expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(drawerBox.y + drawerBox.height);
+    await expectPointerReachable(drawer.getByRole('button', { name: 'Close' }));
+    await expectPointerReachable(drawer.locator('[aria-label="Add Adjustment"]'));
+  });
+
   test('leaves the layer effects drawer at its content height', async ({ page }) => {
     await page.locator('[aria-label="Add Layer"]').click();
     const layerId = (await getEditorState(page)).document.activeLayerId!;

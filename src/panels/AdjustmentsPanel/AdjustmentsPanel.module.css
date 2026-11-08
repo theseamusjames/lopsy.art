@@ -1,8 +1,10 @@
 .panel {
   display: flex;
   flex-direction: column;
-  flex-grow: 1;
-  height: 100%;
+  flex: 1 1 auto;
+  /* Shrink to the drawer's max-height so only the node list scrolls and the
+     header and footer stay in view. */
+  min-height: 0;
   overflow: visible;
 }
 
@@ -54,6 +56,7 @@
 
 .scrollArea {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-3);
 }
