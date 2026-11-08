@@ -94,6 +94,16 @@ async function selection(page: Page, xs: number[]): Promise<SelectionProbe> {
   }, { doc: DOC, xs });
 }
 
+type Bounds = NonNullable<SelectionProbe['bounds']>;
+
+// Firefox truncates pointer clientX to whole pixels, so at fit zoom a dragged
+// marquee can land a doc pixel off its target: measure it instead of assuming.
+async function selectionBounds(page: Page): Promise<Bounds> {
+  const { bounds } = await selection(page, []);
+  expect(bounds).not.toBeNull();
+  return bounds as Bounds;
+}
+
 async function holdArrowRight(page: Page, repeats: number): Promise<void> {
   // keyboard.down on a key already held sends repeat: true, like OS auto-repeat.
   for (let i = 0; i < repeats; i++) {
@@ -116,17 +126,20 @@ async function openDocument(page: Page): Promise<void> {
 /**
  * Quick Mask on, with the quick mask holding the square (200, 200)-(400, 400)
  * and a marquee over (300, 200)-(500, 400): its left half covers the right
- * half of the painted square.
+ * half of the painted square. Returns both as drawn.
  */
-async function setUpQuickMaskMarquee(page: Page): Promise<void> {
+async function setUpQuickMaskMarquee(page: Page): Promise<{ square: Bounds; marquee: Bounds }> {
   await openDocument(page);
   await selectTool(page, 'marquee-rect');
   await drag(page, 200, 200, 400, 400);
+  const square = await selectionBounds(page);
   await page.keyboard.press('q');
   await page.waitForTimeout(300);
   await drag(page, 300, 200, 500, 400);
+  const marquee = await selectionBounds(page);
   await page.keyboard.press('v');
   await page.waitForTimeout(300);
+  return { square, marquee };
 }
 
 test.describe('Selection and quick-mask nudges without per-frame transfers (#1480–#1482)', () => {
@@ -139,6 +152,9 @@ test.describe('Selection and quick-mask nudges without per-frame transfers (#148
     await selectTool(page, 'marquee-rect');
     await drag(page, 200, 200, 400, 400);
     await page.waitForTimeout(200);
+    const drawn = await selectionBounds(page);
+    const left = drawn.x + 12;
+    const right = left + drawn.width;
 
     await takeLog(page, true);
     await holdArrowRight(page, 12);
@@ -151,30 +167,31 @@ test.describe('Selection and quick-mask nudges without per-frame transfers (#148
     // Not one document-sized upload while the key is held: R8 or the old bands.
     expect(docSized(duringHold.uploads)).toEqual([]);
     // The ants follow the bounds during the hold.
-    expect(midHold.bounds?.x).toBeGreaterThan(200);
-    expect(midHold.bounds?.width).toBe(200);
+    expect(midHold.bounds?.x).toBeGreaterThan(drawn.x);
+    expect(midHold.bounds?.width).toBe(drawn.width);
     // The translated mask is written once, when the key comes up.
     expect(docSized(afterRelease.uploads).filter((u) => u.format === GL_RED && u.h === DOC)).toHaveLength(1);
 
-    const after = await selection(page, [205, 215, 405, 415]);
+    const after = await selection(page, [left - 7, left + 3, right - 7, right + 3]);
     expect(after.active).toBe(true);
-    expect(after.bounds).toEqual({ x: 212, y: 200, width: 200, height: 200 });
-    // x = 205 and 415 are outside (212..412); 215 and 405 inside.
+    expect(after.bounds).toEqual({ ...drawn, x: left });
     expect(after.row).toEqual([0, 255, 255, 0]);
 
     await page.screenshot({ path: 'e2e/screenshots/quick-mask-nudge-1480.png' });
 
     // The selection constrains a fill where the ants are.
     await selectTool(page, 'fill');
-    const inside = await docToScreen(page, 408, 300);
+    const inside = await docToScreen(page, right - 4, 300);
     await page.mouse.click(inside.x, inside.y);
     await page.waitForTimeout(300);
-    const filled = await selection(page, [205, 408]);
+    const filled = await selection(page, [left - 7, right - 4]);
     expect(filled.row).toEqual([0, 255]);
   });
 
   test('#1482: a held arrow key in Quick Mask moves the painted content with no readback', async ({ page }) => {
-    await setUpQuickMaskMarquee(page);
+    const { square, marquee: drawn } = await setUpQuickMaskMarquee(page);
+    const gapEnd = drawn.x + 12;
+    const movedRight = square.x + square.width + 12;
 
     await takeLog(page, true);
     await holdArrowRight(page, 12);
@@ -191,22 +208,25 @@ test.describe('Selection and quick-mask nudges without per-frame transfers (#148
     expect(docSized(afterRelease.uploads).length).toBeLessThanOrEqual(1);
 
     const marquee = await selection(page, []);
-    expect(marquee.bounds).toEqual({ x: 312, y: 200, width: 200, height: 200 });
+    expect(marquee.bounds).toEqual({ ...drawn, x: gapEnd });
 
     await page.screenshot({ path: 'e2e/screenshots/quick-mask-nudge-1482.png' });
 
     // Leaving Quick Mask turns the quick mask into the selection. The half
     // of the square outside the marquee stayed; the half inside moved 12 px,
-    // leaving a 12 px gap at x = 300..312.
+    // leaving a 12 px gap where the marquee's left edge was.
     await page.keyboard.press('q');
     await page.waitForTimeout(400);
-    const result = await selection(page, [250, 298, 305, 315, 405, 411, 414]);
+    const result = await selection(page, [
+      square.x + 50, drawn.x - 2, drawn.x + 5, gapEnd + 3, movedRight - 7, movedRight - 1, movedRight + 2,
+    ]);
     expect(result.active).toBe(true);
     expect(result.row).toEqual([255, 255, 0, 255, 255, 255, 0]);
   });
 
   test('#1481/#1482: a quick-mask marquee drag moves the content on the GPU', async ({ page }) => {
-    await setUpQuickMaskMarquee(page);
+    const { square, marquee: drawn } = await setUpQuickMaskMarquee(page);
+    const squareRight = square.x + square.width;
 
     const start = await docToScreen(page, 400, 300);
     const end = await docToScreen(page, 440, 300);
@@ -227,13 +247,15 @@ test.describe('Selection and quick-mask nudges without per-frame transfers (#148
     expect(docSized(duringDrag.uploads).filter((u) => u.type === GL_FLOAT)).toEqual([]);
 
     const marquee = await selection(page, []);
-    const dx = (marquee.bounds?.x ?? 300) - 300;
+    const dx = (marquee.bounds?.x ?? drawn.x) - drawn.x;
     expect(dx).toBeGreaterThan(30);
     expect(dx).toBeLessThan(50);
 
     await page.keyboard.press('q');
     await page.waitForTimeout(400);
-    const result = await selection(page, [250, 298, 305, 300 + dx + 2, 398 + dx, 402 + dx]);
+    const result = await selection(page, [
+      square.x + 50, drawn.x - 2, drawn.x + 5, drawn.x + dx + 2, squareRight + dx - 2, squareRight + dx + 2,
+    ]);
     expect(result.row).toEqual([255, 255, 0, 255, 255, 0]);
   });
 
