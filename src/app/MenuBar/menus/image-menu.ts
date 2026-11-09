@@ -424,7 +424,7 @@ export function applyAutoColor(): void {
   addAdjustmentAndCommit(node, 'Auto Color');
 }
 
-export type ImageDialogId = 'canvas-size' | 'image-size' | 'convert-to-indexed';
+export type ImageDialogId = 'canvas-size' | 'image-size' | 'border' | 'convert-to-indexed';
 
 const MODE_MENU_ITEMS: readonly { mode: DocumentColorMode; label: string }[] = [
   { mode: 'rgb', label: 'RGB Color' },
@@ -462,6 +462,7 @@ export function createImageMenu(
     { separator: true, label: '' },
     { label: 'Canvas Size...', action: () => showDialog('canvas-size') },
     { label: 'Image Size...', action: () => showDialog('image-size') },
+    { label: 'Border...', action: () => showDialog('border') },
     { separator: true, label: '' },
     { label: 'Auto Tone', shortcut: '\u21E7\u2318L', action: applyAutoTone },
     { label: 'Auto Contrast', shortcut: '\u2325\u21E7\u2318L', action: applyAutoContrast },

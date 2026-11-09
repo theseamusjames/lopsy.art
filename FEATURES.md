@@ -1915,6 +1915,16 @@ for Crop / Canvas Size / Image Size, `invalidateLayers()` for Rotate Image, and
   inches (see [The two dialogs](#the-two-dialogs)).
 - **Image Size…** (Image menu): new width/height that resamples the document,
   in pixels or inches.
+- **Border…** (Image menu): adds a "Border" layer in a chosen color, with one
+  width for every side (**Symmetric**) or separate Top / Bottom / Left / Right
+  widths (**Asymmetric**), in pixels. **Expand canvas** grows the document by
+  the widths, moving the content by the left and top widths the way Canvas Size
+  does, then puts a solid layer at the bottom of the project group. **Overlay**
+  keeps the document size and puts the layer at the top of the project group,
+  transparent inside the rectangle the widths leave (solid when the widths meet
+  or overlap). It ignores the selection and is one undo step. Apply is disabled
+  while every width is 0, or when an expanded side would exceed the maximum
+  document size.
 - **Rotate Image 90° CW / 90° CCW** (Image menu): swaps the document dimensions
   and rotates the raster layers about the document center.
 - **Flip Horizontal / Vertical** (Image menu): mirrors the **active layer**

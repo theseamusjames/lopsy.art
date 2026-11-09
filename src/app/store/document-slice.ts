@@ -1,4 +1,5 @@
-import type { BlendMode, LayerEffects, Layer, Rect, DocumentColorMode } from '../../types';
+import type { BlendMode, Color, LayerEffects, Layer, Rect, DocumentColorMode } from '../../types';
+import { planBorder, type BorderPlacement, type BorderWidths } from '../../layers/border';
 import type { AdjustmentNodeType, AdjustmentNode } from '../../types/adjustment-nodes';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
@@ -8,8 +9,8 @@ import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInser
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
-import { flushLayerSync, rerenderTransformedTextLayers, captureUprightTextAnchors, rerenderTextLayersAt } from '../../engine-wasm/engine-sync';
-import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
+import { flushLayerSync, rerenderTransformedTextLayers, captureUprightTextAnchors, rerenderTextLayersAt, syncDocumentSize } from '../../engine-wasm/engine-sync';
+import { uploadLayerPixels, fillLayerFrame, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
 import { cancelPrefloat } from '../interactions/prefloat';
 import { releaseSnapshotsForDocumentReset } from './history-slice';
 import { invalidateBitmapCache, clearBitmapCache } from '../../engine/bitmap-cache';
@@ -34,7 +35,9 @@ import { computeFlattenImage } from './actions/flatten-image';
 import { computeRasterizeStyle, canRasterizeLayerStyle } from './actions/rasterize-style';
 import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
 import { computeCropCanvas } from './actions/crop-canvas';
-import { computeResizeCanvas } from './actions/resize-canvas';
+import { computeResizeCanvas, computeResizeCanvasAtOffset } from './actions/resize-canvas';
+import { computeAddBorderLayer } from './actions/add-border';
+import { getMaxDocumentSide } from '../../engine-wasm/gpu-limits';
 import { computeResizeImage, scaleGuidesForResize, scalePathsForResize } from './actions/resize-image';
 import { computeConvertColorMode, layersWithPixels, paletteFromBytes, paletteToBytes } from './actions/convert-color-mode';
 import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
@@ -280,6 +283,7 @@ export interface DocumentSlice {
   updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => void;
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
+  addBorder: (color: Color, widths: BorderWidths, placement: BorderPlacement) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
   convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => void;
 
@@ -881,6 +885,38 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+  },
+
+  addBorder: (color, widths, placement) => {
+    finalizePendingStrokeGlobal();
+    const s = get();
+    if (!allowLayerCreation(s.document)) return;
+    const engine = getEngine();
+    if (!engine) return;
+    const plan = planBorder(s.document.width, s.document.height, widths, placement, getMaxDocumentSide());
+    if (!plan) return;
+    s.pushHistory('Border');
+
+    if (placement === 'expand') {
+      applyActionResult(set, computeResizeCanvasAtOffset(
+        s.document, s.renderVersion, plan.width, plan.height, plan.offsetX, plan.offsetY,
+      ));
+    }
+    const { document, layerId } = computeAddBorderLayer(get().document, placement);
+    set((state) => ({ document, renderVersion: state.renderVersion + 1 }));
+
+    // The fill writes the engine's texture directly, so the engine must
+    // already know the new canvas size and the new layer.
+    syncDocumentSize(engine, plan.width, plan.height);
+    flushLayerSync(get());
+    const hole = plan.hole ?? { x: 0, y: 0, width: 0, height: 0 };
+    fillLayerFrame(
+      engine, layerId, color.r / 255, color.g / 255, color.b / 255, color.a,
+      hole.x, hole.y, hole.width, hole.height,
+    );
+    pixelDataManager.bumpVersion(layerId);
+    set((state) => ({ dirtyLayerIds: new Set(state.dirtyLayerIds).add(layerId) }));
+    get().notifyRender();
   },
 
   resizeImage: (newWidth, newHeight) => {
