@@ -631,3 +631,25 @@ therefore shows whatever its texture held when it was removed. Test history
 changes by comparing every row reached by a jump against the same row
 reached one step at a time
 (`e2e/autofix-1543-1545-history-jump-mask-selection.spec.ts`).
+
+## Non-Normal blend math must never see negative channels
+RGBA16F layer and composite textures can hold slightly negative values (a
+dithered gradient ramping to 0 did). `sqrt`, `pow` and divisions in the
+blend formulas turn those into NaN, and a NaN in the composite survives
+every opaque layer above it (`dst * (1 - a)` is still NaN when `a = 1`).
+`blend.glsl`'s `blendMode` clamps both inputs to `>= 0` first, and shaders
+that write layer pixels should clamp their own output (#1557).
+
+## Liquify dabs compose by resampling the old field at the moved point
+A backward-mapped warp field `disp` composes with a new dab `delta` as
+`disp_new(p) = delta(p) + disp_old(p + delta(p))` (bilinear sample).
+Updating `disp_old(p)` in place — e.g. rotating it for Twirl — is only exact
+while the brush centre never moves; with a moving centre the error grows
+every dab into stair-step tearing (#1565). The Liquify field can be checked
+from an e2e test by warping a one-level-per-pixel grey ramp: each pixel's
+value is then the x it was pulled from.
+
+## wasm-opt download blocked in the sandbox: use the dev build
+`npm run wasm:build` has wasm-pack download binaryen for `wasm-opt`; when
+the sandbox can't reach that GitHub release the build fails. `npm run
+wasm:build:dev` skips `wasm-opt` and is enough for running e2e tests.
