@@ -575,7 +575,7 @@ mod tests {
         let out = preprocess_frag(BLEND_FRAG);
         assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
         assert!(out.contains("uniform int u_docColorMode;"));
-        assert!(out.contains("srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(dst.rgb)))"));
+        assert!(out.contains("srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(backdrop.rgb)))"));
     }
 
     #[test]

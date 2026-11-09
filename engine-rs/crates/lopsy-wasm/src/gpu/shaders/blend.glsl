@@ -71,6 +71,12 @@ vec3 setLum(vec3 c, float l) {
 float sat(vec3 c) { return max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b); }
 
 vec3 blendMode(vec3 s, vec3 d) {
+    // RGBA16F textures can hold slightly negative channels (a dithered
+    // gradient ramping to 0, say). Soft Light's sqrt and the HSL helpers'
+    // divisions turn those into NaN, and a NaN in the composite survives
+    // every opaque layer above it (NaN * 0 = NaN) (#1557).
+    s = max(s, vec3(0.0));
+    d = max(d, vec3(0.0));
 #if BLEND_MODE == 1
     return s * d; // Multiply
 #elif BLEND_MODE == 2
