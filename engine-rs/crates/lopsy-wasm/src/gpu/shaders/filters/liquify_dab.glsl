@@ -98,11 +98,14 @@ void main() {
         float a = angle * w;
         float cs = cos(a);
         float sn = sin(a);
-        float ndx = dx * cs - dy * sn - dx;
-        float ndy = dx * sn + dy * cs - dy;
-        vec2 prev = disp;
-        disp.x = ndx + prev.x * cs - prev.y * sn;
-        disp.y = ndy + prev.x * sn + prev.y * cs;
+        // Same composition as Bloat/Pinch: the dab maps p to its rotated
+        // point q, and the existing field is resampled at q. Rotating the
+        // previous offset in place only equals that when the centre never
+        // moves; with a moving brush the error grew with every dab into
+        // stair-step tearing across the falloff ring (#1565).
+        vec2 delta = vec2(dx * cs - dy * sn - dx, dx * sn + dy * cs - dy);
+        vec2 prev = sampleDisp(pixel + delta) * MAX_DISP;
+        disp = delta + prev;
     } else if (u_mode == 3 || u_mode == 4) {
         // #945: the per-dab offset is proportional to the distance from the
         // centre (a radial scale), not a constant-length unit vector — a
