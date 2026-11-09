@@ -43,7 +43,7 @@ async function dragDoc(page: Page, x0: number, y0: number, x1: number, y1: numbe
 async function lockRatio(page: Page, w: number, h: number): Promise<void> {
   await page.locator('[aria-label="Aspect ratio width"]').fill(String(w));
   await page.locator('[aria-label="Aspect ratio height"]').fill(String(h));
-  await page.locator('[aria-label="Lock aspect ratio"]').click();
+  await page.locator('[aria-label="Aspect ratio height"]').press('Enter');
   await expect(page.locator('[aria-label="Unlock aspect ratio"]')).toHaveAttribute('aria-pressed', 'true');
 }
 
