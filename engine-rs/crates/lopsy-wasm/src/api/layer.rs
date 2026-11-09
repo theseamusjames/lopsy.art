@@ -285,8 +285,9 @@ pub fn duplicate_layer_texture(engine: &mut Engine, src_id: &str, dst_id: &str) 
 }
 
 #[wasm_bindgen(js_name = "mergeLayers")]
-pub fn merge_layers(engine: &mut Engine, top_id: &str, bottom_id: &str, bake_bottom_opacity: bool) -> Result<(), JsError> {
+pub fn merge_layers(engine: &mut Engine, top_id: &str, bottom_id: &str, bake_bottom_opacity: bool) -> Result<Vec<i32>, JsError> {
     layer_manager::merge_layers(&mut engine.inner, top_id, bottom_id, bake_bottom_opacity)
+        .map(|rect| rect.to_vec())
         .map_err(|e| JsError::new(&e))
 }
 

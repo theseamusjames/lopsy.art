@@ -85,6 +85,9 @@ export function computeMergeDown(
     effects: bottomLayer.effects,
   };
 
+  // The merged texture covers the document plus any overhang of either
+  // layer (#1567); the engine reports that rectangle.
+  let mergedRect = { x: 0, y: 0, width: doc.width, height: doc.height };
   const engine = getEngine();
   if (engine) {
     // `rasterizeLayerEffects` bakes the layer's opacity into the pixels
@@ -102,11 +105,10 @@ export function computeMergeDown(
       }
     }
 
-    // GPU-side merge: composite top onto bottom.
-    // mergeLayers calls ensure_layer_full_size on the bottom layer,
-    // which may reposition it to (0, 0). The JS position update below
-    // keeps the store in sync.
-    mergeLayers(engine, activeId, belowId, !keepsBottomOpacity);
+    const rect: ArrayLike<number> | undefined = mergeLayers(engine, activeId, belowId, !keepsBottomOpacity);
+    if (rect && rect.length === 4) {
+      mergedRect = { x: rect[0] ?? 0, y: rect[1] ?? 0, width: rect[2] ?? doc.width, height: rect[3] ?? doc.height };
+    }
   }
 
   // GPU is source of truth for the two touched layers — drop stale JS
@@ -137,15 +139,12 @@ export function computeMergeDown(
         visible: l.visible,
         locked: l.locked,
         ...mergedStyle,
-        x: 0,
-        y: 0,
+        ...mergedRect,
         clipToBelow: l.clipToBelow,
         mask: l.mask,
-        width: doc.width,
-        height: doc.height,
       };
     }
-    return { ...l, ...mergedStyle, x: 0, y: 0, width: doc.width, height: doc.height } as typeof l;
+    return { ...l, ...mergedStyle, ...mergedRect } as typeof l;
   });
 
   return {
