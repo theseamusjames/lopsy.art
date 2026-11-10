@@ -3,6 +3,13 @@ import { test as base } from '@playwright/test';
 export { expect } from '@playwright/test';
 export type { Page } from '@playwright/test';
 
+// Vite's dev-only HMR socket (ws://localhost:<port>/?token=…) can drop or
+// fail to connect while the dev server is loaded by the full suite. That is
+// test-harness noise, not an app error: production builds have no such
+// socket. Firefox reports it as "can't establish a connection to the server
+// at ws://…", Chromium as "WebSocket connection to 'ws://…' failed".
+const DEV_SERVER_NOISE = [/ws:\/\/localhost:\d+\/\?token=/];
+
 /**
  * Every test fails if the browser logged a console error or threw a page
  * error. A real bug (a wasm panic, an unhandled rejection, a React warning
@@ -24,7 +31,7 @@ export const test = base.extend<{
     async ({ page, allowConsoleErrors }, use) => {
       const errors: string[] = [];
       const isAllowed = (text: string) =>
-        allowConsoleErrors.some((re) => re.test(text));
+        [...DEV_SERVER_NOISE, ...allowConsoleErrors].some((re) => re.test(text));
 
       page.on('console', (msg) => {
         if (msg.type() !== 'error') return;
