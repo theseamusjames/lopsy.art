@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { Lock, Unlock } from 'lucide-react';
+import { ArrowLeftRight, Lock, Unlock } from 'lucide-react';
 import { useToolSettingsStore } from '../../tool-settings-store';
+import { useEditorStore } from '../../editor-store';
 import {
   ASPECT_RATIO_PRESETS,
   MIN_ASPECT_RATIO_TERM,
+  documentAspectRatio,
   findAspectRatioPreset,
   parseAspectRatioDraft,
 } from '../../../utils/aspect-ratio';
 import styles from '../OptionsBar.module.css';
 
 const CUSTOM_PRESET = 'custom';
+const ORIGINAL_PRESET = 'original';
 
 interface RatioInputProps {
   value: number;
@@ -67,7 +70,13 @@ export function AspectRatioControl() {
   const setAspectRatioH = useToolSettingsStore((s) => s.setAspectRatioH);
   const setAspectRatioLocked = useToolSettingsStore((s) => s.setAspectRatioLocked);
 
-  const preset = findAspectRatioPreset(aspectRatioW, aspectRatioH);
+  const docWidth = useEditorStore((s) => s.document.width);
+  const docHeight = useEditorStore((s) => s.document.height);
+  const original = documentAspectRatio(docWidth, docHeight);
+  const isOriginal = aspectRatioW * original.h === aspectRatioH * original.w;
+  const presetId = isOriginal
+    ? ORIGINAL_PRESET
+    : findAspectRatioPreset(aspectRatioW, aspectRatioH)?.id ?? CUSTOM_PRESET;
 
   const handleCommitW = (w: number) => {
     setAspectRatioW(w);
@@ -80,11 +89,22 @@ export function AspectRatioControl() {
   };
 
   const handlePresetChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    if (e.target.value === ORIGINAL_PRESET) {
+      setAspectRatioW(original.w);
+      setAspectRatioH(original.h);
+      setAspectRatioLocked(true);
+      return;
+    }
     const chosen = ASPECT_RATIO_PRESETS.find((p) => p.id === e.target.value);
     if (!chosen) return;
     setAspectRatioW(chosen.w);
     setAspectRatioH(chosen.h);
     setAspectRatioLocked(true);
+  };
+
+  const handleSwap = () => {
+    setAspectRatioW(aspectRatioH);
+    setAspectRatioH(aspectRatioW);
   };
 
   return (
@@ -93,11 +113,12 @@ export function AspectRatioControl() {
       <div className={styles.ratioGroup}>
         <select
           className={styles.select}
-          value={preset?.id ?? CUSTOM_PRESET}
+          value={presetId}
           onChange={handlePresetChange}
           aria-label="Aspect ratio preset"
         >
           <option value={CUSTOM_PRESET} disabled>Custom</option>
+          <option value={ORIGINAL_PRESET}>Original ({original.w}:{original.h})</option>
           {ASPECT_RATIO_PRESETS.map((p) => (
             <option key={p.id} value={p.id}>{p.label}</option>
           ))}
@@ -114,6 +135,15 @@ export function AspectRatioControl() {
           title={aspectRatioLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
         >
           {aspectRatioLocked ? <Lock size={12} /> : <Unlock size={12} />}
+        </button>
+        <button
+          className={styles.lockBtn}
+          type="button"
+          onClick={handleSwap}
+          aria-label="Swap aspect ratio width and height"
+          title="Swap width and height"
+        >
+          <ArrowLeftRight size={12} />
         </button>
       </div>
     </>
