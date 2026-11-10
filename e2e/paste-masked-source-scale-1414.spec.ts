@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { waitForStore, createDocument, docToScreen, selectTool, setForegroundColor } from './helpers';
+import { waitForStore, createDocument, docToScreen, selectTool } from './helpers';
 
 // #1414 — Copy/paste from a masked photo layer sitting at a non-zero origin,
 // delete the photo, then scale the pasted layer with a Move-tool handle: the
@@ -131,20 +131,14 @@ test.describe('Scale a layer pasted from a deleted masked photo (#1414)', () => 
     await page.waitForTimeout(300);
     await page.keyboard.press('Control+d');
     await page.waitForTimeout(200);
-    const photo = (await layers(page)).list.find((l) => l.id === photoId)!;
 
-    // Lasso (150,75)–(468,412), add a mask and fill everything outside it black.
+    // Lasso (150,75)–(468,412) and add a mask: it reveals the lasso and hides
+    // everything outside it.
     await traceLasso(page, [
       { x: 150, y: 75 }, { x: 468, y: 75 }, { x: 468, y: 412 }, { x: 150, y: 412 }, { x: 150, y: 75 },
     ]);
     await page.locator('[aria-label="Add Mask"]').click();
     await page.waitForTimeout(200);
-    await page.locator(`[aria-label="Edit mask for ${photo.name}"]`).click();
-    await page.waitForTimeout(150);
-    await menu(page, 'Select', /^\s*Inverse/);
-    await setForegroundColor(page, 0, 0, 0);
-    await menu(page, 'Edit', /^Fill$/);
-    await page.keyboard.press('Control+d');
     await expect.poll(() => hiddenMaskTexels(page, photoId), { timeout: 10000 }).toBeGreaterThan(100000);
 
     // Mask → selection (the hidden area), inverted to the visible piece; copy, paste.
