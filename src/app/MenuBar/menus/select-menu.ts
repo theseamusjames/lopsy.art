@@ -34,6 +34,7 @@ export function invertSelectionAction(): void {
   const { width, height } = state.document;
   const rect = selectionBounds(inverted, sel.maskWidth, sel.maskHeight)
     ?? { x: 0, y: 0, width, height };
+  state.pushHistoryMetadata('Inverse Selection');
   state.setSelection(rect, inverted, sel.maskWidth, sel.maskHeight);
   useUIStore.getState().setTransform(createTransformState(rect));
 }
