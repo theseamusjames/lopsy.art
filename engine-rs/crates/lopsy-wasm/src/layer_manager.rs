@@ -236,12 +236,16 @@ pub fn duplicate_texture(
 /// the merge, so it stays on the surviving layer (#1068). Its opacity is
 /// baked only when `bake_bottom_opacity` is set — a layer with live effects
 /// draws them from its unscaled alpha, so it keeps its opacity instead.
+///
+/// The result covers the union of the document and both layers' textures,
+/// so pixels hanging past a canvas edge survive the merge (#1567). Returns
+/// that rectangle as `[x, y, width, height]` in document space.
 pub fn merge_layers(
     engine: &mut EngineInner,
     top_id: &str,
     bottom_id: &str,
     bake_bottom_opacity: bool,
-) -> Result<(), String> {
+) -> Result<[i32; 4], String> {
     let top_handle = *engine.layer_textures.get(top_id)
         .ok_or_else(|| format!("Top layer {top_id} not found"))?;
     let bottom_handle = *engine.layer_textures.get(bottom_id)
@@ -271,12 +275,19 @@ pub fn merge_layers(
         Some((mask_gl, mw, mh))
     });
 
-    // Merge into a doc-sized result at position (0, 0).
-    // Both layers are mapped into document space via their positions.
-    // We use the doc-sized scratch buffers as intermediaries, ping-ponging
-    // to avoid read/write feedback on the same texture.
-    let doc_w = engine.doc_width;
-    let doc_h = engine.doc_height;
+    // Merge into a result covering the document plus any overhang of
+    // either layer. The blend shader works in "document" space spanning
+    // u_docSize from the origin, so the pass feeds it the merge rectangle's
+    // size and offsets every position by the rectangle's origin. The
+    // scratch buffers are the intermediaries, ping-ponging to avoid
+    // read/write feedback on the same texture.
+    let (min_x, min_y, max_x, max_y) = merge_rect(
+        engine.doc_width, engine.doc_height,
+        (top_desc.x, top_desc.y, tw, th),
+        (bottom_desc.x, bottom_desc.y, bw, bh),
+    );
+    let doc_w = (max_x - min_x) as u32;
+    let doc_h = (max_y - min_y) as u32;
     engine.ensure_scratch_size(doc_w, doc_h)?;
 
     // Step 1: clear scratch_b, then blend bottom onto it in doc space.
@@ -305,7 +316,7 @@ pub fn merge_layers(
         let bottom_opacity = if bake_bottom_opacity { bottom_desc.opacity } else { 1.0 };
         if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), bottom_opacity); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") {
-            engine.gl.uniform2f(Some(&loc), bottom_desc.x as f32, bottom_desc.y as f32);
+            engine.gl.uniform2f(Some(&loc), (bottom_desc.x - min_x) as f32, (bottom_desc.y - min_y) as f32);
         }
         if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), bw as f32, bh as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
@@ -336,7 +347,7 @@ pub fn merge_layers(
         if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
         if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), top_desc.opacity); }
         if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") {
-            engine.gl.uniform2f(Some(&loc), top_desc.x as f32, top_desc.y as f32);
+            engine.gl.uniform2f(Some(&loc), (top_desc.x - min_x) as f32, (top_desc.y - min_y) as f32);
         }
         if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
         if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
@@ -350,7 +361,9 @@ pub fn merge_layers(
             if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 2); }
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 1); }
             if let Some(loc) = shader.location(&engine.gl, "u_maskSize") { engine.gl.uniform2f(Some(&loc), *mask_w as f32, *mask_h as f32); }
-            if let Some(loc) = shader.location(&engine.gl, "u_maskOffset") { engine.gl.uniform2f(Some(&loc), mask_offset_x, mask_offset_y); }
+            if let Some(loc) = shader.location(&engine.gl, "u_maskOffset") {
+                engine.gl.uniform2f(Some(&loc), mask_offset_x - min_x as f32, mask_offset_y - min_y as f32);
+            }
         } else {
             if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
         }
@@ -387,17 +400,33 @@ pub fn merge_layers(
         engine.texture_pool.release(old);
     }
 
-    // Update the bottom layer's position to (0, 0) since the merged
-    // result is now in document coordinates.
     if let Some(layer) = engine.layer_stack.iter_mut().find(|l| l.id == bottom_id) {
-        layer.x = 0;
-        layer.y = 0;
+        layer.x = min_x;
+        layer.y = min_y;
         layer.width = doc_w;
         layer.height = doc_h;
     }
 
     engine.mark_layer_dirty(bottom_id);
-    Ok(())
+    Ok([min_x, min_y, doc_w as i32, doc_h as i32])
+}
+
+/// Union of the document rectangle and two layer rectangles given as
+/// `(x, y, width, height)`, returned as `(min_x, min_y, max_x, max_y)`.
+pub(crate) fn merge_rect(
+    doc_w: u32,
+    doc_h: u32,
+    a: (i32, i32, u32, u32),
+    b: (i32, i32, u32, u32),
+) -> (i32, i32, i32, i32) {
+    let mut rect = (0, 0, doc_w as i32, doc_h as i32);
+    for (x, y, w, h) in [a, b] {
+        rect.0 = rect.0.min(x);
+        rect.1 = rect.1.min(y);
+        rect.2 = rect.2.max(x + w as i32);
+        rect.3 = rect.3.max(y + h as i32);
+    }
+    rect
 }
 
 /// GPU-side rotate 90°: render the texture with rotated UV coordinates into
@@ -1697,6 +1726,47 @@ pub fn fill_with_color(
     Ok(())
 }
 
+/// Replace a layer's pixels with a solid color everywhere except `hole`
+/// (document space), which is left transparent. Ignores the selection: a
+/// border is drawn against the canvas, not whatever happens to be selected.
+pub fn fill_layer_frame(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    color: [f32; 4],
+    hole: Option<Rect>,
+) -> Result<(), String> {
+    let _ = engine.ensure_layer_full_size(layer_id);
+
+    let layer_tex_handle = *engine.layer_textures.get(layer_id)
+        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+    let (origin_x, origin_y) = engine.layer_stack.iter().find(|l| l.id == layer_id)
+        .map(|l| (l.x, l.y))
+        .ok_or_else(|| format!("Layer desc {layer_id} not found"))?;
+    let (tw, th) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
+    let layer_tex = engine.texture_pool.get(layer_tex_handle).cloned()
+        .ok_or("Layer texture not found")?;
+
+    let texture_hole = hole
+        .map(|r| Rect::new(r.x - origin_x, r.y - origin_y, r.width, r.height))
+        .and_then(|r| r.intersect(&Rect::new(0, 0, tw, th)));
+
+    engine.render_to_texture(&layer_tex, tw as i32, th as i32, |e| {
+        let gl = &e.gl;
+        gl.clear_color(color[0], color[1], color[2], color[3]);
+        gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        if let Some(r) = texture_hole {
+            gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
+            gl.scissor(r.x, r.y, r.width as i32, r.height as i32);
+            gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+            gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
+        }
+    });
+
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
 /// GPU-side fill of a layer's mask with a grey `value` (0 = hide,
 /// 1 = reveal), limited to the selection when one is active (#1034).
 pub fn fill_mask_with_value(
@@ -2019,4 +2089,19 @@ pub fn restore_mask_from_snapshot(engine: &mut EngineInner, layer_id: &str, snap
     engine.layer_masks.insert(layer_id.to_string(), handle);
     engine.mark_layer_dirty(layer_id);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge_rect;
+
+    #[test]
+    fn merge_rect_is_the_document_when_both_layers_fit() {
+        assert_eq!(merge_rect(600, 400, (0, 0, 600, 400), (60, 60, 100, 100)), (0, 0, 600, 400));
+    }
+
+    #[test]
+    fn merge_rect_keeps_overhang_past_any_edge() {
+        assert_eq!(merge_rect(600, 400, (-90, 0, 600, 400), (150, -20, 600, 450)), (-90, -20, 750, 430));
+    }
 }

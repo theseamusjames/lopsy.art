@@ -14,10 +14,22 @@ export function computeResizeCanvas(
   anchorX: number,
   anchorY: number,
 ): ActionResult {
+  const offsetX = Math.round((newWidth - doc.width) * anchorX);
+  const offsetY = Math.round((newHeight - doc.height) * anchorY);
+  return computeResizeCanvasAtOffset(doc, renderVersion, newWidth, newHeight, offsetX, offsetY);
+}
+
+/** Resize the canvas, moving existing content by exactly (`offsetX`, `offsetY`). */
+export function computeResizeCanvasAtOffset(
+  doc: DocumentState,
+  renderVersion: number,
+  newWidth: number,
+  newHeight: number,
+  offsetX: number,
+  offsetY: number,
+): ActionResult {
   const oldW = doc.width;
   const oldH = doc.height;
-  const offsetX = Math.round((newWidth - oldW) * anchorX);
-  const offsetY = Math.round((newHeight - oldH) * anchorY);
 
   const movedLayers = mapLayersForTransform(doc.layers, {
     onText: (layer) => ({

@@ -32,7 +32,9 @@ void main() {
     float n0 = fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453);
     float n1 = fract(sin(dot(seed, vec2(63.7264, 10.873))) * 28637.1136);
     float dither = (n0 + n1 - 1.0) / 255.0;
-    gradColor.rgb += dither;
+    // Clamped so a stop at 0 or 1 never dithers out of range in an RGBA16F
+    // layer: negative channels poison non-Normal blends above it (#1557).
+    gradColor.rgb = clamp(gradColor.rgb + dither, 0.0, 1.0);
 
     vec4 existing = texture(u_existingTex, v_uv);
 

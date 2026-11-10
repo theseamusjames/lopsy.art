@@ -1060,7 +1060,7 @@ Paste takes one of two routes depending on where the image came from.
 
 ### Crop
 - **Modes**: Normal (rectangular) or Perspective (4-point quadrilateral correction). The mode dropdown lives in the options bar; in Perspective mode Apply / Cancel buttons appear next to the dropdown once a quadrilateral has been placed.
-- **Normal mode**: interactive drag to define crop rectangle. The options bar exposes an **Aspect Ratio** control (W : H number inputs plus a lock toggle); when locked, the crop rectangle is constrained to the entered ratio while dragging. The Crop tool reads no modifier keys: Cmd does not square the box as it does a marquee or a shape, and Shift and Alt do nothing. The ratio and lock are **one global setting shared with the two marquees and the Shape tool**, not a crop-specific one — see [Options Bar](#options-bar).
+- **Normal mode**: interactive drag to define crop rectangle. The options bar exposes an **Aspect Ratio** control (a preset dropdown, W : H number inputs and a lock toggle); when locked, the crop rectangle is constrained to the entered ratio while dragging. The Crop tool reads no modifier keys: Cmd does not square the box as it does a marquee or a shape, and Shift and Alt do nothing. The ratio and lock are **one global setting shared with the two marquees and the Shape tool**, not a crop-specific one — see [Options Bar](#options-bar).
 - **Perspective mode**: the first press on the canvas seeds a quadrilateral over the full document (until then the options bar reads *Click canvas to place perspective quad*); switching modes discards it. Dragging any of the four corner handles repositions that corner; on Apply, every raster layer is warped by the inverse homography (8×8 DLT solver, bilinear inverse-warp) and the document is resized to the inferred output dimensions (edge-length heuristic). Lets you rectify perspective-distorted photographs of paintings, documents, signs, etc.
 - **Edit → Crop**: when a marquee selection is active, the Edit menu's **Crop** item crops the canvas to the selection bounds in one click (equivalent to dragging out the same rectangle with the Crop tool). Disabled when nothing is selected.
 
@@ -1928,6 +1928,16 @@ for Crop / Canvas Size / Image Size, `invalidateLayers()` for Rotate Image, and
   inches (see [The two dialogs](#the-two-dialogs)).
 - **Image Size…** (Image menu): new width/height that resamples the document,
   in pixels or inches.
+- **Border…** (Image menu): adds a "Border" layer in a chosen color, with one
+  width for every side (**Symmetric**) or separate Top / Bottom / Left / Right
+  widths (**Asymmetric**), in pixels. **Expand canvas** grows the document by
+  the widths, moving the content by the left and top widths the way Canvas Size
+  does, then puts a solid layer at the bottom of the project group. **Overlay**
+  keeps the document size and puts the layer at the top of the project group,
+  transparent inside the rectangle the widths leave (solid when the widths meet
+  or overlap). It ignores the selection and is one undo step. Apply is disabled
+  while every width is 0, or when an expanded side would exceed the maximum
+  document size.
 - **Rotate Image 90° CW / 90° CCW** (Image menu): swaps the document dimensions
   and rotates the raster layers about the document center.
 - **Flip Horizontal / Vertical** (Image menu): mirrors the **active layer**
@@ -2383,7 +2393,7 @@ The 32 px horizontal strip directly under the menu bar, sharing the app header w
 
 **Settings the bar shares between tools.** Two controls read as per-tool but are backed by single global values, so setting one wherever it is convenient changes it everywhere else it appears:
 
-- **Aspect ratio** (the `W : H` inputs plus the lock toggle) is one setting stored at the top level of the tool-settings store rather than in any per-tool slice, and **four** tools mount it: the [Rectangular Marquee](#rectangular-marquee), the [Elliptical Marquee](#elliptical-marquee), the [Shape tool](#shape-tool), and [Crop](#crop). Lock 16:9 to crop a photograph, switch to the Shape tool, and rectangles come out 16:9 as well. It defaults to 1 : 1, unlocked. The two inputs advertise `min="1"` but the store only floors them at **0.01**.
+- **Aspect ratio** (the `W : H` inputs plus the lock toggle) is one setting stored at the top level of the tool-settings store rather than in any per-tool slice, and **four** tools mount it: the [Rectangular Marquee](#rectangular-marquee), the [Elliptical Marquee](#elliptical-marquee), the [Shape tool](#shape-tool), and [Crop](#crop). Lock 16:9 to crop a photograph, switch to the Shape tool, and rectangles come out 16:9 as well. It defaults to 1 : 1, unlocked. A **preset** dropdown before the inputs offers common ratios (1:1, 4:3, 3:2, 5:4, 7:5, 16:9, 16:10, 21:9 and the portrait 3:4, 2:3, 4:5, 5:7, 9:16) and shows *Custom* when the inputs match none of them. Each input keeps what is typed as a draft and commits it only on **blur** or **Enter** (Escape reverts), so typing over a value is never clamped mid-edit; a blank or non-numeric entry reverts, and committed terms are floored at **1** (decimals such as 2.35 are kept). Committing either input or picking a preset **turns the lock on**; the lock button still toggles it off and on.
 - **Feather** is one `marquee.feather` value shared by the [Rectangular Marquee](#rectangular-marquee) and the [Elliptical Marquee](#elliptical-marquee), and read — with no control of their own — by the [Magic Wand](#magic-wand), Lasso and Magnetic Lasso commits. The two marquees mount the *same* options component, so they cannot hold different feather radii from one another.
 
 ### Status Bar

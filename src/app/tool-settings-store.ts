@@ -3,6 +3,7 @@ import type { BrushPreset } from '../types/brush';
 import type { ToolSettings } from './tool-settings-types';
 import { BUILTIN_PRESETS, BUILTIN_TEXTURES, createPresetId } from '../tools/brush/builtin-presets';
 import { colorEquals } from '../utils/color';
+import { clampAspectRatioTerm } from '../utils/aspect-ratio';
 import { DEFAULT_TOOL_SETTINGS_SLICES } from './tool-settings-slices';
 import { clampWandSetting } from '../tools/wand/wand-settings';
 import { clampFillSetting } from '../tools/fill/fill-settings';
@@ -174,8 +175,8 @@ export const useToolSettingsStore = create<ToolSettings>((set, get) => ({
       shape: { ...s.settings.shape, [key]: clampShapeSetting(key, value) },
     },
   })),
-  setAspectRatioW: (w) => set({ aspectRatioW: Math.max(0.01, w) }),
-  setAspectRatioH: (h) => set({ aspectRatioH: Math.max(0.01, h) }),
+  setAspectRatioW: (w) => set({ aspectRatioW: clampAspectRatioTerm(w) }),
+  setAspectRatioH: (h) => set({ aspectRatioH: clampAspectRatioTerm(h) }),
   setAspectRatioLocked: (locked) => set({ aspectRatioLocked: locked }),
   setCropSetting: (key, value) => set((s) => ({
     settings: {
