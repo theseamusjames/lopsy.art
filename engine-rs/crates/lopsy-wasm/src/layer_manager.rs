@@ -1726,6 +1726,47 @@ pub fn fill_with_color(
     Ok(())
 }
 
+/// Replace a layer's pixels with a solid color everywhere except `hole`
+/// (document space), which is left transparent. Ignores the selection: a
+/// border is drawn against the canvas, not whatever happens to be selected.
+pub fn fill_layer_frame(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    color: [f32; 4],
+    hole: Option<Rect>,
+) -> Result<(), String> {
+    let _ = engine.ensure_layer_full_size(layer_id);
+
+    let layer_tex_handle = *engine.layer_textures.get(layer_id)
+        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+    let (origin_x, origin_y) = engine.layer_stack.iter().find(|l| l.id == layer_id)
+        .map(|l| (l.x, l.y))
+        .ok_or_else(|| format!("Layer desc {layer_id} not found"))?;
+    let (tw, th) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
+    let layer_tex = engine.texture_pool.get(layer_tex_handle).cloned()
+        .ok_or("Layer texture not found")?;
+
+    let texture_hole = hole
+        .map(|r| Rect::new(r.x - origin_x, r.y - origin_y, r.width, r.height))
+        .and_then(|r| r.intersect(&Rect::new(0, 0, tw, th)));
+
+    engine.render_to_texture(&layer_tex, tw as i32, th as i32, |e| {
+        let gl = &e.gl;
+        gl.clear_color(color[0], color[1], color[2], color[3]);
+        gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        gl.clear_color(0.0, 0.0, 0.0, 0.0);
+        if let Some(r) = texture_hole {
+            gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
+            gl.scissor(r.x, r.y, r.width as i32, r.height as i32);
+            gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+            gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
+        }
+    });
+
+    engine.mark_layer_dirty(layer_id);
+    Ok(())
+}
+
 /// GPU-side fill of a layer's mask with a grey `value` (0 = hide,
 /// 1 = reveal), limited to the selection when one is active (#1034).
 pub fn fill_mask_with_value(

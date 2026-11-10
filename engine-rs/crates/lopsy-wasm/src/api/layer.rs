@@ -611,6 +611,27 @@ pub fn fill_with_color(
         .map_err(|e| JsError::new(&e))
 }
 
+/// Solid-fill a layer except for the document-space rect `hole_*`, which is
+/// left transparent. A zero-sized hole fills the whole layer.
+#[wasm_bindgen(js_name = "fillLayerFrame")]
+#[allow(clippy::too_many_arguments)]
+pub fn fill_layer_frame(
+    engine: &mut Engine,
+    layer_id: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+    hole_x: i32,
+    hole_y: i32,
+    hole_w: u32,
+    hole_h: u32,
+) -> Result<(), JsError> {
+    let hole = (hole_w > 0 && hole_h > 0).then(|| Rect::new(hole_x, hole_y, hole_w, hole_h));
+    layer_manager::fill_layer_frame(&mut engine.inner, layer_id, [r, g, b, a], hole)
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "fillMaskWithValue")]
 pub fn fill_mask_with_value(
     engine: &mut Engine,
