@@ -26,6 +26,7 @@ import {
   type PlacedGlyphBox,
 } from './path-text-geometry';
 import { contextOptions } from '../../engine/color-space';
+import { withEngineFace } from '../../utils/engine-font-faces';
 
 export interface PathTextRenderResult {
   /** RGBA pixel data, row-major top-down. */
@@ -74,7 +75,7 @@ export function pathTextFont(layer: TextLayer): string {
   const { fontSize, fontFamily, fontWeight, fontStyle, color, letterSpacing } = layer;
   return buildFontString({
     fontSize,
-    fontFamily,
+    fontFamily: withEngineFace(fontFamily, fontWeight, fontStyle === 'italic'),
     fontWeight,
     fontStyle,
     color: { r: color.r, g: color.g, b: color.b, a: color.a },
