@@ -44,3 +44,33 @@ export function parseAspectRatioDraft(draft: string): number | null {
 export function findAspectRatioPreset(w: number, h: number): AspectRatioPreset | undefined {
   return ASPECT_RATIO_PRESETS.find((p) => p.w === w && p.h === h);
 }
+
+function greatestCommonDivisor(a: number, b: number): number {
+  let x = a;
+  let y = b;
+  while (y !== 0) {
+    const t = x % y;
+    x = y;
+    y = t;
+  }
+  return x;
+}
+
+/**
+ * The document's own width : height in lowest terms, scaled to fit the
+ * term range when the reduced terms are still too large.
+ */
+export function documentAspectRatio(width: number, height: number): { w: number; h: number } {
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+  const divisor = greatestCommonDivisor(w, h);
+  const rw = w / divisor;
+  const rh = h / divisor;
+  const largest = Math.max(rw, rh);
+  if (largest <= MAX_ASPECT_RATIO_TERM) return { w: rw, h: rh };
+  const scale = MAX_ASPECT_RATIO_TERM / largest;
+  return {
+    w: clampAspectRatioTerm(Math.round(rw * scale)),
+    h: clampAspectRatioTerm(Math.round(rh * scale)),
+  };
+}

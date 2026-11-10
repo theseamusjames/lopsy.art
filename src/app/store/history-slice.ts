@@ -14,6 +14,7 @@ import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 import { cancelPrefloat } from '../interactions/prefloat';
 import { commitLiveFloatBeforeEdit, forgetLiveFloat } from '../interactions/live-float';
+import { resumeMeshWarpPreview, suspendMeshWarpPreview } from '../interactions/mesh-warp-history';
 import { snapshotGpuMasks, withCurrentMaskStaleness, restoreMasksAfterUndo } from './mask-history';
 import { useUIStore } from '../ui-store';
 import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
@@ -499,6 +500,93 @@ function applyHistoryJump(
   syncTransformAfterHistoryRestore(target.selection);
 }
 
+function withMeshWarpPreviewSuspended(jump: () => void): void {
+  if (!suspendMeshWarpPreview()) {
+    jump();
+    return;
+  }
+  try {
+    jump();
+  } finally {
+    resumeMeshWarpPreview();
+  }
+}
+
+type HistorySet = (partial: Partial<EditorState>) => void;
+type HistoryGet = () => EditorState;
+
+function undoSteps(set: HistorySet, get: HistoryGet, steps: number): void {
+  finalizePendingStrokeGlobal();
+  // Drop any active float (and cancel a scheduled prefloat) before
+  // restoring. A leftover float leaves `float_layer_id` set on the engine,
+  // which makes `update_layer` preserve the float's expanded x/y/w/h in the
+  // layer descriptor. After a restore that shrinks the layer texture back to
+  // its pre-float dimensions, the mismatched descriptor renders the layer
+  // stretched at (0, 0, doc.w, doc.h) instead of at its original position
+  // (issue #706).
+  cancelPrefloat();
+  const eng0 = getEngine();
+  if (eng0 && hasFloat(eng0)) dropFloat(eng0);
+  forgetLiveFloat();
+  flushPendingSnapshots();
+
+  const state = get();
+  const S = state.undoStack.length;
+  if (S === 0) return;
+  const n = Math.min(steps, S);
+  // Nearest-first: path[i] is the state i + 1 undos away (#761, #1543).
+  const path = state.undoStack.slice(S - n).reverse();
+  const reuseBase = latestPixelSnapshot(state.undoStack);
+  const plan = planHistoryJump(
+    path,
+    liveHistoryState(state),
+    () => ({
+      gpuSnapshots: snapshotLiveLayers(state, reuseBase),
+      maskSnapshots: liveMaskSnapshots(state.document.layers, reuseBase),
+    }),
+    mergeMetadataLayerPositions,
+    EMPTY_HANDLE,
+  );
+  if (!plan) return;
+
+  applyHistoryJump(set, get, state, plan.target, {
+    undoStack: state.undoStack.slice(0, S - n),
+    redoStack: [...state.redoStack, ...plan.additions],
+  }, plan.removedLayerRestores);
+}
+
+function redoSteps(set: HistorySet, get: HistoryGet, steps: number): void {
+  // Same reasoning as undo: a stale float would preserve expanded dims in
+  // the engine's layer descriptor and misplace the restored texture.
+  cancelPrefloat();
+  const eng0 = getEngine();
+  if (eng0 && hasFloat(eng0)) dropFloat(eng0);
+  forgetLiveFloat();
+  flushPendingSnapshots();
+  const state = get();
+  const R = state.redoStack.length;
+  if (R === 0) return;
+  const n = Math.min(steps, R);
+  const path = state.redoStack.slice(R - n).reverse();
+  const reuseBase = state.redoStack[R - 1];
+  const plan = planHistoryJump(
+    path,
+    liveHistoryState(state),
+    () => ({
+      gpuSnapshots: snapshotLiveLayers(state, reuseBase),
+      maskSnapshots: liveMaskSnapshots(state.document.layers, reuseBase),
+    }),
+    mergeMetadataLayerPositions,
+    EMPTY_HANDLE,
+  );
+  if (!plan) return;
+
+  applyHistoryJump(set, get, state, plan.target, {
+    redoStack: state.redoStack.slice(0, R - n),
+    undoStack: [...state.undoStack, ...plan.additions],
+  }, plan.removedLayerRestores);
+}
+
 export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   undoStack: [],
   redoStack: [],
@@ -514,76 +602,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
   undoBy: (steps: number) => {
     if (steps <= 0) return;
-    finalizePendingStrokeGlobal();
-    // Drop any active float (and cancel a scheduled prefloat) before
-    // restoring. A leftover float leaves `float_layer_id` set on the engine,
-    // which makes `update_layer` preserve the float's expanded x/y/w/h in the
-    // layer descriptor. After a restore that shrinks the layer texture back to
-    // its pre-float dimensions, the mismatched descriptor renders the layer
-    // stretched at (0, 0, doc.w, doc.h) instead of at its original position
-    // (issue #706).
-    cancelPrefloat();
-    const eng0 = getEngine();
-    if (eng0 && hasFloat(eng0)) dropFloat(eng0);
-    forgetLiveFloat();
-    flushPendingSnapshots();
-
-    const state = get();
-    const S = state.undoStack.length;
-    if (S === 0) return;
-    const n = Math.min(steps, S);
-    // Nearest-first: path[i] is the state i + 1 undos away (#761, #1543).
-    const path = state.undoStack.slice(S - n).reverse();
-    const reuseBase = latestPixelSnapshot(state.undoStack);
-    const plan = planHistoryJump(
-      path,
-      liveHistoryState(state),
-      () => ({
-        gpuSnapshots: snapshotLiveLayers(state, reuseBase),
-        maskSnapshots: liveMaskSnapshots(state.document.layers, reuseBase),
-      }),
-      mergeMetadataLayerPositions,
-      EMPTY_HANDLE,
-    );
-    if (!plan) return;
-
-    applyHistoryJump(set, get, state, plan.target, {
-      undoStack: state.undoStack.slice(0, S - n),
-      redoStack: [...state.redoStack, ...plan.additions],
-    }, plan.removedLayerRestores);
+    withMeshWarpPreviewSuspended(() => undoSteps(set, get, steps));
   },
 
   redoBy: (steps: number) => {
     if (steps <= 0) return;
-    // Same reasoning as undo: a stale float would preserve expanded dims in
-    // the engine's layer descriptor and misplace the restored texture.
-    cancelPrefloat();
-    const eng0 = getEngine();
-    if (eng0 && hasFloat(eng0)) dropFloat(eng0);
-    forgetLiveFloat();
-    flushPendingSnapshots();
-    const state = get();
-    const R = state.redoStack.length;
-    if (R === 0) return;
-    const n = Math.min(steps, R);
-    const path = state.redoStack.slice(R - n).reverse();
-    const reuseBase = state.redoStack[R - 1];
-    const plan = planHistoryJump(
-      path,
-      liveHistoryState(state),
-      () => ({
-        gpuSnapshots: snapshotLiveLayers(state, reuseBase),
-        maskSnapshots: liveMaskSnapshots(state.document.layers, reuseBase),
-      }),
-      mergeMetadataLayerPositions,
-      EMPTY_HANDLE,
-    );
-    if (!plan) return;
-
-    applyHistoryJump(set, get, state, plan.target, {
-      redoStack: state.redoStack.slice(0, R - n),
-      undoStack: [...state.undoStack, ...plan.additions],
-    }, plan.removedLayerRestores);
+    withMeshWarpPreviewSuspended(() => redoSteps(set, get, steps));
   },
 
   pushHistory: (label = 'Edit', before) => {

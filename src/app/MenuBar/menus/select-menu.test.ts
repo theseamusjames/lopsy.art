@@ -25,6 +25,7 @@ const editorState = {
     maskHeight: 0,
   },
   setSelection: vi.fn(),
+  pushHistoryMetadata: vi.fn(),
 };
 vi.mock('../../editor-store', () => ({
   useEditorStore: { getState: () => editorState },
@@ -62,6 +63,7 @@ import { selectAll, invertSelectionAction } from './select-menu';
 describe('selectAll / invertSelectionAction — transform state stays in sync', () => {
   beforeEach(() => {
     editorState.setSelection.mockClear();
+    editorState.pushHistoryMetadata.mockClear();
     uiState.setTransform.mockClear();
     editorState.selection = {
       active: false,
@@ -90,6 +92,10 @@ describe('selectAll / invertSelectionAction — transform state stays in sync', 
       maskHeight: 2,
     };
     invertSelectionAction();
+    // Its own undo step, pushed before the selection changes (#1585).
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Inverse Selection');
+    expect(editorState.pushHistoryMetadata.mock.invocationCallOrder[0])
+      .toBeLessThan(editorState.setSelection.mock.invocationCallOrder[0] ?? 0);
     expect(editorState.setSelection.mock.calls[0]?.[0]).toEqual({ x: 300, y: 200, width: 200, height: 200 });
     const arg = uiState.setTransform.mock.calls[0]?.[0] as { __bounds: Rect };
     expect(arg.__bounds).toEqual({ x: 300, y: 200, width: 200, height: 200 });
@@ -113,6 +119,7 @@ describe('selectAll / invertSelectionAction — transform state stays in sync', 
 
   it('invertSelectionAction is a no-op when nothing is selected — no transform refresh either', () => {
     invertSelectionAction();
+    expect(editorState.pushHistoryMetadata).not.toHaveBeenCalled();
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(uiState.setTransform).not.toHaveBeenCalled();
   });
