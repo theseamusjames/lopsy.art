@@ -40,7 +40,12 @@ export interface ContentCrop {
 
 /**
  * Scan content bounds and crop ImageData to the smallest rectangle
- * containing all non-zero pixels (any channel). Returns null if fully empty.
+ * containing all pixels with non-zero alpha. Returns null if fully empty.
+ *
+ * Alpha alone decides, matching lopsy-core's `crop_to_content_bounds`: some
+ * GL drivers (Firefox on Linux) leave colour in zero-alpha texels along a
+ * fill's selection edge, and counting those grew the layer by an invisible
+ * row or column.
  */
 export function cropToContentBounds(src: ImageData): ContentCrop | null {
   const { width, height, data } = src;
@@ -49,11 +54,9 @@ export function cropToContentBounds(src: ImageData): ContentCrop | null {
   let maxX = -1;
   let maxY = -1;
 
-  // Use Uint32Array view for fast 4-channel zero check
-  const u32 = new Uint32Array(data.buffer, data.byteOffset, data.byteLength / 4);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (u32[y * width + x] !== 0) {
+      if (data[(y * width + x) * 4 + 3] !== 0) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
