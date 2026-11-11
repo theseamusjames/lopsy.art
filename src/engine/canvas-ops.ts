@@ -43,7 +43,7 @@ export interface ContentCrop {
  * containing all pixels with non-zero alpha. Returns null if fully empty.
  *
  * Alpha alone decides, matching lopsy-core's `crop_to_content_bounds`: some
- * GL drivers (Firefox on Linux) leave colour in zero-alpha texels along a
+ * GL drivers (Firefox on Linux, SwiftShader) leave colour in zero-alpha texels along a
  * fill's selection edge, and counting those grew the layer by an invisible
  * row or column.
  */
