@@ -121,6 +121,10 @@ test.describe('Effect cache perf — 4000x4000, 20 styled layers', () => {
       return ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : 'unknown';
     });
     test.skip(renderer === null, 'WebGL2 not available');
+    // Without Metal (Linux, Windows) headless Chromium falls back to a CPU
+    // rasterizer, which cannot build twenty styled 4000x4000 layers inside
+    // the timeout, let alone produce meaningful GPU frame times.
+    test.skip(/SwiftShader|llvmpipe|softpipe/i.test(renderer ?? ''), `software renderer: ${renderer}`);
 
     await createDocument(page, DOC, DOC, false);
     await page.waitForSelector('[data-testid="canvas-container"]');

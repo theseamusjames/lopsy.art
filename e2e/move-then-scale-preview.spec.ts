@@ -87,7 +87,12 @@ test('scaling right after a Move-drag previews live, and the scaled rotate handl
   const scaled = await transform(page);
   expect(scaled?.scaleX).toBeCloseTo(1.5, 2);
   // The presented frame shows the 120x90 preview (160,120)-(280,210)…
-  expect(await presentedRgb(page, 265, 200)).toEqual([255, 0, 0]);
+  // (the preview is resampled, so allow a rounding step: Firefox on Linux
+  // presents 254).
+  const [r, g, b] = await presentedRgb(page, 265, 200);
+  expect(r).toBeGreaterThanOrEqual(250);
+  expect(g).toBeLessThanOrEqual(5);
+  expect(b).toBeLessThanOrEqual(5);
   // …and the handle box moved to the scaled corner.
   expect(await overlayAlphaNear(page, 280, 210)).toBeGreaterThan(200);
   expect(await overlayAlphaNear(page, 240, 180)).toBeLessThan(50);
