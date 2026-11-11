@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import '../../../test/canvas-mock';
 import { describe, it, expect } from 'vitest';
-import { computeAlignLayer } from './align-layer';
+import { computeAlignLayer, type ContentBoundsLookup } from './align-layer';
+import { getContentBounds } from '../../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model';
 import type { DocumentState } from '../../../types';
 import type { SelectionData } from '../types';
@@ -44,16 +45,23 @@ function makeDoc(): { doc: DocumentState; pixelData: Map<string, ImageData>; sel
   };
 }
 
+function boundsFrom(pixelData: Map<string, ImageData>): ContentBoundsLookup {
+  return (layer) => {
+    const img = pixelData.get(layer.id);
+    return img ? getContentBounds(img, layer.x, layer.y) : null;
+  };
+}
+
 describe('computeAlignLayer', () => {
   it('returns undefined when no active layer', () => {
     const { doc, pixelData, selection } = makeDoc();
-    const result = computeAlignLayer({ ...doc, activeLayerId: null }, pixelData, selection, 0, 'left');
+    const result = computeAlignLayer({ ...doc, activeLayerId: null }, boundsFrom(pixelData), selection, 0, 'left');
     expect(result).toBeUndefined();
   });
 
   it('aligns layer position to the left edge', () => {
     const { doc, pixelData, selection } = makeDoc();
-    const result = computeAlignLayer(doc, pixelData, selection, 0, 'left')!;
+    const result = computeAlignLayer(doc, boundsFrom(pixelData), selection, 0, 'left')!;
     const layer = result.document!.layers[0]!;
     // Content is at pixel (5,5), so aligning left: x = -5
     expect(layer.x).toBe(-5);
@@ -61,7 +69,7 @@ describe('computeAlignLayer', () => {
 
   it('aligns layer position to the right edge', () => {
     const { doc, pixelData, selection } = makeDoc();
-    const result = computeAlignLayer(doc, pixelData, selection, 0, 'right')!;
+    const result = computeAlignLayer(doc, boundsFrom(pixelData), selection, 0, 'right')!;
     const layer = result.document!.layers[0]!;
     // Content bounds: x=5, width=1, canvas=100 -> x = 100 - 1 - 5 = 94
     expect(layer.x).toBe(94);
@@ -69,7 +77,7 @@ describe('computeAlignLayer', () => {
 
   it('increments renderVersion', () => {
     const { doc, pixelData, selection } = makeDoc();
-    const result = computeAlignLayer(doc, pixelData, selection, 3, 'left')!;
+    const result = computeAlignLayer(doc, boundsFrom(pixelData), selection, 3, 'left')!;
     expect(result.renderVersion).toBe(4);
   });
 
@@ -89,7 +97,7 @@ describe('computeAlignLayer', () => {
       colorMode: 'rgb',
     };
 
-    const result = computeAlignLayer(doc, pixelData, NO_SELECTION, 0, 'left')!;
+    const result = computeAlignLayer(doc, boundsFrom(pixelData), NO_SELECTION, 0, 'left')!;
     expect(result).toBeDefined();
     const layers = result.document!.layers;
     const newGroup = layers.find((l) => l.id === group.id)!;
@@ -97,6 +105,22 @@ describe('computeAlignLayer', () => {
     // Union content min-x is 35, so the whole subtree shifts by -35.
     expect(newChild.x).toBe(-5);
     expect(newGroup.x).toBe(-35);
+  });
+
+  it('asks only for the bounds of the layer it aligns (#1291)', () => {
+    const { doc } = makeDoc();
+    const other = createRasterLayer({ name: 'Other', width: 20, height: 20 });
+    const asked: string[] = [];
+    const lookup: ContentBoundsLookup = (layer) => {
+      asked.push(layer.id);
+      return { x: layer.x + 5, y: layer.y + 5, width: 1, height: 1 };
+    };
+    const result = computeAlignLayer(
+      { ...doc, layers: [...doc.layers, other], layerOrder: [...doc.layerOrder, other.id] },
+      lookup, NO_SELECTION, 0, 'left',
+    )!;
+    expect(asked).toEqual([doc.activeLayerId]);
+    expect(result.document!.layers[0]!.x).toBe(-5);
   });
 });
 
@@ -134,20 +158,20 @@ describe('computeAlignLayer with several selected layers (#1517)', () => {
 
   it('aligns every selected layer to the left edge of their union, not the canvas', () => {
     const { doc, pixelData, aId, bId } = twoBoxDoc();
-    const result = computeAlignLayer(doc, pixelData, NO_SELECTION, 0, 'left');
+    const result = computeAlignLayer(doc, boundsFrom(pixelData), NO_SELECTION, 0, 'left');
     expect(positions(result, [aId, bId])).toEqual([{ x: 30, y: 10 }, { x: 30, y: 35 }]);
   });
 
   it('aligns right, bottom and both centres inside the union box', () => {
     const { doc, pixelData, aId, bId } = twoBoxDoc();
     // Union: x 30–60, y 10–45.
-    expect(positions(computeAlignLayer(doc, pixelData, NO_SELECTION, 0, 'right'), [aId, bId]))
+    expect(positions(computeAlignLayer(doc, boundsFrom(pixelData), NO_SELECTION, 0, 'right'), [aId, bId]))
       .toEqual([{ x: 50, y: 10 }, { x: 50, y: 35 }]);
-    expect(positions(computeAlignLayer(doc, pixelData, NO_SELECTION, 0, 'bottom'), [aId, bId]))
+    expect(positions(computeAlignLayer(doc, boundsFrom(pixelData), NO_SELECTION, 0, 'bottom'), [aId, bId]))
       .toEqual([{ x: 30, y: 35 }, { x: 50, y: 35 }]);
-    expect(positions(computeAlignLayer(doc, pixelData, NO_SELECTION, 0, 'center-h'), [aId, bId]))
+    expect(positions(computeAlignLayer(doc, boundsFrom(pixelData), NO_SELECTION, 0, 'center-h'), [aId, bId]))
       .toEqual([{ x: 40, y: 10 }, { x: 40, y: 35 }]);
-    expect(positions(computeAlignLayer(doc, pixelData, NO_SELECTION, 0, 'center-v'), [aId, bId]))
+    expect(positions(computeAlignLayer(doc, boundsFrom(pixelData), NO_SELECTION, 0, 'center-v'), [aId, bId]))
       .toEqual([{ x: 30, y: 23 }, { x: 50, y: 23 }]);
   });
 
@@ -158,8 +182,8 @@ describe('computeAlignLayer with several selected layers (#1517)', () => {
       layers: doc.layers.map((l) => (l.id === aId ? { ...l, locked: true } : l)),
     };
     // Only B is aligned, and it already frames itself, so nothing moves.
-    expect(computeAlignLayer(locked, pixelData, NO_SELECTION, 0, 'left')).toBeUndefined();
-    expect(computeAlignLayer(locked, pixelData, NO_SELECTION, 0, 'right')).toBeUndefined();
+    expect(computeAlignLayer(locked, boundsFrom(pixelData), NO_SELECTION, 0, 'left')).toBeUndefined();
+    expect(computeAlignLayer(locked, boundsFrom(pixelData), NO_SELECTION, 0, 'right')).toBeUndefined();
   });
 
   it('moves a selected group with its children as one item', () => {
@@ -174,7 +198,7 @@ describe('computeAlignLayer with several selected layers (#1517)', () => {
       backgroundColor: { r: 255, g: 255, b: 255, a: 1 },
       colorMode: 'rgb',
     };
-    const result = computeAlignLayer(doc, pixelData, NO_SELECTION, 0, 'left');
+    const result = computeAlignLayer(doc, boundsFrom(pixelData), NO_SELECTION, 0, 'left');
     const [aPos, groupPos, childPos] = positions(result, [a.layer.id, group.id, child.layer.id]);
     expect(aPos).toEqual({ x: 30, y: 10 });
     // The child moved once (with its group), not twice.
@@ -188,7 +212,7 @@ describe('computeAlignLayer with several selected layers (#1517)', () => {
       active: true, bounds: { x: 30, y: 10, width: 10, height: 10 },
       mask: new Uint8ClampedArray(100 * 100), maskWidth: 100, maskHeight: 100,
     };
-    const result = computeAlignLayer(doc, pixelData, selection, 0, 'left');
+    const result = computeAlignLayer(doc, boundsFrom(pixelData), selection, 0, 'left');
     expect(positions(result, [aId])).toEqual([{ x: 0, y: 10 }]);
   });
 });

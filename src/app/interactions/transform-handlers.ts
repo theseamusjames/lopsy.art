@@ -1,5 +1,4 @@
 import {
-  hitTestHandle,
   hitTestBoxHandle,
   isScaleHandle,
   isRotateHandle,
@@ -283,8 +282,7 @@ function handleSelectionTransformDown(
   const editorState = useEditorStore.getState();
   const uiState = useUIStore.getState();
 
-  const handleRadius = 8 / editorState.viewport.zoom;
-  const hit = hitTestHandle(canvasPos, currentTransform, handleRadius);
+  const hit = hitTestTransformHandle(canvasPos, currentTransform, editorState.viewport.zoom);
 
   if (!hit || !isScaleHandle(hit)) {
     return null;
