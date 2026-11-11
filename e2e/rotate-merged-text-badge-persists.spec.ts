@@ -23,8 +23,8 @@ async function drag(page: Page, x0: number, y0: number, x1: number, y1: number):
   await page.mouse.up();
 }
 
-/** Quantised hash of the presented (screenshot) pixels over a doc-space rect. */
-async function presentedHash(page: Page, x0: number, y0: number, x1: number, y1: number): Promise<number> {
+/** RGB bytes of the presented (screenshot) pixels over a doc-space rect. */
+async function presentedPixels(page: Page, x0: number, y0: number, x1: number, y1: number): Promise<number[]> {
   const a = await docToScreen(page, x0, y0);
   const b = await docToScreen(page, x1, y1);
   const png = (await page.screenshot()).toString('base64');
@@ -35,10 +35,21 @@ async function presentedHash(page: Page, x0: number, y0: number, x1: number, y1:
     ctx.drawImage(img, 0, 0);
     const k = img.width / innerWidth;
     const d = ctx.getImageData(Math.round(a.x * k), Math.round(a.y * k), Math.round((b.x - a.x) * k), Math.round((b.y - a.y) * k)).data;
-    let h = 0;
-    for (let i = 0; i < d.length; i += 4) h = (Math.imul(h, 31) + (d[i]! >> 4) * 7 + (d[i + 1]! >> 4) * 3 + (d[i + 2]! >> 4)) | 0;
-    return h;
+    return Array.from(d).filter((_, i) => i % 4 !== 3);
   }, { png, a, b });
+}
+
+/**
+ * Presented pixels that changed by more than a rounding step. GPU drivers
+ * re-present the same content a level or two apart (Firefox on Linux does
+ * after the crop-on-leave), while a lost rotation moves whole glyphs.
+ */
+function changedPixels(before: readonly number[], after: readonly number[]): number {
+  let changed = 0;
+  for (let i = 0; i < before.length; i++) {
+    if (Math.abs((after[i] ?? 0) - (before[i] ?? 0)) > 8) changed++;
+  }
+  return changed;
 }
 
 /** Doc-space positions of the dark (text) pixels on a layer, as a hash. */
@@ -143,7 +154,7 @@ test('a rotation committed on a rasterized-text + Merge Down layer survives the 
 
   await page.keyboard.press(`${mod}+KeyD`);
   await page.waitForTimeout(400);
-  const presentedAfterCommit = await presentedHash(page, 700, 95, 880, 275);
+  const presentedAfterCommit = await presentedPixels(page, 700, 95, 880, 275);
   const rotated = await textPixelsHash(page, badgeId);
   expect(rotated.hash).not.toBe(upright.hash);
 
@@ -159,7 +170,7 @@ test('a rotation committed on a rasterized-text + Merge Down layer survives the 
   await page.waitForTimeout(3500);
   await page.screenshot({ path: 'e2e/screenshots/rotate-merged-text-badge-persists.png' });
 
-  expect(await presentedHash(page, 700, 95, 880, 275)).toBe(presentedAfterCommit);
+  expect(changedPixels(presentedAfterCommit, await presentedPixels(page, 700, 95, 880, 275))).toBe(0);
   const afterClick = await textPixelsHash(page, badgeId);
   expect(afterClick.hash).toBe(rotated.hash);
   expect(afterClick.hash).not.toBe(upright.hash);

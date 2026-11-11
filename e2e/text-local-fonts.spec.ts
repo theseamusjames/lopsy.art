@@ -5,10 +5,10 @@ import { clickAtDoc } from './text-edit-helpers';
 // Fonts that ship with macOS, look nothing like Inter, and each trip a
 // cosmic-text matching quirk the engine has to absorb: Zapfino's only face is
 // flagged italic, Impact declares itself condensed. Impact is also in the
-// static catalog, so it doubles as the "local shadows catalog" check. Every
-// installed candidate is exercised; a trimmed font install skips rather than
-// fails.
-const CANDIDATE_FAMILIES = ['Zapfino', 'Impact'];
+// static catalog, so it doubles as the "local shadows catalog" check. DejaVu
+// Serif covers Linux hosts, which ship neither. Every installed candidate is
+// exercised; a trimmed font install skips rather than fails.
+const CANDIDATE_FAMILIES = ['Zapfino', 'Impact', 'DejaVu Serif'];
 
 const LOCAL_HEADER = /^Local\d+$/;
 
@@ -22,6 +22,16 @@ async function openFontPicker(page: Page): Promise<void> {
     if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
     await expect(search).toBeVisible({ timeout: 2000 });
   }).toPass({ timeout: 20000 });
+}
+
+// A catalog family (Impact) still matches the search where it isn't
+// installed, so ask the browser which candidates are really local.
+async function installedFamilies(page: Page, families: readonly string[]): Promise<string[]> {
+  const local = await page.evaluate(async () => {
+    const query = (window as unknown as { queryLocalFonts?: () => Promise<Array<{ family: string }>> }).queryLocalFonts;
+    return query ? (await query()).map((font) => font.family) : [];
+  });
+  return families.filter((family) => local.includes(family));
 }
 
 function localHeader(page: Page) {
@@ -99,16 +109,14 @@ test.describe('Local fonts (Local Font Access API)', () => {
 
     await page.keyboard.press('Escape');
 
-    const tested: string[] = [];
-    for (const family of CANDIDATE_FAMILIES) {
+    const installed = await installedFamilies(page, CANDIDATE_FAMILIES);
+    test.skip(installed.length === 0, `none of ${CANDIDATE_FAMILIES.join(', ')} is installed here`);
+
+    for (const family of installed) {
       await openFontPicker(page);
       await page.locator('input[aria-label="Search fonts"]').fill(family);
       await page.waitForTimeout(150);
       const row = page.locator('[role="option"]').filter({ hasText: new RegExp(`^${family}$`) });
-      if ((await row.count()) === 0) {
-        await page.keyboard.press('Escape');
-        continue;
-      }
       // Exactly one row: a family both installed and in the catalog (Impact)
       // must be listed once, under Local, not twice.
       await expect(row).toHaveCount(1);
@@ -134,7 +142,6 @@ test.describe('Local fonts (Local Font Access API)', () => {
       // the local family silently fell back to Inter.
       expect(localPixels, `${family} rendered no glyphs`).toBeGreaterThan(50);
       expect(localPixels, `${family} fell back to Inter`).not.toBe(interCount);
-      tested.push(family);
 
       await page.locator(`[data-layer-id="${layerId}"]`)
         .locator('button[aria-label="Hide layer"], button[aria-label="Show layer"]')
@@ -142,7 +149,6 @@ test.describe('Local fonts (Local Font Access API)', () => {
       await page.locator('[aria-label="Add Layer"]').click();
       await page.waitForTimeout(100);
     }
-    test.skip(tested.length === 0, `neither ${CANDIDATE_FAMILIES.join(' nor ')} is installed here`);
   });
 
   test('offers a manual load when the browser withholds local fonts', async ({ page }) => {
