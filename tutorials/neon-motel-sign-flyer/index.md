@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Hotel Xanadu flyer, a neon motel sign with an amber onion dome, red Hotel script, mint XANADU lettering, a bulb-studded red COCKTAILS arrow and a reader board, standing on a wet desert road at dusk, with the Layers panel open on the right
 finished: finished-hotel-xanadu.webp
 finishedAlt: The finished Hotel Xanadu flyer. A 1950s motel sign stands on two steel poles against a starry blue-hour sky that fades to pink and orange over flat-topped mesas. An amber neon onion dome crowns a slanted teal cabinet, with four amber sparkles and a mint crescent moon around it. The cabinet holds the word Hotel in red neon script above XANADU in mint neon. Below it, a crimson arrow edged with chaser bulbs reads COCKTAILS in amber. A cream reader board reads FRIDAY LOUNGE NIGHT and LIVE EXOTICA · 9 PM. A small box hung under the board says NO VACANCY, with the NO tube switched off. A telephone pole stands on the right. The sign's red and cream light reflects in the wet road, and the footer reads AIR-COOLED ROOMS · HEATED POOL · COLOR TV and 2201 DESERT HIGHWAY · XANADU, NEVADA
-project: neon-motel-sign-flyer.lopsy
+project: tutorials/neon-motel-sign-flyer/3bd9cbc9c0a4/neon-motel-sign-flyer.lopsy
 ---
 
 The great roadside motel signs of the 1950s were built to be seen from a car at sixty miles an hour. They used onion domes, boomerang cabinets, arrows ringed with chasing bulbs, and a reader board for the week's specials. At dusk the neon came on against a still-blue sky. After a desert storm the whole sign hung upside down in the wet road.

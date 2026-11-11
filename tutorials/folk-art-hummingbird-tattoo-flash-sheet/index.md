@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Hummingbird & Xóchitl flash sheet on the canvas and its Colibri, Corazon, Sol and Liston groups in the Layers panel
 finished: finished-hummingbird-xochitl.webp
 finishedAlt: The finished Hummingbird and Xóchitl tattoo flash sheet on manila paper. A turquoise, cobalt, marigold and magenta hummingbird with a fan of striped wing feathers sips from an eight-petal magenta flower on a green stem. Below it sit a flaming red sacred heart in a ring of orange dots and a smiling sun with magenta and orange rays. A pink ribbon banner reads Xóchitl. The title is set in a western-style display face, small burgundy prices sit beside each design, masking tape holds the top corners and a double ink border frames the sheet
-project: folk-art-hummingbird-tattoo-flash-sheet.lopsy
+project: tutorials/folk-art-hummingbird-tattoo-flash-sheet/910358d7bea4/folk-art-hummingbird-tattoo-flash-sheet.lopsy
 ---
 
 A tattoo flash sheet is a menu: a sheet of ready-to-tattoo designs, each with

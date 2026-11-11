@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Quayside Kraken cover on the canvas, a ZX Spectrum loading screen with yellow and blue border stripes, and the Layers panel showing Border, Ink, Program, Beam and Bitmap
 finished: finished-quayside-kraken.webp
 finishedAlt: The finished Quayside Kraken album cover, made to look like a ZX Spectrum game loading from tape. Ragged yellow and blue stripes fill the border. On the black screen the title Quayside is set in pixel blackletter, white at the top and cyan at the bottom, and Kraken below it is yellow over red. On the right, magenta octopus arms with rings of suckers rise from behind a stone breakwater, and one curls up past a yellow dithered moon. A white lighthouse with a yellow lantern and a red base stands on the breakwater. Its beam fans out to the left as yellow dots that thin out with distance. Cyan waves fill the sea at the left. The breakwater is blue stone with THE TIDECALLERS painted on a black sign. Halfway through the word CALLERS the colour stops, and from there down the picture shows as black pixels on white paper, with inverted stones and waves. The bottom line reads Program: KRAKEN.
-project: 8-bit-zx-spectrum-loading-screen-album-cover.lopsy
+project: tutorials/8-bit-zx-spectrum-loading-screen-album-cover/473d944bedb4/8-bit-zx-spectrum-loading-screen-album-cover.lopsy
 ---
 
 On a ZX Spectrum, a game took several minutes to load from cassette. While you

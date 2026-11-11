@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Tea and Éclairs birthday card, with gilt copperplate Happy Birthday lettering over pencil guidelines, a teacup with a hanging tag and two éclairs, and the Layers panel open on the right
 finished: finished-tea-and-eclairs.webp
 finishedAlt: The finished birthday card on cream card stock inside a double gold border with pen-flourish scrolls in each corner. Happy Birthday is written in slanted copperplate script in dark brown ink, with the capital H and B in shaded gold, over faint pencil guidelines and slant lines. A pen swash carries on from the y of Birthday and ends in a small loop. Below it, steam rises from a gold-rimmed porcelain teacup with a garland of pink roses and green leaves. A tea-bag tag reading make a wish hangs over the rim, and two chocolate-glazed éclairs lie on the saucer. A mirrored flourish sits above the line TEA & ÉCLAIRS ARE ON ME in small capitals
-project: copperplate-calligraphy-birthday-card.lopsy
+project: tutorials/copperplate-calligraphy-birthday-card/8f187f51bd4a/copperplate-calligraphy-birthday-card.lopsy
 ---
 
 Copperplate is the formal, slanted script of the eighteenth-century English writing masters. It's written with a flexible pointed nib. Every stroke is a hairline until the writer presses on a downstroke, and then the nib opens into a thick, shaded swell. Later penmen added flourishes, which are long oval loops and spirals that spill off the letters, and they gilded the capitals.

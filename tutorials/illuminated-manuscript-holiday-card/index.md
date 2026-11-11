@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Ice Skaters card open at fit-to-screen zoom, showing the gilded pointed arch over a winter skating scene, the blue and rose initial G, red and blue lettering, and the ivy-leaf border, with the Layers panel listing the Text Block, Miniature and Border groups above the vellum layers
 finished: finished-ice-skaters.webp
 finishedAlt: The finished illuminated Christmas card. On warm cream vellum, a gold pointed arch frames a winter scene of skaters on a frozen canal beside a brick house, a bare tree and a church tower, under a deep lapis sky with gold stars and falling snow. A cream scroll with turned-under tails reads Gloria in excelsis Deo in red blackletter. Below, a gold G on a square split diagonally into blue and rose with white dots begins four lines of blackletter text, closed by small blue and rose bars. A red line reads A Merry Christmas and a Joyful New Year, above Anno Domini MMXXVI in blue between two bars. A gold keyline and red rule frame the page, with ink vines, gold, blue and rose ivy leaves, gold dots, trefoils, corner rosettes and a gold roundel holding a sixteen-point star at the bottom
-project: illuminated-manuscript-holiday-card.lopsy
+project: tutorials/illuminated-manuscript-holiday-card/1742bdec4f20/illuminated-manuscript-holiday-card.lopsy
 ---
 
 Medieval *Books of Hours* are prayer books made for wealthy owners in the

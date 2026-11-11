@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished GHOST (notes) album cover, with a halftone photo of a smiling drummer in a hat raising a drumstick in front of an orange dot sun, a cobalt echo of his arm, the huge black word GHOST behind him, a tracklist, a blue 33⅓ badge and a black band of drum notation, with the Layers panel on the right
 finished: finished-ghost-notes.webp
 finishedAlt: The finished square album cover GHOST (notes). On grainy cream paper, GHOST is set across the top in huge black Anton capitals. A halftone photo of the drummer Sid Catlett in a hat breaks into the bottom of the letters, smiling and raising a drumstick through the T. A disc of orange halftone dots glows behind his head and shoulder, and a cobalt dotted echo of his raised arm trails below the real one, its hand running off the right edge. On the left, (notes) is set in blue italic serif, with BIG SID CATLETT under it and a seven-track list with orange numbers. A blue 33⅓ RPM badge reads MICROGROOVE over the top and LONG PLAYING along the bottom. A black band across the foot holds one bar of snare drum notation in cream, with orange parentheses around the ghost notes and accents on the backbeat, above the credits RECORDED IN NEW YORK CITY · 1947 and NIGHTINGALE RECORDS · NR 4701.
-project: halftone-jazz-album-cover.lopsy
+project: tutorials/halftone-jazz-album-cover/ac13f2fc0c7c/halftone-jazz-album-cover.lopsy
 ---
 
 Jazz records of the 1950s mostly had the same ingredients on the cover: one strong photo, printed as a coarse halftone in one or two inks, big type, and a lot of empty paper. This tutorial builds an imaginary reissue LP called **GHOST (notes)** in that style.

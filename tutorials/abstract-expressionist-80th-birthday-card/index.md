@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Just Eighty birthday card, a huge black painted 80 over red, gold, pink and teal brush strokes, with the Layers panel open
 finished: finished-just-eighty-card.webp
 finishedAlt: The finished Just Eighty birthday card. A huge black 80 painted in fat gestural strokes on a scrubbed white ground, with red, gold, pink, teal and grey strokes bursting behind and through it, five short drips, a row of sixteen tally bundles along the bottom, and the handwritten words Happy birthday, just eighty
-project: abstract-expressionist-80th-birthday-card.lopsy
+project: tutorials/abstract-expressionist-80th-birthday-card/0967e74d0499/abstract-expressionist-80th-birthday-card.lopsy
 ---
 
 This card is for someone turning eighty who'd rather you didn't make a fuss.

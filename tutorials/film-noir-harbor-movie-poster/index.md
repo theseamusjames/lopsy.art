@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Yokohama Harbor noir poster on the canvas, its margin and horizon guides showing, and the Layers panel listing the title, billing and other type layers
 finished: finished-yokohama-harbor.webp
 finishedAlt: The finished YOKOHAMA HARBOR film noir poster. Two pale searchlight beams cross in a rainy blue-black sky above a dockside crane and an ocean liner with lit amber portholes. On a wet wooden pier a street lamp throws a pool of amber light, and a man in a fedora and long overcoat stands silhouetted with a thin amber rim, his shadow stretching away across the boards. Red vertical katakana reads ヨコハマ on the left, an italic tagline says Every ship brings a stranger. This one brought a gun., and the huge red title YOKOHAMA has dark venetian-blind slats cut through its lower half, above HARBOR and a three-line billing block
-project: film-noir-harbor-movie-poster.lopsy
+project: tutorials/film-noir-harbor-movie-poster/1365af9162da/film-noir-harbor-movie-poster.lopsy
 ---
 
 Film noir posters sold black-and-white films with loud colour. They used a

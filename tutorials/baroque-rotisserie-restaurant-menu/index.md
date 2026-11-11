@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Rotisserie Royale menu. A gilt medallion holds a painting of a red rooster above a crimson ribbon with the title, and an ivory panel below lists three courses with dotted leaders to the prices, all on crimson damask velvet inside a gold frame.
 finished: rotisserie-royale-finished.webp
 finishedAlt: The finished Rotisserie Royale menu. Crimson velvet with a faint damask pattern fills the page inside a gilt frame with rosettes at the corners. At the top a gilt medallion ringed with ivory pearls holds a 17th-century painting of a red rooster and a white hen, flanked by gold acanthus scrolls. A crimson ribbon across the bottom of the medallion carries the title Rotisserie Royale in cream capitals. Below, on an arched ivory panel, a script tagline reads Spit-roasted over open flame, by candlelight, followed by three sections, Les Entrées, Les Rôtis and Les Douceurs, each with three dishes, italic descriptions and dotted leaders to red prices. A gold small-caps footer reads Rue Royale, Reservations by Candle and Quill.
-project: baroque-rotisserie-restaurant-menu.lopsy
+project: tutorials/baroque-rotisserie-restaurant-menu/ec8aa3f85fa3/baroque-rotisserie-restaurant-menu.lopsy
 ---
 
 Baroque printed ephemera loves excess: heavy gilt frames, velvet, scrolling acanthus leaves and a painted scene held in a medallion. In this tutorial you'll make a menu in that spirit for **Rotisserie Royale**, a made-up spit-roast restaurant. It's all drawn in Lopsy, apart from one public-domain painting. If you'd rather paint the still life yourself, the [quince Baroque menu](/tutorials/baroque-restaurant-menu/) takes that route. This one leans on pattern, gilding and a curved title.

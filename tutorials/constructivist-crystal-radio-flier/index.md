@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Quartz Nights flier, with a man in a hat holding a headphone to his ear inside a red disc, a lattice radio tower sending broadcast arcs toward him, and QUARTZ NIGHTS rotated on a black diagonal band
 finished: finished-quartz-nights.webp
 finishedAlt: The finished Quartz Nights flier on cream paper, with a black and cream photo of a man listening to a headphone inside a vermilion disc, a hyperboloid lattice radio tower with four broadcast arcs, a black band at minus 15 degrees carrying QUARTZ in cream with NIGHTS in red below, a red wedge, a faceted quartz crystal, a FREE ENTRY stamp, an info column and a red footer bar
-project: constructivist-crystal-radio-flier.lopsy
+project: tutorials/constructivist-crystal-radio-flier/4294198b67c1/constructivist-crystal-radio-flier.lopsy
 ---
 
 In the 1920s Alexander Rodchenko and El Lissitzky built posters from a short

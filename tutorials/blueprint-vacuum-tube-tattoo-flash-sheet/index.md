@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Vacuum Electronics flash sheet on the canvas, the Layers panel on the right and the toolbox on the left
 finished: finished-vacuum-electronics-flash-sheet.webp
 finishedAlt: The finished Vacuum Electronics tattoo flash sheet on blueprint-blue gridded paper. A big glass triode with a glowing orange filament stands in a cream sunburst with yellow lightning bolts on each side, and an ALWAYS WARM ribbon crosses its red base. A smoky Nixie tube showing a glowing 7 is on the left, and a green magic-eye tube with white tick marks is on the right. The bottom row holds a red heart pierced by a bolt with an OHM SWEET OHM banner, a red and cream nautical star, and a mustard atom with glowing electrons. Chalk-white dimension lines, FIG. labels, a vertical margin note and a drafting title block reading VALVES · TUBES · SPARKS finish the sheet
-project: blueprint-vacuum-tube-tattoo-flash-sheet.lopsy
+project: tutorials/blueprint-vacuum-tube-tattoo-flash-sheet/7c3b1bfa01b1/blueprint-vacuum-tube-tattoo-flash-sheet.lopsy
 ---
 
 Tattoo flash is a sheet of ready-to-go designs that hangs on a shop wall.

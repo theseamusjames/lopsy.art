@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Insomniac Opossum T-shirt design on the canvas and the Layers panel showing the Sprites and Type groups, on a near-black shirt colour
 finished: finished-insomniac-opossum.webp
 finishedAlt: The finished Insomniac Opossum T-shirt print in 8-bit pixel art. A tired grey and white opossum with heavy eyelids and glowing green eyes stares out of a teal night sky with a crescent moon and pine trees. Below it INSOMNIAC is striped white to mint and OPOSSUM is striped cream to red, above the line PRESS START TO PLAY DEAD and four little opossum sprites that walk, panic, flop over and peek. A game score display runs across the top.
-project: 8-bit-insomniac-opossum-t-shirt-design.lopsy
+project: tutorials/8-bit-insomniac-opossum-t-shirt-design/e23ea46802c6/8-bit-insomniac-opossum-t-shirt-design.lopsy
 ---
 
 Opossums are up all night, and they have the trail camera photos to prove it.

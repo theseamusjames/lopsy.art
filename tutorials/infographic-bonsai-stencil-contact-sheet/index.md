@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Zen Bonsai contact sheet open, two black film strips of sage-green stencil plates with bonsai cut-outs and red lean diagrams, a stencil ZEN BONSAI title, a protractor chart and a photo-to-plate strip, with the Layers panel showing four groups
 finished: finished-zen-bonsai-contact-sheet.webp
 finishedAlt: The finished Zen Bonsai contact sheet on warm paper. A big black stencil title reads ZEN BONSAI, with a right-aligned spec block. Two black film strips hold six frames, each a sage-green Mylar plate with a bonsai silhouette cut through it, four punched corner holes and thin bridges. A vermilion overlay marks each trunk's lean from vertical, 0, 0, 45, 60, 95 and 150 degrees, and amber captions name the styles from Chokkan to Kengai. A magenta grease-pencil loop marks frame 06 with PRINT x2. Below sit a half-protractor chart of the six lean angles with a hatched below-the-soil zone, a three-panel strip turning an old bonsai photo into a threshold and then a cut plate, and a short list of plate notes.
-project: infographic-bonsai-stencil-contact-sheet.lopsy
+project: tutorials/infographic-bonsai-stencil-contact-sheet/08dfca6577f4/infographic-bonsai-stencil-contact-sheet.lopsy
 ---
 
 Bonsai growers sort trees by one number: how far the trunk leans from straight up. A formal upright stands at 0°. A cascade hangs its tip below the bottom of the pot. This tutorial turns that one idea into a poster. You'll cut six bonsai styles out of stencil plates, photograph them onto two strips of medium-format film, mark the lean on every frame, and plot all six on a protractor.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Froyo Club patch. The canvas shows a scalloped sky-blue badge with a hot pink satin border on lilac fabric, a pink soft-serve swirl with sprinkles and a cherry in a smiling mint cup, and a yellow ribbon reading FROYO CLUB. The Layers panel lists the Stitches, Banner, Cup Face and Froyo groups
 finished: finished-froyo-club-patch.webp
 finishedAlt: The finished Froyo Club iron-on patch on lilac twill fabric. A scalloped sky-blue cloud badge is edged in a hot pink satin border with fine stitch ridges and a soft drop shadow. In the middle a four-tier strawberry soft-serve swirl with a rounded tip, rainbow sprinkles, white shine marks and a cherry on top sits in a mint paper cup with a cream rim. The cup has a kawaii face with big glossy eyes, a small open smile and pink blush. A lavender spoon pokes out of the swirl, yellow sparkles and a mint heart float around it, and a butter-yellow ribbon banner across the bottom reads FROYO CLUB in round plum letters
-project: kawaii-froyo-embroidered-iron-on-patch.lopsy
+project: tutorials/kawaii-froyo-embroidered-iron-on-patch/bfc063b8ece2/kawaii-froyo-embroidered-iron-on-patch.lopsy
 ---
 
 Kawaii (Japanese for "cute") art turns everyday things into tiny characters. They get round shapes, soft pastels, big shiny eyes and a blush on the cheeks. Iron-on patches suit the style well, because embroidery likes simple shapes with thick outlines.

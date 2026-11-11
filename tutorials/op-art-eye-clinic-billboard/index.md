@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Retina Zero billboard open. A huge eye made only of horizontal black lines fills the left of the canvas, with a chartreuse, teal and cobalt iris of radial rays. A cream panel on the right reads EVERY LINE STRAIGHT. FREE EYE SCAN, and the Layers panel lists the Sticker, Type Panel and Eye groups
 finished: finished-retina-zero.webp
 finishedAlt: The finished Retina Zero billboard. The whole left of the board is a field of thin horizontal black lines on cream paper. Where the lines swell and thin, an eye appears, outlined by ink lid lines. Inside the eye the lines turn into radial rays that run from chartreuse near the pupil through teal to cobalt at the rim, round a flat black pupil with two cream catchlights. On the right, a cream panel with a black outline and a flat cobalt shadow holds a ring logo and RETINA ZERO, then EVERY in black, LINE in cobalt and STRAIGHT. in black, all set flush to the same width, then FREE EYE SCAN in vermilion and 14 ZENITH ST in small type. A vermilion sticker tilted slightly anticlockwise at bottom left reads 20/20 IN ONE VISIT
-project: op-art-eye-clinic-billboard.lopsy
+project: tutorials/op-art-eye-clinic-billboard/1f5924341155/op-art-eye-clinic-billboard.lopsy
 ---
 
 Op art makes the eye do the work. Bridget Riley and Victor Vasarely used

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished aerie magazine cover. A geometric robin with a twig in its beak perches on a charcoal branch in front of a mustard panel and a teal sun, beside a hanging orange birdhouse with a butterfly roof, under the big lowercase masthead aerie and above the orange script Nesting Season
 finished: finished-nesting-season-cover.webp
 finishedAlt: The finished Spring 1957 cover of aerie. A flat geometric robin holds a cream twig in its beak on a charcoal branch, in front of a mustard panel and a teal halftone sun, with almond leaves, a hanging orange butterfly-roof birdhouse, a nest of three eggs and two starbursts. The heavy lowercase masthead aerie runs across the top, a round orange THE GARDEN ISSUE badge sits on the sun, and Nesting Season is set in slanted orange brush script at the bottom
-project: mid-century-modern-nesting-season-magazine-cover.lopsy
+project: tutorials/mid-century-modern-nesting-season-magazine-cover/f16523529b5e/mid-century-modern-nesting-season-magazine-cover.lopsy
 ---
 
 Mid-century magazine covers from the 1950s are full of flat shapes that

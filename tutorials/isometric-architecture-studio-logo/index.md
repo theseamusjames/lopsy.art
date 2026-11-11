@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Urban Utopia identity sheet, an isometric park block with two blue U-shaped buildings and a yellow sun inside a faint construction circle, above the URBAN UTOPIA wordmark, three logo tiles and a palette grid
 finished: finished-urban-utopia-identity-sheet.webp
 finishedAlt: The finished Urban Utopia identity sheet on cream paper. A faint blue construction circle frames an isometric green park slab with two ultramarine U-shaped buildings meeting in a V, a yellow sun rising between them, a white plaza with a fountain and three small trees. Below sit URBAN in navy and UTOPIA in bright blue, the tagline ARCHITECTURE · CIVIC DESIGN, three rounded tiles with full-colour, reversed and tonal versions of the mark, and an eight-colour palette grid with hex codes
-project: isometric-architecture-studio-logo.lopsy
+project: tutorials/isometric-architecture-studio-logo/1b8352bf80f4/isometric-architecture-studio-logo.lopsy
 ---
 
 An isometric logo draws a small 3D object with no vanishing point. Every edge runs along one of three axes, so the whole mark is built from flat, evenly shaded faces. It looks precise and architectural, which suits a studio that designs buildings.

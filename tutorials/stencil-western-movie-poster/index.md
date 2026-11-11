@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Xanthic Noon poster open. A cream, rust and black stencil of a cowboy on horseback stands on a black hill in front of a big yellow sun ringed with rust rays, sprayed onto a corrugated tin wall, above the yellow stencil title XANTHIC NOON
 finished: finished-xanthic-noon.webp
 finishedAlt: The finished Xanthic Noon movie poster. On a sun-bleached corrugated tin wall with nail heads and rust streaks, a rust ring of rectangular rays surrounds a big yellow sun. A cowboy in a bowler hat sits on his horse in front of it, sprayed in cream, rust and black and standing knee-deep in black grass on a low hill. Three black vultures circle in the sun, and two saguaro cacti stand at the edges. The tagline ONE TOWN. ONE SUN. NO SHADE. runs across the top, and OFFICIAL SELECTION and SONORA FILM FESTIVAL run up the side margins. On the black ground below, the yellow stencil title XANTHIC NOON has a misty yellow overspray and three short drips, above IN CINEMAS · 21 JUNE, the star names and a small billing block
-project: stencil-western-movie-poster.lopsy
+project: tutorials/stencil-western-movie-poster/f2cc586c2517/stencil-western-movie-poster.lopsy
 ---
 
 Street artists spray stencils in layers. Each colour has its own cut-out sheet, called a *plate*. The lightest plate goes on first and the darkest last. The plates never land in exactly the same place twice, and the paint mists past the edges of the card and runs where it pools. Those accidents make a stencil look sprayed rather than printed, so in this tutorial you'll add them on purpose.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Kill Devil Wind poster open. A cream and navy Wright Flyer climbs across a blue-to-apricot sky above a banded orange sun, Wilbur Wright stands on a dune at the right, and the title KILL DEVIL WIND sits over the dunes in tilted cream slab letters with a red shadow. The Layers panel lists Frame, Grain and Title at the top
 finished: finished-kill-devil-wind-americana-movie-poster.webp
 finishedAlt: The finished Kill Devil Wind movie poster. A sky runs from deep navy at the top through dusty blue to apricot at the horizon, with flat two-tone clouds and cream wind lines. The Wright Flyer, cream wings with navy struts and engine, climbs from left to right. Below it a sun of four flat orange and cream bands sets behind rose, rust and dark umber dunes, framed by faint halo rings. Wilbur Wright stands as a navy silhouette on the right-hand dune, watching. Over the dunes the title KILL DEVIL WIND is set in heavy cream slab capitals with a navy outline and a hard red drop shadow, leaning forward and tilted upward. Across the top are the names HAROLD BECKETT · JAMES CALLOWAY and the script tagline Twelve seconds that lifted the world. At the bottom a red ribbon reads KITTY HAWK, NORTH CAROLINA · DECEMBER 17, 1903 between two stars, above a three-line billing block, all inside a cream border with a navy keyline
-project: americana-wright-flyer-movie-poster.lopsy
+project: tutorials/americana-wright-flyer-movie-poster/1e207b4f3a90/americana-wright-flyer-movie-poster.lopsy
 ---
 
 Mid-century travel posters and Hollywood one-sheets sold the American

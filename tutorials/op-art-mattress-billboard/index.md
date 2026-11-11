@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Kip and Idle billboard open. Black and cream wavy stripes ripple around an orange checkered moon on the left and flatten out toward a cream panel on the right that reads KIP & IDLE, LIE DOWN. THE LINES WILL TOO. The Layers panel lists the Grain layer and the Sticker, Panel, Moon and Field groups
 finished: finished-kip-and-idle.webp
 finishedAlt: The finished Kip and Idle billboard. On the left two thirds, ink-black and bone stripes ripple in waves that grow calmer toward the right until they run perfectly flat. An orange checkerboard sphere bulges out of the stripes like a moon, ringed by bands where the stripes flip between black and cream. Three coral four-point stars climb diagonally across the sky, and a coral sticker tilted slightly anticlockwise reads 100 NIGHT TRIAL. A thin coral rule separates the stripes from a cream panel on the right with the coral logo KIP & IDLE in striped capitals, the tagline MATTRESSES FOR RESTLESS MINDS, the black headline LIE DOWN. THE LINES WILL TOO. and the address kipandidle.com
-project: op-art-mattress-billboard.lopsy
+project: tutorials/op-art-mattress-billboard/b8846c3f1a18/op-art-mattress-billboard.lopsy
 ---
 
 Op art makes a flat surface seem to move. In the 1960s Bridget Riley

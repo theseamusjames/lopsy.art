@@ -11,6 +11,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  tutorial-projects:
+    name: Tutorial projects on R2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Plain Node, no install: the script only uses built-ins.
+      - run: npm run tutorial:check
+
   wasm-build:
     name: Build WASM engine
     runs-on: ubuntu-latest

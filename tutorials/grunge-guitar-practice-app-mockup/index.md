@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Woodshed mockup on the canvas, the Layers panel on the right and blue guides across the board
 finished: finished-woodshed-app-mockup.webp
 finishedAlt: The finished WOODSHED app mockup. Three phones are taped with grey gaffer tape, numbered 01, 02 and 03, onto a torn mustard photocopy poster over a dark stained wall. The left phone shows a guitar tuner with a tick-mark gauge, a rust needle, a big E and six string buttons. The middle phone shows a G major chord diagram with rust finger dots and black tape chips for Em, C and D. The right phone shows a riff of the day with an ASCII guitar tab, a big 92 BPM, a rust play button and tally marks. On the left are a distressed cream and rust WOOD SHED headline, a masking-tape tagline reading GUITAR PRACTICE FOR BASEMENT LEGENDS, a numbered list and a photocopied Stratocaster whose neck runs under the poster. An oxblood rubber stamp reading FREE sits in the poster's top-right corner
-project: grunge-guitar-practice-app-mockup.lopsy
+project: tutorials/grunge-guitar-practice-app-mockup/b0cb1b7512d5/grunge-guitar-practice-app-mockup.lopsy
 ---
 
 Grunge design came out of 90s music magazines and gig flyers. Pages were

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom showing the finished Tandem Espresso flier, with a navy tandem bicycle whose wheels are coffee cups in front of a halftone mustard sun and a teal hill, a big red TANDEM headline, a red free-cortado stamp and a red info band, with the ink-plate groups in the Layers panel on the right
 finished: finished-tandem-espresso.webp
 finishedAlt: The finished flier for Tandem Espresso, a mobile coffee bar. On cream paper, TANDEM is set in heavy red slab-serif letters with a teal offset shadow, over ESPRESSO in tall, widely spaced navy capitals between two short red rules. A large mustard sun fades into halftone dots at its lower edge. In front of it stands a navy tandem bicycle whose two wheels are coffee cups seen from above, each on a saucer with a small handle loop and a cream latte-art heart in brown coffee. Red speed lines trail behind the bike, which sits on a curved teal hill with "Two cups. One ride." knocked out in cream script. A tilted red stamp in the top right reads FREE CORTADO, Bring this flier, Saturdays only. Thin navy lines of text run up the left and down the right margins. A red band across the bottom reads MOBILE COFFEE BAR and SATURDAYS 7AM–1PM, FERRIS STREET MARKET, STALL 12 in cream. The inks are slightly out of register, the registration marks in the top corners show four colours, and tiny paper-coloured specks show where ink didn't print.
-project: screen-print-coffee-flier.lopsy
+project: tutorials/screen-print-coffee-flier/97c0a106558a/screen-print-coffee-flier.lopsy
 ---
 
 A screen print is made one ink at a time, each one pushed through its own stencil onto the paper. That process gives the style its look, and you can copy every part of it in Lopsy:

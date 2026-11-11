@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Fig Marmalade billboard open at fit-to-screen zoom, showing the ochre sun, two fig leaves, a whole plum fig and a halved fig on the left, the Fig Marmalade headline and round badge on the right, and the Layers panel with the ink plate groups and type layers
 finished: finished-fig-marmalade.webp
 finishedAlt: The finished screen-printed billboard on cream paper. On the left, an ochre sun with a ring of dotted halftone rays sits behind two sage fig leaves with cream veins, a whole fig shaded in plum halftone dots over rose, and a halved fig showing a plum skin, a cream pith ring, rose flesh, dark radiating strands, pale seeds and a small hollow centre. A dotted plum shadow sits under the figs. On the right, MORROW & FINCH runs across the top in heavy slab capitals, the word Fig is set huge in rose with a plum offset shadow and orange halftone dots, Marmalade sits below in plum with a thin rose misregistered edge, and the tagline reads Spread the last of summer. An ochre badge in the top right corner reads HAND-STIRRED over the top and COPPER POTS under the bottom, around EST. 1931. Fine paper-coloured specks of ink wear cover everything
-project: screen-print-fig-marmalade-billboard.lopsy
+project: tutorials/screen-print-fig-marmalade-billboard/6eedb9b918c0/screen-print-fig-marmalade-billboard.lopsy
 ---
 
 A real screen print is built one ink at a time. Each colour has its own

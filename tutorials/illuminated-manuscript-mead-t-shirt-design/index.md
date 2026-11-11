@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom with the finished Ambrosian Mead T-shirt design on the canvas, a gold-framed Gothic arch of vellum with a beehive miniature, and the Layers panel showing the Lettering, Border, Miniature and Page groups
 finished: finished-ambrosian-mead.webp
 finishedAlt: The finished Ambrosian Mead T-shirt print on a charcoal tee. A tall pointed Gothic arch of cream vellum is edged in gold leaf with a thin red rule. A gold roundel in the point of the arch holds a gilded bee on blue with a ring of white pearls. Below it the word Ambrosian opens with a red uncial A on a blue square in a gold box, the rest in black blackletter, with red and blue penwork running down the left. A gold-framed square picture shows a coiled straw beehive on a green mound dotted with white and red flowers, against a red and blue lozenge pattern, with four honeybees flying around it. Mirrored ivy vines with red, blue and green leaves and gold dots run down both margins. MEAD is set large in alternating blue and red Lombardic capitals with gold lozenges between the letters, above the line Brewed by the Brothers of Saint Ambrose between red paragraph marks, and Anno Domini mmxxvi in red.
-project: illuminated-manuscript-mead-t-shirt-design.lopsy
+project: tutorials/illuminated-manuscript-mead-t-shirt-design/607e170d6d0f/illuminated-manuscript-mead-t-shirt-design.lopsy
 ---
 
 Gothic manuscripts were painted in a small, fixed kit of materials: gold

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Gyre Nocturne poster open at fit-to-screen zoom, showing the Calder-style mobile, the striped Rotorelief disc with its orbit ring, and the GYRE NOCTURNE title, with the Layers panel listing the Mobile, Rotorelief and text layers
 finished: finished-gyre-nocturne.webp
 finishedAlt: The finished Gyre Nocturne poster. On a navy-black ground scattered with a bulging grid of faint dots, a cream disc of eccentric black, cream and vermilion rings spins like a Duchamp Rotorelief, with a saffron centre, a soft blue halo and a hard vermilion offset shadow. A thin cream orbit ring tilts across it and passes behind it, carrying a saffron satellite that leaves a trail of fading dots. Above, a Calder-style mobile of curved wires holds red, cobalt, saffron and cream pendants with motion-blur echoes and cast shadows. At the bottom, the word GYRE in heavy cream letters with vermilion and cobalt misregistered copies sits over NOCTURNE in widely tracked light capitals, beside a right-aligned column reading Fri 13 Nov 2026, 19:00–02:00, Pier 9, Machine Shed. A thin rule and a footer line close the page, and a saffron tagline reading Kinetic Sculpture After Dark runs up the left margin
-project: kinetic-art-event-poster.lopsy
+project: tutorials/kinetic-art-event-poster/ccb4f871b010/kinetic-art-event-poster.lopsy
 ---
 
 *Kinetic art* is art that moves, or looks like it does. In 1935 Marcel

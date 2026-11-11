@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Fowler Orchard stencil set open. Five taped manila stencil plates and a sprayed pine crate end are pinned in a grid on a barn-board wall, with a typed tape title along the bottom. The Layers panel lists a group for each plate and the proof
 finished: finished-fowler-orchard-stencil-set.webp
 finishedAlt: The finished Fowler Orchard crate stencil set. On a weathered brown barn-board wall, five tan oiled-manila stencil plates hang slightly askew, taped at the top corners and labelled in pencil. Plate 1 has a cut-out barn star in a ring with mustard overspray, plate 2 a cut-out rooster and two apples misted barn red, plate 3 the word FOWLER over a ribbon misted navy, plate 4 two laurel sprigs and apple leaves misted green, and plate 5 the word ORCHARD and small highlight holes misted cream. The sixth cell is a nailed pine crate end sprayed with all five colours: a red rooster on a mustard star inside a ring, green laurels, navy FOWLER, a navy ribbon reading ORCHARD in cream, and two red apples, with a red marker note reading PROOF OK. A typed masking-tape title reads FOWLER ORCHARD, CRATE-END STENCIL SET, 5 PLATES + PROOF
-project: americana-crate-stencil-contact-sheet.lopsy
+project: tutorials/americana-crate-stencil-contact-sheet/26da159a392d/americana-crate-stencil-contact-sheet.lopsy
 ---
 
 Before printed labels, orchards marked their apple crates with stencils. Each

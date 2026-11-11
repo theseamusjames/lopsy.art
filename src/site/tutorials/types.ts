@@ -32,7 +32,7 @@ export interface TutorialFrontmatter {
   cover: TutorialImage | null;
   /** Shown under the header as the finished result. Defaults to the last step's image. */
   finished: TutorialImage | null;
-  /** A `.lopsy` file next to `index.md` that readers can open in the editor to follow along. */
+  /** R2 key of the `.lopsy` file readers can open in the editor to follow along. */
   project: string | null;
   isDraft: boolean;
 }

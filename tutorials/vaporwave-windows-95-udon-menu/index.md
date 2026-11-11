@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Udon Utopia menu. The canvas shows a pink and cyan marble head of Helios beside a striped orange sun made from a bowl of udon, palm silhouettes on a pink checkerboard floor, and two grey retro computer windows listing the menu above a taskbar
 finished: finished-udon-utopia-menu.webp
 finishedAlt: The finished Udon Utopia menu. Udon Utopia is written across the top in a white italic serif with a hard cyan shadow, with yellow katakana and a small pixel-font tagline under it. A vertical column of Japanese characters runs down the left edge. A pink and pale-cyan marble head of Helios fills the right side and looks toward a big orange sun on the left. The sun is an overhead photo of a bowl of noodles with fried tofu, cut into horizontal stripes across its lower half. Two dark palm trees stand on the horizon in front of it. Below, a pink and dark violet checkerboard floor runs off into the distance. Over the floor sit two grey retro computer windows, hot_bowls.exe and cold+sides.txt, with blue title bars and menu items in pixel type with dot leaders and yen prices. A white arrow cursor points into the hot menu, a yellow starburst sticker says NEW! curry udon ¥1050, and a grey taskbar runs along the bottom with a Start button and OPEN 11:00-23:00
-project: vaporwave-windows-95-udon-menu.lopsy
+project: tutorials/vaporwave-windows-95-udon-menu/5bbf389c4fa1/vaporwave-windows-95-udon-menu.lopsy
 ---
 
 **Vaporwave** grew out of 2010s internet music and art. It borrows from

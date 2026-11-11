@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished sacred geometry flash sheet on the canvas. A black header holds a white Metatron's Cube over a vermilion disc and the title Sacred Geometry. Below it, six numbered designs sit on pale paper, and the Layers panel shows the Grain layer at the top
 finished: finished-sacred-geometry-flash-sheet.webp
 finishedAlt: The finished Swiss Style tattoo flash sheet. The top third is a black block with a white-line Metatron's Cube over a vermilion disc on the right, the huge white title Sacred Geometry on the left and a three-column info row above it. Below, on pale warm-grey paper, a three by two grid of designs each sits over a black rule and a label with a red number, a bold name and a size and price. The designs are a Seed of Life with a red centre and gold lobes, a Shatkona yantra with woven triangles in a gold lotus, a ring of eight moon phases around a dotwork sphere, a golden spiral over Fibonacci squares, an upright Merkaba star with red, gold and dotted facets, and an eye in a vesica inside a triangle with red rays. Registration marks sit in the paper's corners and a small colophon runs along the foot
-project: swiss-style-sacred-geometry-tattoo-flash-sheet.lopsy
+project: tutorials/swiss-style-sacred-geometry-tattoo-flash-sheet/abf00be8f24e/swiss-style-sacred-geometry-tattoo-flash-sheet.lopsy
 ---
 
 A tattoo flash sheet is a printed menu of ready-to-tattoo designs, each with

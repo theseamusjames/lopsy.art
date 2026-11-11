@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished POLAR JUNGLE frame with its Layers panel, where two explorers stand in a blue ice cave looking through a glowing door at a wrecked ship in a jungle
 finished: polar-jungle-finished.webp
 finishedAlt: The finished POLAR JUNGLE concept frame. Two 1911 explorers in warm light stand on snow in a dark blue ice cave. Through the cave mouth a listing wooden ship lies among palms and ferns with a polar bear below it. A blue and gold macaw perches on the ice on the right, a blurred yellow flower fills the bottom left corner, and a black bar along the bottom holds the title and a slate line.
-project: photomontage-polar-jungle-movie-concept-art.lopsy
+project: tutorials/photomontage-polar-jungle-movie-concept-art/a3bab631923b/photomontage-polar-jungle-movie-concept-art.lopsy
 ---
 
 Concept art doesn't have to be painted. A lot of early film design was cut and pasted, and the photographer Jerry Uelsmann made a career from combination prints: several negatives printed onto one sheet so carefully that they look like a single impossible photograph. That's the goal here. If a viewer can spot where one photo stops and the next begins, the illusion falls apart.

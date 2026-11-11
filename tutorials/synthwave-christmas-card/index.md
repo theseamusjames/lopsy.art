@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Tannenbaum Aurora synthwave Christmas card on the canvas and the Layers panel showing the Finish, Type, Tree, Weather, Floor, Mountains and Sky groups
 finished: finished-tannenbaum-aurora.webp
 finishedAlt: The finished synthwave Christmas card. Chrome letters spell MERRY at the top, striped sky blue, white, plum and orange with a hot pink offset shadow, crossed by Christmas in a glowing pale pink script. Behind them a cyan, green and violet aurora hangs in vertical curtains over a purple night sky with stars and snow. A big yellow-to-orange sun sits on the horizon, dissolving into pink halftone dots at the bottom, between pink-edged violet mountains and cyan-edged dark hills with a wireframe of triangles. In the centre a four-tier dark teal Christmas tree with neon green edges carries strings of warm lights, pink, cyan, gold and purple baubles and a gold star. A pink gift and a tall cyan gift with bows sit at its base on a magenta perspective grid that fades into a pink haze at the horizon, with a faint reflection of the tree. At the bottom a cyan neon pill reads SEASON'S GREETINGS FROM THE GRID
-project: synthwave-christmas-card.lopsy
+project: tutorials/synthwave-christmas-card/24ff7f542c04/synthwave-christmas-card.lopsy
 ---
 
 Synthwave is the 80s as remembered by a VHS tape: a sun sinking into a neon

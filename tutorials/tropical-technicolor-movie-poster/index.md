@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Atoll Radio movie poster open. A lattice radio mast stands on an islet against a magenta and gold sunset, with signal rings around its red beacon, green monstera and banana leaves framing the sky, two pink hibiscus flowers, and the title ATOLL RADIO in tilted orange-gold letters over the sea. The Layers panel lists Grain, the credit lines, Title, the billing lines and Date Pill
 finished: finished-atoll-radio-tropical-movie-poster.webp
 finishedAlt: The finished Atoll Radio movie poster. A sunset over a calm atoll lagoon is graded to Technicolor magenta and gold. On the middle islet stands a black lattice radio mast with a glowing red beacon, and thin cream signal rings spread from the beacon across the sky. Dark green monstera leaves hang in from the top corners and long banana leaves rise up both sides, with a pink hibiscus on the left and another tucked behind the right-hand leaf. Across the top, DOROTHY VALE · RAYMOND KANE is set in spaced capitals over the script tagline Somebody out there is still listening. The title ATOLL RADIO fills the lower half in chunky tilted letters that run from pale yellow to orange-red, with a dark plum outline and a hard drop shadow. A three-line billing block and a gold pill reading IN THEATRES JUNE 6 sit at the bottom
-project: tropical-technicolor-movie-poster.lopsy
+project: tutorials/tropical-technicolor-movie-poster/eab72bf96e25/tropical-technicolor-movie-poster.lopsy
 ---
 
 Studio posters for 1950s South Seas pictures sold an island in Technicolor:

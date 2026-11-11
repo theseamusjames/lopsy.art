@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editor showing the finished VOSTOK MISSIONS flash sheet, with six Suprematist space designs under a black VOSTOK headline on a red diagonal bar
 finished: vostok-missions-finished.webp
 finishedAlt: Finished VOSTOK MISSIONS tattoo flash sheet on aged cream paper, with six outlined Suprematist designs (Sputnik, a rocket, a ringed black planet, a capsule, two flying squares and a gull) and red and black price labels
-project: suprematist-space-race-tattoo-flash-sheet.lopsy
+project: tutorials/suprematist-space-race-tattoo-flash-sheet/35b7d3c83929/suprematist-space-race-tattoo-flash-sheet.lopsy
 ---
 
 This flash sheet retells the Soviet space programme, 1957–1963, in the language of **Suprematism**. That's Malevich's flat squares, circles and bars floating on a pale ground. El Lissitzky's *About Two Squares* is a direct influence.

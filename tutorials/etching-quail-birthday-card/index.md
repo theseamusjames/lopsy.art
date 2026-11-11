@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Imperial Quail birthday card. A sepia line-engraved California quail stands on a weathered post inside an oval of ruled lines on a cream plate, with Many Happy Returns in copperplate script below and pencil notes in the margin
 finished: finished-imperial-quail.webp
 finishedAlt: The finished Imperial Quail birthday card. On cream paper, a slightly darker plate with a soft pressed edge holds a sepia engraving of a California quail standing on a weathered post. The bird is built from fine diagonal lines with cross-hatching in the shadows, washed with slate blue, chestnut on the flanks and buff on the belly. Behind it, an oval of horizontal ruled lines fades out at the edges, with a pale blue wash in the sky, and thin grass grows at the foot of the post. Below the picture, Many Happy Returns is set in copperplate script above THE IMPERIAL QUAIL in small capitals between double rules, and Callipepla californica in italics. Under the plate, grey pencil notes read 1/1, Imperial Quail, and a signature
-project: etching-quail-birthday-card.lopsy
+project: tutorials/etching-quail-birthday-card/dcf4f11350a3/etching-quail-birthday-card.lopsy
 ---
 
 Before photography could be printed, the pictures in bird books were

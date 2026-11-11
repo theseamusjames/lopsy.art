@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Faulty Utopia poster open, showing the blue duotone tower block, the stretched FAULTY title, the pink collapsing building, the grey Utopia.exe error dialog with a mouse pointer, the pink date sticker and UTOPIA running up a lime strip on the right
 finished: finished-faulty-utopia.webp
 finishedAlt: The finished Faulty Utopia movie poster on acid lime. At the top, "it looked great on paper." in Comic Neue sits beside an underlined blue web address, and a pink sticker reading 16.III 1972 has IN THEATERS NEVER running round its rim. Below them, a tower block printed in electric blue duotone fills the upper half, with the word FAULTY stretched tall across it in a Times-style serif that inverts the photo underneath. The lower half is the same estate collapsing in a cloud of dust, printed in hot pink, sliced into sideways-shifted glitch bands with a pixelated block in the dust. A tilted grey Windows 98 dialog titled Utopia.exe says it has stopped responding and that the residents have been notified, with two buttons both labelled Demolish and a giant black pointer with a fading trail on the second one. UTOPIA runs up the right edge in blue with a pink misregistered copy on a lime strip, and a tilted billing block, blue construction lines, registration marks and printer's notes fill the margins.
-project: anti-design-pruitt-igoe-movie-poster.lopsy
+project: tutorials/anti-design-pruitt-igoe-movie-poster/d1e8c738433d/anti-design-pruitt-igoe-movie-poster.lopsy
 ---
 
 Anti-design breaks the rules on purpose. It uses clashing colours, the

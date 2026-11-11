@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Velvet Eclipse painting open. A black eclipse with melting drips sits in a ring of green petals at the centre of green, magenta and violet op-art rays, above banded blue and green hills, a glowing river, a pink and a cyan mushroom, and daisies on two magenta hills. The Layers panel shows the Velvet, Bloom, Land and Sky layers.
 finished: finished-velvet-eclipse.webp
 finishedAlt: The finished painting. A black sun with five drips melting off its lower edge glows with a cyan and white corona inside a dark disc edged in neon blue. Sixteen lime petals and pink dots circle it. Around the disc, thin rays alternate across concentric rings, so each ring flips between green, magenta, violet and lime, and the corners fade to near black. Below, wavy hills in stripes of navy, blue and cyan, then green, lime and teal, roll back to the horizon. A cyan river with white sparkles winds from the green ridge to the bottom edge. A large pink mushroom with lime spots stands on the left hill, a smaller cyan mushroom with magenta spots on the right, and yellow, white and cyan daisies dot the striped magenta hills in front.
-project: psychedelic-eclipse-digital-painting.lopsy
+project: tutorials/psychedelic-eclipse-digital-painting/b456bac7d69c/psychedelic-eclipse-digital-painting.lopsy
 ---
 
 Late-60s psychedelic posters and 70s blacklight velvet prints work on the same idea: put saturated, clashing colours side by side until they seem to vibrate, then give the eye one dark, simple shape to rest on. Here that shape is a total eclipse. A real NASA eclipse photo gives the corona its structure. Everything around it is built from flat, hard-edged shapes you can draw with selections and fills.

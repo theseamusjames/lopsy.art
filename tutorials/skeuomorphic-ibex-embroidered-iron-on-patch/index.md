@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Ibex Backcountry patch open. A round embroidered badge with an orange rolled edge and a dark green band sits on blue denim, with gold topstitching along the top and a copper rivet at the lower right. The layers panel shows the Patch group expanded with its Lettering group
 finished: finished-ibex-backcountry.webp
 finishedAlt: The finished Ibex Backcountry patch, photographed as if ironed on to a denim jacket. A round badge has a thick orange merrowed edge and a dark green twill band with gold chain-stitch rims. Cream slab lettering arches around it, reading IBEX BACKCOUNTRY across the top and HUT TO HUT SINCE 1974 across the bottom, with a gold star at each side. In the centre a brown alpine ibex with huge ridged horns stands on a grey rock ledge, in front of teal snow-capped mountains and a pale sun with orange and gold rays. A loose orange thread trails from the lower left of the patch. Gold topstitching runs along the top of the denim, and a diagonal pocket seam with a copper rivet crosses the lower right corner
-project: skeuomorphic-ibex-embroidered-iron-on-patch.lopsy
+project: tutorials/skeuomorphic-ibex-embroidered-iron-on-patch/f4073f730d96/skeuomorphic-ibex-embroidered-iron-on-patch.lopsy
 ---
 
 Look closely at an embroidered patch and you'll see why it's so hard to fake.

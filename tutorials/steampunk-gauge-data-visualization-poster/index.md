@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Juggernaut Horsepower poster open. A brass pressure gauge on dark leather shows seven coloured rings, a steel needle and a riveted brass title plate, with the Legend, Title, Gauge and Gears groups in the Layers panel
 finished: finished-juggernaut-horsepower.webp
 finishedAlt: The finished poster. A riveted iron frame and dashed stitching border dark brown pebbled leather. At the top, an engraved brass plate reads JUGGERNAUT HORSEPOWER, with the italic line "Two centuries of steam power, read on a logarithmic pressure gauge" beneath it. Most of the page is a large brass gauge with a knurled bezel and twelve slotted screws. Its cream dial holds seven rings in oxblood, verdigris and blued steel, each labelled on the left from Newcomen engine, 1712, 5.5 hp to Big Boy, 1941, 6,290 hp. The scale runs 1, 10, 100, 1,000, 10,000, 100,000. A blued-steel needle points to the end of the RMS Titanic ring. Copper and brass gears are tucked behind the bezel, and a small brass legend plate at the bottom explains the colours
-project: steampunk-gauge-data-visualization-poster.lopsy
+project: tutorials/steampunk-gauge-data-visualization-poster/dd352eb703d1/steampunk-gauge-data-visualization-poster.lopsy
 ---
 
 Victorian engineers lived by their gauges. Every boiler room had a brass

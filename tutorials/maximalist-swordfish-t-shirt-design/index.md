@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished XIPHIAS PARADISE t-shirt graphic, an indigo and teal swordfish leaping out of an orange sunburst medallion with a pink checker ring, banana leaves, coral hibiscus and a pink PARADISE ribbon on a plum background
 finished: finished-xiphias-paradise.webp
 finishedAlt: The finished XIPHIAS PARADISE t-shirt graphic on a plum-black ground. The word XIPHIAS in gold inline capitals arches over a ring of teal and gold beads. Inside a pink and cream checker ring, orange and gold sunburst rays fan out above teal and blue waves with cream crest lines. A posterized swordfish in indigo, teal and cream, outlined in cream, leaps diagonally out of the waves, its bill breaking out of the ring at top right and a crown of cream teardrop splashes at its tail. Two-tone green banana leaves with torn edges fan out behind the ring, with coral hibiscus flowers on the left and right. A tilted hot-pink ribbon reads PARADISE in cream, with SWORDFISH SOCIAL CLUB · EST. 1758 in teal beneath it. Sparkles, stars, small corner leaves and a dotted rule fill the margins, and fine worn-ink specks run through the whole print
-project: maximalist-swordfish-t-shirt-design.lopsy
+project: tutorials/maximalist-swordfish-t-shirt-design/b66678da7bc8/maximalist-swordfish-t-shirt-design.lopsy
 ---
 
 Maximalism is "more is more": layered ornament, clashing colours and

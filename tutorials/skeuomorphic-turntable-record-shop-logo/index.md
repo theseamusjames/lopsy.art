@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Vinyl Xchange logo open. An orange app-icon tile shows a turntable seen from above with a black record, a cream label, a chrome tonearm, two round speed buttons and a pitch slider, above the words Vinyl Xchange. The Layers panel lists the Turntable group with its Spindle, Label, Track Gaps, Sheen, Grooves, Bands, Vinyl, Strobe and Platter layers
 finished: finished-vinyl-xchange.webp
 finishedAlt: The finished Vinyl Xchange logo on warm linen. A rounded-square tile in glossy tangerine lacquer shows a turntable from above. A black record with fine grooves and a soft bow-tie shine sits on a chrome platter ringed with strobe marks. The cream label has a red VX monogram, SIDE A and 33 RPM · STEREO, with VINYL XCHANGE and RECORDS BOUGHT · SOLD · TRADED · HI-FI running around a red band. A chrome tonearm with a counterweight swings in from the top right corner, and two chrome 33 and 45 buttons and a pitch slider stand on the right. VX-79 DIRECT DRIVE is pressed into the top left. Below, Vinyl Xchange is set in heavy charcoal italic with a tangerine offset shadow, over RECORDS · BOUGHT · SOLD · TRADED between two short rules
-project: skeuomorphic-turntable-record-shop-logo.lopsy
+project: tutorials/skeuomorphic-turntable-record-shop-logo/c6bc6988e4e2/skeuomorphic-turntable-record-shop-logo.lopsy
 ---
 
 Skeuomorphism is design that imitates real materials. Think of the

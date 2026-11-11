@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Kelp Keepers patch open on oatmeal canvas. The badge has a dark teal stitched edge and gold keyline, a sea otter holding a coral shell in front of a golden sun, and the layers panel on the right
 finished: finished-kelp-keepers-patch.webp
 finishedAlt: The finished Kelp Keepers patch on oatmeal hemp canvas with copper topstitching. A shield-shaped embroidered badge with a dark teal notched edge and a gold keyline carries KELP KEEPERS in gold Art Nouveau capitals around its arched top. Below the lettering, a ring of teal solar panels with gold lines circles a golden sunburst. A pale-faced sea otter sits in front of the sun, holding a coral shell to its chest, with garden towers and a wind turbine on the left, a terrace, turbine and glass greenhouse on the right. Long olive kelp ribbons rise from teal waves. A dark panel below reads TIDAL COOPERATIVE and, in gold, We keep what keeps us
-project: solarpunk-sea-otter-iron-on-patch.lopsy
+project: tutorials/solarpunk-sea-otter-iron-on-patch/0fed2541421d/solarpunk-sea-otter-iron-on-patch.lopsy
 ---
 
 *Solarpunk* imagines a future that went right: warm light, clean energy and

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom showing the finished Quasar Bao menu, with a holographic foil title and a foil bun on black card, two columns of dishes and the Layers panel on the right
 finished: finished-quasar-bao.webp
 finishedAlt: The finished Quasar Bao menu on black card. The word Quasar runs across the top in huge holographic foil letters. Below it, Ba is followed by an iridescent steamed bun that stands in for the letter o, with a tilted disc around it and thin jets of light above and below. The lower jet divides two columns of dishes with foil headings and prices. A round foil seal, a double-ruled Full Orbit panel and a foil footer finish the page.
-project: holographic-foil-restaurant-menu.lopsy
+project: tutorials/holographic-foil-restaurant-menu/210a8d9a092f/holographic-foil-restaurant-menu.lopsy
 ---
 
 Print shops make holographic menus by stamping one sheet of foil through a

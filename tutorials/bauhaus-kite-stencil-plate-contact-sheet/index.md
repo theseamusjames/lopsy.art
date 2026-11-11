@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Kinetic Kites contact sheet open, a sprayed Bauhaus kite, sun and hill in red, yellow, blue and black above four grey stencil plates, with the Layers panel showing the Pull and Type groups
 finished: finished-kinetic-kites-contact-sheet.webp
 finishedAlt: The finished Kinetic Kites contact sheet on warm paper. A bold lowercase "kinetic kites" title has red dots on its i's, with a red circle, yellow triangle and blue square to its right. Below a thick rule sits the print, fig. 5. It shows a tilted kite split into red, blue, yellow and black triangles by white spars, a yellow sun inside a red ring with four gaps, a black hill in the corner with a red dot for the flyer, a string from the kite to the flyer, three black speed lines and a tail of four bowties. Every shape has a speckled spray halo, and green and near-black show where inks overlap. Under it, four grey stencil boards, fig. 1–4, have the shapes for each ink cut through them, a cut stencil number, a coloured ink tab, punched registration holes and a dusting of overspray. Two boards are slightly askew. A footer holds four lines of plate notes and a three-circle overprint test.
-project: bauhaus-kite-stencil-plate-contact-sheet.lopsy
+project: tutorials/bauhaus-kite-stencil-plate-contact-sheet/24a675f015ed/bauhaus-kite-stencil-plate-contact-sheet.lopsy
 ---
 
 A stencil print in several colours is really several prints. You cut one plate per ink, spray them one after another, and the colours mix wherever two inks land on top of each other. This tutorial makes that process into a poster. You'll spray a Bauhaus kite from four inks, then cut the four plates that would print it and lay them out underneath, like a contact sheet of the job.

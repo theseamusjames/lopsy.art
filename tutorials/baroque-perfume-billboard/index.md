@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Duchess Peony billboard, with the canvas showing a peony bouquet in a bronze tazza beside an amber crystal perfume bottle and gold script type, and the layers panel open on the right
 finished: finished-duchess-peony-billboard.webp
 finishedAlt: The finished 3:1 billboard on a dark umber ground. On the left a crimson velvet curtain is held by a gold tasselled tie-back. A bouquet of blush, cream, crimson, pink and coral peonies with dark olive leaves rises from a fluted bronze tazza on a stone ledge. In the centre stands a clear crystal flacon of amber perfume with a gold teardrop stopper and a gold-ringed oxblood label reading DP, with a strand of pearls curling across the ledge and over its edge. On the right, gold type reads Maison Verdelet · Paris, a swash script Duchess, PEONY in decorative capitals, a scroll ornament and Eau de Parfum, with Now at finer perfumeries inlaid in gold on the ledge front
-project: baroque-perfume-billboard.lopsy
+project: tutorials/baroque-perfume-billboard/16cb6b75aad5/baroque-perfume-billboard.lopsy
 ---
 
 Dutch flower painters of the 1600s put impossible bouquets on stone ledges and pulled them out of the dark with one raking light. Luxury perfume ads still borrow that look. This tutorial builds a 48-sheet (3:1) billboard for a made-up fragrance, *Duchess Peony* by *Maison Verdelet*, in the same spirit:

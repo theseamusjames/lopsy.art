@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Porcupine Zipper Works flier open. An engraved porcupine head sits inside a ring of red zipper tape and cream teeth, with a slider at the top right, under the word PORCUPINE in shaded black capitals and Zipper Works in red script. The Text panel shows Playfair Display Black and the Layers panel lists the Border, Corners and Footer layers
 finished: finished-porcupine-zipper-works.webp
 finishedAlt: The finished Porcupine Zipper Works flier. On cream paper, a slightly darker plate with a pressed edge holds a double-ruled border with quill-fan ornaments in each corner. At the top, ESTABLISHED 1887 · PORTLAND, MAINE runs in small capitals above PORCUPINE in heavy black capitals with a ruled engraved shade, and Zipper Works in red copperplate script. In the middle, a sepia line engraving of a porcupine's head, with pale quills and a bright eye, sits inside a round frame made of red zipper tape with two rows of interlocking cream teeth, a dotted bead rule outside and a zipper slider and pull tab at half past one. A red ribbon across the bottom of the frame reads MENDING · ALTERATIONS · REPAIRS. Below it, No snag too prickly is set in italics with prickly in red, then a needle trailing red thread, a two-column price list with dotted leaders, and the shop's address and hours in small capitals
-project: etching-porcupine-zipper-shop-flier.lopsy
+project: tutorials/etching-porcupine-zipper-shop-flier/71f6d01e0d40/etching-porcupine-zipper-shop-flier.lopsy
 ---
 
 Before photography could be printed, shops advertised with **engraved trade

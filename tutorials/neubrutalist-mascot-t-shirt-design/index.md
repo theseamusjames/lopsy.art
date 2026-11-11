@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Jackalope Xpress t-shirt graphic, with a jackalope in courier goggles bursting out of a yellow bike wheel on a tilted lavender card, a lime JACKALOPE bar, orange XPRESS lettering and three pill buttons, and the layers panel open on the right
 finished: finished-jackalope-xpress-t-shirt.webp
 finishedAlt: The finished 1800 by 2100 t-shirt graphic on a sand shirt colour. A front-facing tan jackalope with white antlers, pink inner ears, lavender courier goggles and a pink polka-dot bandana bursts out of a yellow bicycle wheel with a black tyre. The wheel sits on a lavender graph-paper card tilted slightly, with three orange speed lines streaking out to the left. A white tab reading BIKE COURIER CLUB overlaps the card's top-left corner and a pink starburst sticker reading NO.07 overlaps the top-right. Below, JACKALOPE is set in black on a lime bar and XPRESS in big orange letters with a black keyline, both tilted to match the card. Pink, yellow and lime pill buttons read PEDAL, DELIVER and REPEAT. Every element has a thick black outline and a hard black shadow offset down and to the right
-project: neubrutalist-mascot-t-shirt-design.lopsy
+project: tutorials/neubrutalist-mascot-t-shirt-design/7e8515ba88f8/neubrutalist-mascot-t-shirt-design.lopsy
 ---
 
 Neubrutalism takes the flat colour of a web UI and gives it a body. Everything gets a thick black outline and a solid black shadow pushed down and to the right with no blur, so each element looks like a sticker stuck onto the page. It suits a t-shirt really well, because flat, outlined shapes are exactly what screen printing likes.

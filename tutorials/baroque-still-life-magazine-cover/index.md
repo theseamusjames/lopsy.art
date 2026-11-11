@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished BANKET magazine cover, with a glass roemer of white wine, a silver shell tazza, a pewter plate of oysters and a cut lemon on a red table, and the title The Oyster Months
 finished: oyster-months-finished.webp
 finishedAlt: The finished BANKET magazine cover. A green glass roemer half full of white wine stands in front of the gold masthead, and the letters shift where they pass behind the bowl. To the right is a silver shell tazza with putti. On a red table sit a dented pewter plate of oysters, a lemon, a cut lemon half with its rind spiralling over the edge, a paper cone of pepper and an old knife. The cover line The Oyster Months is set in cream copperplate script on the red cloth below.
-project: baroque-still-life-magazine-cover.lopsy
+project: tutorials/baroque-still-life-magazine-cover/ab1784dd3abf/baroque-still-life-magazine-cover.lopsy
 ---
 
 In the 1630s, Haarlem painters such as Willem Claesz Heda made a speciality of the *banketje*, the "little banquet": a table of oysters, a lemon half peeled, a tall glass of wine and tipped silver, all lit from one window against a dark wall. Oysters meant luxury, and the unfinished meal hinted that pleasure doesn't last.

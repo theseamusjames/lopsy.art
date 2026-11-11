@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom with the finished Toasted Marshmallow label on the canvas. A coral voxel mug of cocoa with marshmallow cubes sits on a graham-cracker slab next to a chocolate bar and a tiny campfire, above the words TOASTED MARSHMALLOW, with the Layers panel open on the right
 finished: finished-toasted-marshmallow.webp
 finishedAlt: The finished Cubic Cocoa Co. Toasted Marshmallow label on deep teal stock with a faint isometric grid and a cream rounded frame. In the middle, a floating voxel diorama: a graham-cracker slab with darker docking holes holds a coral mug with a cream band, filled with cocoa and toasted marshmallow cubes. Pale steam cubes rise from it. A chocolate bar lies at the front left, two marshmallow cubes sit in front of the mug, and a small voxel campfire glows at the right under a marshmallow on a stick. Cream cubes float around the scene. A rotated coral badge reads CAMPFIRE CLASSIC. Below, TOASTED in coral and MARSHMALLOW in a cream-to-toast gradient, both with a dark brown extrusion, then a cream pill reading DRINKING CHOCOLATE · 64% CACAO and a footer with the net weight and 12 MUGS PER TIN.
-project: voxel-hot-chocolate-tin-label.lopsy
+project: tutorials/voxel-hot-chocolate-tin-label/eef9f5bf1c49/voxel-hot-chocolate-tin-label.lopsy
 ---
 
 **Voxel art** is pixel art in three dimensions: everything is built from identical little cubes. Seen from the classic 2:1 isometric angle, every cube shows the same three faces: a diamond on top, a face on the left and a face on the right. If you keep one light direction and give each kind of face its own shade, any pile of cubes reads as a solid object.

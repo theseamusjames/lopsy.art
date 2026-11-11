@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom with the finished Greylag Yonder album cover on the canvas, showing a greylag goose flying across a vermilion sun inside a broad-nib oval flourish, the script title Yonder over blue pencil ruling, and the Layers panel open on the right
 finished: finished-greylag-yonder.webp
 finishedAlt: The finished square album cover on warm parchment. GREYLAG is set in spaced vermilion capitals at the top between two ink curls. A large broad-nib oval, thin across the top and heavy on its downstrokes, sweeps around a sepia photo of a greylag goose flying left with its wings raised across a hand-painted vermilion sun. The oval passes behind the goose's wing tip and ends in a small curl on the right. A V of seven small nib-drawn birds flies beside the sun. Below, Yonder is written in a large copperplate script over faint blue pencil ruling with slanted guide lines, underlined by a tapering swash with a loop. The arched line ten songs for the long way south sits under it, with Hollow Reed Records and HR–07 · Stereo in small capitals in the bottom corners and a small red diamond between them.
-project: calligraphic-goose-album-cover.lopsy
+project: tutorials/calligraphic-goose-album-cover/3e3fce80f2d2/calligraphic-goose-album-cover.lopsy
 ---
 
 This tutorial makes a 1600 × 1600 px album cover for an imaginary folk band, **Greylag**, and its record **Yonder**. It's designed to look like a calligrapher's practice sheet. There's blue pencil ruling on parchment, flourishes drawn with a broad nib, a script title, and a real photo of a greylag goose flying across a watercolour sun.

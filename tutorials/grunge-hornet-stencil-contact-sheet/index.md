@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Hornet Swarm stencil kit open. Three cut chipboard stencil plates sit above three sprayed paper proofs of a hornet on a dark grimy bench, and the Layers panel lists the art, tape, notes, dust and vignette layers
 finished: finished-hornet-swarm-stencil-kit.webp
 finishedAlt: The finished Hornet Swarm spray stencil contact sheet. On a dark, cloudy workbench the eroded stencil title HORNET SWARM sits top left and a typed line, 3-PLATE SPRAY STENCIL KIT / SHEET 01 / 1.5 MM CHIPBOARD, sits top right. The top row has three taped chipboard plates numbered 01, 02 and 03. Plate 01 has the two hornet wings cut out with vein bridges and grey overspray. Plate 02 has the head and abdomen bands cut out with mustard overspray. Plate 03 has the black key shapes and the words HORNET SWARM cut out with dark overspray. Each plate has two punched registration holes, a sliver of raw board along its cut edges and a typed caption beneath. The bottom row has three taped newsprint proofs. The first has smoky grey wings, the second adds the mustard body, and the third adds the black thorax, stripes, legs, antennae and the dripping words HORNET SWARM. Each proof has colour test chips and a pencilled pass note. Plate 01 carries a coffee ring and a paint-marker note, DUST IT - DON'T SOAK. A red grease-pencil loop circles the PROOF 3 caption, next to a red KEEPER!
-project: grunge-hornet-stencil-contact-sheet.lopsy
+project: tutorials/grunge-hornet-stencil-contact-sheet/3a08ff961e3f/grunge-hornet-stencil-contact-sheet.lopsy
 ---
 
 A spray stencil for more than one colour is cut as a set of *plates*, one

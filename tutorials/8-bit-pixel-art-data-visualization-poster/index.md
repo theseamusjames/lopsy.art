@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Ozone Zone poster open. A pixel-art bar chart of the ozone hole sits in a game-style window under a yellow pixel title, a pixel sun and a south-polar Earth, with the CRT, Type, Sprites, Chart and Backdrop groups in the Layers panel
 finished: finished-ozone-zone.webp
 finishedAlt: The finished Ozone Zone poster. On a black starry sky, a big yellow pixel title reads OZONE ZONE with a hard red shadow, above the lines "The Antarctic ozone hole, 1979-2025" and "Biggest daily hole each year, in million sq km". At the top right a pixel sun fires a pink zig-zag at a pixel Earth seen from the South Pole, with a dithered pink hole over Antarctica. Below, a white-framed game window holds 46 bars on an ice-brick floor, banded green, yellow, orange and red by size. A blue dialog box marks the 1987 Montreal Protocol, a crown marks the 2000 record of 29.9, a green arrow marks the 2019 low of 16.4, and NOW 22.9 sits over 2025. A pixel penguin stands at the start of the floor, and a grey question-mark block fills the missing year, 1995
-project: 8-bit-pixel-art-data-visualization-poster.lopsy
+project: tutorials/8-bit-pixel-art-data-visualization-poster/24074c0454e9/8-bit-pixel-art-data-visualization-poster.lopsy
 ---
 
 The Antarctic ozone hole grew fast through the 1980s. The world banned the chemicals that caused it in 1987, but the hole kept growing for another thirteen years before it levelled off. Recovery is now expected around 2066. That's a long game, so this tutorial charts it like one: a level from an old console, with a "hi-score", a power-up box and a penguin at the start line.

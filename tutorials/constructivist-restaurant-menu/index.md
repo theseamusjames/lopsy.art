@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Jackhammer Automat menu, with a cutout steelworker hanging from a cable in front of a red sun, a black diagonal JACKHAMMER band, a vertical AUTOMAT and two columns of dishes and prices
 finished: finished-jackhammer-automat-menu.webp
 finishedAlt: The finished Jackhammer Automat menu on cream paper. A warm black-and-cream photo of a 1930 steelworker swings from a cable in front of a large flat red sun, above a hard-cut slab of the Manhattan skyline. A black band tilted about 7.6 degrees carries JACKHAMMER in cream condensed capitals, edged with a thin red keyline that slices the base of a tall vertical black AUTOMAT. A red PIE 5¢ A DOOR coin sits on the photo. A Cyrillic nameplate reads АВТОМАТ-СТОЛОВАЯ № 7. Below, two red header bars, First Shift and Hot Line, head columns of dishes such as Rivet Hash and Girder on Rye with red prices, above a black footer bar
-project: constructivist-restaurant-menu.lopsy
+project: tutorials/constructivist-restaurant-menu/b31c4e2097b9/constructivist-restaurant-menu.lopsy
 ---
 
 Soviet constructivist posters from the 1920s were built from a small kit of parts:

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Flamingo Jukebox patch open on denim, showing the pink neon flamingo, the cyan Flamingo script and the amber JUKEBOX title inside a raspberry arch-shaped border, with the Layers panel listing Halation, Satin Stitch, Ornaments, the type layers and the Flamingo Neon group
 finished: finished-flamingo-jukebox.webp
 finishedAlt: The finished Flamingo Jukebox patch on dark blue denim. The patch is shaped like the top of a jukebox, an arch over a rounded rectangle, with a thick raspberry merrowed border and a black twill middle. Inside the arch, two violet neon tubes frame a window of faint purple light rays. A pink neon flamingo stands on one leg with the other leg folded, drawn as a single glowing outline with a wing line and a dot for an eye. The word Flamingo in cyan neon script slants up across its leg, and the pink leg tube stops wherever it passes behind a letter. Amber eighth notes float on either side of the bird, and small cyan sparkles twinkle around it. Below the window JUKEBOX glows in amber multi-line capitals, with ALL NIGHT · ALL VINYL underneath and a sparkle on each side
-project: neon-flamingo-jukebox-iron-on-patch.lopsy
+project: tutorials/neon-flamingo-jukebox-iron-on-patch/3135be418f3e/neon-flamingo-jukebox-iron-on-patch.lopsy
 ---
 
 Embroidered patches and neon signs have more in common than you'd think.

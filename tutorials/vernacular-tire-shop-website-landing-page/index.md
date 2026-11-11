@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Big Ed's Tire Mountain homepage open. A red painted nav band runs across a cinder-block wall above a mural of a tire pile shaped like a snow-capped mountain, with fluorescent price signs below
 finished: finished-tire-mountain-website.webp
 finishedAlt: The finished Big Ed's Tire Mountain homepage, painted on a whitewashed cinder-block wall. A red nav band holds a tire logo, four hand-lettered links and a yellow phone button. Below it a blue sky mural with rays and a yellow sun sits behind a huge pile of old tires cut into a mountain with a dripping white snowcap. The red headline TIRE MOUNTAIN has a cream outline and a black block shade. A small hand-tinted man in a red jacket is labelled THAT'S ED. A yellow starburst reads FLATS FIXED $12 WHILE-U-WAIT. Three taped fluorescent signs list used tires at $25, new tires at $69 and alignment at $45. A plywood board gives the opening hours, painted rules say NO CHECKS, NO CREDIT, NO KIDDING, and a black footer has a yellow arrow with directions.
-project: vernacular-tire-shop-website-landing-page.lopsy
+project: tutorials/vernacular-tire-shop-website-landing-page/e80bc2979d49/vernacular-tire-shop-website-landing-page.lopsy
 ---
 
 Vernacular design is the stuff nobody went to design school to make: the hand-lettered sign on the tire shop, the marker price tag in the grocery window, the mural the owner's cousin painted in 1984. It's sincere, a little crooked and very direct. It's also a great antidote to templated websites, so in this tutorial you'll mock up a desktop homepage as if a local sign painter had painted it straight onto the shop wall.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished THEREMIN DISPATCH zine cover. A cut-out photo of Léon Theremin in black and blue halftone reaches toward an antenna in the middle of a yellow sunburst, above a vermilion band reading THEREMIN and a black band reading DISPATCH
 finished: finished-theremin-dispatch.webp
 finishedAlt: The finished THEREMIN DISPATCH zine cover. Léon Theremin, cut out of a 1920s photo and printed as a black plate over a blue halftone with a white paper border, raises one hand toward a thin black antenna. Yellow rays burst from the antenna tip, with three blue arcs on each side like a radio mast. A black cabinet with red stripes and a grille sits below the antenna, with an upright volume loop on a rod. A vermilion band tilted 20 degrees carries THEREMIN in huge cream capitals, and a black band under it carries DISPATCH and a small yellow Cyrillic line, ТЕРМЕНВОКС · 1920. A black bar across the top reads THE NEWSLETTER OF THE UNTOUCHABLE INSTRUMENT and NO. 11 · AUTUMN 2026 · $4, a blue FREE SCHEMATIC badge sits in the top right, and three coverlines with red square bullets sit in the bottom right
-project: theremin-photomontage-zine-cover.lopsy
+project: tutorials/theremin-photomontage-zine-cover/4ba0eb9dd43f/theremin-photomontage-zine-cover.lopsy
 ---
 
 In 1920 a young physicist in Petrograd, Lev Termen, built an instrument you

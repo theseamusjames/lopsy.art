@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Mercury Zenith poster on the canvas. Teal and orange towers converge on a huge sun, a rocket circles it, and an astronaut stands above the block title, with the Layers panel beside it
 finished: finished-mercury-zenith.webp
 finishedAlt: The finished Mercury Zenith movie poster. Seen from the ground, teal and orange Art Deco towers lean in toward a huge banded sun with long rays and two thin orbit rings, and a chrome and red rocket flies along one ring. A cream and navy astronaut stands on a curved rust-coloured horizon. Below, MERCURY and a much larger ZENITH are set in slanted block letters with red sides, above the tagline At high noon, the city of tomorrow casts no shadow and the billing
-project: retro-futurist-mercury-zenith-movie-poster.lopsy
+project: tutorials/retro-futurist-mercury-zenith-movie-poster/eb9eaa521685/retro-futurist-mercury-zenith-movie-poster.lopsy
 ---
 
 **Mercury Zenith** doesn't exist. It's an imaginary 1950s science fiction film about a domed city on the hottest planet in the solar system, where at high noon the sun stands straight overhead and nothing casts a shadow.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Pigeon Coup poster. A teal, navy and mint stencil of a pigeon wearing a gold crown sits on a pink spray-painted disc on a dark brick wall, under the graffiti title PIGEON COUP, with a torn paper flyer along the bottom
 finished: finished-pigeon-coup.webp
 finishedAlt: The finished Pigeon Coup street-art poster. A dark grey brick wall carries a big pink-to-orange spray-painted disc with overspray and a few paint drips. On it is a four-tone stencil of a pigeon's head and neck in navy, teal, mint and cream, with an orange eye, wearing a tilted gold crown with a black outline and pink jewels. Across the top, PIGEON is painted in tilted gold brush letters with a black outline and a pink drop shadow, and below it COUP is written in cream dripping letters with a teal shadow. A yellow FREE ENTRY sticker sits on the bricks at the left, and a white hand-style tag reading coo crew sits low on the left. A torn, wrinkled paper flyer is pasted across the bottom: STREET ART BLOCK PARTY in black, SAT 14 NOV · CANAL ST UNDERPASS · DUSK TILL LATE in pink, and three small black stencilled pigeons walking in a row. The brick texture shows through all of the paint
-project: street-art-crowned-pigeon-poster.lopsy
+project: tutorials/street-art-crowned-pigeon-poster/bec74865591f/street-art-crowned-pigeon-poster.lopsy
 ---
 
 Street-art posters borrow from the wall itself. A stencil is cut from a photo, so the subject breaks down into three or four flat tones, and each tone is sprayed through its own sheet. The paint takes on the bricks underneath it, runs when it's sprayed too heavily, and drifts in a fine mist of overspray. Paper flyers are pasted over the top with wheatpaste, and stickers and tags pile up around them.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Mirror Labyrinth book cover, a black and white vortex of turning squares with a vermilion centre above a cobalt mirror reflection that holds the title, with the Layers panel open on the right
 finished: finished-mirror-labyrinth.webp
 finishedAlt: The finished cover for The Mirror Labyrinth by Lena Moravec. On a black ground, ten nested squares alternate black and off-white, each turned a little further than the last so they spiral inward. A ring through the middle of the vortex swaps black and white. At the centre an eleventh, vermilion square holds the black silhouette of a woman. Below a thin pale horizon line, the vortex is reflected upside down and squashed, in midnight blue and cobalt, fading to black. The title THE MIRROR sits on the reflection with a faint blue mirror image of MIRROR under it, then LABYRINTH in white letters with vermilion stripes, A NOVEL, and LENA MORAVEC. PENUMBRA BOOKS runs up the left edge.
-project: op-art-book-cover.lopsy
+project: tutorials/op-art-book-cover/53fea4ab3032/op-art-book-cover.lopsy
 ---
 
 In the 1960s, op art went from the gallery onto paperback covers. Bridget Riley's black-and-white paintings and Victor Vasarely's warped grids seemed to move while you looked at them. Publishers wanted that effect on the shelf, so covers filled up with stripes, checks and spirals.

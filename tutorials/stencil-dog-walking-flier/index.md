@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Daily Walks flier open. The page shows a kraft paper background, an orange DAILY and black WALKS stencil headline, a cream, brown and black whippet stencil in front of an orange sun disc, a black $18 per walk badge, a services list and eight tear-off phone tabs. The Layers panel lists Paper Flecks, Tear-off Tabs, Type, Paw Trail, Leash and the Whippet Stencil group
 finished: finished-daily-walks.webp
 finishedAlt: The finished Daily Walks flier on kraft paper. At the top, a small kicker reads Dog walking, Dunmore and West End, over a huge stencil headline with DAILY in safety orange and WALKS in black, knocked slightly out of register with an orange second pass. A black $18 per walk badge with a thin orange ring is tilted at the top right. Below, a whippet sprayed in cream, brown and black stands in front of a large orange disc on a black ground line, with soft speckled overspray around its outline and thin stencil bridges through its head and side. A black leash runs from its collar to a hand loop. On the left, a list reads Solo strolls, Pack hikes, Puppy visits and Rain or shine, with orange text below it saying First meet and greet free. Orange paw prints run along under the ground line next to the words Insured, vetted, dog first aid. A dotted cut line with scissors leads into eight tear-off tabs that read Daily Walks 555-0147 sideways
-project: stencil-dog-walking-flier.lopsy
+project: tutorials/stencil-dog-walking-flier/7a29b202c1c6/stencil-dog-walking-flier.lopsy
 ---
 
 A spray-paint stencil is cut from card. Anything that floats inside a cut

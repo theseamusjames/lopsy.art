@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Zero-G Laundry mockup open. Two cream phones float on a teal star field. The centre phone shows a chrome washing-machine porthole with the Earth and tumbling socks inside, and the right phone is tilted and lists laundry pods above a spin-speed dial
 finished: finished-zero-g-laundry.webp
 finishedAlt: The finished Zero-G Laundry app mockup. On a deep teal sky full of cream stars, mustard Googie starbursts and faint orbit rings, the left column reads "Now docking at Station 7", a big cream "Zero-G" with an orange offset shadow over an orange "Laundry", a tapered mustard swoosh, a two-line tagline, three bullet points with sparkle bullets and an outlined "Available on every deck" pill. A banded orange ringed planet sits in the bottom-left corner. The centre phone has a teal header with a curved Googie edge and a mustard pinstripe, and a brushed-chrome porthole ringed by an orange progress arc. Inside the dark glass the Earth floats among blurred orange, mustard and red socks and droplets. Under it a big "42:00" timer, three cycle chips with ORBIT selected, and a red PAUSE CYCLE button. The right phone is tilted a few degrees and shows "Pick a Pod" with an atom icon, three pod cards with mini portholes, a half-dial gauge reading 1200 RPM and an orange BOOK POD A-3 button
-project: retro-futurist-laundry-app-mockup.lopsy
+project: tutorials/retro-futurist-laundry-app-mockup/a6a5a48e5f02/retro-futurist-laundry-app-mockup.lopsy
 ---
 
 In the early 1960s the future looked like a diner sign. Space Age design, also called *Googie* or *atomic age*, drew rockets, satellites and atoms onto everything from coffee shops to toasters. The look has a few signature moves:

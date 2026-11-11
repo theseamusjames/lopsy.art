@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom showing the finished BOILED ONION poster, with a grey boiled onion on a monogrammed plate, a yellow starburst sticker, a recipe card and a press clipping, and the Layers panel open on the right
 finished: boiled-onion-finished.webp
 finishedAlt: The finished poster for Boiled Onion. Under a dark brown bar reading Municipal Pictures presents a Bernard Oakes film, the title BOILED is set in stretched cream capitals and ONION in fat serif letters fading from yellow to red, all with brown outlines and hard shadows, over olive wallpaper printed with orange and brown circles. A huge pale grey boiled onion slumps on a gold-rimmed china plate in a puddle of murky water, with a red glacé cherry on a cocktail stick. A yellow starburst sticker says 3 hours 12 mins, no interval. The plate's rim reads It was always going to end this way. Below, on a pink and cream gingham tablecloth, a typed recipe card lists the cast as one onion as itself, and a torn newspaper clipping gives it one star and says It is an onion. A bottom bar reads One week only, Lower Wexcombe Church Hall, bring a chair.
-project: anti-aesthetic-boiled-onion-movie-poster.lopsy
+project: tutorials/anti-aesthetic-boiled-onion-movie-poster/36c54fa5a766/anti-aesthetic-boiled-onion-movie-poster.lopsy
 ---
 
 Anti-aesthetic design goes after ugliness on purpose: clashing colours, type stretched out of shape, flash photography that flattens everything, and the leftovers of a 1970s kitchen. The joke only works if every ugly choice is plainly deliberate, so the hard part is keeping the craft tidy underneath it.

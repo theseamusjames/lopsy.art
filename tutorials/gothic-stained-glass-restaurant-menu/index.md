@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom showing the finished Crow & Ember gothic menu, with a stained-glass arch window holding a raven silhouette, two candles in iron sconces, a gold blackletter title and a parchment menu panel, with the Layers panel open on the right
 finished: 01-finished-crow-and-ember.webp
 finishedAlt: The finished Crow & Ember menu. A dark ashlar stone wall glows warm around a pointed gothic window of stained glass, leaded in black, shading from a gold and orange centre through ruby to cobalt blue. A black raven silhouette perches on a bare branch across the glass. The window has a warm grey stone frame with voussoir joints and a stone sill. Two cream candles burn in wrought-iron wall sconces on either side, with small glowing quatrefoil windows above and sparks rising from the flames. Below, Crow & Ember is set in large gold blackletter with an ember glow, over the line A Gothic Chophouse, Est. MCCCXLIX. A parchment panel lists four dishes under Of the Hearth and four drinks under Of the Cellar, with ruby prices, and a ruby wax seal stamped C&E sits on its bottom-right corner. A small-caps footer reads Open from Vespers till the Last Candle, No. 13 Rookery Lane.
-project: gothic-stained-glass-restaurant-menu.lopsy
+project: tutorials/gothic-stained-glass-restaurant-menu/d12d9e9d87d3/gothic-stained-glass-restaurant-menu.lopsy
 ---
 
 Gothic design runs on contrast: cold stone and hot coloured light, black lead against glowing glass, a heavy blackletter title against a quiet, readable menu. In this tutorial you'll make a 1400 × 2000 px menu for **Crow & Ember**, an imaginary candlelit chophouse.

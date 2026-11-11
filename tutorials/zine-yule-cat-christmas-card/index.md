@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Yule Cat card. A ransom-note title spelling YULE CAT in mismatched fonts sits above a torn red night sky where a photocopied black cat with mustard eyes stalks over a tiny black village. A typewritten story slip, a black label strip reading GLEÐILEG JÓL! and a handwritten sign-off are taped along the bottom
 finished: finished-yule-cat.webp
 finishedAlt: The finished Yule Cat Christmas card on speckled photocopy paper. At the top a small typed slip reads "beware the" above the words YULE CAT. Each letter is cut from a different paper and typeface, in white, red, black and mustard. "(Jólakötturinn)" is scrawled in red marker. Below, a torn red panel holds a halftone night sky, a pale outlined moon, white snowflake doodles and falling snow. A huge black cat, photocopied to hard black and white, with glowing mustard eyes and a white paper cut-out border, stalks forward over a black silhouette village of gabled houses with lit windows, a Christmas tree and a church. At the bottom, a taped typewriter slip tells the legend and ends with "Wear your new socks!" underlined in red. A black label strip reads GLEÐILEG JÓL! and a torn strip says "love from all of us, xo". A copier-lid shadow darkens the left edge
-project: zine-yule-cat-christmas-card.lopsy
+project: tutorials/zine-yule-cat-christmas-card/0a7cecc840ba/zine-yule-cat-christmas-card.lopsy
 ---
 
 In Iceland, Christmas comes with a monster. The **Yule Cat** (*Jólakötturinn*) is a giant black cat that prowls the snowy farms on Christmas Eve. It eats anyone who didn't get a new piece of clothing for Christmas. That makes a new pair of socks a matter of life and death.

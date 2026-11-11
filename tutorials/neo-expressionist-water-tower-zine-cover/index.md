@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Water Tower zine cover open. A red and ochre water tower hangs upside down between the painted words WATER and TOWER, with a black and white xerox of a real tower taped on the right and the Layers panel beside it
 finished: finished-water-tower-zine-cover.webp
 finishedAlt: The finished Water Tower zine cover. Huge cream brush-painted letters on rough red underpainting spell WATER at the top and TOWER at the bottom. Between them a wooden water tower with red and ochre staves hangs upside down from black rooftops, tilted, its cone pointing down at the O of TOWER, with pale paint runs rising from the tank. A paler, smaller tower hangs at the upper right. Below it a taped halftone xerox of a real tower, captioned FIG. 1. RIGHT WAY UP, is the only thing the right way up. Hand-lettered notes read NO.9, $2, THIS WAY UP with an arrow pointing down, GRAVITY struck out in orange, and POEMS FROM THE ROOF
-project: neo-expressionist-water-tower-zine-cover.lopsy
+project: tutorials/neo-expressionist-water-tower-zine-cover/1da11a54accd/neo-expressionist-water-tower-zine-cover.lopsy
 ---
 
 Neo-expressionism was painting's loud comeback around 1980. Painters like Georg Baselitz, Anselm Kiefer and Jean-Michel Basquiat went back to big figures, crude drawing and thick, fast paint. Baselitz added a famous trick: from 1969 on he painted his subjects upside down, so that the viewer has to look at the paint before the picture.

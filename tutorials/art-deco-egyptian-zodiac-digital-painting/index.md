@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Nile Zodiac painting open. A gold zodiac wheel around a full moon hangs over three pyramids and the Nile at night, framed by palms, with a cream and black ibis on a stepped quay and gold fan corners, and the Layers panel listing the Finish group's frame and texture layers
 finished: finished-nile-zodiac.webp
 finishedAlt: The finished Nile Zodiac painting. A deep navy night sky with soft gold sunburst rays rises from the horizon. A large gold zodiac wheel fills the upper half, with the twelve zodiac signs in its outer band, a ring of cloisonné lotus flowers in turquoise, cream and Egyptian blue, and a cratered full moon at its centre. Below it three pyramids with stone courses and a glowing gold capstone stand on the far bank of the Nile. Two feluccas sail on the dark teal water, which carries a broken path of gold moonlight and a faint reflection of the pyramids. Silhouetted palms frame both sides, gold papyrus and coral lotus flowers grow by a stepped stone quay, and a cream and black sacred ibis stands on the quay facing the moon path. A gold double rule with stepped brackets and sunburst fans in each corner frames the scene
-project: art-deco-egyptian-zodiac-digital-painting.lopsy
+project: tutorials/art-deco-egyptian-zodiac-digital-painting/80b0a25b8568/art-deco-egyptian-zodiac-digital-painting.lopsy
 ---
 
 In the 1920s, the discovery of Tutankhamun's tomb set off a craze for

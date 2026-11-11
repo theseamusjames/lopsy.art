@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom showing the finished Jovian Lido painting, with the Grain, Jupiter Light, Lido Deck, Rocket, Dome City, Ground Shadows and Monorail layers in the Layers panel
 finished: finished-jovian-lido.webp
 finishedAlt: The finished painting. A huge banded Jupiter hangs in a violet night sky at the upper left. Its left side is in deep shadow and a soft pink glow rims its sunlit edge. A small golden moon, Io, sits to its right. Below, pale lavender ice spires line the horizon, and rust-coloured cracks cross a lilac ice plain. In the middle, a glass dome with white ribs covers a saucer-topped tower and two hotel wings with orange swept roofs, glazed gables and rows of lit windows. A red monorail train runs in from the left on a white track raised on slim pylons, and a silver rocket with red fins stands on a launch pad at the right. In the foreground, beyond a glass railing, a warm tiled deck holds a kidney-shaped pool with cream coping, a dark far wall and a net of light caustics, a chrome ladder, an orange-and-cream striped parasol, two orange loungers and a white planter with a spiky teal plant tipped with pink blossoms.
-project: retro-futurist-jupiter-space-resort-painting.lopsy
+project: tutorials/retro-futurist-jupiter-space-resort-painting/8f38032cc82f/retro-futurist-jupiter-space-resort-painting.lopsy
 ---
 
 In the early 1960s, illustrators like Klaus Bürgle and Chesley Bonestell painted the future for magazines and children's annuals. Their scenes showed families on holiday on other worlds: glass domes, saucer-topped towers and swooping "Googie" roofs, with a giant planet filling the sky. The look is called **retro-futurism**, and it's a lot of fun to paint.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Holy Cluck menu open, showing the brick wall, the yellow-to-red CLUCK graffiti on a lime cloud, the red rooster stencil with a gold halo, the black menu board and the row of heat stickers, with the Layers panel listing the Grain layer, the Title Piece group and the menu text layers
 finished: finished-holy-cluck.webp
 finishedAlt: The finished Holy Cluck menu painted on a dark brick wall. At the top, a white Holy tag with a small gold halo sits above CLUCK in fat graffiti letters that fade from yellow to red, with a maroon 3D block, white shines and red paint drips, all on a lime cloud with a black outline. Below on the left is a spray-stencil portrait of a rooster's head in red, crimson, black and cream, outlined in black with a teal shadow, in front of a gold halo with short rays. On the right is a black painted board headed The Good Book in yellow, listing The Sinner 13, Halo Tenders 12, Holy Wings 10, Confession Fries 5, Amen Mac 6 and Holy Water 3 with handwritten notes. Along the bottom, yellow handwriting says pick your heat with an arrow to four round stickers, Plain Jane, Mild, Hot and Holy Hell, with small flames behind the last two, and a cayenne-red fried drumstick sticker wearing a halo. The address line 414 Alley St, Nashville, open til 3am runs along the foot, and faded tags Krush 09 and ZEKE! sit on the wall
-project: graffiti-hot-chicken-restaurant-menu.lopsy
+project: tutorials/graffiti-hot-chicken-restaurant-menu/1bacd28bf561/graffiti-hot-chicken-restaurant-menu.lopsy
 ---
 
 A graffiti *piece* (short for masterpiece) is built in layers, the way a

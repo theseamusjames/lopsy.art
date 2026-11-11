@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Xebec Model blueprint birthday card open. A white line drawing of a three-masted sailing ship dressed in signal flags sits on a blue gridded sheet, above a deck plan, a circular cake detail, a red approval stamp and a title block. The Layers panel shows Title Block, Detail A, Lettering, Plan and Ship groups above the sheet layers
 finished: finished-xebec-model-birthday-card.webp
 finishedAlt: The finished Xebec Model birthday card, drawn as a naval architect's blueprint. On a mottled Prussian-blue sheet with a fine white grid and a double border, HAPPY 70TH BIRTHDAY runs across the top over the line FAIR WINDS & FOLLOWING SEAS, CAPTAIN. Below, a white profile drawing of a xebec with three raked masts and triangular lateen sails is strung bow to stern with red, yellow, white and blue signal flags. A dashed waterline, an air-draft dimension and a small sail-area table frame it. Under the ship is a deck plan of the hull from above, then a length dimension and a scale bar. In the bottom left a magnified circle labelled DETAIL A shows a two-tier cake with outlined 7 and 0 candles and glowing yellow flames, with a red pencil note reading 70 candles, not to scale. A worn red rubber stamp reading APPROVED, SEAWORTHY, 70 YEARS sits above a title block reading XEBEC MODEL, prepared for Capt. Elena March, launched 17 Oct 1956
-project: blueprint-xebec-birthday-card.lopsy
+project: tutorials/blueprint-xebec-birthday-card/65af88d3a819/blueprint-xebec-birthday-card.lopsy
 ---
 
 A *xebec* (say "zee-beck") is a fast Mediterranean sailing ship with three
