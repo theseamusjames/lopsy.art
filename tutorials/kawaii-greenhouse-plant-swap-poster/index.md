@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: The Lopsy editor showing the finished Dewdrop Greenhouse kawaii poster on the canvas, with the Layers panel listing the plant groups and text layers
 finished: finished-dewdrop-greenhouse.webp
 finishedAlt: The finished Dewdrop Greenhouse poster. A mint glass greenhouse with white window bars sits on a cream polka-dot background. Inside, a smiling cactus in a terracotta pot stands on a wooden shelf between a sprout in a lavender mug and a pink-tipped succulent in a pink bowl, under a hanging string-of-hearts planter. A smiling cloud and a glossy water-drop character float at the top corners. The pink word Dewdrop arches over the dome, a tilted mint banner reads GREENHOUSE, and three lines of event details sit above a scalloped mint hem
-project: kawaii-greenhouse-plant-swap-poster.lopsy
+project: tutorials/kawaii-greenhouse-plant-swap-poster/c213f66c2511/kawaii-greenhouse-plant-swap-poster.lopsy
 ---
 
 Kawaii ("cute") illustration comes down to a few rules: soft pastel colours, round shapes, one warm outline colour around everything, and little faces with rosy cheeks. In this tutorial you'll make **Dewdrop Greenhouse**, a 1200 × 1600 poster for a spring plant swap. You'll build a glass greenhouse and give it a cast of plant characters, then frame them with an arched title and a sticker-style banner.

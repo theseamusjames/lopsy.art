@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Zombie Grog billboard open. A carved tiki mug with glowing green eyes and green foam stands in front of a striped yellow sun, a volcano and two palm trees, next to the cream ZOMBIE GROG headline. The Layers panel lists the Print Grain layer and the Headline, Tiki Mug and Bar Counter groups.
 finished: finished-zombie-grog.webp
 finishedAlt: The finished 3 to 1 billboard. A flat sunset sky in six bands runs from deep teal through coral and orange to a yellow sun cut with horizontal slits. A plum volcano with orange lava and a small smoke plume sits on the left horizon, framed by a dark palm silhouette, and a second palm leans in from the right edge. In front of the sun, a carved wooden tiki mug glares with lime green eyes, a heavy brow, a broad nose and two rows of cream teeth. Lime foam boils over its rim and drips down the front, and a red-striped straw and a teal paper umbrella stick out of the top. On the right, ZOMBIE GROG is set in fat cream-to-gold letters with a dark brown outline and a hard shadow, above the script line Limit two per customer. A bar counter with a two-row tapa-cloth band runs along the bottom and reads LAVA LAGOON TIKI LOUNGE, EXIT 14.
-project: tiki-cocktail-billboard.lopsy
+project: tutorials/tiki-cocktail-billboard/28b43b7f5ba9/tiki-cocktail-billboard.lopsy
 ---
 
 In the late 1950s and 60s, American tiki bars sold a Polynesian fantasy:

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished TIGER MOTH invitation at fit-to-screen zoom, with the glitched moth over a green glow, the cream title at the top, the green terminal window at the bottom and the Layers panel open on the right
 finished: tiger-moth-finished.webp
 finishedAlt: The finished glitch-art invitation. On a near-black card with a soft green glow, a garden tiger moth with brown-and-cream forewings and orange hindwings with black spots is torn into sideways-shifted slices with red and cyan fringes, and its lower edge melts down into vertical streaks of orange and brown. Above it, TIGER MOTH in tall cream capitals has thin torn streaks and white bars running through it, under a green header line reading // PRIVATE VIEW and NO.013 / 13.11.2026. Below the moth, a green-framed terminal window titled LIGHT_TRAP.EXE lists the opening night, the venue, free entry and RSVP by 6 November. Fine scanlines cover the whole card, and small red, cyan and green blocks float near the tears.
-project: glitch-art-tiger-moth-invitation.lopsy
+project: tutorials/glitch-art-tiger-moth-invitation/66c6f051d1e8/glitch-art-tiger-moth-invitation.lopsy
 ---
 
 Moths fly at lights, and these days the brightest light in the room is usually a screen. This invitation is for **TIGER MOTH**, a made-up private view of new work by a made-up artist, Ines Varga. The card treats the moth as if it got too close to an old CRT monitor. Its wings tear into slices, its colour channels slip apart, and the bottom of the photo melts into a pixel-sort drip that runs down into a terminal window holding the event details.

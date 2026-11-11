@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom with the finished Neko Pâtisserie poster on the canvas and the Layers panel open on the right, showing the Grain layer above the Banner, Title, Awning and Treats groups
 finished: finished-neko-patisserie.webp
 finishedAlt: The finished Neko Pâtisserie poster. A mint and cream striped awning with scalloped edges runs across the top of a pink gingham background. Below it, a small Japanese line reads ねこのパティスリー, then Neko in big pink rounded letters and Pâtisserie in dark brown, both with white sticker outlines and a crimson drop shadow. In the middle, on a cream circle edged with pink dots, sits a round cake with a cat's face: pink frosting dripping down the sides, pink cat ears, a strawberry with a face on a dollop of cream, shiny black eyes, a small ω mouth, pink blush and whiskers. The cake stands on a mint cake stand. Around it float a lavender, a mint and a yellow macaron with faces, a paw-print cookie, yellow four-point sparkles, red hearts and a speech bubble saying nyaa~ with a red heart. A red ribbon banner reads GRAND OPENING · NOV 22, and a cream pill below gives the address and a free-macaron offer.
-project: kawaii-cat-patisserie-poster.lopsy
+project: tutorials/kawaii-cat-patisserie-poster/ab8ed84358fb/kawaii-cat-patisserie-poster.lopsy
 ---
 
 **Kawaii** (かわいい, "cute") is the Japanese aesthetic behind Hello Kitty, Rilakkuma and thousands of bakery signs. The look is easy to recognise: soft pastel colours, round shapes, thick dark outlines, and faces on everything, from cakes to cookies. The faces are tiny dot eyes with a white catchlight, a little mouth set low, and pink blush ovals on the cheeks. Flat colour with one simple highlight and one simple shadow keeps it graphic.

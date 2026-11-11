@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Mackerel Exchange logo open. A round woodcut emblem shows a teal and silver mackerel leaping across black sun rays, a half-set red sun and a striped sea, above a black banner reading Mackerel and a red ribbon reading Exchange. The Layers panel lists the Fish and Wordmark groups above the Waves, Rays, Ring, Wood Grain, Sea, Sun and Sky layers
 finished: finished-mackerel-exchange.webp
 finishedAlt: The finished Mackerel Exchange logo on cream paper. A thick black ring with a white sawtooth edge frames an ochre sky of black sun rays, a half-set red sun on the horizon and a blue sea of four rows of black scalloped waves with white cuts. A mackerel with a teal back, wavy black stripes and a silver belly leaps diagonally out of the ring, its head breaking out at the upper left and its tail at the right, wrapped in a cream outline. Below, a black banner reads MACKEREL in chunky cream wood type, a red ribbon with folded swallowtail ends reads EXCHANGE, and a line underneath reads Fish Salesmen, Newlyn Quay, Est. 1908. Every black area is streaked with fine horizontal voids, as if printed from a worn wood block
-project: woodcut-mackerel-fish-market-logo.lopsy
+project: tutorials/woodcut-mackerel-fish-market-logo/20e93d64e3a9/woodcut-mackerel-fish-market-logo.lopsy
 ---
 
 A *woodcut* is printed from a plank of wood. The carver cuts away

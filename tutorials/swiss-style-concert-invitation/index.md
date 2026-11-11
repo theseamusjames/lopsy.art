@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished bach recital invitation open. A huge black lowercase bach heads a cream card, a red disc is cut by four diagonal black violin strings, and a red RSVP box sits at the bottom right. The Layers panel shows the Ink Dropout, Paper Grain, Type and Instrument layers
 finished: finished-bach-sonatas.webp
 finishedAlt: The finished invitation on warm off-white paper with a fine print grain. A huge black ExtraBold lowercase "bach" fills the top left, with "sonatas and partitas / for violin solo" below it and a small red rotated line "köthen 1720 · bwv 1001–1006" down the right margin. On the left, a red-headed programme lists the six sonatas and partitas. A large red disc sits right of centre inside one thin black ring. Four black strings, thick to thin, rise at an angle from the lower left, pass through the disc as paper-coloured gaps and run off the top right edge. Two hairline echoes follow the thinnest string. At the bottom, a rule heads two columns, "selma brändli, violin, an invitation. reply via braendli.ch" and "14.11.2026, sat, 19.30 h, saal zum rheinsprung, basel", beside a tall red box reading "rsvp by" at the top and "7.11.2026" at the bottom
-project: swiss-style-concert-invitation.lopsy
+project: tutorials/swiss-style-concert-invitation/1f2a7e3eb9eb/swiss-style-concert-invitation.lopsy
 ---
 
 The Swiss International Typographic Style came out of Zürich and Basel in the 1950s. Josef Müller-Brockmann's concert posters for the Zürich Tonhalle are the best-known examples. Each one is built on a strict grid, with flush-left grotesque type, flat colour and one geometric idea that stands in for the music.

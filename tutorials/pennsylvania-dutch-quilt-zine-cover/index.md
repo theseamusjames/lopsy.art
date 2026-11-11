@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Quilters' Quarterly zine cover open at fit-to-screen zoom, showing the flying-geese border, the blackletter masthead, the fraktur heart with two birds and three tulips, and the taped contents slip, with the Layers panel listing the Quilt Border, Fraktur Motif, Masthead and Cover Lines groups
 finished: finished-quilters-quarterly.webp
 finishedAlt: The finished Quilters' Quarterly zine cover. A border of red and navy flying-geese triangles runs clockwise around the page, with mustard and red cornerstone blocks in the corners, a navy binding and a red running stitch inside it. On a cream muslin background quilted in a diamond lattice, the blackletter masthead reads Quilters' Quarterly in navy and red with counterchanged initial Qs and a mustard shadow, above a mustard strip reading Vol. III, No. 12, Winter 2026, Fifty Cents. Below it a red calico heart with white running stitches holds a navy and mustard eight-point star in a cream disc. Olive stems rise from the heart to three red and mustard tulips, and two yellow distelfink birds with red heads and navy wings perch facing each other. Two small stitched hearts with tulip buds flank the big heart, and a cream contents slip held by masking tape lists three articles with dotted leaders to red page numbers
-project: pennsylvania-dutch-quilt-zine-cover.lopsy
+project: tutorials/pennsylvania-dutch-quilt-zine-cover/698ac2bc4fcf/pennsylvania-dutch-quilt-zine-cover.lopsy
 ---
 
 Pennsylvania Dutch *fraktur* is the illuminated folk art that German

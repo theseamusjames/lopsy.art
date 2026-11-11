@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Goblin Quartet album cover on the canvas, the Move tool active and the Layers panel showing Side A, Side B, Glow, Scanlines, Menu Box and the collapsed Logo and Band groups
 finished: finished-goblin-quartet.webp
 finishedAlt: The finished Goblin Quartet album cover in 8-bit pixel art. On a starry night sky, the word GOBLIN is set in big blocky letters striped yellow to red, over QUARTET striped white to blue, both with black outlines and a purple drop shadow, above the line DUNGEON SESSIONS. Below is a purple brick castle wall with battlements, an arched window showing a yellow moon over banded purple sky, and two wall torches with warm light around them. Four pixel goblins stand on a wooden stage. A green bard in a red feathered cap plays a lute, an ochre goblin plays a red drum, a teal goblin plays a golden horn and a lime goblin in a gold crown plays a red accordion. At the bottom, a black game menu box with a white border reads SIDE A and SIDE B, with a cursor arrow pointing at SIDE A
-project: 8-bit-goblin-band-album-cover.lopsy
+project: tutorials/8-bit-goblin-band-album-cover/fae6bffcf676/8-bit-goblin-band-album-cover.lopsy
 ---
 
 Chiptune bands make music on old game consoles, so their album covers often

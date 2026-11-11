@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Peacock ink billboard open. A green and blue peacock feather lies across the left of an ivory sheet, the word Peacock is written in an iridescent copperplate script over faint ruled guidelines, a broad ink swash sweeps under it, and a teal inkwell with a feather quill stands on the right. The Layers panel shows the Lettering group with Vignette, Grain, Subhead, Maker, Maker Rules, Gold Hairline, Ink Splatter and Swash layers
 finished: finished-peacock-ink-billboard.webp
 finishedAlt: The finished Peacock fountain-pen ink billboard. On warm ivory paper, the maker's line PLUME & FEATHER INK MAKERS runs across the top between two gold rules. Peacock is written large in a slanted copperplate script, shading from teal through blue and violet to emerald, over faint calligrapher's guidelines with 55-degree slant lines. A real peacock feather tinted emerald to blue lies across the left side, and from the end of its quill a broad-edged ink swash sweeps under the word, thick at first and thinning to a hairline tail, with a gold hairline above it and a few ink spatters at the quill. IRIDESCENT FOUNTAIN PEN INK sits in small caps underneath. On the right a teal glass inkwell holds a smaller blue feather as a quill, with a cream label reading Peacock, Iridescent Ink, and a tilted hang tag reading No. 7
-project: calligraphic-peacock-ink-billboard.lopsy
+project: tutorials/calligraphic-peacock-ink-billboard/8c27a17ddc54/calligraphic-peacock-ink-billboard.lopsy
 ---
 
 Copperplate is the pointed-pen script of 18th- and 19th-century engravers.

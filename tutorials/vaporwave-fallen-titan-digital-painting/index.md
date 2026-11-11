@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Fallen Titan painting, a glitched pink and violet marble head half sunk in a cyan perspective grid under a striped sunset, with a broken column, palm silhouettes and the Layers panel open
 finished: finished-fallen-titan.webp
 finishedAlt: The finished Fallen Titan digital painting. A colossal Roman marble head lies on its side, half sunk in a sea made of a glowing cyan perspective grid. Its face is tinted pink, violet and cyan, and three thin horizontal slices are shifted sideways with red and blue fringes. A glowing cyan waterline, ripple rings and a soft reflection surround it. Behind it a yellow-to-pink striped sun sets on the horizon, crossed by dark cloud strata, with a small palm silhouette in front of it. A broken fluted column stands in the water on the left and a tall palm frames the right. A starry violet sky, film grain and scanlines finish the picture
-project: vaporwave-fallen-titan-digital-painting.lopsy
+project: tutorials/vaporwave-fallen-titan-digital-painting/69635b80afb4/vaporwave-fallen-titan-digital-painting.lopsy
 ---
 
 Vaporwave borrows its props from the shopping malls and screensavers of the 1980s and 90s. A Greek or Roman marble head, a striped sunset, palm trees, an endless neon grid, all in sticky pinks, violets and cyans, with a bit of VHS damage on top. In this tutorial you'll put those props into one quiet scene, **Fallen Titan**. A colossal marble head has toppled into a sea made of a glowing grid and is slowly going under.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished NOCTURNE UPTOWN T-shirt design. A gold Chrysler-style skyscraper rises in front of an ivory moon inside an oxblood sunburst arch, with NOCTURNE in two-tone gold above it and an UPTOWN plaque below, all on a warm black canvas with a fine worn-print texture
 finished: finished-nocturne-uptown.webp
 finishedAlt: The finished NOCTURNE UPTOWN Art Deco T-shirt print on a warm black shirt colour. NOCTURNE is set in large two-tone gold Limelight capitals with an oxblood drop shadow. Below it a gold double-ruled arch holds an oxblood sunburst, an ivory moon ringed by two thin gold circles, four small gold eight-point stars, two stepped plum towers with gold pinstripes and lit windows, and a banded gold skyscraper whose arched crown is cut with sunburst windows. A chevron band runs along the arch's base. SUPPER CLUB runs up the left side and AFTER HOURS runs down the right. Under the arch an oxblood plaque with clipped corners reads UPTOWN in ivory between gold speed lines, followed by COCKTAILS · DANCING · ORCHESTRA and EST. 1931 between two gold diamonds. Tiny specks of the shirt colour break up every ink, like a worn screen print
-project: art-deco-supper-club-t-shirt-design.lopsy
+project: tutorials/art-deco-supper-club-t-shirt-design/0ac33f2d006a/art-deco-supper-club-t-shirt-design.lopsy
 ---
 
 Art Deco print design is all about **symmetry, stepped shapes and rays**: a

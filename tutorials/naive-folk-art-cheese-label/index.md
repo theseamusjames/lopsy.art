@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Merry Goat cheese label, a scalloped cobalt sticker with an arched red title, a painted goat in a meadow with a red barn, tulips and a yellow Fresh Chèvre ribbon, lying on a red gingham tablecloth
 finished: 37-finished-merry-goat-label.webp
 finishedAlt: The finished Merry Goat Creamery label, a round scalloped cobalt sticker on red gingham, with a white spotted goat, red barn, tulips and daisies under an arched MERRY GOAT title and a yellow Fresh Chèvre ribbon
-project: naive-folk-art-cheese-label.lopsy
+project: tutorials/naive-folk-art-cheese-label/4c00687875de/naive-folk-art-cheese-label.lopsy
 ---
 
 Naive folk painters such as Maud Lewis paint the countryside the way a child

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Kilowatt Wolf key frame on the canvas, and the Layers panel showing the type layers above the artwork
 finished: finished-kilowatt-wolf.webp
 finishedAlt: The finished Kilowatt Wolf key frame. A huge halftone wolf head with yellow eyes rises in front of a black disc on a red sunburst sky. A yellow beam from its eye falls on a lineman climbing a black pole, power lines run back to the head, and a red wolf bites the lineman's wire while two black wolves circle on the snow. KILOWATT WOLF is set on a slanted black wedge, above a slate with a frame number, scene notes, a value study and colour keys
-project: constructivist-wolf-movie-concept-art.lopsy
+project: tutorials/constructivist-wolf-movie-concept-art/4d470c34dd9e/constructivist-wolf-movie-concept-art.lopsy
 ---
 
 In the 1920s the Stenberg brothers made Soviet film posters by enlarging film

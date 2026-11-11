@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Dandelion Anarchy zine cover open, showing the white DANDELION masthead, the tilted black ANARCHY banner, the grinning yellow and orange dandelion in its pale cyan halo, the yellow FREE starburst and the grey sidewalk, with the Layers panel listing the Issue Line, Lawns, Seed Bomb, Field Guide and Pull Nothing text layers above the Print Grain layer
 finished: finished-dandelion-anarchy.webp
 finishedAlt: The finished Dandelion Anarchy zine cover. A black strip at the top reads Issue Nº 04, Spring, Pay what you grow. Below it, DANDELION fills the width in fat white letters with a black outline and a hard black shadow, and a tilted black slab reads ANARCHY in yellow. A hot pink page with darker pink halftone dots holds a pale cyan disc ringed by the white fluff of a real dandelion seed head. In the middle, a cartoon dandelion with notched orange and yellow florets and a glossy yellow face grins with a row of pointed white teeth, pink cheeks and a pink tongue. A green stem runs down to two toothed leaves growing from a black crack in a grey sidewalk, with a smaller weed in a second crack. White parachute seeds drift on both sides. Cover lines read Pull nothing, A field guide p.08 on a yellow strip, Seed-bomb a parking lot p.12 on a black label, and Lawns are a lie on the pavement. A yellow starburst badge reads Free, if you're a weed, and a barcode sits in the bottom right corner
-project: neo-pop-dandelion-zine-cover.lopsy
+project: tutorials/neo-pop-dandelion-zine-cover/f73eafea1058/neo-pop-dandelion-zine-cover.lopsy
 ---
 
 Neo-pop took the bright, flat, commercial look of 1960s pop art and gave it

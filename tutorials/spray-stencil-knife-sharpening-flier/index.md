@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom with the finished Scissor Queen flier on the canvas and its Layers panel open, showing the Dropout, Grain, Fold Light, Folds and Drips layers at the top of the stack
 finished: finished-scissor-queen.webp
 finishedAlt: The finished Scissor Queen flier on mottled kraft paper folded in quarters. A black banner across the top reads Mobile Knife and Scissor Sharpening, We Come To You. On the right, a woman in a 1910s turban is shown in profile as a four-colour spray stencil in black, fluorescent pink, cream and off-white, in front of a pink halo with spiky pink rays. She wears a crown of five craft-knife blades set in a cream band with three pink dots. On the left, a black disc badge reads $6 per blade, then a We Sharpen list of kitchen knives, salon shears, garden pruners, sewing scissors and chisels and axes with pink arrow bullets, then the phone number 555-0142 in black over a pink offset and Tues-Sat, call or text. At the bottom, SCISSOR in black stencil capitals and QUEEN in larger pink stencil capitals with a slightly off-register black pass and pink paint drips.
-project: spray-stencil-knife-sharpening-flier.lopsy
+project: tutorials/spray-stencil-knife-sharpening-flier/e968c79ab1c3/spray-stencil-knife-sharpening-flier.lopsy
 ---
 
 This tutorial makes a street-poster flier for an imaginary mobile sharpening service, **Scissor Queen**. It's 1200 × 1600 px, sprayed through cut stencils onto brown kraft paper in four inks: black, fluorescent pink, cream and off-white.

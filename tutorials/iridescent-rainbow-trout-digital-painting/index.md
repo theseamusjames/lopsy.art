@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished rainbow trout painting open. A spotted trout with a rose and gold iridescent flank rises diagonally through deep blue water toward teal sunbeams, with the Layers panel beside it
 finished: finished-rainbow-trout.webp
 finishedAlt: The finished painting. A rainbow trout swims diagonally upward from the lower left, its flank shining with bands of rose, gold and green over silver scales and dark spots. Teal light shafts fan down from the surface at the top right, a few bubbles rise above its head, and the water fades to deep blue over a dim riverbed
-project: iridescent-rainbow-trout-digital-painting.lopsy
+project: tutorials/iridescent-rainbow-trout-digital-painting/e56ab5287ead/iridescent-rainbow-trout-digital-painting.lopsy
 ---
 
 Iridescence is colour that shifts as the angle of the light shifts. It comes from thin layers bouncing light back at slightly different wavelengths, like the rainbow in a film of oil. A rainbow trout's flank does this. Its pink stripe is real pigment, but the gold, green and violet that slide across the scales change as the fish turns.

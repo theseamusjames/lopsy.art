@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Llama Quest iron-on patch open at fit view. A pixel art llama in a red saddle blanket stands on a cliff under a dithered sunset sky beside a sliced sun and a distant castle, with a red LLAMA QUEST banner and a gold stitched border on olive canvas. The Layers panel shows the Patch group above the Seam, Weave and Background layers
 finished: finished-llama-quest-iron-on-patch.webp
 finishedAlt: The finished Llama Quest iron-on patch in 16-bit pixel art. Inside a stair-stepped circle, a tan and cream llama in a red blanket with teal crosses, a brown pack and a yellow pennant stands on a dark plum cliff. It looks across a violet lake with orange reflections towards a pale sun sliced by raspberry stripes, three V-shaped birds and a dark castle with lit windows on a lavender mountain. The sky steps from indigo through plum and magenta to coral and apricot with checkerboard dithering, with stars, two purple clouds and three red HP hearts, the last half empty. A red ribbon banner with folded tails reads LLAMA QUEST in cream pixel capitals with a dark red shadow and yellow diamond studs. A gold merrowed border with satin stitches runs around the circle and banner, every pixel carries a small cross-stitch texture, and the patch casts a soft shadow on an olive canvas backpack with rows of beige stitching at the top and bottom
-project: pixel-art-llama-iron-on-patch.lopsy
+project: tutorials/pixel-art-llama-iron-on-patch/26d76c4623c5/pixel-art-llama-iron-on-patch.lopsy
 ---
 
 Embroidered patches and pixel art are a natural fit. Machine embroidery

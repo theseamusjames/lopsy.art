@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished THAW magazine cover open. A dark violet Arctic fox stares out of a flat coral background, its ear tucked over the big THAW masthead, with The Tundra Fox in cream italic across its chest and the Layers panel listing the Grain, Cover Lines, Fox, Masthead and Snow layers
 finished: finished-tundra-fox.webp
 finishedAlt: The finished THAW magazine cover. A blue-morph Arctic fox, printed in deep violet and plum, fills the lower two thirds of a flat salmon-coral page and stares straight out. THAW is set huge in a dark violet Didone across the top, with the fox's right ear tucked over the foot of the W. A small strap reads A QUARTERLY OF COLD PLACES and NO. 14 · WINTER 2026 above a thin rule. Two cover lines sit in the left margin, a cream badge tilted on the right reads -50° AND STILL HUNTING, a small photo credit runs up the right margin, and The Tundra Fox runs across the fox's chest in cream italic above a two-line dek, with a small barcode box in the bottom right corner
-project: duotone-fox-magazine-cover.lopsy
+project: tutorials/duotone-fox-magazine-cover/fa35a977cbb5/duotone-fox-magazine-cover.lopsy
 ---
 
 A duotone prints a photo in just two inks: a dark one for the shadows and a

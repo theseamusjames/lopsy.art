@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom with the finished Ossicle Keys album cover on the canvas: a cream anatomical plate with the title at the top, a hand-tinted engraving of the inner ear, three ear bones down the right and a tapered piano keyboard along the bottom, with the Layers panel showing the Fig 1, Ossicles, Fig 5 and Type groups
 finished: finished-ossicle-keys.webp
 finishedAlt: The finished Ossicle Keys album cover, styled as a 19th-century hand-tinted anatomy plate on aged cream paper. ANATOMY OF THE EAR and PLATE XII sit above a double rule, with OSSICLE KEYS in large black serif capitals and The Organ of Hearing in red italic below. A Gray's Anatomy engraving of the bony labyrinth fills the left half, washed blue along the semicircular canals, yellow on the vestibule and carmine on the snail-shaped cochlea, with a worn blue 33⅓ R.P.M. stamp touching its top left. The malleus, incus and stapes run down the right with italic figure captions. A dotted arrow leads from the cochlea to a long piano keyboard that tapers from left to right and shades from blue to rose. An italic legend at the bottom lists eight tracks as the explanation of the plate. The margins are stained and lightly foxed.
-project: hand-tinted-anatomical-plate-album-cover.lopsy
+project: tutorials/hand-tinted-anatomical-plate-album-cover/32e76fd508b9/hand-tinted-anatomical-plate-album-cover.lopsy
 ---
 
 The great 19th-century anatomy atlases were printed in black from engraved

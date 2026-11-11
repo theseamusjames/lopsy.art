@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom with the finished Clockwork Kiwi patch on the canvas. A gear-shaped patch with a white satin edge sits on khaki canvas, with CLOCKWORK KIWI arched across the top and AUCKLAND AUTOMATA WORKS across the bottom of a navy band. Inside, a white line drawing of a kiwi with brass gears in its body stands on a blueprint grid. The Layers panel shows the Patch group with Stitch Grain, Satin Ridges and Sheen at the top
 finished: finished-clockwork-kiwi.webp
 finishedAlt: The finished Clockwork Kiwi iron-on patch, die-cut in the shape of a twelve-tooth gear with a thick white satin-stitch edge, lying on khaki canvas with a soft shadow. A navy band carries CLOCKWORK KIWI arched over the top and AUCKLAND AUTOMATA WORKS under the bottom in wide white capitals, with a brass screw at each side. Inside a thin brass ring is a blueprint field with a fine grid. A white technical drawing of a kiwi faces right, its long bill tilted up, with diagonal hatching in its body and three meshing brass gears showing through. A brass wind-up key sticks out of its back, labelled WIND 12 TURNS. Its legs are jointed rods with round pivots and claw feet. Hand-lettered callouts read BEAK ACTUATOR and MAIN WHEEL, a dimension line under the feet reads 420 mm, and a round inset at the lower left shows the small gear enlarged, captioned DETAIL A · 3:2. FIG. 1 — SIDE ELEVATION sits at the top of the drawing and SCALE 1:2 · SHEET 1 OF 1 at the bottom
-project: blueprint-clockwork-kiwi-iron-on-patch.lopsy
+project: tutorials/blueprint-clockwork-kiwi-iron-on-patch/a82d0955f6e7/blueprint-clockwork-kiwi-iron-on-patch.lopsy
 ---
 
 Blueprints are the working drawings engineers used before computers. They are

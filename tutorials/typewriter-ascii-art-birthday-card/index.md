@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Queen Anne's lace birthday card. A bouquet of three lacy flower heads typed from asterisks, dots and slashes rises from striped stems tied with a pink typed bow, beside a cream specimen label on a dark green card
 finished: finished-queen-annes-lace-card.webp
 finishedAlt: The finished birthday card. On dark green card, "happy birthday" in worn typewriter letters runs across the top. Below, three Queen Anne's lace flower heads are typed in cream characters, each a flat cap of small clusters with one raspberry @ floret in the middle and thin slash rays running down to a stem. The stems are rows of equals signs that curve down to a raspberry bow and run off the bottom edge, with feathery leaves of percent and ampersand signs. A typed moth flies up towards falling florets on the left. A cream herbarium label taped at the bottom right reads HERBARIUM OF GOOD WISHES No.1002, Daucus carota L., Queen Anne's lace, with a typo struck out in x's
-project: typewriter-ascii-art-birthday-card.lopsy
+project: tutorials/typewriter-ascii-art-birthday-card/8bda70dd7c93/typewriter-ascii-art-birthday-card.lopsy
 ---
 
 Long before computers, typists made pictures on their typewriters. In

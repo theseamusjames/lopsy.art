@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Indigo Datura movie poster, a botanical specimen plate of a purple thorn-apple dripping a glowing drop into a teacup above an indigo title band
 finished: finished-indigo-datura.webp
 finishedAlt: The finished INDIGO DATURA poster. On aged cream paper inside a thin double rule, a hand-coloured thorn-apple plant has lobed green leaves with fine engraving hatch, a twisted bud and a drooping violet trumpet flower. A glowing violet drop falls from the flower into a blue-banded porcelain teacup marked Fig. 4. Around it sit a spiny seed capsule, a capsule cross-section and three black seeds, numbered like a specimen plate. An indigo ink band with a dark tide-line fills the bottom and carries the cast names, the title INDIGO DATURA in cream capitals, the plant's common names, a billing block and ONLY IN CINEMAS, OCTOBER 31
-project: botanical-plate-thriller-movie-poster.lopsy
+project: tutorials/botanical-plate-thriller-movie-poster/2a717f479747/botanical-plate-thriller-movie-poster.lopsy
 ---
 
 Nineteenth-century botanical plates are calm and exact. A plant is drawn

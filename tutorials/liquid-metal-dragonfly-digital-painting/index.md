@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Dragonfly Rising painting, a chrome dragonfly tilted over a sunset pond with cattails at the edges, and the Layers panel listing the Liquid, Mercury and Mercury Pool groups
 finished: finished-dragonfly-rising.webp
 finishedAlt: The finished Dragonfly Rising painting. A dragonfly made of polished liquid metal climbs diagonally into a violet sunset sky, its iridescent wings banked. Its tail is joined to a mercury pond by a thin beaded strand that flares into a meniscus at the water, ringed by ripples, with small drops falling from the strand. The low sun sits on a dark ridge at the horizon, sun glitter runs down the water, the dragonfly's reflection wavers below, and black cattail silhouettes frame both lower corners
-project: liquid-metal-dragonfly-digital-painting.lopsy
+project: tutorials/liquid-metal-dragonfly-digital-painting/9af4426361c0/liquid-metal-dragonfly-digital-painting.lopsy
 ---
 
 Chrome is a mirror bent into a shape. It doesn't have a colour of its own.

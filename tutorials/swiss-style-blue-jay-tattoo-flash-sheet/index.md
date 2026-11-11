@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished blue jay flash sheet on the canvas. A geometric blue jay on a perch, a blue and black photo portrait in a ringed disc, a barred feather over a red sun, an acorn, a round seal and the big title blue jay with a red period. The Layers panel shows the Grain layer and the design groups
 finished: finished-blue-jay-flash-sheet.webp
 finishedAlt: The finished blue jay tattoo flash sheet on warm off-white paper. A three-column header and three black rules divide the sheet. Design 01 is a blue jay built from circles, sitting on a long black perch, with thin red compass circles and cross-hairs behind it. Design 02 is a three-tone screen-print portrait of a jay's head in a disc with a black ring and an outer red ring. In the second row are a notched, barred tail feather over a red sun, a blue acorn with a cross-hatched cap on a pale blue disc, and a blue seal reading CYANOCITTA CRISTATA over the top and BLUE JAY · ZÜRICH underneath, around a small jay head. Each design has a bold number and name with its size and price. The huge title blue jay fills the bottom, with blue in blue, jay in black and a red square period. A small upright colophon runs up the right margin
-project: swiss-style-blue-jay-tattoo-flash-sheet.lopsy
+project: tutorials/swiss-style-blue-jay-tattoo-flash-sheet/b211ee332082/swiss-style-blue-jay-tattoo-flash-sheet.lopsy
 ---
 
 A tattoo flash sheet is a menu of ready-to-tattoo designs. Each design gets

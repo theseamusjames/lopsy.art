@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Bodensee stencil set open. A cream proof of a blue engraved zeppelin over the Alps is taped to a green cutting mat, next to tilted manila stencil plates and a typed index card, with the Layers panel listing the Proof and plate groups
 finished: finished-bodensee-zeppelin-stencil-set.webp
 finishedAlt: The finished Bodensee stencil contact sheet. On a green self-healing cutting mat, a cream proof taped at its top corners shows the 1919 Zeppelin Bodensee in Prussian blue ruled lines. The hull lines pinch toward the nose and tail, the Alps are hatched on the diagonal, and a red ruled sun sets behind them with a red glint on the lake. The red stencil title BODENSEE and a caption sit below the plate mark. To the right, two slightly tilted manila plates show the blue key plate and the red sun-and-name plate with blue and red overspray. Below, plate C has the title cut through so the mat shows in the letters. A typed index card lists the three plates
-project: engraved-zeppelin-stencil-contact-sheet.lopsy
+project: tutorials/engraved-zeppelin-stencil-contact-sheet/87bc9eae43a4/engraved-zeppelin-stencil-contact-sheet.lopsy
 ---
 
 Before photographs could be printed in newspapers, pictures were *engraved*.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Uppercase Etiquette zine cover open. A giant lime U and a tilted violet E overlap under a black strip reading UPPERCASE, with the word etiquette below it marked up in pink. The Layers panel lists the text and stamp layers above the texture layers
 finished: finished-uppercase-etiquette-zine-cover.webp
 finishedAlt: The finished Uppercase Etiquette zine cover on speckled newsprint. A huge acid-lime U fills the top left and a huge violet E, tilted slightly and outlined in black slightly off register, overlaps it on the right. Where they cross, the lime shows through a violet halftone. A black strip runs across the page at a slight angle with UPPERCASE in lime capitals over an offset pink copy. Below it, etiquette is set in lowercase black serif type, with its first e circled and triple-underlined in pink and a pink leader line running to a margin note that reads caps!. Inside the U a contents list ends with a struck-out Shouting corrected by hand to speaking up, and a worn pink rubber stamp reads MIND YOUR CAPITALS, SPEAK UP POLITELY around OK!. A tracked masthead runs across the top, a large 07 sits top right, a spine line runs up the left edge between two staples, and a barcode sits bottom right
-project: typographic-uppercase-zine-cover.lopsy
+project: tutorials/typographic-uppercase-zine-cover/bf7c2df9a091/typographic-uppercase-zine-cover.lopsy
 ---
 
 *Uppercase Etiquette* is an imaginary zine about capital letters and the

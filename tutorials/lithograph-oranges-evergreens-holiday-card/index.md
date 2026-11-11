@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Oranges and Evergreens card. A blue-and-white bowl piled with oranges sits on a red gingham table in a brown wallpapered room with a snowy night window, above a red "Season's Greetings" caption
 finished: finished-oranges-evergreens.webp
 finishedAlt: The finished colour-lithograph holiday card on cream paper. Inside a thin dark border, a cream-and-blue bowl holds a pyramid of flat orange oranges topped with two olive leaves. It sits on a red-and-cream gingham cloth whose back edge slopes down to the left. Behind it is a dark brown wall with a small floret wallpaper, shaded with slanted crayon grain on the left. A cream window frame shows a Prussian-blue night with a full moon, falling snow and a band of orange dusk behind dark rooftops with lit windows. In front of the bowl are a loose orange, a cut half orange showing its segments, and fir boughs, one tied with a red bow. Below the picture, "Season's Greetings" is set in red swash capitals above the smaller blue line "ORANGES & EVERGREENS · WINTER MMXXVI", with a small red OE chop in the bottom-right corner
-project: lithograph-oranges-evergreens-holiday-card.lopsy
+project: tutorials/lithograph-oranges-evergreens-holiday-card/77ede3c4ca1d/lithograph-oranges-evergreens-holiday-card.lopsy
 ---
 
 In the 1890s, Paris print shops turned out colour lithographs by Bonnard, Vuillard and Toulouse-Lautrec. Each colour was drawn on its own limestone, with a greasy crayon or brush, and the stones were printed one after another onto the same sheet. That process gives the style its look:

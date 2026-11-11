@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Umbral Keyhole painting open, the Layers panel showing the Vignette, Film Grain and Cloud Key layers beside a night piazza with a brick wall whose keyhole shows a daytime sky
 finished: finished-umbral-keyhole.webp
 finishedAlt: A surrealist night scene. A freestanding brick wall stands on a red and cream checkerboard piazza under a navy sky with stars and a crescent moon. A keyhole cut through the wall shows a bright blue daytime sky full of white clouds. Daylight pours through it and lands on the floor as an upside-down keyhole of light inside the wall's long shadow, where a backlit green apple stands. Three small white clouds drift out of the keyhole in a rising arc toward a floating key made of clouds.
-project: surrealist-keyhole-digital-painting.lopsy
+project: tutorials/surrealist-keyhole-digital-painting/f90ffccd8cd9/surrealist-keyhole-digital-painting.lopsy
 ---
 
 René Magritte's *Empire of Light* paintings show a street at night under a bright daytime sky. Giorgio de Chirico painted empty piazzas, long raking shadows and greenish dusk skies. This tutorial combines the two in one picture, **Umbral Keyhole**. It's night on a checkerboard piazza, but a keyhole in a brick wall opens onto a summer afternoon. Daylight spills through the keyhole onto the floor, and a few clouds drift out toward a key made of cloud.

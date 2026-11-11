@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Gravel Lullaby album cover, black dry-brush beams over soft orange and crimson colour fields, with the Layers panel open
 finished: 26-finished-gravel-lullaby-album-cover.webp
 finishedAlt: The finished Gravel Lullaby album cover, a leaning black brush beam with an arm and a counter-diagonal over a glowing orange field and a crimson field on an oxblood ground, cream scumbles, short drips, and cream type at top and bottom
-project: abstract-expressionist-jazz-album-cover.lopsy
+project: tutorials/abstract-expressionist-jazz-album-cover/c1072193883e/abstract-expressionist-jazz-album-cover.lopsy
 ---
 
 In the 1950s, the painters of the New York School and the bebop players

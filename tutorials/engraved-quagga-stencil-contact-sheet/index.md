@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Unstriped Quagga contact sheet open. Three brushed brass stencil plates with hatch-line cuts sit above three sepia proofs of a quagga on cream paper, and the Layers panel lists the Foxing, Age, Grain, Stamp, Proofs, Stencil Plates and Type layers
 finished: finished-unstriped-quagga.webp
 finishedAlt: The finished Unstriped Quagga stencil contact sheet. The title Unstriped Quagga is set in an old-style serif on cream paper above a double rule. The top row holds three brushed brass stencil plates numbered I, II and III, each with hatch-line slits in the shape of a quagga, punch holes on both sides and a soft shadow. The bottom row holds three proofs on sunken plate marks: the first in olive brown horizontal lines, the second adding burnt umber diagonals, and the final one adding blue-black crosshatching and a bold contour, with a red APPROVED rubber stamp in its corner. Stencil-lettered labels and italic captions sit under every cell, red registration crosses mark the margins, and the paper has faint foxing spots and darker edges
-project: engraved-quagga-stencil-contact-sheet.lopsy
+project: tutorials/engraved-quagga-stencil-contact-sheet/eb68dc70a1df/engraved-quagga-stencil-contact-sheet.lopsy
 ---
 
 Old engravings make tone out of lines. Thin lines read as light grey,

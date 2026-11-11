@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Mako Jaws stencil kit open. Four tan stencil cards with a cut-out shark and lettering sit on a green cutting mat beside a maple skateboard deck sprayed with a teal and bone shark and an orange sun, circled in red grease pencil. The Layers panel lists the Deck Proof group, tapes, labels and cards
 finished: finished-mako-jaws-stencil-kit.webp
 finishedAlt: The finished Mako Jaws stencil kit. On a green self-healing cutting mat with a light grid and ruler numbers, four tan chipboard stencil cards are taped down in a two by two grid, each labelled in black marker and numbered in orange. Card 1 has the whole shark silhouette cut out with bone-coloured overspray around it, card 2 the teal mid tones, card 3 the black shadows, and card 4 an arched MAKO JAWS, a round sun and SKATE CREW, misted with orange. On the left a tilted maple skateboard deck shows the sprayed result, a teal, bone and black shark rising towards an orange sun under the arched name, with drips and truck bolt holes. A red grease pencil loop circles the deck with the note 05 — PRINT THIS ONE and a tick. MAKO JAWS is sprayed in orange stencil letters across the top next to a masking tape label reading STENCIL KIT No.1 — 4 PLATES + DECK PROOF
-project: skate-shark-stencil-kit-contact-sheet.lopsy
+project: tutorials/skate-shark-stencil-kit-contact-sheet/fea5c658aabb/skate-shark-stencil-kit-contact-sheet.lopsy
 ---
 
 Multi-layer spray stencils are how a lot of skateboard graphics start. You

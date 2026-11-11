@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Fauna Illustrated cover. A cyan screen-printed iguana head with an orange crest faces right on a yellow ground with magenta dots, under a white FAUNA masthead, with a speech balloon, a red starburst and the layers panel open on the right.
 finished: finished-fauna-illustrated.webp
 finishedAlt: The finished Fauna Illustrated cover. A huge iguana head printed in black ink over flat cyan, with a pink cheek, yellow eye, red mouth and a row of orange spines, fills the lower two thirds. Magenta Ben-Day dots grow toward the bottom right of a yellow ground. Above it sit the white FAUNA masthead with a black outline, red shadow and cyan dots, a black ILLUSTRATED band, the cover line Lizard Kings of the Caribbean, and a balloon saying Who you calling green?! A rotated red and yellow starburst reads 100% cold-blooded, and a barcode sits in the bottom right corner.
-project: pop-art-iguana-magazine-cover.lopsy
+project: tutorials/pop-art-iguana-magazine-cover/05a800834e2e/pop-art-iguana-magazine-cover.lopsy
 ---
 
 In the early 1960s, Andy Warhol started making paintings with commercial silkscreens. He'd blow a photo up into a stark black-and-white stencil, then print it over flat blocks of colour that he'd painted by hand. The colour never quite lined up with the black, and that slightly-off look became the signature of pop art. Roy Lichtenstein borrowed from comics instead: thick outlines, speech balloons, and the **Ben-Day dots** that cheap printers used for shading.

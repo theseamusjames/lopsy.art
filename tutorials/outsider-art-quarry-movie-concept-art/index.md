@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Hermit's Quarry concept art. A stepped quarry made of concentric crayon rings fills the canvas, with a striped tower rising from the pit into a ringed sun, and the Layers panel beside it
 finished: finished-hermits-quarry.webp
 finishedAlt: The finished Hermit's Quarry concept art. Inside a border of hand-repeated discs and bars, a huge oval quarry of red, gold and blue crayon rings drops to a black pool. A striped tower with yellow arched windows rises from it and points into a ringed sun with crayon rays. Sermon text runs along three curved ribbons. Small trains leave round tunnels, derricks stand against a striped dusk sky, and torn-paper photos of a stooped stonecutter shrink down the rings. A cream strip at the bottom holds the hand-lettered title, a subtitle and three colour key thumbnails, with DUSK circled in red
-project: outsider-art-quarry-movie-concept-art.lopsy
+project: tutorials/outsider-art-quarry-movie-concept-art/f495c8ee18cc/outsider-art-quarry-movie-concept-art.lopsy
 ---
 
 **The Hermit's Quarry** doesn't exist. It's an imaginary film about one man who spends thirty-one years carving a city out of a hill. Concept art is what a production designer paints to show everyone what a film will look like before a single set gets built. This piece imagines the production hired an **outsider artist** to do it.

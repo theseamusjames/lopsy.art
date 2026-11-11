@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Yuzu Highball flier open, showing the black and yellow zigzag ring disc, the highball glass with cyan magnified rings and a pink striped straw, the yuzu wheel on the rim, the pink starburst price badge and the YUZU title, with the Layers panel listing the Type group's text and badge layers
 finished: finished-yuzu-highball.webp
 finishedAlt: The finished Yuzu Highball Hour flier. On a yuzu yellow ground covered in hot pink Ben-Day dots, a black and yellow disc of zigzag rings with a pink centre sits inside a pink and black target rim. In front of it stands a tall highball glass. Its liquid shows the same zigzag rings magnified and turned cyan, with pink dot shading on the right, a pink and white striped straw that jogs sideways at the liquid line, two white ice cubes with cyan edges and two columns of outlined bubbles on either side of the straw. A yuzu wheel with white spokes sits on the rim with a black slit and a hard black shadow. At the top, YUZU is set in fat white letters with a black outline and a pink block shadow, above a black banner reading HIGHBALL HOUR. A pink starburst at the left reads $6 each. A black band at the bottom reads Every Friday · 5–8 PM and Kumo Bar · 418 Mercer St · NYC
-project: op-pop-highball-bar-flier.lopsy
+project: tutorials/op-pop-highball-bar-flier/9743447184fd/op-pop-highball-bar-flier.lopsy
 ---
 
 In the mid-1960s, Op Art and Pop Art arrived in galleries and advertising

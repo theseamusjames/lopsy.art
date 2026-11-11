@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Babcia's Naleśniki flyer. A black scalloped paper-cut medallion holds two blue roosters facing a green tree of life, under a pink script and a black NALEŚNIKI headline, with the Layers panel open on the right
 finished: finished-babcias-nalesniki.webp
 finishedAlt: The finished Babcia's Naleśniki flyer on cream paper. A border of black scallops with magenta dots runs along the top and bottom edges. Babcia's is written in pink script between two small pink and green flowers, above NALEŚNIKI in heavy black capitals with an orange-red shadow, and the line POLISH CRÊPES · HAND-PINCHED PIEROGI · KOMPOT. In the middle, a black scalloped medallion punched with lace holes is ringed with pink and green teardrop petals. Inside it, on a cream disc, two blue roosters with yellow necks, layered wings and pink-and-green fan tails face each other across a green tree of life topped with red and pink tulips. Below them a heart and blue flowers hang from a branch. Under the medallion are two menu columns, SŁODKIE · SWEET and SŁONE · SAVORY, split by a little green sprig. A black ribbon with notched ends reads EVERY SATURDAY 8–2 · NORTHSIDE MARKET, STALL 14
-project: polish-folk-art-papercut-flyer.lopsy
+project: tutorials/polish-folk-art-papercut-flyer/1694b5b468bc/polish-folk-art-papercut-flyer.lopsy
 ---
 
 In the villages around Łowicz in central Poland, people decorated their homes with **wycinanki**: paper cuts made with sheep shears. A Łowicz cut starts with a symmetric black shape. Smaller pieces of coloured paper are glued on top, each one a little smaller than the one under it, so every colour ends up with a thin black edge. Roosters, tulips and a tree of life are the favourite subjects.

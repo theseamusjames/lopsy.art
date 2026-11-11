@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type ProjectHost, buildTutorialSite } from './build-site';
+import { buildTutorialSite } from './build-site';
 import { SWATCH_SCRIPT } from './swatch';
 import type { SourceTutorial } from './types';
 
@@ -55,8 +55,8 @@ Done.
   };
 }
 
-function build(sources: SourceTutorial[], shouldIncludeDrafts = false, projectHost: ProjectHost | null = null) {
-  return buildTutorialSite({ sources, css: 'body{}', shouldIncludeDrafts, projectHost });
+function build(sources: SourceTutorial[], shouldIncludeDrafts = false) {
+  return buildTutorialSite({ sources, css: 'body{}', shouldIncludeDrafts });
 }
 
 function jsonLd(html: string): { '@graph': Array<Record<string, unknown>> } {
@@ -140,11 +140,11 @@ describe('buildTutorialSite', () => {
     expect(html.match(/class="finished-figure"/g)).toHaveLength(1);
   });
 
-  it('publishes the project file and links to it under the finished image', () => {
-    const result = build([source('alpha', 'project: alpha.lopsy', ['alpha.lopsy']), source('beta', '')]);
+  it('links the R2-hosted project under the finished image', () => {
+    const key = 'tutorials/alpha/0123456789ab/alpha.lopsy';
+    const result = build([source('alpha', `project: ${key}`), source('beta', '')]);
     expect(result.errors).toEqual([]);
-    expect(result.files.has('tutorials/alpha/alpha.lopsy')).toBe(true);
-    expect(result.warnings.some((w) => w.includes('alpha.lopsy'))).toBe(false);
+    expect([...result.files.keys()].some((path) => path.endsWith('.lopsy'))).toBe(false);
 
     const html = result.files.get('tutorials/alpha/index.html') as string;
     const box = html.indexOf('<aside class="follow-along">');
@@ -152,35 +152,25 @@ describe('buildTutorialSite', () => {
     expect(box).toBeLessThan(html.indexOf('class="intro"'));
     expect(html).toContain('Follow along with this tutorial');
     expect(html).toContain(
-      '<a class="button" href="/?open=%2Ftutorials%2Falpha%2Falpha.lopsy" target="_blank" rel="noopener">Open Project in Lopsy</a>',
+      `<a class="button" href="/?open=${encodeURIComponent(`https://files.lopsy.art/${key}`)}" target="_blank" rel="noopener">Open Project in Lopsy</a>`,
     );
 
     const other = result.files.get('tutorials/beta/index.html') as string;
     expect(other).not.toContain('follow-along');
   });
 
-  it('hands the project file to the host under a content-addressed key and links there', () => {
-    const host: ProjectHost = { origin: 'https://files.example', digest: (bytes) => `d${bytes.length}` };
-    const project = source('alpha', 'project: alpha.lopsy', ['alpha.lopsy']);
-    const result = build([project], false, host);
-    expect(result.errors).toEqual([]);
-    expect(result.files.has('tutorials/alpha/alpha.lopsy')).toBe(false);
-    const bytes = project.assets.get('alpha.lopsy');
-    expect([...result.hostedFiles]).toEqual([[`tutorials/alpha/d${bytes?.length}/alpha.lopsy`, bytes]]);
-    expect(result.warnings.some((w) => w.includes('alpha.lopsy'))).toBe(false);
-
-    const html = result.files.get('tutorials/alpha/index.html') as string;
-    const url = `https://files.example/tutorials/alpha/d${bytes?.length}/alpha.lopsy`;
-    expect(html).toContain(`href="/?open=${encodeURIComponent(url)}"`);
-  });
-
-  it('fails when the project file is missing or not a .lopsy', () => {
-    expect(build([source('alpha', 'project: alpha.lopsy')]).errors).toEqual([
-      'tutorials/alpha: project "alpha.lopsy" does not exist.',
-    ]);
-    expect(build([source('alpha', 'project: ../beta/beta.lopsy')]).errors).toEqual([
-      'tutorials/alpha: `project` must be the name of a `.lopsy` file next to index.md.',
-    ]);
+  it('fails when the project is not an R2 key', () => {
+    const message =
+      'tutorials/alpha: `project` must be the R2 key of an uploaded project (tutorials/<slug>/<hash>/<file>.lopsy). Run `npm run tutorial:upload <slug>` to upload it and set this field.';
+    for (const value of [
+      'alpha.lopsy',
+      '../beta/beta.lopsy',
+      'tutorials/alpha/0123456789AB/alpha.lopsy',
+      'tutorials/alpha/0123456789ab/alpha.png',
+      'https://files.lopsy.art/tutorials/alpha/0123456789ab/alpha.lopsy',
+    ]) {
+      expect(build([source('alpha', `project: ${value}`)]).errors).toEqual([message]);
+    }
   });
 
   it('adds the swatch copy script only to pages with colour codes', () => {

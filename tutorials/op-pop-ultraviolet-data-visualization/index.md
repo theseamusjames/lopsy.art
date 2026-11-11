@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Ultraviolet Wavelengths poster. Wavy black and white, magenta and yellow stripes fall from a dotted Sun into layers of sky and skin, with the Layers panel showing the groups beside it
 finished: finished-ultraviolet-wavelengths.webp
 finishedAlt: The finished Ultraviolet Wavelengths poster. A magenta and yellow halftone Sun sits on a wavelength ruler. Three bands of wavy stripes fall from it. UVC stops at the orange ozone layer under a STOPPED! burst, UVB thins to fine lines that end in the epidermis at a BURN! burst, and UVA runs on into the dermis beside a WRINKLES! burst. A UV Index scale runs along the bottom
-project: op-pop-ultraviolet-data-visualization.lopsy
+project: tutorials/op-pop-ultraviolet-data-visualization/45d2e994aabc/op-pop-ultraviolet-data-visualization.lopsy
 ---
 
 Op-Pop is what happens when two 1960s movements share a wall. **Op Art** makes flat lines seem to move, as in Bridget Riley's [Current](https://www.moma.org/collection/works/79998), where hand-painted curves billow as if the surface were caught in wind. **Pop Art** borrows from print and comics, with Roy Lichtenstein's dots, thick outlines and shouting captions.

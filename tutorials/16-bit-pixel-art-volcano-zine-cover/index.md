@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Volcano Ascent zine cover open. A pixel art volcano with glowing lava streams stands under a dithered purple and orange sky, a small hiker with a backpack looks at it from a rock ledge, and a blue game-style dialog box sits at the bottom. The HUD, Masthead and Hiker groups sit at the top of the Layers panel
 finished: finished-volcano-ascent-zine-cover.webp
 finishedAlt: The finished Volcano Ascent zine cover in 16-bit pixel art. ISSUE 16 and three red pixel hearts run across the top. The title VOLCANO ASCENT is set in chunky pixel capitals banded pale yellow, yellow, orange and red, with a dark outline and a plum 3D extrusion. Under it, cream text reads A HIKING ZINE IN 16 BITS. A crescent moon and stars sit in a sky that steps from deep indigo through purple and magenta to orange, with checkerboard dithering between the bands. A dark volcano with a glowing crater, orange lava streams in a crimson glow and a dotted switchback trail stands in front of purple mountains, smoke drifts away to the upper right, and pine silhouettes line the foothills. A hiker in a red beanie with a yellow backpack and a walking stick stands on a basalt ledge at the lower left. At the bottom, a blue dialog box with a white border reads HIKER: THE SUMMIT AWAITS, with menu items TRAIL MAPS, LAVA SAFETY and CAMP STOVE COOKBOOK
-project: 16-bit-pixel-art-volcano-zine-cover.lopsy
+project: tutorials/16-bit-pixel-art-volcano-zine-cover/c05ce17c79db/16-bit-pixel-art-volcano-zine-cover.lopsy
 ---
 
 Games from the Super Nintendo and Mega Drive era got lush skies out of

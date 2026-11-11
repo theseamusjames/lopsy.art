@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Ursonate Wurst menu, with giant scattered red letters spelling WURST behind torn paper menu slips, a pig engraving, pointing fists, a blue DADA stamp and a black URSONATE masthead
 finished: finished-ursonate-wurst.webp
 finishedAlt: The finished Ursonate Wurst menu on cream newsprint, with a black URSONATE masthead, giant speckled red letters W, U upside down, R on its side, S and T, a torn scrap with a pig engraving, the black slogan DADA IST GEGEN DIE ZUKUNFT across the W, three torn paper menu slips for sausages, sides and drinks, two printer's fists, a blue round DADA stamp and a Fraktur sound-poem footer
-project: dadaist-collage-restaurant-menu.lopsy
+project: tutorials/dadaist-collage-restaurant-menu/2b8c16a7ef50/dadaist-collage-restaurant-menu.lopsy
 ---
 
 In 1922 Kurt Schwitters and Theo van Doesburg printed the *Kleine Dada

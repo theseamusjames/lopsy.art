@@ -15,6 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "tutorial:upload": "node scripts/tutorial-projects.ts upload",
+    "tutorial:check": "node scripts/tutorial-projects.ts check",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src && node scripts/check-pixel-debt.mjs",
     "storybook": "storybook dev -p 6006",

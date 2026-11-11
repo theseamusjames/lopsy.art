@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Rad Aerobics board. Three phones stand on a patterned staircase under a coral, yellow and pink arch, with a black and white halftone dancer kicking out of the middle phone and the layers panel open on the right.
 finished: finished-rad-aerobics.webp
 finishedAlt: The finished Rad Aerobics app board on a mint wall. A chunky tilted RAD headline in coral, cobalt and squiggle-filled yellow sits above the word AEROBICS. Three phones showing a class schedule, a Get Rad start screen and a live workout timer stand on three steps patterned with terrazzo, black squiggles and blue stripes, labelled Step 1 Book It, Step 2 Warm Up and Step 3 Go Rad. A halftone woman in a tracksuit kicks out of the middle phone in front of a concentric arch.
-project: memphis-step-aerobics-app-mockup.lopsy
+project: tutorials/memphis-step-aerobics-app-mockup/b9a7f76afff0/memphis-step-aerobics-app-mockup.lopsy
 ---
 
 In 1981 a group of Milan designers led by Ettore Sottsass showed a collection of furniture under the name **Memphis**. It looked nothing like tasteful modern design: loud plastic laminates, clashing colours, squiggly prints and bookcases that seemed to be dancing. It went on to define the look of the 1980s, which makes it a good fit for an app about 80s aerobics.

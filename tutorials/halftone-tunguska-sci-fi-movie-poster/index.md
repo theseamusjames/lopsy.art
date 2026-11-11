@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished TUNGUSKA movie poster on the canvas, with an orange and yellow halftone blast over an indigo sky, dead trees on the horizon, a halftoned photo of a flattened forest and the orange title, with the Layers panel listing the Grain layer and the Title, Ground and Blast groups
 finished: finished-tunguska-unearthed.webp
 finishedAlt: The finished poster for an imaginary film, TUNGUSKA UNEARTHED. A pale sun with a dotted edge blazes in the middle of an indigo sky, inside a disc of orange halftone dots that shrink towards the edges. A yellow dotted meteor trail streaks in from the top right, and three thin cream shock rings circle the sun, fading out above the horizon. Below the sun, a band of solid yellow dots meets a ragged dotted horizon lined with bare, broken trees and fallen trunks. Under that, a photo of a flattened forest is printed as indigo dots over orange dots and dissolves into peach paper. At the bottom, TUNGUSKA is set in huge orange condensed capitals with indigo halftone shading and an offset indigo shadow, above UNEARTHED between two rules, a cast line, a crew line and IN CINEMAS 30 JUNE. The tagline THE SKY OPENED AT 7:17 A.M. runs across the top, with Russian text up the left edge and coordinates down the right.
-project: halftone-tunguska-sci-fi-movie-poster.lopsy
+project: tutorials/halftone-tunguska-sci-fi-movie-poster/ed5c10d5ea5b/halftone-tunguska-sci-fi-movie-poster.lopsy
 ---
 
 On 30 June 1908, at about 7:17 in the morning, something exploded in the air over the Tunguska river in Siberia. It flattened around 80 million trees. Nobody reached the site until 1927, when Leonid Kulik's expedition found trees lying in a vast ring, pointing away from the blast.

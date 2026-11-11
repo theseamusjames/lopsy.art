@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Red Wanderer key frame. A red, black, ochre and blue suprematist starship flies diagonally across a pale ivory steppe towards a black eclipse with an ochre ring, towing a small astronaut on a black tether, between black letterbox bars with slate type
 finished: finished-red-wanderer.webp
 finishedAlt: The finished Red Wanderer movie key frame, 1920 by 1080 with black letterbox bars. The top bar reads RED WANDERER in wide cream capitals on the left and KEY FRAME 07 — THE TETHER in small grey monospace on the right. In the pale ivory frame a starship built from flat planes climbs diagonally to the right. It has a red hull marked RW-1924, an ochre sail, a black engine block, a long black keel, and a black spar and a blue fin crossing it at steep angles. Three tapered red, grey and ochre speed wedges trail behind it. A small white-suited astronaut floats at upper left on a curved black tether. A black eclipse with an ochre ring and a white corona hangs at right above a distant city of thin white slabs. Faint flattened shadows of the ship and the astronaut lie on the ground. The bottom bar reads EXT. THE WHITE STEPPE — FIRST LIGHT and SC. 42 / 2.39:1 next to a small red square
-project: suprematist-sci-fi-movie-concept-art.lopsy
+project: tutorials/suprematist-sci-fi-movie-concept-art/ebf8ee4acc3d/suprematist-sci-fi-movie-concept-art.lopsy
 ---
 
 In 1915 Kazimir Malevich hung a set of paintings in Petrograd that had no subject at all: only black, red, yellow and blue rectangles floating on white. He called the movement **Suprematism**. One of the best known, *Suprematist Composition: Airplane Flying*, doesn't show an aeroplane. It's a cluster of tilted planes that *feels* like flight.

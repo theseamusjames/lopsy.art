@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Ursa Solstice holiday card on the canvas, cyan guides around the margins, and the layers panel on the right listing the Bear Group, Seal and title layers
 finished: finished-ursa-solstice-holiday-card.webp
 finishedAlt: The finished 1500 by 2100 holiday card on cream paper. An arch-shaped night sky of navy blue with a pale sunburst and teal halftone aurora ribbons holds a gold Big Dipper and a drift of gold stars. A huge gold moon fills the arch with a navy bear walking across it in a red scarf. Teal hills, two navy pine clusters, a small cabin with a lit window and a halftone snow bank sit under the bear. Below the arch, URSA and SOLSTICE are set in chunky navy slab letters with a vermilion shadow, next to a red seal reading LONGEST NIGHT 21 DECEMBER around a white star. A small credit line and four ink swatches run along the bottom, with navy crop marks in the corners and a registration target above the arch
-project: screen-print-bear-solstice-holiday-card.lopsy
+project: tutorials/screen-print-bear-solstice-holiday-card/e8ba2ac75f27/screen-print-bear-solstice-holiday-card.lopsy
 ---
 
 Screen-printed cards from the 1970s have a look you can spot across a room. Every colour is a flat ink, shading is a field of halftone dots and nothing is blended with a soft brush. That makes them a good fit for Lopsy: you only need a handful of inks and the right filters.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Espresso Jitters poster, with a tomato title panel, a black chart panel of hourly caffeine bars, lilac drink bars and a top-down coffee cup donut chart.
 finished: finished-espresso-jitters.webp
 finishedAlt: The finished Espresso Jitters poster on mustard graph paper. A heavy black ESPRESSO headline sits above seven tilted JITTERS letter tiles. Below are an hourly caffeine bar chart on black, a lilac bar chart of milligrams per drink, and a top-down espresso cup whose rim is a donut chart reading 79 percent.
-project: neubrutalist-caffeine-data-visualization-poster.lopsy
+project: tutorials/neubrutalist-caffeine-data-visualization-poster/9c4f2ea18486/neubrutalist-caffeine-data-visualization-poster.lopsy
 ---
 
 Neubrutalism suits data better than you might expect. Its thick outlines, flat

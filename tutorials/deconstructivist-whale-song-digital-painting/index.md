@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Whale Song painting. A navy and bone humpback whale swims left through deep cobalt water, its tail breaking into a fan of lit shards and a split fluke, inside broken coral and bone rings, with coral and bone bars and a black band cutting across the frame
 finished: finished-whale-song.webp
 finishedAlt: The finished Whale Song digital painting. A humpback whale with a near-black back and a bone-white belly swims up and to the left through deep cobalt water lit by pale light rays from the top left. Concentric coral and bone rings radiate from its head. The inner rings are cut into four quadrants that have slipped and turned, and the outer rings are sliced into sliding bands. Behind its dorsal fin the body cracks, then breaks into a fan of navy, blue and bone shards that spread wider and turn further the further they fly, ending in a fluke split into two scalloped halves that splay into a V. A long coral bar crosses under the whale, a broken bone bar crosses over it, a pale glass pane tints its back, and a black band with bone edges runs along the bottom right. Plankton specks, a rising column of bubbles and fine grain cover the scene
-project: deconstructivist-whale-song-digital-painting.lopsy
+project: tutorials/deconstructivist-whale-song-digital-painting/6a92a886b224/deconstructivist-whale-song-digital-painting.lopsy
 ---
 
 Deconstructivism takes something whole and pulls it apart on purpose. Zaha

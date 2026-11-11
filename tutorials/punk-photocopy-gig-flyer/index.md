@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished WARTHOG INSURRECTION flyer. The layers panel lists the Dymo label groups and their embossed relief copies, beside a pink sheet with a halftone warthog, black gaffer-tape type and black label strips
 finished: finished-warthog-insurrection.webp
 finishedAlt: The finished punk gig flyer on fluorescent pink paper. WARTHOG is set huge in black condensed capitals across the top. Below it a torn scrap of white paper, tilted slightly, holds a coarse black halftone of a warthog's face, with its tusks, warts and snout. A taped typewritten slip in the top left reads "W/ CAR ALARM CHOIR + THE SPLEENS + DEAD MALL". A black label-maker strip runs up the right margin reading "RUST BUCKET - 2111 E. CANAL ST.", held on with masking tape. Across the bottom of the photo, INSURRECTION is printed in cream on a strip of torn black gaffer tape. At the bottom left a black label strip reads "SAT. NOV. 21 - DOORS 8PM", and at the bottom right "$5" is circled in black marker next to "ALL AGES / NO JERKS!". Sparse toner specks, a soft fold line and a copier shadow on the left edge make it look photocopied
-project: punk-photocopy-gig-flyer.lopsy
+project: tutorials/punk-photocopy-gig-flyer/fce3c41bc312/punk-photocopy-gig-flyer.lopsy
 ---
 
 Before social media, a punk show got its crowd from a sheet of paper stapled to a telephone pole. The band cut pictures out of magazines, glued them to a page with typed or hand-lettered details, and ran a stack through the copier at the corner shop. Anything that went through that copier came out the same way:

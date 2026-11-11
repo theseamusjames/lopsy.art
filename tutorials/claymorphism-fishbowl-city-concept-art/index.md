@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Fishbowl City key frame on the canvas, the letterbox bars, colour key chips and the Layers panel showing the Letterbox, Grade, Bowl, Props, Sill and Window groups
 finished: finished-fishbowl-city.webp
 finishedAlt: The finished Fishbowl City concept frame. A glass goldfish bowl sits on a lilac kitchen windowsill in front of a cream window with a pastel sky, a yellow sun and puffy clouds. Inside the bowl, a pastel clay town of domed houses and a red-and-cream lighthouse stands on a mound of candy-coloured pebbles, and three orange goldfish in navy bowler hats swim to the left in a queue. On the sill are a cactus in a terracotta pot with a SPIKE plant marker, a striped tea towel, a pink snail and a steaming blue teacup, under a coral wall clock reading 8:40. Dark letterbox bars carry the title FISHBOWL CITY, the slate line KEY FRAME 07 · MORNING COMMUTE, scene details and seven colour key chips
-project: claymorphism-fishbowl-city-concept-art.lopsy
+project: tutorials/claymorphism-fishbowl-city-concept-art/efd643f04be3/claymorphism-fishbowl-city-concept-art.lopsy
 ---
 
 Stop-motion studios plan their films with painted key frames: one still per

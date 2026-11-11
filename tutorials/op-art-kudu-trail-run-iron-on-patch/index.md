@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Kudu Quest patch open. An arch-topped badge with a striped terracotta edge and a black border sits on olive canvas. Inside, a kudu head made of horizontal black and cream stripes stands in front of bowed vertical stripes and a saffron sun. KUDU QUEST curves over the top and KAROO TRAIL RUN, 100 KM · EST. 2026 sits in the bottom band. The Layers panel is open on the right
 finished: finished-kudu-quest-patch.webp
 finishedAlt: The finished Kudu Quest patch on olive canvas fabric. A terracotta merrow edge with diagonal stitches wraps an arch-topped black badge. KUDU QUEST in saffron follows the arch, with a small saffron diamond at each end. In the arch, cream and black vertical stripes bow outward toward the edges, and they turn saffron where they cross a large sun disc. A greater kudu head is built only from horizontal stripes: a long tapering face, a cream chevron between almond eyes, a flat black nose, ring-striped ears and tall spiralling horns with fine ridges and an ink outline. The neck flares into the shoulders above a bottom band reading KAROO TRAIL RUN and 100 KM · EST. 2026
-project: op-art-kudu-trail-run-iron-on-patch.lopsy
+project: tutorials/op-art-kudu-trail-run-iron-on-patch/a0103065f3cc/op-art-kudu-trail-run-iron-on-patch.lopsy
 ---
 
 *Op art* (short for optical art) uses nothing but stripes, rings and hard

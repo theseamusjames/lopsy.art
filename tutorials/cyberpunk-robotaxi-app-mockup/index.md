@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Night Cab mockup open. A glowing NIGHT CAB headline sits on the left over a blurred violet neon street, a phone in the middle shows a dark map with a magenta route, and a tilted phone on the right shows a cyan wireframe car
 finished: finished-night-cab.webp
 finishedAlt: The finished Night Cab app mockup. Over a blurred violet and magenta neon street with fine rain streaks, the left column reads "SECTOR 9 // AFTER-HOURS TRANSIT" above a big white glowing NIGHT and a magenta, glitch-sliced CAB, the katakana ナイトキャブ, the tagline "Robotaxis that find you in the rain.", three stats (4 MIN, 24/7, 4.98), a yellow GET THE APP pill and an outlined WATCH DEMO pill. The centre phone shows a dark navy map with a rotated street grid, a canal, a glowing magenta route from a cyan arrow to a ringed pickup pin, and a bottom sheet reading 4 MIN and ₡24.80 above a magenta HAIL NIGHT CAB button. The right phone is tilted a few degrees and shows a cyan wireframe sedan on a glowing holo floor, the name KESTREL-7, a magenta speed gauge reading 62 km/h, trip stats, a cyan-to-magenta progress bar and a SHARE MY RIDE button. A small "RAIN SURGE ×1.4" notification floats between the phones' tops
-project: cyberpunk-robotaxi-app-mockup.lopsy
+project: tutorials/cyberpunk-robotaxi-app-mockup/1962804aa307/cyberpunk-robotaxi-app-mockup.lopsy
 ---
 
 Cyberpunk lives at night, in the rain, under signs you can't quite read. As an interface style it borrows that mood and keeps the screens themselves clean:

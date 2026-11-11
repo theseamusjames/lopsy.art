@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Jellyfish Undertow book cover, a bulging pink and black checkerboard jellyfish with cream halo rings and trailing tentacles on navy chevron stripes, with the Layers panel showing the Jellyfish, Juveniles and Cover Type groups
 finished: finished-jellyfish-undertow.webp
 finishedAlt: The finished cover for Jellyfish Undertow by Clea Varga. A cream band at the top holds JELLYFISH in heavy navy capitals, with UNDERTOW below it in letters made of navy horizontal stripes, then a thin magenta rule. The middle of the cover is a field of navy and blue-violet chevron stripes. In it floats a moon jelly seen from below. Its round bell is a black and pink checkerboard that bulges like a sphere, with big squares at the centre shrinking toward the rim. The bell glows lemon yellow at the centre, through coral, to magenta at the edge, with sixteen thin yellow canals and four cream horseshoe shapes. Two cream rings circle the bell. Cream tentacles and thin coral strands hang from it and sweep down to the left. Two small copies of the jellyfish drift at the upper right and the left. A cream band at the bottom has CLEA VARGA in navy, SOME CURRENTS ONLY PULL ONE WAY on two lines below it, and A NOVEL running vertically in magenta at each side.
-project: op-art-jellyfish-book-cover.lopsy
+project: tutorials/op-art-jellyfish-book-cover/977ed027d1b1/op-art-jellyfish-book-cover.lopsy
 ---
 
 In the late 1950s Victor Vasarely painted *Vega*, a black-and-white checkerboard that swells in the middle as if a ball were pushing up through the canvas. Bridget Riley was soon filling canvases with stripes that seem to ripple while you look at them. Within a few years, paperback covers were full of both.

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Beeswax Votive card open. A half-sectioned honey-coloured candle in a glass votive glows on a navy drafting grid, with numbered callouts down both sides, a honey-toned photo plan view in the bottom left and an engineering title block in the bottom right
 finished: finished-beeswax-votive.webp
 finishedAlt: The finished holiday card. On a navy drafting board with a faint blue grid and a cream double border, a rolled beeswax candle stands in a ghosted glass votive. Its right half is cut away to show striped rolled sheets of wax, the wick running down to a zinc tab, and the hatched glass wall. A tall flame glows above it with an amber dark zone and a thin blue crescent at its base. Eight numbered honey bubbles with cream leader lines label the outer veil, luminous zone, dark zone, blue zone, wick, melt pool, rolled comb sheet and wick tab. The serif italic title The Anatomy of a Small Light sits top left, the greeting With warmth & light for the longest nights top right, a circular honey-toned photo of the candle's spiral top labelled View B sits bottom left, and a title block reading BEESWAX VOTIVE sits bottom right
-project: candle-cutaway-holiday-card.lopsy
+project: tutorials/candle-cutaway-holiday-card/5c91621552b9/candle-cutaway-holiday-card.lopsy
 ---
 
 Old encyclopaedias and service manuals explained machines with cutaway

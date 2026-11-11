@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom with the finished Online Lives poster on the canvas, showing glass bubbles rising to an Earth photo above a chrome title, with the Layers panel open on the right
 finished: finished-online-lives.webp
 finishedAlt: The finished Online Lives poster. On a deep blue sky with faint rays and a grid of tiny plus marks, eleven glass bubbles grow from a tiny green one labelled 1995, 16M at the bottom left, along a lime thread with arrowheads, through aqua and blue bubbles, up to a large glass sphere holding a photo of Earth at the top right with a lime gel pill reading 2005, 1,018M. Small dated notes mark Windows 95, Google, the Y2K bug, Facebook and youtube.com. A small bar chart and a size legend sit in the gaps. Below, ONLINE LIVES is set in huge chrome letters with a warm reflection, next to 64X in lime, above a navy footer listing the sources.
-project: y2k-internet-users-data-visualization.lopsy
+project: tutorials/y2k-internet-users-data-visualization/81b25d0d4634/y2k-internet-users-data-visualization.lopsy
 ---
 
 In 1995 about 16 million people were online. Ten years later it was over a billion. In this tutorial you'll turn those numbers into a 2000 × 2800 px poster in the style of the time they describe: glass bubbles, chrome type, lime gel and pixel fonts. It's called **Online Lives**.

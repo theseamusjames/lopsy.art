@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Zodiac Keys blueprint open. A zodiac wheel with crossed keys sits in the middle of a Prussian-blue sheet, four labelled keys surround it, a ZODIAC KEYS ribbon and a title block sit along the bottom, and the Layers panel lists the Bleed, Grain, Vignette and Creases layers
 finished: finished-zodiac-keys.webp
 finishedAlt: The finished Zodiac Keys flash sheet. White linework on Prussian-blue paper with a fine grid, soft mottling, fold creases and a dark vignette. In the centre is a zodiac wheel with ticks, a ring of sign names and a ring of the twelve sign glyphs, holding two crossed skeleton keys and a rivet. Around it are FIG. 1 Aries with a trefoil bow, FIG. 2 Leo with a sun-ray bow, FIG. 3 Scorpio with an arrowhead stinger and FIG. 4 Pisces with a fish-shaped bow. Each key has a translucent fill, hatched bit, its glyph in the finger hole, a title and a dimension line in inches. A ribbon banner reads ZODIAC KEYS above a scale bar. Bottom left, a framed photostat of an antique key; bottom right, a title block with a red revision letter B. A red revision cloud circles the Scorpio stinger with a note, and a crescent moon, sparkles and a keyhole escutcheon fill the gaps
-project: blueprint-zodiac-keys-tattoo-flash-sheet.lopsy
+project: tutorials/blueprint-zodiac-keys-tattoo-flash-sheet/9462f1c6ed94/blueprint-zodiac-keys-tattoo-flash-sheet.lopsy
 ---
 
 Tattoo flash is a sheet of ready-to-tattoo designs, each one bold, closed

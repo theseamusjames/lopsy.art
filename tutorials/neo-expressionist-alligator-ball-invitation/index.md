@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Bayou Alligator Ball invitation open. Yellow, blue, cream, red and black painted blocks surround a green alligator wearing a yellow crown, with marker lettering at the top and a black information band at the bottom. The Layers panel lists the Grain, Impasto, Marks, Type, Gator and Fields groups and layers
 finished: finished-bayou-alligator-ball.webp
 finishedAlt: The finished invitation. The top half is brushy yellow and orange with YOU'RE INVITED TO THE, a huge black BAYOU, the word CRAWFISH in red struck through with one black bar, and ALLIGATOR in black. Tally marks sit in the top corner and a hand-drawn copyright sign sits in a white block at the right. Below, painted blocks of black, blue, dirty white and red break up the page. A red BALL with a scrawled double underline sits on the white block. A photo of an alligator, repainted in greens with a thick black outline, raises its open jaws to the right, with a dark mouth, white zigzag teeth and a yellow crown with red tips on its head. A white TEETH label points at the teeth with a yellow arrow. A taped cream patch reads BEER $2. The black band at the bottom has a ragged top edge and lists Saturday November 21, 8 PM til late, The Old Icehouse, Breaux Bridge LA, Zydeco, crawfish boil, bad paintings, and a benefit for the Atchafalaya Art Club, with a taped RSVP by Nov. 7 card wearing a small crown
-project: neo-expressionist-alligator-ball-invitation.lopsy
+project: tutorials/neo-expressionist-alligator-ball-invitation/056c1b8ff4fc/neo-expressionist-alligator-ball-invitation.lopsy
 ---
 
 Early-80s New York neo-expressionism, from Jean-Michel Basquiat, Julian

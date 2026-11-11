@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished AMBER KOI zine cover, an amber koi and a red-and-white kohaku circling in a dark blue pond with lily pads and maple leaves, under a cream masthead with a red seal
 finished: amber-koi-finished.webp
 finishedAlt: The finished AMBER KOI zine cover, printed in a Japanese woodblock style. Under a cream masthead with the title in a dark antique serif, a faint amber misregistration and a square red seal reading 鯉, a black key-block frame holds a dark indigo pond. A dark band fades down from the top of the water. An amber koi with a darker stripe along its spine swims up to the right, and a cream kohaku with vermilion patches swims down to the left. Both have scale patterns, forked fan tails, sumi outlines and flat blue shadows on the pond floor. Around them are three green lily pads, ripple rings, pale current lines and five maple leaves. A cream title slip reads 琥珀鯉 vertically, and a contents label sits at the lower left.
-project: woodblock-koi-zine-cover.lopsy
+project: tutorials/woodblock-koi-zine-cover/c1a71dd106d3/woodblock-koi-zine-cover.lopsy
 ---
 
 A Japanese woodblock print (*moku hanga*) is built in layers of ink. The carver cuts one block for the black outlines, called the **key block**, and a separate block for every colour. The printer inks each block, lays the paper on it and rubs it down. The finished print is a stack of flat colours, a few graded bands of colour called *bokashi*, and the grain of the wood showing through the ink.

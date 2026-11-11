@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom showing the finished Electric Toast comic page, with the Wordmark, Over and Tile groups in the Layers panel
 finished: finished-electric-toast.webp
 finishedAlt: A pop-art comic page on cream paper. In the large top panel, a startled slice of toast with wide eyes and an open mouth sits on a red and cyan comic burst, against blue Ben-Day dots. A yellow lightning bolt breaks through the top right of the frame and strikes the toast. A speech balloon says ZAP!, a yellow caption reads Meanwhile, at breakfast..., and the words Electric Toast are stacked below in white on a black slab and in big yellow letters with red dots. Four small panels below repeat the mascot in blue on pink, red on blue, magenta on yellow and green on violet.
-project: pop-art-electric-toast-logo.lopsy
+project: tutorials/pop-art-electric-toast-logo/f3ec17bfdf29/pop-art-electric-toast-logo.lopsy
 ---
 
 Pop art took the cheapest printing in America and put it on gallery walls. Roy Lichtenstein painted comic-book dots by hand, and Andy Warhol silkscreened the same image again and again in loud, slightly misaligned colours. Those habits still make a great logo: thick black outlines, a few flat inks and one big idea you can read from across the street.

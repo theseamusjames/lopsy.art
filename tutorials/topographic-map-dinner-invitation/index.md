@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Timberline Supper invitation, a topographic map of a mountain with brown contour lines, a green woodland tint, a blue lake and a red dotted trail to a lodge, with the title above and a legend and scale bar below
 finished: timberline-supper-finished.webp
 finishedAlt: The finished Timberline Supper invitation. A red line reads The pleasure of your company is requested at, above the title Timberline Supper in black small caps. Below is a framed topographic map. Brown contour lines wind around Tamarack Peak, the alpine ground is pale and the slopes below the timberline are tinted green. A red dotted trail switchbacks up from the trailhead to Timberline Lodge, marked by a red ring, beside a blue lake with waterlining and a creek with its name set along it. Under the map are the date, three lines of invitation text, a red reply line, a legend, a scale bar and a north arrow.
-project: topographic-map-dinner-invitation.lopsy
+project: tutorials/topographic-map-dinner-invitation/64d296ae4813/topographic-map-dinner-invitation.lopsy
 ---
 
 Old USGS topographic maps have their own quiet look. There's a cream sheet, fine brown contour lines with every fifth one drawn heavier, and a green wash wherever trees grow. Lakes get rings of blue lines, and the names are set in small, carefully spaced type. It's a lovely look to borrow for an invitation, especially one that asks guests to walk somewhere.

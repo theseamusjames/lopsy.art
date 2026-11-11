@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Mesa Coyote logo sheet on the canvas, the 16 px grid showing, the Pencil tool active and the Layers panel listing Board stars, Palette, the variant layers and the wordmark layers
 finished: finished-mesa-coyote.webp
 finishedAlt: The finished Mesa Coyote Game Studio logo sheet in 8-bit pixel art on a near-black purple background. On the left is a round pixel badge with a magenta, gold and purple border. Inside it, a tan coyote with a pale throat stands on a stepped red mesa and howls at a big cream moon. Behind it is a dusk sky in bands of navy, purple, magenta, coral and orange joined by checkerboard dithers, plus a few stars, and a teal saguaro stands in front of a maroon butte. On the right, MESA and COYOTE are stacked in big blocky letters, butter yellow on top and orange below, with a magenta drop shadow, over GAME STUDIO in teal. Along the bottom are a 16-colour palette bar labelled PALETTE and three small variants labelled ONE-BIT, MINI and ICON. ONE-BIT is a one-colour cream version, MINI is the full-colour badge at quarter size and ICON is the coyote and moon on a magenta rounded square
-project: 8-bit-coyote-game-studio-logo.lopsy
+project: tutorials/8-bit-coyote-game-studio-logo/f6eacaed1b1f/8-bit-coyote-game-studio-logo.lopsy
 ---
 
 A good game studio logo has to work as a big splash screen and as a tiny

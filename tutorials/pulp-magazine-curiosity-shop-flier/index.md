@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Octopus Oddities flier open. A giant orange octopus rises from a night sea under a yellow OCTOPUS masthead and a red ODDITIES ribbon, with a NOW OPEN starburst, a ship in a bottle and a black info band, and the Layers panel on the right
 finished: finished-octopus-oddities.webp
 finishedAlt: The finished Octopus Oddities flier. A black strip at the top reads Curios, Relics, Uncanny Antiques on the left and Est. 1931 on the right. Below it OCTOPUS is set in fat yellow slab letters with an oxblood 3D extrusion and a black keyline, leaning forward. A red swallowtail ribbon under it reads ODDITIES, and one of the octopus's arms crosses in front of the ribbon's tail. The octopus, painted in hot orange with a glowing slit eye, rises out of a dark teal sea against a teal-to-sulphur sunset with soft sunburst rays and a lightning bolt. White water churns where its arms meet the waves. A yellow starburst badge on the right reads NOW OPEN!, a ship in a bottle floats in the foreground with a tentacle tip curled over its neck, and a tilted cream card on the left reads SEE! The ship that sailed into a bottle! A black band at the bottom lists fossils, sea charts, taxidermy and ships in bottles, the address 27 Wharf Lane, Port Alder, and the hours, Thursday to Sunday, 11 am to 7 pm. Yellowed paper, grain and burnt edges age the whole sheet
-project: pulp-magazine-curiosity-shop-flier.lopsy
+project: tutorials/pulp-magazine-curiosity-shop-flier/36cc5a578a42/pulp-magazine-curiosity-shop-flier.lopsy
 ---
 
 From the 1920s to the early 1950s, pulp magazines like *Weird Tales*,

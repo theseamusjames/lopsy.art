@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished GIN JOINT De Stijl movie poster on the canvas. A Mondrian lozenge sits over a yellow Boogie-Woogie street grid as a martini glass with blue gin and a red olive, under GIN in white on red and JOINT in black. The Layers panel lists the Grain Dark, Grain, Weave Down and Weave Across layers above the Type, Structure, Martini and City groups
 finished: finished-gin-joint.webp
 finishedAlt: The finished GIN JOINT movie poster. Thick black bars split a cream page into Mondrian cells. At the top the cast names MARGOT VELD, AUGUST KLAAS and THEO RUBEN sit above GIN in white on a red block and JOINT in black with a red O. A yellow column on the left reads A HENK DE VRIES PICTURE sideways above a blue block. The middle is a grid of yellow streets dotted with red, blue and grey squares. Over it a square turned on its corner forms a martini glass, with a black frame, blue gin in the lower half, a black rim, stem and foot, and a black pick holding a red diamond olive. Below sit EVERY NOTE HAD A PRICE. and FALL 1948 in a yellow cell, and a three-line billing block in tall condensed type
-project: de-stijl-martini-movie-poster.lopsy
+project: tutorials/de-stijl-martini-movie-poster/c1f8b861452c/de-stijl-martini-movie-poster.lopsy
 ---
 
 **De Stijl** was the Dutch art movement of Piet Mondrian and Theo van

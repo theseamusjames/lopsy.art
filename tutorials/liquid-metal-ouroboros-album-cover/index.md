@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Ouroboros Engine album cover, a chrome serpent ring biting its tail around an eclipsed sun, dripping into a mercury pool, with the Layers panel collapsed into four groups
 finished: finished-ouroboros-engine.webp
 finishedAlt: The finished HALO VESPER Ouroboros Engine album cover. A polished chrome serpent forms a ring and bites its own tapering tail around a black eclipsed moon with a fiery orange corona. The motto THE END IS THE BEGINNING IS THE END runs around the corona in cream letters. The bottom of the ring melts into four silver drips above a small mercury pool that reflects the eclipse, with a drop splashing into ripples. Chrome title lettering with one drip sits at the top, and a catalogue line sits at the bottom, on a smoky navy background
-project: liquid-metal-ouroboros-album-cover.lopsy
+project: tutorials/liquid-metal-ouroboros-album-cover/e16643209e9c/liquid-metal-ouroboros-album-cover.lopsy
 ---
 
 Liquid metal is chrome that has started to move. It still needs the hard

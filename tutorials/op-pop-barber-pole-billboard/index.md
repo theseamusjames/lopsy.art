@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Barber Pole billboard open. A chrome-capped red, white and blue barber pole stands between two tilted cream comic panels reading BARBER and POLE, over a black and orange op-art checker that radiates from the pole, with the Layers panel listing the Grain, Snip Burst, Scissors, Pole Panel and Barber Panel groups
 finished: finished-barber-pole.webp
 finishedAlt: The finished Barber Pole billboard. A glossy barber pole with chrome caps and red, white and blue diagonal stripes stands in the centre on a royal-blue address bar. Behind it a black and orange checkerboard bends and radiates outward from the pole and darkens to deep red at the edges. On the left, a cream comic panel tilted slightly anticlockwise reads BARBER in red multi-line letters with a solid navy shadow, above SHARP CUTS, with red Ben-Day dots fading in from its corners. A yellow SNIP! starburst overlaps its top-left corner. On the right, a matching panel tilted the other way reads POLE above HOT SHAVES, and a pair of chrome scissors with red handles snips at its top-right corner. The bar along the bottom reads 214 MAIN ST ★ WALK-INS WELCOME in cream
-project: op-pop-barber-pole-billboard.lopsy
+project: tutorials/op-pop-barber-pole-billboard/2faf65f8dd9a/op-pop-barber-pole-billboard.lopsy
 ---
 
 Op art and pop art grew up side by side in the 1960s. Op artists like

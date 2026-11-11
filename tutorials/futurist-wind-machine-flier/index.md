@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished WIND MACHINE flier. A black six-bladed fan with cobalt, vermilion and cream motion trails spins over mustard and cream rays, above a black slab carrying the title WIND MACHINE in big cream capitals
 finished: finished-wind-machine.webp
 finishedAlt: The finished WIND MACHINE flier. A black six-bladed fan with blue, red and cream motion echoes sits in the middle of a mustard and cream sunburst, ringed by thin black arcs, with blue halftone dots below it. A tilted black slab under red and blue stripes carries WIND MACHINE in huge cream Anton capitals with a red offset shadow, then an Oswald subtitle in mustard, a cream date line and a small monospaced footer. A vertical black band reads MACCHINA DEL VENTO on the right and a round red L. 5 badge sits below it
-project: futurist-wind-machine-flier.lopsy
+project: tutorials/futurist-wind-machine-flier/11efed28bcd8/futurist-wind-machine-flier.lopsy
 ---
 
 Italian Futurists loved speed, noise and machines. Their posters threw

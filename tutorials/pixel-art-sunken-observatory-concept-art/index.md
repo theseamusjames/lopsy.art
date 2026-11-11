@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Sunken Observatory key frame on the canvas and the Layers panel showing the slate text layers, Stamp, Stamp Box, Color Key and Letterbox above the Pixel Pass layer
 finished: finished-sunken-observatory.webp
 finishedAlt: The finished Sunken Observatory pixel-art key frame. Under a navy blue-hour sky with stars and a huge cream moon, a domed observatory stands half drowned in a flooded valley, its amber slit and windows lit and a steel telescope aimed at the moon. Violet mountains frame the scene, fireflies drift over the water, and a canoe of four people with a bow lantern crosses the moon's glitter path. Black letterbox bars carry the title SUNKEN OBSERVATORY, the slate line SEQ. 12 - KEY FRAME 04, EXT. FLOODED VALLEY - BLUE HOUR, a row of colour key chips, a lighting note and a red APPROVED stamp
-project: pixel-art-sunken-observatory-concept-art.lopsy
+project: tutorials/pixel-art-sunken-observatory-concept-art/f67e8f955841/pixel-art-sunken-observatory-concept-art.lopsy
 ---
 
 Game and animation studios often plan a film's look with pixel-art key

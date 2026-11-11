@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Zucchini Potluck flier open at fit-to-screen zoom, showing the ransom-note ZUCCHINI headline, the crossed zucchini on an orange disc, the black POTLUCK strip and the gingham tablecloth with typed slips, and the Layers panel on the right
 finished: finished-zucchini-potluck.webp
 finishedAlt: The finished collage flier on kraft paper. ZUCCHINI is spelled across the top in eight letters cut from different coloured papers and fonts, each scrap tilted and casting a shadow. Below it a torn orange disc with halftone dots holds two photo cut-out zucchini, one dark green and one striped, crossed in an X with a yellow zucchini blossom on top. All three have white scissor borders, and strips of masking tape hold the zucchini ends. Cut-paper squash leaves peek out from behind the disc. A marker sun and asterisks sit in the corners, and a red handwritten note says bring a fork with an arrow. A torn black strip carries POTLUCK in big yellow letters with a red offset shadow. Under it a red gingham tablecloth holds three typed paper slips reading SATURDAY, AUGUST 29 · 5 PM with 5 PM circled in red marker, ELM STREET COMMUNITY GARDEN, and FREE · ALL NEIGHBOURS WELCOME, plus a taped notebook note that says bring a dish, take a zucchini!
-project: collage-zucchini-potluck-flier.lopsy
+project: tutorials/collage-zucchini-potluck-flier/ca89612f0fcd/collage-zucchini-potluck-flier.lopsy
 ---
 
 Every August, someone on the street has more zucchini than they know what

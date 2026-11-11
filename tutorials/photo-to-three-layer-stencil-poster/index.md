@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Lynx Xing poster open. A cream, teal and black stencil of a lynx's head breaks out of the top of a yellow diamond road sign, above a LYNX XING plaque on a post, all sprayed on a grey concrete wall. The Layers panel shows the Grit layer above the Lynx and Sign groups.
 finished: finished-lynx-xing.webp
 finishedAlt: The finished Lynx Xing poster. On a grey board-formed concrete wall with seams, form-tie holes and water stains, a yellow diamond warning sign with a black border holds a three-colour spray stencil of a lynx's face in cream, teal and black. Its tufted ears break out past the top edges of the sign, and black paint drips run down from its chest. Below, a yellow plaque on a grey post reads LYNX XING in black stencil capitals. Red stencilled words THEY'RE BACK. with long drips sit in the top-left corner, a trail of four black paw prints walks down from the top-right corner towards the lynx, the footer reads WILDLIFE CORRIDOR 7 / SLOW DOWN AFTER DUSK, and a red hand-written LX tag signs the bottom-right corner. Yellow overspray speckles and haze surround the sign.
-project: photo-to-three-layer-stencil-poster.lopsy
+project: tutorials/photo-to-three-layer-stencil-poster/ec0b5ca1eb26/photo-to-three-layer-stencil-poster.lopsy
 ---
 
 Multi-layer stencils are how street artists like Shepard Fairey turn a photograph into a few flat colours they can spray fast. Each colour is its own cut-out sheet, called a *plate*. You spray the lightest plate first and the darkest last, and the slightly-off alignment between them is part of the charm.

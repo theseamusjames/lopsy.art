@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Oolong Pavilion board. Three phones in gold frames hang from pink ribbons on a pale blue damask wall, beside an oval script title and a brown and gold Sèvres teapot on a gilt bracket
 finished: finished-oolong-pavilion.webp
 finishedAlt: The finished Oolong Pavilion app mockup. On a pale blue damask wall inside a thin gold rail, three phones hang from pink ribbons and bows like framed miniatures, each with a gold shell crest and beaded frame. The rose phone says Bonjour, Madame, with an oval picture of a green and gold tea pavilion and a card for Iron Goddess tea. The cream phone, The Steeping, shows a porcelain cup inside a gold dial, 0:45 in large numerals and six numbered infusions. The yellow phone, The Cellar, lists four oolongs with bowls of tea. On the left, an oval cream cartouche reads Oolong Pavilion in copperplate script above a brown and gold teapot on a gilt bracket, with pink roses, and a small plaque reads Now steeping on the App Store. Script captions sit under each phone
-project: rococo-tea-app-mockup.lopsy
+project: tutorials/rococo-tea-app-mockup/b6dd69c319a4/rococo-tea-app-mockup.lopsy
 ---
 
 Rococo is the French decorative style of the mid 1700s: pale rooms, gold scrollwork, shells, ribbons and porcelain. The word comes from *rocaille*, the shell and pebble work used to line garden grottoes. Its ornament is built from C and S curves that swell and curl, and it's happiest when things don't quite match, so the left side of a shell is rarely the same as the right. Rococo's best colours came from the Sèvres porcelain factory: a turquoise called *bleu céleste*, a pink later named *rose Pompadour*, and a yellow called *jonquille*.

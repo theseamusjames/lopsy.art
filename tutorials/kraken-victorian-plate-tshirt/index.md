@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished KRAKEN plate. A teal kraken with orange eyes sits on a cream medallion of fine rays, ringed by four small inset figures on an indigo background, with the title KRAKEN in large cream capitals below
 finished: finished-kraken-plate.webp
 finishedAlt: The finished KRAKEN T-shirt plate on an indigo garment colour. A teal seven-armed kraken with cat-slit orange eyes and cream suckers sits on a cream medallion covered in fine sepia rays. Four cream inset circles in the corners show a beak, a lens, a sucker and an ink sac, joined to the animal by red leader lines. A tilted red Space Mono stamp reads SPECIMEN Nº 8 above the medallion. Below it, KRAKEN is set in huge cream Cinzel capitals, then an ochre italic Latin name and a small tracked caption
-project: kraken-victorian-plate-tshirt.lopsy
+project: tutorials/kraken-victorian-plate-tshirt/2f88d7fa311f/kraken-victorian-plate-tshirt.lopsy
 ---
 
 Victorian naturalists drew every new creature as a **plate**: one big,
