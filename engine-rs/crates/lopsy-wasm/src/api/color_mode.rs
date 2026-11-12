@@ -35,11 +35,7 @@ pub fn convert_layer_to_grayscale(engine: &mut Engine, layer_id: &str) {
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.color_convert,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_colorMatrix") {
-                gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, &GRAYSCALE_MATRIX);
-            }
-        },
+        |pass| pass.mat3("u_colorMatrix", &GRAYSCALE_MATRIX),
     );
 }
 

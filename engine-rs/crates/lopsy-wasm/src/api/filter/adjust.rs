@@ -15,10 +15,12 @@ pub fn filter_brightness_contrast(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.adjustments,
-        |gl, shader| {
-            crate::compositor::set_standalone_adjustment_uniforms(
-                gl, shader, brightness / 100.0, contrast, doc_color_mode,
-            );
+        |pass| {
+            pass.raw_uniforms(|gl, shader| {
+                crate::compositor::set_standalone_adjustment_uniforms(
+                    gl, shader, brightness / 100.0, contrast, doc_color_mode,
+                );
+            })
         },
     );
 }
@@ -32,16 +34,11 @@ pub fn filter_hue_saturation(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.hue_sat,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_hue") {
-                gl.uniform1f(Some(&loc), hue);
-            }
-            if let Some(loc) = shader.location(gl, "u_saturation") {
-                gl.uniform1f(Some(&loc), saturation);
-            }
-            if let Some(loc) = shader.location(gl, "u_lightness") {
-                gl.uniform1f(Some(&loc), lightness);
-            }
+        |pass| {
+            pass
+                .f32("u_hue", hue)
+                .f32("u_saturation", saturation)
+                .f32("u_lightness", lightness)
         },
     );
 }
@@ -52,7 +49,7 @@ pub fn filter_invert(engine: &mut Engine, layer_id: &str) {
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.invert,
-        |_gl, _shader| {},
+        |pass| pass,
     );
 }
 
@@ -63,16 +60,11 @@ pub fn filter_desaturate(engine: &mut Engine, layer_id: &str) {
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.hue_sat,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_hue") {
-                gl.uniform1f(Some(&loc), 0.0);
-            }
-            if let Some(loc) = shader.location(gl, "u_saturation") {
-                gl.uniform1f(Some(&loc), -100.0);
-            }
-            if let Some(loc) = shader.location(gl, "u_lightness") {
-                gl.uniform1f(Some(&loc), 0.0);
-            }
+        |pass| {
+            pass
+                .f32("u_hue", 0.0)
+                .f32("u_saturation", -100.0)
+                .f32("u_lightness", 0.0)
         },
     );
 }
@@ -83,10 +75,9 @@ pub fn filter_posterize(engine: &mut Engine, layer_id: &str, levels: u32) {
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.posterize,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_levels") {
-                gl.uniform1f(Some(&loc), levels as f32);
-            }
+        |pass| {
+            pass
+                .f32("u_levels", levels as f32)
         },
     );
 }
@@ -97,10 +88,9 @@ pub fn filter_threshold(engine: &mut Engine, layer_id: &str, level: u32) {
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.threshold,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_level") {
-                gl.uniform1f(Some(&loc), level as f32 / 255.0);
-            }
+        |pass| {
+            pass
+                .f32("u_level", level as f32 / 255.0)
         },
     );
 }
@@ -111,10 +101,9 @@ pub fn filter_solarize(engine: &mut Engine, layer_id: &str, threshold: u32) {
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.solarize,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_threshold") {
-                gl.uniform1f(Some(&loc), threshold as f32 / 255.0);
-            }
+        |pass| {
+            pass
+                .f32("u_threshold", threshold as f32 / 255.0)
         },
     );
 }

@@ -1,10 +1,10 @@
 //! Distortion filters: mesh warp, liquify warp.
 
 use wasm_bindgen::prelude::*;
-use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
 use crate::filter_gpu;
+use crate::gpu::pass::{Blend, Target};
 
 #[wasm_bindgen(js_name = "filterMeshWarp")]
 pub fn filter_mesh_warp(
@@ -22,20 +22,18 @@ pub fn filter_mesh_warp(
         return;
     }
 
-    let gl = &engine.inner.gl;
-
-    let grid_handle = match engine.inner.texture_pool.acquire(gl, grid_width, grid_height) {
+    let grid_handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, grid_width, grid_height) {
         Ok(h) => h,
         Err(_) => return,
     };
     let _ = engine.inner.texture_pool.upload_rgba(
-        gl, grid_handle, 0, 0, grid_width, grid_height, grid_data,
+        &engine.inner.gl, grid_handle, 0, 0, grid_width, grid_height, grid_data,
     );
 
     // The shader reads grid points with texelFetch and interpolates the
     // decoded 16-bit offsets itself: hardware filtering would blend the high
     // and low bytes separately at the texture's own precision (#1160).
-    let grid_tex_obj = engine.inner.texture_pool.get(grid_handle).cloned();
+    let is_grid_live = engine.inner.texture_pool.get(grid_handle).is_some();
 
     let gw = grid_width as f32;
     let gh = grid_height as f32;
@@ -44,23 +42,16 @@ pub fn filter_mesh_warp(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.mesh_warp,
-        |gl, shader| {
-            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-            if let Some(t) = &grid_tex_obj {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-            }
-            if let Some(loc) = shader.location(gl, "u_grid") {
-                gl.uniform1i(Some(&loc), 1);
-            }
-            if let Some(loc) = shader.location(gl, "u_gridSize") {
-                gl.uniform2f(Some(&loc), gw, gh);
-            }
-            if let Some(loc) = shader.location(gl, "u_boundsMin") {
-                gl.uniform2f(Some(&loc), bounds_min_u, bounds_min_v);
-            }
-            if let Some(loc) = shader.location(gl, "u_boundsMax") {
-                gl.uniform2f(Some(&loc), bounds_max_u, bounds_max_v);
-            }
+        |pass| {
+            let pass = if is_grid_live {
+                pass.texture("u_grid", grid_handle)
+            } else {
+                pass.i32("u_grid", 1)
+            };
+            pass
+                .vec2("u_gridSize", gw, gh)
+                .vec2("u_boundsMin", bounds_min_u, bounds_min_v)
+                .vec2("u_boundsMax", bounds_max_u, bounds_max_v)
         },
     );
 
@@ -79,42 +70,18 @@ pub fn liquify_init_displacement(
     if data.is_empty() || width == 0 || height == 0 {
         return;
     }
-    let gl = &engine.inner.gl;
-
     if let Some(old) = engine.inner.liquify_disp_texture.take() {
         engine.inner.texture_pool.release(old);
     }
-    let handle = match engine.inner.texture_pool.acquire(gl, width, height) {
+    let handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, width, height) {
         Ok(h) => h,
         Err(_) => return,
     };
-    let _ = engine.inner.texture_pool.upload_rgba(gl, handle, 0, 0, width, height, data);
+    let _ = engine.inner.texture_pool.upload_rgba(&engine.inner.gl, handle, 0, 0, width, height, data);
 
     // NEAREST — displacement is per-pixel.
-    if let Some(tex) = engine.inner.texture_pool.get(handle) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
-        gl.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-            WebGl2RenderingContext::NEAREST as i32,
-        );
-        gl.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-            WebGl2RenderingContext::NEAREST as i32,
-        );
-        gl.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_WRAP_S,
-            WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-        );
-        gl.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_WRAP_T,
-            WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-        );
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    }
+    engine.inner.texture_pool.set_nearest_filter(&engine.inner.gl, handle);
+    engine.inner.texture_pool.set_clamp_wrap(&engine.inner.gl, handle);
     engine.inner.liquify_disp_texture = Some(handle);
 }
 
@@ -126,19 +93,17 @@ pub fn liquify_render(engine: &mut Engine, layer_id: &str, max_disp: f32) {
         Some(h) => h,
         None => return,
     };
-    let preview_tex = match engine.inner.texture_pool.get(preview_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.inner.texture_pool.get(preview_handle).is_none() {
+        return;
+    }
 
     let disp_handle = match engine.inner.liquify_disp_texture {
         Some(h) => h,
         None => return,
     };
-    let disp_tex = match engine.inner.texture_pool.get(disp_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.inner.texture_pool.get(disp_handle).is_none() {
+        return;
+    }
 
     let _ = engine.inner.ensure_layer_full_size(layer_id);
 
@@ -151,43 +116,22 @@ pub fn liquify_render(engine: &mut Engine, layer_id: &str, max_disp: f32) {
         .texture_pool
         .get_size(layer_tex_handle)
         .unwrap_or((1, 1));
-    let layer_tex = match engine.inner.texture_pool.get(layer_tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.inner.texture_pool.get(layer_tex_handle).is_none() {
+        return;
+    }
 
     let texel_w = 1.0 / w as f32;
     let texel_h = 1.0 / h as f32;
 
-    engine.inner.gl.disable(WebGl2RenderingContext::BLEND);
-    engine
-        .inner
-        .render_to_texture(&layer_tex, w as i32, h as i32, |eng| {
-            let gl = &eng.gl;
-            let shader = &eng.shaders.liquify_warp;
-            gl.use_program(Some(&shader.program));
-
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&preview_tex));
-            if let Some(loc) = shader.location(gl, "u_tex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
-
-            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&disp_tex));
-            if let Some(loc) = shader.location(gl, "u_disp") {
-                gl.uniform1i(Some(&loc), 1);
-            }
-
-            if let Some(loc) = shader.location(gl, "u_maxDisp") {
-                gl.uniform1f(Some(&loc), max_disp);
-            }
-            if let Some(loc) = shader.location(gl, "u_texelSize") {
-                gl.uniform2f(Some(&loc), texel_w, texel_h);
-            }
-
-            eng.draw_fullscreen_quad();
-        });
+    let inner = &engine.inner;
+    inner.pass(&inner.shaders.liquify_warp)
+        .texture("u_tex", preview_handle)
+        .texture("u_disp", disp_handle)
+        .f32("u_maxDisp", max_disp)
+        .vec2("u_texelSize", texel_w, texel_h)
+        .blend(Blend::Off)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(layer_tex_handle));
 
     engine.inner.mark_layer_dirty(layer_id);
 }
@@ -218,47 +162,33 @@ pub fn liquify_apply_dab_gpu(
     let (w, h) = engine.inner.texture_pool.get_size(disp_handle).unwrap_or((0, 0));
     if w == 0 || h == 0 { return; }
 
-    let disp_tex = match engine.inner.texture_pool.get(disp_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.inner.texture_pool.get(disp_handle).is_none() {
+        return;
+    }
 
     let scratch = match engine.inner.texture_pool.acquire(&engine.inner.gl, w, h) {
         Ok(s) => s,
         Err(_) => return,
     };
-    let scratch_gl = match engine.inner.texture_pool.get(scratch) {
-        Some(t) => t.clone(),
-        None => { engine.inner.texture_pool.release(scratch); return; }
-    };
-
-    let scratch_fbo = engine.inner.scratch_fbo_a;
-    engine.inner.fbo_pool.attach_texture(&engine.inner.gl, scratch_fbo, &scratch_gl);
-    engine.inner.fbo_pool.bind(&engine.inner.gl, scratch_fbo);
-    engine.inner.gl.viewport(0, 0, w as i32, h as i32);
-
-    {
-        let gl = &engine.inner.gl;
-        let shader = &engine.inner.shaders.liquify_dab;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&disp_tex));
-        if let Some(loc) = shader.location(gl, "u_disp") { gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(gl, "u_center") { gl.uniform2f(Some(&loc), cx, cy); }
-        if let Some(loc) = shader.location(gl, "u_radius") { gl.uniform1f(Some(&loc), radius); }
-        if let Some(loc) = shader.location(gl, "u_pressure") { gl.uniform1f(Some(&loc), pressure); }
-        if let Some(loc) = shader.location(gl, "u_drag") { gl.uniform2f(Some(&loc), drag_dx, drag_dy); }
-        if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), mode as i32); }
-        if let Some(loc) = shader.location(gl, "u_size") { gl.uniform2f(Some(&loc), w as f32, h as f32); }
+    if engine.inner.texture_pool.get(scratch).is_none() {
+        engine.inner.texture_pool.release(scratch);
+        return;
     }
-    engine.inner.draw_fullscreen_quad();
-    engine.inner.fbo_pool.unbind(&engine.inner.gl);
+
+    // Read the displacement field, write the dabbed field into a fresh
+    // texture, and make that the new field.
+    let inner = &engine.inner;
+    inner.pass(&inner.shaders.liquify_dab)
+        .texture("u_disp", disp_handle)
+        .vec2("u_center", cx, cy)
+        .f32("u_radius", radius)
+        .f32("u_pressure", pressure)
+        .vec2("u_drag", drag_dx, drag_dy)
+        .i32("u_mode", mode as i32)
+        .vec2("u_size", w as f32, h as f32)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(scratch));
 
     engine.inner.texture_pool.release(disp_handle);
     engine.inner.liquify_disp_texture = Some(scratch);
-
-    if let Some(orig_scratch) = engine.inner.texture_pool.get(engine.inner.scratch_texture_a) {
-        let orig = orig_scratch.clone();
-        engine.inner.fbo_pool.attach_texture(&engine.inner.gl, scratch_fbo, &orig);
-    }
 }

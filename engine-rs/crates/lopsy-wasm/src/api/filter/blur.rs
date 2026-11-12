@@ -1,10 +1,11 @@
 //! Blur filters: gaussian, box, unsharp mask, motion, radial.
 
 use wasm_bindgen::prelude::*;
-use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
 use crate::filter_gpu;
+use crate::gpu::pass::Target;
+use crate::gpu::texture_pool::TextureHandle;
 
 #[wasm_bindgen(js_name = "filterGaussianBlur")]
 pub fn filter_gaussian_blur(engine: &mut Engine, layer_id: &str, radius: u32) {
@@ -24,16 +25,12 @@ pub fn filter_gaussian_blur(engine: &mut Engine, layer_id: &str, radius: u32) {
             &mut engine.inner,
             layer_id,
             |e| &e.shaders.gaussian_blur,
-            |gl, shader| {
-                if let Some(loc) = shader.location(gl, "u_radius") {
-                    gl.uniform1i(Some(&loc), radius as i32);
-                }
+            |pass| {
+                let mut pass = pass.i32("u_radius", radius as i32);
                 for (i, &w) in weights.iter().enumerate() {
-                    let name = format!("u_weights[{i}]");
-                    if let Some(loc) = shader.location(gl, &name) {
-                        gl.uniform1f(Some(&loc), w);
-                    }
+                    pass = pass.f32(&format!("u_weights[{i}]"), w);
                 }
+                pass
             },
         );
     } else {
@@ -46,13 +43,10 @@ pub fn filter_gaussian_blur(engine: &mut Engine, layer_id: &str, radius: u32) {
                 &mut engine.inner,
                 layer_id,
                 |e| &e.shaders.box_blur,
-                |gl, shader| {
-                    if let Some(loc) = shader.location(gl, "u_radius") {
-                        gl.uniform1i(Some(&loc), sample_radius as i32);
-                    }
-                    if let Some(loc) = shader.location(gl, "u_step") {
-                        gl.uniform1i(Some(&loc), step as i32);
-                    }
+                |pass| {
+                    pass
+                        .i32("u_radius", sample_radius as i32)
+                        .i32("u_step", step as i32)
                 },
             );
         }
@@ -66,10 +60,9 @@ pub fn filter_box_blur(engine: &mut Engine, layer_id: &str, radius: u32) {
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.box_blur,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_radius") {
-                gl.uniform1i(Some(&loc), radius as i32);
-            }
+        |pass| {
+            pass
+                .i32("u_radius", radius as i32)
         },
     );
 }
@@ -89,80 +82,39 @@ pub fn filter_unsharp_mask(
 
     // First do a gaussian blur pass (layer -> scratch B via scratch A)
     let kernel = lopsy_core::filters::blur::gaussian_kernel(radius);
-    let gl = &engine.inner.gl;
-    let tex_handle = match engine.inner.layer_textures.get(layer_id) {
+    let inner = &engine.inner;
+    let tex_handle = match inner.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
     };
-    let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.inner.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    let (w, h) = inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    if inner.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
-    let blur_shader = &engine.inner.shaders.gaussian_blur;
-    gl.use_program(Some(&blur_shader.program));
-
-    // Horizontal pass: layer -> scratch A
-    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = blur_shader.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    if let Some(loc) = blur_shader.location(gl, "u_direction") {
-        gl.uniform2f(Some(&loc), 1.0, 0.0);
-    }
-    if let Some(loc) = blur_shader.location(gl, "u_radius") {
-        gl.uniform1i(Some(&loc), radius as i32);
-    }
-    for (i, &wt) in kernel.iter().enumerate().take(64) {
-        let name = format!("u_weights[{i}]");
-        if let Some(loc) = blur_shader.location(gl, &name) {
-            gl.uniform1f(Some(&loc), wt);
+    let blur_pass = |src: TextureHandle, direction: (f32, f32)| {
+        let mut pass = inner.pass(&inner.shaders.gaussian_blur)
+            .texture("u_tex", src)
+            .vec2("u_direction", direction.0, direction.1)
+            .i32("u_radius", radius as i32);
+        for (i, &wt) in kernel.iter().enumerate().take(64) {
+            pass = pass.f32(&format!("u_weights[{i}]"), wt);
         }
-    }
-    engine.inner.draw_fullscreen_quad();
-
-    let gl = &engine.inner.gl;
-    let blur_shader = &engine.inner.shaders.gaussian_blur;
+        pass.viewport(0, 0, w as i32, h as i32)
+    };
+    // Horizontal pass: layer -> scratch A
+    blur_pass(tex_handle, (1.0, 0.0)).draw(Target::Framebuffer(inner.scratch_fbo_a));
     // Vertical pass: scratch A -> scratch B
-    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_b);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch_a) = engine.inner.texture_pool.get(engine.inner.scratch_texture_a) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_a));
-    }
-    if let Some(loc) = blur_shader.location(gl, "u_direction") {
-        gl.uniform2f(Some(&loc), 0.0, 1.0);
-    }
-    engine.inner.draw_fullscreen_quad();
+    blur_pass(inner.scratch_texture_a, (0.0, 1.0)).draw(Target::Framebuffer(inner.scratch_fbo_b));
 
-    let gl = &engine.inner.gl;
     // Now apply sharpen shader: original (layer) + blurred (scratch B) -> scratch A
-    let sharpen_shader = &engine.inner.shaders.sharpen;
-    gl.use_program(Some(&sharpen_shader.program));
-    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_a);
-
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = sharpen_shader.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    if let Some(scratch_b) = engine.inner.texture_pool.get(engine.inner.scratch_texture_b) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_b));
-    }
-    if let Some(loc) = sharpen_shader.location(gl, "u_blurredTex") {
-        gl.uniform1i(Some(&loc), 1);
-    }
-    if let Some(loc) = sharpen_shader.location(gl, "u_amount") {
-        gl.uniform1f(Some(&loc), amount);
-    }
-    if let Some(loc) = sharpen_shader.location(gl, "u_threshold") {
-        gl.uniform1f(Some(&loc), threshold as f32);
-    }
-    engine.inner.draw_fullscreen_quad();
+    inner.pass(&inner.shaders.sharpen)
+        .texture("u_tex", tex_handle)
+        .texture("u_blurredTex", inner.scratch_texture_b)
+        .f32("u_amount", amount)
+        .f32("u_threshold", threshold as f32)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(inner.scratch_fbo_a));
 
     // Sharpened result is in scratch A; confine it to the selection (#1176).
     filter_gpu::commit_scratch_a_to_layer(&mut engine.inner, layer_id);
@@ -175,13 +127,10 @@ pub fn filter_motion_blur(engine: &mut Engine, layer_id: &str, angle: f32, dista
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.motion_blur,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_angle") {
-                gl.uniform1f(Some(&loc), angle);
-            }
-            if let Some(loc) = shader.location(gl, "u_distance") {
-                gl.uniform1i(Some(&loc), distance as i32);
-            }
+        |pass| {
+            pass
+                .f32("u_angle", angle)
+                .i32("u_distance", distance as i32)
         },
     );
 }
@@ -203,19 +152,12 @@ pub fn filter_tilt_shift_blur(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.tilt_shift_blur,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_focusPosition") {
-                gl.uniform1f(Some(&loc), focus_position);
-            }
-            if let Some(loc) = shader.location(gl, "u_focusWidth") {
-                gl.uniform1f(Some(&loc), focus_width);
-            }
-            if let Some(loc) = shader.location(gl, "u_blurRadius") {
-                gl.uniform1f(Some(&loc), blur_radius);
-            }
-            if let Some(loc) = shader.location(gl, "u_angle") {
-                gl.uniform1f(Some(&loc), angle);
-            }
+        |pass| {
+            pass
+                .f32("u_focusPosition", focus_position)
+                .f32("u_focusWidth", focus_width)
+                .f32("u_blurRadius", blur_radius)
+                .f32("u_angle", angle)
         },
     );
 }
@@ -236,13 +178,10 @@ pub fn filter_surface_blur(engine: &mut Engine, layer_id: &str, radius: u32, thr
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.surface_blur,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_radius") {
-                gl.uniform1i(Some(&loc), radius as i32);
-            }
-            if let Some(loc) = shader.location(gl, "u_threshold") {
-                gl.uniform1f(Some(&loc), threshold);
-            }
+        |pass| {
+            pass
+                .i32("u_radius", radius as i32)
+                .f32("u_threshold", threshold)
         },
     );
 }
@@ -257,13 +196,10 @@ pub fn filter_radial_blur(engine: &mut Engine, layer_id: &str, amount: u32) {
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.radial_blur,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_center") {
-                gl.uniform2f(Some(&loc), cu, cv);
-            }
-            if let Some(loc) = shader.location(gl, "u_amount") {
-                gl.uniform1i(Some(&loc), amount as i32);
-            }
+        |pass| {
+            pass
+                .vec2("u_center", cu, cv)
+                .i32("u_amount", amount as i32)
         },
     );
 }
