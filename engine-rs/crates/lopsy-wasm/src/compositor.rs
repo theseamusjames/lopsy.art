@@ -1154,11 +1154,7 @@ fn render_stroke_silhouette(engine: &mut EngineInner, src: EffectSource, stroke:
         engine.gl.active_texture(unit);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
     }
-    let result = if reach <= 10.0 {
-        silhouette_by_distance(engine, &frame, stroke, out).then_some(out)
-    } else {
-        silhouette_by_band(engine, &frame, stroke, reach, out)
-    };
+    let result = silhouette_by_band(engine, &frame, stroke, reach, out);
     for unit in [WebGl2RenderingContext::TEXTURE1, WebGl2RenderingContext::TEXTURE0] {
         engine.gl.active_texture(unit);
         engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
@@ -1185,38 +1181,7 @@ struct SilhouetteFrame<'a> {
     h: u32,
 }
 
-/// Single-pass silhouette for narrow strokes, via `stroke_edt.glsl`.
-fn silhouette_by_distance(engine: &mut EngineInner, frame: &SilhouetteFrame, stroke: &StrokeDesc, out: TextureHandle) -> bool {
-    let Some(out_gl) = engine.texture_pool.get(out).cloned() else { return false };
-    let position = match stroke.position {
-        lopsy_core::layer::StrokePosition::Inside => 1,
-        lopsy_core::layer::StrokePosition::Outside => 0,
-        lopsy_core::layer::StrokePosition::Center => 2,
-    };
-    engine.render_to_texture(&out_gl, frame.w as i32, frame.h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.stroke_edt;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(frame.src));
-        if let Some(loc) = shader.location(gl, "u_srcTex") { gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(gl, "u_strokeColor") { gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
-        if let Some(loc) = shader.location(gl, "u_width") { gl.uniform1f(Some(&loc), stroke.width); }
-        if let Some(loc) = shader.location(gl, "u_position") { gl.uniform1i(Some(&loc), position); }
-        if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), stroke.opacity); }
-        if let Some(loc) = shader.location(gl, "u_texelSize") { gl.uniform2f(Some(&loc), 1.0 / frame.src_w as f32, 1.0 / frame.src_h as f32); }
-        if let Some(loc) = shader.location(gl, "u_srcOffset") { gl.uniform2f(Some(&loc), frame.pad_x, frame.pad_y); }
-        if let Some(loc) = shader.location(gl, "u_srcSize") { gl.uniform2f(Some(&loc), frame.src_w as f32, frame.src_h as f32); }
-        if let Some(loc) = shader.location(gl, "u_docSize") { gl.uniform2f(Some(&loc), frame.w as f32, frame.h as f32); }
-        if let Some(loc) = shader.location(gl, "u_silhouette") { gl.uniform1i(Some(&loc), 1); }
-        // Coverage knockout only scales the drawn stroke; the silhouette is the plain union.
-        if let Some(loc) = shader.location(gl, "u_layerOpacity") { gl.uniform1f(Some(&loc), 1.0); }
-        engine.draw_fullscreen_quad();
-    });
-    true
-}
-
-/// Silhouette for wide strokes: extract alpha, the two-pass Euclidean band
+/// Stroke silhouette: extract alpha, the two-pass Euclidean band
 /// (`separable_edt.glsl`), then `stroke_apply.glsl` folds the ring into the
 /// layer's alpha. Ping-pongs
 /// between `out` and one more pooled texture; returns whichever holds the
@@ -1543,8 +1508,6 @@ fn is_behind_stroke(stroke: &StrokeDesc) -> bool {
 }
 
 fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, stroke: &StrokeDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, out: &mut EffectOut) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
     let position = match stroke.position {
         lopsy_core::layer::StrokePosition::Inside => 1,
         lopsy_core::layer::StrokePosition::Outside => 0,
@@ -1558,59 +1521,37 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         None => return,
     };
 
-    if half_w <= 10.0 {
-        // Small width: use brute-force EDT shader (single pass, fast enough)
-        engine.gl.use_program(Some(&engine.shaders.stroke_edt.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        let shader = &engine.shaders.stroke_edt;
-        if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_strokeColor") { engine.gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
-        if let Some(loc) = shader.location(&engine.gl, "u_width") { engine.gl.uniform1f(Some(&loc), stroke.width); }
-        if let Some(loc) = shader.location(&engine.gl, "u_position") { engine.gl.uniform1i(Some(&loc), position); }
-        if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), stroke.opacity); }
-        if let Some(loc) = shader.location(&engine.gl, "u_layerOpacity") { engine.gl.uniform1f(Some(&loc), layer_opacity); }
-        if let Some(loc) = shader.location(&engine.gl, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
-        if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-        if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
-        if let Some(loc) = shader.location(&engine.gl, "u_silhouette") { engine.gl.uniform1i(Some(&loc), 0); }
+    // Every width goes through the two-pass Euclidean band, O(r) per pixel
+    // per pass. Narrow strokes used a single-pass brute-force search
+    // (stroke_edt.glsl) that drew nothing on NVIDIA under ANGLE/Vulkan
+    // (#1640); the band gives the same pixels (lopsy-core stroke_band tests).
+    // For center strokes, handle outside and inside halves separately.
+    // Outside: band around the opaque pixels → stroke where in band && !original
+    // Inside: band around the transparent pixels → stroke where in band && original
 
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-        engine.draw_fullscreen_quad();
-    } else {
-        // Large width: a two-pass Euclidean band, O(r) per pixel per pass.
-        // For center strokes, handle outside and inside halves separately.
-        // Outside: band around the opaque pixels → stroke where in band && !original
-        // Inside: band around the transparent pixels → stroke where in band && original
+    let do_outside = position == 0 || position == 2;
+    let do_inside = position == 1 || position == 2;
 
-        let do_outside = position == 0 || position == 2;
-        let do_inside = position == 1 || position == 2;
+    // Extract alpha → scratch_b (or inverted alpha for inside-only)
+    render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, do_inside && !do_outside);
 
-        // Extract alpha → scratch_b (or inverted alpha for inside-only)
-        render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, do_inside && !do_outside);
+    // scratch_b → scratch_a → scratch_b. For inverted alpha (inner
+    // stroke), texels beyond the edge are "outside the layer": seeds.
+    render_stroke_band(engine, half_w, do_inside && !do_outside);
 
-        // scratch_b → scratch_a → scratch_b. For inverted alpha (inner
-        // stroke), texels beyond the edge are "outside the layer": seeds.
-        render_stroke_band(engine, half_w, do_inside && !do_outside);
+    // Apply stroke: read band (scratch_b) + original → scratch_a
+    render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y,
+        if do_inside && !do_outside { 1 } else { 0 }, is_behind_stroke(stroke), layer_opacity);
 
-        // Apply stroke: read band (scratch_b) + original → scratch_a
-        render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y,
-            if do_inside && !do_outside { 1 } else { 0 }, is_behind_stroke(stroke), layer_opacity);
+    // For center stroke: also need the inside half
+    if do_outside && do_inside {
+        // First half (outside) is in scratch_a, blend it onto composite
+        emit_effect(engine, out, || fx_extent::stroke_extent(src_rect, stroke));
 
-        // For center stroke: also need the inside half
-        if do_outside && do_inside {
-            // First half (outside) is in scratch_a, blend it onto composite
-            emit_effect(engine, out, || fx_extent::stroke_extent(src_rect, stroke));
-
-            // Now do inside half: extract inverted alpha, band, apply
-            render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, true);
-            render_stroke_band(engine, half_w, true);
-            render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y, 1, false, layer_opacity);
-        }
+        // Now do inside half: extract inverted alpha, band, apply
+        render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, true);
+        render_stroke_band(engine, half_w, true);
+        render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y, 1, false, layer_opacity);
     }
 
     emit_effect(engine, out, || fx_extent::stroke_extent(src_rect, stroke));

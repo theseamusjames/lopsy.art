@@ -43,7 +43,7 @@ void main() {
     float coverage = 1.0;
     if (u_knockout == 1) {
         // Behind the layer: also under its partly covered edge pixels, and
-        // knocked out by its coverage (see stroke_edt.glsl).
+        // knocked out by its coverage, as the hard drop shadow is.
         bool isEdge = false;
         if (isOpaque && origA < 0.999) {
             vec2 texel = 1.0 / u_origSize;
@@ -61,7 +61,7 @@ void main() {
     // ring are seeds of the inverted band, so they are in it but not opaque.
     // Drawn over the layer, they would keep the fill colour as a fringe
     // outside the ring; they take the stroke, ramped by their coverage so
-    // the ring's outer edge stays anti-aliased (see stroke_edt.glsl).
+    // the ring's outer edge stays anti-aliased.
     bool isFaintEdge = false;
     if (u_position == 1 && u_knockout == 0 && !isOpaque && origA > 0.0) {
         vec2 texel = 1.0 / u_origSize;

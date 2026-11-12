@@ -118,7 +118,7 @@ pub fn stroke_band(
 mod tests {
     use super::*;
 
-    /// The narrow-stroke path's per-pixel search, as `stroke_edt.glsl` runs it.
+    /// A brute-force per-pixel disc search: the reference the band must match.
     fn brute_force(
         seeds: &[bool],
         w: usize,
