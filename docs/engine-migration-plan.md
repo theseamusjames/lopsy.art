@@ -11,8 +11,8 @@ Status: in progress. `scripts/check-gl-debt.mjs` holds the live counts.
 
 | Phase | State |
 |---|---|
-| 0 | Done, in review: CI guards (#1643), verification tooling (#1644). Spikes S1 and S2 are under way; S3 not run |
-| 1 | In progress: 766 of 2,481 raw GL references removed across #1645, #1646, #1648, #1649 and #1650. Filters, layers and the compositor remain |
+| 0 | Done, in review: CI guards (#1643), verification tooling (#1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
+| 1 | In progress: 1,127 of 2,481 raw GL references removed across #1645, #1646, #1648, #1649, #1650 and #1651. The layers cluster and the compositor remain |
 | 2–7 | Not started |
 
 ---
@@ -350,6 +350,62 @@ question the later phases depend on:
 | S2 | Can naga turn WGSL into GLSL ES 3.00 at build time for `blend`, `adjustments` and `stroke_edt`, with output the WebGL backend can bind? | Phase 5 keeps GLSL and WGSL side by side, checked against each other by the composition check |
 | S3 | Does a native wgpu surface on Metal give display-P3 and extended range? | Reach past wgpu to the `CAMetalLayer` for presentation only |
 
+**Spike results.** S1 and S2 were run on the local branch
+`theseamusjames/spike-wgpu-naga` (code under `spikes/`, not pushed,
+never to be merged). S3 has not been run.
+
+*S1: WebGPU-only wgpu is small; wgpu's own WebGL backend is not.*
+Built with the engine's release profile and wasm-opt flags, wgpu 30.0.1:
+
+| Build | wasm raw | wasm gzip | Against the engine's wasm |
+|---|---|---|---|
+| wgpu, WebGPU only | +112 to +133 KB | +44 to +51 KB | about +3% |
+| wgpu, WebGPU and its WebGL backend | +3.2 MB | +1.06 to +1.09 MB | about +74% raw, +58% gzip |
+
+The range is a minimal renderer against one that also exercises
+uploads, a uniform buffer, blending, scissor, copies and readback. This
+confirms the choice in section 2: keep the hand-written WebGL backend as
+the fallback and ship wgpu with only WebGPU enabled. A build with both
+wgpu backends does pick WebGPU or WebGL at runtime, but at that size.
+
+*S2: yes, with conditions.* naga 30.0.1 emitted valid `#version 300 es`
+fragment GLSL for `blit`, `blit_resample`, `gaussian_blur`, `stroke_edt`
+and all 16 modes of `blend`. Compiled in WebGL2 against the existing
+vertex shader, the generated shaders rendered bit-identically to the
+hand-written ones over 82 cases, in RGBA8 and RGBA16F, on SwiftShader
+and on an Apple M4 Max. Conditions and findings:
+
+- The build step must rename naga's varying to `v_uv` (GLSL ES 3.00
+  links varyings by name) and can rename samplers and the output the
+  same way. The existing vertex shader then works unchanged.
+- Uniforms arrive as one std140 block per shader. naga's struct offsets
+  matched what GL reported for every member.
+- `BLEND_MODE` variants must be selected by text preprocessing before
+  naga, as planned; a WGSL `const` does not prune the dead branches.
+- WGSL constructs to avoid: `array<f32, N>` in a uniform struct (pack as
+  `array<vec4<f32>, N/4>`), swizzle assignment, and one texture used
+  with two samplers.
+- **Passing naga does not prove a shader loads on WebGPU.** A
+  `textureSample` after a varying-dependent early return is accepted by
+  naga and rejected by Chromium's WebGPU compiler; `blend` does this and
+  needs `textureSampleLevel`. Phase 5 therefore also validates each WGSL
+  file in headless Chromium's WebGPU, which runs on SwiftShader.
+- Size: generated GLSL is larger for small shaders and smaller for
+  `blend` per variant, but 16 separate blend variants add about 133 KB
+  of raw wasm (about 0.6 KB gzipped). The bundle budget will need
+  raising for that, on purpose.
+- naga's `var<immediate>` comes out as a plain uniform struct, not a
+  block, so the per-dab shaders could keep individual uniform calls from
+  the same WGSL. Translated only, not rendered.
+
+Not covered by the spike: `filters/adjustments.glsl` and the brush dab
+header, body and footer assembly were not ported; shader compile time of
+the generated GLSL was not measured; no GPU other than Apple Metal.
+
+*A dependency to sequence.* wgpu 30.0.1 needs wasm-bindgen 0.2.127 or
+later. The engine locks 0.2.114, so a wasm-bindgen bump (and the matching
+CLI in wasm-pack) comes before Phase 6.
+
 ### Phase 1 — Pass layer on WebGL
 
 Tolerance: bit-identical.
@@ -404,7 +460,7 @@ once its last caller is gone.
 | #1648 | Brush | `brush_gpu` 187 | In review |
 | #1649 | Gradients and masks | `gradient_gpu` 72, `mask_paint_gpu` 94, `quick_mask_gpu` 99 | In review |
 | #1650 | Shapes, selection, fill | `api/fill` 28, `selection_gpu` 31, `shape_gpu` 36 | In review |
-| – | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 | Not started |
+| #1651 | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 | In review |
 | – | Layers | `thumbnail_gpu` 35, `layer_transform_gpu` 45, `engine.rs` 125, `layer_manager` 446 | Not started |
 | – | Compositor | `effect_cache_gpu` 40, `compositor` 663 | Not started |
 | – | Cap | 1.5 | Not started |
@@ -420,17 +476,14 @@ travel with the layers cluster.
 
 What the remaining clusters need that the pass layer does not have yet:
 
-- **Filters:** an unsigned-integer uniform setter; a pass-based version
-  of `compositor::set_standalone_adjustment_uniforms`, which Brightness /
-  Contrast calls with a raw GL program; and, for an exact A/B, a pinned
-  `Math.random` in the test page, because Add Noise, Clouds, Smoke and
-  Fibers take their seed from it.
 - **Layers:** a target for 8-bit staging textures (thumbnails and the R8
   mask readback render into textures that are not in the pool's format);
   a clear limited to a rect; and `bind_transform_program`, which the
   layer transform and `layer_manager`'s float transform share.
-- **Compositor:** the persistent framebuffers and the screen target,
-  which the pass layer has but nothing uses yet.
+- **Compositor:** a pass-based version of its adjustment uniform
+  helpers. Brightness / Contrast reaches
+  `set_standalone_adjustment_uniforms` through `Pass::raw_uniforms`, a
+  transitional hook that goes away when the compositor moves.
 
 `compositor.rs` splits along its own stages: present, layer blend,
 behind-effects, above-effects, group adjustments, document adjustments,
@@ -654,9 +707,9 @@ Started when a second app is actually being built.
 
 These are assumptions until the Phase 0 spikes run:
 
-- wgpu's bundle size cost in wasm.
-- That naga's GLSL ES output is usable by the existing WebGL backend for
-  every shader.
+- That naga's GLSL ES output works for the shaders the spike did not
+  port: `adjustments` and the brush dab family.
+- Shader compile time of naga-generated GLSL.
 - wgpu's control over surface colour space and extended range on native.
 - That `koi-fish` and `shapes` repeat exactly on a real GPU; they were
   checked on SwiftShader only.
