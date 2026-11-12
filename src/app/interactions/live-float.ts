@@ -10,6 +10,7 @@ import { applyTransformToMask, createTransformState, isShapeChangingTransform } 
 import { cancelPrefloat, commitUnmovedPrefloat } from './prefloat';
 import { commitLayerTransform, forgetLayerTransform } from './layer-transform';
 import { translateSelectionMask } from './quick-mask-move';
+import { endMaskNudge } from './move-layer-masks';
 import type { Rect } from '../../types';
 
 /**
@@ -164,6 +165,9 @@ export function heldNudgeMask(kind: NudgeKind, mask: Uint8ClampedArray): Pending
 
 /** Write a held nudge's translated mask into the store. No-op when the selection was replaced meanwhile. */
 export function flushNudgeMask(): void {
+  // A whole-layer nudge carries layer masks on the GPU; their JS bytes are
+  // refreshed once here, when the hold ends.
+  endMaskNudge();
   const p = pendingNudgeMask;
   pendingNudgeMask = null;
   if (!p) return;
@@ -191,6 +195,7 @@ export function flushNudgeMask(): void {
 /** Forget the Move tool's float without baking it (undo/redo restore the pixels themselves). */
 export function forgetLiveFloat(): void {
   owner = null;
+  endMaskNudge();
   const pending = pendingNudgeMask;
   pendingNudgeMask = null;
   pending?.onEnd?.();

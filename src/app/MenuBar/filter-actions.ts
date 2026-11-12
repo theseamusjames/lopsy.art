@@ -53,6 +53,7 @@ export type FilterDialogId =
   | 'voronoi'
   | 'fibers'
   | 'sunburst'
+  | 'texture'
   | 'color-lut';
 
 export function getFilterDialogConfig(id: FilterDialogId): FilterDefinition | null {

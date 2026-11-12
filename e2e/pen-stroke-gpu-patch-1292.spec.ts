@@ -81,9 +81,8 @@ test.describe('Pen + Enter strokes on the GPU (#1292)', () => {
     await page.screenshot({ path: 'e2e/screenshots/pen-stroke-gpu-patch.png' });
 
     const stroked = await readActiveLayer(page);
-    // On the stroke (both segments' midpoints): solid red. The path raster
-    // is in the canvas colour space, so on a Display P3 canvas #C80000
-    // reads as roughly (186, 38, 23).
+    // On the stroke (both segments' midpoints): solid red. Exact channel
+    // values are pinned by stroke-path-p3-color-1593.spec.ts.
     for (const [x, y] of [[250, 100], [400, 200]] as const) {
       const [r, g, b, a] = pixelAt(stroked, x, y);
       expect(a, `alpha at (${x},${y})`).toBeGreaterThan(240);

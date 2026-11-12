@@ -600,8 +600,9 @@ Settings are keyed by the slider label (`Size`, `Opacity`, `Blur`,
 
 **Filters.** `h.filter('Name...', { 'Slider label': value }, ['Toggle'])`
 applies to the active layer, or to the selection if there is one. Useful for
-illustration: Add Noise (grain), Halftone, Pixelate, Posterize, Threshold,
-Oil Paint, Clouds / Fibers / Smoke / Sunburst (they render texture onto the
+illustration: Add Noise (grain), Texture (grain, rough, canvas, streaks or
+cells, picked with toggles such as `['Canvas', 'Relief']`), Halftone,
+Pixelate, Posterize, Threshold, Oil Paint, Clouds / Fibers / Smoke / Sunburst (they render texture onto the
 layer), Motion Blur, Radial Blur, Lens Distortion, Chromatic Aberration,
 Kaleidoscope, Voronoi. `Invert`, `Desaturate` and `Find Edges` apply
 straight from the menu with no dialog: use `h.menu('Filter', 'Invert')`.
@@ -610,7 +611,9 @@ levels, hue/saturation, colour balance, colour grading, gradient map, and
 more) on a group.
 
 **Masks.** With the layer active, click `Add Mask` in the Layers panel
-toolbar, then its `Edit mask for <name>` thumbnail. With a selection
+toolbar: it enters mask edit mode on the new mask, so the next stroke
+paints the mask. Its `Edit mask for <name>` thumbnail re-enters mask edit
+mode later; clicking the layer row leaves it. With a selection
 active, `Add Mask` reveals only the selection: everything outside it is
 hidden, and the selection is dropped. In mask edit mode the
 Brush and Pencil always **hide** (paint black) and the Eraser always
@@ -746,7 +749,7 @@ CSS class names are hashed in production.
 | Layer row | `[data-layer-id]`, identified by its `button[aria-label="Layer effects for <name>"]`; the active row's class contains `_active_` |
 | Row controls | `Hide layer` / `Show layer`, `Lock layer`, `Opacity N% for <name>` (opens a `<name> opacity` range), `Drag to reorder <name>`, `Edit mask for <name>` |
 | Rename | Double-click the row's name, then fill `input[aria-label="Layer name"]` and press Enter |
-| Effects drawer | `[data-testid="effects-drawer"]`, with checkboxes `Enable <Effect>`, blend mode `[aria-labelledby="blend-mode-label"]`, close button `Close effects` |
+| Effects drawer | `[data-testid="effects-drawer"]`, with checkboxes `Enable <Effect>`, blend mode `[aria-labelledby="blend-mode-label"]`, close button `Close effects` (the same in both the layer-effects and group-adjustments modes; File → New closes the drawer) |
 | Dialogs | `role="dialog"` named after their title: `New Document`, `Gaussian Blur`, `Gradient Editor`, `Feather Selection`... |
 | Fonts | The options-bar `button[aria-haspopup="listbox"]`, then `Search fonts` and a `role="option"` |
 | Text colour | The options-bar `[aria-label="Text color"]` swatch (`data-mixed="true"` and "–" when the text holds several colours) opens `role="dialog"` `Text color picker` |

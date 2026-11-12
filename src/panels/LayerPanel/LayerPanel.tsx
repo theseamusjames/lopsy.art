@@ -105,6 +105,15 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
     }
   }, [showEffectsDrawer, activeLayerId, setShowEffectsDrawer, onSelectLayer]);
 
+  const handleAddMask = useCallback((layerId: string) => {
+    addLayerMask(layerId);
+    // A new mask is added to be painted on; leaving the layer pixels as the
+    // paint target made the next stroke land on the artwork.
+    if (useEditorStore.getState().document.layers.find((l) => l.id === layerId)?.mask) {
+      setMaskEditMode(true);
+    }
+  }, [addLayerMask, setMaskEditMode]);
+
   const handleRemoveMask = useCallback((layerId: string) => {
     removeLayerMask(layerId);
     setMaskEditMode(false);
@@ -217,7 +226,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
         {activeLayerId && (() => {
           const activeLayer = layers.find((l) => l.id === activeLayerId);
           if (!activeLayer || activeLayer.mask) return null;
-          return <IconButton icon={<RectangleCircle size={16} />} label="Add Mask" onClick={() => addLayerMask(activeLayerId)} />;
+          return <IconButton icon={<RectangleCircle size={16} />} label="Add Mask" onClick={() => handleAddMask(activeLayerId)} />;
         })()}
         {activeLayerId && (() => {
           const activeLayer = layers.find((l) => l.id === activeLayerId);

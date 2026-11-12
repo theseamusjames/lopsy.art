@@ -270,6 +270,7 @@ export function LayerRow({
             }}
             role="button"
             tabIndex={0}
+            aria-pressed={isMaskEditActive}
             aria-label={`Edit mask for ${layer.name}`}
             title="Click to edit mask"
           >

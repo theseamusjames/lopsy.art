@@ -121,6 +121,8 @@ test.describe('Mask Sub-Row', () => {
     const layerId = state.document.layers[0]!.id;
 
     await addMaskViaStore(page, layerId);
+    // Add Mask enters mask edit mode; clicking the layer row leaves it.
+    await page.locator(`[data-layer-id="${layerId}"]`).click();
 
     const uiBefore = await getUIState(page);
     expect(uiBefore.maskEditMode).toBe(false);
@@ -242,6 +244,8 @@ test.describe('Add Mask Button', () => {
     const activeLayer = state.document.layers.find(l => l.id === state.document.activeLayerId)!;
     expect(activeLayer.mask).not.toBeNull();
     expect(activeLayer.mask!.enabled).toBe(true);
+    // The new mask is the edit target.
+    expect((await getUIState(page)).maskEditMode).toBe(true);
   });
 
   test('add mask button is hidden when active layer already has a mask', async ({ page }) => {

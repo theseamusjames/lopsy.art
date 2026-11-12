@@ -177,9 +177,9 @@ pub fn extract_channel_pixels(
 
 /// GPU-side downscaled thumbnail for a single channel of a layer texture.
 ///
-/// Renders the channel via the channel_extract shader into a small RGBA8
-/// texture (bilinearly downsampled via LINEAR filtering on the source
-/// layer texture), then reads back only the thumbnail-sized pixels.
+/// Box-downscales the channel on the GPU into a small RGBA8 texture (each
+/// thumbnail pixel averages its whole source footprint), then reads back
+/// only the thumbnail-sized pixels.
 ///
 /// Replaces `readLayerAsImageData` + `extractChannelPixels` in
 /// ChannelsPanel — those combined to move ~67 MB per channel per

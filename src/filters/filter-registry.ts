@@ -28,6 +28,7 @@ import { voronoiFilter } from './voronoi';
 import { surfaceBlur } from './surface-blur';
 import { fibers } from './fibers';
 import { sunburst } from './sunburst';
+import { texture } from './texture';
 
 export type { FilterDefinition };
 
@@ -61,6 +62,7 @@ const allFilters: FilterDefinition[] = [
   surfaceBlur,
   fibers,
   sunburst,
+  texture,
 ];
 
 export const filterRegistry: Record<string, FilterDefinition> = Object.fromEntries(

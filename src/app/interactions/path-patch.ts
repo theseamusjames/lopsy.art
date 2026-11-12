@@ -1,5 +1,6 @@
 import type { Color, Rect } from '../../types';
-import { contextOptions } from '../../engine/color-space';
+import { canvasColorSpace, contextOptions } from '../../engine/color-space';
+import { canvasColorString } from '../../utils/canvas-color';
 import { pathStrokeBounds, tracePath, type PathAnchor } from '../../tools/path/path';
 
 /** A straight-alpha RGBA stroke raster with its top-left at (`x`, `y`) in document space. */
@@ -38,7 +39,7 @@ export function rasterizePathPatch(
   canvas.height = height;
   const ctx = canvas.getContext('2d', contextOptions);
   if (!ctx) return null;
-  ctx.strokeStyle = `rgba(${color.r},${color.g},${color.b},${color.a})`;
+  ctx.strokeStyle = canvasColorString(color, canvasColorSpace);
   ctx.lineWidth = strokeWidth;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';

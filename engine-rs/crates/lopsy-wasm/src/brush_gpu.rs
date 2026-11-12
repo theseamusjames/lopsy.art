@@ -271,6 +271,11 @@ pub fn apply_dab_batch(
     if let Some(loc) = shader.location(gl, "u_angle") {
         gl.uniform1f(Some(&loc), if use_brush_tip { engine.brush_angle } else { 0.0 });
     }
+    if let Some(loc) = shader.location(gl, "u_dabTransform") {
+        let [m00, m01, m10, m11] = engine.brush_dab_transform;
+        // GLSL mat2 is column-major.
+        gl.uniform_matrix2fv_with_f32_array(Some(&loc), false, &[m00, m10, m01, m11]);
+    }
     if let Some(loc) = shader.location(gl, "u_tipAspect") {
         if use_brush_tip && engine.brush_tip_width > 0 && engine.brush_tip_height > 0 {
             let max_dim = engine.brush_tip_width.max(engine.brush_tip_height) as f32;

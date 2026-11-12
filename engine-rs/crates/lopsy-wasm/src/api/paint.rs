@@ -195,6 +195,15 @@ pub fn set_brush_tip_state(engine: &mut Engine, has_tip: bool, angle: f32, is_co
     engine.inner.brush_tip_is_color = is_color;
 }
 
+/// Set the per-dab sample transform used by the brush dab shaders (row-major
+/// `[[m00, m01], [m10, m11]]`). Identity for the primary stroke; a symmetry
+/// copy passes the inverse of its linear map so the tip is reflected or
+/// rotated along with the dab position.
+#[wasm_bindgen(js_name = "setBrushDabTransform")]
+pub fn set_brush_dab_transform(engine: &mut Engine, m00: f32, m01: f32, m10: f32, m11: f32) {
+    engine.inner.brush_dab_transform = [m00, m01, m10, m11];
+}
+
 #[wasm_bindgen(js_name = "cacheSubBrushTip")]
 pub fn cache_sub_brush_tip(engine: &mut Engine, index: u32, data: &[u8], width: u32, height: u32) -> Result<(), JsError> {
     let idx = index as usize;

@@ -80,6 +80,29 @@ vec3 softOffset(vec3 c, vec3 offset) {
     return 1.0 - 0.5 * (headroom + sqrt(headroom * headroom + 4.0 * ceilEase * ceilEase));
 }
 
+float lumaOf(vec3 c) {
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// Highlights / Whites. Pushing the bright end up uses a smoothstep weight,
+// which only ever steepens the ramp. Pulling it down toward the anchor uses
+// a quadratic weight whose slope tops out at 1 (at lum 1), so even at full
+// strength the curve flattens at white instead of folding back below the
+// tones beneath it. Each control re-reads luma, so stacked controls compose
+// monotonic curves and stay monotonic.
+float brightEndOffset(float lum, float anchor, float strength) {
+    if (strength >= 0.0) return strength * smoothstep(anchor, 1.0, lum);
+    float t = clamp(lum, anchor, 1.0) - anchor;
+    return max(strength, -1.0) * t * t / (2.0 * (1.0 - anchor));
+}
+
+// Shadows / Blacks: the mirror image, anchored above black.
+float darkEndOffset(float lum, float anchor, float strength) {
+    if (strength <= 0.0) return strength * (1.0 - smoothstep(0.0, anchor, lum));
+    float t = anchor - clamp(lum, 0.0, anchor);
+    return min(strength, 1.0) * t * t / (2.0 * anchor);
+}
+
 void main() {
     vec4 c = texture(u_tex, v_uv);
     if (c.a < 0.001) {
@@ -90,11 +113,10 @@ void main() {
     if (isLab) c.rgb = labToSrgb(c.rgb);
     c.rgb *= pow(2.0, u_exposure);
     c.rgb = (c.rgb - 0.5) * max(u_contrast + 1.0, 0.0) + 0.5 + u_brightness;
-    float lum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-    c.rgb += u_highlights * smoothstep(0.5, 1.0, lum) * 0.01;
-    c.rgb += u_shadows * (1.0 - smoothstep(0.0, 0.5, lum)) * 0.01;
-    c.rgb += u_whites * smoothstep(0.7, 1.0, lum) * 0.01;
-    c.rgb += u_blacks * (1.0 - smoothstep(0.0, 0.3, lum)) * 0.01;
+    c.rgb += brightEndOffset(lumaOf(c.rgb), 0.5, u_highlights * 0.01);
+    c.rgb += darkEndOffset(lumaOf(c.rgb), 0.5, u_shadows * 0.01);
+    c.rgb += brightEndOffset(lumaOf(c.rgb), 0.7, u_whites * 0.01);
+    c.rgb += darkEndOffset(lumaOf(c.rgb), 0.3, u_blacks * 0.01);
 
     // Saturation: lerp between grayscale and color
     if (abs(u_saturation) > 0.001) {

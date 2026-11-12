@@ -25,7 +25,8 @@ import {
   type GlyphInkRect,
   type PlacedGlyphBox,
 } from './path-text-geometry';
-import { contextOptions } from '../../engine/color-space';
+import { canvasColorSpace, contextOptions } from '../../engine/color-space';
+import { canvasColorString } from '../../utils/canvas-color';
 import { withEngineFace } from '../../utils/engine-font-faces';
 
 export interface PathTextRenderResult {
@@ -143,7 +144,7 @@ export function renderTextOnPath(
 
   for (const placement of placements) {
     const c = colors[placement.charIndex] ?? color;
-    ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},${c.a})`;
+    ctx.fillStyle = canvasColorString(c, canvasColorSpace);
     ctx.save();
     ctx.translate(placement.x - bounds.x, placement.y - bounds.y);
     ctx.rotate(placement.rotation);

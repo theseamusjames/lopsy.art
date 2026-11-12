@@ -82,7 +82,7 @@ test.describe('Group adjustments drawer size', () => {
     const footerBox = (await drawer.locator('[aria-label="Add Adjustment"]').boundingBox())!;
     expect(headerBox.y).toBeGreaterThanOrEqual(drawerBox.y);
     expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(drawerBox.y + drawerBox.height);
-    await expectPointerReachable(drawer.getByRole('button', { name: 'Close' }));
+    await expectPointerReachable(drawer.getByRole('button', { name: 'Close effects' }));
     await expectPointerReachable(drawer.locator('[aria-label="Add Adjustment"]'));
   });
 

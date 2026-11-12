@@ -110,8 +110,16 @@ void main() {
         bool isEdge = isOpaque && srcA < 0.999 && minDistSq <= 2.0;
         isStroke = (!isOpaque && minDistSq <= thresholdSq) || isEdge;
         coverage = (1.0 - srcA) / max(1.0 - srcA * u_layerOpacity, 1e-4);
+    } else if (u_position == 1) {
+        // An inside stroke is drawn over its layer, so the shape's faint
+        // edge pixels (alpha below 0.5) right outside the ring would keep
+        // the fill colour as a fringe. They take the stroke instead, ramped
+        // by their coverage so the ring's outer edge stays anti-aliased.
+        bool isFaintEdge = !isOpaque && srcA > 0.0 && minDistSq <= min(2.0, thresholdSq);
+        isStroke = (isOpaque && minDistSq <= thresholdSq) || isFaintEdge;
+        if (isFaintEdge) coverage = min(srcA * 2.0, 1.0);
     } else if (minDistSq <= thresholdSq) {
-        isStroke = u_position == 1 ? isOpaque : true;
+        isStroke = true;
     }
 
     float strokeA = u_strokeColor.a * u_opacity;
@@ -119,7 +127,7 @@ void main() {
         // Stroke and layer combine source-over whichever is in front, so the
         // silhouette is their alpha union. An outside ring (edge pixels
         // included) grows it; a centre stroke only outside the opaque core.
-        bool grows = isStroke && (u_position == 0 || !isOpaque);
+        bool grows = isStroke && (u_position == 0 || (u_position == 2 && !isOpaque));
         float a = grows ? strokeA + srcA * (1.0 - strokeA) : srcA;
         fragColor = vec4(0.0, 0.0, 0.0, a);
     } else if (isStroke) {

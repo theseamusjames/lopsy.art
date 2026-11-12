@@ -16,6 +16,7 @@ void main() {
 
 // Core shaders
 pub const BLIT_FRAG: &str = include_str!("shaders/blit.glsl");
+pub const THUMBNAIL_BOX_FRAG: &str = include_str!("shaders/thumbnail_box.glsl");
 pub const BLEND_FRAG: &str = include_str!("shaders/blend.glsl");
 /// Shared GLSL helpers spliced into fragment sources where a
 /// `//#include hsl` line appears (see `preprocess_frag`).
@@ -92,6 +93,7 @@ pub const LIQUIFY_DAB_FRAG: &str = include_str!("shaders/filters/liquify_dab.gls
 pub const FIBERS_FRAG: &str = include_str!("shaders/filters/fibers.glsl");
 pub const SUNBURST_FRAG: &str = include_str!("shaders/filters/sunburst.glsl");
 pub const COLOR_LUT_FRAG: &str = include_str!("shaders/filters/color_lut.glsl");
+pub const TEXTURE_FRAG: &str = include_str!("shaders/filters/texture.glsl");
 
 // Brush (assembled from header + variant + footer at compile_all time)
 const BRUSH_DAB_HEADER: &str = include_str!("shaders/brush/brush_dab_header.glsl");
@@ -257,6 +259,7 @@ pub fn compile_program_with_defines(
 pub struct ShaderPrograms {
     // Core
     pub blit: ShaderProgram,
+    pub thumbnail_box: ShaderProgram,
     pub blit_resample: ShaderProgram,
     /// Blend program specialized for Normal mode (BLEND_MODE 0). Compiled at
     /// startup since nearly every composite pass uses it; the other modes are
@@ -326,6 +329,7 @@ pub struct ShaderPrograms {
     pub fibers: ShaderProgram,
     pub sunburst: ShaderProgram,
     pub color_lut: ShaderProgram,
+    pub texture: ShaderProgram,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab_circle: ShaderProgram,
     pub brush_dab_alpha: ShaderProgram,
@@ -401,6 +405,7 @@ impl ShaderPrograms {
         Ok(Self {
             // Core
             blit: compile_program(gl, v, BLIT_FRAG)?,
+            thumbnail_box: compile_program(gl, v, THUMBNAIL_BOX_FRAG)?,
             blit_resample: compile_program(gl, v, BLIT_RESAMPLE_FRAG)?,
             blend_normal,
             blend_variants,
@@ -464,6 +469,7 @@ impl ShaderPrograms {
             fibers: compile_program(gl, v, FIBERS_FRAG)?,
             sunburst: compile_program(gl, v, SUNBURST_FRAG)?,
             color_lut: compile_program(gl, v, COLOR_LUT_FRAG)?,
+            texture: compile_program(gl, v, TEXTURE_FRAG)?,
             // Brush — assembled from header + variant body + footer
             brush_dab_circle: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_CIRCLE_BODY}{BRUSH_DAB_FOOTER}"))?,
             brush_dab_alpha: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_ALPHA_BODY}{BRUSH_DAB_FOOTER}"))?,
@@ -507,6 +513,7 @@ mod tests {
     use super::{
         inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
         OIL_PAINT_FRAG, SMUDGE_DAB_FRAG, VIGNETTE_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
+        TEXTURE_FRAG,
     };
 
     #[test]
@@ -619,5 +626,35 @@ mod tests {
             OIL_PAINT_FRAG.contains("vec3 v = max(var_sum[i] / count[i] - m * m, vec3(0.0));"),
             "negative variance reaches pow() and turns flat colours black on Metal"
         );
+    }
+
+    #[test]
+    fn texture_is_deterministic_and_alpha_preserving() {
+        let code: String = TEXTURE_FRAG
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            !code.contains("fract(sin"),
+            "a sin()-based hash is not reproducible across backends (Metal fast-math)"
+        );
+        assert!(code.contains("uvec3 pcg3d(uvec3 v)"));
+        assert!(code.contains("uniform uint u_seed;"));
+        assert!(
+            code.contains("c & ivec2(0x7FFFFFFF)"),
+            "negative lattice cells must be masked before the int -> uint conversion"
+        );
+        assert!(
+            code.contains("fragColor = vec4(clamp(c.rgb + t * (u_amount * 0.6), 0.0, 1.0), c.a);"),
+            "texture modulates existing pixels and keeps their alpha"
+        );
+        // Kind indices must match lopsy_core::filters::texture::TextureKind.
+        for (kind, func) in [(1, "ridged("), (2, "canvasWeave("), (3, "fbm("), (4, "cells(")] {
+            assert!(
+                code.contains(&format!("if (u_kind == {kind}) return {func}")),
+                "kind {kind} does not dispatch to {func}"
+            );
+        }
     }
 }

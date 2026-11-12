@@ -7,6 +7,7 @@ pub mod layer_transform_gpu;
 pub mod content_bounds_gpu;
 pub mod brush_gpu;
 pub mod filter_gpu;
+pub mod thumbnail_gpu;
 pub mod gradient_gpu;
 pub mod shape_gpu;
 pub mod selection_gpu;

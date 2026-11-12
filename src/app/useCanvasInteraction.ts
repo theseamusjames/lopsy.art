@@ -5,13 +5,12 @@ import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } fr
 import { getEngine } from '../engine-wasm/engine-state';
 import {
   beginStroke, endStroke, hasFloat, dropFloat,
-  applyBrushDabBatch as gpuBrushDabBatch,
   uploadLayerPixels,
   restoreFromGpuSnapshot,
 } from '../engine-wasm/wasm-bridge';
 import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
 import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line';
-import { mirrorBatchPoints } from '../tools/symmetry';
+import { brushDabBatchSymmetric } from './interactions/symmetric-dabs';
 import { useToolSettingsStore } from './tool-settings-store';
 
 import { clearJsPixelData } from './store/clear-js-pixel-data';
@@ -210,7 +209,8 @@ export function useCanvasInteraction(
 
       const canvasPos = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
 
-      if (e.metaKey) {
+      // Ctrl stands in for Cmd on Windows/Linux, where metaKey is the Super key.
+      if (e.metaKey || e.ctrlKey) {
         const ts = useToolSettingsStore.getState();
         if (ts.symmetryRadialSegments >= 2 || ts.symmetryHorizontal || ts.symmetryVertical) {
           ts.setSymmetryCenter({ x: canvasPos.x, y: canvasPos.y });
@@ -578,23 +578,19 @@ export function useCanvasInteraction(
             arr[i * 2] = result.sampledPoints[i]!.x;
             arr[i * 2 + 1] = result.sampledPoints[i]!.y;
           }
-          gpuBrushDabBatch(eng, layerId, arr, size, hardness, r, g, b, color.a, opacity, 1, 0, 0, 0);
-
-          if (symmetryCenter) {
-            const { symmetryHorizontal, symmetryVertical, symmetryRadialSegments } = useToolSettingsStore.getState();
-            if (symmetryHorizontal || symmetryVertical || symmetryRadialSegments >= 2) {
-              const sym = {
-                horizontal: symmetryHorizontal,
-                vertical: symmetryVertical,
-                centerX: symmetryCenter.x,
-                centerY: symmetryCenter.y,
-                radialSegments: symmetryRadialSegments,
-              };
-              for (const m of mirrorBatchPoints(arr, sym)) {
-                gpuBrushDabBatch(eng, layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, 0, 0);
-              }
-            }
-          }
+          const { symmetryHorizontal, symmetryVertical, symmetryRadialSegments } = useToolSettingsStore.getState();
+          const hasCenter = Boolean(symmetryCenter);
+          const sym = {
+            horizontal: hasCenter && symmetryHorizontal,
+            vertical: hasCenter && symmetryVertical,
+            centerX: symmetryCenter?.x ?? 0,
+            centerY: symmetryCenter?.y ?? 0,
+            radialSegments: hasCenter ? symmetryRadialSegments : 0,
+          };
+          brushDabBatchSymmetric(eng, layerId, arr, sym, {
+            size, hardness, r, g, b, a: color.a, opacity,
+            flow: 1, sizeJitter: 0, angleJitter: 0, opacityJitter: 0,
+          });
 
           endStroke(eng, layerId);
 

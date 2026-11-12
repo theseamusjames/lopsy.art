@@ -16,7 +16,6 @@ import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
-  floatSelection,
   restoreFloatBase,
   compositeFloat,
   hasFloat,
@@ -34,9 +33,10 @@ import type {
 } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask } from './quick-mask-move';
+import { floatLayerSelection } from './float-layer-selection';
 import { beginQuickMaskContentMove, endQuickMaskContentMove, moveQuickMaskContent } from './quick-mask-content-move';
 import { nudgeHeldSelection } from './selection-nudge';
-import { applyMaskFollow, beginMaskFollow, endMaskFollow, isMaskFollowActive, translateMasksWithLayers } from './move-layer-masks';
+import { applyMaskFollow, beginMaskFollow, endMaskFollow, isMaskFollowActive, nudgeMasksWithLayers } from './move-layer-masks';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
 import { claimLiveFloat, commitLiveFloat, deferNudgeMask, flushNudgeMask, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
 import {
@@ -387,11 +387,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
         gpuResident: true,
       };
     } else if (engine && selNow.active && selNow.mask) {
-      const maskBytes = new Uint8Array(selNow.mask.buffer, selNow.mask.byteOffset, selNow.mask.byteLength);
-      setSelectionMask(engine, maskBytes, selNow.maskWidth, selNow.maskHeight);
-
-      floatSelection(engine, activeLayerId);
-      compositeFloat(engine, 0, 0);
+      floatLayerSelection(engine, activeLayerId, { ...selNow, mask: selNow.mask });
 
       // The float expanded the layer texture; mirror its full rect into the
       // store. update_layer shields the engine only while the float lives —
@@ -862,12 +858,7 @@ export function handleNudgeMove(
 
     // Float selection on GPU if not already floating
     if (!floatingSelectionRef.current) {
-      // Ensure selection mask is on the GPU before floating
-      const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
-      setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
-
-      floatSelection(engine, activeId);
-      compositeFloat(engine, 0, 0);
+      floatLayerSelection(engine, activeId, { ...sel, mask: sel.mask });
       // Leave the pixel version alone until the hold ends (flushNudgeMask):
       // a bump here queued a synchronous thumbnail readback mid-hold (#1383).
       reconcileLayerBoundsWithEngine(engine, activeId, { shouldBumpVersion: false });
@@ -929,6 +920,6 @@ export function handleNudgeMove(
       editor.updateLayerPosition(sid, l.x + dx, l.y + dy);
       movedIds.push(sid);
     }
-    translateMasksWithLayers(movedIds, dx, dy);
+    nudgeMasksWithLayers(movedIds, dx, dy);
   }
 }

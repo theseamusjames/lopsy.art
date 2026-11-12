@@ -57,6 +57,21 @@ void main() {
         coverage = (1.0 - origA) / max(1.0 - origA * u_layerOpacity, 1e-4);
     }
 
+    // Inside: the shape's faint edge pixels (alpha below 0.5) beside the
+    // ring are seeds of the inverted band, so they are in it but not opaque.
+    // Drawn over the layer, they would keep the fill colour as a fringe
+    // outside the ring; they take the stroke, ramped by their coverage so
+    // the ring's outer edge stays anti-aliased (see stroke_edt.glsl).
+    bool isFaintEdge = false;
+    if (u_position == 1 && u_knockout == 0 && !isOpaque && origA > 0.0) {
+        vec2 texel = 1.0 / u_origSize;
+        for (int y = -1; y <= 1; y++) {
+            for (int x = -1; x <= 1; x++) {
+                if (origAlphaAt(origUV + vec2(float(x), float(y)) * texel) >= 0.5) isFaintEdge = true;
+            }
+        }
+    }
+
     float strokeA = u_strokeColor.a * u_opacity;
     if (u_silhouette == 1) {
         // Stroke and layer combine source-over whichever is in front, so the
@@ -66,6 +81,8 @@ void main() {
         fragColor = vec4(0.0, 0.0, 0.0, a);
     } else if (isStroke) {
         fragColor = vec4(u_strokeColor.rgb, strokeA * coverage);
+    } else if (isFaintEdge) {
+        fragColor = vec4(u_strokeColor.rgb, strokeA * min(origA * 2.0, 1.0));
     } else {
         fragColor = vec4(0.0);
     }

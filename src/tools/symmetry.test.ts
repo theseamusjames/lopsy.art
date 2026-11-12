@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from './symmetry';
-import type { SymmetryConfig } from './symmetry';
+import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive, getSymmetryMatrices, dabSampleMatrix } from './symmetry';
+import type { SymmetryConfig, SymmetryMatrix } from './symmetry';
 
 const config = (h: boolean, v: boolean, radial = 0): SymmetryConfig => ({
   horizontal: h,
@@ -74,5 +74,82 @@ describe('isSymmetryActive', () => {
   it('returns true when either on', () => {
     expect(isSymmetryActive(config(true, false))).toBe(true);
     expect(isSymmetryActive(config(false, true))).toBe(true);
+  });
+});
+
+describe('getSymmetryMatrices (#1599)', () => {
+  const apply = (m: SymmetryMatrix, x: number, y: number) => ({
+    x: m.m00 * x + m.m01 * y,
+    y: m.m10 * x + m.m11 * y,
+  });
+  const det = (m: SymmetryMatrix) => m.m00 * m.m11 - m.m01 * m.m10;
+
+  const cases: Array<[string, SymmetryConfig]> = [
+    ['vertical', config(false, true)],
+    ['horizontal', config(true, false)],
+    ['4-way', config(true, true)],
+    ['radial 4', config(false, false, 4)],
+    ['radial 7', config(false, false, 7)],
+  ];
+
+  it.each(cases)('%s: one matrix per mirrored point, mapping offsets about the centre', (_name, cfg) => {
+    const px = 30;
+    const py = 20;
+    const points = getMirroredPoints(px, py, cfg);
+    const matrices = getSymmetryMatrices(cfg);
+    expect(matrices).toHaveLength(points.length);
+    matrices.forEach((m, i) => {
+      const off = apply(m, px - cfg.centerX, py - cfg.centerY);
+      expect(cfg.centerX + off.x).toBeCloseTo(points[i]!.x, 9);
+      expect(cfg.centerY + off.y).toBeCloseTo(points[i]!.y, 9);
+    });
+  });
+
+  it('a vertical-axis mirror flips the tip horizontally rather than rotating it', () => {
+    const [m] = getSymmetryMatrices(config(false, true));
+    expect(m).toEqual({ m00: -1, m01: 0, m10: 0, m11: 1 });
+    expect(det(m!)).toBe(-1);
+  });
+
+  it('a horizontal-axis mirror flips the tip vertically', () => {
+    const [m] = getSymmetryMatrices(config(true, false));
+    expect(m).toEqual({ m00: 1, m01: 0, m10: 0, m11: -1 });
+    expect(det(m!)).toBe(-1);
+  });
+
+  it('the 4-way diagonal copy is a 180 degree turn, not a flip', () => {
+    const m = getSymmetryMatrices(config(true, true))[2]!;
+    expect(det(m)).toBe(1);
+    const v = apply(m, 1, 0);
+    expect(v.x).toBeCloseTo(-1);
+    expect(v.y).toBeCloseTo(0);
+  });
+
+  it('radial copy k rotates the tip by k * 360/n degrees', () => {
+    const n = 4;
+    getSymmetryMatrices(config(false, false, n)).forEach((m, i) => {
+      const angle = (2 * Math.PI * (i + 1)) / n;
+      const v = apply(m, 1, 0);
+      expect(det(m)).toBeCloseTo(1);
+      expect(Math.atan2(v.y, v.x)).toBeCloseTo(Math.atan2(Math.sin(angle), Math.cos(angle)));
+    });
+  });
+
+  it('returns nothing when symmetry is off', () => {
+    expect(getSymmetryMatrices(config(false, false))).toEqual([]);
+  });
+});
+
+describe('dabSampleMatrix (#1599)', () => {
+  it('inverts every copy transform so a copy samples the tip texel of its source pixel', () => {
+    for (const cfg of [config(false, true), config(true, true), config(false, false, 5)]) {
+      for (const m of getSymmetryMatrices(cfg)) {
+        const inv = dabSampleMatrix(m);
+        expect(inv.m00 * m.m00 + inv.m01 * m.m10).toBeCloseTo(1);
+        expect(inv.m00 * m.m01 + inv.m01 * m.m11).toBeCloseTo(0);
+        expect(inv.m10 * m.m00 + inv.m11 * m.m10).toBeCloseTo(0);
+        expect(inv.m10 * m.m01 + inv.m11 * m.m11).toBeCloseTo(1);
+      }
+    }
   });
 });
