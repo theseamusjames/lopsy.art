@@ -36,7 +36,8 @@ import { computeFlattenImage } from './actions/flatten-image';
 import { computeRasterizeStyle, canRasterizeLayerStyle } from './actions/rasterize-style';
 import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
 import { computeCropCanvas } from './actions/crop-canvas';
-import { computeResizeCanvas, computeResizeCanvasAtOffset } from './actions/resize-canvas';
+import { computeResizeCanvas, computeResizeCanvasAtOffset, resizeCanvasOffset } from './actions/resize-canvas';
+import { translateGuidesForCanvas, translatePathsForCanvas } from './actions/translate-canvas-overlays';
 import { computeAddBorderLayer } from './actions/add-border';
 import { getMaxDocumentSide } from '../../engine-wasm/gpu-limits';
 import { computeResizeImage, scaleGuidesForResize, scalePathsForResize } from './actions/resize-image';
@@ -93,6 +94,19 @@ function applyActionResult(
     );
   }
   set(storeDelta);
+}
+
+/** Shift paths and guides with content that a canvas resize or crop moved. */
+function translateCanvasOverlays(
+  get: () => import('./types').EditorState,
+  set: (partial: Partial<import('./types').EditorState>) => void,
+  dx: number,
+  dy: number,
+): void {
+  if (dx === 0 && dy === 0) return;
+  set({ paths: translatePathsForCanvas(get().paths, dx, dy) });
+  const { guides } = useUIStore.getState();
+  useUIStore.setState({ guides: translateGuidesForCanvas(guides, dx, dy) });
 }
 
 /**
@@ -872,6 +886,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+    translateCanvasOverlays(get, set, -x1, -y1);
   },
 
   resizeCanvas: (newWidth, newHeight, anchorX, anchorY) => {
@@ -886,6 +901,8 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+    const offset = resizeCanvasOffset(s.document, newWidth, newHeight, anchorX, anchorY);
+    translateCanvasOverlays(get, set, offset.x, offset.y);
   },
 
   addBorder: (color, widths, placement) => {
@@ -902,6 +919,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       applyActionResult(set, computeResizeCanvasAtOffset(
         s.document, s.renderVersion, plan.width, plan.height, plan.offsetX, plan.offsetY,
       ));
+      translateCanvasOverlays(get, set, plan.offsetX, plan.offsetY);
     }
     const { document, layerId } = computeAddBorderLayer(get().document, placement);
     set((state) => ({ document, renderVersion: state.renderVersion + 1 }));

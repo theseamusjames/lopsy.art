@@ -1,4 +1,5 @@
-import type { DocumentState, Layer, Rect } from '../../../types';
+import type { DocumentState, Layer, Rect, TextLayer } from '../../../types';
+import { translateTextLayerForCanvas } from './translate-canvas-overlays';
 import type { ActionResult } from '../types';
 import { cropLayerTexture } from '../../../engine-wasm/wasm-bridge';
 import { mapLayersForTransform } from './_helpers/layer-transform';
@@ -24,11 +25,7 @@ export function computeCropCanvas(
   if (cw <= 0 || ch <= 0) return undefined;
 
   const movedLayers = mapLayersForTransform(doc.layers, {
-    onText: (layer) => ({
-      ...layer,
-      x: Math.round(layer.x - cx),
-      y: Math.round(layer.y - cy),
-    }) as Layer,
+    onText: (layer) => translateTextLayerForCanvas(layer as TextLayer, -cx, -cy),
     onRaster: (layer, engine) => {
       if (engine) {
         cropLayerTexture(engine, layer.id, layer.x, layer.y, cx, cy, cw, ch);

@@ -337,7 +337,7 @@ Holding **Shift** while hovering the canvas draws a live hairline showing exactl
 - **What a press hits while editing a selected path**, in this order and all within 8 screen px: the nearest **handle** of any anchor, the nearest **anchor**, a **segment**, then empty canvas (which deselects and starts a new path). An anchor drag carries both its handles with it and ignores movement under 1 px on both axes.
 - **A click on a segment splits it at its midpoint, not at the click.** `splitSegmentAt` inserts a corner anchor (no handles) at `t = 0.5` and leaves the neighbours' handles as they are, so a curved segment changes shape. The gesture ends with the press: dragging the new anchor takes a fresh press.
   - **The segment test samples 21 points per segment** (`t = 0, 0.05 … 1`) and takes the first segment in path order with a sample inside the threshold, not the closest one. Samples spread out with on-screen length: on a straight segment longer than about 210 screen px the middle has gaps between them, and a press in a gap counts as empty canvas.
-- **What has no gesture.** A single anchor can't be deleted. A committed open path can't be extended or closed (pressing an end anchor just starts an anchor drag; closing exists only in a draft). A whole path can't be moved, transformed or duplicated: the Move tool never touches paths, and stored paths are document-level, so moving or deleting a layer leaves them alone. Only Image Size and Rotate Image change a stored path's geometry without the Pen.
+- **What has no gesture.** A single anchor can't be deleted. A committed open path can't be extended or closed (pressing an end anchor just starts an anchor drag; closing exists only in a draft). A whole path can't be moved, transformed or duplicated: the Move tool never touches paths, and stored paths are document-level, so moving or deleting a layer leaves them alone. Only Image Size, Rotate Image, Crop, Canvas Size and Border (Expand) change a stored path's geometry without the Pen.
   - **`Backspace` / `Delete` never touch a path.** With a path selected they still run the global delete, which clears the marquee or, with none, deletes the active layer (see [Single-Key Shortcuts](#single-key-shortcuts)). Delete Path is a Paths panel button only.
   - **Escape does not deselect a path.** A path is deselected by a press on empty canvas with the Pen, a second click on its Paths panel row, or deleting it.
 - **Stroke Path ignores the marquee and symmetry.** Enter and the Stroke Path modal both draw through a 2D canvas stroke with round caps and joins, written over the layer's whole buffer, so a stroke paints outside an active selection and is not mirrored. Each stroke adds the foreground colour to the recent-colours strip.
@@ -1978,9 +1978,9 @@ for Crop / Canvas Size / Image Size, `invalidateLayers()` for Rotate Image, and
     px* for Overlay, *Enter a border width.* while every width is 0, and the
     maximum side length when the expanded canvas would be too large.
   - **The result.** The new layer is named **Border**, is document-sized, and
-    becomes the active and only selected layer. Expand leaves guides and paths
-    where they are, as Canvas Size does, so they stay put while the content
-    moves by the left and top widths. The History row reads
+    becomes the active and only selected layer. Expand moves guides and paths
+    with the content by the left and top widths, as Canvas Size does. The
+    History row reads
     **Border**. Like New Layer, Border is refused in an Indexed document with
     the *does not support layers* toast.
 - **Rotate Image 90° CW / 90° CCW** (Image menu): swaps the document dimensions
@@ -1999,8 +1999,8 @@ raster and text layers and skips shape and group layers.
 
 | | raster pixels | raster geometry | text | shape / group | layer mask | selection |
 |---|---|---|---|---|---|---|
-| **Crop canvas** | cropped to the rect | reset to `(0,0)` at full canvas size | translated by the crop origin | untouched | cropped with the layer | untouched by the tool; **Edit → Crop clears it** |
-| **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset | untouched | moved by the anchor offset | untouched |
+| **Crop canvas** | cropped to the rect | reset to `(0,0)` at full canvas size | translated by the crop origin (a path-bound layer's path anchor too) | untouched | cropped with the layer | untouched by the tool; **Edit → Crop clears it** |
+| **Canvas Size** | repositioned inside a new full-canvas texture | reset to `(0,0)` at full canvas size | translated by the anchor offset (a path-bound layer's path anchor too) | untouched | moved by the anchor offset | untouched |
 | **Image Size** | bilinear rescale | scaled by the document factor, **crop preserved** | position, font size, letter spacing, area-text width, and effect dimensions all scaled; a path-bound layer's path anchor scales too, so its offset off the path is kept | untouched | scaled with the layer | untouched |
 | **Rotate Image** | rotated 90° | dimensions swapped, position rotated about the document center | turned with the canvas through its stored transform and re-rendered, stays live; path-bound text re-lays on its turned path (its offset off the path turns too); empty text untouched | untouched | rotated with the layer (shape masks untouched) | untouched |
 | **Flip** | mirrored within the layer's own texture | moved so the content mirrors about its own bounds (see below) | flipped through its transform, stays live; text on a path is **refused** with a toast | a group mirrors its descendants as a unit (refused if it holds a text layer); a shape layer flips like a raster | mirrored with the layer (a text layer's mask is untouched) | untouched |
@@ -2011,8 +2011,16 @@ X factor, horizontal by Y), are multiplied by the document scale, so text bound
 to a path stays on the scaled path when it is next re-laid. Guides are not
 otherwise part of history; undo / redo restores them only across a step that
 changed the document size, so undoing Image Size un-scales them while undoing
-an unrelated step leaves guides alone. Crop and Canvas Size leave paths and
-guides where they are.
+an unrelated step leaves guides alone.
+
+**Crop, Canvas Size and Border (Expand) shift vector paths and guides.** Every
+path anchor and handle, and every guide (vertical by the x offset, horizontal
+by the y offset), moves by the same offset as the pixels: the anchor offset
+for Canvas Size, the left and top widths for Border, and minus the crop origin
+for Crop (the Crop tool and Edit → Crop alike). A path-bound text layer's path
+anchor moves too, so its offset off the path is kept. Guides that land outside
+the new canvas are kept. Undo / redo restores paths and, across the size
+change, the guides that step saw.
 
 **Rotate Image also turns vector paths and guides.** Every path anchor and
 handle goes through the same quarter turn as the pixels (CW `(x, y) → (H − y,

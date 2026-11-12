@@ -1,4 +1,5 @@
-import type { DocumentState, Layer } from '../../../types';
+import type { DocumentState, Layer, TextLayer } from '../../../types';
+import { translateTextLayerForCanvas } from './translate-canvas-overlays';
 import type { ActionResult } from '../types';
 import { getLayerEngineBounds, resizeCanvasTexture } from '../../../engine-wasm/wasm-bridge';
 import { mapLayersForTransform } from './_helpers/layer-transform';
@@ -14,9 +15,22 @@ export function computeResizeCanvas(
   anchorX: number,
   anchorY: number,
 ): ActionResult {
-  const offsetX = Math.round((newWidth - doc.width) * anchorX);
-  const offsetY = Math.round((newHeight - doc.height) * anchorY);
-  return computeResizeCanvasAtOffset(doc, renderVersion, newWidth, newHeight, offsetX, offsetY);
+  const offset = resizeCanvasOffset(doc, newWidth, newHeight, anchorX, anchorY);
+  return computeResizeCanvasAtOffset(doc, renderVersion, newWidth, newHeight, offset.x, offset.y);
+}
+
+/** Where Canvas Size puts the old canvas's top-left corner for an anchor. */
+export function resizeCanvasOffset(
+  doc: Pick<DocumentState, 'width' | 'height'>,
+  newWidth: number,
+  newHeight: number,
+  anchorX: number,
+  anchorY: number,
+): { x: number; y: number } {
+  return {
+    x: Math.round((newWidth - doc.width) * anchorX),
+    y: Math.round((newHeight - doc.height) * anchorY),
+  };
 }
 
 /** Resize the canvas, moving existing content by exactly (`offsetX`, `offsetY`). */
@@ -32,11 +46,7 @@ export function computeResizeCanvasAtOffset(
   const oldH = doc.height;
 
   const movedLayers = mapLayersForTransform(doc.layers, {
-    onText: (layer) => ({
-      ...layer,
-      x: Math.round(layer.x + offsetX),
-      y: Math.round(layer.y + offsetY),
-    }) as Layer,
+    onText: (layer) => translateTextLayerForCanvas(layer as TextLayer, offsetX, offsetY),
     onRaster: (layer, engine) => {
       if (engine) {
         // The layer's GPU texture may be smaller than the document — an
