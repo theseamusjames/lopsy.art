@@ -12,7 +12,7 @@ Status: in progress. `scripts/check-gl-debt.mjs` holds the live counts.
 | Phase | State |
 |---|---|
 | 0 | Done, in review: CI guards (#1643), verification tooling (#1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
-| 1 | In progress: 1,770 of 2,481 raw GL references removed across eight PRs (#1645, #1646 and #1648 to #1653). The compositor (with the effect cache) and the cap remain. A broad chromium e2e run on #1652's tip passed 1,442 tests with one failure that also fails on `main` (`transform-user-repro`, the "move immediately" case) |
+| 1 | Conversions done, in review: 2,478 of 2,481 raw GL references removed across nine PRs (#1645, #1646, #1648 to #1653, #1667). What is left is the context handle on `EngineInner`, which the cap removes. On #1667's tip the chromium e2e suite without the composition and perf specs passed 1,444 tests with one failure that also fails on the previous engine (`transform-user-repro`, the "move immediately" case), and an old-against-new comparison of that whole suite found no difference that repeats (7,038 checkpoints) |
 | 2–7 | Not started |
 
 ---
@@ -450,8 +450,8 @@ three helpers expose GL types across module boundaries:
 
 Each shared helper is converted together with its callers, in its own
 cluster PR, so no cluster waits on another. `render_to_texture` is
-replaced by the pass builder itself and is deleted in the cap PR (1.5)
-once its last caller is gone.
+replaced by the pass builder itself and was deleted with its last
+caller, in the compositor PR.
 
 | PR | Cluster | Files | State |
 |---|---|---|---|
@@ -463,7 +463,7 @@ once its last caller is gone.
 | #1651 | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 | In review |
 | #1652 | Staging uploads, readbacks, thumbnails | `thumbnail_gpu` 35, `engine.rs` 117 of 125 | In review |
 | #1653 | Layers | `layer_transform_gpu` 45, `layer_manager` 446 | In review |
-| – | Compositor | `effect_cache_gpu` 40, `compositor` 663, the last 8 in `engine.rs` | Not started |
+| #1667 | Compositor | `effect_cache_gpu` 40, `compositor` 663, 5 of the last 8 in `engine.rs` | In review |
 | – | Cap | 1.5 | Not started |
 
 The PRs so far are stacked in the order listed, because nothing merged
@@ -475,23 +475,51 @@ helpers became clear: gradients travel with the two mask modules, which
 called the gradient uniform helper; the layer transform and thumbnails
 travel with the layers cluster.
 
-What the compositor needs, and why it is the one cluster to do with
-care rather than mechanically:
+How the compositor was converted, since it is the one cluster that
+could not be done mechanically:
 
-- **It relies on which framebuffer is bound between calls.** Helpers
-  such as `clear_target` and `capture_effect_backdrop` leave the target
-  bound for whatever runs next, and the per-layer blends assume it. Each
-  of those hand-offs has to become an explicit target on a pass.
-- **It has its own `Target { tex, fbo }`** pairing a texture with a
-  persistent framebuffer, and passes effect images around as raw
-  `WebGlTexture`s. Both become handles.
-- **Its adjustment uniform helpers are shared.** Brightness / Contrast
-  reaches `set_standalone_adjustment_uniforms` through
-  `Pass::raw_uniforms`, a transitional hook that goes away once those
-  helpers build passes.
-- **`present` reads the canvas size from the GL context.** That is host
-  coupling and moves to a value the host passes in.
-- **It runs every frame**, so its conversion is the one to benchmark.
+- **Framebuffer hand-offs became explicit targets.** Helpers used to
+  leave a framebuffer bound for whatever ran next, and export read the
+  composite back from whichever one the last pass left bound. Every
+  pass now names its target, and export reads the composite texture by
+  handle.
+- **Textures travel as handles.** The compositor's own
+  `Target { tex, fbo }` is now `DocTarget`, and layer, mask and effect
+  textures are `TextureHandle`s instead of cloned `WebGlTexture`s.
+- **Four copies of the blend setup became one.** The layer blend, the
+  effect blend and the two mask overlays all go through
+  `blend_through_scratch`.
+- **The adjustment helpers build passes**, so Brightness / Contrast no
+  longer needs `Pass::raw_uniforms`, which is gone.
+- **`present` asks the pass layer for the screen size**
+  (`GpuRef::screen_size`) instead of reaching into the GL context.
+
+Benchmarked on the real GPU (ANGLE Metal, M4 Max) with
+`e2e/effect-cache-perf.spec.ts`, a 4000×4000 document with 20 styled
+layers: brushing and panning take the same time per input event on the
+old and new engine (18 ms and 19 ms). A forced full composite takes
+8.3 ms against 8.4 ms including the GPU drain; its CPU side went from
+5.8 ms to 5.95 ms, because each blend makes a few more GL calls than the
+hand-written code did. The cap's state caching is where that comes back.
+
+Two things the conversion found that Phase 2 has to deal with, because
+both work only while uniforms are per-program state that survives
+between draws:
+
+- **Passes that leaned on an earlier draw's uniforms.** The third pass
+  of a blurred glow or shadow set only what changed from the first and
+  relied on the colour, spread, opacity and document size still being
+  on the program. Those passes now set every uniform they read.
+- **One that still does.** `render_layer_plus_stroke` draws with
+  `composite.glsl` and sets none of its brush-texture uniforms
+  (`u_hasBrushTexture`, `u_textureScale`, `u_layerOffset`, ...). It gets
+  whatever the last `end_stroke` left on the program. That is today's
+  behaviour, kept as is; a typed uniform struct will force a decision.
+
+The conversion also made unused samplers safe: a sampler uniform the
+draw does not read (mask, backdrop, the adjustment LUTs, the glow's
+original layer) now points at the source texture's unit, so it cannot
+alias the render target whatever an earlier pass left bound.
 
 **1.3 Remove raw GL types from signatures.** The ~50 functions that take
 `&WebGlTexture` or `&WebGl2RenderingContext` change to take
@@ -503,8 +531,24 @@ closures in `filter_gpu.rs`. Done alongside each module's conversion.
 `tex_image_2d`, `blit_framebuffer` and the canvas upload become methods
 on the backend.
 
-**1.5 Close the door.** Make `EngineInner.gl` private to `gpu/`. The
-ratchet is now zero and the script becomes a hard ban.
+**1.5 Close the door.** What is left outside `gpu/` is the context
+handle itself: the `gl` field on `EngineInner`, passed to the texture
+and framebuffer pools and to the lazy blend-variant compile at about 170
+call sites. The cap:
+
+- gives the pools and the shader set their own handle, so `gl` becomes
+  private to `gpu/` and the ratchet becomes a hard ban at zero;
+- removes `Blend::Inherit` and `Scissor::Inherit`, so every pass states
+  its full state. Nothing leaves blending or the scissor test on between
+  passes any more, so this changes no output;
+- has a pass unbind its own textures when it ends, replacing the
+  `unbind_textures` calls feature code makes today;
+- caches blend, scissor, program and framebuffer state to skip the GL
+  calls the two points above would otherwise add;
+- replaces `Target::Framebuffer` and `DocTarget`'s framebuffer half
+  with texture targets, if the benchmark shows re-attaching costs
+  nothing; otherwise the framebuffer pool stays as a `gpu/` detail
+  behind texture handles.
 
 End state: `web_sys` GL types appear only in `gpu/` and in engine
 creation.
