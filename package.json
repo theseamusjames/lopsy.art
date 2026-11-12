@@ -18,7 +18,7 @@
     "tutorial:upload": "node scripts/tutorial-projects.ts upload",
     "tutorial:check": "node scripts/tutorial-projects.ts check",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src && node scripts/check-pixel-debt.mjs",
+    "lint": "eslint src && node scripts/check-pixel-debt.mjs && node scripts/check-gl-debt.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },
