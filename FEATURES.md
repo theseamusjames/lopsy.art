@@ -1298,7 +1298,7 @@ Panel footer: **Add Adjustment** opens the type menu — a popup floating over t
 Available node types (Add menu — labels as they appear in the menu and node headers):
 - **Exposure** — stops, -5 to +5 (multiplier = 2^value)
 - **Contrast** — -100 to +100
-- **Highlights & Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100
+- **Highlights & Shadows** — Highlights -100 to +100, Shadows -100 to +100, Whites -100 to +100, Blacks -100 to +100. Highlights and Shadows act on the tones above / below 0.5 luma, Whites above 0.7 and Blacks below 0.3. Pushing an end outward (positive Highlights / Whites, negative Shadows / Blacks) adds a smoothstep-weighted offset. Pulling an end toward the middle compresses it with a quadratic whose slope reaches zero at the extreme, so at the full −100 / +100 white settles at a light grey (black at a dark grey) instead of folding back below the tones beside it. Each control reads luma after the previous one (Highlights, Shadows, Whites, Blacks), so any combination stays monotonic.
 - **Saturation & Vibrance** — Saturation -100 to +200, Vibrance -100 to +200 (the -100 floor is full desaturation; the cap extrapolates past 1× saturation distance from gray and only clips at the gamut edge)
 - **Vignette** — 0 to 100 (piped through the per-group adjustment pipeline)
 - **Curves** — per-channel tone curves (RGB master + R / G / B), evaluated as
