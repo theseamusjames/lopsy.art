@@ -10,10 +10,10 @@ use std::collections::HashMap;
 
 use lopsy_core::dab_rect::{dab_rect, DirtyRect};
 use lopsy_core::geometry::Rect;
-use web_sys::{WebGl2RenderingContext, WebGlTexture};
 
-use crate::dab_pass_gpu::{copy_scratch_a_to, with_scissor};
+use crate::dab_pass_gpu::copy_scratch_a_to;
 use crate::engine::EngineInner;
+use crate::gpu::pass::{Blend, Pass, Scissor, Target};
 use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::gpu::texture_pool::TextureHandle;
 
@@ -130,64 +130,40 @@ pub(crate) fn accumulate_dabs(
         .texture_pool
         .get_size(coverage_handle)
         .unwrap_or((1, 1));
-    let (Some(fbo), Some(tex)) = (engine.stroke_fbo, engine.texture_pool.get(coverage_handle))
-    else {
+    if engine.stroke_fbo.is_none() || engine.texture_pool.get(coverage_handle).is_none() {
         return;
-    };
+    }
 
-    let gl = &engine.gl;
-    engine.fbo_pool.attach_texture(gl, fbo, tex);
-    engine.fbo_pool.bind(gl, fbo);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.enable(WebGl2RenderingContext::BLEND);
-    gl.blend_equation(WebGl2RenderingContext::MAX);
-
-    let shader = &engine.shaders.dodge_burn_dab;
-    gl.use_program(Some(&shader.program));
-    if let Some(loc) = shader.location(gl, "u_exposure") {
-        gl.uniform1f(Some(&loc), strength);
-    }
-    if let Some(loc) = shader.location(gl, "u_hardness") {
-        gl.uniform1f(Some(&loc), hardness);
-    }
-    if let Some(loc) = shader.location(gl, "u_texSize") {
-        gl.uniform2f(Some(&loc), w as f32, h as f32);
-    }
-    if let Some(loc) = shader.location(gl, "u_size") {
-        gl.uniform1f(Some(&loc), size);
-    }
     // Selection mask — same coordinate dance as brush_dab.
     let has_selection = engine.selection_mask_texture.is_some();
-    if let Some(mask_tex) = engine
+    let selection_mask = engine
         .selection_mask_texture
-        .and_then(|m| engine.texture_pool.get(m))
-    {
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
-        if let Some(loc) = shader.location(gl, "u_selectionMask") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-    }
-    if let Some(loc) = shader.location(gl, "u_hasSelection") {
-        gl.uniform1i(Some(&loc), if has_selection { 1 } else { 0 });
-    }
-    if let Some(loc) = shader.location(gl, "u_docSize") {
-        gl.uniform2f(
-            Some(&loc),
-            engine.doc_width as f32,
-            engine.doc_height as f32,
-        );
-    }
+        .filter(|&mask| engine.texture_pool.get(mask).is_some());
     let (layer_ox, layer_oy) = engine
         .layer_stack
         .iter()
         .find(|l| l.id == layer_id)
         .map(|l| (l.x as f32, l.y as f32))
         .unwrap_or((0.0, 0.0));
-    if let Some(loc) = shader.location(gl, "u_layerOffset") {
-        gl.uniform2f(Some(&loc), layer_ox, layer_oy);
+
+    let mut pass = engine
+        .pass(&engine.shaders.dodge_burn_dab)
+        .f32("u_exposure", strength)
+        .f32("u_hardness", hardness)
+        .vec2("u_texSize", w as f32, h as f32)
+        .f32("u_size", size);
+    if let Some(mask) = selection_mask {
+        pass = pass.texture("u_selectionMask", mask);
     }
-    let center_loc = shader.location(gl, "u_center");
+    let pass = pass
+        .i32("u_hasSelection", i32::from(has_selection))
+        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
+        .vec2("u_layerOffset", layer_ox, layer_oy)
+        .blend(Blend::Max);
+    let Some(mut dabs) = pass.begin(Target::Texture(coverage_handle)) else {
+        return;
+    };
+    let center = dabs.slot("u_center");
 
     let mut touched = DirtyRect::default();
     for chunk in points.chunks_exact(2) {
@@ -196,18 +172,10 @@ pub(crate) fn accumulate_dabs(
             continue;
         };
         touched.add(Some(rect));
-        with_scissor(engine, rect, |engine| {
-            if let Some(loc) = &center_loc {
-                engine.gl.uniform2f(Some(loc), cx, cy);
-            }
-            engine.draw_fullscreen_quad();
-        });
+        dabs.set_vec2(&center, cx, cy);
+        dabs.draw_in(rect);
     }
-
-    let gl = &engine.gl;
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
+    dabs.end();
 
     if let Some(state) = engine.coverage_strokes.get_mut(layer_id) {
         state.stroke.add(touched.get());
@@ -273,18 +241,16 @@ pub(crate) fn render_preview(
     };
     state.preview_base = base;
 
-    let layer_gl_tex = engine.texture_pool.get(layer_handle)?.clone();
-    let coverage_gl_tex = engine.texture_pool.get(coverage_handle)?.clone();
-    let preview_gl_tex = engine.texture_pool.get(preview_handle)?.clone();
+    engine.texture_pool.get(layer_handle)?;
+    engine.texture_pool.get(coverage_handle)?;
+    engine.texture_pool.get(preview_handle)?;
 
     if let Some(rect) = rect {
-        engine.gl.disable(WebGl2RenderingContext::BLEND);
-        with_scissor(engine, rect, |engine| {
-            engine.render_to_texture(&preview_gl_tex, tw as i32, th as i32, |engine| {
-                draw_apply(engine, tool, mode, &layer_gl_tex, &coverage_gl_tex);
-            });
-        });
-        unbind_apply_inputs(engine);
+        apply_pass(engine, tool, mode, layer_handle, coverage_handle)
+            .blend(Blend::Off)
+            .scissor(Scissor::Rect(rect))
+            .draw(Target::Texture(preview_handle));
+        engine.gpu().unbind_textures(2);
     }
 
     Some(preview_handle)
@@ -341,63 +307,39 @@ fn bake(
     if engine.texture_pool.get_size(coverage_handle) != Some((w, h)) {
         return;
     }
-    let Some(layer_gl_tex) = engine.texture_pool.get(layer_tex_handle).cloned() else {
+    if engine.texture_pool.get(layer_tex_handle).is_none()
+        || engine.texture_pool.get(coverage_handle).is_none()
+    {
         return;
-    };
-    let Some(coverage_gl_tex) = engine.texture_pool.get(coverage_handle).cloned() else {
-        return;
-    };
+    }
     // The copy-back reads scratch texel for texel, so it must match the layer.
     if engine.ensure_scratch_size(w, h).is_err() {
         return;
     }
 
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    with_scissor(engine, rect, |engine| {
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, w as i32, h as i32);
-        draw_apply(engine, tool, mode, &layer_gl_tex, &coverage_gl_tex);
-        // Unbind the layer texture before blitting back onto it, otherwise
-        // some drivers sample the FBO's own attachment.
-        unbind_apply_inputs(engine);
-        copy_scratch_a_to(engine, &layer_gl_tex, w, h);
-    });
+    apply_pass(engine, tool, mode, layer_tex_handle, coverage_handle)
+        .blend(Blend::Off)
+        .viewport(0, 0, w as i32, h as i32)
+        .scissor(Scissor::Rect(rect))
+        .draw(Target::Framebuffer(engine.scratch_fbo_a));
+    // Unbind the layer texture before blitting back onto it, otherwise
+    // some drivers sample the FBO's own attachment.
+    engine.gpu().unbind_textures(2);
+    copy_scratch_a_to(engine, layer_tex_handle, w, h, rect);
 }
 
-/// Draw `apply(layer, coverage)` at full strength into the bound target.
-fn draw_apply(
-    engine: &EngineInner,
+/// The pass that draws `apply(layer, coverage)` at full strength.
+fn apply_pass<'a>(
+    engine: &'a EngineInner,
     tool: CoverageTool,
     mode: u32,
-    layer_tex: &WebGlTexture,
-    coverage_tex: &WebGlTexture,
-) {
-    let gl = &engine.gl;
-    let shader = tool.apply_shader(&engine.shaders);
-    gl.use_program(Some(&shader.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(layer_tex));
-    if let Some(loc) = shader.location(gl, "u_layerTex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(coverage_tex));
-    if let Some(loc) = shader.location(gl, "u_stampTex") {
-        gl.uniform1i(Some(&loc), 1);
-    }
-    if let Some(loc) = shader.location(gl, "u_mode") {
-        gl.uniform1i(Some(&loc), mode as i32);
-    }
-    if let Some(loc) = shader.location(gl, "u_exposure") {
-        gl.uniform1f(Some(&loc), 1.0);
-    }
-    engine.draw_fullscreen_quad();
-}
-
-fn unbind_apply_inputs(engine: &EngineInner) {
-    let gl = &engine.gl;
-    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    layer: TextureHandle,
+    coverage: TextureHandle,
+) -> Pass<'a> {
+    engine
+        .pass(tool.apply_shader(&engine.shaders))
+        .texture("u_layerTex", layer)
+        .texture("u_stampTex", coverage)
+        .i32("u_mode", mode as i32)
+        .f32("u_exposure", 1.0)
 }
