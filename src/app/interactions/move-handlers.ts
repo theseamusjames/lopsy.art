@@ -36,7 +36,7 @@ import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask } from './quick-mask-move';
 import { beginQuickMaskContentMove, endQuickMaskContentMove, moveQuickMaskContent } from './quick-mask-content-move';
 import { nudgeHeldSelection } from './selection-nudge';
-import { applyMaskFollow, beginMaskFollow, endMaskFollow, isMaskFollowActive, translateMasksWithLayers } from './move-layer-masks';
+import { applyMaskFollow, beginMaskFollow, endMaskFollow, isMaskFollowActive, nudgeMasksWithLayers } from './move-layer-masks';
 import { consumePrefloat, cancelPrefloat } from './prefloat';
 import { claimLiveFloat, commitLiveFloat, deferNudgeMask, flushNudgeMask, releaseStaleMoveFloat, withLiveFloatKept } from './live-float';
 import {
@@ -929,6 +929,6 @@ export function handleNudgeMove(
       editor.updateLayerPosition(sid, l.x + dx, l.y + dy);
       movedIds.push(sid);
     }
-    translateMasksWithLayers(movedIds, dx, dy);
+    nudgeMasksWithLayers(movedIds, dx, dy);
   }
 }
