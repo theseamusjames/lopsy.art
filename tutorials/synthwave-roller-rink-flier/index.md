@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Roller Lounge flier open, showing the disco ball, the pink neon Roller script over cyan LOUNGE lettering, the striped synthwave sun, a purple gradient-mapped roller skate on a neon rink and the dark info panel, with the Layers panel listing the panel text and corner tag layers
 finished: finished-roller-lounge.webp
 finishedAlt: The finished Roller Lounge flier. A mirrored disco ball hangs from the top of a starry purple sky and throws four soft beams down the page. Below it, Roller is written in a pink neon script, tilted slightly upward, over LOUNGE in cyan inline capitals. Behind the title a yellow-to-pink sun is cut by horizontal slits and sinks behind purple mountains edged with pink and cyan neon lines. On a glossy dark rink floor ringed with cyan and pink oval lines, a black quad roller skate, recoloured purple, pink and orange, rolls toward the right with a cyan halo, an orange rim light, tapered speed trails and golden sparks behind the rear wheel. A dark rounded panel with a cyan outline at the bottom reads FRI 10.24, 8 PM – 1 AM, DJ CASSETTE KID, ALL-NIGHT SYNTH SET, $12 ENTRY, SKATE RENTAL +$5 and the address line. Fine scanlines, grain and a vignette give it a VHS finish
-project: synthwave-roller-rink-flier.lopsy
+project: tutorials/synthwave-roller-rink-flier/7903ef4cbb32/synthwave-roller-rink-flier.lopsy
 ---
 
 Synthwave (also called retrowave or outrun) is the 2010s take on 80s

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished PING magazine cover open. It shows the orange PING masthead, the periwinkle coffee-mug disc with the Wi-Fi steam, the INTERNET CAFÉ label and the dimmed sticker backdrop, with the Layers panel on the right
 finished: finished-ping-internet-cafe.webp
 finishedAlt: The finished PING magazine cover. A graphite laptop lid with rounded corners sits on a walnut table, covered edge to edge in dimmed die-cut stickers: smileys, floppy disks, pixel hearts, cursors, globes, esc keys and price tags. A mint tape strip at the top reads The Quarterly of Net Culture, above a huge orange PING masthead with a black outline and a white die-cut border. In the middle, a periwinkle disc holds a cream coffee mug with an orange @ on it. A mint Wi-Fi symbol rises from the mug as steam, and FREE WI-FI, OAT MILK LATTES, OPEN 24/7, LOG ON, SIP UP and NO LAG run round the rim. A yellow Issue 42 badge, a mint slip reading 12 dial-up sounds we still miss and an orange slip reading LAN party survival guide sit around the disc. A cream label at the bottom reads Cover Story, INTERNET CAFÉ, Free Wi-Fi, strong espresso and why we log on together, with its bottom-right corner peeled up. A yellow Free Stickers Inside starburst and a barcode sticker finish the cover.
-project: sticker-bomb-magazine-cover.lopsy
+project: tutorials/sticker-bomb-magazine-cover/5b381c479789/sticker-bomb-magazine-cover.lopsy
 ---
 
 Sticker bombing grew out of skate and graffiti culture: you keep adding
