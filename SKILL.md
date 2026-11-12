@@ -600,8 +600,9 @@ Settings are keyed by the slider label (`Size`, `Opacity`, `Blur`,
 
 **Filters.** `h.filter('Name...', { 'Slider label': value }, ['Toggle'])`
 applies to the active layer, or to the selection if there is one. Useful for
-illustration: Add Noise (grain), Halftone, Pixelate, Posterize, Threshold,
-Oil Paint, Clouds / Fibers / Smoke / Sunburst (they render texture onto the
+illustration: Add Noise (grain), Texture (grain, rough, canvas, streaks or
+cells, picked with toggles such as `['Canvas', 'Relief']`), Halftone,
+Pixelate, Posterize, Threshold, Oil Paint, Clouds / Fibers / Smoke / Sunburst (they render texture onto the
 layer), Motion Blur, Radial Blur, Lens Distortion, Chromatic Aberration,
 Kaleidoscope, Voronoi. `Invert`, `Desaturate` and `Find Edges` apply
 straight from the menu with no dialog: use `h.menu('Filter', 'Invert')`.

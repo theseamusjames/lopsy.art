@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FilterDialog } from './FilterDialog';
+import { TEXTURE_PARAMS } from '../../filters/texture-params';
 
 const meta: Meta<typeof FilterDialog> = {
   component: FilterDialog,
@@ -30,5 +31,12 @@ export const Sharpen: Story = {
       { key: 'radius', label: 'Radius', min: 0.1, max: 10, step: 0.1, defaultValue: 1 },
       { key: 'threshold', label: 'Threshold', min: 0, max: 255, step: 1, defaultValue: 0 },
     ],
+  },
+};
+
+export const Texture: Story = {
+  args: {
+    title: 'Texture',
+    params: TEXTURE_PARAMS,
   },
 };
