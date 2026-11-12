@@ -103,10 +103,19 @@ function escapeForHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 }
 
+// A global `full-reload` would also reload the editor tab, silently dropping a
+// clean document or raising "Leave site?" for a dirty one. Site pages listen
+// for their own event instead, so content edits reload only them.
+const RELOAD_EVENT = 'lopsy-site:reload';
+const DEV_CLIENT_SCRIPT = `<script type="module">
+import { createHotContext } from '/@vite/client';
+createHotContext('/@lopsy-site').on('${RELOAD_EVENT}', () => location.reload());
+</script>`;
+
 function renderErrorPage(errors: string[]): string {
   const items = errors.map((e) => `<li>${escapeForHtml(e)}</li>`).join('');
   return `<!DOCTYPE html><meta charset="utf-8"><title>Content errors</title>
-<script type="module" src="/@vite/client"></script>
+${DEV_CLIENT_SCRIPT}
 <body style="font:15px/1.5 system-ui;padding:24px;background:#1e1e1e;color:#e0e0e0">
 <h1 style="color:#f44336">Content errors</h1><ul>${items}</ul></body>`;
 }
@@ -138,7 +147,7 @@ function serveSite(server: ViteDevServer, options: SitePluginOptions): void {
   server.watcher.on('all', (_event, file) => {
     if (!isWatched(options, file)) return;
     cached = null;
-    server.ws.send({ type: 'full-reload', path: '*' });
+    server.ws.send({ type: 'custom', event: RELOAD_EVENT });
   });
 
   server.middlewares.use((req, res, next) => {
@@ -169,7 +178,7 @@ function serveSite(server: ViteDevServer, options: SitePluginOptions): void {
     if (body === undefined) return next();
 
     const payload = typeof body === 'string' && file.endsWith('.html')
-      ? body.replace('</head>', '<script type="module" src="/@vite/client"></script>\n</head>')
+      ? body.replace('</head>', `${DEV_CLIENT_SCRIPT}\n</head>`)
       : body;
     res.writeHead(200, { 'Content-Type': contentType(file), 'Cache-Control': 'no-store' }).end(payload);
   });
