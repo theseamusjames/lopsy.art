@@ -77,6 +77,22 @@ describe('resolveTtfUrl (#951)', () => {
   });
 });
 
+describe('resolveTtfUrl for families upstream renamed to variable fonts (#1656)', () => {
+  const cdn = 'https://cdn.jsdelivr.net/gh/google/fonts@main';
+  const cases: ReadonlyArray<[string, number, string]> = [
+    ['Tiny5', 400, 'ofl/tiny5/Tiny5[BLED,JITT,ROND,wdth,wght].ttf'],
+    ['Castoro', 400, 'ofl/castoro/Castoro[wght].ttf'],
+    ['Akshar', 600, 'ofl/akshar/Akshar[CTRS,wght].ttf'],
+    ['Kode Mono', 700, 'ofl/kodemono/KodeMono[ROND,wdth,wght].ttf'],
+  ];
+
+  it.each(cases)('%s resolves to the current repo file', (family, weight, path) => {
+    const entry = fontsByFamily.get(family);
+    expect(entry).toBeDefined();
+    expect(resolveTtfUrl(entry!, weight)).toBe(`${cdn}/${path}`);
+  });
+});
+
 describe('buildCss2PreviewUrl', () => {
   // Regression for #729: the picker used to fetch pre-rendered PNGs from a
   // third-party CDN that has since been deleted (getstencil/
