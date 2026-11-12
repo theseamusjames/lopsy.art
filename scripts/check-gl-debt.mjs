@@ -38,7 +38,6 @@ const BASELINE = {
   'api/fill.rs': 28,
   'selection_gpu.rs': 31,
   'thumbnail_gpu.rs': 35,
-  'shape_gpu.rs': 36,
   'effect_cache_gpu.rs': 40,
   'api/filter/render.rs': 42,
   'api/filter/blur.rs': 44,
