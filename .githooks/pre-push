@@ -2,7 +2,7 @@
 # Block pushes when local quality gates fail. Bypass with `git push --no-verify`.
 #
 # Skip individual gates with env vars:
-#   SKIP_LINT=1   git push   — skip eslint + pixel-debt
+#   SKIP_LINT=1   git push   — skip eslint + pixel-debt + gl-debt
 #   SKIP_TEST=1   git push   — skip vitest
 #   FAST_PUSH=1   git push   — skip lint + test (typecheck still runs)
 set -e
@@ -20,7 +20,7 @@ npm run typecheck
 if [ "${FAST_PUSH:-0}" = "1" ] || [ "${SKIP_LINT:-0}" = "1" ]; then
   echo "pre-push: skipping lint (SKIP_LINT or FAST_PUSH set)"
 else
-  echo "pre-push: running lint (eslint + pixel-debt)"
+  echo "pre-push: running lint (eslint + pixel-debt + gl-debt)"
   npm run lint
 fi
 

@@ -18,6 +18,11 @@ Read SPEC.md for the full product specification.
 - `docs/pixel-data-debt.md` — authoritative tracker for places where
   pixel buffers still live on the JS side, with the migration plan
   for each.
+- `docs/engine-migration-plan.md` — the plan for moving the engine off
+  raw WebGL onto a pass layer and then wgpu. Feature code must not add
+  raw GL calls outside `engine-rs/crates/lopsy-wasm/src/gpu/`;
+  `scripts/check-gl-debt.mjs` (part of `npm run lint`) enforces the
+  per-file counts.
 
 ## Language & Types
 
