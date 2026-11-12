@@ -16,6 +16,7 @@ void main() {
 
 // Core shaders
 pub const BLIT_FRAG: &str = include_str!("shaders/blit.glsl");
+pub const THUMBNAIL_BOX_FRAG: &str = include_str!("shaders/thumbnail_box.glsl");
 pub const BLEND_FRAG: &str = include_str!("shaders/blend.glsl");
 /// Shared GLSL helpers spliced into fragment sources where a
 /// `//#include hsl` line appears (see `preprocess_frag`).
@@ -258,6 +259,7 @@ pub fn compile_program_with_defines(
 pub struct ShaderPrograms {
     // Core
     pub blit: ShaderProgram,
+    pub thumbnail_box: ShaderProgram,
     pub blit_resample: ShaderProgram,
     /// Blend program specialized for Normal mode (BLEND_MODE 0). Compiled at
     /// startup since nearly every composite pass uses it; the other modes are
@@ -403,6 +405,7 @@ impl ShaderPrograms {
         Ok(Self {
             // Core
             blit: compile_program(gl, v, BLIT_FRAG)?,
+            thumbnail_box: compile_program(gl, v, THUMBNAIL_BOX_FRAG)?,
             blit_resample: compile_program(gl, v, BLIT_RESAMPLE_FRAG)?,
             blend_normal,
             blend_variants,
