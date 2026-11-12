@@ -60,8 +60,9 @@ test.describe('#1317 keyboard opacity change records history', () => {
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(200);
 
-    // Only the last arrow step is undone; the red fill stays.
-    expect(await layerOpacity(page, layerId)).toBeCloseTo(0.91, 5);
+    // The run of arrow presses is one step (#1635): one undo restores 100%
+    // and the red fill stays.
+    expect(await layerOpacity(page, layerId)).toBeCloseTo(1, 5);
     expect((await getPixelAt(page, 200, 150, layerId)).r).toBe(255);
   });
 });
