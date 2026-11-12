@@ -6,7 +6,8 @@ use lopsy_core::layer::LayerDesc;
 
 use crate::gpu::context::GpuContext;
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
-use crate::gpu::shader::ShaderPrograms;
+use crate::gpu::pass::{GpuRef, Pass};
+use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
 
 /// Magnetic-lasso state: a precomputed Sobel edge field that the snap
@@ -857,6 +858,21 @@ impl EngineInner {
     pub fn mark_all_dirty(&mut self) {
         self.needs_recomposite = true;
         self.group_pre_adj_valid = false;
+    }
+
+    /// The GPU objects a [`Pass`] draws with.
+    pub fn gpu(&self) -> GpuRef<'_> {
+        GpuRef {
+            gl: &self.gl,
+            textures: &self.texture_pool,
+            fbos: &self.fbo_pool,
+            render_fbo: self.render_fbo,
+        }
+    }
+
+    /// Start a pass that runs `program`. See `gpu::pass`.
+    pub fn pass<'a>(&'a self, program: &'a ShaderProgram) -> Pass<'a> {
+        self.gpu().pass(program)
     }
 
     /// Draw a fullscreen quad (3 vertices, no VBO needed)
