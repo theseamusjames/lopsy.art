@@ -315,6 +315,7 @@ import init, {
 } from './pkg/lopsy_wasm';
 import { markMaskGpuDirty } from './mask-gpu-dirty';
 import { bumpTextLayoutGeneration } from './text-layout-generation';
+import { WASM_INIT_TIMING, recordStartupTiming } from './startup-timing';
 
 export type { Engine };
 
@@ -326,7 +327,11 @@ export async function initWasm(): Promise<void> {
   if (initError) throw initError;
   if (!initPromise) {
     initPromise = init()
-      .then((output: { memory: WebAssembly.Memory }) => { wasmMemory = output.memory; })
+      .then((output: { memory: WebAssembly.Memory }) => {
+        wasmMemory = output.memory;
+        // From navigation start: the wasm fetch begins with the page.
+        recordStartupTiming(WASM_INIT_TIMING, 0);
+      })
       .catch((err: unknown) => {
         initError = err;
         initPromise = null;

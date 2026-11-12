@@ -10,6 +10,7 @@
     "wasm:build:dev": "rm -rf src/engine-wasm/pkg && cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --dev --out-dir ../../../src/engine-wasm/pkg",
     "wasm:test": "cd engine-rs && cargo test",
     "wasm:size": "node scripts/check-bundle-size.mjs",
+    "perf:load": "node scripts/measure-load-time.mjs",
     "dev": "vite",
     "build": "npm run wasm:build && tsc --noEmit && vite build",
     "preview": "vite preview",
