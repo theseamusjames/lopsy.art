@@ -1040,8 +1040,8 @@ fn layer_content_rect(
     tw: u32,
     th: u32,
 ) -> Result<lopsy_core::geometry::Rect, String> {
-    if let Some(tex) = engine.texture_pool.get(tex_handle).cloned() {
-        if let Ok(rect) = crate::content_bounds_gpu::texture_content_bounds(engine, &tex, tw, th) {
+    if engine.texture_pool.get(tex_handle).is_some() {
+        if let Ok(rect) = crate::content_bounds_gpu::texture_content_bounds(engine, tex_handle, tw, th) {
             return Ok(rect);
         }
     }
