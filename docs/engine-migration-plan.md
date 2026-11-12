@@ -9,6 +9,12 @@ Lopsy unchanged for users. There is no long-lived rewrite branch.
 
 Status: in progress. `scripts/check-gl-debt.mjs` holds the live counts.
 
+| Phase | State |
+|---|---|
+| 0 | Done, in review: CI guards (#1643), verification tooling (#1644). Spikes S1 and S2 are under way; S3 not run |
+| 1 | In progress: 766 of 2,481 raw GL references removed across #1645, #1646, #1648, #1649 and #1650. Filters, layers and the compositor remain |
+| 2–7 | Not started |
+
 ---
 
 ## 1. Where we start
@@ -152,6 +158,25 @@ What varies run to run, and so must stay out of an exact comparison:
 No repeatable composition covers the filters yet. Filter PRs rely on the
 targeted filter specs until those seeds can be pinned from a test, which
 would make `photoediting` usable too.
+
+**A/B on a cluster.** The two compositions do not reach every tool, so
+a PR that converts a group of tools also compares the old and new engine
+on the specs that exercise them:
+
+1. `python3 scripts/parity-ab-instrument.py <spec>...` adds a checkpoint
+   after every screenshot step and at the end of every test in those
+   specs: the engine's export composite, a hash of every layer, and the
+   canvas pixels (which also show what is drawn only to the screen).
+2. Run the specs with `PARITY_OUT` set, on the new engine.
+3. `git checkout <base> -- engine-rs && npm run wasm:build`, run them
+   again into a second directory, then `git checkout HEAD -- engine-rs`
+   and rebuild.
+4. `node scripts/parity-compare.mjs <old-dir> <new-dir>`.
+5. `git checkout -- e2e` to drop the instrumentation.
+
+A checkpoint that differs is only a regression if it repeats: tests that
+use scatter, jitter or a random filter seed differ between two runs of
+the same engine.
 
 **Milestones:** the full e2e suite except the `composition-*` specs,
 plus two or three compositions, plus `brush-perf-6k`.
@@ -372,20 +397,40 @@ cluster PR, so no cluster waits on another. `render_to_texture` is
 replaced by the pass builder itself and is deleted in the cap PR (1.5)
 once its last caller is gone.
 
-| PR | Cluster | Files |
-|---|---|---|
-| 1 | Foundation | `gpu::pass` and leaf modules: `glyph_atlas` 4, `api/paint` 13, `text_transform_gpu` 20, `content_bounds_gpu` 21 |
-| 2 | Dab tools | `clone_stamp_gpu` 11, `smudge_gpu` 12, `dab_pass_gpu` 15, `stamp_preview_gpu` 31, `healing_brush_gpu` 37, `coverage_stroke_gpu` 55 |
-| 3 | Brush and mask painting | `mask_paint_gpu` 94, `quick_mask_gpu` 99, `brush_gpu` 187 |
-| 4–5 | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 |
-| 6 | Drawing and transforms | `api/fill` 28, `selection_gpu` 31, `shape_gpu` 36, `effect_cache_gpu` 40, `layer_transform_gpu` 45, `gradient_gpu` 72 |
-| 7 | Layers | `thumbnail_gpu` 35, `engine.rs` 125, `layer_manager` 446 |
-| 8–9 | Compositor | `compositor` 663 |
-| 10 | Cap | 1.5 |
+| PR | Cluster | Files | State |
+|---|---|---|---|
+| #1645 | Foundation | `gpu::pass` and leaf modules: `glyph_atlas` 4, `api/paint` 13, `text_transform_gpu` 20, `content_bounds_gpu` 21 | In review |
+| #1646 | Dab tools | `clone_stamp_gpu` 11, `smudge_gpu` 12, `dab_pass_gpu` 15, `stamp_preview_gpu` 31, `healing_brush_gpu` 37, `coverage_stroke_gpu` 55 | In review |
+| #1648 | Brush | `brush_gpu` 187 | In review |
+| #1649 | Gradients and masks | `gradient_gpu` 72, `mask_paint_gpu` 94, `quick_mask_gpu` 99 | In review |
+| #1650 | Shapes, selection, fill | `api/fill` 28, `selection_gpu` 31, `shape_gpu` 36 | In review |
+| – | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 | Not started |
+| – | Layers | `thumbnail_gpu` 35, `layer_transform_gpu` 45, `engine.rs` 125, `layer_manager` 446 | Not started |
+| – | Compositor | `effect_cache_gpu` 40, `compositor` 663 | Not started |
+| – | Cap | 1.5 | Not started |
 
-PRs 2–9 depend only on PR 1 and can merge in any order, with one
-exception: the two compositor PRs touch the same file and go one after
-the other.
+The PRs so far are stacked in the order listed, because nothing merged
+while they were written. In content each cluster depends only on the
+foundation.
+
+The grouping moved from the first draft of this plan as the shared
+helpers became clear: gradients travel with the two mask modules, which
+called the gradient uniform helper; the layer transform and thumbnails
+travel with the layers cluster.
+
+What the remaining clusters need that the pass layer does not have yet:
+
+- **Filters:** an unsigned-integer uniform setter; a pass-based version
+  of `compositor::set_standalone_adjustment_uniforms`, which Brightness /
+  Contrast calls with a raw GL program; and, for an exact A/B, a pinned
+  `Math.random` in the test page, because Add Noise, Clouds, Smoke and
+  Fibers take their seed from it.
+- **Layers:** a target for 8-bit staging textures (thumbnails and the R8
+  mask readback render into textures that are not in the pool's format);
+  a clear limited to a rect; and `bind_transform_program`, which the
+  layer transform and `layer_manager`'s float transform share.
+- **Compositor:** the persistent framebuffers and the screen target,
+  which the pass layer has but nothing uses yet.
 
 `compositor.rs` splits along its own stages: present, layer blend,
 behind-effects, above-effects, group adjustments, document adjustments,

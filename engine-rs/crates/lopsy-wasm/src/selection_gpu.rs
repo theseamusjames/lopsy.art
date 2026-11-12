@@ -1,5 +1,5 @@
-use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
+use crate::gpu::pass::Target;
 
 pub fn set_selection_mask(
     engine: &mut EngineInner,
@@ -35,72 +35,38 @@ pub fn feather_selection_mask(engine: &mut EngineInner, radius: u32) {
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(mask_handle).unwrap_or((1, 1));
-    let mask_tex = match engine.texture_pool.get(mask_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(mask_handle).is_none() {
+        return;
+    }
 
     // Switch to LINEAR filtering for smooth blur sampling
     engine.texture_pool.set_linear_filter(&engine.gl, mask_handle);
 
     let clamped_radius = radius.min(63) as usize;
     let weights = gaussian_weights(clamped_radius);
-
-    let gl = &engine.gl;
-    let shader = &engine.shaders.gaussian_blur;
-    gl.use_program(Some(&shader.program));
-
-    // Upload weights
-    if let Some(loc) = shader.location(gl, "u_radius") {
-        gl.uniform1i(Some(&loc), clamped_radius as i32);
+    let mut w64 = [0.0f32; 64];
+    for (i, &v) in weights.iter().enumerate() {
+        if i < 64 { w64[i] = v; }
     }
-    if let Some(loc) = shader.location(gl, "u_weights[0]") {
-        let mut w64 = [0.0f32; 64];
-        for (i, &v) in weights.iter().enumerate() {
-            if i < 64 { w64[i] = v; }
-        }
-        gl.uniform1fv_with_f32_array(Some(&loc), &w64);
-    }
+    let blur_pass = |src, direction: (f32, f32)| {
+        engine.pass(&engine.shaders.gaussian_blur)
+            .i32("u_radius", clamped_radius as i32)
+            .f32_array("u_weights[0]", &w64)
+            .texture("u_tex", src)
+            .vec2("u_direction", direction.0, direction.1)
+            .viewport(0, 0, w as i32, h as i32)
+    };
 
     // Pass 1: horizontal — mask → scratch A
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
-    if let Some(loc) = shader.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    if let Some(loc) = shader.location(gl, "u_direction") {
-        gl.uniform2f(Some(&loc), 1.0, 0.0);
-    }
-    engine.draw_fullscreen_quad();
-
+    blur_pass(mask_handle, (1.0, 0.0)).draw(Target::Framebuffer(engine.scratch_fbo_a));
     // Pass 2: vertical — scratch A → scratch B
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_b);
-    gl.viewport(0, 0, w as i32, h as i32);
-    if let Some(scratch_a) = engine.texture_pool.get(engine.scratch_texture_a) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_a));
-    }
-    if let Some(loc) = shader.location(gl, "u_direction") {
-        gl.uniform2f(Some(&loc), 0.0, 1.0);
-    }
-    engine.draw_fullscreen_quad();
-    engine.fbo_pool.unbind(gl);
+    blur_pass(engine.scratch_texture_a, (0.0, 1.0)).draw(Target::Framebuffer(engine.scratch_fbo_b));
 
     // Copy scratch B → mask texture
-    let scratch_b_tex = engine.texture_pool.get(engine.scratch_texture_b).cloned();
-    engine.render_to_texture(&mask_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        gl.use_program(Some(&engine.shaders.blit.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(s) = &scratch_b_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-        }
-        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        engine.draw_fullscreen_quad();
-    });
+    engine.pass(&engine.shaders.blit)
+        .texture("u_tex", engine.scratch_texture_b)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(mask_handle));
 
     // Keep LINEAR filtering so feathered mask samples smoothly
     engine.needs_recomposite = true;
@@ -115,30 +81,11 @@ pub fn read_selection_mask(engine: &EngineInner) -> (u32, u32, Vec<u8>) {
     };
     let (w, h) = engine.texture_pool.get_size(mask_handle).unwrap_or((0, 0));
     if w == 0 || h == 0 { return (0, 0, Vec::new()); }
-    let texture = match engine.texture_pool.get(mask_handle) {
-        Some(t) => t,
-        None => return (0, 0, Vec::new()),
-    };
+    if engine.texture_pool.get(mask_handle).is_none() {
+        return (0, 0, Vec::new());
+    }
 
-    let gl = &engine.gl;
-    let fbo = match gl.create_framebuffer() {
-        Some(f) => f,
-        None => return (0, 0, Vec::new()),
-    };
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-    gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(texture),
-        0,
-    );
-
-    let rgba = engine.texture_pool.read_rgba(gl, 0, 0, w, h)
-        .unwrap_or_default();
-
-    gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    gl.delete_framebuffer(Some(&fbo));
+    let rgba = engine.gpu().read_rgba(mask_handle, 0, 0, w, h).unwrap_or_default();
 
     let mut mask = vec![0u8; (w * h) as usize];
     for i in 0..(w * h) as usize {
