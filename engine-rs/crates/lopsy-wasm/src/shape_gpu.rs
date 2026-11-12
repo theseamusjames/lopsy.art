@@ -1,5 +1,6 @@
-use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
+use crate::gpu::pass::{Blend, Target};
+use crate::gpu::texture_pool::TextureHandle;
 
 /// Save the current layer content so render_shape can restore it before each
 /// frame. Called once at the start of a shape drag.
@@ -11,10 +12,9 @@ pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     // Allocate (or reuse) the preview texture
     if let Some(old) = engine.shape_preview_texture.take() {
@@ -24,12 +24,11 @@ pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
         Ok(h) => h,
         Err(_) => return,
     };
-    let preview_tex = match engine.texture_pool.get(preview_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(preview_handle).is_none() {
+        return;
+    }
 
-    copy_texture(engine, &layer_tex, &preview_tex, w, h);
+    copy_texture(engine, tex_handle, preview_handle, w, h);
 
     engine.shape_preview_texture = Some(preview_handle);
     engine.shape_preview_layer_id = Some(layer_id.to_string());
@@ -79,10 +78,9 @@ pub fn render_shape(
         .find(|l| l.id == layer_id)
         .map(|l| (l.x, l.y))
         .unwrap_or((0, 0));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     // The shape is composited in the shader against a copy of the layer's
     // prior content instead of with fixed-function blending: layer textures
@@ -91,98 +89,56 @@ pub fn render_shape(
     // edge, which rendered as a dark fringe (#815). During a drag the saved
     // preview already is that copy, and sampling it also restores the layer
     // so each mousemove renders cleanly instead of accumulating.
-    let preview_tex = if engine.shape_preview_layer_id.as_deref() == Some(layer_id) {
-        engine.shape_preview_texture.and_then(|h| engine.texture_pool.get(h).cloned())
+    let preview = if engine.shape_preview_layer_id.as_deref() == Some(layer_id) {
+        engine.shape_preview_texture.filter(|&p| engine.texture_pool.get(p).is_some())
     } else {
         None
     };
     let mut temp_handle = None;
-    let dst_tex = match preview_tex {
-        Some(t) => t,
+    let dst = match preview {
+        Some(p) => p,
         None => {
             let Ok(handle) = engine.texture_pool.acquire(&engine.gl, w, h) else { return };
-            let Some(t) = engine.texture_pool.get(handle).cloned() else {
+            if engine.texture_pool.get(handle).is_none() {
                 engine.texture_pool.release(handle);
                 return;
-            };
-            copy_texture(engine, &layer_tex, &t, w, h);
+            }
+            copy_texture(engine, tex_handle, handle, w, h);
             temp_handle = Some(handle);
-            t
+            handle
         }
     };
 
-    // Convert center from document space to texture space
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.shape_fill;
-        gl.use_program(Some(&shader.program));
+    engine.pass(&engine.shaders.shape_fill)
+        .texture("u_dstTex", dst)
+        .i32("u_shapeType", shape_type as i32)
+        // Convert center from document space to texture space
+        .vec2("u_center", (cx as f32) - (layer_x as f32), (cy as f32) - (layer_y as f32))
+        .vec2("u_size", width as f32, height as f32)
+        .vec4("u_fillColor", fill_r, fill_g, fill_b, fill_a)
+        .vec4("u_strokeColor", stroke_r, stroke_g, stroke_b, stroke_a)
+        .f32("u_strokeWidth", stroke_width)
+        .f32("u_cornerRadius", corner_radius)
+        .i32("u_sides", sides as i32)
+        .vec2("u_texSize", w as f32, h as f32)
+        .blend(Blend::Off)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(tex_handle));
+    // The copy may be released below; don't leave it bound to a sampler.
+    engine.gpu().unbind_textures(1);
 
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&dst_tex));
-        if let Some(loc) = shader.location(gl, "u_dstTex") {
-            gl.uniform1i(Some(&loc), 1);
-        }
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-
-        if let Some(loc) = shader.location(gl, "u_shapeType") {
-            gl.uniform1i(Some(&loc), shape_type as i32);
-        }
-        if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), (cx as f32) - (layer_x as f32), (cy as f32) - (layer_y as f32));
-        }
-        if let Some(loc) = shader.location(gl, "u_size") {
-            gl.uniform2f(Some(&loc), width as f32, height as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_fillColor") {
-            gl.uniform4f(Some(&loc), fill_r, fill_g, fill_b, fill_a);
-        }
-        if let Some(loc) = shader.location(gl, "u_strokeColor") {
-            gl.uniform4f(Some(&loc), stroke_r, stroke_g, stroke_b, stroke_a);
-        }
-        if let Some(loc) = shader.location(gl, "u_strokeWidth") {
-            gl.uniform1f(Some(&loc), stroke_width);
-        }
-        if let Some(loc) = shader.location(gl, "u_cornerRadius") {
-            gl.uniform1f(Some(&loc), corner_radius);
-        }
-        if let Some(loc) = shader.location(gl, "u_sides") {
-            gl.uniform1i(Some(&loc), sides as i32);
-        }
-        if let Some(loc) = shader.location(gl, "u_texSize") {
-            gl.uniform2f(Some(&loc), w as f32, h as f32);
-        }
-
-        engine.draw_fullscreen_quad();
-    });
-
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
     if let Some(handle) = temp_handle {
         engine.texture_pool.release(handle);
     }
     engine.mark_layer_dirty(layer_id);
 }
 
-fn copy_texture(
-    engine: &EngineInner,
-    src: &web_sys::WebGlTexture,
-    dst: &web_sys::WebGlTexture,
-    w: u32,
-    h: u32,
-) {
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(dst, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        gl.use_program(Some(&engine.shaders.blit.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src));
-        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        engine.draw_fullscreen_quad();
-    });
+fn copy_texture(engine: &EngineInner, src: TextureHandle, dst: TextureHandle, w: u32, h: u32) {
+    engine.pass(&engine.shaders.blit)
+        .texture("u_tex", src)
+        .blend(Blend::Off)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(dst));
 }
 
 /// One-shot shape render that expands the texture to cover the full shape.
