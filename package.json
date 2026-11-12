@@ -15,6 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "parity:record": "rm -rf .parity/baseline && PARITY_OUT=.parity/baseline playwright test composition-koi-fish composition-shapes --project=chromium --retries=0 --workers=1",
+    "parity:check": "rm -rf .parity/current && PARITY_OUT=.parity/current playwright test composition-koi-fish composition-shapes --project=chromium --retries=0 --workers=1 && node scripts/parity-compare.mjs .parity/baseline .parity/current",
     "tutorial:upload": "node scripts/tutorial-projects.ts upload",
     "tutorial:check": "node scripts/tutorial-projects.ts check",
     "typecheck": "tsc --noEmit",

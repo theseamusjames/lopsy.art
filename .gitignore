@@ -20,6 +20,11 @@ src/engine-wasm/pkg/
 
 # Playwright test artifacts
 test-results/
+# Engine-output checkpoints from npm run parity:record / parity:check
+.parity/
+# Step screenshots the parity compositions write on every run
+e2e/screenshots/comp2-*.png
+e2e/screenshots/koi-fish-*.png
 engine-rs/test-output/
 tests/screenshots/
 

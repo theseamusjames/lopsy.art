@@ -15,6 +15,7 @@
  * Grid and guides toggle.
  */
 import { test, expect, type Page } from './fixtures';
+import { parityCheckpoint } from './parity';
 import {
   setToolOption,
   setForegroundColor as setForegroundColorUI,
@@ -392,6 +393,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(ellipsePixel.a).toBeGreaterThan(200);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-01-ellipse.png' });
+    await parityCheckpoint(page, 'shapes', '01-ellipse');
 
     // =====================================================================
     // PHASE 2: SHAPE — Polygon (hexagon with corner radius)
@@ -413,6 +415,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(hexPixel.a).toBeGreaterThan(200);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-02-hexagon.png' });
+    await parityCheckpoint(page, 'shapes', '02-hexagon');
 
     // =====================================================================
     // PHASE 3: SHAPE — Triangle (polygon 3 sides)
@@ -429,6 +432,7 @@ test.describe('Composition 2: Geometric Design', () => {
     await dragAtDoc(page, { x: 320, y: 80 }, { x: 420, y: 200 });
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-03-triangle.png' });
+    await parityCheckpoint(page, 'shapes', '03-triangle');
 
     // =====================================================================
     // PHASE 4: MOVE TOOL + ALIGNMENT — Align shapes
@@ -466,6 +470,7 @@ test.describe('Composition 2: Geometric Design', () => {
     }
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-04-aligned.png' });
+    await parityCheckpoint(page, 'shapes', '04-aligned');
 
     // =====================================================================
     // PHASE 5: MOVE TOOL — Nudge with arrow keys
@@ -511,6 +516,7 @@ test.describe('Composition 2: Geometric Design', () => {
     await page.waitForTimeout(200);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-05-moved.png' });
+    await parityCheckpoint(page, 'shapes', '05-moved');
 
     // =====================================================================
     // PHASE 7: PATH TOOL — Create a star-like path with spline curves
@@ -550,6 +556,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(diamondPath.anchorCount).toBe(4);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-06-diamond-path.png' });
+    await parityCheckpoint(page, 'shapes', '06-diamond-path');
 
     // =====================================================================
     // PHASE 8: PATH — Convert anchor to spline (Cmd+drag)
@@ -576,6 +583,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(convertedAnchor.handleIn).not.toBeNull();
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-07-spline-anchor.png' });
+    await parityCheckpoint(page, 'shapes', '07-spline-anchor');
 
     // =====================================================================
     // PHASE 9: PATH — Add anchor to segment
@@ -613,6 +621,7 @@ test.describe('Composition 2: Geometric Design', () => {
     }
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-08-stroked-path.png' });
+    await parityCheckpoint(page, 'shapes', '08-stroked-path');
 
     // =====================================================================
     // PHASE 11: RECTANGULAR MARQUEE — Draw selection
@@ -645,6 +654,7 @@ test.describe('Composition 2: Geometric Design', () => {
     // (checking a point right on the boundary line)
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-09-rect-marquee.png' });
+    await parityCheckpoint(page, 'shapes', '09-rect-marquee');
 
     // =====================================================================
     // PHASE 12: FILL TOOL — Fill inside selection
@@ -663,6 +673,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(filledPixel.a).toBeGreaterThan(200);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-10-filled-selection.png' });
+    await parityCheckpoint(page, 'shapes', '10-filled-selection');
 
     // Deselect
     await page.keyboard.press('Meta+d');
@@ -684,6 +695,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(ellipseSelState.nonZeroMaskPixels).toBeGreaterThan(100);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-11-ellipse-marquee.png' });
+    await parityCheckpoint(page, 'shapes', '11-ellipse-marquee');
 
     // Deselect
     await page.keyboard.press('Meta+d');
@@ -698,6 +710,7 @@ test.describe('Composition 2: Geometric Design', () => {
     await dragAtDoc(page, { x: 100, y: 100 }, { x: 200, y: 150 }, 15);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-12-lasso.png' });
+    await parityCheckpoint(page, 'shapes', '12-lasso');
 
     // Deselect
     await page.keyboard.press('Meta+d');
@@ -729,6 +742,7 @@ test.describe('Composition 2: Geometric Design', () => {
     });
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-13-magic-wand.png' });
+    await parityCheckpoint(page, 'shapes', '13-magic-wand');
 
     // Deselect
     await page.keyboard.press('Meta+d');
@@ -754,6 +768,7 @@ test.describe('Composition 2: Geometric Design', () => {
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-14-copy-paste.png' });
+    await parityCheckpoint(page, 'shapes', '14-copy-paste');
 
     // =====================================================================
     // PHASE 17: FLIP AND ROTATE — Flip the pasted layer
@@ -787,6 +802,7 @@ test.describe('Composition 2: Geometric Design', () => {
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-15-flip-rotate.png' });
+    await parityCheckpoint(page, 'shapes', '15-flip-rotate');
 
     // =====================================================================
     // PHASE 18: GRID AND GUIDES
@@ -807,6 +823,7 @@ test.describe('Composition 2: Geometric Design', () => {
     expect(gridVisible).toBe(true);
 
     await page.screenshot({ path: 'e2e/screenshots/comp2-16-grid.png' });
+    await parityCheckpoint(page, 'shapes', '16-grid');
 
     // Toggle guides via keyboard shortcut (default is true, so toggling turns them off)
     await page.keyboard.press('Control+;');
@@ -903,6 +920,7 @@ test.describe('Composition 2: Geometric Design', () => {
     // FINAL SCREENSHOT
     // =====================================================================
     await page.screenshot({ path: 'e2e/screenshots/comp2-final-geometric.png' });
+    await parityCheckpoint(page, 'shapes', 'final-geometric');
 
     const finalState = await getEditorState(page);
     expect(finalState.document.layers.length).toBeGreaterThanOrEqual(4);
