@@ -12,8 +12,6 @@ import type { Engine } from '../../engine-wasm/wasm-bridge';
 import type { SubBrush } from '../../types/brush';
 import type { Point } from '../../types';
 import {
-  applyBrushDab as gpuBrushDab,
-  applyBrushDabBatch as gpuBrushDabBatch,
   applyEraserDab as gpuEraserDab,
   applyEraserDabBatch as gpuEraserDabBatch,
   drawPencilLine as gpuDrawPencilLine,
@@ -28,6 +26,7 @@ import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
 import type { SymmetryConfig } from '../../tools/symmetry';
 import { getMirroredPoints, mirrorBatchPoints, isSymmetryActive } from '../../tools/symmetry';
 import { handleBrushStroke } from '../../tools/brush/brush-stroke';
+import { brushDabBatchSymmetric, brushDabSymmetric } from './symmetric-dabs';
 import { handlePencilStroke } from '../../tools/pencil/pencil-stroke';
 import { handleEraserStroke } from '../../tools/eraser/eraser-stroke';
 import { getQuickMaskPaintMode } from './quick-mask-paint';
@@ -53,10 +52,10 @@ function emitSubBrushDabs(
     const sJ = sub.sizeJitter / 100;
     const subAJ = sub.angleJitter / 100;
     const subOJ = sub.opacityJitter / 100;
-    gpuBrushDabBatch(engine, layerId, pts, subSize, subHardness, r, g, b, a, subOpacity, 1, sJ, subAJ, subOJ);
-    for (const m of mirrorBatchPoints(pts, sym)) {
-      gpuBrushDabBatch(engine, layerId, m, subSize, subHardness, r, g, b, a, subOpacity, 1, sJ, subAJ, subOJ);
-    }
+    brushDabBatchSymmetric(engine, layerId, pts, sym, {
+      size: subSize, hardness: subHardness, r, g, b, a, opacity: subOpacity,
+      flow: 1, sizeJitter: sJ, angleJitter: subAJ, opacityJitter: subOJ,
+    });
   }
   restorePrimaryBrushTip(engine);
 }
@@ -383,10 +382,10 @@ export function handlePaintDown(
               px += perpX * offset;
               py += perpY * offset;
             }
-            gpuBrushDab(engine, activeLayerId, px, py, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-            for (const mp of getMirroredPoints(px, py, sym)) {
-              gpuBrushDab(engine, activeLayerId, mp.x, mp.y, dabSize, jH, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-            }
+            brushDabSymmetric(engine, activeLayerId, px, py, sym, {
+              size: dabSize, hardness: jH, r, g, b, a: color.a, opacity,
+              flow: 1, sizeJitter: 0, angleJitter: aJ, opacityJitter: oJ,
+            });
             const curSpacing = Math.max(1, dabSize * brushSpacing / 100);
             walked += curSpacing;
           }
@@ -399,10 +398,10 @@ export function handlePaintDown(
         if (brushFade > 0) {
           emitFlatDabsWithFade(engine, activeLayerId, pts, baseSize, baseHardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
         } else {
-          gpuBrushDabBatch(engine, activeLayerId, pts, baseSize, baseHardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-          for (const m of mirrorBatchPoints(pts, sym)) {
-            gpuBrushDabBatch(engine, activeLayerId, m, baseSize, baseHardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-          }
+          brushDabBatchSymmetric(engine, activeLayerId, pts, sym, {
+            size: baseSize, hardness: baseHardness, r, g, b, a: color.a, opacity,
+            flow: 1, sizeJitter: 0, angleJitter: aJ, opacityJitter: oJ,
+          });
           const subs = getActiveSubBrushes();
           if (subs.length > 0) emitSubBrushDabs(engine, activeLayerId, pts, baseSize, r, g, b, color.a, opacity, subs, sym);
         }
@@ -410,10 +409,10 @@ export function handlePaintDown(
     } else {
       const fadedOpacity = brushFade > 0 ? opacity * Math.max(0, 1 - (state.strokeDistance ?? 0) / brushFade) : opacity;
       if (fadedOpacity > 0) {
-        gpuBrushDab(engine, activeLayerId, layerPos.x, layerPos.y, baseSize, baseHardness, r, g, b, color.a, fadedOpacity, 1, 0, aJ, oJ);
-        for (const mp of getMirroredPoints(layerPos.x, layerPos.y, sym)) {
-          gpuBrushDab(engine, activeLayerId, mp.x, mp.y, baseSize, baseHardness, r, g, b, color.a, fadedOpacity, 1, 0, aJ, oJ);
-        }
+        brushDabSymmetric(engine, activeLayerId, layerPos.x, layerPos.y, sym, {
+          size: baseSize, hardness: baseHardness, r, g, b, a: color.a, opacity: fadedOpacity,
+          flow: 1, sizeJitter: 0, angleJitter: aJ, opacityJitter: oJ,
+        });
         const subs = getActiveSubBrushes();
         if (subs.length > 0) {
           const pts = new Float64Array([layerPos.x, layerPos.y]);
@@ -536,10 +535,10 @@ function emitFlatDabsWithFade(
 
     const fadeFactor = Math.max(0, 1 - dist / fadeDistance);
     const fadedOp = baseOpacity * fadeFactor;
-    gpuBrushDab(engine, layerId, px, py, size, hardness, r, g, b, a, fadedOp, 1, sJ, aJ, oJ);
-    for (const mp of getMirroredPoints(px, py, sym)) {
-      gpuBrushDab(engine, layerId, mp.x, mp.y, size, hardness, r, g, b, a, fadedOp, 1, sJ, aJ, oJ);
-    }
+    brushDabSymmetric(engine, layerId, px, py, sym, {
+      size, hardness, r, g, b, a, opacity: fadedOp,
+      flow: 1, sizeJitter: sJ, angleJitter: aJ, opacityJitter: oJ,
+    });
   }
   state.strokeDistance = dist;
 }
@@ -581,10 +580,10 @@ function emitDabsWithFade(
 
     const fadeFactor = Math.max(0, 1 - dist / fadeDistance);
     const fadedOp = baseOpacity * fadeFactor;
-    gpuBrushDab(engine, layerId, pt.x, pt.y, size, hardness, r, g, b, a, fadedOp, 1, sJ, aJ, oJ);
-    for (const mp of getMirroredPoints(pt.x, pt.y, sym)) {
-      gpuBrushDab(engine, layerId, mp.x, mp.y, size, hardness, r, g, b, a, fadedOp, 1, sJ, aJ, oJ);
-    }
+    brushDabSymmetric(engine, layerId, pt.x, pt.y, sym, {
+      size, hardness, r, g, b, a, opacity: fadedOp,
+      flow: 1, sizeJitter: sJ, angleJitter: aJ, opacityJitter: oJ,
+    });
   }
   state.strokeDistance = dist;
 }

@@ -14,6 +14,7 @@ uniform vec2 u_docSize;
 uniform vec2 u_layerOffset;
 uniform sampler2D u_brushTip;
 uniform float u_angle;
+uniform mat2 u_dabTransform;
 uniform vec2 u_tipAspect;
 uniform float u_sizeJitter;
 uniform float u_angleJitter;
@@ -34,7 +35,7 @@ float dabHash(vec2 center, float seed) {
 // Compute rotated + aspect-corrected UV for tip-based brushes.
 // Returns UV in [0,1] range. Caller must discard if out of bounds.
 vec2 computeTipUV(vec2 fragPos, vec2 center, float jSize, float jAngle) {
-    vec2 uv = (fragPos - center) / jSize;
+    vec2 uv = (u_dabTransform * (fragPos - center)) / jSize;
     float ca = cos(jAngle);
     float sa = sin(jAngle);
     uv = mat2(ca, sa, -sa, ca) * uv;

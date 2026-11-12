@@ -212,6 +212,10 @@ pub struct EngineInner {
     pub brush_has_tip: bool,
     pub brush_tip_is_color: bool,
     pub brush_angle: f32,
+    /// Row-major 2x2 map from a dab's local offset to the tip-space offset
+    /// it samples. Symmetry copies set it to the inverse of their
+    /// reflection/rotation so each copy carries a mirrored/rotated tip.
+    pub brush_dab_transform: [f32; 4],
     // Sub-brush tip cache: pre-processed textures to avoid per-dab Gaussian blur
     pub sub_brush_tips: Vec<Option<(TextureHandle, u32, u32, bool)>>,
     pub saved_primary_tip: Option<(TextureHandle, u32, u32, bool)>,
@@ -433,6 +437,7 @@ impl EngineInner {
             brush_has_tip: false,
             brush_tip_is_color: false,
             brush_angle: 0.0,
+            brush_dab_transform: [1.0, 0.0, 0.0, 1.0],
             sub_brush_tips: Vec::new(),
             saved_primary_tip: None,
             stroke_texture_origin: (0.0, 0.0),

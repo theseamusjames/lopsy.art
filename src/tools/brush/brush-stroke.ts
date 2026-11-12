@@ -4,10 +4,8 @@ import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { useEditorStore } from '../../app/editor-store';
 import { interpolatePointsWithScatter } from './brush';
 import type { SymmetryConfig } from '../symmetry';
-import { mirrorBatchPoints } from '../symmetry';
-import {
-  applyBrushDabBatch as gpuBrushDabBatch,
-} from '../../engine-wasm/wasm-bridge';
+import { brushDabBatchSymmetric } from '../../app/interactions/symmetric-dabs';
+import type { BrushDabParams } from '../../app/interactions/symmetric-dabs';
 import type { SubBrush } from '../../types/brush';
 
 interface BrushStrokeDeps {
@@ -95,6 +93,10 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
   }
 
   const spacing = Math.max(1, size * brush.spacing / 100);
+  const dabParams: BrushDabParams = {
+    size, hardness, r, g, b, a: color.a, opacity,
+    flow: 1, sizeJitter: 0, angleJitter: aJ, opacityJitter: oJ,
+  };
 
   if (brushFade > 0 && (state.strokeDistance ?? 0) >= brushFade) {
     state.lastPoint = layerLocalPos;
@@ -111,10 +113,7 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
         pts[i * 2] = scatterPts[i]!.x;
         pts[i * 2 + 1] = scatterPts[i]!.y;
       }
-      gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-      for (const m of mirrorBatchPoints(pts, sym)) {
-        gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-      }
+      brushDabBatchSymmetric(engine, state.layerId, pts, sym, dabParams);
       const subs = deps.getActiveSubBrushes();
       if (subs.length > 0) deps.emitSubBrushDabs(engine, state.layerId, pts, size, r, g, b, color.a, opacity, subs, sym);
     }
@@ -124,10 +123,7 @@ export function handleBrushStroke(deps: BrushStrokeDeps): void {
     if (brushFade > 0) {
       deps.emitFlatDabsWithFade(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, brushFade, state, sym, 0, aJ, oJ);
     } else {
-      gpuBrushDabBatch(engine, state.layerId, pts, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-      for (const m of mirrorBatchPoints(pts, sym)) {
-        gpuBrushDabBatch(engine, state.layerId, m, size, hardness, r, g, b, color.a, opacity, 1, 0, aJ, oJ);
-      }
+      brushDabBatchSymmetric(engine, state.layerId, pts, sym, dabParams);
       const subs2 = deps.getActiveSubBrushes();
       if (subs2.length > 0) deps.emitSubBrushDabs(engine, state.layerId, pts, size, r, g, b, color.a, opacity, subs2, sym);
     }
