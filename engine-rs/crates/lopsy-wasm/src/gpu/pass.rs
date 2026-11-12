@@ -27,9 +27,17 @@
 //!
 //! The `Inherit` variants exist only for that transition and go away once
 //! every module is converted.
+//!
+//! Build and draw one pass before starting the next: a pass makes its
+//! program current when it is created and sets uniforms as it is built.
+//!
+//! A tool that stamps many dabs with one shader uses [`Pass::begin`]
+//! instead of [`Pass::draw`]. That sets the pass up once and returns an
+//! [`ActivePass`], which redraws with only a uniform or two and the scissor
+//! rect changing between draws.
 
 use lopsy_core::geometry::Rect;
-use web_sys::WebGl2RenderingContext as GL;
+use web_sys::{WebGl2RenderingContext as GL, WebGlUniformLocation};
 
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
 use crate::gpu::shader::ShaderProgram;
@@ -106,6 +114,17 @@ impl<'a> GpuRef<'a> {
             scissor: Scissor::Inherit,
             blend: Blend::Inherit,
             clear: None,
+        }
+    }
+
+    /// Unbind the textures on units `0..count`, leaving unit 0 active. A
+    /// texture left bound to a sampler unit while it is also a render target
+    /// is a feedback loop, and some drivers then discard the draw. Call this
+    /// before rendering into a texture an earlier pass sampled.
+    pub fn unbind_textures(self, count: u32) {
+        for unit in (0..count).rev() {
+            self.gl.active_texture(GL::TEXTURE0 + unit);
+            self.gl.bind_texture(GL::TEXTURE_2D, None);
         }
     }
 
@@ -246,16 +265,28 @@ impl<'a> Pass<'a> {
     /// Run the pass. Returns `false`, having drawn nothing, if the target
     /// or one of the input textures no longer exists.
     pub fn draw(self, target: Target) -> bool {
+        match self.begin(target) {
+            Some(active) => {
+                active.draw();
+                active.end();
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Set the pass up for several draws. Returns `None`, having changed
+    /// no target or blend state, if the target or one of the input textures
+    /// no longer exists. Call [`ActivePass::end`] when done.
+    pub fn begin(self, target: Target) -> Option<ActivePass<'a>> {
         if self.has_missing_texture {
-            return false;
+            return None;
         }
         let GpuRef { gl, textures, fbos, render_fbo } = self.gpu;
 
         let default_viewport = match target {
             Target::Texture(handle) => {
-                let (Some(tex), Some((w, h))) = (textures.get(handle), textures.get_size(handle)) else {
-                    return false;
-                };
+                let (tex, (w, h)) = (textures.get(handle)?, textures.get_size(handle)?);
                 fbos.attach_texture(gl, render_fbo, tex);
                 fbos.bind(gl, render_fbo);
                 Some([0, 0, w as i32, h as i32])
@@ -273,12 +304,14 @@ impl<'a> Pass<'a> {
             gl.viewport(x, y, w, h);
         }
 
+        let mut is_scissor_enabled = false;
         match self.scissor {
             Scissor::Inherit => {}
             Scissor::Off => gl.disable(GL::SCISSOR_TEST),
             Scissor::Rect(rect) => {
                 gl.enable(GL::SCISSOR_TEST);
                 gl.scissor(rect.x, rect.y, rect.width as i32, rect.height as i32);
+                is_scissor_enabled = true;
             }
         }
 
@@ -306,20 +339,91 @@ impl<'a> Pass<'a> {
             gl.clear(GL::COLOR_BUFFER_BIT);
         }
 
-        gl.draw_arrays(GL::TRIANGLES, 0, 3);
+        Some(ActivePass {
+            gpu: self.gpu,
+            program: self.program,
+            target,
+            blend: self.blend,
+            is_scissor_enabled,
+        })
+    }
+}
 
+/// A uniform of the pass's program, looked up once so a loop of draws can
+/// set it without a name lookup each time.
+pub struct UniformSlot(Option<WebGlUniformLocation>);
+
+/// A pass that has been set up and can draw repeatedly. Made by
+/// [`Pass::begin`]; finish with [`ActivePass::end`].
+#[must_use = "call `end` to put the pass's blend, scissor and target state back"]
+pub struct ActivePass<'a> {
+    gpu: GpuRef<'a>,
+    program: &'a ShaderProgram,
+    target: Target,
+    blend: Blend,
+    is_scissor_enabled: bool,
+}
+
+impl ActivePass<'_> {
+    pub fn slot(&self, name: &str) -> UniformSlot {
+        UniformSlot(self.program.location(self.gpu.gl, name))
+    }
+
+    pub fn set_i32(&self, slot: &UniformSlot, value: i32) {
+        if let Some(loc) = &slot.0 {
+            self.gpu.gl.uniform1i(Some(loc), value);
+        }
+    }
+
+    pub fn set_f32(&self, slot: &UniformSlot, value: f32) {
+        if let Some(loc) = &slot.0 {
+            self.gpu.gl.uniform1f(Some(loc), value);
+        }
+    }
+
+    pub fn set_vec2(&self, slot: &UniformSlot, x: f32, y: f32) {
+        if let Some(loc) = &slot.0 {
+            self.gpu.gl.uniform2f(Some(loc), x, y);
+        }
+    }
+
+    pub fn set_vec4(&self, slot: &UniformSlot, x: f32, y: f32, z: f32, w: f32) {
+        if let Some(loc) = &slot.0 {
+            self.gpu.gl.uniform4f(Some(loc), x, y, z, w);
+        }
+    }
+
+    /// Draw with the scissor state the pass began with.
+    pub fn draw(&self) {
+        self.gpu.gl.draw_arrays(GL::TRIANGLES, 0, 3);
+    }
+
+    /// Draw limited to `rect`, in target texels. The scissor test stays on
+    /// for the pass's later draws, so each one names its own rect.
+    pub fn draw_in(&mut self, rect: Rect) {
+        let gl = self.gpu.gl;
+        if !self.is_scissor_enabled {
+            gl.enable(GL::SCISSOR_TEST);
+            self.is_scissor_enabled = true;
+        }
+        gl.scissor(rect.x, rect.y, rect.width as i32, rect.height as i32);
+        gl.draw_arrays(GL::TRIANGLES, 0, 3);
+    }
+
+    /// Put back the state the pass changed.
+    pub fn end(self) {
+        let gl = self.gpu.gl;
         if self.blend.enables_blending() {
             gl.disable(GL::BLEND);
             gl.blend_equation(GL::FUNC_ADD);
             gl.blend_func(GL::ONE, GL::ZERO);
         }
-        if matches!(self.scissor, Scissor::Rect(_)) {
+        if self.is_scissor_enabled {
             gl.disable(GL::SCISSOR_TEST);
         }
-        if matches!(target, Target::Texture(_)) {
-            fbos.unbind(gl);
+        if matches!(self.target, Target::Texture(_)) {
+            self.gpu.fbos.unbind(gl);
         }
-        true
     }
 }
 
