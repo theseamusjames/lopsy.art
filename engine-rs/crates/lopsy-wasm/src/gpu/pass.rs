@@ -161,6 +161,17 @@ impl<'a> GpuRef<'a> {
         true
     }
 
+    /// Read back `w × h` texels of `texture` starting at `(x, y)` as 16-bit
+    /// RGBA.
+    pub fn read_rgba_u16(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Result<Vec<u16>, String> {
+        let tex = self.textures.get(texture).ok_or("Texture not found")?;
+        self.fbos.attach_texture(self.gl, self.render_fbo, tex);
+        self.fbos.bind(self.gl, self.render_fbo);
+        let result = self.textures.read_rgba_u16(self.gl, x, y, w, h);
+        self.fbos.unbind(self.gl);
+        result
+    }
+
     /// Upload `w * h` single-byte values as a temporary R8 texture and run
     /// `program` over it into `dst`, with the bytes bound to `sampler` and
     /// blending off. This is how one-byte-per-texel data reaches a pooled
@@ -214,6 +225,25 @@ impl<'a> GpuRef<'a> {
         self.fbos.unbind(gl);
         gl.delete_texture(Some(&staging));
         Ok(())
+    }
+
+    /// Fill `rect` of `texture` (in texels) with `color`, leaving the rest
+    /// untouched. Returns `false` if the texture no longer exists.
+    pub fn clear_rect(self, texture: TextureHandle, rect: Rect, color: [f32; 4]) -> bool {
+        let (Some(tex), Some((w, h))) = (self.textures.get(texture), self.textures.get_size(texture)) else {
+            return false;
+        };
+        let gl = self.gl;
+        self.fbos.attach_texture(gl, self.render_fbo, tex);
+        self.fbos.bind(gl, self.render_fbo);
+        gl.viewport(0, 0, w as i32, h as i32);
+        gl.enable(GL::SCISSOR_TEST);
+        gl.scissor(rect.x, rect.y, rect.width as i32, rect.height as i32);
+        gl.clear_color(color[0], color[1], color[2], color[3]);
+        gl.clear(GL::COLOR_BUFFER_BIT);
+        gl.disable(GL::SCISSOR_TEST);
+        self.fbos.unbind(gl);
+        true
     }
 
     /// Read back `w × h` texels of `texture` starting at `(x, y)` as RGBA8.

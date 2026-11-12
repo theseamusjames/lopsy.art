@@ -33,8 +33,6 @@ const PATTERN = /\bWebGl\w+|\bgl\.[a-z_0-9]+\(/g;
 const BASELINE = {
   'engine.rs': 8,
   'effect_cache_gpu.rs': 40,
-  'layer_transform_gpu.rs': 45,
-  'layer_manager.rs': 446,
   'compositor.rs': 627,
 };
 
