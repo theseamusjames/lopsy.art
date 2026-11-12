@@ -64,6 +64,9 @@ jobs:
         if: steps.wasm-cache.outputs.cache-hit != 'true'
         run: npm run wasm:build
 
+      - name: Check engine bundle size
+        run: npm run wasm:size
+
       - name: Upload WASM pkg artifact
         uses: actions/upload-artifact@v4
         with:
