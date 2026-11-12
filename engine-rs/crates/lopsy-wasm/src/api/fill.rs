@@ -3,7 +3,7 @@
 //! selection-mask machinery that only `floodFill` and its callers need.
 
 use wasm_bindgen::prelude::*;
-use web_sys::WebGl2RenderingContext;
+use crate::gpu::pass::Target;
 
 use crate::{Engine, layer_manager};
 
@@ -73,69 +73,49 @@ pub fn bucket_fill_by_color_gpu(
     let sample_u = (sample_lx as f32 + 0.5) / tw as f32;
     let sample_v = (sample_ly as f32 + 0.5) / th as f32;
 
-    let layer_tex = match engine.inner.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.inner.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     // Selection mask (if any) is uploaded into a layer-sized RGBA texture
     // with the doc mask placed at (-layer_x, -layer_y) — same alignment
     // machinery as apply_fill_impl.
-    let sel_tex_handle_gl = if let Some(mask) = selection_mask {
+    let sel_upload = if let Some(mask) = selection_mask {
         upload_doc_mask_to_layer_tex(engine, layer_x, layer_y, tw, th, &mask, sel_w, sel_h)
     } else {
         None
     };
-    let sel_tex_gl = sel_tex_handle_gl.and_then(|h| {
-        engine.inner.texture_pool.get(h).cloned().map(|t| (h, t))
-    });
+    let sel_tex = sel_upload.filter(|&h| engine.inner.texture_pool.get(h).is_some());
 
-    let gl = &engine.inner.gl;
-    let out_tex_h = match engine.inner.texture_pool.acquire(gl, tw, th) {
+    let out_tex_h = match engine.inner.texture_pool.acquire(&engine.inner.gl, tw, th) {
         Ok(h) => h,
         Err(_) => {
-            if let Some((h, _)) = sel_tex_gl { engine.inner.texture_pool.release(h); }
+            if let Some(h) = sel_tex { engine.inner.texture_pool.release(h); }
             return;
         }
     };
-    let out_tex = match engine.inner.texture_pool.get(out_tex_h) {
-        Some(t) => t.clone(),
-        None => {
-            engine.inner.texture_pool.release(out_tex_h);
-            if let Some((h, _)) = sel_tex_gl { engine.inner.texture_pool.release(h); }
-            return;
-        }
+    if engine.inner.texture_pool.get(out_tex_h).is_none() {
+        engine.inner.texture_pool.release(out_tex_h);
+        if let Some(h) = sel_tex { engine.inner.texture_pool.release(h); }
+        return;
+    }
+
+    let eng = &engine.inner;
+    let pass = eng.pass(&eng.shaders.bucket_fill_color_match).texture("u_layerTex", tex_handle);
+    let pass = match sel_tex {
+        Some(sel) => pass.texture("u_selMaskTex", sel),
+        None => pass.i32("u_selMaskTex", 1),
     };
-
-    let has_sel = sel_tex_gl.is_some();
-    let sel_tex_gl_ref = sel_tex_gl.as_ref().map(|(_, t)| t.clone());
-
-    engine.inner.render_to_texture(&out_tex, tw as i32, th as i32, |eng| {
-        let gl = &eng.gl;
-        let shader = &eng.shaders.bucket_fill_color_match;
-        gl.use_program(Some(&shader.program));
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_layerTex") { gl.uniform1i(Some(&loc), 0); }
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        if let Some(t) = &sel_tex_gl_ref {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-        }
-        if let Some(loc) = shader.location(gl, "u_selMaskTex") { gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(gl, "u_hasSelMask") { gl.uniform1i(Some(&loc), if has_sel { 1 } else { 0 }); }
-        if let Some(loc) = shader.location(gl, "u_sampleUv") { gl.uniform2f(Some(&loc), sample_u, sample_v); }
-        if let Some(loc) = shader.location(gl, "u_fillColor") { gl.uniform4f(Some(&loc), fill_r, fill_g, fill_b, fill_a); }
-        if let Some(loc) = shader.location(gl, "u_tolerance") { gl.uniform1f(Some(&loc), tolerance); }
-
-        eng.draw_fullscreen_quad();
-    });
+    pass.i32("u_hasSelMask", i32::from(sel_tex.is_some()))
+        .vec2("u_sampleUv", sample_u, sample_v)
+        .vec4("u_fillColor", fill_r, fill_g, fill_b, fill_a)
+        .f32("u_tolerance", tolerance)
+        .draw(Target::Texture(out_tex_h));
 
     if let Some(old) = engine.inner.layer_textures.insert(layer_id.to_string(), out_tex_h) {
         engine.inner.texture_pool.release(old);
     }
-    if let Some((h, _)) = sel_tex_gl {
+    if let Some(h) = sel_tex {
         engine.inner.texture_pool.release(h);
     }
     engine.inner.mark_layer_dirty(layer_id);
@@ -194,49 +174,37 @@ fn apply_fill_impl(
         .map(|l| (l.x, l.y))
         .unwrap_or((0, 0));
 
-    let layer_tex = match engine.inner.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.inner.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     let mask_tex = match upload_doc_mask_to_layer_tex(engine, layer_x, layer_y, w, h, mask, width, height) {
         Some(h) => h,
         None => return,
     };
 
-    let gl = &engine.inner.gl;
-    let out_tex_h = match engine.inner.texture_pool.acquire(gl, w, h) {
+    let out_tex_h = match engine.inner.texture_pool.acquire(&engine.inner.gl, w, h) {
         Ok(h) => h,
         Err(_) => {
             engine.inner.texture_pool.release(mask_tex);
             return;
         }
     };
-    let out_tex = match engine.inner.texture_pool.get(out_tex_h) {
-        Some(t) => t.clone(),
-        None => {
-            engine.inner.texture_pool.release(mask_tex);
-            engine.inner.texture_pool.release(out_tex_h);
-            return;
-        }
-    };
+    if engine.inner.texture_pool.get(out_tex_h).is_none() {
+        engine.inner.texture_pool.release(mask_tex);
+        engine.inner.texture_pool.release(out_tex_h);
+        return;
+    }
 
-    let mask_tex_gl = engine.inner.texture_pool.get(mask_tex).cloned();
-    engine.inner.render_to_texture(&out_tex, w as i32, h as i32, |eng| {
-        let gl = &eng.gl;
-        let shader = &eng.shaders.flood_fill_apply;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_layerTex") { gl.uniform1i(Some(&loc), 0); }
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        if let Some(t) = &mask_tex_gl {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-        }
-        if let Some(loc) = shader.location(gl, "u_maskTex") { gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(gl, "u_fillColor") { gl.uniform4f(Some(&loc), fill_r, fill_g, fill_b, fill_a); }
-        eng.draw_fullscreen_quad();
-    });
+    let eng = &engine.inner;
+    let pass = eng.pass(&eng.shaders.flood_fill_apply).texture("u_layerTex", tex_handle);
+    let pass = if eng.texture_pool.get(mask_tex).is_some() {
+        pass.texture("u_maskTex", mask_tex)
+    } else {
+        pass.i32("u_maskTex", 1)
+    };
+    pass.vec4("u_fillColor", fill_r, fill_g, fill_b, fill_a)
+        .draw(Target::Texture(out_tex_h));
 
     if let Some(old) = engine.inner.layer_textures.insert(layer_id.to_string(), out_tex_h) {
         engine.inner.texture_pool.release(old);
