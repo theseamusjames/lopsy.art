@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { waitForStore } from './helpers';
+import { getWebGLRenderer, isSoftwareRenderer, waitForStore } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -84,9 +84,14 @@ function formatProfile(
   return out;
 }
 
+// Replaces the chromium project's SwiftShader launch args for this file.
+// ANGLE with no backend named picks the platform's own GPU backend (Metal on
+// macOS); `--use-gl=angle` has to stay, because without it the headless shell
+// creates no WebGL context at all. For numbers worth comparing, run this spec
+// on its own: `npx playwright test brush-perf-6k --project=chromium --workers=1`.
 test.use({
   launchOptions: {
-    args: ['--enable-webgl', '--enable-webgl2-compute-context', '--ignore-gpu-blocklist'],
+    args: ['--use-gl=angle', '--enable-webgl', '--ignore-gpu-blocklist'],
   },
 });
 
@@ -102,17 +107,11 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
     test.skip(browserName !== 'chromium', 'CDP profiler requires Chromium');
     test.setTimeout(600_000);
 
-    const hasWebGL2 = await page.evaluate(() => {
-      const c = document.createElement('canvas');
-      const gl = c.getContext('webgl2');
-      return !!gl;
-    });
-    test.skip(!hasWebGL2, 'WebGL2 not available (SwiftShader may not support 6K textures)');
-
-    // This test intentionally drops SwiftShader to profile on real GPU.
-    // Skip if the canvas never renders (headless env without GPU).
-    const canvasVisible = await page.locator('[data-testid="canvas-container"]').isVisible({ timeout: 15_000 }).catch(() => false);
-    test.skip(!canvasVisible, 'canvas not visible — no GPU available (headless without SwiftShader)');
+    // Profiles the real GPU. A CPU rasterizer says nothing about brush
+    // latency on a 6000x4000 canvas, so skip rather than report its numbers.
+    const renderer = await getWebGLRenderer(page);
+    test.skip(renderer === null, 'no GPU available: the browser could not create a WebGL2 context');
+    test.skip(isSoftwareRenderer(renderer ?? ''), `no GPU available: software renderer (${renderer})`);
 
     const outDir = path.join(process.cwd(), 'tests', 'screenshots');
     fs.mkdirSync(outDir, { recursive: true });
@@ -197,7 +196,8 @@ test.describe('Brush perf — 6000x4000 cross-hatch', () => {
 
     const bp = analyzeProfile(brushProfile as { nodes: ProfileNode[]; samples: number[]; timeDeltas: number[] });
 
-    let report = `PHASE 1: Brush Hatching — 6000x4000 (${brushElapsed}ms)\n`;
+    let report = `Renderer: ${renderer}\n\n`;
+    report += `PHASE 1: Brush Hatching — 6000x4000 (${brushElapsed}ms)\n`;
     report += `============================================================\n\n`;
     report += `Strokes: ${strokes.length} | Strokes/sec: ${(strokes.length / (brushElapsed / 1000)).toFixed(1)}\n`;
     report += `Per-stroke p50: ${pctl(strokeDurations, 0.5)}ms  p95: ${pctl(strokeDurations, 0.95)}ms  max: ${strokeDurations[strokeDurations.length - 1]}ms\n\n`;

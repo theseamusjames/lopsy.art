@@ -25,6 +25,31 @@ export async function withEditorStore<T>(
 }
 
 // ---------------------------------------------------------------------------
+// GPU detection — for benchmarks that only mean something on real hardware
+// ---------------------------------------------------------------------------
+
+/**
+ * The unmasked WebGL2 renderer string of the browser the page runs in, e.g.
+ * `ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, ...)`. Returns `null`
+ * when the browser cannot create a WebGL2 context at all.
+ *
+ * Reads a throwaway context, so it works before any document exists.
+ */
+export async function getWebGLRenderer(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) return null;
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : 'unknown';
+  });
+}
+
+/** True when the renderer string names a CPU rasterizer rather than a GPU. */
+export function isSoftwareRenderer(renderer: string): boolean {
+  return /SwiftShader|llvmpipe|softpipe/i.test(renderer);
+}
+
+// ---------------------------------------------------------------------------
 // Document lifecycle
 // ---------------------------------------------------------------------------
 

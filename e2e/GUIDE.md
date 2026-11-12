@@ -286,6 +286,7 @@ them instead.
 | `getPixelAt(page, x, y, layerId?)` | Reads a single pixel from `__readLayerPixels`. Returns `{r:0, g:0, b:0, a:0}` for out-of-bounds. |
 | `paintRect` / `paintCircle` | **Deprecated.** Use `drawRect` / `drawEllipse` instead (supports alpha via `a` field, 0–1). |
 | `docToScreen(page, docX, docY)` | Projects doc coords to screen coords for mouse events. |
+| `getWebGLRenderer(page)` / `isSoftwareRenderer(renderer)` | The browser's unmasked WebGL2 renderer string (`null` when there is no WebGL2), and whether it names a CPU rasterizer (SwiftShader, llvmpipe). GPU benchmarks use them to skip when there is no real GPU; they work before a document exists. |
 
 **UI interaction helpers (all drive real UI):**
 
