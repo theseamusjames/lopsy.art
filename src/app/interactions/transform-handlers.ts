@@ -20,16 +20,12 @@ import { notifyInfo } from '../notifications-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
-  floatSelection,
   hasFloat,
-  setSelectionMask,
-  clearSelection,
-  compositeFloat,
   compositeFloatAffine,
   compositeFloatPerspective,
   dropFloat,
 } from '../../engine-wasm/wasm-bridge';
-import { isLayerAlphaSelection } from '../../panels/LayerPanel/layer-selection';
+import { floatLayerSelection } from './float-layer-selection';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { growFloatToCover } from './float-growth';
 import { cancelPrefloat } from './prefloat';
@@ -120,26 +116,8 @@ export function handleTransformDown(ctx: InteractionContext): InteractionState |
 
   if (!persistentTransformRef.current && sel.active && sel.mask) {
     if (engine && !hasFloat(engine)) {
-      // Ensure selection mask is on the GPU before floating, otherwise
-      // floatSelection extracts the entire layer instead of just the
-      // selected pixels.
-      const maskBytes = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
-      // A layer-alpha selection means the whole layer, but its doc-sized
-      // mask drops whatever lies past the canvas edge. Lift unmasked so
-      // that part turns with the rest instead of staying behind (#994).
-      const isWholeLayer = isLayerAlphaSelection(activeLayerId, sel.mask);
-      if (isWholeLayer) {
-        clearSelection(engine);
-      } else {
-        setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
-      }
-
       // The float covers the union of the canvas and the layer.
-      floatSelection(engine, activeLayerId);
-      compositeFloat(engine, 0, 0);
-      if (isWholeLayer) {
-        setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
-      }
+      floatLayerSelection(engine, activeLayerId, sel);
 
       // Mirror the float's expanded texture rect into the store so neither
       // engine-sync nor the post-drop store holds the pre-float bounds.

@@ -12,22 +12,8 @@ import { createTransformState } from '../../tools/transform/transform';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
 import { schedulePrefloat } from '../../app/interactions/prefloat';
+import { recordLayerAlphaSelection } from '../../app/interactions/layer-alpha-selection';
 import { getMaskDocOrigin } from '../../layers/mask-origin';
-
-/**
- * The most recent selection built from a layer's alpha, identified by its
- * mask array (every later selection change installs a new array). A
- * document-sized mask cannot hold the part of a layer past the canvas edge,
- * so a transform of this selection lifts the whole layer instead (#994).
- */
-let layerAlphaSelection: { layerId: string; mask: Uint8ClampedArray } | null = null;
-
-/** Whether `mask` is still the alpha selection `selectLayerAlpha` made for `layerId`. */
-export function isLayerAlphaSelection(layerId: string, mask: Uint8ClampedArray): boolean {
-  return layerAlphaSelection !== null
-    && layerAlphaSelection.layerId === layerId
-    && layerAlphaSelection.mask === mask;
-}
 
 export interface SelectLayerAlphaOptions {
   /** Float the selection ahead of the first drag (default true). */
@@ -73,7 +59,7 @@ export function selectLayerAlpha(layerId: string, options: SelectLayerAlphaOptio
   const bounds = selectionBounds(selMask, docW, docH);
   if (bounds) {
     editorState.setSelection(bounds, selMask, docW, docH);
-    layerAlphaSelection = { layerId, mask: selMask };
+    recordLayerAlphaSelection(layerId, selMask);
     useUIStore.getState().setTransform(createTransformState(bounds));
     // Prefloat runs ensure_layer_full_size on the engine, which re-origins
     // the layer to (0,0). For text layers that destroys the anchor

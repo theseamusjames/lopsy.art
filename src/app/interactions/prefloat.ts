@@ -1,14 +1,12 @@
 import { getEngine } from '../../engine-wasm/engine-state';
 import {
-  floatSelection,
-  compositeFloat,
-  setSelectionMask,
   hasFloat,
   dropFloat,
   snapshotLayerGpu,
   releaseGpuSnapshot,
 } from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
+import { floatLayerSelection } from './float-layer-selection';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { useEditorStore } from '../editor-store';
 import type { HistorySnapshot } from '../store/types';
@@ -62,12 +60,7 @@ function executePrefloat(layerId: string, mask: Uint8ClampedArray, bounds: Rect)
     selectedPathId: state.selectedPathId,
   };
 
-  // Now float the selection
-  const maskBytes = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
-  setSelectionMask(engine, maskBytes, sel.maskWidth, sel.maskHeight);
-
-  floatSelection(engine, layerId);
-  compositeFloat(engine, 0, 0);
+  floatLayerSelection(engine, layerId, sel);
 
   // Floating expands the layer's texture to the document (union its
   // content). Mirror the whole new rect — not just x/y — into the store: a
