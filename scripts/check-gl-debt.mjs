@@ -62,7 +62,7 @@ const BASELINE = {
   'engine.rs': 125,
   'brush_gpu.rs': 187,
   'layer_manager.rs': 446,
-  'compositor.rs': 663,
+  'compositor.rs': 627,
 };
 
 function walk(dir) {
