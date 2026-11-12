@@ -71,6 +71,30 @@ jobs:
           path: src/engine-wasm/pkg
           retention-days: 1
 
+  rust-test:
+    name: Rust tests (cargo test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache cargo registry, git, and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            engine-rs/target
+          key: cargo-test-${{ runner.os }}-${{ hashFiles('engine-rs/**/Cargo.lock') }}
+          restore-keys: |
+            cargo-test-${{ runner.os }}-
+
+      # Plain Node, no install: the script only runs cargo.
+      - run: npm run wasm:test
+
   lint:
     name: Lint (ESLint + pixel-debt)
     runs-on: ubuntu-latest
