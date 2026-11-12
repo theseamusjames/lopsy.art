@@ -39,13 +39,21 @@ async function lastClickReadPx(page: Page): Promise<number> {
   });
 }
 
-async function layerXs(page: Page, ids: string[]): Promise<number[]> {
+interface LayerSpan {
+  x: number;
+  right: number;
+}
+
+async function layerSpans(page: Page, ids: string[]): Promise<LayerSpan[]> {
   return page.evaluate((ids) => {
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
-      getState: () => { document: { layers: { id: string; x: number }[] } };
+      getState: () => { document: { layers: { id: string; x: number; width: number }[] } };
     };
     const layers = store.getState().document.layers;
-    return ids.map((id) => layers.find((l) => l.id === id)!.x);
+    return ids.map((id) => {
+      const layer = layers.find((l) => l.id === id)!;
+      return { x: layer.x, right: layer.x + layer.width };
+    });
   }, ids);
 }
 
@@ -66,11 +74,16 @@ test.describe('Align reads content bounds on the GPU (#1604)', () => {
     }
     await selectTool(page, 'move');
     await installClickReadCounter(page);
+    // The squares are drawn with the mouse, and a fractional fit-zoom can land
+    // an edge a pixel off the requested one (Firefox does), so the expected
+    // positions come from where the layers actually are.
+    const drawn = await layerSpans(page, ids);
 
     await page.getByRole('button', { name: 'Align left', exact: true }).click();
     await page.waitForTimeout(200);
     const singleRead = await lastClickReadPx(page);
-    expect(await layerXs(page, ids)).toEqual([300, 700, 0]);
+    const afterLeft = await layerSpans(page, ids);
+    expect(afterLeft.map((l) => l.x)).toEqual([drawn[0]!.x, drawn[1]!.x, 0]);
 
     // Multi-select the other two layers in the Layers panel.
     await page.locator(`[data-layer-id="${ids[0]}"]`).click({ modifiers: ['Shift'] });
@@ -85,8 +98,10 @@ test.describe('Align reads content bounds on the GPU (#1604)', () => {
     expect(singleRead).toBeLessThan((DOC_W * DOC_H) / 10);
     expect(multiRead).toBeLessThan((DOC_W * DOC_H) / 10);
 
-    // The three selected 200 px squares line up on their shared right edge
-    // (x 900, the right edge of the middle square).
-    expect(await layerXs(page, ids)).toEqual([700, 700, 700]);
+    // The three selected squares line up on their shared right edge, the
+    // right edge of the middle square.
+    const sharedRight = Math.max(...afterLeft.map((l) => l.right));
+    expect(sharedRight).toBe(drawn[1]!.right);
+    expect((await layerSpans(page, ids)).map((l) => l.right)).toEqual([sharedRight, sharedRight, sharedRight]);
   });
 });

@@ -17,3 +17,13 @@ export function isLayerAlphaSelection(layerId: string, mask: Uint8ClampedArray):
     && layerAlphaSelection.layerId === layerId
     && layerAlphaSelection.mask === mask;
 }
+
+/**
+ * Stop treating the recorded mask as "the whole layer". A tool that writes
+ * pixels can put some outside the mask while the mask array stays the same;
+ * lifting the whole layer afterwards would drag those unselected pixels
+ * along with the selection.
+ */
+export function forgetLayerAlphaSelection(): void {
+  layerAlphaSelection = null;
+}
