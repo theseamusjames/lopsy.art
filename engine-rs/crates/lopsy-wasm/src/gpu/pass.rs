@@ -37,6 +37,7 @@
 //! rect changing between draws.
 
 use lopsy_core::geometry::Rect;
+use wasm_bindgen::JsCast;
 use web_sys::{WebGl2RenderingContext as GL, WebGlUniformLocation};
 
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
@@ -244,6 +245,32 @@ impl<'a> GpuRef<'a> {
         gl.disable(GL::SCISSOR_TEST);
         self.fbos.unbind(gl);
         true
+    }
+
+    /// Copy `region` of `src`'s colour attachment to the origin of `dst`,
+    /// texel for texel. Returns `false` if `dst` no longer exists.
+    pub fn copy_region(self, src: FramebufferHandle, region: Rect, dst: TextureHandle) -> bool {
+        let Some(tex) = self.textures.get(dst) else {
+            return false;
+        };
+        self.fbos.attach_texture(self.gl, self.render_fbo, tex);
+        self.fbos.blit_region(
+            self.gl,
+            src,
+            self.render_fbo,
+            (region.x, region.y, region.width as i32, region.height as i32),
+            (0, 0),
+        );
+        self.fbos.unbind(self.gl);
+        true
+    }
+
+    /// Size of the canvas [`Target::Screen`] draws to, in device pixels.
+    pub fn screen_size(self) -> Result<(i32, i32), String> {
+        let canvas = self.gl.canvas().ok_or("WebGL canvas missing")?;
+        let canvas: web_sys::HtmlCanvasElement =
+            canvas.dyn_into().map_err(|_| "canvas is not HtmlCanvasElement")?;
+        Ok((canvas.width() as i32, canvas.height() as i32))
     }
 
     /// Read back `w × h` texels of `texture` starting at `(x, y)` as RGBA8.
