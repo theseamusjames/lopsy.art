@@ -11,6 +11,7 @@ import {
 import { flushLayerSync, resetTrackedState, syncDocumentSize, syncSelection } from '../engine-wasm/engine-sync';
 import { smoothStroke, HOLD_TIMEOUT_MS } from '../tools/smooth-line/smooth-line';
 import { brushDabBatchSymmetric } from './interactions/symmetric-dabs';
+import { forgetLayerAlphaSelection } from './interactions/layer-alpha-selection';
 import { useToolSettingsStore } from './tool-settings-store';
 
 import { clearJsPixelData } from './store/clear-js-pixel-data';
@@ -374,6 +375,8 @@ export function useCanvasInteraction(
       // grew the marquee over everything on the layer, so a Marquee press
       // dragged that outline instead of starting a new selection.
       // Move handles this itself in handleMoveDown.
+      if (toolWritesRasterPixels(activeTool, { shapeOutput })) forgetLayerAlphaSelection();
+
       if (activeTool !== 'move' && engine && hasFloat(engine)) {
         commitLiveFloat();
 

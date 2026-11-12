@@ -9,9 +9,13 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
 
 const bridge = await import('../../engine-wasm/wasm-bridge');
 const { floatLayerSelection } = await import('./float-layer-selection');
-const { recordLayerAlphaSelection } = await import('./layer-alpha-selection');
+const { recordLayerAlphaSelection, forgetLayerAlphaSelection } = await import('./layer-alpha-selection');
 
 const engine = {} as unknown as Parameters<typeof floatLayerSelection>[0];
+
+function selectionMask(): Uint8ClampedArray {
+  return new Uint8ClampedArray(16);
+}
 
 function calls(): string[] {
   const order: Array<[number, string]> = [];
@@ -25,23 +29,31 @@ describe('floatLayerSelection', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('lifts an ordinary selection through its mask', () => {
-    const mask = new Uint8ClampedArray(16);
+    const mask = selectionMask();
     floatLayerSelection(engine, 'a', { mask, maskWidth: 4, maskHeight: 4 });
     expect(calls()).toEqual(['setSelectionMask', 'floatSelection', 'compositeFloat']);
   });
 
   it('lifts a layer-alpha selection of the same layer unmasked, then reinstalls the mask (#1605)', () => {
-    const mask = new Uint8ClampedArray(16);
+    const mask = selectionMask();
     recordLayerAlphaSelection('a', mask);
     floatLayerSelection(engine, 'a', { mask, maskWidth: 4, maskHeight: 4 });
     expect(calls()).toEqual(['clearSelection', 'floatSelection', 'compositeFloat', 'setSelectionMask']);
   });
 
   it('masks a layer-alpha selection when it floats a different layer or the mask changed', () => {
-    const mask = new Uint8ClampedArray(16);
+    const mask = selectionMask();
     recordLayerAlphaSelection('a', mask);
     floatLayerSelection(engine, 'b', { mask, maskWidth: 4, maskHeight: 4 });
-    floatLayerSelection(engine, 'a', { mask: new Uint8ClampedArray(16), maskWidth: 4, maskHeight: 4 });
+    floatLayerSelection(engine, 'a', { mask: selectionMask(), maskWidth: 4, maskHeight: 4 });
     expect(vi.mocked(bridge.clearSelection)).not.toHaveBeenCalled();
+  });
+
+  it('masks a layer-alpha selection once a pixel-writing tool has forgotten it', () => {
+    const mask = selectionMask();
+    recordLayerAlphaSelection('a', mask);
+    forgetLayerAlphaSelection();
+    floatLayerSelection(engine, 'a', { mask, maskWidth: 4, maskHeight: 4 });
+    expect(calls()).toEqual(['setSelectionMask', 'floatSelection', 'compositeFloat']);
   });
 });
