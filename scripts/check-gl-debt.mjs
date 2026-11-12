@@ -31,10 +31,9 @@ const PATTERN = /\bWebGl\w+|\bgl\.[a-z_0-9]+\(/g;
 // number of raw GL references the file may contain. Sorted smallest
 // first, which is also the rough conversion order.
 const BASELINE = {
-  'thumbnail_gpu.rs': 35,
+  'engine.rs': 8,
   'effect_cache_gpu.rs': 40,
   'layer_transform_gpu.rs': 45,
-  'engine.rs': 125,
   'layer_manager.rs': 446,
   'compositor.rs': 627,
 };

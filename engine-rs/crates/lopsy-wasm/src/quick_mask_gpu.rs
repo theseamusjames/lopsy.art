@@ -20,7 +20,7 @@ pub fn fill_quick_mask(
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
 
     // Read mask texture as RGBA
-    let Some(tex) = engine.texture_pool.get(tex_handle).cloned() else { return };
+    if engine.texture_pool.get(tex_handle).is_none() { return; }
     let Ok(rgba) = engine.gpu().read_rgba(tex_handle, 0, 0, w, h) else { return };
 
     // Extract grayscale from RGBA
@@ -66,7 +66,7 @@ pub fn fill_quick_mask(
         }
     }
 
-    if let Err(e) = engine.expand_mask_bytes_into(&tex, &mask, w, h) {
+    if let Err(e) = engine.expand_mask_bytes_into(tex_handle, &mask, w, h) {
         web_sys::console::warn_1(&format!("fill_quick_mask: {e}").into());
     }
     engine.needs_recomposite = true;
@@ -158,11 +158,11 @@ pub fn exit_quick_mask_mode(engine: &mut EngineInner) -> Option<Vec<u8>> {
 pub fn read_quick_mask_pixels(engine: &EngineInner) -> (u32, u32, Vec<u8>) {
     let Some(handle) = engine.quick_mask_texture else { return (0, 0, Vec::new()) };
     let Some((w, h)) = engine.texture_pool.get_size(handle) else { return (0, 0, Vec::new()) };
-    let Some(tex) = engine.texture_pool.get(handle).cloned() else { return (0, 0, Vec::new()) };
+    if engine.texture_pool.get(handle).is_none() { return (0, 0, Vec::new()); }
 
     // R8 staging: 1 byte per pixel back over the bridge instead of 4,
     // and no CPU-side strided extract (#745).
-    match engine.read_texture_r8(&tex, w, h) {
+    match engine.read_texture_r8(handle, w, h) {
         Some(data) => (w, h, data),
         None => (0, 0, Vec::new()),
     }
@@ -184,8 +184,8 @@ pub fn upload_quick_mask_pixels(
         None => return,
     };
     if tex_w != w || tex_h != h { return; }
-    let Some(tex) = engine.texture_pool.get(tex_handle).cloned() else { return };
-    if let Err(e) = engine.expand_mask_bytes_into(&tex, data, w, h) {
+    if engine.texture_pool.get(tex_handle).is_none() { return; }
+    if let Err(e) = engine.expand_mask_bytes_into(tex_handle, data, w, h) {
         web_sys::console::warn_1(&format!("upload_quick_mask_pixels: {e}").into());
         return;
     }
