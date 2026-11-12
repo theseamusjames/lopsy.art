@@ -1114,11 +1114,5 @@ impl Drop for EngineInner {
     fn drop(&mut self) {
         self.texture_pool.destroy(&self.gl);
         self.fbo_pool.destroy(&self.gl);
-        if let Some(tr) = self.text_renderer.as_mut() {
-            #[cfg(target_arch = "wasm32")]
-            tr.glyph_atlas.destroy(&self.gl);
-            #[cfg(not(target_arch = "wasm32"))]
-            tr.glyph_atlas.destroy();
-        }
     }
 }
