@@ -176,8 +176,9 @@ migration, not only at the end.
 measures the wasm binary and its JS glue, raw and gzipped, and fails if
 either is more than 3% over the budget recorded in the script, unless
 the PR raises the budget explicitly. The margin absorbs toolchain drift.
-Baseline: `lopsy_wasm_bg.wasm` 4.30 MB raw, 1.84 MB gzip; `lopsy_wasm.js`
-236 KB raw, 27 KB gzip. The app's own JS chunks are not covered, because
+Baseline, as built by CI: `lopsy_wasm_bg.wasm` 4.23 MB raw, 1.82 MB gzip;
+`lopsy_wasm.js` 236 KB raw, 27 KB gzip. A local macOS build of the same
+source is about 1.8% larger. The app's own JS chunks are not covered, because
 PR CI does not run `vite build`.
 
 **Initial load time, at milestones and on PRs that change startup
