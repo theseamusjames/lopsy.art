@@ -50,7 +50,6 @@ const BASELINE = {
   'quick_mask_gpu.rs': 99,
   'filter_gpu.rs': 104,
   'engine.rs': 125,
-  'brush_gpu.rs': 187,
   'layer_manager.rs': 446,
   'compositor.rs': 627,
 };
