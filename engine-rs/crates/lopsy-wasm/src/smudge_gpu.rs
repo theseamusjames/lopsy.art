@@ -1,5 +1,4 @@
 use lopsy_core::dab_rect::dab_rect;
-use web_sys::WebGl2RenderingContext;
 
 use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
@@ -41,10 +40,9 @@ pub fn apply_smudge_dab_batch(
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
     if engine.ensure_scratch_size(w, h).is_err() {
         return;
     }
@@ -57,32 +55,21 @@ pub fn apply_smudge_dab_batch(
         let Some(rect) = dab_rect(cx, cy, size, w, h) else {
             continue;
         };
-        scratch_dab_pass(engine, &layer_tex, w, h, rect, |engine| {
-            let gl = &engine.gl;
-            let shader = &engine.shaders.smudge_dab;
-            gl.use_program(Some(&shader.program));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-            if let Some(loc) = shader.location(gl, "u_sourceTex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
-            if let Some(loc) = shader.location(gl, "u_center") {
-                gl.uniform2f(Some(&loc), cx, cy);
-            }
-            if let Some(loc) = shader.location(gl, "u_prev") {
-                gl.uniform2f(Some(&loc), prev_x, prev_y);
-            }
-            if let Some(loc) = shader.location(gl, "u_size") {
-                gl.uniform1f(Some(&loc), size);
-            }
-            if let Some(loc) = shader.location(gl, "u_strength") {
-                gl.uniform1f(Some(&loc), strength);
-            }
-            if let Some(loc) = shader.location(gl, "u_texSize") {
-                gl.uniform2f(Some(&loc), w as f32, h as f32);
-            }
-            engine.draw_fullscreen_quad();
-        });
+        scratch_dab_pass(
+            engine,
+            tex_handle,
+            w,
+            h,
+            rect,
+            engine
+                .pass(&engine.shaders.smudge_dab)
+                .texture("u_sourceTex", tex_handle)
+                .vec2("u_center", cx, cy)
+                .vec2("u_prev", prev_x, prev_y)
+                .f32("u_size", size)
+                .f32("u_strength", strength)
+                .vec2("u_texSize", w as f32, h as f32),
+        );
     }
 
     engine.mark_layer_dirty(layer_id);
