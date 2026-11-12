@@ -1,22 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-// transform-handlers creates its selection-transform coalescer at import
-// time. Install rAF/cancelAnimationFrame stubs above the ES-hoisted
-// imports so the coalescer's captured closures see the stubs.
-const rafHandles = vi.hoisted(() => {
-  const state: { cbs: FrameRequestCallback[]; nextId: number } = {
-    cbs: [],
-    nextId: 1,
-  };
-  globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number => {
-    state.cbs.push(cb);
-    return state.nextId++;
-  };
-  globalThis.cancelAnimationFrame = (): void => {
-    state.cbs = [];
-  };
-  return state;
-});
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../engine-wasm/wasm-bridge', () => ({
   floatSelection: vi.fn(() => new Int32Array()),
@@ -86,14 +68,20 @@ vi.mock('../ui-store', () => ({
 
 import {
   handleTransformMove,
-  flushSelectionTransform,
+  commitSelectionTransform,
 } from './transform-handlers';
 import { createTransformState } from '../../tools/transform/transform';
+import type { TransformHandle } from '../../tools/transform/transform';
+import { getMarqueePreview, setMarqueePreview } from '../../tools/marquee/marquee-preview';
+import { useToolSettingsStore } from '../tool-settings-store';
 import type { InteractionState } from './interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from './interaction-types';
 
+type Bounds = { x: number; y: number; width: number; height: number };
+
 function makeState(
   overrides: Partial<InteractionState> & { startState?: ReturnType<typeof createTransformState> } = {},
+  handle: TransformHandle = 'bottom-right',
 ): InteractionState {
   const startState =
     overrides.startState ?? createTransformState({ x: 10, y: 10, width: 30, height: 30 });
@@ -112,7 +100,7 @@ function makeState(
     ...overrides,
     gesture: {
       kind: 'transform',
-      handle: 'bottom-right',
+      handle,
       startState,
       startAngle: 0,
       selectionOnly: true,
@@ -121,103 +109,64 @@ function makeState(
   };
 }
 
-describe('handleTransformMove — selection-transform coalescing (issue #653)', () => {
-  beforeEach(() => {
-    rafHandles.cbs = [];
-    rafHandles.nextId = 1;
+function committedBounds(): Bounds {
+  return editorState.setSelection.mock.calls[0]![0] as Bounds;
+}
 
+function committedMask(): Uint8ClampedArray {
+  return editorState.setSelection.mock.calls[0]![1] as Uint8ClampedArray;
+}
+
+describe('marquee handle resize (#1421, #653)', () => {
+  beforeEach(() => {
+    commitSelectionTransform();
+    setMarqueePreview(null);
     editorState.setSelection.mockClear();
     editorState.notifyRender.mockClear();
     uiState.setTransform.mockClear();
     uiState.activeTool = 'marquee-rect';
-
-    // Drain any stale pending frame from a prior test.
-    flushSelectionTransform();
-    editorState.setSelection.mockClear();
-    uiState.setTransform.mockClear();
-    rafHandles.cbs = [];
+    useToolSettingsStore.setState({ aspectRatioLocked: false, aspectRatioW: 1, aspectRatioH: 1 });
   });
 
-  afterEach(() => {
-    rafHandles.cbs = [];
-  });
-
-  function tickFrame(): void {
-    const pending = rafHandles.cbs;
-    rafHandles.cbs = [];
-    for (const cb of pending) cb(0);
-  }
-
-  // Pinning the invariant from #651: N pointer moves in one frame reach
-  // the underlying mask rebuild + setSelection exactly ONCE — not N
-  // times. This is the whole point of the coalescer.
-  it('collapses a burst of moves into 1 setSelection per frame', () => {
+  // #1421: rebuilding and uploading a document-sized mask on every frame
+  // made resizing crawl. The drag only moves the analytic preview.
+  it('builds no mask while the handle is dragged', () => {
     const state = makeState();
     for (let i = 0; i < 12; i++) {
       handleTransformMove(state, { x: 40 + i, y: 40 + i }, false);
     }
     expect(editorState.setSelection).not.toHaveBeenCalled();
-    tickFrame();
-    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
-    expect(uiState.setTransform).toHaveBeenCalledTimes(1);
+    expect(uiState.setTransform).not.toHaveBeenCalled();
+    expect(getMarqueePreview()).toEqual({ kind: 'rect', rect: { x: 10, y: 10, width: 41, height: 41 } });
   });
 
-  // #653 (1): the coalescer runs regardless of selection tool. Marquee-ellipse
-  // is a marquee variant, lasso/wand were the concern in #650 — verify the
-  // coalescer fires exactly once per frame for each.
-  for (const tool of ['marquee-rect', 'marquee-ellipse', 'lasso', 'lasso-magnetic', 'wand'] as const) {
-    it(`coalesces bursts for selection tool "${tool}"`, () => {
-      uiState.activeTool = tool;
-      const state = makeState({ tool });
-      for (let i = 0; i < 5; i++) {
-        handleTransformMove(state, { x: 40 + i, y: 40 + i }, false);
-      }
-      expect(editorState.setSelection).not.toHaveBeenCalled();
-      tickFrame();
-      expect(editorState.setSelection).toHaveBeenCalledTimes(1);
-    });
-  }
-
-  // #653 (2): the last-position wins. Only the newest args survive to the
-  // frame; intermediate positions are dropped by design.
-  it('uses only the latest pointer position when firing', () => {
+  it('commits the last dragged box once on release', () => {
     const state = makeState();
     handleTransformMove(state, { x: 45, y: 45 }, false);
     handleTransformMove(state, { x: 60, y: 60 }, false);
-    tickFrame();
+    commitSelectionTransform();
 
     expect(editorState.setSelection).toHaveBeenCalledTimes(1);
-    const [bounds] = editorState.setSelection.mock.calls[0]! as [
-      { x: number; y: number; width: number; height: number },
-      Uint8ClampedArray,
-      number,
-      number,
-    ];
-    // Starting bounds were 10..40 (30-wide). Bottom-right handle drag by
-    // (+20,+20) grows the box by 20 on the right + bottom edges, so the
-    // new bounds are x:10 y:10 w:50 h:50 (drag centered on cx+dx/2).
-    expect(bounds.width).toBeGreaterThan(30);
-    expect(bounds.height).toBeGreaterThan(30);
+    expect(committedBounds()).toEqual({ x: 10, y: 10, width: 50, height: 50 });
+    expect(uiState.setTransform).toHaveBeenCalledTimes(1);
+    expect(getMarqueePreview()).toBeNull();
   });
 
-  // #653 (3): ellipse vs rect mask correctness. marquee-ellipse produces
-  // an elliptical mask (corners are 0); every other selection tool falls
-  // through to a rectangular mask.
+  it('commits nothing when the handle was only tapped', () => {
+    handleTransformMove(makeState(), { x: 40, y: 40 }, false);
+    commitSelectionTransform();
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+
   it('produces an elliptical mask when the active tool is marquee-ellipse', () => {
     uiState.activeTool = 'marquee-ellipse';
     const state = makeState({ tool: 'marquee-ellipse' });
     handleTransformMove(state, { x: 60, y: 60 }, false);
-    tickFrame();
+    expect(getMarqueePreview()?.kind).toBe('ellipse');
+    commitSelectionTransform();
 
-    const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
-      { x: number; y: number; width: number; height: number },
-      Uint8ClampedArray,
-      number,
-      number,
-    ];
-    // Ellipse mask: the four corner pixels of the tight bounding box are
-    // outside the ellipse, so their alpha is 0. A pixel near the centre
-    // is inside.
+    const bounds = committedBounds();
+    const mask = committedMask();
     const cornerIdx = Math.floor(bounds.y) * DOC_W + Math.floor(bounds.x);
     const centreIdx =
       Math.floor(bounds.y + bounds.height / 2) * DOC_W +
@@ -227,65 +176,47 @@ describe('handleTransformMove — selection-transform coalescing (issue #653)', 
   });
 
   it('produces a rectangular mask for non-ellipse selection tools', () => {
-    uiState.activeTool = 'marquee-rect';
-    const state = makeState({ tool: 'marquee-rect' });
-    handleTransformMove(state, { x: 60, y: 60 }, false);
-    tickFrame();
-
-    const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
-      { x: number; y: number; width: number; height: number },
-      Uint8ClampedArray,
-      number,
-      number,
-    ];
-    // Rect mask: every pixel inside the bounds is 255 including the
-    // corner where the ellipse mask would have been 0.
-    const cornerIdx = Math.floor(bounds.y) * DOC_W + Math.floor(bounds.x);
-    expect(mask[cornerIdx]).toBe(255);
+    for (const tool of ['marquee-rect', 'lasso', 'lasso-magnetic'] as const) {
+      editorState.setSelection.mockClear();
+      uiState.activeTool = tool;
+      handleTransformMove(makeState({ tool }), { x: 60, y: 60 }, false);
+      commitSelectionTransform();
+      const bounds = committedBounds();
+      expect(committedMask()[Math.floor(bounds.y) * DOC_W + Math.floor(bounds.x)]).toBe(255);
+    }
   });
 
-  // #653 (4): degenerate / collapsed bounds is a no-op on commit. Dragging
-  // the bottom-right handle past the top-left collapses width/height to 0
-  // or negative; the coalescer's underlying apply function must not push
-  // an empty mask through setSelection.
-  it('does not push a mask when the transform collapses bounds below 1px', () => {
-    const state = makeState();
-    // Drag bottom-right handle so far above/left that width+height both
-    // go to zero. computeScale for bottom-right adds deltaX/origW to
-    // scaleX and deltaY/origH to scaleY. deltaX = -30, origW = 30 →
-    // scaleX = 0 → width = 0.
-    handleTransformMove(state, { x: 10, y: 10 }, false);
-    tickFrame();
-
-    expect(editorState.setSelection).not.toHaveBeenCalled();
-    expect(uiState.setTransform).not.toHaveBeenCalled();
+  it('never collapses or flips the box when dragged past the opposite corner', () => {
+    handleTransformMove(makeState(), { x: 0, y: 0 }, false);
+    commitSelectionTransform();
+    expect(committedBounds()).toEqual({ x: 10, y: 10, width: 1, height: 1 });
   });
 
-  // #653 (2, extension): the coalescer schedules and then no-ops when the
-  // computed transform lands at the same effective position twice.
-  it('reschedules cleanly after a flush (a subsequent burst produces a new call)', () => {
-    const state = makeState();
-
-    handleTransformMove(state, { x: 45, y: 45 }, false);
-    tickFrame();
-    handleTransformMove(state, { x: 50, y: 50 }, false);
-    tickFrame();
-
-    expect(editorState.setSelection).toHaveBeenCalledTimes(2);
+  // #1421: the lock applied only while drawing, not while resizing.
+  it('keeps the locked aspect ratio on a corner drag', () => {
+    useToolSettingsStore.setState({ aspectRatioLocked: true, aspectRatioW: 16, aspectRatioH: 9 });
+    const startState = createTransformState({ x: 10, y: 10, width: 32, height: 18 });
+    handleTransformMove(makeState({ startState, startPoint: { x: 42, y: 28 } }), { x: 74, y: 70 }, false);
+    commitSelectionTransform();
+    expect(committedBounds()).toEqual({ x: 10, y: 10, width: 64, height: 36 });
   });
 
-  // flushSelectionTransform is the test seam used by pointer-up
-  // handling — pending work must fire synchronously.
-  it('flushSelectionTransform runs pending work synchronously', () => {
-    const state = makeState();
-    handleTransformMove(state, { x: 45, y: 45 }, false);
-    expect(editorState.setSelection).not.toHaveBeenCalled();
-    flushSelectionTransform();
-    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+  it('keeps the locked aspect ratio on an edge drag', () => {
+    useToolSettingsStore.setState({ aspectRatioLocked: true, aspectRatioW: 2, aspectRatioH: 1 });
+    const startState = createTransformState({ x: 10, y: 20, width: 40, height: 20 });
+    handleTransformMove(
+      makeState({ startState, startPoint: { x: 50, y: 30 } }, 'right'),
+      { x: 70, y: 30 },
+      false,
+    );
+    commitSelectionTransform();
+    expect(committedBounds()).toEqual({ x: 10, y: 15, width: 60, height: 30 });
   });
 
-  it('flushSelectionTransform is a no-op when nothing is pending', () => {
-    flushSelectionTransform();
-    expect(editorState.setSelection).not.toHaveBeenCalled();
+  it('resizes freely when the lock is off', () => {
+    const startState = createTransformState({ x: 10, y: 10, width: 32, height: 18 });
+    handleTransformMove(makeState({ startState, startPoint: { x: 42, y: 28 } }), { x: 74, y: 70 }, false);
+    commitSelectionTransform();
+    expect(committedBounds()).toEqual({ x: 10, y: 10, width: 64, height: 60 });
   });
 });

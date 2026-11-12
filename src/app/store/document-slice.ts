@@ -1,4 +1,5 @@
-import type { BlendMode, LayerEffects, Layer, Rect, DocumentColorMode } from '../../types';
+import type { BlendMode, Color, LayerEffects, Layer, Rect, DocumentColorMode } from '../../types';
+import { planBorder, type BorderPlacement, type BorderWidths } from '../../layers/border';
 import type { AdjustmentNodeType, AdjustmentNode } from '../../types/adjustment-nodes';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
@@ -6,10 +7,11 @@ import { createDefaultNode, createDefaultAdjustments } from '../../filters/adjus
 import { createImageData } from '../../engine/color-space';
 import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil, buildFlatDisplayList, findParentGroup, isAncestorOf, removeFromParentGroup } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
-import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
+import { getContentBounds } from '../../tools/move/move';
+import { layerContentRect } from '../layer-content-rect';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
-import { flushLayerSync, rerenderTransformedTextLayers, captureUprightTextAnchors, rerenderTextLayersAt } from '../../engine-wasm/engine-sync';
-import { uploadLayerPixels, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
+import { flushLayerSync, rerenderTransformedTextLayers, captureUprightTextAnchors, rerenderTextLayersAt, syncDocumentSize } from '../../engine-wasm/engine-sync';
+import { uploadLayerPixels, fillLayerFrame, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
 import { cancelPrefloat } from '../interactions/prefloat';
 import { releaseSnapshotsForDocumentReset } from './history-slice';
 import { invalidateBitmapCache, clearBitmapCache } from '../../engine/bitmap-cache';
@@ -34,7 +36,9 @@ import { computeFlattenImage } from './actions/flatten-image';
 import { computeRasterizeStyle, canRasterizeLayerStyle } from './actions/rasterize-style';
 import { resolveRasterTextBounds } from './actions/resolve-raster-text-bounds';
 import { computeCropCanvas } from './actions/crop-canvas';
-import { computeResizeCanvas } from './actions/resize-canvas';
+import { computeResizeCanvas, computeResizeCanvasAtOffset } from './actions/resize-canvas';
+import { computeAddBorderLayer } from './actions/add-border';
+import { getMaxDocumentSide } from '../../engine-wasm/gpu-limits';
 import { computeResizeImage, scaleGuidesForResize, scalePathsForResize } from './actions/resize-image';
 import { computeConvertColorMode, layersWithPixels, paletteFromBytes, paletteToBytes } from './actions/convert-color-mode';
 import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
@@ -58,35 +62,18 @@ import {
   computeUpdateMaskData,
 } from './actions/layer-property-updates';
 
-/** Merge dense + sparse + GPU pixel data into a single map for compute
- *  functions. Pulls from the PixelDataManager and falls back to GPU
- *  readback for layers that have no JS data. */
-function resolveAllPixelData(
-  layerIds?: readonly string[],
-  layers?: readonly Layer[],
-): Map<string, ImageData> {
-  const merged = new Map(pixelDataManager.denseMap());
-  for (const [id, entry] of pixelDataManager.sparseMap()) {
-    if (!merged.has(id)) {
-      merged.set(id, sparseToImageData(entry.sparse));
-    }
-  }
-  if (layerIds) {
-    for (const id of layerIds) {
-      if (!merged.has(id)) {
-        // Skip group layers — they have no GPU texture.
-        if (layers) {
-          const layer = layers.find((l) => l.id === id);
-          if (layer && layer.type === 'group') continue;
-        }
-        const gpuData = readLayerAsImageData(id);
-        if (gpuData) {
-          merged.set(id, gpuData);
-        }
-      }
-    }
-  }
-  return merged;
+/**
+ * Document-space content bounds of a layer for Align. JS pixel data, when the
+ * layer still has some, is scanned on the CPU; otherwise the bounds come from
+ * the GPU reduction (cached by content generation), so nothing is read back.
+ */
+function alignContentBounds(layer: Layer): Rect | null {
+  const dense = pixelDataManager.get(layer.id);
+  if (dense) return getContentBounds(dense, layer.x, layer.y);
+  const sparse = pixelDataManager.getSparse(layer.id);
+  if (sparse) return getContentBounds(sparseToImageData(sparse.sparse), layer.x, layer.y);
+  const engine = getEngine();
+  return engine ? layerContentRect(engine, layer.id) : null;
 }
 
 /** Apply an ActionResult: if it carries pixel data, push it to the manager;
@@ -280,6 +267,7 @@ export interface DocumentSlice {
   updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => void;
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
+  addBorder: (color: Color, widths: BorderWidths, placement: BorderPlacement) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
   convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => void;
 
@@ -609,11 +597,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     finalizePendingStrokeGlobal();
     const s = get();
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
-    const result = computeAlignLayer(
-      s.document,
-      resolveAllPixelData(s.document.layerOrder, s.document.layers),
-      s.selection, s.renderVersion, edge,
-    );
+    const result = computeAlignLayer(s.document, alignContentBounds, s.selection, s.renderVersion, edge);
     if (!result) return;
     s.pushHistory('Align Layer');
     applyActionResult(set, result);
@@ -722,9 +706,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     // GPU-only (mergeLayers composites on the GPU); the compute
     // function invalidates JS pixel cache for the two touched layers
     // directly. No whole-document round trip (#746).
+    const belowId = s.document.layerOrder[s.document.layerOrder.indexOf(s.document.activeLayerId ?? '') - 1];
     const result = computeMergeDown(s.document);
     if (!result) return;
     applyActionResult(set, result);
+    // #1443: mergeLayers rewrote the lower layer's texture after the
+    // snapshot above, so it must be dirty or the next snapshot (undo's redo
+    // entry) reuses its pre-merge handle whenever its bounds didn't change.
+    if (belowId) set({ dirtyLayerIds: new Set(get().dirtyLayerIds).add(belowId) });
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
@@ -759,6 +748,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const result = computeRasterizeStyle(s.document);
     if (!result) return;
     applyActionResult(set, result);
+    // Baked after the snapshot above; dirty so the redo entry copies it (#1443).
+    const bakedId = s.document.activeLayerId;
+    if (bakedId) set({ dirtyLayerIds: new Set(get().dirtyLayerIds).add(bakedId) });
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
@@ -821,10 +813,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   addLayerMask: (id) => {
     const s = get();
-    const result = computeAddLayerMask(s.document, s.renderVersion, id);
+    const result = computeAddLayerMask(s.document, s.renderVersion, id, s.selection);
     if (!result) return;
     s.pushHistoryMetadata('Add Mask');
     set(result);
+    // The selection is now the mask; keeping it would leave marching ants
+    // over a selection that no longer does anything (#1545).
+    if (s.selection.active) get().clearSelection();
   },
 
   removeLayerMask: (id) => {
@@ -881,6 +876,38 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (result.layerPixelData && result.document) {
       syncPixelDataToGpu(result.layerPixelData, result.document.layers);
     }
+  },
+
+  addBorder: (color, widths, placement) => {
+    finalizePendingStrokeGlobal();
+    const s = get();
+    if (!allowLayerCreation(s.document)) return;
+    const engine = getEngine();
+    if (!engine) return;
+    const plan = planBorder(s.document.width, s.document.height, widths, placement, getMaxDocumentSide());
+    if (!plan) return;
+    s.pushHistory('Border');
+
+    if (placement === 'expand') {
+      applyActionResult(set, computeResizeCanvasAtOffset(
+        s.document, s.renderVersion, plan.width, plan.height, plan.offsetX, plan.offsetY,
+      ));
+    }
+    const { document, layerId } = computeAddBorderLayer(get().document, placement);
+    set((state) => ({ document, renderVersion: state.renderVersion + 1 }));
+
+    // The fill writes the engine's texture directly, so the engine must
+    // already know the new canvas size and the new layer.
+    syncDocumentSize(engine, plan.width, plan.height);
+    flushLayerSync(get());
+    const hole = plan.hole ?? { x: 0, y: 0, width: 0, height: 0 };
+    fillLayerFrame(
+      engine, layerId, color.r / 255, color.g / 255, color.b / 255, color.a,
+      hole.x, hole.y, hole.width, hole.height,
+    );
+    pixelDataManager.bumpVersion(layerId);
+    set((state) => ({ dirtyLayerIds: new Set(state.dirtyLayerIds).add(layerId) }));
+    get().notifyRender();
   },
 
   resizeImage: (newWidth, newHeight) => {

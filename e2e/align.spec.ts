@@ -191,12 +191,13 @@ test.describe('Align layer content', () => {
     expect(Math.abs(pos.x - 0)).toBeLessThanOrEqual(1);
 
     // Content center is at approximately doc (10, 20) after align left.
-    // Read a pixel well inside the content to verify it moved.
+    // Read a pixel well inside the content to verify it moved; pixel data
+    // is layer-local, so convert from document coordinates.
     // Firefox WebGL readback has timing issues after drawRect + align
     // that cause stale pixel reads; verified working on Chromium.
     if (browserName !== 'firefox') {
       await page.waitForTimeout(200);
-      const pixel = await getPixelAt(page, 10, 20);
+      const pixel = await getPixelAt(page, 10 - pos.x, 20 - pos.y);
       expect(pixel.r).toBeGreaterThan(200);
       expect(pixel.a).toBeGreaterThan(200);
     }

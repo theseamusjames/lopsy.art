@@ -1,6 +1,15 @@
 node_modules
 dist
 .context
+
+# Secrets never belong in this public repo. Credentials live outside it
+# (e.g. ~/.config/lopsy/r2.env); these patterns are a backstop.
+.env
+.env.*
+*.env
+
+# Tutorial projects live in R2 (npm run tutorial:upload), never in git.
+tutorials/**/*.lopsy
 *.local
 .DS_Store
 storybook-static

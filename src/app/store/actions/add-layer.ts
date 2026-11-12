@@ -1,13 +1,14 @@
 import type { DocumentState } from '../../../types';
 import type { ActionResult } from '../types';
 import { createRasterLayer } from '../../../layers/layer-model';
+import { nextDefaultLayerName } from '../../../layers/layer-naming';
 import { getInsertionGroupId, getInsertionOrderIndex, addToGroup } from '../../../layers/group-utils';
 
 export function computeAddLayer(
   doc: DocumentState,
 ): ActionResult {
   const newLayer = createRasterLayer({
-    name: `Layer ${doc.layers.length + 1}`,
+    name: nextDefaultLayerName(doc.layers, 'Layer'),
     width: doc.width,
     height: doc.height,
   });

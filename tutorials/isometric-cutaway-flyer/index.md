@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Mushroom Underground flyer, with the Layers panel open beside an isometric block of earth under a cream and red 3D title
 finished: finished-mushroom-underground-flyer.webp
 finishedAlt: The finished flyer on a deep purple night sky. MUSHROOM UNDERGROUND runs across the top in chunky cream capitals with a dark red 3D extrusion. Below it floats an isometric block of earth. On its grass top are a small cabin with a glowing doorway, a stepping-stone path, a lantern, two teal trees and three red-and-white fly agarics. The left face is cut away to show a grow cave with shelves of cream mushrooms, two hanging lamps and glowing mint mushrooms on the floor. Glowing mint mycelium threads spread through the right face behind the skewed words DEEP CELLAR FARMS · EST. 1926. Mint spores float in the sky, and a rounded panel at the bottom reads FUNGI FARM OPEN HOUSE, SATURDAY · NOVEMBER 14 · 4–9 PM, grow-cave tours · spore tasting · lantern walk, 127 CELLAR LANE · FREE ENTRY · ALL AGES
-project: isometric-cutaway-flyer.lopsy
+project: tutorials/isometric-cutaway-flyer/3427399d1387/isometric-cutaway-flyer.lopsy
 ---
 
 Isometric illustration draws a 3D scene with no vanishing point. Every edge runs along one of three axes, so a whole diorama can be built from flat polygons. A **cutaway** slices part of the object away to show what's inside.

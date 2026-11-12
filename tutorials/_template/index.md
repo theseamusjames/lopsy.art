@@ -41,9 +41,10 @@ coverAlt:
 finished:
 finishedAlt:
 
-# Optional. A .lopsy file next to index.md (File → Save Project). The page gets
-# a "Follow along" box under the finished image with a button that opens it in
-# the editor. Name it after the folder: <your-slug>.lopsy.
+# Optional. Save the finished project next to index.md as <your-slug>.lopsy
+# (File → Save Project), then run `npm run tutorial:upload <your-slug>`: it
+# uploads the file to R2 and fills this in with its key. The .lopsy is never
+# committed. The page gets a "Follow along" box with a button that opens it.
 project:
 
 # Drafts appear in `npm run dev` but are left out of production builds.

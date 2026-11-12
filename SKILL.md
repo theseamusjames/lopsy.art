@@ -606,10 +606,13 @@ layer), Motion Blur, Radial Blur, Lens Distortion, Chromatic Aberration,
 Kaleidoscope, Voronoi. `Invert`, `Desaturate` and `Find Edges` apply
 straight from the menu with no dialog: use `h.menu('Filter', 'Invert')`.
 **Layer → Adjustment Layer…** opens non-destructive adjustments (curves,
-levels, hue/saturation, colour balance, gradient map, and more) on a group.
+levels, hue/saturation, colour balance, colour grading, gradient map, and
+more) on a group.
 
 **Masks.** With the layer active, click `Add Mask` in the Layers panel
-toolbar, then its `Edit mask for <name>` thumbnail. In mask edit mode the
+toolbar, then its `Edit mask for <name>` thumbnail. With a selection
+active, `Add Mask` reveals only the selection: everything outside it is
+hidden, and the selection is dropped. In mask edit mode the
 Brush and Pencil always **hide** (paint black) and the Eraser always
 **reveals**, whatever the foreground colour. The Gradient and a
 selection + Fill also work on the mask.
@@ -703,9 +706,12 @@ These are by design, and the helpers already handle most of them:
 - **`Cmd+A` selects the canvas, not the layers.** It selects every layer
   only while keyboard focus is inside the Layers panel, which `h.blur()`
   clears. While editing text it selects the text.
-- **Escape** cancels text editing and commits a live transform. **`Cmd+D`**
+- **Escape** cancels text editing and commits a live transform. An open
+  popover (the Text color picker, a shape colour, a menu) takes the first
+  Escape and only closes. **`Cmd+D`**
   (the key, not the Select menu item) deselects and commits a transform.
-- **Menus close by clicking their title again**, not with Escape.
+- **Menus close by clicking their title again** or with Escape. That Escape
+  only closes the menu; it does not also deselect.
 - **Gradient stops ignore the foreground and background colours.** Set them
   in the Gradient Editor (`h.gradient`).
 - **The undo history holds 50 steps.** Save projects as checkpoints instead

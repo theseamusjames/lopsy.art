@@ -44,6 +44,29 @@ export function tutorialAssetPath(slug: string, file: string): string {
   return `${tutorialPath(slug)}${file}`;
 }
 
+/**
+ * Tutorial `.lopsy` files live only in this R2 bucket, never in git: they run
+ * to tens of MiB each, and Pages rejects any file over 25 MiB. Upload one with
+ * `npm run tutorial:upload <slug>`, which records its key in the frontmatter.
+ */
+export const PROJECT_FILES_ORIGIN = 'https://files.lopsy.art';
+export const PROJECT_FILES_BUCKET = 'lopsy-art-projects';
+
+/** A `project` frontmatter value: `tutorials/<slug>/<12 hex digest>/<file>.lopsy`. */
+export const PROJECT_KEY_PATTERN = /^tutorials\/[a-z0-9]+(-[a-z0-9]+)*\/[0-9a-f]{12}\/[^/\\]+\.lopsy$/;
+
+/**
+ * Bucket key for a project file. The content digest makes every version its
+ * own immutable object, so an upload never has to replace (or purge) one.
+ */
+export function hostedProjectKey(slug: string, digest: string, file: string): string {
+  return `tutorials/${slug}/${digest}/${file}`;
+}
+
+export function hostedProjectUrl(key: string): string {
+  return `${PROJECT_FILES_ORIGIN}/${key}`;
+}
+
 /** Editor URL that opens the project at `projectPath` as soon as the app loads. */
 export function openProjectHref(projectPath: string): string {
   return `/?${OPEN_PROJECT_PARAM}=${encodeURIComponent(projectPath)}`;

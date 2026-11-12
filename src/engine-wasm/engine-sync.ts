@@ -18,6 +18,7 @@ import type { ImageAdjustments } from '../filters/image-adjustments';
 import { buildCurvesLutRgba, isIdentityCurves } from '../filters/curves';
 import { buildLevelsLutRgba, isIdentityLevels } from '../filters/levels';
 import { nodesToLegacyAdjustments } from '../filters/adjustment-node-utils';
+import { compileColorGrade, isIdentityColorGrade } from '../filters/color-grading';
 import {
   setDocumentSize,
   setViewport,
@@ -62,6 +63,7 @@ import {
   setGroupInvert,
   setGroupHueSaturation,
   setGroupColorBalance,
+  setGroupColorGrading,
   setGroupPhotoFilter,
   setGroupBlackWhite,
   setGroupChannelMixer,
@@ -129,7 +131,7 @@ import { pathTextFont, renderTextOnPath } from '../tools/text/render-text-on-pat
 import { clearPathTextGlyphBoxes, setPathTextGlyphBoxes } from '../tools/text/path-text-hit-boxes';
 import { alignmentAnchorShift, blockWidthFromGlyphs, isPointTextLayout } from '../tools/text/point-text-align';
 import { ensureFontFacesLoaded, parseFontFamilyList } from '../utils/font-face-readiness';
-import { getTracked } from './sync-state';
+import { getTracked, markPathTextFontRedrawn } from './sync-state';
 import { textLayoutGeneration } from './text-layout-generation';
 import { syncLayers } from './sync-layers';
 
@@ -193,7 +195,8 @@ function buildGradientMapLut(
   return lut;
 }
 
-export function invalidatePathTextCache(layerId: string): void {
+export function invalidatePathTextCache(layerId: string, opts?: { isFontLoad?: boolean }): void {
+  if (opts?.isFontLoad) markPathTextFontRedrawn(layerId);
   const engine = getEngine();
   if (!engine) return;
   const tracked = getTracked(engine);
@@ -608,6 +611,9 @@ function pushGroupToEngine(
     const lut = buildGradientMapLut(gStops);
     setGroupGradientMapLut(engine, group.id, lut);
   }
+  if (adj?.colorGrading && !isIdentityColorGrade(adj.colorGrading)) {
+    setGroupColorGrading(engine, group.id, compileColorGrade(adj.colorGrading));
+  }
   return childrenJson;
 }
 
@@ -631,7 +637,8 @@ function adjIsNonTrivial(adj: ReturnType<typeof nodesToLegacyAdjustments>): bool
     (adj.colorBalanceHighlights ?? [0,0,0]).some(v => Math.abs(v) > 1e-6) ||
     (adj.photoFilterDensity ?? 0) > 1e-6 ||
     !!adj.bwEnabled || !!adj.channelMixerEnabled ||
-    (adj.gradientMapStops?.length ?? 0) >= 2
+    (adj.gradientMapStops?.length ?? 0) >= 2 ||
+    (adj.colorGrading != null && !isIdentityColorGrade(adj.colorGrading))
   );
 }
 
@@ -1095,6 +1102,7 @@ export function syncPathTextLayers(
 
     ensureFontFacesLoaded(pathTextFont(layerWithLiveText), liveText, () => {
       pathTextKeys.delete(layer.id);
+      markPathTextFontRedrawn(layer.id);
       onFontsSettled?.();
     });
   }

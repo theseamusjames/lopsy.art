@@ -4,6 +4,7 @@ import { isFontLoaded as isEngineFontLoaded, loadFontDataForFamily } from '../en
 import type { Engine } from '../engine-wasm/wasm-bridge';
 import { getEngine } from '../engine-wasm/engine-state';
 import { loadPreviewFace } from './font-previews';
+import { registerEngineFontFace } from './engine-font-faces';
 import {
   buildCss2StylesheetUrl,
   buildCss2SingleWeightUrl,
@@ -225,6 +226,7 @@ export function loadFontBinaryToEngine(family: string, weight: number, isItalic 
     if (engine && loadedIntoEngine.get(cacheKey) !== engine && loadIntoEngine(engine, family, cached)) {
       loadedIntoEngine.set(cacheKey, engine);
     }
+    registerEngineFontFace(family, weight, isItalic, cached);
     // Already loaded — the caller's immediate render already uses this font.
     return Promise.resolve(false);
   }
@@ -244,6 +246,7 @@ export function loadFontBinaryToEngine(family: string, weight: number, isItalic 
       if (!loadIntoEngine(engine, family, buf)) return false;
       binaryCache.set(cacheKey, buf);
       loadedIntoEngine.set(cacheKey, engine);
+      registerEngineFontFace(family, weight, isItalic, buf);
       return true;
     } catch {
       // All fetches failed — engine uses Inter fallback.

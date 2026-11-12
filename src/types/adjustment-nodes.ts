@@ -95,6 +95,27 @@ export interface HueSaturationNode extends BaseAdjustmentNode {
   readonly lightness: number;
 }
 
+export interface ColorGradeWheel {
+  /** Degrees, 0..360. */
+  readonly hue: number;
+  /** Tint strength, 0..100. */
+  readonly saturation: number;
+  /** -100..100. */
+  readonly luminance: number;
+}
+
+export interface ColorGradingNode extends BaseAdjustmentNode {
+  readonly type: 'color-grading';
+  readonly shadows: ColorGradeWheel;
+  readonly midtones: ColorGradeWheel;
+  readonly highlights: ColorGradeWheel;
+  readonly global: ColorGradeWheel;
+  /** Overlap between the tonal ranges, 0..100. */
+  readonly blending: number;
+  /** Shifts the tonal ranges toward shadows or highlights, -100..100. */
+  readonly balance: number;
+}
+
 export type AdjustmentNode =
   | ExposureNode
   | ContrastNode
@@ -109,6 +130,7 @@ export type AdjustmentNode =
   | PhotoFilterNode
   | ChannelMixerNode
   | InvertNode
-  | HueSaturationNode;
+  | HueSaturationNode
+  | ColorGradingNode;
 
 export type AdjustmentNodeType = AdjustmentNode['type'];

@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom showing the finished Gaslamp Noodles billboard, with a copper steam pipe pouring broth into a red ramen bowl on the left and the gold and cream GASLAMP NOODLES headline on the right, with the Layers panel open
 finished: finished-gaslamp-noodles.webp
 finishedAlt: The finished Gaslamp Noodles billboard on bottle-green Victorian wallpaper. On the left, a copper steam pipe with brass collars and a red valve wheel pours golden broth into a red lacquer ramen bowl with a cream Greek-key band. The bowl holds rolled chashu, two jammy eggs, bamboo shoots, scallions and a leaning sheet of nori, and a pair of brass chopsticks joined by a little gear lifts a bundle of wavy noodles while steam curls up. On the right, gold GASLAMP arches over a big cream NOODLES with a red woodtype shadow, above a cream ribbon reading STEAM-PRESSED RAMEN and a red enamel EXIT 14 plaque. A small gas lantern glows in the top right corner.
-project: steampunk-ramen-billboard.lopsy
+project: tutorials/steampunk-ramen-billboard/356aaa0280e1/steampunk-ramen-billboard.lopsy
 ---
 
 A roadside billboard gets about five seconds of a driver's attention. So the rules are strict: one bold picture, high contrast, and **seven words or fewer**. This tutorial fits those rules to a steampunk theme. You'll make **Gaslamp Noodles**, a 2400 × 800 billboard for an imaginary ramen bar where the broth arrives through copper plumbing.

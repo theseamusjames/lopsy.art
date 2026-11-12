@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Belfry at Midnight poster open. A gothic bell tower with glowing lancet windows stands in front of a full moon, with bats streaming past, a dead tree, a misty churchyard and gold blackletter lettering, all inside a gilt frame. The Layers panel lists the Type, Frame and Graveyard groups
 finished: finished-belfry-at-midnight-poster.webp
 finishedAlt: The finished Belfry at Midnight poster. Inside a thin gilt frame with quatrefoil corners, a small gold line reads THE CARILLON GUILD OF ST. BARNABAS PRESENTS above the word Belfry in large cream-to-gold blackletter. Below, a dark gothic bell tower with a gold cross, crocketed spire, two pinnacles, two glowing lancet windows with bells and a lit clock face at two minutes to midnight stands in front of a huge pale moon. A stream of bats pours from the belfry across the moon, three larger bats fly nearby, faint sound rings ripple out behind the tower, and a bare tree and a few headstones stand on a hill wrapped in violet fog. A gold divider sits above the words at Midnight, with two lines of small capitals giving the event details, and the mottos MEMENTO MORI and TEMPUS FUGIT run up and down the side margins
-project: gothic-belfry-midnight-poster.lopsy
+project: tutorials/gothic-belfry-midnight-poster/a12a8e547002/gothic-belfry-midnight-poster.lopsy
 ---
 
 Gothic posters run on a simple contrast: a black silhouette against a bright

@@ -107,9 +107,6 @@ export function getHandlePositions(
   const leftMid = transformPoint(left, midY, state);
   const rightMid = transformPoint(right, midY, state);
 
-  // Rotation handles offset outside corners
-  const rotOff = ROTATE_HANDLE_OFFSET;
-
   return {
     'top-left': tl,
     'top': topMid,
@@ -119,11 +116,24 @@ export function getHandlePositions(
     'bottom': bottomMid,
     'bottom-left': bl,
     'left': leftMid,
-    'rotate-top-left': transformPoint(left - rotOff, top - rotOff, state),
-    'rotate-top-right': transformPoint(right + rotOff, top - rotOff, state),
-    'rotate-bottom-right': transformPoint(right + rotOff, bottom + rotOff, state),
-    'rotate-bottom-left': transformPoint(left - rotOff, bottom + rotOff, state),
+    'rotate-top-left': rotateHandleOutside(tl, -1, -1, state),
+    'rotate-top-right': rotateHandleOutside(tr, 1, -1, state),
+    'rotate-bottom-right': rotateHandleOutside(br, 1, 1, state),
+    'rotate-bottom-left': rotateHandleOutside(bl, -1, 1, state),
   };
+}
+
+/**
+ * The offset is applied after the transform, not to the original bounds, so
+ * a pending scale doesn't stretch it (#1453): the handle stays
+ * `ROTATE_HANDLE_OFFSET` px out from its corner along the box's own axes.
+ */
+function rotateHandleOutside(corner: Point, sideX: number, sideY: number, state: TransformState): Point {
+  const ox = sideX * ROTATE_HANDLE_OFFSET * (state.scaleX < 0 ? -1 : 1);
+  const oy = sideY * ROTATE_HANDLE_OFFSET * (state.scaleY < 0 ? -1 : 1);
+  const cos = Math.cos(state.rotation);
+  const sin = Math.sin(state.rotation);
+  return { x: corner.x + ox * cos - oy * sin, y: corner.y + ox * sin + oy * cos };
 }
 
 const ROTATE_HANDLES: readonly TransformHandle[] = [
@@ -179,6 +189,16 @@ export function hitTestHandle(
   return nearestWithin(point, positions, ROTATE_HANDLES, rotateHandleRadius)
     ?? nearestWithin(point, positions, SCALE_HANDLES, handleRadius);
 }
+
+/** Screen px side of the white square drawn for a scale handle. */
+export const SCALE_HANDLE_DRAWN_PX = 6;
+
+const CORNER_HANDLES: readonly TransformHandle[] = [
+  'top-left',
+  'top-right',
+  'bottom-right',
+  'bottom-left',
+];
 
 /** Screen px radius of a handle's hit circle. */
 export const HANDLE_HIT_RADIUS_PX = 8;
@@ -247,16 +267,28 @@ export function hitTestBoxHandle(point: Point, state: TransformState, zoom: numb
   const positions = getHandlePositions(state);
   const radius = HANDLE_HIT_RADIUS_PX / zoom;
   const halfMin = halfMinExtent(positions);
-  // Rotation handles keep their #1000 radius: at least what the scale
-  // handles had, and short of the corner at low zoom.
-  const clampedRadius = Math.max(1, Math.min(radius, halfMin * 0.8));
+  const insideBand = Math.min(radius, halfMin * HANDLE_INSIDE_BAND_FRACTION);
+  const isInScaleReach = depthInsideBox(point, positions) <= insideBand;
+  // The drawn corner square scales even where a rotate circle overlaps it: at
+  // low zoom the rotate handle sits only a few screen px outside the corner
+  // (#1311). The square gives way halfway to the rotate handle so that one
+  // stays grabbable at any zoom.
+  const cornerSquareRadius = Math.min(
+    (SCALE_HANDLE_DRAWN_PX / 2) * Math.SQRT2 / zoom,
+    (ROTATE_HANDLE_OFFSET * Math.SQRT2) / 2,
+  );
+  if (isInScaleReach) {
+    const cornerSquareHit = nearestWithin(point, positions, CORNER_HANDLES, cornerSquareRadius);
+    if (cornerSquareHit) return cornerSquareHit;
+  }
+  // Rotation handles keep the full radius on thin boxes (#1000), but never
+  // reach the corner at low zoom.
   const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
-  const rotateRadius = Math.max(clampedRadius, Math.min(radius, rotateCornerClearance));
+  const rotateRadius = Math.max(1, Math.min(radius, rotateCornerClearance));
   const rotateHit = nearestWithin(point, positions, ROTATE_HANDLES, rotateRadius);
   if (rotateHit) return rotateHit;
 
-  const insideBand = Math.min(radius, halfMin * HANDLE_INSIDE_BAND_FRACTION);
-  if (depthInsideBox(point, positions) > insideBand) return null;
+  if (!isInScaleReach) return null;
   return nearestWithin(point, positions, SCALE_HANDLES, radius);
 }
 

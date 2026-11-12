@@ -37,6 +37,7 @@ pub const ROTATE90_FRAG: &str = include_str!("shaders/rotate90.glsl");
 pub const BLIT_REGION_FRAG: &str = include_str!("shaders/blit_region.glsl");
 pub const MASK_EXPAND_FRAG: &str = include_str!("shaders/mask_expand.glsl");
 pub const MASK_REMAP_FRAG: &str = include_str!("shaders/mask_remap.glsl");
+pub const QUICK_MASK_TRANSLATE_FRAG: &str = include_str!("shaders/quick_mask_translate.glsl");
 pub const TRANSFORM_AFFINE_FRAG: &str = include_str!("shaders/transform_affine.glsl");
 pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_perspective.glsl");
 
@@ -276,6 +277,7 @@ pub struct ShaderPrograms {
     pub blit_region: ShaderProgram,
     pub mask_expand: ShaderProgram,
     pub mask_remap: ShaderProgram,
+    pub quick_mask_translate: ShaderProgram,
     pub transform_affine: ShaderProgram,
     pub transform_perspective: ShaderProgram,
     // Effects
@@ -413,6 +415,7 @@ impl ShaderPrograms {
             blit_region: compile_program(gl, v, BLIT_REGION_FRAG)?,
             mask_expand: compile_program(gl, v, MASK_EXPAND_FRAG)?,
             mask_remap: compile_program(gl, v, MASK_REMAP_FRAG)?,
+            quick_mask_translate: compile_program(gl, v, QUICK_MASK_TRANSLATE_FRAG)?,
             transform_affine: compile_program(gl, v, TRANSFORM_AFFINE_FRAG)?,
             transform_perspective: compile_program(gl, v, TRANSFORM_PERSPECTIVE_FRAG)?,
             // Effects
@@ -572,7 +575,7 @@ mod tests {
         let out = preprocess_frag(BLEND_FRAG);
         assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
         assert!(out.contains("uniform int u_docColorMode;"));
-        assert!(out.contains("srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(dst.rgb)))"));
+        assert!(out.contains("srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(backdrop.rgb)))"));
     }
 
     #[test]

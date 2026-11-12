@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Eye, EyeOff, Folder, GripVertical, Lock, Sparkles, SquareDashed, Unlock, X } from 'lucide-react';
 import type { Layer } from '../../types';
 import { isGroupLayer } from '../../layers/group-utils';
@@ -18,8 +18,16 @@ function hasActiveEffects(layer: Layer): boolean {
   return false;
 }
 
+/**
+ * Rows take a layer id and read the layer from the store rather than taking
+ * the `Layer` as a prop. In development React's performance track diffs
+ * every component's changed props and walks a typed array index by index;
+ * a `Layer` prop reaches `mask.data`, so each mask change built millions
+ * of entries per component and cloned them into `performance.measure` —
+ * gigabytes of garbage on a large document. Hook state isn't diffed.
+ */
 export interface LayerRowProps {
-  layer: Layer;
+  layerId: string;
   depth: number;
   rowIndex: number;
   isActive: boolean;
@@ -52,7 +60,7 @@ export interface LayerRowProps {
 }
 
 export function LayerRow({
-  layer, depth, rowIndex,
+  layerId, depth, rowIndex,
   isActive, isSelected, isRootGroup, isDragging,
   isDropTarget, isDropTargetEnd, isDropIntoGroup, dropDepth,
   isEditingOpacity, isMaskEditActive, showEffectsDrawer,
@@ -64,6 +72,20 @@ export function LayerRow({
 }: LayerRowProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  // Each pointer drag or key press on the opacity slider is one history step,
+  // pushed on its first change. Arrow/Page/Home/End keys change the value
+  // without a pointer-down, so they open a step too (#1317).
+  const isOpacityStepPendingRef = useRef(false);
+  const layer = useEditorStore((s) => s.document.layers.find((l) => l.id === layerId));
+  if (!layer) return null;
+
+  const handleOpacityChange = (value: number) => {
+    if (isOpacityStepPendingRef.current) {
+      isOpacityStepPendingRef.current = false;
+      useEditorStore.getState().pushHistoryMetadata('Change Opacity');
+    }
+    onUpdateOpacity(layerId, value);
+  };
 
   return (
     <div className={styles.itemWrapper}>
@@ -124,7 +146,7 @@ export function LayerRow({
             className={styles.thumbnail}
             onClick={(e) => onThumbnailCmdClick(e, layer.id)}
           >
-            <LayerThumbnail layer={layer} />
+            <LayerThumbnail layerId={layer.id} />
           </div>
         )}
         {isGroupLayer(layer) && (
@@ -227,8 +249,9 @@ export function LayerRow({
             max={100}
             value={Math.round(layer.opacity * 100)}
             aria-label={`${layer.name} opacity`}
-            onPointerDown={() => useEditorStore.getState().pushHistoryMetadata('Change Opacity')}
-            onChange={(e) => onUpdateOpacity(layer.id, Number(e.target.value) / 100)}
+            onPointerDown={() => { isOpacityStepPendingRef.current = true; }}
+            onKeyDown={() => { isOpacityStepPendingRef.current = true; }}
+            onChange={(e) => handleOpacityChange(Number(e.target.value) / 100)}
           />
         </div>
       )}
@@ -250,7 +273,7 @@ export function LayerRow({
             aria-label={`Edit mask for ${layer.name}`}
             title="Click to edit mask"
           >
-            <MaskThumbnail layer={layer} />
+            <MaskThumbnail layerId={layer.id} />
           </div>
           <span className={styles.maskLabel}>Mask</span>
           <button

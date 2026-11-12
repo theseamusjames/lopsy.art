@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Daydream Boombox painting open. A teal boombox covered in die-cut stickers sits on a wooden table against an apricot wall lit by a four-pane window, and the Layers panel shows the Stickers group inside the Boombox group.
 finished: finished-daydream-boombox.webp
 finishedAlt: The finished painting. A teal 80s boombox with a black handle and a chrome antenna sits on a warm wooden table in late-afternoon light. A four-pane window casts pale light and floating dust across the apricot wall, and the boombox throws a soft shadow to its right. A dark green DB-88 badge sits between its speakers, and it is covered in die-cut stickers with white borders, including a pink Daydream pill, a blue Saturn, a red heart, a smiling blue cloud, an orange star, a yellow lightning bolt, a black B-SIDE badge, a rainbow, cherries, a checkerboard strip, a yellow VOL 11 disc and a red HELLO my name is JUNE tag with a peeling corner. A black PLAY LOUD label-maker tape is wrapped round the handle. A peeled sticker sheet with one heart left lies on the table at the left, and a cassette labelled mixtape for june lies at the right.
-project: sticker-bomb-boombox-digital-painting.lopsy
+project: tutorials/sticker-bomb-boombox-digital-painting/333768884711/sticker-bomb-boombox-digital-painting.lopsy
 ---
 
 Sticker bombing means covering a surface, such as a laptop, a guitar case or a skateboard, with so many stickers that they overlap and almost hide it. The stickers stay readable because each one has a thick white die-cut border and simple, bold shapes.

@@ -1,6 +1,6 @@
 import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
-import { createRectSelection, invertSelection } from '../../../selection/selection';
+import { createRectSelection, invertSelection, selectionBounds } from '../../../selection/selection';
 import { selectionToPaths } from '../../../selection/selection-to-path';
 import { createTransformState } from '../../../tools/transform/transform';
 import { commitLiveFloat } from '../../interactions/live-float';
@@ -29,8 +29,12 @@ export function invertSelectionAction(): void {
   const sel = state.selection;
   if (!sel.active || !sel.mask) return;
   const inverted = invertSelection(sel.mask);
+  // Bounds-driven commands (Crop, transform handles, Define Pattern) read
+  // the rect, so it has to frame what the inverted mask covers (#1492).
   const { width, height } = state.document;
-  const rect = { x: 0, y: 0, width, height };
+  const rect = selectionBounds(inverted, sel.maskWidth, sel.maskHeight)
+    ?? { x: 0, y: 0, width, height };
+  state.pushHistoryMetadata('Inverse Selection');
   state.setSelection(rect, inverted, sel.maskWidth, sel.maskHeight);
   useUIStore.getState().setTransform(createTransformState(rect));
 }

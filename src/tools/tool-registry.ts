@@ -4,6 +4,7 @@ import type { ToolHandler } from '../app/interactions/interaction-types';
 
 import { handleMoveDown, handleMoveMove, handleMoveUp } from '../app/interactions/move-handlers';
 import { handlePaintDown, handlePaintMove } from '../app/interactions/paint-handlers';
+import { snapToPixelUnderPointer } from './pencil/pencil';
 import { handleSelectionDown, handleSelectionMove, handleSelectionUp } from '../app/interactions/selection-handlers';
 import { handleFillDown } from './fill/fill-interaction';
 import { handleQuickSelectDown, handleQuickSelectMove, handleQuickSelectUp } from './quick-select/quick-select-interaction';
@@ -114,8 +115,8 @@ export const toolRegistry: Record<ToolId, ToolDescriptor> = {
     isPaint: true,
     isGpu: true,
     handler: {
-      down: (ctx) => handlePaintDown(ctx, 'pencil'),
-      move: (ctx, state) => handlePaintMove(ctx, state),
+      down: (ctx) => handlePaintDown(snapToPixelUnderPointer(ctx), 'pencil'),
+      move: (ctx, state) => handlePaintMove(snapToPixelUnderPointer(ctx), state),
     },
   },
   eraser: {

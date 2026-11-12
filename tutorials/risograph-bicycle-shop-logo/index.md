@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy at fit-to-screen zoom showing the finished Tortoise Bicycles brand sheet, with the Ink Dropouts layer and its mask above the Teal Plate and Orange Plate groups in the Layers panel
 finished: finished-tortoise-bicycles.webp
 finishedAlt: A two-colour risograph brand sheet on cream paper. On the left is a round badge. A double teal ring frames an orange sunset disc with "Slow & Steady" reversed out in cream script. A tortoise walks across it whose shell is half a bicycle wheel, with a tyre, a rim, spokes and a hub, and three speed lines trail behind it. Below the ground line, the sun dissolves into fine halftone dots. A dark ribbon banner across the bottom reads TORTOISE in orange capitals, with EST.2026 underneath. On the right, a header reads TORTOISE BICYCLES CO-OP / BRAND MARK above a rule. Below it, a horizontal lockup pairs a small teal tortoise icon with "Tortoise" in teal script and BICYCLES in spaced orange capitals. An orange circle holding a tilted tortoise overlaps a teal circle with a knocked-out TB monogram, and the overlap prints dark green. A row of four ink chips is labelled TEAL, ORANGE, OVERPRINT and PAPER. The teal ink sits slightly off register from the orange, with clumps of white ink-dropout specks and registration marks in two corners.
-project: risograph-bicycle-shop-logo.lopsy
+project: tutorials/risograph-bicycle-shop-logo/5544f20b31ab/risograph-bicycle-shop-logo.lopsy
 ---
 
 A risograph prints one ink at a time through a stencil drum. That gives riso prints a recognisable look:

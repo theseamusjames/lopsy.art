@@ -9,6 +9,7 @@ import { hitTestTextLayer } from './text-hit-test';
 import { getPathTextGlyphBoxes } from './path-text-hit-boxes';
 import { engineRenderedSize } from './text-geometry';
 import { createTextLayer } from '../../layers/layer-model';
+import { nextDefaultLayerName } from '../../layers/layer-naming';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { loadTextSettingsFromLayer } from '../../app/text-settings-layer-sync';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -162,6 +163,24 @@ function hitTestOffset(editing: TextEditingState, canvasPos: Point): number {
   const local = editingLayoutPoint(editing, canvasPos);
   const byte = textHitPosition(engine, editing.layerId, local.x, local.y);
   return byte >= 0 ? utf8ToUtf16(editing.text, byte) : editing.text.length;
+}
+
+/** Layout props for re-measuring a committed layer in the engine. */
+function reEditPropsJson(layer: TextLayer): string {
+  return JSON.stringify({
+    text: layer.text,
+    fontFamily: layer.fontFamily,
+    fontSize: layer.fontSize,
+    fontWeight: layer.fontWeight,
+    fontStyle: layer.fontStyle,
+    color: [layer.color.r / 255, layer.color.g / 255, layer.color.b / 255, layer.color.a],
+    lineHeight: layer.lineHeight,
+    letterSpacing: layer.letterSpacing,
+    paragraphSpacing: layer.paragraphSpacing,
+    textAlign: layer.textAlign,
+    areaWidth: layer.width ?? null,
+    vertical: layer.vertical ?? false,
+  });
 }
 
 /** Slack (document px) around the edited text that still counts as a click inside it. */
@@ -467,6 +486,10 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
     let boundsY = hitLayer.y;
     let matrix: TextMatrix | null = null;
     const reEditEngine = getEngine();
+    const hasReEditContent = !!reEditEngine && hitLayer.text.trim().length > 0;
+    if (reEditEngine && hasReEditContent) {
+      setTextLayerContent(reEditEngine, hitLayer.id, reEditPropsJson(hitLayer));
+    }
     const storedAnchor = textAnchorOf(hitLayer);
     if (storedAnchor) {
       // A transformed layer keeps its anchor, so the text is edited in place
@@ -474,22 +497,7 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
       boundsX = storedAnchor.x;
       boundsY = storedAnchor.y;
       matrix = matrixOf(hitLayer.transform);
-    } else if (reEditEngine && hitLayer.text.trim().length > 0) {
-      const reEditPropsJson = JSON.stringify({
-        text: hitLayer.text,
-        fontFamily: hitLayer.fontFamily,
-        fontSize: hitLayer.fontSize,
-        fontWeight: hitLayer.fontWeight,
-        fontStyle: hitLayer.fontStyle,
-        color: [hitLayer.color.r / 255, hitLayer.color.g / 255, hitLayer.color.b / 255, hitLayer.color.a],
-        lineHeight: hitLayer.lineHeight,
-        letterSpacing: hitLayer.letterSpacing,
-        paragraphSpacing: hitLayer.paragraphSpacing,
-        textAlign: hitLayer.textAlign,
-        areaWidth: hitLayer.width ?? null,
-        vertical: hitLayer.vertical ?? false,
-      });
-      setTextLayerContent(reEditEngine, hitLayer.id, reEditPropsJson);
+    } else if (reEditEngine && hasReEditContent) {
       const boundsResult = renderTextLayer(reEditEngine, hitLayer.id);
       if (boundsResult.length === 4) {
         boundsX = hitLayer.x - (boundsResult[2] ?? 0);
@@ -513,6 +521,12 @@ export function handleTextDown(ctx: InteractionContext): InteractionState | unde
       matrix,
       colorSpans: hitLayer.colorSpans ?? [],
     };
+    // The click that enters editing also places the caret, as one made while
+    // editing would. Path text lays out along its path, not in layout space,
+    // so its caret stays at the end.
+    if (hasReEditContent && !hitLayer.pathId) {
+      editingState.cursorPos = hitTestOffset(editingState, canvasPos);
+    }
     beginEditSession(editingState, hitLayer);
     editorState.notifyRender();
     return undefined;
@@ -593,7 +607,7 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
 
   const text = toolSettings.settings.text;
   const newLayer = createTextLayer({
-    name: `Text ${editorState.document.layers.length + 1}`,
+    name: nextDefaultLayerName(editorState.document.layers, 'Text'),
     text: '',
     fontFamily: text.fontFamily,
     fontSize: text.fontSize,

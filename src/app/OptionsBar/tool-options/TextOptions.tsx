@@ -68,6 +68,9 @@ export function TextOptions() {
   const editingLayerId = textEditing?.layerId ?? activeLayerId;
   const editingLayer = layers.find((l) => l.id === editingLayerId && l.type === 'text');
   const currentPathId = editingLayer?.type === 'text' ? (editingLayer.pathId ?? '') : '';
+  // A project saved before Delete Path unbound its text can still hold a
+  // dangling pathId; keep the dropdown so None can unbind it (#1393).
+  const isCurrentPathMissing = currentPathId !== '' && !paths.some((p) => p.id === currentPathId);
 
   const handlePathChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -198,7 +201,7 @@ export function TextOptions() {
           <span className={decorationStyles.verticalIcon}><span>A</span><span>B</span></span>
         </button>
       </div>
-      {paths.length > 0 && (
+      {(paths.length > 0 || isCurrentPathMissing) && (
         <>
           <label className={styles.label} id="text-path-label">Path</label>
           <select
@@ -209,6 +212,9 @@ export function TextOptions() {
             aria-label="Text path"
           >
             <option value="">None</option>
+            {isCurrentPathMissing && (
+              <option value={currentPathId} disabled>Deleted path</option>
+            )}
             {paths.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}

@@ -41,6 +41,20 @@ export function computeAlign(
 }
 
 /**
+ * How far to shift `bounds` so its `edge` lines up with the same edge of
+ * `frame` (or, for the centre edges, so their centres meet on that axis).
+ */
+export function computeAlignToFrame(
+  edge: AlignEdge,
+  bounds: Rect,
+  frame: Rect,
+): { dx: number; dy: number } {
+  const local = { ...bounds, x: bounds.x - frame.x, y: bounds.y - frame.y };
+  const pos = computeAlign(edge, local, frame.width, frame.height, local.x, local.y);
+  return { dx: pos.x - local.x, dy: pos.y - local.y };
+}
+
+/**
  * Compute new dimensions and position to fit content within a canvas such
  * that the longest side fits within the canvas bounds, preserving aspect
  * ratio, and the content is centered. Used by the move-tool "Fit" action

@@ -371,6 +371,10 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         };
         let effects_src_handle = masked_effect_handle.unwrap_or(effect_tex_handle);
 
+        let has_behind_effects = outer_glow.is_some() || drop_shadow.is_some()
+            || stroke_eff.as_ref().is_some_and(is_behind_stroke);
+        let effect_backdrop = capture_effect_backdrop(engine, blend_mode, has_behind_effects, target);
+
         // --- "Behind" effects: outer glow, drop shadow, outside stroke ---
         if let Some((behind, _)) = &cached {
             for image in behind {
@@ -408,7 +412,11 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         };
         let (src_handle, src_w, src_h) = composite_src.unwrap_or((tex_handle, tw, th));
         if let Some(src_tex) = engine.texture_pool.get(src_handle).cloned() {
-            blend_layer_rect_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target)?;
+            let backdrop_gl = effect_backdrop.and_then(|h| engine.texture_pool.get(h).cloned());
+            blend_layer_rect_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target, backdrop_gl.as_ref())?;
+        }
+        if let Some(h) = effect_backdrop {
+            engine.texture_pool.release(h);
         }
 
         // --- Active stroke texture ---
@@ -418,7 +426,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             if let Some(&stroke_handle) = engine.stroke_textures.get(&layer_id) {
                 if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
                     let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
-                    blend_layer_rect_onto_target(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target)?;
+                    blend_layer_rect_onto_target(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target, None)?;
                 }
             }
         }
@@ -627,6 +635,34 @@ fn refresh_pre_adj_cache(engine: &mut EngineInner, group_id: &str, src_tex: Text
     }
 }
 
+/// A copy of `target` taken before a non-Normal layer draws its behind
+/// effects, for its blend to read as the backdrop (`u_backdropTex` in
+/// `blend.glsl`). Normal needs none: its result doesn't depend on the
+/// backdrop's colour. The caller releases the texture.
+fn capture_effect_backdrop(engine: &mut EngineInner, blend_mode: i32, has_behind_effects: bool, target: Target) -> Option<TextureHandle> {
+    if blend_mode == 0 || !has_behind_effects {
+        return None;
+    }
+    let doc_w = engine.doc_width;
+    let doc_h = engine.doc_height;
+    let copy = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).ok()?;
+    let (Some(dst), Some(src)) = (engine.texture_pool.get(copy).cloned(), engine.texture_pool.get(target.tex).cloned()) else {
+        engine.texture_pool.release(copy);
+        return None;
+    };
+    engine.gl.disable(WebGl2RenderingContext::BLEND);
+    engine.render_to_texture(&dst, doc_w as i32, doc_h as i32, |eng| {
+        eng.gl.use_program(Some(&eng.shaders.blit.program));
+        eng.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        eng.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
+        if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") { eng.gl.uniform1i(Some(&loc), 0); }
+        eng.draw_fullscreen_quad();
+    });
+    engine.fbo_pool.bind(&engine.gl, target.fbo);
+    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    Some(copy)
+}
+
 /// Restore a group's cached pre-adjustment pixels into its live scratch
 /// target, skipping re-rendering of its children.
 fn restore_pre_adj_cache(engine: &mut EngineInner, cache_tex: TextureHandle, target: Target) {
@@ -681,9 +717,10 @@ fn blend_layer_rect_onto_target(
     overlay: Option<&ColorOverlayDesc>,
     mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
     target: Target,
+    backdrop: Option<&web_sys::WebGlTexture>,
 ) -> Result<(), String> {
     if engine.seamless_pattern && engine.seamless_wrap {
-        return blend_onto_target(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target);
+        return blend_onto_target_over_backdrop(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target, backdrop);
     }
     let x0 = layer_x.floor() as i32;
     let y0 = layer_y.floor() as i32;
@@ -695,7 +732,7 @@ fn blend_layer_rect_onto_target(
     };
     engine.gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
     engine.gl.scissor(clip.x, clip.y, clip.width as i32, clip.height as i32);
-    let result = blend_onto_target(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target);
+    let result = blend_onto_target_over_backdrop(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target, backdrop);
     engine.gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
     result
 }
@@ -715,6 +752,27 @@ fn blend_onto_target(
     overlay: Option<&ColorOverlayDesc>,
     mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
     target: Target,
+) -> Result<(), String> {
+    blend_onto_target_over_backdrop(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target, None)
+}
+
+/// `blend_onto_target`, with the blend formula reading `backdrop` (the
+/// target before the layer's behind effects, see `capture_effect_backdrop`)
+/// instead of the target itself.
+fn blend_onto_target_over_backdrop(
+    engine: &mut EngineInner,
+    src_tex: &web_sys::WebGlTexture,
+    opacity: f32,
+    blend_mode: i32,
+    layer_x: f32,
+    layer_y: f32,
+    tw: u32,
+    th: u32,
+    premultiplied: bool,
+    overlay: Option<&ColorOverlayDesc>,
+    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
+    target: Target,
+    backdrop: Option<&web_sys::WebGlTexture>,
 ) -> Result<(), String> {
     let dst_texture = target.tex;
     let dst_fbo = target.fbo;
@@ -760,11 +818,32 @@ fn blend_onto_target(
         if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
     }
     if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
+    if let Some(backdrop_tex) = backdrop {
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE3);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(backdrop_tex));
+        if let Some(loc) = shader.location(&engine.gl, "u_backdropTex") { engine.gl.uniform1i(Some(&loc), 3); }
+        if let Some(loc) = shader.location(&engine.gl, "u_hasBackdrop") { engine.gl.uniform1i(Some(&loc), 1); }
+    } else if let Some(loc) = shader.location(&engine.gl, "u_hasBackdrop") {
+        engine.gl.uniform1i(Some(&loc), 0);
+    }
 
     engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
     engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     engine.draw_fullscreen_quad();
 
+    if backdrop.is_some() {
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE3);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
+
+    // A mask left on unit 2 outlives its layer: once the layer is deleted the
+    // pool hands the texture to a new owner, and a later draw into it by any
+    // blend program whose u_maskTex still points at unit 2 is a feedback loop
+    // that WebGL drops without writing anything (#1414).
+    if mask_tex.is_some() {
+        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
+        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
     engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
     engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
 
@@ -1741,6 +1820,10 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         };
         let fx_handle = masked_effect_handle.unwrap_or(tex_handle);
 
+        let has_behind_effects = effects.outer_glow.as_ref().is_some_and(|g| g.enabled)
+            || effects.drop_shadow.as_ref().is_some_and(|d| d.enabled)
+            || effects.stroke.as_ref().is_some_and(|st| st.enabled && is_behind_stroke(st));
+        let effect_backdrop = capture_effect_backdrop(engine, *blend_mode, has_behind_effects, target);
         render_behind_effects(
             engine,
             EffectSource { handle: fx_handle, x: *layer_x, y: *layer_y, width: tw, height: th },
@@ -1753,7 +1836,11 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
 
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
         if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
-            blend_onto_target(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg, target)?;
+            let backdrop_gl = effect_backdrop.and_then(|h| engine.texture_pool.get(h).cloned());
+            blend_onto_target_over_backdrop(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg, target, backdrop_gl.as_ref())?;
+        }
+        if let Some(h) = effect_backdrop {
+            engine.texture_pool.release(h);
         }
 
         if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 1, *layer_x, *layer_y, &mut EffectOut::direct(target)); } }
@@ -2012,6 +2099,18 @@ fn set_adjustment_value_uniforms(
     if let Some(loc) = shader.location(gl, "u_cm_enabled") { gl.uniform1f(Some(&loc), if adj.cm_enabled { 1.0 } else { 0.0 }); }
     // Invert
     if let Some(loc) = shader.location(gl, "u_invert") { gl.uniform1f(Some(&loc), if adj.invert { 1.0 } else { 0.0 }); }
+    // Color Grading
+    if let Some(loc) = shader.location(gl, "u_cg_enabled") { gl.uniform1f(Some(&loc), if adj.cg_enabled { 1.0 } else { 0.0 }); }
+    for (name, v) in [
+        ("u_cg_shadows", adj.cg_shadows),
+        ("u_cg_midtones", adj.cg_midtones),
+        ("u_cg_highlights", adj.cg_highlights),
+        ("u_cg_global", adj.cg_global),
+    ] {
+        if let Some(loc) = shader.location(gl, name) { gl.uniform4f(Some(&loc), v[0], v[1], v[2], v[3]); }
+    }
+    if let Some(loc) = shader.location(gl, "u_cg_exponent") { gl.uniform1f(Some(&loc), adj.cg_exponent); }
+    if let Some(loc) = shader.location(gl, "u_cg_width") { gl.uniform1f(Some(&loc), adj.cg_width); }
     let has_levels = adj.has_levels && adj.levels_texture.is_some();
     if let Some(loc) = shader.location(gl, "u_hasLevels") { gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 }); }
     let has_curves = adj.has_curves && adj.curves_texture.is_some();
@@ -2081,6 +2180,7 @@ fn has_any_adjustment(adj: &crate::engine::ImageAdjustmentState) -> bool {
         || adj.cm_enabled
         || adj.invert
         || adj.has_gradient_map
+        || adj.cg_enabled
 }
 
 /// Apply image adjustments (exposure, contrast, highlights, shadows, whites, blacks)

@@ -198,6 +198,11 @@ export interface EditorState {
   // Canvas
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
+  addBorder: (
+    color: import('../../types').Color,
+    widths: import('../../layers/border').BorderWidths,
+    placement: import('../../layers/border').BorderPlacement,
+  ) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
   convertColorMode: (
     newMode: DocumentColorMode,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ColorPicker } from '../ColorPicker/ColorPicker';
+import { useEscapeDismiss } from '../../app/shortcuts/escape-dismiss';
 import type { Color } from '../../types';
 import styles from './TextColorControl.module.css';
 
@@ -42,6 +43,8 @@ export function TextColorControl({ color, pickerColor, onChange, onPickStart, on
     onPickEndRef.current?.();
   }, []);
 
+  useEscapeDismiss(isOpen, close);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleMouseDown = (e: MouseEvent) => {
@@ -77,6 +80,14 @@ export function TextColorControl({ color, pickerColor, onChange, onPickStart, on
     onChange(next);
   };
 
+  // Escape inside the picker (its hex field) closes it; the hex field stops
+  // the key itself while it holds an unsaved draft.
+  const handlePopoverKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    close();
+  };
+
   const isMixed = color === null;
   return (
     <>
@@ -105,6 +116,7 @@ export function TextColorControl({ color, pickerColor, onChange, onPickStart, on
           className={styles.popover}
           role="dialog"
           aria-label="Text color picker"
+          onKeyDown={handlePopoverKeyDown}
           style={{ '--popover-top': `${pos.top}px`, '--popover-left': `${pos.left}px` } as React.CSSProperties}
         >
           <ColorPicker color={pickerColor} onChange={handleChange} />

@@ -25,10 +25,13 @@ const editorState = {
     maskHeight: 0,
   },
   setSelection: vi.fn(),
+  pushHistoryMetadata: vi.fn(),
 };
 vi.mock('../../editor-store', () => ({
   useEditorStore: { getState: () => editorState },
 }));
+
+const invertedBounds = vi.hoisted(() => ({ current: null as Rect | null }));
 
 const uiState = { setTransform: vi.fn() };
 vi.mock('../../ui-store', () => ({
@@ -40,6 +43,7 @@ vi.mock('../../ui-store', () => ({
 vi.mock('../../../selection/selection', () => ({
   createRectSelection: () => MASK_SENTINEL,
   invertSelection: (mask: Uint8ClampedArray) => mask,
+  selectionBounds: () => invertedBounds.current,
 }));
 
 // selection-to-path is only used by selectionToPathAction; stub it so the
@@ -59,6 +63,7 @@ import { selectAll, invertSelectionAction } from './select-menu';
 describe('selectAll / invertSelectionAction — transform state stays in sync', () => {
   beforeEach(() => {
     editorState.setSelection.mockClear();
+    editorState.pushHistoryMetadata.mockClear();
     uiState.setTransform.mockClear();
     editorState.selection = {
       active: false,
@@ -77,7 +82,27 @@ describe('selectAll / invertSelectionAction — transform state stays in sync', 
     expect(arg.__bounds).toEqual({ x: 0, y: 0, width: 400, height: 300 });
   });
 
-  it('invertSelectionAction refreshes the transform overlay with the full-canvas rect', () => {
+  it('invertSelectionAction frames the inverted mask, not the whole canvas (#1492)', () => {
+    invertedBounds.current = { x: 300, y: 200, width: 200, height: 200 };
+    editorState.selection = {
+      active: true,
+      bounds: { x: 0, y: 0, width: 400, height: 300 },
+      mask: MASK_SENTINEL,
+      maskWidth: 2,
+      maskHeight: 2,
+    };
+    invertSelectionAction();
+    // Its own undo step, pushed before the selection changes (#1585).
+    expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Inverse Selection');
+    expect(editorState.pushHistoryMetadata.mock.invocationCallOrder[0])
+      .toBeLessThan(editorState.setSelection.mock.invocationCallOrder[0] ?? 0);
+    expect(editorState.setSelection.mock.calls[0]?.[0]).toEqual({ x: 300, y: 200, width: 200, height: 200 });
+    const arg = uiState.setTransform.mock.calls[0]?.[0] as { __bounds: Rect };
+    expect(arg.__bounds).toEqual({ x: 300, y: 200, width: 200, height: 200 });
+  });
+
+  it('invertSelectionAction falls back to the full-canvas rect when the inverse is empty', () => {
+    invertedBounds.current = null;
     editorState.selection = {
       active: true,
       bounds: { x: 10, y: 20, width: 30, height: 40 },
@@ -94,6 +119,7 @@ describe('selectAll / invertSelectionAction — transform state stays in sync', 
 
   it('invertSelectionAction is a no-op when nothing is selected — no transform refresh either', () => {
     invertSelectionAction();
+    expect(editorState.pushHistoryMetadata).not.toHaveBeenCalled();
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(uiState.setTransform).not.toHaveBeenCalled();
   });

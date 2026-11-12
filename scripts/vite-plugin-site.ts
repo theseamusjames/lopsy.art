@@ -6,6 +6,8 @@
  *   dev:   pages render on request (drafts included) and live-reload on save.
  *   build: pages, images, the feed and sitemap.xml are emitted into dist/.
  *          Content errors fail the build; SEO guideline misses print as warnings.
+ *          Tutorial .lopsy files are not part of the site: they live in R2
+ *          (see PROJECT_FILES_ORIGIN and scripts/tutorial-projects.ts).
  *
  * All parsing and rendering lives in src/site/ — this file only touches the
  * filesystem and Vite.
@@ -41,6 +43,11 @@ interface SiteBuild {
 
 const SECTIONS = ['/tutorials', '/blog'];
 
+/** Gitignored local copies of R2-hosted tutorial projects; large, and never published. */
+function isLocalProjectFile(file: string): boolean {
+  return file.toLowerCase().endsWith('.lopsy');
+}
+
 function loadSources(contentDir: string): SourceEntry[] {
   if (!existsSync(contentDir)) return [];
   return readdirSync(contentDir)
@@ -51,7 +58,7 @@ function loadSources(contentDir: string): SourceEntry[] {
       const assets = new Map<string, Uint8Array>();
       for (const file of readdirSync(dir)) {
         const path = join(dir, file);
-        if (file === 'index.md' || file.startsWith('.') || !statSync(path).isFile()) continue;
+        if (file === 'index.md' || file.startsWith('.') || isLocalProjectFile(file) || !statSync(path).isFile()) continue;
         assets.set(file, readFileSync(path));
       }
       return { slug, source: readFileSync(join(dir, 'index.md'), 'utf8'), assets };
@@ -116,9 +123,22 @@ function isWatched(options: SitePluginOptions, file: string): boolean {
 }
 
 function serveSite(server: ViteDevServer, options: SitePluginOptions): void {
+  // A build reads every tutorial's assets (hundreds of MB), so rebuilding per
+  // request made each page load fetch its images one multi-second build at a
+  // time. Build once and rebuild only after watched content changes.
+  let cached: SiteBuild | null = null;
+  const currentBuild = (): SiteBuild => {
+    if (cached) return cached;
+    cached = build(options, true);
+    for (const warning of cached.warnings) server.config.logger.warn(`[site] ${warning}`);
+    return cached;
+  };
+
   server.watcher.add([options.tutorialsDir, options.blogDir, options.baseCss, options.blogCss]);
   server.watcher.on('all', (_event, file) => {
-    if (isWatched(options, file)) server.ws.send({ type: 'full-reload', path: '*' });
+    if (!isWatched(options, file)) return;
+    cached = null;
+    server.ws.send({ type: 'full-reload', path: '*' });
   });
 
   server.middlewares.use((req, res, next) => {
@@ -138,8 +158,7 @@ function serveSite(server: ViteDevServer, options: SitePluginOptions): void {
       return;
     }
 
-    const result = build(options, true);
-    for (const warning of result.warnings) server.config.logger.warn(`[site] ${warning}`);
+    const result = currentBuild();
     if (result.errors.length > 0) {
       res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' }).end(renderErrorPage(result.errors));
       return;

@@ -758,6 +758,7 @@ const ADJUSTMENT_MENU_LABELS: Record<string, string> = {
   invert: 'Invert',
   'hue-saturation': 'Hue / Saturation',
   'color-balance': 'Color Balance',
+  'color-grading': 'Color Grading',
   'black-white': 'Black & White',
   'photo-filter': 'Photo Filter',
   'channel-mixer': 'Channel Mixer',
@@ -777,6 +778,10 @@ const ADJUSTMENT_SLIDER_LABELS: Record<string, Record<string, string>> = {
   vignette: { vignette: 'Vignette' },
   'hue-saturation': { hue: 'Hue', saturation: 'Saturation', lightness: 'Lightness' },
   'photo-filter': { density: 'Density' },
+  'color-grading': {
+    hue: 'Hue', saturation: 'Saturation', luminance: 'Luminance',
+    blending: 'Blending', balance: 'Balance',
+  },
   'black-white': {
     reds: 'Reds', yellows: 'Yellows', greens: 'Greens',
     cyans: 'Cyans', blues: 'Blues', magentas: 'Magentas',
@@ -803,18 +808,9 @@ export async function addAdjustment(
   const menuLabel = ADJUSTMENT_MENU_LABELS[nodeType];
   if (!menuLabel) throw new Error(`Unknown adjustment type: ${nodeType}`);
 
-  // Click Add Adjustment and select from the menu. The menu opens
-  // upward and may be clipped by the canvas overlay. If the normal
-  // click fails due to the canvas intercepting, dispatch a click
-  // event directly on the menu item.
   await page.locator('[aria-label="Add Adjustment"]').click();
   const menuItem = page.getByRole('menuitem', { name: menuLabel, exact: true });
-  await menuItem.waitFor({ state: 'visible', timeout: 3000 });
-  try {
-    await menuItem.click({ timeout: 2000 });
-  } catch {
-    await menuItem.dispatchEvent('click');
-  }
+  await menuItem.click({ timeout: 3000 });
   await page.waitForTimeout(200);
 
   if (values) {

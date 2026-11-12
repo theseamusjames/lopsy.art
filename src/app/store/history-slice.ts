@@ -1,4 +1,5 @@
-import type { HistorySnapshot, SelectionData, SliceCreator } from './types';
+import type { EditorState, HistorySnapshot, SelectionData, SliceCreator } from './types';
+import { planHistoryJump, type LiveHistoryState } from './history-jump';
 import type { DocumentState, Layer } from '../../types';
 import { EMPTY_HANDLE, restoreLayerGpu, type LayerHistoryBefore } from './layer-gpu-capture';
 import { getEngine } from '../../engine-wasm/engine-state';
@@ -13,6 +14,7 @@ import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { finalizePendingStrokeGlobal } from '../interactions/pending-stroke';
 import { cancelPrefloat } from '../interactions/prefloat';
 import { commitLiveFloatBeforeEdit, forgetLiveFloat } from '../interactions/live-float';
+import { resumeMeshWarpPreview, suspendMeshWarpPreview } from '../interactions/mesh-warp-history';
 import { snapshotGpuMasks, withCurrentMaskStaleness, restoreMasksAfterUndo } from './mask-history';
 import { useUIStore } from '../ui-store';
 import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
@@ -250,6 +252,10 @@ function snapshotGpuLayers(
  * else in the snapshot (blend mode, opacity, effects, mask, adjustments,
  * order, active layer, etc.) is restored as-is.
  */
+function isPathBoundText(layer: import('../../types').Layer): boolean {
+  return layer.type === 'text' && layer.pathId !== undefined && layer.pathAnchorX !== undefined;
+}
+
 function mergeMetadataLayerPositions(
   snapshot: import('../../types').DocumentState,
   current: import('../../types').DocumentState,
@@ -258,6 +264,11 @@ function mergeMetadataLayerPositions(
   const layers = snapshot.layers.map((snapLayer) => {
     const cur = curById.get(snapLayer.id);
     if (!cur) return snapLayer;
+    // Path-bound text is laid out from its path: `x - pathAnchorX` is the
+    // user's offset from it. The snapshot's anchor comes back with its path,
+    // so its x/y must too, or the gap reads as an offset and the text floats
+    // off the restored path (#1423).
+    if (isPathBoundText(snapLayer)) return snapLayer;
     if (cur.x === snapLayer.x && cur.y === snapLayer.y) {
       const snapW = 'width' in snapLayer ? (snapLayer as { width?: number | null }).width : undefined;
       const snapH = 'height' in snapLayer ? (snapLayer as { height?: number | null }).height : undefined;
@@ -279,6 +290,31 @@ function mergeMetadataLayerPositions(
     return patched as unknown as typeof snapLayer;
   });
   return { ...snapshot, layers };
+}
+
+/**
+ * The group-wide "Disable adjustments" bypass records no history entry, so a
+ * restore must not carry the snapshot's value for it either: undoing an
+ * adjustment edit made before the bypass would otherwise silently re-enable
+ * the stack (#1461).
+ */
+function keepAdjustmentsBypass(
+  restored: import('../../types').DocumentState,
+  current: import('../../types').DocumentState,
+): import('../../types').DocumentState {
+  const currentEnabled = new Map<string, boolean>();
+  for (const l of current.layers) {
+    if (l.type === 'group') currentEnabled.set(l.id, l.adjustmentsEnabled);
+  }
+  let isChanged = false;
+  const layers = restored.layers.map((l) => {
+    if (l.type !== 'group') return l;
+    const enabled = currentEnabled.get(l.id);
+    if (enabled === undefined || enabled === l.adjustmentsEnabled) return l;
+    isChanged = true;
+    return { ...l, adjustmentsEnabled: enabled };
+  });
+  return isChanged ? { ...restored, layers } : restored;
 }
 
 const NO_DIRTY_LAYERS: Set<string> = new Set();
@@ -348,15 +384,17 @@ function restoreGpuFromSnapshot(snapshot: HistorySnapshot): void {
 }
 
 /**
- * Guides are UI state outside history, but Image Size scales them. Crossing a
- * step that changed the document size puts back the guides that step saw, so
- * undoing an Image Size un-scales them; any other step leaves them alone.
+ * Guides are UI state outside history, but Image Size scales them and Rotate
+ * Image turns them. Crossing a step that changed the document size, or a
+ * rotate (which keeps a square document's size), puts back the guides that
+ * step saw; any other step leaves them alone.
  */
 function restoreGuidesAcrossResize(target: HistorySnapshot, current: DocumentState): void {
   if (!target.guides) return;
   const isSizeChange =
     target.document.width !== current.width || target.document.height !== current.height;
-  if (!isSizeChange) return;
+  const isCanvasRotate = target.label.startsWith('Rotate Image');
+  if (!isSizeChange && !isCanvasRotate) return;
   useUIStore.setState({ guides: [...target.guides] });
 }
 
@@ -399,6 +437,156 @@ function historySelection(selection: SelectionData): SelectionData {
   return { ...selection, mask, bounds };
 }
 
+function liveHistoryState(state: EditorState): LiveHistoryState {
+  return {
+    document: state.document,
+    selection: historySelection(state.selection),
+    paths: state.paths,
+    selectedPathId: state.selectedPathId,
+    guides: useUIStore.getState().guides,
+  };
+}
+
+/** Restores `target` into the engine and the store (both stacks excepted). */
+function applyHistoryJump(
+  set: (partial: Partial<EditorState>) => void,
+  get: () => EditorState,
+  state: EditorState,
+  target: HistorySnapshot,
+  stacks: Pick<EditorState, 'undoStack' | 'redoStack'>,
+  removedLayerRestores: ReadonlyMap<string, number>,
+): void {
+  for (const [layerId, handle] of removedLayerRestores) restoreLayerGpu(layerId, handle);
+  restoreGpuFromSnapshot(target);
+  lastRestoredSnapshot = target;
+  const eng = getEngine();
+  // Keep mask/selection content refs across the reset (#781): mask
+  // textures are restored from GPU snapshots below or untouched, and
+  // `mask.data` may lag them, so it must not be re-uploaded (#780).
+  if (eng) {
+    resetTrackedState(eng, { preserveContentRefs: true });
+    restoreMasksAfterUndo(eng, target, state.document.layers);
+  }
+  markAllMasksGpuDirty();
+
+  // Not clearAll(): that's a one-shot (drains layerVersions after
+  // bumping), so a second consecutive undo/redo with no intervening
+  // pixel-cache write sees it already empty and skips notifying,
+  // leaving LayerThumbnail's cached read stale (#918).
+  pixelDataManager.invalidateLayers(target.document.layerOrder);
+  const restoredDocument = keepAdjustmentsBypass(
+    target.kind === 'metadata'
+      ? mergeMetadataLayerPositions(target.document, state.document)
+      : target.document,
+    state.document,
+  );
+  set({
+    ...stacks,
+    document: restoredDocument,
+    selection: target.selection,
+    paths: [...target.paths],
+    selectedPathId: target.selectedPathId,
+    dirtyLayerIds: new Set(restoredDocument.layerOrder),
+    renderVersion: state.renderVersion + 1,
+  });
+  if (eng) {
+    const restored = get();
+    syncLayers(
+      eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds,
+      restored.document.colorMode,
+    );
+  }
+  restoreGuidesAcrossResize(target, state.document);
+  syncTransformAfterHistoryRestore(target.selection);
+}
+
+function withMeshWarpPreviewSuspended(jump: () => void): void {
+  if (!suspendMeshWarpPreview()) {
+    jump();
+    return;
+  }
+  try {
+    jump();
+  } finally {
+    resumeMeshWarpPreview();
+  }
+}
+
+type HistorySet = (partial: Partial<EditorState>) => void;
+type HistoryGet = () => EditorState;
+
+function undoSteps(set: HistorySet, get: HistoryGet, steps: number): void {
+  finalizePendingStrokeGlobal();
+  // Drop any active float (and cancel a scheduled prefloat) before
+  // restoring. A leftover float leaves `float_layer_id` set on the engine,
+  // which makes `update_layer` preserve the float's expanded x/y/w/h in the
+  // layer descriptor. After a restore that shrinks the layer texture back to
+  // its pre-float dimensions, the mismatched descriptor renders the layer
+  // stretched at (0, 0, doc.w, doc.h) instead of at its original position
+  // (issue #706).
+  cancelPrefloat();
+  const eng0 = getEngine();
+  if (eng0 && hasFloat(eng0)) dropFloat(eng0);
+  forgetLiveFloat();
+  flushPendingSnapshots();
+
+  const state = get();
+  const S = state.undoStack.length;
+  if (S === 0) return;
+  const n = Math.min(steps, S);
+  // Nearest-first: path[i] is the state i + 1 undos away (#761, #1543).
+  const path = state.undoStack.slice(S - n).reverse();
+  const reuseBase = latestPixelSnapshot(state.undoStack);
+  const plan = planHistoryJump(
+    path,
+    liveHistoryState(state),
+    () => ({
+      gpuSnapshots: snapshotLiveLayers(state, reuseBase),
+      maskSnapshots: liveMaskSnapshots(state.document.layers, reuseBase),
+    }),
+    mergeMetadataLayerPositions,
+    EMPTY_HANDLE,
+  );
+  if (!plan) return;
+
+  applyHistoryJump(set, get, state, plan.target, {
+    undoStack: state.undoStack.slice(0, S - n),
+    redoStack: [...state.redoStack, ...plan.additions],
+  }, plan.removedLayerRestores);
+}
+
+function redoSteps(set: HistorySet, get: HistoryGet, steps: number): void {
+  // Same reasoning as undo: a stale float would preserve expanded dims in
+  // the engine's layer descriptor and misplace the restored texture.
+  cancelPrefloat();
+  const eng0 = getEngine();
+  if (eng0 && hasFloat(eng0)) dropFloat(eng0);
+  forgetLiveFloat();
+  flushPendingSnapshots();
+  const state = get();
+  const R = state.redoStack.length;
+  if (R === 0) return;
+  const n = Math.min(steps, R);
+  const path = state.redoStack.slice(R - n).reverse();
+  const reuseBase = state.redoStack[R - 1];
+  const plan = planHistoryJump(
+    path,
+    liveHistoryState(state),
+    () => ({
+      gpuSnapshots: snapshotLiveLayers(state, reuseBase),
+      maskSnapshots: liveMaskSnapshots(state.document.layers, reuseBase),
+    }),
+    mergeMetadataLayerPositions,
+    EMPTY_HANDLE,
+  );
+  if (!plan) return;
+
+  applyHistoryJump(set, get, state, plan.target, {
+    redoStack: state.redoStack.slice(0, R - n),
+    undoStack: [...state.undoStack, ...plan.additions],
+  }, plan.removedLayerRestores);
+}
+
 export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   undoStack: [],
   redoStack: [],
@@ -414,195 +602,12 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
 
   undoBy: (steps: number) => {
     if (steps <= 0) return;
-    finalizePendingStrokeGlobal();
-    // Drop any active float (and cancel a scheduled prefloat) before
-    // restoring. A leftover float leaves `float_layer_id` set on the engine,
-    // which makes `update_layer` preserve the float's expanded x/y/w/h in the
-    // layer descriptor. After a restore that shrinks the layer texture back to
-    // its pre-float dimensions, the mismatched descriptor renders the layer
-    // stretched at (0, 0, doc.w, doc.h) instead of at its original position
-    // (issue #706).
-    cancelPrefloat();
-    const eng0 = getEngine();
-    if (eng0 && hasFloat(eng0)) dropFloat(eng0);
-    forgetLiveFloat();
-    flushPendingSnapshots();
-
-    const state = get();
-    const S = state.undoStack.length;
-    if (S === 0) return;
-    const n = Math.min(steps, S);
-    const target = state.undoStack[S - n];
-    if (!target) return;
-
-    // Build the additions to push onto redoStack — one entry per undone
-    // step, in the order they'd have been pushed by n consecutive undo()
-    // calls. The first is a fresh snapshot of the current live state; each
-    // subsequent one is the undoStack entry immediately below it, which by
-    // construction has both the document AND the gpuSnapshots for the
-    // intermediate state that undo() would have paused at (#761).
-    const additions: HistorySnapshot[] = [];
-    let firstSnapshot: HistorySnapshot;
-    if (target.kind === 'metadata') {
-      firstSnapshot = {
-        kind: 'metadata',
-        document: state.document,
-        selection: historySelection(state.selection),
-        label: target.label,
-        paths: state.paths,
-        selectedPathId: state.selectedPathId,
-        guides: useUIStore.getState().guides,
-      };
-    } else {
-      const reuseBase = latestPixelSnapshot(state.undoStack);
-      const gpuSnapshots = snapshotLiveLayers(state, reuseBase);
-      firstSnapshot = {
-        kind: 'pixels',
-        document: state.document,
-        selection: historySelection(state.selection),
-        gpuSnapshots,
-        maskSnapshots: liveMaskSnapshots(state.document.layers, reuseBase),
-        label: target.label,
-        paths: state.paths,
-        selectedPathId: state.selectedPathId,
-        guides: useUIStore.getState().guides,
-      };
-    }
-    additions.push(firstSnapshot);
-    for (let i = S - 1; i > S - n; i--) {
-      const step = state.undoStack[i];
-      if (step) additions.push(step);
-    }
-
-    restoreGpuFromSnapshot(target);
-    lastRestoredSnapshot = target;
-    const eng = getEngine();
-    // Keep mask/selection content refs across the reset (#781): mask
-    // textures are restored from GPU snapshots below or untouched, and
-    // `mask.data` may lag them, so it must not be re-uploaded (#780).
-    if (eng) {
-      resetTrackedState(eng, { preserveContentRefs: true });
-      restoreMasksAfterUndo(eng, target, state.document.layers);
-    }
-    markAllMasksGpuDirty();
-
-    // Not clearAll(): that's a one-shot (drains layerVersions after
-    // bumping), so a second consecutive undo/redo with no intervening
-    // pixel-cache write sees it already empty and skips notifying,
-    // leaving LayerThumbnail's cached read stale (#918).
-    pixelDataManager.invalidateLayers(target.document.layerOrder);
-    const restoredDocument = target.kind === 'metadata'
-      ? mergeMetadataLayerPositions(target.document, state.document)
-      : target.document;
-    set({
-      undoStack: state.undoStack.slice(0, S - n),
-      redoStack: [...state.redoStack, ...additions],
-      document: restoredDocument,
-      selection: target.selection,
-      paths: [...target.paths],
-      selectedPathId: target.selectedPathId,
-      dirtyLayerIds: new Set(restoredDocument.layerOrder),
-      renderVersion: state.renderVersion + 1,
-    });
-    if (eng) {
-      const restored = get();
-      syncLayers(
-        eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds,
-        restored.document.colorMode,
-      );
-    }
-    restoreGuidesAcrossResize(target, state.document);
-    syncTransformAfterHistoryRestore(target.selection);
+    withMeshWarpPreviewSuspended(() => undoSteps(set, get, steps));
   },
 
   redoBy: (steps: number) => {
     if (steps <= 0) return;
-    // Same reasoning as undo: a stale float would preserve expanded dims in
-    // the engine's layer descriptor and misplace the restored texture.
-    cancelPrefloat();
-    const eng0 = getEngine();
-    if (eng0 && hasFloat(eng0)) dropFloat(eng0);
-    forgetLiveFloat();
-    flushPendingSnapshots();
-    const state = get();
-    const R = state.redoStack.length;
-    if (R === 0) return;
-    const n = Math.min(steps, R);
-    const target = state.redoStack[R - n];
-    if (!target) return;
-
-    // Build additions to push onto undoStack, in the order n consecutive
-    // redo() calls would have. First is a fresh snapshot of the current
-    // live state; each subsequent one is the redoStack entry immediately
-    // above it — same reuse trick as undoBy (#761).
-    const additions: HistorySnapshot[] = [];
-    let firstSnapshot: HistorySnapshot;
-    if (target.kind === 'metadata') {
-      firstSnapshot = {
-        kind: 'metadata',
-        document: state.document,
-        selection: historySelection(state.selection),
-        label: target.label,
-        paths: state.paths,
-        selectedPathId: state.selectedPathId,
-        guides: useUIStore.getState().guides,
-      };
-    } else {
-      const gpuSnapshots = snapshotLiveLayers(state, state.redoStack[R - 1]);
-      firstSnapshot = {
-        kind: 'pixels',
-        document: state.document,
-        selection: historySelection(state.selection),
-        gpuSnapshots,
-        maskSnapshots: liveMaskSnapshots(state.document.layers, state.redoStack[R - 1]),
-        label: target.label,
-        paths: state.paths,
-        selectedPathId: state.selectedPathId,
-        guides: useUIStore.getState().guides,
-      };
-    }
-    additions.push(firstSnapshot);
-    for (let i = R - 1; i > R - n; i--) {
-      const step = state.redoStack[i];
-      if (step) additions.push(step);
-    }
-
-    restoreGpuFromSnapshot(target);
-    lastRestoredSnapshot = target;
-    const eng = getEngine();
-    // Keep mask/selection content refs across the reset (#781): mask
-    // textures are restored from GPU snapshots below or untouched, and
-    // `mask.data` may lag them, so it must not be re-uploaded (#780).
-    if (eng) {
-      resetTrackedState(eng, { preserveContentRefs: true });
-      restoreMasksAfterUndo(eng, target, state.document.layers);
-    }
-    markAllMasksGpuDirty();
-
-    // See undoBy — invalidateLayers() always notifies, unlike clearAll().
-    pixelDataManager.invalidateLayers(target.document.layerOrder);
-    const restoredDocument = target.kind === 'metadata'
-      ? mergeMetadataLayerPositions(target.document, state.document)
-      : target.document;
-    set({
-      redoStack: state.redoStack.slice(0, R - n),
-      undoStack: [...state.undoStack, ...additions],
-      document: restoredDocument,
-      selection: target.selection,
-      paths: [...target.paths],
-      selectedPathId: target.selectedPathId,
-      dirtyLayerIds: new Set(restoredDocument.layerOrder),
-      renderVersion: state.renderVersion + 1,
-    });
-    if (eng) {
-      const restored = get();
-      syncLayers(
-        eng, restored.document.layers, restored.document.layerOrder, restored.dirtyLayerIds,
-        restored.document.colorMode,
-      );
-    }
-    restoreGuidesAcrossResize(target, state.document);
-    syncTransformAfterHistoryRestore(target.selection);
+    withMeshWarpPreviewSuspended(() => redoSteps(set, get, steps));
   },
 
   pushHistory: (label = 'Edit', before) => {

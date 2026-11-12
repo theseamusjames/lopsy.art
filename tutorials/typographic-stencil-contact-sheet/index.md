@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Rivet & Kerf contact sheet, three black 35 mm film strips of manila stencil cards spelling RIVET & KERF under a stencil wordmark and a red 07, with a loupe, masking tape and a red grease pencil circle
 finished: finished-rivet-and-kerf-contact-sheet.webp
 finishedAlt: The finished Rivet & Kerf contact sheet on warm off-white paper. A large black stencil wordmark reads RIVET & KERF, with a mono spec block and a big red stencil 07 to its right. Below are three black film strips with cream sprocket holes, yellow edge print and frame numbers. Each of the twelve frames is a photo of a tilted manila stencil card on a dark bench. The cut letters spell R I V E, T & K E, and R F, then two white test cards sprayed with a red R and a misregistered red and black K. A magnifying loupe enlarges frame 9's R, masking tape holds the strips down, and a red grease pencil circle around frame 11 points to a note reading keep 11 + 12, cut 50 each!
-project: typographic-stencil-contact-sheet.lopsy
+project: tutorials/typographic-stencil-contact-sheet/288ebff07a4e/typographic-stencil-contact-sheet.lopsy
 ---
 
 A type foundry checks a new stencil face by cutting the letters out of card, photographing them and spraying a few test proofs. Then it marks up the contact sheet with a grease pencil. This tutorial recreates that sheet for **Rivet & Kerf**, an invented stencil typeface. (A *kerf* is the width of a cut.) Three strips of 35 mm film run across the page. Each frame shows a manila card with one letter cut through it, so together they spell the name. The last two frames are spray-paint proofs.

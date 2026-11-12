@@ -9,7 +9,7 @@ import {
   type Engine,
 } from '../../engine-wasm/wasm-bridge';
 import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
-import { guardPixelWrite } from '../../layers/paint-target';
+import { canReceiveRasterPaint, guardPixelWrite } from '../../layers/paint-target';
 
 /**
  * What a Filter menu command writes: the active layer's pixels or, in
@@ -43,6 +43,21 @@ export function resolveFilterTarget(): FilterTarget | null {
   if (isFilteringMask()) return { layerId, isMask: true };
   const layer = doc.layers.find((l) => l.id === layerId);
   if (!guardPixelWrite(layer)) return null;
+  return { layerId, isMask: false };
+}
+
+/**
+ * `resolveFilterTarget` without the toast, for the steps of a session that
+ * already resolved its target once (preview updates, cancel, apply). A group
+ * or text layer still yields null, so no step can expand it (#1395).
+ */
+export function peekFilterTarget(): FilterTarget | null {
+  const { document: doc } = useEditorStore.getState();
+  const layerId = doc.activeLayerId;
+  if (!layerId) return null;
+  if (isFilteringMask()) return { layerId, isMask: true };
+  const layer = doc.layers.find((l) => l.id === layerId);
+  if (!canReceiveRasterPaint(layer)) return null;
   return { layerId, isMask: false };
 }
 

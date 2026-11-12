@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Demoiselle Ultramarine birthday card open. A metallic damselfly perches on a glowing blue leaf at night, with soap bubbles and sparkles on the right, pastel script reading Happy Birthday at the top left, and the Layers panel listing the Grain, Title and Bubbles layers and groups
 finished: finished-demoiselle-ultramarine.webp
 finishedAlt: The finished Demoiselle Ultramarine birthday card. A male banded demoiselle damselfly with a metallic green and blue head and thorax perches on a curving cyan leaf in a deep ultramarine night. Its wing has a violet sheen. Faint magenta and teal oil-slick colour drifts in the corners. Five soap bubbles with rainbow rims rise up the right side among four-point sparkles and two trails of glittering dust. Happy Birthday is written in pastel iridescent copperplate script at the top left, and WISHING YOU A YEAR THAT SHIMMERS runs along the bottom right in spaced small capitals
-project: iridescent-damselfly-birthday-card.lopsy
+project: tutorials/iridescent-damselfly-birthday-card/0b47148ff925/iridescent-damselfly-birthday-card.lopsy
 ---
 
 Iridescence is colour that changes as the light or angle changes. You see it

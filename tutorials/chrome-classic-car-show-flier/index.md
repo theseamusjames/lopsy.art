@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Yesteryear Autos flier open at fit-to-screen zoom. Chrome script and block lettering sit above a chrome-framed photo of an orange vintage car grille, with the show details below and the Layers panel listing the Glints, Grain, Badge, Details, Title and Hero Panel layers
 finished: finished-yesteryear-autos.webp
 finishedAlt: The finished Yesteryear Autos car show flier on a midnight-blue background with a faint halftone glow. Yesteryear is set in a big chrome script, sky blue on top with a hard horizon line and an orange reflection underneath, with a maroon extruded edge and a sparkle on the Y. AUTOS sits below it in heavy italic chrome capitals, flanked by cream pinstripe flourishes, and the whole title tilts up slightly to the right. Below it, a chrome-framed panel holds a close-up photo of an orange 1939 car's chrome grille and teardrop headlight, with a navy and chrome FREE SPECTATORS badge overlapping its top right corner. Under the photo, CLASSIC CARS star CRUISE NIGHT arches over SATURDAY JUNE 12 in cream italic capitals, then 4 PM TILL DUSK and RAIN DATE JUNE 19 in orange, the address RIVERSIDE DRIVE-IN 1200 OLD MILL ROAD stamped on a chrome bumper bar, the programme SHOW AND SHINE, SWAP MEET, PINSTRIPING, LIVE ROCKABILLY, and a line of small print
-project: chrome-classic-car-show-flier.lopsy
+project: tutorials/chrome-classic-car-show-flier/53372aa65395/chrome-classic-car-show-flier.lopsy
 ---
 
 Classic car culture has its own lettering. Look at the back of any 1950s

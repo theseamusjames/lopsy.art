@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Riptide Point patch open. A round embroidered badge with a cream stitched edge and a black lettered band sits on dark denim. Inside, black and cream rays fan out from a coral and black checkerboard sun above a striped sea with two swirling eddies and a coral reflection. The Layers panel shows the Patch group's layers
 finished: finished-riptide-point-surf-club-patch.webp
 finishedAlt: The finished Riptide Point Surf Club patch, ironed onto blue denim at a slight angle. A cream overlocked edge rings a black band lettered RIPTIDE POINT across the top and SURF CLUB ★ EST 1966 along the bottom, with a coral star at each side. Inside a thin coral keyline, black and cream rays radiate from a coral and black polar checkerboard sun that bulges like a sphere, with a black dot at its centre. Below a ruled horizon the sea is made of black and cream stripes that squeeze together toward the horizon, curl into two mirrored riptide eddies, and are cut by a coral reflection that widens toward the viewer
-project: op-art-surf-club-iron-on-patch.lopsy
+project: tutorials/op-art-surf-club-iron-on-patch/715e5d702d65/op-art-surf-club-iron-on-patch.lopsy
 ---
 
 *Op art*, short for optical art, was the big new look of the mid-1960s. Bridget

@@ -10,6 +10,7 @@ import type { ImageAdjustments } from './image-adjustments';
 import { DEFAULT_ADJUSTMENTS } from './image-adjustments';
 import { IDENTITY_CURVES, isIdentityCurves } from './curves';
 import { IDENTITY_LEVELS, isIdentityLevels } from './levels';
+import { IDENTITY_COLOR_GRADE } from './color-grading';
 
 /** Convert a legacy flat ImageAdjustments object to an AdjustmentNode array.
  *  Skips nodes whose values are all at their defaults to keep the list lean.
@@ -142,6 +143,9 @@ export function nodesToLegacyAdjustments(nodes: readonly AdjustmentNode[]): Imag
       case 'gradient-map':
         result.gradientMapStops = node.stops;
         break;
+      case 'color-grading':
+        result.colorGrading = node;
+        break;
     }
   }
 
@@ -185,6 +189,8 @@ export function createDefaultNode(type: AdjustmentNodeType): AdjustmentNode {
       return { id, enabled: true, type: 'invert' };
     case 'hue-saturation':
       return { id, enabled: true, type: 'hue-saturation', hue: 0, saturation: 0, lightness: 0 };
+    case 'color-grading':
+      return { id, enabled: true, type: 'color-grading', ...IDENTITY_COLOR_GRADE };
   }
 }
 
@@ -195,6 +201,7 @@ export function createDefaultAdjustments(): AdjustmentNode[] {
     createDefaultNode('curves'),
     createDefaultNode('exposure'),
     createDefaultNode('hue-saturation'),
+    createDefaultNode('color-grading'),
   ];
 }
 
@@ -214,4 +221,5 @@ export const ADJUSTMENT_NODE_LABELS: Record<AdjustmentNodeType, string> = {
   'channel-mixer': 'Channel Mixer',
   'invert': 'Invert',
   'hue-saturation': 'Hue / Saturation',
+  'color-grading': 'Color Grading',
 };

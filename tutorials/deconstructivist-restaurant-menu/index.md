@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished LOST WAX menu. A tilted black plate holds the word LOST in sliced paper-coloured capitals, WAX runs up the right edge in an orange-to-bronze gradient, and four menu sections sit in two columns above a teal halftone band
 finished: finished-lost-wax.webp
 finishedAlt: The finished LOST WAX menu on grey concrete-coloured paper. A large black plate, tipped a few degrees anticlockwise, fills the top left. On it the word LOST is set in huge paper-coloured Anton capitals, cut into horizontal bands. The middle band slides right and a thin band near the baseline slides left, and the tip of the T's crossbar pokes past the plate's edge and turns black. WAX runs up the right edge, reading bottom to top in a yellow-to-orange-to-bronze gradient. In the top right, BRONZE POURS AT sits above a big orange 1150°C, a short note about the old foundry, and a thermometer scale marked 1150° pour, 700° burnout, 150° dewax and 0°. Below the plate, two columns hold four sections, FIRE, IRON, ASH and a slanted POUR, each with small orange index numbers and monospaced dishes with right-aligned prices. A teal halftone band cuts diagonally across the lower page, a ghosted teal word MOULD rises from behind it, an orange-to-bronze ring sits half off the bottom-left corner, and the hours and address are stacked under WAX
-project: deconstructivist-restaurant-menu.lopsy
+project: tutorials/deconstructivist-restaurant-menu/447112510a88/deconstructivist-restaurant-menu.lopsy
 ---
 
 Deconstructivist graphic design grew out of the late 1980s and early 1990s.

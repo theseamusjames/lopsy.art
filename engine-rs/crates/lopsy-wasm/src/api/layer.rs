@@ -160,43 +160,27 @@ pub fn decode_and_upload_dng(
         .map_err(|e| JsError::new(&format!("JSON serialize: {e}")))
 }
 
-/// Decode a RAF (Fujifilm RAW) file and upload to a layer texture as f32 RGBA.
-/// Returns JSON: `{ width, height }`
-#[wasm_bindgen(js_name = "decodeAndUploadRaf")]
-pub fn decode_and_upload_raf(
+/// Upload an RGBA f32 rectangle into a layer whose texture is (re)allocated
+/// at `texture_width`×`texture_height` if it isn't already that size. The
+/// rest of the texture is left as is, so a large image can be filled in
+/// pieces (the RAF import uploads each decoded band as it arrives).
+#[wasm_bindgen(js_name = "uploadLayerPixelsF32Rect")]
+#[allow(clippy::too_many_arguments)]
+pub fn upload_layer_pixels_f32_rect(
     engine: &mut Engine,
     layer_id: &str,
-    data: &[u8],
-) -> Result<String, JsError> {
-    let raf = lopsy_core::raf::read_raf(data)
-        .map_err(|e| JsError::new(&format!("RAF decode failed: {e}")))?;
-
-    layer_manager::upload_pixels_f32(
-        &mut engine.inner,
-        layer_id,
-        &raf.pixels,
-        raf.width,
-        raf.height,
-    ).map_err(|e| JsError::new(&e))?;
-
-    for line in &raf.debug_log {
-        web_sys::console::log_1(&line.into());
-    }
-
-    #[derive(serde::Serialize)]
-    #[serde(rename_all = "camelCase")]
-    struct RafMeta {
-        width: u32,
-        height: u32,
-    }
-
-    let meta = RafMeta {
-        width: raf.width,
-        height: raf.height,
-    };
-
-    serde_json::to_string(&meta)
-        .map_err(|e| JsError::new(&format!("JSON serialize: {e}")))
+    texture_width: u32,
+    texture_height: u32,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    data: &[f32],
+) -> Result<(), JsError> {
+    layer_manager::upload_pixels_f32_rect(
+        &mut engine.inner, layer_id, texture_width, texture_height, x, y, width, height, data,
+    )
+    .map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "uploadLayerSparsePixels")]
@@ -301,8 +285,9 @@ pub fn duplicate_layer_texture(engine: &mut Engine, src_id: &str, dst_id: &str) 
 }
 
 #[wasm_bindgen(js_name = "mergeLayers")]
-pub fn merge_layers(engine: &mut Engine, top_id: &str, bottom_id: &str, bake_bottom_opacity: bool) -> Result<(), JsError> {
+pub fn merge_layers(engine: &mut Engine, top_id: &str, bottom_id: &str, bake_bottom_opacity: bool) -> Result<Vec<i32>, JsError> {
     layer_manager::merge_layers(&mut engine.inner, top_id, bottom_id, bake_bottom_opacity)
+        .map(|rect| rect.to_vec())
         .map_err(|e| JsError::new(&e))
 }
 
@@ -591,9 +576,12 @@ pub fn composite_float_affine(
     src_center_y: f32,
     dst_center_x: f32,
     dst_center_y: f32,
+    src_width: f32,
+    src_height: f32,
 ) -> Result<(), JsError> {
     layer_manager::composite_float_affine(
         &mut engine.inner, inv_matrix, src_center_x, src_center_y, dst_center_x, dst_center_y,
+        src_width, src_height,
     ).map_err(|e| JsError::new(&e))
 }
 
@@ -620,6 +608,27 @@ pub fn fill_with_color(
     a: f32,
 ) -> Result<(), JsError> {
     layer_manager::fill_with_color(&mut engine.inner, layer_id, r, g, b, a)
+        .map_err(|e| JsError::new(&e))
+}
+
+/// Solid-fill a layer except for the document-space rect `hole_*`, which is
+/// left transparent. A zero-sized hole fills the whole layer.
+#[wasm_bindgen(js_name = "fillLayerFrame")]
+#[allow(clippy::too_many_arguments)]
+pub fn fill_layer_frame(
+    engine: &mut Engine,
+    layer_id: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+    hole_x: i32,
+    hole_y: i32,
+    hole_w: u32,
+    hole_h: u32,
+) -> Result<(), JsError> {
+    let hole = (hole_w > 0 && hole_h > 0).then(|| Rect::new(hole_x, hole_y, hole_w, hole_h));
+    layer_manager::fill_layer_frame(&mut engine.inner, layer_id, [r, g, b, a], hole)
         .map_err(|e| JsError::new(&e))
 }
 

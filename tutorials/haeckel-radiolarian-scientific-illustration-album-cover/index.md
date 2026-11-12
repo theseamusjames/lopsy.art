@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Foraminifera Oceanica album cover open. A black plate shows a large silver lattice sphere with a dusty rose capsule and an ochre nucleus, ringed by barbed spines and fine filaments, with four smaller specimens in the corners, the title at the top and the band name at the bottom. The Layers panel lists the Fig 1 to Fig 5 groups and the Type group
 finished: finished-foraminifera-oceanica.webp
 finishedAlt: The finished Foraminifera Oceanica album cover, a square black plate inside a thin double rule. FORAMINIFERA is set in widely spaced cream capitals across the top, with OCEANICA between two hairline rules below it. In the centre a silver lattice sphere holds a dusty rose capsule and an ochre nucleus, both lightly stippled, with twelve long barbed spines, twelve short ones, faint radiating filaments and two small clusters of straw-yellow cells. Top left, a thin star of twenty spines around a small rose capsule. Top right, a tilted, perforated silver disc with concentric chamber walls and six spines. Bottom left, a grey electron micrograph of a round foraminifer inside a ringed microscope field with tick marks and a 200 µm scale bar. Bottom right, a perforated silver bell with a domed head, a horn and three feet, a rose body showing through the pores. Each specimen has a small italic Fig. label, and THE GILTSCH ENSEMBLE and Five studies for the open ocean sit at the bottom
-project: haeckel-radiolarian-scientific-illustration-album-cover.lopsy
+project: tutorials/haeckel-radiolarian-scientific-illustration-album-cover/509150b16564/haeckel-radiolarian-scientific-illustration-album-cover.lopsy
 ---
 
 Between 1899 and 1904 the zoologist Ernst Haeckel published

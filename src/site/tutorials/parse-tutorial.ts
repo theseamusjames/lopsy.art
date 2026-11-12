@@ -5,7 +5,7 @@ import type {
   TutorialLevel,
   TutorialStep,
 } from './types';
-import { DESCRIPTION_MAX, DESCRIPTION_MIN, TITLE_MAX } from './site-config';
+import { DESCRIPTION_MAX, DESCRIPTION_MIN, PROJECT_KEY_PATTERN, TITLE_MAX } from './site-config';
 
 export interface ParseResult {
   tutorial: Tutorial | null;
@@ -16,7 +16,6 @@ export interface ParseResult {
 const LEVELS: readonly TutorialLevel[] = ['Beginner', 'Intermediate', 'Advanced'];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const PUBLISHED = /^(\d{4}-\d{2}-\d{2})(?:[ T]([01]\d|2[0-3]):([0-5]\d))?$/;
-const PROJECT_FILE = /^[^/\\]+\.lopsy$/i;
 const IMAGE_LINE = /^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/;
 export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -102,8 +101,10 @@ function readFrontmatter(
 
   if (coverSrc && !coverAlt) errors.push('`cover` needs a `coverAlt` description.');
   if (finishedSrc && !finishedAlt) errors.push('`finished` needs a `finishedAlt` description.');
-  if (project && !PROJECT_FILE.test(project)) {
-    errors.push('`project` must be the name of a `.lopsy` file next to index.md.');
+  if (project && !PROJECT_KEY_PATTERN.test(project)) {
+    errors.push(
+      '`project` must be the R2 key of an uploaded project (tutorials/<slug>/<hash>/<file>.lopsy). Run `npm run tutorial:upload <slug>` to upload it and set this field.',
+    );
   }
 
   const tags = splitList(fields.get('tags')).map((tag) => tag.toLowerCase());

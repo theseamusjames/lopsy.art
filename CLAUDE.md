@@ -230,8 +230,8 @@ Each tool follows this pattern:
 4. `src/tools/<name>/<Name>Options.module.css` — styles for the options bar.
 
 Tool logic modules must not import React, DOM APIs, or any rendering
-code. A small set of pre-rule files still violate this (path/path.ts,
-path/boolean-ops.ts, text/render-text-on-path.ts, brush/preset-io.ts)
+code. A small set of pre-rule files still violate this
+(path/boolean-ops.ts, text/render-text-on-path.ts, brush/preset-io.ts)
 and are tracked for cleanup — new code must not extend the list.
 
 ## Components
@@ -301,6 +301,12 @@ npm run wasm:build
   - `style: fix CSS token usage in layers panel` — formatting, styling, no logic change.
 - Use a scope when it adds clarity: `feat(brush): add scatter control`, `fix(compositor): correct mask sampling order`.
 - Keep the subject line under 72 characters. Use the body for details if needed.
+
+## Example Images
+Sometimes you'll need example images to test image editing, particularly when working with RAW image formats. 
+- For RAF images, I have an open source, free to use library of sample images available at https://github.com/theseamusjames/sample-raf-images.
+- Never try to create RAW image for testing. You need real sample images because the file formats vary significantly.
+- For other images, you can use https://placecats.com/1920/1080 where 1920 and 1080 are values you can adjust to get a photo in those dimensions.
 
 ## Tutorial PRs
 

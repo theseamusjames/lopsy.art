@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished GEYSIR poster. A saffron sky speckled with coral dots, a white halftone steam column rising from a bullseye of orange and teal terraces in front of teal and indigo mountains, with the title GEYSIR in huge indigo capitals below
 finished: finished-iceland-geyser.webp
 finishedAlt: The finished GEYSIR travel poster. Inside a cream border, a saffron sky printed with coral halftone dots holds a pale sun with a dotted halo. A tall white steam column, shaded with indigo dots on the left and coral dots on the right, erupts from a bullseye of coral, saffron, cream and teal terraces. Teal and indigo mountains with snow caps sit behind it. A cream height scale marked 10 M to 40 M runs up the left edge, a rope fence with five tiny tourists crosses the foreground, and a round coral badge reading EVERY 9 MINUTES is tilted in the top right corner. Below the picture, GEYSIR is set in enormous indigo Anton capitals over a coral misprint copy, with a Playfair Display tagline and a coral Space Mono data strip underneath
-project: halftone-iceland-geyser-poster.lopsy
+project: tutorials/halftone-iceland-geyser-poster/34e26f1bd279/halftone-iceland-geyser-poster.lopsy
 ---
 
 Travel posters of the 1960s and 70s were printed in a handful of flat inks,

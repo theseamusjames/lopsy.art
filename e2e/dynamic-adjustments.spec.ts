@@ -131,8 +131,8 @@ test.describe('Dynamic adjustment node list on groups', () => {
     const withNode = await readCompositedAtDoc(page, 100, 100);
 
     // Click the eye toggle button on the saturation node specifically.
-    // Default adjustment nodes (levels, curves, exposure, hue-saturation)
-    // precede the newly added saturation node, so we target the last
+    // Default adjustment nodes (levels, curves, exposure, hue-saturation,
+    // color-grading) precede the newly added saturation node, so we target the last
     // "Disable node" button which corresponds to the saturation node.
     const drawer = page.getByTestId('effects-drawer');
     await drawer.locator('[aria-label="Disable node"]').last().click();
@@ -154,8 +154,8 @@ test.describe('Dynamic adjustment node list on groups', () => {
   test('reordering nodes changes their order in the store', async ({ page }) => {
     const rootGroupId = await getRootGroupId(page);
 
-    // The root group starts with 4 default nodes (levels, curves, exposure,
-    // hue-saturation). Record the baseline count before adding more.
+    // The root group starts with 5 default nodes (levels, curves, exposure,
+    // hue-saturation, color-grading). Record the baseline count before adding more.
     const baselineNodes = await getGroupAdjustments(page, rootGroupId);
     const baselineCount = baselineNodes.length;
 

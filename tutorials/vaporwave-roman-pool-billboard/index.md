@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Roman Pools vaporwave billboard, a pink gradient-mapped marble bust beside a backlit Roman temple, a striped sun and a cyan perspective pool, with the Layers panel open
 finished: finished-roman-pools.webp
 finishedAlt: The finished Roman Pools billboard. A pink and violet marble bust of Helios with glitch slices and a cyan echo looks up at a chrome ROMAN POOLS headline. A striped yellow sun sets behind a purple temple colonnade and two palm silhouettes. A cyan tiled pool with caustics and a rippled sun reflection runs to the horizon. A Windows 95 dialog reads Welcome to AQUA PLAZA, Open 24/7, Exit 42, with a cursor on DIVE IN, and vertical katakana runs down the right edge
-project: vaporwave-roman-pool-billboard.lopsy
+project: tutorials/vaporwave-roman-pool-billboard/bcec8444ff21/vaporwave-roman-pool-billboard.lopsy
 ---
 
 The look is built from a few parts. A classical marble bust, a sunset, a swimming pool, palms, Japanese type and old computer UI, all drenched in pink and cyan. In this tutorial you'll make **Roman Pools**, a 2400 × 1100 billboard for an imaginary 1995 mall water park. A real statue photo carries it. You'll cut it out, then recolour it with a Gradient Map. Everything else is built around it, step by step:

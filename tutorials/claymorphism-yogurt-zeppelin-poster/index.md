@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy showing the finished Yogurt Zeppelin claymorphism poster, a mint clay blimp with a pink band floating over a yogurt cup, with the Layers panel open
 finished: finished-yogurt-zeppelin.webp
 finishedAlt: The finished Yogurt Zeppelin poster. A glossy mint zeppelin with a pink band drifts across a cream sun above a pink-banded yogurt cup topped with a swirl and a cherry. White clay clouds float around it and a rotated yellow 100% LIVE CULTURES badge sits at the right. A chunky pink ZEPPELIN headline with a purple YOGURT above it, and the line Cultured at altitude, sit at the top and bottom
-project: claymorphism-yogurt-zeppelin-poster.lopsy
+project: tutorials/claymorphism-yogurt-zeppelin-poster/84bbaede273b/claymorphism-yogurt-zeppelin-poster.lopsy
 ---
 
 Claymorphism is the look of soft, inflated 3D objects: rounded shapes, pastel colours, a bright edge where the light hits, and a gentle shadow underneath. You don't need a 3D program for it. In this tutorial you'll make **Yogurt Zeppelin**, a 1200 × 1600 poster for an imaginary dairy that delivers by blimp. Every object starts as a flat fill. Layer effects and a few Multiply layers do the "clay" work. It's about 35 layers in all, so name them as you go and take it one object at a time.

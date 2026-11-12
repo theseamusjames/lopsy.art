@@ -9,6 +9,13 @@
  */
 const ARROW_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
+/**
+ * Marks a custom control that handles arrow keys itself. The global handler
+ * runs in the capture phase, so such a control cannot stop it by calling
+ * stopPropagation from its own keydown.
+ */
+export const HANDLES_ARROW_KEYS_ATTR = 'data-handles-arrow-keys';
+
 function isRangeOrRadioInput(el: HTMLInputElement): boolean {
   const type = (el.type || 'text').toLowerCase();
   return type === 'range' || type === 'radio';
@@ -24,5 +31,5 @@ export function isNativeArrowKeyTarget(target: EventTarget | null, key: string):
   if (!ARROW_KEYS.has(key)) return false;
   if (target instanceof HTMLSelectElement) return true;
   if (target instanceof HTMLInputElement) return isRangeOrRadioInput(target);
-  return false;
+  return target instanceof HTMLElement && target.hasAttribute(HANDLES_ARROW_KEYS_ATTR);
 }

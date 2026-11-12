@@ -319,9 +319,9 @@ center horizontally** button and nudge it up or down with the arrow keys:
 A single grade over every layer is what makes three photos read as one
 film still. Choose **Layer → Adjustment Layer…** and click **Got it** on the
 note that pops up. That opens the adjustments on the top-level *Project*
-group, which apply to every layer. It already holds four nodes that do
+group, which apply to every layer. It already holds five nodes that do
 nothing yet:
-**Levels**, **Curves**, **Exposure** and **Hue / Saturation**.
+**Levels**, **Curves**, **Exposure**, **Hue / Saturation** and **Color Grading**.
 
 1. **Levels:** expand it and drag the input black handle to **14** and the
    white handle to **242**. That sets a firm black point, so the image isn't

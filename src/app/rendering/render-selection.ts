@@ -2,6 +2,7 @@ import { traceSelectionContours } from '../../selection/selection';
 import { getHandlePositions, isShapeChangingTransform } from '../../tools/transform/transform';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
 import { transformPolylines } from '../../tools/transform/transform-point';
+import { SCALE_HANDLE_DRAWN_PX } from '../../tools/transform/transform-handles';
 import type { Rect } from '../../types';
 
 export interface SelectionData {
@@ -171,7 +172,7 @@ export function drawTransformHandles(
   zoom: number,
 ): void {
   const handles = getHandlePositions(transform);
-  const handleSize = 6 / zoom;
+  const handleSize = SCALE_HANDLE_DRAWN_PX / zoom;
   const rotHandleSize = 5 / zoom;
 
   ctx.save();

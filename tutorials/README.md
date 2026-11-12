@@ -15,10 +15,12 @@ small inline script that copies colour swatches.
    "look at the finished result" step: the finished image is shown under the
    title automatically (the last step's image, or `finished` if set).
 3. Drop the screenshots next to `index.md` and reference them by file name.
-   If you saved the finished piece as a project, put the `.lopsy` file there
-   too (named `<slug>.lopsy`) and set `project` in the frontmatter. The page
-   then shows a "Follow along" box under the finished image with a button that
-   opens the project in the editor.
+   If you saved the finished piece as a project, save the `.lopsy` file there
+   too (named `<slug>.lopsy`) and run `npm run tutorial:upload <slug>`. It
+   uploads the file to R2 and sets `project` in the frontmatter to its key.
+   The `.lopsy` itself is gitignored and never committed. The page then shows
+   a "Follow along" box under the finished image with a button that opens the
+   project in the editor.
 4. Run `npm run dev` and open <http://localhost:5173/tutorials/>. Pages
    reload as you save, and drafts are shown.
 5. Remove `draft: true` when it's ready. `npm run build` fails on content
@@ -92,6 +94,20 @@ The "Open Project in Lopsy" button links to `/?open=<project URL>`. On
 startup the editor fetches whatever `.lopsy` URL the `open` parameter names
 and opens it (`src/io/project-url.ts`). The parameter is deliberately
 undocumented in the app itself, with no menu item or dialog.
+
+Projects live only in R2, in dev and production alike (Cloudflare Pages
+rejects files over 25 MiB, and they would bloat the repo): the button links to
+`https://files.lopsy.art/<project key>`, where the key is
+`tutorials/<slug>/<hash>/<slug>.lopsy`. The content hash means a changed
+project gets a new key, so nothing needs replacing or purging; re-run
+`npm run tutorial:upload <slug>` after changing one. `npm run tutorial:check`
+confirms every key is served, and CI runs it on pull requests and before each
+deploy.
+
+Uploading needs an R2 token scoped to Object Read & Write on the
+`lopsy-art-projects` bucket, in `~/.config/lopsy/r2.env` (`R2_ACCOUNT_ID`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) or the environment. This repo is
+public: never commit those values or paste them anywhere.
 
 The generator lives in `src/site/tutorials/`, the page styles in
 `src/site/tutorials/tutorials.css`, and the Vite glue in

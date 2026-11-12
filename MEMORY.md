@@ -561,3 +561,95 @@ the engine (brush colour via `encodeColorForEngine`, effect colours in
 `layerToDescJson`) must be encoded first, and shaders that do RGB maths on
 the composite (`adjustments.glsl`, `vignette.glsl`) decode/re-encode via
 `//#include lab` (`gpu/shaders/lab_common.glsl`) when `u_docColorMode == 1`.
+
+## Never pass objects that reach large typed arrays as React props
+
+In development, React 19.2's performance track diffs every re-rendered
+component's changed props (`addObjectDiffToProperties` in
+`react-dom-client.development.js`) and lists a typed array found within two
+levels of a prop **index by index**, then structured-clones the list into
+`performance.measure`. A `layer` prop reaches `layer.mask.data`, so each mask
+change on an 1800×1200 document cost ~0.5–1.4 GB of transient heap and a few
+in a row crashed the tab with "Data cannot be cloned, out of memory" (#1408).
+Production builds don't do this. Pass ids and read big data with a store
+selector inside the component (hook state isn't diffed), as `LayerRow` /
+`MaskThumbnail` do. `src/panels/LayerPanel/LayerPanel.test.ts` shows how to
+observe the track under Vitest (stub `console.timeStamp` and
+`performance.measure` before importing React). Heap sampling misses this
+garbage unless `includeObjectsCollectedByMajorGC` is on; measure with
+`HeapProfiler.collectGarbage` + `Performance.getMetrics` instead
+(`e2e/mask-heap-1408.spec.ts`).
+
+## A texture left bound to a unit can turn a later draw into a silent no-op
+
+Sampler uniforms persist on a program, and texture units keep whatever was
+last bound. If a unit still holds a texture the pool has since handed to a
+new owner, any draw into that texture by a program whose sampler points at
+the unit is a WebGL feedback loop: Chrome logs `GL_INVALID_OPERATION:
+Feedback loop formed between Framebuffer and active Texture` and the draw
+writes nothing — even when a flag like `u_hasMask == 0` means the sampler is
+never read. A deleted layer's mask left on TEXTURE2 by the compositor broke
+every float composite into the next layer that got its texture (#1414; #964
+was the same shape). Unbind extra units after the draw that used them, and
+point unused samplers at a unit holding the draw's source. The console line
+is the tell: capture console errors in e2e repros of "the operation did
+nothing" bugs.
+
+## A custom control can't stop the global arrow-key nudge from its own keydown
+
+`useKeyboardShortcuts` listens on `window` in the capture phase, so it runs
+before any React handler and `stopPropagation` in the control is too late.
+A `role="slider"` div that handles arrows would step itself *and* nudge the
+active layer. Put `HANDLES_ARROW_KEYS_ATTR` (`native-control-keys.ts`) on the
+element to opt out, as `ColorWheel` does. Native range, radio and select
+controls are already exempt.
+
+## Splitting a raw-decode stage into bands: prove the halo, don't guess it
+
+The RAF pipeline after white balance (`render_rgb`) only reads a bounded
+neighbourhood per pixel, so `render_band` renders row bands with
+`BAND_HALO_ROWS` of context and stays bit-identical to a whole-frame
+decode. If you add or widen a stage in `render_rgb`, bump
+`RENDER_REACH_ROWS`. `tests/raf_bands.rs` compares 6-row bands against the
+whole frame on a noisy synthetic RAF (`tests/support/synthetic_raf.rs`), and
+it fails once the halo is below the real reach (12 rows fails, 18 passes),
+so run it after any change there. Anything that needs the whole frame
+(phase detection, gray-world WB, statistics) belongs in `prepare_raf`.
+Workers get the params as the JSON string Rust wrote. Never re-serialize
+it in JS, or the floats can drift by an ulp.
+
+## History: metadata entries hold no pixels, and removed layers keep theirs
+
+A `kind: 'metadata'` history entry has no GPU handles, because its action
+changed no pixels. Restoring one keeps the live textures. That is only right
+when every step between the live state and that entry was a metadata step,
+so a multi-step jump (`undoBy` / `redoBy`) goes through `planHistoryJump`,
+which takes the pixels from the nearest pixel entry along the path. Also,
+`syncLayers` can leave a removed layer's texture in the engine, and
+`add_layer` reuses an existing texture. A layer that comes back on redo
+therefore shows whatever its texture held when it was removed. Test history
+changes by comparing every row reached by a jump against the same row
+reached one step at a time
+(`e2e/autofix-1543-1545-history-jump-mask-selection.spec.ts`).
+
+## Non-Normal blend math must never see negative channels
+RGBA16F layer and composite textures can hold slightly negative values (a
+dithered gradient ramping to 0 did). `sqrt`, `pow` and divisions in the
+blend formulas turn those into NaN, and a NaN in the composite survives
+every opaque layer above it (`dst * (1 - a)` is still NaN when `a = 1`).
+`blend.glsl`'s `blendMode` clamps both inputs to `>= 0` first, and shaders
+that write layer pixels should clamp their own output (#1557).
+
+## Liquify dabs compose by resampling the old field at the moved point
+A backward-mapped warp field `disp` composes with a new dab `delta` as
+`disp_new(p) = delta(p) + disp_old(p + delta(p))` (bilinear sample).
+Updating `disp_old(p)` in place — e.g. rotating it for Twirl — is only exact
+while the brush centre never moves; with a moving centre the error grows
+every dab into stair-step tearing (#1565). The Liquify field can be checked
+from an e2e test by warping a one-level-per-pixel grey ramp: each pixel's
+value is then the x it was pulled from.
+
+## wasm-opt download blocked in the sandbox: use the dev build
+`npm run wasm:build` has wasm-pack download binaryen for `wasm-opt`; when
+the sandbox can't reach that GitHub release the build fails. `npm run
+wasm:build:dev` skips `wasm-opt` and is enough for running e2e tests.

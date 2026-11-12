@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished Karaoke Cowboy neon poster, with an amber cowboy hat inside a turquoise lasso, pink Karaoke script, an amber outline-tube COWBOY sign and a red marquee board on a dark brick wall, and the layers panel open on the right
 finished: finished-karaoke-cowboy-neon-poster.webp
 finishedAlt: The finished 1600 by 2000 poster. Neon signs glow on a dark brick wall at night. At the top an amber neon cowboy hat sits inside a tilted turquoise lasso loop whose rope runs down the right side and ends in a turquoise neon microphone. Below it the word Karaoke is written in pink neon script. A dark metal raceway carries COWBOY in oxblood letters outlined with amber neon tubes. Under it EVERY THURSDAY glows in turquoise between two amber sparkles, above a red marquee board ringed with light bulbs that reads SILVER SPUR, SALOON, OPEN MIC, 9 PM TILL LAST CALL. A painted footer reads 1407 RAILROAD AVE, NO COVER, BOOTS WELCOME
-project: neon-sign-karaoke-poster.lopsy
+project: tutorials/neon-sign-karaoke-poster/41eb897903ec/neon-sign-karaoke-poster.lopsy
 ---
 
 Real neon is glass tube bent over a flame. It's one even line with rounded ends and a white-hot core, and its light washes over whatever it's mounted on. This tutorial fakes all of that for a poster advertising *Karaoke Cowboy*, a made-up Thursday open-mic night at the *Silver Spur Saloon*:

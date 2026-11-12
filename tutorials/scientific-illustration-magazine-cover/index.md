@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished SPECIMEN magazine cover, with the Layers panel showing the Grain, Type, Chart, Figures and Specimen groups beside a hand-coloured kingfisher inside a microscope-style disc
 finished: finished-specimen-kingfisher-cover.webp
 finishedAlt: The finished SPECIMEN cover on warm cream paper. A large black serif masthead sits above a dateline. The cobalt headline reads The blue that isn't there, with a short deck below. A hand-coloured kingfisher perches on a fading twig inside a pale microscope field ringed with tick marks. An orange loupe ring on its wing coverts leads by thin lines to Fig. 1, a blue-and-brown barb cross-section numbered 1 to 3, which zooms down to Fig. 2, a cobalt labyrinth with white and blue light arrows. Monospace captions and a reflectance curve over a spectrum bar fill the lower middle, and Plate III with the italic binomial Alcedo atthis sits bottom right
-project: scientific-illustration-magazine-cover.lopsy
+project: tutorials/scientific-illustration-magazine-cover/9473109d8356/scientific-illustration-magazine-cover.lopsy
 ---
 
 Science magazines love a cover that is half photograph and half diagram. The animal is the hook, and a chain of magnified figures explains what you're looking at. This tutorial builds one for a made-up natural-history quarterly, *SPECIMEN*. The cover story is "The blue that isn't there": a kingfisher's back has no blue pigment. Its colour comes from a sponge of keratin and air that scatters blue light.

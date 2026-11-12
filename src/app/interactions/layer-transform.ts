@@ -28,13 +28,11 @@ import {
   beginLayerTransform,
   compositeLayerTransformAffine,
   compositeLayerTransformPerspective,
-  getLayerContentBounds,
   dropFloat,
-  getLayerEngineBounds,
   hasLayerTransform,
   prepareLayerTransformTarget,
 } from '../../engine-wasm/wasm-bridge';
-import { pixelDataManager } from '../../engine/pixel-data-manager';
+import { layerContentRect, clearLayerContentRectCache } from '../layer-content-rect';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
@@ -71,14 +69,6 @@ interface LiveSession {
 
 let live: LiveSession | null = null;
 
-interface CachedBounds {
-  key: string;
-  /** Texture-local. */
-  rect: Rect | null;
-}
-
-const contentBoundsCache = new Map<string, CachedBounds>();
-
 /** The layers a multi-layer transform would move right now, or [] when the Move tool would not show one. */
 export function currentLayerTransformTargets(): string[] {
   const ui = useUIStore.getState();
@@ -104,31 +94,6 @@ function isSessionFor(engine: Engine, targets: readonly string[]): boolean {
 export function isLayerTransformLive(): boolean {
   const engine = getEngine();
   return live !== null && engine !== null && hasLayerTransform(engine);
-}
-
-/**
- * Document-space content rect of a layer, or null when it is empty. Read on
- * the GPU (`width + height` texels) and cached, texture-local, until the
- * layer's pixels, texture size or history change — so neither drawing the
- * box nor dragging the layers around reads anything back.
- */
-function layerContentRect(engine: Engine, layerId: string): Rect | null {
-  const [x = 0, y = 0, w = 0, h = 0] = getLayerEngineBounds(engine, layerId);
-  const editor = useEditorStore.getState();
-  const key = [
-    pixelDataManager.versionOf(layerId), w, h,
-    editor.undoStack.length, editor.redoStack.length,
-  ].join('|');
-  let cached = contentBoundsCache.get(layerId);
-  if (!cached || cached.key !== key) {
-    const local = getLayerContentBounds(engine, layerId);
-    const lw = local[2] ?? 0;
-    const lh = local[3] ?? 0;
-    const rect = lw > 0 && lh > 0 ? { x: local[0] ?? 0, y: local[1] ?? 0, width: lw, height: lh } : null;
-    cached = { key, rect };
-    contentBoundsCache.set(layerId, cached);
-  }
-  return cached.rect ? { ...cached.rect, x: cached.rect.x + x, y: cached.rect.y + y } : null;
 }
 
 /**
@@ -294,5 +259,5 @@ export function forgetLayerTransform(): void {
 
 /** Test seam: drop cached content bounds. */
 export function resetLayerTransformCache(): void {
-  contentBoundsCache.clear();
+  clearLayerContentRectCache();
 }

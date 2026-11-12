@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished BUFFER OVERFLOW diner menu. A tilted sheet of green-striped printer paper with tractor-feed holes sits on a teal boomerang counter. Big ASCII letters spell BUFFER in black and OVERFLOW in red, and a two-column menu runs down the page
 finished: finished-buffer-overflow-menu.webp
 finishedAlt: The finished BUFFER OVERFLOW diner menu. A slightly tilted sheet of green-bar fanfold paper with punched tractor holes and torn perforated ends lies on teal 1950s boomerang formica. At the top, inside a box drawn with plus signs and dashes, BUFFER is spelled in big black letters made of repeated characters, and OVERFLOW in red letters bursts through the right side of the box, with red drips running down through its bottom border. Below are two columns of dot-matrix menu items with dot leaders and red prices, an ASCII cherry pie and coffee mug, a warning footer, a blue ballpoint loop round 3.14, DECAF struck out with 86'd written above it, a scribbled cherry today! note, and two coffee-cup rings in the bottom-left corner
-project: ascii-art-dot-matrix-diner-menu.lopsy
+project: tutorials/ascii-art-dot-matrix-diner-menu/eab2fc9f65c5/ascii-art-dot-matrix-diner-menu.lopsy
 ---
 
 Before laser printers, restaurants, offices and computer labs printed on

@@ -5,7 +5,7 @@ import { byNewest, pickRelated } from './related';
 import { type RenderContext, coverImage } from './render-layout';
 import { renderTutorialIndex } from './render-index';
 import { renderTutorialPage } from './render-tutorial';
-import { RELATED_LIMIT, TUTORIALS_PATH, tutorialPath } from './site-config';
+import { RELATED_LIMIT, TUTORIALS_PATH, hostedProjectUrl, tutorialPath } from './site-config';
 import { type SitemapEntry, latestDate } from '../sitemap';
 import type { ImageSize, SourceTutorial, Tutorial } from './types';
 
@@ -58,12 +58,6 @@ function measureImages(
   }
 }
 
-function checkProject(tutorial: Tutorial, source: SourceTutorial, errors: string[]): void {
-  if (tutorial.project && !source.assets.has(tutorial.project)) {
-    errors.push(`tutorials/${tutorial.slug}: project "${tutorial.project}" does not exist.`);
-  }
-}
-
 export function tutorialSitemapEntries(tutorials: readonly Tutorial[]): SitemapEntry[] {
   return [
     { path: TUTORIALS_PATH, lastmod: latestDate(tutorials.map((t) => t.updated)) },
@@ -97,7 +91,6 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
         `tutorials/${tutorial.slug}: the palette won't render as swatches because of "${item}". Write it as named colour groups (see tutorials/README.md).`,
       );
     }
-    checkProject(tutorial, source, errors);
   }
 
   const files = new Map<string, string | Uint8Array>();
@@ -112,9 +105,9 @@ export function buildTutorialSite(options: BuildOptions): BuildResult {
   files.set('tutorials/index.html', renderTutorialIndex(ctx, tutorials));
   for (const { tutorial, source } of parsed) {
     const related = pickRelated(tutorial, tutorials, RELATED_LIMIT);
-    files.set(`tutorials/${tutorial.slug}/index.html`, renderTutorialPage(ctx, tutorial, related));
+    const projectUrl = tutorial.project ? hostedProjectUrl(tutorial.project) : null;
+    files.set(`tutorials/${tutorial.slug}/index.html`, renderTutorialPage(ctx, tutorial, related, projectUrl));
     const used = new Set(referencedImages(tutorial));
-    if (tutorial.project) used.add(tutorial.project);
     for (const file of used) {
       const bytes = source.assets.get(file);
       if (bytes) files.set(`tutorials/${tutorial.slug}/${file}`, bytes);

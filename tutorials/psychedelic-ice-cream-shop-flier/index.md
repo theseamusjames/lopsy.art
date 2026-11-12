@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy with the finished Dizzy Cones flier open, showing the swirling pink and blue stripes, the ice cream cone in its scalloped purple halo, the yellow-to-orange DIZZY and CONES titles, the orange starburst badge and the purple info panel, with the Layers panel listing the Frame, Badge, Info, Lettering, Treat and Halo groups
 finished: finished-dizzy-cones.webp
 finishedAlt: The finished Dizzy Cones flier. Hot pink and electric blue stripes fill the page and curl into six swirls. In the middle, a purple disc with a scalloped lime edge holds an orange and pink spiral, and in front of it stands a waffle cone topped with a twisted soft serve of pink, lilac, mint and pink tiers, a lilac curl on top, pink drips over the rim and colourful sprinkles. Above it, DIZZY arches in fat bubble letters with a yellow-to-orange gradient, a dark outline and a hard shadow; CONES curves the other way below the cone. Cream sparkles flank the disc, an orange starburst on the right reads First 100 cones free, and a purple panel at the bottom reads Psychedelic Soft Serve, Grand opening Saturday June 7, 1967 Kaleidoscope Ave, noon 'til midnight. A cream frame with a purple keyline and a fine print grain finish the page
-project: psychedelic-ice-cream-shop-flier.lopsy
+project: tutorials/psychedelic-ice-cream-shop-flier/9d7a613cc0aa/psychedelic-ice-cream-shop-flier.lopsy
 ---
 
 Late-60s San Francisco concert posters, especially Victor Moscoso's, got

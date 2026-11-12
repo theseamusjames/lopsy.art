@@ -14,12 +14,14 @@ import {
 // columns 100..299 to 900..1099. The flip must mirror the content about its
 // own bounds, leaving it where it was.
 
+// Firefox truncates pointer coordinates to whole CSS pixels; pressing on whole
+// pixels makes every browser land the marquee on the same doc pixels.
 async function drag(page: Page, x0: number, y0: number, x1: number, y1: number): Promise<void> {
   const a = await docToScreen(page, x0, y0);
   const b = await docToScreen(page, x1, y1);
-  await page.mouse.move(a.x, a.y);
+  await page.mouse.move(Math.round(a.x), Math.round(a.y));
   await page.mouse.down();
-  await page.mouse.move(b.x, b.y, { steps: 10 });
+  await page.mouse.move(Math.round(b.x), Math.round(b.y), { steps: 10 });
   await page.mouse.up();
   await page.waitForTimeout(200);
 }
@@ -110,12 +112,16 @@ async function paintRepro(page: Page): Promise<{ layerId: string; before: Scan }
   const before = await scanLayerInDocument(page, layerId);
   expect(before.other).toBe(0);
   const all = union(before.red, before.blue);
-  // The box spans roughly 100..299 × 300..599 (the zoomed-out drag may land a
-  // pixel either side), with the notch in the top-left corner.
-  expect(Math.abs(all.x0 - 100)).toBeLessThanOrEqual(2);
-  expect(Math.abs(all.x1 - 299)).toBeLessThanOrEqual(2);
-  expect(Math.abs(all.y0 - 300)).toBeLessThanOrEqual(2);
-  expect(Math.abs(all.y1 - 599)).toBeLessThanOrEqual(2);
+  // The box spans roughly 100..299 × 300..599, with the notch in the top-left
+  // corner. Zoomed out to fit, one screen pixel covers several doc pixels, so
+  // the drag can land up to a screen pixel either side.
+  const origin = await docToScreen(page, 0, 0);
+  const unit = await docToScreen(page, 1, 1);
+  const slop = Math.ceil(1 / (unit.x - origin.x)) + 1;
+  expect(Math.abs(all.x0 - 100)).toBeLessThanOrEqual(slop);
+  expect(Math.abs(all.x1 - 299)).toBeLessThanOrEqual(slop);
+  expect(Math.abs(all.y0 - 300)).toBeLessThanOrEqual(slop);
+  expect(Math.abs(all.y1 - 599)).toBeLessThanOrEqual(slop);
   expect(before.blue.x0).toBe(all.x0);
   expect(before.blue.y0).toBe(all.y0);
   expect(before.blue.count).toBeGreaterThan(2500);

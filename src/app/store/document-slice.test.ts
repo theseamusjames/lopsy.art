@@ -107,6 +107,15 @@ describe('document-slice action orchestration', () => {
     expect(layerCount()).toBe(initial + 1);
   });
 
+  it('mergeDown marks the merged layer dirty so the redo entry re-snapshots it (#1443)', () => {
+    getState().addLayer();
+    const { layerOrder, activeLayerId } = getState().document;
+    const belowId = layerOrder[layerOrder.indexOf(activeLayerId!) - 1]!;
+    getState().mergeDown();
+    expect(getState().document.activeLayerId).toBe(belowId);
+    expect(getState().dirtyLayerIds.has(belowId)).toBe(true);
+  });
+
   it('flattenImage + undo restores original layers', () => {
     getState().addLayer();
     getState().addLayer();
@@ -173,6 +182,23 @@ describe('document-slice action orchestration', () => {
 
     getState().undo();
     expect(getState().document.layers.find((l) => l.id === activeId)!.mask).not.toBeNull();
+  });
+
+  it('addLayerMask with a selection masks to it, deselects, and undo restores both (#1545)', () => {
+    const activeId = getState().document.activeLayerId!;
+    const sel = new Uint8ClampedArray(100);
+    sel[3 * 10 + 3] = 255;
+    getState().setSelection({ x: 3, y: 3, width: 1, height: 1 }, sel, 10, 10);
+    getState().addLayerMask(activeId);
+    const mask = getState().document.layers.find((l) => l.id === activeId)!.mask!;
+    expect(mask.data[33]).toBe(255);
+    expect(mask.data[0]).toBe(0);
+    expect(getState().selection.active).toBe(false);
+    expect(undoLabels()[undoLabels().length - 1]).toBe('Add Mask');
+
+    getState().undo();
+    expect(getState().document.layers.find((l) => l.id === activeId)!.mask).toBeNull();
+    expect(getState().selection.active).toBe(true);
   });
 
   it('history labels are not duplicated for sequential same-type actions', () => {

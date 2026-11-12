@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished FIREFLY EVENINGS lo-fi T-shirt design. A rounded CRT screen shows a pixelated dusk scene with a cat on a hill, power lines and fireflies, under a two-line pixel title, with the Layers panel open on the right
 finished: finished-firefly-evenings.webp
 finishedAlt: The finished FIREFLY EVENINGS lo-fi T-shirt print on a dark plum shirt colour. FIREFLY is set in yellow-green pixel capitals with a soft glow, and EVENINGS in peach below it, both with a hard plum drop shadow. Under the title, a rounded CRT screen with a cream outline shows a pixelated dusk scene with scanlines. A navy-to-peach sky sits over purple hills, a cat watches the sunset from a hilltop, power lines sag across a pale sun, a little house has two lit windows, and glowing green fireflies drift over the grass. A VHS tracking glitch slices through the sun. The screen carries a VHS on-screen display reading PLAY and SP 0:47:12, plus an orange camcorder date stamp reading AUG 14 '98 9:41 PM. Pink vertical Japanese text, ほたるのゆうべ, runs down the left margin, and VOL.02 SIDE A 45 MIN runs up the right. A tilted masking-tape label reading "summer tapes vol. 2" overlaps the bottom of the screen. Below it, LO-FI BEATS TO FALL ASLEEP TO sits between two firefly dots above a two-column tracklist
-project: lo-fi-vhs-t-shirt-design.lopsy
+project: tutorials/lo-fi-vhs-t-shirt-design/add58c431793/lo-fi-vhs-t-shirt-design.lopsy
 ---
 
 Lo-fi art borrows from three places: **pixel art**, **old VHS tapes** and

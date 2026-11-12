@@ -87,6 +87,14 @@ pub struct ImageAdjustmentState {
     // Gradient Map
     pub gradient_map_texture: Option<TextureHandle>,
     pub has_gradient_map: bool,
+    // Color Grading (per wheel: [tint_r, tint_g, tint_b, luminance], as offsets)
+    pub cg_enabled: bool,
+    pub cg_shadows: [f32; 4],
+    pub cg_midtones: [f32; 4],
+    pub cg_highlights: [f32; 4],
+    pub cg_global: [f32; 4],
+    pub cg_exponent: f32,
+    pub cg_width: f32,
 }
 
 impl Default for ImageAdjustmentState {
@@ -132,6 +140,13 @@ impl Default for ImageAdjustmentState {
             invert: false,
             gradient_map_texture: None,
             has_gradient_map: false,
+            cg_enabled: false,
+            cg_shadows: [0.0; 4],
+            cg_midtones: [0.0; 4],
+            cg_highlights: [0.0; 4],
+            cg_global: [0.0; 4],
+            cg_exponent: 1.0,
+            cg_width: 0.18,
         }
     }
 }
@@ -214,6 +229,10 @@ pub struct EngineInner {
     // Selection
     pub selection_mask_texture: Option<TextureHandle>,
     pub quick_mask_texture: Option<TextureHandle>,
+    /// Quick mask and marquee as they were when a quick-mask marquee move
+    /// began; every frame of the move re-derives the quick mask from them.
+    pub quick_mask_move_base: Option<TextureHandle>,
+    pub quick_mask_move_marquee: Option<TextureHandle>,
     // Shape preview (stores pre-drag layer content for live preview)
     pub shape_preview_texture: Option<TextureHandle>,
     pub shape_preview_layer_id: Option<String>,
@@ -251,6 +270,9 @@ pub struct EngineInner {
     pub float_transform_center: [f32; 2],
     pub float_transform_corners: [f32; 8],
     pub float_transform_orig_rect: [f32; 4],
+    /// Document rect of the float's source pixels (x, y, w, h) for the affine
+    /// path; w = 0 when unknown.
+    pub float_transform_src_rect: [f32; 4],
     // Multi-layer transform session (see layer_transform_gpu)
     pub layer_transform: Vec<crate::layer_transform_gpu::LayerTransformSlot>,
     // Overlays
@@ -424,6 +446,8 @@ impl EngineInner {
             brush_texture_blend_mode: 0,
             selection_mask_texture: None,
             quick_mask_texture: None,
+            quick_mask_move_base: None,
+            quick_mask_move_marquee: None,
             shape_preview_texture: None,
             shape_preview_layer_id: None,
             shape_preview_x: 0,
@@ -453,6 +477,7 @@ impl EngineInner {
             float_transform_center: [0.0, 0.0],
             float_transform_corners: [0.0; 8],
             float_transform_orig_rect: [0.0; 4],
+            float_transform_src_rect: [0.0; 4],
             layer_transform: Vec::new(),
             grid_visible: false,
             grid_size: 1.0,
@@ -731,6 +756,7 @@ impl EngineInner {
         if let Some(tex) = self.quick_mask_texture.take() {
             self.texture_pool.release(tex);
         }
+        crate::quick_mask_gpu::end_quick_mask_move(self);
         // Shape preview
         if let Some(tex) = self.shape_preview_texture.take() {
             self.texture_pool.release(tex);
@@ -874,6 +900,32 @@ impl EngineInner {
             &padded
         };
 
+        let dst = self.texture_pool.acquire(&self.gl, w, h)?;
+        let Some(dst_tex) = self.texture_pool.get(dst).cloned() else {
+            self.texture_pool.release(dst);
+            return Err("Mask texture not found".into());
+        };
+        if let Err(e) = self.expand_mask_bytes_into(&dst_tex, bytes, w, h) {
+            self.texture_pool.release(dst);
+            return Err(e);
+        }
+        Ok(dst)
+    }
+
+    /// Write exactly `w * h` one-byte mask values into an existing `w`x`h`
+    /// texture as (v, v, v, 1), through an R8 staging texture and the
+    /// `mask_expand` pass (#1381). The quick mask reuses its texture for
+    /// every upload, so it cannot go through `upload_mask_texture` (#1481).
+    pub fn expand_mask_bytes_into(
+        &self,
+        dst_tex: &web_sys::WebGlTexture,
+        bytes: &[u8],
+        w: u32,
+        h: u32,
+    ) -> Result<(), String> {
+        if bytes.len() != (w * h) as usize {
+            return Err("Mask byte count does not match its size".into());
+        }
         let gl = &self.gl;
         let staging = gl.create_texture().ok_or("Failed to create mask staging texture")?;
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
@@ -897,20 +949,8 @@ impl EngineInner {
             return Err("Failed to upload mask bytes".into());
         }
 
-        let dst = match self.texture_pool.acquire(&self.gl, w, h) {
-            Ok(dst) => dst,
-            Err(e) => {
-                self.gl.delete_texture(Some(&staging));
-                return Err(e);
-            }
-        };
-        let Some(dst_tex) = self.texture_pool.get(dst).cloned() else {
-            self.gl.delete_texture(Some(&staging));
-            self.texture_pool.release(dst);
-            return Err("Mask texture not found".into());
-        };
-        self.gl.disable(WebGl2RenderingContext::BLEND);
-        self.render_to_texture(&dst_tex, w as i32, h as i32, |engine| {
+        gl.disable(WebGl2RenderingContext::BLEND);
+        self.render_to_texture(dst_tex, w as i32, h as i32, |engine| {
             let gl = &engine.gl;
             let shader = &engine.shaders.mask_expand;
             gl.use_program(Some(&shader.program));
@@ -922,7 +962,7 @@ impl EngineInner {
             engine.draw_fullscreen_quad();
         });
         self.gl.delete_texture(Some(&staging));
-        Ok(dst)
+        Ok(())
     }
 
     /// Read a texture's red channel back as a single-byte-per-pixel

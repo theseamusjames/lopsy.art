@@ -1,6 +1,7 @@
 use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
 use crate::gpu::shader::ShaderProgram;
+use crate::gpu::texture_pool::TextureHandle;
 
 pub fn set_brush_texture_uniforms(
     engine: &EngineInner,
@@ -652,7 +653,12 @@ pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
         engine.mark_layer_dirty(layer_id);
         return;
     };
+    merge_stroke_texture(engine, layer_id, stroke_tex);
+}
 
+/// Composite a premultiplied, layer-sized stroke texture over the layer,
+/// then release it and mark the layer dirty.
+fn merge_stroke_texture(engine: &mut EngineInner, layer_id: &str, stroke_tex: TextureHandle) {
     if let Some(&layer_tex_handle) = engine.layer_textures.get(layer_id) {
         let stroke_gl_tex_opt = engine.texture_pool.get(stroke_tex).cloned();
         let layer_gl_tex_opt = engine.texture_pool.get(layer_tex_handle).cloned();
@@ -732,4 +738,63 @@ pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
 
     engine.texture_pool.release(stroke_tex);
     engine.mark_layer_dirty(layer_id);
+}
+
+/// Composite a straight-alpha RGBA patch over a layer, with its top-left at
+/// document position (`x`, `y`). The layer is first expanded to cover the
+/// document (as a brush stroke does); the part of the patch outside the
+/// layer texture is dropped. Only the patch crosses the bridge, so stroking
+/// a path costs its bounding box, not a full-layer readback and re-upload
+/// (#1292). Unlike a brush stroke, no brush tip or selection applies.
+pub fn composite_patch_onto_layer(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    data: &[u8],
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<(), String> {
+    if w == 0 || h == 0 || data.len() < (w * h * 4) as usize {
+        return Err("patch data does not match its size".into());
+    }
+    engine.ensure_layer_full_size(layer_id)?;
+    let layer_tex = *engine.layer_textures.get(layer_id).ok_or("layer has no texture")?;
+    let (lw, lh) = engine.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
+    let (lx, ly) = engine.layer_stack.iter()
+        .find(|l| l.id == layer_id)
+        .map(|l| (l.x, l.y))
+        .unwrap_or((0, 0));
+
+    // Clip the patch to the layer texture, in texture-local pixels.
+    let x0 = (x - lx).max(0);
+    let y0 = (y - ly).max(0);
+    let x1 = (x - lx + w as i32).min(lw as i32);
+    let y1 = (y - ly + h as i32).min(lh as i32);
+    if x1 <= x0 || y1 <= y0 {
+        return Ok(());
+    }
+    let cw = (x1 - x0) as usize;
+    let ch = (y1 - y0) as usize;
+    let src_x = (x0 - (x - lx)) as usize;
+    let src_y = (y0 - (y - ly)) as usize;
+    let mut premultiplied = Vec::with_capacity(cw * ch * 4);
+    for row in 0..ch {
+        let start = ((src_y + row) * w as usize + src_x) * 4;
+        for px in data[start..start + cw * 4].chunks_exact(4) {
+            let a = px[3] as u32;
+            premultiplied.push(((px[0] as u32 * a + 127) / 255) as u8);
+            premultiplied.push(((px[1] as u32 * a + 127) / 255) as u8);
+            premultiplied.push(((px[2] as u32 * a + 127) / 255) as u8);
+            premultiplied.push(px[3]);
+        }
+    }
+
+    let stroke_tex = engine.texture_pool.acquire(&engine.gl, lw, lh)?;
+    if let Err(e) = engine.texture_pool.upload_rgba(&engine.gl, stroke_tex, x0, y0, cw as u32, ch as u32, &premultiplied) {
+        engine.texture_pool.release(stroke_tex);
+        return Err(e);
+    }
+    merge_stroke_texture(engine, layer_id, stroke_tex);
+    Ok(())
 }

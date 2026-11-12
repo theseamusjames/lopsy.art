@@ -21,6 +21,7 @@ import {
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import { isFilteringMask } from './filter-target';
+import { guardPixelWrite } from '../../layers/paint-target';
 import { DISP_CENTER, MAX_DISP, defaultLiquifySettings } from '../../tools/liquify/liquify';
 import type { LiquifySession } from '../ui-store';
 
@@ -34,7 +35,7 @@ export function openLiquify(): void {
   if (!engine) return;
 
   const layer = editorStore.document.layers.find((l) => l.id === activeId);
-  if (!layer || layer.type !== 'raster') return;
+  if (!guardPixelWrite(layer) || layer?.type !== 'raster') return;
 
   saveFilterPreview(engine, activeId);
   // saveFilterPreview expands the layer texture to doc size — reconcile

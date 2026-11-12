@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished MERIDIAN magazine cover, with the layers panel open beside a pink-and-blue halftone humpback whale breaching in front of a yellow sun
 finished: finished-meridian-risograph-cover.webp
 finishedAlt: The finished risograph magazine cover on warm off-white paper. MERIDIAN runs across the top in heavy fluorescent pink capitals with a blue dateline beneath. The blue serif headline reads The Long Swim. A dotted pink route arc labelled 65°S to TONGA 21°S curves over a flat yellow sun that sets into a halftone sea. A humpback whale breaches diagonally in overprinted indigo, pink and blue dots with its white pectoral fin raised. A tilted pink sticker reads 6,000 KM ONE WAY, and a solid blue footer band holds three cover lines and a barcode
-project: risograph-magazine-cover.lopsy
+project: tutorials/risograph-magazine-cover/7d2169074c24/risograph-magazine-cover.lopsy
 ---
 
 A risograph prints one spot colour at a time through a stencil drum, so riso magazines and zines have a recognisable look:

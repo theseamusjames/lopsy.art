@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { hitTestTextLayer, type RenderedSize } from './text-hit-test';
 import type { TextLayer } from '../../types';
 import type { PlacedGlyphBox } from './path-text-geometry';
+import { createGroupLayer } from '../../layers/layer-model';
 
 function makeTextLayer(overrides: Partial<TextLayer> = {}): TextLayer {
   return {
@@ -235,5 +236,35 @@ describe('hitTestTextLayer — path-bound text (#1174)', () => {
   it('ignores glyph boxes on a layer that is not bound to a path', () => {
     const unbound = { ...layer, pathId: undefined };
     expect(hitTestTextLayer([unbound], { x: 200, y: 400 }, texture, undefined, lookup)).toBe(unbound);
+  });
+});
+
+describe('hitTestTextLayer — layers inside groups (#1303)', () => {
+  function groupedText(groupOverrides: { visible?: boolean; locked?: boolean }) {
+    const text = makeTextLayer({ text: 'HELLO', fontSize: 24, x: 40, y: 200 });
+    const group = { ...createGroupLayer({ name: 'Group', children: [text.id] }), ...groupOverrides };
+    return { text, layers: [text, group] };
+  }
+
+  it('hits a text layer inside a visible, unlocked group', () => {
+    const { text, layers } = groupedText({});
+    expect(hitTestTextLayer(layers, { x: 60, y: 210 })).toBe(text);
+  });
+
+  it('skips a text layer whose parent group is hidden', () => {
+    const { layers } = groupedText({ visible: false });
+    expect(hitTestTextLayer(layers, { x: 60, y: 210 })).toBeNull();
+  });
+
+  it('skips a text layer whose parent group is locked', () => {
+    const { layers } = groupedText({ locked: true });
+    expect(hitTestTextLayer(layers, { x: 60, y: 210 })).toBeNull();
+  });
+
+  it('skips a text layer under a hidden grandparent group', () => {
+    const text = makeTextLayer({ text: 'HELLO', fontSize: 24, x: 40, y: 200 });
+    const inner = createGroupLayer({ name: 'Inner', children: [text.id] });
+    const outer = { ...createGroupLayer({ name: 'Outer', children: [inner.id] }), visible: false };
+    expect(hitTestTextLayer([text, inner, outer], { x: 60, y: 210 })).toBeNull();
   });
 });

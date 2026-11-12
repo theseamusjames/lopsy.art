@@ -29,7 +29,7 @@ import {
   INITIAL_INTERACTION_STATE,
   resolveDownGesture,
 } from './interactions/interaction-types';
-import { handleTransformDown, flushSelectionTransform, refuseGroupSelectionTransform } from './interactions/transform-handlers';
+import { handleTransformDown, commitSelectionTransform, refuseGroupSelectionTransform } from './interactions/transform-handlers';
 import { commitLayerTransform, markLayerTransformDirty } from './interactions/layer-transform';
 import {
   handleMeshWarpDown,
@@ -46,14 +46,14 @@ import {
   handleLiquifyMove,
 } from './interactions/liquify-handlers';
 import { handleNudgeMove } from './interactions/move-handlers';
-import { commitLiveFloat, registerFloatSession } from './interactions/live-float';
-import { createTransformState } from '../tools/transform/transform';
+import { commitLiveFloat, flushNudgeMask, registerFloatSession } from './interactions/live-float';
+import { nudgeHeldSelection } from './interactions/selection-nudge';
 import { toolHandlers, handleTransformMove } from './interactions/tool-router';
 // PAINT_TOOLS / GPU_TOOLS are derived from the tool registry, so adding a
 // new paint or GPU tool is a single-file change at the descriptor.
 import { PAINT_TOOLS, GPU_TOOLS, SELF_HISTORY_PAINT_TOOLS } from '../tools/tool-registry';
 import { pixelDataManager } from '../engine/pixel-data-manager';
-import { guardPixelWrite, toolWritesRasterPixels } from '../layers/paint-target';
+import { guardPixelWrite, toolIgnoresLayerLock, toolWritesRasterPixels } from '../layers/paint-target';
 import {
   finishTextBodyMove,
   handleTextTransformDown,
@@ -62,6 +62,7 @@ import {
   refusePartialTextMove,
   releaseCoveringTextSelection,
 } from './interactions/text-transform-handlers';
+import { refuseMaskEditSelectionMove } from './interactions/mask-edit-move-guard';
 
 import type { Point, Layer } from '../types';
 
@@ -180,6 +181,9 @@ export function useCanvasInteraction(
   const handleToolDown = useCallback(
     (e: ToolEvent) => {
       if (e.button !== 0) return;
+      // A held arrow nudge leaves the store's mask behind the ants until
+      // the hold ends; any tool that reads the selection needs it current.
+      flushNudgeMask();
 
       // Cancel any pending hold-to-smooth timer from the previous stroke
       cancelHoldTimer();
@@ -191,7 +195,8 @@ export function useCanvasInteraction(
       if (!activeLayerId) return;
 
       const activeLayer = editorState.document.layers.find((l) => l.id === activeLayerId);
-      if (!activeLayer || activeLayer.locked) return;
+      if (!activeLayer) return;
+      if (activeLayer.locked && !toolIgnoresLayerLock(activeTool)) return;
 
       // #768: refuse pixel writes on group / text layers before dispatching
       // to the tool handler. Without this every writer allocates a texture,
@@ -352,6 +357,7 @@ export function useCanvasInteraction(
           return;
         }
         if (refusePartialTextMove()) return;
+        if (refuseMaskEditSelectionMove()) return;
         if (refuseGroupSelectionTransform(ctx)) return;
         releaseCoveringTextSelection();
       }
@@ -636,10 +642,8 @@ export function useCanvasInteraction(
         return;
       case 'transform':
         if (state.gesture.selectionOnly) {
-          // Drain any pointer-move that's still parked in the coalescer's
-          // rAF slot — otherwise the final drag position is dropped if the
-          // browser fires pointer-up before the next frame boundary.
-          flushSelectionTransform();
+          // The drag only moved the marquee preview; build the mask once now.
+          commitSelectionTransform();
           useUIStore.getState().setActiveTransformHandle(null);
           stateRef.current = { ...INITIAL_INTERACTION_STATE };
           return;
@@ -777,31 +781,7 @@ export function useCanvasInteraction(
   }, []);
 
   const nudgeSelection = useCallback((dx: number, dy: number) => {
-    const editor = useEditorStore.getState();
-    const sel = editor.selection;
-    if (!sel.active || !sel.mask || !sel.bounds) return;
-
-    const { width: docW, height: docH } = editor.document;
-    const origMask = sel.mask;
-    const newMask = new Uint8ClampedArray(docW * docH);
-    for (let y = 0; y < docH; y++) {
-      for (let x = 0; x < docW; x++) {
-        const sx = x - dx;
-        const sy = y - dy;
-        if (sx >= 0 && sx < docW && sy >= 0 && sy < docH) {
-          newMask[y * docW + x] = origMask[sy * docW + sx]!;
-        }
-      }
-    }
-    const newBounds = {
-      x: sel.bounds.x + dx,
-      y: sel.bounds.y + dy,
-      width: sel.bounds.width,
-      height: sel.bounds.height,
-    };
-    editor.setSelection(newBounds, newMask, docW, docH);
-    useUIStore.getState().setTransform(createTransformState(newBounds));
-    editor.notifyRender();
+    nudgeHeldSelection('selection', dx, dy);
   }, []);
 
   return { handleToolDown, handleToolMove, handleToolUp, clearPersistentTransform, nudgeMove, nudgeSelection };

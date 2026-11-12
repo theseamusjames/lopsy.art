@@ -224,6 +224,39 @@ describe('hitTestHandle', () => {
   });
 });
 
+describe('rotate handle positions under a pending scale (#1453)', () => {
+  const base = createTransformState({ x: 200, y: 390, width: 400, height: 20 });
+
+  it('stays 20 px outside the corner after a 10x vertical stretch', () => {
+    const state: TransformState = { ...base, scaleY: 10, translateY: 90 };
+    const pos = getHandlePositions(state);
+    expect(pos['rotate-top-right'].x).toBeCloseTo(pos['top-right'].x + 20);
+    expect(pos['rotate-top-right'].y).toBeCloseTo(pos['top-right'].y - 20);
+    expect(pos['rotate-bottom-left'].x).toBeCloseTo(pos['bottom-left'].x - 20);
+    expect(pos['rotate-bottom-left'].y).toBeCloseTo(pos['bottom-left'].y + 20);
+  });
+
+  it('keeps the corner a scale handle after a 10x shrink', () => {
+    const square = createTransformState({ x: 200, y: 200, width: 400, height: 400 });
+    const state: TransformState = { ...square, scaleX: 0.1, scaleY: 0.1 };
+    const pos = getHandlePositions(state);
+    expect(pos['rotate-bottom-right'].x).toBeCloseTo(pos['bottom-right'].x + 20);
+    expect(pos['rotate-bottom-right'].y).toBeCloseTo(pos['bottom-right'].y + 20);
+    expect(hitTestBoxHandle(pos['bottom-right'], state, 1)).toBe('bottom-right');
+  });
+
+  it('stays outside a flipped and rotated box', () => {
+    const state: TransformState = { ...base, scaleX: -3, rotation: Math.PI / 2 };
+    const pos = getHandlePositions(state);
+    const tr = pos['top-right'];
+    const rot = pos['rotate-top-right'];
+    expect(Math.hypot(rot.x - tr.x, rot.y - tr.y)).toBeCloseTo(20 * Math.SQRT2);
+    const centre = { x: 400, y: 400 };
+    expect(Math.hypot(rot.x - centre.x, rot.y - centre.y))
+      .toBeGreaterThan(Math.hypot(tr.x - centre.x, tr.y - centre.y));
+  });
+});
+
 describe('hitTestHandle overlapping circles', () => {
   it('picks the nearest scale handle, not the first in the list', () => {
     const state = createTransformState({ x: 0, y: 0, width: 10, height: 10 });
@@ -282,6 +315,32 @@ describe('hitTestBoxHandle (#1200)', () => {
     // 5 doc px in from the turned "top" edge, which now faces +x.
     expect(hitTestBoxHandle({ x: centre.x + 9.1 - 5, y: centre.y }, turned, zoom)).toBeNull();
     expect(hitTestBoxHandle({ x: centre.x + 9.1 - 1, y: centre.y }, turned, zoom)).toBe('top');
+  });
+});
+
+describe('hitTestBoxHandle at low zoom (#1311)', () => {
+  // An 800x800 selection on a 2400x3200 document at its ~26% fit zoom.
+  const zoom = 0.255;
+  const box = createTransformState({ x: 600, y: 1200, width: 800, height: 800 });
+  const corner = { x: 1400, y: 2000 };
+
+  it('scales from the drawn corner square instead of rotating', () => {
+    expect(hitTestBoxHandle(corner, box, zoom)).toBe('bottom-right');
+    for (let screenPx = -3; screenPx <= 2; screenPx++) {
+      const d = screenPx / zoom;
+      expect(hitTestBoxHandle({ x: corner.x + d, y: corner.y + d }, box, zoom)).toBe('bottom-right');
+    }
+  });
+
+  it('keeps the rotate handle grabbable outside the square', () => {
+    const rot = getHandlePositions(box)['rotate-bottom-right'];
+    expect(hitTestBoxHandle(rot, box, zoom)).toBe('rotate-bottom-right');
+    expect(hitTestBoxHandle({ x: rot.x + 10, y: rot.y + 10 }, box, zoom)).toBe('rotate-bottom-right');
+  });
+
+  it('keeps the rotate handle grabbable at very low zoom', () => {
+    const rot = getHandlePositions(box)['rotate-bottom-right'];
+    expect(hitTestBoxHandle(rot, box, 0.05)).toBe('rotate-bottom-right');
   });
 });
 

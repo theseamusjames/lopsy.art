@@ -29,6 +29,7 @@ import {
   pathTextLayersUsingFamilies,
 } from '../engine-wasm/engine-sync';
 import { onFontFacesLoaded } from '../utils/font-face-readiness';
+import { onEngineFaceLoaded } from '../utils/engine-font-faces';
 import { renderOverlayFrame } from './rendering/render-overlay-frame';
 import { canvasPixelRatio, sizeCanvasToDisplay } from './rendering/display-pixel-ratio';
 import { getMarqueePreview } from '../tools/marquee/marquee-preview';
@@ -377,12 +378,20 @@ export function useCanvasRendering(
   // Path-bound text is drawn with Canvas2D, which silently substitutes a
   // fallback face while a web font is still loading. Redraw those layers
   // whenever a face of their family finishes loading.
-  useEffect(() => onFontFacesLoaded((families) => {
-    const stale = pathTextLayersUsingFamilies(useEditorStore.getState().document.layers, families);
-    if (stale.length === 0) return;
-    for (const id of stale) invalidatePathTextCache(id);
-    dirtyRef.current = true;
-  }), []);
+  useEffect(() => {
+    const redrawPathText = (families: string[]) => {
+      const stale = pathTextLayersUsingFamilies(useEditorStore.getState().document.layers, families);
+      if (stale.length === 0) return;
+      for (const id of stale) invalidatePathTextCache(id, { isFontLoad: true });
+      dirtyRef.current = true;
+    };
+    const offCss = onFontFacesLoaded(redrawPathText);
+    const offEngine = onEngineFaceLoaded((family) => redrawPathText([family]));
+    return () => {
+      offCss();
+      offEngine();
+    };
+  }, []);
 
   // Persistent rAF loop — runs independently of React renders.
   // Only does work when the dirty flag is set.

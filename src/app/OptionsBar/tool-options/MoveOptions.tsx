@@ -17,6 +17,7 @@ import { TransformControls, applyLayerTransformStep, rotateSelection } from './T
 import { getLayerTransformBox } from '../../interactions/layer-transform';
 import { rotateTransform90 } from '../../../tools/transform/multi-layer-transform';
 import { MeshWarpControls } from './MeshWarpControls';
+import { commitLiveFloat } from '../../interactions/live-float';
 import styles from '../OptionsBar.module.css';
 
 export function MoveOptions() {
@@ -35,6 +36,13 @@ export function MoveOptions() {
     }
   };
 
+  const handleAlign = (edge: AlignEdge) => {
+    // A live multi-layer transform holds the selected layers' pixels; bake
+    // it so the align measures and moves what the box shows.
+    if (getLayerTransformBox()) commitLiveFloat();
+    alignLayer(edge);
+  };
+
   return (
     <>
       <div className={styles.alignGroup}>
@@ -50,7 +58,7 @@ export function MoveOptions() {
             key={edge}
             icon={<Icon size={16} />}
             label={label}
-            onClick={() => alignLayer(edge as AlignEdge)}
+            onClick={() => handleAlign(edge)}
           />
         ))}
       </div>

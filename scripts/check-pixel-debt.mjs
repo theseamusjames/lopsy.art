@@ -31,14 +31,19 @@ const ALLOWLIST = {
   // paths. These don't ship to users; they only need to round-trip.
   // ──────────────────────────────────────────────────────────────────────
   'src/app/editor-store.test.ts': 5,
+  'src/app/store/document-slice.test.ts': 1,              // #1545 selection-mask fixture
   'src/app/tool-settings-store.test.ts': 5,
   'src/app/interactions/interaction-types.test.ts': 1,
   'src/app/interactions/move-handlers.test.ts': 1,
   'src/app/interactions/quick-mask-move.test.ts': 2,
   'src/app/interactions/transform-handlers.test.ts': 1,
   'src/app/interactions/live-float.test.ts': 2,       // selection-mask fixtures
+  'src/app/interactions/mask-edit-move-guard.test.ts': 1, // selection-mask fixture
+  'src/app/interactions/path-stroke.test.ts': 1,      // #1292 stroke-patch fixture
   'src/app/interactions/prefloat.test.ts': 6,         // #1076 selection-mask fixtures
-  'src/app/store/actions/align-layer.test.ts': 2,
+  'src/app/interactions/selection-nudge.test.ts': 1,  // #1480 selection-mask fixture
+  'src/app/store/actions/add-layer-mask.test.ts': 2,      // #1545 selection-mask fixtures
+  'src/app/store/actions/align-layer.test.ts': 3,         // +1: #1517 marquee-over-multi-select fixture mask
   'src/app/store/actions/crop-canvas.test.ts': 1,
   'src/app/store/actions/duplicate-layer.test.ts': 1,
   'src/app/store/actions/flatten-image.test.ts': 1,
@@ -67,6 +72,7 @@ const ALLOWLIST = {
   'src/app/mask-read-queue.test.ts': 14,                     // +4: rAF quiescence tests for #760
   'src/app/mask-data-sync.test.ts': 1,                       // #780 fixture mask
   'src/app/store/mask-history.test.ts': 1,                   // #780 fixture mask
+  'src/panels/LayerPanel/LayerPanel.test.ts': 1,             // replacement mask bytes for updateLayerMaskData
   'src/panels/LayerPanel/layer-selection.test.ts': 1,        // layer-alpha fixture for selectLayerAlpha
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
   'src/layers/mask-remap.test.ts': 1,                  // #1357 fixture mask
@@ -177,7 +183,7 @@ const ALLOWLIST = {
   'src/components/BrushModal/BrushDabPreview.tsx': 2,        // brush preview blur kernel + output
   'src/components/BrushModal/BrushModal.tsx': 1,             // texture-image grayscale import
   'src/tools/brush/abr-parser.ts': 4,
-  'src/tools/brush/brush-from-selection.ts': 8,
+  'src/tools/brush/brush-from-selection.ts': 4,
   'src/tools/brush/brush.ts': 1,
   'src/tools/brush/builtin-brushes.ts': 1,                   // PNG → grayscale tip decode
   'src/tools/brush/preset-io.ts': 1,                         // Base64 → bytes for preset import

@@ -5,6 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# The last deploy to finish becomes production, so overlapping runs can put an
+# older commit live. Run one at a time; a queued run is replaced by a newer one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -22,13 +28,10 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: Create Cloudflare Pages project (if needed)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create lopsy-art --production-branch main
-        continue-on-error: true
+      # Tutorial projects live only in R2 (uploaded with `npm run
+      # tutorial:upload`), so no published link may point at a missing one.
+      - name: Check tutorial projects are on R2
+        run: npm run tutorial:check
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

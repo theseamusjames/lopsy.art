@@ -11,7 +11,7 @@ cover: cover.jpg
 coverAlt: Lopsy editing the finished El Yunque t-shirt design, an emerald and pink duotone waterfall inside an arch with palm silhouettes and a pink script title, with the layers panel open
 finished: finished-el-yunque-t-shirt.webp
 finishedAlt: The finished El Yunque t-shirt design on a bone background. BOSQUE NACIONAL · PUERTO RICO arcs over a tall arch window holding a hibiscus-pink and emerald duotone photo of La Coca Falls, whose bone-white cascade runs down the middle. Emerald palm fronds with bone outlines rise into the arch from a wide band that dissolves into halftone dots. A pink Shrikhand script reads El Yunque across the band with a small pink coquí frog perched on the E. Vertical labels read 28,000 ACRES and 18°19′N · 65°46′W, and the footer reads LA COCA FALLS · EST. 1876
-project: duotone-rainforest-t-shirt-design.lopsy
+project: tutorials/duotone-rainforest-t-shirt-design/0d69674c2fdd/duotone-rainforest-t-shirt-design.lopsy
 ---
 
 A duotone prints a photo with just two inks. On a t-shirt that's a real advantage: every ink is another screen at the print shop, and a two-ink design costs far less than full colour while still reading as a photograph.

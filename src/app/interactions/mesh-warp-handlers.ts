@@ -9,8 +9,10 @@ import { INITIAL_INTERACTION_STATE, type InteractionState } from './interaction-
 /**
  * Pre-tool down guard for the mesh-warp gesture. Hit-tests the mesh
  * warp handles and, if one is hit, claims the gesture with the
- * `meshWarp` variant. Returns null otherwise so the dispatcher falls
- * through to the next guard.
+ * `meshWarp` variant. A press that misses every handle is still claimed
+ * while the Move tool hosts the session, as an inert gesture: falling
+ * through would run a Move on the pixels the session is about to warp
+ * and strand the grid on the old box (#1508). Other tools fall through.
  */
 export function handleMeshWarpDown(
   canvasPos: Point,
@@ -22,9 +24,9 @@ export function handleMeshWarpDown(
 
   const zoom = useEditorStore.getState().viewport.zoom;
   const idx = hitTestMeshHandle(canvasPos.x, canvasPos.y, session, zoom);
-  if (idx === null) return null;
+  if (idx === null && ui.activeTool !== 'move') return null;
 
-  ui.setMeshWarpDragging(idx);
+  if (idx !== null) ui.setMeshWarpDragging(idx);
 
   return {
     ...INITIAL_INTERACTION_STATE,

@@ -14,5 +14,6 @@ pub mod magnetic_lasso;
 pub mod overlay;
 pub mod paint;
 pub mod psd;
+pub mod raf;
 pub mod selection;
 pub mod text;

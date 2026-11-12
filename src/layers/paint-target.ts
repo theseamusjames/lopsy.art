@@ -34,6 +34,26 @@ export function toolWritesRasterPixels(tool: ToolId, options: ToolWriteOptions =
 }
 
 /**
+ * Tools whose canvas press only reads the active layer or edits the
+ * selection. The layer lock guards pixels, so these still work on a locked
+ * layer — otherwise a marquee drawn over a locked layer silently made no
+ * selection and a following Copy Merged copied the whole document (#1188).
+ */
+const LOCK_EXEMPT_TOOLS: ReadonlySet<ToolId> = new Set<ToolId>([
+  'marquee-rect',
+  'marquee-ellipse',
+  'lasso',
+  'lasso-magnetic',
+  'wand',
+  'quick-select',
+  'eyedropper',
+]);
+
+export function toolIgnoresLayerLock(tool: ToolId): boolean {
+  return LOCK_EXEMPT_TOOLS.has(tool);
+}
+
+/**
  * True when the layer's type can accept a pixel write from a paint /
  * bucket / gradient / shape tool or a menu writer (fill, filter,
  * define-pattern).

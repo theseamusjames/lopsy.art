@@ -33,6 +33,8 @@ import { flushLayerSync } from '../../../engine-wasm/engine-sync';
 import { clearJsPixelData } from '../../store/clear-js-pixel-data';
 import { remapDocumentMasks, remapLayerMaskThrough } from '../../store/actions/_helpers/remap-layer-masks';
 import { documentRotation90, layerFlip, layerRotation90, type Affine } from '../../../layers/mask-remap';
+import { rotateGuidesForCanvas, rotatePathsForCanvas } from '../../store/actions/rotate-image-overlays';
+import { useUIStore } from '../../ui-store';
 
 const GROUP_TEXT_FLIP_REFUSAL = 'Rasterize the text layers in this group before flipping it.';
 
@@ -255,11 +257,18 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   const newHeight = doc.width;
   const newLayers: Layer[] = [];
 
-  const textLayerIds: string[] = [];
+  // Every layer whose texture changes must be re-snapshotted on the next
+  // pushHistory: a full-canvas layer on a square document keeps its
+  // position and size, so it would otherwise reuse the pre-rotate handle.
+  const rewrittenLayerIds: string[] = [];
   for (const layer of doc.layers) {
+    if (layer.type === 'text' && layer.pathId) {
+      newLayers.push(turnPathTextOffset(layer, direction));
+      continue;
+    }
     if (layer.type === 'text') {
       const turned = rotateTextLayerWithCanvas(engine, layer, direction, doc.width, doc.height);
-      if (turned !== layer) textLayerIds.push(layer.id);
+      if (turned !== layer) rewrittenLayerIds.push(layer.id);
       newLayers.push(turned);
       continue;
     }
@@ -270,6 +279,7 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
 
     // GPU-side rotate
     rotateLayer90(engine, layer.id, direction === 'cw');
+    rewrittenLayerIds.push(layer.id);
 
     // Rotate layer position around document center
     let newX: number;
@@ -303,15 +313,31 @@ export function rotateImage(direction: 'cw' | 'ccw'): void {
   // on a second consecutive rotate — use invalidateLayers() instead (#918).
   pixelDataManager.invalidateLayers(maskedLayers.map((l) => l.id));
   useEditorStore.setState({
-    dirtyLayerIds: new Set([...useEditorStore.getState().dirtyLayerIds, ...textLayerIds]),
+    dirtyLayerIds: new Set([...useEditorStore.getState().dirtyLayerIds, ...rewrittenLayerIds]),
     document: {
       ...doc,
       width: newWidth,
       height: newHeight,
       layers: maskedLayers,
     },
+    paths: rotatePathsForCanvas(state.paths, direction, doc.width, doc.height),
     renderVersion: state.renderVersion + 1,
   });
+  const { guides } = useUIStore.getState();
+  useUIStore.setState({ guides: rotateGuidesForCanvas(guides, direction, doc.width, doc.height) });
+}
+
+/**
+ * Path-bound text re-lays itself on its path once the path turns with the
+ * canvas; turning the layer's offset off the path keeps a nudged layer the
+ * same distance from the path in the rotated frame.
+ */
+function turnPathTextOffset(layer: TextLayer, direction: 'cw' | 'ccw'): TextLayer {
+  if (layer.pathAnchorX === undefined || layer.pathAnchorY === undefined) return layer;
+  const dx = layer.x - layer.pathAnchorX;
+  const dy = layer.y - layer.pathAnchorY;
+  const turned = direction === 'cw' ? { x: -dy, y: dx } : { x: dy, y: -dx };
+  return { ...layer, pathAnchorX: layer.x - turned.x, pathAnchorY: layer.y - turned.y };
 }
 
 function getActiveGroupId(): string | null {
@@ -398,7 +424,7 @@ export function applyAutoColor(): void {
   addAdjustmentAndCommit(node, 'Auto Color');
 }
 
-export type ImageDialogId = 'canvas-size' | 'image-size' | 'convert-to-indexed';
+export type ImageDialogId = 'canvas-size' | 'image-size' | 'border' | 'convert-to-indexed';
 
 const MODE_MENU_ITEMS: readonly { mode: DocumentColorMode; label: string }[] = [
   { mode: 'rgb', label: 'RGB Color' },
@@ -436,6 +462,7 @@ export function createImageMenu(
     { separator: true, label: '' },
     { label: 'Canvas Size...', action: () => showDialog('canvas-size') },
     { label: 'Image Size...', action: () => showDialog('image-size') },
+    { label: 'Border...', action: () => showDialog('border') },
     { separator: true, label: '' },
     { label: 'Auto Tone', shortcut: '\u21E7\u2318L', action: applyAutoTone },
     { label: 'Auto Contrast', shortcut: '\u2325\u21E7\u2318L', action: applyAutoContrast },

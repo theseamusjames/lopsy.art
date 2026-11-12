@@ -28,7 +28,9 @@ import { hasEnabledEffects } from '../layers/layer-model';
 import { parsePsdEffects, serializePsdEffects } from './layer-effects-format';
 import { getMaskDocOrigin } from '../layers/mask-origin';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
+import { commitLayerTransform } from '../app/interactions/layer-transform';
 import { materializeAllMaskData } from '../app/mask-data-sync';
+import { bytesOf } from '../utils/byte-view';
 import { BLEND_MODE_TO_PSD_INDEX, BLEND_MODES_BY_PSD_INDEX } from '../types/blend-mode-tables';
 
 const BLEND_MODE_TO_U8 = BLEND_MODE_TO_PSD_INDEX;
@@ -97,6 +99,8 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   // the rAF render loop may try to upload pending data (mutable borrow)
   // while exportPsd holds an immutable borrow, triggering a RefCell panic.
   finalizePendingStrokeGlobal();
+  // A live multi-layer transform shows its text resampled; baking it re-renders the text sharp.
+  commitLayerTransform();
   // Layer masks are written from `layer.mask.data`, which lags the GPU
   // until the lazy readback lands (#780).
   materializeAllMaskData();
@@ -168,7 +172,7 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
 
     // Pack mask data.
     if (layer.mask && layer.mask.data.length > 0) {
-      const maskBytes = new Uint8Array(layer.mask.data.buffer);
+      const maskBytes = bytesOf(layer.mask.data);
       meta.maskWidth = layer.mask.width;
       meta.maskHeight = layer.mask.height;
       const maskOrigin = getMaskDocOrigin(layer);

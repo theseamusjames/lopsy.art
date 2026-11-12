@@ -37,7 +37,23 @@ async function readTextLayer(page: Page): Promise<{ x: number; y: number; pathId
 }
 
 function anchorPoints(paths: PathSnap[]): Array<{ x: number; y: number }> {
-  return paths[0]!.anchors.map((a) => ({ x: Math.round(a.point.x), y: Math.round(a.point.y) }));
+  return paths[0]!.anchors.map((a) => ({ x: a.point.x, y: a.point.y }));
+}
+
+function expectPointsAt(
+  actual: Array<{ x: number; y: number }>,
+  expected: Array<{ x: number; y: number }>,
+  slop: number,
+): void {
+  expect(actual).toHaveLength(expected.length);
+  actual.forEach((p, i) => {
+    expect(Math.abs(p.x - expected[i]!.x)).toBeLessThanOrEqual(slop);
+    expect(Math.abs(p.y - expected[i]!.y)).toBeLessThanOrEqual(slop);
+  });
+}
+
+function scaled(points: Array<{ x: number; y: number }>, k: number): Array<{ x: number; y: number }> {
+  return points.map((p) => ({ x: p.x * k, y: p.y * k }));
 }
 
 async function clickDoc(page: Page, x: number, y: number): Promise<void> {
@@ -73,7 +89,10 @@ test.describe('#1363 — Image Size scales paths and guides', () => {
     await clickDoc(page, 700, 400);
     await page.locator('[aria-label="Commit path"]').click();
     await page.waitForTimeout(200);
-    expect(anchorPoints(await readPaths(page))).toEqual([{ x: 100, y: 400 }, { x: 700, y: 400 }]);
+    // Firefox truncates pointer coordinates to whole CSS pixels, so the clicks
+    // can land a doc pixel short; later checks compare against where they landed.
+    const anchorsBefore = anchorPoints(await readPaths(page));
+    expectPointsAt(anchorsBefore, [{ x: 100, y: 400 }, { x: 700, y: 400 }], 2);
     const pathId = await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => { paths: Array<{ id: string }> };
@@ -104,7 +123,7 @@ test.describe('#1363 — Image Size scales paths and guides', () => {
     await page.waitForTimeout(300);
     expect((await getEditorState(page)).document.width).toBe(400);
 
-    expect(anchorPoints(await readPaths(page))).toEqual([{ x: 50, y: 200 }, { x: 350, y: 200 }]);
+    expectPointsAt(anchorPoints(await readPaths(page)), scaled(anchorsBefore, 0.5), 0.01);
     expect((await readGuides(page))[0]!.position).toBeCloseTo(guideBefore / 2, 5);
     const textAfterResize = await readTextLayer(page);
     expect(Math.abs(textAfterResize.y - textOnPath.y / 2)).toBeLessThanOrEqual(6);
@@ -127,13 +146,13 @@ test.describe('#1363 — Image Size scales paths and guides', () => {
       await page.waitForTimeout(150);
     }
     expect((await getEditorState(page)).document.width).toBe(800);
-    expect(anchorPoints(await readPaths(page))).toEqual([{ x: 100, y: 400 }, { x: 700, y: 400 }]);
+    expectPointsAt(anchorPoints(await readPaths(page)), anchorsBefore, 0.01);
     expect((await readGuides(page))[0]!.position).toBeCloseTo(guideBefore, 5);
 
     await redo(page);
     await page.waitForTimeout(200);
     expect((await getEditorState(page)).document.width).toBe(400);
-    expect(anchorPoints(await readPaths(page))).toEqual([{ x: 50, y: 200 }, { x: 350, y: 200 }]);
+    expectPointsAt(anchorPoints(await readPaths(page)), scaled(anchorsBefore, 0.5), 0.01);
     expect((await readGuides(page))[0]!.position).toBeCloseTo(guideBefore / 2, 5);
   });
 });

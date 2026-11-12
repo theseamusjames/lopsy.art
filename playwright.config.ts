@@ -47,6 +47,15 @@ export default defineConfig({
       name: 'firefox',
       use: {
         ...devices['Desktop Firefox'],
+        launchOptions: {
+          // Headless Firefox on Linux reports `pointer: none` and no hover,
+          // so mouse-only UI (the blog gallery arrows) never shows. Declare
+          // a fine, hovering pointer like a desktop with a mouse.
+          firefoxUserPrefs: {
+            'ui.primaryPointerCapabilities': 6,
+            'ui.allPointerCapabilities': 6,
+          },
+        },
       },
     },
     {
