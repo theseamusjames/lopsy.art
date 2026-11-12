@@ -1,6 +1,6 @@
-use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
-use crate::gpu::shader::ShaderProgram;
+use crate::gpu::pass::{Blend, Pass, Target};
+use crate::gpu::texture_pool::TextureHandle;
 
 #[derive(serde::Deserialize)]
 pub struct GradientStop {
@@ -26,10 +26,9 @@ pub fn save_gradient_preview(engine: &mut EngineInner, layer_id: &str) {
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     if let Some(old) = engine.gradient_preview_texture.take() {
         engine.texture_pool.release(old);
@@ -38,22 +37,14 @@ pub fn save_gradient_preview(engine: &mut EngineInner, layer_id: &str) {
         Ok(h) => h,
         Err(_) => return,
     };
-    let preview_tex = match engine.texture_pool.get(preview_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(preview_handle).is_none() {
+        return;
+    }
 
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&preview_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        gl.use_program(Some(&engine.shaders.blit.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        engine.draw_fullscreen_quad();
-    });
+    engine.pass(&engine.shaders.blit)
+        .texture("u_tex", tex_handle)
+        .blend(Blend::Off)
+        .draw(Target::Texture(preview_handle));
 
     engine.gradient_preview_texture = Some(preview_handle);
     engine.gradient_preview_layer_id = Some(layer_id.to_string());
@@ -82,25 +73,20 @@ fn restore_layer_from_preview(engine: &mut EngineInner, layer_id: &str) -> bool 
         None => return false,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return false,
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return false;
+    }
+    let Some(preview) = engine.gradient_preview_texture
+        .filter(|&p| engine.texture_pool.get(p).is_some())
+    else {
+        return false;
     };
-    let preview_tex = engine.gradient_preview_texture
-        .and_then(|h| engine.texture_pool.get(h).cloned());
-    let ptex = match preview_tex { Some(t) => t, None => return false };
 
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        gl.use_program(Some(&engine.shaders.blit.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&ptex));
-        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        engine.draw_fullscreen_quad();
-    });
+    engine.pass(&engine.shaders.blit)
+        .texture("u_tex", preview)
+        .viewport(0, 0, w as i32, h as i32)
+        .blend(Blend::Off)
+        .draw(Target::Texture(tex_handle));
     true
 }
 
@@ -124,85 +110,41 @@ pub fn render_linear_gradient(
     // subsequent gradient renders during the same drag don't accumulate.
     restore_layer_from_preview(engine, layer_id);
 
-    let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     let layer_desc = engine.layer_stack.iter().find(|l| l.id == layer_id);
     let layer_x = layer_desc.map(|l| l.x as f32).unwrap_or(0.0);
     let layer_y = layer_desc.map(|l| l.y as f32).unwrap_or(0.0);
 
     // Copy existing layer content to scratch_a for reading
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.use_program(Some(&engine.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    engine.draw_fullscreen_quad();
+    copy_to_scratch_a(engine, tex_handle, w, h);
 
-    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
-    let mask_tex_opt = engine.selection_mask_texture
-        .and_then(|h| engine.texture_pool.get(h).cloned());
-    let has_mask = mask_tex_opt.is_some();
-
-    engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.gradient_linear;
-        gl.use_program(Some(&shader.program));
-
-        // Bind existing content (from scratch_a)
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(s) = &scratch_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-        }
-        if let Some(loc) = shader.location(gl, "u_existingTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-
-        // Bind selection mask
-        if let Some(m) = &mask_tex_opt {
-            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
-        }
+    let selection_mask = engine.selection_mask_texture
+        .filter(|&m| engine.texture_pool.get(m).is_some());
+    // The shader measures texture-local pixels and the endpoints arrive
+    // in document space: take off the layer origin, which is negative
+    // for a layer moved past the top or left edge (#1169).
+    let shape = GradientShape::Linear {
+        start: (start_x as f32 - layer_x, start_y as f32 - layer_y),
+        end: (end_x as f32 - layer_x, end_y as f32 - layer_y),
+    };
+    let pass = gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (layer_x, layer_y));
+    let pass = match selection_mask {
+        Some(mask) => pass.texture("u_maskTex", mask),
         // Without a selection, point the mask sampler at the source unit so
         // it never aliases a stale unit-1 texture bound to the target FBO.
-        if let Some(loc) = shader.location(gl, "u_maskTex") {
-            gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
-        }
-        if let Some(loc) = shader.location(gl, "u_hasMask") {
-            gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
-        }
-        if let Some(loc) = shader.location(gl, "u_docSize") {
-            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_layerOffset") {
-            gl.uniform2f(Some(&loc), layer_x, layer_y);
-        }
-
-        set_gradient_uniforms(gl, shader, &stops, w, h);
-        // The shader measures texture-local pixels and the endpoints arrive
-        // in document space: take off the layer origin, which is negative
-        // for a layer moved past the top or left edge (#1169).
-        if let Some(loc) = shader.location(gl, "u_start") {
-            gl.uniform2f(Some(&loc), start_x as f32 - layer_x, start_y as f32 - layer_y);
-        }
-        if let Some(loc) = shader.location(gl, "u_end") {
-            gl.uniform2f(Some(&loc), end_x as f32 - layer_x, end_y as f32 - layer_y);
-        }
-
-        engine.draw_fullscreen_quad();
-    });
+        None => pass.i32("u_maskTex", 0),
+    };
+    pass.i32("u_hasMask", i32::from(selection_mask.is_some()))
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(tex_handle));
 
     engine.mark_layer_dirty(layer_id);
 }
@@ -224,109 +166,92 @@ pub fn render_radial_gradient(
 
     restore_layer_from_preview(engine, layer_id);
 
-    let gl = &engine.gl;
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     let layer_desc = engine.layer_stack.iter().find(|l| l.id == layer_id);
     let layer_x = layer_desc.map(|l| l.x as f32).unwrap_or(0.0);
     let layer_y = layer_desc.map(|l| l.y as f32).unwrap_or(0.0);
 
-    // Copy existing layer content to scratch_a
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.use_program(Some(&engine.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    engine.draw_fullscreen_quad();
+    // Copy existing layer content to scratch_a for reading
+    copy_to_scratch_a(engine, tex_handle, w, h);
 
-    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
-    let mask_tex_opt = engine.selection_mask_texture
-        .and_then(|h| engine.texture_pool.get(h).cloned());
-    let has_mask = mask_tex_opt.is_some();
-
-    engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.gradient_radial;
-        gl.use_program(Some(&shader.program));
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(s) = &scratch_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-        }
-        if let Some(loc) = shader.location(gl, "u_existingTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-
-        if let Some(m) = &mask_tex_opt {
-            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(m));
-        }
+    let selection_mask = engine.selection_mask_texture
+        .filter(|&m| engine.texture_pool.get(m).is_some());
+    let shape = GradientShape::Radial {
+        center: (center_x as f32 - layer_x, center_y as f32 - layer_y),
+        radius: radius as f32,
+    };
+    let pass = gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (layer_x, layer_y));
+    let pass = match selection_mask {
+        Some(mask) => pass.texture("u_maskTex", mask),
         // Without a selection, point the mask sampler at the source unit so
         // it never aliases a stale unit-1 texture bound to the target FBO.
-        if let Some(loc) = shader.location(gl, "u_maskTex") {
-            gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
-        }
-        if let Some(loc) = shader.location(gl, "u_hasMask") {
-            gl.uniform1i(Some(&loc), if has_mask { 1 } else { 0 });
-        }
-        if let Some(loc) = shader.location(gl, "u_docSize") {
-            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_layerOffset") {
-            gl.uniform2f(Some(&loc), layer_x, layer_y);
-        }
-
-        set_gradient_uniforms(gl, shader, &stops, w, h);
-        if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), center_x as f32 - layer_x, center_y as f32 - layer_y);
-        }
-        if let Some(loc) = shader.location(gl, "u_radius") {
-            gl.uniform1f(Some(&loc), radius as f32);
-        }
-
-        engine.draw_fullscreen_quad();
-    });
+        None => pass.i32("u_maskTex", 0),
+    };
+    pass.i32("u_hasMask", i32::from(selection_mask.is_some()))
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(tex_handle));
 
     engine.mark_layer_dirty(layer_id);
 }
 
-pub fn set_gradient_uniforms(
-    gl: &WebGl2RenderingContext,
-    shader: &ShaderProgram,
+/// Where a gradient runs, in the target's texels.
+pub(crate) enum GradientShape {
+    Linear { start: (f32, f32), end: (f32, f32) },
+    Radial { center: (f32, f32), radius: f32 },
+}
+
+/// Blit `src` into scratch A at `w`×`h`, so a pass can read a texture's
+/// current content while rendering back into it.
+pub(crate) fn copy_to_scratch_a(engine: &EngineInner, src: TextureHandle, w: u32, h: u32) {
+    engine.pass(&engine.shaders.blit)
+        .texture("u_tex", src)
+        .viewport(0, 0, w as i32, h as i32)
+        .blend(Blend::Off)
+        .draw(Target::Framebuffer(engine.scratch_fbo_a));
+}
+
+/// The pass that draws `stops` along `shape` over `existing`, a `w`×`h`
+/// copy of what the target holds. `origin` is the target's document-space
+/// origin. The caller adds the selection inputs and draws.
+pub(crate) fn gradient_pass<'a>(
+    engine: &'a EngineInner,
+    shape: &GradientShape,
     stops: &[GradientStop],
+    existing: TextureHandle,
     w: u32,
     h: u32,
-) {
-    let count = stops.len().min(16) as i32;
-    if let Some(loc) = shader.location(gl, "u_stopCount") {
-        gl.uniform1i(Some(&loc), count);
-    }
-    if let Some(loc) = shader.location(gl, "u_texSize") {
-        gl.uniform2f(Some(&loc), w as f32, h as f32);
-    }
-
-    // Set stop colors and positions
+    origin: (f32, f32),
+) -> Pass<'a> {
+    let shader = match shape {
+        GradientShape::Linear { .. } => &engine.shaders.gradient_linear,
+        GradientShape::Radial { .. } => &engine.shaders.gradient_radial,
+    };
+    let mut pass = engine.pass(shader)
+        .texture("u_existingTex", existing)
+        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
+        .vec2("u_layerOffset", origin.0, origin.1)
+        .i32("u_stopCount", stops.len().min(16) as i32)
+        .vec2("u_texSize", w as f32, h as f32);
     for (i, stop) in stops.iter().enumerate().take(16) {
-        let name = format!("u_stops[{i}]");
-        if let Some(loc) = shader.location(gl, &name) {
-            gl.uniform4f(Some(&loc), stop.r, stop.g, stop.b, stop.a);
-        }
-        let name = format!("u_stopPositions[{i}]");
-        if let Some(loc) = shader.location(gl, &name) {
-            gl.uniform1f(Some(&loc), stop.position);
-        }
+        pass = pass
+            .vec4(&format!("u_stops[{i}]"), stop.r, stop.g, stop.b, stop.a)
+            .f32(&format!("u_stopPositions[{i}]"), stop.position);
+    }
+    match *shape {
+        GradientShape::Linear { start, end } => pass
+            .vec2("u_start", start.0, start.1)
+            .vec2("u_end", end.0, end.1),
+        GradientShape::Radial { center, radius } => pass
+            .vec2("u_center", center.0, center.1)
+            .f32("u_radius", radius),
     }
 }
 
