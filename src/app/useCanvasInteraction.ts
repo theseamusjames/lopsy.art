@@ -210,7 +210,8 @@ export function useCanvasInteraction(
 
       const canvasPos = screenToCanvas(e.clientX - rect.left, e.clientY - rect.top);
 
-      if (e.metaKey) {
+      // Ctrl stands in for Cmd on Windows/Linux, where metaKey is the Super key.
+      if (e.metaKey || e.ctrlKey) {
         const ts = useToolSettingsStore.getState();
         if (ts.symmetryRadialSegments >= 2 || ts.symmetryHorizontal || ts.symmetryVertical) {
           ts.setSymmetryCenter({ x: canvasPos.x, y: canvasPos.y });
