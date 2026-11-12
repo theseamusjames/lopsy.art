@@ -611,7 +611,9 @@ levels, hue/saturation, colour balance, colour grading, gradient map, and
 more) on a group.
 
 **Masks.** With the layer active, click `Add Mask` in the Layers panel
-toolbar, then its `Edit mask for <name>` thumbnail. With a selection
+toolbar: it enters mask edit mode on the new mask, so the next stroke
+paints the mask. Its `Edit mask for <name>` thumbnail re-enters mask edit
+mode later; clicking the layer row leaves it. With a selection
 active, `Add Mask` reveals only the selection: everything outside it is
 hidden, and the selection is dropped. In mask edit mode the
 Brush and Pencil always **hide** (paint black) and the Eraser always

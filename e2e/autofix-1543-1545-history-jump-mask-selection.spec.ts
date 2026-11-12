@@ -208,6 +208,12 @@ test.describe('#1545: Add Mask with an active selection', () => {
     expect(result.corner).toBe(0);
     expect(result.selectionActive).toBe(false);
 
+    // Add Mask enters mask edit mode, which shows the layer unmasked; click
+    // the layer row to leave it and see the mask applied.
+    const maskedId = (await getEditorState(page)).document.activeLayerId!;
+    await page.locator(`[data-layer-id="${maskedId}"]`).click();
+    await page.waitForTimeout(150);
+
     // The composite keeps a red disc on the white Background: about pi/4
     // of the document stays red instead of all of it.
     const counts = await page.evaluate(async () => {

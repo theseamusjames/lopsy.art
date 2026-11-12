@@ -80,4 +80,25 @@ describe('LayerPanel', () => {
     expect(propertyListCount).toBeGreaterThan(0);
     expect(largestPropertyList).toBeLessThan(1000);
   });
+
+  it('Add Mask makes the new mask the edit target', async () => {
+    const [{ act, createElement }, { createRoot }, { useEditorStore }, { LayerPanel }] = mods;
+    const { useUIStore } = await import('../../app/ui-store');
+    useEditorStore.getState().createDocument(300, 200, false);
+    useUIStore.getState().setMaskEditMode(false);
+    const layerName = useEditorStore.getState().document.layers
+      .find((l) => l.id === useEditorStore.getState().document.activeLayerId)!.name;
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root!.render(createElement(LayerPanel, { onSelectLayer: () => {} })));
+
+    const addMask = container.querySelector<HTMLButtonElement>('[aria-label="Add Mask"]')!;
+    act(() => addMask.click());
+
+    expect(useUIStore.getState().maskMode).toBe('layerMask');
+    const thumb = container.querySelector(`[aria-label="Edit mask for ${layerName}"]`);
+    expect(thumb?.getAttribute('aria-pressed')).toBe('true');
+  });
 });
