@@ -1,7 +1,7 @@
-use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
+use crate::gpu::pass::{Blend, Target};
 use crate::gpu::texture_pool::TextureHandle;
-use crate::gradient_gpu::{GradientStop, set_gradient_uniforms};
+use crate::gradient_gpu::{copy_to_scratch_a, gradient_pass, GradientShape, GradientStop};
 
 /// Flood-fill the quick mask texture. Reads the mask from the GPU, runs a
 /// region-fill based on mask-value tolerance, and writes the result back.
@@ -20,36 +20,8 @@ pub fn fill_quick_mask(
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
 
     // Read mask texture as RGBA
-    let fbo = match engine.gl.create_framebuffer() {
-        Some(f) => f,
-        None => return,
-    };
-    let tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => {
-            engine.gl.delete_framebuffer(Some(&fbo));
-            return;
-        }
-    };
-
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-    engine.gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&tex),
-        0,
-    );
-    let rgba = match engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h) {
-        Ok(d) => d,
-        Err(_) => {
-            engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-            engine.gl.delete_framebuffer(Some(&fbo));
-            return;
-        }
-    };
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    engine.gl.delete_framebuffer(Some(&fbo));
+    let Some(tex) = engine.texture_pool.get(tex_handle).cloned() else { return };
+    let Ok(rgba) = engine.gpu().read_rgba(tex_handle, 0, 0, w, h) else { return };
 
     // Extract grayscale from RGBA
     let mut mask = vec![0u8; (w * h) as usize];
@@ -117,12 +89,7 @@ pub fn enter_quick_mask_mode(engine: &mut EngineInner) {
         // Fully unselected, in the (v, v, v, 1) layout the mask samplers
         // expect. A clear: uploading a zero buffer went through the
         // 16-bytes-per-texel CPU path on every Q press (#1481).
-        if let Some(dst_gl) = engine.texture_pool.get(tex).cloned() {
-            engine.render_to_texture(&dst_gl, w as i32, h as i32, |engine| {
-                engine.gl.clear_color(0.0, 0.0, 0.0, 1.0);
-                engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-            });
-        }
+        engine.gpu().clear(tex, [0.0, 0.0, 0.0, 1.0]);
         engine.quick_mask_texture = Some(tex);
         engine.needs_recomposite = true;
         return;
@@ -143,28 +110,17 @@ pub fn enter_quick_mask_mode(engine: &mut EngineInner) {
     engine.texture_pool.set_nearest_filter(&engine.gl, tex);
 
     // GPU-to-GPU copy: blit selection mask to quick mask texture
-    let sel_gl = match engine.texture_pool.get(sel_handle) {
-        Some(t) => t.clone(),
-        None => {
-            engine.texture_pool.release(tex);
-            return;
-        }
-    };
-    let dst_gl = match engine.texture_pool.get(tex) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(sel_handle).is_none() {
+        engine.texture_pool.release(tex);
+        return;
+    }
+    if engine.texture_pool.get(tex).is_none() {
+        return;
+    }
 
-    engine.render_to_texture(&dst_gl, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        gl.use_program(Some(&engine.shaders.blit.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&sel_gl));
-        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        engine.draw_fullscreen_quad();
-    });
+    engine.pass(&engine.shaders.blit)
+        .texture("u_tex", sel_handle)
+        .draw(Target::Texture(tex));
 
     engine.quick_mask_texture = Some(tex);
     engine.needs_recomposite = true;
@@ -179,32 +135,10 @@ pub fn exit_quick_mask_mode(engine: &mut EngineInner) -> Option<Vec<u8>> {
     let (w, h) = engine.texture_pool.get_size(handle)?;
 
     // Read RGBA from the texture
-    let fbo = match engine.gl.create_framebuffer() {
-        Some(f) => f,
-        None => {
-            engine.texture_pool.release(handle);
-            return None;
-        }
-    };
-    let tex = match engine.texture_pool.get(handle) {
-        Some(t) => t.clone(),
-        None => {
-            engine.gl.delete_framebuffer(Some(&fbo));
-            return None;
-        }
-    };
-
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-    engine.gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&tex),
-        0,
-    );
-    let rgba = engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h).ok();
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    engine.gl.delete_framebuffer(Some(&fbo));
+    if engine.texture_pool.get(handle).is_none() {
+        return None;
+    }
+    let rgba = engine.gpu().read_rgba(handle, 0, 0, w, h).ok();
     engine.texture_pool.release(handle);
     engine.needs_recomposite = true;
 
@@ -260,23 +194,16 @@ pub fn upload_quick_mask_pixels(
 
 fn copy_texture(engine: &mut EngineInner, src: TextureHandle) -> Option<TextureHandle> {
     let (w, h) = engine.texture_pool.get_size(src)?;
-    let src_tex = engine.texture_pool.get(src).cloned()?;
+    engine.texture_pool.get(src)?;
     let dst = engine.texture_pool.acquire(&engine.gl, w, h).ok()?;
-    let Some(dst_tex) = engine.texture_pool.get(dst).cloned() else {
+    if engine.texture_pool.get(dst).is_none() {
         engine.texture_pool.release(dst);
         return None;
-    };
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&dst_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        gl.use_program(Some(&engine.shaders.blit.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-        if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        engine.draw_fullscreen_quad();
-    });
+    }
+    engine.pass(&engine.shaders.blit)
+        .texture("u_tex", src)
+        .blend(Blend::Off)
+        .draw(Target::Texture(dst));
     Some(dst)
 }
 
@@ -313,34 +240,20 @@ pub fn translate_quick_mask(engine: &mut EngineInner, dx: i32, dy: i32) {
     };
     let Some((w, h)) = engine.texture_pool.get_size(quick) else { return };
     if engine.texture_pool.get_size(base) != Some((w, h)) { return; }
-    let (Some(dst_tex), Some(base_tex), Some(marquee_tex)) = (
-        engine.texture_pool.get(quick).cloned(),
-        engine.texture_pool.get(base).cloned(),
-        engine.texture_pool.get(marquee).cloned(),
-    ) else {
+    if engine.texture_pool.get(quick).is_none()
+        || engine.texture_pool.get(base).is_none()
+        || engine.texture_pool.get(marquee).is_none()
+    {
         return;
-    };
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&dst_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.quick_mask_translate;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&base_tex));
-        if let Some(loc) = shader.location(gl, "u_base") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&marquee_tex));
-        if let Some(loc) = shader.location(gl, "u_marquee") {
-            gl.uniform1i(Some(&loc), 1);
-        }
-        if let Some(loc) = shader.location(gl, "u_offset") {
-            gl.uniform2i(Some(&loc), dx, dy);
-        }
-        engine.draw_fullscreen_quad();
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    });
+    }
+    engine.pass(&engine.shaders.quick_mask_translate)
+        .texture("u_base", base)
+        .texture("u_marquee", marquee)
+        .ivec2("u_offset", dx, dy)
+        .blend(Blend::Off)
+        .draw(Target::Texture(quick));
+    // Leave unit 0 active, with neither move copy still bound to a sampler.
+    engine.gpu().unbind_textures(2);
     engine.needs_recomposite = true;
 }
 
@@ -425,58 +338,20 @@ pub fn render_quick_mask_linear_gradient(
 
     let Some(tex_handle) = engine.quick_mask_texture else { return };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let mask_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-
-    let gl = &engine.gl;
-
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.use_program(Some(&engine.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
-    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
     }
-    engine.draw_fullscreen_quad();
 
-    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+    copy_to_scratch_a(engine, tex_handle, w, h);
 
-    engine.render_to_texture(&mask_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.gradient_linear;
-        gl.use_program(Some(&shader.program));
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(s) = &scratch_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-        }
-        if let Some(loc) = shader.location(gl, "u_existingTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_hasMask") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_docSize") {
-            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_layerOffset") {
-            gl.uniform2f(Some(&loc), 0.0, 0.0);
-        }
-
-        set_gradient_uniforms(gl, shader, &stops, w, h);
-        if let Some(loc) = shader.location(gl, "u_start") {
-            gl.uniform2f(Some(&loc), start_x as f32, start_y as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_end") {
-            gl.uniform2f(Some(&loc), end_x as f32, end_y as f32);
-        }
-
-        engine.draw_fullscreen_quad();
-    });
+    let shape = GradientShape::Linear {
+        start: (start_x as f32, start_y as f32),
+        end: (end_x as f32, end_y as f32),
+    };
+    gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (0.0, 0.0))
+        .i32("u_hasMask", 0)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(tex_handle));
 
     engine.needs_recomposite = true;
 }
@@ -498,58 +373,20 @@ pub fn render_quick_mask_radial_gradient(
 
     let Some(tex_handle) = engine.quick_mask_texture else { return };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let mask_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-
-    let gl = &engine.gl;
-
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.use_program(Some(&engine.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
-    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
     }
-    engine.draw_fullscreen_quad();
 
-    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
+    copy_to_scratch_a(engine, tex_handle, w, h);
 
-    engine.render_to_texture(&mask_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.gradient_radial;
-        gl.use_program(Some(&shader.program));
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(s) = &scratch_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-        }
-        if let Some(loc) = shader.location(gl, "u_existingTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_hasMask") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_docSize") {
-            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_layerOffset") {
-            gl.uniform2f(Some(&loc), 0.0, 0.0);
-        }
-
-        set_gradient_uniforms(gl, shader, &stops, w, h);
-        if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), center_x as f32, center_y as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_radius") {
-            gl.uniform1f(Some(&loc), radius as f32);
-        }
-
-        engine.draw_fullscreen_quad();
-    });
+    let shape = GradientShape::Radial {
+        center: (center_x as f32, center_y as f32),
+        radius: radius as f32,
+    };
+    gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (0.0, 0.0))
+        .i32("u_hasMask", 0)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(tex_handle));
 
     engine.needs_recomposite = true;
 }

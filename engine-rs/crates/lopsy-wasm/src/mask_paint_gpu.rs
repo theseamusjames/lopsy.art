@@ -1,6 +1,9 @@
-use web_sys::WebGl2RenderingContext;
+use lopsy_core::geometry::Rect;
 use crate::compositor::mask_doc_origin;
+use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
+use crate::gpu::pass::{Blend, Target};
+use crate::gradient_gpu::{copy_to_scratch_a, gradient_pass, GradientShape};
 
 // Every layer-mask writer here takes DOCUMENT-space coordinates and maps
 // them into mask texels with `mask_doc_origin` — the same origin the
@@ -64,68 +67,34 @@ pub(crate) fn paint_mask_dabs_scissored(
     dab: MaskDab,
 ) {
     let Some((w, h)) = engine.texture_pool.get_size(tex_handle) else { return };
-    let Some(mask_tex) = engine.texture_pool.get(tex_handle).cloned() else { return };
+    if engine.texture_pool.get(tex_handle).is_none() { return; }
     // The copy-back samples scratch by v_uv, so scratch must match the mask exactly.
     if engine.ensure_scratch_size(w, h).is_err() { return; }
-    let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a).cloned() else { return };
+    if engine.texture_pool.get(engine.scratch_texture_a).is_none() { return; }
     let (ox, oy) = origin;
 
-    let gl = &engine.gl;
-    let dab_shader = &engine.shaders.quick_mask_dab;
-    gl.use_program(Some(&dab_shader.program));
-    if let Some(loc) = dab_shader.location(gl, "u_maskTex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    if let Some(loc) = dab_shader.location(gl, "u_size") {
-        gl.uniform1f(Some(&loc), dab.size);
-    }
-    if let Some(loc) = dab_shader.location(gl, "u_hardness") {
-        gl.uniform1f(Some(&loc), dab.hardness);
-    }
-    if let Some(loc) = dab_shader.location(gl, "u_opacity") {
-        gl.uniform1f(Some(&loc), dab.opacity);
-    }
-    if let Some(loc) = dab_shader.location(gl, "u_texSize") {
-        gl.uniform2f(Some(&loc), w as f32, h as f32);
-    }
-    if let Some(loc) = dab_shader.location(gl, "u_mode") {
-        gl.uniform1i(Some(&loc), dab.mode as i32);
-    }
-    let u_center_loc = dab_shader.location(gl, "u_center");
-    let blit = &engine.shaders.blit;
-    gl.use_program(Some(&blit.program));
-    if let Some(loc) = blit.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-
-    gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
     for chunk in points.chunks_exact(2) {
         let cx = chunk[0] as f32 - ox;
         let cy = chunk[1] as f32 - oy;
         let Some([x, y, rw, rh]) =
             lopsy_core::brush::circle_dab_scissor_rect(cx, cy, dab.size, w, h) else { continue };
 
-        let gl = &engine.gl;
-        gl.scissor(x, y, rw, rh);
-        engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-        gl.viewport(0, 0, w as i32, h as i32);
-        gl.use_program(Some(&engine.shaders.quick_mask_dab.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
-        if let Some(loc) = &u_center_loc {
-            gl.uniform2f(Some(loc), cx, cy);
-        }
-        engine.draw_fullscreen_quad();
-
-        engine.render_to_texture(&mask_tex, w as i32, h as i32, |engine| {
-            let gl = &engine.gl;
-            gl.use_program(Some(&engine.shaders.blit.program));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&scratch_tex));
-            engine.draw_fullscreen_quad();
-        });
+        scratch_dab_pass(
+            engine,
+            tex_handle,
+            w,
+            h,
+            Rect::new(x, y, rw as u32, rh as u32),
+            engine.pass(&engine.shaders.quick_mask_dab)
+                .texture("u_maskTex", tex_handle)
+                .f32("u_size", dab.size)
+                .f32("u_hardness", dab.hardness)
+                .f32("u_opacity", dab.opacity)
+                .vec2("u_texSize", w as f32, h as f32)
+                .i32("u_mode", dab.mode as i32)
+                .vec2("u_center", cx, cy),
+        );
     }
-    engine.gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
 }
 
 /// Render hard square pencil blocks into a mask-style RGBA texture
@@ -144,7 +113,7 @@ pub(crate) fn draw_pencil_blocks_gpu(
 ) {
     if size <= 0.0 { return; }
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let Some(target_tex) = engine.texture_pool.get(tex_handle).cloned() else { return };
+    if engine.texture_pool.get(tex_handle).is_none() { return; }
 
     let points = lopsy_core::brush::interpolate_points(x0, y0, x1, y1, 1.0);
     if points.len() < 2 { return; }
@@ -154,47 +123,30 @@ pub(crate) fn draw_pencil_blocks_gpu(
     let tex_w_i = w as i32;
     let tex_h_i = h as i32;
 
-    engine.render_to_texture(&target_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        gl.disable(WebGl2RenderingContext::BLEND);
-
-        let shader = &engine.shaders.pencil_dab;
-        gl.use_program(Some(&shader.program));
-        if let Some(loc) = shader.location(gl, "u_color") {
-            gl.uniform4f(Some(&loc), value, value, value, 1.0);
-        }
-        if let Some(loc) = shader.location(gl, "u_size") {
-            gl.uniform1f(Some(&loc), size);
-        }
-        if let Some(loc) = shader.location(gl, "u_texSize") {
-            gl.uniform2f(Some(&loc), w as f32, h as f32);
-        }
+    let pass = engine.pass(&engine.shaders.pencil_dab)
+        .vec4("u_color", value, value, value, 1.0)
+        .f32("u_size", size)
+        .vec2("u_texSize", w as f32, h as f32)
         // Mask painting writes the mask itself — never clipped by selection.
-        if let Some(loc) = shader.location(gl, "u_hasSelection") {
-            gl.uniform1i(Some(&loc), 0);
-        }
+        .i32("u_hasSelection", 0)
+        .blend(Blend::Off);
+    let Some(mut blocks) = pass.begin(Target::Texture(tex_handle)) else { return };
+    let center = blocks.slot("u_center");
+    for chunk in points.chunks(2) {
+        if chunk.len() < 2 { break; }
+        let cx = chunk[0] as f32;
+        let cy = chunk[1] as f32;
 
-        gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
-        let u_center_loc = shader.location(gl, "u_center");
-        for chunk in points.chunks(2) {
-            if chunk.len() < 2 { break; }
-            let cx = chunk[0] as f32;
-            let cy = chunk[1] as f32;
+        let lo_x = (cx.floor() as i32 - half).max(0);
+        let lo_y = (cy.floor() as i32 - half).max(0);
+        let hi_x = (cx.floor() as i32 - half + block).min(tex_w_i);
+        let hi_y = (cy.floor() as i32 - half + block).min(tex_h_i);
+        if hi_x <= lo_x || hi_y <= lo_y { continue; }
 
-            let lo_x = (cx.floor() as i32 - half).max(0);
-            let lo_y = (cy.floor() as i32 - half).max(0);
-            let hi_x = (cx.floor() as i32 - half + block).min(tex_w_i);
-            let hi_y = (cy.floor() as i32 - half + block).min(tex_h_i);
-            if hi_x <= lo_x || hi_y <= lo_y { continue; }
-            gl.scissor(lo_x, lo_y, hi_x - lo_x, hi_y - lo_y);
-
-            if let Some(loc) = &u_center_loc {
-                gl.uniform2f(Some(loc), cx, cy);
-            }
-            engine.draw_fullscreen_quad();
-        }
-        gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
-    });
+        blocks.set_vec2(&center, cx, cy);
+        blocks.draw_in(Rect::new(lo_x, lo_y, (hi_x - lo_x) as u32, (hi_y - lo_y) as u32));
+    }
+    blocks.end();
 }
 
 pub fn draw_mask_pencil_line(
@@ -233,36 +185,7 @@ pub fn fill_mask(
     if local_x < 0 || local_y < 0 || local_x >= w as i32 || local_y >= h as i32 { return; }
     let (start_x, start_y) = (local_x as u32, local_y as u32);
 
-    let fbo = match engine.gl.create_framebuffer() {
-        Some(f) => f,
-        None => return,
-    };
-    let tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => {
-            engine.gl.delete_framebuffer(Some(&fbo));
-            return;
-        }
-    };
-
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-    engine.gl.framebuffer_texture_2d(
-        WebGl2RenderingContext::FRAMEBUFFER,
-        WebGl2RenderingContext::COLOR_ATTACHMENT0,
-        WebGl2RenderingContext::TEXTURE_2D,
-        Some(&tex),
-        0,
-    );
-    let rgba = match engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h) {
-        Ok(d) => d,
-        Err(_) => {
-            engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-            engine.gl.delete_framebuffer(Some(&fbo));
-            return;
-        }
-    };
-    engine.gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-    engine.gl.delete_framebuffer(Some(&fbo));
+    let Ok(rgba) = engine.gpu().read_rgba(tex_handle, 0, 0, w, h) else { return };
 
     let mut mask = vec![0u8; (w * h) as usize];
     for i in 0..(w * h) as usize {
@@ -328,63 +251,25 @@ pub fn render_mask_linear_gradient(
 
     let Some(&tex_handle) = engine.layer_masks.get(layer_id) else { return };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let mask_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     let (layer_x, layer_y) = mask_doc_origin(engine, layer_id);
     // Copies the mask into scratch at the mask's size and samples it back
     // by v_uv, so scratch must match the mask exactly.
     if engine.ensure_scratch_size(w, h).is_err() { return; }
 
-    let gl = &engine.gl;
+    copy_to_scratch_a(engine, tex_handle, w, h);
 
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.use_program(Some(&engine.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
-    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    engine.draw_fullscreen_quad();
-
-    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
-
-    engine.render_to_texture(&mask_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.gradient_linear;
-        gl.use_program(Some(&shader.program));
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(s) = &scratch_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-        }
-        if let Some(loc) = shader.location(gl, "u_existingTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_hasMask") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_docSize") {
-            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_layerOffset") {
-            gl.uniform2f(Some(&loc), layer_x, layer_y);
-        }
-
-        crate::gradient_gpu::set_gradient_uniforms(gl, shader, &stops, w, h);
-        if let Some(loc) = shader.location(gl, "u_start") {
-            gl.uniform2f(Some(&loc), start_x as f32 - layer_x, start_y as f32 - layer_y);
-        }
-        if let Some(loc) = shader.location(gl, "u_end") {
-            gl.uniform2f(Some(&loc), end_x as f32 - layer_x, end_y as f32 - layer_y);
-        }
-
-        engine.draw_fullscreen_quad();
-    });
+    let shape = GradientShape::Linear {
+        start: (start_x as f32 - layer_x, start_y as f32 - layer_y),
+        end: (end_x as f32 - layer_x, end_y as f32 - layer_y),
+    };
+    gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (layer_x, layer_y))
+        .i32("u_hasMask", 0)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(tex_handle));
 
     engine.mark_layer_dirty(layer_id);
 }
@@ -404,63 +289,25 @@ pub fn render_mask_radial_gradient(
 
     let Some(&tex_handle) = engine.layer_masks.get(layer_id) else { return };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let mask_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     let (layer_x, layer_y) = mask_doc_origin(engine, layer_id);
     // Copies the mask into scratch at the mask's size and samples it back
     // by v_uv, so scratch must match the mask exactly.
     if engine.ensure_scratch_size(w, h).is_err() { return; }
 
-    let gl = &engine.gl;
+    copy_to_scratch_a(engine, tex_handle, w, h);
 
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.use_program(Some(&engine.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
-    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    engine.draw_fullscreen_quad();
-
-    let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
-
-    engine.render_to_texture(&mask_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.gradient_radial;
-        gl.use_program(Some(&shader.program));
-
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(s) = &scratch_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(s));
-        }
-        if let Some(loc) = shader.location(gl, "u_existingTex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_hasMask") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_docSize") {
-            gl.uniform2f(Some(&loc), engine.doc_width as f32, engine.doc_height as f32);
-        }
-        if let Some(loc) = shader.location(gl, "u_layerOffset") {
-            gl.uniform2f(Some(&loc), layer_x, layer_y);
-        }
-
-        crate::gradient_gpu::set_gradient_uniforms(gl, shader, &stops, w, h);
-        if let Some(loc) = shader.location(gl, "u_center") {
-            gl.uniform2f(Some(&loc), center_x as f32 - layer_x, center_y as f32 - layer_y);
-        }
-        if let Some(loc) = shader.location(gl, "u_radius") {
-            gl.uniform1f(Some(&loc), radius as f32);
-        }
-
-        engine.draw_fullscreen_quad();
-    });
+    let shape = GradientShape::Radial {
+        center: (center_x as f32 - layer_x, center_y as f32 - layer_y),
+        radius: radius as f32,
+    };
+    gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (layer_x, layer_y))
+        .i32("u_hasMask", 0)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(tex_handle));
 
     engine.mark_layer_dirty(layer_id);
 }
