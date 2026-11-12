@@ -2,9 +2,9 @@
 //! transform. The raster is always re-rendered from the text props, so the
 //! transform is applied fresh each time and never compounds.
 
-use web_sys::WebGl2RenderingContext;
 use lopsy_core::text_transform::{doc_to_raster_linear, transformed_raster_rect, DocRect, TextMatrix};
 use crate::engine::EngineInner;
+use crate::gpu::pass::{Blend, Target};
 use crate::gpu::texture_pool::TextureHandle;
 
 /// Upright glyph raster produced by the text renderer.
@@ -41,13 +41,10 @@ pub fn render_text_raster_transformed(
         engine.texture_pool.delete(&engine.gl, src);
         return Err(e);
     }
-    let src_tex = match engine.texture_pool.get(src).cloned() {
-        Some(t) => t,
-        None => {
-            engine.texture_pool.delete(&engine.gl, src);
-            return Err("Text raster texture missing".to_string());
-        }
-    };
+    if engine.texture_pool.get(src).is_none() {
+        engine.texture_pool.delete(&engine.gl, src);
+        return Err("Text raster texture missing".to_string());
+    }
 
     // transform_affine maps an output pixel at `doc` to source pixel
     // `srcCenter + invMatrix · (doc - dstCenter) - floatOffset`; with these
@@ -64,45 +61,24 @@ pub fn render_text_raster_transformed(
     );
 
     let result = layer_texture_sized(engine, layer_id, rect.width, rect.height).and_then(|handle| {
-        let dst_tex = engine.texture_pool.get(handle).cloned().ok_or("Layer texture missing")?;
-        engine.gl.disable(WebGl2RenderingContext::BLEND);
-        engine.render_to_texture(&dst_tex, rect.width as i32, rect.height as i32, |eng| {
-            eng.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-            eng.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-            let shader = &eng.shaders.transform_affine;
-            eng.gl.use_program(Some(&shader.program));
-            eng.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            eng.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-            if let Some(loc) = shader.location(&eng.gl, "u_floatTex") {
-                eng.gl.uniform1i(Some(&loc), 0);
-            }
-            if let Some(loc) = shader.location(&eng.gl, "u_floatSize") {
-                eng.gl.uniform2f(Some(&loc), raster.width as f32, raster.height as f32);
-            }
-            if let Some(loc) = shader.location(&eng.gl, "u_layerOffset") {
-                eng.gl.uniform2f(Some(&loc), rect.x as f32, rect.y as f32);
-            }
-            if let Some(loc) = shader.location(&eng.gl, "u_floatOffset") {
-                eng.gl.uniform2f(Some(&loc), rect.x as f32, rect.y as f32);
-            }
-            if let Some(loc) = shader.location(&eng.gl, "u_layerSize") {
-                eng.gl.uniform2f(Some(&loc), rect.width as f32, rect.height as f32);
-            }
-            if let Some(loc) = shader.location(&eng.gl, "u_srcCenter") {
-                eng.gl.uniform2f(Some(&loc), src_center.0, src_center.1);
-            }
-            if let Some(loc) = shader.location(&eng.gl, "u_dstCenter") {
-                eng.gl.uniform2f(Some(&loc), anchor.0 as f32, anchor.1 as f32);
-            }
-            if let Some(loc) = shader.location(&eng.gl, "u_invMatrix") {
-                eng.gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, &inv_matrix);
-            }
+        let is_drawn = engine
+            .pass(&engine.shaders.transform_affine)
+            .texture("u_floatTex", src)
+            .vec2("u_floatSize", raster.width as f32, raster.height as f32)
+            .vec2("u_layerOffset", rect.x as f32, rect.y as f32)
+            .vec2("u_floatOffset", rect.x as f32, rect.y as f32)
+            .vec2("u_layerSize", rect.width as f32, rect.height as f32)
+            .vec2("u_srcCenter", src_center.0, src_center.1)
+            .vec2("u_dstCenter", anchor.0 as f32, anchor.1 as f32)
+            .mat3("u_invMatrix", &inv_matrix)
             // Uniforms persist per program: clear the float path's source rect.
-            if let Some(loc) = shader.location(&eng.gl, "u_srcRect") {
-                eng.gl.uniform4f(Some(&loc), 0.0, 0.0, 0.0, 0.0);
-            }
-            eng.draw_fullscreen_quad();
-        });
+            .vec4("u_srcRect", 0.0, 0.0, 0.0, 0.0)
+            .blend(Blend::Off)
+            .clear([0.0, 0.0, 0.0, 0.0])
+            .draw(Target::Texture(handle));
+        if !is_drawn {
+            return Err("Layer texture missing".to_string());
+        }
         engine.mark_layer_dirty(layer_id);
         Ok(())
     });

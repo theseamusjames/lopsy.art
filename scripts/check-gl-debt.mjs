@@ -40,7 +40,6 @@ const BASELINE = {
   'dab_pass_gpu.rs': 15,
   'api/filter/noise.rs': 17,
   'api/filter/preview.rs': 17,
-  'text_transform_gpu.rs': 20,
   'content_bounds_gpu.rs': 21,
   'api/fill.rs': 28,
   'selection_gpu.rs': 31,
