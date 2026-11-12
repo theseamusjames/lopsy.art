@@ -15,6 +15,7 @@
  * composited pixel diffs rather than mask data inspection.
  */
 import { test, expect, type Page } from './fixtures';
+import { parityCheckpoint } from './parity';
 import {
   waitForStore,
   createDocument,
@@ -259,6 +260,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await pushHistory(page, 'Background fill');
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-01-background.png') });
+    await parityCheckpoint(page, 'koi-fish', '01-background');
 
     // =====================================================================
     // PHASE 2: Paint koi fish body using brush strokes (orange/gold)
@@ -298,6 +300,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
 
     await pushHistory(page, 'Koi body');
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-02-body.png') });
+    await parityCheckpoint(page, 'koi-fish', '02-body');
 
     // =====================================================================
     // PHASE 3: Add mask to koi layer with top-to-bottom gradient fade
@@ -319,6 +322,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     expect(pixelDiff(snapBeforeMask, snapAfterMask)).toBeGreaterThan(50);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-03-mask-gradient.png') });
+    await parityCheckpoint(page, 'koi-fish', '03-mask-gradient');
 
     // =====================================================================
     // PHASE 4: Enter mask edit mode — verify UI state
@@ -349,6 +353,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await page.waitForTimeout(300);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-04-mask-painted.png') });
+    await parityCheckpoint(page, 'koi-fish', '04-mask-painted');
 
     // =====================================================================
     // PHASE 5: Eraser on mask — exercise mask eraser path
@@ -360,6 +365,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await drawStroke(page, { x: 400, y: 410 }, { x: 420, y: 430 }, 8);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-05-mask-erased.png') });
+    await parityCheckpoint(page, 'koi-fish', '05-mask-erased');
 
     // Exit mask edit mode via store (UI toggle can be unreliable after tool changes)
     await page.evaluate(() => {
@@ -385,12 +391,14 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     // didn't fully sync in SwiftShader, but the undo must not crash)
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-06-undo.png') });
+    await parityCheckpoint(page, 'koi-fish', '06-undo');
 
     // Redo
     await redo(page);
     await page.waitForTimeout(400);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-07-redo.png') });
+    await parityCheckpoint(page, 'koi-fish', '07-redo');
 
     // =====================================================================
     // PHASE 7: Modify mask data directly — apply a different mask pattern
@@ -429,6 +437,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await page.waitForTimeout(400);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-08-radial-mask.png') });
+    await parityCheckpoint(page, 'koi-fish', '08-radial-mask');
 
     // =====================================================================
     // PHASE 8: Rectangular marquee + fill for geometric border elements
@@ -443,6 +452,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
 
     await pushHistory(page, 'Geometric bars');
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-09-geometric-bars.png') });
+    await parityCheckpoint(page, 'koi-fish', '09-geometric-bars');
 
     // =====================================================================
     // PHASE 9: Elliptical marquee + fill for water ripple circles
@@ -460,6 +470,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
 
     await pushHistory(page, 'Water ripples');
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-10-ripples.png') });
+    await parityCheckpoint(page, 'koi-fish', '10-ripples');
 
     // Set ripples layer to Screen blend mode
     await setActiveLayer(page, ripplesLayerId);
@@ -489,6 +500,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
 
     await pushHistory(page, 'Second koi');
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-11-second-koi.png') });
+    await parityCheckpoint(page, 'koi-fish', '11-second-koi');
 
     // =====================================================================
     // PHASE 11: Add radial mask to second koi (store-based)
@@ -502,6 +514,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     expect(koi2Layer!.mask).not.toBeNull();
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-12-koi2-mask.png') });
+    await parityCheckpoint(page, 'koi-fish', '12-koi2-mask');
 
     // =====================================================================
     // PHASE 12: Layer effects — drop shadow and outer glow on main koi
@@ -532,6 +545,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     expect(koiLayerEffects.effects.outerGlow.enabled).toBe(true);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-13-effects.png') });
+    await parityCheckpoint(page, 'koi-fish', '13-effects');
 
     // =====================================================================
     // PHASE 13: Inner glow on second koi
@@ -547,6 +561,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await page.waitForTimeout(200);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-14-koi2-effects.png') });
+    await parityCheckpoint(page, 'koi-fish', '14-koi2-effects');
 
     // =====================================================================
     // PHASE 14: Layer opacity adjustment
@@ -555,6 +570,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     await setLayerOpacity(page, ripplesLayerId, 60);
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-15-opacity.png') });
+    await parityCheckpoint(page, 'koi-fish', '15-opacity');
 
     // =====================================================================
     // PHASE 15: Title "KOI" using filled rectangles as block letters
@@ -580,6 +596,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
 
     await pushHistory(page, 'Title KOI');
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-16-title.png') });
+    await parityCheckpoint(page, 'koi-fish', '16-title');
 
     // =====================================================================
     // PHASE 16: Add mask to title with left-right gradient
@@ -593,6 +610,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     expect(titleLayer!.mask).not.toBeNull();
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-17-title-masked.png') });
+    await parityCheckpoint(page, 'koi-fish', '17-title-masked');
 
     // =====================================================================
     // PHASE 17: Decorative details (rectangles + circles)
@@ -614,6 +632,7 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
 
     await pushHistory(page, 'Details');
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-18-details.png') });
+    await parityCheckpoint(page, 'koi-fish', '18-details');
 
     // =====================================================================
     // PHASE 18: Undo/redo of broader operations
@@ -674,5 +693,6 @@ test.describe('Composition: Koi Fish Mid-Century Poster', () => {
     // FINAL SCREENSHOT
     // =====================================================================
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'koi-fish-final.png') });
+    await parityCheckpoint(page, 'koi-fish', 'final');
   });
 });
