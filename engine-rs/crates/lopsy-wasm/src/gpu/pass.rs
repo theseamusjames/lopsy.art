@@ -89,6 +89,24 @@ impl Blend {
     }
 }
 
+/// Byte layout of a readback through an 8-bit staging target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReadFormat {
+    /// The red channel only, one byte per texel.
+    R8,
+    /// Four bytes per texel.
+    Rgba8,
+}
+
+impl ReadFormat {
+    fn bytes_per_texel(self) -> u32 {
+        match self {
+            ReadFormat::R8 => 1,
+            ReadFormat::Rgba8 => 4,
+        }
+    }
+}
+
 /// Which texels of the target a pass may write.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Scissor {
@@ -141,6 +159,61 @@ impl<'a> GpuRef<'a> {
         self.gl.clear(GL::COLOR_BUFFER_BIT);
         self.fbos.unbind(self.gl);
         true
+    }
+
+    /// Upload `w * h` single-byte values as a temporary R8 texture and run
+    /// `program` over it into `dst`, with the bytes bound to `sampler` and
+    /// blending off. This is how one-byte-per-texel data reaches a pooled
+    /// texture without a CPU expansion to the pool's format.
+    pub fn draw_r8_bytes(
+        self,
+        program: &ShaderProgram,
+        sampler: &str,
+        bytes: &[u8],
+        w: u32,
+        h: u32,
+        dst: TextureHandle,
+    ) -> Result<(), String> {
+        let gl = self.gl;
+        let Some(dst_tex) = self.textures.get(dst) else {
+            return Err("Destination texture not found".into());
+        };
+        let staging = gl.create_texture().ok_or("Failed to create mask staging texture")?;
+        gl.bind_texture(GL::TEXTURE_2D, Some(&staging));
+        gl.tex_storage_2d(GL::TEXTURE_2D, 1, GL::R8, w as i32, h as i32);
+        gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_MIN_FILTER, GL::NEAREST as i32);
+        gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_MAG_FILTER, GL::NEAREST as i32);
+        gl.pixel_storei(GL::UNPACK_FLIP_Y_WEBGL, 0);
+        // Rows of 1-byte texels are not 4-byte aligned unless w is.
+        gl.pixel_storei(GL::UNPACK_ALIGNMENT, 1);
+        let uploaded = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
+            GL::TEXTURE_2D,
+            0, 0, 0,
+            w as i32, h as i32,
+            GL::RED,
+            GL::UNSIGNED_BYTE,
+            Some(bytes),
+        );
+        gl.pixel_storei(GL::UNPACK_ALIGNMENT, 4);
+        if uploaded.is_err() {
+            gl.delete_texture(Some(&staging));
+            return Err("Failed to upload mask bytes".into());
+        }
+
+        gl.disable(GL::BLEND);
+        self.fbos.attach_texture(gl, self.render_fbo, dst_tex);
+        self.fbos.bind(gl, self.render_fbo);
+        gl.viewport(0, 0, w as i32, h as i32);
+        gl.use_program(Some(&program.program));
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(&staging));
+        if let Some(loc) = program.location(gl, sampler) {
+            gl.uniform1i(Some(&loc), 0);
+        }
+        gl.draw_arrays(GL::TRIANGLES, 0, 3);
+        self.fbos.unbind(gl);
+        gl.delete_texture(Some(&staging));
+        Ok(())
     }
 
     /// Read back `w × h` texels of `texture` starting at `(x, y)` as RGBA8.
@@ -290,6 +363,74 @@ impl<'a> Pass<'a> {
     pub fn clear(mut self, color: [f32; 4]) -> Self {
         self.clear = Some(color);
         self
+    }
+
+    /// Draw the pass into a temporary `w`×`h` 8-bit target and read that
+    /// back. Reading an 8-bit target is fast on every driver, where reading
+    /// a float one is not, and an R8 target moves a quarter of the bytes.
+    /// Returns `None` if an input texture no longer exists, the staging
+    /// objects cannot be created or the read fails.
+    pub fn read_back(self, format: ReadFormat, w: u32, h: u32) -> Option<Vec<u8>> {
+        if self.has_missing_texture {
+            return None;
+        }
+        let gl = self.gpu.gl;
+
+        // Set the staging texture up on a unit the pass does not sample
+        // from, then unbind it: it must not sit on a sampler unit while it
+        // is the render target.
+        gl.active_texture(GL::TEXTURE0 + self.next_unit);
+        let staging = gl.create_texture()?;
+        gl.bind_texture(GL::TEXTURE_2D, Some(&staging));
+        let internal = match format {
+            ReadFormat::R8 => GL::R8,
+            ReadFormat::Rgba8 => GL::RGBA8,
+        };
+        gl.tex_storage_2d(GL::TEXTURE_2D, 1, internal, w as i32, h as i32);
+        gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_MIN_FILTER, GL::NEAREST as i32);
+        gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_MAG_FILTER, GL::NEAREST as i32);
+        gl.bind_texture(GL::TEXTURE_2D, None);
+        gl.active_texture(GL::TEXTURE0);
+
+        let Some(fbo) = gl.create_framebuffer() else {
+            gl.delete_texture(Some(&staging));
+            return None;
+        };
+        gl.bind_framebuffer(GL::FRAMEBUFFER, Some(&fbo));
+        gl.framebuffer_texture_2d(GL::FRAMEBUFFER, GL::COLOR_ATTACHMENT0, GL::TEXTURE_2D, Some(&staging), 0);
+        gl.viewport(0, 0, w as i32, h as i32);
+        match self.blend {
+            Blend::Inherit => {}
+            _ => gl.disable(GL::BLEND),
+        }
+
+        gl.draw_arrays(GL::TRIANGLES, 0, 3);
+
+        let mut pixels = vec![0u8; (w * h * format.bytes_per_texel()) as usize];
+        let is_read = match format {
+            ReadFormat::R8 => {
+                // With 1-byte texels and a width that is not a multiple of
+                // 4, the default PACK_ALIGNMENT of 4 expects padded rows and
+                // rejects the tightly sized buffer (#1057).
+                gl.pixel_storei(GL::PACK_ALIGNMENT, 1);
+                let result = gl.read_pixels_with_opt_u8_array(
+                    0, 0, w as i32, h as i32, GL::RED, GL::UNSIGNED_BYTE, Some(&mut pixels),
+                );
+                gl.pixel_storei(GL::PACK_ALIGNMENT, 4);
+                result.is_ok()
+            }
+            ReadFormat::Rgba8 => gl
+                .read_pixels_with_opt_u8_array(
+                    0, 0, w as i32, h as i32, GL::RGBA, GL::UNSIGNED_BYTE, Some(&mut pixels),
+                )
+                .is_ok(),
+        };
+
+        gl.bind_framebuffer(GL::FRAMEBUFFER, None);
+        gl.delete_framebuffer(Some(&fbo));
+        gl.delete_texture(Some(&staging));
+
+        is_read.then_some(pixels)
     }
 
     /// Run the pass. Returns `false`, having drawn nothing, if the target
