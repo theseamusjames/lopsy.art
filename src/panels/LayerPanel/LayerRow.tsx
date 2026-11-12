@@ -59,6 +59,10 @@ export interface LayerRowProps {
   onToggleEffectsDrawer: (layerId: string) => void;
 }
 
+const OPACITY_STEP_KEYS: ReadonlySet<string> = new Set([
+  'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End',
+]);
+
 export function LayerRow({
   layerId, depth, rowIndex,
   isActive, isSelected, isRootGroup, isDragging,
@@ -72,10 +76,14 @@ export function LayerRow({
 }: LayerRowProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
-  // Each pointer drag or key press on the opacity slider is one history step,
-  // pushed on its first change. Arrow/Page/Home/End keys change the value
-  // without a pointer-down, so they open a step too (#1317).
+  // Each pointer drag on the opacity slider is one history step, pushed on
+  // its first change. Arrow/Page/Home/End keys change the value without a
+  // pointer-down, so they open a step too (#1317) — but a run of them is one
+  // gesture: only the first key of a run opens a step, and the run ends on
+  // blur, a pointer-down or any other key such as Cmd+Z (#1635). Otherwise a
+  // long keyboard change floods the 50-entry undo stack.
   const isOpacityStepPendingRef = useRef(false);
+  const isOpacityKeyRunRef = useRef(false);
   const layer = useEditorStore((s) => s.document.layers.find((l) => l.id === layerId));
   if (!layer) return null;
 
@@ -249,8 +257,20 @@ export function LayerRow({
             max={100}
             value={Math.round(layer.opacity * 100)}
             aria-label={`${layer.name} opacity`}
-            onPointerDown={() => { isOpacityStepPendingRef.current = true; }}
-            onKeyDown={() => { isOpacityStepPendingRef.current = true; }}
+            onPointerDown={() => {
+              isOpacityKeyRunRef.current = false;
+              isOpacityStepPendingRef.current = true;
+            }}
+            onKeyDown={(e) => {
+              if (!OPACITY_STEP_KEYS.has(e.key) || e.metaKey || e.ctrlKey || e.altKey) {
+                isOpacityKeyRunRef.current = false;
+                return;
+              }
+              if (isOpacityKeyRunRef.current) return;
+              isOpacityKeyRunRef.current = true;
+              isOpacityStepPendingRef.current = true;
+            }}
+            onBlur={() => { isOpacityKeyRunRef.current = false; }}
             onChange={(e) => handleOpacityChange(Number(e.target.value) / 100)}
           />
         </div>

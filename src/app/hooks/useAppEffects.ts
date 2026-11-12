@@ -5,7 +5,6 @@ import { commitTextEditing } from '../../tools/text/text-interaction';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { markAllLayersDirty } from '../../engine-wasm/engine-sync';
 import { installPaintLinePreviewKeyListener } from '../interactions/paint-line-preview';
-import { useLocalFontsStore } from '../local-fonts-store';
 import { sizeCanvasToDisplay } from '../rendering/display-pixel-ratio';
 import { installTextSettingsLayerSync } from '../text-settings-layer-sync';
 import { installMaskModeSync } from '../mask-mode-sync';
@@ -54,15 +53,6 @@ export function useAppEffects({
 
   // #1150 — mask edit mode ends when the active layer loses its mask.
   useEffect(() => installMaskModeSync(), []);
-
-  // Enumerate the fonts installed on this machine once the editor is up — not
-  // at startup, so the New Document modal never triggers the permission
-  // prompt. Chromium-only; elsewhere the store just records "unsupported".
-  useEffect(() => {
-    if (!documentReady) return;
-    if (useLocalFontsStore.getState().status !== 'idle') return;
-    void useLocalFontsStore.getState().loadLocalFonts();
-  }, [documentReady]);
 
   // #666 — track shift/meta key changes so the paint-line preview updates
   // when the user presses/releases the modifier without moving the mouse.

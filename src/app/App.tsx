@@ -287,7 +287,7 @@ export function App() {
         <div className={styles.sidebarArea}>
           {showEffectsDrawer && (
             <div
-              className={`${styles.effectsDrawer} ${isActiveLayerGroup ? styles.effectsDrawerAdjustments : ''}`}
+              className={styles.effectsDrawer}
               data-testid="effects-drawer"
               style={{
                 '--drag-x': `${drawerOffset.x}px`,

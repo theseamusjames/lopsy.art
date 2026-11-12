@@ -1,7 +1,10 @@
 .drawer {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* Fill the drawer's min-height and shrink to its max-height, like the
+     Adjustments panel, so only the effect list and form scroll. */
+  flex: 1 1 auto;
+  min-height: 0;
   background: var(--color-bg-secondary);
   overflow: hidden;
 }

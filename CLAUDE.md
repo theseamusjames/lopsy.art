@@ -157,7 +157,8 @@ gpu/shaders/
   effects/
     glow.glsl             # Inner/outer glow (distance field based)
     shadow.glsl           # Drop shadow
-    stroke_edt.glsl       # Stroke effect (EDT outline)
+    separable_edt.glsl    # Stroke effect band (two-pass Euclidean distance)
+    stroke_apply.glsl     # Stroke effect ring from that band
     color_overlay.glsl    # Color overlay
   filters/
     adjustments.glsl      # Exposure, contrast, highlights, shadows, whites, blacks

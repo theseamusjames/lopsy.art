@@ -129,6 +129,65 @@ describe('local-fonts-store', () => {
     expect(useLocalFontsStore.getState().status).toBe('ready');
   });
 
+  describe('loadLocalFontsIfGranted (#1642)', () => {
+    const nav = globalThis as unknown as { navigator?: unknown };
+    let savedNavigator: PropertyDescriptor | undefined;
+
+    function stubPermission(state: PermissionState | 'throws'): void {
+      const query = vi.fn(async () => {
+        if (state === 'throws') throw new TypeError('unknown permission');
+        return { state };
+      });
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { permissions: { query } },
+        configurable: true,
+        writable: true,
+      });
+    }
+
+    beforeEach(() => {
+      savedNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    });
+
+    afterEach(() => {
+      if (savedNavigator) Object.defineProperty(globalThis, 'navigator', savedNavigator);
+      else delete nav.navigator;
+    });
+
+    it('queries installed fonts when access is already granted', async () => {
+      const query = vi.fn(async () => [face('Avenida Std', 'Regular')]);
+      stubWindow(query);
+      stubPermission('granted');
+      await useLocalFontsStore.getState().loadLocalFontsIfGranted();
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(useLocalFontsStore.getState().status).toBe('ready');
+    });
+
+    it.each(['prompt', 'denied', 'throws'] as const)('never queries (or prompts) when permission is %s', async (state) => {
+      const query = vi.fn(async () => [face('Avenida Std', 'Regular')]);
+      stubWindow(query);
+      stubPermission(state);
+      await useLocalFontsStore.getState().loadLocalFontsIfGranted();
+      expect(query).not.toHaveBeenCalled();
+      expect(useLocalFontsStore.getState().status).toBe('idle');
+    });
+
+    it('concurrent callers share one query and all see its result', async () => {
+      const query = vi.fn(async () => [face('Avenida Std', 'Regular')]);
+      stubWindow(query);
+      stubPermission('granted');
+      await Promise.all([
+        useLocalFontsStore.getState().loadLocalFontsIfGranted().then(() => {
+          expect(findFontEntry('Avenida Std')?.source).toBe('local');
+        }),
+        useLocalFontsStore.getState().loadLocalFontsIfGranted().then(() => {
+          expect(findFontEntry('Avenida Std')?.source).toBe('local');
+        }),
+      ]);
+      expect(query).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('findFontEntry prefers an installed family over the static catalog', async () => {
     expect(findFontEntry('Arial')?.source).toBe('system');
     expect(findFontEntry('Pacifico')?.source).toBe('google');

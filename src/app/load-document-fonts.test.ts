@@ -1,10 +1,17 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { collectTextLayerFonts, loadDocumentFonts } from './load-document-fonts';
 
+const localState = { isQueried: false };
+const loadLocalFontsIfGranted = vi.fn(async () => { localState.isQueried = true; });
+
 vi.mock('./local-fonts-store', () => ({
-  findFontEntry: (family: string) =>
-    family === 'Missing' ? undefined : { source: 'google', weights: [400], hasItalic: false },
-  loadLocalFontToEngine: () => Promise.resolve(false),
+  findFontEntry: (family: string) => {
+    if (family === 'Missing') return undefined;
+    if (family === 'Installed') return localState.isQueried ? { source: 'local', weights: [400], hasItalic: false } : undefined;
+    return { source: 'google', weights: [400], hasItalic: false };
+  },
+  loadLocalFontToEngine: (family: string) => Promise.resolve(family === 'Installed'),
+  useLocalFontsStore: { getState: () => ({ loadLocalFontsIfGranted }) },
 }));
 
 vi.mock('../utils/font-loader', async (importOriginal) => ({
@@ -52,5 +59,22 @@ describe('loadDocumentFonts', () => {
       (family) => loaded.push(family),
     );
     expect(loaded).toEqual(['Arvo']);
+  });
+
+  describe('installed fonts (#1642)', () => {
+    beforeEach(() => {
+      localState.isQueried = false;
+      loadLocalFontsIfGranted.mockClear();
+    });
+
+    it('enumerates installed fonts (without prompting) only for a family the catalog lacks', async () => {
+      const loaded: string[] = [];
+      await loadDocumentFonts([textLayer('a', 'Arvo, serif', 400)], (family) => loaded.push(family));
+      expect(loadLocalFontsIfGranted).not.toHaveBeenCalled();
+
+      await loadDocumentFonts([textLayer('b', 'Installed, serif', 400)], (family) => loaded.push(family));
+      expect(loadLocalFontsIfGranted).toHaveBeenCalledTimes(1);
+      expect(loaded).toEqual(['Arvo', 'Installed']);
+    });
   });
 });

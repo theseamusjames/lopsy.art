@@ -474,6 +474,7 @@ export function useCanvasInteraction(
 
       const ctx: InteractionContext = {
         canvasPos, layerPos: layerLocalPos,
+        pixelPos: pixelUnderPointer(e),
         shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
         clientX: e.clientX, clientY: e.clientY,
         activeLayerId: state.layerId,
@@ -610,7 +611,7 @@ export function useCanvasInteraction(
         };
       }
     },
-    [screenToCanvas, containerRef, cancelHoldTimer, handleToolDown],
+    [screenToCanvas, containerRef, cancelHoldTimer, handleToolDown, pixelUnderPointer],
   );
 
   const handleToolUp = useCallback((e: ToolEvent) => {
@@ -676,6 +677,7 @@ export function useCanvasInteraction(
 
     const ctx: InteractionContext = {
       canvasPos, layerPos: layerLocalPos,
+      pixelPos: rect ? pixelUnderPointer(e) : undefined,
       shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
       clientX: e.clientX, clientY: e.clientY,
       activeLayerId: state.layerId ?? '',
@@ -750,7 +752,7 @@ export function useCanvasInteraction(
     }
 
     stateRef.current = { ...INITIAL_INTERACTION_STATE };
-  }, [screenToCanvas, containerRef, cancelHoldTimer]);
+  }, [screenToCanvas, containerRef, cancelHoldTimer, pixelUnderPointer]);
 
   const clearPersistentTransform = useCallback(() => {
     persistentTransformRef.current = null;

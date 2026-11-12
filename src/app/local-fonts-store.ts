@@ -30,6 +30,31 @@ interface LocalFontsState {
    * in flight; safe to call again after a failure (re-prompts for permission).
    */
   loadLocalFonts: () => Promise<void>;
+  /**
+   * {@link loadLocalFonts}, but only when font access is already granted, so
+   * it never raises the permission prompt. Resolves once any query it starts
+   * has finished.
+   */
+  loadLocalFontsIfGranted: () => Promise<void>;
+}
+
+function hasLocalFontAccessApi(): boolean {
+  return typeof window !== 'undefined' && typeof window.queryLocalFonts === 'function';
+}
+
+/**
+ * Whether `local-fonts` permission is already granted. A browser without the
+ * Permissions API entry for it (or one that throws on the unknown name)
+ * counts as not granted, so the caller falls back to an explicit click.
+ */
+async function isLocalFontAccessGranted(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return false;
+  try {
+    const status = await navigator.permissions.query({ name: 'local-fonts' as PermissionName });
+    return status.state === 'granted';
+  } catch {
+    return false;
+  }
 }
 
 // The live FontData handles, kept outside the store: they are opaque browser
@@ -38,22 +63,24 @@ const facesByFamily = new Map<string, LocalFontData[]>();
 const inflightEngineLoads = new Map<string, Promise<boolean>>();
 const domLoadedFamilies = new Set<string>();
 const inflightDomLoads = new Map<string, Promise<boolean>>();
+let grantedLoad: Promise<void> | null = null;
 
 export const useLocalFontsStore = create<LocalFontsState>((set, get) => ({
-  status: 'idle',
+  status: hasLocalFontAccessApi() ? 'idle' : 'unsupported',
   entries: [],
   byFamily: new Map(),
   error: null,
 
   loadLocalFonts: async () => {
-    if (typeof window === 'undefined' || typeof window.queryLocalFonts !== 'function') {
+    const queryLocalFonts = typeof window === 'undefined' ? undefined : window.queryLocalFonts;
+    if (typeof queryLocalFonts !== 'function') {
       set({ status: 'unsupported' });
       return;
     }
     if (get().status === 'loading') return;
     set({ status: 'loading', error: null });
     try {
-      const faces = await window.queryLocalFonts();
+      const faces = await queryLocalFonts.call(window);
       facesByFamily.clear();
       for (const face of faces) {
         const family = face.family.trim();
@@ -72,6 +99,18 @@ export const useLocalFontsStore = create<LocalFontsState>((set, get) => ({
         document.addEventListener('visibilitychange', () => void get().loadLocalFonts(), { once: true });
       }
     }
+  },
+
+  loadLocalFontsIfGranted: () => {
+    if (get().status !== 'idle' || !hasLocalFontAccessApi()) return Promise.resolve();
+    // Shared so concurrent callers (one per text face of an opening project)
+    // all wait for the same query instead of returning before it lands.
+    grantedLoad ??= (async () => {
+      if (!(await isLocalFontAccessGranted())) return;
+      if (get().status !== 'idle') return;
+      await get().loadLocalFonts();
+    })().finally(() => { grantedLoad = null; });
+    return grantedLoad;
   },
 }));
 

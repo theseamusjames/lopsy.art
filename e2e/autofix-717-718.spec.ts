@@ -122,7 +122,15 @@ test.describe('#718 — effects drawer anchors to the top of the Layers panel', 
     if (!drawerRect) throw new Error('effects drawer missing');
 
     // The drawer's top should track the layers panel top within a small tolerance.
-    // Ancestor borders and rounding can introduce a 1-2px delta.
-    expect(Math.abs(drawerRect.y - layersRectBefore.y)).toBeLessThan(4);
+    // Ancestor borders and rounding can introduce a 1-2px delta. When half the
+    // window (the drawer's floor, #1639) does not fit below that anchor, the
+    // drawer rises just far enough for its bottom to meet the sidebar's.
+    const roomTop = await drawer.evaluate((el) => {
+      const area = (el.offsetParent as HTMLElement).getBoundingClientRect();
+      return area.bottom - window.innerHeight / 2 - 8;
+    });
+    const expectedTop = Math.max(0, Math.min(layersRectBefore.y, roomTop));
+    expect(Math.abs(drawerRect.y - expectedTop)).toBeLessThan(4);
+    expect(drawerRect.y).toBeGreaterThan(80);
   });
 });

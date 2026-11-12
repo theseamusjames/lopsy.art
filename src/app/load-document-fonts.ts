@@ -1,4 +1,4 @@
-import { findFontEntry, loadLocalFontToEngine } from './local-fonts-store';
+import { findFontEntry, loadLocalFontToEngine, useLocalFontsStore } from './local-fonts-store';
 import { extractFamilyName, loadFontBinaryToEngine, loadGoogleFont } from '../utils/font-loader';
 import type { Layer, TextLayer } from '../types/layers';
 
@@ -46,11 +46,17 @@ export function loadDocumentFonts(
   return Promise.all(loads).then(() => undefined);
 }
 
-function loadFace(face: DocumentFontFace): Promise<boolean> {
-  const entry = findFontEntry(face.family);
-  if (!entry) return Promise.resolve(false);
+async function loadFace(face: DocumentFontFace): Promise<boolean> {
+  let entry = findFontEntry(face.family);
+  if (!entry) {
+    // Not a catalog family, so possibly an installed one. Installed fonts are
+    // no longer enumerated at start-up (#1642); do it now, without a prompt.
+    await useLocalFontsStore.getState().loadLocalFontsIfGranted();
+    entry = findFontEntry(face.family);
+  }
+  if (!entry) return false;
   if (entry.source === 'local') return loadLocalFontToEngine(face.family);
-  if (entry.source !== 'google') return Promise.resolve(false);
+  if (entry.source !== 'google') return false;
   loadGoogleFont(face.family, entry.weights, entry.hasItalic).catch(() => {});
   const isItalic = face.isItalic && entry.hasItalic;
   return loadFontBinaryToEngine(face.family, nearestWeight(entry.weights, face.weight), isItalic);
