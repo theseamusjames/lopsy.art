@@ -86,14 +86,22 @@ test.describe('Group adjustments drawer size', () => {
     await expectPointerReachable(drawer.locator('[aria-label="Add Adjustment"]'));
   });
 
-  test('leaves the layer effects drawer at its content height', async ({ page }) => {
+  test('gives the layer effects drawer the same height as the group drawer (#1639)', async ({ page }) => {
     await page.locator('[aria-label="Add Layer"]').click();
     const layerId = (await getEditorState(page)).document.activeLayerId!;
     await page.locator(`[data-layer-id="${layerId}"]`).locator('button[aria-label*="effects"]').click();
     const drawer = page.getByTestId('effects-drawer');
     await expect(drawer).toBeVisible();
+    await page.screenshot({ path: 'e2e/screenshots/layer-effects-drawer-size-1639.png' });
 
-    const minHeight = await drawer.evaluate((el) => getComputedStyle(el).minHeight);
-    expect(minHeight).toBe('200px');
+    const box = (await drawer.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(VIEWPORT.height / 2);
+    expect(box.y + box.height).toBeLessThanOrEqual(VIEWPORT.height);
+
+    // The panel fills the drawer: Rasterize Layer Style stays pinned to the
+    // drawer's foot instead of leaving a gap below the effect list.
+    const rasterize = (await drawer.getByRole('button', { name: 'Rasterize Layer Style' }).boundingBox())!;
+    expect(box.y + box.height - (rasterize.y + rasterize.height)).toBeLessThan(24);
+    expect(await drawer.evaluate((el) => el.scrollTop)).toBe(0);
   });
 });
