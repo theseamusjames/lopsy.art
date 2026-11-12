@@ -302,6 +302,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     }
     useUIStore.getState().clearGuides();
     useUIStore.getState().clearPath();
+    useUIStore.getState().setShowEffectsDrawer(false);
 
     // Match convertColorMode: the swatches must sit in the new document's
     // value space, or a fresh Grayscale doc opens showing a saturated color.
@@ -329,6 +330,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     }
     useUIStore.getState().clearGuides();
     useUIStore.getState().clearPath();
+    useUIStore.getState().setShowEffectsDrawer(false);
   },
 
   addLayer: () => {

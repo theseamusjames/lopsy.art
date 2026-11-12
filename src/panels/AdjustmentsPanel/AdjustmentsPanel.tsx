@@ -155,7 +155,7 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
           <span className={styles.headerTitle}>{group.name}</span>
           <IconButton
             icon={<X size={14} />}
-            label="Close"
+            label="Close effects"
             onClick={() => setShowEffectsDrawer(false)}
           />
         </div>
