@@ -11,7 +11,7 @@ Status: in progress. `scripts/check-gl-debt.mjs` holds the live counts.
 
 | Phase | State |
 |---|---|
-| 0 | Done, in review: CI guards (#1643), verification tooling (#1644). Spikes S1 and S2 run; S3 not run |
+| 0 | Done, in review: CI guards (#1643), verification tooling (#1644). Spikes S1 and S2 are under way; S3 not run |
 | 1 | In progress: 766 of 2,481 raw GL references removed across #1645, #1646, #1648, #1649 and #1650. Filters, layers and the compositor remain |
 | 2–7 | Not started |
 
