@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { waitForStore } from './helpers';
+import { getWebGLRenderer, isSoftwareRenderer, waitForStore } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -27,14 +27,31 @@ function spiralPath(
   return points;
 }
 
+// Replaces the chromium project's SwiftShader launch args for this file.
+// ANGLE with no backend named picks the platform's own GPU backend (Metal on
+// macOS); `--use-gl=angle` has to stay, because without it the headless shell
+// creates no WebGL context at all.
+test.use({
+  launchOptions: {
+    args: ['--use-gl=angle', '--enable-webgl', '--ignore-gpu-blocklist'],
+  },
+});
+
 test.describe('Brush performance', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
   });
 
-  test.skip('sustained fast spiral painting on 4K canvas', async ({ page }) => {
+  test('sustained fast spiral painting on 4K canvas', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP profiler requires Chromium');
     test.setTimeout(300_000);
+
+    // Move-to-move latency on a CPU rasterizer says nothing about the brush
+    // on real hardware, so skip rather than report its numbers.
+    const renderer = await getWebGLRenderer(page);
+    test.skip(renderer === null, 'no GPU available: the browser could not create a WebGL2 context');
+    test.skip(isSoftwareRenderer(renderer ?? ''), `no GPU available: software renderer (${renderer})`);
 
     // Create a large canvas (4K equivalent)
     await page.evaluate(() => {
@@ -180,6 +197,7 @@ test.describe('Brush performance', () => {
     // Write report
     let report = `Brush Performance — 4K Sustained Spiral (${totalElapsed}ms)\n`;
     report += `=======================================================\n\n`;
+    report += `Renderer: ${renderer}\n`;
     report += `Total profile time: ${(totalSampleTime / 1000).toFixed(1)}ms\n`;
     report += `Sample count: ${samples.length}\n`;
     report += `Move events: ${moveTimestamps.length}\n\n`;
@@ -235,10 +253,8 @@ test.describe('Brush performance', () => {
     console.log(`Hitch rate (>50ms): ${(hitchCount / moveDeltas.length * 100).toFixed(1)}%`);
     console.log(`Hitch rate (>100ms): ${(perceptibleHitchPct * 100).toFixed(1)}%`);
 
-    // On real GPU hardware, no more than 5% of moves should have hitches.
-    // SwiftShader (used in CI/headless) is much slower, so we only verify
-    // the test completes without crashes and the report is generated.
-    // expect(perceptibleHitchPct).toBeLessThan(0.05);
+    // The latency numbers are reported, not asserted: they depend on the
+    // machine and on what else it is running.
     expect(moveDeltas.length).toBeGreaterThan(0);
   });
 });
