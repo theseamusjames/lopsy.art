@@ -435,9 +435,8 @@ pub fn read_channel_thumbnail(
         None => return Vec::new(),
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return Vec::new(),
-    };
-    crate::thumbnail_gpu::read_box_thumbnail(engine, &layer_tex, w, h, max_size, channel.min(3) as i32)
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return Vec::new();
+    }
+    crate::thumbnail_gpu::read_box_thumbnail(engine, tex_handle, w, h, max_size, channel.min(3) as i32)
 }

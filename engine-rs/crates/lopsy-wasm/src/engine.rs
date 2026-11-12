@@ -6,7 +6,7 @@ use lopsy_core::layer::LayerDesc;
 
 use crate::gpu::context::GpuContext;
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
-use crate::gpu::pass::{GpuRef, Pass};
+use crate::gpu::pass::{Blend, GpuRef, Pass, ReadFormat};
 use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
 
@@ -922,11 +922,11 @@ impl EngineInner {
         };
 
         let dst = self.texture_pool.acquire(&self.gl, w, h)?;
-        let Some(dst_tex) = self.texture_pool.get(dst).cloned() else {
+        if self.texture_pool.get(dst).is_none() {
             self.texture_pool.release(dst);
             return Err("Mask texture not found".into());
-        };
-        if let Err(e) = self.expand_mask_bytes_into(&dst_tex, bytes, w, h) {
+        }
+        if let Err(e) = self.expand_mask_bytes_into(dst, bytes, w, h) {
             self.texture_pool.release(dst);
             return Err(e);
         }
@@ -939,7 +939,7 @@ impl EngineInner {
     /// every upload, so it cannot go through `upload_mask_texture` (#1481).
     pub fn expand_mask_bytes_into(
         &self,
-        dst_tex: &web_sys::WebGlTexture,
+        dst: TextureHandle,
         bytes: &[u8],
         w: u32,
         h: u32,
@@ -947,43 +947,7 @@ impl EngineInner {
         if bytes.len() != (w * h) as usize {
             return Err("Mask byte count does not match its size".into());
         }
-        let gl = &self.gl;
-        let staging = gl.create_texture().ok_or("Failed to create mask staging texture")?;
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
-        gl.tex_storage_2d(WebGl2RenderingContext::TEXTURE_2D, 1, WebGl2RenderingContext::R8, w as i32, h as i32);
-        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::NEAREST as i32);
-        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::NEAREST as i32);
-        gl.pixel_storei(WebGl2RenderingContext::UNPACK_FLIP_Y_WEBGL, 0);
-        // Rows of 1-byte texels are not 4-byte aligned unless w is.
-        gl.pixel_storei(WebGl2RenderingContext::UNPACK_ALIGNMENT, 1);
-        let uploaded = gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-            WebGl2RenderingContext::TEXTURE_2D,
-            0, 0, 0,
-            w as i32, h as i32,
-            WebGl2RenderingContext::RED,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            Some(bytes),
-        );
-        gl.pixel_storei(WebGl2RenderingContext::UNPACK_ALIGNMENT, 4);
-        if uploaded.is_err() {
-            gl.delete_texture(Some(&staging));
-            return Err("Failed to upload mask bytes".into());
-        }
-
-        gl.disable(WebGl2RenderingContext::BLEND);
-        self.render_to_texture(dst_tex, w as i32, h as i32, |engine| {
-            let gl = &engine.gl;
-            let shader = &engine.shaders.mask_expand;
-            gl.use_program(Some(&shader.program));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
-            if let Some(loc) = shader.location(gl, "u_tex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
-            engine.draw_fullscreen_quad();
-        });
-        self.gl.delete_texture(Some(&staging));
-        Ok(())
+        self.gpu().draw_r8_bytes(&self.shaders.mask_expand, "u_tex", bytes, w, h, dst)
     }
 
     /// Read a texture's red channel back as a single-byte-per-pixel
@@ -995,61 +959,13 @@ impl EngineInner {
     /// path stalled ~26 s per mask stroke on a 4K document (staging
     /// alloc + 64 MB transfer + a 16 M-iteration cache-hostile CPU
     /// loop). R8 removes all three parts of that cost.
-    pub fn read_texture_r8(&self, src_tex: &web_sys::WebGlTexture, w: u32, h: u32) -> Option<Vec<u8>> {
-        let gl = &self.gl;
-
-        let staging = gl.create_texture()?;
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
-        gl.tex_storage_2d(WebGl2RenderingContext::TEXTURE_2D, 1, WebGl2RenderingContext::R8, w as i32, h as i32);
-        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::NEAREST as i32);
-        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::NEAREST as i32);
-
-        let Some(fbo) = gl.create_framebuffer() else {
-            gl.delete_texture(Some(&staging));
-            return None;
-        };
-        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-        gl.framebuffer_texture_2d(
-            WebGl2RenderingContext::FRAMEBUFFER,
-            WebGl2RenderingContext::COLOR_ATTACHMENT0,
-            WebGl2RenderingContext::TEXTURE_2D,
-            Some(&staging),
-            0,
-        );
-        gl.viewport(0, 0, w as i32, h as i32);
-        gl.disable(WebGl2RenderingContext::BLEND);
-
-        // The blit shader writes vec4(color); the R8 attachment only
-        // keeps the R channel — GB and A are dropped by the FBO.
-        let shader = &self.shaders.blit;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src_tex));
-        if let Some(loc) = shader.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        self.draw_fullscreen_quad();
-
-        // ES 3.0 / WebGL 2 spec: for an R8 color attachment, readPixels
-        // with RED + UNSIGNED_BYTE is guaranteed to succeed.
-        // PACK_ALIGNMENT defaults to 4; with 1-byte pixels and a width that
-        // isn't a multiple of 4, WebGL expects padded rows and rejects the
-        // tightly sized buffer (#1057).
-        let mut pixels = vec![0u8; (w * h) as usize];
-        gl.pixel_storei(WebGl2RenderingContext::PACK_ALIGNMENT, 1);
-        let read_ok = gl.read_pixels_with_opt_u8_array(
-            0, 0, w as i32, h as i32,
-            WebGl2RenderingContext::RED,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            Some(&mut pixels),
-        ).is_ok();
-        gl.pixel_storei(WebGl2RenderingContext::PACK_ALIGNMENT, 4);
-
-        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-        gl.delete_framebuffer(Some(&fbo));
-        gl.delete_texture(Some(&staging));
-
-        if read_ok { Some(pixels) } else { None }
+    pub fn read_texture_r8(&self, src: TextureHandle, w: u32, h: u32) -> Option<Vec<u8>> {
+        // The blit shader writes vec4(color); the R8 target only keeps the
+        // R channel.
+        self.pass(&self.shaders.blit)
+            .texture("u_tex", src)
+            .blend(Blend::Off)
+            .read_back(ReadFormat::R8, w, h)
     }
 
     /// Read a texture back as 8-bit RGBA by first blitting it into a
@@ -1057,52 +973,11 @@ impl EngineInner {
     /// attachment is the driver's slow path (an 8.4s stall for a 2MP mask
     /// on software GL); one GPU blit plus an UNSIGNED_BYTE read is fast on
     /// every backend. Use for data that is conceptually 8-bit (masks).
-    pub fn read_texture_rgba8(&self, src_tex: &web_sys::WebGlTexture, w: u32, h: u32) -> Option<Vec<u8>> {
-        let gl = &self.gl;
-
-        let staging = gl.create_texture()?;
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&staging));
-        gl.tex_storage_2d(WebGl2RenderingContext::TEXTURE_2D, 1, WebGl2RenderingContext::RGBA8, w as i32, h as i32);
-        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MIN_FILTER, WebGl2RenderingContext::NEAREST as i32);
-        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_MAG_FILTER, WebGl2RenderingContext::NEAREST as i32);
-
-        let Some(fbo) = gl.create_framebuffer() else {
-            gl.delete_texture(Some(&staging));
-            return None;
-        };
-        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&fbo));
-        gl.framebuffer_texture_2d(
-            WebGl2RenderingContext::FRAMEBUFFER,
-            WebGl2RenderingContext::COLOR_ATTACHMENT0,
-            WebGl2RenderingContext::TEXTURE_2D,
-            Some(&staging),
-            0,
-        );
-        gl.viewport(0, 0, w as i32, h as i32);
-        gl.disable(WebGl2RenderingContext::BLEND);
-
-        let shader = &self.shaders.blit;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src_tex));
-        if let Some(loc) = shader.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        self.draw_fullscreen_quad();
-
-        let mut pixels = vec![0u8; (w * h * 4) as usize];
-        let read_ok = gl.read_pixels_with_opt_u8_array(
-            0, 0, w as i32, h as i32,
-            WebGl2RenderingContext::RGBA,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            Some(&mut pixels),
-        ).is_ok();
-
-        gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
-        gl.delete_framebuffer(Some(&fbo));
-        gl.delete_texture(Some(&staging));
-
-        if read_ok { Some(pixels) } else { None }
+    pub fn read_texture_rgba8(&self, src: TextureHandle, w: u32, h: u32) -> Option<Vec<u8>> {
+        self.pass(&self.shaders.blit)
+            .texture("u_tex", src)
+            .blend(Blend::Off)
+            .read_back(ReadFormat::Rgba8, w, h)
     }
 }
 

@@ -841,12 +841,11 @@ pub fn read_layer_thumbnail(engine: &Engine, layer_id: &str, max_size: u32) -> V
         Some(&t) => t,
         None => return Vec::new(),
     };
-    let src_tex = match engine.inner.texture_pool.get(tex_handle).cloned() {
-        Some(t) => t,
-        None => return Vec::new(),
-    };
+    if engine.inner.texture_pool.get(tex_handle).is_none() {
+        return Vec::new();
+    }
     let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
-    thumbnail_gpu::read_box_thumbnail(&engine.inner, &src_tex, w, h, max_size, thumbnail_gpu::COLOUR)
+    thumbnail_gpu::read_box_thumbnail(&engine.inner, tex_handle, w, h, max_size, thumbnail_gpu::COLOUR)
 }
 
 /// Read the composited document (all layers flattened) as a thumbnail.
@@ -861,12 +860,12 @@ pub fn read_layer_thumbnail(engine: &Engine, layer_id: &str, max_size: u32) -> V
 /// Returns 8-byte header [width_u32_le, height_u32_le] + RGBA pixels.
 #[wasm_bindgen(js_name = "readCompositeThumbnail")]
 pub fn read_composite_thumbnail(engine: &Engine, max_size: u32) -> Vec<u8> {
-    let src_tex = match engine.inner.texture_pool.get(engine.inner.composite_texture).cloned() {
-        Some(t) => t,
-        None => return Vec::new(),
-    };
+    let composite = engine.inner.composite_texture;
+    if engine.inner.texture_pool.get(composite).is_none() {
+        return Vec::new();
+    }
     let (w, h) = (engine.inner.doc_width, engine.inner.doc_height);
-    thumbnail_gpu::read_box_thumbnail(&engine.inner, &src_tex, w, h, max_size, thumbnail_gpu::COLOUR)
+    thumbnail_gpu::read_box_thumbnail(&engine.inner, composite, w, h, max_size, thumbnail_gpu::COLOUR)
 }
 
 // ============================================================

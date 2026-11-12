@@ -315,11 +315,11 @@ pub fn render_mask_radial_gradient(
 pub fn read_mask_texture(engine: &mut EngineInner, layer_id: &str) -> Option<Vec<u8>> {
     let &handle = engine.layer_masks.get(layer_id)?;
     let (w, h) = engine.texture_pool.get_size(handle)?;
-    let tex = engine.texture_pool.get(handle)?.clone();
+    engine.texture_pool.get(handle)?;
 
     // R8 staging: 1 byte per pixel back over the bridge instead of 4,
     // and no CPU-side strided extract. See #745 — the RGBA path stalled
     // ~26 s per stroke on a 4K mask (60× worse than linear per pixel,
     // driven by the 16 M-iteration cache-hostile CPU loop).
-    engine.read_texture_r8(&tex, w, h)
+    engine.read_texture_r8(handle, w, h)
 }

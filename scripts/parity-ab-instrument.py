@@ -19,6 +19,10 @@ Math.random in the page with a fixed sequence. Filters that take a random
 seed (Add Noise, Clouds, Smoke, Fibers), spray and brush scatter then
 repeat exactly, so they can be compared too.
 
+Set PARITY_READS=1 to also record what the engine hands back to the app
+rather than draws: the composite, layer and channel thumbnails and the
+selection and quick-mask readbacks.
+
 The edits are not meant to be committed. Revert with: git checkout -- e2e
 """
 import re, sys
@@ -59,6 +63,39 @@ async function __pc(page: import('@playwright/test').Page, tag = 'shot'): Promis
     __wf(`${{dir}}/${{id}}-canvas.json`, JSON.stringify({{ width: canvas.width, height: canvas.height, layers: [] }}));
   }}
   await __parity(page, '{name}', id).catch(() => undefined);
+  if (process.env.PARITY_READS) {{
+    const reads = await page.evaluate(async () => {{
+      const w = window as unknown as {{
+        __editorStore: {{ getState: () => {{ document: {{ layerOrder: string[]; layers: Array<{{ id: string; name: string }}> }} }} }};
+        __engineState: {{ getEngine: () => unknown }};
+        __wasmBridge: Record<string, (...args: unknown[]) => Uint8Array>;
+      }};
+      const sha = async (bytes: Uint8Array): Promise<string> => {{
+        const d = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource));
+        return Array.from(d, (b) => b.toString(16).padStart(2, '0')).join('');
+      }};
+      const engine = w.__engineState.getEngine();
+      const br = w.__wasmBridge;
+      const doc = w.__editorStore.getState().document;
+      const out: Array<{{ name: string; sha256: string }}> = [];
+      out.push({{ name: 'composite-thumbnail', sha256: await sha(br.readCompositeThumbnail(engine, 256)) }});
+      out.push({{ name: 'selection-mask', sha256: await sha(br.readSelectionMask(engine)) }});
+      out.push({{ name: 'quick-mask', sha256: await sha(br.readQuickMaskPixels(engine)) }});
+      for (const [i, id] of doc.layerOrder.entries()) {{
+        out.push({{ name: `layer-thumbnail:${{i}}`, sha256: await sha(br.readLayerThumbnail(engine, id, 64)) }});
+        for (let c = 0; c < 4; c++) {{
+          out.push({{ name: `channel-thumbnail:${{i}}:${{c}}`, sha256: await sha(br.readChannelThumbnail(engine, id, c, 64)) }});
+        }}
+      }}
+      return out;
+    }}).catch(() => null);
+    if (reads) {{
+      const dir = `${{out}}/{name}`;
+      __mk(dir, {{ recursive: true }});
+      __wf(`${{dir}}/${{id}}-reads.rgba`, Buffer.alloc(0));
+      __wf(`${{dir}}/${{id}}-reads.json`, JSON.stringify({{ width: 0, height: 0, layers: reads.map((r) => ({{ ...r, type: 'read', x: 0, y: 0, width: 0, height: 0 }})) }}));
+    }}
+  }}
 }}
 __pwTest.afterEach(async ({{ page }}) => {{ await __pc(page, 'end'); }});
 __pwTest.beforeEach(async ({{ page }}) => {{
