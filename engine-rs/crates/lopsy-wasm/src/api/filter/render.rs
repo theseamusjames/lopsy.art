@@ -1,7 +1,6 @@
 //! Render filters: pattern fill, color LUT (texture-based filters), sunburst.
 
 use wasm_bindgen::prelude::*;
-use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
 use crate::filter_gpu;
@@ -26,16 +25,14 @@ pub fn filter_pattern_fill(
         return;
     }
 
-    let gl = &engine.inner.gl;
-
-    let pattern_handle = match engine.inner.texture_pool.acquire(gl, pattern_width, pattern_height) {
+    let pattern_handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, pattern_width, pattern_height) {
         Ok(h) => h,
         Err(_) => return,
     };
     let _ = engine.inner.texture_pool.upload_rgba(
-        gl, pattern_handle, 0, 0, pattern_width, pattern_height, pattern_data,
+        &engine.inner.gl, pattern_handle, 0, 0, pattern_width, pattern_height, pattern_data,
     );
-    let pattern_tex = engine.inner.texture_pool.get(pattern_handle).cloned();
+    let is_pattern_live = engine.inner.texture_pool.get(pattern_handle).is_some();
 
     // #848: expand the layer's texture to the doc union before reading its
     // size. A never-painted layer's texture is still the lazy 1x1
@@ -63,29 +60,18 @@ pub fn filter_pattern_fill(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.pattern_fill,
-        |gl, shader| {
-            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-            if let Some(t) = &pattern_tex {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-            }
-            if let Some(loc) = shader.location(gl, "u_pattern") {
-                gl.uniform1i(Some(&loc), 1);
-            }
-            if let Some(loc) = shader.location(gl, "u_layerSize") {
-                gl.uniform2f(Some(&loc), lw, lh);
-            }
-            if let Some(loc) = shader.location(gl, "u_patternSize") {
-                gl.uniform2f(Some(&loc), pw, ph);
-            }
-            if let Some(loc) = shader.location(gl, "u_scale") {
-                gl.uniform1f(Some(&loc), scale);
-            }
-            if let Some(loc) = shader.location(gl, "u_stagger") {
-                gl.uniform2f(Some(&loc), stagger_x, stagger_y);
-            }
-            if let Some(loc) = shader.location(gl, "u_origin") {
-                gl.uniform2f(Some(&loc), origin_x, origin_y);
-            }
+        |pass| {
+            let pass = if is_pattern_live {
+                pass.texture("u_pattern", pattern_handle)
+            } else {
+                pass.i32("u_pattern", 1)
+            };
+            pass
+                .vec2("u_layerSize", lw, lh)
+                .vec2("u_patternSize", pw, ph)
+                .f32("u_scale", scale)
+                .vec2("u_stagger", stagger_x, stagger_y)
+                .vec2("u_origin", origin_x, origin_y)
         },
     );
 
@@ -107,16 +93,18 @@ pub fn filter_color_lut(
     let strip_w = lut_size * lut_size;
     let strip_h = lut_size;
 
-    let gl = &engine.inner.gl;
-
-    let lut_handle = match engine.inner.texture_pool.acquire(gl, strip_w, strip_h) {
+    let lut_handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, strip_w, strip_h) {
         Ok(h) => h,
         Err(_) => return,
     };
     let _ = engine.inner.texture_pool.upload_rgba(
-        gl, lut_handle, 0, 0, strip_w, strip_h, lut_data,
+        &engine.inner.gl, lut_handle, 0, 0, strip_w, strip_h, lut_data,
     );
-    let lut_tex = engine.inner.texture_pool.get(lut_handle).cloned();
+    let is_lut_live = engine.inner.texture_pool.get(lut_handle).is_some();
+    // The LUT is sampled with interpolation between its texels and must
+    // not wrap across the strip's slices.
+    engine.inner.texture_pool.set_linear_filter(&engine.inner.gl, lut_handle);
+    engine.inner.texture_pool.set_clamp_wrap(&engine.inner.gl, lut_handle);
 
     let size_f = lut_size as f32;
     let intensity = intensity.clamp(0.0, 1.0);
@@ -125,41 +113,15 @@ pub fn filter_color_lut(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.color_lut,
-        |gl, shader| {
-            gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-            if let Some(t) = &lut_tex {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-                gl.tex_parameteri(
-                    WebGl2RenderingContext::TEXTURE_2D,
-                    WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-                    WebGl2RenderingContext::LINEAR as i32,
-                );
-                gl.tex_parameteri(
-                    WebGl2RenderingContext::TEXTURE_2D,
-                    WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-                    WebGl2RenderingContext::LINEAR as i32,
-                );
-                gl.tex_parameteri(
-                    WebGl2RenderingContext::TEXTURE_2D,
-                    WebGl2RenderingContext::TEXTURE_WRAP_S,
-                    WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-                );
-                gl.tex_parameteri(
-                    WebGl2RenderingContext::TEXTURE_2D,
-                    WebGl2RenderingContext::TEXTURE_WRAP_T,
-                    WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-                );
-            }
-            if let Some(loc) = shader.location(gl, "u_lut") {
-                gl.uniform1i(Some(&loc), 1);
-            }
-            if let Some(loc) = shader.location(gl, "u_lutSize") {
-                gl.uniform1f(Some(&loc), size_f);
-            }
-            if let Some(loc) = shader.location(gl, "u_intensity") {
-                gl.uniform1f(Some(&loc), intensity);
-            }
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
+        |pass| {
+            let pass = if is_lut_live {
+                pass.texture("u_lut", lut_handle)
+            } else {
+                pass.i32("u_lut", 1)
+            };
+            pass
+                .f32("u_lutSize", size_f)
+                .f32("u_intensity", intensity)
         },
     );
 
@@ -268,37 +230,23 @@ pub fn filter_sunburst(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.sunburst,
-        |gl, shader| {
-            let set1f = |name: &str, v: f32| {
-                if let Some(loc) = shader.location(gl, name) {
-                    gl.uniform1f(Some(&loc), v);
-                }
-            };
-            set1f("u_reach", reach);
-            set1f("u_rays", rays.max(3) as f32);
-            set1f("u_rotation", rotation_degrees.to_radians());
-            set1f("u_length", length.max(0.0));
-            set1f("u_width", width.clamp(0.0, 1.0));
-            set1f("u_taper", taper.clamp(0.0, 1.0));
-            set1f("u_fade", fade.clamp(0.0, 1.0));
-            set1f("u_softness", softness.clamp(0.0, 1.0));
-            set1f("u_jitter", jitter.clamp(0.0, 1.0));
-            set1f("u_seed", seed);
-            if let Some(loc) = shader.location(gl, "u_size") {
-                gl.uniform2f(Some(&loc), w as f32, h as f32);
-            }
-            if let Some(loc) = shader.location(gl, "u_center") {
-                gl.uniform2f(Some(&loc), cx, cy);
-            }
-            if let Some(loc) = shader.location(gl, "u_rayColor") {
-                gl.uniform4f(Some(&loc), ray_r, ray_g, ray_b, ray_a.clamp(0.0, 1.0));
-            }
-            if let Some(loc) = shader.location(gl, "u_fillGaps") {
-                gl.uniform1i(Some(&loc), if fill_gaps { 1 } else { 0 });
-            }
-            if let Some(loc) = shader.location(gl, "u_gapColor") {
-                gl.uniform3f(Some(&loc), gap_r, gap_g, gap_b);
-            }
+        |pass| {
+            pass
+                .f32("u_reach", reach)
+                .f32("u_rays", rays.max(3) as f32)
+                .f32("u_rotation", rotation_degrees.to_radians())
+                .f32("u_length", length.max(0.0))
+                .f32("u_width", width.clamp(0.0, 1.0))
+                .f32("u_taper", taper.clamp(0.0, 1.0))
+                .f32("u_fade", fade.clamp(0.0, 1.0))
+                .f32("u_softness", softness.clamp(0.0, 1.0))
+                .f32("u_jitter", jitter.clamp(0.0, 1.0))
+                .f32("u_seed", seed)
+                .vec2("u_size", w as f32, h as f32)
+                .vec2("u_center", cx, cy)
+                .vec4("u_rayColor", ray_r, ray_g, ray_b, ray_a.clamp(0.0, 1.0))
+                .i32("u_fillGaps", if fill_gaps { 1 } else { 0 })
+                .vec3("u_gapColor", gap_r, gap_g, gap_b)
         },
     );
 }

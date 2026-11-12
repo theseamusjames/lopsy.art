@@ -2,11 +2,12 @@
 //! aberration, pixel stretch, find edges, cel shading, bloom.
 
 use wasm_bindgen::prelude::*;
-use web_sys::WebGl2RenderingContext;
 
 use super::full_size_doc_center;
 use crate::Engine;
 use crate::filter_gpu;
+use crate::gpu::pass::Target;
+use crate::gpu::texture_pool::TextureHandle;
 
 #[wasm_bindgen(js_name = "filterPixelate")]
 pub fn filter_pixelate(engine: &mut Engine, layer_id: &str, block_size: u32) {
@@ -26,19 +27,12 @@ pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, densi
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.halftone,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_dotSize") {
-                gl.uniform1f(Some(&loc), dot_size);
-            }
-            if let Some(loc) = shader.location(gl, "u_density") {
-                gl.uniform1f(Some(&loc), density);
-            }
-            if let Some(loc) = shader.location(gl, "u_angle") {
-                gl.uniform1f(Some(&loc), angle);
-            }
-            if let Some(loc) = shader.location(gl, "u_contrast") {
-                gl.uniform1f(Some(&loc), contrast);
-            }
+        |pass| {
+            pass
+                .f32("u_dotSize", dot_size)
+                .f32("u_density", density)
+                .f32("u_angle", angle)
+                .f32("u_contrast", contrast)
         },
     );
 }
@@ -57,19 +51,12 @@ pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, r
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.kaleidoscope,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_segments") {
-                gl.uniform1f(Some(&loc), segments.max(2) as f32);
-            }
-            if let Some(loc) = shader.location(gl, "u_rotation") {
-                gl.uniform1f(Some(&loc), rotation_degrees.to_radians());
-            }
-            if let Some(loc) = shader.location(gl, "u_size") {
-                gl.uniform2f(Some(&loc), w as f32, h as f32);
-            }
-            if let Some(loc) = shader.location(gl, "u_center") {
-                gl.uniform2f(Some(&loc), cu, cv);
-            }
+        |pass| {
+            pass
+                .f32("u_segments", segments.max(2) as f32)
+                .f32("u_rotation", rotation_degrees.to_radians())
+                .vec2("u_size", w as f32, h as f32)
+                .vec2("u_center", cu, cv)
         },
     );
 }
@@ -82,13 +69,10 @@ pub fn filter_oil_paint(engine: &mut Engine, layer_id: &str, radius: f32, sharpn
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.oil_paint,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_radius") {
-                gl.uniform1f(Some(&loc), radius);
-            }
-            if let Some(loc) = shader.location(gl, "u_sharpness") {
-                gl.uniform1f(Some(&loc), sharpness);
-            }
+        |pass| {
+            pass
+                .f32("u_radius", radius)
+                .f32("u_sharpness", sharpness)
         },
     );
 }
@@ -100,13 +84,10 @@ pub fn filter_chromatic_aberration(engine: &mut Engine, layer_id: &str, amount: 
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.chromatic_aberration,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_amount") {
-                gl.uniform1f(Some(&loc), amount);
-            }
-            if let Some(loc) = shader.location(gl, "u_angle") {
-                gl.uniform1f(Some(&loc), angle_degrees.to_radians());
-            }
+        |pass| {
+            pass
+                .f32("u_amount", amount)
+                .f32("u_angle", angle_degrees.to_radians())
         },
     );
 }
@@ -127,19 +108,12 @@ pub fn filter_pixel_stretch(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.pixel_stretch,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_amount") {
-                gl.uniform1f(Some(&loc), amount);
-            }
-            if let Some(loc) = shader.location(gl, "u_bands") {
-                gl.uniform1f(Some(&loc), bands);
-            }
-            if let Some(loc) = shader.location(gl, "u_seed") {
-                gl.uniform1f(Some(&loc), seed);
-            }
-            if let Some(loc) = shader.location(gl, "u_rgbSplit") {
-                gl.uniform1f(Some(&loc), rgb_split);
-            }
+        |pass| {
+            pass
+                .f32("u_amount", amount)
+                .f32("u_bands", bands)
+                .f32("u_seed", seed)
+                .f32("u_rgbSplit", rgb_split)
         },
     );
 }
@@ -163,22 +137,13 @@ pub fn filter_lens_distortion(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.lens_distortion,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_strength") {
-                gl.uniform1f(Some(&loc), strength);
-            }
-            if let Some(loc) = shader.location(gl, "u_zoom") {
-                gl.uniform1f(Some(&loc), zoom);
-            }
-            if let Some(loc) = shader.location(gl, "u_fringing") {
-                gl.uniform1f(Some(&loc), fringing);
-            }
-            if let Some(loc) = shader.location(gl, "u_center") {
-                gl.uniform2f(Some(&loc), cu, cv);
-            }
-            if let Some(loc) = shader.location(gl, "u_radiusScale") {
-                gl.uniform1f(Some(&loc), doc_long_side);
-            }
+        |pass| {
+            pass
+                .f32("u_strength", strength)
+                .f32("u_zoom", zoom)
+                .f32("u_fringing", fringing)
+                .vec2("u_center", cu, cv)
+                .f32("u_radiusScale", doc_long_side)
         },
     );
 }
@@ -189,7 +154,7 @@ pub fn filter_find_edges(engine: &mut Engine, layer_id: &str) {
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.find_edges,
-        |_gl, _shader| {},
+        |pass| pass,
     );
 }
 
@@ -199,13 +164,10 @@ pub fn filter_cel_shading(engine: &mut Engine, layer_id: &str, levels: u32, edge
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.cel_shading,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_levels") {
-                gl.uniform1i(Some(&loc), levels as i32);
-            }
-            if let Some(loc) = shader.location(gl, "u_edgeStrength") {
-                gl.uniform1f(Some(&loc), edge_strength);
-            }
+        |pass| {
+            pass
+                .i32("u_levels", levels as i32)
+                .f32("u_edgeStrength", edge_strength)
         },
     );
 }
@@ -218,16 +180,11 @@ pub fn filter_emboss(engine: &mut Engine, layer_id: &str, angle_degrees: f32, st
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.emboss,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_angle") {
-                gl.uniform1f(Some(&loc), angle_degrees.to_radians());
-            }
-            if let Some(loc) = shader.location(gl, "u_strength") {
-                gl.uniform1f(Some(&loc), strength);
-            }
-            if let Some(loc) = shader.location(gl, "u_type") {
-                gl.uniform1f(Some(&loc), emboss_type);
-            }
+        |pass| {
+            pass
+                .f32("u_angle", angle_degrees.to_radians())
+                .f32("u_strength", strength)
+                .f32("u_type", emboss_type)
         },
     );
 }
@@ -256,95 +213,44 @@ pub fn filter_bloom(
         None => return,
     };
     let (w, h) = engine.inner.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.inner.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.inner.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
+    let inner = &engine.inner;
 
     // Pass 1: Threshold — extract bright pixels (layer → scratch B)
-    let gl = &engine.inner.gl;
-    let thresh_shader = &engine.inner.shaders.bloom_threshold;
-    gl.use_program(Some(&thresh_shader.program));
-    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_b);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = thresh_shader.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    if let Some(loc) = thresh_shader.location(gl, "u_threshold") {
-        gl.uniform1f(Some(&loc), threshold);
-    }
-    if let Some(loc) = thresh_shader.location(gl, "u_softKnee") {
-        gl.uniform1f(Some(&loc), soft_knee);
-    }
-    engine.inner.draw_fullscreen_quad();
+    inner.pass(&inner.shaders.bloom_threshold)
+        .texture("u_tex", tex_handle)
+        .f32("u_threshold", threshold)
+        .f32("u_softKnee", soft_knee)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(inner.scratch_fbo_b));
 
-    // Pass 2: Horizontal blur (scratch B → scratch A)
-    let gl = &engine.inner.gl;
-    let blur_shader = &engine.inner.shaders.gaussian_blur;
-    gl.use_program(Some(&blur_shader.program));
-    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch_b) = engine.inner.texture_pool.get(engine.inner.scratch_texture_b) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_b));
-    }
-    if let Some(loc) = blur_shader.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    if let Some(loc) = blur_shader.location(gl, "u_direction") {
-        gl.uniform2f(Some(&loc), 1.0, 0.0);
-    }
-    if let Some(loc) = blur_shader.location(gl, "u_radius") {
-        gl.uniform1i(Some(&loc), radius as i32);
-    }
     let center = radius as usize;
-    for i in 0..64usize {
-        let ki = center + i;
-        let wt = if ki < kernel.len() { kernel[ki] } else { 0.0 };
-        let name = format!("u_weights[{i}]");
-        if let Some(loc) = blur_shader.location(gl, &name) {
-            gl.uniform1f(Some(&loc), wt);
+    let blur_pass = |src: TextureHandle, direction: (f32, f32)| {
+        let mut pass = inner.pass(&inner.shaders.gaussian_blur)
+            .texture("u_tex", src)
+            .vec2("u_direction", direction.0, direction.1)
+            .i32("u_radius", radius as i32);
+        for i in 0..64usize {
+            let ki = center + i;
+            let wt = if ki < kernel.len() { kernel[ki] } else { 0.0 };
+            pass = pass.f32(&format!("u_weights[{i}]"), wt);
         }
-    }
-    engine.inner.draw_fullscreen_quad();
-
+        pass.viewport(0, 0, w as i32, h as i32)
+    };
+    // Pass 2: Horizontal blur (scratch B → scratch A)
+    blur_pass(inner.scratch_texture_b, (1.0, 0.0)).draw(Target::Framebuffer(inner.scratch_fbo_a));
     // Pass 3: Vertical blur (scratch A → scratch B)
-    let gl = &engine.inner.gl;
-    let blur_shader = &engine.inner.shaders.gaussian_blur;
-    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_b);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch_a) = engine.inner.texture_pool.get(engine.inner.scratch_texture_a) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_a));
-    }
-    if let Some(loc) = blur_shader.location(gl, "u_direction") {
-        gl.uniform2f(Some(&loc), 0.0, 1.0);
-    }
-    engine.inner.draw_fullscreen_quad();
+    blur_pass(inner.scratch_texture_a, (0.0, 1.0)).draw(Target::Framebuffer(inner.scratch_fbo_b));
 
     // Pass 4: Combine — add bloom onto original (layer + scratch B → scratch A)
-    let gl = &engine.inner.gl;
-    let combine_shader = &engine.inner.shaders.bloom_combine;
-    gl.use_program(Some(&combine_shader.program));
-    engine.inner.fbo_pool.bind(gl, engine.inner.scratch_fbo_a);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = combine_shader.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    if let Some(scratch_b) = engine.inner.texture_pool.get(engine.inner.scratch_texture_b) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_b));
-    }
-    if let Some(loc) = combine_shader.location(gl, "u_bloomTex") {
-        gl.uniform1i(Some(&loc), 1);
-    }
-    if let Some(loc) = combine_shader.location(gl, "u_intensity") {
-        gl.uniform1f(Some(&loc), intensity);
-    }
-    engine.inner.draw_fullscreen_quad();
+    inner.pass(&inner.shaders.bloom_combine)
+        .texture("u_tex", tex_handle)
+        .texture("u_bloomTex", inner.scratch_texture_b)
+        .f32("u_intensity", intensity)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(inner.scratch_fbo_a));
 
     // Bloomed result is in scratch A; confine it to the selection (#1176).
     filter_gpu::commit_scratch_a_to_layer(&mut engine.inner, layer_id);
@@ -371,25 +277,14 @@ pub fn filter_voronoi(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.voronoi,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_cellCount") {
-                gl.uniform1f(Some(&loc), cell_count);
-            }
-            if let Some(loc) = shader.location(gl, "u_edgeWidth") {
-                gl.uniform1f(Some(&loc), edge_width);
-            }
-            if let Some(loc) = shader.location(gl, "u_edgeR") {
-                gl.uniform1f(Some(&loc), edge_r);
-            }
-            if let Some(loc) = shader.location(gl, "u_edgeG") {
-                gl.uniform1f(Some(&loc), edge_g);
-            }
-            if let Some(loc) = shader.location(gl, "u_edgeB") {
-                gl.uniform1f(Some(&loc), edge_b);
-            }
-            if let Some(loc) = shader.location(gl, "u_seed") {
-                gl.uniform1f(Some(&loc), seed);
-            }
+        |pass| {
+            pass
+                .f32("u_cellCount", cell_count)
+                .f32("u_edgeWidth", edge_width)
+                .f32("u_edgeR", edge_r)
+                .f32("u_edgeG", edge_g)
+                .f32("u_edgeB", edge_b)
+                .f32("u_seed", seed)
         },
     );
 }

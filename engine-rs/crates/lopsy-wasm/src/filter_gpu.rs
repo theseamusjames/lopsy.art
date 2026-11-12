@@ -1,117 +1,79 @@
-use web_sys::WebGl2RenderingContext;
 use crate::engine::EngineInner;
+use crate::gpu::framebuffer::FramebufferHandle;
+use crate::gpu::pass::{Pass, Target};
 use crate::gpu::shader::ShaderProgram;
+use crate::gpu::texture_pool::TextureHandle;
 
 /// Blend the filtered result with the original layer texture
 /// using the selection mask. Writes the blended result back to the layer texture.
 fn blend_with_selection_mask(
     engine: &mut EngineInner,
     layer_id: &str,
-    filtered_scratch: crate::gpu::texture_pool::TextureHandle,
-    original_scratch: crate::gpu::texture_pool::TextureHandle,
+    filtered_scratch: TextureHandle,
+    original_scratch: TextureHandle,
 ) {
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
     let sel_handle = match engine.selection_mask_texture {
         Some(h) => h,
         None => return,
     };
-    let sel_tex = match engine.texture_pool.get(sel_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(sel_handle).is_none() {
+        return;
+    }
 
     let (layer_x, layer_y) = engine.layer_stack.iter()
         .find(|l| l.id == layer_id)
         .map_or((0.0, 0.0), |l| (l.x as f32, l.y as f32));
     let (doc_w, doc_h) = (engine.doc_width as f32, engine.doc_height as f32);
 
-    let filtered_tex = engine.texture_pool.get(filtered_scratch).cloned();
-    let original_tex = engine.texture_pool.get(original_scratch).cloned();
-
-    engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.selection_mask_blend;
-        gl.use_program(Some(&shader.program));
-
-        // TEXTURE0: filtered result
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(t) = &filtered_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-        }
-        if let Some(loc) = shader.location(gl, "u_filtered") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-
-        // TEXTURE1: original layer backup
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        if let Some(t) = &original_tex {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-        }
-        if let Some(loc) = shader.location(gl, "u_original") {
-            gl.uniform1i(Some(&loc), 1);
-        }
-
-        // TEXTURE2: selection mask
-        gl.active_texture(WebGl2RenderingContext::TEXTURE2);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&sel_tex));
-        if let Some(loc) = shader.location(gl, "u_selMask") {
-            gl.uniform1i(Some(&loc), 2);
-        }
-        if let Some(loc) = shader.location(gl, "u_docSize") {
-            gl.uniform2f(Some(&loc), doc_w, doc_h);
-        }
-        if let Some(loc) = shader.location(gl, "u_layerOffset") {
-            gl.uniform2f(Some(&loc), layer_x, layer_y);
-        }
-        if let Some(loc) = shader.location(gl, "u_layerSize") {
-            gl.uniform2f(Some(&loc), w as f32, h as f32);
-        }
-
-        engine.draw_fullscreen_quad();
-    });
+    engine.pass(&engine.shaders.selection_mask_blend)
+        .texture("u_filtered", filtered_scratch)
+        .texture("u_original", original_scratch)
+        .texture("u_selMask", sel_handle)
+        .vec2("u_docSize", doc_w, doc_h)
+        .vec2("u_layerOffset", layer_x, layer_y)
+        .vec2("u_layerSize", w as f32, h as f32)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(tex_handle));
 }
 
 /// Copy the layer texture into a scratch buffer using a simple blit.
-fn copy_layer_to_scratch(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    scratch_fbo: crate::gpu::framebuffer::FramebufferHandle,
-) {
+fn copy_layer_to_scratch(engine: &mut EngineInner, layer_id: &str, scratch_fbo: FramebufferHandle) {
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-
-    let gl = &engine.gl;
-    engine.fbo_pool.bind(gl, scratch_fbo);
-    gl.viewport(0, 0, w as i32, h as i32);
-    gl.use_program(Some(&engine.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-        gl.uniform1i(Some(&loc), 0);
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
     }
-    engine.draw_fullscreen_quad();
+
+    engine.pass(&engine.shaders.blit)
+        .texture("u_tex", tex_handle)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(scratch_fbo));
+}
+
+/// Blit scratch texture `scratch` over the `w`×`h` texture `dst`.
+fn blit_scratch_to(engine: &EngineInner, scratch: TextureHandle, dst: TextureHandle, w: u32, h: u32) {
+    engine.pass(&engine.shaders.blit)
+        .texture("u_tex", scratch)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Texture(dst));
 }
 
 /// What `begin_mask_filter_target` swapped out, so the end call can put it
 /// back.
 pub struct MaskFilterTarget {
     layer_id: String,
-    layer_texture: Option<crate::gpu::texture_pool::TextureHandle>,
+    layer_texture: Option<TextureHandle>,
     layer_rect: Option<(i32, i32, u32, u32)>,
     mask_origin: (i32, i32),
     mask_size: (u32, u32),
@@ -161,7 +123,7 @@ pub fn end_mask_filter_target(engine: &mut EngineInner) {
     let Some(target) = engine.mask_filter_target.take() else { return };
     let id = target.layer_id.as_str();
 
-    apply_filter_full_layer(engine, id, |e| &e.shaders.mask_luminance, |_, _| {});
+    apply_filter_full_layer(engine, id, |e| &e.shaders.mask_luminance, |pass| pass);
 
     let (cur_x, cur_y) = engine.layer_stack.iter()
         .find(|l| l.id == id)
@@ -205,10 +167,9 @@ pub(crate) fn commit_scratch_a_to_layer(engine: &mut EngineInner, layer_id: &str
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
 
     if engine.selection_mask_texture.is_some() {
         let scratch_fbo_b = engine.scratch_fbo_b;
@@ -217,26 +178,15 @@ pub(crate) fn commit_scratch_a_to_layer(engine: &mut EngineInner, layer_id: &str
         let scratch_b = engine.scratch_texture_b;
         blend_with_selection_mask(engine, layer_id, scratch_a, scratch_b);
     } else {
-        let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
-        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
-            let gl = &engine.gl;
-            gl.use_program(Some(&engine.shaders.blit.program));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            if let Some(t) = &scratch_tex {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-            }
-            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
-            engine.draw_fullscreen_quad();
-        });
+        blit_scratch_to(engine, engine.scratch_texture_a, tex_handle, w, h);
     }
 
     engine.mark_layer_dirty(layer_id);
 }
 
 /// Apply a shader program to a layer's texture (read from layer, render to scratch, copy back).
-/// The `set_uniforms` closure is called after the shader is bound so you can set custom uniforms.
+/// `set_uniforms` receives the filter's pass, with the layer already bound as `u_tex`, and adds the
+/// filter's own uniforms and textures to it.
 ///
 /// `get_shader` is called lazily to borrow the shader from the engine — this lets callers
 /// pass e.g. `|e| &e.shaders.noise` without fighting the borrow checker.
@@ -244,7 +194,7 @@ pub fn apply_filter(
     engine: &mut EngineInner,
     layer_id: &str,
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
+    set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
 ) {
     apply_filter_inner(engine, layer_id, get_shader, set_uniforms, true, true);
 }
@@ -256,7 +206,7 @@ pub fn apply_filter_full_layer(
     engine: &mut EngineInner,
     layer_id: &str,
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
+    set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
 ) {
     apply_filter_inner(engine, layer_id, get_shader, set_uniforms, false, true);
 }
@@ -270,7 +220,7 @@ pub fn apply_pointwise_filter_full_layer(
     engine: &mut EngineInner,
     layer_id: &str,
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
+    set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
 ) {
     apply_filter_inner(engine, layer_id, get_shader, set_uniforms, false, false);
 }
@@ -279,7 +229,7 @@ fn apply_filter_inner(
     engine: &mut EngineInner,
     layer_id: &str,
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_uniforms: impl FnOnce(&WebGl2RenderingContext, &ShaderProgram),
+    set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
     respect_selection: bool,
     expand_to_document: bool,
 ) {
@@ -311,36 +261,14 @@ fn apply_filter_inner(
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-
-    // Bind scratch FBO A
-    let scratch_fbo_a = engine.scratch_fbo_a;
-    engine.fbo_pool.bind(&engine.gl, scratch_fbo_a);
-    engine.gl.viewport(0, 0, w as i32, h as i32);
-
-    {
-        let gl = &engine.gl;
-        let shader = get_shader(engine);
-
-        // Use the filter shader
-        gl.use_program(Some(&shader.program));
-
-        // Bind layer texture to unit 0
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-
-        // Let caller set additional uniforms
-        set_uniforms(gl, shader);
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
     }
 
-    // Draw fullscreen quad
-    engine.draw_fullscreen_quad();
+    // Render the filter into scratch A
+    set_uniforms(engine.pass(get_shader(engine)).texture("u_tex", tex_handle))
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
     if has_selection {
         // Blend filtered (scratch A) with original (scratch B) using selection mask → layer
@@ -349,19 +277,7 @@ fn apply_filter_inner(
         blend_with_selection_mask(engine, layer_id, scratch_a, scratch_b);
     } else {
         // Copy result back to layer texture (original path)
-        let scratch_tex = engine.texture_pool.get(engine.scratch_texture_a).cloned();
-        engine.render_to_texture(&layer_tex, w as i32, h as i32, |engine| {
-            let gl = &engine.gl;
-            gl.use_program(Some(&engine.shaders.blit.program));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            if let Some(t) = &scratch_tex {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-            }
-            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
-            engine.draw_fullscreen_quad();
-        });
+        blit_scratch_to(engine, engine.scratch_texture_a, tex_handle, w, h);
     }
 
     engine.mark_layer_dirty(layer_id);
@@ -373,7 +289,7 @@ pub fn apply_separable_blur(
     engine: &mut EngineInner,
     layer_id: &str,
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_common_uniforms: impl Fn(&WebGl2RenderingContext, &ShaderProgram),
+    set_common_uniforms: impl for<'a> Fn(Pass<'a>) -> Pass<'a>,
 ) {
     // See note in apply_filter: ensure layer/scratch dimensions match so
     // pass 2 doesn't sample garbage outside the layer's sub-region.
@@ -386,58 +302,29 @@ pub fn apply_separable_blur(
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-
-    {
-        let gl = &engine.gl;
-        let shader = get_shader(engine);
-        gl.use_program(Some(&shader.program));
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
     }
 
     // Pass 1: horizontal (layer -> scratch A)
-    let scratch_fbo_a = engine.scratch_fbo_a;
-    engine.fbo_pool.bind(&engine.gl, scratch_fbo_a);
-    engine.gl.viewport(0, 0, w as i32, h as i32);
-    {
-        let gl = &engine.gl;
-        let shader = get_shader(engine);
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_direction") {
-            gl.uniform2f(Some(&loc), 1.0, 0.0);
-        }
-        set_common_uniforms(gl, shader);
-    }
-    engine.draw_fullscreen_quad();
+    set_common_uniforms(
+        engine.pass(get_shader(engine))
+            .texture("u_tex", tex_handle)
+            .vec2("u_direction", 1.0, 0.0),
+    )
+    .viewport(0, 0, w as i32, h as i32)
+    .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
     // Pass 2: vertical (scratch A -> scratch B)
-    let scratch_fbo_b = engine.scratch_fbo_b;
-    engine.fbo_pool.bind(&engine.gl, scratch_fbo_b);
-    engine.gl.viewport(0, 0, w as i32, h as i32);
-    {
-        let gl = &engine.gl;
-        let shader = get_shader(engine);
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(scratch_tex_a) = engine.texture_pool.get(engine.scratch_texture_a) {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex_a));
-        }
-        if let Some(loc) = shader.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_direction") {
-            gl.uniform2f(Some(&loc), 0.0, 1.0);
-        }
-        set_common_uniforms(gl, shader);
-    }
-    engine.draw_fullscreen_quad();
+    set_common_uniforms(
+        engine.pass(get_shader(engine))
+            .texture("u_tex", engine.scratch_texture_a)
+            .vec2("u_direction", 0.0, 1.0),
+    )
+    .viewport(0, 0, w as i32, h as i32)
+    .draw(Target::Framebuffer(engine.scratch_fbo_b));
 
-    commit_scratch_b(engine, layer_id, &layer_tex, w, h, has_selection);
+    commit_scratch_b(engine, layer_id, tex_handle, w, h, has_selection);
 }
 
 /// Write a filter result held in scratch B back to the layer — through the
@@ -446,15 +333,13 @@ pub fn apply_separable_blur(
 fn commit_scratch_b(
     engine: &mut EngineInner,
     layer_id: &str,
-    layer_tex: &web_sys::WebGlTexture,
+    layer: TextureHandle,
     w: u32,
     h: u32,
     has_selection: bool,
 ) {
     if has_selection {
         // Save the original layer to scratch A (layer still untouched).
-        // We need to drop the `gl` borrow before calling copy_layer_to_scratch,
-        // so we capture the needed values first.
         let scratch_fbo_a = engine.scratch_fbo_a;
         copy_layer_to_scratch(engine, layer_id, scratch_fbo_a);
         // Blend: filtered (scratch B) with original (scratch A) using selection mask → layer
@@ -463,19 +348,7 @@ fn commit_scratch_b(
         blend_with_selection_mask(engine, layer_id, scratch_b, scratch_a);
     } else {
         // Copy scratch B back to layer texture (original path)
-        let scratch_tex_b = engine.texture_pool.get(engine.scratch_texture_b).cloned();
-        engine.render_to_texture(layer_tex, w as i32, h as i32, |engine| {
-            let gl = &engine.gl;
-            gl.use_program(Some(&engine.shaders.blit.program));
-            gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            if let Some(t) = &scratch_tex_b {
-                gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-            }
-            if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") {
-                gl.uniform1i(Some(&loc), 0);
-            }
-            engine.draw_fullscreen_quad();
-        });
+        blit_scratch_to(engine, engine.scratch_texture_b, layer, w, h);
     }
 
     engine.mark_layer_dirty(layer_id);
@@ -496,60 +369,28 @@ pub fn apply_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32)
         None => return,
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
     let blocks_w = w.div_ceil(block_size);
     let blocks_h = h.div_ceil(block_size);
 
     // Pass 1: block averages (layer -> scratch A, blocks_w x blocks_h)
-    let scratch_fbo_a = engine.scratch_fbo_a;
-    engine.fbo_pool.bind(&engine.gl, scratch_fbo_a);
-    engine.gl.viewport(0, 0, blocks_w as i32, blocks_h as i32);
-    {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.pixelate_blocks;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_blockSize") {
-            gl.uniform1i(Some(&loc), block_size as i32);
-        }
-    }
-    engine.draw_fullscreen_quad();
+    engine.pass(&engine.shaders.pixelate_blocks)
+        .texture("u_tex", tex_handle)
+        .i32("u_blockSize", block_size as i32)
+        .viewport(0, 0, blocks_w as i32, blocks_h as i32)
+        .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
     // Pass 2: expand blocks over the source footprint (-> scratch B, w x h)
-    let scratch_fbo_b = engine.scratch_fbo_b;
-    engine.fbo_pool.bind(&engine.gl, scratch_fbo_b);
-    engine.gl.viewport(0, 0, w as i32, h as i32);
-    {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.pixelate;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        if let Some(t) = engine.texture_pool.get(engine.scratch_texture_a) {
-            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(t));
-        }
-        if let Some(loc) = shader.location(gl, "u_blocks") {
-            gl.uniform1i(Some(&loc), 1);
-        }
-        if let Some(loc) = shader.location(gl, "u_blockSize") {
-            gl.uniform1i(Some(&loc), block_size as i32);
-        }
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    }
-    engine.draw_fullscreen_quad();
+    engine.pass(&engine.shaders.pixelate)
+        .texture("u_tex", tex_handle)
+        .texture("u_blocks", engine.scratch_texture_a)
+        .i32("u_blockSize", block_size as i32)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(engine.scratch_fbo_b));
 
-    commit_scratch_b(engine, layer_id, &layer_tex, w, h, has_selection);
+    commit_scratch_b(engine, layer_id, tex_handle, w, h, has_selection);
 }
 
 /// Render a single channel of a layer texture as grayscale into a scratch
@@ -565,31 +406,17 @@ pub fn extract_channel_pixels(
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
     if w == 0 || h == 0 { return Vec::new(); }
-    let layer_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return Vec::new(),
-    };
-
-    let scratch_fbo = engine.scratch_fbo_a;
-    engine.fbo_pool.bind(&engine.gl, scratch_fbo);
-    engine.gl.viewport(0, 0, w as i32, h as i32);
-
-    {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.channel_extract;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        if let Some(loc) = shader.location(gl, "u_tex") {
-            gl.uniform1i(Some(&loc), 0);
-        }
-        if let Some(loc) = shader.location(gl, "u_channel") {
-            gl.uniform1i(Some(&loc), channel as i32);
-        }
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return Vec::new();
     }
-    engine.draw_fullscreen_quad();
 
-    engine.texture_pool.read_rgba(&engine.gl, 0, 0, w, h)
+    engine.pass(&engine.shaders.channel_extract)
+        .texture("u_tex", tex_handle)
+        .i32("u_channel", channel as i32)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(engine.scratch_fbo_a));
+
+    engine.gpu().read_rgba(engine.scratch_texture_a, 0, 0, w, h)
         .unwrap_or_default()
 }
 

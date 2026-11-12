@@ -196,6 +196,13 @@ impl<'a> Pass<'a> {
         self
     }
 
+    pub fn u32(self, name: &str, value: u32) -> Self {
+        if let Some(loc) = self.program.location(self.gpu.gl, name) {
+            self.gpu.gl.uniform1ui(Some(&loc), value);
+        }
+        self
+    }
+
     pub fn ivec2(self, name: &str, x: i32, y: i32) -> Self {
         if let Some(loc) = self.program.location(self.gpu.gl, name) {
             self.gpu.gl.uniform2i(Some(&loc), x, y);
@@ -251,6 +258,14 @@ impl<'a> Pass<'a> {
         if let Some(loc) = self.program.location(self.gpu.gl, name) {
             self.gpu.gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, value);
         }
+        self
+    }
+
+    /// Set uniforms with a helper that still takes the raw GL context and
+    /// program. Only for helpers in modules that have not moved onto the
+    /// pass layer yet; it goes away with them.
+    pub fn raw_uniforms(self, set: impl FnOnce(&GL, &ShaderProgram)) -> Self {
+        set(self.gpu.gl, self.program);
         self
     }
 

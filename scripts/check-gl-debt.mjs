@@ -31,18 +31,9 @@ const PATTERN = /\bWebGl\w+|\bgl\.[a-z_0-9]+\(/g;
 // number of raw GL references the file may contain. Sorted smallest
 // first, which is also the rough conversion order.
 const BASELINE = {
-  'api/color_mode.rs': 1,
-  'api/filter/adjust.rs': 9,
-  'api/filter/noise.rs': 17,
-  'api/filter/preview.rs': 17,
   'thumbnail_gpu.rs': 35,
   'effect_cache_gpu.rs': 40,
-  'api/filter/render.rs': 42,
-  'api/filter/blur.rs': 44,
   'layer_transform_gpu.rs': 45,
-  'api/filter/distort.rs': 57,
-  'api/filter/stylize.rs': 70,
-  'filter_gpu.rs': 104,
   'engine.rs': 125,
   'layer_manager.rs': 446,
   'compositor.rs': 627,

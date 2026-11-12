@@ -14,6 +14,11 @@ instrumented spec records, when PARITY_OUT is set:
   - the engine's export composite and a hash of every layer (e2e/parity.ts)
   - the canvas pixels, which also show what is drawn only to the screen
 
+Set PARITY_PIN_RANDOM=1 when running the instrumented specs to replace
+Math.random in the page with a fixed sequence. Filters that take a random
+seed (Add Noise, Clouds, Smoke, Fibers), spray and brush scatter then
+repeat exactly, so they can be compared too.
+
 The edits are not meant to be committed. Revert with: git checkout -- e2e
 """
 import re, sys
@@ -55,7 +60,19 @@ async function __pc(page: import('@playwright/test').Page, tag = 'shot'): Promis
   }}
   await __parity(page, '{name}', id).catch(() => undefined);
 }}
-__pwTest.afterEach(async ({{ page }}) => {{ await __pc(page, 'end'); }});""".split('\n')
+__pwTest.afterEach(async ({{ page }}) => {{ await __pc(page, 'end'); }});
+__pwTest.beforeEach(async ({{ page }}) => {{
+  if (!process.env.PARITY_PIN_RANDOM) return;
+  await page.addInitScript(() => {{
+    let a = 0x9e3779b9;
+    Math.random = () => {{
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }};
+  }});
+}});""".split('\n')
     out, n = [], 0
     for i, l in enumerate(src):
         out.append(l)

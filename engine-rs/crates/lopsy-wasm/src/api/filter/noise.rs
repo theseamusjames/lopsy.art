@@ -15,19 +15,12 @@ pub fn filter_add_noise(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.noise,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_amount") {
-                gl.uniform1f(Some(&loc), amount / 255.0);
-            }
-            if let Some(loc) = shader.location(gl, "u_monochrome") {
-                gl.uniform1i(Some(&loc), if monochrome { 1 } else { 0 });
-            }
-            if let Some(loc) = shader.location(gl, "u_gaussian") {
-                gl.uniform1i(Some(&loc), if gaussian { 1 } else { 0 });
-            }
-            if let Some(loc) = shader.location(gl, "u_seed") {
-                gl.uniform1f(Some(&loc), seed);
-            }
+        |pass| {
+            pass
+                .f32("u_amount", amount / 255.0)
+                .i32("u_monochrome", if monochrome { 1 } else { 0 })
+                .i32("u_gaussian", if gaussian { 1 } else { 0 })
+                .f32("u_seed", seed)
         },
     );
 }
@@ -38,13 +31,10 @@ pub fn filter_clouds(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32)
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.clouds,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_scale") {
-                gl.uniform1f(Some(&loc), scale);
-            }
-            if let Some(loc) = shader.location(gl, "u_seed") {
-                gl.uniform1f(Some(&loc), seed);
-            }
+        |pass| {
+            pass
+                .f32("u_scale", scale)
+                .f32("u_seed", seed)
         },
     );
 }
@@ -55,16 +45,11 @@ pub fn filter_smoke(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32, 
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.smoke,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_scale") {
-                gl.uniform1f(Some(&loc), scale);
-            }
-            if let Some(loc) = shader.location(gl, "u_seed") {
-                gl.uniform1f(Some(&loc), seed);
-            }
-            if let Some(loc) = shader.location(gl, "u_turbulence") {
-                gl.uniform1f(Some(&loc), turbulence);
-            }
+        |pass| {
+            pass
+                .f32("u_scale", scale)
+                .f32("u_seed", seed)
+                .f32("u_turbulence", turbulence)
         },
     );
 }
@@ -75,16 +60,11 @@ pub fn filter_fibers(engine: &mut Engine, layer_id: &str, variance: f32, strengt
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.fibers,
-        |gl, shader| {
-            if let Some(loc) = shader.location(gl, "u_variance") {
-                gl.uniform1f(Some(&loc), variance);
-            }
-            if let Some(loc) = shader.location(gl, "u_strength") {
-                gl.uniform1f(Some(&loc), strength);
-            }
-            if let Some(loc) = shader.location(gl, "u_seed") {
-                gl.uniform1f(Some(&loc), seed);
-            }
+        |pass| {
+            pass
+                .f32("u_variance", variance)
+                .f32("u_strength", strength)
+                .f32("u_seed", seed)
         },
     );
 }
@@ -109,30 +89,18 @@ pub fn filter_texture(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.texture,
-        |gl, shader| {
-            let set_f = |name: &str, v: f32| {
-                if let Some(loc) = shader.location(gl, name) {
-                    gl.uniform1f(Some(&loc), v);
-                }
-            };
-            set_f("u_amount", p.amount);
-            set_f("u_size", p.size);
-            set_f("u_stretch", p.stretch);
-            set_f("u_angle", p.angle_rad);
-            set_f("u_octaves", p.octaves);
-            set_f("u_contrast", p.contrast);
-            if let Some(loc) = shader.location(gl, "u_kind") {
-                gl.uniform1i(Some(&loc), p.kind as i32);
-            }
-            if let Some(loc) = shader.location(gl, "u_blend") {
-                gl.uniform1i(Some(&loc), p.blend as i32);
-            }
-            if let Some(loc) = shader.location(gl, "u_colored") {
-                gl.uniform1i(Some(&loc), i32::from(p.is_colored));
-            }
-            if let Some(loc) = shader.location(gl, "u_seed") {
-                gl.uniform1ui(Some(&loc), p.seed);
-            }
+        |pass| {
+            pass
+                .f32("u_amount", p.amount)
+                .f32("u_size", p.size)
+                .f32("u_stretch", p.stretch)
+                .f32("u_angle", p.angle_rad)
+                .f32("u_octaves", p.octaves)
+                .f32("u_contrast", p.contrast)
+                .i32("u_kind", p.kind as i32)
+                .i32("u_blend", p.blend as i32)
+                .i32("u_colored", i32::from(p.is_colored))
+                .u32("u_seed", p.seed)
         },
     );
 }
