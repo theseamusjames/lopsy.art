@@ -128,6 +128,21 @@ impl<'a> GpuRef<'a> {
         }
     }
 
+    /// Fill `texture` with `color`. The context's scissor state still
+    /// applies. Returns `false` if the texture no longer exists.
+    pub fn clear(self, texture: TextureHandle, color: [f32; 4]) -> bool {
+        let (Some(tex), Some((w, h))) = (self.textures.get(texture), self.textures.get_size(texture)) else {
+            return false;
+        };
+        self.fbos.attach_texture(self.gl, self.render_fbo, tex);
+        self.fbos.bind(self.gl, self.render_fbo);
+        self.gl.viewport(0, 0, w as i32, h as i32);
+        self.gl.clear_color(color[0], color[1], color[2], color[3]);
+        self.gl.clear(GL::COLOR_BUFFER_BIT);
+        self.fbos.unbind(self.gl);
+        true
+    }
+
     /// Read back `w × h` texels of `texture` starting at `(x, y)` as RGBA8.
     pub fn read_rgba(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Result<Vec<u8>, String> {
         let tex = self.textures.get(texture).ok_or("Texture not found")?;
