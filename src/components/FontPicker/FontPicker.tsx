@@ -118,10 +118,15 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
     [items, currentFamily],
   );
 
+  // Installed fonts are enumerated only once the user opens the list, and
+  // only on their own when access is already granted: enumerating at editor
+  // start-up raised the permission prompt and, on machines with many fonts,
+  // stalled the page (#1642). Otherwise the Load local fonts button asks.
   const open = useCallback(() => {
     setIsOpen(true);
     setSearch('');
     setHighlightIndex(-1);
+    void useLocalFontsStore.getState().loadLocalFontsIfGranted();
   }, []);
 
   const close = useCallback(() => {
