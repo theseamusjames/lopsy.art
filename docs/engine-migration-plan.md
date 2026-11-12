@@ -11,8 +11,8 @@ Status: in progress. `scripts/check-gl-debt.mjs` holds the live counts.
 
 | Phase | State |
 |---|---|
-| 0 | Done, in review: CI guards (#1643), verification tooling (#1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
-| 1 | Conversions done, in review: 2,478 of 2,481 raw GL references removed across nine PRs (#1645, #1646, #1648 to #1653, #1667). What is left is the context handle on `EngineInner`, which the cap removes. On #1667's tip the chromium e2e suite without the composition and perf specs passed 1,444 tests with one failure that also fails on the previous engine (`transform-user-repro`, the "move immediately" case), and an old-against-new comparison of that whole suite found no difference that repeats (7,038 checkpoints) |
+| 0 | Done: CI guards merged (#1643); verification tooling in review as part of #1671. Spikes S1 and S2 done (results under Phase 0); S3 not run |
+| 1 | Conversions done, in review as one PR (#1671) that collects the nine cluster PRs (#1645, #1646, #1648 to #1653, #1667): all but 3 raw GL references removed. What is left is the context handle on `EngineInner`, which the cap removes. On #1667's tip the chromium e2e suite without the composition and perf specs passed 1,444 tests with one failure that also fails on the previous engine (`transform-user-repro`, the "move immediately" case), and an old-against-new comparison of that whole suite found no difference that repeats (7,038 checkpoints) |
 | 2–7 | Not started |
 
 ---
@@ -455,20 +455,22 @@ caller, in the compositor PR.
 
 | PR | Cluster | Files | State |
 |---|---|---|---|
-| #1645 | Foundation | `gpu::pass` and leaf modules: `glyph_atlas` 4, `api/paint` 13, `text_transform_gpu` 20, `content_bounds_gpu` 21 | In review |
-| #1646 | Dab tools | `clone_stamp_gpu` 11, `smudge_gpu` 12, `dab_pass_gpu` 15, `stamp_preview_gpu` 31, `healing_brush_gpu` 37, `coverage_stroke_gpu` 55 | In review |
-| #1648 | Brush | `brush_gpu` 187 | In review |
-| #1649 | Gradients and masks | `gradient_gpu` 72, `mask_paint_gpu` 94, `quick_mask_gpu` 99 | In review |
-| #1650 | Shapes, selection, fill | `api/fill` 28, `selection_gpu` 31, `shape_gpu` 36 | In review |
-| #1651 | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 | In review |
-| #1652 | Staging uploads, readbacks, thumbnails | `thumbnail_gpu` 35, `engine.rs` 117 of 125 | In review |
-| #1653 | Layers | `layer_transform_gpu` 45, `layer_manager` 446 | In review |
-| #1667 | Compositor | `effect_cache_gpu` 40, `compositor` 663, 5 of the last 8 in `engine.rs` | In review |
+| #1645 | Foundation | `gpu::pass` and leaf modules: `glyph_atlas` 4, `api/paint` 13, `text_transform_gpu` 20, `content_bounds_gpu` 21 | In #1671 |
+| #1646 | Dab tools | `clone_stamp_gpu` 11, `smudge_gpu` 12, `dab_pass_gpu` 15, `stamp_preview_gpu` 31, `healing_brush_gpu` 37, `coverage_stroke_gpu` 55 | In #1671 |
+| #1648 | Brush | `brush_gpu` 187 | In #1671 |
+| #1649 | Gradients and masks | `gradient_gpu` 72, `mask_paint_gpu` 94, `quick_mask_gpu` 99 | In #1671 |
+| #1650 | Shapes, selection, fill | `api/fill` 28, `selection_gpu` 31, `shape_gpu` 36 | In #1671 |
+| #1651 | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 | In #1671 |
+| #1652 | Staging uploads, readbacks, thumbnails | `thumbnail_gpu` 35, `engine.rs` 117 of 125 | In #1671 |
+| #1653 | Layers | `layer_transform_gpu` 45, `layer_manager` 446 | In #1671 |
+| #1667 | Compositor | `effect_cache_gpu` 40, `compositor` 663, 5 of the last 8 in `engine.rs` | In #1671 |
 | – | Cap | 1.5 | Not started |
 
-The PRs so far are stacked in the order listed, because nothing merged
-while they were written. In content each cluster depends only on the
-foundation.
+The cluster PRs were written as a stack and are landing together as
+#1671, because `main` takes squash merges and a squash leaves every PR
+above it in a stack needing a rebase. The cluster PRs are closed but
+keep their descriptions and verification notes. In content each cluster
+depends only on the foundation.
 
 The grouping moved from the first draft of this plan as the shared
 helpers became clear: gradients travel with the two mask modules, which
