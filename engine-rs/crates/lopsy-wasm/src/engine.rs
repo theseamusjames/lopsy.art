@@ -164,8 +164,8 @@ pub struct EngineInner {
     pub composite_fbo: FramebufferHandle,
     pub scratch_fbo_a: FramebufferHandle,
     pub scratch_fbo_b: FramebufferHandle,
-    /// Reusable FBO for `render_to_texture` — re-attaches to the caller's
-    /// destination texture each call so we don't create/delete an FBO per blit.
+    /// Reusable FBO that `Target::Texture` passes attach their destination
+    /// to, so no FBO is created and deleted per draw.
     pub render_fbo: FramebufferHandle,
     pub composite_texture: TextureHandle,
     pub scratch_texture_a: TextureHandle,
@@ -367,13 +367,7 @@ pub struct SnapshotTexture {
 impl EngineInner {
     pub fn new(gpu_ctx: GpuContext, shaders: ShaderPrograms) -> Result<Self, String> {
         let gl = gpu_ctx.gl.clone();
-        let max_texture_size = gl
-            .get_parameter(WebGl2RenderingContext::MAX_TEXTURE_SIZE)
-            .ok()
-            .and_then(|v| v.as_f64())
-            .map(|v| v as u32)
-            .filter(|&v| v > 0)
-            .unwrap_or(u32::MAX);
+        let max_texture_size = gpu_ctx.max_texture_size();
         let mut texture_pool = TexturePool::new(gpu_ctx.has_half_float, max_texture_size);
         let mut fbo_pool = FramebufferPool::new();
 
@@ -873,33 +867,6 @@ impl EngineInner {
     /// Start a pass that runs `program`. See `gpu::pass`.
     pub fn pass<'a>(&'a self, program: &'a ShaderProgram) -> Pass<'a> {
         self.gpu().pass(program)
-    }
-
-    /// Draw a fullscreen quad (3 vertices, no VBO needed)
-    pub fn draw_fullscreen_quad(&self) {
-        self.gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
-    }
-
-    /// Binds the reusable `render_fbo` with `dst_tex` attached, sets the
-    /// viewport, and calls `setup_and_draw` (which should bind the shader,
-    /// upload uniforms, and call `draw_fullscreen_quad`). Unbinds the FBO on
-    /// return. Replaces the `create_framebuffer → bind → attach → viewport →
-    /// ... → unbind → delete_framebuffer` boilerplate.
-    pub fn render_to_texture<F>(
-        &self,
-        dst_tex: &web_sys::WebGlTexture,
-        viewport_w: i32,
-        viewport_h: i32,
-        setup_and_draw: F,
-    )
-    where
-        F: FnOnce(&Self),
-    {
-        self.fbo_pool.attach_texture(&self.gl, self.render_fbo, dst_tex);
-        self.fbo_pool.bind(&self.gl, self.render_fbo);
-        self.gl.viewport(0, 0, viewport_w, viewport_h);
-        setup_and_draw(self);
-        self.fbo_pool.unbind(&self.gl);
     }
 
     /// Upload a one-byte-per-pixel mask into a pooled texture as

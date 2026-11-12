@@ -31,9 +31,9 @@ const PATTERN = /\bWebGl\w+|\bgl\.[a-z_0-9]+\(/g;
 // number of raw GL references the file may contain. Sorted smallest
 // first, which is also the rough conversion order.
 const BASELINE = {
-  'engine.rs': 8,
-  'effect_cache_gpu.rs': 40,
-  'compositor.rs': 627,
+  // The context handle the engine owns. It goes when `gl` becomes private
+  // to `gpu/`.
+  'engine.rs': 3,
 };
 
 function walk(dir) {

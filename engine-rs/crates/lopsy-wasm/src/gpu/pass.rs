@@ -391,14 +391,6 @@ impl<'a> Pass<'a> {
         self
     }
 
-    /// Set uniforms with a helper that still takes the raw GL context and
-    /// program. Only for helpers in modules that have not moved onto the
-    /// pass layer yet; it goes away with them.
-    pub fn raw_uniforms(self, set: impl FnOnce(&GL, &ShaderProgram)) -> Self {
-        set(self.gpu.gl, self.program);
-        self
-    }
-
     /// Draw into this part of the target instead of the default.
     pub fn viewport(mut self, x: i32, y: i32, width: i32, height: i32) -> Self {
         self.viewport = Some([x, y, width, height]);

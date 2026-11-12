@@ -15,13 +15,7 @@ pub fn filter_brightness_contrast(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.adjustments,
-        |pass| {
-            pass.raw_uniforms(|gl, shader| {
-                crate::compositor::set_standalone_adjustment_uniforms(
-                    gl, shader, brightness / 100.0, contrast, doc_color_mode,
-                );
-            })
-        },
+        |pass| crate::compositor::standalone_adjustments(pass, brightness / 100.0, contrast, doc_color_mode),
     );
 }
 
