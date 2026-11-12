@@ -12,10 +12,10 @@
 //! Only the live compositor caches. Export, Merge Down and Rasterize Layer
 //! Style render effects afresh through the same passes.
 
-use web_sys::{WebGl2RenderingContext, WebGlTexture};
 use lopsy_core::effect_cache::{CacheStats, CachedImage, EffectCacheStore};
 use lopsy_core::geometry::Rect;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc};
+use crate::compositor::{blend_through_scratch, BlendSource, Scratch};
 use crate::engine::EngineInner;
 use crate::gpu::framebuffer::FramebufferHandle;
 use crate::gpu::texture_pool::TextureHandle;
@@ -34,7 +34,7 @@ pub type CachedEffect = CachedImage<TextureHandle>;
 /// follow their layer into the scratch so the group's adjustments apply
 /// over them instead of the scratch covering them (#796).
 #[derive(Clone, Copy)]
-pub(crate) struct Target {
+pub(crate) struct DocTarget {
     pub tex: TextureHandle,
     pub fbo: FramebufferHandle,
 }
@@ -138,20 +138,11 @@ impl EffectCapture {
             self.failed = true;
             return;
         };
-        let Some(dst) = engine.texture_pool.get(handle).cloned() else {
+        if !engine.gpu().copy_region(engine.scratch_fbo_a, rect, handle) {
             self.failed = true;
             self.recycle.push(handle);
             return;
-        };
-        engine.fbo_pool.attach_texture(&engine.gl, engine.render_fbo, &dst);
-        engine.fbo_pool.blit_region(
-            &engine.gl,
-            engine.scratch_fbo_a,
-            engine.render_fbo,
-            (rect.x, rect.y, rect.width as i32, rect.height as i32),
-            (0, 0),
-        );
-        engine.fbo_pool.unbind(&engine.gl);
+        }
         let image = CachedImage { handle, rect };
         match self.phase {
             Phase::Behind => self.behind.push(image),
@@ -164,7 +155,7 @@ impl EffectCapture {
 /// the compositor fills the cache — copied into `capture` as well. With
 /// `clip`, the blend only touches the region the effect can paint.
 pub(crate) struct EffectOut<'a> {
-    pub target: Target,
+    pub target: DocTarget,
     pub capture: Option<&'a mut EffectCapture>,
     pub clip: bool,
 }
@@ -172,7 +163,7 @@ pub(crate) struct EffectOut<'a> {
 impl EffectOut<'_> {
     /// Unclipped, uncached: how export and the single-layer bake draw
     /// effects, so they stay an independent reference for the live view.
-    pub fn direct(target: Target) -> EffectOut<'static> {
+    pub fn direct(target: DocTarget) -> EffectOut<'static> {
         EffectOut { target, capture: None, clip: false }
     }
 }
@@ -194,14 +185,12 @@ pub(crate) fn emit_effect(engine: &mut EngineInner, out: &mut EffectOut, extent:
         // Nothing of the effect is on the canvas.
         return;
     }
-    let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a).cloned() else { return };
-    blend_effect_image(engine, &scratch, None, if out.clip { clipped } else { None }, out.target);
+    blend_effect_image(engine, engine.scratch_texture_a, None, if out.clip { clipped } else { None }, out.target);
 }
 
 /// Blend a cached effect image onto `target`.
-pub(crate) fn blend_cached_effect(engine: &mut EngineInner, image: &CachedEffect, target: Target) {
-    let Some(tex) = engine.texture_pool.get(image.handle).cloned() else { return };
-    blend_effect_image(engine, &tex, Some(image.rect), Some(image.rect), target);
+pub(crate) fn blend_cached_effect(engine: &mut EngineInner, image: &CachedEffect, target: DocTarget) {
+    blend_effect_image(engine, image.handle, Some(image.rect), Some(image.rect), target);
 }
 
 /// Normal-blend an effect image onto `target` via `scratch_b`. `src_rect`
@@ -210,66 +199,13 @@ pub(crate) fn blend_cached_effect(engine: &mut EngineInner, image: &CachedEffect
 /// effect image is transparent the blend shader returns the destination
 /// texel unchanged, so leaving those texels alone produces the same target
 /// as a full-document pass.
-pub(crate) fn blend_effect_image(engine: &mut EngineInner, src: &WebGlTexture, src_rect: Option<Rect>, scissor: Option<Rect>, target: Target) {
-    let comp_tex = match engine.texture_pool.get(target.tex) {
-        Some(t) => t.clone(),
-        None => return,
+fn blend_effect_image(engine: &EngineInner, src: TextureHandle, src_rect: Option<Rect>, scissor: Option<Rect>, target: DocTarget) {
+    let (offset, size) = match src_rect {
+        Some(r) => ((r.x as f32, r.y as f32), (r.width as f32, r.height as f32)),
+        None => ((0.0, 0.0), (engine.doc_width as f32, engine.doc_height as f32)),
     };
-    let doc_w = engine.doc_width as f32;
-    let doc_h = engine.doc_height as f32;
-    let (src_x, src_y, src_w, src_h) = match src_rect {
-        Some(r) => (r.x as f32, r.y as f32, r.width as f32, r.height as f32),
-        None => (0.0, 0.0, doc_w, doc_h),
-    };
-
-    let gl = &engine.gl;
-    if let Some(r) = scissor {
-        gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
-        gl.scissor(r.x, r.y, r.width as i32, r.height as i32);
-    }
-
-    // Normal-mode blend shader: src = effect, dst = target → scratch_b.
-    let shader = &engine.shaders.blend_normal;
-    gl.use_program(Some(&shader.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
-    if let Some(loc) = shader.location(gl, "u_srcTex") { gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(gl, "u_dstTex") { gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = shader.location(gl, "u_srcOffset") { gl.uniform2f(Some(&loc), src_x, src_y); }
-    if let Some(loc) = shader.location(gl, "u_srcSize") { gl.uniform2f(Some(&loc), src_w, src_h); }
-    if let Some(loc) = shader.location(gl, "u_docSize") { gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = shader.location(gl, "u_srcPremultiplied") { gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(gl, "u_overlayEnabled") { gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(gl, "u_hasMask") { gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(gl, "u_maskOverlay") { gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(gl, "u_wrapLayer") { gl.uniform1i(Some(&loc), 0); }
-
-    engine.fbo_pool.bind(gl, engine.scratch_fbo_b);
-    gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.draw_fullscreen_quad();
-
-    // Break feedback loop: unbind the target texture from TEXTURE1 before
-    // rendering to the FBO it backs.
-    gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
-    // Copy scratch_b → target
-    engine.fbo_pool.bind(gl, target.fbo);
-    gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    gl.use_program(Some(&engine.shaders.blit.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex));
-    }
-    if let Some(loc) = engine.shaders.blit.location(gl, "u_tex") { gl.uniform1i(Some(&loc), 0); }
-    engine.draw_fullscreen_quad();
-
-    if scissor.is_some() {
-        gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
-    }
+    let source = BlendSource::new(src, offset, size);
+    blend_through_scratch(engine, &engine.shaders.blend_normal, &source, target, Scratch::B, scissor);
 }
 
 /// Store what a cache miss captured as `layer_id`'s entry, or free it when

@@ -57,4 +57,16 @@ impl GpuContext {
             has_float_blend,
         })
     }
+
+    /// Largest texture edge the context accepts, or `u32::MAX` if it does
+    /// not say.
+    pub fn max_texture_size(&self) -> u32 {
+        self.gl
+            .get_parameter(WebGl2RenderingContext::MAX_TEXTURE_SIZE)
+            .ok()
+            .and_then(|v| v.as_f64())
+            .map(|v| v as u32)
+            .filter(|&v| v > 0)
+            .unwrap_or(u32::MAX)
+    }
 }

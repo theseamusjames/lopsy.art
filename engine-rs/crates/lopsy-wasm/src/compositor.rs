@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
-use web_sys::WebGl2RenderingContext;
 use crate::coverage_stroke_gpu::{self, CoverageTool};
-use crate::engine::EngineInner;
+use crate::engine::{EngineInner, ImageAdjustmentState};
+use crate::gpu::pass::{Blend, Pass, Scissor, Target};
+use crate::gpu::shader::ShaderProgram;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
-use crate::effect_cache_gpu::{self as fx_cache, emit_effect, EffectCacheKey, EffectCapture, EffectOut, Phase, Target};
+use crate::effect_cache_gpu::{self as fx_cache, emit_effect, DocTarget, EffectCacheKey, EffectCapture, EffectOut, Phase};
 use lopsy_core::effect_cache as fx_extent;
 use lopsy_core::geometry::Rect;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
@@ -51,16 +52,8 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     let budget = fx_cache::budget_for_document(doc_w, doc_h, fx_cache::bytes_per_texel(engine));
     engine.effect_cache.set_budget_bytes(budget);
 
-    // Reset GL state — brush/shape/selection tools may have left blending enabled.
-    // If BLEND is on, the blit passes in blend_onto_composite would blend
-    // instead of overwrite, corrupting alpha.
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-
-    // 1. Bind composite FBO and clear with background color
-    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.gl.clear_color(bg[0], bg[1], bg[2], bg[3]);
-    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+    // 1. Clear the composite with the background color
+    engine.gpu().clear(engine.composite_texture, bg);
 
     // 2. Iterate layers by index so we can take fresh borrows of engine
     //    inside the loop without holding a long-lived borrow of layer_stack.
@@ -180,7 +173,6 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                 // This is the group marker — finalize its children.
                 let frame = group_stack.pop().expect("checked by the condition above");
                 let gs_tex = frame.target.tex;
-                let gs_fbo = frame.target.fbo;
                 let is_cache_eligible = !nested_group_ids.contains(&layer_id);
 
                 if !frame.skip && is_cache_eligible {
@@ -193,19 +185,13 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 
                 if let Some(ga) = engine.group_adjustments.get(&layer_id) {
                     let adj = ga.adjustments.clone();
-                    apply_adjustments_to_texture(engine, gs_tex, gs_fbo, &adj);
+                    apply_adjustments_to_texture(engine, frame.target, &adj);
                 }
                 // Look up the group's mask (same path as individual layer masks).
-                // The group FBO is doc-sized so mask offset is (0,0) and size is doc size.
-                let mask_enabled_in_stack = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
-                let group_mask_info = engine.layer_masks.get(&layer_id).copied().and_then(|mask_handle| {
-                    let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
-                    let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
-                    Some((mask_gl, mw, mh, mask_enabled_in_stack))
-                });
-                let group_mask_arg = group_mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
-                    if *enabled { Some((tex, *mw, *mh)) } else { None }
-                });
+                // A group's own scratch is always doc-sized/doc-origin (#850),
+                // regardless of nesting depth, so its mask sits at the origin.
+                let is_mask_enabled = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
+                let group_mask = live_mask(engine, &layer_id, 0.0, 0.0).filter(|_| is_mask_enabled);
                 // Blend the adjusted group scratch onto whichever target is
                 // accumulating this group's content: an ancestor group's
                 // scratch if this group is nested inside one that's still
@@ -215,22 +201,12 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                 // over-brightened every partially transparent child pixel,
                 // e.g. a glow's falloff.
                 let dest = group_stack.last().map(|f| f.target).unwrap_or_else(|| main_target(engine));
-                if let Some(gs_gl) = engine.texture_pool.get(gs_tex).cloned() {
-                    blend_onto_target(
-                        engine,
-                        &gs_gl,
-                        opacity,
-                        blend_mode,
-                        0.0, 0.0,
-                        doc_w, doc_h,
-                        false,
-                        None,
-                        // A group's own scratch is always doc-sized/doc-origin
-                        // (#850), regardless of nesting depth.
-                        group_mask_arg.as_ref().map(|(t, w, h)| (&**t, *w, *h, 0.0f32, 0.0f32)),
-                        dest,
-                    )?;
-                }
+                let source = BlendSource {
+                    opacity,
+                    mask: group_mask,
+                    ..BlendSource::new(gs_tex, (0.0, 0.0), (doc_w as f32, doc_h as f32))
+                };
+                blend_onto_target(engine, &source, blend_mode, dest, None)?;
                 // A mask-edited child's overlay can't be drawn into the
                 // scratch (the adjustments would tint it) nor under it (the
                 // scratch would cover it), so it's drawn once the outermost
@@ -238,9 +214,6 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                 if group_stack.is_empty() {
                     render_routed_mask_edit_overlay(engine, mask_edit_id.as_deref(), &layer_id, &child_to_group);
                 }
-                // Re-bind the destination FBO for subsequent layers.
-                engine.fbo_pool.bind(&engine.gl, dest.fbo);
-                engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
                 continue;
             }
             continue;
@@ -282,13 +255,6 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             main_target(engine)
         };
 
-        let mask_info = engine.layer_masks.get(&layer_id).copied().and_then(|mask_handle| {
-            let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
-            let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
-            let mask_enabled = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
-            Some((mask_gl, mw, mh, mask_enabled))
-        });
-
         let tex_handle = match engine.layer_textures.get(&layer_id) {
             Some(&h) => h,
             None => continue,
@@ -303,18 +269,14 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // continuation).
         let merged_handle: Option<TextureHandle> = engine.stroke_textures.get(&layer_id)
             .copied()
-            .and_then(|stroke_handle| render_layer_plus_stroke(engine, tex_handle, stroke_handle, tw, th, &layer_id));
+            .and_then(|stroke_handle| render_layer_plus_stroke(engine, tex_handle, stroke_handle, tw, th));
         let effect_tex_handle = merged_handle.unwrap_or(tex_handle);
 
         // In mask edit mode: skip mask clipping so full layer content is visible
         let (mask_offset_x, mask_offset_y) = mask_doc_offset(layer_type, layer_x, layer_y);
-        let mask_arg = if is_mask_editing {
-            None
-        } else {
-            mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
-                if *enabled { Some((tex, *mw, *mh, mask_offset_x, mask_offset_y)) } else { None }
-            })
-        };
+        let layer_mask = live_mask(engine, &layer_id, mask_offset_x, mask_offset_y);
+        let is_mask_enabled = engine.layer_stack[idx].mask.as_ref().map_or(false, |m| m.enabled);
+        let mask_arg = layer_mask.filter(|_| is_mask_enabled && !is_mask_editing);
 
         // Effects follow the masked silhouette, not the raw layer alpha (#977).
         let has_shape_effects = outer_glow.is_some() || drop_shadow.is_some()
@@ -328,9 +290,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             texture: tex_handle,
             texture_size: (tw, th),
             origin: (layer_x as i32, layer_y as i32),
-            mask: mask_arg.as_ref().and_then(|(_, w, h, ox, oy)| {
-                engine.layer_masks.get(&layer_id).map(|&m| (m, *w, *h, *ox, *oy))
-            }),
+            mask: mask_arg.map(|m| (m.texture, m.width, m.height, m.offset_x, m.offset_y)),
             opacity,
             doc_size: (doc_w, doc_h),
             outer_glow: outer_glow.clone(),
@@ -363,9 +323,9 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         };
         fx_cache::delete_textures(engine, stale);
 
-        let masked_effect_handle = match (&mask_arg, has_shape_effects && cached.is_none()) {
-            (Some((t, w, h, ox, oy)), true) => render_layer_masked_for_effects(
-                engine, effect_tex_handle, tw, th, layer_x, layer_y, (&**t, *w, *h, *ox, *oy),
+        let masked_effect_handle = match (mask_arg, has_shape_effects && cached.is_none()) {
+            (Some(mask), true) => render_layer_masked_for_effects(
+                engine, effect_tex_handle, tw, th, layer_x, layer_y, mask,
             ),
             _ => None,
         };
@@ -411,10 +371,14 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
             None
         };
         let (src_handle, src_w, src_h) = composite_src.unwrap_or((tex_handle, tw, th));
-        if let Some(src_tex) = engine.texture_pool.get(src_handle).cloned() {
-            let backdrop_gl = effect_backdrop.and_then(|h| engine.texture_pool.get(h).cloned());
-            blend_layer_rect_onto_target(engine, &src_tex, opacity, blend_mode, layer_x, layer_y, src_w, src_h, false, overlay_desc, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target, backdrop_gl.as_ref())?;
-        }
+        let source = BlendSource {
+            opacity,
+            overlay: overlay_desc,
+            mask: mask_arg,
+            backdrop: effect_backdrop.filter(|&h| engine.texture_pool.get(h).is_some()),
+            ..BlendSource::new(src_handle, (layer_x, layer_y), (src_w as f32, src_h as f32))
+        };
+        blend_layer_rect_onto_target(engine, &source, blend_mode, target)?;
         if let Some(h) = effect_backdrop {
             engine.texture_pool.release(h);
         }
@@ -424,10 +388,14 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // it's already in the composite source.
         if merged_handle.is_none() {
             if let Some(&stroke_handle) = engine.stroke_textures.get(&layer_id) {
-                if let Some(stroke_tex) = engine.texture_pool.get(stroke_handle).cloned() {
-                    let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
-                    blend_layer_rect_onto_target(engine, &stroke_tex, opacity, 0, layer_x, layer_y, sw, sh, true, None, mask_arg.as_ref().map(|(t, w, h, ox, oy)| (&**t, *w, *h, *ox, *oy)), target, None)?;
-                }
+                let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
+                let source = BlendSource {
+                    opacity,
+                    is_premultiplied: true,
+                    mask: mask_arg,
+                    ..BlendSource::new(stroke_handle, (layer_x, layer_y), (sw as f32, sh as f32))
+                };
+                blend_layer_rect_onto_target(engine, &source, 0, target)?;
             }
         }
 
@@ -435,8 +403,8 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // Routed children get theirs at the group's finalize instead.
         let is_main_target = target.fbo == engine.composite_fbo;
         if is_mask_editing && is_main_target {
-            if let Some((mask_gl, mw, mh, _)) = &mask_info {
-                render_mask_overlay(engine, mask_gl, *mw, *mh, mask_offset_x, mask_offset_y);
+            if let Some(mask) = layer_mask {
+                render_mask_overlay(engine, mask);
             }
         }
 
@@ -504,39 +472,23 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 /// state changed (pan, zoom, channel visibility): the composite texture
 /// still holds the current document, so no layer is re-blended.
 pub fn present(engine: &mut EngineInner) -> Result<(), String> {
-    let vp_zoom = engine.viewport.zoom;
-    let vp_pan_x = engine.viewport.pan_x;
-    let vp_pan_y = engine.viewport.pan_y;
-    let doc_w = engine.doc_width;
-    let doc_h = engine.doc_height;
-    let bg = engine.bg_color;
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.fbo_pool.unbind(&engine.gl);
-    let canvas = engine.gl.canvas().ok_or("WebGL canvas missing")?;
-    let canvas_el: web_sys::HtmlCanvasElement = canvas.dyn_into().map_err(|_| "canvas is not HtmlCanvasElement")?;
-    let screen_w = canvas_el.width() as i32;
-    let screen_h = canvas_el.height() as i32;
-    engine.gl.viewport(0, 0, screen_w, screen_h);
-
-    engine.gl.use_program(Some(&engine.shaders.final_blit.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
-    }
-
-    let shader = &engine.shaders.final_blit;
-    if let Some(loc) = shader.location(&engine.gl, "u_compositeTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_resolution") { engine.gl.uniform2f(Some(&loc), screen_w as f32, screen_h as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_zoom") { engine.gl.uniform1f(Some(&loc), vp_zoom as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_pan") { engine.gl.uniform2f(Some(&loc), vp_pan_x as f32, vp_pan_y as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_bgAlpha") { engine.gl.uniform1f(Some(&loc), bg[3]); }
-    if let Some(loc) = shader.location(&engine.gl, "u_seamlessEnabled") { engine.gl.uniform1f(Some(&loc), if engine.seamless_pattern { 1.0 } else { 0.0 }); }
-    if let Some(loc) = shader.location(&engine.gl, "u_seamlessDim") { engine.gl.uniform1f(Some(&loc), if engine.seamless_dim { 1.0 } else { 0.0 }); }
-    if let Some(loc) = shader.location(&engine.gl, "u_channelMask") { engine.gl.uniform4f(Some(&loc), engine.channel_mask[0], engine.channel_mask[1], engine.channel_mask[2], engine.channel_mask[3]); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
-
-    engine.draw_fullscreen_quad();
+    let (screen_w, screen_h) = engine.gpu().screen_size()?;
+    let channel_mask = engine.channel_mask;
+    engine
+        .pass(&engine.shaders.final_blit)
+        .blend(Blend::Off)
+        .viewport(0, 0, screen_w, screen_h)
+        .texture("u_compositeTex", engine.composite_texture)
+        .vec2("u_resolution", screen_w as f32, screen_h as f32)
+        .f32("u_zoom", engine.viewport.zoom as f32)
+        .vec2("u_pan", engine.viewport.pan_x as f32, engine.viewport.pan_y as f32)
+        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
+        .f32("u_bgAlpha", engine.bg_color[3])
+        .f32("u_seamlessEnabled", if engine.seamless_pattern { 1.0 } else { 0.0 })
+        .f32("u_seamlessDim", if engine.seamless_dim { 1.0 } else { 0.0 })
+        .vec4("u_channelMask", channel_mask[0], channel_mask[1], channel_mask[2], channel_mask[3])
+        .i32("u_docColorMode", engine.doc_color_mode as i32)
+        .draw(Target::Screen);
     crate::stamp_preview_gpu::draw(engine, screen_w, screen_h);
     engine.needs_present = false;
     Ok(())
@@ -546,8 +498,215 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
 // Effect rendering helpers
 // ---------------------------------------------------------------------------
 
-fn main_target(engine: &EngineInner) -> Target {
-    Target { tex: engine.composite_texture, fbo: engine.composite_fbo }
+const TRANSPARENT: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+
+fn main_target(engine: &EngineInner) -> DocTarget {
+    DocTarget { tex: engine.composite_texture, fbo: engine.composite_fbo }
+}
+
+/// Start a pass that covers the whole document and replaces what it draws
+/// over — the shape of every pass into the engine's document-sized
+/// framebuffers (composite, group scratch, scratch A and B).
+fn doc_pass<'a>(engine: &'a EngineInner, program: &'a ShaderProgram) -> Pass<'a> {
+    engine
+        .pass(program)
+        .blend(Blend::Off)
+        .viewport(0, 0, engine.doc_width as i32, engine.doc_height as i32)
+}
+
+/// Copy the document-sized texture `src` over the framebuffer `dst`.
+fn copy_doc(engine: &EngineInner, src: TextureHandle, dst: FramebufferHandle, scissor: Scissor) {
+    doc_pass(engine, &engine.shaders.blit)
+        .scissor(scissor)
+        .texture("u_tex", src)
+        .draw(Target::Framebuffer(dst));
+}
+
+/// A layer mask as `blend.glsl` reads it: the texture, its size, and where
+/// its texel (0, 0) sits in the document (see `mask_doc_offset`).
+#[derive(Clone, Copy)]
+pub(crate) struct MaskRef {
+    pub texture: TextureHandle,
+    pub width: u32,
+    pub height: u32,
+    pub offset_x: f32,
+    pub offset_y: f32,
+}
+
+/// `layer_id`'s mask texture placed at the given document origin, if it has
+/// one. Whether the mask is enabled is the caller's question.
+fn live_mask(engine: &EngineInner, layer_id: &str, offset_x: f32, offset_y: f32) -> Option<MaskRef> {
+    let texture = *engine.layer_masks.get(layer_id)?;
+    let (width, height) = engine.texture_pool.get_size(texture)?;
+    engine.texture_pool.get(texture)?;
+    Some(MaskRef { texture, width, height, offset_x, offset_y })
+}
+
+/// One source for `blend.glsl`: a texture placed in the document, and how
+/// it is combined with the target.
+#[derive(Clone, Copy)]
+pub(crate) struct BlendSource<'a> {
+    pub texture: TextureHandle,
+    /// Document position of the texture's texel (0, 0).
+    pub offset: (f32, f32),
+    /// Texture size in texels.
+    pub size: (f32, f32),
+    pub opacity: f32,
+    pub is_premultiplied: bool,
+    pub overlay: Option<&'a ColorOverlayDesc>,
+    pub mask: Option<MaskRef>,
+    /// The target before the layer's behind effects, for the blend formula
+    /// to read instead of the target itself (see `capture_effect_backdrop`).
+    pub backdrop: Option<TextureHandle>,
+    /// Draw the source's red channel as the translucent blue mask overlay
+    /// instead of blending it.
+    pub is_mask_overlay: bool,
+    /// Tile the source across the document (seamless pattern preview).
+    pub wraps: bool,
+}
+
+impl BlendSource<'static> {
+    /// An opaque, unmasked, straight-alpha source.
+    pub fn new(texture: TextureHandle, offset: (f32, f32), size: (f32, f32)) -> Self {
+        Self {
+            texture,
+            offset,
+            size,
+            opacity: 1.0,
+            is_premultiplied: false,
+            overlay: None,
+            mask: None,
+            backdrop: None,
+            is_mask_overlay: false,
+            wraps: false,
+        }
+    }
+}
+
+/// Which of the engine's two document-sized scratch targets a blend goes
+/// through on its way to the target.
+#[derive(Clone, Copy)]
+pub(crate) enum Scratch {
+    A,
+    B,
+}
+
+/// Blend `source` over `target` with `program` (a `blend.glsl` variant). The
+/// shader reads the target, so the result is drawn into a scratch and copied
+/// back. With `clip`, both passes only touch that rectangle. Returns `false`,
+/// leaving the target as it was, if a texture no longer exists.
+pub(crate) fn blend_through_scratch(
+    engine: &EngineInner,
+    program: &ShaderProgram,
+    source: &BlendSource,
+    target: DocTarget,
+    scratch: Scratch,
+    clip: Option<Rect>,
+) -> bool {
+    let (scratch_tex, scratch_fbo) = match scratch {
+        Scratch::A => (engine.scratch_texture_a, engine.scratch_fbo_a),
+        Scratch::B => (engine.scratch_texture_b, engine.scratch_fbo_b),
+    };
+    let scissor = clip.map_or(Scissor::Inherit, Scissor::Rect);
+
+    let mut pass = doc_pass(engine, program)
+        .scissor(scissor)
+        .texture("u_srcTex", source.texture)
+        .texture("u_dstTex", target.tex)
+        .f32("u_opacity", source.opacity)
+        .i32("u_hasBrushTexture", 0)
+        .vec2("u_srcOffset", source.offset.0, source.offset.1)
+        .vec2("u_srcSize", source.size.0, source.size.1)
+        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
+        .i32("u_srcPremultiplied", i32::from(source.is_premultiplied))
+        .i32("u_docColorMode", engine.doc_color_mode as i32)
+        .i32("u_wrapLayer", i32::from(source.wraps))
+        .i32("u_maskOverlay", i32::from(source.is_mask_overlay));
+    pass = match source.overlay {
+        Some(overlay) => pass
+            .i32("u_overlayEnabled", 1)
+            .vec3("u_overlayColor", overlay.color[0], overlay.color[1], overlay.color[2])
+            .f32("u_overlayOpacity", overlay.opacity),
+        None => pass.i32("u_overlayEnabled", 0),
+    };
+    // A sampler the draw does not read must still not point at a unit that
+    // holds the render target, so the unused ones share the source's unit.
+    let mut units = 2;
+    pass = match source.mask {
+        Some(mask) => {
+            units += 1;
+            pass.texture("u_maskTex", mask.texture)
+                .i32("u_hasMask", 1)
+                .vec2("u_maskSize", mask.width as f32, mask.height as f32)
+                .vec2("u_maskOffset", mask.offset_x, mask.offset_y)
+        }
+        None => pass.i32("u_maskTex", 0).i32("u_hasMask", 0),
+    };
+    pass = match source.backdrop {
+        Some(backdrop) => {
+            units += 1;
+            pass.texture("u_backdropTex", backdrop).i32("u_hasBackdrop", 1)
+        }
+        None => pass.i32("u_backdropTex", 0).i32("u_hasBackdrop", 0),
+    };
+    if !pass.draw(Target::Framebuffer(scratch_fbo)) {
+        return false;
+    }
+
+    // The target must leave its sampler unit before it is drawn into. The
+    // mask and backdrop go too: a texture left on a unit outlives its layer,
+    // and once the pool hands it to a new owner a later draw into it by any
+    // blend program still pointing at that unit is a feedback loop that
+    // WebGL drops without writing anything (#1414).
+    engine.gpu().unbind_textures(units);
+    copy_doc(engine, scratch_tex, target.fbo, scissor);
+    true
+}
+
+/// Whether layers tile across the document (seamless pattern with wrap).
+fn layers_wrap(engine: &EngineInner) -> bool {
+    engine.seamless_pattern && engine.seamless_wrap
+}
+
+/// Blend a layer-like source onto `target` using the blend shader variant
+/// specialized for `blend_mode`.
+fn blend_onto_target(
+    engine: &EngineInner,
+    source: &BlendSource,
+    blend_mode: i32,
+    target: DocTarget,
+    clip: Option<Rect>,
+) -> Result<(), String> {
+    let program = engine.shaders.blend_for_mode(&engine.gl, blend_mode)?;
+    let source = BlendSource { wraps: layers_wrap(engine), ..*source };
+    blend_through_scratch(engine, &program, &source, target, Scratch::A, clip);
+    Ok(())
+}
+
+/// `blend_onto_target` for the live compositor, touching only the source's
+/// rectangle (clipped to the document). Outside it the blend shader returns
+/// the destination texel unchanged, so skipping those texels gives the same
+/// target as a full-document pass, at the cost of the layer's area instead
+/// of the document's. With seamless wrap on the layer can land anywhere, so
+/// the full pass runs.
+fn blend_layer_rect_onto_target(
+    engine: &EngineInner,
+    source: &BlendSource,
+    blend_mode: i32,
+    target: DocTarget,
+) -> Result<(), String> {
+    if layers_wrap(engine) {
+        return blend_onto_target(engine, source, blend_mode, target, None);
+    }
+    let x0 = source.offset.0.floor() as i32;
+    let y0 = source.offset.1.floor() as i32;
+    let x1 = (source.offset.0 + source.size.0).ceil() as i32;
+    let y1 = (source.offset.1 + source.size.1).ceil() as i32;
+    let rect = Rect::new(x0, y0, (x1 - x0).max(0) as u32, (y1 - y0).max(0) as u32);
+    let Some(clip) = fx_extent::clip_to_document(rect, engine.doc_width, engine.doc_height) else {
+        return Ok(());
+    };
+    blend_onto_target(engine, source, blend_mode, target, Some(clip))
 }
 
 /// One open adjusted-group accumulation on the compositor's group stack.
@@ -555,7 +714,7 @@ fn main_target(engine: &EngineInner) -> Target {
 /// its pre-adjustment cache (its children were not re-rendered this frame).
 struct GroupFrame {
     id: String,
-    target: Target,
+    target: DocTarget,
     skip: bool,
 }
 
@@ -564,7 +723,7 @@ struct GroupFrame {
 /// Depth 0 is the outermost currently-open adjusted group; a group nested
 /// inside another gets the next depth's scratch instead of colliding with
 /// its ancestor's (#857).
-fn acquire_group_scratch_level(engine: &mut EngineInner, depth: usize) -> Result<Target, String> {
+fn acquire_group_scratch_level(engine: &mut EngineInner, depth: usize) -> Result<DocTarget, String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     while engine.group_scratch_levels.len() <= depth {
@@ -584,17 +743,12 @@ fn acquire_group_scratch_level(engine: &mut EngineInner, depth: usize) -> Result
         }
         engine.group_scratch_levels[depth] = (tex, fbo);
     }
-    Ok(Target { tex, fbo })
+    Ok(DocTarget { tex, fbo })
 }
 
-/// Clear a scratch target to transparent and leave it bound.
-fn clear_target(engine: &mut EngineInner, target: Target) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
-    engine.fbo_pool.bind(&engine.gl, target.fbo);
-    engine.gl.viewport(0, 0, doc_w, doc_h);
-    engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+/// Clear a scratch target to transparent.
+fn clear_target(engine: &EngineInner, target: DocTarget) {
+    engine.gpu().clear(target.tex, TRANSPARENT);
 }
 
 /// Get (allocating or resizing on demand) the persistent pre-adjustment
@@ -618,297 +772,51 @@ fn get_or_create_pre_adj_cache(engine: &mut EngineInner, group_id: &str) -> Resu
 /// pre-adjustment cache, so a later frame that only changes adjustment
 /// values (not children) can restore from it instead of re-blending.
 fn refresh_pre_adj_cache(engine: &mut EngineInner, group_id: &str, src_tex: TextureHandle) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
-    let cache_tex = match get_or_create_pre_adj_cache(engine, group_id) {
-        Ok(t) => t,
-        Err(_) => return,
+    let Ok(cache_tex) = get_or_create_pre_adj_cache(engine, group_id) else {
+        return;
     };
-    if let (Some(dst), Some(src)) = (engine.texture_pool.get(cache_tex).cloned(), engine.texture_pool.get(src_tex).cloned()) {
-        engine.render_to_texture(&dst, doc_w, doc_h, |eng| {
-            eng.gl.use_program(Some(&eng.shaders.blit.program));
-            eng.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            eng.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
-            if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") { eng.gl.uniform1i(Some(&loc), 0); }
-            eng.draw_fullscreen_quad();
-        });
-    }
+    engine
+        .pass(&engine.shaders.blit)
+        .blend(Blend::Off)
+        .texture("u_tex", src_tex)
+        .draw(Target::Texture(cache_tex));
 }
 
 /// A copy of `target` taken before a non-Normal layer draws its behind
 /// effects, for its blend to read as the backdrop (`u_backdropTex` in
 /// `blend.glsl`). Normal needs none: its result doesn't depend on the
 /// backdrop's colour. The caller releases the texture.
-fn capture_effect_backdrop(engine: &mut EngineInner, blend_mode: i32, has_behind_effects: bool, target: Target) -> Option<TextureHandle> {
+fn capture_effect_backdrop(engine: &mut EngineInner, blend_mode: i32, has_behind_effects: bool, target: DocTarget) -> Option<TextureHandle> {
     if blend_mode == 0 || !has_behind_effects {
         return None;
     }
-    let doc_w = engine.doc_width;
-    let doc_h = engine.doc_height;
-    let copy = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h).ok()?;
-    let (Some(dst), Some(src)) = (engine.texture_pool.get(copy).cloned(), engine.texture_pool.get(target.tex).cloned()) else {
+    let copy = engine.texture_pool.acquire(&engine.gl, engine.doc_width, engine.doc_height).ok()?;
+    let is_copied = engine
+        .pass(&engine.shaders.blit)
+        .blend(Blend::Off)
+        .texture("u_tex", target.tex)
+        .draw(Target::Texture(copy));
+    if !is_copied {
         engine.texture_pool.release(copy);
         return None;
-    };
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&dst, doc_w as i32, doc_h as i32, |eng| {
-        eng.gl.use_program(Some(&eng.shaders.blit.program));
-        eng.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        eng.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
-        if let Some(loc) = eng.shaders.blit.location(&eng.gl, "u_tex") { eng.gl.uniform1i(Some(&loc), 0); }
-        eng.draw_fullscreen_quad();
-    });
-    engine.fbo_pool.bind(&engine.gl, target.fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+    }
     Some(copy)
 }
 
 /// Restore a group's cached pre-adjustment pixels into its live scratch
 /// target, skipping re-rendering of its children.
-fn restore_pre_adj_cache(engine: &mut EngineInner, cache_tex: TextureHandle, target: Target) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
-    if let Some(src) = engine.texture_pool.get(cache_tex).cloned() {
-        engine.fbo_pool.bind(&engine.gl, target.fbo);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.use_program(Some(&engine.shaders.blit.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src));
-        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.draw_fullscreen_quad();
-    }
-}
-
-/// Blend a source texture onto the composite using the blend shader
-/// variant specialized for `blend_mode`.
-fn blend_onto_composite(
-    engine: &mut EngineInner,
-    src_tex: &web_sys::WebGlTexture,
-    opacity: f32,
-    blend_mode: i32,
-    layer_x: f32,
-    layer_y: f32,
-    tw: u32,
-    th: u32,
-    premultiplied: bool,
-    overlay: Option<&ColorOverlayDesc>,
-    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
-) -> Result<(), String> {
-    let target = main_target(engine);
-    blend_onto_target(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target)
-}
-
-/// `blend_onto_target` for the live compositor, touching only the source's
-/// rectangle (clipped to the document). Outside it the blend shader returns
-/// the destination texel unchanged, so skipping those texels gives the same
-/// target as a full-document pass, at the cost of the layer's area instead
-/// of the document's. With seamless wrap on the layer can land anywhere, so
-/// the full pass runs.
-fn blend_layer_rect_onto_target(
-    engine: &mut EngineInner,
-    src_tex: &web_sys::WebGlTexture,
-    opacity: f32,
-    blend_mode: i32,
-    layer_x: f32,
-    layer_y: f32,
-    tw: u32,
-    th: u32,
-    premultiplied: bool,
-    overlay: Option<&ColorOverlayDesc>,
-    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
-    target: Target,
-    backdrop: Option<&web_sys::WebGlTexture>,
-) -> Result<(), String> {
-    if engine.seamless_pattern && engine.seamless_wrap {
-        return blend_onto_target_over_backdrop(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target, backdrop);
-    }
-    let x0 = layer_x.floor() as i32;
-    let y0 = layer_y.floor() as i32;
-    let x1 = (layer_x + tw as f32).ceil() as i32;
-    let y1 = (layer_y + th as f32).ceil() as i32;
-    let rect = Rect::new(x0, y0, (x1 - x0).max(0) as u32, (y1 - y0).max(0) as u32);
-    let Some(clip) = fx_extent::clip_to_document(rect, engine.doc_width, engine.doc_height) else {
-        return Ok(());
-    };
-    engine.gl.enable(WebGl2RenderingContext::SCISSOR_TEST);
-    engine.gl.scissor(clip.x, clip.y, clip.width as i32, clip.height as i32);
-    let result = blend_onto_target_over_backdrop(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target, backdrop);
-    engine.gl.disable(WebGl2RenderingContext::SCISSOR_TEST);
-    result
-}
-
-/// Blend a source texture onto `target` using the blend shader variant
-/// specialized for `blend_mode`.
-fn blend_onto_target(
-    engine: &mut EngineInner,
-    src_tex: &web_sys::WebGlTexture,
-    opacity: f32,
-    blend_mode: i32,
-    layer_x: f32,
-    layer_y: f32,
-    tw: u32,
-    th: u32,
-    premultiplied: bool,
-    overlay: Option<&ColorOverlayDesc>,
-    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
-    target: Target,
-) -> Result<(), String> {
-    blend_onto_target_over_backdrop(engine, src_tex, opacity, blend_mode, layer_x, layer_y, tw, th, premultiplied, overlay, mask_tex, target, None)
-}
-
-/// `blend_onto_target`, with the blend formula reading `backdrop` (the
-/// target before the layer's behind effects, see `capture_effect_backdrop`)
-/// instead of the target itself.
-fn blend_onto_target_over_backdrop(
-    engine: &mut EngineInner,
-    src_tex: &web_sys::WebGlTexture,
-    opacity: f32,
-    blend_mode: i32,
-    layer_x: f32,
-    layer_y: f32,
-    tw: u32,
-    th: u32,
-    premultiplied: bool,
-    overlay: Option<&ColorOverlayDesc>,
-    mask_tex: Option<(&web_sys::WebGlTexture, u32, u32, f32, f32)>,
-    target: Target,
-    backdrop: Option<&web_sys::WebGlTexture>,
-) -> Result<(), String> {
-    let dst_texture = target.tex;
-    let dst_fbo = target.fbo;
-    let doc_w = engine.doc_width as f32;
-    let doc_h = engine.doc_height as f32;
-
-    let shader = engine.shaders.blend_for_mode(&engine.gl, blend_mode)?;
-    engine.gl.use_program(Some(&shader.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(src_tex));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    if let Some(dst_tex) = engine.texture_pool.get(dst_texture) {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(dst_tex));
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), opacity); }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasBrushTexture") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), if premultiplied { 1 } else { 0 }); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
-    let wrap_on = engine.seamless_pattern && engine.seamless_wrap;
-    if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), if wrap_on { 1 } else { 0 }); }
-
-    if let Some(ov) = overlay {
-        if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(&engine.gl, "u_overlayColor") { engine.gl.uniform3f(Some(&loc), ov.color[0], ov.color[1], ov.color[2]); }
-        if let Some(loc) = shader.location(&engine.gl, "u_overlayOpacity") { engine.gl.uniform1f(Some(&loc), ov.opacity); }
-    } else {
-        if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
-    }
-
-    if let Some((mask_gl_tex, mask_w, mask_h, mask_offset_x, mask_offset_y)) = mask_tex {
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_gl_tex));
-        if let Some(loc) = shader.location(&engine.gl, "u_maskTex") { engine.gl.uniform1i(Some(&loc), 2); }
-        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(&engine.gl, "u_maskSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
-        if let Some(loc) = shader.location(&engine.gl, "u_maskOffset") { engine.gl.uniform2f(Some(&loc), mask_offset_x, mask_offset_y); }
-    } else {
-        if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
-    }
-    if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(backdrop_tex) = backdrop {
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE3);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(backdrop_tex));
-        if let Some(loc) = shader.location(&engine.gl, "u_backdropTex") { engine.gl.uniform1i(Some(&loc), 3); }
-        if let Some(loc) = shader.location(&engine.gl, "u_hasBackdrop") { engine.gl.uniform1i(Some(&loc), 1); }
-    } else if let Some(loc) = shader.location(&engine.gl, "u_hasBackdrop") {
-        engine.gl.uniform1i(Some(&loc), 0);
-    }
-
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.draw_fullscreen_quad();
-
-    if backdrop.is_some() {
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE3);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    }
-
-    // A mask left on unit 2 outlives its layer: once the layer is deleted the
-    // pool hands the texture to a new owner, and a later draw into it by any
-    // blend program whose u_maskTex still points at unit 2 is a feedback loop
-    // that WebGL drops without writing anything (#1414).
-    if mask_tex.is_some() {
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    }
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
-    engine.fbo_pool.bind(&engine.gl, dst_fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.gl.use_program(Some(&engine.shaders.blit.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
-    }
-    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-    engine.draw_fullscreen_quad();
-    Ok(())
+fn restore_pre_adj_cache(engine: &EngineInner, cache_tex: TextureHandle, target: DocTarget) {
+    copy_doc(engine, cache_tex, target.fbo, Scissor::Inherit);
 }
 
 /// Render the mask as a translucent blue overlay on top of the composite.
 /// Used during mask edit mode so the user can see what's under the mask.
-fn render_mask_overlay(
-    engine: &mut EngineInner,
-    mask_tex: &web_sys::WebGlTexture,
-    mask_w: u32,
-    mask_h: u32,
-    mask_offset_x: f32,
-    mask_offset_y: f32,
-) {
-    let doc_w = engine.doc_width as f32;
-    let doc_h = engine.doc_height as f32;
-
-    engine.gl.use_program(Some(&engine.shaders.blend_normal.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_tex));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
-    }
-    let shader = &engine.shaders.blend_normal;
-    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), mask_offset_x, mask_offset_y); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), 0); }
-
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.draw_fullscreen_quad();
-
-    // Break feedback loop and blit back to composite
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
-    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.gl.use_program(Some(&engine.shaders.blit.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
-    }
-    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-    engine.draw_fullscreen_quad();
+fn render_mask_overlay(engine: &EngineInner, mask: MaskRef) {
+    let source = BlendSource {
+        is_mask_overlay: true,
+        ..BlendSource::new(mask.texture, (mask.offset_x, mask.offset_y), (mask.width as f32, mask.height as f32))
+    };
+    blend_through_scratch(engine, &engine.shaders.blend_normal, &source, main_target(engine), Scratch::A, None);
 }
 
 /// Draw the mask edit overlay for `mask_edit_id` if that layer is routed
@@ -935,62 +843,16 @@ fn render_routed_mask_edit_overlay(
         return;
     }
     let (offset_x, offset_y) = mask_doc_offset(layer.layer_type, layer.x as f32, layer.y as f32);
-    let Some(&mask_handle) = engine.layer_masks.get(edit_id) else { return };
-    let Some((mw, mh)) = engine.texture_pool.get_size(mask_handle) else { return };
-    let Some(mask_gl) = engine.texture_pool.get(mask_handle).cloned() else { return };
-    render_mask_overlay(engine, &mask_gl, mw, mh, offset_x, offset_y);
+    let Some(mask) = live_mask(engine, edit_id, offset_x, offset_y) else { return };
+    render_mask_overlay(engine, mask);
 }
 
 /// Render the quick mask as a translucent blue overlay on top of the composite.
 /// Blue covers unselected areas (mask=0), selected areas (mask=255) are clear.
-fn render_quick_mask_overlay(engine: &mut EngineInner) {
-    let Some(tex_handle) = engine.quick_mask_texture else { return };
-    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((engine.doc_width, engine.doc_height));
-    let mask_tex = match engine.texture_pool.get(tex_handle) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-
-    let doc_w = engine.doc_width as f32;
-    let doc_h = engine.doc_height as f32;
-
-    engine.gl.use_program(Some(&engine.shaders.blend_normal.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&mask_tex));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    if let Some(comp_tex) = engine.texture_pool.get(engine.composite_texture) {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(comp_tex));
-    }
-    let shader = &engine.shaders.blend_normal;
-    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_dstTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), 1.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), w as f32, h as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcPremultiplied") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_overlayEnabled") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasMask") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_maskOverlay") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_wrapLayer") { engine.gl.uniform1i(Some(&loc), 0); }
-
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.draw_fullscreen_quad();
-
-    // Break feedback loop and blit back to composite
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
-    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.gl.use_program(Some(&engine.shaders.blit.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(scratch_tex) = engine.texture_pool.get(engine.scratch_texture_a) {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch_tex));
-    }
-    if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-    engine.draw_fullscreen_quad();
+fn render_quick_mask_overlay(engine: &EngineInner) {
+    let Some(texture) = engine.quick_mask_texture else { return };
+    let (width, height) = engine.texture_pool.get_size(texture).unwrap_or((engine.doc_width, engine.doc_height));
+    render_mask_overlay(engine, MaskRef { texture, width, height, offset_x: 0.0, offset_y: 0.0 });
 }
 
 /// Render (layer + pending stroke) into a scratch texture via the
@@ -1003,37 +865,27 @@ fn render_layer_plus_stroke(
     stroke_handle: TextureHandle,
     tw: u32,
     th: u32,
-    _layer_id: &str,
 ) -> Option<TextureHandle> {
     if engine.texture_pool.get_size(stroke_handle).map_or(true, |(w, h)| w != tw || h != th) {
         return None;
     }
-    let layer_gl = engine.texture_pool.get(layer_handle)?.clone();
-    let stroke_gl = engine.texture_pool.get(stroke_handle)?.clone();
+    engine.texture_pool.get(layer_handle)?;
+    engine.texture_pool.get(stroke_handle)?;
     let merged = engine.texture_pool.acquire(&engine.gl, tw, th).ok()?;
-    let merged_gl = engine.texture_pool.get(merged)?.clone();
 
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&merged_gl, tw as i32, th as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.composite;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&stroke_gl));
-        if let Some(loc) = shader.location(gl, "u_srcTex") { gl.uniform1i(Some(&loc), 0); }
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_gl));
-        if let Some(loc) = shader.location(gl, "u_dstTex") { gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), 1.0); }
-        if let Some(loc) = shader.location(gl, "u_strokeTexSize") { gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-        engine.draw_fullscreen_quad();
-    });
-
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
+    let is_drawn = engine
+        .pass(&engine.shaders.composite)
+        .blend(Blend::Off)
+        .texture("u_srcTex", stroke_handle)
+        .texture("u_dstTex", layer_handle)
+        .f32("u_opacity", 1.0)
+        .vec2("u_strokeTexSize", tw as f32, th as f32)
+        .draw(Target::Texture(merged));
+    engine.gpu().unbind_textures(2);
+    if !is_drawn {
+        engine.texture_pool.release(merged);
+        return None;
+    }
     Some(merged)
 }
 
@@ -1048,39 +900,26 @@ fn render_layer_masked_for_effects(
     th: u32,
     layer_x: f32,
     layer_y: f32,
-    mask: (&web_sys::WebGlTexture, u32, u32, f32, f32),
+    mask: MaskRef,
 ) -> Option<TextureHandle> {
-    let (mask_gl, mask_w, mask_h, mask_offset_x, mask_offset_y) = mask;
-    let src_gl = engine.texture_pool.get(src_handle)?.clone();
+    engine.texture_pool.get(src_handle)?;
     let masked = engine.texture_pool.acquire(&engine.gl, tw, th).ok()?;
-    let Some(masked_gl) = engine.texture_pool.get(masked).cloned() else {
+
+    let is_drawn = engine
+        .pass(&engine.shaders.layer_mask_apply)
+        .blend(Blend::Off)
+        .texture("u_srcTex", src_handle)
+        .texture("u_maskTex", mask.texture)
+        .vec2("u_layerOffset", layer_x, layer_y)
+        .vec2("u_layerSize", tw as f32, th as f32)
+        .vec2("u_maskOffset", mask.offset_x, mask.offset_y)
+        .vec2("u_maskSize", mask.width as f32, mask.height as f32)
+        .draw(Target::Texture(masked));
+    engine.gpu().unbind_textures(2);
+    if !is_drawn {
         engine.texture_pool.release(masked);
         return None;
-    };
-
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.render_to_texture(&masked_gl, tw as i32, th as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.layer_mask_apply;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_gl));
-        if let Some(loc) = shader.location(gl, "u_srcTex") { gl.uniform1i(Some(&loc), 0); }
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(mask_gl));
-        if let Some(loc) = shader.location(gl, "u_maskTex") { gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(gl, "u_layerOffset") { gl.uniform2f(Some(&loc), layer_x, layer_y); }
-        if let Some(loc) = shader.location(gl, "u_layerSize") { gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-        if let Some(loc) = shader.location(gl, "u_maskOffset") { gl.uniform2f(Some(&loc), mask_offset_x, mask_offset_y); }
-        if let Some(loc) = shader.location(gl, "u_maskSize") { gl.uniform2f(Some(&loc), mask_w as f32, mask_h as f32); }
-        engine.draw_fullscreen_quad();
-    });
-
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-
+    }
     Some(masked)
 }
 
@@ -1144,21 +983,14 @@ fn render_stroke_silhouette(engine: &mut EngineInner, src: EffectSource, stroke:
         lopsy_core::layer::DocRect { x: src.x, y: src.y, width: src.width, height: src.height },
         reach,
     );
-    let src_gl = engine.texture_pool.get(src.handle)?.clone();
+    engine.texture_pool.get(src.handle)?;
     let out = engine.texture_pool.acquire(&engine.gl, rect.width, rect.height).ok()?;
-    let frame = SilhouetteFrame { src: &src_gl, src_w: src.width, src_h: src.height, pad_x: src.x - rect.x, pad_y: src.y - rect.y, w: rect.width, h: rect.height };
+    let frame = SilhouetteFrame { src: src.handle, src_w: src.width, src_h: src.height, pad_x: src.x - rect.x, pad_y: src.y - rect.y, w: rect.width, h: rect.height };
 
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
     // Units 0 and 1 may hold a texture the pool just handed back as `out`.
-    for unit in [WebGl2RenderingContext::TEXTURE1, WebGl2RenderingContext::TEXTURE0] {
-        engine.gl.active_texture(unit);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    }
+    engine.gpu().unbind_textures(2);
     let result = silhouette_by_band(engine, &frame, stroke, reach, out);
-    for unit in [WebGl2RenderingContext::TEXTURE1, WebGl2RenderingContext::TEXTURE0] {
-        engine.gl.active_texture(unit);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    }
+    engine.gpu().unbind_textures(2);
 
     match result {
         Some(handle) => Some(EffectSource { handle, x: rect.x, y: rect.y, width: rect.width, height: rect.height }),
@@ -1170,8 +1002,8 @@ fn render_stroke_silhouette(engine: &mut EngineInner, src: EffectSource, stroke:
 }
 
 /// The source layer and the padded region a silhouette is rendered into.
-struct SilhouetteFrame<'a> {
-    src: &'a web_sys::WebGlTexture,
+struct SilhouetteFrame {
+    src: TextureHandle,
     src_w: u32,
     src_h: u32,
     /// The layer's offset inside the region.
@@ -1179,6 +1011,14 @@ struct SilhouetteFrame<'a> {
     pad_y: f32,
     w: u32,
     h: u32,
+}
+
+fn stroke_position_index(stroke: &StrokeDesc) -> i32 {
+    match stroke.position {
+        lopsy_core::layer::StrokePosition::Outside => 0,
+        lopsy_core::layer::StrokePosition::Inside => 1,
+        lopsy_core::layer::StrokePosition::Center => 2,
+    }
 }
 
 /// Stroke silhouette: extract alpha, the two-pass Euclidean band
@@ -1194,310 +1034,213 @@ fn silhouette_by_band(
     out: TextureHandle,
 ) -> Option<TextureHandle> {
     let tmp = engine.texture_pool.acquire(&engine.gl, frame.w, frame.h).ok()?;
-    let (Some(out_gl), Some(tmp_gl)) = (engine.texture_pool.get(out).cloned(), engine.texture_pool.get(tmp).cloned()) else {
+    if engine.texture_pool.get(out).is_none() || engine.texture_pool.get(tmp).is_none() {
         engine.texture_pool.release(tmp);
         return None;
-    };
+    }
     let (fw, fh) = (frame.w as f32, frame.h as f32);
 
     // Layer alpha placed in the padded region → out.
-    engine.render_to_texture(&out_gl, frame.w as i32, frame.h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.glow;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(frame.src));
-        if let Some(loc) = shader.location(gl, "u_srcTex") { gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(gl, "u_srcOffset") { gl.uniform2f(Some(&loc), frame.pad_x, frame.pad_y); }
-        if let Some(loc) = shader.location(gl, "u_srcSize") { gl.uniform2f(Some(&loc), frame.src_w as f32, frame.src_h as f32); }
-        if let Some(loc) = shader.location(gl, "u_docSize") { gl.uniform2f(Some(&loc), fw, fh); }
-        if let Some(loc) = shader.location(gl, "u_rawAlpha") { gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(gl, "u_mode") { gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(gl, "u_hasOrigTex") { gl.uniform1i(Some(&loc), 0); }
-        engine.draw_fullscreen_quad();
-    });
+    alpha_extract_pass(engine, frame.src, (frame.pad_x, frame.pad_y), (frame.src_w as f32, frame.src_h as f32), (fw, fh), false)
+        .draw(Target::Texture(out));
 
     // Euclidean band: out → tmp (rows) → out (columns).
-    for (read, write, pass) in [(&out_gl, &tmp_gl, StrokeBandPass::Rows), (&tmp_gl, &out_gl, StrokeBandPass::Columns)] {
-        engine.render_to_texture(write, frame.w as i32, frame.h as i32, |engine| {
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(read));
-            use_stroke_band_program(engine, pass, reach, false);
-            engine.draw_fullscreen_quad();
-        });
+    for (read, write, pass) in [(out, tmp, StrokeBandPass::Rows), (tmp, out, StrokeBandPass::Columns)] {
+        stroke_band_pass(engine, read, pass, reach, false).draw(Target::Texture(write));
     }
 
     // Band (out) + layer → silhouette (tmp).
-    engine.render_to_texture(&tmp_gl, frame.w as i32, frame.h as i32, |engine| {
-        let gl = &engine.gl;
-        let shader = &engine.shaders.stroke_apply;
-        gl.use_program(Some(&shader.program));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&out_gl));
-        gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(frame.src));
-        if let Some(loc) = shader.location(gl, "u_bandTex") { gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(gl, "u_origTex") { gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(gl, "u_strokeColor") { gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
-        if let Some(loc) = shader.location(gl, "u_opacity") { gl.uniform1f(Some(&loc), stroke.opacity); }
-        if let Some(loc) = shader.location(gl, "u_position") { gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(gl, "u_origOffset") { gl.uniform2f(Some(&loc), frame.pad_x, frame.pad_y); }
-        if let Some(loc) = shader.location(gl, "u_origSize") { gl.uniform2f(Some(&loc), frame.src_w as f32, frame.src_h as f32); }
-        if let Some(loc) = shader.location(gl, "u_docSize") { gl.uniform2f(Some(&loc), fw, fh); }
-        if let Some(loc) = shader.location(gl, "u_silhouette") { gl.uniform1i(Some(&loc), 1); }
-        // Uniforms persist per program: set the edge mode explicitly so an
-        // outside ring covers the anti-aliased edge here just as when drawn.
-        if let Some(loc) = shader.location(gl, "u_knockout") { gl.uniform1i(Some(&loc), is_behind_stroke(stroke) as i32); }
-        if let Some(loc) = shader.location(gl, "u_layerOpacity") { gl.uniform1f(Some(&loc), 1.0); }
-        engine.draw_fullscreen_quad();
-    });
+    engine
+        .pass(&engine.shaders.stroke_apply)
+        .blend(Blend::Off)
+        .texture("u_bandTex", out)
+        .texture("u_origTex", frame.src)
+        .vec4("u_strokeColor", stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3])
+        .f32("u_opacity", stroke.opacity)
+        .i32("u_position", 0)
+        .vec2("u_origOffset", frame.pad_x, frame.pad_y)
+        .vec2("u_origSize", frame.src_w as f32, frame.src_h as f32)
+        .vec2("u_docSize", fw, fh)
+        .i32("u_silhouette", 1)
+        // An outside ring covers the anti-aliased edge here just as when drawn.
+        .i32("u_knockout", is_behind_stroke(stroke) as i32)
+        .f32("u_layerOpacity", 1.0)
+        .draw(Target::Texture(tmp));
 
     engine.texture_pool.release(out);
     Some(tmp)
 }
 
+/// The layer's alpha (inverted with `invert`) at its place in a region of
+/// `region_size`, through `glow.glsl`'s raw-alpha mode.
+fn alpha_extract_pass<'a>(
+    engine: &'a EngineInner,
+    layer: TextureHandle,
+    offset: (f32, f32),
+    size: (f32, f32),
+    region_size: (f32, f32),
+    invert: bool,
+) -> Pass<'a> {
+    engine
+        .pass(&engine.shaders.glow)
+        .blend(Blend::Off)
+        .texture("u_srcTex", layer)
+        .i32("u_origTex", 0)
+        .vec2("u_srcOffset", offset.0, offset.1)
+        .vec2("u_srcSize", size.0, size.1)
+        .vec2("u_docSize", region_size.0, region_size.1)
+        .i32("u_rawAlpha", 1)
+        .i32("u_mode", i32::from(invert))
+        .i32("u_hasOrigTex", 0)
+}
+
+/// Blur the alpha in scratch B with a separable Gaussian, through scratch A.
+fn blur_scratch_b(engine: &EngineInner, blur_radius: u32) {
+    let r = blur_radius.min(63);
+    let kernel = lopsy_core::filters::blur::gaussian_kernel(r);
+    // Half-kernel from the centre out: weights[0] is the centre and
+    // weights[i] the tap at offset ±i.
+    let mut weights = [0.0f32; 64];
+    for (i, weight) in weights.iter_mut().enumerate() {
+        *weight = kernel.get(r as usize + i).copied().unwrap_or(0.0);
+    }
+    let steps = [
+        (engine.scratch_texture_b, engine.scratch_fbo_a, (1.0, 0.0)),
+        (engine.scratch_texture_a, engine.scratch_fbo_b, (0.0, 1.0)),
+    ];
+    for (read, write, direction) in steps {
+        doc_pass(engine, &engine.shaders.gaussian_blur)
+            .texture("u_tex", read)
+            .i32("u_radius", r as i32)
+            .f32_array("u_weights[0]", &weights)
+            .vec2("u_direction", direction.0, direction.1)
+            .draw(Target::Framebuffer(write));
+    }
+}
+
+/// A `glow.glsl` pass over the document with `source` as its input and every
+/// uniform but the raw-alpha and masking switches set from `glow`.
+fn glow_pass<'a>(engine: &'a EngineInner, source: TextureHandle, glow: &GlowDesc, mode: i32, tw: u32, th: u32, layer_x: f32, layer_y: f32) -> Pass<'a> {
+    doc_pass(engine, &engine.shaders.glow)
+        .texture("u_srcTex", source)
+        .vec4("u_glowColor", glow.color[0], glow.color[1], glow.color[2], glow.color[3])
+        .f32("u_size", glow.size)
+        .f32("u_spread", glow.spread)
+        .f32("u_opacity", glow.opacity)
+        .vec2("u_texelSize", 1.0 / tw as f32, 1.0 / th as f32)
+        .vec2("u_srcOffset", layer_x, layer_y)
+        .vec2("u_srcSize", tw as f32, th as f32)
+        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
+        .i32("u_mode", mode)
+}
+
 /// Render outer or inner glow.
 fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, glow: &GlowDesc, mode: i32, layer_x: f32, layer_y: f32, out: &mut EffectOut) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
     let blur_radius = glow.size.ceil() as u32;
-
-    let layer_tex = match engine.texture_pool.get(tex_handle).cloned() {
-        Some(t) => t,
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
+    let scratch_a = Target::Framebuffer(engine.scratch_fbo_a);
+    let scratch_b = Target::Framebuffer(engine.scratch_fbo_b);
 
     if blur_radius < 2 {
         // Small size: single pass, no separable blur needed
-        engine.gl.use_program(Some(&engine.shaders.glow.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        set_glow_uniforms(engine, glow, mode, tw, th, layer_x, layer_y);
-        if let Some(loc) = engine.shaders.glow.location(&engine.gl, "u_rawAlpha") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = engine.shaders.glow.location(&engine.gl, "u_hasOrigTex") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-        engine.draw_fullscreen_quad();
+        glow_pass(engine, tex_handle, glow, mode, tw, th, layer_x, layer_y)
+            .i32("u_origTex", 0)
+            .i32("u_rawAlpha", 0)
+            .i32("u_hasOrigTex", 0)
+            .clear(TRANSPARENT)
+            .draw(scratch_a);
     } else {
         // Phase 1: extract raw alpha (outer) or inverted alpha (inner) → scratch_b
-        engine.gl.use_program(Some(&engine.shaders.glow.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        set_glow_uniforms(engine, glow, mode, tw, th, layer_x, layer_y);
-        if let Some(loc) = engine.shaders.glow.location(&engine.gl, "u_rawAlpha") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = engine.shaders.glow.location(&engine.gl, "u_hasOrigTex") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-        engine.draw_fullscreen_quad();
+        glow_pass(engine, tex_handle, glow, mode, tw, th, layer_x, layer_y)
+            .i32("u_origTex", 0)
+            .i32("u_rawAlpha", 1)
+            .i32("u_hasOrigTex", 0)
+            .clear(TRANSPARENT)
+            .draw(scratch_b);
 
         // Phase 2: separable Gaussian blur
-        let r = blur_radius.min(63);
-        let kernel = lopsy_core::filters::blur::gaussian_kernel(r);
-        let blur_shader = &engine.shaders.gaussian_blur;
-        engine.gl.use_program(Some(&blur_shader.program));
-        if let Some(loc) = blur_shader.location(&engine.gl, "u_radius") {
-            engine.gl.uniform1i(Some(&loc), r as i32);
-        }
-        for i in 0..64usize {
-            let ki = r as usize + i;
-            let w = if ki < kernel.len() { kernel[ki] } else { 0.0 };
-            let name = format!("u_weights[{i}]");
-            if let Some(loc) = blur_shader.location(&engine.gl, &name) {
-                engine.gl.uniform1f(Some(&loc), w);
-            }
-        }
+        blur_scratch_b(engine, blur_radius);
 
-        // Horizontal: scratch_b → scratch_a
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b).cloned() {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
-        }
-        if let Some(loc) = blur_shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = blur_shader.location(&engine.gl, "u_direction") { engine.gl.uniform2f(Some(&loc), 1.0, 0.0); }
-        engine.draw_fullscreen_quad();
-
-        // Vertical: scratch_a → scratch_b
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_a).cloned() {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
-        }
-        if let Some(loc) = blur_shader.location(&engine.gl, "u_direction") { engine.gl.uniform2f(Some(&loc), 0.0, 1.0); }
-        engine.draw_fullscreen_quad();
-
-        // Phase 3: apply spread + masking + color → scratch_a
-        // Read blurred alpha from scratch_b, original layer from u_origTex
-        engine.gl.use_program(Some(&engine.shaders.glow.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b).cloned() {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
-        }
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        let shader = &engine.shaders.glow;
-        if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_origTex") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(&engine.gl, "u_hasOrigTex") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = shader.location(&engine.gl, "u_origOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-        if let Some(loc) = shader.location(&engine.gl, "u_origSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-        if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
-        if let Some(loc) = shader.location(&engine.gl, "u_rawAlpha") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-        engine.draw_fullscreen_quad();
-
-        // Unbind TEXTURE1
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+        // Phase 3: apply spread + masking + color → scratch_a. The blurred
+        // alpha in scratch_b is a document-sized source; the original layer
+        // masks it through u_origTex.
+        glow_pass(engine, engine.scratch_texture_b, glow, mode, tw, th, layer_x, layer_y)
+            .texture("u_origTex", tex_handle)
+            .i32("u_hasOrigTex", 1)
+            .vec2("u_origOffset", layer_x, layer_y)
+            .vec2("u_origSize", tw as f32, th as f32)
+            .vec2("u_srcOffset", 0.0, 0.0)
+            .vec2("u_srcSize", engine.doc_width as f32, engine.doc_height as f32)
+            .i32("u_rawAlpha", 0)
+            .clear(TRANSPARENT)
+            .draw(scratch_a);
+        engine.gpu().unbind_textures(2);
     }
 
     let src_rect = Rect::new(layer_x as i32, layer_y as i32, tw, th);
     emit_effect(engine, out, || if mode == 0 { fx_extent::outer_glow_extent(src_rect, glow) } else { fx_extent::inner_glow_extent(src_rect) });
 }
 
-fn set_glow_uniforms(engine: &EngineInner, glow: &GlowDesc, mode: i32, tw: u32, th: u32, layer_x: f32, layer_y: f32) {
-    let doc_w = engine.doc_width as f32;
-    let doc_h = engine.doc_height as f32;
-    let shader = &engine.shaders.glow;
-    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_glowColor") { engine.gl.uniform4f(Some(&loc), glow.color[0], glow.color[1], glow.color[2], glow.color[3]); }
-    if let Some(loc) = shader.location(&engine.gl, "u_size") { engine.gl.uniform1f(Some(&loc), glow.size); }
-    if let Some(loc) = shader.location(&engine.gl, "u_spread") { engine.gl.uniform1f(Some(&loc), glow.spread); }
-    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), glow.opacity); }
-    if let Some(loc) = shader.location(&engine.gl, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
-    if let Some(loc) = shader.location(&engine.gl, "u_mode") { engine.gl.uniform1i(Some(&loc), mode); }
+/// A `shadow.glsl` pass over the document with `source` as its input and
+/// every uniform but the knockout and raw-alpha switches set from `shadow`.
+fn shadow_pass<'a>(engine: &'a EngineInner, source: TextureHandle, shadow: &ShadowDesc, tw: u32, th: u32, layer_x: f32, layer_y: f32) -> Pass<'a> {
+    doc_pass(engine, &engine.shaders.shadow)
+        .texture("u_srcTex", source)
+        .vec4("u_shadowColor", shadow.color[0], shadow.color[1], shadow.color[2], shadow.color[3])
+        .vec2("u_offset", shadow.offset_x, shadow.offset_y)
+        .f32("u_spread", shadow.spread)
+        .f32("u_opacity", shadow.opacity)
+        .vec2("u_texelSize", 1.0 / tw as f32, 1.0 / th as f32)
+        .vec2("u_srcOffset", layer_x, layer_y)
+        .vec2("u_srcSize", tw as f32, th as f32)
+        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
 }
 
 /// Render drop shadow.
 fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, shadow: &ShadowDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, out: &mut EffectOut) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
     let blur_radius = shadow.blur.ceil() as u32;
-
-    let layer_tex = match engine.texture_pool.get(tex_handle).cloned() {
-        Some(t) => t,
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
+    let scratch_a = Target::Framebuffer(engine.scratch_fbo_a);
+    let scratch_b = Target::Framebuffer(engine.scratch_fbo_b);
 
     if blur_radius == 0 {
         // No blur: single pass with spread + knockout + color → scratch_a
-        engine.gl.use_program(Some(&engine.shaders.shadow.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        set_shadow_uniforms(engine, shadow, tw, th, layer_x, layer_y);
-        if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_knockout") { engine.gl.uniform1i(Some(&loc), 1); }
-        if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_layerOpacity") { engine.gl.uniform1f(Some(&loc), layer_opacity); }
-        if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_rawAlpha") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-        engine.draw_fullscreen_quad();
+        shadow_pass(engine, tex_handle, shadow, tw, th, layer_x, layer_y)
+            .i32("u_knockout", 1)
+            .f32("u_layerOpacity", layer_opacity)
+            .i32("u_rawAlpha", 0)
+            .clear(TRANSPARENT)
+            .draw(scratch_a);
     } else {
         // Phase 1: extract raw alpha silhouette → scratch_b
-        engine.gl.use_program(Some(&engine.shaders.shadow.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-        set_shadow_uniforms(engine, shadow, tw, th, layer_x, layer_y);
-        if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_knockout") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = engine.shaders.shadow.location(&engine.gl, "u_rawAlpha") { engine.gl.uniform1i(Some(&loc), 1); }
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-        engine.draw_fullscreen_quad();
+        shadow_pass(engine, tex_handle, shadow, tw, th, layer_x, layer_y)
+            .i32("u_knockout", 0)
+            .i32("u_rawAlpha", 1)
+            .clear(TRANSPARENT)
+            .draw(scratch_b);
 
         // Phase 2: separable Gaussian blur
-        let r = blur_radius.min(63);
-        let kernel = lopsy_core::filters::blur::gaussian_kernel(r);
-        let blur_shader = &engine.shaders.gaussian_blur;
-        engine.gl.use_program(Some(&blur_shader.program));
-        if let Some(loc) = blur_shader.location(&engine.gl, "u_radius") {
-            engine.gl.uniform1i(Some(&loc), r as i32);
-        }
-        // Upload half-kernel starting from center: weights[0] = center,
-        // weights[i] = offset i (symmetric, shader samples both +i and -i).
-        for i in 0..64usize {
-            let ki = r as usize + i;
-            let w = if ki < kernel.len() { kernel[ki] } else { 0.0 };
-            let name = format!("u_weights[{i}]");
-            if let Some(loc) = blur_shader.location(&engine.gl, &name) {
-                engine.gl.uniform1f(Some(&loc), w);
-            }
-        }
+        blur_scratch_b(engine, blur_radius);
 
-        // Horizontal: scratch_b → scratch_a
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b).cloned() {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
-        }
-        if let Some(loc) = blur_shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = blur_shader.location(&engine.gl, "u_direction") { engine.gl.uniform2f(Some(&loc), 1.0, 0.0); }
-        engine.draw_fullscreen_quad();
-
-        // Vertical: scratch_a → scratch_b
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_a).cloned() {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
-        }
-        if let Some(loc) = blur_shader.location(&engine.gl, "u_direction") { engine.gl.uniform2f(Some(&loc), 0.0, 1.0); }
-        engine.draw_fullscreen_quad();
-
-        // Phase 3: apply spread + color to blurred alpha → scratch_a
-        // Read from scratch_b (blurred alpha), treat as full-document source.
-        engine.gl.use_program(Some(&engine.shaders.shadow.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b).cloned() {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
-        }
-        let shader = &engine.shaders.shadow;
-        if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
-        if let Some(loc) = shader.location(&engine.gl, "u_offset") { engine.gl.uniform2f(Some(&loc), 0.0, 0.0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_knockout") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_rawAlpha") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-        engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-        engine.draw_fullscreen_quad();
+        // Phase 3: apply spread + color to blurred alpha → scratch_a. The
+        // blurred alpha in scratch_b is a document-sized source that already
+        // carries the shadow's offset.
+        shadow_pass(engine, engine.scratch_texture_b, shadow, tw, th, layer_x, layer_y)
+            .vec2("u_srcOffset", 0.0, 0.0)
+            .vec2("u_srcSize", engine.doc_width as f32, engine.doc_height as f32)
+            .vec2("u_offset", 0.0, 0.0)
+            .i32("u_knockout", 0)
+            .i32("u_rawAlpha", 0)
+            .clear(TRANSPARENT)
+            .draw(scratch_a);
     }
 
     let src_rect = Rect::new(layer_x as i32, layer_y as i32, tw, th);
     emit_effect(engine, out, || fx_extent::drop_shadow_extent(src_rect, shadow));
-}
-
-fn set_shadow_uniforms(engine: &EngineInner, shadow: &ShadowDesc, tw: u32, th: u32, layer_x: f32, layer_y: f32) {
-    let doc_w = engine.doc_width as f32;
-    let doc_h = engine.doc_height as f32;
-    let shader = &engine.shaders.shadow;
-    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_shadowColor") { engine.gl.uniform4f(Some(&loc), shadow.color[0], shadow.color[1], shadow.color[2], shadow.color[3]); }
-    if let Some(loc) = shader.location(&engine.gl, "u_offset") { engine.gl.uniform2f(Some(&loc), shadow.offset_x, shadow.offset_y); }
-    if let Some(loc) = shader.location(&engine.gl, "u_spread") { engine.gl.uniform1f(Some(&loc), shadow.spread); }
-    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), shadow.opacity); }
-    if let Some(loc) = shader.location(&engine.gl, "u_texelSize") { engine.gl.uniform2f(Some(&loc), 1.0 / tw as f32, 1.0 / th as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w, doc_h); }
 }
 
 /// Render stroke effect using proper hard-edge distance check.
@@ -1508,18 +1251,14 @@ fn is_behind_stroke(stroke: &StrokeDesc) -> bool {
 }
 
 fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th: u32, stroke: &StrokeDesc, layer_x: f32, layer_y: f32, layer_opacity: f32, out: &mut EffectOut) {
-    let position = match stroke.position {
-        lopsy_core::layer::StrokePosition::Inside => 1,
-        lopsy_core::layer::StrokePosition::Outside => 0,
-        lopsy_core::layer::StrokePosition::Center => 2,
-    };
+    let position = stroke_position_index(stroke);
     let src_rect = Rect::new(layer_x as i32, layer_y as i32, tw, th);
     let half_w = if position == 2 { stroke.width * 0.5 } else { stroke.width };
 
-    let layer_tex = match engine.texture_pool.get(tex_handle).cloned() {
-        Some(t) => t,
-        None => return,
-    };
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
+    let layer = StrokeLayer { texture: tex_handle, x: layer_x, y: layer_y, width: tw, height: th, opacity: layer_opacity };
 
     // Every width goes through the two-pass Euclidean band, O(r) per pixel
     // per pass. Narrow strokes used a single-pass brute-force search
@@ -1531,17 +1270,17 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
 
     let do_outside = position == 0 || position == 2;
     let do_inside = position == 1 || position == 2;
+    let is_inside_only = do_inside && !do_outside;
 
     // Extract alpha → scratch_b (or inverted alpha for inside-only)
-    render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, do_inside && !do_outside);
+    render_stroke_extract_alpha(engine, &layer, is_inside_only);
 
     // scratch_b → scratch_a → scratch_b. For inverted alpha (inner
     // stroke), texels beyond the edge are "outside the layer": seeds.
-    render_stroke_band(engine, half_w, do_inside && !do_outside);
+    render_stroke_band(engine, half_w, is_inside_only);
 
     // Apply stroke: read band (scratch_b) + original → scratch_a
-    render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y,
-        if do_inside && !do_outside { 1 } else { 0 }, is_behind_stroke(stroke), layer_opacity);
+    render_stroke_apply(engine, &layer, stroke, i32::from(is_inside_only), is_behind_stroke(stroke));
 
     // For center stroke: also need the inside half
     if do_outside && do_inside {
@@ -1549,36 +1288,33 @@ fn render_stroke(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         emit_effect(engine, out, || fx_extent::stroke_extent(src_rect, stroke));
 
         // Now do inside half: extract inverted alpha, band, apply
-        render_stroke_extract_alpha(engine, &layer_tex, tw, th, layer_x, layer_y, true);
+        render_stroke_extract_alpha(engine, &layer, true);
         render_stroke_band(engine, half_w, true);
-        render_stroke_apply(engine, &layer_tex, stroke, tw, th, layer_x, layer_y, 1, false, layer_opacity);
+        render_stroke_apply(engine, &layer, stroke, 1, false);
     }
 
     emit_effect(engine, out, || fx_extent::stroke_extent(src_rect, stroke));
 }
 
-fn render_stroke_extract_alpha(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTexture, tw: u32, th: u32, layer_x: f32, layer_y: f32, invert: bool) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
-    // Use the glow shader's rawAlpha mode to extract alpha at layer position
-    // mode=1 (inner glow) inverts alpha, mode=0 outputs raw alpha
-    let shader = &engine.shaders.glow;
-    engine.gl.use_program(Some(&shader.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(layer_tex));
-    if let Some(loc) = shader.location(&engine.gl, "u_srcTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-    if let Some(loc) = shader.location(&engine.gl, "u_srcSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_rawAlpha") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_mode") { engine.gl.uniform1i(Some(&loc), if invert { 1 } else { 0 }); }
-    if let Some(loc) = shader.location(&engine.gl, "u_hasOrigTex") { engine.gl.uniform1i(Some(&loc), 0); }
+/// The layer a stroke is traced around.
+struct StrokeLayer {
+    texture: TextureHandle,
+    x: f32,
+    y: f32,
+    width: u32,
+    height: u32,
+    /// Opacity the layer itself is composited with.
+    opacity: f32,
+}
 
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-    engine.gl.viewport(0, 0, doc_w, doc_h);
-    engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-    engine.draw_fullscreen_quad();
+/// Layer alpha (inverted for an inside stroke) at the layer's position →
+/// scratch_b.
+fn render_stroke_extract_alpha(engine: &EngineInner, layer: &StrokeLayer, invert: bool) {
+    let doc = (engine.doc_width as f32, engine.doc_height as f32);
+    alpha_extract_pass(engine, layer.texture, (layer.x, layer.y), (layer.width as f32, layer.height as f32), doc, invert)
+        .viewport(0, 0, engine.doc_width as i32, engine.doc_height as i32)
+        .clear(TRANSPARENT)
+        .draw(Target::Framebuffer(engine.scratch_fbo_b));
 }
 
 #[derive(Clone, Copy)]
@@ -1587,81 +1323,54 @@ enum StrokeBandPass {
     Columns,
 }
 
-/// Bind `separable_edt.glsl` for one pass of the band within `reach` of the
-/// seeds (texels with alpha ≥ 0.5) in the texture bound to TEXTURE0.
-fn use_stroke_band_program(engine: &EngineInner, pass: StrokeBandPass, reach: f32, is_oob_seed: bool) {
-    let gl = &engine.gl;
-    let shader = &engine.shaders.separable_edt;
-    gl.use_program(Some(&shader.program));
-    if let Some(loc) = shader.location(gl, "u_tex") { gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(gl, "u_pass") { gl.uniform1i(Some(&loc), matches!(pass, StrokeBandPass::Columns) as i32); }
-    if let Some(loc) = shader.location(gl, "u_radius") { gl.uniform1i(Some(&loc), lopsy_core::stroke_band::search_radius(reach) as i32); }
-    if let Some(loc) = shader.location(gl, "u_reachSq") { gl.uniform1f(Some(&loc), reach * reach); }
-    if let Some(loc) = shader.location(gl, "u_oobSeed") { gl.uniform1i(Some(&loc), is_oob_seed as i32); }
+/// One `separable_edt.glsl` pass of the band within `reach` of the seeds
+/// (texels with alpha ≥ 0.5) in `read`.
+fn stroke_band_pass<'a>(engine: &'a EngineInner, read: TextureHandle, pass: StrokeBandPass, reach: f32, is_oob_seed: bool) -> Pass<'a> {
+    engine
+        .pass(&engine.shaders.separable_edt)
+        .blend(Blend::Off)
+        .texture("u_tex", read)
+        .i32("u_pass", matches!(pass, StrokeBandPass::Columns) as i32)
+        .i32("u_radius", lopsy_core::stroke_band::search_radius(reach) as i32)
+        .f32("u_reachSq", reach * reach)
+        .i32("u_oobSeed", is_oob_seed as i32)
 }
 
 /// Replace the seed alpha in scratch_b with the band within `reach` of it
 /// (alpha 1 inside, 0 outside), going through scratch_a.
-fn render_stroke_band(engine: &mut EngineInner, reach: f32, is_oob_seed: bool) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
+fn render_stroke_band(engine: &EngineInner, reach: f32, is_oob_seed: bool) {
     let passes = [
         (engine.scratch_texture_b, engine.scratch_fbo_a, StrokeBandPass::Rows),
         (engine.scratch_texture_a, engine.scratch_fbo_b, StrokeBandPass::Columns),
     ];
-    for (read, write_fbo, pass) in passes {
-        engine.fbo_pool.bind(&engine.gl, write_fbo);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(tex) = engine.texture_pool.get(read).cloned() {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
-        }
-        use_stroke_band_program(engine, pass, reach, is_oob_seed);
-        engine.draw_fullscreen_quad();
+    for (read, write, pass) in passes {
+        stroke_band_pass(engine, read, pass, reach, is_oob_seed)
+            .viewport(0, 0, engine.doc_width as i32, engine.doc_height as i32)
+            .draw(Target::Framebuffer(write));
     }
 }
 
-fn render_stroke_apply(engine: &mut EngineInner, layer_tex: &web_sys::WebGlTexture, stroke: &StrokeDesc, tw: u32, th: u32, layer_x: f32, layer_y: f32, apply_position: i32, knockout: bool, layer_opacity: f32) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
-    let shader = &engine.shaders.stroke_apply;
-    engine.gl.use_program(Some(&shader.program));
-
-    // TEXTURE0 = band (scratch_b)
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    if let Some(tex) = engine.texture_pool.get(engine.scratch_texture_b).cloned() {
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&tex));
-    }
-    // TEXTURE1 = original layer
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(layer_tex));
-
-    if let Some(loc) = shader.location(&engine.gl, "u_bandTex") { engine.gl.uniform1i(Some(&loc), 0); }
-    if let Some(loc) = shader.location(&engine.gl, "u_origTex") { engine.gl.uniform1i(Some(&loc), 1); }
-    if let Some(loc) = shader.location(&engine.gl, "u_strokeColor") { engine.gl.uniform4f(Some(&loc), stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]); }
-    if let Some(loc) = shader.location(&engine.gl, "u_opacity") { engine.gl.uniform1f(Some(&loc), stroke.opacity); }
-    if let Some(loc) = shader.location(&engine.gl, "u_position") { engine.gl.uniform1i(Some(&loc), apply_position); }
-    if let Some(loc) = shader.location(&engine.gl, "u_knockout") { engine.gl.uniform1i(Some(&loc), knockout as i32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_layerOpacity") { engine.gl.uniform1f(Some(&loc), layer_opacity); }
-    if let Some(loc) = shader.location(&engine.gl, "u_origOffset") { engine.gl.uniform2f(Some(&loc), layer_x, layer_y); }
-    if let Some(loc) = shader.location(&engine.gl, "u_origSize") { engine.gl.uniform2f(Some(&loc), tw as f32, th as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_docSize") { engine.gl.uniform2f(Some(&loc), doc_w as f32, doc_h as f32); }
-    if let Some(loc) = shader.location(&engine.gl, "u_silhouette") { engine.gl.uniform1i(Some(&loc), 0); }
-
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, doc_w, doc_h);
-    engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-    engine.draw_fullscreen_quad();
-
-    // Unbind TEXTURE1
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+/// Band (scratch_b) + the original layer → the coloured stroke in scratch_a.
+fn render_stroke_apply(engine: &EngineInner, layer: &StrokeLayer, stroke: &StrokeDesc, apply_position: i32, knockout: bool) {
+    doc_pass(engine, &engine.shaders.stroke_apply)
+        .texture("u_bandTex", engine.scratch_texture_b)
+        .texture("u_origTex", layer.texture)
+        .vec4("u_strokeColor", stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3])
+        .f32("u_opacity", stroke.opacity)
+        .i32("u_position", apply_position)
+        .i32("u_knockout", knockout as i32)
+        .f32("u_layerOpacity", layer.opacity)
+        .vec2("u_origOffset", layer.x, layer.y)
+        .vec2("u_origSize", layer.width as f32, layer.height as f32)
+        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
+        .i32("u_silhouette", 0)
+        .clear(TRANSPARENT)
+        .draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(2);
 }
 
 /// Composite every visible layer (with effects and group adjustments) into
-/// the composite texture over the background colour, leaving the composite
-/// FBO bound for readback. Shared by the 8- and 16-bit export paths; unlike
+/// the composite texture over the background colour. Shared by the 8- and 16-bit export paths; unlike
 /// `composite` it has no in-progress stroke / preview handling and no
 /// group pre-adjustment cache.
 fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
@@ -1670,12 +1379,7 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
     let bg = engine.bg_color;
     engine.ensure_scratch_size(doc_w, doc_h)?;
 
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-
-    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.gl.clear_color(bg[0], bg[1], bg[2], bg[3]);
-    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+    engine.gpu().clear(engine.composite_texture, bg);
 
     let child_to_group: HashMap<String, String> = engine.group_adjustments.iter()
         .flat_map(|(gid, ga)| ga.child_ids.iter().map(move |cid| (cid.clone(), gid.clone())))
@@ -1686,16 +1390,14 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
     let mut group_stack: Vec<GroupFrame> = Vec::new();
 
     let layer_info: Vec<_> = engine.layer_stack.iter().map(|layer| {
-        let mask_info = engine.layer_masks.get(&layer.id).and_then(|&mask_handle| {
-            let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
-            let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
-            let mask_enabled = layer.mask.as_ref().map_or(false, |m| m.enabled);
-            Some((mask_gl, mw, mh, mask_enabled))
-        });
+        let (mask_offset_x, mask_offset_y) = mask_doc_offset(layer.layer_type, layer.x as f32, layer.y as f32);
+        let is_mask_enabled = layer.mask.as_ref().map_or(false, |m| m.enabled);
+        let mask_info = live_mask(engine, &layer.id, mask_offset_x, mask_offset_y).filter(|_| is_mask_enabled);
         (layer.id.clone(), layer.layer_type, layer.visible, layer.opacity, layer.blend_mode as i32, layer.x as f32, layer.y as f32, layer.width as f32, layer.height as f32, layer.effects.clone(), mask_info)
     }).collect();
 
-    for (layer_id, layer_type, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_info) in &layer_info {
+    for (layer_id, layer_type, visible, opacity, blend_mode, layer_x, layer_y, layer_w, layer_h, effects, mask_arg) in &layer_info {
+        let mask_arg = *mask_arg;
         if !visible || *opacity < 1e-7 {
             if *layer_type == lopsy_core::layer::LayerType::Group
                 && group_stack.last().map(|f| f.id.as_str()) == Some(layer_id.as_str())
@@ -1705,28 +1407,24 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
             continue;
         }
 
-        let (mask_offset_x, mask_offset_y) = mask_doc_offset(*layer_type, *layer_x, *layer_y);
-        let mask_arg = mask_info.as_ref().and_then(|(tex, mw, mh, enabled)| {
-            if *enabled { Some((tex, *mw, *mh, mask_offset_x, mask_offset_y)) } else { None }
-        });
-
         if *layer_type == lopsy_core::layer::LayerType::Group {
             if group_stack.last().map(|f| f.id.as_str()) == Some(layer_id.as_str()) {
                 let frame = group_stack.pop().expect("checked by the condition above");
                 if let Some(ga) = engine.group_adjustments.get(layer_id) {
                     let adj = ga.adjustments.clone();
-                    apply_adjustments_to_texture(engine, frame.target.tex, frame.target.fbo, &adj);
+                    apply_adjustments_to_texture(engine, frame.target, &adj);
                 }
                 // Same opacity / blend mode / mask handling as the live
                 // compositor, so exports match the canvas. Blend onto the
                 // new stack top (an ancestor group still open) or the main
                 // composite if this group isn't nested inside another.
                 let dest = group_stack.last().map(|f| f.target).unwrap_or_else(|| main_target(engine));
-                if let Some(gs_gl) = engine.texture_pool.get(frame.target.tex).cloned() {
-                    blend_onto_target(engine, &gs_gl, *opacity, *blend_mode, 0.0, 0.0, doc_w, doc_h, false, None, mask_arg, dest)?;
-                }
-                engine.fbo_pool.bind(&engine.gl, dest.fbo);
-                engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
+                let source = BlendSource {
+                    opacity: *opacity,
+                    mask: mask_arg,
+                    ..BlendSource::new(frame.target.tex, (0.0, 0.0), (doc_w as f32, doc_h as f32))
+                };
+                blend_onto_target(engine, &source, *blend_mode, dest, None)?;
             }
             continue;
         }
@@ -1776,10 +1474,14 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         );
 
         let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
-        if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
-            let backdrop_gl = effect_backdrop.and_then(|h| engine.texture_pool.get(h).cloned());
-            blend_onto_target_over_backdrop(engine, &src_tex, *opacity, *blend_mode, *layer_x, *layer_y, tw, th, false, overlay_desc, mask_arg, target, backdrop_gl.as_ref())?;
-        }
+        let source = BlendSource {
+            opacity: *opacity,
+            overlay: overlay_desc,
+            mask: mask_arg,
+            backdrop: effect_backdrop.filter(|&h| engine.texture_pool.get(h).is_some()),
+            ..BlendSource::new(tex_handle, (*layer_x, *layer_y), (tw as f32, th as f32))
+        };
+        blend_onto_target(engine, &source, *blend_mode, target, None)?;
         if let Some(h) = effect_backdrop {
             engine.texture_pool.release(h);
         }
@@ -1791,8 +1493,6 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         }
     }
 
-    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
     Ok(())
 }
 
@@ -1806,9 +1506,8 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
     // only re-present it.
     engine.needs_recomposite = true;
 
-    let mut pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, doc_w, doc_h)?;
+    let mut pixels = engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h)?;
 
-    engine.fbo_pool.unbind(&engine.gl);
     // Native modes composite in their own space; every consumer of this buffer
     // (PNG/JPEG encode, eyedropper, e2e pixel probes) expects sRGB, so decode
     // here with the same math final_blit.glsl uses for the screen.
@@ -1834,7 +1533,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
 
     apply_image_adjustments(engine);
 
-    let mut pixels = engine.texture_pool.read_rgba_u16(&engine.gl, 0, 0, doc_w, doc_h)?;
+    let mut pixels = engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h)?;
     // Lab is stored 8-bit-encoded even in a 16-bit texture, so decoding steps
     // down to bytes and back; the extra precision is in the alpha/geometry, not
     // the encoded Lab channels.
@@ -1853,7 +1552,6 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
         }
     }
 
-    engine.fbo_pool.unbind(&engine.gl);
     Ok(pixels)
 }
 
@@ -1882,17 +1580,12 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
     let tex_handle = match engine.layer_textures.get(&lid) { Some(&h) => h, None => return Err("Layer texture not found".to_string()) };
     let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((layer_w as u32, layer_h as u32));
 
-    let mask_info = if bake_mask && mask_enabled {
-        engine.layer_masks.get(&lid).copied().and_then(|mask_handle| {
-            let (mw, mh) = engine.texture_pool.get_size(mask_handle)?;
-            let mask_gl = engine.texture_pool.get(mask_handle)?.clone();
-            let (ox, oy) = mask_doc_offset(layer_type, layer_x, layer_y);
-            Some((mask_gl, mw, mh, ox, oy))
-        })
+    let mask_arg = if bake_mask && mask_enabled {
+        let (ox, oy) = mask_doc_offset(layer_type, layer_x, layer_y);
+        live_mask(engine, &lid, ox, oy)
     } else {
         None
     };
-    let mask_arg = mask_info.as_ref().map(|(t, w, h, ox, oy)| (t, *w, *h, *ox, *oy));
 
     let has_shape_effects = [
         effects.outer_glow.as_ref().map(|g| g.enabled),
@@ -1900,21 +1593,15 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
         effects.drop_shadow.as_ref().map(|d| d.enabled),
         effects.stroke.as_ref().map(|st| st.enabled),
     ].into_iter().any(|e| e == Some(true));
-    // Rendered before the target is bound: it draws into its own texture.
     let masked_effect_handle = match (mask_arg, has_shape_effects) {
         (Some(mask), true) => render_layer_masked_for_effects(engine, tex_handle, tw, th, layer_x, layer_y, mask),
         _ => None,
     };
     let fx_handle = masked_effect_handle.unwrap_or(tex_handle);
 
-    // Render to composite FBO with transparent background
-    engine.gl.disable(WebGl2RenderingContext::BLEND);
-    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-    engine.gl.viewport(0, 0, doc_w as i32, doc_h as i32);
-    engine.gl.clear_color(0.0, 0.0, 0.0, 0.0);
-    engine.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-
+    // Render into the composite over a transparent background
     let target = main_target(engine);
+    clear_target(engine, target);
 
     // Behind effects
     render_behind_effects(
@@ -1929,9 +1616,13 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
 
     // Layer content with color overlay (use Normal blend, not the layer's blend mode)
     let overlay_desc = effects.color_overlay.as_ref().filter(|o| o.enabled);
-    if let Some(src_tex) = engine.texture_pool.get(tex_handle).cloned() {
-        blend_onto_composite(engine, &src_tex, opacity, 0, layer_x, layer_y, tw, th, false, overlay_desc, mask_arg)?;
-    }
+    let source = BlendSource {
+        opacity,
+        overlay: overlay_desc,
+        mask: mask_arg,
+        ..BlendSource::new(tex_handle, (layer_x, layer_y), (tw as f32, th as f32))
+    };
+    blend_onto_target(engine, &source, 0, target, None)?;
 
     // On-top effects
     if let Some(ref glow) = effects.inner_glow { if glow.enabled { render_glow(engine, fx_handle, tw, th, glow, 1, layer_x, layer_y, &mut EffectOut::direct(target)); } }
@@ -1941,161 +1632,125 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
         engine.texture_pool.release(masked);
     }
 
-    // Read pixels
-    engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-    let pixels = engine.texture_pool.read_rgba(&engine.gl, 0, 0, doc_w, doc_h)?;
+    let pixels = engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h)?;
 
-    engine.fbo_pool.unbind(&engine.gl);
     engine.needs_recomposite = true;
     Ok(pixels)
 }
 
-/// Set all uniforms on the currently bound adjustments shader program.
-/// Texture unit assignments: 0=u_tex, 1=u_curveLut, 2=u_levelsLut, 3=u_gradientLut.
-fn set_adjustment_uniforms(
-    engine: &mut EngineInner,
-    adj: &crate::engine::ImageAdjustmentState,
-    brightness: f32,
-) {
-    set_adjustment_value_uniforms(
-        &engine.gl, &engine.shaders.adjustments, adj, brightness, engine.doc_color_mode,
-    );
-    bind_adjustment_luts(engine, adj);
+/// Set up the adjustments program for a one-off use outside the
+/// compositor (the Brightness / Contrast filter): every adjustment at the
+/// identity except the caller's brightness and contrast, from the same list
+/// the compositor writes (#1163). The unused LUT samplers are pointed at
+/// unit 0, the source texture, so none can alias the render target.
+pub(crate) fn standalone_adjustments(pass: Pass<'_>, brightness: f32, contrast: f32, doc_color_mode: u32) -> Pass<'_> {
+    let adj = ImageAdjustmentState { contrast, ..Default::default() };
+    adjustment_values(pass, &adj, brightness, doc_color_mode)
+        .i32("u_curveLut", 0)
+        .i32("u_levelsLut", 0)
+        .i32("u_gradientLut", 0)
 }
 
-/// Prepare the bound adjustments program for a one-off use outside the
-/// compositor (the Brightness / Contrast filter). Uniforms are per-program
-/// state that survives between draws, so everything the last composite
-/// frame set — Gradient Map, Curves, Levels, Hue/Sat, … — is reset to the
-/// identity here, from the same list the compositor writes, before the
-/// caller's brightness and contrast are applied (#1163). The unused LUT
-/// samplers are pointed at unit 0, the source texture, so none can alias
-/// the render target.
-pub(crate) fn set_standalone_adjustment_uniforms(
-    gl: &WebGl2RenderingContext,
-    shader: &crate::gpu::shader::ShaderProgram,
-    brightness: f32,
-    contrast: f32,
-    doc_color_mode: u32,
-) {
-    let adj = crate::engine::ImageAdjustmentState { contrast, ..Default::default() };
-    set_adjustment_value_uniforms(gl, shader, &adj, brightness, doc_color_mode);
-    for name in ["u_curveLut", "u_levelsLut", "u_gradientLut"] {
-        if let Some(loc) = shader.location(gl, name) { gl.uniform1i(Some(&loc), 0); }
-    }
+fn has_lut(is_enabled: bool, texture: Option<TextureHandle>) -> bool {
+    is_enabled && texture.is_some()
 }
 
 /// Every non-sampler uniform of `adjustments.glsl`, including the
 /// `u_has*` LUT flags, derived from `adj`.
-fn set_adjustment_value_uniforms(
-    gl: &WebGl2RenderingContext,
-    shader: &crate::gpu::shader::ShaderProgram,
-    adj: &crate::engine::ImageAdjustmentState,
-    brightness: f32,
-    doc_color_mode: u32,
-) {
-    if let Some(loc) = shader.location(gl, "u_docColorMode") { gl.uniform1i(Some(&loc), doc_color_mode as i32); }
-    if let Some(loc) = shader.location(gl, "u_brightness") { gl.uniform1f(Some(&loc), brightness); }
-    if let Some(loc) = shader.location(gl, "u_contrast")   { gl.uniform1f(Some(&loc), adj.contrast / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_exposure")   { gl.uniform1f(Some(&loc), adj.exposure); }
-    if let Some(loc) = shader.location(gl, "u_highlights") { gl.uniform1f(Some(&loc), adj.highlights); }
-    if let Some(loc) = shader.location(gl, "u_shadows")    { gl.uniform1f(Some(&loc), adj.shadows); }
-    if let Some(loc) = shader.location(gl, "u_whites")     { gl.uniform1f(Some(&loc), adj.whites); }
-    if let Some(loc) = shader.location(gl, "u_blacks")     { gl.uniform1f(Some(&loc), adj.blacks); }
-    if let Some(loc) = shader.location(gl, "u_saturation") { gl.uniform1f(Some(&loc), adj.saturation / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_vibrance")   { gl.uniform1f(Some(&loc), adj.vibrance / 100.0); }
-    // Hue/Saturation
-    if let Some(loc) = shader.location(gl, "u_hue_shift")       { gl.uniform1f(Some(&loc), adj.hue_shift); }
-    if let Some(loc) = shader.location(gl, "u_hsl_saturation")  { gl.uniform1f(Some(&loc), adj.hsl_saturation); }
-    if let Some(loc) = shader.location(gl, "u_lightness")       { gl.uniform1f(Some(&loc), adj.lightness); }
-    // Color Balance
-    if let Some(loc) = shader.location(gl, "u_cb_shadows")    { gl.uniform3f(Some(&loc), adj.cb_shadows[0],    adj.cb_shadows[1],    adj.cb_shadows[2]); }
-    if let Some(loc) = shader.location(gl, "u_cb_midtones")   { gl.uniform3f(Some(&loc), adj.cb_midtones[0],   adj.cb_midtones[1],   adj.cb_midtones[2]); }
-    if let Some(loc) = shader.location(gl, "u_cb_highlights") { gl.uniform3f(Some(&loc), adj.cb_highlights[0], adj.cb_highlights[1], adj.cb_highlights[2]); }
-    // Photo Filter
-    if let Some(loc) = shader.location(gl, "u_pf_color")      { gl.uniform3f(Some(&loc), adj.pf_color[0], adj.pf_color[1], adj.pf_color[2]); }
-    if let Some(loc) = shader.location(gl, "u_pf_density")    { gl.uniform1f(Some(&loc), adj.pf_density); }
-    if let Some(loc) = shader.location(gl, "u_pf_luminosity") { gl.uniform1f(Some(&loc), if adj.pf_preserve_luminosity { 1.0 } else { 0.0 }); }
-    // Black & White
-    if let Some(loc) = shader.location(gl, "u_bw_reds")     { gl.uniform1f(Some(&loc), adj.bw_reds); }
-    if let Some(loc) = shader.location(gl, "u_bw_yellows")  { gl.uniform1f(Some(&loc), adj.bw_yellows); }
-    if let Some(loc) = shader.location(gl, "u_bw_greens")   { gl.uniform1f(Some(&loc), adj.bw_greens); }
-    if let Some(loc) = shader.location(gl, "u_bw_cyans")    { gl.uniform1f(Some(&loc), adj.bw_cyans); }
-    if let Some(loc) = shader.location(gl, "u_bw_blues")    { gl.uniform1f(Some(&loc), adj.bw_blues); }
-    if let Some(loc) = shader.location(gl, "u_bw_magentas") { gl.uniform1f(Some(&loc), adj.bw_magentas); }
-    if let Some(loc) = shader.location(gl, "u_bw_enabled")  { gl.uniform1f(Some(&loc), if adj.bw_enabled { 1.0 } else { 0.0 }); }
-    // Channel Mixer
-    if let Some(loc) = shader.location(gl, "u_cm_rr") { gl.uniform1f(Some(&loc), adj.cm_r[0] / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_cm_rg") { gl.uniform1f(Some(&loc), adj.cm_r[1] / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_cm_rb") { gl.uniform1f(Some(&loc), adj.cm_r[2] / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_cm_rc") { gl.uniform1f(Some(&loc), adj.cm_r[3]); }
-    if let Some(loc) = shader.location(gl, "u_cm_gr") { gl.uniform1f(Some(&loc), adj.cm_g[0] / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_cm_gg") { gl.uniform1f(Some(&loc), adj.cm_g[1] / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_cm_gb") { gl.uniform1f(Some(&loc), adj.cm_g[2] / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_cm_gc") { gl.uniform1f(Some(&loc), adj.cm_g[3]); }
-    if let Some(loc) = shader.location(gl, "u_cm_br") { gl.uniform1f(Some(&loc), adj.cm_b[0] / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_cm_bg") { gl.uniform1f(Some(&loc), adj.cm_b[1] / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_cm_bb") { gl.uniform1f(Some(&loc), adj.cm_b[2] / 100.0); }
-    if let Some(loc) = shader.location(gl, "u_cm_bc") { gl.uniform1f(Some(&loc), adj.cm_b[3]); }
-    if let Some(loc) = shader.location(gl, "u_cm_enabled") { gl.uniform1f(Some(&loc), if adj.cm_enabled { 1.0 } else { 0.0 }); }
-    // Invert
-    if let Some(loc) = shader.location(gl, "u_invert") { gl.uniform1f(Some(&loc), if adj.invert { 1.0 } else { 0.0 }); }
-    // Color Grading
-    if let Some(loc) = shader.location(gl, "u_cg_enabled") { gl.uniform1f(Some(&loc), if adj.cg_enabled { 1.0 } else { 0.0 }); }
-    for (name, v) in [
-        ("u_cg_shadows", adj.cg_shadows),
-        ("u_cg_midtones", adj.cg_midtones),
-        ("u_cg_highlights", adj.cg_highlights),
-        ("u_cg_global", adj.cg_global),
-    ] {
-        if let Some(loc) = shader.location(gl, name) { gl.uniform4f(Some(&loc), v[0], v[1], v[2], v[3]); }
-    }
-    if let Some(loc) = shader.location(gl, "u_cg_exponent") { gl.uniform1f(Some(&loc), adj.cg_exponent); }
-    if let Some(loc) = shader.location(gl, "u_cg_width") { gl.uniform1f(Some(&loc), adj.cg_width); }
-    let has_levels = adj.has_levels && adj.levels_texture.is_some();
-    if let Some(loc) = shader.location(gl, "u_hasLevels") { gl.uniform1f(Some(&loc), if has_levels { 1.0 } else { 0.0 }); }
-    let has_curves = adj.has_curves && adj.curves_texture.is_some();
-    if let Some(loc) = shader.location(gl, "u_hasCurves") { gl.uniform1f(Some(&loc), if has_curves { 1.0 } else { 0.0 }); }
-    let has_gradient = adj.has_gradient_map && adj.gradient_map_texture.is_some();
-    if let Some(loc) = shader.location(gl, "u_hasGradientMap") { gl.uniform1f(Some(&loc), if has_gradient { 1.0 } else { 0.0 }); }
+fn adjustment_values<'a>(pass: Pass<'a>, adj: &ImageAdjustmentState, brightness: f32, doc_color_mode: u32) -> Pass<'a> {
+    pass
+        .i32("u_docColorMode", doc_color_mode as i32)
+        .f32("u_brightness", brightness)
+        .f32("u_contrast", adj.contrast / 100.0)
+        .f32("u_exposure", adj.exposure)
+        .f32("u_highlights", adj.highlights)
+        .f32("u_shadows", adj.shadows)
+        .f32("u_whites", adj.whites)
+        .f32("u_blacks", adj.blacks)
+        .f32("u_saturation", adj.saturation / 100.0)
+        .f32("u_vibrance", adj.vibrance / 100.0)
+        // Hue/Saturation
+        .f32("u_hue_shift", adj.hue_shift)
+        .f32("u_hsl_saturation", adj.hsl_saturation)
+        .f32("u_lightness", adj.lightness)
+        // Color Balance
+        .vec3("u_cb_shadows", adj.cb_shadows[0], adj.cb_shadows[1], adj.cb_shadows[2])
+        .vec3("u_cb_midtones", adj.cb_midtones[0], adj.cb_midtones[1], adj.cb_midtones[2])
+        .vec3("u_cb_highlights", adj.cb_highlights[0], adj.cb_highlights[1], adj.cb_highlights[2])
+        // Photo Filter
+        .vec3("u_pf_color", adj.pf_color[0], adj.pf_color[1], adj.pf_color[2])
+        .f32("u_pf_density", adj.pf_density)
+        .f32("u_pf_luminosity", if adj.pf_preserve_luminosity { 1.0 } else { 0.0 })
+        // Black & White
+        .f32("u_bw_reds", adj.bw_reds)
+        .f32("u_bw_yellows", adj.bw_yellows)
+        .f32("u_bw_greens", adj.bw_greens)
+        .f32("u_bw_cyans", adj.bw_cyans)
+        .f32("u_bw_blues", adj.bw_blues)
+        .f32("u_bw_magentas", adj.bw_magentas)
+        .f32("u_bw_enabled", if adj.bw_enabled { 1.0 } else { 0.0 })
+        // Channel Mixer
+        .f32("u_cm_rr", adj.cm_r[0] / 100.0)
+        .f32("u_cm_rg", adj.cm_r[1] / 100.0)
+        .f32("u_cm_rb", adj.cm_r[2] / 100.0)
+        .f32("u_cm_rc", adj.cm_r[3])
+        .f32("u_cm_gr", adj.cm_g[0] / 100.0)
+        .f32("u_cm_gg", adj.cm_g[1] / 100.0)
+        .f32("u_cm_gb", adj.cm_g[2] / 100.0)
+        .f32("u_cm_gc", adj.cm_g[3])
+        .f32("u_cm_br", adj.cm_b[0] / 100.0)
+        .f32("u_cm_bg", adj.cm_b[1] / 100.0)
+        .f32("u_cm_bb", adj.cm_b[2] / 100.0)
+        .f32("u_cm_bc", adj.cm_b[3])
+        .f32("u_cm_enabled", if adj.cm_enabled { 1.0 } else { 0.0 })
+        // Invert
+        .f32("u_invert", if adj.invert { 1.0 } else { 0.0 })
+        // Color Grading
+        .f32("u_cg_enabled", if adj.cg_enabled { 1.0 } else { 0.0 })
+        .vec4("u_cg_shadows", adj.cg_shadows[0], adj.cg_shadows[1], adj.cg_shadows[2], adj.cg_shadows[3])
+        .vec4("u_cg_midtones", adj.cg_midtones[0], adj.cg_midtones[1], adj.cg_midtones[2], adj.cg_midtones[3])
+        .vec4("u_cg_highlights", adj.cg_highlights[0], adj.cg_highlights[1], adj.cg_highlights[2], adj.cg_highlights[3])
+        .vec4("u_cg_global", adj.cg_global[0], adj.cg_global[1], adj.cg_global[2], adj.cg_global[3])
+        .f32("u_cg_exponent", adj.cg_exponent)
+        .f32("u_cg_width", adj.cg_width)
+        .f32("u_hasLevels", if has_lut(adj.has_levels, adj.levels_texture) { 1.0 } else { 0.0 })
+        .f32("u_hasCurves", if has_lut(adj.has_curves, adj.curves_texture) { 1.0 } else { 0.0 })
+        .f32("u_hasGradientMap", if has_lut(adj.has_gradient_map, adj.gradient_map_texture) { 1.0 } else { 0.0 })
 }
 
-/// Bind the Curves / Levels / Gradient Map LUTs that `adj` enables.
-fn bind_adjustment_luts(engine: &mut EngineInner, adj: &crate::engine::ImageAdjustmentState) {
-    let shader = &engine.shaders.adjustments;
-    // Levels LUT — bound to TEXTURE2
-    let has_levels = adj.has_levels && adj.levels_texture.is_some();
-    if has_levels {
-        if let Some(levels_tex) = adj.levels_texture.and_then(|h| engine.texture_pool.get(h)) {
-            let levels_tex = levels_tex.clone();
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE2);
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&levels_tex));
-            if let Some(loc) = shader.location(&engine.gl, "u_levelsLut") { engine.gl.uniform1i(Some(&loc), 2); }
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        }
+/// A pass over the document that applies `adj` to `source`: every uniform
+/// of `adjustments.glsl`, plus the Curves / Levels / Gradient Map LUTs `adj`
+/// enables. A LUT sampler that is not in use points at unit 0, the source,
+/// so it cannot alias the render target. Returns the pass and how many
+/// texture units it bound.
+fn adjustments_pass<'a>(engine: &'a EngineInner, source: TextureHandle, adj: &ImageAdjustmentState) -> (Pass<'a>, u32) {
+    let mut pass = doc_pass(engine, &engine.shaders.adjustments).texture("u_tex", source);
+    pass = adjustment_values(pass, adj, 0.0, engine.doc_color_mode);
+    let mut units = 1;
+    let luts = [
+        ("u_levelsLut", has_lut(adj.has_levels, adj.levels_texture), adj.levels_texture),
+        ("u_curveLut", has_lut(adj.has_curves, adj.curves_texture), adj.curves_texture),
+        ("u_gradientLut", has_lut(adj.has_gradient_map, adj.gradient_map_texture), adj.gradient_map_texture),
+    ];
+    for (name, is_enabled, texture) in luts {
+        let live = texture.filter(|&h| is_enabled && engine.texture_pool.get(h).is_some());
+        pass = match live {
+            Some(lut) => {
+                units += 1;
+                pass.texture(name, lut)
+            }
+            None => pass.i32(name, 0),
+        };
     }
-    // Curves LUT — bound to TEXTURE1
-    let has_curves = adj.has_curves && adj.curves_texture.is_some();
-    if has_curves {
-        if let Some(curve_tex) = adj.curves_texture.and_then(|h| engine.texture_pool.get(h)) {
-            let curve_tex = curve_tex.clone();
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE1);
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&curve_tex));
-            if let Some(loc) = shader.location(&engine.gl, "u_curveLut") { engine.gl.uniform1i(Some(&loc), 1); }
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        }
-    }
-    // Gradient Map LUT — bound to TEXTURE3
-    let has_gradient = adj.has_gradient_map && adj.gradient_map_texture.is_some();
-    if has_gradient {
-        if let Some(grad_tex) = adj.gradient_map_texture.and_then(|h| engine.texture_pool.get(h)) {
-            let grad_tex = grad_tex.clone();
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE3);
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&grad_tex));
-            if let Some(loc) = shader.location(&engine.gl, "u_gradientLut") { engine.gl.uniform1i(Some(&loc), 3); }
-            engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        }
-    }
+    (pass, units)
+}
+
+/// A pass over the document that applies the vignette to `source`.
+fn vignette_pass<'a>(engine: &'a EngineInner, source: TextureHandle, amount: f32) -> Pass<'a> {
+    doc_pass(engine, &engine.shaders.vignette)
+        .texture("u_tex", source)
+        .f32("u_amount", amount)
+        .i32("u_docColorMode", engine.doc_color_mode as i32)
 }
 
 /// Returns true if any adjustment in the state is non-default (i.e., would change pixels).
@@ -2127,143 +1782,44 @@ fn has_any_adjustment(adj: &crate::engine::ImageAdjustmentState) -> bool {
 /// Apply image adjustments (exposure, contrast, highlights, shadows, whites, blacks)
 /// to the composite texture. Renders composite → scratch_a via adjustments shader,
 /// then copies scratch_a → composite.
-fn apply_image_adjustments(engine: &mut EngineInner) {
+fn apply_image_adjustments(engine: &EngineInner) {
     let has_adjustments = has_any_adjustment(&engine.adjustments);
     let has_vignette = engine.adjustments.vignette.abs() > 1e-6;
-
-    if !has_adjustments && !has_vignette { return; }
-
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
+    let scratch_a = Target::Framebuffer(engine.scratch_fbo_a);
 
     if has_adjustments {
-        // Render composite → scratch_a via adjustments shader
-        let comp_tex = match engine.texture_pool.get(engine.composite_texture) {
-            Some(t) => t.clone(),
-            None => return,
-        };
-
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-
-        let shader = &engine.shaders.adjustments;
-        engine.gl.use_program(Some(&shader.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
-        if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        let adj = engine.adjustments.clone();
-        set_adjustment_uniforms(engine, &adj, 0.0);
-        engine.draw_fullscreen_quad();
-
-        // Copy scratch_a → composite
-        engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-        engine.gl.use_program(Some(&engine.shaders.blit.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
+        let (pass, units) = adjustments_pass(engine, engine.composite_texture, &engine.adjustments);
+        if !pass.draw(scratch_a) {
+            return;
         }
-        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.draw_fullscreen_quad();
+        engine.gpu().unbind_textures(units);
+        copy_doc(engine, engine.scratch_texture_a, engine.composite_fbo, Scissor::Inherit);
     }
 
     if has_vignette {
-        let comp_tex = match engine.texture_pool.get(engine.composite_texture) {
-            Some(t) => t.clone(),
-            None => return,
-        };
-
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-
-        let shader = &engine.shaders.vignette;
-        engine.gl.use_program(Some(&shader.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&comp_tex));
-        if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_amount") { engine.gl.uniform1f(Some(&loc), engine.adjustments.vignette); }
-        if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
-        engine.draw_fullscreen_quad();
-
-        // Copy scratch_a → composite
-        engine.fbo_pool.bind(&engine.gl, engine.composite_fbo);
-        engine.gl.use_program(Some(&engine.shaders.blit.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
+        if !vignette_pass(engine, engine.composite_texture, engine.adjustments.vignette).draw(scratch_a) {
+            return;
         }
-        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.draw_fullscreen_quad();
+        copy_doc(engine, engine.scratch_texture_a, engine.composite_fbo, Scissor::Inherit);
     }
 }
 
-/// Apply adjustment scalars to a specific texture in-place.
-/// Renders src_tex → scratch_a via the adjustments shader, then copies
-/// scratch_a → dst_fbo. Used for per-group adjustments where the source
+/// Apply `adj` to a document-sized target in place: its texture → scratch_a
+/// via the adjustments shader (→ scratch_b via the vignette when there is
+/// one), then copied back. Used for per-group adjustments, where the source
 /// is the group scratch (transparent background) rather than the composite.
-fn apply_adjustments_to_texture(
-    engine: &mut EngineInner,
-    src_texture: TextureHandle,
-    dst_fbo: FramebufferHandle,
-    adj: &crate::engine::ImageAdjustmentState,
-) {
-    let doc_w = engine.doc_width as i32;
-    let doc_h = engine.doc_height as i32;
-
-    let src_tex = match engine.texture_pool.get(src_texture) {
-        Some(t) => t.clone(),
-        None => return,
-    };
-
-    engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_a);
-    engine.gl.viewport(0, 0, doc_w, doc_h);
-
-    let shader = &engine.shaders.adjustments;
-    engine.gl.use_program(Some(&shader.program));
-    engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&src_tex));
-    if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-    let adj_clone = adj.clone();
-    set_adjustment_uniforms(engine, &adj_clone, 0.0);
-
-    engine.draw_fullscreen_quad();
-
-    // Vignette pass: scratch_a → scratch_b (if needed), then copy result → dst
-    if adj.vignette.abs() > 1e-6 {
-        engine.fbo_pool.bind(&engine.gl, engine.scratch_fbo_b);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        let shader = &engine.shaders.vignette;
-        engine.gl.use_program(Some(&shader.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
-        }
-        if let Some(loc) = shader.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        if let Some(loc) = shader.location(&engine.gl, "u_amount") { engine.gl.uniform1f(Some(&loc), adj.vignette); }
-        if let Some(loc) = shader.location(&engine.gl, "u_docColorMode") { engine.gl.uniform1i(Some(&loc), engine.doc_color_mode as i32); }
-        engine.draw_fullscreen_quad();
-
-        // Copy scratch_b → dst
-        engine.fbo_pool.bind(&engine.gl, dst_fbo);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.use_program(Some(&engine.shaders.blit.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_b) {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
-        }
-        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.draw_fullscreen_quad();
-    } else {
-        // No vignette — copy scratch_a → dst
-        engine.fbo_pool.bind(&engine.gl, dst_fbo);
-        engine.gl.viewport(0, 0, doc_w, doc_h);
-        engine.gl.use_program(Some(&engine.shaders.blit.program));
-        engine.gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-        if let Some(scratch) = engine.texture_pool.get(engine.scratch_texture_a) {
-            engine.gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(scratch));
-        }
-        if let Some(loc) = engine.shaders.blit.location(&engine.gl, "u_tex") { engine.gl.uniform1i(Some(&loc), 0); }
-        engine.draw_fullscreen_quad();
+fn apply_adjustments_to_texture(engine: &EngineInner, target: DocTarget, adj: &ImageAdjustmentState) {
+    let (pass, units) = adjustments_pass(engine, target.tex, adj);
+    if !pass.draw(Target::Framebuffer(engine.scratch_fbo_a)) {
+        return;
     }
-}
+    engine.gpu().unbind_textures(units);
 
-use wasm_bindgen::JsCast;
+    let result = if adj.vignette.abs() > 1e-6 {
+        vignette_pass(engine, engine.scratch_texture_a, adj.vignette).draw(Target::Framebuffer(engine.scratch_fbo_b));
+        engine.scratch_texture_b
+    } else {
+        engine.scratch_texture_a
+    };
+    copy_doc(engine, result, target.fbo, Scissor::Inherit);
+}
