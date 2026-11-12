@@ -7,10 +7,9 @@
 //! and the source crosshair stay on the 2D overlay canvas above it.
 
 use lopsy_core::dab_rect::viewport_disc_rect;
-use web_sys::WebGl2RenderingContext;
 
-use crate::dab_pass_gpu::with_scissor;
 use crate::engine::EngineInner;
+use crate::gpu::pass::{Blend, Scissor, Target};
 
 /// The preview's opacity over the composite.
 const PREVIEW_OPACITY: f32 = 0.7;
@@ -48,9 +47,9 @@ pub(crate) fn draw(engine: &mut EngineInner, fb_w: i32, fb_h: i32) {
     let Some((tw, th)) = engine.texture_pool.get_size(tex_handle) else {
         return;
     };
-    let Some(layer_tex) = engine.texture_pool.get(tex_handle).cloned() else {
+    if engine.texture_pool.get(tex_handle).is_none() {
         return;
-    };
+    }
     let (lx, ly) = engine
         .layer_stack
         .iter()
@@ -67,65 +66,21 @@ pub(crate) fn draw(engine: &mut EngineInner, fb_w: i32, fb_h: i32) {
         return;
     };
 
-    let gl = &engine.gl;
-    gl.enable(WebGl2RenderingContext::BLEND);
-    gl.blend_equation(WebGl2RenderingContext::FUNC_ADD);
-    // Keep the canvas alpha the final blit wrote; blend colour "over" it.
-    gl.blend_func_separate(
-        WebGl2RenderingContext::SRC_ALPHA,
-        WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA,
-        WebGl2RenderingContext::ZERO,
-        WebGl2RenderingContext::ONE,
-    );
-    let shader = &engine.shaders.stamp_preview;
-    gl.use_program(Some(&shader.program));
-    gl.active_texture(WebGl2RenderingContext::TEXTURE0);
-    gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&layer_tex));
-    if let Some(loc) = shader.location(gl, "u_layerTex") {
-        gl.uniform1i(Some(&loc), 0);
-    }
-    if let Some(loc) = shader.location(gl, "u_resolution") {
-        gl.uniform2f(Some(&loc), fb_w as f32, fb_h as f32);
-    }
-    if let Some(loc) = shader.location(gl, "u_zoom") {
-        gl.uniform1f(Some(&loc), engine.viewport.zoom as f32);
-    }
-    if let Some(loc) = shader.location(gl, "u_pan") {
-        gl.uniform2f(
-            Some(&loc),
-            engine.viewport.pan_x as f32,
-            engine.viewport.pan_y as f32,
-        );
-    }
-    if let Some(loc) = shader.location(gl, "u_docSize") {
-        gl.uniform2f(
-            Some(&loc),
-            engine.doc_width as f32,
-            engine.doc_height as f32,
-        );
-    }
-    if let Some(loc) = shader.location(gl, "u_cursor") {
-        gl.uniform2f(Some(&loc), preview.cursor.0 as f32, preview.cursor.1 as f32);
-    }
-    if let Some(loc) = shader.location(gl, "u_source") {
-        gl.uniform2f(Some(&loc), preview.source.0 as f32, preview.source.1 as f32);
-    }
-    if let Some(loc) = shader.location(gl, "u_radius") {
-        gl.uniform1f(Some(&loc), preview.radius as f32);
-    }
-    if let Some(loc) = shader.location(gl, "u_layerOrigin") {
-        gl.uniform2f(Some(&loc), lx, ly);
-    }
-    if let Some(loc) = shader.location(gl, "u_layerSize") {
-        gl.uniform2f(Some(&loc), tw as f32, th as f32);
-    }
-    if let Some(loc) = shader.location(gl, "u_opacity") {
-        gl.uniform1f(Some(&loc), PREVIEW_OPACITY);
-    }
-
-    with_scissor(engine, rect, |engine| engine.draw_fullscreen_quad());
-
-    let gl = &engine.gl;
-    gl.disable(WebGl2RenderingContext::BLEND);
-    gl.blend_func(WebGl2RenderingContext::ONE, WebGl2RenderingContext::ZERO);
+    engine
+        .pass(&engine.shaders.stamp_preview)
+        .texture("u_layerTex", tex_handle)
+        .vec2("u_resolution", fb_w as f32, fb_h as f32)
+        .f32("u_zoom", engine.viewport.zoom as f32)
+        .vec2("u_pan", engine.viewport.pan_x as f32, engine.viewport.pan_y as f32)
+        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
+        .vec2("u_cursor", preview.cursor.0 as f32, preview.cursor.1 as f32)
+        .vec2("u_source", preview.source.0 as f32, preview.source.1 as f32)
+        .f32("u_radius", preview.radius as f32)
+        .vec2("u_layerOrigin", lx, ly)
+        .vec2("u_layerSize", tw as f32, th as f32)
+        .f32("u_opacity", PREVIEW_OPACITY)
+        // Keep the canvas alpha the final blit wrote; blend colour "over" it.
+        .blend(Blend::OverKeepAlpha)
+        .scissor(Scissor::Rect(rect))
+        .draw(Target::Screen);
 }
