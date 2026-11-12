@@ -24,9 +24,11 @@ const PKG = join(ROOT, 'src', 'engine-wasm', 'pkg');
 
 const MARGIN = 0.03;
 
-// Bytes. `gzip` is what a typical visitor downloads.
+// Bytes, as built by CI, which is where this check is enforced. A local
+// build can differ by a percent or two (a macOS build of the same source
+// came out 1.8% larger). `gzip` is what a typical visitor downloads.
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 4_304_571, gzip: 1_835_674 },
+  'lopsy_wasm_bg.wasm': { raw: 4_228_519, gzip: 1_824_653 },
   'lopsy_wasm.js': { raw: 236_107, gzip: 26_666 },
 };
 
