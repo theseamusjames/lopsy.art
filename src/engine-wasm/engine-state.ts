@@ -10,6 +10,7 @@ import { initWasm, createEngine, clearAllLayers } from './wasm-bridge';
 import { resetTrackedState, cacheSubBrushTips } from './engine-sync';
 import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
 import { canvasColorSpace } from '../engine/color-space';
+import { ENGINE_CREATE_TIMING, recordStartupTiming } from './startup-timing';
 import { useToolSettingsStore } from '../app/tool-settings-store';
 
 let engine: Engine | null = null;
@@ -42,7 +43,9 @@ export function getEngineCanvas(): HTMLCanvasElement | null {
 export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   await initWasm();
   import('../tools/brush/builtin-brushes').then((m) => m.loadBuiltinBitmapBrushes()).catch(() => {});
+  const createStart = performance.now();
   engine = createEngine(canvas);
+  recordStartupTiming(ENGINE_CREATE_TIMING, createStart);
   engineCanvas = canvas;
 
   // Enable wide-gamut / EDR output if the display supports it.
