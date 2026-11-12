@@ -12,7 +12,7 @@ Status: in progress. `scripts/check-gl-debt.mjs` holds the live counts.
 | Phase | State |
 |---|---|
 | 0 | Done, in review: CI guards (#1643), verification tooling (#1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
-| 1 | In progress: 1,127 of 2,481 raw GL references removed across #1645, #1646, #1648, #1649, #1650 and #1651. The layers cluster and the compositor remain |
+| 1 | In progress: 1,770 of 2,481 raw GL references removed across eight PRs (#1645, #1646 and #1648 to #1653). The compositor (with the effect cache) and the cap remain. A broad chromium e2e run on #1652's tip passed 1,442 tests with one failure that also fails on `main` (`transform-user-repro`, the "move immediately" case) |
 | 2–7 | Not started |
 
 ---
@@ -461,8 +461,9 @@ once its last caller is gone.
 | #1649 | Gradients and masks | `gradient_gpu` 72, `mask_paint_gpu` 94, `quick_mask_gpu` 99 | In review |
 | #1650 | Shapes, selection, fill | `api/fill` 28, `selection_gpu` 31, `shape_gpu` 36 | In review |
 | #1651 | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 | In review |
-| – | Layers | `thumbnail_gpu` 35, `layer_transform_gpu` 45, `engine.rs` 125, `layer_manager` 446 | Not started |
-| – | Compositor | `effect_cache_gpu` 40, `compositor` 663 | Not started |
+| #1652 | Staging uploads, readbacks, thumbnails | `thumbnail_gpu` 35, `engine.rs` 117 of 125 | In review |
+| #1653 | Layers | `layer_transform_gpu` 45, `layer_manager` 446 | In review |
+| – | Compositor | `effect_cache_gpu` 40, `compositor` 663, the last 8 in `engine.rs` | Not started |
 | – | Cap | 1.5 | Not started |
 
 The PRs so far are stacked in the order listed, because nothing merged
@@ -474,21 +475,23 @@ helpers became clear: gradients travel with the two mask modules, which
 called the gradient uniform helper; the layer transform and thumbnails
 travel with the layers cluster.
 
-What the remaining clusters need that the pass layer does not have yet:
+What the compositor needs, and why it is the one cluster to do with
+care rather than mechanically:
 
-- **Layers:** a target for 8-bit staging textures (thumbnails and the R8
-  mask readback render into textures that are not in the pool's format);
-  a clear limited to a rect; and `bind_transform_program`, which the
-  layer transform and `layer_manager`'s float transform share.
-- **Compositor:** a pass-based version of its adjustment uniform
-  helpers. Brightness / Contrast reaches
-  `set_standalone_adjustment_uniforms` through `Pass::raw_uniforms`, a
-  transitional hook that goes away when the compositor moves.
-
-`compositor.rs` splits along its own stages: present, layer blend,
-behind-effects, above-effects, group adjustments, document adjustments,
-overlays, export. `layer_manager.rs` splits into upload, read, duplicate
-and snapshot, resize and crop.
+- **It relies on which framebuffer is bound between calls.** Helpers
+  such as `clear_target` and `capture_effect_backdrop` leave the target
+  bound for whatever runs next, and the per-layer blends assume it. Each
+  of those hand-offs has to become an explicit target on a pass.
+- **It has its own `Target { tex, fbo }`** pairing a texture with a
+  persistent framebuffer, and passes effect images around as raw
+  `WebGlTexture`s. Both become handles.
+- **Its adjustment uniform helpers are shared.** Brightness / Contrast
+  reaches `set_standalone_adjustment_uniforms` through
+  `Pass::raw_uniforms`, a transitional hook that goes away once those
+  helpers build passes.
+- **`present` reads the canvas size from the GL context.** That is host
+  coupling and moves to a value the host passes in.
+- **It runs every frame**, so its conversion is the one to benchmark.
 
 **1.3 Remove raw GL types from signatures.** The ~50 functions that take
 `&WebGlTexture` or `&WebGl2RenderingContext` change to take
@@ -705,7 +708,7 @@ Started when a second app is actually being built.
 
 ## 7. Not yet verified
 
-These are assumptions until the Phase 0 spikes run:
+Still open:
 
 - That naga's GLSL ES output works for the shaders the spike did not
   port: `adjustments` and the brush dab family.
