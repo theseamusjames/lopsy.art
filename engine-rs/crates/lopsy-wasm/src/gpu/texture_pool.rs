@@ -314,6 +314,24 @@ impl TexturePool {
         }
     }
 
+    /// Make sampling outside [0, 1] tile the texture instead of clamping.
+    pub fn set_repeat_wrap(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
+        if let Some(entry) = self.entries.get(handle.0).and_then(|e| e.as_ref()) {
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));
+            gl.tex_parameteri(
+                WebGl2RenderingContext::TEXTURE_2D,
+                WebGl2RenderingContext::TEXTURE_WRAP_S,
+                WebGl2RenderingContext::REPEAT as i32,
+            );
+            gl.tex_parameteri(
+                WebGl2RenderingContext::TEXTURE_2D,
+                WebGl2RenderingContext::TEXTURE_WRAP_T,
+                WebGl2RenderingContext::REPEAT as i32,
+            );
+            gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+        }
+    }
+
     pub fn set_linear_filter(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
         if let Some(entry) = self.entries.get(handle.0).and_then(|e| e.as_ref()) {
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));

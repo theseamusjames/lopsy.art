@@ -32,16 +32,12 @@ const PATTERN = /\bWebGl\w+|\bgl\.[a-z_0-9]+\(/g;
 // first, which is also the rough conversion order.
 const BASELINE = {
   'api/color_mode.rs': 1,
-  'glyph_atlas.rs': 4,
   'api/filter/adjust.rs': 9,
   'clone_stamp_gpu.rs': 11,
   'smudge_gpu.rs': 12,
-  'api/paint.rs': 13,
   'dab_pass_gpu.rs': 15,
   'api/filter/noise.rs': 17,
   'api/filter/preview.rs': 17,
-  'text_transform_gpu.rs': 20,
-  'content_bounds_gpu.rs': 21,
   'api/fill.rs': 28,
   'selection_gpu.rs': 31,
   'stamp_preview_gpu.rs': 31,

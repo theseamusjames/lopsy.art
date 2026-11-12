@@ -15,12 +15,10 @@ pub fn font_id_to_u64(id: cosmic_text::fontdb::ID) -> u64 {
     h.finish()
 }
 
-/// Glyph atlas backed by a single R8 GPU texture. Allocation uses etagere
-/// (shelf packing). The texture is created lazily on first `ensure_texture` call.
+/// Glyph atlas bookkeeping: where each rasterized glyph sits in a
+/// `width × height` sheet. Allocation uses etagere (shelf packing).
 pub struct GlyphAtlas {
     pub allocator: etagere::AtlasAllocator,
-    #[cfg(target_arch = "wasm32")]
-    pub texture: Option<web_sys::WebGlTexture>,
     pub width: u32,
     pub height: u32,
     pub entries: HashMap<GlyphKey, GlyphEntry>,
@@ -28,22 +26,16 @@ pub struct GlyphAtlas {
 }
 
 impl GlyphAtlas {
-    /// Create a new 1024×1024 atlas with no GPU texture allocated.
+    /// Create a new, empty 1024×1024 atlas.
     pub fn new() -> Self {
         Self {
             allocator: etagere::AtlasAllocator::new(etagere::Size::new(1024, 1024)),
-            #[cfg(target_arch = "wasm32")]
-            texture: None,
             width: 1024,
             height: 1024,
             entries: HashMap::new(),
             generation: 0,
         }
     }
-
-    /// Stub in Phase 1 — Phase 3 creates the R8 WebGL texture here.
-    #[cfg(target_arch = "wasm32")]
-    pub fn ensure_texture(&mut self, _gl: &web_sys::WebGl2RenderingContext) {}
 
     /// Look up a cached entry. Returns `None` if not in atlas.
     pub fn get(&self, key: &GlyphKey) -> Option<&GlyphEntry> {
@@ -106,17 +98,6 @@ impl GlyphAtlas {
         ));
         self.generation += 1;
     }
-
-    /// Delete the WebGL texture. Called from EngineInner Drop.
-    #[cfg(target_arch = "wasm32")]
-    pub fn destroy(&mut self, gl: &web_sys::WebGl2RenderingContext) {
-        if let Some(tex) = self.texture.take() {
-            gl.delete_texture(Some(&tex));
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn destroy(&mut self) {}
 }
 
 #[cfg(test)]
@@ -162,8 +143,6 @@ mod tests {
     fn test_atlas_overflow_clears_and_retries() {
         let mut atlas = GlyphAtlas {
             allocator: etagere::AtlasAllocator::new(etagere::Size::new(32, 32)),
-            #[cfg(target_arch = "wasm32")]
-            texture: None,
             width: 32,
             height: 32,
             entries: HashMap::new(),

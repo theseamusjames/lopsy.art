@@ -6,7 +6,8 @@ use lopsy_core::layer::LayerDesc;
 
 use crate::gpu::context::GpuContext;
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
-use crate::gpu::shader::ShaderPrograms;
+use crate::gpu::pass::{GpuRef, Pass};
+use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
 
 /// Magnetic-lasso state: a precomputed Sobel edge field that the snap
@@ -859,6 +860,21 @@ impl EngineInner {
         self.group_pre_adj_valid = false;
     }
 
+    /// The GPU objects a [`Pass`] draws with.
+    pub fn gpu(&self) -> GpuRef<'_> {
+        GpuRef {
+            gl: &self.gl,
+            textures: &self.texture_pool,
+            fbos: &self.fbo_pool,
+            render_fbo: self.render_fbo,
+        }
+    }
+
+    /// Start a pass that runs `program`. See `gpu::pass`.
+    pub fn pass<'a>(&'a self, program: &'a ShaderProgram) -> Pass<'a> {
+        self.gpu().pass(program)
+    }
+
     /// Draw a fullscreen quad (3 vertices, no VBO needed)
     pub fn draw_fullscreen_quad(&self) {
         self.gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
@@ -1098,11 +1114,5 @@ impl Drop for EngineInner {
     fn drop(&mut self) {
         self.texture_pool.destroy(&self.gl);
         self.fbo_pool.destroy(&self.gl);
-        if let Some(tr) = self.text_renderer.as_mut() {
-            #[cfg(target_arch = "wasm32")]
-            tr.glyph_atlas.destroy(&self.gl);
-            #[cfg(not(target_arch = "wasm32"))]
-            tr.glyph_atlas.destroy();
-        }
     }
 }

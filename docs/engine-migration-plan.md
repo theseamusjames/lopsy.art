@@ -64,13 +64,12 @@ The pass layer is the seam. Feature code describes a pass and never
 touches GPU state:
 
 ```rust
-engine.gpu.pass(Target::Texture(dst))
-    .scissor(rect)                       // optional
-    .blend(Blend::None)                  // None | PremulOver | Max | Separate
-    .program(&shaders.blit)
-    .texture("u_tex", scratch, Filter::Nearest)
-    .uniforms(&BlitParams { .. })        // typed struct (Phase 2)
-    .draw();
+engine.pass(&engine.shaders.blit)
+    .texture("u_tex", scratch)
+    .f32("u_opacity", 1.0)               // becomes a typed struct in Phase 2
+    .scissor(Scissor::Rect(rect))        // Inherit | Off | Rect
+    .blend(Blend::Off)                   // Inherit | Off | PremulOver | Max | OverKeepAlpha
+    .draw(Target::Texture(dst));         // Texture | Framebuffer | Screen
 ```
 
 Backends are selected at compile time by a cargo feature and a type
@@ -330,17 +329,28 @@ question the later phases depend on:
 
 Tolerance: bit-identical.
 
-**1.1 Introduce `gpu::pass`.** Add the builder, implemented with the
-same GL calls the engine makes today. Convert exactly one call site:
-`dab_pass_gpu::copy_scratch_a_to`, a plain blit. In this phase the
-builder still takes uniforms by name (`.f32("u_opacity", 1.0)`), so each
-conversion is a mechanical one-to-one rewrite.
+**1.1 Introduce `gpu::pass`.** `gpu/pass.rs` holds the builder,
+implemented with the same GL calls the engine makes today, and
+`EngineInner::pass(program)` starts one. In this phase the builder takes
+uniforms by name (`.f32("u_opacity", 1.0)`), so each conversion is a
+mechanical one-to-one rewrite.
 
 **Neutral-state contract.** Converted and unconverted code coexist for
-the whole phase. After every `draw()` the pass layer restores the state
-unconverted code expects: blend off, scissor off, framebuffer unbound,
-texture unit 0 active. State caching, to skip redundant GL calls, is
-added only when the ratchet reaches zero.
+the whole phase, on one GL context. A pass therefore changes only the
+state it is told to set, and puts that state back afterwards:
+
+- `Blend::Inherit` and `Scissor::Inherit`, the defaults, leave the
+  context as found. A converted call site states its blend and scissor
+  only where the hand-written code did.
+- A blend mode that enables blending is switched off again after the
+  draw, and a scissor rect is disabled again.
+- `Target::Texture` unbinds the framebuffer afterwards, as
+  `render_to_texture` did. `Target::Framebuffer` leaves it bound, as the
+  code it replaces did.
+
+The `Inherit` variants exist only for this transition. The cap PR (1.5)
+removes them, so every pass states its full state, and adds state
+caching to skip redundant GL calls.
 
 **1.2 Convert modules by cluster.** One commit per file, or per function
 group for the large ones. Counts are the ratchet baselines when the

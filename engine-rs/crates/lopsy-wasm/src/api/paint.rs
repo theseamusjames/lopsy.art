@@ -7,7 +7,6 @@
 //! site — it just groups the paint surface in one place.
 
 use wasm_bindgen::prelude::*;
-use web_sys::WebGl2RenderingContext;
 
 use crate::Engine;
 use crate::gpu::texture_pool::TextureHandle;
@@ -354,14 +353,7 @@ pub fn upload_brush_texture(engine: &mut Engine, data: &[u8], width: u32, height
         .map_err(|e| JsError::new(&e))?;
     engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
         .map_err(|e| JsError::new(&e))?;
-    // Set texture wrapping to REPEAT for tiling
-    let gl = &engine.inner.gl;
-    if let Some(tex_gl) = engine.inner.texture_pool.get(tex) {
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(tex_gl));
-        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_WRAP_S, WebGl2RenderingContext::REPEAT as i32);
-        gl.tex_parameteri(WebGl2RenderingContext::TEXTURE_2D, WebGl2RenderingContext::TEXTURE_WRAP_T, WebGl2RenderingContext::REPEAT as i32);
-        gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
-    }
+    engine.inner.texture_pool.set_repeat_wrap(&engine.inner.gl, tex);
     engine.inner.brush_texture = Some(tex);
     engine.inner.brush_texture_width = width;
     engine.inner.brush_texture_height = height;
