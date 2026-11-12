@@ -36,7 +36,6 @@ const BASELINE = {
   'api/filter/adjust.rs': 9,
   'clone_stamp_gpu.rs': 11,
   'smudge_gpu.rs': 12,
-  'api/paint.rs': 13,
   'dab_pass_gpu.rs': 15,
   'api/filter/noise.rs': 17,
   'api/filter/preview.rs': 17,
