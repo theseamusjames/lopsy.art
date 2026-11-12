@@ -171,20 +171,40 @@ and the build catches most of what can go wrong.
 Bundle size and initial load time are tracked through the whole
 migration, not only at the end.
 
-**Bundle size, every PR.** A CI script records the size of the wasm and
-the JS entry chunks and fails if they grow past a recorded budget,
-unless the PR raises the budget explicitly. Same pattern as the
-ratchet. Baseline today for `lopsy_wasm_bg.wasm`: 4.28 MB raw, 1.80 MB
-gzip, 1.39 MB brotli.
+**Bundle size, every PR.** `npm run wasm:size`
+(`scripts/check-bundle-size.mjs`) runs in the CI wasm build job. It
+measures the wasm binary and its JS glue, raw and gzipped, and fails if
+either is more than 3% over the budget recorded in the script, unless
+the PR raises the budget explicitly. The margin absorbs toolchain drift.
+Baseline: `lopsy_wasm_bg.wasm` 4.30 MB raw, 1.84 MB gzip; `lopsy_wasm.js`
+236 KB raw, 27 KB gzip. The app's own JS chunks are not covered, because
+PR CI does not run `vite build`.
 
 **Initial load time, at milestones and on PRs that change startup
 work.** Those PRs are the Phase 2 and Phase 5 foundations and everything
-in Phase 6 from 6.2 on. Measure a cold load from navigation to first
-frame, as the median of several loads, on a real GPU: SwiftShader's
-shader compile time is not representative. Report three parts: wasm
-fetch and compile, engine creation, first composite. Engine creation
-compiles about 90 shader programs today, so it is the part most likely
-to move.
+in Phase 6 from 6.2 on. `npm run build && npm run perf:load`
+(`scripts/measure-load-time.mjs`) serves the production build and does
+several cold loads, each in a freshly launched browser on the real GPU:
+SwiftShader's shader compile time is not representative. It reads two
+User Timing measures the app records:
+
+- `lopsy:wasm-init`: navigation start until the wasm module is fetched,
+  compiled and ready.
+- `lopsy:engine-create`: time inside `createEngine`, which is the GL
+  context plus compiling about 90 shader programs.
+
+Baseline on an Apple M4 Max, local preview server:
+
+| Measure | Median | First run after a build |
+|---|---|---|
+| `lopsy:wasm-init` | 138 ms | 148 ms |
+| `lopsy:engine-create` | 135 ms | 3,005 ms |
+
+The first run pays the full shader compile; later runs are fast even in
+a fresh browser profile, which points to a compiled-shader cache kept by
+the OS. The first-run number is what a first-time visitor pays and is
+the one most likely to move when shaders change (Phases 5 and 6), so the
+script reports the slowest run as well as the median.
 
 | Phase | Bundle size | Load time |
 |---|---|---|
@@ -272,11 +292,17 @@ change and it makes progress visible from then on.
 **0.3 Composition parity check.** Reuse the existing composition specs
 instead of building a new scene suite.
 
-- When an output directory is set, a composition spec writes the
-  engine's output at its checkpoints: the composite readback and the
-  export, not page screenshots, which include UI chrome.
-- A small script compares two output directories and reports the
-  largest per-channel difference.
+- `e2e/parity.ts` adds `parityCheckpoint(page, composition, name)`.
+  When `PARITY_OUT` is set it writes the engine's output at that point:
+  the export composite as raw bytes and a hash of every layer. It does
+  not use page screenshots, which include UI chrome. Without
+  `PARITY_OUT` it does nothing. `koi-fish` and `shapes` call it at each
+  of their existing screenshot steps.
+- `scripts/parity-compare.mjs` compares two output directories and
+  reports the largest per-channel difference.
+- `npm run parity:record` writes `.parity/baseline`; run it on `main`.
+- `npm run parity:check` writes `.parity/current` on the branch and
+  compares. Both take under two minutes.
 
 The baseline is recorded from `main` on the same machine that checks the
 branch, so GPU and driver differences cancel out and refactor phases can
@@ -579,5 +605,4 @@ These are assumptions until the Phase 0 spikes run:
 - That `koi-fish` and `shapes` repeat exactly on a real GPU; they were
   checked on SwiftShader only.
 - Whether `export-roundtrip` repeats exactly.
-- The current initial load time; no baseline has been taken.
 - WebGPU availability on Linux browsers.
