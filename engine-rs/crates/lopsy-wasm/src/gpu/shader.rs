@@ -143,15 +143,25 @@ impl ShaderProgram {
         Self { program, uniforms: RefCell::new(HashMap::new()) }
     }
 
-    /// Looks up a uniform location, caching the result so that subsequent calls
-    /// avoid the `gl.getUniformLocation` round trip. Safe to call per-draw.
-    pub fn location(&self, gl: &WebGl2RenderingContext, name: &str) -> Option<WebGlUniformLocation> {
-        if let Some(cached) = self.uniforms.borrow().get(name) {
-            return cached.clone();
+    /// Calls `set` with the location of uniform `name`, if the program has
+    /// one. Locations are cached, and handed out by reference: cloning one
+    /// is a round trip into JS and back, which at a dozen uniforms a pass
+    /// was a large part of what a pass cost on the CPU.
+    pub(in crate::gpu) fn with_location(&self, gl: &WebGl2RenderingContext, name: &str, set: impl FnOnce(&WebGlUniformLocation)) {
+        if !self.uniforms.borrow().contains_key(name) {
+            let location = gl.get_uniform_location(&self.program, name);
+            self.uniforms.borrow_mut().insert(name.to_string(), location);
         }
-        let loc = gl.get_uniform_location(&self.program, name);
-        self.uniforms.borrow_mut().insert(name.to_string(), loc.clone());
-        loc
+        if let Some(Some(location)) = self.uniforms.borrow().get(name) {
+            set(location);
+        }
+    }
+
+    /// The location of uniform `name`, cloned for a caller that keeps it.
+    pub(in crate::gpu) fn location(&self, gl: &WebGl2RenderingContext, name: &str) -> Option<WebGlUniformLocation> {
+        let mut location = None;
+        self.with_location(gl, name, |found| location = Some(found.clone()));
+        location
     }
 }
 

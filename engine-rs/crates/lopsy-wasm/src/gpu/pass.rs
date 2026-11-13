@@ -299,9 +299,7 @@ impl<'a> Pass<'a> {
             Some(tex) => {
                 gl.active_texture(GL::TEXTURE0 + unit);
                 gl.bind_texture(GL::TEXTURE_2D, Some(tex));
-                if let Some(loc) = self.program.location(gl, name) {
-                    gl.uniform1i(Some(&loc), unit as i32);
-                }
+                self.program.with_location(gl, name, |loc| gl.uniform1i(Some(loc), unit as i32));
             }
             None => self.has_missing_texture = true,
         }
@@ -309,74 +307,54 @@ impl<'a> Pass<'a> {
     }
 
     pub fn i32(self, name: &str, value: i32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform1i(Some(&loc), value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1i(Some(loc), value));
         self
     }
 
     pub fn u32(self, name: &str, value: u32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform1ui(Some(&loc), value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1ui(Some(loc), value));
         self
     }
 
     pub fn ivec2(self, name: &str, x: i32, y: i32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform2i(Some(&loc), x, y);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform2i(Some(loc), x, y));
         self
     }
 
     pub fn f32(self, name: &str, value: f32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform1f(Some(&loc), value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1f(Some(loc), value));
         self
     }
 
     pub fn vec2(self, name: &str, x: f32, y: f32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform2f(Some(&loc), x, y);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform2f(Some(loc), x, y));
         self
     }
 
     pub fn vec3(self, name: &str, x: f32, y: f32, z: f32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform3f(Some(&loc), x, y, z);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform3f(Some(loc), x, y, z));
         self
     }
 
     pub fn vec4(self, name: &str, x: f32, y: f32, z: f32, w: f32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform4f(Some(&loc), x, y, z, w);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform4f(Some(loc), x, y, z, w));
         self
     }
 
     pub fn f32_array(self, name: &str, values: &[f32]) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform1fv_with_f32_array(Some(&loc), values);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1fv_with_f32_array(Some(loc), values));
         self
     }
 
     /// Column-major 2×2 matrix.
     pub fn mat2(self, name: &str, value: &[f32; 4]) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform_matrix2fv_with_f32_array(Some(&loc), false, value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform_matrix2fv_with_f32_array(Some(loc), false, value));
         self
     }
 
     /// Column-major 3×3 matrix.
     pub fn mat3(self, name: &str, value: &[f32; 9]) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform_matrix3fv_with_f32_array(Some(loc), false, value));
         self
     }
 
