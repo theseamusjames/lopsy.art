@@ -29,6 +29,7 @@ pub mod vertical_forms;
 pub mod text_transform_gpu;
 pub mod woff2;
 pub mod variable_instance;
+pub mod host;
 pub mod api;
 
 use wasm_bindgen::prelude::*;
@@ -54,8 +55,18 @@ pub struct Engine {
 // Engine Lifecycle
 // ============================================================
 
+fn console_log(level: host::LogLevel, message: &str) {
+    let message = message.into();
+    match level {
+        host::LogLevel::Info => web_sys::console::log_1(&message),
+        host::LogLevel::Warn => web_sys::console::warn_1(&message),
+        host::LogLevel::Error => web_sys::console::error_1(&message),
+    }
+}
+
 #[wasm_bindgen(js_name = "createEngine")]
 pub fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError> {
+    host::install(host::Host { log: console_log, now_ms: js_sys::Date::now });
     let gpu_ctx = GpuContext::new(&canvas).map_err(|e| JsError::new(&e))?;
     let shaders = ShaderPrograms::compile_all(&gpu_ctx).map_err(|e| JsError::new(&e))?;
     let inner = EngineInner::new(gpu_ctx, shaders).map_err(|e| JsError::new(&e))?;
@@ -109,7 +120,7 @@ pub fn render(engine: &mut Engine) {
         return;
     };
     if let Err(e) = result {
-        web_sys::console::error_1(&format!("compositor error: {e}").into());
+        host::log(host::LogLevel::Error, &format!("compositor error: {e}"));
     }
 }
 

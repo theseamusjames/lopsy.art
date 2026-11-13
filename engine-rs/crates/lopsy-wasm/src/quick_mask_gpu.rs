@@ -68,7 +68,7 @@ pub fn fill_quick_mask(
     }
 
     if let Err(e) = engine.expand_mask_bytes_into(tex_handle, &mask, w, h) {
-        web_sys::console::warn_1(&format!("fill_quick_mask: {e}").into());
+        crate::host::log(crate::host::LogLevel::Warn, &format!("fill_quick_mask: {e}"));
     }
     engine.needs_recomposite = true;
 }
@@ -187,7 +187,7 @@ pub fn upload_quick_mask_pixels(
     if tex_w != w || tex_h != h { return; }
     if engine.texture_pool.get(tex_handle).is_none() { return; }
     if let Err(e) = engine.expand_mask_bytes_into(tex_handle, data, w, h) {
-        web_sys::console::warn_1(&format!("upload_quick_mask_pixels: {e}").into());
+        crate::host::log(crate::host::LogLevel::Warn, &format!("upload_quick_mask_pixels: {e}"));
         return;
     }
     engine.needs_recomposite = true;

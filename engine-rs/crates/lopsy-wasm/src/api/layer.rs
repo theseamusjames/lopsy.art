@@ -137,7 +137,7 @@ pub fn decode_and_upload_dng(
     ).map_err(|e| JsError::new(&e))?;
 
     for line in &dng.debug_log {
-        web_sys::console::log_1(&line.into());
+        crate::host::log(crate::host::LogLevel::Info, line);
     }
 
     #[derive(serde::Serialize)]
