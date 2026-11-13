@@ -10,7 +10,9 @@ precision highp float;
 // Blocks clipped by the texture edge average only the texels inside it.
 
 uniform sampler2D u_tex;
-uniform int u_blockSize;
+layout(std140) uniform Params {
+    int u_blockSize;
+};
 
 out vec4 fragColor;
 

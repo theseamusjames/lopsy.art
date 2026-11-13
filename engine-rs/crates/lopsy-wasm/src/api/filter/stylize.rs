@@ -8,6 +8,10 @@ use crate::Engine;
 use crate::filter_gpu;
 use crate::gpu::pass::Target;
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::params::filters::{
+    CelShadingParams, ChromaticAberrationParams, EmbossParams, HalftoneParams, KaleidoscopeParams,
+    LensDistortionParams, OilPaintParams, PixelStretchParams, VoronoiParams,
+};
 
 #[wasm_bindgen(js_name = "filterPixelate")]
 pub fn filter_pixelate(engine: &mut Engine, layer_id: &str, block_size: u32) {
@@ -23,17 +27,11 @@ pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, densi
         return;
     }
     let density = density.clamp(0.25, 3.0);
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.halftone,
-        |pass| {
-            pass
-                .f32("u_dotSize", dot_size)
-                .f32("u_density", density)
-                .f32("u_angle", angle)
-                .f32("u_contrast", contrast)
-        },
+        HalftoneParams { dot_size, angle, contrast, density },
     );
 }
 
@@ -47,16 +45,15 @@ pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, r
         return;
     };
 
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.kaleidoscope,
-        |pass| {
-            pass
-                .f32("u_segments", segments.max(2) as f32)
-                .f32("u_rotation", rotation_degrees.to_radians())
-                .vec2("u_size", w as f32, h as f32)
-                .vec2("u_center", cu, cv)
+        KaleidoscopeParams {
+            segments: segments.max(2) as f32,
+            rotation: rotation_degrees.to_radians(),
+            size: [w as f32, h as f32],
+            center: [cu, cv],
         },
     );
 }
@@ -65,30 +62,22 @@ pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, r
 pub fn filter_oil_paint(engine: &mut Engine, layer_id: &str, radius: f32, sharpness: f32) {
     let radius = radius.clamp(1.0, 10.0);
     let sharpness = sharpness.clamp(0.1, 5.0);
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.oil_paint,
-        |pass| {
-            pass
-                .f32("u_radius", radius)
-                .f32("u_sharpness", sharpness)
-        },
+        OilPaintParams { radius, sharpness },
     );
 }
 
 #[wasm_bindgen(js_name = "filterChromaticAberration")]
 pub fn filter_chromatic_aberration(engine: &mut Engine, layer_id: &str, amount: f32, angle_degrees: f32) {
     let amount = amount.clamp(0.0, 100.0);
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.chromatic_aberration,
-        |pass| {
-            pass
-                .f32("u_amount", amount)
-                .f32("u_angle", angle_degrees.to_radians())
-        },
+        ChromaticAberrationParams { amount, angle: angle_degrees.to_radians() },
     );
 }
 
@@ -104,17 +93,11 @@ pub fn filter_pixel_stretch(
     let amount = amount.clamp(0.0, 200.0);
     let bands = bands.clamp(2.0, 50.0);
     let rgb_split = rgb_split.clamp(0.0, 1.0);
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.pixel_stretch,
-        |pass| {
-            pass
-                .f32("u_amount", amount)
-                .f32("u_bands", bands)
-                .f32("u_seed", seed)
-                .f32("u_rgbSplit", rgb_split)
-        },
+        PixelStretchParams { amount, bands, seed, rgb_split },
     );
 }
 
@@ -133,42 +116,37 @@ pub fn filter_lens_distortion(
         return;
     };
     let doc_long_side = engine.inner.doc_width.max(engine.inner.doc_height).max(1) as f32;
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.lens_distortion,
-        |pass| {
-            pass
-                .f32("u_strength", strength)
-                .f32("u_zoom", zoom)
-                .f32("u_fringing", fringing)
-                .vec2("u_center", cu, cv)
-                .f32("u_radiusScale", doc_long_side)
+        LensDistortionParams {
+            strength,
+            zoom,
+            fringing,
+            center: [cu, cv],
+            radius_scale: doc_long_side,
         },
     );
 }
 
 #[wasm_bindgen(js_name = "filterFindEdges")]
 pub fn filter_find_edges(engine: &mut Engine, layer_id: &str) {
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.find_edges,
-        |pass| pass,
+        (),
     );
 }
 
 #[wasm_bindgen(js_name = "filterCelShading")]
 pub fn filter_cel_shading(engine: &mut Engine, layer_id: &str, levels: u32, edge_strength: f32) {
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.cel_shading,
-        |pass| {
-            pass
-                .i32("u_levels", levels as i32)
-                .f32("u_edgeStrength", edge_strength)
-        },
+        CelShadingParams { levels: levels as i32, edge_strength },
     );
 }
 
@@ -176,16 +154,11 @@ pub fn filter_cel_shading(engine: &mut Engine, layer_id: &str, levels: u32, edge
 pub fn filter_emboss(engine: &mut Engine, layer_id: &str, angle_degrees: f32, strength: f32, emboss_type: f32) {
     let strength = strength.clamp(0.0, 1.0);
     let emboss_type = emboss_type.clamp(0.0, 1.0);
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.emboss,
-        |pass| {
-            pass
-                .f32("u_angle", angle_degrees.to_radians())
-                .f32("u_strength", strength)
-                .f32("u_type", emboss_type)
-        },
+        EmbossParams { angle: angle_degrees.to_radians(), strength, emboss_type },
     );
 }
 
@@ -273,18 +246,10 @@ pub fn filter_voronoi(
     let edge_g = edge_g.clamp(0.0, 1.0);
     let edge_b = edge_b.clamp(0.0, 1.0);
     let seed = seed.clamp(0.0, 999.0);
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.voronoi,
-        |pass| {
-            pass
-                .f32("u_cellCount", cell_count)
-                .f32("u_edgeWidth", edge_width)
-                .f32("u_edgeR", edge_r)
-                .f32("u_edgeG", edge_g)
-                .f32("u_edgeB", edge_b)
-                .f32("u_seed", seed)
-        },
+        VoronoiParams { cell_count, edge_width, edge_r, edge_g, edge_b, seed },
     );
 }

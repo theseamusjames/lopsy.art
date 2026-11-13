@@ -2,10 +2,12 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_amount;
-uniform float u_bands;
-uniform float u_seed;
-uniform float u_rgbSplit;
+layout(std140) uniform Params {
+    float u_amount;
+    float u_bands;
+    float u_seed;
+    float u_rgbSplit;
+};
 out vec4 fragColor;
 
 float hash(float n) {

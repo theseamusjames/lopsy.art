@@ -5,8 +5,10 @@ in vec2 v_uv;
 out vec4 fragColor;
 
 uniform sampler2D u_tex;
-uniform float u_angle;    // radians
-uniform int u_distance;   // number of samples
+layout(std140) uniform Params {
+    float u_angle; // radians
+    int u_distance; // number of samples
+};
 
 // Bilinear sample of a straight-alpha texture, interpolated in premultiplied
 // space and un-premultiplied on return. At a non-axis-aligned angle the

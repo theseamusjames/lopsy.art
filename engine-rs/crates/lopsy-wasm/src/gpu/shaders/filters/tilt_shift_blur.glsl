@@ -5,10 +5,12 @@ in vec2 v_uv;
 out vec4 fragColor;
 
 uniform sampler2D u_tex;
-uniform float u_focusPosition;
-uniform float u_focusWidth;
-uniform float u_blurRadius;
-uniform float u_angle;
+layout(std140) uniform Params {
+    float u_focusPosition;
+    float u_focusWidth;
+    float u_blurRadius;
+    float u_angle;
+};
 
 float computeBlurAmount(vec2 uv) {
     vec2 centered = uv - 0.5;

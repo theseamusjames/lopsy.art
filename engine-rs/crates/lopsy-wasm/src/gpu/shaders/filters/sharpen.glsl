@@ -3,8 +3,10 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
 uniform sampler2D u_blurredTex;
-uniform float u_amount;
-uniform float u_threshold;
+layout(std140) uniform Params {
+    float u_amount;
+    float u_threshold;
+};
 out vec4 fragColor;
 void main() {
     vec4 orig = texture(u_tex, v_uv);

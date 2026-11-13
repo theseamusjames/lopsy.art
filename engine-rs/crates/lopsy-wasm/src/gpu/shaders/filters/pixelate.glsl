@@ -9,7 +9,9 @@ precision highp float;
 
 uniform sampler2D u_tex;
 uniform sampler2D u_blocks;
-uniform int u_blockSize;
+layout(std140) uniform Params {
+    int u_blockSize;
+};
 
 out vec4 fragColor;
 

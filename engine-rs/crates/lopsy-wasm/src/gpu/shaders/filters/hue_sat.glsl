@@ -2,9 +2,11 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_hue;
-uniform float u_saturation;
-uniform float u_lightness;
+layout(std140) uniform Params {
+    float u_hue;
+    float u_saturation;
+    float u_lightness;
+};
 out vec4 fragColor;
 //#include hsl
 

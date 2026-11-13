@@ -5,8 +5,10 @@ in vec2 v_uv;
 out vec4 fragColor;
 
 uniform sampler2D u_tex;
-uniform vec2 u_center;    // normalized center (0.5, 0.5 = image center)
-uniform int u_amount;     // number of samples / strength
+layout(std140) uniform Params {
+    vec2 u_center; // normalized center (0.5, 0.5 = image center)
+    int u_amount; // number of samples / strength
+};
 
 // Bilinear sample of a straight-alpha texture, interpolated in premultiplied
 // space and un-premultiplied on return. The sample offsets below are a

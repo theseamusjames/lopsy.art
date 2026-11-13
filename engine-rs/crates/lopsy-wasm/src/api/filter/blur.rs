@@ -6,6 +6,9 @@ use crate::Engine;
 use crate::filter_gpu;
 use crate::gpu::pass::Target;
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::params::filters::{
+    MotionBlurParams, RadialBlurParams, SharpenParams, SurfaceBlurParams, TiltShiftBlurParams,
+};
 
 #[wasm_bindgen(js_name = "filterGaussianBlur")]
 pub fn filter_gaussian_blur(engine: &mut Engine, layer_id: &str, radius: u32) {
@@ -108,11 +111,9 @@ pub fn filter_unsharp_mask(
     blur_pass(inner.scratch_texture_a, (0.0, 1.0)).draw(Target::Framebuffer(inner.scratch_fbo_b));
 
     // Now apply sharpen shader: original (layer) + blurred (scratch B) -> scratch A
-    inner.pass_untyped(&inner.shaders.sharpen)
+    inner.pass(&inner.shaders.sharpen, SharpenParams { amount, threshold: threshold as f32 })
         .texture("u_tex", tex_handle)
         .texture("u_blurredTex", inner.scratch_texture_b)
-        .f32("u_amount", amount)
-        .f32("u_threshold", threshold as f32)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(inner.scratch_fbo_a));
 
@@ -123,15 +124,11 @@ pub fn filter_unsharp_mask(
 #[wasm_bindgen(js_name = "filterMotionBlur")]
 pub fn filter_motion_blur(engine: &mut Engine, layer_id: &str, angle: f32, distance: u32) {
     if distance == 0 { return; }
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.motion_blur,
-        |pass| {
-            pass
-                .f32("u_angle", angle)
-                .i32("u_distance", distance as i32)
-        },
+        MotionBlurParams { angle, distance: distance as i32 },
     );
 }
 
@@ -148,17 +145,11 @@ pub fn filter_tilt_shift_blur(
     let focus_position = focus_position.clamp(0.0, 1.0);
     let focus_width = focus_width.clamp(0.0, 1.0);
     let blur_radius = blur_radius.clamp(1.0, 32.0);
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.tilt_shift_blur,
-        |pass| {
-            pass
-                .f32("u_focusPosition", focus_position)
-                .f32("u_focusWidth", focus_width)
-                .f32("u_blurRadius", blur_radius)
-                .f32("u_angle", angle)
-        },
+        TiltShiftBlurParams { focus_position, focus_width, blur_radius, angle },
     );
 }
 
@@ -174,15 +165,11 @@ pub fn filter_surface_blur(engine: &mut Engine, layer_id: &str, radius: u32, thr
     if radius == 0 { return; }
     let radius = radius.min(SURFACE_BLUR_MAX_RADIUS);
     let threshold = threshold.clamp(1.0, 255.0) / 255.0;
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.surface_blur,
-        |pass| {
-            pass
-                .i32("u_radius", radius as i32)
-                .f32("u_threshold", threshold)
-        },
+        SurfaceBlurParams { radius: radius as i32, threshold },
     );
 }
 
@@ -192,14 +179,10 @@ pub fn filter_radial_blur(engine: &mut Engine, layer_id: &str, amount: u32) {
     let Some((_, _, cu, cv)) = super::full_size_doc_center(&mut engine.inner, layer_id) else {
         return;
     };
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.radial_blur,
-        |pass| {
-            pass
-                .vec2("u_center", cu, cv)
-                .i32("u_amount", amount as i32)
-        },
+        RadialBlurParams { center: [cu, cv], amount: amount as i32 },
     );
 }

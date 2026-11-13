@@ -5,8 +5,10 @@ in vec2 v_uv;
 out vec4 fragColor;
 
 uniform sampler2D u_tex;
-uniform int u_levels;        // color quantization levels (3-10)
-uniform float u_edgeStrength; // edge line strength (0-1)
+layout(std140) uniform Params {
+    int u_levels; // color quantization levels (3-10)
+    float u_edgeStrength; // edge line strength (0-1)
+};
 
 void main() {
     vec2 texel = 1.0 / vec2(textureSize(u_tex, 0));

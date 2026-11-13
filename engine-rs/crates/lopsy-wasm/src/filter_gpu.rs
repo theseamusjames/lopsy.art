@@ -4,6 +4,7 @@ use crate::gpu::pass::{Pass, Target};
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::uniforms::Uniforms;
+use crate::gpu::params::filters::{PixelateBlocksParams, PixelateParams, SelectionMaskBlendParams};
 
 /// Blend the filtered result with the original layer texture
 /// using the selection mask. Writes the blended result back to the layer texture.
@@ -34,13 +35,14 @@ fn blend_with_selection_mask(
         .map_or((0.0, 0.0), |l| (l.x as f32, l.y as f32));
     let (doc_w, doc_h) = (engine.doc_width as f32, engine.doc_height as f32);
 
-    engine.pass_untyped(&engine.shaders.selection_mask_blend)
+    engine.pass(&engine.shaders.selection_mask_blend, SelectionMaskBlendParams {
+        doc_size: [doc_w, doc_h],
+        layer_offset: [layer_x, layer_y],
+        layer_size: [w as f32, h as f32],
+    })
         .texture("u_filtered", filtered_scratch)
         .texture("u_original", original_scratch)
         .texture("u_selMask", sel_handle)
-        .vec2("u_docSize", doc_w, doc_h)
-        .vec2("u_layerOffset", layer_x, layer_y)
-        .vec2("u_layerSize", w as f32, h as f32)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Texture(tex_handle));
 }
@@ -389,17 +391,15 @@ pub fn apply_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32)
     let blocks_h = h.div_ceil(block_size);
 
     // Pass 1: block averages (layer -> scratch A, blocks_w x blocks_h)
-    engine.pass_untyped(&engine.shaders.pixelate_blocks)
+    engine.pass(&engine.shaders.pixelate_blocks, PixelateBlocksParams { block_size: block_size as i32 })
         .texture("u_tex", tex_handle)
-        .i32("u_blockSize", block_size as i32)
         .viewport(0, 0, blocks_w as i32, blocks_h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
     // Pass 2: expand blocks over the source footprint (-> scratch B, w x h)
-    engine.pass_untyped(&engine.shaders.pixelate)
+    engine.pass(&engine.shaders.pixelate, PixelateParams { block_size: block_size as i32 })
         .texture("u_tex", tex_handle)
         .texture("u_blocks", engine.scratch_texture_a)
-        .i32("u_blockSize", block_size as i32)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_b));
 
