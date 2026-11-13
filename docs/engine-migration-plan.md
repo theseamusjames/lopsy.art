@@ -12,8 +12,9 @@ Status: in progress.
 | Phase | State |
 |---|---|
 | 0 | Done (#1643, #1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
-| 1 | Conversions merged (#1645, #1646, #1648 to #1653, #1667): no raw GL is left outside `gpu/`. The cap (1.5) is in review: the context is private to `gpu/` and the transitional `Inherit` states are gone. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
-| 2–7 | Not started |
+| 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
+| 2 | In review as one GitHub stack (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
+| 3–7 | Not started |
 
 ---
 
@@ -70,11 +71,10 @@ The pass layer is the seam. Feature code describes a pass and never
 touches GPU state:
 
 ```rust
-engine.pass(&engine.shaders.blit)
+engine.pass(&engine.shaders.posterize, PosterizeParams { levels: 4.0 })   // the shader's uniform struct
     .texture("u_tex", scratch)
-    .f32("u_opacity", 1.0)               // becomes a typed struct in Phase 2
-    .scissor(Scissor::Rect(rect))        // Inherit | Off | Rect
-    .blend(Blend::Off)                   // Inherit | Off | PremulOver | Max | OverKeepAlpha
+    .scissor(Scissor::Rect(rect))        // Off | Rect
+    .blend(Blend::Off)                   // Off | PremulOver | Max | OverKeepAlpha
     .draw(Target::Texture(dst));         // Texture | Framebuffer | Screen
 ```
 
@@ -234,7 +234,7 @@ script reports the slowest run as well as the median.
 | Phase | Bundle size | Load time |
 |---|---|---|
 | 1 | Flat or smaller: the pass layer replaces repeated GL boilerplate | Flat |
-| 2 | Flat | One uniform-block setup per program; expected flat |
+| 2 | Measured: wasm +1.1% raw (4,293,925 bytes against 4,246,140 on the same machine). The typed wrappers are thin over an untyped core; without that it was +4.7% | Measured flat: `wasm-init` 134 ms, `engine-create` 128 ms median; 496 ms on the first run after the build |
 | 5 | Up: generated GLSL is more verbose than hand-written | Shader compile time may change; measured in the foundation PR before the fan starts |
 | 6 | wgpu adds code (spike S1). It ships as a separate artifact, so a user downloads one backend, not both | Pipelines replace programs; they can be created lazily or asynchronously |
 
@@ -466,7 +466,7 @@ caller, in the compositor PR.
 | #1652 | Staging uploads, readbacks, thumbnails | `thumbnail_gpu` 35, `engine.rs` 117 of 125 | Merged |
 | #1653 | Layers | `layer_transform_gpu` 45, `layer_manager` 446 | Merged |
 | #1667 | Compositor | `effect_cache_gpu` 40, `compositor` 663, 5 of the last 8 in `engine.rs` | Merged |
-| – | Cap | 1.5 | In review |
+| #1683 | Cap | 1.5 | Merged |
 
 The cluster PRs were written as a chain and merged together as a GitHub
 stack. In content each cluster depends only on the foundation.
@@ -553,13 +553,16 @@ on the backend.
 
 Moved out of the cap, with the reason:
 
-- **A pass unbinding its own textures** goes to Phase 2. One draw still
-  depends on a texture an earlier pass left bound: the
-  `render_layer_plus_stroke` case described above, where the brush
-  texture sampler is whatever the last `end_stroke` set up. Unbinding
-  at the end of every pass would change what that draw samples, so it
-  waits for the typed uniform struct that makes that pass state its own
-  inputs.
+- **A pass unbinding its own textures** is still not done. The reason
+  first given here was wrong: the brush-texture uniforms and sampler
+  that `render_layer_plus_stroke` appeared to inherit are declared in
+  `composite.glsl` and `blend.glsl` but read by neither, and Phase 2
+  removed them. What is left is cost. Unbinding after every pass adds
+  two GL calls per texture, on a path where calls into JS are most of
+  the CPU time. The cheaper design is for `gpu` to remember what each
+  unit holds and unbind only a texture that is about to become the
+  render target; that would also retire the `unbind_textures` calls and
+  the parked samplers (`sampler_unit`) in feature code.
 - **Caching program and framebuffer binds** is not done. Blend and
   scissor needed no cache once the contract made them free. The
   remaining redundant calls are one `use_program` and one framebuffer
@@ -577,31 +580,129 @@ creation.
 
 Tolerance: bit-identical.
 
-Per shader, in one commit:
+A pass is created with the shader's uniform struct:
 
-1. Replace the shader's loose uniforms with one `Params` uniform block.
-2. Add a matching Rust struct.
-3. Change its call sites from named setters to `.uniforms(&Params {..})`.
-4. Add a unit test that the struct's layout matches the block.
+```rust
+engine.pass(&engine.shaders.posterize, PosterizeParams { levels: 4.0 })
+```
 
-PRs follow the shader directories: core blits and transforms; filters
-in two or three; effects; the brush family; gradient, shape, selection
-and text; then `blend` with `adjustments`.
+so every value uniform is given on every pass, and a wrong name or type
+does not compile. Per shader:
 
-The WebGL backend uploads the struct as a uniform buffer. Sampler
-bindings are already handled by `.texture(..)` from Phase 1.
+1. Its non-sampler uniforms are one `Params` block in the GLSL source
+   (`layout(std140) uniform Params { ... };`). Samplers stay outside.
+2. `gpu/params/<family>.rs` has the matching struct, declared with
+   `uniforms!`. Field `layer_offset` feeds member `u_layerOffset`.
+3. `typed_shaders!` in `gpu/shader.rs` ties the source to the struct,
+   and one unit test checks every struct against its block: same
+   members, same types, same order, nothing left outside the block.
+4. Call sites build the struct. `()` is the struct of a shader that only
+   samples. A tool that redraws per dab keeps its struct and hands
+   `ActivePass::set` a copy with the new centre.
 
-Order: smallest shaders first (`blit`, `invert`, `threshold`,
-`posterize`), `blend.glsl` and the brush dab family last.
+**How the WebGL backend uploads it.** Not as a uniform buffer, which is
+what this plan first said. The backend compiles the block as plain
+uniforms (`flatten_params_block`, a line-for-line text rewrite at
+program link) and sets members one by one, skipping any whose value is
+what the program already holds. The block in the source is still the
+single description of the interface, and it is what a WGSL port and the
+wgpu backend will read.
 
-Traps:
+The reason is a measurement. A fragment shader with fourteen uniforms,
+drawn into a 4000×4000 RGBA16F target, median time per frame including
+a readback that drains the GPU:
 
-- `vec3` and `mat3` padding differs between a naive Rust struct and the
-  block layout. The layout test exists to catch this.
-- The brush dab path uploads uniforms once per dab. Run `brush-perf-6k`
-  before and after converting those shaders. If a per-dab buffer upload
-  is slower on WebGL, the WebGL backend can keep setting those few
-  shaders' uniforms individually behind the same typed interface.
+| Draws per frame | Backend | Plain uniforms | Buffer, `bufferSubData` | Buffer, `bufferData` (orphaned) |
+|---|---|---|---|---|
+| 60 full-target | ANGLE Metal | 6.3 ms | 6.4 ms | 6.3 ms |
+| 400 scissored to 96 px | ANGLE Metal | 0.7 ms | 1.0 ms | 0.8 ms |
+| 2,000 scissored to 32 px | ANGLE Metal | 2.1 ms | 5.3 ms | 4.2 ms |
+| 60 full-target | ANGLE OpenGL | 1.9 ms | 24.9 ms | 1.7 ms |
+
+A buffer buys nothing at compositor rates, costs two to two and a half
+times as much at brush-dab rates, and with `bufferSubData` stalls
+outright on one backend. ANGLE's Direct3D backend, which is what Chrome
+uses on Windows, could not be measured here. Plain uniforms carry none
+of that risk. Phase 5 decides again for naga's output, which declares a
+block: its build step can flatten it the same way.
+
+Skipping unchanged members is safe because a program's uniforms keep
+their value between passes and a typed program's are written nowhere
+else. It replaces the per-dab uniform slots of Phase 1: a dab sends only
+its centre.
+
+**PRs**, written as a chain and opened as one GitHub stack:
+
+| PR | Family | Shaders |
+|---|---|---|
+| #1685 | Foundation | `gpu::uniforms`, `Pass` created with a struct; `blit`, `invert`, `posterize`, `threshold` |
+| #1686 | Core | copies, flips, remaps, transforms, clipboard, selection fill, content bounds |
+| #1687 | Filters | every filter but `adjustments` and `vignette`, with `color_convert` and `tonemap` |
+| #1688 | Gradients, shapes, fill, selection, text | |
+| #1689 | Brush | the dab shaders and the retouching tools |
+| #1690 | Compositor | `blend`, `composite`, `final_blit`, the layer effects, `adjustments`, `vignette` |
+| #1691 | Cap | removes the by-name setters, the uniform slots and the untyped constructors |
+
+While the chain was open, an unconverted shader went through
+`pass_untyped` and the `*_untyped` filter helpers; the cap deleted them.
+
+**What every-field-every-pass turned up.** Each of these read a uniform
+some earlier pass had left on the program. The conversion had to pick a
+value; where the old value could reach a pixel, it is a behaviour fix.
+
+- **Box Blur** never set `u_step`, so it ran with the stride of the last
+  large Gaussian Blur (radius over 63). It passes 1.
+- **Merge Down, the Move float and the transform commit** blend with the
+  Normal program and never set `u_maskOverlay`, `u_hasBackdrop` or
+  `u_docColorMode`; they used whatever the last composite's final
+  Normal blend left. They pass 0 and the document's mode. Whether a
+  stale mask tint could be reached from the UI was not tried.
+- Unread in the pass that left them unset, so no effect: clipboard copy's
+  `u_extendPastCanvas` without a mask, mask-pencil's selection uniforms,
+  the Gaussian weights past the radius, gradient stops past the count.
+
+Also found: `blend.glsl` and `composite.glsl` declared brush-texture
+uniforms and a sampler that neither reads; removed. `marching_ants` and
+`text_glyph` are compiled at startup and used nowhere; left for a
+separate change.
+
+**Left for Phase 5**, where each shader is rewritten anyway. WGSL cannot
+hold these in a uniform struct as they stand:
+
+- `float` arrays (`u_weights[64]`, `u_stopPositions[16]`): pack as
+  `vec4` arrays (spike S2).
+- `bool` members (`noise`, `texture`): make them `int`.
+- `mat2` (`mask_remap`, the brush dab transform): WGSL lays it out
+  differently from std140; pass a `vec4`.
+
+Renamed so a field name maps to them: `adjustments.glsl`'s
+`u_cb_shadows`-style names to camelCase, `emboss.glsl`'s `u_type` to
+`u_embossType`, `text_glyph.glsl`'s `u_glyphUV` to `u_glyphUv`.
+
+**Verification**, run on the tip of the stack. Each commit type-checks
+without warnings and passes `cargo test`; the pixel comparison was not
+repeated per PR.
+
+- Against `main`'s engine over the e2e suite (every spec but the `perf`
+  ones and the four multi-hour compositions), chromium: 7,068
+  checkpoints, 7,030 identical. The other 38 are in seven tests that
+  differ between two runs of one engine: four in `brush-jitter-texture`,
+  `layer-dnd-autoscroll`, `shape-polygon-path-matches-pixels` (the idle
+  crop lands or not before the checkpoint), and `merge-down-chained-undo`
+  (a thumbnail that depends on timing: `main`'s engine gives the new
+  engine's hash when the spec runs alone, and gave a different one in
+  the loaded baseline run).
+- e2e: 1,453 passed, 7 skipped, 1 failed (`composition-painting`, which
+  fails on `main`'s engine too).
+- Real GPU (ANGLE Metal, M4 Max), 4000×4000 with 20 styled layers: CPU
+  time per forced composite 5.57 to 5.67 ms against 5.80 to 5.84 ms on
+  `main`, 6.97 ms including the GPU drain on both. Brush 17.6 ms and pan
+  19.2 ms per input event on both.
+- `brush-perf-6k`: 19.6 to 21.8 strokes/s over four runs, against 17.3
+  to 21.8 on `main`.
+- Not run: Firefox, and any GPU other than Apple's. The Box Blur fix has
+  no test.
+
 
 ### Phase 3 — Engine / host split
 
