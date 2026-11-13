@@ -2,6 +2,7 @@ use lopsy_core::dab_rect::dab_rect;
 
 use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
+use crate::gpu::params::brush::CloneStampParams;
 
 pub fn apply_clone_stamp_dab(
     engine: &mut EngineInner,
@@ -58,12 +59,13 @@ pub fn apply_clone_stamp_dab_batch(
             h,
             rect,
             engine
-                .pass_untyped(&engine.shaders.clone_stamp)
-                .texture("u_sourceTex", tex_handle)
-                .vec2("u_center", cx, cy)
-                .f32("u_size", size)
-                .vec2("u_texSize", w as f32, h as f32)
-                .vec2("u_sourceOffset", source_offset_x as f32, source_offset_y as f32),
+                .pass(&engine.shaders.clone_stamp, CloneStampParams {
+                    source_offset: [source_offset_x as f32, source_offset_y as f32],
+                    center: [cx, cy],
+                    size,
+                    tex_size: [w as f32, h as f32],
+                })
+                .texture("u_sourceTex", tex_handle),
         );
     }
 

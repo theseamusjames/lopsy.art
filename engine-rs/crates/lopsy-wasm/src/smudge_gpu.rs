@@ -2,6 +2,7 @@ use lopsy_core::dab_rect::dab_rect;
 
 use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
+use crate::gpu::params::brush::SmudgeDabParams;
 
 pub fn apply_smudge_dab(
     engine: &mut EngineInner,
@@ -62,13 +63,14 @@ pub fn apply_smudge_dab_batch(
             h,
             rect,
             engine
-                .pass_untyped(&engine.shaders.smudge_dab)
-                .texture("u_sourceTex", tex_handle)
-                .vec2("u_center", cx, cy)
-                .vec2("u_prev", prev_x, prev_y)
-                .f32("u_size", size)
-                .f32("u_strength", strength)
-                .vec2("u_texSize", w as f32, h as f32),
+                .pass(&engine.shaders.smudge_dab, SmudgeDabParams {
+                    center: [cx, cy],
+                    prev: [prev_x, prev_y],
+                    size,
+                    strength,
+                    tex_size: [w as f32, h as f32],
+                })
+                .texture("u_sourceTex", tex_handle),
         );
     }
 

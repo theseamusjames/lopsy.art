@@ -3,14 +3,16 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_stampTex;
 uniform sampler2D u_layerTex;
-uniform float u_opacity;
-uniform vec2 u_center;
-uniform float u_size;
-uniform vec2 u_texSize;
+layout(std140) uniform Params {
+    float u_opacity;
+    vec2 u_center;
+    float u_size;
+    vec2 u_texSize;
+    int u_hasSelection;
+    vec2 u_docSize;
+    vec2 u_layerOffset;
+};
 uniform sampler2D u_selectionMask;
-uniform int u_hasSelection;
-uniform vec2 u_docSize;
-uniform vec2 u_layerOffset;
 out vec4 fragColor;
 
 void main() {

@@ -10,6 +10,7 @@ use lopsy_core::dab_rect::viewport_disc_rect;
 
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Scissor, Target};
+use crate::gpu::params::brush::StampPreviewParams;
 
 /// The preview's opacity over the composite.
 const PREVIEW_OPACITY: f32 = 0.7;
@@ -67,18 +68,19 @@ pub(crate) fn draw(engine: &mut EngineInner, fb_w: i32, fb_h: i32) {
     };
 
     engine
-        .pass_untyped(&engine.shaders.stamp_preview)
+        .pass(&engine.shaders.stamp_preview, StampPreviewParams {
+            resolution: [fb_w as f32, fb_h as f32],
+            zoom: engine.viewport.zoom as f32,
+            pan: [engine.viewport.pan_x as f32, engine.viewport.pan_y as f32],
+            doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+            cursor: [preview.cursor.0 as f32, preview.cursor.1 as f32],
+            source: [preview.source.0 as f32, preview.source.1 as f32],
+            radius: preview.radius as f32,
+            layer_origin: [lx, ly],
+            layer_size: [tw as f32, th as f32],
+            opacity: PREVIEW_OPACITY,
+        })
         .texture("u_layerTex", tex_handle)
-        .vec2("u_resolution", fb_w as f32, fb_h as f32)
-        .f32("u_zoom", engine.viewport.zoom as f32)
-        .vec2("u_pan", engine.viewport.pan_x as f32, engine.viewport.pan_y as f32)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .vec2("u_cursor", preview.cursor.0 as f32, preview.cursor.1 as f32)
-        .vec2("u_source", preview.source.0 as f32, preview.source.1 as f32)
-        .f32("u_radius", preview.radius as f32)
-        .vec2("u_layerOrigin", lx, ly)
-        .vec2("u_layerSize", tw as f32, th as f32)
-        .f32("u_opacity", PREVIEW_OPACITY)
         // Keep the canvas alpha the final blit wrote; blend colour "over" it.
         .blend(Blend::OverKeepAlpha)
         .scissor(Scissor::Rect(rect))

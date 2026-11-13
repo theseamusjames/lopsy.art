@@ -2,7 +2,9 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_maxOpacity;
+layout(std140) uniform Params {
+    float u_maxOpacity;
+};
 out vec4 fragColor;
 
 void main() {

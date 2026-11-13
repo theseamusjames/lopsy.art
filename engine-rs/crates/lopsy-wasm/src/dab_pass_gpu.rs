@@ -12,13 +12,13 @@ use crate::gpu::texture_pool::TextureHandle;
 /// identical to the two full-texture passes they replace. Scratch texels
 /// outside `rect` stay stale and are never copied back. The caller sizes
 /// scratch to the layer and calls `mark_layer_dirty` once its batch is done.
-pub(crate) fn scratch_dab_pass(
+pub(crate) fn scratch_dab_pass<P>(
     engine: &EngineInner,
     layer: TextureHandle,
     w: u32,
     h: u32,
     rect: Rect,
-    dab: Pass<'_>,
+    dab: Pass<'_, P>,
 ) {
     dab.viewport(0, 0, w as i32, h as i32)
         .scissor(Scissor::Rect(rect))
