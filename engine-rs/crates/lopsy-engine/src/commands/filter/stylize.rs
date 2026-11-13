@@ -29,7 +29,7 @@ pub fn filter_halftone(engine: &mut EngineInner, layer_id: &str, dot_size: f32, 
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.halftone,
+        |s| &s.halftone,
         HalftoneParams { dot_size, angle, contrast, density },
     );
 }
@@ -46,7 +46,7 @@ pub fn filter_kaleidoscope(engine: &mut EngineInner, layer_id: &str, segments: u
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.kaleidoscope,
+        |s| &s.kaleidoscope,
         KaleidoscopeParams {
             segments: segments.max(2) as f32,
             rotation: rotation_degrees.to_radians(),
@@ -62,7 +62,7 @@ pub fn filter_oil_paint(engine: &mut EngineInner, layer_id: &str, radius: f32, s
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.oil_paint,
+        |s| &s.oil_paint,
         OilPaintParams { radius, sharpness },
     );
 }
@@ -72,7 +72,7 @@ pub fn filter_chromatic_aberration(engine: &mut EngineInner, layer_id: &str, amo
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.chromatic_aberration,
+        |s| &s.chromatic_aberration,
         ChromaticAberrationParams { amount, angle: angle_degrees.to_radians() },
     );
 }
@@ -91,7 +91,7 @@ pub fn filter_pixel_stretch(
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.pixel_stretch,
+        |s| &s.pixel_stretch,
         PixelStretchParams { amount, bands, seed, rgb_split },
     );
 }
@@ -113,7 +113,7 @@ pub fn filter_lens_distortion(
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.lens_distortion,
+        |s| &s.lens_distortion,
         LensDistortionParams {
             strength,
             zoom,
@@ -128,7 +128,7 @@ pub fn filter_find_edges(engine: &mut EngineInner, layer_id: &str) {
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.find_edges,
+        |s| &s.find_edges,
         (),
     );
 }
@@ -137,7 +137,7 @@ pub fn filter_cel_shading(engine: &mut EngineInner, layer_id: &str, levels: u32,
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.cel_shading,
+        |s| &s.cel_shading,
         CelShadingParams { levels: levels as i32, edge_strength },
     );
 }
@@ -148,7 +148,7 @@ pub fn filter_emboss(engine: &mut EngineInner, layer_id: &str, angle_degrees: f3
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.emboss,
+        |s| &s.emboss,
         EmbossParams { angle: angle_degrees.to_radians(), strength, emboss_type },
     );
 }
@@ -234,7 +234,7 @@ pub fn filter_voronoi(
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.voronoi,
+        |s| &s.voronoi,
         VoronoiParams { cell_count, edge_width, edge_r, edge_g, edge_b, seed },
     );
 }

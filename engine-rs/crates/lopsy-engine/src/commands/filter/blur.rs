@@ -28,7 +28,7 @@ pub fn filter_gaussian_blur(engine: &mut EngineInner, layer_id: &str, radius: u3
         filter_gpu::apply_separable_blur(
             &mut *engine,
             layer_id,
-            |e| &e.shaders.gaussian_blur,
+            |s| &s.gaussian_blur,
             |direction| GaussianBlurParams { direction, weights, radius: radius as i32 },
         );
     } else {
@@ -40,7 +40,7 @@ pub fn filter_gaussian_blur(engine: &mut EngineInner, layer_id: &str, radius: u3
             filter_gpu::apply_separable_blur(
                 &mut *engine,
                 layer_id,
-                |e| &e.shaders.box_blur,
+                |s| &s.box_blur,
                 |direction| BoxBlurParams { direction, radius: sample_radius as i32, step: step as i32 },
             );
         }
@@ -52,7 +52,7 @@ pub fn filter_box_blur(engine: &mut EngineInner, layer_id: &str, radius: u32) {
     filter_gpu::apply_separable_blur(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.box_blur,
+        |s| &s.box_blur,
         |direction| BoxBlurParams { direction, radius: radius as i32, step: 1 },
     );
 }
@@ -113,7 +113,7 @@ pub fn filter_motion_blur(engine: &mut EngineInner, layer_id: &str, angle: f32, 
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.motion_blur,
+        |s| &s.motion_blur,
         MotionBlurParams { angle, distance: distance as i32 },
     );
 }
@@ -133,7 +133,7 @@ pub fn filter_tilt_shift_blur(
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.tilt_shift_blur,
+        |s| &s.tilt_shift_blur,
         TiltShiftBlurParams { focus_position, focus_width, blur_radius, angle },
     );
 }
@@ -152,7 +152,7 @@ pub fn filter_surface_blur(engine: &mut EngineInner, layer_id: &str, radius: u32
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.surface_blur,
+        |s| &s.surface_blur,
         SurfaceBlurParams { radius: radius as i32, threshold },
     );
 }
@@ -165,7 +165,7 @@ pub fn filter_radial_blur(engine: &mut EngineInner, layer_id: &str, amount: u32)
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.radial_blur,
+        |s| &s.radial_blur,
         RadialBlurParams { center: [cu, cv], amount: amount as i32 },
     );
 }

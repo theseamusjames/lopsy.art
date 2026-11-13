@@ -14,7 +14,7 @@ pub fn filter_add_noise(
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.noise,
+        |s| &s.noise,
         NoiseParams {
             amount: amount / 255.0,
             monochrome,
@@ -28,7 +28,7 @@ pub fn filter_clouds(engine: &mut EngineInner, layer_id: &str, scale: f32, seed:
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.clouds,
+        |s| &s.clouds,
         CloudsParams { scale, seed },
     );
 }
@@ -37,7 +37,7 @@ pub fn filter_smoke(engine: &mut EngineInner, layer_id: &str, scale: f32, seed: 
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.smoke,
+        |s| &s.smoke,
         SmokeParams { scale, seed, turbulence },
     );
 }
@@ -46,7 +46,7 @@ pub fn filter_fibers(engine: &mut EngineInner, layer_id: &str, variance: f32, st
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.fibers,
+        |s| &s.fibers,
         FibersParams { variance, strength, seed },
     );
 }
@@ -69,7 +69,7 @@ pub fn filter_texture(
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.texture,
+        |s| &s.texture,
         params::filters::TextureParams {
             kind: p.kind as i32,
             blend: p.blend as i32,

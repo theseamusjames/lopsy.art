@@ -8,6 +8,7 @@ use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
 use crate::gpu::pass::{Blend, GpuRef, Pass, ReadFormat};
 use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::gpu::uniforms::Uniforms;
+use crate::imaging::Imaging;
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
 
 /// Magnetic-lasso state: a precomputed Sobel edge field that the snap
@@ -34,122 +35,6 @@ impl MagneticLassoState {
 pub struct GroupAdjustment {
     pub adjustments: ImageAdjustmentState,
     pub child_ids: Vec<String>,
-}
-
-/// Per-document image adjustments applied on the compositor's final pass.
-/// Scalars plus optional LUT textures for curves and levels. Values here
-/// don't touch pixel data — they're read by the compositor each frame.
-#[derive(Clone)]
-pub struct ImageAdjustmentState {
-    pub exposure: f32,
-    pub contrast: f32,
-    pub highlights: f32,
-    pub shadows: f32,
-    pub whites: f32,
-    pub blacks: f32,
-    pub vignette: f32,
-    pub saturation: f32,
-    pub vibrance: f32,
-    pub curves_texture: Option<TextureHandle>,
-    pub has_curves: bool,
-    pub levels_rgb: [f32; 5],
-    pub levels_r: [f32; 5],
-    pub levels_g: [f32; 5],
-    pub levels_b: [f32; 5],
-    pub levels_texture: Option<TextureHandle>,
-    pub has_levels: bool,
-    // Hue/Saturation
-    pub hue_shift: f32,
-    pub hsl_saturation: f32,
-    pub lightness: f32,
-    // Color Balance (CMY→RGB shifts per tonal range, -100..100)
-    pub cb_shadows: [f32; 3],
-    pub cb_midtones: [f32; 3],
-    pub cb_highlights: [f32; 3],
-    // Photo Filter
-    pub pf_color: [f32; 3],
-    pub pf_density: f32,
-    pub pf_preserve_luminosity: bool,
-    // Black & White
-    pub bw_reds: f32,
-    pub bw_yellows: f32,
-    pub bw_greens: f32,
-    pub bw_cyans: f32,
-    pub bw_blues: f32,
-    pub bw_magentas: f32,
-    pub bw_enabled: bool,
-    // Channel Mixer (row per output channel: [from_r, from_g, from_b, constant])
-    pub cm_r: [f32; 4],
-    pub cm_g: [f32; 4],
-    pub cm_b: [f32; 4],
-    pub cm_enabled: bool,
-    // Invert
-    pub invert: bool,
-    // Gradient Map
-    pub gradient_map_texture: Option<TextureHandle>,
-    pub has_gradient_map: bool,
-    // Color Grading (per wheel: [tint_r, tint_g, tint_b, luminance], as offsets)
-    pub cg_enabled: bool,
-    pub cg_shadows: [f32; 4],
-    pub cg_midtones: [f32; 4],
-    pub cg_highlights: [f32; 4],
-    pub cg_global: [f32; 4],
-    pub cg_exponent: f32,
-    pub cg_width: f32,
-}
-
-impl Default for ImageAdjustmentState {
-    fn default() -> Self {
-        Self {
-            exposure: 0.0,
-            contrast: 0.0,
-            highlights: 0.0,
-            shadows: 0.0,
-            whites: 0.0,
-            blacks: 0.0,
-            vignette: 0.0,
-            saturation: 0.0,
-            vibrance: 0.0,
-            curves_texture: None,
-            has_curves: false,
-            levels_rgb: [0.0, 1.0, 1.0, 0.0, 1.0],
-            levels_r: [0.0, 1.0, 1.0, 0.0, 1.0],
-            levels_g: [0.0, 1.0, 1.0, 0.0, 1.0],
-            levels_b: [0.0, 1.0, 1.0, 0.0, 1.0],
-            levels_texture: None,
-            has_levels: false,
-            hue_shift: 0.0,
-            hsl_saturation: 0.0,
-            lightness: 0.0,
-            cb_shadows: [0.0; 3],
-            cb_midtones: [0.0; 3],
-            cb_highlights: [0.0; 3],
-            pf_color: [1.0; 3],
-            pf_density: 0.0,
-            pf_preserve_luminosity: true,
-            bw_reds: 40.0,
-            bw_yellows: 60.0,
-            bw_greens: 40.0,
-            bw_cyans: 60.0,
-            bw_blues: 20.0,
-            bw_magentas: 80.0,
-            bw_enabled: false,
-            cm_r: [1.0, 0.0, 0.0, 0.0],
-            cm_g: [0.0, 1.0, 0.0, 0.0],
-            cm_b: [0.0, 0.0, 1.0, 0.0],
-            cm_enabled: false,
-            invert: false,
-            gradient_map_texture: None,
-            has_gradient_map: false,
-            cg_enabled: false,
-            cg_shadows: [0.0; 4],
-            cg_midtones: [0.0; 4],
-            cg_highlights: [0.0; 4],
-            cg_global: [0.0; 4],
-            cg_exponent: 1.0,
-            cg_width: 0.18,
-        }
-    }
 }
 
 /// Pixels copied or cut from a layer, held on the GPU until pasted.
@@ -290,6 +175,8 @@ pub struct BrushState {
     pub texture_scale: f32,
     pub texture_blend_mode: u32,
 }
+
+pub use crate::imaging::adjustments::ImageAdjustmentState;
 
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
@@ -872,6 +759,11 @@ impl EngineInner {
     pub fn mark_all_dirty(&mut self) {
         self.needs_recomposite = true;
         self.groups.pre_adj_valid = false;
+    }
+
+    /// What a stateless imaging operation draws with. See `imaging`.
+    pub fn imaging(&self) -> Imaging<'_> {
+        Imaging { gpu: self.gpu(), shaders: &self.shaders }
     }
 
     /// The GPU objects a [`Pass`] draws with.

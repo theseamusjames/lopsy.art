@@ -57,7 +57,7 @@ pub fn filter_pattern_fill(
     filter_gpu::apply_filter_with_texture(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.pattern_fill,
+        |s| &s.pattern_fill,
         PatternFillParams {
             layer_size: [lw, lh],
             pattern_size: [pw, ph],
@@ -104,7 +104,7 @@ pub fn filter_color_lut(
     filter_gpu::apply_filter_with_texture(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.color_lut,
+        |s| &s.color_lut,
         ColorLutParams { lut_size: size_f, intensity },
         "u_lut",
         is_lut_live.then_some(lut_handle),
@@ -211,7 +211,7 @@ pub fn filter_sunburst(
     filter_gpu::apply_filter(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.sunburst,
+        |s| &s.sunburst,
         SunburstParams {
             size: [w as f32, h as f32],
             center: [cx, cy],

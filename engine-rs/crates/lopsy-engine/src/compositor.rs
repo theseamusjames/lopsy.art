@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crate::coverage_stroke_gpu::{self, CoverageTool};
 use crate::engine::{EngineInner, ImageAdjustmentState};
+use crate::imaging::adjustments;
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::params::composite::{BlendParams, CompositeParams, FinalBlitParams};
@@ -1685,125 +1686,21 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
     Ok(pixels)
 }
 
-/// `adjustments.glsl`'s uniforms for a one-off use outside the compositor
-/// (the Brightness / Contrast filter): every adjustment at the identity
-/// except the caller's brightness and contrast, from the same list the
-/// compositor writes (#1163).
-pub(crate) fn standalone_adjustments(brightness: f32, contrast: f32, doc_color_mode: u32) -> AdjustmentsParams {
-    let adj = ImageAdjustmentState { contrast, ..Default::default() };
-    adjustment_params(&adj, brightness, doc_color_mode)
+/// `pass` drawn over the whole document, replacing what it covers.
+fn over_document<'a, P>(engine: &EngineInner, pass: Pass<'a, P>) -> Pass<'a, P> {
+    pass.blend(Blend::Off).viewport(0, 0, engine.doc_width as i32, engine.doc_height as i32)
 }
 
-/// The adjustments program's LUT samplers, each pointed at unit 0, the
-/// source texture, so none can alias the render target.
-pub(crate) fn park_adjustment_luts<P>(pass: Pass<'_, P>) -> Pass<'_, P> {
-    pass.sampler_unit("u_curveLut", 0)
-        .sampler_unit("u_levelsLut", 0)
-        .sampler_unit("u_gradientLut", 0)
-}
-
-fn has_lut(is_enabled: bool, texture: Option<TextureHandle>) -> bool {
-    is_enabled && texture.is_some()
-}
-
-fn flag(is_on: bool) -> f32 {
-    if is_on { 1.0 } else { 0.0 }
-}
-
-/// Every non-sampler uniform of `adjustments.glsl`, including the
-/// `u_has*` LUT flags, derived from `adj`.
-fn adjustment_params(adj: &ImageAdjustmentState, brightness: f32, doc_color_mode: u32) -> AdjustmentsParams {
-    AdjustmentsParams {
-        brightness,
-        contrast: adj.contrast / 100.0,
-        exposure: adj.exposure,
-        highlights: adj.highlights,
-        shadows: adj.shadows,
-        whites: adj.whites,
-        blacks: adj.blacks,
-        saturation: adj.saturation / 100.0,
-        vibrance: adj.vibrance / 100.0,
-        has_levels: flag(has_lut(adj.has_levels, adj.levels_texture)),
-        has_curves: flag(has_lut(adj.has_curves, adj.curves_texture)),
-        // Hue/Saturation
-        hue_shift: adj.hue_shift,
-        hsl_saturation: adj.hsl_saturation,
-        lightness: adj.lightness,
-        // Color Balance
-        cb_shadows: adj.cb_shadows,
-        cb_midtones: adj.cb_midtones,
-        cb_highlights: adj.cb_highlights,
-        // Photo Filter
-        pf_color: adj.pf_color,
-        pf_density: adj.pf_density,
-        pf_luminosity: flag(adj.pf_preserve_luminosity),
-        // Black & White
-        bw_reds: adj.bw_reds,
-        bw_yellows: adj.bw_yellows,
-        bw_greens: adj.bw_greens,
-        bw_cyans: adj.bw_cyans,
-        bw_blues: adj.bw_blues,
-        bw_magentas: adj.bw_magentas,
-        bw_enabled: flag(adj.bw_enabled),
-        // Channel Mixer
-        cm_rr: adj.cm_r[0] / 100.0,
-        cm_rg: adj.cm_r[1] / 100.0,
-        cm_rb: adj.cm_r[2] / 100.0,
-        cm_rc: adj.cm_r[3],
-        cm_gr: adj.cm_g[0] / 100.0,
-        cm_gg: adj.cm_g[1] / 100.0,
-        cm_gb: adj.cm_g[2] / 100.0,
-        cm_gc: adj.cm_g[3],
-        cm_br: adj.cm_b[0] / 100.0,
-        cm_bg: adj.cm_b[1] / 100.0,
-        cm_bb: adj.cm_b[2] / 100.0,
-        cm_bc: adj.cm_b[3],
-        cm_enabled: flag(adj.cm_enabled),
-        invert: flag(adj.invert),
-        has_gradient_map: flag(has_lut(adj.has_gradient_map, adj.gradient_map_texture)),
-        // Color Grading
-        cg_enabled: flag(adj.cg_enabled),
-        cg_shadows: adj.cg_shadows,
-        cg_midtones: adj.cg_midtones,
-        cg_highlights: adj.cg_highlights,
-        cg_global: adj.cg_global,
-        cg_exponent: adj.cg_exponent,
-        cg_width: adj.cg_width,
-        doc_color_mode: doc_color_mode as i32,
-    }
-}
-
-/// A pass over the document that applies `adj` to `source`: every uniform
-/// of `adjustments.glsl`, plus the Curves / Levels / Gradient Map LUTs `adj`
-/// enables. A LUT sampler that is not in use points at unit 0, the source,
-/// so it cannot alias the render target. Returns the pass and how many
-/// texture units it bound.
+/// The adjustments in `adj` applied to `source`, over the document. Returns
+/// the pass and how many texture units it bound.
 fn adjustments_pass<'a>(engine: &'a EngineInner, source: TextureHandle, adj: &ImageAdjustmentState) -> (Pass<'a, AdjustmentsParams>, u32) {
-    let params = adjustment_params(adj, 0.0, engine.doc_color_mode);
-    let mut pass = doc_pass(engine, &engine.shaders.adjustments, params).texture("u_tex", source);
-    let mut units = 1;
-    let luts = [
-        ("u_levelsLut", has_lut(adj.has_levels, adj.levels_texture), adj.levels_texture),
-        ("u_curveLut", has_lut(adj.has_curves, adj.curves_texture), adj.curves_texture),
-        ("u_gradientLut", has_lut(adj.has_gradient_map, adj.gradient_map_texture), adj.gradient_map_texture),
-    ];
-    for (name, is_enabled, texture) in luts {
-        let live = texture.filter(|&h| is_enabled && engine.texture_pool.get(h).is_some());
-        pass = match live {
-            Some(lut) => {
-                units += 1;
-                pass.texture(name, lut)
-            }
-            None => pass.sampler_unit(name, 0),
-        };
-    }
-    (pass, units)
+    let (pass, units) = adjustments::pass(engine.imaging(), source, adj, 0.0, engine.doc_color_mode);
+    (over_document(engine, pass), units)
 }
 
-/// A pass over the document that applies the vignette to `source`.
+/// The vignette applied to `source`, over the document.
 fn vignette_pass<'a>(engine: &'a EngineInner, source: TextureHandle, amount: f32) -> Pass<'a, VignetteParams> {
-    doc_pass(engine, &engine.shaders.vignette, VignetteParams { amount, doc_color_mode: engine.doc_color_mode as i32 })
-        .texture("u_tex", source)
+    over_document(engine, adjustments::vignette(engine.imaging(), source, amount, engine.doc_color_mode))
 }
 
 /// Returns true if any adjustment in the state is non-default (i.e., would change pixels).
