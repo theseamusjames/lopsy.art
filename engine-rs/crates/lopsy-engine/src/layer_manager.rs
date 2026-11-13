@@ -638,7 +638,7 @@ pub fn clipboard_copy(
     };
 
     // Release old clipboard texture
-    if let Some(old) = engine.clipboard_texture.take() {
+    if let Some(old) = engine.clipboard.texture.take() {
         engine.texture_pool.release(old);
     }
 
@@ -671,11 +671,11 @@ pub fn clipboard_copy(
         .clear([0.0, 0.0, 0.0, 0.0])
         .draw(Target::Texture(clip_tex));
 
-    engine.clipboard_texture = Some(clip_tex);
-    engine.clipboard_width = out_w;
-    engine.clipboard_height = out_h;
-    engine.clipboard_offset_x = off_x;
-    engine.clipboard_offset_y = off_y;
+    engine.clipboard.texture = Some(clip_tex);
+    engine.clipboard.width = out_w;
+    engine.clipboard.height = out_h;
+    engine.clipboard.offset_x = off_x;
+    engine.clipboard.offset_y = off_y;
 
     Ok((out_w, out_h, off_x, off_y))
 }
@@ -737,10 +737,10 @@ pub fn clipboard_paste(
     engine: &mut EngineInner,
     dst_layer_id: &str,
 ) -> Result<(), String> {
-    let clip_tex_handle = engine.clipboard_texture
+    let clip_tex_handle = engine.clipboard.texture
         .ok_or("No clipboard data")?;
-    let clip_w = engine.clipboard_width;
-    let clip_h = engine.clipboard_height;
+    let clip_w = engine.clipboard.width;
+    let clip_h = engine.clipboard.height;
 
     engine.texture_pool.get(clip_tex_handle).ok_or("Clipboard texture not found")?;
 
@@ -1568,21 +1568,21 @@ pub fn upload_clipboard_pixels(
     offset_x: i32,
     offset_y: i32,
 ) -> Result<(), String> {
-    if let Some(old) = engine.clipboard_texture.take() {
+    if let Some(old) = engine.clipboard.texture.take() {
         engine.texture_pool.release(old);
     }
     let tex = engine.texture_pool.acquire(width, height)?;
     engine.texture_pool.upload_rgba(tex, 0, 0, width, height, data)?;
-    engine.clipboard_texture = Some(tex);
-    engine.clipboard_width = width;
-    engine.clipboard_height = height;
-    engine.clipboard_offset_x = offset_x;
-    engine.clipboard_offset_y = offset_y;
+    engine.clipboard.texture = Some(tex);
+    engine.clipboard.width = width;
+    engine.clipboard.height = height;
+    engine.clipboard.offset_x = offset_x;
+    engine.clipboard.offset_y = offset_y;
     Ok(())
 }
 
 pub fn read_clipboard_pixels(engine: &EngineInner) -> Result<Vec<u8>, String> {
-    let tex_handle = engine.clipboard_texture
+    let tex_handle = engine.clipboard.texture
         .ok_or("No clipboard texture")?;
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
     engine.texture_pool.get(tex_handle).ok_or("Clipboard texture not found")?;

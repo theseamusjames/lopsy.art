@@ -152,6 +152,15 @@ impl Default for ImageAdjustmentState {
     }
 }
 
+/// Pixels copied or cut from a layer, held on the GPU until pasted.
+pub struct ClipboardState {
+    pub texture: Option<TextureHandle>,
+    pub width: u32,
+    pub height: u32,
+    pub offset_x: i32,
+    pub offset_y: i32,
+}
+
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
@@ -255,11 +264,6 @@ pub struct EngineInner {
     pub gradient_preview_texture: Option<TextureHandle>,
     pub gradient_preview_layer_id: Option<String>,
     // Clipboard
-    pub clipboard_texture: Option<TextureHandle>,
-    pub clipboard_width: u32,
-    pub clipboard_height: u32,
-    pub clipboard_offset_x: i32,
-    pub clipboard_offset_y: i32,
     // Floating selection (for move-with-selection)
     pub float_texture: Option<TextureHandle>,
     pub float_base_texture: Option<TextureHandle>,
@@ -355,6 +359,8 @@ pub struct EngineInner {
     /// Clone Stamp / Healing Brush source preview disc drawn over the
     /// screen after the final blit (`stamp_preview_gpu.rs`).
     pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
+    pub clipboard: ClipboardState,
+
 }
 
 pub struct SnapshotTexture {
@@ -455,11 +461,6 @@ impl EngineInner {
             liquify_disp_texture: None,
             gradient_preview_texture: None,
             gradient_preview_layer_id: None,
-            clipboard_texture: None,
-            clipboard_width: 0,
-            clipboard_height: 0,
-            clipboard_offset_x: 0,
-            clipboard_offset_y: 0,
             float_texture: None,
             float_base_texture: None,
             float_layer_id: None,
@@ -504,6 +505,13 @@ impl EngineInner {
             healing_mean_target: None,
             coverage_strokes: HashMap::new(),
             stamp_preview: None,
+            clipboard: ClipboardState {
+                texture: None,
+                width: 0,
+                height: 0,
+                offset_x: 0,
+                offset_y: 0,
+            },
         })
     }
 
@@ -767,13 +775,13 @@ impl EngineInner {
         }
         self.gradient_preview_layer_id = None;
         // Clipboard
-        if let Some(tex) = self.clipboard_texture.take() {
+        if let Some(tex) = self.clipboard.texture.take() {
             self.texture_pool.release(tex);
         }
-        self.clipboard_width = 0;
-        self.clipboard_height = 0;
-        self.clipboard_offset_x = 0;
-        self.clipboard_offset_y = 0;
+        self.clipboard.width = 0;
+        self.clipboard.height = 0;
+        self.clipboard.offset_x = 0;
+        self.clipboard.offset_y = 0;
         // Float
         if let Some(tex) = self.float_texture.take() {
             self.texture_pool.release(tex);

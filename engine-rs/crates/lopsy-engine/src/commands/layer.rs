@@ -374,7 +374,7 @@ pub fn clipboard_cut(
 
 /// Clear pixels in the selection (or whole layer) without touching the
 /// retained internal clipboard. Delete/Backspace uses this instead of
-/// `clipboardCut` — `clipboardCut` re-copies into `engine.clipboard_texture`
+/// `clipboardCut` — `clipboardCut` re-copies into `engine.clipboard.texture`
 /// as a side effect, which clobbers a paste-in-place copy made earlier with
 /// `clipboardCopy`/`clipboardCut` (see #870).
 pub fn clear_selected_pixels(
