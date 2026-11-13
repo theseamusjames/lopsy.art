@@ -3,14 +3,16 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_layerTex;
 uniform sampler2D u_maskTex;
-uniform int u_hasMask;
-// 1 for the Move tool's float: a selection reaching a canvas edge carries on
-// past it, so content hanging off that edge moves with the rest (#1131).
-// 0 elsewhere: off-canvas texels are outside the selection (#1033).
-uniform int u_extendPastCanvas;
-uniform vec2 u_docSize;
-uniform vec2 u_layerOffset;
-uniform vec2 u_layerSize;
+layout(std140) uniform Params {
+    int u_hasMask;
+    // 1 for the Move tool's float: a selection reaching a canvas edge carries on
+    // past it, so content hanging off that edge moves with the rest (#1131).
+    // 0 elsewhere: off-canvas texels are outside the selection (#1033).
+    int u_extendPastCanvas;
+    vec2 u_docSize;
+    vec2 u_layerOffset;
+    vec2 u_layerSize;
+};
 out vec4 fragColor;
 
 void main() {

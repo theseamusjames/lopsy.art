@@ -47,3 +47,58 @@ uniforms! {
         pub channel: i32,
     }
 }
+
+uniforms! {
+    /// `clipboard_copy.glsl`
+    pub struct ClipboardCopyParams {
+        pub has_mask: i32,
+        pub extend_past_canvas: i32,
+        pub layer_offset: [f32; 2],
+        pub layer_size: [f32; 2],
+        pub bounds_offset: [f32; 2],
+        pub bounds_size: [f32; 2],
+        pub doc_size: [f32; 2],
+    }
+}
+
+uniforms! {
+    /// `clipboard_clear.glsl`
+    pub struct ClipboardClearParams {
+        pub has_mask: i32,
+        pub extend_past_canvas: i32,
+        pub doc_size: [f32; 2],
+        pub layer_offset: [f32; 2],
+        pub layer_size: [f32; 2],
+    }
+}
+
+uniforms! {
+    /// `selection_fill.glsl`
+    pub struct SelectionFillParams {
+        pub has_mask: i32,
+        pub fill_color: [f32; 4],
+        pub doc_size: [f32; 2],
+        pub layer_offset: [f32; 2],
+        pub layer_size: [f32; 2],
+    }
+}
+
+uniforms! {
+    /// `content_bounds_reduce.glsl`
+    pub struct ContentBoundsReduceParams {
+        pub axis: [i32; 2],
+        pub span: i32,
+        pub src_size: [i32; 2],
+        pub alpha_test: i32,
+    }
+}
+
+uniforms! {
+    /// `effects/layer_mask_apply.glsl`
+    pub struct LayerMaskApplyParams {
+        pub layer_offset: [f32; 2],
+        pub layer_size: [f32; 2],
+        pub mask_offset: [f32; 2],
+        pub mask_size: [f32; 2],
+    }
+}

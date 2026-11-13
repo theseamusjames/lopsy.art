@@ -6,12 +6,14 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_srcTex;
 uniform sampler2D u_maskTex;
-// The layer texture covers [layerOffset .. layerOffset+layerSize] in document
-// space; the mask covers [maskOffset .. maskOffset+maskSize].
-uniform vec2 u_layerOffset;
-uniform vec2 u_layerSize;
-uniform vec2 u_maskOffset;
-uniform vec2 u_maskSize;
+layout(std140) uniform Params {
+    // The layer texture covers [layerOffset .. layerOffset+layerSize] in document
+    // space; the mask covers [maskOffset .. maskOffset+maskSize].
+    vec2 u_layerOffset;
+    vec2 u_layerSize;
+    vec2 u_maskOffset;
+    vec2 u_maskSize;
+};
 out vec4 fragColor;
 
 void main() {

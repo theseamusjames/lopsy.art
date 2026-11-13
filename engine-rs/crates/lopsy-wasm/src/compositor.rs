@@ -10,6 +10,7 @@ use crate::effect_cache_gpu::{self as fx_cache, emit_effect, DocTarget, EffectCa
 use lopsy_core::effect_cache as fx_extent;
 use lopsy_core::geometry::Rect;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
+use crate::gpu::params::core::LayerMaskApplyParams;
 
 /// The document-space origin of a layer's mask texture — where mask texel
 /// (0, 0) sits in the document. Every mask reader and writer goes through
@@ -915,14 +916,15 @@ fn render_layer_masked_for_effects(
     let masked = engine.texture_pool.acquire(tw, th).ok()?;
 
     let is_drawn = engine
-        .pass_untyped(&engine.shaders.layer_mask_apply)
+        .pass(&engine.shaders.layer_mask_apply, LayerMaskApplyParams {
+            layer_offset: [layer_x, layer_y],
+            layer_size: [tw as f32, th as f32],
+            mask_offset: [mask.offset_x, mask.offset_y],
+            mask_size: [mask.width as f32, mask.height as f32],
+        })
         .blend(Blend::Off)
         .texture("u_srcTex", src_handle)
         .texture("u_maskTex", mask.texture)
-        .vec2("u_layerOffset", layer_x, layer_y)
-        .vec2("u_layerSize", tw as f32, th as f32)
-        .vec2("u_maskOffset", mask.offset_x, mask.offset_y)
-        .vec2("u_maskSize", mask.width as f32, mask.height as f32)
         .draw(Target::Texture(masked));
     engine.gpu().unbind_textures(2);
     if !is_drawn {

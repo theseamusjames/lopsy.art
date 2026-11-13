@@ -167,6 +167,11 @@ typed_shaders! {
     MASK_REMAP: params::core::MaskRemapParams = MASK_REMAP_FRAG;
     QUICK_MASK_TRANSLATE: params::core::QuickMaskTranslateParams = QUICK_MASK_TRANSLATE_FRAG;
     THUMBNAIL_BOX: params::core::ThumbnailBoxParams = THUMBNAIL_BOX_FRAG;
+    CLIPBOARD_COPY: params::core::ClipboardCopyParams = CLIPBOARD_COPY_FRAG;
+    CLIPBOARD_CLEAR: params::core::ClipboardClearParams = CLIPBOARD_CLEAR_FRAG;
+    SELECTION_FILL: params::core::SelectionFillParams = SELECTION_FILL_FRAG;
+    CONTENT_BOUNDS_REDUCE: params::core::ContentBoundsReduceParams = CONTENT_BOUNDS_REDUCE_FRAG;
+    LAYER_MASK_APPLY: params::core::LayerMaskApplyParams = LAYER_MASK_APPLY_FRAG;
 }
 
 /// Marks a program whose uniforms are still set one by one, by name. Each
@@ -474,10 +479,10 @@ pub struct ShaderPrograms {
     pub composite: ShaderProgram,
     pub final_blit: ShaderProgram,
     pub flip: ShaderProgram<params::core::FlipParams>,
-    pub clipboard_copy: ShaderProgram,
-    pub layer_mask_apply: ShaderProgram,
-    pub clipboard_clear: ShaderProgram,
-    pub selection_fill: ShaderProgram,
+    pub clipboard_copy: ShaderProgram<params::core::ClipboardCopyParams>,
+    pub layer_mask_apply: ShaderProgram<params::core::LayerMaskApplyParams>,
+    pub clipboard_clear: ShaderProgram<params::core::ClipboardClearParams>,
+    pub selection_fill: ShaderProgram<params::core::SelectionFillParams>,
     pub rotate90: ShaderProgram<params::core::Rotate90Params>,
     pub blit_region: ShaderProgram<params::core::BlitRegionParams>,
     pub mask_expand: ShaderProgram<()>,
@@ -538,7 +543,7 @@ pub struct ShaderPrograms {
     pub eraser_dab: ShaderProgram,
     pub pencil_dab: ShaderProgram,
     pub quick_mask_dab: ShaderProgram,
-    pub content_bounds_reduce: ShaderProgram,
+    pub content_bounds_reduce: ShaderProgram<params::core::ContentBoundsReduceParams>,
     pub dodge_burn: ShaderProgram,
     pub dodge_burn_dab: ShaderProgram,
     pub smudge_dab: ShaderProgram,
@@ -615,10 +620,10 @@ impl ShaderPrograms {
             composite: compile_program(gl, v, COMPOSITE_FRAG)?,
             final_blit: compile_program(gl, v, FINAL_BLIT_FRAG)?,
             flip: compile(gl, v, &FLIP)?,
-            clipboard_copy: compile_program(gl, v, CLIPBOARD_COPY_FRAG)?,
-            layer_mask_apply: compile_program(gl, v, LAYER_MASK_APPLY_FRAG)?,
-            clipboard_clear: compile_program(gl, v, CLIPBOARD_CLEAR_FRAG)?,
-            selection_fill: compile_program(gl, v, SELECTION_FILL_FRAG)?,
+            clipboard_copy: compile(gl, v, &CLIPBOARD_COPY)?,
+            layer_mask_apply: compile(gl, v, &LAYER_MASK_APPLY)?,
+            clipboard_clear: compile(gl, v, &CLIPBOARD_CLEAR)?,
+            selection_fill: compile(gl, v, &SELECTION_FILL)?,
             rotate90: compile(gl, v, &ROTATE90)?,
             blit_region: compile(gl, v, &BLIT_REGION)?,
             mask_expand: compile(gl, v, &MASK_EXPAND)?,
@@ -679,7 +684,7 @@ impl ShaderPrograms {
             eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
             pencil_dab: compile_program(gl, v, PENCIL_DAB_FRAG)?,
             quick_mask_dab: compile_program(gl, v, QUICK_MASK_DAB_FRAG)?,
-            content_bounds_reduce: compile_program(gl, v, CONTENT_BOUNDS_REDUCE_FRAG)?,
+            content_bounds_reduce: compile(gl, v, &CONTENT_BOUNDS_REDUCE)?,
             dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
             dodge_burn_dab: compile_program(gl, v, DODGE_BURN_DAB_FRAG)?,
             smudge_dab: compile_program(gl, v, SMUDGE_DAB_FRAG)?,
