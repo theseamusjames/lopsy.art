@@ -81,7 +81,7 @@ pub fn liquify_init_displacement(
 /// Render the liquify warp: source = filter preview backup, displacement =
 /// persistent displacement texture, output = layer texture.
 pub fn liquify_render(engine: &mut EngineInner, layer_id: &str, max_disp: f32) {
-    let preview_handle = match engine.filter_preview_texture {
+    let preview_handle = match engine.previews.filter_texture {
         Some(h) => h,
         None => return,
     };

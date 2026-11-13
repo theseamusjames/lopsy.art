@@ -178,6 +178,20 @@ pub struct FloatState {
     pub transform_src_rect: [f32; 4],
 }
 
+/// Pre-edit copies of a layer kept while a shape, filter or gradient is previewed live.
+pub struct PreviewState {
+    pub shape_texture: Option<TextureHandle>,
+    pub shape_layer_id: Option<String>,
+    pub shape_x: i32,
+    pub shape_y: i32,
+    pub shape_w: u32,
+    pub shape_h: u32,
+    pub filter_texture: Option<TextureHandle>,
+    pub filter_layer_id: Option<String>,
+    pub gradient_texture: Option<TextureHandle>,
+    pub gradient_layer_id: Option<String>,
+}
+
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
@@ -264,22 +278,12 @@ pub struct EngineInner {
     pub quick_mask_move_base: Option<TextureHandle>,
     pub quick_mask_move_marquee: Option<TextureHandle>,
     // Shape preview (stores pre-drag layer content for live preview)
-    pub shape_preview_texture: Option<TextureHandle>,
-    pub shape_preview_layer_id: Option<String>,
-    pub shape_preview_x: i32,
-    pub shape_preview_y: i32,
-    pub shape_preview_w: u32,
-    pub shape_preview_h: u32,
     // Filter preview (stores pre-filter layer content for live preview)
-    pub filter_preview_texture: Option<TextureHandle>,
-    pub filter_preview_layer_id: Option<String>,
     /// Set while a filter runs on a layer mask (see `filter_gpu::begin_mask_filter_target`).
     pub mask_filter_target: Option<crate::filter_gpu::MaskFilterTarget>,
     // Liquify persistent displacement texture (lives for the session)
     pub liquify_disp_texture: Option<TextureHandle>,
     // Gradient preview (stores pre-drag layer content for live preview)
-    pub gradient_preview_texture: Option<TextureHandle>,
-    pub gradient_preview_layer_id: Option<String>,
     // Clipboard
     // Floating selection (for move-with-selection)
     // Float transform state (GPU-side affine/perspective)
@@ -365,6 +369,7 @@ pub struct EngineInner {
     pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
     pub clipboard: ClipboardState,
     pub float: FloatState,
+    pub previews: PreviewState,
 
 }
 
@@ -454,18 +459,8 @@ impl EngineInner {
             quick_mask_texture: None,
             quick_mask_move_base: None,
             quick_mask_move_marquee: None,
-            shape_preview_texture: None,
-            shape_preview_layer_id: None,
-            shape_preview_x: 0,
-            shape_preview_y: 0,
-            shape_preview_w: 0,
-            shape_preview_h: 0,
-            filter_preview_texture: None,
-            filter_preview_layer_id: None,
             mask_filter_target: None,
             liquify_disp_texture: None,
-            gradient_preview_texture: None,
-            gradient_preview_layer_id: None,
             layer_transform: Vec::new(),
             grid_visible: false,
             grid_size: 1.0,
@@ -518,6 +513,18 @@ impl EngineInner {
                 transform_corners: [0.0; 8],
                 transform_orig_rect: [0.0; 4],
                 transform_src_rect: [0.0; 4],
+            },
+            previews: PreviewState {
+                shape_texture: None,
+                shape_layer_id: None,
+                shape_x: 0,
+                shape_y: 0,
+                shape_w: 0,
+                shape_h: 0,
+                filter_texture: None,
+                filter_layer_id: None,
+                gradient_texture: None,
+                gradient_layer_id: None,
             },
         })
     }
@@ -763,24 +770,24 @@ impl EngineInner {
         }
         crate::quick_mask_gpu::end_quick_mask_move(self);
         // Shape preview
-        if let Some(tex) = self.shape_preview_texture.take() {
+        if let Some(tex) = self.previews.shape_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.shape_preview_layer_id = None;
+        self.previews.shape_layer_id = None;
         // Filter preview
-        if let Some(tex) = self.filter_preview_texture.take() {
+        if let Some(tex) = self.previews.filter_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.filter_preview_layer_id = None;
+        self.previews.filter_layer_id = None;
         // Liquify displacement
         if let Some(tex) = self.liquify_disp_texture.take() {
             self.texture_pool.release(tex);
         }
         // Gradient preview
-        if let Some(tex) = self.gradient_preview_texture.take() {
+        if let Some(tex) = self.previews.gradient_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.gradient_preview_layer_id = None;
+        self.previews.gradient_layer_id = None;
         // Clipboard
         if let Some(tex) = self.clipboard.texture.take() {
             self.texture_pool.release(tex);

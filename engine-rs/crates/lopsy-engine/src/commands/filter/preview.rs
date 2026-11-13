@@ -19,7 +19,7 @@ pub fn save_filter_preview(engine: &mut EngineInner, layer_id: &str) {
         return;
     }
 
-    if let Some(old) = inner.filter_preview_texture.take() {
+    if let Some(old) = inner.previews.filter_texture.take() {
         inner.texture_pool.release(old);
     }
     let preview_handle = match inner.texture_pool.acquire(w, h) {
@@ -35,17 +35,17 @@ pub fn save_filter_preview(engine: &mut EngineInner, layer_id: &str) {
         .blend(Blend::Off)
         .draw(Target::Texture(preview_handle));
 
-    inner.filter_preview_texture = Some(preview_handle);
-    inner.filter_preview_layer_id = Some(layer_id.to_string());
+    inner.previews.filter_texture = Some(preview_handle);
+    inner.previews.filter_layer_id = Some(layer_id.to_string());
 }
 
 pub fn restore_filter_preview(engine: &mut EngineInner) {
     let inner = &mut *engine;
-    let preview_handle = match inner.filter_preview_texture {
+    let preview_handle = match inner.previews.filter_texture {
         Some(h) => h,
         None => return,
     };
-    let layer_id = match &inner.filter_preview_layer_id {
+    let layer_id = match &inner.previews.filter_layer_id {
         Some(id) => id.clone(),
         None => return,
     };
@@ -70,8 +70,8 @@ pub fn restore_filter_preview(engine: &mut EngineInner) {
 }
 
 pub fn clear_filter_preview(engine: &mut EngineInner) {
-    if let Some(tex) = engine.filter_preview_texture.take() {
+    if let Some(tex) = engine.previews.filter_texture.take() {
         engine.texture_pool.release(tex);
     }
-    engine.filter_preview_layer_id = None;
+    engine.previews.filter_layer_id = None;
 }

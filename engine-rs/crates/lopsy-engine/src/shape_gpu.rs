@@ -18,7 +18,7 @@ pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
     }
 
     // Allocate (or reuse) the preview texture
-    if let Some(old) = engine.shape_preview_texture.take() {
+    if let Some(old) = engine.previews.shape_texture.take() {
         engine.texture_pool.release(old);
     }
     let preview_handle = match engine.texture_pool.acquire(w, h) {
@@ -31,20 +31,20 @@ pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
 
     copy_texture(engine, tex_handle, preview_handle, w, h);
 
-    engine.shape_preview_texture = Some(preview_handle);
-    engine.shape_preview_layer_id = Some(layer_id.to_string());
-    engine.shape_preview_x = 0;
-    engine.shape_preview_y = 0;
-    engine.shape_preview_w = w;
-    engine.shape_preview_h = h;
+    engine.previews.shape_texture = Some(preview_handle);
+    engine.previews.shape_layer_id = Some(layer_id.to_string());
+    engine.previews.shape_x = 0;
+    engine.previews.shape_y = 0;
+    engine.previews.shape_w = w;
+    engine.previews.shape_h = h;
 }
 
 /// Release the preview texture. Called when the shape drag ends.
 pub fn end_shape_preview(engine: &mut EngineInner) {
-    if let Some(h) = engine.shape_preview_texture.take() {
+    if let Some(h) = engine.previews.shape_texture.take() {
         engine.texture_pool.release(h);
     }
-    engine.shape_preview_layer_id = None;
+    engine.previews.shape_layer_id = None;
 }
 
 pub fn render_shape(
@@ -90,8 +90,8 @@ pub fn render_shape(
     // edge, which rendered as a dark fringe (#815). During a drag the saved
     // preview already is that copy, and sampling it also restores the layer
     // so each mousemove renders cleanly instead of accumulating.
-    let preview = if engine.shape_preview_layer_id.as_deref() == Some(layer_id) {
-        engine.shape_preview_texture.filter(|&p| engine.texture_pool.get(p).is_some())
+    let preview = if engine.previews.shape_layer_id.as_deref() == Some(layer_id) {
+        engine.previews.shape_texture.filter(|&p| engine.texture_pool.get(p).is_some())
     } else {
         None
     };
