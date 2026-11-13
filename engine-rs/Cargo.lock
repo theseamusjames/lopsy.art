@@ -280,6 +280,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lopsy-engine"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "lopsy-core",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "lopsy-wasm"
 version = "0.1.0"
 dependencies = [
@@ -288,6 +298,7 @@ dependencies = [
  "etagere",
  "js-sys",
  "lopsy-core",
+ "lopsy-engine",
  "serde",
  "serde_json",
  "skrifa",

@@ -1,4 +1,4 @@
-pub mod gpu;
+pub use lopsy_engine::{gpu, host};
 pub mod engine;
 pub mod compositor;
 pub mod effect_cache_gpu;
@@ -29,7 +29,6 @@ pub mod vertical_forms;
 pub mod text_transform_gpu;
 pub mod woff2;
 pub mod variable_instance;
-pub mod host;
 pub mod commands;
 pub mod api;
 
