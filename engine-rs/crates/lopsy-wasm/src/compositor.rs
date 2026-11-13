@@ -12,8 +12,9 @@ use crate::effect_cache_gpu::{self as fx_cache, emit_effect, DocTarget, EffectCa
 use lopsy_core::effect_cache as fx_extent;
 use lopsy_core::geometry::Rect;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
-use crate::gpu::params::core::LayerMaskApplyParams;
-use crate::gpu::params::effects::{GlowParams, SeparableEdtParams, ShadowParams, StrokeApplyParams};
+use crate::gpu::params::effects::{
+    GlowParams, LayerMaskApplyParams, SeparableEdtParams, ShadowParams, StrokeApplyParams,
+};
 
 /// The document-space origin of a layer's mask texture — where mask texel
 /// (0, 0) sits in the document. Every mask reader and writer goes through

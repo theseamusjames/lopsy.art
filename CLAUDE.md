@@ -144,7 +144,10 @@ engine-rs/
           context.rs      # WebGL2 context wrapper, extension detection
           texture_pool.rs # Texture allocation, RGBA8/RGBA16F, upload/read
           framebuffer.rs  # FBO pool for render-to-texture
-          shader.rs       # Shader compilation, program linking
+          shader.rs       # Shader compilation, program linking, the typed shader list
+          pass.rs         # The pass layer: the only way feature code draws
+          uniforms.rs     # Typed uniform structs (`uniforms!`) and their checks
+          params/         # One uniform struct per shader, grouped like shaders/
           shaders/        # GLSL source files (see below)
 ```
 
@@ -177,6 +180,25 @@ gpu/shaders/
   selection/
     marching_ants.glsl    # Animated selection outline
 ```
+
+### Shader uniforms
+
+A shader declares every non-sampler uniform in one block,
+`layout(std140) uniform Params { ... };`, and `gpu/params/<family>.rs`
+holds the matching struct, declared with `uniforms!`: field `layer_offset`
+feeds member `u_layerOffset`, in the same order with the same types. A pass
+is created with that struct, or `()` for a shader that only samples:
+
+```rust
+engine.pass(&engine.shaders.posterize, PosterizeParams { levels: 4.0 })
+    .texture("u_tex", src)
+    .draw(Target::Texture(dst));
+```
+
+Adding or changing a uniform means editing the block and the struct
+together; `cargo test` fails when they differ. A new shader is listed in
+`typed_shaders!` in `gpu/shader.rs`. There is no way to set a uniform by
+name.
 
 ### Build
 

@@ -855,12 +855,6 @@ impl EngineInner {
         self.gpu().pass(program, params)
     }
 
-    /// Start a pass that runs a program whose uniforms are still set by
-    /// name.
-    pub fn pass_untyped<'a>(&'a self, program: &'a ShaderProgram) -> Pass<'a> {
-        self.gpu().pass_untyped(program)
-    }
-
     /// Upload a one-byte-per-pixel mask into a pooled texture as
     /// (v, v, v, 1). The bytes go up as an R8 texture and a GPU pass expands
     /// them: expanding to RGBA on the CPU and converting to f32 for an
