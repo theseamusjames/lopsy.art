@@ -4,12 +4,14 @@ precision highp float;
 in vec2 v_uv;
 
 uniform sampler2D u_maskTex;
-uniform float u_size;
-uniform float u_hardness;
-uniform float u_opacity;
-uniform vec2 u_center;
-uniform vec2 u_texSize;
-uniform int u_mode; // 0 = brush (add), 1 = eraser (remove)
+layout(std140) uniform Params {
+    float u_size;
+    float u_hardness;
+    float u_opacity;
+    vec2 u_center;
+    vec2 u_texSize;
+    int u_mode; // 0 = brush (add), 1 = eraser (remove)
+};
 
 out vec4 fragColor;
 

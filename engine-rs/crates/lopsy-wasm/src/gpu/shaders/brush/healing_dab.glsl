@@ -2,11 +2,13 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_layerTex;
-uniform vec2 u_center;
-uniform float u_size;
-uniform vec2 u_texSize;
-uniform vec2 u_sourceOffset;
-uniform float u_opacity;
+layout(std140) uniform Params {
+    vec2 u_center;
+    float u_size;
+    vec2 u_texSize;
+    vec2 u_sourceOffset;
+    float u_opacity;
+};
 // 2x1 region means from healing_mean.glsl: (0, 0) source, (1, 0) destination.
 uniform sampler2D u_meanTex;
 out vec4 fragColor;

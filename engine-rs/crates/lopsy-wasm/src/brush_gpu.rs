@@ -2,6 +2,8 @@ use lopsy_core::geometry::Rect;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Pass, Target};
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::params::brush::{BrushDabParams, EraserDabParams, PencilDabParams};
+use crate::gpu::uniforms::Mat2;
 
 /// `handle`, if it still names a live texture.
 fn live_texture(engine: &EngineInner, handle: Option<TextureHandle>) -> Option<TextureHandle> {
@@ -179,47 +181,51 @@ pub fn apply_dab_batch(
     let use_brush_texture = engine.brush_has_texture && engine.brush_texture.is_some();
 
     // No stamp texture needed — computed analytically in shader
-    let mut pass = engine.pass_untyped(shader)
-        .vec4("u_brushColor", r, g, b, a)
-        .f32("u_opacity", opacity)
-        .f32("u_flow", flow)
-        .f32("u_hardness", hardness)
-        .vec2("u_texSize", w as f32, h as f32)
-        .f32("u_size", size);
+    let first_center = match points {
+        [x, y, ..] => [*x as f32, *y as f32],
+        _ => [0.0, 0.0],
+    };
+    let params = BrushDabParams {
+        brush_color: [r, g, b, a],
+        opacity,
+        flow,
+        hardness,
+        center: first_center,
+        size,
+        tex_size: [w as f32, h as f32],
+        has_selection: i32::from(has_selection),
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        layer_offset: [layer_ox, layer_oy],
+        angle: if use_brush_tip { engine.brush_angle } else { 0.0 },
+        // GLSL mat2 is column-major.
+        dab_transform: Mat2([m00, m10, m01, m11]),
+        tip_aspect: [tip_aspect.0, tip_aspect.1],
+        size_jitter,
+        angle_jitter,
+        opacity_jitter,
+        has_brush_texture: i32::from(use_brush_texture),
+        texture_scale: engine.brush_texture_scale,
+        texture_blend_mode: engine.brush_texture_blend_mode as i32,
+        brush_texture_size: [engine.brush_texture_width as f32, engine.brush_texture_height as f32],
+        stroke_origin: [engine.stroke_texture_origin.0, engine.stroke_texture_origin.1],
+        texture_rotation: engine.stroke_texture_rotation,
+    };
+    let mut pass = engine.pass(shader, params);
     if let Some(mask) = live_texture(engine, engine.selection_mask_texture) {
         pass = pass.texture("u_selectionMask", mask);
     }
-    pass = pass
-        .i32("u_hasSelection", i32::from(has_selection))
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .vec2("u_layerOffset", layer_ox, layer_oy);
     // Custom brush tip texture (for alpha and color variants)
     if use_brush_tip {
         if let Some(tip) = live_texture(engine, engine.brush_tip_texture) {
             pass = pass.texture("u_brushTip", tip);
         }
     }
-    pass = pass
-        .f32("u_angle", if use_brush_tip { engine.brush_angle } else { 0.0 })
-        // GLSL mat2 is column-major.
-        .mat2("u_dabTransform", &[m00, m10, m01, m11])
-        .vec2("u_tipAspect", tip_aspect.0, tip_aspect.1)
-        .f32("u_sizeJitter", size_jitter)
-        .f32("u_angleJitter", angle_jitter)
-        .f32("u_opacityJitter", opacity_jitter);
     if use_brush_texture {
         if let Some(tex) = live_texture(engine, engine.brush_texture) {
             pass = pass.texture("u_brushTexture", tex);
         }
     }
-    let pass = pass
-        .i32("u_hasBrushTexture", i32::from(use_brush_texture))
-        .f32("u_textureScale", engine.brush_texture_scale)
-        .i32("u_textureBlendMode", engine.brush_texture_blend_mode as i32)
-        .vec2("u_brushTextureSize", engine.brush_texture_width as f32, engine.brush_texture_height as f32)
-        .vec2("u_strokeOrigin", engine.stroke_texture_origin.0, engine.stroke_texture_origin.1)
-        .f32("u_textureRotation", engine.stroke_texture_rotation)
-        .blend(blend);
+    let pass = pass.blend(blend);
 
     // Scissor each dab to its bounding box so the fragment shader only
     // runs on the pixels it will actually write. Without this, every dab
@@ -236,7 +242,6 @@ pub fn apply_dab_batch(
     let half_extent = (effective_size * 0.5 * std::f32::consts::SQRT_2).ceil() as i32 + 2;
 
     if let Some(mut dabs) = pass.begin(Target::Texture(tex_handle)) {
-        let center = dabs.slot("u_center");
         for chunk in points.chunks(2) {
             if chunk.len() < 2 { break; }
             let cx = chunk[0] as f32;
@@ -248,7 +253,7 @@ pub fn apply_dab_batch(
             let y1 = (cy.ceil() as i32 + half_extent).min(tex_h_i);
             if x1 <= x0 || y1 <= y0 { continue; }
 
-            dabs.set_vec2(&center, cx, cy);
+            dabs.set(&BrushDabParams { center: [cx, cy], ..params });
             dabs.draw_in(Rect::new(x0, y0, (x1 - x0) as u32, (y1 - y0) as u32));
         }
         dabs.end();
@@ -290,19 +295,21 @@ pub fn draw_pencil_line(
     let has_selection = engine.selection_mask_texture.is_some();
     let (layer_ox, layer_oy) = layer_offset(engine, layer_id);
 
-    let mut pass = engine.pass_untyped(&engine.shaders.pencil_dab)
-        .vec4("u_color", r, g, b, a)
-        .f32("u_size", size)
-        .vec2("u_texSize", w as f32, h as f32);
+    let params = PencilDabParams {
+        color: [r, g, b, a],
+        center: [points[0] as f32, points[1] as f32],
+        size,
+        tex_size: [w as f32, h as f32],
+        has_selection: i32::from(has_selection),
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        layer_offset: [layer_ox, layer_oy],
+    };
+    let mut pass = engine.pass(&engine.shaders.pencil_dab, params);
     if let Some(mask) = live_texture(engine, engine.selection_mask_texture) {
         pass = pass.texture("u_selectionMask", mask);
     }
-    let pass = pass
-        .i32("u_hasSelection", i32::from(has_selection))
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .vec2("u_layerOffset", layer_ox, layer_oy)
-        // MAX blending so overlapping dabs along the stroke don't compound alpha.
-        .blend(Blend::Max);
+    // MAX blending so overlapping dabs along the stroke don't compound alpha.
+    let pass = pass.blend(Blend::Max);
 
     // Scissor each dab to its block so the fragment shader only runs over the
     // pixels it writes, not the whole stroke texture.
@@ -312,7 +319,6 @@ pub fn draw_pencil_line(
     let block = size.ceil() as i32;
 
     if let Some(mut dabs) = pass.begin(Target::Texture(stroke_tex)) {
-        let center = dabs.slot("u_center");
         for chunk in points.chunks(2) {
             if chunk.len() < 2 { break; }
             let cx = chunk[0] as f32;
@@ -324,7 +330,7 @@ pub fn draw_pencil_line(
             let hi_y = (cy.floor() as i32 - half + block).min(tex_h_i);
             if hi_x <= lo_x || hi_y <= lo_y { continue; }
 
-            dabs.set_vec2(&center, cx, cy);
+            dabs.set(&PencilDabParams { center: [cx, cy], ..params });
             dabs.draw_in(Rect::new(lo_x, lo_y, (hi_x - lo_x) as u32, (hi_y - lo_y) as u32));
         }
         dabs.end();
@@ -388,20 +394,21 @@ pub fn apply_eraser_dab_batch(
         if chunk.len() < 2 { break; }
 
         // Render to scratch
-        let mut pass = engine.pass_untyped(&engine.shaders.eraser_dab)
+        let mut pass = engine.pass(&engine.shaders.eraser_dab, EraserDabParams {
+            opacity,
+            center: [chunk[0] as f32, chunk[1] as f32],
+            size,
+            tex_size: [w as f32, h as f32],
+            has_selection: i32::from(has_sel),
+            doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+            layer_offset: [layer_ox, layer_oy],
+        })
             .texture("u_stampTex", stamp_tex)
-            .texture("u_layerTex", tex_handle)
-            .f32("u_opacity", opacity)
-            .vec2("u_texSize", w as f32, h as f32)
-            .vec2("u_center", chunk[0] as f32, chunk[1] as f32)
-            .f32("u_size", size);
+            .texture("u_layerTex", tex_handle);
         if let Some(mask) = live_texture(engine, engine.selection_mask_texture) {
             pass = pass.texture("u_selectionMask", mask);
         }
-        pass.i32("u_hasSelection", i32::from(has_sel))
-            .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-            .vec2("u_layerOffset", layer_ox, layer_oy)
-            .viewport(0, 0, w as i32, h as i32)
+        pass.viewport(0, 0, w as i32, h as i32)
             .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
         // Copy scratch A -> layer

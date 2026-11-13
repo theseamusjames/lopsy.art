@@ -1,15 +1,17 @@
 #version 300 es
 precision highp float;
 in vec2 v_uv;
-uniform vec2 u_center;
-uniform float u_size;
-uniform float u_hardness;
-uniform vec2 u_texSize;
-uniform float u_exposure;
+layout(std140) uniform Params {
+    vec2 u_center;
+    float u_size;
+    float u_hardness;
+    vec2 u_texSize;
+    float u_exposure;
+    int u_hasSelection;
+    vec2 u_docSize;
+    vec2 u_layerOffset;
+};
 uniform sampler2D u_selectionMask;
-uniform int u_hasSelection;
-uniform vec2 u_docSize;
-uniform vec2 u_layerOffset;
 out vec4 fragColor;
 
 void main() {

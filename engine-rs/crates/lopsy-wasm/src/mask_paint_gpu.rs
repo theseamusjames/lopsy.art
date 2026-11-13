@@ -4,6 +4,7 @@ use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
 use crate::gradient_gpu::{copy_to_scratch_a, draw_gradient, GradientShape, GradientTarget};
+use crate::gpu::params::brush::{PencilDabParams, QuickMaskDabParams};
 
 // Every layer-mask writer here takes DOCUMENT-space coordinates and maps
 // them into mask texels with `mask_doc_origin` — the same origin the
@@ -85,14 +86,15 @@ pub(crate) fn paint_mask_dabs_scissored(
             w,
             h,
             Rect::new(x, y, rw as u32, rh as u32),
-            engine.pass_untyped(&engine.shaders.quick_mask_dab)
-                .texture("u_maskTex", tex_handle)
-                .f32("u_size", dab.size)
-                .f32("u_hardness", dab.hardness)
-                .f32("u_opacity", dab.opacity)
-                .vec2("u_texSize", w as f32, h as f32)
-                .i32("u_mode", dab.mode as i32)
-                .vec2("u_center", cx, cy),
+            engine.pass(&engine.shaders.quick_mask_dab, QuickMaskDabParams {
+                size: dab.size,
+                hardness: dab.hardness,
+                opacity: dab.opacity,
+                center: [cx, cy],
+                tex_size: [w as f32, h as f32],
+                mode: dab.mode as i32,
+            })
+                .texture("u_maskTex", tex_handle),
         );
     }
 }
@@ -123,15 +125,18 @@ pub(crate) fn draw_pencil_blocks_gpu(
     let tex_w_i = w as i32;
     let tex_h_i = h as i32;
 
-    let pass = engine.pass_untyped(&engine.shaders.pencil_dab)
-        .vec4("u_color", value, value, value, 1.0)
-        .f32("u_size", size)
-        .vec2("u_texSize", w as f32, h as f32)
+    let params = PencilDabParams {
+        color: [value, value, value, 1.0],
+        center: [points[0] as f32, points[1] as f32],
+        size,
+        tex_size: [w as f32, h as f32],
         // Mask painting writes the mask itself — never clipped by selection.
-        .i32("u_hasSelection", 0)
-        .blend(Blend::Off);
+        has_selection: 0,
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        layer_offset: [0.0, 0.0],
+    };
+    let pass = engine.pass(&engine.shaders.pencil_dab, params).blend(Blend::Off);
     let Some(mut blocks) = pass.begin(Target::Texture(tex_handle)) else { return };
-    let center = blocks.slot("u_center");
     for chunk in points.chunks(2) {
         if chunk.len() < 2 { break; }
         let cx = chunk[0] as f32;
@@ -143,7 +148,7 @@ pub(crate) fn draw_pencil_blocks_gpu(
         let hi_y = (cy.floor() as i32 - half + block).min(tex_h_i);
         if hi_x <= lo_x || hi_y <= lo_y { continue; }
 
-        blocks.set_vec2(&center, cx, cy);
+        blocks.set(&PencilDabParams { center: [cx, cy], ..params });
         blocks.draw_in(Rect::new(lo_x, lo_y, (hi_x - lo_x) as u32, (hi_y - lo_y) as u32));
     }
     blocks.end();

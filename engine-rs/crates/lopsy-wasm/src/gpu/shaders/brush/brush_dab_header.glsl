@@ -1,31 +1,33 @@
 #version 300 es
 precision highp float;
 in vec2 v_uv;
-uniform vec4 u_brushColor;
-uniform float u_opacity;
-uniform float u_flow;
-uniform float u_hardness;
-uniform vec2 u_center;
-uniform float u_size;
-uniform vec2 u_texSize;
+layout(std140) uniform Params {
+    vec4 u_brushColor;
+    float u_opacity;
+    float u_flow;
+    float u_hardness;
+    vec2 u_center;
+    float u_size;
+    vec2 u_texSize;
+    int u_hasSelection;
+    vec2 u_docSize;
+    vec2 u_layerOffset;
+    float u_angle;
+    mat2 u_dabTransform;
+    vec2 u_tipAspect;
+    float u_sizeJitter;
+    float u_angleJitter;
+    float u_opacityJitter;
+    int u_hasBrushTexture;
+    float u_textureScale;
+    int u_textureBlendMode;
+    vec2 u_brushTextureSize;
+    vec2 u_strokeOrigin;
+    float u_textureRotation;
+};
 uniform sampler2D u_selectionMask;
-uniform int u_hasSelection;
-uniform vec2 u_docSize;
-uniform vec2 u_layerOffset;
 uniform sampler2D u_brushTip;
-uniform float u_angle;
-uniform mat2 u_dabTransform;
-uniform vec2 u_tipAspect;
-uniform float u_sizeJitter;
-uniform float u_angleJitter;
-uniform float u_opacityJitter;
 uniform sampler2D u_brushTexture;
-uniform int u_hasBrushTexture;
-uniform float u_textureScale;
-uniform int u_textureBlendMode;
-uniform vec2 u_brushTextureSize;
-uniform vec2 u_strokeOrigin;
-uniform float u_textureRotation;
 out vec4 fragColor;
 
 float dabHash(vec2 center, float seed) {

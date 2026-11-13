@@ -2,11 +2,13 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_sourceTex;
-uniform vec2 u_center;
-uniform vec2 u_prev;
-uniform float u_size;
-uniform float u_strength;
-uniform vec2 u_texSize;
+layout(std140) uniform Params {
+    vec2 u_center;
+    vec2 u_prev;
+    float u_size;
+    float u_strength;
+    vec2 u_texSize;
+};
 out vec4 fragColor;
 
 //#include premul_sample

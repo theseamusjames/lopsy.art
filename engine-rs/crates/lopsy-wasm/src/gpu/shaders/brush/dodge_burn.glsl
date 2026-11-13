@@ -3,8 +3,10 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_layerTex;
 uniform sampler2D u_stampTex;
-uniform int u_mode;
-uniform float u_exposure;
+layout(std140) uniform Params {
+    int u_mode;
+    float u_exposure;
+};
 out vec4 fragColor;
 void main() {
     vec4 c = texture(u_layerTex, v_uv);

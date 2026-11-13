@@ -3,10 +3,12 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_sourceTex;
 uniform sampler2D u_stampTex;
-uniform vec2 u_sourceOffset;
-uniform vec2 u_center;
-uniform float u_size;
-uniform vec2 u_texSize;
+layout(std140) uniform Params {
+    vec2 u_sourceOffset;
+    vec2 u_center;
+    float u_size;
+    vec2 u_texSize;
+};
 out vec4 fragColor;
 
 void main() {

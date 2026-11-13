@@ -5,16 +5,18 @@ in vec2 v_uv;
 // u_cursor, show the active layer as it is at u_source. The screen ↔
 // document mapping matches final_blit.glsl.
 uniform sampler2D u_layerTex;
-uniform vec2 u_resolution;
-uniform float u_zoom;
-uniform vec2 u_pan;
-uniform vec2 u_docSize;
-uniform vec2 u_cursor;
-uniform vec2 u_source;
-uniform float u_radius;
-uniform vec2 u_layerOrigin;
-uniform vec2 u_layerSize;
-uniform float u_opacity;
+layout(std140) uniform Params {
+    vec2 u_resolution;
+    float u_zoom;
+    vec2 u_pan;
+    vec2 u_docSize;
+    vec2 u_cursor;
+    vec2 u_source;
+    float u_radius;
+    vec2 u_layerOrigin;
+    vec2 u_layerSize;
+    float u_opacity;
+};
 out vec4 fragColor;
 
 void main() {

@@ -5,6 +5,7 @@ use crate::engine::EngineInner;
 use crate::gpu::framebuffer::FramebufferHandle;
 use crate::gpu::pass::Target;
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::params::brush::{HealingDabParams, HealingMeanParams};
 
 /// Apply a healing brush dab entirely on the GPU, preserving FP16 precision.
 ///
@@ -91,14 +92,15 @@ pub fn apply_healing_dab_batch(
             h,
             rect,
             engine
-                .pass_untyped(&engine.shaders.healing_dab)
+                .pass(&engine.shaders.healing_dab, HealingDabParams {
+                    center: [dx, dy],
+                    size,
+                    tex_size: [w as f32, h as f32],
+                    source_offset: [ox, oy],
+                    opacity,
+                })
                 .texture("u_layerTex", tex_handle)
-                .texture("u_meanTex", mean_tex)
-                .vec2("u_center", dx, dy)
-                .f32("u_size", size)
-                .vec2("u_texSize", w as f32, h as f32)
-                .vec2("u_sourceOffset", ox, oy)
-                .f32("u_opacity", opacity),
+                .texture("u_meanTex", mean_tex),
         );
     }
 
@@ -147,12 +149,13 @@ fn render_region_means(
     radius: f32,
 ) {
     engine
-        .pass_untyped(&engine.shaders.healing_mean)
+        .pass(&engine.shaders.healing_mean, HealingMeanParams {
+            src_center: [src_center.0, src_center.1],
+            dst_center: [dst_center.0, dst_center.1],
+            radius,
+            tex_size: [tex_w as f32, tex_h as f32],
+        })
         .texture("u_tex", layer)
-        .vec2("u_srcCenter", src_center.0, src_center.1)
-        .vec2("u_dstCenter", dst_center.0, dst_center.1)
-        .f32("u_radius", radius)
-        .vec2("u_texSize", tex_w as f32, tex_h as f32)
         .viewport(0, 0, 2, 1)
         .draw(Target::Framebuffer(mean_fbo));
 }

@@ -2,12 +2,14 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-// Drawn into a 2x1 target: texel (0, 0) receives the source region's mean,
-// texel (1, 0) the destination region's.
-uniform vec2 u_srcCenter;
-uniform vec2 u_dstCenter;
-uniform float u_radius;
-uniform vec2 u_texSize;
+layout(std140) uniform Params {
+    // Drawn into a 2x1 target: texel (0, 0) receives the source region's mean,
+    // texel (1, 0) the destination region's.
+    vec2 u_srcCenter;
+    vec2 u_dstCenter;
+    float u_radius;
+    vec2 u_texSize;
+};
 out vec4 fragColor;
 
 // Poisson disk samples in unit circle (32 taps for good coverage)

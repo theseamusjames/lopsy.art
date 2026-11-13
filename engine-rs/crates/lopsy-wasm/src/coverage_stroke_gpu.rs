@@ -16,6 +16,7 @@ use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
 use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::params::brush::{CoverageApplyParams, DodgeBurnDabParams};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoverageTool {
@@ -24,7 +25,7 @@ pub enum CoverageTool {
 }
 
 impl CoverageTool {
-    fn apply_shader(self, shaders: &ShaderPrograms) -> &ShaderProgram {
+    fn apply_shader(self, shaders: &ShaderPrograms) -> &ShaderProgram<CoverageApplyParams> {
         match self {
             Self::DodgeBurn => &shaders.dodge_burn,
             Self::Sponge => &shaders.sponge,
@@ -146,24 +147,27 @@ pub(crate) fn accumulate_dabs(
         .map(|l| (l.x as f32, l.y as f32))
         .unwrap_or((0.0, 0.0));
 
-    let mut pass = engine
-        .pass_untyped(&engine.shaders.dodge_burn_dab)
-        .f32("u_exposure", strength)
-        .f32("u_hardness", hardness)
-        .vec2("u_texSize", w as f32, h as f32)
-        .f32("u_size", size);
+    let params = DodgeBurnDabParams {
+        center: match points {
+            [x, y, ..] => [*x as f32, *y as f32],
+            _ => [0.0, 0.0],
+        },
+        size,
+        hardness,
+        tex_size: [w as f32, h as f32],
+        exposure: strength,
+        has_selection: i32::from(has_selection),
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        layer_offset: [layer_ox, layer_oy],
+    };
+    let mut pass = engine.pass(&engine.shaders.dodge_burn_dab, params);
     if let Some(mask) = selection_mask {
         pass = pass.texture("u_selectionMask", mask);
     }
-    let pass = pass
-        .i32("u_hasSelection", i32::from(has_selection))
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .vec2("u_layerOffset", layer_ox, layer_oy)
-        .blend(Blend::Max);
+    let pass = pass.blend(Blend::Max);
     let Some(mut dabs) = pass.begin(Target::Texture(coverage_handle)) else {
         return;
     };
-    let center = dabs.slot("u_center");
 
     let mut touched = DirtyRect::default();
     for chunk in points.chunks_exact(2) {
@@ -172,7 +176,7 @@ pub(crate) fn accumulate_dabs(
             continue;
         };
         touched.add(Some(rect));
-        dabs.set_vec2(&center, cx, cy);
+        dabs.set(&DodgeBurnDabParams { center: [cx, cy], ..params });
         dabs.draw_in(rect);
     }
     dabs.end();
@@ -335,11 +339,9 @@ fn apply_pass<'a>(
     mode: u32,
     layer: TextureHandle,
     coverage: TextureHandle,
-) -> Pass<'a> {
+) -> Pass<'a, CoverageApplyParams> {
     engine
-        .pass_untyped(tool.apply_shader(&engine.shaders))
+        .pass(tool.apply_shader(&engine.shaders), CoverageApplyParams { mode: mode as i32, exposure: 1.0 })
         .texture("u_layerTex", layer)
         .texture("u_stampTex", coverage)
-        .i32("u_mode", mode as i32)
-        .f32("u_exposure", 1.0)
 }

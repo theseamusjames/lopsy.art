@@ -99,11 +99,21 @@ pub const COLOR_LUT_FRAG: &str = include_str!("shaders/filters/color_lut.glsl");
 pub const TEXTURE_FRAG: &str = include_str!("shaders/filters/texture.glsl");
 
 // Brush (assembled from header + variant + footer at compile_all time)
-const BRUSH_DAB_HEADER: &str = include_str!("shaders/brush/brush_dab_header.glsl");
-const BRUSH_DAB_FOOTER: &str = include_str!("shaders/brush/brush_dab_footer.glsl");
-const BRUSH_DAB_CIRCLE_BODY: &str = include_str!("shaders/brush/brush_dab_circle.glsl");
-const BRUSH_DAB_ALPHA_BODY: &str = include_str!("shaders/brush/brush_dab_alpha.glsl");
-const BRUSH_DAB_COLOR_BODY: &str = include_str!("shaders/brush/brush_dab_color.glsl");
+const BRUSH_DAB_CIRCLE_FRAG: &str = concat!(
+    include_str!("shaders/brush/brush_dab_header.glsl"),
+    include_str!("shaders/brush/brush_dab_circle.glsl"),
+    include_str!("shaders/brush/brush_dab_footer.glsl"),
+);
+const BRUSH_DAB_ALPHA_FRAG: &str = concat!(
+    include_str!("shaders/brush/brush_dab_header.glsl"),
+    include_str!("shaders/brush/brush_dab_alpha.glsl"),
+    include_str!("shaders/brush/brush_dab_footer.glsl"),
+);
+const BRUSH_DAB_COLOR_FRAG: &str = concat!(
+    include_str!("shaders/brush/brush_dab_header.glsl"),
+    include_str!("shaders/brush/brush_dab_color.glsl"),
+    include_str!("shaders/brush/brush_dab_footer.glsl"),
+);
 pub const ERASER_DAB_FRAG: &str = include_str!("shaders/brush/eraser_dab.glsl");
 pub const PENCIL_DAB_FRAG: &str = include_str!("shaders/brush/pencil_dab.glsl");
 pub const QUICK_MASK_DAB_FRAG: &str = include_str!("shaders/brush/quick_mask_dab.glsl");
@@ -220,6 +230,21 @@ typed_shaders! {
     BUCKET_FILL_COLOR_MATCH: params::shape::BucketFillColorMatchParams = BUCKET_FILL_COLOR_MATCH_FRAG;
     MARCHING_ANTS: params::selection::MarchingAntsParams = MARCHING_ANTS_FRAG;
     TEXT_GLYPH: params::text::TextGlyphParams = TEXT_GLYPH_FRAG;
+    ERASER_DAB: params::brush::EraserDabParams = ERASER_DAB_FRAG;
+    PENCIL_DAB: params::brush::PencilDabParams = PENCIL_DAB_FRAG;
+    QUICK_MASK_DAB: params::brush::QuickMaskDabParams = QUICK_MASK_DAB_FRAG;
+    DODGE_BURN: params::brush::CoverageApplyParams = DODGE_BURN_FRAG;
+    DODGE_BURN_DAB: params::brush::DodgeBurnDabParams = DODGE_BURN_DAB_FRAG;
+    SMUDGE_DAB: params::brush::SmudgeDabParams = SMUDGE_DAB_FRAG;
+    CLONE_STAMP: params::brush::CloneStampParams = CLONE_STAMP_FRAG;
+    HEALING_DAB: params::brush::HealingDabParams = HEALING_DAB_FRAG;
+    HEALING_MEAN: params::brush::HealingMeanParams = HEALING_MEAN_FRAG;
+    OPACITY_CLAMP: params::brush::OpacityClampParams = OPACITY_CLAMP_FRAG;
+    SPONGE: params::brush::CoverageApplyParams = SPONGE_FRAG;
+    STAMP_PREVIEW: params::brush::StampPreviewParams = STAMP_PREVIEW_FRAG;
+    BRUSH_DAB_CIRCLE: params::brush::BrushDabParams = BRUSH_DAB_CIRCLE_FRAG;
+    BRUSH_DAB_ALPHA: params::brush::BrushDabParams = BRUSH_DAB_ALPHA_FRAG;
+    BRUSH_DAB_COLOR: params::brush::BrushDabParams = BRUSH_DAB_COLOR_FRAG;
 }
 
 /// Marks a program whose uniforms are still set one by one, by name. Each
@@ -585,22 +610,22 @@ pub struct ShaderPrograms {
     pub color_lut: ShaderProgram<params::filters::ColorLutParams>,
     pub texture: ShaderProgram<params::filters::TextureParams>,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
-    pub brush_dab_circle: ShaderProgram,
-    pub brush_dab_alpha: ShaderProgram,
-    pub brush_dab_color: ShaderProgram,
-    pub eraser_dab: ShaderProgram,
-    pub pencil_dab: ShaderProgram,
-    pub quick_mask_dab: ShaderProgram,
+    pub brush_dab_circle: ShaderProgram<params::brush::BrushDabParams>,
+    pub brush_dab_alpha: ShaderProgram<params::brush::BrushDabParams>,
+    pub brush_dab_color: ShaderProgram<params::brush::BrushDabParams>,
+    pub eraser_dab: ShaderProgram<params::brush::EraserDabParams>,
+    pub pencil_dab: ShaderProgram<params::brush::PencilDabParams>,
+    pub quick_mask_dab: ShaderProgram<params::brush::QuickMaskDabParams>,
     pub content_bounds_reduce: ShaderProgram<params::core::ContentBoundsReduceParams>,
-    pub dodge_burn: ShaderProgram,
-    pub dodge_burn_dab: ShaderProgram,
-    pub smudge_dab: ShaderProgram,
-    pub clone_stamp: ShaderProgram,
-    pub healing_dab: ShaderProgram,
-    pub healing_mean: ShaderProgram,
-    pub opacity_clamp: ShaderProgram,
-    pub sponge: ShaderProgram,
-    pub stamp_preview: ShaderProgram,
+    pub dodge_burn: ShaderProgram<params::brush::CoverageApplyParams>,
+    pub dodge_burn_dab: ShaderProgram<params::brush::DodgeBurnDabParams>,
+    pub smudge_dab: ShaderProgram<params::brush::SmudgeDabParams>,
+    pub clone_stamp: ShaderProgram<params::brush::CloneStampParams>,
+    pub healing_dab: ShaderProgram<params::brush::HealingDabParams>,
+    pub healing_mean: ShaderProgram<params::brush::HealingMeanParams>,
+    pub opacity_clamp: ShaderProgram<params::brush::OpacityClampParams>,
+    pub sponge: ShaderProgram<params::brush::CoverageApplyParams>,
+    pub stamp_preview: ShaderProgram<params::brush::StampPreviewParams>,
     // Gradient
     pub gradient_linear: ShaderProgram<params::gradient::GradientLinearParams>,
     pub gradient_radial: ShaderProgram<params::gradient::GradientRadialParams>,
@@ -726,22 +751,22 @@ impl ShaderPrograms {
             color_lut: compile(gl, v, &COLOR_LUT)?,
             texture: compile(gl, v, &TEXTURE)?,
             // Brush — assembled from header + variant body + footer
-            brush_dab_circle: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_CIRCLE_BODY}{BRUSH_DAB_FOOTER}"))?,
-            brush_dab_alpha: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_ALPHA_BODY}{BRUSH_DAB_FOOTER}"))?,
-            brush_dab_color: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_COLOR_BODY}{BRUSH_DAB_FOOTER}"))?,
-            eraser_dab: compile_program(gl, v, ERASER_DAB_FRAG)?,
-            pencil_dab: compile_program(gl, v, PENCIL_DAB_FRAG)?,
-            quick_mask_dab: compile_program(gl, v, QUICK_MASK_DAB_FRAG)?,
+            brush_dab_circle: compile(gl, v, &BRUSH_DAB_CIRCLE)?,
+            brush_dab_alpha: compile(gl, v, &BRUSH_DAB_ALPHA)?,
+            brush_dab_color: compile(gl, v, &BRUSH_DAB_COLOR)?,
+            eraser_dab: compile(gl, v, &ERASER_DAB)?,
+            pencil_dab: compile(gl, v, &PENCIL_DAB)?,
+            quick_mask_dab: compile(gl, v, &QUICK_MASK_DAB)?,
             content_bounds_reduce: compile(gl, v, &CONTENT_BOUNDS_REDUCE)?,
-            dodge_burn: compile_program(gl, v, DODGE_BURN_FRAG)?,
-            dodge_burn_dab: compile_program(gl, v, DODGE_BURN_DAB_FRAG)?,
-            smudge_dab: compile_program(gl, v, SMUDGE_DAB_FRAG)?,
-            clone_stamp: compile_program(gl, v, CLONE_STAMP_FRAG)?,
-            healing_dab: compile_program(gl, v, HEALING_DAB_FRAG)?,
-            healing_mean: compile_program(gl, v, HEALING_MEAN_FRAG)?,
-            opacity_clamp: compile_program(gl, v, OPACITY_CLAMP_FRAG)?,
-            sponge: compile_program(gl, v, SPONGE_FRAG)?,
-            stamp_preview: compile_program(gl, v, STAMP_PREVIEW_FRAG)?,
+            dodge_burn: compile(gl, v, &DODGE_BURN)?,
+            dodge_burn_dab: compile(gl, v, &DODGE_BURN_DAB)?,
+            smudge_dab: compile(gl, v, &SMUDGE_DAB)?,
+            clone_stamp: compile(gl, v, &CLONE_STAMP)?,
+            healing_dab: compile(gl, v, &HEALING_DAB)?,
+            healing_mean: compile(gl, v, &HEALING_MEAN)?,
+            opacity_clamp: compile(gl, v, &OPACITY_CLAMP)?,
+            sponge: compile(gl, v, &SPONGE)?,
+            stamp_preview: compile(gl, v, &STAMP_PREVIEW)?,
             // Gradient
             gradient_linear: compile(gl, v, &GRADIENT_LINEAR)?,
             gradient_radial: compile(gl, v, &GRADIENT_RADIAL)?,

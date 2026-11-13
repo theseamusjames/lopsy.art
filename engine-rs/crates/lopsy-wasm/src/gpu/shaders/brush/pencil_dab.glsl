@@ -1,14 +1,16 @@
 #version 300 es
 precision highp float;
 in vec2 v_uv;
-uniform vec4 u_color;
-uniform vec2 u_center;
-uniform float u_size;
-uniform vec2 u_texSize;
+layout(std140) uniform Params {
+    vec4 u_color;
+    vec2 u_center;
+    float u_size;
+    vec2 u_texSize;
+    int u_hasSelection;
+    vec2 u_docSize;
+    vec2 u_layerOffset;
+};
 uniform sampler2D u_selectionMask;
-uniform int u_hasSelection;
-uniform vec2 u_docSize;
-uniform vec2 u_layerOffset;
 out vec4 fragColor;
 
 // Pencil renders hard, aliased square pixel blocks — no edge feathering.
