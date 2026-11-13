@@ -19,22 +19,22 @@ pub fn filter_pattern_fill(
     origin_x: f32,
     origin_y: f32,
 ) {
-    crate::commands::filter::render::filter_pattern_fill(&mut engine.inner, layer_id, pattern_data, pattern_width, pattern_height, scale, stagger_x, stagger_y, origin_x, origin_y)
+    lopsy_engine::commands::filter::render::filter_pattern_fill(&mut engine.inner, layer_id, pattern_data, pattern_width, pattern_height, scale, stagger_x, stagger_y, origin_x, origin_y)
 }
 
 #[wasm_bindgen(js_name = "filterColorLut")]
 pub fn filter_color_lut(engine: &mut Engine, layer_id: &str, lut_data: &[u8], lut_size: u32, intensity: f32) {
-    crate::commands::filter::render::filter_color_lut(&mut engine.inner, layer_id, lut_data, lut_size, intensity)
+    lopsy_engine::commands::filter::render::filter_color_lut(&mut engine.inner, layer_id, lut_data, lut_size, intensity)
 }
 
 #[wasm_bindgen(js_name = "extractChannelPixels")]
 pub fn extract_channel_pixels(engine: &mut Engine, layer_id: &str, channel: u32) -> Vec<u8> {
-    crate::commands::filter::render::extract_channel_pixels(&mut engine.inner, layer_id, channel)
+    lopsy_engine::commands::filter::render::extract_channel_pixels(&mut engine.inner, layer_id, channel)
 }
 
 #[wasm_bindgen(js_name = "readChannelThumbnail")]
 pub fn read_channel_thumbnail(engine: &mut Engine, layer_id: &str, channel: u32, max_size: u32) -> Vec<u8> {
-    crate::commands::filter::render::read_channel_thumbnail(&mut engine.inner, layer_id, channel, max_size)
+    lopsy_engine::commands::filter::render::read_channel_thumbnail(&mut engine.inner, layer_id, channel, max_size)
 }
 
 #[wasm_bindgen(js_name = "filterSunburst")]
@@ -62,5 +62,5 @@ pub fn filter_sunburst(
     gap_g: f32,
     gap_b: f32,
 ) {
-    crate::commands::filter::render::filter_sunburst(&mut engine.inner, layer_id, rays, center_x, center_y, rotation_degrees, length, width, taper, fade, softness, jitter, seed, ray_r, ray_g, ray_b, ray_a, fill_gaps, gap_r, gap_g, gap_b)
+    lopsy_engine::commands::filter::render::filter_sunburst(&mut engine.inner, layer_id, rays, center_x, center_y, rotation_degrees, length, width, taper, fade, softness, jitter, seed, ray_r, ray_g, ray_b, ray_a, fill_gaps, gap_r, gap_g, gap_b)
 }

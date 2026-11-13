@@ -283,8 +283,15 @@ dependencies = [
 name = "lopsy-engine"
 version = "0.1.0"
 dependencies = [
+ "brotli",
+ "cosmic-text",
+ "etagere",
  "js-sys",
  "lopsy-core",
+ "serde",
+ "serde_json",
+ "skrifa",
+ "swash",
  "wasm-bindgen",
  "web-sys",
 ]
@@ -293,16 +300,11 @@ dependencies = [
 name = "lopsy-wasm"
 version = "0.1.0"
 dependencies = [
- "brotli",
- "cosmic-text",
- "etagere",
  "js-sys",
  "lopsy-core",
  "lopsy-engine",
  "serde",
  "serde_json",
- "skrifa",
- "swash",
  "wasm-bindgen",
  "web-sys",
 ]

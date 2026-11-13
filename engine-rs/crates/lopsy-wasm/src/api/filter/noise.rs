@@ -14,22 +14,22 @@ pub fn filter_add_noise(
     gaussian: bool,
     seed: f32,
 ) {
-    crate::commands::filter::noise::filter_add_noise(&mut engine.inner, layer_id, amount, monochrome, gaussian, seed)
+    lopsy_engine::commands::filter::noise::filter_add_noise(&mut engine.inner, layer_id, amount, monochrome, gaussian, seed)
 }
 
 #[wasm_bindgen(js_name = "filterClouds")]
 pub fn filter_clouds(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32) {
-    crate::commands::filter::noise::filter_clouds(&mut engine.inner, layer_id, scale, seed)
+    lopsy_engine::commands::filter::noise::filter_clouds(&mut engine.inner, layer_id, scale, seed)
 }
 
 #[wasm_bindgen(js_name = "filterSmoke")]
 pub fn filter_smoke(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32, turbulence: f32) {
-    crate::commands::filter::noise::filter_smoke(&mut engine.inner, layer_id, scale, seed, turbulence)
+    lopsy_engine::commands::filter::noise::filter_smoke(&mut engine.inner, layer_id, scale, seed, turbulence)
 }
 
 #[wasm_bindgen(js_name = "filterFibers")]
 pub fn filter_fibers(engine: &mut Engine, layer_id: &str, variance: f32, strength: f32, seed: f32) {
-    crate::commands::filter::noise::filter_fibers(&mut engine.inner, layer_id, variance, strength, seed)
+    lopsy_engine::commands::filter::noise::filter_fibers(&mut engine.inner, layer_id, variance, strength, seed)
 }
 
 #[wasm_bindgen(js_name = "filterTexture")]
@@ -48,5 +48,5 @@ pub fn filter_texture(
     colored: bool,
     seed: f32,
 ) {
-    crate::commands::filter::noise::filter_texture(&mut engine.inner, layer_id, kind, blend, amount, size, stretch, angle_deg, detail, contrast, colored, seed)
+    lopsy_engine::commands::filter::noise::filter_texture(&mut engine.inner, layer_id, kind, blend, amount, size, stretch, angle_deg, detail, contrast, colored, seed)
 }

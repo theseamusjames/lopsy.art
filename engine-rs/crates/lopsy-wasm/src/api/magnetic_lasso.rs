@@ -7,7 +7,7 @@ use crate::Engine;
 
 #[wasm_bindgen(js_name = "magneticLassoBegin")]
 pub fn magnetic_lasso_begin(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
-    crate::commands::magnetic_lasso::magnetic_lasso_begin(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::magnetic_lasso::magnetic_lasso_begin(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "magneticLassoSnap")]
@@ -20,15 +20,15 @@ pub fn magnetic_lasso_snap(
     radius: u32,
     threshold: u8,
 ) -> Vec<f32> {
-    crate::commands::magnetic_lasso::magnetic_lasso_snap(&engine.inner, from_x, from_y, to_x, to_y, radius, threshold)
+    lopsy_engine::commands::magnetic_lasso::magnetic_lasso_snap(&engine.inner, from_x, from_y, to_x, to_y, radius, threshold)
 }
 
 #[wasm_bindgen(js_name = "magneticLassoSnapPoint")]
 pub fn magnetic_lasso_snap_point(engine: &Engine, x: f32, y: f32, radius: u32, threshold: u8) -> Vec<f32> {
-    crate::commands::magnetic_lasso::magnetic_lasso_snap_point(&engine.inner, x, y, radius, threshold)
+    lopsy_engine::commands::magnetic_lasso::magnetic_lasso_snap_point(&engine.inner, x, y, radius, threshold)
 }
 
 #[wasm_bindgen(js_name = "magneticLassoEnd")]
 pub fn magnetic_lasso_end(engine: &mut Engine) {
-    crate::commands::magnetic_lasso::magnetic_lasso_end(&mut engine.inner)
+    lopsy_engine::commands::magnetic_lasso::magnetic_lasso_end(&mut engine.inner)
 }

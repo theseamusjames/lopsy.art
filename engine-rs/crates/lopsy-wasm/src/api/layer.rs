@@ -8,22 +8,22 @@ use crate::Engine;
 
 #[wasm_bindgen(js_name = "addLayer")]
 pub fn add_layer(engine: &mut Engine, layer_desc_json: &str) -> Result<(), JsError> {
-    crate::commands::layer::add_layer(&mut engine.inner, layer_desc_json).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::add_layer(&mut engine.inner, layer_desc_json).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "removeLayer")]
 pub fn remove_layer(engine: &mut Engine, layer_id: &str) {
-    crate::commands::layer::remove_layer(&mut engine.inner, layer_id)
+    lopsy_engine::commands::layer::remove_layer(&mut engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "updateLayer")]
 pub fn update_layer(engine: &mut Engine, layer_desc_json: &str) -> Result<(), JsError> {
-    crate::commands::layer::update_layer(&mut engine.inner, layer_desc_json).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::update_layer(&mut engine.inner, layer_desc_json).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "setLayerOrder")]
 pub fn set_layer_order(engine: &mut Engine, order_json: &str) -> Result<(), JsError> {
-    crate::commands::layer::set_layer_order(&mut engine.inner, order_json).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::set_layer_order(&mut engine.inner, order_json).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "uploadLayerPixels")]
@@ -36,7 +36,7 @@ pub fn upload_layer_pixels(
     offset_x: i32,
     offset_y: i32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::upload_layer_pixels(&mut engine.inner, layer_id, data, width, height, offset_x, offset_y).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::upload_layer_pixels(&mut engine.inner, layer_id, data, width, height, offset_x, offset_y).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "uploadLayerPixelsFromCanvas")]
@@ -47,22 +47,22 @@ pub fn upload_layer_pixels_from_canvas(
     width: u32,
     height: u32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::upload_layer_pixels_from_canvas(&mut engine.inner, layer_id, canvas, width, height).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::upload_layer_pixels_from_canvas(&mut engine.inner, layer_id, canvas, width, height).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "readLayerPixels")]
 pub fn read_layer_pixels(engine: &Engine, layer_id: &str) -> Result<Vec<u8>, JsError> {
-    crate::commands::layer::read_layer_pixels(&engine.inner, layer_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::read_layer_pixels(&engine.inner, layer_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "decodeAndUploadImage")]
 pub fn decode_and_upload_image(engine: &mut Engine, layer_id: &str, data: &[u8]) -> Vec<u32> {
-    crate::commands::layer::decode_and_upload_image(&mut engine.inner, layer_id, data)
+    lopsy_engine::commands::layer::decode_and_upload_image(&mut engine.inner, layer_id, data)
 }
 
 #[wasm_bindgen(js_name = "decodeAndUploadDng")]
 pub fn decode_and_upload_dng(engine: &mut Engine, layer_id: &str, data: &[u8]) -> Result<String, JsError> {
-    crate::commands::layer::decode_and_upload_dng(&mut engine.inner, layer_id, data).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::decode_and_upload_dng(&mut engine.inner, layer_id, data).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "uploadLayerPixelsF32Rect")]
@@ -78,7 +78,7 @@ pub fn upload_layer_pixels_f32_rect(
     height: u32,
     data: &[f32],
 ) -> Result<(), JsError> {
-    crate::commands::layer::upload_layer_pixels_f32_rect(&mut engine.inner, layer_id, texture_width, texture_height, x, y, width, height, data).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::upload_layer_pixels_f32_rect(&mut engine.inner, layer_id, texture_width, texture_height, x, y, width, height, data).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "uploadLayerSparsePixels")]
@@ -92,47 +92,47 @@ pub fn upload_layer_sparse_pixels(
     offset_x: i32,
     offset_y: i32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::upload_layer_sparse_pixels(&mut engine.inner, layer_id, indices, rgba, sparse_width, sparse_height, offset_x, offset_y).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::upload_layer_sparse_pixels(&mut engine.inner, layer_id, indices, rgba, sparse_width, sparse_height, offset_x, offset_y).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "uploadLayerMask")]
 pub fn upload_layer_mask(engine: &mut Engine, layer_id: &str, mask_data: &[u8], width: u32, height: u32) {
-    crate::commands::layer::upload_layer_mask(&mut engine.inner, layer_id, mask_data, width, height)
+    lopsy_engine::commands::layer::upload_layer_mask(&mut engine.inner, layer_id, mask_data, width, height)
 }
 
 #[wasm_bindgen(js_name = "removeLayerMask")]
 pub fn remove_layer_mask(engine: &mut Engine, layer_id: &str) {
-    crate::commands::layer::remove_layer_mask(&mut engine.inner, layer_id)
+    lopsy_engine::commands::layer::remove_layer_mask(&mut engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "getLayerTextureDimensions")]
 pub fn get_layer_texture_dimensions(engine: &Engine, layer_id: &str) -> Vec<u32> {
-    crate::commands::layer::get_layer_texture_dimensions(&engine.inner, layer_id)
+    lopsy_engine::commands::layer::get_layer_texture_dimensions(&engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "layerContentGeneration")]
 pub fn layer_content_generation(engine: &Engine, layer_id: &str) -> f64 {
-    crate::commands::layer::layer_content_generation(&engine.inner, layer_id)
+    lopsy_engine::commands::layer::layer_content_generation(&engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "getLayerEngineBounds")]
 pub fn get_layer_engine_bounds(engine: &Engine, layer_id: &str) -> Vec<i32> {
-    crate::commands::layer::get_layer_engine_bounds(&engine.inner, layer_id)
+    lopsy_engine::commands::layer::get_layer_engine_bounds(&engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "getLayerContentBounds")]
 pub fn get_layer_content_bounds(engine: &mut Engine, layer_id: &str) -> Vec<i32> {
-    crate::commands::layer::get_layer_content_bounds(&mut engine.inner, layer_id)
+    lopsy_engine::commands::layer::get_layer_content_bounds(&mut engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "rasterizeLayerEffects")]
 pub fn rasterize_layer_effects(engine: &mut Engine, layer_id: &str, bake_mask: bool) -> Vec<u8> {
-    crate::commands::layer::rasterize_layer_effects(&mut engine.inner, layer_id, bake_mask)
+    lopsy_engine::commands::layer::rasterize_layer_effects(&mut engine.inner, layer_id, bake_mask)
 }
 
 #[wasm_bindgen(js_name = "duplicateLayerTexture")]
 pub fn duplicate_layer_texture(engine: &mut Engine, src_id: &str, dst_id: &str) -> Result<(), JsError> {
-    crate::commands::layer::duplicate_layer_texture(&mut engine.inner, src_id, dst_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::duplicate_layer_texture(&mut engine.inner, src_id, dst_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "mergeLayers")]
@@ -142,22 +142,22 @@ pub fn merge_layers(
     bottom_id: &str,
     bake_bottom_opacity: bool,
 ) -> Result<Vec<i32>, JsError> {
-    crate::commands::layer::merge_layers(&mut engine.inner, top_id, bottom_id, bake_bottom_opacity).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::merge_layers(&mut engine.inner, top_id, bottom_id, bake_bottom_opacity).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "flipLayer")]
 pub fn flip_layer(engine: &mut Engine, layer_id: &str, horizontal: bool) -> Result<(), JsError> {
-    crate::commands::layer::flip_layer(&mut engine.inner, layer_id, horizontal).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::flip_layer(&mut engine.inner, layer_id, horizontal).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "rotateLayer90")]
 pub fn rotate_layer_90(engine: &mut Engine, layer_id: &str, clockwise: bool) -> Result<(), JsError> {
-    crate::commands::layer::rotate_layer_90(&mut engine.inner, layer_id, clockwise).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::rotate_layer_90(&mut engine.inner, layer_id, clockwise).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "scaleLayerTexture")]
 pub fn scale_layer_texture(engine: &mut Engine, layer_id: &str, new_w: u32, new_h: u32) -> Result<(), JsError> {
-    crate::commands::layer::scale_layer_texture(&mut engine.inner, layer_id, new_w, new_h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::scale_layer_texture(&mut engine.inner, layer_id, new_w, new_h).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "remapLayerMask")]
@@ -173,7 +173,7 @@ pub fn remap_layer_mask(
     e: f32,
     f: f32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::remap_layer_mask(&mut engine.inner, layer_id, dst_w, dst_h, a, b, c, d, e, f).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::remap_layer_mask(&mut engine.inner, layer_id, dst_w, dst_h, a, b, c, d, e, f).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "resizeCanvasTexture")]
@@ -189,7 +189,7 @@ pub fn resize_canvas_texture(
     offset_x: i32,
     offset_y: i32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::resize_canvas_texture(&mut engine.inner, layer_id, old_layer_x, old_layer_y, old_w, old_h, new_w, new_h, offset_x, offset_y).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::resize_canvas_texture(&mut engine.inner, layer_id, old_layer_x, old_layer_y, old_w, old_h, new_w, new_h, offset_x, offset_y).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "cropLayerTexture")]
@@ -203,17 +203,17 @@ pub fn crop_layer_texture(
     crop_w: u32,
     crop_h: u32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::crop_layer_texture(&mut engine.inner, layer_id, layer_x, layer_y, crop_x, crop_y, crop_w, crop_h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::crop_layer_texture(&mut engine.inner, layer_id, layer_x, layer_y, crop_x, crop_y, crop_w, crop_h).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "expandLayerToDocSize")]
 pub fn expand_layer_to_doc_size(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
-    crate::commands::layer::expand_layer_to_doc_size(&mut engine.inner, layer_id)
+    lopsy_engine::commands::layer::expand_layer_to_doc_size(&mut engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "cropLayerToContent")]
 pub fn crop_layer_to_content(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
-    crate::commands::layer::crop_layer_to_content(&mut engine.inner, layer_id)
+    lopsy_engine::commands::layer::crop_layer_to_content(&mut engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "clipboardCopy")]
@@ -226,7 +226,7 @@ pub fn clipboard_copy(
     bounds_w: u32,
     bounds_h: u32,
 ) -> Result<Vec<i32>, JsError> {
-    crate::commands::layer::clipboard_copy(&mut engine.inner, layer_id, has_selection, bounds_x, bounds_y, bounds_w, bounds_h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::clipboard_copy(&mut engine.inner, layer_id, has_selection, bounds_x, bounds_y, bounds_w, bounds_h).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "clipboardCut")]
@@ -239,22 +239,22 @@ pub fn clipboard_cut(
     bounds_w: u32,
     bounds_h: u32,
 ) -> Result<Vec<i32>, JsError> {
-    crate::commands::layer::clipboard_cut(&mut engine.inner, layer_id, has_selection, bounds_x, bounds_y, bounds_w, bounds_h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::clipboard_cut(&mut engine.inner, layer_id, has_selection, bounds_x, bounds_y, bounds_w, bounds_h).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "clearSelectedPixels")]
 pub fn clear_selected_pixels(engine: &mut Engine, layer_id: &str, has_selection: bool) -> Result<(), JsError> {
-    crate::commands::layer::clear_selected_pixels(&mut engine.inner, layer_id, has_selection).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::clear_selected_pixels(&mut engine.inner, layer_id, has_selection).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "clipboardPaste")]
 pub fn clipboard_paste(engine: &mut Engine, dst_layer_id: &str) -> Result<(), JsError> {
-    crate::commands::layer::clipboard_paste(&mut engine.inner, dst_layer_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::clipboard_paste(&mut engine.inner, dst_layer_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "readClipboardPixels")]
 pub fn read_clipboard_pixels(engine: &Engine) -> Result<Vec<u8>, JsError> {
-    crate::commands::layer::read_clipboard_pixels(&engine.inner).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::read_clipboard_pixels(&engine.inner).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "uploadClipboardPixels")]
@@ -266,42 +266,42 @@ pub fn upload_clipboard_pixels(
     offset_x: i32,
     offset_y: i32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::upload_clipboard_pixels(&mut engine.inner, data, width, height, offset_x, offset_y).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::upload_clipboard_pixels(&mut engine.inner, data, width, height, offset_x, offset_y).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "floatSelection")]
 pub fn float_selection(engine: &mut Engine, layer_id: &str) -> Result<Vec<f64>, JsError> {
-    crate::commands::layer::float_selection(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::float_selection(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "restoreFloatBase")]
 pub fn restore_float_base(engine: &mut Engine, src_id: &str) -> Result<(), JsError> {
-    crate::commands::layer::restore_float_base(&mut engine.inner, src_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::restore_float_base(&mut engine.inner, src_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "compositeFloat")]
 pub fn composite_float(engine: &mut Engine, dx: i32, dy: i32) -> Result<(), JsError> {
-    crate::commands::layer::composite_float(&mut engine.inner, dx, dy).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::composite_float(&mut engine.inner, dx, dy).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "dropFloat")]
 pub fn drop_float(engine: &mut Engine) {
-    crate::commands::layer::drop_float(&mut engine.inner)
+    lopsy_engine::commands::layer::drop_float(&mut engine.inner)
 }
 
 #[wasm_bindgen(js_name = "ensureFloatCovers")]
 pub fn ensure_float_covers(engine: &mut Engine, x: i32, y: i32, w: u32, h: u32) -> Result<Vec<i32>, JsError> {
-    crate::commands::layer::ensure_float_covers(&mut engine.inner, x, y, w, h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::ensure_float_covers(&mut engine.inner, x, y, w, h).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "hasFloat")]
 pub fn has_float(engine: &Engine) -> bool {
-    crate::commands::layer::has_float(&engine.inner)
+    lopsy_engine::commands::layer::has_float(&engine.inner)
 }
 
 #[wasm_bindgen(js_name = "beginLayerTransform")]
 pub fn begin_layer_transform(engine: &mut Engine, layer_id: &str) -> Result<Vec<i32>, JsError> {
-    crate::commands::layer::begin_layer_transform(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::begin_layer_transform(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "prepareLayerTransformTarget")]
@@ -313,7 +313,7 @@ pub fn prepare_layer_transform_target(
     w: u32,
     h: u32,
 ) -> Result<Vec<i32>, JsError> {
-    crate::commands::layer::prepare_layer_transform_target(&mut engine.inner, layer_id, x, y, w, h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::prepare_layer_transform_target(&mut engine.inner, layer_id, x, y, w, h).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "compositeLayerTransformAffine")]
@@ -325,7 +325,7 @@ pub fn composite_layer_transform_affine(
     dst_center_x: f32,
     dst_center_y: f32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::composite_layer_transform_affine(&mut engine.inner, inv_matrix, src_center_x, src_center_y, dst_center_x, dst_center_y).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::composite_layer_transform_affine(&mut engine.inner, inv_matrix, src_center_x, src_center_y, dst_center_x, dst_center_y).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "compositeLayerTransformPerspective")]
@@ -337,12 +337,12 @@ pub fn composite_layer_transform_perspective(
     orig_w: f32,
     orig_h: f32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::composite_layer_transform_perspective(&mut engine.inner, corners, orig_x, orig_y, orig_w, orig_h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::composite_layer_transform_perspective(&mut engine.inner, corners, orig_x, orig_y, orig_w, orig_h).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "hasLayerTransform")]
 pub fn has_layer_transform(engine: &Engine) -> bool {
-    crate::commands::layer::has_layer_transform(&engine.inner)
+    lopsy_engine::commands::layer::has_layer_transform(&engine.inner)
 }
 
 #[wasm_bindgen(js_name = "compositeFloatAffine")]
@@ -356,7 +356,7 @@ pub fn composite_float_affine(
     src_width: f32,
     src_height: f32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::composite_float_affine(&mut engine.inner, inv_matrix, src_center_x, src_center_y, dst_center_x, dst_center_y, src_width, src_height).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::composite_float_affine(&mut engine.inner, inv_matrix, src_center_x, src_center_y, dst_center_x, dst_center_y, src_width, src_height).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "compositeFloatPerspective")]
@@ -368,7 +368,7 @@ pub fn composite_float_perspective(
     orig_w: f32,
     orig_h: f32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::composite_float_perspective(&mut engine.inner, corners, orig_x, orig_y, orig_w, orig_h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::composite_float_perspective(&mut engine.inner, corners, orig_x, orig_y, orig_w, orig_h).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "fillWithColor")]
@@ -380,7 +380,7 @@ pub fn fill_with_color(
     b: f32,
     a: f32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::fill_with_color(&mut engine.inner, layer_id, r, g, b, a).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::fill_with_color(&mut engine.inner, layer_id, r, g, b, a).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "fillLayerFrame")]
@@ -397,12 +397,12 @@ pub fn fill_layer_frame(
     hole_w: u32,
     hole_h: u32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::fill_layer_frame(&mut engine.inner, layer_id, r, g, b, a, hole_x, hole_y, hole_w, hole_h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::fill_layer_frame(&mut engine.inner, layer_id, r, g, b, a, hole_x, hole_y, hole_w, hole_h).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "fillMaskWithValue")]
 pub fn fill_mask_with_value(engine: &mut Engine, layer_id: &str, value: f32) -> Result<(), JsError> {
-    crate::commands::layer::fill_mask_with_value(&mut engine.inner, layer_id, value).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::fill_mask_with_value(&mut engine.inner, layer_id, value).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "uploadLayerPixelsCompressed")]
@@ -411,17 +411,17 @@ pub fn upload_layer_pixels_compressed(
     layer_id: &str,
     compressed: &[u8],
 ) -> Result<(), JsError> {
-    crate::commands::layer::upload_layer_pixels_compressed(&mut engine.inner, layer_id, compressed).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::upload_layer_pixels_compressed(&mut engine.inner, layer_id, compressed).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "readLayerPixelsCompressedU16")]
 pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<u8> {
-    crate::commands::layer::read_layer_pixels_compressed_u16(&engine.inner, layer_id)
+    lopsy_engine::commands::layer::read_layer_pixels_compressed_u16(&engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "readLayerPixelsLz4U16")]
 pub fn read_layer_pixels_lz4_u16(engine: &Engine, layer_id: &str) -> Vec<u8> {
-    crate::commands::layer::read_layer_pixels_lz4_u16(&engine.inner, layer_id)
+    lopsy_engine::commands::layer::read_layer_pixels_lz4_u16(&engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "uploadLayerPixelsCompressedU16")]
@@ -430,32 +430,32 @@ pub fn upload_layer_pixels_compressed_u16(
     layer_id: &str,
     compressed: &[u8],
 ) -> Result<(), JsError> {
-    crate::commands::layer::upload_layer_pixels_compressed_u16(&mut engine.inner, layer_id, compressed).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::upload_layer_pixels_compressed_u16(&mut engine.inner, layer_id, compressed).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "readLayerThumbnail")]
 pub fn read_layer_thumbnail(engine: &Engine, layer_id: &str, max_size: u32) -> Vec<u8> {
-    crate::commands::layer::read_layer_thumbnail(&engine.inner, layer_id, max_size)
+    lopsy_engine::commands::layer::read_layer_thumbnail(&engine.inner, layer_id, max_size)
 }
 
 #[wasm_bindgen(js_name = "readCompositeThumbnail")]
 pub fn read_composite_thumbnail(engine: &Engine, max_size: u32) -> Vec<u8> {
-    crate::commands::layer::read_composite_thumbnail(&engine.inner, max_size)
+    lopsy_engine::commands::layer::read_composite_thumbnail(&engine.inner, max_size)
 }
 
 #[wasm_bindgen(js_name = "snapshotLayerGpu")]
 pub fn snapshot_layer_gpu(engine: &mut Engine, layer_id: &str) -> u32 {
-    crate::commands::layer::snapshot_layer_gpu(&mut engine.inner, layer_id)
+    lopsy_engine::commands::layer::snapshot_layer_gpu(&mut engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "restoreFromGpuSnapshot")]
 pub fn restore_from_gpu_snapshot(engine: &mut Engine, layer_id: &str, snap_id: u32) -> Result<(), JsError> {
-    crate::commands::layer::restore_from_gpu_snapshot(&mut engine.inner, layer_id, snap_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::restore_from_gpu_snapshot(&mut engine.inner, layer_id, snap_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "snapshotMaskGpu")]
 pub fn snapshot_mask_gpu(engine: &mut Engine, layer_id: &str) -> u32 {
-    crate::commands::layer::snapshot_mask_gpu(&mut engine.inner, layer_id)
+    lopsy_engine::commands::layer::snapshot_mask_gpu(&mut engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "restoreMaskFromGpuSnapshot")]
@@ -464,25 +464,25 @@ pub fn restore_mask_from_gpu_snapshot(
     layer_id: &str,
     snap_id: u32,
 ) -> Result<(), JsError> {
-    crate::commands::layer::restore_mask_from_gpu_snapshot(&mut engine.inner, layer_id, snap_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::restore_mask_from_gpu_snapshot(&mut engine.inner, layer_id, snap_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "releaseGpuSnapshot")]
 pub fn release_gpu_snapshot(engine: &mut Engine, snap_id: u32) {
-    crate::commands::layer::release_gpu_snapshot(&mut engine.inner, snap_id)
+    lopsy_engine::commands::layer::release_gpu_snapshot(&mut engine.inner, snap_id)
 }
 
 #[wasm_bindgen(js_name = "clearGpuSnapshots")]
 pub fn clear_gpu_snapshots(engine: &mut Engine) {
-    crate::commands::layer::clear_gpu_snapshots(&mut engine.inner)
+    lopsy_engine::commands::layer::clear_gpu_snapshots(&mut engine.inner)
 }
 
 #[wasm_bindgen(js_name = "liveGpuSnapshotCount")]
 pub fn live_gpu_snapshot_count(engine: &Engine) -> u32 {
-    crate::commands::layer::live_gpu_snapshot_count(&engine.inner)
+    lopsy_engine::commands::layer::live_gpu_snapshot_count(&engine.inner)
 }
 
 #[wasm_bindgen(js_name = "effectCacheStats")]
 pub fn effect_cache_stats(engine: &Engine) -> Vec<f64> {
-    crate::commands::layer::effect_cache_stats(&engine.inner)
+    lopsy_engine::commands::layer::effect_cache_stats(&engine.inner)
 }

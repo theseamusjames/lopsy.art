@@ -5,7 +5,7 @@
 //! its own row; a column pass then takes the minimum of `dy² + row(dy)²`
 //! over the column, which is the exact squared distance to the nearest seed.
 //!
-//! This is the CPU statement of `separable_edt.glsl` in `lopsy-wasm`, which
+//! This is the CPU statement of `separable_edt.glsl` in `lopsy-engine`, which
 //! runs the same two passes on the GPU (with the row distance stored in two
 //! 8-bit channels, see [`encode_distance`]). The result matches the
 //! single-pass per-pixel search the narrow-stroke path uses, so the band is
