@@ -2,9 +2,11 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-// Map output UV [0,1] to source UV via: srcUV = v_uv * u_scale + u_offset
-uniform vec2 u_scale;
-uniform vec2 u_offset;
+layout(std140) uniform Params {
+    // Map output UV [0,1] to source UV via: srcUV = v_uv * u_scale + u_offset
+    vec2 u_scale;
+    vec2 u_offset;
+};
 out vec4 fragColor;
 void main() {
     vec2 srcUV = v_uv * u_scale + u_offset;

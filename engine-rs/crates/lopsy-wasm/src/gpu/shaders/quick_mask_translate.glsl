@@ -2,7 +2,9 @@
 precision highp float;
 uniform sampler2D u_base;
 uniform sampler2D u_marquee;
-uniform ivec2 u_offset;
+layout(std140) uniform Params {
+    ivec2 u_offset;
+};
 out vec4 fragColor;
 // Moves the quick-mask content under the marquee by u_offset texels: the
 // marquee's original area is cleared and the moved content max-blends onto

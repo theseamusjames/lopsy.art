@@ -4,17 +4,19 @@ precision highp float;
 in vec2 v_uv;
 
 uniform sampler2D u_floatTex;
-uniform vec2 u_floatSize;
-// Document position of the float texture's origin. The Move tool's float
-// shares the layer's rect; a multi-layer transform's source does not.
-uniform vec2 u_floatOffset;
-uniform vec2 u_layerOffset;
-uniform vec2 u_layerSize;
-uniform mat3 u_invMatrix;
-uniform vec2 u_srcCenter;   // original bounds center (where source pixels are)
-uniform vec2 u_dstCenter;   // srcCenter + translate (where output should appear)
-// Document rect (x, y, w, h) of the source pixels; w <= 0 when unknown.
-uniform vec4 u_srcRect;
+layout(std140) uniform Params {
+    vec2 u_floatSize;
+    // Document position of the float texture's origin. The Move tool's float
+    // shares the layer's rect; a multi-layer transform's source does not.
+    vec2 u_floatOffset;
+    vec2 u_layerOffset;
+    vec2 u_layerSize;
+    mat3 u_invMatrix;
+    vec2 u_srcCenter; // original bounds center (where source pixels are)
+    vec2 u_dstCenter; // srcCenter + translate (where output should appear)
+    // Document rect (x, y, w, h) of the source pixels; w <= 0 when unknown.
+    vec4 u_srcRect;
+};
 
 out vec4 fragColor;
 

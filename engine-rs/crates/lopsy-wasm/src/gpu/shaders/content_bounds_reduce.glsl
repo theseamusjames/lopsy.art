@@ -14,10 +14,12 @@ precision highp int;
 // `u_alphaTest` = 0 the source is a previous step's output (R = 0 or 1).
 
 uniform sampler2D u_src;
-uniform ivec2 u_axis;
-uniform int u_span;
-uniform ivec2 u_srcSize;
-uniform int u_alphaTest;
+layout(std140) uniform Params {
+    ivec2 u_axis;
+    int u_span;
+    ivec2 u_srcSize;
+    int u_alphaTest;
+};
 
 out vec4 fragColor;
 

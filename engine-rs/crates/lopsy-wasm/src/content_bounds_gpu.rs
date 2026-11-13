@@ -3,6 +3,7 @@ use lopsy_core::pixel_buffer::{content_rect_from_projections, reduction_steps};
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Scissor, Target};
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::params::core::ContentBoundsReduceParams;
 
 /// Texels each reduction step folds into one. Large enough that a 16K
 /// axis needs only three steps, small enough to keep per-fragment loops
@@ -93,12 +94,13 @@ fn draw_reduce_step(
 ) {
     let (ax, ay) = match axis { Axis::X => (1, 0), Axis::Y => (0, 1) };
     engine
-        .pass_untyped(&engine.shaders.content_bounds_reduce)
+        .pass(&engine.shaders.content_bounds_reduce, ContentBoundsReduceParams {
+            axis: [ax, ay],
+            span: SPAN as i32,
+            src_size: [src_size.0 as i32, src_size.1 as i32],
+            alpha_test: i32::from(is_alpha_test),
+        })
         .texture("u_src", src)
-        .ivec2("u_axis", ax, ay)
-        .i32("u_span", SPAN as i32)
-        .ivec2("u_srcSize", src_size.0 as i32, src_size.1 as i32)
-        .i32("u_alphaTest", i32::from(is_alpha_test))
         .blend(Blend::Off)
         .scissor(Scissor::Off)
         .draw(Target::Texture(dst));

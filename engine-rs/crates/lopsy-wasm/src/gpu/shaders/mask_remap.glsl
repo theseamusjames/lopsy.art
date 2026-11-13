@@ -2,11 +2,13 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform vec2 u_dstSize;
-uniform vec2 u_srcSize;
-// Inverse map in pixel space: srcPos = u_linear * dstPos + u_offset.
-uniform mat2 u_linear;
-uniform vec2 u_offset;
+layout(std140) uniform Params {
+    vec2 u_dstSize;
+    vec2 u_srcSize;
+    // Inverse map in pixel space: srcPos = u_linear * dstPos + u_offset.
+    mat2 u_linear;
+    vec2 u_offset;
+};
 out vec4 fragColor;
 void main() {
     vec2 srcUV = (u_linear * (v_uv * u_dstSize) + u_offset) / u_srcSize;

@@ -1,10 +1,12 @@
 #version 300 es
 precision highp float;
 uniform sampler2D u_tex;
-uniform vec2 u_dstSize;
-// -1 = colour, averaged in premultiplied space. 0..3 = that channel's
-// straight value averaged, as grey.
-uniform int u_channel;
+layout(std140) uniform Params {
+    vec2 u_dstSize;
+    // -1 = colour, averaged in premultiplied space. 0..3 = that channel's
+    // straight value averaged, as grey.
+    int u_channel;
+};
 out vec4 fragColor;
 
 const int MAX_TAPS = 64;

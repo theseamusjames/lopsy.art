@@ -2,6 +2,7 @@ use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gradient_gpu::{copy_to_scratch_a, gradient_pass, GradientShape, GradientStop};
+use crate::gpu::params::core::QuickMaskTranslateParams;
 
 /// Flood-fill the quick mask texture. Reads the mask from the GPU, runs a
 /// region-fill based on mask-value tolerance, and writes the result back.
@@ -246,10 +247,9 @@ pub fn translate_quick_mask(engine: &mut EngineInner, dx: i32, dy: i32) {
     {
         return;
     }
-    engine.pass_untyped(&engine.shaders.quick_mask_translate)
+    engine.pass(&engine.shaders.quick_mask_translate, QuickMaskTranslateParams { offset: [dx, dy] })
         .texture("u_base", base)
         .texture("u_marquee", marquee)
-        .ivec2("u_offset", dx, dy)
         .blend(Blend::Off)
         .draw(Target::Texture(quick));
     // Leave unit 0 active, with neither move copy still bound to a sampler.

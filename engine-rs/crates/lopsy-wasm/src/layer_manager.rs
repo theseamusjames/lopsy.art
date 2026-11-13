@@ -3,9 +3,14 @@ use lopsy_core::geometry::Rect;
 use lopsy_core::layer::LayerDesc;
 use crate::compositor::mask_doc_offset;
 use crate::engine::EngineInner;
-use crate::gpu::pass::{Blend, Target};
+use crate::gpu::pass::{Blend, Scissor, Target};
 use crate::gpu::texture_pool::TextureHandle;
-use crate::layer_transform_gpu::{TransformParams, TransformTargets};
+use crate::layer_transform_gpu::{TransformDraw, TransformParams, TransformTargets};
+use crate::gpu::params::core::{
+    BlitRegionParams, ClipboardClearParams, ClipboardCopyParams, FlipParams, MaskRemapParams, Rotate90Params,
+    SelectionFillParams,
+};
+use crate::gpu::uniforms::Mat2;
 
 pub fn add_layer(engine: &mut EngineInner, desc: LayerDesc) -> Result<(), String> {
     // Only create a texture if the layer doesn't already have one.
@@ -396,9 +401,8 @@ pub fn rotate_texture_90(
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
     // Render rotated into new texture
-    engine.pass_untyped(&engine.shaders.rotate90)
+    engine.pass(&engine.shaders.rotate90, Rotate90Params { clockwise: i32::from(clockwise) })
         .texture("u_tex", tex_handle)
-        .i32("u_clockwise", i32::from(clockwise))
         .blend(Blend::Off)
         .draw(Target::Texture(new_tex));
 
@@ -426,7 +430,7 @@ pub fn scale_texture(
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
     // Bilinear resample in premultiplied space (see premul_sample.glsl).
-    engine.pass_untyped(&engine.shaders.blit_resample)
+    engine.pass(&engine.shaders.blit_resample, ())
         .texture("u_tex", tex_handle)
         .blend(Blend::Off)
         .draw(Target::Texture(new_tex));
@@ -469,10 +473,8 @@ pub fn resize_canvas_texture(
     let off_x = -(old_layer_x as f32 + offset_x as f32) / old_w as f32;
     let off_y = -(old_layer_y as f32 + offset_y as f32) / old_h as f32;
 
-    engine.pass_untyped(&engine.shaders.blit_region)
+    engine.pass(&engine.shaders.blit_region, BlitRegionParams { scale: [scale_x, scale_y], offset: [off_x, off_y] })
         .texture("u_tex", tex_handle)
-        .vec2("u_scale", scale_x, scale_y)
-        .vec2("u_offset", off_x, off_y)
         .blend(Blend::Off)
         .clear([0.0, 0.0, 0.0, 0.0])
         .draw(Target::Texture(new_tex));
@@ -512,10 +514,8 @@ pub fn crop_texture(
     let off_x = (crop_x - layer_x) as f32 / old_w as f32;
     let off_y = (crop_y - layer_y) as f32 / old_h as f32;
 
-    engine.pass_untyped(&engine.shaders.blit_region)
+    engine.pass(&engine.shaders.blit_region, BlitRegionParams { scale: [scale_x, scale_y], offset: [off_x, off_y] })
         .texture("u_tex", tex_handle)
-        .vec2("u_scale", scale_x, scale_y)
-        .vec2("u_offset", off_x, off_y)
         .blend(Blend::Off)
         .clear([0.0, 0.0, 0.0, 0.0])
         .draw(Target::Texture(new_tex));
@@ -543,10 +543,8 @@ pub fn flip_texture(
     engine.ensure_scratch_size(w, h)?;
 
     // Render flipped into scratch_a using the flip shader
-    engine.pass_untyped(&engine.shaders.flip)
+    engine.pass(&engine.shaders.flip, FlipParams { flip_h: i32::from(horizontal), flip_v: i32::from(!horizontal) })
         .texture("u_tex", tex_handle)
-        .i32("u_flipH", i32::from(horizontal))
-        .i32("u_flipV", i32::from(!horizontal))
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
@@ -581,12 +579,13 @@ pub fn remap_layer_mask(
     engine.texture_pool.get(new_mask).ok_or("New mask texture not found")?;
 
     let [a, b, c, d, e, f] = inverse;
-    engine.pass_untyped(&engine.shaders.mask_remap)
+    engine.pass(&engine.shaders.mask_remap, MaskRemapParams {
+        dst_size: [dst_w as f32, dst_h as f32],
+        src_size: [src_w as f32, src_h as f32],
+        linear: Mat2([a, b, c, d]),
+        offset: [e, f],
+    })
         .texture("u_tex", mask_handle)
-        .vec2("u_dstSize", dst_w as f32, dst_h as f32)
-        .vec2("u_srcSize", src_w as f32, src_h as f32)
-        .mat2("u_linear", &[a, b, c, d])
-        .vec2("u_offset", e, f)
         .blend(Blend::Off)
         .draw(Target::Texture(new_mask));
 
@@ -648,18 +647,20 @@ pub fn clipboard_copy(
         None
     };
 
-    let pass = engine.pass_untyped(&engine.shaders.clipboard_copy).texture("u_layerTex", layer_tex_handle);
+    let pass = engine.pass(&engine.shaders.clipboard_copy, ClipboardCopyParams {
+        has_mask: i32::from(mask.is_some()),
+        extend_past_canvas: 0,
+        layer_offset: [layer_x, layer_y],
+        layer_size: [lw as f32, lh as f32],
+        bounds_offset: [off_x as f32, off_y as f32],
+        bounds_size: [out_w as f32, out_h as f32],
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+    }).texture("u_layerTex", layer_tex_handle);
     let pass = match mask {
         Some(m) => pass.texture("u_maskTex", m),
-        None => pass.i32("u_maskTex", mask_sampler_unit(false)),
+        None => pass.sampler_unit("u_maskTex", mask_sampler_unit(false)),
     };
-    pass.i32("u_hasMask", i32::from(mask.is_some()))
-        .i32("u_extendPastCanvas", 0)
-        .vec2("u_layerOffset", layer_x, layer_y)
-        .vec2("u_layerSize", lw as f32, lh as f32)
-        .vec2("u_boundsOffset", off_x as f32, off_y as f32)
-        .vec2("u_boundsSize", out_w as f32, out_h as f32)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
+    pass
         .blend(Blend::Off)
         .clear([0.0, 0.0, 0.0, 0.0])
         .draw(Target::Texture(clip_tex));
@@ -699,16 +700,18 @@ pub fn clipboard_clear_selected(
     let tmp_tex_h = engine.texture_pool.acquire(lw, lh)?;
     engine.texture_pool.get(tmp_tex_h).ok_or("Temp texture not found")?;
 
-    let pass = engine.pass_untyped(&engine.shaders.clipboard_clear).texture("u_layerTex", layer_tex_handle);
+    let pass = engine.pass(&engine.shaders.clipboard_clear, ClipboardClearParams {
+        has_mask: i32::from(has_mask),
+        extend_past_canvas: 0,
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        layer_offset: [layer_x, layer_y],
+        layer_size: [lw as f32, lh as f32],
+    }).texture("u_layerTex", layer_tex_handle);
     let pass = match mask {
         Some(m) => pass.texture("u_maskTex", m),
-        None => pass.i32("u_maskTex", mask_sampler_unit(has_mask)),
+        None => pass.sampler_unit("u_maskTex", mask_sampler_unit(has_mask)),
     };
-    pass.i32("u_hasMask", i32::from(has_mask))
-        .i32("u_extendPastCanvas", 0)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .vec2("u_layerOffset", layer_x, layer_y)
-        .vec2("u_layerSize", lw as f32, lh as f32)
+    pass
         .blend(Blend::Off)
         .draw(Target::Texture(tmp_tex_h));
 
@@ -797,15 +800,17 @@ pub fn expand_layer_to_doc_size(
     let new_tex = engine.texture_pool.acquire(new_w, new_h)?;
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
-    engine.pass_untyped(&engine.shaders.clipboard_copy)
+    engine.pass(&engine.shaders.clipboard_copy, ClipboardCopyParams {
+        has_mask: 0,
+        extend_past_canvas: 0,
+        layer_offset: [layer_x as f32, layer_y as f32],
+        layer_size: [lw as f32, lh as f32],
+        bounds_offset: [min_x as f32, min_y as f32],
+        bounds_size: [new_w as f32, new_h as f32],
+        doc_size: [doc_w as f32, doc_h as f32],
+    })
         .texture("u_layerTex", tex_handle)
-        .i32("u_maskTex", mask_sampler_unit(false))
-        .i32("u_hasMask", 0)
-        .vec2("u_layerOffset", layer_x as f32, layer_y as f32)
-        .vec2("u_layerSize", lw as f32, lh as f32)
-        .vec2("u_boundsOffset", min_x as f32, min_y as f32)
-        .vec2("u_boundsSize", new_w as f32, new_h as f32)
-        .vec2("u_docSize", doc_w as f32, doc_h as f32)
+        .sampler_unit("u_maskTex", mask_sampler_unit(false))
         .blend(Blend::Off)
         .clear([0.0, 0.0, 0.0, 0.0])
         .draw(Target::Texture(new_tex));
@@ -955,19 +960,21 @@ pub fn float_selection(
     let float_tex = engine.texture_pool.acquire(fw, fh)?;
     engine.texture_pool.get(float_tex).ok_or("Float texture not found")?;
     {
-        let pass = engine.pass_untyped(&engine.shaders.clipboard_copy).texture("u_layerTex", layer_tex_handle);
+        let pass = engine.pass(&engine.shaders.clipboard_copy, ClipboardCopyParams {
+            has_mask: i32::from(has_mask),
+            extend_past_canvas: 1,
+            layer_offset: [layer_x as f32, layer_y as f32],
+            layer_size: [lw as f32, lh as f32],
+            // Bounds cover the full fw×fh region (new_x, new_y origin for expanded layers)
+            bounds_offset: [new_x as f32, new_y as f32],
+            bounds_size: [fw as f32, fh as f32],
+            doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        }).texture("u_layerTex", layer_tex_handle);
         let pass = match mask {
             Some(m) => pass.texture("u_maskTex", m),
-            None => pass.i32("u_maskTex", mask_sampler_unit(has_mask)),
+            None => pass.sampler_unit("u_maskTex", mask_sampler_unit(has_mask)),
         };
-        pass.i32("u_hasMask", i32::from(has_mask))
-            .i32("u_extendPastCanvas", 1)
-            .vec2("u_layerOffset", layer_x as f32, layer_y as f32)
-            .vec2("u_layerSize", lw as f32, lh as f32)
-            // Bounds cover the full fw×fh region (new_x, new_y origin for expanded layers)
-            .vec2("u_boundsOffset", new_x as f32, new_y as f32)
-            .vec2("u_boundsSize", fw as f32, fh as f32)
-            .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
+        pass
             .blend(Blend::Off)
             .clear([0.0, 0.0, 0.0, 0.0])
             .draw(Target::Texture(float_tex));
@@ -980,16 +987,18 @@ pub fn float_selection(
     let base_tex = engine.texture_pool.acquire(fw, fh)?;
     engine.texture_pool.get(base_tex).ok_or("Base texture not found")?;
     {
-        let pass = engine.pass_untyped(&engine.shaders.clipboard_clear).texture("u_layerTex", layer_tex_handle);
+        let pass = engine.pass(&engine.shaders.clipboard_clear, ClipboardClearParams {
+            has_mask: i32::from(has_mask),
+            extend_past_canvas: 1,
+            doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+            layer_offset: [layer_x as f32, layer_y as f32],
+            layer_size: [lw as f32, lh as f32],
+        }).texture("u_layerTex", layer_tex_handle);
         let pass = match mask {
             Some(m) => pass.texture("u_maskTex", m),
-            None => pass.i32("u_maskTex", mask_sampler_unit(has_mask)),
+            None => pass.sampler_unit("u_maskTex", mask_sampler_unit(has_mask)),
         };
-        pass.i32("u_hasMask", i32::from(has_mask))
-            .i32("u_extendPastCanvas", 1)
-            .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-            .vec2("u_layerOffset", layer_x as f32, layer_y as f32)
-            .vec2("u_layerSize", lw as f32, lh as f32)
+        pass
             .blend(Blend::Off)
             // Clear the full fw×fh to transparent, then draw into the
             // center lw×lh sub-region so that clipboard_clear's v_uv [0,1]
@@ -1222,10 +1231,8 @@ pub fn flip_float(
     // Render into scratch_a
     // Full-quad blit back below: scratch must match the float exactly.
     engine.ensure_scratch_size(fw, fh)?;
-    engine.pass_untyped(&engine.shaders.flip)
+    engine.pass(&engine.shaders.flip, FlipParams { flip_h: i32::from(horizontal), flip_v: i32::from(!horizontal) })
         .texture("u_tex", float_handle)
-        .i32("u_flipH", i32::from(horizontal))
-        .i32("u_flipV", i32::from(!horizontal))
         .blend(Blend::Off)
         .viewport(0, 0, fw as i32, fh as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
@@ -1256,9 +1263,8 @@ pub fn rotate_float_90(
     // Render into scratch_a
     // Full-quad blit back below: scratch must match the float exactly.
     engine.ensure_scratch_size(fw, fh)?;
-    engine.pass_untyped(&engine.shaders.rotate90)
+    engine.pass(&engine.shaders.rotate90, Rotate90Params { clockwise: i32::from(clockwise) })
         .texture("u_tex", float_handle)
-        .i32("u_clockwise", i32::from(clockwise))
         .blend(Blend::Off)
         .viewport(0, 0, fw as i32, fh as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
@@ -1368,17 +1374,19 @@ fn composite_float_transformed(
     // Step 1: Render transformed float → tmp (fw×fh, correctly sized).
     // The transform shaders filter bilinearly in premultiplied space via
     // texelFetch, so the float texture's own filter mode doesn't matter.
-    crate::layer_transform_gpu::transform_pass(engine, &params, &TransformTargets {
+    crate::layer_transform_gpu::draw_transform(engine, &params, &TransformTargets {
         source: float_handle,
         source_offset: (lx, ly),
         source_size: (fw as f32, fh as f32),
         layer_offset: (lx, ly),
         layer_size: (fw as f32, fh as f32),
         content_rect: Some(src_rect),
-    })
-    .blend(Blend::Off)
-    .clear([0.0, 0.0, 0.0, 0.0])
-    .draw(Target::Texture(tmp));
+    }, &TransformDraw {
+        target: tmp,
+        scissor: Scissor::Off,
+        viewport: None,
+        clear: Some([0.0, 0.0, 0.0, 0.0]),
+    });
 
     // Step 2: Blend tmp (transformed float, fw×fh) onto base → layer texture.
     // Both tmp and base_tex are fw×fh, so v_uv correctly addresses them.
@@ -1498,16 +1506,18 @@ fn fill_texture_in_selection(
 
     // Render filled result into scratch_a
     let [r, g, b, a] = color;
-    let pass = engine.pass_untyped(&engine.shaders.selection_fill).texture("u_layerTex", target_handle);
+    let pass = engine.pass(&engine.shaders.selection_fill, SelectionFillParams {
+        has_mask: i32::from(has_mask),
+        fill_color: [r, g, b, a],
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        layer_offset: [origin.0, origin.1],
+        layer_size: [tw as f32, th as f32],
+    }).texture("u_layerTex", target_handle);
     let pass = match mask {
         Some(m) => pass.texture("u_maskTex", m),
-        None => pass.i32("u_maskTex", mask_sampler_unit(has_mask)),
+        None => pass.sampler_unit("u_maskTex", mask_sampler_unit(has_mask)),
     };
-    pass.i32("u_hasMask", i32::from(has_mask))
-        .vec4("u_fillColor", r, g, b, a)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .vec2("u_layerOffset", origin.0, origin.1)
-        .vec2("u_layerSize", tw as f32, th as f32)
+    pass
         .blend(Blend::Off)
         .viewport(0, 0, tw as i32, th as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
