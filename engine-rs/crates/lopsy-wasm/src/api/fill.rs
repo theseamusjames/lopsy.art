@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::*;
 use crate::gpu::pass::Target;
 
 use crate::{Engine, layer_manager};
+use crate::gpu::params::shape::{BucketFillColorMatchParams, FloodFillApplyParams};
 
 /// #667 — Fast path: fill an entire layer with a solid color, optionally
 /// restricted to a doc-space selection mask, without ever touching the CPU
@@ -101,15 +102,17 @@ pub fn bucket_fill_by_color_gpu(
     }
 
     let eng = &engine.inner;
-    let pass = eng.pass_untyped(&eng.shaders.bucket_fill_color_match).texture("u_layerTex", tex_handle);
+    let pass = eng.pass(&eng.shaders.bucket_fill_color_match, BucketFillColorMatchParams {
+        has_sel_mask: i32::from(sel_tex.is_some()),
+        sample_uv: [sample_u, sample_v],
+        fill_color: [fill_r, fill_g, fill_b, fill_a],
+        tolerance,
+    }).texture("u_layerTex", tex_handle);
     let pass = match sel_tex {
         Some(sel) => pass.texture("u_selMaskTex", sel),
-        None => pass.i32("u_selMaskTex", 1),
+        None => pass.sampler_unit("u_selMaskTex", 1),
     };
-    pass.i32("u_hasSelMask", i32::from(sel_tex.is_some()))
-        .vec2("u_sampleUv", sample_u, sample_v)
-        .vec4("u_fillColor", fill_r, fill_g, fill_b, fill_a)
-        .f32("u_tolerance", tolerance)
+    pass
         .draw(Target::Texture(out_tex_h));
 
     if let Some(old) = engine.inner.layer_textures.insert(layer_id.to_string(), out_tex_h) {
@@ -197,13 +200,15 @@ fn apply_fill_impl(
     }
 
     let eng = &engine.inner;
-    let pass = eng.pass_untyped(&eng.shaders.flood_fill_apply).texture("u_layerTex", tex_handle);
+    let pass = eng
+        .pass(&eng.shaders.flood_fill_apply, FloodFillApplyParams { fill_color: [fill_r, fill_g, fill_b, fill_a] })
+        .texture("u_layerTex", tex_handle);
     let pass = if eng.texture_pool.get(mask_tex).is_some() {
         pass.texture("u_maskTex", mask_tex)
     } else {
-        pass.i32("u_maskTex", 1)
+        pass.sampler_unit("u_maskTex", 1)
     };
-    pass.vec4("u_fillColor", fill_r, fill_g, fill_b, fill_a)
+    pass
         .draw(Target::Texture(out_tex_h));
 
     if let Some(old) = engine.inner.layer_textures.insert(layer_id.to_string(), out_tex_h) {

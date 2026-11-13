@@ -1,7 +1,7 @@
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
 use crate::gpu::texture_pool::TextureHandle;
-use crate::gradient_gpu::{copy_to_scratch_a, gradient_pass, GradientShape, GradientStop};
+use crate::gradient_gpu::{copy_to_scratch_a, draw_gradient, GradientShape, GradientStop, GradientTarget};
 use crate::gpu::params::core::QuickMaskTranslateParams;
 
 /// Flood-fill the quick mask texture. Reads the mask from the GPU, runs a
@@ -348,10 +348,14 @@ pub fn render_quick_mask_linear_gradient(
         start: (start_x as f32, start_y as f32),
         end: (end_x as f32, end_y as f32),
     };
-    gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (0.0, 0.0))
-        .i32("u_hasMask", 0)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Texture(tex_handle));
+    draw_gradient(engine, &shape, &stops, &GradientTarget {
+        existing: engine.scratch_texture_a,
+        target: tex_handle,
+        w,
+        h,
+        origin: (0.0, 0.0),
+        selection: None,
+    });
 
     engine.needs_recomposite = true;
 }
@@ -383,10 +387,14 @@ pub fn render_quick_mask_radial_gradient(
         center: (center_x as f32, center_y as f32),
         radius: radius as f32,
     };
-    gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (0.0, 0.0))
-        .i32("u_hasMask", 0)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Texture(tex_handle));
+    draw_gradient(engine, &shape, &stops, &GradientTarget {
+        existing: engine.scratch_texture_a,
+        target: tex_handle,
+        w,
+        h,
+        origin: (0.0, 0.0),
+        selection: None,
+    });
 
     engine.needs_recomposite = true;
 }

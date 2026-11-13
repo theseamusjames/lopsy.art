@@ -10,13 +10,15 @@ in vec2 v_uv;
 
 uniform sampler2D u_layerTex;
 uniform sampler2D u_selMaskTex;   // 0 = outside selection, 1 = inside
-uniform int u_hasSelMask;         // 1 if u_selMaskTex is valid, else 0
+layout(std140) uniform Params {
+    int u_hasSelMask; // 1 if u_selMaskTex is valid, else 0
+    // v_uv coord of the sample point (already resolved on JS side to layer-local UV).
+    vec2 u_sampleUv;
+    vec4 u_fillColor; // final color (straight alpha)
+    float u_tolerance; // 0..1 (normalized 0..255 / 255)
+};
 
-// v_uv coord of the sample point (already resolved on JS side to layer-local UV).
-uniform vec2 u_sampleUv;
 
-uniform vec4 u_fillColor;         // final color (straight alpha)
-uniform float u_tolerance;        // 0..1 (normalized 0..255 / 255)
 
 out vec4 fragColor;
 

@@ -1,6 +1,7 @@
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::params::shape::ShapeFillParams;
 
 /// Save the current layer content so render_shape can restore it before each
 /// frame. Called once at the start of a shape drag.
@@ -109,18 +110,18 @@ pub fn render_shape(
         }
     };
 
-    engine.pass_untyped(&engine.shaders.shape_fill)
+    engine.pass(&engine.shaders.shape_fill, ShapeFillParams {
+        shape_type: shape_type as i32,
+        center: [(cx as f32) - (layer_x as f32), (cy as f32) - (layer_y as f32)],
+        size: [width as f32, height as f32],
+        fill_color: [fill_r, fill_g, fill_b, fill_a],
+        stroke_color: [stroke_r, stroke_g, stroke_b, stroke_a],
+        stroke_width,
+        corner_radius,
+        sides: sides as i32,
+        tex_size: [w as f32, h as f32],
+    })
         .texture("u_dstTex", dst)
-        .i32("u_shapeType", shape_type as i32)
-        // Convert center from document space to texture space
-        .vec2("u_center", (cx as f32) - (layer_x as f32), (cy as f32) - (layer_y as f32))
-        .vec2("u_size", width as f32, height as f32)
-        .vec4("u_fillColor", fill_r, fill_g, fill_b, fill_a)
-        .vec4("u_strokeColor", stroke_r, stroke_g, stroke_b, stroke_a)
-        .f32("u_strokeWidth", stroke_width)
-        .f32("u_cornerRadius", corner_radius)
-        .i32("u_sides", sides as i32)
-        .vec2("u_texSize", w as f32, h as f32)
         .blend(Blend::Off)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Texture(tex_handle));
