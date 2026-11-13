@@ -13,20 +13,11 @@
 //!     .draw(Target::Texture(dst));
 //! ```
 //!
-//! While modules are still being moved onto this layer, converted and
-//! unconverted code run side by side on one GL context. To keep that safe a
-//! pass only changes the state it is told to set, and puts that state back
-//! afterwards:
-//!
-//! - [`Blend::Inherit`] and [`Scissor::Inherit`] (the defaults) leave the
-//!   context as found, exactly like the hand-written code they replace.
-//! - A blend mode that enables blending is switched off again after the
-//!   draw, and a scissor rect is disabled again.
-//! - [`Target::Texture`] unbinds the framebuffer afterwards;
-//!   [`Target::Framebuffer`] leaves it bound, as the code it replaces did.
-//!
-//! The `Inherit` variants exist only for that transition and go away once
-//! every module is converted.
+//! Between passes the context is in one known state: blending off and the
+//! scissor test off. A pass that turns either on turns it off again when it
+//! ends, and nothing outside this module can touch them, so a pass that
+//! needs them off has nothing to set. [`Target::Texture`] unbinds the
+//! framebuffer afterwards; [`Target::Framebuffer`] leaves it bound.
 //!
 //! Build and draw one pass before starting the next: a pass makes its
 //! program current when it is created and sets uniforms as it is built.
@@ -40,6 +31,7 @@ use lopsy_core::geometry::Rect;
 use wasm_bindgen::JsCast;
 use web_sys::{WebGl2RenderingContext as GL, WebGlUniformLocation};
 
+use crate::gpu::context::GpuContext;
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
@@ -47,12 +39,12 @@ use crate::gpu::texture_pool::{TextureHandle, TexturePool};
 /// The GPU objects a pass draws with, borrowed from the engine.
 #[derive(Clone, Copy)]
 pub struct GpuRef<'a> {
-    pub gl: &'a GL,
-    pub textures: &'a TexturePool,
-    pub fbos: &'a FramebufferPool,
+    gl: &'a GL,
+    textures: &'a TexturePool,
+    fbos: &'a FramebufferPool,
     /// Reusable framebuffer that [`Target::Texture`] attaches its
     /// destination to.
-    pub render_fbo: FramebufferHandle,
+    render_fbo: FramebufferHandle,
 }
 
 /// Where a pass draws.
@@ -70,10 +62,8 @@ pub enum Target {
 /// How a pass combines its output with what the target already holds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Blend {
-    /// Leave the context's blend state as found.
-    #[default]
-    Inherit,
     /// Replace the destination.
+    #[default]
     Off,
     /// Premultiplied source over destination: `src + dst * (1 - src.a)`.
     PremulOver,
@@ -111,16 +101,18 @@ impl ReadFormat {
 /// Which texels of the target a pass may write.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Scissor {
-    /// Leave the context's scissor state as found.
-    #[default]
-    Inherit,
     /// The whole viewport.
+    #[default]
     Off,
     /// Only `Rect`, in target texels.
     Rect(Rect),
 }
 
 impl<'a> GpuRef<'a> {
+    pub fn new(ctx: &'a GpuContext, textures: &'a TexturePool, fbos: &'a FramebufferPool, render_fbo: FramebufferHandle) -> Self {
+        Self { gl: &ctx.gl, textures, fbos, render_fbo }
+    }
+
     /// Start a pass that runs `program`.
     pub fn pass(self, program: &'a ShaderProgram) -> Pass<'a> {
         self.gl.use_program(Some(&program.program));
@@ -130,8 +122,8 @@ impl<'a> GpuRef<'a> {
             next_unit: 0,
             has_missing_texture: false,
             viewport: None,
-            scissor: Scissor::Inherit,
-            blend: Blend::Inherit,
+            scissor: Scissor::Off,
+            blend: Blend::Off,
             clear: None,
         }
     }
@@ -147,18 +139,18 @@ impl<'a> GpuRef<'a> {
         }
     }
 
-    /// Fill `texture` with `color`. The context's scissor state still
-    /// applies. Returns `false` if the texture no longer exists.
+    /// Fill `texture` with `color`. Returns `false` if the texture no longer
+    /// exists.
     pub fn clear(self, texture: TextureHandle, color: [f32; 4]) -> bool {
         let (Some(tex), Some((w, h))) = (self.textures.get(texture), self.textures.get_size(texture)) else {
             return false;
         };
-        self.fbos.attach_texture(self.gl, self.render_fbo, tex);
-        self.fbos.bind(self.gl, self.render_fbo);
+        self.fbos.attach_texture(self.render_fbo, tex);
+        self.fbos.bind(self.render_fbo);
         self.gl.viewport(0, 0, w as i32, h as i32);
         self.gl.clear_color(color[0], color[1], color[2], color[3]);
         self.gl.clear(GL::COLOR_BUFFER_BIT);
-        self.fbos.unbind(self.gl);
+        self.fbos.unbind();
         true
     }
 
@@ -166,10 +158,10 @@ impl<'a> GpuRef<'a> {
     /// RGBA.
     pub fn read_rgba_u16(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Result<Vec<u16>, String> {
         let tex = self.textures.get(texture).ok_or("Texture not found")?;
-        self.fbos.attach_texture(self.gl, self.render_fbo, tex);
-        self.fbos.bind(self.gl, self.render_fbo);
-        let result = self.textures.read_rgba_u16(self.gl, x, y, w, h);
-        self.fbos.unbind(self.gl);
+        self.fbos.attach_texture(self.render_fbo, tex);
+        self.fbos.bind(self.render_fbo);
+        let result = self.textures.read_rgba_u16(x, y, w, h);
+        self.fbos.unbind();
         result
     }
 
@@ -212,9 +204,8 @@ impl<'a> GpuRef<'a> {
             return Err("Failed to upload mask bytes".into());
         }
 
-        gl.disable(GL::BLEND);
-        self.fbos.attach_texture(gl, self.render_fbo, dst_tex);
-        self.fbos.bind(gl, self.render_fbo);
+        self.fbos.attach_texture(self.render_fbo, dst_tex);
+        self.fbos.bind(self.render_fbo);
         gl.viewport(0, 0, w as i32, h as i32);
         gl.use_program(Some(&program.program));
         gl.active_texture(GL::TEXTURE0);
@@ -223,7 +214,7 @@ impl<'a> GpuRef<'a> {
             gl.uniform1i(Some(&loc), 0);
         }
         gl.draw_arrays(GL::TRIANGLES, 0, 3);
-        self.fbos.unbind(gl);
+        self.fbos.unbind();
         gl.delete_texture(Some(&staging));
         Ok(())
     }
@@ -235,15 +226,15 @@ impl<'a> GpuRef<'a> {
             return false;
         };
         let gl = self.gl;
-        self.fbos.attach_texture(gl, self.render_fbo, tex);
-        self.fbos.bind(gl, self.render_fbo);
+        self.fbos.attach_texture(self.render_fbo, tex);
+        self.fbos.bind(self.render_fbo);
         gl.viewport(0, 0, w as i32, h as i32);
         gl.enable(GL::SCISSOR_TEST);
         gl.scissor(rect.x, rect.y, rect.width as i32, rect.height as i32);
         gl.clear_color(color[0], color[1], color[2], color[3]);
         gl.clear(GL::COLOR_BUFFER_BIT);
         gl.disable(GL::SCISSOR_TEST);
-        self.fbos.unbind(gl);
+        self.fbos.unbind();
         true
     }
 
@@ -253,15 +244,13 @@ impl<'a> GpuRef<'a> {
         let Some(tex) = self.textures.get(dst) else {
             return false;
         };
-        self.fbos.attach_texture(self.gl, self.render_fbo, tex);
-        self.fbos.blit_region(
-            self.gl,
-            src,
+        self.fbos.attach_texture(self.render_fbo, tex);
+        self.fbos.blit_region(src,
             self.render_fbo,
             (region.x, region.y, region.width as i32, region.height as i32),
             (0, 0),
         );
-        self.fbos.unbind(self.gl);
+        self.fbos.unbind();
         true
     }
 
@@ -276,10 +265,10 @@ impl<'a> GpuRef<'a> {
     /// Read back `w × h` texels of `texture` starting at `(x, y)` as RGBA8.
     pub fn read_rgba(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Result<Vec<u8>, String> {
         let tex = self.textures.get(texture).ok_or("Texture not found")?;
-        self.fbos.attach_texture(self.gl, self.render_fbo, tex);
-        self.fbos.bind(self.gl, self.render_fbo);
-        let result = self.textures.read_rgba(self.gl, x, y, w, h);
-        self.fbos.unbind(self.gl);
+        self.fbos.attach_texture(self.render_fbo, tex);
+        self.fbos.bind(self.render_fbo);
+        let result = self.textures.read_rgba(x, y, w, h);
+        self.fbos.unbind();
         result
     }
 }
@@ -310,9 +299,7 @@ impl<'a> Pass<'a> {
             Some(tex) => {
                 gl.active_texture(GL::TEXTURE0 + unit);
                 gl.bind_texture(GL::TEXTURE_2D, Some(tex));
-                if let Some(loc) = self.program.location(gl, name) {
-                    gl.uniform1i(Some(&loc), unit as i32);
-                }
+                self.program.with_location(gl, name, |loc| gl.uniform1i(Some(loc), unit as i32));
             }
             None => self.has_missing_texture = true,
         }
@@ -320,74 +307,54 @@ impl<'a> Pass<'a> {
     }
 
     pub fn i32(self, name: &str, value: i32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform1i(Some(&loc), value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1i(Some(loc), value));
         self
     }
 
     pub fn u32(self, name: &str, value: u32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform1ui(Some(&loc), value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1ui(Some(loc), value));
         self
     }
 
     pub fn ivec2(self, name: &str, x: i32, y: i32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform2i(Some(&loc), x, y);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform2i(Some(loc), x, y));
         self
     }
 
     pub fn f32(self, name: &str, value: f32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform1f(Some(&loc), value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1f(Some(loc), value));
         self
     }
 
     pub fn vec2(self, name: &str, x: f32, y: f32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform2f(Some(&loc), x, y);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform2f(Some(loc), x, y));
         self
     }
 
     pub fn vec3(self, name: &str, x: f32, y: f32, z: f32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform3f(Some(&loc), x, y, z);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform3f(Some(loc), x, y, z));
         self
     }
 
     pub fn vec4(self, name: &str, x: f32, y: f32, z: f32, w: f32) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform4f(Some(&loc), x, y, z, w);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform4f(Some(loc), x, y, z, w));
         self
     }
 
     pub fn f32_array(self, name: &str, values: &[f32]) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform1fv_with_f32_array(Some(&loc), values);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1fv_with_f32_array(Some(loc), values));
         self
     }
 
     /// Column-major 2×2 matrix.
     pub fn mat2(self, name: &str, value: &[f32; 4]) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform_matrix2fv_with_f32_array(Some(&loc), false, value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform_matrix2fv_with_f32_array(Some(loc), false, value));
         self
     }
 
     /// Column-major 3×3 matrix.
     pub fn mat3(self, name: &str, value: &[f32; 9]) -> Self {
-        if let Some(loc) = self.program.location(self.gpu.gl, name) {
-            self.gpu.gl.uniform_matrix3fv_with_f32_array(Some(&loc), false, value);
-        }
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform_matrix3fv_with_f32_array(Some(loc), false, value));
         self
     }
 
@@ -448,11 +415,6 @@ impl<'a> Pass<'a> {
         gl.bind_framebuffer(GL::FRAMEBUFFER, Some(&fbo));
         gl.framebuffer_texture_2d(GL::FRAMEBUFFER, GL::COLOR_ATTACHMENT0, GL::TEXTURE_2D, Some(&staging), 0);
         gl.viewport(0, 0, w as i32, h as i32);
-        match self.blend {
-            Blend::Inherit => {}
-            _ => gl.disable(GL::BLEND),
-        }
-
         gl.draw_arrays(GL::TRIANGLES, 0, 3);
 
         let mut pixels = vec![0u8; (w * h * format.bytes_per_texel()) as usize];
@@ -507,16 +469,16 @@ impl<'a> Pass<'a> {
         let default_viewport = match target {
             Target::Texture(handle) => {
                 let (tex, (w, h)) = (textures.get(handle)?, textures.get_size(handle)?);
-                fbos.attach_texture(gl, render_fbo, tex);
-                fbos.bind(gl, render_fbo);
+                fbos.attach_texture(render_fbo, tex);
+                fbos.bind(render_fbo);
                 Some([0, 0, w as i32, h as i32])
             }
             Target::Framebuffer(fbo) => {
-                fbos.bind(gl, fbo);
+                fbos.bind(fbo);
                 None
             }
             Target::Screen => {
-                fbos.unbind(gl);
+                fbos.unbind();
                 None
             }
         };
@@ -526,8 +488,7 @@ impl<'a> Pass<'a> {
 
         let mut is_scissor_enabled = false;
         match self.scissor {
-            Scissor::Inherit => {}
-            Scissor::Off => gl.disable(GL::SCISSOR_TEST),
+            Scissor::Off => {}
             Scissor::Rect(rect) => {
                 gl.enable(GL::SCISSOR_TEST);
                 gl.scissor(rect.x, rect.y, rect.width as i32, rect.height as i32);
@@ -536,8 +497,7 @@ impl<'a> Pass<'a> {
         }
 
         match self.blend {
-            Blend::Inherit => {}
-            Blend::Off => gl.disable(GL::BLEND),
+            Blend::Off => {}
             Blend::PremulOver => {
                 gl.enable(GL::BLEND);
                 gl.blend_equation(GL::FUNC_ADD);
@@ -575,7 +535,6 @@ pub struct UniformSlot(Option<WebGlUniformLocation>);
 
 /// A pass that has been set up and can draw repeatedly. Made by
 /// [`Pass::begin`]; finish with [`ActivePass::end`].
-#[must_use = "call `end` to put the pass's blend, scissor and target state back"]
 pub struct ActivePass<'a> {
     gpu: GpuRef<'a>,
     program: &'a ShaderProgram,
@@ -630,8 +589,14 @@ impl ActivePass<'_> {
         gl.draw_arrays(GL::TRIANGLES, 0, 3);
     }
 
-    /// Put back the state the pass changed.
-    pub fn end(self) {
+    /// Finish the pass, putting back the state it changed.
+    pub fn end(self) {}
+}
+
+impl Drop for ActivePass<'_> {
+    /// Restores the between-passes state however the pass ends, so an early
+    /// return cannot leave blending or the scissor test on.
+    fn drop(&mut self) {
         let gl = self.gpu.gl;
         if self.blend.enables_blending() {
             gl.disable(GL::BLEND);
@@ -642,7 +607,7 @@ impl ActivePass<'_> {
             gl.disable(GL::SCISSOR_TEST);
         }
         if matches!(self.target, Target::Texture(_)) {
-            self.gpu.fbos.unbind(gl);
+            self.gpu.fbos.unbind();
         }
     }
 }
@@ -653,7 +618,6 @@ mod tests {
 
     #[test]
     fn only_compositing_modes_enable_blending() {
-        assert!(!Blend::Inherit.enables_blending());
         assert!(!Blend::Off.enables_blending());
         assert!(Blend::PremulOver.enables_blending());
         assert!(Blend::Max.enables_blending());
@@ -661,8 +625,8 @@ mod tests {
     }
 
     #[test]
-    fn a_pass_inherits_blend_and_scissor_unless_told_otherwise() {
-        assert_eq!(Blend::default(), Blend::Inherit);
-        assert_eq!(Scissor::default(), Scissor::Inherit);
+    fn a_pass_replaces_the_whole_target_unless_told_otherwise() {
+        assert_eq!(Blend::default(), Blend::Off);
+        assert_eq!(Scissor::default(), Scissor::Off);
     }
 }

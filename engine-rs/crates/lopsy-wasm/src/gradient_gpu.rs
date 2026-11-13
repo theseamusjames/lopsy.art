@@ -33,7 +33,7 @@ pub fn save_gradient_preview(engine: &mut EngineInner, layer_id: &str) {
     if let Some(old) = engine.gradient_preview_texture.take() {
         engine.texture_pool.release(old);
     }
-    let preview_handle = match engine.texture_pool.acquire(&engine.gl, w, h) {
+    let preview_handle = match engine.texture_pool.acquire(w, h) {
         Ok(h) => h,
         Err(_) => return,
     };

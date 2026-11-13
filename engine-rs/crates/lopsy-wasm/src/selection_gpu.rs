@@ -18,7 +18,7 @@ pub fn set_selection_mask(
     };
 
     // Use NEAREST filtering to avoid interpolation at mask boundaries
-    engine.texture_pool.set_nearest_filter(&engine.gl, tex_handle);
+    engine.texture_pool.set_nearest_filter(tex_handle);
 
     engine.selection_mask_texture = Some(tex_handle);
     engine.needs_recomposite = true;
@@ -40,7 +40,7 @@ pub fn feather_selection_mask(engine: &mut EngineInner, radius: u32) {
     }
 
     // Switch to LINEAR filtering for smooth blur sampling
-    engine.texture_pool.set_linear_filter(&engine.gl, mask_handle);
+    engine.texture_pool.set_linear_filter(mask_handle);
 
     let clamped_radius = radius.min(63) as usize;
     let weights = gaussian_weights(clamped_radius);

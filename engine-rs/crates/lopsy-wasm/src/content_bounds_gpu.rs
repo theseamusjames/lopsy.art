@@ -54,7 +54,7 @@ fn reduce_axis(
 
     for out_len in reduction_steps(len, SPAN) {
         let (out_w, out_h) = match axis { Axis::X => (out_len, h), Axis::Y => (w, out_len) };
-        let out = match engine.texture_pool.acquire(&engine.gl, out_w, out_h) {
+        let out = match engine.texture_pool.acquire(out_w, out_h) {
             Ok(t) => t,
             Err(e) => {
                 if let Some(prev) = owned { engine.texture_pool.release(prev); }

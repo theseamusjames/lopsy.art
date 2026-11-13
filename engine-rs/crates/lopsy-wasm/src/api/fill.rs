@@ -87,7 +87,7 @@ pub fn bucket_fill_by_color_gpu(
     };
     let sel_tex = sel_upload.filter(|&h| engine.inner.texture_pool.get(h).is_some());
 
-    let out_tex_h = match engine.inner.texture_pool.acquire(&engine.inner.gl, tw, th) {
+    let out_tex_h = match engine.inner.texture_pool.acquire(tw, th) {
         Ok(h) => h,
         Err(_) => {
             if let Some(h) = sel_tex { engine.inner.texture_pool.release(h); }
@@ -183,7 +183,7 @@ fn apply_fill_impl(
         None => return,
     };
 
-    let out_tex_h = match engine.inner.texture_pool.acquire(&engine.inner.gl, w, h) {
+    let out_tex_h = match engine.inner.texture_pool.acquire(w, h) {
         Ok(h) => h,
         Err(_) => {
             engine.inner.texture_pool.release(mask_tex);
@@ -223,8 +223,7 @@ fn upload_doc_mask_to_layer_tex(
     tex_w: u32, tex_h: u32,
     doc_mask: &[u8], doc_w: u32, doc_h: u32,
 ) -> Option<crate::gpu::texture_pool::TextureHandle> {
-    let gl = &engine.inner.gl;
-    let mask_tex = engine.inner.texture_pool.acquire(gl, tex_w, tex_h).ok()?;
+    let mask_tex = engine.inner.texture_pool.acquire(tex_w, tex_h).ok()?;
 
     let mut mask_rgba = vec![0u8; (tex_w as usize) * (tex_h as usize) * 4];
     let offset_x = -layer_x;
@@ -248,7 +247,7 @@ fn upload_doc_mask_to_layer_tex(
             mask_rgba[di + 3] = 255;
         }
     }
-    let _ = engine.inner.texture_pool.upload_rgba(gl, mask_tex, 0, 0, tex_w, tex_h, &mask_rgba);
+    let _ = engine.inner.texture_pool.upload_rgba(mask_tex, 0, 0, tex_w, tex_h, &mask_rgba);
     Some(mask_tex)
 }
 

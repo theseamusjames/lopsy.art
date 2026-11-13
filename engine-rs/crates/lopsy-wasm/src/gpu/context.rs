@@ -1,10 +1,13 @@
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 use wasm_bindgen::JsCast;
 
+use crate::gpu::framebuffer::FramebufferPool;
 use crate::gpu::texture_pool::TexturePool;
 
 pub struct GpuContext {
-    pub gl: WebGl2RenderingContext,
+    /// The WebGL context. Nothing outside `gpu/` can reach it: feature code
+    /// draws through `gpu::pass` and allocates through the pools.
+    pub(in crate::gpu) gl: WebGl2RenderingContext,
     pub has_half_float: bool,
     pub has_float_blend: bool,
 }
@@ -56,6 +59,14 @@ impl GpuContext {
             has_half_float,
             has_float_blend,
         })
+    }
+
+    /// The texture and framebuffer pools for this context.
+    pub fn create_pools(&self) -> (TexturePool, FramebufferPool) {
+        (
+            TexturePool::new(&self.gl, self.has_half_float, self.max_texture_size()),
+            FramebufferPool::new(&self.gl),
+        )
     }
 
     /// Largest texture edge the context accepts, or `u32::MAX` if it does

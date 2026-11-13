@@ -135,9 +135,9 @@ pub fn upload_brush_tip(engine: &mut Engine, data: &[u8], width: u32, height: u3
     if let Some(old) = engine.inner.brush_tip_texture.take() {
         engine.inner.texture_pool.release(old);
     }
-    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+    let tex = engine.inner.texture_pool.acquire(width, height)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+    engine.inner.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         .map_err(|e| JsError::new(&e))?;
     engine.inner.brush_tip_texture = Some(tex);
     engine.inner.brush_tip_width = width;
@@ -165,9 +165,9 @@ pub fn upload_brush_tip_rgba(engine: &mut Engine, data: &[u8], width: u32, heigh
     if let Some(old) = engine.inner.brush_tip_texture.take() {
         engine.inner.texture_pool.release(old);
     }
-    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+    let tex = engine.inner.texture_pool.acquire(width, height)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+    engine.inner.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         .map_err(|e| JsError::new(&e))?;
     engine.inner.brush_tip_texture = Some(tex);
     engine.inner.brush_tip_width = width;
@@ -248,9 +248,9 @@ pub fn cache_sub_brush_tip(engine: &mut Engine, index: u32, data: &[u8], width: 
         rgba[i * 4 + 2] = 0;
         rgba[i * 4 + 3] = 255;
     }
-    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+    let tex = engine.inner.texture_pool.acquire(width, height)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+    engine.inner.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         .map_err(|e| JsError::new(&e))?;
     engine.inner.sub_brush_tips[idx] = Some((tex, width, height, false));
     Ok(())
@@ -279,9 +279,9 @@ pub fn cache_sub_brush_tip_rgba(engine: &mut Engine, index: u32, data: &[u8], wi
         rgba[off + 2] = (data[off + 2] as f32 * a + 0.5) as u8;
         rgba[off + 3] = data[off + 3];
     }
-    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+    let tex = engine.inner.texture_pool.acquire(width, height)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+    engine.inner.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         .map_err(|e| JsError::new(&e))?;
     engine.inner.sub_brush_tips[idx] = Some((tex, width, height, true));
     Ok(())
@@ -349,11 +349,11 @@ pub fn upload_brush_texture(engine: &mut Engine, data: &[u8], width: u32, height
     if let Some(old) = engine.inner.brush_texture.take() {
         engine.inner.texture_pool.release(old);
     }
-    let tex = engine.inner.texture_pool.acquire(&engine.inner.gl, width, height)
+    let tex = engine.inner.texture_pool.acquire(width, height)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, width, height, &rgba)
+    engine.inner.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         .map_err(|e| JsError::new(&e))?;
-    engine.inner.texture_pool.set_repeat_wrap(&engine.inner.gl, tex);
+    engine.inner.texture_pool.set_repeat_wrap(tex);
     engine.inner.brush_texture = Some(tex);
     engine.inner.brush_texture_width = width;
     engine.inner.brush_texture_height = height;

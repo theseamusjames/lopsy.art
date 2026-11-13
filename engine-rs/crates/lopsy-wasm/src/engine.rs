@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use web_sys::WebGl2RenderingContext;
 
 use lopsy_core::geometry::ViewportState;
 use lopsy_core::layer::LayerDesc;
@@ -153,7 +152,6 @@ impl Default for ImageAdjustmentState {
 }
 
 pub struct EngineInner {
-    pub gl: WebGl2RenderingContext,
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
     pub texture_pool: TexturePool,
@@ -366,35 +364,31 @@ pub struct SnapshotTexture {
 
 impl EngineInner {
     pub fn new(gpu_ctx: GpuContext, shaders: ShaderPrograms) -> Result<Self, String> {
-        let gl = gpu_ctx.gl.clone();
-        let max_texture_size = gpu_ctx.max_texture_size();
-        let mut texture_pool = TexturePool::new(gpu_ctx.has_half_float, max_texture_size);
-        let mut fbo_pool = FramebufferPool::new();
+        let (mut texture_pool, mut fbo_pool) = gpu_ctx.create_pools();
 
         // Default document size — will be resized
         let doc_w = 1u32;
         let doc_h = 1u32;
 
-        let composite_texture = texture_pool.acquire(&gl, doc_w, doc_h)?;
-        let scratch_texture_a = texture_pool.acquire(&gl, doc_w, doc_h)?;
-        let scratch_texture_b = texture_pool.acquire(&gl, doc_w, doc_h)?;
+        let composite_texture = texture_pool.acquire(doc_w, doc_h)?;
+        let scratch_texture_a = texture_pool.acquire(doc_w, doc_h)?;
+        let scratch_texture_b = texture_pool.acquire(doc_w, doc_h)?;
 
         // System textures use NEAREST — they are always sampled 1:1 at exact texel centers
-        texture_pool.set_nearest_filter(&gl, composite_texture);
-        texture_pool.set_nearest_filter(&gl, scratch_texture_a);
-        texture_pool.set_nearest_filter(&gl, scratch_texture_b);
+        texture_pool.set_nearest_filter(composite_texture);
+        texture_pool.set_nearest_filter(scratch_texture_a);
+        texture_pool.set_nearest_filter(scratch_texture_b);
 
-        let composite_fbo = fbo_pool.create(&gl)?;
-        let scratch_fbo_a = fbo_pool.create(&gl)?;
-        let scratch_fbo_b = fbo_pool.create(&gl)?;
-        let render_fbo = fbo_pool.create(&gl)?;
+        let composite_fbo = fbo_pool.create()?;
+        let scratch_fbo_a = fbo_pool.create()?;
+        let scratch_fbo_b = fbo_pool.create()?;
+        let render_fbo = fbo_pool.create()?;
 
-        fbo_pool.attach_texture(&gl, composite_fbo, texture_pool.get(composite_texture).ok_or("texture pool handle invalid")?);
-        fbo_pool.attach_texture(&gl, scratch_fbo_a, texture_pool.get(scratch_texture_a).ok_or("texture pool handle invalid")?);
-        fbo_pool.attach_texture(&gl, scratch_fbo_b, texture_pool.get(scratch_texture_b).ok_or("texture pool handle invalid")?);
+        fbo_pool.attach_texture(composite_fbo, texture_pool.get(composite_texture).ok_or("texture pool handle invalid")?);
+        fbo_pool.attach_texture(scratch_fbo_a, texture_pool.get(scratch_texture_a).ok_or("texture pool handle invalid")?);
+        fbo_pool.attach_texture(scratch_fbo_b, texture_pool.get(scratch_texture_b).ok_or("texture pool handle invalid")?);
 
         Ok(Self {
-            gl,
             gpu_ctx,
             shaders,
             texture_pool,
@@ -521,25 +515,22 @@ impl EngineInner {
         self.texture_pool.release(self.scratch_texture_a);
         self.texture_pool.release(self.scratch_texture_b);
 
-        self.composite_texture = self.texture_pool.acquire(&self.gl, width, height)?;
-        self.scratch_texture_a = self.texture_pool.acquire(&self.gl, width, height)?;
-        self.scratch_texture_b = self.texture_pool.acquire(&self.gl, width, height)?;
+        self.composite_texture = self.texture_pool.acquire(width, height)?;
+        self.scratch_texture_a = self.texture_pool.acquire(width, height)?;
+        self.scratch_texture_b = self.texture_pool.acquire(width, height)?;
 
         // System textures use NEAREST — always sampled 1:1
-        self.texture_pool.set_nearest_filter(&self.gl, self.composite_texture);
-        self.texture_pool.set_nearest_filter(&self.gl, self.scratch_texture_a);
-        self.texture_pool.set_nearest_filter(&self.gl, self.scratch_texture_b);
+        self.texture_pool.set_nearest_filter(self.composite_texture);
+        self.texture_pool.set_nearest_filter(self.scratch_texture_a);
+        self.texture_pool.set_nearest_filter(self.scratch_texture_b);
 
-        self.fbo_pool.attach_texture(
-            &self.gl, self.composite_fbo,
+        self.fbo_pool.attach_texture(self.composite_fbo,
             self.texture_pool.get(self.composite_texture).ok_or("texture pool handle invalid")?,
         );
-        self.fbo_pool.attach_texture(
-            &self.gl, self.scratch_fbo_a,
+        self.fbo_pool.attach_texture(self.scratch_fbo_a,
             self.texture_pool.get(self.scratch_texture_a).ok_or("texture pool handle invalid")?,
         );
-        self.fbo_pool.attach_texture(
-            &self.gl, self.scratch_fbo_b,
+        self.fbo_pool.attach_texture(self.scratch_fbo_b,
             self.texture_pool.get(self.scratch_texture_b).ok_or("texture pool handle invalid")?,
         );
 
@@ -644,7 +635,7 @@ impl EngineInner {
                 self, layer_tex, lw, lh, new_w, new_h, layer_x - min_x, layer_y - min_y,
             )?
         } else {
-            self.texture_pool.acquire(&self.gl, new_w, new_h)?
+            self.texture_pool.acquire(new_w, new_h)?
         };
 
         let old = self.layer_textures.insert(layer_id.to_string(), new_tex);
@@ -681,19 +672,17 @@ impl EngineInner {
 
         self.texture_pool.release(self.scratch_texture_a);
         self.texture_pool.release(self.scratch_texture_b);
-        self.scratch_texture_a = self.texture_pool.acquire(&self.gl, new_w, new_h)?;
-        self.scratch_texture_b = self.texture_pool.acquire(&self.gl, new_w, new_h)?;
+        self.scratch_texture_a = self.texture_pool.acquire(new_w, new_h)?;
+        self.scratch_texture_b = self.texture_pool.acquire(new_w, new_h)?;
 
         // System textures use NEAREST — always sampled 1:1
-        self.texture_pool.set_nearest_filter(&self.gl, self.scratch_texture_a);
-        self.texture_pool.set_nearest_filter(&self.gl, self.scratch_texture_b);
+        self.texture_pool.set_nearest_filter(self.scratch_texture_a);
+        self.texture_pool.set_nearest_filter(self.scratch_texture_b);
 
-        self.fbo_pool.attach_texture(
-            &self.gl, self.scratch_fbo_a,
+        self.fbo_pool.attach_texture(self.scratch_fbo_a,
             self.texture_pool.get(self.scratch_texture_a).ok_or("texture pool handle invalid")?,
         );
-        self.fbo_pool.attach_texture(
-            &self.gl, self.scratch_fbo_b,
+        self.fbo_pool.attach_texture(self.scratch_fbo_b,
             self.texture_pool.get(self.scratch_texture_b).ok_or("texture pool handle invalid")?,
         );
         Ok(())
@@ -719,7 +708,7 @@ impl EngineInner {
         }
         self.stroke_opacity.clear();
         if let Some(fbo) = self.stroke_fbo.take() {
-            self.fbo_pool.release(&self.gl, fbo);
+            self.fbo_pool.release(fbo);
         }
         // Dodge/burn stroke state
         for (_, tex) in self.stroke_dodge_textures.drain() {
@@ -856,12 +845,7 @@ impl EngineInner {
 
     /// The GPU objects a [`Pass`] draws with.
     pub fn gpu(&self) -> GpuRef<'_> {
-        GpuRef {
-            gl: &self.gl,
-            textures: &self.texture_pool,
-            fbos: &self.fbo_pool,
-            render_fbo: self.render_fbo,
-        }
+        GpuRef::new(&self.gpu_ctx, &self.texture_pool, &self.fbo_pool, self.render_fbo)
     }
 
     /// Start a pass that runs `program`. See `gpu::pass`.
@@ -888,7 +872,7 @@ impl EngineInner {
             &padded
         };
 
-        let dst = self.texture_pool.acquire(&self.gl, w, h)?;
+        let dst = self.texture_pool.acquire(w, h)?;
         if self.texture_pool.get(dst).is_none() {
             self.texture_pool.release(dst);
             return Err("Mask texture not found".into());
@@ -954,7 +938,7 @@ impl Drop for EngineInner {
     /// underlying GL objects alive in the WebGL context until that context
     /// itself is destroyed (which, for an SPA, may be never).
     fn drop(&mut self) {
-        self.texture_pool.destroy(&self.gl);
-        self.fbo_pool.destroy(&self.gl);
+        self.texture_pool.destroy();
+        self.fbo_pool.destroy();
     }
 }

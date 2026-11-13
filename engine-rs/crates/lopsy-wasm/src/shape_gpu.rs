@@ -20,7 +20,7 @@ pub fn save_shape_preview(engine: &mut EngineInner, layer_id: &str) {
     if let Some(old) = engine.shape_preview_texture.take() {
         engine.texture_pool.release(old);
     }
-    let preview_handle = match engine.texture_pool.acquire(&engine.gl, w, h) {
+    let preview_handle = match engine.texture_pool.acquire(w, h) {
         Ok(h) => h,
         Err(_) => return,
     };
@@ -98,7 +98,7 @@ pub fn render_shape(
     let dst = match preview {
         Some(p) => p,
         None => {
-            let Ok(handle) = engine.texture_pool.acquire(&engine.gl, w, h) else { return };
+            let Ok(handle) = engine.texture_pool.acquire(w, h) else { return };
             if engine.texture_pool.get(handle).is_none() {
                 engine.texture_pool.release(handle);
                 return;

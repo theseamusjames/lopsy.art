@@ -231,7 +231,7 @@ pub fn fill_mask(
         rgba_out[i * 4 + 2] = v;
         rgba_out[i * 4 + 3] = 255;
     }
-    let _ = engine.texture_pool.upload_rgba(&engine.gl, tex_handle, 0, 0, w, h, &rgba_out);
+    let _ = engine.texture_pool.upload_rgba(tex_handle, 0, 0, w, h, &rgba_out);
     engine.mark_layer_dirty(layer_id);
 }
 

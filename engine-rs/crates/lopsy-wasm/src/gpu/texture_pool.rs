@@ -32,11 +32,12 @@ pub struct TexturePool {
     /// uploads/readbacks trip over — so `acquire` rejects them up front
     /// (#934).
     max_size: u32,
+    gl: WebGl2RenderingContext,
 }
 
 impl TexturePool {
-    pub fn new(use_float: bool, max_size: u32) -> Self {
-        Self { entries: Vec::new(), use_float, max_size }
+    pub(in crate::gpu) fn new(gl: &WebGl2RenderingContext, use_float: bool, max_size: u32) -> Self {
+        Self { entries: Vec::new(), use_float, max_size, gl: gl.clone() }
     }
 
     pub fn max_size(&self) -> u32 {
@@ -103,7 +104,8 @@ impl TexturePool {
     /// down the engine — without this, freeing the Rust-side Engine leaves
     /// the WebGL textures alive in the context until the context itself
     /// dies, which for an SPA may be never.
-    pub fn destroy(&mut self, gl: &WebGl2RenderingContext) {
+    pub fn destroy(&mut self) {
+        let gl = &self.gl;
         for entry in self.entries.drain(..).flatten() {
             gl.delete_texture(Some(&entry.texture));
         }
@@ -125,7 +127,6 @@ impl TexturePool {
 
     pub fn acquire(
         &mut self,
-        gl: &WebGl2RenderingContext,
         width: u32,
         height: u32,
     ) -> Result<TextureHandle, String> {
@@ -142,7 +143,8 @@ impl TexturePool {
             ));
         }
 
-        self.evict_excess_free_entries(gl);
+        self.evict_excess_free_entries();
+        let gl = &self.gl;
 
         // Look for a free texture of matching size
         for (i, slot) in self.entries.iter_mut().enumerate() {
@@ -243,7 +245,8 @@ impl TexturePool {
     /// textures a float growth replaces (#1019). `release` would keep them:
     /// eviction only trims free entries above `MAX_FREE_PER_SIZE` of the
     /// same size, so a stream of distinct sizes is never reclaimed.
-    pub fn delete(&mut self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
+    pub fn delete(&mut self, handle: TextureHandle) {
+        let gl = &self.gl;
         let Some(slot) = self.entries.get_mut(handle.0) else { return };
         let Some(entry) = slot.take() else { return };
         if !entry.in_use {
@@ -257,7 +260,8 @@ impl TexturePool {
     /// pool's worst-case free-entry count is therefore
     /// (distinct sizes ever seen) × MAX_FREE_PER_SIZE between acquires —
     /// well bounded even on documents that crop and resize repeatedly.
-    fn evict_excess_free_entries(&mut self, gl: &WebGl2RenderingContext) {
+    fn evict_excess_free_entries(&mut self) {
+        let gl = &self.gl;
         let mut counts: std::collections::HashMap<(u32, u32), usize> =
             std::collections::HashMap::new();
         for slot in self.entries.iter_mut() {
@@ -298,7 +302,8 @@ impl TexturePool {
 
     /// Set NEAREST filtering on a texture (for system textures that are always
     /// sampled at exact texel centers — avoids interpolation precision issues).
-    pub fn set_nearest_filter(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
+    pub fn set_nearest_filter(&self, handle: TextureHandle) {
+        let gl = &self.gl;
         if let Some(entry) = self.entries.get(handle.0).and_then(|e| e.as_ref()) {
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));
             gl.tex_parameteri(
@@ -315,7 +320,8 @@ impl TexturePool {
     }
 
     /// Make sampling outside [0, 1] tile the texture instead of clamping.
-    pub fn set_repeat_wrap(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
+    pub fn set_repeat_wrap(&self, handle: TextureHandle) {
+        let gl = &self.gl;
         if let Some(entry) = self.entries.get(handle.0).and_then(|e| e.as_ref()) {
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));
             gl.tex_parameteri(
@@ -335,7 +341,8 @@ impl TexturePool {
     /// Make sampling outside [0, 1] repeat the edge texel. Pooled textures
     /// keep whatever wrap mode their last user set, so a pass that depends
     /// on clamping says so.
-    pub fn set_clamp_wrap(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
+    pub fn set_clamp_wrap(&self, handle: TextureHandle) {
+        let gl = &self.gl;
         if let Some(entry) = self.entries.get(handle.0).and_then(|e| e.as_ref()) {
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));
             gl.tex_parameteri(
@@ -352,7 +359,8 @@ impl TexturePool {
         }
     }
 
-    pub fn set_linear_filter(&self, gl: &WebGl2RenderingContext, handle: TextureHandle) {
+    pub fn set_linear_filter(&self, handle: TextureHandle) {
+        let gl = &self.gl;
         if let Some(entry) = self.entries.get(handle.0).and_then(|e| e.as_ref()) {
             gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&entry.texture));
             gl.tex_parameteri(
@@ -371,7 +379,6 @@ impl TexturePool {
     /// Upload u8 RGBA data to a texture, converting to f32 if using float textures.
     pub fn upload_rgba(
         &self,
-        gl: &WebGl2RenderingContext,
         handle: TextureHandle,
         x: i32,
         y: i32,
@@ -379,6 +386,7 @@ impl TexturePool {
         h: u32,
         data: &[u8],
     ) -> Result<(), String> {
+        let gl = &self.gl;
         let texture = self.get(handle).ok_or("Texture not found")?;
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
 
@@ -412,7 +420,6 @@ impl TexturePool {
     /// When the pool uses RGBA8 textures, clamps and quantizes to u8.
     pub fn upload_rgba_f32(
         &self,
-        gl: &WebGl2RenderingContext,
         handle: TextureHandle,
         x: i32,
         y: i32,
@@ -420,6 +427,7 @@ impl TexturePool {
         h: u32,
         data: &[f32],
     ) -> Result<(), String> {
+        let gl = &self.gl;
         let texture = self.get(handle).ok_or("Texture not found")?;
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
 
@@ -445,12 +453,12 @@ impl TexturePool {
     /// getImageData unpremultiply round-trip.
     pub fn upload_canvas(
         &self,
-        gl: &WebGl2RenderingContext,
         handle: TextureHandle,
         canvas: &web_sys::HtmlCanvasElement,
         w: u32,
         h: u32,
     ) -> Result<(), String> {
+        let gl = &self.gl;
         let texture = self.get(handle).ok_or("Texture not found")?;
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
 
@@ -494,12 +502,12 @@ impl TexturePool {
     /// upscales u8 data on RGBA8 textures.
     pub fn read_rgba_u16(
         &self,
-        gl: &WebGl2RenderingContext,
         x: i32,
         y: i32,
         w: u32,
         h: u32,
     ) -> Result<Vec<u16>, String> {
+        let gl = &self.gl;
         let count = (w * h * 4) as usize;
 
         if self.use_float {
@@ -549,7 +557,6 @@ impl TexturePool {
     /// Upload u16 RGBA pixel data, converting to the pool's native format.
     pub fn upload_rgba_u16(
         &self,
-        gl: &WebGl2RenderingContext,
         handle: TextureHandle,
         x: i32,
         y: i32,
@@ -557,6 +564,7 @@ impl TexturePool {
         h: u32,
         data: &[u16],
     ) -> Result<(), String> {
+        let gl = &self.gl;
         let texture = self.get(handle).ok_or("Texture not found")?;
         gl.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(texture));
 
@@ -582,12 +590,12 @@ impl TexturePool {
     /// Handles float→u8 conversion when using RGBA16F textures.
     pub fn read_rgba(
         &self,
-        gl: &WebGl2RenderingContext,
         x: i32,
         y: i32,
         w: u32,
         h: u32,
     ) -> Result<Vec<u8>, String> {
+        let gl = &self.gl;
         let count = (w * h * 4) as usize;
 
         if self.use_float {

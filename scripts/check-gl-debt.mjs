@@ -1,19 +1,14 @@
 #!/usr/bin/env node
-// Ratchet for raw WebGL usage in the Rust engine, per
+// Ban on raw WebGL in the Rust engine outside `gpu/`, per
 // docs/engine-migration-plan.md (Phase 1).
 //
-// Feature code is moving off raw WebGL calls and onto the pass layer in
-// `gpu/`. Until that is finished, this script pins how many raw GL
-// references each file outside `gpu/` may contain. The numbers only go
-// down:
-//
-//   - more references than the baseline  → fail (new GL debt)
-//   - fewer references than the baseline → fail until the baseline is
-//     lowered to match, so the ratchet never has slack in it
+// Feature code draws through the pass layer (`gpu/pass.rs`) and allocates
+// through the texture and framebuffer pools. The WebGL context itself is
+// private to `gpu/`, so most violations do not compile; this check also
+// catches GL types and constants named from outside it.
 //
 // A "reference" is a `WebGl*` type or constant path, or a `gl.method(`
-// call. If you genuinely need a new raw GL call in a file that has not
-// been converted yet, raise that file's number in the same PR and say why.
+// call.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -26,15 +21,6 @@ const ENGINE_SRC = join(ROOT, 'engine-rs', 'crates', 'lopsy-wasm', 'src');
 const BACKEND_DIR = 'gpu/';
 
 const PATTERN = /\bWebGl\w+|\bgl\.[a-z_0-9]+\(/g;
-
-// POSIX-style path relative to engine-rs/crates/lopsy-wasm/src → the
-// number of raw GL references the file may contain. Sorted smallest
-// first, which is also the rough conversion order.
-const BASELINE = {
-  // The context handle the engine owns. It goes when `gl` becomes private
-  // to `gpu/`.
-  'engine.rs': 3,
-};
 
 function walk(dir) {
   const files = [];
@@ -65,41 +51,17 @@ for (const file of walk(ENGINE_SRC)) {
 const errors = [];
 
 for (const [file, count] of counts) {
-  const allowed = BASELINE[file];
-  if (allowed === undefined) {
-    errors.push(
-      `${file}: ${count} raw GL reference(s) in a file with no baseline. ` +
-        'Use the pass layer in gpu/ instead of calling WebGL directly.',
-    );
-  } else if (count > allowed) {
-    errors.push(
-      `${file}: ${count} raw GL references, baseline is ${allowed}. ` +
-        'Use the pass layer in gpu/ instead of adding WebGL calls.',
-    );
-  } else if (count < allowed) {
-    errors.push(
-      `${file}: ${count} raw GL references, baseline is ${allowed}. ` +
-        `Lower its baseline to ${count} in scripts/check-gl-debt.mjs.`,
-    );
-  }
+  errors.push(
+    `${file}: ${count} raw GL reference(s). ` +
+      'Use the pass layer and the pools in gpu/ instead of WebGL directly.',
+  );
 }
-
-for (const file of Object.keys(BASELINE)) {
-  if (!counts.has(file)) {
-    errors.push(
-      `${file}: no raw GL references left (or the file is gone). ` +
-        'Remove its entry from scripts/check-gl-debt.mjs.',
-    );
-  }
-}
-
-const total = [...counts.values()].reduce((sum, n) => sum + n, 0);
 
 if (errors.length > 0) {
-  console.error('GL debt check failed:\n');
+  console.error('Raw GL outside gpu/:\n');
   for (const error of errors) console.error(`  ${error}`);
   console.error('\nSee docs/engine-migration-plan.md (Phase 1).');
   process.exit(1);
 }
 
-console.log(`GL debt: ${total} raw GL references in ${counts.size} files outside gpu/.`);
+console.log('No raw GL outside gpu/.');

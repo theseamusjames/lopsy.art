@@ -54,17 +54,17 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
     // Create a stroke texture matching the layer size
     if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
         let (w, h) = engine.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
-        let stroke_tex = engine.texture_pool.acquire(&engine.gl, w, h)?;
+        let stroke_tex = engine.texture_pool.acquire(w, h)?;
         engine.stroke_textures.insert(layer_id.to_string(), stroke_tex);
 
         if engine.stroke_fbo.is_none() {
-            let fbo = engine.fbo_pool.create(&engine.gl)?;
+            let fbo = engine.fbo_pool.create()?;
             engine.stroke_fbo = Some(fbo);
         }
 
         if let (Some(fbo), Some(tex)) = (engine.stroke_fbo, engine.texture_pool.get(stroke_tex)) {
-            engine.fbo_pool.attach_texture(&engine.gl, fbo, tex);
-            engine.fbo_pool.unbind(&engine.gl);
+            engine.fbo_pool.attach_texture(fbo, tex);
+            engine.fbo_pool.unbind();
         }
     }
     Ok(())
@@ -85,7 +85,7 @@ pub fn prewarm_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), St
     engine.ensure_layer_full_size(layer_id)?;
 
     if engine.stroke_fbo.is_none() {
-        let fbo = engine.fbo_pool.create(&engine.gl)?;
+        let fbo = engine.fbo_pool.create()?;
         engine.stroke_fbo = Some(fbo);
     }
 
@@ -95,7 +95,7 @@ pub fn prewarm_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), St
                 // Acquire a stroke-sized texture and release it immediately
                 // so a freshly-sized texture sits in the pool ready for the
                 // next `begin_stroke` call.
-                let warm = engine.texture_pool.acquire(&engine.gl, w, h)?;
+                let warm = engine.texture_pool.acquire(w, h)?;
                 engine.texture_pool.release(warm);
             }
         }
@@ -374,12 +374,11 @@ pub fn apply_eraser_dab_batch(
         stamp_rgba[i * 4 + 3] = 255;
     }
 
-    let stamp_tex = match engine.texture_pool.acquire(&engine.gl, stamp_size, stamp_size) {
+    let stamp_tex = match engine.texture_pool.acquire(stamp_size, stamp_size) {
         Ok(h) => h,
         Err(_) => return,
     };
-    let _ = engine.texture_pool.upload_rgba(
-        &engine.gl, stamp_tex, 0, 0, stamp_size, stamp_size, &stamp_rgba,
+    let _ = engine.texture_pool.upload_rgba(stamp_tex, 0, 0, stamp_size, stamp_size, &stamp_rgba,
     );
 
     let has_sel = engine.selection_mask_texture.is_some();
@@ -444,9 +443,9 @@ fn merge_stroke_texture(engine: &mut EngineInner, layer_id: &str, stroke_tex: Te
             let scratch_size = engine.texture_pool.get_size(engine.scratch_texture_a).unwrap_or((1, 1));
             let needs_temp = scratch_size.0 < w || scratch_size.1 < h;
             let intermediate_tex = if needs_temp {
-                match engine.texture_pool.acquire(&engine.gl, w, h) {
+                match engine.texture_pool.acquire(w, h) {
                     Ok(t) => {
-                        engine.texture_pool.set_nearest_filter(&engine.gl, t);
+                        engine.texture_pool.set_nearest_filter(t);
                         t
                     }
                     Err(_) => {
@@ -539,8 +538,8 @@ pub fn composite_patch_onto_layer(
         }
     }
 
-    let stroke_tex = engine.texture_pool.acquire(&engine.gl, lw, lh)?;
-    if let Err(e) = engine.texture_pool.upload_rgba(&engine.gl, stroke_tex, x0, y0, cw as u32, ch as u32, &premultiplied) {
+    let stroke_tex = engine.texture_pool.acquire(lw, lh)?;
+    if let Err(e) = engine.texture_pool.upload_rgba(stroke_tex, x0, y0, cw as u32, ch as u32, &premultiplied) {
         engine.texture_pool.release(stroke_tex);
         return Err(e);
     }

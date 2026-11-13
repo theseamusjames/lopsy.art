@@ -9,14 +9,16 @@ struct FboEntry {
 
 pub struct FramebufferPool {
     entries: Vec<FboEntry>,
+    gl: WebGl2RenderingContext,
 }
 
 impl FramebufferPool {
-    pub fn new() -> Self {
-        Self { entries: Vec::new() }
+    pub(in crate::gpu) fn new(gl: &WebGl2RenderingContext) -> Self {
+        Self { entries: Vec::new(), gl: gl.clone() }
     }
 
-    pub fn create(&mut self, gl: &WebGl2RenderingContext) -> Result<FramebufferHandle, String> {
+    pub fn create(&mut self) -> Result<FramebufferHandle, String> {
+        let gl = &self.gl;
         let fbo = gl.create_framebuffer().ok_or("Failed to create framebuffer")?;
         let handle = FramebufferHandle(self.entries.len());
         self.entries.push(FboEntry { fbo });
@@ -25,10 +27,10 @@ impl FramebufferPool {
 
     pub fn attach_texture(
         &self,
-        gl: &WebGl2RenderingContext,
         handle: FramebufferHandle,
         texture: &WebGlTexture,
     ) {
+        let gl = &self.gl;
         if let Some(entry) = self.entries.get(handle.0) {
             gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&entry.fbo));
             gl.framebuffer_texture_2d(
@@ -41,7 +43,8 @@ impl FramebufferPool {
         }
     }
 
-    pub fn bind(&self, gl: &WebGl2RenderingContext, handle: FramebufferHandle) {
+    pub fn bind(&self, handle: FramebufferHandle) {
+        let gl = &self.gl;
         if let Some(entry) = self.entries.get(handle.0) {
             gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&entry.fbo));
         }
@@ -52,12 +55,12 @@ impl FramebufferPool {
     /// and draw); callers rebind or `unbind` afterwards.
     pub fn blit_region(
         &self,
-        gl: &WebGl2RenderingContext,
         src: FramebufferHandle,
         dst: FramebufferHandle,
         region: (i32, i32, i32, i32),
         dst_origin: (i32, i32),
     ) {
+        let gl = &self.gl;
         let (Some(src), Some(dst)) = (self.entries.get(src.0), self.entries.get(dst.0)) else { return };
         let (x, y, w, h) = region;
         let (dx, dy) = dst_origin;
@@ -71,11 +74,13 @@ impl FramebufferPool {
         );
     }
 
-    pub fn unbind(&self, gl: &WebGl2RenderingContext) {
+    pub fn unbind(&self) {
+        let gl = &self.gl;
         gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, None);
     }
 
-    pub fn release(&mut self, gl: &WebGl2RenderingContext, handle: FramebufferHandle) {
+    pub fn release(&mut self, handle: FramebufferHandle) {
+        let gl = &self.gl;
         if let Some(entry) = self.entries.get(handle.0) {
             gl.delete_framebuffer(Some(&entry.fbo));
         }
@@ -84,7 +89,8 @@ impl FramebufferPool {
     /// Delete every FBO held by the pool. Call once when tearing down the
     /// engine so WebGL reclaims all FBO memory without waiting for the
     /// context itself to be destroyed.
-    pub fn destroy(&mut self, gl: &WebGl2RenderingContext) {
+    pub fn destroy(&mut self) {
+        let gl = &self.gl;
         for entry in self.entries.drain(..) {
             gl.delete_framebuffer(Some(&entry.fbo));
         }

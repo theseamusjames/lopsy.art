@@ -25,12 +25,11 @@ pub fn filter_pattern_fill(
         return;
     }
 
-    let pattern_handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, pattern_width, pattern_height) {
+    let pattern_handle = match engine.inner.texture_pool.acquire(pattern_width, pattern_height) {
         Ok(h) => h,
         Err(_) => return,
     };
-    let _ = engine.inner.texture_pool.upload_rgba(
-        &engine.inner.gl, pattern_handle, 0, 0, pattern_width, pattern_height, pattern_data,
+    let _ = engine.inner.texture_pool.upload_rgba(pattern_handle, 0, 0, pattern_width, pattern_height, pattern_data,
     );
     let is_pattern_live = engine.inner.texture_pool.get(pattern_handle).is_some();
 
@@ -93,18 +92,17 @@ pub fn filter_color_lut(
     let strip_w = lut_size * lut_size;
     let strip_h = lut_size;
 
-    let lut_handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, strip_w, strip_h) {
+    let lut_handle = match engine.inner.texture_pool.acquire(strip_w, strip_h) {
         Ok(h) => h,
         Err(_) => return,
     };
-    let _ = engine.inner.texture_pool.upload_rgba(
-        &engine.inner.gl, lut_handle, 0, 0, strip_w, strip_h, lut_data,
+    let _ = engine.inner.texture_pool.upload_rgba(lut_handle, 0, 0, strip_w, strip_h, lut_data,
     );
     let is_lut_live = engine.inner.texture_pool.get(lut_handle).is_some();
     // The LUT is sampled with interpolation between its texels and must
     // not wrap across the strip's slices.
-    engine.inner.texture_pool.set_linear_filter(&engine.inner.gl, lut_handle);
-    engine.inner.texture_pool.set_clamp_wrap(&engine.inner.gl, lut_handle);
+    engine.inner.texture_pool.set_linear_filter(lut_handle);
+    engine.inner.texture_pool.set_clamp_wrap(lut_handle);
 
     let size_f = lut_size as f32;
     let intensity = intensity.clamp(0.0, 1.0);

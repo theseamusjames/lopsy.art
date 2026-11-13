@@ -88,8 +88,8 @@ pub(crate) fn begin_stroke(
 
     if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
         let (w, h) = engine.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
-        let coverage_tex = engine.texture_pool.acquire(&engine.gl, w, h)?;
-        let preview_tex = engine.texture_pool.acquire(&engine.gl, w, h)?;
+        let coverage_tex = engine.texture_pool.acquire(w, h)?;
+        let preview_tex = engine.texture_pool.acquire(w, h)?;
         let (coverage, previews, modes) = tool.maps_mut(engine);
         let old_coverage = coverage.insert(layer_id.to_string(), coverage_tex);
         let old_preview = previews.insert(layer_id.to_string(), preview_tex);
@@ -102,7 +102,7 @@ pub(crate) fn begin_stroke(
             .insert(layer_id.to_string(), CoverageStroke::default());
 
         if engine.stroke_fbo.is_none() {
-            let fbo = engine.fbo_pool.create(&engine.gl)?;
+            let fbo = engine.fbo_pool.create()?;
             engine.stroke_fbo = Some(fbo);
         }
     }
