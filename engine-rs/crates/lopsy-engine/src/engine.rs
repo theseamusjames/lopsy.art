@@ -175,6 +175,8 @@ pub struct FloatState {
     pub transform_center: [f32; 2],
     pub transform_corners: [f32; 8],
     pub transform_orig_rect: [f32; 4],
+    /// Document rect of the float's source pixels (x, y, w, h) for the affine
+    /// path; w = 0 when unknown.
     pub transform_src_rect: [f32; 4],
 }
 
@@ -205,16 +207,41 @@ pub struct OverlayState {
     pub path_overlay: Option<String>,
     pub seamless_pattern: bool,
     pub seamless_dim: bool,
+    /// When true (and seamless_pattern is on), layer compositing wraps
+    /// modularly at the document edges — content that overhangs one side
+    /// reappears on the opposite side. The layer texture itself is untouched
+    /// so repeated moves keep transforming the original content, not the
+    /// already-wrapped result.
     pub seamless_wrap: bool,
     pub channel_mask: [f32; 4],
     pub selection_time: f64,
+    /// Clone Stamp / Healing Brush source preview disc drawn over the
+    /// screen after the final blit (`stamp_preview_gpu.rs`).
     pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
 }
 
 /// Adjustments attached to layer groups, and the scratch targets and caches their children composite through.
 pub struct GroupState {
+    /// Per-group adjustments — keyed by group layer ID. Each entry holds the
+    /// adjustment scalars/LUTs plus a list of child layer IDs (in stack order)
+    /// so the compositor can scope the adjustment pass to only those layers.
     pub adjustments: HashMap<String, GroupAdjustment>,
+    /// Scratch (texture, FBO) pairs for group-scoped adjustments, indexed by
+    /// nesting depth (0 = outermost currently-open adjusted group) rather
+    /// than a single slot — a group nested inside another adjusted group
+    /// gets its own scratch instead of colliding with its ancestor's (#857).
+    /// Allocated lazily and resized on demand; kept for the engine's
+    /// lifetime like the other persistent FBOs.
     pub scratch_levels: Vec<(TextureHandle, FramebufferHandle)>,
+    /// Pre-adjustment group scratch cache: for each adjusted group (keyed by
+    /// group id), caches the composited children so that when only
+    /// adjustment values change (not the children), the compositor can skip
+    /// re-blending all children and just re-apply the adjustment shader to
+    /// this cached texture. `group_pre_adj_valid` is the global "nothing has
+    /// changed since these caches were built" flag; individual entries are
+    /// only trusted while it's true. Nested groups (an adjusted group that
+    /// is itself an ancestor or descendant of another adjusted group) never
+    /// populate or read this cache — see `nested_group_ids` in compositor.rs.
     pub pre_adj_cache: HashMap<String, TextureHandle>,
     pub pre_adj_valid: bool,
 }
@@ -225,8 +252,18 @@ pub struct BrushState {
     pub stroke_opacity: HashMap<String, f32>,
     pub stroke_use_brush_texture: HashMap<String, bool>,
     pub stroke_fbo: Option<FramebufferHandle>,
+    /// Dodge/burn per-stroke coverage texture: a scalar strength field
+    /// (RGBA, all four channels equal) MAX-accumulated across dabs so
+    /// overlapping dabs within one stroke don't compound. Baked into the
+    /// layer on `end_dodge_burn_stroke` via the dodge_burn shader with
+    /// `u_exposure = 1.0`.
     pub stroke_dodge_textures: HashMap<String, TextureHandle>,
+    /// Per-frame compositor preview: the result of applying the coverage
+    /// texture to the layer, so the user sees their in-progress stroke
+    /// without touching the source pixels.
     pub stroke_dodge_preview_textures: HashMap<String, TextureHandle>,
+    /// 0 = dodge, 1 = burn — captured on `begin_dodge_burn_stroke` so the
+    /// compositor preview and bake share the mode.
     pub stroke_dodge_modes: HashMap<String, u32>,
     pub stroke_sponge_textures: HashMap<String, TextureHandle>,
     pub stroke_sponge_preview_textures: HashMap<String, TextureHandle>,
@@ -237,6 +274,9 @@ pub struct BrushState {
     pub has_tip: bool,
     pub tip_is_color: bool,
     pub angle: f32,
+    /// Row-major 2x2 map from a dab's local offset to the tip-space offset
+    /// it samples. Symmetry copies set it to the inverse of their
+    /// reflection/rotation so each copy carries a mirrored/rotated tip.
     pub dab_transform: [f32; 4],
     pub sub_brush_tips: Vec<Option<(TextureHandle, u32, u32, bool)>>,
     pub saved_primary_tip: Option<(TextureHandle, u32, u32, bool)>,
@@ -283,24 +323,6 @@ pub struct EngineInner {
     /// writes the composite texture outside `composite` must set
     /// `needs_recomposite` instead.
     pub needs_present: bool,
-    // Brush state
-    /// Dodge/burn per-stroke coverage texture: a scalar strength field
-    /// (RGBA, all four channels equal) MAX-accumulated across dabs so
-    /// overlapping dabs within one stroke don't compound. Baked into the
-    /// layer on `end_dodge_burn_stroke` via the dodge_burn shader with
-    /// `u_exposure = 1.0`.
-    /// Per-frame compositor preview: the result of applying the coverage
-    /// texture to the layer, so the user sees their in-progress stroke
-    /// without touching the source pixels.
-    /// 0 = dodge, 1 = burn — captured on `begin_dodge_burn_stroke` so the
-    /// compositor preview and bake share the mode.
-    // Custom brush tip
-    /// Row-major 2x2 map from a dab's local offset to the tip-space offset
-    /// it samples. Symmetry copies set it to the inverse of their
-    /// reflection/rotation so each copy carries a mirrored/rotated tip.
-    // Sub-brush tip cache: pre-processed textures to avoid per-dab Gaussian blur
-    // Per-stroke texture state (origin + rotation for stroke-relative UV)
-    // Custom brush texture
     // Selection
     pub selection_mask_texture: Option<TextureHandle>,
     pub quick_mask_texture: Option<TextureHandle>,
@@ -308,49 +330,17 @@ pub struct EngineInner {
     /// began; every frame of the move re-derives the quick mask from them.
     pub quick_mask_move_base: Option<TextureHandle>,
     pub quick_mask_move_marquee: Option<TextureHandle>,
-    // Shape preview (stores pre-drag layer content for live preview)
-    // Filter preview (stores pre-filter layer content for live preview)
     /// Set while a filter runs on a layer mask (see `filter_gpu::begin_mask_filter_target`).
     pub mask_filter_target: Option<crate::filter_gpu::MaskFilterTarget>,
     // Liquify persistent displacement texture (lives for the session)
     pub liquify_disp_texture: Option<TextureHandle>,
-    // Gradient preview (stores pre-drag layer content for live preview)
-    // Clipboard
-    // Floating selection (for move-with-selection)
-    // Float transform state (GPU-side affine/perspective)
-    /// Document rect of the float's source pixels (x, y, w, h) for the affine
-    /// path; w = 0 when unknown.
     // Multi-layer transform session (see layer_transform_gpu)
     pub layer_transform: Vec<crate::layer_transform_gpu::LayerTransformSlot>,
-    // Overlays
-    /// When true (and seamless_pattern is on), layer compositing wraps
-    /// modularly at the document edges — content that overhangs one side
-    /// reappears on the opposite side. The layer texture itself is untouched
-    /// so repeated moves keep transforming the original content, not the
-    /// already-wrapped result.
     /// Per-document image adjustments — exposure/contrast/highlights/
     /// shadows/whites/blacks/vignette/saturation/vibrance plus curves and
     /// levels LUTs. Applied on the compositor's final pass, not baked into
     /// pixels.
     pub adjustments: ImageAdjustmentState,
-    /// Per-group adjustments — keyed by group layer ID. Each entry holds the
-    /// adjustment scalars/LUTs plus a list of child layer IDs (in stack order)
-    /// so the compositor can scope the adjustment pass to only those layers.
-    /// Scratch (texture, FBO) pairs for group-scoped adjustments, indexed by
-    /// nesting depth (0 = outermost currently-open adjusted group) rather
-    /// than a single slot — a group nested inside another adjusted group
-    /// gets its own scratch instead of colliding with its ancestor's (#857).
-    /// Allocated lazily and resized on demand; kept for the engine's
-    /// lifetime like the other persistent FBOs.
-    /// Pre-adjustment group scratch cache: for each adjusted group (keyed by
-    /// group id), caches the composited children so that when only
-    /// adjustment values change (not the children), the compositor can skip
-    /// re-blending all children and just re-apply the adjustment shader to
-    /// this cached texture. `group_pre_adj_valid` is the global "nothing has
-    /// changed since these caches were built" flag; individual entries are
-    /// only trusted while it's true. Nested groups (an adjusted group that
-    /// is itself an ancestor or descendant of another adjusted group) never
-    /// populate or read this cache — see `nested_group_ids` in compositor.rs.
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -377,15 +367,12 @@ pub struct EngineInner {
     /// Texels touched by the in-progress Dodge / Burn or Sponge stroke on
     /// each layer (`coverage_stroke_gpu.rs`).
     pub coverage_strokes: HashMap<String, crate::coverage_stroke_gpu::CoverageStroke>,
-    /// Clone Stamp / Healing Brush source preview disc drawn over the
-    /// screen after the final blit (`stamp_preview_gpu.rs`).
     pub clipboard: ClipboardState,
     pub float: FloatState,
     pub previews: PreviewState,
     pub overlays: OverlayState,
     pub groups: GroupState,
     pub brush: BrushState,
-
 }
 
 pub struct SnapshotTexture {
