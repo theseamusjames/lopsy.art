@@ -3,15 +3,17 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_existingTex;
 uniform sampler2D u_maskTex;
-uniform int u_hasMask;
-uniform vec2 u_start;
-uniform vec2 u_end;
-uniform vec4 u_stops[16];
-uniform float u_stopPositions[16];
-uniform int u_stopCount;
-uniform vec2 u_texSize;
-uniform vec2 u_docSize;
-uniform vec2 u_layerOffset;
+layout(std140) uniform Params {
+    int u_hasMask;
+    vec2 u_start;
+    vec2 u_end;
+    vec4 u_stops[16];
+    float u_stopPositions[16];
+    int u_stopCount;
+    vec2 u_texSize;
+    vec2 u_docSize;
+    vec2 u_layerOffset;
+};
 out vec4 fragColor;
 void main() {
     // Texture-local, like u_start / u_end: callers subtract the layer

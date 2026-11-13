@@ -1,16 +1,18 @@
 #version 300 es
 precision highp float;
 in vec2 v_uv;
-// 0 = ellipse, 1 = regular polygon, 2 = rectangle (fills the whole box).
-uniform int u_shapeType;
-uniform vec2 u_center;
-uniform vec2 u_size;
-uniform vec4 u_fillColor;
-uniform vec4 u_strokeColor;
-uniform float u_strokeWidth;
-uniform float u_cornerRadius;
-uniform int u_sides;
-uniform vec2 u_texSize;
+layout(std140) uniform Params {
+    // 0 = ellipse, 1 = regular polygon, 2 = rectangle (fills the whole box).
+    int u_shapeType;
+    vec2 u_center;
+    vec2 u_size;
+    vec4 u_fillColor;
+    vec4 u_strokeColor;
+    float u_strokeWidth;
+    float u_cornerRadius;
+    int u_sides;
+    vec2 u_texSize;
+};
 // Copy of the layer's content before this shape (straight alpha).
 uniform sampler2D u_dstTex;
 out vec4 fragColor;

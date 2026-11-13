@@ -213,6 +213,13 @@ typed_shaders! {
     BOX_BLUR: params::filters::BoxBlurParams = BOX_BLUR_FRAG;
     COLOR_CONVERT: params::color::ColorConvertParams = COLOR_CONVERT_FRAG;
     TONEMAP: params::color::TonemapParams = TONEMAP_FRAG;
+    GRADIENT_LINEAR: params::gradient::GradientLinearParams = GRADIENT_LINEAR_FRAG;
+    GRADIENT_RADIAL: params::gradient::GradientRadialParams = GRADIENT_RADIAL_FRAG;
+    SHAPE_FILL: params::shape::ShapeFillParams = SHAPE_FILL_FRAG;
+    FLOOD_FILL_APPLY: params::shape::FloodFillApplyParams = FLOOD_FILL_APPLY_FRAG;
+    BUCKET_FILL_COLOR_MATCH: params::shape::BucketFillColorMatchParams = BUCKET_FILL_COLOR_MATCH_FRAG;
+    MARCHING_ANTS: params::selection::MarchingAntsParams = MARCHING_ANTS_FRAG;
+    TEXT_GLYPH: params::text::TextGlyphParams = TEXT_GLYPH_FRAG;
 }
 
 /// Marks a program whose uniforms are still set one by one, by name. Each
@@ -595,14 +602,14 @@ pub struct ShaderPrograms {
     pub sponge: ShaderProgram,
     pub stamp_preview: ShaderProgram,
     // Gradient
-    pub gradient_linear: ShaderProgram,
-    pub gradient_radial: ShaderProgram,
+    pub gradient_linear: ShaderProgram<params::gradient::GradientLinearParams>,
+    pub gradient_radial: ShaderProgram<params::gradient::GradientRadialParams>,
     // Shape
-    pub shape_fill: ShaderProgram,
-    pub flood_fill_apply: ShaderProgram,
-    pub bucket_fill_color_match: ShaderProgram,
+    pub shape_fill: ShaderProgram<params::shape::ShapeFillParams>,
+    pub flood_fill_apply: ShaderProgram<params::shape::FloodFillApplyParams>,
+    pub bucket_fill_color_match: ShaderProgram<params::shape::BucketFillColorMatchParams>,
     // Selection
-    pub marching_ants: ShaderProgram,
+    pub marching_ants: ShaderProgram<params::selection::MarchingAntsParams>,
     // Color
     pub color_convert: ShaderProgram<params::color::ColorConvertParams>,
     pub tonemap: ShaderProgram<params::color::TonemapParams>,
@@ -610,7 +617,7 @@ pub struct ShaderPrograms {
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
-    pub text_glyph: ShaderProgram,
+    pub text_glyph: ShaderProgram<params::text::TextGlyphParams>,
 }
 
 /// Compiles the blend shader specialized for a single blend mode.
@@ -736,14 +743,14 @@ impl ShaderPrograms {
             sponge: compile_program(gl, v, SPONGE_FRAG)?,
             stamp_preview: compile_program(gl, v, STAMP_PREVIEW_FRAG)?,
             // Gradient
-            gradient_linear: compile_program(gl, v, GRADIENT_LINEAR_FRAG)?,
-            gradient_radial: compile_program(gl, v, GRADIENT_RADIAL_FRAG)?,
+            gradient_linear: compile(gl, v, &GRADIENT_LINEAR)?,
+            gradient_radial: compile(gl, v, &GRADIENT_RADIAL)?,
             // Shape
-            shape_fill: compile_program(gl, v, SHAPE_FILL_FRAG)?,
-            flood_fill_apply: compile_program(gl, v, FLOOD_FILL_APPLY_FRAG)?,
-            bucket_fill_color_match: compile_program(gl, v, BUCKET_FILL_COLOR_MATCH_FRAG)?,
+            shape_fill: compile(gl, v, &SHAPE_FILL)?,
+            flood_fill_apply: compile(gl, v, &FLOOD_FILL_APPLY)?,
+            bucket_fill_color_match: compile(gl, v, &BUCKET_FILL_COLOR_MATCH)?,
             // Selection
-            marching_ants: compile_program(gl, v, MARCHING_ANTS_FRAG)?,
+            marching_ants: compile(gl, v, &MARCHING_ANTS)?,
             // Color
             color_convert: compile(gl, v, &COLOR_CONVERT)?,
             tonemap: compile(gl, v, &TONEMAP)?,
@@ -751,7 +758,7 @@ impl ShaderPrograms {
             mask_luminance: compile(gl, v, &MASK_LUMINANCE)?,
             liquify_dab: compile(gl, v, &LIQUIFY_DAB)?,
             // Text
-            text_glyph: compile_program(gl, v, TEXT_GLYPH_FRAG)?,
+            text_glyph: compile(gl, v, &TEXT_GLYPH)?,
         })
     }
 }

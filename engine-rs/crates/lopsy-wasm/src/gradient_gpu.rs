@@ -1,5 +1,7 @@
 use crate::engine::EngineInner;
+use crate::gpu::params::gradient::{GradientLinearParams, GradientRadialParams};
 use crate::gpu::pass::{Blend, Pass, Target};
+use crate::gpu::uniforms::{FloatArray, Vec4Array};
 use crate::gpu::texture_pool::TextureHandle;
 
 #[derive(serde::Deserialize)]
@@ -135,16 +137,14 @@ pub fn render_linear_gradient(
         start: (start_x as f32 - layer_x, start_y as f32 - layer_y),
         end: (end_x as f32 - layer_x, end_y as f32 - layer_y),
     };
-    let pass = gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (layer_x, layer_y));
-    let pass = match selection_mask {
-        Some(mask) => pass.texture("u_maskTex", mask),
-        // Without a selection, point the mask sampler at the source unit so
-        // it never aliases a stale unit-1 texture bound to the target FBO.
-        None => pass.i32("u_maskTex", 0),
-    };
-    pass.i32("u_hasMask", i32::from(selection_mask.is_some()))
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Texture(tex_handle));
+    draw_gradient(engine, &shape, &stops, &GradientTarget {
+        existing: engine.scratch_texture_a,
+        target: tex_handle,
+        w,
+        h,
+        origin: (layer_x, layer_y),
+        selection: selection_mask,
+    });
 
     engine.mark_layer_dirty(layer_id);
 }
@@ -188,16 +188,14 @@ pub fn render_radial_gradient(
         center: (center_x as f32 - layer_x, center_y as f32 - layer_y),
         radius: radius as f32,
     };
-    let pass = gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (layer_x, layer_y));
-    let pass = match selection_mask {
-        Some(mask) => pass.texture("u_maskTex", mask),
-        // Without a selection, point the mask sampler at the source unit so
-        // it never aliases a stale unit-1 texture bound to the target FBO.
-        None => pass.i32("u_maskTex", 0),
-    };
-    pass.i32("u_hasMask", i32::from(selection_mask.is_some()))
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Texture(tex_handle));
+    draw_gradient(engine, &shape, &stops, &GradientTarget {
+        existing: engine.scratch_texture_a,
+        target: tex_handle,
+        w,
+        h,
+        origin: (layer_x, layer_y),
+        selection: selection_mask,
+    });
 
     engine.mark_layer_dirty(layer_id);
 }
@@ -218,41 +216,76 @@ pub(crate) fn copy_to_scratch_a(engine: &EngineInner, src: TextureHandle, w: u32
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
 }
 
-/// The pass that draws `stops` along `shape` over `existing`, a `w`×`h`
-/// copy of what the target holds. `origin` is the target's document-space
-/// origin. The caller adds the selection inputs and draws.
-pub(crate) fn gradient_pass<'a>(
-    engine: &'a EngineInner,
-    shape: &GradientShape,
-    stops: &[GradientStop],
-    existing: TextureHandle,
-    w: u32,
-    h: u32,
-    origin: (f32, f32),
-) -> Pass<'a> {
-    let shader = match shape {
-        GradientShape::Linear { .. } => &engine.shaders.gradient_linear,
-        GradientShape::Radial { .. } => &engine.shaders.gradient_radial,
-    };
-    let mut pass = engine.pass_untyped(shader)
-        .texture("u_existingTex", existing)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .vec2("u_layerOffset", origin.0, origin.1)
-        .i32("u_stopCount", stops.len().min(16) as i32)
-        .vec2("u_texSize", w as f32, h as f32);
+/// Where a gradient is drawn: over `existing`, a `w`×`h` copy of what
+/// `target` holds, with `origin` the target's document-space origin. With a
+/// `selection`, the gradient is limited to it.
+pub(crate) struct GradientTarget {
+    pub existing: TextureHandle,
+    pub target: TextureHandle,
+    pub w: u32,
+    pub h: u32,
+    pub origin: (f32, f32),
+    pub selection: Option<TextureHandle>,
+}
+
+/// Draw `stops` along `shape`. Returns `false`, having drawn nothing, if
+/// one of the textures no longer exists.
+pub(crate) fn draw_gradient(engine: &EngineInner, shape: &GradientShape, stops: &[GradientStop], t: &GradientTarget) -> bool {
+    let count = stops.len().min(16);
+    let mut colors = [[0.0; 4]; 16];
+    let mut positions = [0.0; 16];
     for (i, stop) in stops.iter().enumerate().take(16) {
-        pass = pass
-            .vec4(&format!("u_stops[{i}]"), stop.r, stop.g, stop.b, stop.a)
-            .f32(&format!("u_stopPositions[{i}]"), stop.position);
+        colors[i] = [stop.r, stop.g, stop.b, stop.a];
+        positions[i] = stop.position;
     }
+    let has_mask = i32::from(t.selection.is_some());
+    let stops = Vec4Array(colors);
+    let stop_positions = FloatArray(positions);
+    let stop_count = count as i32;
+    let tex_size = [t.w as f32, t.h as f32];
+    let doc_size = [engine.doc_width as f32, engine.doc_height as f32];
+    let layer_offset = [t.origin.0, t.origin.1];
     match *shape {
-        GradientShape::Linear { start, end } => pass
-            .vec2("u_start", start.0, start.1)
-            .vec2("u_end", end.0, end.1),
-        GradientShape::Radial { center, radius } => pass
-            .vec2("u_center", center.0, center.1)
-            .f32("u_radius", radius),
+        GradientShape::Linear { start, end } => finish_gradient(
+            engine.pass(&engine.shaders.gradient_linear, GradientLinearParams {
+                has_mask,
+                start: [start.0, start.1],
+                end: [end.0, end.1],
+                stops,
+                stop_positions,
+                stop_count,
+                tex_size,
+                doc_size,
+                layer_offset,
+            }),
+            t,
+        ),
+        GradientShape::Radial { center, radius } => finish_gradient(
+            engine.pass(&engine.shaders.gradient_radial, GradientRadialParams {
+                has_mask,
+                center: [center.0, center.1],
+                radius,
+                stops,
+                stop_positions,
+                stop_count,
+                tex_size,
+                doc_size,
+                layer_offset,
+            }),
+            t,
+        ),
     }
+}
+
+fn finish_gradient<P>(pass: Pass<'_, P>, t: &GradientTarget) -> bool {
+    let pass = pass.texture("u_existingTex", t.existing);
+    let pass = match t.selection {
+        Some(mask) => pass.texture("u_maskTex", mask),
+        // Without a selection, point the mask sampler at the source unit so
+        // it never aliases a stale unit-1 texture bound to the target FBO.
+        None => pass.sampler_unit("u_maskTex", 0),
+    };
+    pass.viewport(0, 0, t.w as i32, t.h as i32).draw(Target::Texture(t.target))
 }
 
 /// CPU-side gradient interpolation

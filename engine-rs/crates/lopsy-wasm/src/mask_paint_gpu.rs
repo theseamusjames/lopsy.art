@@ -3,7 +3,7 @@ use crate::compositor::mask_doc_origin;
 use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
-use crate::gradient_gpu::{copy_to_scratch_a, gradient_pass, GradientShape};
+use crate::gradient_gpu::{copy_to_scratch_a, draw_gradient, GradientShape, GradientTarget};
 
 // Every layer-mask writer here takes DOCUMENT-space coordinates and maps
 // them into mask texels with `mask_doc_origin` — the same origin the
@@ -266,10 +266,14 @@ pub fn render_mask_linear_gradient(
         start: (start_x as f32 - layer_x, start_y as f32 - layer_y),
         end: (end_x as f32 - layer_x, end_y as f32 - layer_y),
     };
-    gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (layer_x, layer_y))
-        .i32("u_hasMask", 0)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Texture(tex_handle));
+    draw_gradient(engine, &shape, &stops, &GradientTarget {
+        existing: engine.scratch_texture_a,
+        target: tex_handle,
+        w,
+        h,
+        origin: (layer_x, layer_y),
+        selection: None,
+    });
 
     engine.mark_layer_dirty(layer_id);
 }
@@ -304,10 +308,14 @@ pub fn render_mask_radial_gradient(
         center: (center_x as f32 - layer_x, center_y as f32 - layer_y),
         radius: radius as f32,
     };
-    gradient_pass(engine, &shape, &stops, engine.scratch_texture_a, w, h, (layer_x, layer_y))
-        .i32("u_hasMask", 0)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Texture(tex_handle));
+    draw_gradient(engine, &shape, &stops, &GradientTarget {
+        existing: engine.scratch_texture_a,
+        target: tex_handle,
+        w,
+        h,
+        origin: (layer_x, layer_y),
+        selection: None,
+    });
 
     engine.mark_layer_dirty(layer_id);
 }
