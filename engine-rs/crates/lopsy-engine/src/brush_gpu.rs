@@ -23,9 +23,9 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
 
     // Track whether this stroke should apply the brush texture during compositing.
     // Only brush strokes use texture; pencil/eraser override this to false.
-    engine.stroke_use_brush_texture.insert(
+    engine.brush.stroke_use_brush_texture.insert(
         layer_id.to_string(),
-        engine.brush_has_texture,
+        engine.brush.has_texture,
     );
 
     // Generate random texture rotation for this stroke.
@@ -35,21 +35,21 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
             .wrapping_mul(0x85EBCA6Bu32)
     });
     let seed = seed ^ (crate::host::now_ms() as u32);
-    engine.stroke_texture_rotation = (seed as f32 / u32::MAX as f32) * std::f32::consts::TAU;
-    engine.stroke_texture_origin_set = false;
+    engine.brush.stroke_texture_rotation = (seed as f32 / u32::MAX as f32) * std::f32::consts::TAU;
+    engine.brush.stroke_texture_origin_set = false;
 
     // Create a stroke texture matching the layer size
     if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
         let (w, h) = engine.texture_pool.get_size(layer_tex).unwrap_or((1, 1));
         let stroke_tex = engine.texture_pool.acquire(w, h)?;
-        engine.stroke_textures.insert(layer_id.to_string(), stroke_tex);
+        engine.brush.stroke_textures.insert(layer_id.to_string(), stroke_tex);
 
-        if engine.stroke_fbo.is_none() {
+        if engine.brush.stroke_fbo.is_none() {
             let fbo = engine.fbo_pool.create()?;
-            engine.stroke_fbo = Some(fbo);
+            engine.brush.stroke_fbo = Some(fbo);
         }
 
-        if let (Some(fbo), Some(tex)) = (engine.stroke_fbo, engine.texture_pool.get(stroke_tex)) {
+        if let (Some(fbo), Some(tex)) = (engine.brush.stroke_fbo, engine.texture_pool.get(stroke_tex)) {
             engine.fbo_pool.attach_texture(fbo, tex);
             engine.fbo_pool.unbind();
         }
@@ -65,15 +65,15 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
 pub fn prewarm_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
     // If a stroke is already in progress, the resources are already live —
     // don't disturb them.
-    if engine.stroke_textures.contains_key(layer_id) {
+    if engine.brush.stroke_textures.contains_key(layer_id) {
         return Ok(());
     }
 
     engine.ensure_layer_full_size(layer_id)?;
 
-    if engine.stroke_fbo.is_none() {
+    if engine.brush.stroke_fbo.is_none() {
         let fbo = engine.fbo_pool.create()?;
-        engine.stroke_fbo = Some(fbo);
+        engine.brush.stroke_fbo = Some(fbo);
     }
 
     if let Some(&layer_tex) = engine.layer_textures.get(layer_id) {
@@ -113,10 +113,10 @@ pub fn apply_dab_batch(
     size_jitter: f32, angle_jitter: f32, opacity_jitter: f32,
 ) {
     // Track brush opacity for this stroke so end_stroke and the compositor can use it
-    engine.stroke_opacity.insert(layer_id.to_string(), opacity);
+    engine.brush.stroke_opacity.insert(layer_id.to_string(), opacity);
 
     // Get stroke texture (or layer texture if no active stroke)
-    let stroke_tex = engine.stroke_textures.get(layer_id).copied();
+    let stroke_tex = engine.brush.stroke_textures.get(layer_id).copied();
     let target_tex = stroke_tex.or_else(|| engine.layer_textures.get(layer_id).copied());
     let tex_handle = match target_tex {
         Some(h) => h,
@@ -125,9 +125,9 @@ pub fn apply_dab_batch(
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
 
     // Set stroke origin from first dab position if not yet set
-    if !engine.stroke_texture_origin_set && points.len() >= 2 {
-        engine.stroke_texture_origin = (points[0] as f32, points[1] as f32);
-        engine.stroke_texture_origin_set = true;
+    if !engine.brush.stroke_texture_origin_set && points.len() >= 2 {
+        engine.brush.stroke_texture_origin = (points[0] as f32, points[1] as f32);
+        engine.brush.stroke_texture_origin_set = true;
     }
 
     // Break any accidental feedback loop: the stroke texture may still be
@@ -142,11 +142,11 @@ pub fn apply_dab_batch(
     // Color brushes: premultiplied alpha "over" compositing — overlapping
     // rotated dabs layer correctly instead of per-channel MAX which would
     // create phantom colors (e.g. blue + orange → pink).
-    let is_color_tip = engine.brush_has_tip && engine.brush_tip_is_color;
+    let is_color_tip = engine.brush.has_tip && engine.brush.tip_is_color;
     let blend = if is_color_tip { Blend::PremulOver } else { Blend::Max };
     let shader = if is_color_tip {
         &engine.shaders.brush_dab_color
-    } else if engine.brush_has_tip {
+    } else if engine.brush.has_tip {
         &engine.shaders.brush_dab_alpha
     } else {
         &engine.shaders.brush_dab_circle
@@ -155,15 +155,15 @@ pub fn apply_dab_batch(
     let has_selection = engine.selection_mask_texture.is_some();
     // Layer offset for selection mask coordinate mapping
     let (layer_ox, layer_oy) = layer_offset(engine, layer_id);
-    let use_brush_tip = engine.brush_has_tip && engine.brush_tip_texture.is_some();
-    let tip_aspect = if use_brush_tip && engine.brush_tip_width > 0 && engine.brush_tip_height > 0 {
-        let max_dim = engine.brush_tip_width.max(engine.brush_tip_height) as f32;
-        (engine.brush_tip_width as f32 / max_dim, engine.brush_tip_height as f32 / max_dim)
+    let use_brush_tip = engine.brush.has_tip && engine.brush.tip_texture.is_some();
+    let tip_aspect = if use_brush_tip && engine.brush.tip_width > 0 && engine.brush.tip_height > 0 {
+        let max_dim = engine.brush.tip_width.max(engine.brush.tip_height) as f32;
+        (engine.brush.tip_width as f32 / max_dim, engine.brush.tip_height as f32 / max_dim)
     } else {
         (1.0, 1.0)
     };
-    let [m00, m01, m10, m11] = engine.brush_dab_transform;
-    let use_brush_texture = engine.brush_has_texture && engine.brush_texture.is_some();
+    let [m00, m01, m10, m11] = engine.brush.dab_transform;
+    let use_brush_texture = engine.brush.has_texture && engine.brush.texture.is_some();
 
     // No stamp texture needed — computed analytically in shader
     let first_center = match points {
@@ -181,7 +181,7 @@ pub fn apply_dab_batch(
         has_selection: i32::from(has_selection),
         doc_size: [engine.doc_width as f32, engine.doc_height as f32],
         layer_offset: [layer_ox, layer_oy],
-        angle: if use_brush_tip { engine.brush_angle } else { 0.0 },
+        angle: if use_brush_tip { engine.brush.angle } else { 0.0 },
         // GLSL mat2 is column-major.
         dab_transform: Mat2([m00, m10, m01, m11]),
         tip_aspect: [tip_aspect.0, tip_aspect.1],
@@ -189,11 +189,11 @@ pub fn apply_dab_batch(
         angle_jitter,
         opacity_jitter,
         has_brush_texture: i32::from(use_brush_texture),
-        texture_scale: engine.brush_texture_scale,
-        texture_blend_mode: engine.brush_texture_blend_mode as i32,
-        brush_texture_size: [engine.brush_texture_width as f32, engine.brush_texture_height as f32],
-        stroke_origin: [engine.stroke_texture_origin.0, engine.stroke_texture_origin.1],
-        texture_rotation: engine.stroke_texture_rotation,
+        texture_scale: engine.brush.texture_scale,
+        texture_blend_mode: engine.brush.texture_blend_mode as i32,
+        brush_texture_size: [engine.brush.texture_width as f32, engine.brush.texture_height as f32],
+        stroke_origin: [engine.brush.stroke_texture_origin.0, engine.brush.stroke_texture_origin.1],
+        texture_rotation: engine.brush.stroke_texture_rotation,
     };
     let mut pass = engine.pass(shader, params);
     if let Some(mask) = live_texture(engine, engine.selection_mask_texture) {
@@ -201,12 +201,12 @@ pub fn apply_dab_batch(
     }
     // Custom brush tip texture (for alpha and color variants)
     if use_brush_tip {
-        if let Some(tip) = live_texture(engine, engine.brush_tip_texture) {
+        if let Some(tip) = live_texture(engine, engine.brush.tip_texture) {
             pass = pass.texture("u_brushTip", tip);
         }
     }
     if use_brush_texture {
-        if let Some(tex) = live_texture(engine, engine.brush_texture) {
+        if let Some(tex) = live_texture(engine, engine.brush.texture) {
             pass = pass.texture("u_brushTexture", tex);
         }
     }
@@ -262,13 +262,13 @@ pub fn draw_pencil_line(
 ) {
     if size <= 0.0 { return; }
 
-    if !engine.stroke_textures.contains_key(layer_id) {
+    if !engine.brush.stroke_textures.contains_key(layer_id) {
         if begin_stroke(engine, layer_id).is_err() { return; }
     }
     // Pencil strokes never use the brush texture during compositing.
-    engine.stroke_use_brush_texture.insert(layer_id.to_string(), false);
+    engine.brush.stroke_use_brush_texture.insert(layer_id.to_string(), false);
 
-    let Some(&stroke_tex) = engine.stroke_textures.get(layer_id) else { return };
+    let Some(&stroke_tex) = engine.brush.stroke_textures.get(layer_id) else { return };
     let (w, h) = engine.texture_pool.get_size(stroke_tex).unwrap_or((1, 1));
 
     let points = lopsy_core::brush::interpolate_points(x0, y0, x1, y1, 1.0);
@@ -408,10 +408,10 @@ pub fn apply_eraser_dab_batch(
 }
 
 pub fn end_stroke(engine: &mut EngineInner, layer_id: &str) {
-    let _stroke_opacity = engine.stroke_opacity.remove(layer_id).unwrap_or(1.0);
+    let _stroke_opacity = engine.brush.stroke_opacity.remove(layer_id).unwrap_or(1.0);
 
-    engine.stroke_use_brush_texture.remove(layer_id);
-    let Some(stroke_tex) = engine.stroke_textures.remove(layer_id) else {
+    engine.brush.stroke_use_brush_texture.remove(layer_id);
+    let Some(stroke_tex) = engine.brush.stroke_textures.remove(layer_id) else {
         engine.mark_layer_dirty(layer_id);
         return;
     };

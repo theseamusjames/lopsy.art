@@ -273,7 +273,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // of the layer. Without this, effects lag by one stroke because
         // endStroke is deferred until the next mousedown (shift-click
         // continuation).
-        let merged_handle: Option<TextureHandle> = engine.stroke_textures.get(&layer_id)
+        let merged_handle: Option<TextureHandle> = engine.brush.stroke_textures.get(&layer_id)
             .copied()
             .and_then(|stroke_handle| render_layer_plus_stroke(engine, tex_handle, stroke_handle, tw, th));
         let effect_tex_handle = merged_handle.unwrap_or(tex_handle);
@@ -291,7 +291,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // Replay the layer's cached effect images when nothing they're built
         // from has changed. A live brush stroke bypasses the cache: the
         // effects then trace layer + stroke, which changes every dab.
-        let cache_key = (has_shape_effects && !engine.stroke_textures.contains_key(&layer_id)).then(|| EffectCacheKey {
+        let cache_key = (has_shape_effects && !engine.brush.stroke_textures.contains_key(&layer_id)).then(|| EffectCacheKey {
             content_gen: engine.layer_content_gen(&layer_id),
             texture: tex_handle,
             texture_size: (tw, th),
@@ -365,10 +365,10 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // per-stroke preview texture and composite that instead of the raw
         // layer. This way the stroke is non-destructive until `endStroke`
         // bakes it in.
-        let composite_src = if engine.stroke_dodge_textures.contains_key(&layer_id) {
+        let composite_src = if engine.brush.stroke_dodge_textures.contains_key(&layer_id) {
             coverage_stroke_gpu::render_preview(engine, &layer_id, effect_tex_handle, tw, th, CoverageTool::DodgeBurn)
                 .map(|h| (h, tw, th))
-        } else if engine.stroke_sponge_textures.contains_key(&layer_id) {
+        } else if engine.brush.stroke_sponge_textures.contains_key(&layer_id) {
             coverage_stroke_gpu::render_preview(engine, &layer_id, effect_tex_handle, tw, th, CoverageTool::Sponge)
                 .map(|h| (h, tw, th))
         } else if merged_handle.is_some() {
@@ -393,7 +393,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
         // Skipped when we merged the stroke into effect_tex_handle above —
         // it's already in the composite source.
         if merged_handle.is_none() {
-            if let Some(&stroke_handle) = engine.stroke_textures.get(&layer_id) {
+            if let Some(&stroke_handle) = engine.brush.stroke_textures.get(&layer_id) {
                 let (sw, sh) = engine.texture_pool.get_size(stroke_handle).unwrap_or((1, 1));
                 let source = BlendSource {
                     opacity,

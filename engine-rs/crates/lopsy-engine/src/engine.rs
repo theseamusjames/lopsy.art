@@ -219,6 +219,38 @@ pub struct GroupState {
     pub pre_adj_valid: bool,
 }
 
+/// The brush being painted with (tip, texture, dab transform) and the strokes in progress.
+pub struct BrushState {
+    pub stroke_textures: HashMap<String, TextureHandle>,
+    pub stroke_opacity: HashMap<String, f32>,
+    pub stroke_use_brush_texture: HashMap<String, bool>,
+    pub stroke_fbo: Option<FramebufferHandle>,
+    pub stroke_dodge_textures: HashMap<String, TextureHandle>,
+    pub stroke_dodge_preview_textures: HashMap<String, TextureHandle>,
+    pub stroke_dodge_modes: HashMap<String, u32>,
+    pub stroke_sponge_textures: HashMap<String, TextureHandle>,
+    pub stroke_sponge_preview_textures: HashMap<String, TextureHandle>,
+    pub stroke_sponge_modes: HashMap<String, u32>,
+    pub tip_texture: Option<TextureHandle>,
+    pub tip_width: u32,
+    pub tip_height: u32,
+    pub has_tip: bool,
+    pub tip_is_color: bool,
+    pub angle: f32,
+    pub dab_transform: [f32; 4],
+    pub sub_brush_tips: Vec<Option<(TextureHandle, u32, u32, bool)>>,
+    pub saved_primary_tip: Option<(TextureHandle, u32, u32, bool)>,
+    pub stroke_texture_origin: (f32, f32),
+    pub stroke_texture_rotation: f32,
+    pub stroke_texture_origin_set: bool,
+    pub texture: Option<TextureHandle>,
+    pub texture_width: u32,
+    pub texture_height: u32,
+    pub has_texture: bool,
+    pub texture_scale: f32,
+    pub texture_blend_mode: u32,
+}
+
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
@@ -252,51 +284,23 @@ pub struct EngineInner {
     /// `needs_recomposite` instead.
     pub needs_present: bool,
     // Brush state
-    pub stroke_textures: HashMap<String, TextureHandle>,
-    pub stroke_opacity: HashMap<String, f32>,
-    pub stroke_use_brush_texture: HashMap<String, bool>,
-    pub stroke_fbo: Option<FramebufferHandle>,
     /// Dodge/burn per-stroke coverage texture: a scalar strength field
     /// (RGBA, all four channels equal) MAX-accumulated across dabs so
     /// overlapping dabs within one stroke don't compound. Baked into the
     /// layer on `end_dodge_burn_stroke` via the dodge_burn shader with
     /// `u_exposure = 1.0`.
-    pub stroke_dodge_textures: HashMap<String, TextureHandle>,
     /// Per-frame compositor preview: the result of applying the coverage
     /// texture to the layer, so the user sees their in-progress stroke
     /// without touching the source pixels.
-    pub stroke_dodge_preview_textures: HashMap<String, TextureHandle>,
     /// 0 = dodge, 1 = burn — captured on `begin_dodge_burn_stroke` so the
     /// compositor preview and bake share the mode.
-    pub stroke_dodge_modes: HashMap<String, u32>,
-    pub stroke_sponge_textures: HashMap<String, TextureHandle>,
-    pub stroke_sponge_preview_textures: HashMap<String, TextureHandle>,
-    pub stroke_sponge_modes: HashMap<String, u32>,
     // Custom brush tip
-    pub brush_tip_texture: Option<TextureHandle>,
-    pub brush_tip_width: u32,
-    pub brush_tip_height: u32,
-    pub brush_has_tip: bool,
-    pub brush_tip_is_color: bool,
-    pub brush_angle: f32,
     /// Row-major 2x2 map from a dab's local offset to the tip-space offset
     /// it samples. Symmetry copies set it to the inverse of their
     /// reflection/rotation so each copy carries a mirrored/rotated tip.
-    pub brush_dab_transform: [f32; 4],
     // Sub-brush tip cache: pre-processed textures to avoid per-dab Gaussian blur
-    pub sub_brush_tips: Vec<Option<(TextureHandle, u32, u32, bool)>>,
-    pub saved_primary_tip: Option<(TextureHandle, u32, u32, bool)>,
     // Per-stroke texture state (origin + rotation for stroke-relative UV)
-    pub stroke_texture_origin: (f32, f32),
-    pub stroke_texture_rotation: f32,
-    pub stroke_texture_origin_set: bool,
     // Custom brush texture
-    pub brush_texture: Option<TextureHandle>,
-    pub brush_texture_width: u32,
-    pub brush_texture_height: u32,
-    pub brush_has_texture: bool,
-    pub brush_texture_scale: f32,
-    pub brush_texture_blend_mode: u32,
     // Selection
     pub selection_mask_texture: Option<TextureHandle>,
     pub quick_mask_texture: Option<TextureHandle>,
@@ -380,6 +384,7 @@ pub struct EngineInner {
     pub previews: PreviewState,
     pub overlays: OverlayState,
     pub groups: GroupState,
+    pub brush: BrushState,
 
 }
 
@@ -437,34 +442,6 @@ impl EngineInner {
             doc_color_mode: 0,
             needs_recomposite: true,
             needs_present: true,
-            stroke_textures: HashMap::new(),
-            stroke_opacity: HashMap::new(),
-            stroke_use_brush_texture: HashMap::new(),
-            stroke_fbo: None,
-            stroke_dodge_textures: HashMap::new(),
-            stroke_dodge_preview_textures: HashMap::new(),
-            stroke_dodge_modes: HashMap::new(),
-            stroke_sponge_textures: HashMap::new(),
-            stroke_sponge_preview_textures: HashMap::new(),
-            stroke_sponge_modes: HashMap::new(),
-            brush_tip_texture: None,
-            brush_tip_width: 0,
-            brush_tip_height: 0,
-            brush_has_tip: false,
-            brush_tip_is_color: false,
-            brush_angle: 0.0,
-            brush_dab_transform: [1.0, 0.0, 0.0, 1.0],
-            sub_brush_tips: Vec::new(),
-            saved_primary_tip: None,
-            stroke_texture_origin: (0.0, 0.0),
-            stroke_texture_rotation: 0.0,
-            stroke_texture_origin_set: false,
-            brush_texture: None,
-            brush_texture_width: 0,
-            brush_texture_height: 0,
-            brush_has_texture: false,
-            brush_texture_scale: 1.0,
-            brush_texture_blend_mode: 0,
             selection_mask_texture: None,
             quick_mask_texture: None,
             quick_mask_move_base: None,
@@ -539,6 +516,36 @@ impl EngineInner {
                 scratch_levels: Vec::new(),
                 pre_adj_cache: HashMap::new(),
                 pre_adj_valid: false,
+            },
+            brush: BrushState {
+                stroke_textures: HashMap::new(),
+                stroke_opacity: HashMap::new(),
+                stroke_use_brush_texture: HashMap::new(),
+                stroke_fbo: None,
+                stroke_dodge_textures: HashMap::new(),
+                stroke_dodge_preview_textures: HashMap::new(),
+                stroke_dodge_modes: HashMap::new(),
+                stroke_sponge_textures: HashMap::new(),
+                stroke_sponge_preview_textures: HashMap::new(),
+                stroke_sponge_modes: HashMap::new(),
+                tip_texture: None,
+                tip_width: 0,
+                tip_height: 0,
+                has_tip: false,
+                tip_is_color: false,
+                angle: 0.0,
+                dab_transform: [1.0, 0.0, 0.0, 1.0],
+                sub_brush_tips: Vec::new(),
+                saved_primary_tip: None,
+                stroke_texture_origin: (0.0, 0.0),
+                stroke_texture_rotation: 0.0,
+                stroke_texture_origin_set: false,
+                texture: None,
+                texture_width: 0,
+                texture_height: 0,
+                has_texture: false,
+                texture_scale: 1.0,
+                texture_blend_mode: 0,
             },
         })
     }
@@ -740,40 +747,40 @@ impl EngineInner {
         crate::effect_cache_gpu::clear(self);
         self.layer_content_gen.clear();
         // Stroke textures
-        for (_, tex) in self.stroke_textures.drain() {
+        for (_, tex) in self.brush.stroke_textures.drain() {
             self.texture_pool.release(tex);
         }
-        self.stroke_opacity.clear();
-        if let Some(fbo) = self.stroke_fbo.take() {
+        self.brush.stroke_opacity.clear();
+        if let Some(fbo) = self.brush.stroke_fbo.take() {
             self.fbo_pool.release(fbo);
         }
         // Dodge/burn stroke state
-        for (_, tex) in self.stroke_dodge_textures.drain() {
+        for (_, tex) in self.brush.stroke_dodge_textures.drain() {
             self.texture_pool.release(tex);
         }
-        for (_, tex) in self.stroke_dodge_preview_textures.drain() {
+        for (_, tex) in self.brush.stroke_dodge_preview_textures.drain() {
             self.texture_pool.release(tex);
         }
-        self.stroke_dodge_modes.clear();
-        for (_, tex) in self.stroke_sponge_textures.drain() {
+        self.brush.stroke_dodge_modes.clear();
+        for (_, tex) in self.brush.stroke_sponge_textures.drain() {
             self.texture_pool.release(tex);
         }
-        for (_, tex) in self.stroke_sponge_preview_textures.drain() {
+        for (_, tex) in self.brush.stroke_sponge_preview_textures.drain() {
             self.texture_pool.release(tex);
         }
-        self.stroke_sponge_modes.clear();
+        self.brush.stroke_sponge_modes.clear();
         self.coverage_strokes.clear();
         self.overlays.stamp_preview = None;
         // Brush tip
-        if let Some(tex) = self.brush_tip_texture.take() {
+        if let Some(tex) = self.brush.tip_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.brush_has_tip = false;
+        self.brush.has_tip = false;
         // Brush texture
-        if let Some(tex) = self.brush_texture.take() {
+        if let Some(tex) = self.brush.texture.take() {
             self.texture_pool.release(tex);
         }
-        self.brush_has_texture = false;
+        self.brush.has_texture = false;
         // Selection mask
         if let Some(tex) = self.selection_mask_texture.take() {
             self.texture_pool.release(tex);

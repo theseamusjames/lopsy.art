@@ -34,8 +34,8 @@ impl CoverageTool {
 
     fn coverage(self, engine: &EngineInner) -> &HashMap<String, TextureHandle> {
         match self {
-            Self::DodgeBurn => &engine.stroke_dodge_textures,
-            Self::Sponge => &engine.stroke_sponge_textures,
+            Self::DodgeBurn => &engine.brush.stroke_dodge_textures,
+            Self::Sponge => &engine.brush.stroke_sponge_textures,
         }
     }
 
@@ -49,14 +49,14 @@ impl CoverageTool {
     ) {
         match self {
             Self::DodgeBurn => (
-                &mut engine.stroke_dodge_textures,
-                &mut engine.stroke_dodge_preview_textures,
-                &mut engine.stroke_dodge_modes,
+                &mut engine.brush.stroke_dodge_textures,
+                &mut engine.brush.stroke_dodge_preview_textures,
+                &mut engine.brush.stroke_dodge_modes,
             ),
             Self::Sponge => (
-                &mut engine.stroke_sponge_textures,
-                &mut engine.stroke_sponge_preview_textures,
-                &mut engine.stroke_sponge_modes,
+                &mut engine.brush.stroke_sponge_textures,
+                &mut engine.brush.stroke_sponge_preview_textures,
+                &mut engine.brush.stroke_sponge_modes,
             ),
         }
     }
@@ -102,9 +102,9 @@ pub(crate) fn begin_stroke(
             .coverage_strokes
             .insert(layer_id.to_string(), CoverageStroke::default());
 
-        if engine.stroke_fbo.is_none() {
+        if engine.brush.stroke_fbo.is_none() {
             let fbo = engine.fbo_pool.create()?;
-            engine.stroke_fbo = Some(fbo);
+            engine.brush.stroke_fbo = Some(fbo);
         }
     }
     engine.needs_recomposite = true;
@@ -131,7 +131,7 @@ pub(crate) fn accumulate_dabs(
         .texture_pool
         .get_size(coverage_handle)
         .unwrap_or((1, 1));
-    if engine.stroke_fbo.is_none() || engine.texture_pool.get(coverage_handle).is_none() {
+    if engine.brush.stroke_fbo.is_none() || engine.texture_pool.get(coverage_handle).is_none() {
         return;
     }
 
