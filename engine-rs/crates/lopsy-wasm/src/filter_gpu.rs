@@ -3,6 +3,7 @@ use crate::gpu::framebuffer::FramebufferHandle;
 use crate::gpu::pass::{Pass, Target};
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::uniforms::Uniforms;
 
 /// Blend the filtered result with the original layer texture
 /// using the selection mask. Writes the blended result back to the layer texture.
@@ -33,7 +34,7 @@ fn blend_with_selection_mask(
         .map_or((0.0, 0.0), |l| (l.x as f32, l.y as f32));
     let (doc_w, doc_h) = (engine.doc_width as f32, engine.doc_height as f32);
 
-    engine.pass(&engine.shaders.selection_mask_blend)
+    engine.pass_untyped(&engine.shaders.selection_mask_blend)
         .texture("u_filtered", filtered_scratch)
         .texture("u_original", original_scratch)
         .texture("u_selMask", sel_handle)
@@ -55,7 +56,7 @@ fn copy_layer_to_scratch(engine: &mut EngineInner, layer_id: &str, scratch_fbo: 
         return;
     }
 
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", tex_handle)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(scratch_fbo));
@@ -63,7 +64,7 @@ fn copy_layer_to_scratch(engine: &mut EngineInner, layer_id: &str, scratch_fbo: 
 
 /// Blit scratch texture `scratch` over the `w`×`h` texture `dst`.
 fn blit_scratch_to(engine: &EngineInner, scratch: TextureHandle, dst: TextureHandle, w: u32, h: u32) {
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", scratch)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Texture(dst));
@@ -123,7 +124,7 @@ pub fn end_mask_filter_target(engine: &mut EngineInner) {
     let Some(target) = engine.mask_filter_target.take() else { return };
     let id = target.layer_id.as_str();
 
-    apply_filter_full_layer(engine, id, |e| &e.shaders.mask_luminance, |pass| pass);
+    apply_filter_full_layer_untyped(engine, id, |e| &e.shaders.mask_luminance, |pass| pass);
 
     let (cur_x, cur_y) = engine.layer_stack.iter()
         .find(|l| l.id == id)
@@ -184,31 +185,42 @@ pub(crate) fn commit_scratch_a_to_layer(engine: &mut EngineInner, layer_id: &str
     engine.mark_layer_dirty(layer_id);
 }
 
-/// Apply a shader program to a layer's texture (read from layer, render to scratch, copy back).
-/// `set_uniforms` receives the filter's pass, with the layer already bound as `u_tex`, and adds the
-/// filter's own uniforms and textures to it.
+/// Apply a shader program to a layer's texture (read from layer, render to scratch, copy back),
+/// with the layer bound as `u_tex` and `params` as the shader's uniforms.
 ///
 /// `get_shader` is called lazily to borrow the shader from the engine — this lets callers
 /// pass e.g. `|e| &e.shaders.noise` without fighting the borrow checker.
-pub fn apply_filter(
+pub fn apply_filter<P: Uniforms>(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    params: P,
+) {
+    apply_filter_inner(engine, layer_id, |e, tex| e.pass(get_shader(e), params).texture("u_tex", tex), true, true);
+}
+
+/// [`apply_filter`] for a shader whose uniforms are still set by name:
+/// `set_uniforms` receives the filter's pass, with the layer already bound
+/// as `u_tex`, and adds the filter's own uniforms and textures to it.
+pub fn apply_filter_untyped(
     engine: &mut EngineInner,
     layer_id: &str,
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
     set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
 ) {
-    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, true, true);
+    apply_filter_inner(engine, layer_id, |e, tex| set_uniforms(e.pass_untyped(get_shader(e)).texture("u_tex", tex)), true, true);
 }
 
 /// Like `apply_filter`, but always transforms the whole layer even when a
 /// selection is active. Document-wide operations (color mode conversion) must
 /// not leave part of a layer in the old color space.
-pub fn apply_filter_full_layer(
+pub fn apply_filter_full_layer_untyped(
     engine: &mut EngineInner,
     layer_id: &str,
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
     set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
 ) {
-    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, false, true);
+    apply_filter_inner(engine, layer_id, |e, tex| set_uniforms(e.pass_untyped(get_shader(e)).texture("u_tex", tex)), false, true);
 }
 
 /// Like `apply_filter_full_layer`, for shaders that read only the texel
@@ -216,20 +228,21 @@ pub fn apply_filter_full_layer(
 /// size: growing it to the document would re-origin the texture behind the
 /// caller's back, and a caller that then pushes the layer's old cropped
 /// `x`/`y` draws the content at twice its offset (#1367).
-pub fn apply_pointwise_filter_full_layer(
+pub fn apply_pointwise_filter_full_layer_untyped(
     engine: &mut EngineInner,
     layer_id: &str,
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
     set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
 ) {
-    apply_filter_inner(engine, layer_id, get_shader, set_uniforms, false, false);
+    apply_filter_inner(engine, layer_id, |e, tex| set_uniforms(e.pass_untyped(get_shader(e)).texture("u_tex", tex)), false, false);
 }
 
-fn apply_filter_inner(
+/// `start_pass` starts the filter's pass with the layer texture it is
+/// given bound as `u_tex`.
+fn apply_filter_inner<P>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
+    start_pass: impl for<'a> FnOnce(&'a EngineInner, TextureHandle) -> Pass<'a, P>,
     respect_selection: bool,
     expand_to_document: bool,
 ) {
@@ -266,7 +279,7 @@ fn apply_filter_inner(
     }
 
     // Render the filter into scratch A
-    set_uniforms(engine.pass(get_shader(engine)).texture("u_tex", tex_handle))
+    start_pass(engine, tex_handle)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
@@ -285,7 +298,7 @@ fn apply_filter_inner(
 
 /// Two-pass separable blur (horizontal then vertical).
 /// Used for both Gaussian and box blur.
-pub fn apply_separable_blur(
+pub fn apply_separable_blur_untyped(
     engine: &mut EngineInner,
     layer_id: &str,
     get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
@@ -308,7 +321,7 @@ pub fn apply_separable_blur(
 
     // Pass 1: horizontal (layer -> scratch A)
     set_common_uniforms(
-        engine.pass(get_shader(engine))
+        engine.pass_untyped(get_shader(engine))
             .texture("u_tex", tex_handle)
             .vec2("u_direction", 1.0, 0.0),
     )
@@ -317,7 +330,7 @@ pub fn apply_separable_blur(
 
     // Pass 2: vertical (scratch A -> scratch B)
     set_common_uniforms(
-        engine.pass(get_shader(engine))
+        engine.pass_untyped(get_shader(engine))
             .texture("u_tex", engine.scratch_texture_a)
             .vec2("u_direction", 0.0, 1.0),
     )
@@ -376,14 +389,14 @@ pub fn apply_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32)
     let blocks_h = h.div_ceil(block_size);
 
     // Pass 1: block averages (layer -> scratch A, blocks_w x blocks_h)
-    engine.pass(&engine.shaders.pixelate_blocks)
+    engine.pass_untyped(&engine.shaders.pixelate_blocks)
         .texture("u_tex", tex_handle)
         .i32("u_blockSize", block_size as i32)
         .viewport(0, 0, blocks_w as i32, blocks_h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
     // Pass 2: expand blocks over the source footprint (-> scratch B, w x h)
-    engine.pass(&engine.shaders.pixelate)
+    engine.pass_untyped(&engine.shaders.pixelate)
         .texture("u_tex", tex_handle)
         .texture("u_blocks", engine.scratch_texture_a)
         .i32("u_blockSize", block_size as i32)
@@ -410,7 +423,7 @@ pub fn extract_channel_pixels(
         return Vec::new();
     }
 
-    engine.pass(&engine.shaders.channel_extract)
+    engine.pass_untyped(&engine.shaders.channel_extract)
         .texture("u_tex", tex_handle)
         .i32("u_channel", channel as i32)
         .viewport(0, 0, w as i32, h as i32)

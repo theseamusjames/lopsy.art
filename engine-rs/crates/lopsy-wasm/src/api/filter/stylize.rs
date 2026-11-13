@@ -23,7 +23,7 @@ pub fn filter_halftone(engine: &mut Engine, layer_id: &str, dot_size: f32, densi
         return;
     }
     let density = density.clamp(0.25, 3.0);
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.halftone,
@@ -47,7 +47,7 @@ pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, r
         return;
     };
 
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.kaleidoscope,
@@ -65,7 +65,7 @@ pub fn filter_kaleidoscope(engine: &mut Engine, layer_id: &str, segments: u32, r
 pub fn filter_oil_paint(engine: &mut Engine, layer_id: &str, radius: f32, sharpness: f32) {
     let radius = radius.clamp(1.0, 10.0);
     let sharpness = sharpness.clamp(0.1, 5.0);
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.oil_paint,
@@ -80,7 +80,7 @@ pub fn filter_oil_paint(engine: &mut Engine, layer_id: &str, radius: f32, sharpn
 #[wasm_bindgen(js_name = "filterChromaticAberration")]
 pub fn filter_chromatic_aberration(engine: &mut Engine, layer_id: &str, amount: f32, angle_degrees: f32) {
     let amount = amount.clamp(0.0, 100.0);
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.chromatic_aberration,
@@ -104,7 +104,7 @@ pub fn filter_pixel_stretch(
     let amount = amount.clamp(0.0, 200.0);
     let bands = bands.clamp(2.0, 50.0);
     let rgb_split = rgb_split.clamp(0.0, 1.0);
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.pixel_stretch,
@@ -133,7 +133,7 @@ pub fn filter_lens_distortion(
         return;
     };
     let doc_long_side = engine.inner.doc_width.max(engine.inner.doc_height).max(1) as f32;
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.lens_distortion,
@@ -150,7 +150,7 @@ pub fn filter_lens_distortion(
 
 #[wasm_bindgen(js_name = "filterFindEdges")]
 pub fn filter_find_edges(engine: &mut Engine, layer_id: &str) {
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.find_edges,
@@ -160,7 +160,7 @@ pub fn filter_find_edges(engine: &mut Engine, layer_id: &str) {
 
 #[wasm_bindgen(js_name = "filterCelShading")]
 pub fn filter_cel_shading(engine: &mut Engine, layer_id: &str, levels: u32, edge_strength: f32) {
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.cel_shading,
@@ -176,7 +176,7 @@ pub fn filter_cel_shading(engine: &mut Engine, layer_id: &str, levels: u32, edge
 pub fn filter_emboss(engine: &mut Engine, layer_id: &str, angle_degrees: f32, strength: f32, emboss_type: f32) {
     let strength = strength.clamp(0.0, 1.0);
     let emboss_type = emboss_type.clamp(0.0, 1.0);
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.emboss,
@@ -219,7 +219,7 @@ pub fn filter_bloom(
     let inner = &engine.inner;
 
     // Pass 1: Threshold — extract bright pixels (layer → scratch B)
-    inner.pass(&inner.shaders.bloom_threshold)
+    inner.pass_untyped(&inner.shaders.bloom_threshold)
         .texture("u_tex", tex_handle)
         .f32("u_threshold", threshold)
         .f32("u_softKnee", soft_knee)
@@ -228,7 +228,7 @@ pub fn filter_bloom(
 
     let center = radius as usize;
     let blur_pass = |src: TextureHandle, direction: (f32, f32)| {
-        let mut pass = inner.pass(&inner.shaders.gaussian_blur)
+        let mut pass = inner.pass_untyped(&inner.shaders.gaussian_blur)
             .texture("u_tex", src)
             .vec2("u_direction", direction.0, direction.1)
             .i32("u_radius", radius as i32);
@@ -245,7 +245,7 @@ pub fn filter_bloom(
     blur_pass(inner.scratch_texture_a, (0.0, 1.0)).draw(Target::Framebuffer(inner.scratch_fbo_b));
 
     // Pass 4: Combine — add bloom onto original (layer + scratch B → scratch A)
-    inner.pass(&inner.shaders.bloom_combine)
+    inner.pass_untyped(&inner.shaders.bloom_combine)
         .texture("u_tex", tex_handle)
         .texture("u_bloomTex", inner.scratch_texture_b)
         .f32("u_intensity", intensity)
@@ -273,7 +273,7 @@ pub fn filter_voronoi(
     let edge_g = edge_g.clamp(0.0, 1.0);
     let edge_b = edge_b.clamp(0.0, 1.0);
     let seed = seed.clamp(0.0, 999.0);
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.voronoi,

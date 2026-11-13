@@ -118,7 +118,7 @@ pub fn enter_quick_mask_mode(engine: &mut EngineInner) {
         return;
     }
 
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", sel_handle)
         .draw(Target::Texture(tex));
 
@@ -200,7 +200,7 @@ fn copy_texture(engine: &mut EngineInner, src: TextureHandle) -> Option<TextureH
         engine.texture_pool.release(dst);
         return None;
     }
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", src)
         .blend(Blend::Off)
         .draw(Target::Texture(dst));
@@ -246,7 +246,7 @@ pub fn translate_quick_mask(engine: &mut EngineInner, dx: i32, dy: i32) {
     {
         return;
     }
-    engine.pass(&engine.shaders.quick_mask_translate)
+    engine.pass_untyped(&engine.shaders.quick_mask_translate)
         .texture("u_base", base)
         .texture("u_marquee", marquee)
         .ivec2("u_offset", dx, dy)

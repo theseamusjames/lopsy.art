@@ -7,11 +7,14 @@
 //! WebGL state themselves (docs/engine-migration-plan.md, Phase 1).
 //!
 //! ```ignore
-//! engine.pass(&engine.shaders.blit)
+//! engine.pass(&engine.shaders.posterize, PosterizeParams { levels: 4.0 })
 //!     .texture("u_tex", src)
-//!     .blend(Blend::Off)
 //!     .draw(Target::Texture(dst));
 //! ```
+//!
+//! A pass is created with the shader's uniform struct (`gpu::uniforms`),
+//! or `()` for a shader that only samples textures, so no uniform can be
+//! left holding what an earlier pass set.
 //!
 //! Between passes the context is in one known state: blending off and the
 //! scissor test off. A pass that turns either on turns it off again when it
@@ -20,12 +23,14 @@
 //! framebuffer afterwards; [`Target::Framebuffer`] leaves it bound.
 //!
 //! Build and draw one pass before starting the next: a pass makes its
-//! program current when it is created and sets uniforms as it is built.
+//! program current and uploads its uniforms when it is created.
 //!
 //! A tool that stamps many dabs with one shader uses [`Pass::begin`]
 //! instead of [`Pass::draw`]. That sets the pass up once and returns an
-//! [`ActivePass`], which redraws with only a uniform or two and the scissor
-//! rect changing between draws.
+//! [`ActivePass`], which redraws with only the changed uniforms and the
+//! scissor rect sent between draws.
+
+use std::marker::PhantomData;
 
 use lopsy_core::geometry::Rect;
 use wasm_bindgen::JsCast;
@@ -33,8 +38,9 @@ use web_sys::{WebGl2RenderingContext as GL, WebGlUniformLocation};
 
 use crate::gpu::context::GpuContext;
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
-use crate::gpu::shader::ShaderProgram;
+use crate::gpu::shader::{upload_params, LinkedProgram, ShaderProgram, Untyped};
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
+use crate::gpu::uniforms::Uniforms;
 
 /// The GPU objects a pass draws with, borrowed from the engine.
 #[derive(Clone, Copy)]
@@ -113,19 +119,20 @@ impl<'a> GpuRef<'a> {
         Self { gl: &ctx.gl, textures, fbos, render_fbo }
     }
 
-    /// Start a pass that runs `program`.
-    pub fn pass(self, program: &'a ShaderProgram) -> Pass<'a> {
+    /// Start a pass that runs `program` with `params` as its uniforms.
+    pub fn pass<P: Uniforms>(self, program: &'a ShaderProgram<P>, params: P) -> Pass<'a, P> {
+        let program = program.linked();
         self.gl.use_program(Some(&program.program));
-        Pass {
-            gpu: self,
-            program,
-            next_unit: 0,
-            has_missing_texture: false,
-            viewport: None,
-            scissor: Scissor::Off,
-            blend: Blend::Off,
-            clear: None,
-        }
+        upload_params(program, self.gl, &params);
+        Pass { raw: RawPass::new(self, program), marker: PhantomData }
+    }
+
+    /// Start a pass that runs a program whose uniforms are still set one by
+    /// one, by name.
+    pub fn pass_untyped(self, program: &'a ShaderProgram) -> Pass<'a> {
+        let program = program.linked();
+        self.gl.use_program(Some(&program.program));
+        Pass { raw: RawPass::new(self, program), marker: PhantomData }
     }
 
     /// Unbind the textures on units `0..count`, leaving unit 0 active. A
@@ -169,9 +176,9 @@ impl<'a> GpuRef<'a> {
     /// `program` over it into `dst`, with the bytes bound to `sampler` and
     /// blending off. This is how one-byte-per-texel data reaches a pooled
     /// texture without a CPU expansion to the pool's format.
-    pub fn draw_r8_bytes(
+    pub fn draw_r8_bytes<P>(
         self,
-        program: &ShaderProgram,
+        program: &ShaderProgram<P>,
         sampler: &str,
         bytes: &[u8],
         w: u32,
@@ -207,6 +214,7 @@ impl<'a> GpuRef<'a> {
         self.fbos.attach_texture(self.render_fbo, dst_tex);
         self.fbos.bind(self.render_fbo);
         gl.viewport(0, 0, w as i32, h as i32);
+        let program = program.linked();
         gl.use_program(Some(&program.program));
         gl.active_texture(GL::TEXTURE0);
         gl.bind_texture(GL::TEXTURE_2D, Some(&staging));
@@ -274,11 +282,19 @@ impl<'a> GpuRef<'a> {
 }
 
 /// One draw: a fragment shader, its inputs, and where the output goes.
-/// Build it with the setters, then call [`Pass::draw`].
+/// Build it with the setters, then call [`Pass::draw`]. `P` is the uniform
+/// struct the pass was created with.
 #[must_use = "a pass does nothing until `draw` is called"]
-pub struct Pass<'a> {
+pub struct Pass<'a, P = Untyped> {
+    raw: RawPass<'a>,
+    marker: PhantomData<fn(P)>,
+}
+
+/// A [`Pass`] without its uniform struct's type: what the methods below
+/// work on, so their code is compiled once and not once per shader.
+struct RawPass<'a> {
     gpu: GpuRef<'a>,
-    program: &'a ShaderProgram,
+    program: &'a LinkedProgram,
     next_unit: u32,
     has_missing_texture: bool,
     viewport: Option<[i32; 4]>,
@@ -287,11 +303,84 @@ pub struct Pass<'a> {
     clear: Option<[f32; 4]>,
 }
 
-impl<'a> Pass<'a> {
+impl<'a, P> Pass<'a, P> {
     /// Bind `texture` to the sampler uniform `name`. Textures take texture
     /// units in the order they are added. If the handle is stale the pass
     /// is not drawn and [`Pass::draw`] returns `false`.
     pub fn texture(mut self, name: &str, texture: TextureHandle) -> Self {
+        self.raw.texture(name, texture);
+        self
+    }
+
+    /// Point the sampler uniform `name` at texture unit `unit` without
+    /// binding anything to it, for a sampler the shader will not read in
+    /// this pass. Left at its default unit it could alias the render target.
+    pub fn sampler_unit(self, name: &str, unit: i32) -> Self {
+        self.raw.sampler_unit(name, unit);
+        self
+    }
+
+    /// Draw into this part of the target instead of the default.
+    pub fn viewport(mut self, x: i32, y: i32, width: i32, height: i32) -> Self {
+        self.raw.viewport = Some([x, y, width, height]);
+        self
+    }
+
+    pub fn scissor(mut self, scissor: Scissor) -> Self {
+        self.raw.scissor = scissor;
+        self
+    }
+
+    pub fn blend(mut self, blend: Blend) -> Self {
+        self.raw.blend = blend;
+        self
+    }
+
+    /// Clear the target to `color` before drawing. Like the draw itself,
+    /// the clear is limited by the scissor.
+    pub fn clear(mut self, color: [f32; 4]) -> Self {
+        self.raw.clear = Some(color);
+        self
+    }
+
+    /// Draw the pass into a temporary `w`×`h` 8-bit target and read that
+    /// back. Reading an 8-bit target is fast on every driver, where reading
+    /// a float one is not, and an R8 target moves a quarter of the bytes.
+    /// Returns `None` if an input texture no longer exists, the staging
+    /// objects cannot be created or the read fails.
+    pub fn read_back(self, format: ReadFormat, w: u32, h: u32) -> Option<Vec<u8>> {
+        self.raw.read_back(format, w, h)
+    }
+
+    /// Run the pass. Returns `false`, having drawn nothing, if the target
+    /// or one of the input textures no longer exists.
+    pub fn draw(self, target: Target) -> bool {
+        self.raw.draw(target)
+    }
+
+    /// Set the pass up for several draws. Returns `None`, having changed
+    /// no target or blend state, if the target or one of the input textures
+    /// no longer exists. Call [`ActivePass::end`] when done.
+    pub fn begin(self, target: Target) -> Option<ActivePass<'a, P>> {
+        self.raw.begin(target).map(|raw| ActivePass { raw, marker: PhantomData })
+    }
+}
+
+impl<'a> RawPass<'a> {
+    fn new(gpu: GpuRef<'a>, program: &'a LinkedProgram) -> Self {
+        RawPass {
+            gpu,
+            program,
+            next_unit: 0,
+            has_missing_texture: false,
+            viewport: None,
+            scissor: Scissor::Off,
+            blend: Blend::Off,
+            clear: None,
+        }
+    }
+
+    fn texture(&mut self, name: &str, texture: TextureHandle) {
         let unit = self.next_unit;
         self.next_unit += 1;
         let gl = self.gpu.gl;
@@ -303,90 +392,14 @@ impl<'a> Pass<'a> {
             }
             None => self.has_missing_texture = true,
         }
-        self
     }
 
-    pub fn i32(self, name: &str, value: i32) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1i(Some(loc), value));
-        self
+
+    fn sampler_unit(&self, name: &str, unit: i32) {
+        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1i(Some(loc), unit));
     }
 
-    pub fn u32(self, name: &str, value: u32) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1ui(Some(loc), value));
-        self
-    }
-
-    pub fn ivec2(self, name: &str, x: i32, y: i32) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform2i(Some(loc), x, y));
-        self
-    }
-
-    pub fn f32(self, name: &str, value: f32) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1f(Some(loc), value));
-        self
-    }
-
-    pub fn vec2(self, name: &str, x: f32, y: f32) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform2f(Some(loc), x, y));
-        self
-    }
-
-    pub fn vec3(self, name: &str, x: f32, y: f32, z: f32) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform3f(Some(loc), x, y, z));
-        self
-    }
-
-    pub fn vec4(self, name: &str, x: f32, y: f32, z: f32, w: f32) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform4f(Some(loc), x, y, z, w));
-        self
-    }
-
-    pub fn f32_array(self, name: &str, values: &[f32]) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1fv_with_f32_array(Some(loc), values));
-        self
-    }
-
-    /// Column-major 2×2 matrix.
-    pub fn mat2(self, name: &str, value: &[f32; 4]) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform_matrix2fv_with_f32_array(Some(loc), false, value));
-        self
-    }
-
-    /// Column-major 3×3 matrix.
-    pub fn mat3(self, name: &str, value: &[f32; 9]) -> Self {
-        self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform_matrix3fv_with_f32_array(Some(loc), false, value));
-        self
-    }
-
-    /// Draw into this part of the target instead of the default.
-    pub fn viewport(mut self, x: i32, y: i32, width: i32, height: i32) -> Self {
-        self.viewport = Some([x, y, width, height]);
-        self
-    }
-
-    pub fn scissor(mut self, scissor: Scissor) -> Self {
-        self.scissor = scissor;
-        self
-    }
-
-    pub fn blend(mut self, blend: Blend) -> Self {
-        self.blend = blend;
-        self
-    }
-
-    /// Clear the target to `color` before drawing. Like the draw itself,
-    /// the clear is limited by the scissor.
-    pub fn clear(mut self, color: [f32; 4]) -> Self {
-        self.clear = Some(color);
-        self
-    }
-
-    /// Draw the pass into a temporary `w`×`h` 8-bit target and read that
-    /// back. Reading an 8-bit target is fast on every driver, where reading
-    /// a float one is not, and an R8 target moves a quarter of the bytes.
-    /// Returns `None` if an input texture no longer exists, the staging
-    /// objects cannot be created or the read fails.
-    pub fn read_back(self, format: ReadFormat, w: u32, h: u32) -> Option<Vec<u8>> {
+    fn read_back(self, format: ReadFormat, w: u32, h: u32) -> Option<Vec<u8>> {
         if self.has_missing_texture {
             return None;
         }
@@ -444,23 +457,17 @@ impl<'a> Pass<'a> {
         is_read.then_some(pixels)
     }
 
-    /// Run the pass. Returns `false`, having drawn nothing, if the target
-    /// or one of the input textures no longer exists.
-    pub fn draw(self, target: Target) -> bool {
+    fn draw(self, target: Target) -> bool {
         match self.begin(target) {
             Some(active) => {
                 active.draw();
-                active.end();
                 true
             }
             None => false,
         }
     }
 
-    /// Set the pass up for several draws. Returns `None`, having changed
-    /// no target or blend state, if the target or one of the input textures
-    /// no longer exists. Call [`ActivePass::end`] when done.
-    pub fn begin(self, target: Target) -> Option<ActivePass<'a>> {
+    fn begin(self, target: Target) -> Option<RawActivePass<'a>> {
         if self.has_missing_texture {
             return None;
         }
@@ -519,7 +526,7 @@ impl<'a> Pass<'a> {
             gl.clear(GL::COLOR_BUFFER_BIT);
         }
 
-        Some(ActivePass {
+        Some(RawActivePass {
             gpu: self.gpu,
             program: self.program,
             target,
@@ -529,57 +536,139 @@ impl<'a> Pass<'a> {
     }
 }
 
+impl Pass<'_, Untyped> {
+    pub fn i32(self, name: &str, value: i32) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform1i(Some(loc), value));
+        self
+    }
+
+    pub fn u32(self, name: &str, value: u32) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform1ui(Some(loc), value));
+        self
+    }
+
+    pub fn ivec2(self, name: &str, x: i32, y: i32) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform2i(Some(loc), x, y));
+        self
+    }
+
+    pub fn f32(self, name: &str, value: f32) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform1f(Some(loc), value));
+        self
+    }
+
+    pub fn vec2(self, name: &str, x: f32, y: f32) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform2f(Some(loc), x, y));
+        self
+    }
+
+    pub fn vec3(self, name: &str, x: f32, y: f32, z: f32) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform3f(Some(loc), x, y, z));
+        self
+    }
+
+    pub fn vec4(self, name: &str, x: f32, y: f32, z: f32, w: f32) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform4f(Some(loc), x, y, z, w));
+        self
+    }
+
+    pub fn f32_array(self, name: &str, values: &[f32]) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform1fv_with_f32_array(Some(loc), values));
+        self
+    }
+
+    /// Column-major 2×2 matrix.
+    pub fn mat2(self, name: &str, value: &[f32; 4]) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform_matrix2fv_with_f32_array(Some(loc), false, value));
+        self
+    }
+
+    /// Column-major 3×3 matrix.
+    pub fn mat3(self, name: &str, value: &[f32; 9]) -> Self {
+        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform_matrix3fv_with_f32_array(Some(loc), false, value));
+        self
+    }
+}
+
 /// A uniform of the pass's program, looked up once so a loop of draws can
 /// set it without a name lookup each time.
 pub struct UniformSlot(Option<WebGlUniformLocation>);
 
 /// A pass that has been set up and can draw repeatedly. Made by
 /// [`Pass::begin`]; finish with [`ActivePass::end`].
-pub struct ActivePass<'a> {
+pub struct ActivePass<'a, P = Untyped> {
+    raw: RawActivePass<'a>,
+    marker: PhantomData<fn(P)>,
+}
+
+struct RawActivePass<'a> {
     gpu: GpuRef<'a>,
-    program: &'a ShaderProgram,
+    program: &'a LinkedProgram,
     target: Target,
     blend: Blend,
     is_scissor_enabled: bool,
 }
 
-impl ActivePass<'_> {
+impl ActivePass<'_, Untyped> {
     pub fn slot(&self, name: &str) -> UniformSlot {
-        UniformSlot(self.program.location(self.gpu.gl, name))
+        UniformSlot(self.raw.program.location(self.raw.gpu.gl, name))
     }
 
     pub fn set_i32(&self, slot: &UniformSlot, value: i32) {
         if let Some(loc) = &slot.0 {
-            self.gpu.gl.uniform1i(Some(loc), value);
+            self.raw.gpu.gl.uniform1i(Some(loc), value);
         }
     }
 
     pub fn set_f32(&self, slot: &UniformSlot, value: f32) {
         if let Some(loc) = &slot.0 {
-            self.gpu.gl.uniform1f(Some(loc), value);
+            self.raw.gpu.gl.uniform1f(Some(loc), value);
         }
     }
 
     pub fn set_vec2(&self, slot: &UniformSlot, x: f32, y: f32) {
         if let Some(loc) = &slot.0 {
-            self.gpu.gl.uniform2f(Some(loc), x, y);
+            self.raw.gpu.gl.uniform2f(Some(loc), x, y);
         }
     }
 
     pub fn set_vec4(&self, slot: &UniformSlot, x: f32, y: f32, z: f32, w: f32) {
         if let Some(loc) = &slot.0 {
-            self.gpu.gl.uniform4f(Some(loc), x, y, z, w);
+            self.raw.gpu.gl.uniform4f(Some(loc), x, y, z, w);
         }
     }
+}
 
+impl<P: Uniforms> ActivePass<'_, P> {
+    /// Change the pass's uniforms for its next draws. Only the fields that
+    /// differ from the previous values are sent.
+    pub fn set(&self, params: &P) {
+        upload_params(self.raw.program, self.raw.gpu.gl, params);
+    }
+}
+
+impl<P> ActivePass<'_, P> {
     /// Draw with the scissor state the pass began with.
     pub fn draw(&self) {
-        self.gpu.gl.draw_arrays(GL::TRIANGLES, 0, 3);
+        self.raw.draw();
     }
 
     /// Draw limited to `rect`, in target texels. The scissor test stays on
     /// for the pass's later draws, so each one names its own rect.
     pub fn draw_in(&mut self, rect: Rect) {
+        self.raw.draw_in(rect);
+    }
+
+    /// Finish the pass, putting back the state it changed.
+    pub fn end(self) {}
+}
+
+impl RawActivePass<'_> {
+    fn draw(&self) {
+        self.gpu.gl.draw_arrays(GL::TRIANGLES, 0, 3);
+    }
+
+    fn draw_in(&mut self, rect: Rect) {
         let gl = self.gpu.gl;
         if !self.is_scissor_enabled {
             gl.enable(GL::SCISSOR_TEST);
@@ -588,12 +677,9 @@ impl ActivePass<'_> {
         gl.scissor(rect.x, rect.y, rect.width as i32, rect.height as i32);
         gl.draw_arrays(GL::TRIANGLES, 0, 3);
     }
-
-    /// Finish the pass, putting back the state it changed.
-    pub fn end(self) {}
 }
 
-impl Drop for ActivePass<'_> {
+impl Drop for RawActivePass<'_> {
     /// Restores the between-passes state however the pass ends, so an early
     /// return cannot leave blending or the scissor test on.
     fn drop(&mut self) {

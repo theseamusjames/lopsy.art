@@ -101,7 +101,7 @@ pub fn bucket_fill_by_color_gpu(
     }
 
     let eng = &engine.inner;
-    let pass = eng.pass(&eng.shaders.bucket_fill_color_match).texture("u_layerTex", tex_handle);
+    let pass = eng.pass_untyped(&eng.shaders.bucket_fill_color_match).texture("u_layerTex", tex_handle);
     let pass = match sel_tex {
         Some(sel) => pass.texture("u_selMaskTex", sel),
         None => pass.i32("u_selMaskTex", 1),
@@ -197,7 +197,7 @@ fn apply_fill_impl(
     }
 
     let eng = &engine.inner;
-    let pass = eng.pass(&eng.shaders.flood_fill_apply).texture("u_layerTex", tex_handle);
+    let pass = eng.pass_untyped(&eng.shaders.flood_fill_apply).texture("u_layerTex", tex_handle);
     let pass = if eng.texture_pool.get(mask_tex).is_some() {
         pass.texture("u_maskTex", mask_tex)
     } else {

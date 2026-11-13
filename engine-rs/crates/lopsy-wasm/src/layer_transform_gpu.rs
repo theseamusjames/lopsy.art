@@ -63,7 +63,7 @@ pub fn transform_pass<'a>(engine: &'a EngineInner, params: &TransformParams, t: 
         TransformParams::Affine { .. } => &engine.shaders.transform_affine,
         TransformParams::Perspective { .. } => &engine.shaders.transform_perspective,
     };
-    let pass = engine.pass(shader)
+    let pass = engine.pass_untyped(shader)
         .texture("u_floatTex", t.source)
         .vec2("u_floatSize", t.source_size.0, t.source_size.1)
         .vec2("u_floatOffset", t.source_offset.0, t.source_offset.1)
@@ -123,7 +123,7 @@ pub fn begin_layer_transform(engine: &mut EngineInner, layer_id: &str) -> Result
     let source = engine.texture_pool.acquire(source_rect.width, source_rect.height)?;
     engine.texture_pool.get(source).ok_or("Source texture not found")?;
     let (off_x, off_y) = (layer.x - source_rect.x, layer.y - source_rect.y);
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", layer_handle)
         .blend(Blend::Off)
         .clear([0.0, 0.0, 0.0, 0.0])

@@ -147,7 +147,7 @@ pub(crate) fn accumulate_dabs(
         .unwrap_or((0.0, 0.0));
 
     let mut pass = engine
-        .pass(&engine.shaders.dodge_burn_dab)
+        .pass_untyped(&engine.shaders.dodge_burn_dab)
         .f32("u_exposure", strength)
         .f32("u_hardness", hardness)
         .vec2("u_texSize", w as f32, h as f32)
@@ -337,7 +337,7 @@ fn apply_pass<'a>(
     coverage: TextureHandle,
 ) -> Pass<'a> {
     engine
-        .pass(tool.apply_shader(&engine.shaders))
+        .pass_untyped(tool.apply_shader(&engine.shaders))
         .texture("u_layerTex", layer)
         .texture("u_stampTex", coverage)
         .i32("u_mode", mode as i32)

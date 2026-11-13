@@ -49,7 +49,7 @@ pub fn feather_selection_mask(engine: &mut EngineInner, radius: u32) {
         if i < 64 { w64[i] = v; }
     }
     let blur_pass = |src, direction: (f32, f32)| {
-        engine.pass(&engine.shaders.gaussian_blur)
+        engine.pass_untyped(&engine.shaders.gaussian_blur)
             .i32("u_radius", clamped_radius as i32)
             .f32_array("u_weights[0]", &w64)
             .texture("u_tex", src)
@@ -63,7 +63,7 @@ pub fn feather_selection_mask(engine: &mut EngineInner, radius: u32) {
     blur_pass(engine.scratch_texture_a, (0.0, 1.0)).draw(Target::Framebuffer(engine.scratch_fbo_b));
 
     // Copy scratch B → mask texture
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", engine.scratch_texture_b)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Texture(mask_handle));

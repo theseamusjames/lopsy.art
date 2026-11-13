@@ -11,7 +11,7 @@ pub fn filter_add_noise(
     engine: &mut Engine, layer_id: &str,
     amount: f32, monochrome: bool, gaussian: bool, seed: f32,
 ) {
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.noise,
@@ -27,7 +27,7 @@ pub fn filter_add_noise(
 
 #[wasm_bindgen(js_name = "filterClouds")]
 pub fn filter_clouds(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32) {
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.clouds,
@@ -41,7 +41,7 @@ pub fn filter_clouds(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32)
 
 #[wasm_bindgen(js_name = "filterSmoke")]
 pub fn filter_smoke(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32, turbulence: f32) {
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.smoke,
@@ -56,7 +56,7 @@ pub fn filter_smoke(engine: &mut Engine, layer_id: &str, scale: f32, seed: f32, 
 
 #[wasm_bindgen(js_name = "filterFibers")]
 pub fn filter_fibers(engine: &mut Engine, layer_id: &str, variance: f32, strength: f32, seed: f32) {
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.fibers,
@@ -85,7 +85,7 @@ pub fn filter_texture(
     if p.is_identity() {
         return;
     }
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.texture,

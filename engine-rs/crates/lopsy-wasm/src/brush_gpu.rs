@@ -179,7 +179,7 @@ pub fn apply_dab_batch(
     let use_brush_texture = engine.brush_has_texture && engine.brush_texture.is_some();
 
     // No stamp texture needed — computed analytically in shader
-    let mut pass = engine.pass(shader)
+    let mut pass = engine.pass_untyped(shader)
         .vec4("u_brushColor", r, g, b, a)
         .f32("u_opacity", opacity)
         .f32("u_flow", flow)
@@ -290,7 +290,7 @@ pub fn draw_pencil_line(
     let has_selection = engine.selection_mask_texture.is_some();
     let (layer_ox, layer_oy) = layer_offset(engine, layer_id);
 
-    let mut pass = engine.pass(&engine.shaders.pencil_dab)
+    let mut pass = engine.pass_untyped(&engine.shaders.pencil_dab)
         .vec4("u_color", r, g, b, a)
         .f32("u_size", size)
         .vec2("u_texSize", w as f32, h as f32);
@@ -388,7 +388,7 @@ pub fn apply_eraser_dab_batch(
         if chunk.len() < 2 { break; }
 
         // Render to scratch
-        let mut pass = engine.pass(&engine.shaders.eraser_dab)
+        let mut pass = engine.pass_untyped(&engine.shaders.eraser_dab)
             .texture("u_stampTex", stamp_tex)
             .texture("u_layerTex", tex_handle)
             .f32("u_opacity", opacity)
@@ -405,7 +405,7 @@ pub fn apply_eraser_dab_batch(
             .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
         // Copy scratch A -> layer
-        engine.pass(&engine.shaders.blit)
+        engine.pass(&engine.shaders.blit, ())
             .texture("u_tex", engine.scratch_texture_a)
             .viewport(0, 0, w as i32, h as i32)
             .draw(Target::Texture(tex_handle));
@@ -460,7 +460,7 @@ fn merge_stroke_texture(engine: &mut EngineInner, layer_id: &str, stroke_tex: Te
 
             if engine.texture_pool.get(intermediate_tex).is_some() {
                 // Composite: stroke OVER layer → intermediate
-                let composite = engine.pass(&engine.shaders.composite)
+                let composite = engine.pass_untyped(&engine.shaders.composite)
                     .texture("u_srcTex", stroke_tex)
                     .texture("u_dstTex", layer_tex_handle)
                     .f32("u_opacity", 1.0)
@@ -472,7 +472,7 @@ fn merge_stroke_texture(engine: &mut EngineInner, layer_id: &str, stroke_tex: Te
                     .draw(Target::Texture(intermediate_tex));
 
                 // Blit intermediate → layer
-                engine.pass(&engine.shaders.blit)
+                engine.pass(&engine.shaders.blit, ())
                     .texture("u_tex", intermediate_tex)
                     .viewport(0, 0, w as i32, h as i32)
                     .draw(Target::Texture(layer_tex_handle));

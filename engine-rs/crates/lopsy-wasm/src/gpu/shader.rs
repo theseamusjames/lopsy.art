@@ -1,7 +1,11 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::rc::Rc;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
+
+use crate::gpu::params::filters::{PosterizeParams, ThresholdParams};
+use crate::gpu::uniforms::{flatten_params_block, glsl_name, Field, UniformSink, UniformType, Uniforms};
 
 pub const FULLSCREEN_QUAD_VERT: &str = r#"#version 300 es
 precision highp float;
@@ -133,14 +137,131 @@ pub const TONEMAP_FRAG: &str = include_str!("shaders/color/tonemap.glsl");
 // Text
 pub const TEXT_GLYPH_FRAG: &str = include_str!("shaders/text/text_glyph.glsl");
 
-pub struct ShaderProgram {
-    pub program: WebGlProgram,
-    uniforms: RefCell<HashMap<String, Option<WebGlUniformLocation>>>,
+/// Declares the typed shaders: each source tagged with the uniform struct
+/// its passes are created with. A test checks every struct against its
+/// source's `Params` block.
+macro_rules! typed_shaders {
+    ($($name:ident: $params:ty = $frag:expr;)*) => {
+        $(pub const $name: Shader<$params> = Shader::new($frag);)*
+
+        #[cfg(test)]
+        fn typed_shader_checks() -> Vec<(&'static str, Result<(), String>)> {
+            vec![$((
+                stringify!($name),
+                crate::gpu::uniforms::check::struct_matches_source::<$params>(&preprocess_frag($name.frag)),
+            )),*]
+        }
+    };
 }
 
-impl ShaderProgram {
+typed_shaders! {
+    BLIT: () = BLIT_FRAG;
+    INVERT: () = INVERT_FRAG;
+    POSTERIZE: PosterizeParams = POSTERIZE_FRAG;
+    THRESHOLD: ThresholdParams = THRESHOLD_FRAG;
+}
+
+/// Marks a program whose uniforms are still set one by one, by name. Each
+/// shader moves off it as it gains a `Params` block and a uniform struct.
+pub struct Untyped;
+
+/// A fragment shader's source, tagged with the uniform struct it takes.
+pub struct Shader<P> {
+    pub frag: &'static str,
+    params: PhantomData<fn(P)>,
+}
+
+impl<P> Shader<P> {
+    pub const fn new(frag: &'static str) -> Self {
+        Self { frag, params: PhantomData }
+    }
+}
+
+/// A linked program. `P` is the uniform struct its passes are created with.
+pub struct ShaderProgram<P = Untyped> {
+    linked: LinkedProgram,
+    marker: PhantomData<fn(P)>,
+}
+
+/// The part of a [`ShaderProgram`] that does not depend on its uniform
+/// struct. Everything that works on a program takes this, so that code is
+/// compiled once and not once per shader.
+pub(in crate::gpu) struct LinkedProgram {
+    pub(in crate::gpu) program: WebGlProgram,
+    uniforms: RefCell<HashMap<String, Option<WebGlUniformLocation>>>,
+    params: RefCell<Option<ParamState>>,
+}
+
+/// Where a typed program's `Params` members live, and the values they hold.
+struct ParamState {
+    /// One per field of the uniform struct; `None` where the compiler
+    /// dropped a member the shader variant does not read.
+    locations: Vec<Option<WebGlUniformLocation>>,
+    /// The bits last uploaded, field after field.
+    values: Vec<u32>,
+    is_uploaded: bool,
+}
+
+/// Sets the members whose value differs from what the program holds.
+struct ParamUpload<'a> {
+    gl: &'a WebGl2RenderingContext,
+    state: &'a mut ParamState,
+    field: usize,
+    offset: usize,
+}
+
+impl ParamUpload<'_> {
+    /// Records `bits` as the next field's value. Returns the field's
+    /// location if the value has to be sent.
+    fn store(&mut self, bits: impl ExactSizeIterator<Item = u32> + Clone) -> Option<&WebGlUniformLocation> {
+        let held = &mut self.state.values[self.offset..self.offset + bits.len()];
+        let field = self.field;
+        self.field += 1;
+        self.offset += bits.len();
+        if self.state.is_uploaded && held.iter().copied().eq(bits.clone()) {
+            return None;
+        }
+        for (slot, value) in held.iter_mut().zip(bits) {
+            *slot = value;
+        }
+        self.state.locations[field].as_ref()
+    }
+}
+
+impl UniformSink for ParamUpload<'_> {
+    fn floats(&mut self, ty: UniformType, values: &[f32]) {
+        let gl = self.gl;
+        let Some(location) = self.store(values.iter().map(|v| v.to_bits())) else { return };
+        let location = Some(location);
+        match ty {
+            UniformType::Float => gl.uniform1f(location, values[0]),
+            UniformType::Vec2 => gl.uniform2f(location, values[0], values[1]),
+            UniformType::Vec3 => gl.uniform3f(location, values[0], values[1], values[2]),
+            UniformType::Vec4 => gl.uniform4f(location, values[0], values[1], values[2], values[3]),
+            UniformType::Mat2 => gl.uniform_matrix2fv_with_f32_array(location, false, values),
+            UniformType::Mat3 => gl.uniform_matrix3fv_with_f32_array(location, false, values),
+            UniformType::FloatArray(_) => gl.uniform1fv_with_f32_array(location, values),
+            UniformType::Vec4Array(_) => gl.uniform4fv_with_f32_array(location, values),
+            UniformType::Int | UniformType::Uint | UniformType::Bool | UniformType::IVec2 => {}
+        }
+    }
+
+    fn ints(&mut self, ty: UniformType, values: &[i32]) {
+        let gl = self.gl;
+        let Some(location) = self.store(values.iter().map(|v| *v as u32)) else { return };
+        let location = Some(location);
+        match ty {
+            UniformType::Int | UniformType::Bool => gl.uniform1i(location, values[0]),
+            UniformType::Uint => gl.uniform1ui(location, values[0] as u32),
+            UniformType::IVec2 => gl.uniform2i(location, values[0], values[1]),
+            _ => {}
+        }
+    }
+}
+
+impl LinkedProgram {
     fn new(program: WebGlProgram) -> Self {
-        Self { program, uniforms: RefCell::new(HashMap::new()) }
+        Self { program, uniforms: RefCell::new(HashMap::new()), params: RefCell::new(None) }
     }
 
     /// Calls `set` with the location of uniform `name`, if the program has
@@ -163,6 +284,40 @@ impl ShaderProgram {
         self.with_location(gl, name, |found| location = Some(found.clone()));
         location
     }
+
+    /// Makes the program's `Params` members hold the struct that `put`
+    /// hands over, whose fields are `fields`. The program must be current.
+    /// A member is only sent when its value changed: uniforms belong to the
+    /// program and keep their value between passes, and they are written
+    /// nowhere else.
+    fn upload(&self, gl: &WebGl2RenderingContext, fields: &'static [Field], put: &dyn Fn(&mut ParamUpload)) {
+        if fields.is_empty() {
+            return;
+        }
+        let mut state = self.params.borrow_mut();
+        let state = state.get_or_insert_with(|| ParamState {
+            locations: fields
+                .iter()
+                .map(|field| gl.get_uniform_location(&self.program, &glsl_name(field.name)))
+                .collect(),
+            values: vec![0; fields.iter().map(|field| field.ty.components()).sum()],
+            is_uploaded: false,
+        });
+        put(&mut ParamUpload { gl, state, field: 0, offset: 0 });
+        state.is_uploaded = true;
+    }
+}
+
+impl<P> ShaderProgram<P> {
+    pub(in crate::gpu) fn linked(&self) -> &LinkedProgram {
+        &self.linked
+    }
+}
+
+/// Uploads `params` as `program`'s uniforms. `P` is the struct the program
+/// was compiled for; see [`LinkedProgram::upload`].
+pub(in crate::gpu) fn upload_params<P: Uniforms>(program: &LinkedProgram, gl: &WebGl2RenderingContext, params: &P) {
+    program.upload(gl, P::FIELDS, &|sink| params.put(sink));
 }
 
 pub fn compile_shader(
@@ -256,18 +411,46 @@ pub fn compile_program_with_defines(
     frag_src: &str,
     defines: &[(&str, &str)],
 ) -> Result<ShaderProgram, String> {
-    let frag_src = inject_defines(&preprocess_frag(frag_src), defines);
+    Ok(ShaderProgram { linked: link(gl, vert_src, frag_src, defines)?, marker: PhantomData })
+}
+
+/// Compiles a shader that takes the uniform struct `P`.
+pub fn compile<P: Uniforms>(
+    gl: &WebGl2RenderingContext,
+    vert_src: &str,
+    shader: &Shader<P>,
+) -> Result<ShaderProgram<P>, String> {
+    compile_with_defines(gl, vert_src, shader, &[])
+}
+
+/// [`compile`], with `#define`s injected into the fragment source.
+pub fn compile_with_defines<P: Uniforms>(
+    gl: &WebGl2RenderingContext,
+    vert_src: &str,
+    shader: &Shader<P>,
+    defines: &[(&str, &str)],
+) -> Result<ShaderProgram<P>, String> {
+    Ok(ShaderProgram { linked: link(gl, vert_src, shader.frag, defines)?, marker: PhantomData })
+}
+
+fn link(
+    gl: &WebGl2RenderingContext,
+    vert_src: &str,
+    frag_src: &str,
+    defines: &[(&str, &str)],
+) -> Result<LinkedProgram, String> {
+    let frag_src = flatten_params_block(&inject_defines(&preprocess_frag(frag_src), defines));
     let vert = compile_shader(gl, vert_src, WebGl2RenderingContext::VERTEX_SHADER)?;
     let frag = compile_shader(gl, &frag_src, WebGl2RenderingContext::FRAGMENT_SHADER)?;
     let program = link_program(gl, &vert, &frag)?;
     gl.delete_shader(Some(&vert));
     gl.delete_shader(Some(&frag));
-    Ok(ShaderProgram::new(program))
+    Ok(LinkedProgram::new(program))
 }
 
 pub struct ShaderPrograms {
     // Core
-    pub blit: ShaderProgram,
+    pub blit: ShaderProgram<()>,
     pub thumbnail_box: ShaderProgram,
     pub blit_resample: ShaderProgram,
     /// Blend program specialized for Normal mode (BLEND_MODE 0). Compiled at
@@ -305,9 +488,9 @@ pub struct ShaderPrograms {
     pub box_blur: ShaderProgram,
     pub adjustments: ShaderProgram,
     pub hue_sat: ShaderProgram,
-    pub invert: ShaderProgram,
-    pub posterize: ShaderProgram,
-    pub threshold: ShaderProgram,
+    pub invert: ShaderProgram<()>,
+    pub posterize: ShaderProgram<PosterizeParams>,
+    pub threshold: ShaderProgram<ThresholdParams>,
     pub noise: ShaderProgram,
     pub sharpen: ShaderProgram,
     pub vignette: ShaderProgram,
@@ -415,7 +598,7 @@ impl ShaderPrograms {
 
         Ok(Self {
             // Core
-            blit: compile_program(gl, v, BLIT_FRAG)?,
+            blit: compile(gl, v, &BLIT)?,
             thumbnail_box: compile_program(gl, v, THUMBNAIL_BOX_FRAG)?,
             blit_resample: compile_program(gl, v, BLIT_RESAMPLE_FRAG)?,
             blend_normal,
@@ -446,9 +629,9 @@ impl ShaderPrograms {
             box_blur: compile_program(gl, v, BOX_BLUR_FRAG)?,
             adjustments: compile_program(gl, v, ADJUSTMENTS_FRAG)?,
             hue_sat: compile_program(gl, v, HUE_SAT_FRAG)?,
-            invert: compile_program(gl, v, INVERT_FRAG)?,
-            posterize: compile_program(gl, v, POSTERIZE_FRAG)?,
-            threshold: compile_program(gl, v, THRESHOLD_FRAG)?,
+            invert: compile(gl, v, &INVERT)?,
+            posterize: compile(gl, v, &POSTERIZE)?,
+            threshold: compile(gl, v, &THRESHOLD)?,
             noise: compile_program(gl, v, NOISE_FRAG)?,
             sharpen: compile_program(gl, v, SHARPEN_FRAG)?,
             vignette: compile_program(gl, v, VIGNETTE_FRAG)?,
@@ -522,7 +705,7 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
+        inject_defines, preprocess_frag, typed_shader_checks, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
         OIL_PAINT_FRAG, SMUDGE_DAB_FRAG, VIGNETTE_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
         TEXTURE_FRAG,
     };
@@ -667,5 +850,14 @@ mod tests {
                 "kind {kind} does not dispatch to {func}"
             );
         }
+    }
+
+    #[test]
+    fn every_typed_shader_declares_its_uniform_struct_as_its_params_block() {
+        let failures: Vec<String> = typed_shader_checks()
+            .into_iter()
+            .filter_map(|(name, result)| result.err().map(|why| format!("{name}: {why}")))
+            .collect();
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
 }

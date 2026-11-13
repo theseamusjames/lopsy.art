@@ -3,6 +3,7 @@ use crate::coverage_stroke_gpu::{self, CoverageTool};
 use crate::engine::{EngineInner, ImageAdjustmentState};
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
 use crate::gpu::shader::ShaderProgram;
+use crate::gpu::uniforms::Uniforms;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
 use crate::effect_cache_gpu::{self as fx_cache, emit_effect, DocTarget, EffectCacheKey, EffectCapture, EffectOut, Phase};
@@ -475,7 +476,7 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
     let (screen_w, screen_h) = engine.gpu().screen_size()?;
     let channel_mask = engine.channel_mask;
     engine
-        .pass(&engine.shaders.final_blit)
+        .pass_untyped(&engine.shaders.final_blit)
         .blend(Blend::Off)
         .viewport(0, 0, screen_w, screen_h)
         .texture("u_compositeTex", engine.composite_texture)
@@ -507,16 +508,24 @@ fn main_target(engine: &EngineInner) -> DocTarget {
 /// Start a pass that covers the whole document and replaces what it draws
 /// over — the shape of every pass into the engine's document-sized
 /// framebuffers (composite, group scratch, scratch A and B).
-fn doc_pass<'a>(engine: &'a EngineInner, program: &'a ShaderProgram) -> Pass<'a> {
+fn doc_pass<'a, P: Uniforms>(engine: &'a EngineInner, program: &'a ShaderProgram<P>, params: P) -> Pass<'a, P> {
     engine
-        .pass(program)
+        .pass(program, params)
+        .blend(Blend::Off)
+        .viewport(0, 0, engine.doc_width as i32, engine.doc_height as i32)
+}
+
+/// [`doc_pass`] for a program whose uniforms are still set by name.
+fn doc_pass_untyped<'a>(engine: &'a EngineInner, program: &'a ShaderProgram) -> Pass<'a> {
+    engine
+        .pass_untyped(program)
         .blend(Blend::Off)
         .viewport(0, 0, engine.doc_width as i32, engine.doc_height as i32)
 }
 
 /// Copy the document-sized texture `src` over the framebuffer `dst`.
 fn copy_doc(engine: &EngineInner, src: TextureHandle, dst: FramebufferHandle, scissor: Scissor) {
-    doc_pass(engine, &engine.shaders.blit)
+    doc_pass(engine, &engine.shaders.blit, ())
         .scissor(scissor)
         .texture("u_tex", src)
         .draw(Target::Framebuffer(dst));
@@ -609,7 +618,7 @@ pub(crate) fn blend_through_scratch(
     };
     let scissor = clip.map_or(Scissor::Off, Scissor::Rect);
 
-    let mut pass = doc_pass(engine, program)
+    let mut pass = doc_pass_untyped(engine, program)
         .scissor(scissor)
         .texture("u_srcTex", source.texture)
         .texture("u_dstTex", target.tex)
@@ -776,7 +785,7 @@ fn refresh_pre_adj_cache(engine: &mut EngineInner, group_id: &str, src_tex: Text
         return;
     };
     engine
-        .pass(&engine.shaders.blit)
+        .pass(&engine.shaders.blit, ())
         .blend(Blend::Off)
         .texture("u_tex", src_tex)
         .draw(Target::Texture(cache_tex));
@@ -792,7 +801,7 @@ fn capture_effect_backdrop(engine: &mut EngineInner, blend_mode: i32, has_behind
     }
     let copy = engine.texture_pool.acquire(engine.doc_width, engine.doc_height).ok()?;
     let is_copied = engine
-        .pass(&engine.shaders.blit)
+        .pass(&engine.shaders.blit, ())
         .blend(Blend::Off)
         .texture("u_tex", target.tex)
         .draw(Target::Texture(copy));
@@ -874,7 +883,7 @@ fn render_layer_plus_stroke(
     let merged = engine.texture_pool.acquire(tw, th).ok()?;
 
     let is_drawn = engine
-        .pass(&engine.shaders.composite)
+        .pass_untyped(&engine.shaders.composite)
         .blend(Blend::Off)
         .texture("u_srcTex", stroke_handle)
         .texture("u_dstTex", layer_handle)
@@ -906,7 +915,7 @@ fn render_layer_masked_for_effects(
     let masked = engine.texture_pool.acquire(tw, th).ok()?;
 
     let is_drawn = engine
-        .pass(&engine.shaders.layer_mask_apply)
+        .pass_untyped(&engine.shaders.layer_mask_apply)
         .blend(Blend::Off)
         .texture("u_srcTex", src_handle)
         .texture("u_maskTex", mask.texture)
@@ -1051,7 +1060,7 @@ fn silhouette_by_band(
 
     // Band (out) + layer → silhouette (tmp).
     engine
-        .pass(&engine.shaders.stroke_apply)
+        .pass_untyped(&engine.shaders.stroke_apply)
         .blend(Blend::Off)
         .texture("u_bandTex", out)
         .texture("u_origTex", frame.src)
@@ -1082,7 +1091,7 @@ fn alpha_extract_pass<'a>(
     invert: bool,
 ) -> Pass<'a> {
     engine
-        .pass(&engine.shaders.glow)
+        .pass_untyped(&engine.shaders.glow)
         .blend(Blend::Off)
         .texture("u_srcTex", layer)
         .i32("u_origTex", 0)
@@ -1109,7 +1118,7 @@ fn blur_scratch_b(engine: &EngineInner, blur_radius: u32) {
         (engine.scratch_texture_a, engine.scratch_fbo_b, (0.0, 1.0)),
     ];
     for (read, write, direction) in steps {
-        doc_pass(engine, &engine.shaders.gaussian_blur)
+        doc_pass_untyped(engine, &engine.shaders.gaussian_blur)
             .texture("u_tex", read)
             .i32("u_radius", r as i32)
             .f32_array("u_weights[0]", &weights)
@@ -1121,7 +1130,7 @@ fn blur_scratch_b(engine: &EngineInner, blur_radius: u32) {
 /// A `glow.glsl` pass over the document with `source` as its input and every
 /// uniform but the raw-alpha and masking switches set from `glow`.
 fn glow_pass<'a>(engine: &'a EngineInner, source: TextureHandle, glow: &GlowDesc, mode: i32, tw: u32, th: u32, layer_x: f32, layer_y: f32) -> Pass<'a> {
-    doc_pass(engine, &engine.shaders.glow)
+    doc_pass_untyped(engine, &engine.shaders.glow)
         .texture("u_srcTex", source)
         .vec4("u_glowColor", glow.color[0], glow.color[1], glow.color[2], glow.color[3])
         .f32("u_size", glow.size)
@@ -1186,7 +1195,7 @@ fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th:
 /// A `shadow.glsl` pass over the document with `source` as its input and
 /// every uniform but the knockout and raw-alpha switches set from `shadow`.
 fn shadow_pass<'a>(engine: &'a EngineInner, source: TextureHandle, shadow: &ShadowDesc, tw: u32, th: u32, layer_x: f32, layer_y: f32) -> Pass<'a> {
-    doc_pass(engine, &engine.shaders.shadow)
+    doc_pass_untyped(engine, &engine.shaders.shadow)
         .texture("u_srcTex", source)
         .vec4("u_shadowColor", shadow.color[0], shadow.color[1], shadow.color[2], shadow.color[3])
         .vec2("u_offset", shadow.offset_x, shadow.offset_y)
@@ -1327,7 +1336,7 @@ enum StrokeBandPass {
 /// (texels with alpha ≥ 0.5) in `read`.
 fn stroke_band_pass<'a>(engine: &'a EngineInner, read: TextureHandle, pass: StrokeBandPass, reach: f32, is_oob_seed: bool) -> Pass<'a> {
     engine
-        .pass(&engine.shaders.separable_edt)
+        .pass_untyped(&engine.shaders.separable_edt)
         .blend(Blend::Off)
         .texture("u_tex", read)
         .i32("u_pass", matches!(pass, StrokeBandPass::Columns) as i32)
@@ -1352,7 +1361,7 @@ fn render_stroke_band(engine: &EngineInner, reach: f32, is_oob_seed: bool) {
 
 /// Band (scratch_b) + the original layer → the coloured stroke in scratch_a.
 fn render_stroke_apply(engine: &EngineInner, layer: &StrokeLayer, stroke: &StrokeDesc, apply_position: i32, knockout: bool) {
-    doc_pass(engine, &engine.shaders.stroke_apply)
+    doc_pass_untyped(engine, &engine.shaders.stroke_apply)
         .texture("u_bandTex", engine.scratch_texture_b)
         .texture("u_origTex", layer.texture)
         .vec4("u_strokeColor", stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3])
@@ -1724,7 +1733,7 @@ fn adjustment_values<'a>(pass: Pass<'a>, adj: &ImageAdjustmentState, brightness:
 /// so it cannot alias the render target. Returns the pass and how many
 /// texture units it bound.
 fn adjustments_pass<'a>(engine: &'a EngineInner, source: TextureHandle, adj: &ImageAdjustmentState) -> (Pass<'a>, u32) {
-    let mut pass = doc_pass(engine, &engine.shaders.adjustments).texture("u_tex", source);
+    let mut pass = doc_pass_untyped(engine, &engine.shaders.adjustments).texture("u_tex", source);
     pass = adjustment_values(pass, adj, 0.0, engine.doc_color_mode);
     let mut units = 1;
     let luts = [
@@ -1747,7 +1756,7 @@ fn adjustments_pass<'a>(engine: &'a EngineInner, source: TextureHandle, adj: &Im
 
 /// A pass over the document that applies the vignette to `source`.
 fn vignette_pass<'a>(engine: &'a EngineInner, source: TextureHandle, amount: f32) -> Pass<'a> {
-    doc_pass(engine, &engine.shaders.vignette)
+    doc_pass_untyped(engine, &engine.shaders.vignette)
         .texture("u_tex", source)
         .f32("u_amount", amount)
         .i32("u_docColorMode", engine.doc_color_mode as i32)

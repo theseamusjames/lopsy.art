@@ -29,7 +29,7 @@ pub(crate) fn scratch_dab_pass(
 /// Blit scratch A over `dst` at `w`×`h`, limited to `rect`.
 pub(crate) fn copy_scratch_a_to(engine: &EngineInner, dst: TextureHandle, w: u32, h: u32, rect: Rect) {
     engine
-        .pass(&engine.shaders.blit)
+        .pass(&engine.shaders.blit, ())
         .texture("u_tex", engine.scratch_texture_a)
         .viewport(0, 0, w as i32, h as i32)
         .scissor(Scissor::Rect(rect))

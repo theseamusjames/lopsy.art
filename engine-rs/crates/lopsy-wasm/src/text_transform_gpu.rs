@@ -61,7 +61,7 @@ pub fn render_text_raster_transformed(
 
     let result = layer_texture_sized(engine, layer_id, rect.width, rect.height).and_then(|handle| {
         let is_drawn = engine
-            .pass(&engine.shaders.transform_affine)
+            .pass_untyped(&engine.shaders.transform_affine)
             .texture("u_floatTex", src)
             .vec2("u_floatSize", raster.width as f32, raster.height as f32)
             .vec2("u_layerOffset", rect.x as f32, rect.y as f32)

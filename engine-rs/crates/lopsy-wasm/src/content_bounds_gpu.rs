@@ -93,7 +93,7 @@ fn draw_reduce_step(
 ) {
     let (ax, ay) = match axis { Axis::X => (1, 0), Axis::Y => (0, 1) };
     engine
-        .pass(&engine.shaders.content_bounds_reduce)
+        .pass_untyped(&engine.shaders.content_bounds_reduce)
         .texture("u_src", src)
         .ivec2("u_axis", ax, ay)
         .i32("u_span", SPAN as i32)
