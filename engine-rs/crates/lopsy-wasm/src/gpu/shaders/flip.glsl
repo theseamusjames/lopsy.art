@@ -2,8 +2,10 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform int u_flipH;
-uniform int u_flipV;
+layout(std140) uniform Params {
+    int u_flipH;
+    int u_flipV;
+};
 out vec4 fragColor;
 void main() {
     vec2 uv = v_uv;

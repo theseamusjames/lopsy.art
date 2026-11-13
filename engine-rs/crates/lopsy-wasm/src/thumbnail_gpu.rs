@@ -9,6 +9,7 @@
 use crate::engine::EngineInner;
 use crate::gpu::pass::ReadFormat;
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::params::core::ThumbnailBoxParams;
 
 /// `channel` value for a colour thumbnail (as opposed to one channel as grey).
 pub const COLOUR: i32 = -1;
@@ -44,10 +45,8 @@ pub fn read_box_thumbnail(
     }
     let (tw, th) = thumbnail_size(w, h, max_size);
 
-    let Some(thumb) = engine.pass_untyped(&engine.shaders.thumbnail_box)
+    let Some(thumb) = engine.pass(&engine.shaders.thumbnail_box, ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel })
         .texture("u_tex", src)
-        .vec2("u_dstSize", tw as f32, th as f32)
-        .i32("u_channel", channel)
         .read_back(ReadFormat::Rgba8, tw, th)
     else {
         return Vec::new();

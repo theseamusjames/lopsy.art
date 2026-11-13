@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
 
-use crate::gpu::params::filters::{PosterizeParams, ThresholdParams};
+use crate::gpu::params;
 use crate::gpu::uniforms::{flatten_params_block, glsl_name, Field, UniformSink, UniformType, Uniforms};
 
 pub const FULLSCREEN_QUAD_VERT: &str = r#"#version 300 es
@@ -157,8 +157,16 @@ macro_rules! typed_shaders {
 typed_shaders! {
     BLIT: () = BLIT_FRAG;
     INVERT: () = INVERT_FRAG;
-    POSTERIZE: PosterizeParams = POSTERIZE_FRAG;
-    THRESHOLD: ThresholdParams = THRESHOLD_FRAG;
+    POSTERIZE: params::filters::PosterizeParams = POSTERIZE_FRAG;
+    THRESHOLD: params::filters::ThresholdParams = THRESHOLD_FRAG;
+    BLIT_RESAMPLE: () = BLIT_RESAMPLE_FRAG;
+    BLIT_REGION: params::core::BlitRegionParams = BLIT_REGION_FRAG;
+    FLIP: params::core::FlipParams = FLIP_FRAG;
+    ROTATE90: params::core::Rotate90Params = ROTATE90_FRAG;
+    MASK_EXPAND: () = MASK_EXPAND_FRAG;
+    MASK_REMAP: params::core::MaskRemapParams = MASK_REMAP_FRAG;
+    QUICK_MASK_TRANSLATE: params::core::QuickMaskTranslateParams = QUICK_MASK_TRANSLATE_FRAG;
+    THUMBNAIL_BOX: params::core::ThumbnailBoxParams = THUMBNAIL_BOX_FRAG;
 }
 
 /// Marks a program whose uniforms are still set one by one, by name. Each
@@ -451,8 +459,8 @@ fn link(
 pub struct ShaderPrograms {
     // Core
     pub blit: ShaderProgram<()>,
-    pub thumbnail_box: ShaderProgram,
-    pub blit_resample: ShaderProgram,
+    pub thumbnail_box: ShaderProgram<params::core::ThumbnailBoxParams>,
+    pub blit_resample: ShaderProgram<()>,
     /// Blend program specialized for Normal mode (BLEND_MODE 0). Compiled at
     /// startup since nearly every composite pass uses it; the other modes are
     /// compiled lazily via `blend_for_mode`.
@@ -465,16 +473,16 @@ pub struct ShaderPrograms {
     gl: WebGl2RenderingContext,
     pub composite: ShaderProgram,
     pub final_blit: ShaderProgram,
-    pub flip: ShaderProgram,
+    pub flip: ShaderProgram<params::core::FlipParams>,
     pub clipboard_copy: ShaderProgram,
     pub layer_mask_apply: ShaderProgram,
     pub clipboard_clear: ShaderProgram,
     pub selection_fill: ShaderProgram,
-    pub rotate90: ShaderProgram,
-    pub blit_region: ShaderProgram,
-    pub mask_expand: ShaderProgram,
-    pub mask_remap: ShaderProgram,
-    pub quick_mask_translate: ShaderProgram,
+    pub rotate90: ShaderProgram<params::core::Rotate90Params>,
+    pub blit_region: ShaderProgram<params::core::BlitRegionParams>,
+    pub mask_expand: ShaderProgram<()>,
+    pub mask_remap: ShaderProgram<params::core::MaskRemapParams>,
+    pub quick_mask_translate: ShaderProgram<params::core::QuickMaskTranslateParams>,
     pub transform_affine: ShaderProgram,
     pub transform_perspective: ShaderProgram,
     // Effects
@@ -489,8 +497,8 @@ pub struct ShaderPrograms {
     pub adjustments: ShaderProgram,
     pub hue_sat: ShaderProgram,
     pub invert: ShaderProgram<()>,
-    pub posterize: ShaderProgram<PosterizeParams>,
-    pub threshold: ShaderProgram<ThresholdParams>,
+    pub posterize: ShaderProgram<params::filters::PosterizeParams>,
+    pub threshold: ShaderProgram<params::filters::ThresholdParams>,
     pub noise: ShaderProgram,
     pub sharpen: ShaderProgram,
     pub vignette: ShaderProgram,
@@ -599,23 +607,23 @@ impl ShaderPrograms {
         Ok(Self {
             // Core
             blit: compile(gl, v, &BLIT)?,
-            thumbnail_box: compile_program(gl, v, THUMBNAIL_BOX_FRAG)?,
-            blit_resample: compile_program(gl, v, BLIT_RESAMPLE_FRAG)?,
+            thumbnail_box: compile(gl, v, &THUMBNAIL_BOX)?,
+            blit_resample: compile(gl, v, &BLIT_RESAMPLE)?,
             blend_normal,
             blend_variants,
             gl: gl.clone(),
             composite: compile_program(gl, v, COMPOSITE_FRAG)?,
             final_blit: compile_program(gl, v, FINAL_BLIT_FRAG)?,
-            flip: compile_program(gl, v, FLIP_FRAG)?,
+            flip: compile(gl, v, &FLIP)?,
             clipboard_copy: compile_program(gl, v, CLIPBOARD_COPY_FRAG)?,
             layer_mask_apply: compile_program(gl, v, LAYER_MASK_APPLY_FRAG)?,
             clipboard_clear: compile_program(gl, v, CLIPBOARD_CLEAR_FRAG)?,
             selection_fill: compile_program(gl, v, SELECTION_FILL_FRAG)?,
-            rotate90: compile_program(gl, v, ROTATE90_FRAG)?,
-            blit_region: compile_program(gl, v, BLIT_REGION_FRAG)?,
-            mask_expand: compile_program(gl, v, MASK_EXPAND_FRAG)?,
-            mask_remap: compile_program(gl, v, MASK_REMAP_FRAG)?,
-            quick_mask_translate: compile_program(gl, v, QUICK_MASK_TRANSLATE_FRAG)?,
+            rotate90: compile(gl, v, &ROTATE90)?,
+            blit_region: compile(gl, v, &BLIT_REGION)?,
+            mask_expand: compile(gl, v, &MASK_EXPAND)?,
+            mask_remap: compile(gl, v, &MASK_REMAP)?,
+            quick_mask_translate: compile(gl, v, &QUICK_MASK_TRANSLATE)?,
             transform_affine: compile_program(gl, v, TRANSFORM_AFFINE_FRAG)?,
             transform_perspective: compile_program(gl, v, TRANSFORM_PERSPECTIVE_FRAG)?,
             // Effects
