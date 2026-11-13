@@ -3,16 +3,18 @@ precision highp float;
 
 in vec2 v_uv;
 uniform sampler2D u_compositeTex;
-uniform vec2 u_resolution;
-uniform float u_zoom;
-uniform vec2 u_pan;
-uniform vec2 u_docSize;
-uniform float u_bgAlpha;
-uniform float u_seamlessEnabled;
-uniform float u_seamlessDim;
-uniform vec4 u_channelMask;
-// Document color mode: 0 = sRGB-backed (RGB, grayscale, indexed, CMYK), 1 = Lab.
-uniform int u_docColorMode;
+layout(std140) uniform Params {
+    vec2 u_resolution;
+    float u_zoom;
+    vec2 u_pan;
+    vec2 u_docSize;
+    float u_bgAlpha;
+    float u_seamlessEnabled;
+    float u_seamlessDim;
+    vec4 u_channelMask;
+    // Document color mode: 0 = sRGB-backed (RGB, grayscale, indexed, CMYK), 1 = Lab.
+    int u_docColorMode;
+};
 out vec4 fragColor;
 
 // Lab documents store encoded CIELAB in the composite, so the screen needs

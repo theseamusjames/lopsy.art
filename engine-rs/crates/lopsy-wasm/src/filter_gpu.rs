@@ -201,16 +201,16 @@ pub fn apply_filter<P: Uniforms>(
     apply_filter_inner(engine, layer_id, |e, tex| e.pass(get_shader(e), params).texture("u_tex", tex), true, true);
 }
 
-/// [`apply_filter`] for a shader whose uniforms are still set by name:
-/// `set_uniforms` receives the filter's pass, with the layer already bound
-/// as `u_tex`, and adds the filter's own uniforms and textures to it.
-pub fn apply_filter_untyped(
+/// [`apply_filter`] with `extra` adding to the filter's pass, for a shader
+/// that needs more than the layer bound.
+pub fn apply_filter_with<P: Uniforms>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
+    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    params: P,
+    extra: impl for<'a> FnOnce(Pass<'a, P>) -> Pass<'a, P>,
 ) {
-    apply_filter_inner(engine, layer_id, |e, tex| set_uniforms(e.pass_untyped(get_shader(e)).texture("u_tex", tex)), true, true);
+    apply_filter_inner(engine, layer_id, |e, tex| extra(e.pass(get_shader(e), params).texture("u_tex", tex)), true, true);
 }
 
 /// [`apply_filter`] for a shader that samples a second texture through

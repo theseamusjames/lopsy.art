@@ -11,46 +11,42 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_srcTex;
 uniform sampler2D u_dstTex;
-uniform float u_opacity;
-uniform vec2 u_srcOffset;  // layer position in document pixels
-uniform vec2 u_srcSize;    // layer texture size in pixels
-uniform vec2 u_docSize;    // document size in pixels
-uniform int u_srcPremultiplied; // 1 if source is premultiplied alpha
-// When 1, the layer texture wraps modularly across the document — content
-// that overhangs one edge appears on the opposite side. Enabled by the
-// "Wrap" checkbox next to "Dim pattern" in the seamless-preview options.
-uniform int u_wrapLayer;
-uniform int u_overlayEnabled;   // 1 if color overlay is active
-uniform vec3 u_overlayColor;    // overlay color (RGB)
-uniform float u_overlayOpacity; // overlay mix factor
+layout(std140) uniform Params {
+    float u_opacity;
+    vec2 u_srcOffset; // layer position in document pixels
+    vec2 u_srcSize; // layer texture size in pixels
+    vec2 u_docSize; // document size in pixels
+    int u_srcPremultiplied; // 1 if source is premultiplied alpha
+    // When 1, the layer texture wraps modularly across the document — content
+    // that overhangs one edge appears on the opposite side. Enabled by the
+    // "Wrap" checkbox next to "Dim pattern" in the seamless-preview options.
+    int u_wrapLayer;
+    int u_overlayEnabled; // 1 if color overlay is active
+    vec3 u_overlayColor; // overlay color (RGB)
+    float u_overlayOpacity; // overlay mix factor
+    int u_hasMask; // 1 if layer mask is active
+    vec2 u_maskSize; // mask texture size in pixels
+    // Mask's own document-space origin. Distinct from u_srcOffset/effectiveOffset:
+    // a raster layer's texture can be cropped to its content bounds while inactive
+    // (a storage optimization, not a content move), which shifts u_srcOffset away
+    // from the mask's fixed origin. The mask must stay anchored to where it was
+    // created, not follow that crop (#850).
+    vec2 u_maskOffset;
+    int u_maskOverlay; // 1 = render mask as blue overlay (edit mode)
+    // Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Every
+    // non-Normal formula below assumes sRGB channels, so the blend decodes both
+    // sides first and re-encodes its result (#1372). Normal is a plain lerp and
+    // needs no decode.
+    int u_docColorMode;
+    int u_hasBackdrop;
+};
 uniform sampler2D u_maskTex;    // layer mask texture
-uniform int u_hasMask;          // 1 if layer mask is active
-uniform vec2 u_maskSize;        // mask texture size in pixels
-// Mask's own document-space origin. Distinct from u_srcOffset/effectiveOffset:
-// a raster layer's texture can be cropped to its content bounds while inactive
-// (a storage optimization, not a content move), which shifts u_srcOffset away
-// from the mask's fixed origin. The mask must stay anchored to where it was
-// created, not follow that crop (#850).
-uniform vec2 u_maskOffset;
-uniform int u_maskOverlay;      // 1 = render mask as blue overlay (edit mode)
-// Optional brush texture (modulates stroke alpha during composite)
-uniform sampler2D u_brushTexture;
-uniform int u_hasBrushTexture;
-uniform float u_textureScale;
-uniform int u_textureBlendMode;
-uniform vec2 u_brushTextureSize;
-// Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Every
-// non-Normal formula below assumes sRGB channels, so the blend decodes both
-// sides first and re-encodes its result (#1372). Normal is a plain lerp and
-// needs no decode.
-uniform int u_docColorMode;
 // The layer's own behind effects (outer glow, drop shadow, outside stroke)
 // are already in u_dstTex. A non-Normal layer blends with the backdrop as it
 // was *before* them (u_backdropTex), and the result covers the effects by the
 // layer's coverage. Blending against its own knocked-out shadow multiplied
 // the anti-aliased edge into it, a seam darker than the shadow (#1525).
 uniform sampler2D u_backdropTex;
-uniform int u_hasBackdrop;
 out vec4 fragColor;
 
 //#include hsl

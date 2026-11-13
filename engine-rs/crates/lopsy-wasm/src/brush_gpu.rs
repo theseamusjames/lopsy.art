@@ -1,9 +1,10 @@
 use lopsy_core::geometry::Rect;
 use crate::engine::EngineInner;
-use crate::gpu::pass::{Blend, Pass, Target};
+use crate::gpu::pass::{Blend, Target};
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::params::brush::{BrushDabParams, EraserDabParams, PencilDabParams};
 use crate::gpu::uniforms::Mat2;
+use crate::gpu::params::composite::CompositeParams;
 
 /// `handle`, if it still names a live texture.
 fn live_texture(engine: &EngineInner, handle: Option<TextureHandle>) -> Option<TextureHandle> {
@@ -15,22 +16,6 @@ fn layer_offset(engine: &EngineInner, layer_id: &str) -> (f32, f32) {
         .find(|l| l.id == layer_id)
         .map(|l| (l.x as f32, l.y as f32))
         .unwrap_or((0.0, 0.0))
-}
-
-/// Add the brush texture and the uniforms that place it to `pass`.
-fn brush_texture_inputs<'a>(engine: &'a EngineInner, mut pass: Pass<'a>, layer_id: &str) -> Pass<'a> {
-    let use_tex = engine.brush_has_texture && engine.brush_texture.is_some();
-    if use_tex {
-        if let Some(tex) = live_texture(engine, engine.brush_texture) {
-            pass = pass.texture("u_brushTexture", tex);
-        }
-    }
-    let (layer_ox, layer_oy) = layer_offset(engine, layer_id);
-    pass.i32("u_hasBrushTexture", i32::from(use_tex))
-        .f32("u_textureScale", engine.brush_texture_scale)
-        .i32("u_textureBlendMode", engine.brush_texture_blend_mode as i32)
-        .vec2("u_brushTextureSize", engine.brush_texture_width as f32, engine.brush_texture_height as f32)
-        .vec2("u_layerOffset", layer_ox, layer_oy)
 }
 
 pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
@@ -467,13 +452,9 @@ fn merge_stroke_texture(engine: &mut EngineInner, layer_id: &str, stroke_tex: Te
 
             if engine.texture_pool.get(intermediate_tex).is_some() {
                 // Composite: stroke OVER layer → intermediate
-                let composite = engine.pass_untyped(&engine.shaders.composite)
+                engine.pass(&engine.shaders.composite, CompositeParams { opacity: 1.0 })
                     .texture("u_srcTex", stroke_tex)
                     .texture("u_dstTex", layer_tex_handle)
-                    .f32("u_opacity", 1.0)
-                    // Stroke texture size for brush texture doc-space sampling
-                    .vec2("u_strokeTexSize", w as f32, h as f32);
-                brush_texture_inputs(engine, composite, layer_id)
                     .blend(Blend::Off)
                     .viewport(0, 0, w as i32, h as i32)
                     .draw(Target::Texture(intermediate_tex));

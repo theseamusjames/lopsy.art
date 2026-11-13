@@ -245,6 +245,16 @@ typed_shaders! {
     BRUSH_DAB_CIRCLE: params::brush::BrushDabParams = BRUSH_DAB_CIRCLE_FRAG;
     BRUSH_DAB_ALPHA: params::brush::BrushDabParams = BRUSH_DAB_ALPHA_FRAG;
     BRUSH_DAB_COLOR: params::brush::BrushDabParams = BRUSH_DAB_COLOR_FRAG;
+    GLOW: params::effects::GlowParams = GLOW_FRAG;
+    SHADOW: params::effects::ShadowParams = SHADOW_FRAG;
+    SEPARABLE_EDT: params::effects::SeparableEdtParams = SEPARABLE_EDT_FRAG;
+    STROKE_APPLY: params::effects::StrokeApplyParams = STROKE_APPLY_FRAG;
+    COLOR_OVERLAY: params::effects::ColorOverlayParams = COLOR_OVERLAY_FRAG;
+    VIGNETTE: params::filters::VignetteParams = VIGNETTE_FRAG;
+    ADJUSTMENTS: params::filters::AdjustmentsParams = ADJUSTMENTS_FRAG;
+    COMPOSITE: params::composite::CompositeParams = COMPOSITE_FRAG;
+    FINAL_BLIT: params::composite::FinalBlitParams = FINAL_BLIT_FRAG;
+    BLEND: params::composite::BlendParams = BLEND_FRAG;
 }
 
 /// Marks a program whose uniforms are still set one by one, by name. Each
@@ -542,15 +552,15 @@ pub struct ShaderPrograms {
     /// Blend program specialized for Normal mode (BLEND_MODE 0). Compiled at
     /// startup since nearly every composite pass uses it; the other modes are
     /// compiled lazily via `blend_for_mode`.
-    pub blend_normal: Rc<ShaderProgram>,
+    pub blend_normal: Rc<ShaderProgram<params::composite::BlendParams>>,
     /// Lazily compiled blend program variants, keyed by blend mode. Each
     /// variant is its own `ShaderProgram` with its own uniform-location
     /// cache — locations must never be shared across program variants.
-    blend_variants: RefCell<HashMap<i32, Rc<ShaderProgram>>>,
+    blend_variants: RefCell<HashMap<i32, Rc<ShaderProgram<params::composite::BlendParams>>>>,
     /// For compiling a blend variant the first time a document uses its mode.
     gl: WebGl2RenderingContext,
-    pub composite: ShaderProgram,
-    pub final_blit: ShaderProgram,
+    pub composite: ShaderProgram<params::composite::CompositeParams>,
+    pub final_blit: ShaderProgram<params::composite::FinalBlitParams>,
     pub flip: ShaderProgram<params::core::FlipParams>,
     pub clipboard_copy: ShaderProgram<params::core::ClipboardCopyParams>,
     pub layer_mask_apply: ShaderProgram<params::core::LayerMaskApplyParams>,
@@ -564,22 +574,22 @@ pub struct ShaderPrograms {
     pub transform_affine: ShaderProgram<params::core::TransformAffineParams>,
     pub transform_perspective: ShaderProgram<params::core::TransformPerspectiveParams>,
     // Effects
-    pub glow: ShaderProgram,
-    pub shadow: ShaderProgram,
-    pub separable_edt: ShaderProgram,
-    pub stroke_apply: ShaderProgram,
-    pub color_overlay: ShaderProgram,
+    pub glow: ShaderProgram<params::effects::GlowParams>,
+    pub shadow: ShaderProgram<params::effects::ShadowParams>,
+    pub separable_edt: ShaderProgram<params::effects::SeparableEdtParams>,
+    pub stroke_apply: ShaderProgram<params::effects::StrokeApplyParams>,
+    pub color_overlay: ShaderProgram<params::effects::ColorOverlayParams>,
     // Filters
     pub gaussian_blur: ShaderProgram<params::filters::GaussianBlurParams>,
     pub box_blur: ShaderProgram<params::filters::BoxBlurParams>,
-    pub adjustments: ShaderProgram,
+    pub adjustments: ShaderProgram<params::filters::AdjustmentsParams>,
     pub hue_sat: ShaderProgram<params::filters::HueSatParams>,
     pub invert: ShaderProgram<()>,
     pub posterize: ShaderProgram<params::filters::PosterizeParams>,
     pub threshold: ShaderProgram<params::filters::ThresholdParams>,
     pub noise: ShaderProgram<params::filters::NoiseParams>,
     pub sharpen: ShaderProgram<params::filters::SharpenParams>,
-    pub vignette: ShaderProgram,
+    pub vignette: ShaderProgram<params::filters::VignetteParams>,
     pub motion_blur: ShaderProgram<params::filters::MotionBlurParams>,
     pub radial_blur: ShaderProgram<params::filters::RadialBlurParams>,
     pub find_edges: ShaderProgram<()>,
@@ -646,13 +656,11 @@ pub struct ShaderPrograms {
 }
 
 /// Compiles the blend shader specialized for a single blend mode.
-fn compile_blend_variant(gl: &WebGl2RenderingContext, mode: i32) -> Result<ShaderProgram, String> {
-    compile_program_with_defines(
-        gl,
-        FULLSCREEN_QUAD_VERT,
-        BLEND_FRAG,
-        &[("BLEND_MODE", &mode.to_string())],
-    )
+fn compile_blend_variant(
+    gl: &WebGl2RenderingContext,
+    mode: i32,
+) -> Result<ShaderProgram<params::composite::BlendParams>, String> {
+    compile_with_defines(gl, FULLSCREEN_QUAD_VERT, &BLEND, &[("BLEND_MODE", &mode.to_string())])
 }
 
 impl ShaderPrograms {
@@ -661,7 +669,7 @@ impl ShaderPrograms {
     /// jank initial load, and most documents only ever use a few modes.
     /// Unknown modes fall back to Normal, matching the old uniform-driven
     /// shader's final `return s;` fallback.
-    pub fn blend_for_mode(&self, mode: i32) -> Result<Rc<ShaderProgram>, String> {
+    pub fn blend_for_mode(&self, mode: i32) -> Result<Rc<ShaderProgram<params::composite::BlendParams>>, String> {
         let max_mode = lopsy_core::color::BlendMode::ALL.len() as i32 - 1;
         let mode = if (0..=max_mode).contains(&mode) { mode } else { 0 };
         if let Some(program) = self.blend_variants.borrow().get(&mode) {
@@ -690,8 +698,8 @@ impl ShaderPrograms {
             blend_normal,
             blend_variants,
             gl: gl.clone(),
-            composite: compile_program(gl, v, COMPOSITE_FRAG)?,
-            final_blit: compile_program(gl, v, FINAL_BLIT_FRAG)?,
+            composite: compile(gl, v, &COMPOSITE)?,
+            final_blit: compile(gl, v, &FINAL_BLIT)?,
             flip: compile(gl, v, &FLIP)?,
             clipboard_copy: compile(gl, v, &CLIPBOARD_COPY)?,
             layer_mask_apply: compile(gl, v, &LAYER_MASK_APPLY)?,
@@ -705,22 +713,22 @@ impl ShaderPrograms {
             transform_affine: compile(gl, v, &TRANSFORM_AFFINE)?,
             transform_perspective: compile(gl, v, &TRANSFORM_PERSPECTIVE)?,
             // Effects
-            glow: compile_program(gl, v, GLOW_FRAG)?,
-            shadow: compile_program(gl, v, SHADOW_FRAG)?,
-            separable_edt: compile_program(gl, v, SEPARABLE_EDT_FRAG)?,
-            stroke_apply: compile_program(gl, v, STROKE_APPLY_FRAG)?,
-            color_overlay: compile_program(gl, v, COLOR_OVERLAY_FRAG)?,
+            glow: compile(gl, v, &GLOW)?,
+            shadow: compile(gl, v, &SHADOW)?,
+            separable_edt: compile(gl, v, &SEPARABLE_EDT)?,
+            stroke_apply: compile(gl, v, &STROKE_APPLY)?,
+            color_overlay: compile(gl, v, &COLOR_OVERLAY)?,
             // Filters
             gaussian_blur: compile(gl, v, &GAUSSIAN_BLUR)?,
             box_blur: compile(gl, v, &BOX_BLUR)?,
-            adjustments: compile_program(gl, v, ADJUSTMENTS_FRAG)?,
+            adjustments: compile(gl, v, &ADJUSTMENTS)?,
             hue_sat: compile(gl, v, &HUE_SAT)?,
             invert: compile(gl, v, &INVERT)?,
             posterize: compile(gl, v, &POSTERIZE)?,
             threshold: compile(gl, v, &THRESHOLD)?,
             noise: compile(gl, v, &NOISE)?,
             sharpen: compile(gl, v, &SHARPEN)?,
-            vignette: compile_program(gl, v, VIGNETTE_FRAG)?,
+            vignette: compile(gl, v, &VIGNETTE)?,
             motion_blur: compile(gl, v, &MOTION_BLUR)?,
             radial_blur: compile(gl, v, &RADIAL_BLUR)?,
             find_edges: compile(gl, v, &FIND_EDGES)?,
@@ -848,7 +856,7 @@ mod tests {
         for src in [ADJUSTMENTS_FRAG, VIGNETTE_FRAG] {
             let out = preprocess_frag(src);
             assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
-            assert!(out.contains("uniform int u_docColorMode;"));
+            assert!(out.contains("int u_docColorMode;"));
             assert!(out.contains("c.rgb = labToSrgb(c.rgb)"));
             assert!(out.contains("c.rgb = srgbToLab(c.rgb)"));
         }
@@ -861,17 +869,17 @@ mod tests {
         // Multiply/Screen/… on encoded Lab turned a grey Multiply blue (#1372).
         let out = preprocess_frag(BLEND_FRAG);
         assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
-        assert!(out.contains("uniform int u_docColorMode;"));
+        assert!(out.contains("int u_docColorMode;"));
         assert!(out.contains("srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(backdrop.rgb)))"));
     }
 
     #[test]
     fn photo_filter_runs_after_black_and_white() {
         let bw = ADJUSTMENTS_FRAG
-            .find("if (u_bw_enabled > 0.5)")
+            .find("if (u_bwEnabled > 0.5)")
             .expect("Black & White block");
         let pf = ADJUSTMENTS_FRAG
-            .find("if (u_pf_density > 0.001)")
+            .find("if (u_pfDensity > 0.001)")
             .expect("Photo Filter block");
         assert!(
             bw < pf,

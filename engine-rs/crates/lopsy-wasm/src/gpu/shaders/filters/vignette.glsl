@@ -2,11 +2,13 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_amount;
-// Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Scaling
-// the encoded a/b channels would push them toward -128 (blue), so the pass
-// darkens decoded sRGB and re-encodes it.
-uniform int u_docColorMode;
+layout(std140) uniform Params {
+    float u_amount;
+    // Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Scaling
+    // the encoded a/b channels would push them toward -128 (blue), so the pass
+    // darkens decoded sRGB and re-encodes it.
+    int u_docColorMode;
+};
 out vec4 fragColor;
 
 //#include lab

@@ -12,11 +12,12 @@ pub fn filter_brightness_contrast(
     engine: &mut Engine, layer_id: &str, brightness: f32, contrast: f32,
 ) {
     let doc_color_mode = engine.inner.doc_color_mode;
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter_with(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.adjustments,
-        |pass| crate::compositor::standalone_adjustments(pass, brightness / 100.0, contrast, doc_color_mode),
+        crate::compositor::standalone_adjustments(brightness / 100.0, contrast, doc_color_mode),
+        crate::compositor::park_adjustment_luts,
     );
 }
 

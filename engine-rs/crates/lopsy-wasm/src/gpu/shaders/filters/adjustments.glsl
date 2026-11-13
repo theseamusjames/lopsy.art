@@ -2,67 +2,78 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_brightness;
-uniform float u_contrast;
-uniform float u_exposure;
-uniform float u_highlights;
-uniform float u_shadows;
-uniform float u_whites;
-uniform float u_blacks;
-uniform float u_saturation;
-uniform float u_vibrance;
+layout(std140) uniform Params {
+    float u_brightness;
+    float u_contrast;
+    float u_exposure;
+    float u_highlights;
+    float u_shadows;
+    float u_whites;
+    float u_blacks;
+    float u_saturation;
+    float u_vibrance;
+    float u_hasLevels;
+    float u_hasCurves;
+    // Hue/Saturation: HSL-space adjustments applied after the standard pass.
+    float u_hueShift; // degrees: -180..180
+    float u_hslSaturation; // -100..100
+    float u_lightness; // -100..100
+    // Color Balance: per-tonal-range CMY→RGB shifts (-100..100 each channel).
+    vec3 u_cbShadows;
+    vec3 u_cbMidtones;
+    vec3 u_cbHighlights;
+    // Photo Filter: multiply+blend toward u_pfColor by u_pfDensity (0..1).
+    vec3 u_pfColor;
+    float u_pfDensity;
+    float u_pfLuminosity; // 1 = preserve luminosity
+    // Black & White: per-hue grayscale weights (default values ~ standard).
+    float u_bwReds;
+    float u_bwYellows;
+    float u_bwGreens;
+    float u_bwCyans;
+    float u_bwBlues;
+    float u_bwMagentas;
+    float u_bwEnabled; // 0 or 1
+    // Channel Mixer: 3x4 matrix (output R/G/B = mix(R,G,B) + constant/100).
+    float u_cmRr;
+    float u_cmRg;
+    float u_cmRb;
+    float u_cmRc;
+    float u_cmGr;
+    float u_cmGg;
+    float u_cmGb;
+    float u_cmGc;
+    float u_cmBr;
+    float u_cmBg;
+    float u_cmBb;
+    float u_cmBc;
+    float u_cmEnabled;
+    // Invert: flip all channels.
+    float u_invert;
+    float u_hasGradientMap;
+    // Color Grading: per-wheel offsets, rgb = tint, a = luminance.
+    float u_cgEnabled;
+    vec4 u_cgShadows;
+    vec4 u_cgMidtones;
+    vec4 u_cgHighlights;
+    vec4 u_cgGlobal;
+    float u_cgExponent; // Balance: bends luma before the tone masks.
+    float u_cgWidth; // Blending: half-width of the mask crossovers.
+    // Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Every
+    // node below assumes sRGB channels, so Lab pixels are decoded first and
+    // re-encoded at the end.
+    int u_docColorMode;
+};
 // Levels: 256x1 RGBA texture. R/G/B = per-channel Levels LUTs,
 // A = master RGB Levels LUT. u_hasLevels=0 skips the lookups.
 // Levels are applied before Curves (matches Photoshop compositing order).
 uniform sampler2D u_levelsLut;
-uniform float u_hasLevels;
 // Curves: 256x1 RGBA texture. R/G/B = per-channel curve LUTs,
 // A = master RGB curve LUT. u_hasCurves=0 skips the lookups so the
 // common no-curves case stays identical to the old shader.
 uniform sampler2D u_curveLut;
-uniform float u_hasCurves;
-// Hue/Saturation: HSL-space adjustments applied after the standard pass.
-uniform float u_hue_shift;       // degrees: -180..180
-uniform float u_hsl_saturation;  // -100..100
-uniform float u_lightness;       // -100..100
-// Color Balance: per-tonal-range CMY→RGB shifts (-100..100 each channel).
-uniform vec3 u_cb_shadows;
-uniform vec3 u_cb_midtones;
-uniform vec3 u_cb_highlights;
-// Photo Filter: multiply+blend toward u_pf_color by u_pf_density (0..1).
-uniform vec3 u_pf_color;
-uniform float u_pf_density;
-uniform float u_pf_luminosity;  // 1 = preserve luminosity
-// Black & White: per-hue grayscale weights (default values ~ standard).
-uniform float u_bw_reds;
-uniform float u_bw_yellows;
-uniform float u_bw_greens;
-uniform float u_bw_cyans;
-uniform float u_bw_blues;
-uniform float u_bw_magentas;
-uniform float u_bw_enabled;     // 0 or 1
-// Channel Mixer: 3x4 matrix (output R/G/B = mix(R,G,B) + constant/100).
-uniform float u_cm_rr; uniform float u_cm_rg; uniform float u_cm_rb; uniform float u_cm_rc;
-uniform float u_cm_gr; uniform float u_cm_gg; uniform float u_cm_gb; uniform float u_cm_gc;
-uniform float u_cm_br; uniform float u_cm_bg; uniform float u_cm_bb; uniform float u_cm_bc;
-uniform float u_cm_enabled;
-// Invert: flip all channels.
-uniform float u_invert;
 // Gradient Map: 256x1 RGBA LUT mapping luminosity → colour.
 uniform sampler2D u_gradientLut;
-uniform float u_hasGradientMap;
-// Color Grading: per-wheel offsets, rgb = tint, a = luminance.
-uniform float u_cg_enabled;
-uniform vec4 u_cg_shadows;
-uniform vec4 u_cg_midtones;
-uniform vec4 u_cg_highlights;
-uniform vec4 u_cg_global;
-uniform float u_cg_exponent;  // Balance: bends luma before the tone masks.
-uniform float u_cg_width;     // Blending: half-width of the mask crossovers.
-// Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Every
-// node below assumes sRGB channels, so Lab pixels are decoded first and
-// re-encoded at the end.
-uniform int u_docColorMode;
 out vec4 fragColor;
 
 //#include hsl
@@ -159,10 +170,10 @@ void main() {
     }
 
     // Hue/Saturation: HSL-space adjustments.
-    if (abs(u_hue_shift) > 0.001 || abs(u_hsl_saturation) > 0.001 || abs(u_lightness) > 0.001) {
+    if (abs(u_hueShift) > 0.001 || abs(u_hslSaturation) > 0.001 || abs(u_lightness) > 0.001) {
         vec3 hsl = rgb2hsl(c.rgb);
-        hsl.x = fract(hsl.x + u_hue_shift / 360.0);
-        hsl.y = clamp(hsl.y * (1.0 + u_hsl_saturation / 100.0), 0.0, 1.0);
+        hsl.x = fract(hsl.x + u_hueShift / 360.0);
+        hsl.y = clamp(hsl.y * (1.0 + u_hslSaturation / 100.0), 0.0, 1.0);
         c.rgb = hsl2rgb(hsl);
         // Lightness blends towards black or white (as Photoshop does) rather
         // than shifting HSL L, which turns pale tints into vivid colours.
@@ -171,28 +182,28 @@ void main() {
     }
 
     // Color Balance: shift colors in each tonal range toward CMY or RGB.
-    if (dot(abs(u_cb_shadows), vec3(1.0)) > 0.001 ||
-        dot(abs(u_cb_midtones), vec3(1.0)) > 0.001 ||
-        dot(abs(u_cb_highlights), vec3(1.0)) > 0.001) {
+    if (dot(abs(u_cbShadows), vec3(1.0)) > 0.001 ||
+        dot(abs(u_cbMidtones), vec3(1.0)) > 0.001 ||
+        dot(abs(u_cbHighlights), vec3(1.0)) > 0.001) {
         float l2 = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
         float shadowW    = clamp(1.0 - l2 * 2.0, 0.0, 1.0);
         float highlightW = clamp(l2 * 2.0 - 1.0, 0.0, 1.0);
         float midtoneW   = clamp(1.0 - shadowW - highlightW, 0.0, 1.0);
-        c.rgb += (u_cb_shadows * shadowW + u_cb_midtones * midtoneW + u_cb_highlights * highlightW) / 100.0;
+        c.rgb += (u_cbShadows * shadowW + u_cbMidtones * midtoneW + u_cbHighlights * highlightW) / 100.0;
         c.rgb = clamp(c.rgb, 0.0, 1.0);
     }
 
     // Black & White: per-hue weighted grayscale.
-    if (u_bw_enabled > 0.5) {
+    if (u_bwEnabled > 0.5) {
         vec3 hsl = rgb2hsl(c.rgb);
         float h6 = hsl.x * 6.0;
         float w;
-        if      (h6 < 1.0) w = mix(u_bw_reds,     u_bw_yellows,  h6);
-        else if (h6 < 2.0) w = mix(u_bw_yellows,  u_bw_greens,   h6 - 1.0);
-        else if (h6 < 3.0) w = mix(u_bw_greens,   u_bw_cyans,    h6 - 2.0);
-        else if (h6 < 4.0) w = mix(u_bw_cyans,    u_bw_blues,    h6 - 3.0);
-        else if (h6 < 5.0) w = mix(u_bw_blues,    u_bw_magentas, h6 - 4.0);
-        else               w = mix(u_bw_magentas,  u_bw_reds,     h6 - 5.0);
+        if      (h6 < 1.0) w = mix(u_bwReds,     u_bwYellows,  h6);
+        else if (h6 < 2.0) w = mix(u_bwYellows,  u_bwGreens,   h6 - 1.0);
+        else if (h6 < 3.0) w = mix(u_bwGreens,   u_bwCyans,    h6 - 2.0);
+        else if (h6 < 4.0) w = mix(u_bwCyans,    u_bwBlues,    h6 - 3.0);
+        else if (h6 < 5.0) w = mix(u_bwBlues,    u_bwMagentas, h6 - 4.0);
+        else               w = mix(u_bwMagentas,  u_bwReds,     h6 - 5.0);
         float stdLum = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
         float gray = mix(stdLum, clamp(w / 100.0 * hsl.z * 2.0, 0.0, 1.0), hsl.y);
         c.rgb = vec3(clamp(gray, 0.0, 1.0));
@@ -202,10 +213,10 @@ void main() {
     // Runs after Black & White, which rebuilds RGB from a grey and would
     // otherwise discard the tint: a toned monochrome is the only useful
     // result of combining the two (#1277).
-    if (u_pf_density > 0.001) {
-        vec3 filtered = c.rgb * u_pf_color;
-        vec3 result = mix(c.rgb, filtered, u_pf_density);
-        if (u_pf_luminosity > 0.5) {
+    if (u_pfDensity > 0.001) {
+        vec3 filtered = c.rgb * u_pfColor;
+        vec3 result = mix(c.rgb, filtered, u_pfDensity);
+        if (u_pfLuminosity > 0.5) {
             // Scale result to match the original luminance rather than swapping
             // the HSL L channel. The L-swap causes unexpected hue shifts when
             // the filter and source are complementary (e.g. orange on blue sky).
@@ -221,10 +232,10 @@ void main() {
     }
 
     // Channel Mixer: linear combination of input channels per output channel.
-    if (u_cm_enabled > 0.5) {
-        float r = clamp(c.r * u_cm_rr + c.g * u_cm_rg + c.b * u_cm_rb + u_cm_rc / 100.0, 0.0, 1.0);
-        float g = clamp(c.r * u_cm_gr + c.g * u_cm_gg + c.b * u_cm_gb + u_cm_gc / 100.0, 0.0, 1.0);
-        float b = clamp(c.r * u_cm_br + c.g * u_cm_bg + c.b * u_cm_bb + u_cm_bc / 100.0, 0.0, 1.0);
+    if (u_cmEnabled > 0.5) {
+        float r = clamp(c.r * u_cmRr + c.g * u_cmRg + c.b * u_cmRb + u_cmRc / 100.0, 0.0, 1.0);
+        float g = clamp(c.r * u_cmGr + c.g * u_cmGg + c.b * u_cmGb + u_cmGc / 100.0, 0.0, 1.0);
+        float b = clamp(c.r * u_cmBr + c.g * u_cmBg + c.b * u_cmBb + u_cmBc / 100.0, 0.0, 1.0);
         c.rgb = vec3(r, g, b);
     }
 
@@ -243,12 +254,12 @@ void main() {
     // Color Grading: runs last because Black & White and Gradient Map rebuild
     // RGB and would discard an earlier tint; a split-toned monochrome is one
     // of the main reasons to reach for it.
-    if (u_cg_enabled > 0.5) {
-        float tone = pow(clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0), u_cg_exponent);
-        float shadowW    = 1.0 - smoothstep(1.0 / 3.0 - u_cg_width, 1.0 / 3.0 + u_cg_width, tone);
-        float highlightW = smoothstep(2.0 / 3.0 - u_cg_width, 2.0 / 3.0 + u_cg_width, tone);
+    if (u_cgEnabled > 0.5) {
+        float tone = pow(clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0), u_cgExponent);
+        float shadowW    = 1.0 - smoothstep(1.0 / 3.0 - u_cgWidth, 1.0 / 3.0 + u_cgWidth, tone);
+        float highlightW = smoothstep(2.0 / 3.0 - u_cgWidth, 2.0 / 3.0 + u_cgWidth, tone);
         float midtoneW   = 1.0 - shadowW - highlightW;
-        vec4 grade = u_cg_global + u_cg_shadows * shadowW + u_cg_midtones * midtoneW + u_cg_highlights * highlightW;
+        vec4 grade = u_cgGlobal + u_cgShadows * shadowW + u_cgMidtones * midtoneW + u_cgHighlights * highlightW;
         c.rgb = softOffset(c.rgb, grade.rgb + grade.a);
     }
 

@@ -3,20 +3,22 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_srcTex;
 uniform sampler2D u_origTex;   // original layer texture (for post-blur masking)
-uniform int u_hasOrigTex;      // 1 = use u_origTex for masking instead of u_srcTex
-uniform vec4 u_glowColor;
-uniform float u_size;
-uniform float u_spread;
-uniform float u_opacity;
-uniform vec2 u_texelSize;  // 1/layerWidth, 1/layerHeight
-uniform vec2 u_srcOffset;  // layer position in document pixels
-uniform vec2 u_srcSize;    // layer texture size in pixels
-uniform vec2 u_docSize;    // document size in pixels
-uniform int u_mode;        // 0 = outer glow, 1 = inner glow
-uniform int u_rawAlpha;    // 1 = output raw alpha only (pre-blur extraction)
-// original layer position/size for post-blur masking lookups
-uniform vec2 u_origOffset;
-uniform vec2 u_origSize;
+layout(std140) uniform Params {
+    int u_hasOrigTex; // 1 = use u_origTex for masking instead of u_srcTex
+    vec4 u_glowColor;
+    float u_size;
+    float u_spread;
+    float u_opacity;
+    vec2 u_texelSize; // 1/layerWidth, 1/layerHeight
+    vec2 u_srcOffset; // layer position in document pixels
+    vec2 u_srcSize; // layer texture size in pixels
+    vec2 u_docSize; // document size in pixels
+    int u_mode; // 0 = outer glow, 1 = inner glow
+    int u_rawAlpha; // 1 = output raw alpha only (pre-blur extraction)
+    // original layer position/size for post-blur masking lookups
+    vec2 u_origOffset;
+    vec2 u_origSize;
+};
 out vec4 fragColor;
 
 void main() {

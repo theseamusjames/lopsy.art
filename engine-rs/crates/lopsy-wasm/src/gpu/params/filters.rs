@@ -341,3 +341,67 @@ uniforms! {
         pub step: i32,
     }
 }
+
+uniforms! {
+    /// `filters/vignette.glsl`
+    pub struct VignetteParams {
+        pub amount: f32,
+        pub doc_color_mode: i32,
+    }
+}
+
+uniforms! {
+    /// `filters/adjustments.glsl`
+    pub struct AdjustmentsParams {
+        pub brightness: f32,
+        pub contrast: f32,
+        pub exposure: f32,
+        pub highlights: f32,
+        pub shadows: f32,
+        pub whites: f32,
+        pub blacks: f32,
+        pub saturation: f32,
+        pub vibrance: f32,
+        pub has_levels: f32,
+        pub has_curves: f32,
+        pub hue_shift: f32,
+        pub hsl_saturation: f32,
+        pub lightness: f32,
+        pub cb_shadows: [f32; 3],
+        pub cb_midtones: [f32; 3],
+        pub cb_highlights: [f32; 3],
+        pub pf_color: [f32; 3],
+        pub pf_density: f32,
+        pub pf_luminosity: f32,
+        pub bw_reds: f32,
+        pub bw_yellows: f32,
+        pub bw_greens: f32,
+        pub bw_cyans: f32,
+        pub bw_blues: f32,
+        pub bw_magentas: f32,
+        pub bw_enabled: f32,
+        pub cm_rr: f32,
+        pub cm_rg: f32,
+        pub cm_rb: f32,
+        pub cm_rc: f32,
+        pub cm_gr: f32,
+        pub cm_gg: f32,
+        pub cm_gb: f32,
+        pub cm_gc: f32,
+        pub cm_br: f32,
+        pub cm_bg: f32,
+        pub cm_bb: f32,
+        pub cm_bc: f32,
+        pub cm_enabled: f32,
+        pub invert: f32,
+        pub has_gradient_map: f32,
+        pub cg_enabled: f32,
+        pub cg_shadows: [f32; 4],
+        pub cg_midtones: [f32; 4],
+        pub cg_highlights: [f32; 4],
+        pub cg_global: [f32; 4],
+        pub cg_exponent: f32,
+        pub cg_width: f32,
+        pub doc_color_mode: i32,
+    }
+}
