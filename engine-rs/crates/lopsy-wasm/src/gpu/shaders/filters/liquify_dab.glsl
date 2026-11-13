@@ -4,12 +4,14 @@ precision highp float;
 in vec2 v_uv;
 
 uniform sampler2D u_disp;
-uniform vec2 u_center;
-uniform float u_radius;
-uniform float u_pressure;
-uniform vec2 u_drag;
-uniform int u_mode;
-uniform vec2 u_size;
+layout(std140) uniform Params {
+    vec2 u_center;
+    float u_radius;
+    float u_pressure;
+    vec2 u_drag;
+    int u_mode;
+    vec2 u_size;
+};
 
 out vec4 fragColor;
 

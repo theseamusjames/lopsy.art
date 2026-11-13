@@ -10,6 +10,8 @@ use lopsy_core::{cmyk, lab, quantize};
 
 use crate::{compositor, filter_gpu, layer_manager};
 use crate::Engine;
+use crate::gpu::params::color::ColorConvertParams;
+use crate::gpu::uniforms::Mat3;
 
 /// Rec. 709 luma weights, applied to the stored (gamma-encoded) values so the
 /// result matches the Black & White adjustment in `adjustments.glsl`.
@@ -31,11 +33,11 @@ const GRAYSCALE_MATRIX: [f32; 9] = [
 /// conversion must not leave part of a layer in the previous color space.
 #[wasm_bindgen(js_name = "convertLayerToGrayscale")]
 pub fn convert_layer_to_grayscale(engine: &mut Engine, layer_id: &str) {
-    filter_gpu::apply_pointwise_filter_full_layer_untyped(
+    filter_gpu::apply_pointwise_filter_full_layer(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.color_convert,
-        |pass| pass.mat3("u_colorMatrix", &GRAYSCALE_MATRIX),
+        ColorConvertParams { color_matrix: Mat3(GRAYSCALE_MATRIX) },
     );
 }
 

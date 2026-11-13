@@ -9,16 +9,18 @@ precision highp int;
 
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform int u_kind;       // 0 grain, 1 rough, 2 canvas, 3 streaks, 4 cells
-uniform int u_blend;      // 0 light & dark, 1 lighten, 2 darken, 3 relief
-uniform float u_amount;   // 0 - 1
-uniform float u_size;     // feature size, px
-uniform float u_stretch;  // elongation along u_angle, >= 1
-uniform float u_angle;    // radians
-uniform float u_octaves;  // 1 - 6, fractional
-uniform float u_contrast; // 0 - 1
-uniform bool u_colored;
-uniform uint u_seed;
+layout(std140) uniform Params {
+    int u_kind; // 0 grain, 1 rough, 2 canvas, 3 streaks, 4 cells
+    int u_blend; // 0 light & dark, 1 lighten, 2 darken, 3 relief
+    float u_amount; // 0 - 1
+    float u_size; // feature size, px
+    float u_stretch; // elongation along u_angle, >= 1
+    float u_angle; // radians
+    float u_octaves; // 1 - 6, fractional
+    float u_contrast; // 0 - 1
+    bool u_colored;
+    uint u_seed;
+};
 out vec4 fragColor;
 
 const float PI = 3.14159265359;

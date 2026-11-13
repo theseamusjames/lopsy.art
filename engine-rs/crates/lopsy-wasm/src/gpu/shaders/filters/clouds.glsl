@@ -5,8 +5,10 @@ in vec2 v_uv;
 out vec4 fragColor;
 
 uniform sampler2D u_tex;
-uniform float u_scale;
-uniform float u_seed;
+layout(std140) uniform Params {
+    float u_scale;
+    float u_seed;
+};
 
 // Simplex-like value noise
 float hash(vec2 p) {

@@ -6,12 +6,14 @@ out vec4 fragColor;
 
 uniform sampler2D u_tex;
 uniform sampler2D u_grid;
-uniform vec2 u_gridSize;
-// Bounds in texture UV coordinates (0..1). Pixels outside the bounds
-// pass through unchanged. When bounds = (0,0,1,1) the warp covers the
-// whole image.
-uniform vec2 u_boundsMin;
-uniform vec2 u_boundsMax;
+layout(std140) uniform Params {
+    vec2 u_gridSize;
+    // Bounds in texture UV coordinates (0..1). Pixels outside the bounds
+    // pass through unchanged. When bounds = (0,0,1,1) the warp covers the
+    // whole image.
+    vec2 u_boundsMin;
+    vec2 u_boundsMax;
+};
 
 // Each grid texel holds one point's offset from its identity position in
 // bounds-local units, 16 bits per axis: (R, G) = high and low byte of X,

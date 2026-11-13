@@ -9,9 +9,11 @@ use crate::filter_gpu;
 use crate::gpu::pass::Target;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::params::filters::{
-    CelShadingParams, ChromaticAberrationParams, EmbossParams, HalftoneParams, KaleidoscopeParams,
-    LensDistortionParams, OilPaintParams, PixelStretchParams, VoronoiParams,
+    BloomCombineParams, BloomThresholdParams, CelShadingParams, ChromaticAberrationParams, EmbossParams,
+    GaussianBlurParams, HalftoneParams, KaleidoscopeParams, LensDistortionParams, OilPaintParams,
+    PixelStretchParams, VoronoiParams,
 };
+use crate::gpu::uniforms::FloatArray;
 
 #[wasm_bindgen(js_name = "filterPixelate")]
 pub fn filter_pixelate(engine: &mut Engine, layer_id: &str, block_size: u32) {
@@ -192,25 +194,22 @@ pub fn filter_bloom(
     let inner = &engine.inner;
 
     // Pass 1: Threshold — extract bright pixels (layer → scratch B)
-    inner.pass_untyped(&inner.shaders.bloom_threshold)
+    inner.pass(&inner.shaders.bloom_threshold, BloomThresholdParams { threshold, soft_knee })
         .texture("u_tex", tex_handle)
-        .f32("u_threshold", threshold)
-        .f32("u_softKnee", soft_knee)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(inner.scratch_fbo_b));
 
-    let center = radius as usize;
+    // Half-kernel from the centre out.
+    let weights = FloatArray::from_slice(kernel.get(radius as usize..).unwrap_or(&[]));
     let blur_pass = |src: TextureHandle, direction: (f32, f32)| {
-        let mut pass = inner.pass_untyped(&inner.shaders.gaussian_blur)
+        inner
+            .pass(&inner.shaders.gaussian_blur, GaussianBlurParams {
+                direction: [direction.0, direction.1],
+                weights,
+                radius: radius as i32,
+            })
             .texture("u_tex", src)
-            .vec2("u_direction", direction.0, direction.1)
-            .i32("u_radius", radius as i32);
-        for i in 0..64usize {
-            let ki = center + i;
-            let wt = if ki < kernel.len() { kernel[ki] } else { 0.0 };
-            pass = pass.f32(&format!("u_weights[{i}]"), wt);
-        }
-        pass.viewport(0, 0, w as i32, h as i32)
+            .viewport(0, 0, w as i32, h as i32)
     };
     // Pass 2: Horizontal blur (scratch B → scratch A)
     blur_pass(inner.scratch_texture_b, (1.0, 0.0)).draw(Target::Framebuffer(inner.scratch_fbo_a));
@@ -218,10 +217,9 @@ pub fn filter_bloom(
     blur_pass(inner.scratch_texture_a, (0.0, 1.0)).draw(Target::Framebuffer(inner.scratch_fbo_b));
 
     // Pass 4: Combine — add bloom onto original (layer + scratch B → scratch A)
-    inner.pass_untyped(&inner.shaders.bloom_combine)
+    inner.pass(&inner.shaders.bloom_combine, BloomCombineParams { intensity })
         .texture("u_tex", tex_handle)
         .texture("u_bloomTex", inner.scratch_texture_b)
-        .f32("u_intensity", intensity)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(inner.scratch_fbo_a));
 

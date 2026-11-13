@@ -4,7 +4,7 @@ use crate::gpu::pass::{Pass, Target};
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::uniforms::Uniforms;
-use crate::gpu::params::filters::{PixelateBlocksParams, PixelateParams, SelectionMaskBlendParams};
+use crate::gpu::params::filters::{ChannelExtractParams, PixelateBlocksParams, PixelateParams, SelectionMaskBlendParams};
 
 /// Blend the filtered result with the original layer texture
 /// using the selection mask. Writes the blended result back to the layer texture.
@@ -126,7 +126,7 @@ pub fn end_mask_filter_target(engine: &mut EngineInner) {
     let Some(target) = engine.mask_filter_target.take() else { return };
     let id = target.layer_id.as_str();
 
-    apply_filter_full_layer_untyped(engine, id, |e| &e.shaders.mask_luminance, |pass| pass);
+    apply_filter_full_layer(engine, id, |e| &e.shaders.mask_luminance, ());
 
     let (cur_x, cur_y) = engine.layer_stack.iter()
         .find(|l| l.id == id)
@@ -213,16 +213,42 @@ pub fn apply_filter_untyped(
     apply_filter_inner(engine, layer_id, |e, tex| set_uniforms(e.pass_untyped(get_shader(e)).texture("u_tex", tex)), true, true);
 }
 
+/// [`apply_filter`] for a shader that samples a second texture through
+/// `sampler`. With no texture to give it, the sampler is pointed at the
+/// unit after the layer's with nothing bound.
+pub fn apply_filter_with_texture<P: Uniforms>(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    params: P,
+    sampler: &str,
+    texture: Option<TextureHandle>,
+) {
+    apply_filter_inner(
+        engine,
+        layer_id,
+        |e, tex| {
+            let pass = e.pass(get_shader(e), params).texture("u_tex", tex);
+            match texture {
+                Some(texture) => pass.texture(sampler, texture),
+                None => pass.sampler_unit(sampler, 1),
+            }
+        },
+        true,
+        true,
+    );
+}
+
 /// Like `apply_filter`, but always transforms the whole layer even when a
 /// selection is active. Document-wide operations (color mode conversion) must
 /// not leave part of a layer in the old color space.
-pub fn apply_filter_full_layer_untyped(
+pub fn apply_filter_full_layer<P: Uniforms>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
+    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    params: P,
 ) {
-    apply_filter_inner(engine, layer_id, |e, tex| set_uniforms(e.pass_untyped(get_shader(e)).texture("u_tex", tex)), false, true);
+    apply_filter_inner(engine, layer_id, |e, tex| e.pass(get_shader(e), params).texture("u_tex", tex), false, true);
 }
 
 /// Like `apply_filter_full_layer`, for shaders that read only the texel
@@ -230,13 +256,13 @@ pub fn apply_filter_full_layer_untyped(
 /// size: growing it to the document would re-origin the texture behind the
 /// caller's back, and a caller that then pushes the layer's old cropped
 /// `x`/`y` draws the content at twice its offset (#1367).
-pub fn apply_pointwise_filter_full_layer_untyped(
+pub fn apply_pointwise_filter_full_layer<P: Uniforms>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_uniforms: impl for<'a> FnOnce(Pass<'a>) -> Pass<'a>,
+    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    params: P,
 ) {
-    apply_filter_inner(engine, layer_id, |e, tex| set_uniforms(e.pass_untyped(get_shader(e)).texture("u_tex", tex)), false, false);
+    apply_filter_inner(engine, layer_id, |e, tex| e.pass(get_shader(e), params).texture("u_tex", tex), false, false);
 }
 
 /// `start_pass` starts the filter's pass with the layer texture it is
@@ -298,13 +324,14 @@ fn apply_filter_inner<P>(
     engine.mark_layer_dirty(layer_id);
 }
 
-/// Two-pass separable blur (horizontal then vertical).
+/// Two-pass separable blur (horizontal then vertical). `params` gives the
+/// shader's uniforms for a blur along the direction it is handed.
 /// Used for both Gaussian and box blur.
-pub fn apply_separable_blur_untyped(
+pub fn apply_separable_blur<P: Uniforms>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram,
-    set_common_uniforms: impl for<'a> Fn(Pass<'a>) -> Pass<'a>,
+    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    params: impl Fn([f32; 2]) -> P,
 ) {
     // See note in apply_filter: ensure layer/scratch dimensions match so
     // pass 2 doesn't sample garbage outside the layer's sub-region.
@@ -322,22 +349,16 @@ pub fn apply_separable_blur_untyped(
     }
 
     // Pass 1: horizontal (layer -> scratch A)
-    set_common_uniforms(
-        engine.pass_untyped(get_shader(engine))
-            .texture("u_tex", tex_handle)
-            .vec2("u_direction", 1.0, 0.0),
-    )
-    .viewport(0, 0, w as i32, h as i32)
-    .draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.pass(get_shader(engine), params([1.0, 0.0]))
+        .texture("u_tex", tex_handle)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
     // Pass 2: vertical (scratch A -> scratch B)
-    set_common_uniforms(
-        engine.pass_untyped(get_shader(engine))
-            .texture("u_tex", engine.scratch_texture_a)
-            .vec2("u_direction", 0.0, 1.0),
-    )
-    .viewport(0, 0, w as i32, h as i32)
-    .draw(Target::Framebuffer(engine.scratch_fbo_b));
+    engine.pass(get_shader(engine), params([0.0, 1.0]))
+        .texture("u_tex", engine.scratch_texture_a)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(Target::Framebuffer(engine.scratch_fbo_b));
 
     commit_scratch_b(engine, layer_id, tex_handle, w, h, has_selection);
 }
@@ -423,9 +444,8 @@ pub fn extract_channel_pixels(
         return Vec::new();
     }
 
-    engine.pass_untyped(&engine.shaders.channel_extract)
+    engine.pass(&engine.shaders.channel_extract, ChannelExtractParams { channel: channel as i32 })
         .texture("u_tex", tex_handle)
-        .i32("u_channel", channel as i32)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
 

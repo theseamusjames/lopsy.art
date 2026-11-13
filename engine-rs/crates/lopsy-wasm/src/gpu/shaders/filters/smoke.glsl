@@ -5,9 +5,11 @@ in vec2 v_uv;
 out vec4 fragColor;
 
 uniform sampler2D u_tex;
-uniform float u_scale;
-uniform float u_seed;
-uniform float u_turbulence;
+layout(std140) uniform Params {
+    float u_scale;
+    float u_seed;
+    float u_turbulence;
+};
 
 float hash(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031 + u_seed * 0.01);

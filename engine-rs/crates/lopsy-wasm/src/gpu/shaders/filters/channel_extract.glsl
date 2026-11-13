@@ -2,7 +2,9 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform int u_channel; // 0=R, 1=G, 2=B, 3=A
+layout(std140) uniform Params {
+    int u_channel; // 0=R, 1=G, 2=B, 3=A
+};
 out vec4 fragColor;
 void main() {
     vec4 c = texture(u_tex, v_uv);

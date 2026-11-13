@@ -1,4 +1,4 @@
-use crate::gpu::uniforms::uniforms;
+use crate::gpu::uniforms::{uniforms, FloatArray};
 
 uniforms! {
     /// `filters/posterize.glsl`
@@ -178,5 +178,166 @@ uniforms! {
         pub doc_size: [f32; 2],
         pub layer_offset: [f32; 2],
         pub layer_size: [f32; 2],
+    }
+}
+
+uniforms! {
+    /// `filters/noise.glsl`
+    pub struct NoiseParams {
+        pub amount: f32,
+        pub monochrome: bool,
+        pub gaussian: bool,
+        pub seed: f32,
+    }
+}
+
+uniforms! {
+    /// `filters/clouds.glsl`
+    pub struct CloudsParams {
+        pub scale: f32,
+        pub seed: f32,
+    }
+}
+
+uniforms! {
+    /// `filters/smoke.glsl`
+    pub struct SmokeParams {
+        pub scale: f32,
+        pub seed: f32,
+        pub turbulence: f32,
+    }
+}
+
+uniforms! {
+    /// `filters/pattern_fill.glsl`
+    pub struct PatternFillParams {
+        pub layer_size: [f32; 2],
+        pub pattern_size: [f32; 2],
+        pub scale: f32,
+        pub stagger: [f32; 2],
+        pub origin: [f32; 2],
+    }
+}
+
+uniforms! {
+    /// `filters/mesh_warp.glsl`
+    pub struct MeshWarpParams {
+        pub grid_size: [f32; 2],
+        pub bounds_min: [f32; 2],
+        pub bounds_max: [f32; 2],
+    }
+}
+
+uniforms! {
+    /// `filters/liquify_warp.glsl`
+    pub struct LiquifyWarpParams {
+        pub max_disp: f32,
+        pub texel_size: [f32; 2],
+    }
+}
+
+uniforms! {
+    /// `filters/liquify_dab.glsl`
+    pub struct LiquifyDabParams {
+        pub center: [f32; 2],
+        pub radius: f32,
+        pub pressure: f32,
+        pub drag: [f32; 2],
+        pub mode: i32,
+        pub size: [f32; 2],
+    }
+}
+
+uniforms! {
+    /// `filters/bloom_threshold.glsl`
+    pub struct BloomThresholdParams {
+        pub threshold: f32,
+        pub soft_knee: f32,
+    }
+}
+
+uniforms! {
+    /// `filters/bloom_combine.glsl`
+    pub struct BloomCombineParams {
+        pub intensity: f32,
+    }
+}
+
+uniforms! {
+    /// `filters/fibers.glsl`
+    pub struct FibersParams {
+        pub variance: f32,
+        pub strength: f32,
+        pub seed: f32,
+    }
+}
+
+uniforms! {
+    /// `filters/sunburst.glsl`
+    pub struct SunburstParams {
+        pub size: [f32; 2],
+        pub center: [f32; 2],
+        pub reach: f32,
+        pub rays: f32,
+        pub rotation: f32,
+        pub length: f32,
+        pub width: f32,
+        pub taper: f32,
+        pub fade: f32,
+        pub softness: f32,
+        pub jitter: f32,
+        pub seed: f32,
+        pub ray_color: [f32; 4],
+        pub fill_gaps: i32,
+        pub gap_color: [f32; 3],
+    }
+}
+
+uniforms! {
+    /// `filters/color_lut.glsl`
+    pub struct ColorLutParams {
+        pub lut_size: f32,
+        pub intensity: f32,
+    }
+}
+
+uniforms! {
+    /// `filters/texture.glsl`
+    pub struct TextureParams {
+        pub kind: i32,
+        pub blend: i32,
+        pub amount: f32,
+        pub size: f32,
+        pub stretch: f32,
+        pub angle: f32,
+        pub octaves: f32,
+        pub contrast: f32,
+        pub colored: bool,
+        pub seed: u32,
+    }
+}
+
+uniforms! {
+    /// `filters/channel_extract.glsl`
+    pub struct ChannelExtractParams {
+        pub channel: i32,
+    }
+}
+
+uniforms! {
+    /// `filters/gaussian_blur.glsl`
+    pub struct GaussianBlurParams {
+        pub direction: [f32; 2],
+        pub weights: FloatArray<64>,
+        pub radius: i32,
+    }
+}
+
+uniforms! {
+    /// `filters/box_blur.glsl`
+    pub struct BoxBlurParams {
+        pub direction: [f32; 2],
+        pub radius: i32,
+        pub step: i32,
     }
 }

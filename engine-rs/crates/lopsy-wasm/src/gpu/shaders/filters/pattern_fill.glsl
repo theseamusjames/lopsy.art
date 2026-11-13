@@ -6,14 +6,16 @@ out vec4 fragColor;
 
 uniform sampler2D u_tex;
 uniform sampler2D u_pattern;
-uniform vec2 u_layerSize;
-uniform vec2 u_patternSize;
-uniform float u_scale;
-// Brick / half-drop stagger as a fraction of one tile: x shifts each row by
-// row * u_stagger.x, y shifts each column by col * u_stagger.y.
-uniform vec2 u_stagger;
-// Tiling-origin shift as a fraction of one tile; moves the whole grid.
-uniform vec2 u_origin;
+layout(std140) uniform Params {
+    vec2 u_layerSize;
+    vec2 u_patternSize;
+    float u_scale;
+    // Brick / half-drop stagger as a fraction of one tile: x shifts each row by
+    // row * u_stagger.x, y shifts each column by col * u_stagger.y.
+    vec2 u_stagger;
+    // Tiling-origin shift as a fraction of one tile; moves the whole grid.
+    vec2 u_origin;
+};
 
 void main() {
     vec2 tileCoord = v_uv * u_layerSize / (u_patternSize * u_scale) - u_origin;

@@ -3,7 +3,8 @@ use crate::coverage_stroke_gpu::{self, CoverageTool};
 use crate::engine::{EngineInner, ImageAdjustmentState};
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
 use crate::gpu::shader::ShaderProgram;
-use crate::gpu::uniforms::Uniforms;
+use crate::gpu::params::filters::GaussianBlurParams;
+use crate::gpu::uniforms::{FloatArray, Uniforms};
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
 use crate::effect_cache_gpu::{self as fx_cache, emit_effect, DocTarget, EffectCacheKey, EffectCapture, EffectOut, Phase};
@@ -1116,15 +1117,13 @@ fn blur_scratch_b(engine: &EngineInner, blur_radius: u32) {
         *weight = kernel.get(r as usize + i).copied().unwrap_or(0.0);
     }
     let steps = [
-        (engine.scratch_texture_b, engine.scratch_fbo_a, (1.0, 0.0)),
-        (engine.scratch_texture_a, engine.scratch_fbo_b, (0.0, 1.0)),
+        (engine.scratch_texture_b, engine.scratch_fbo_a, [1.0, 0.0]),
+        (engine.scratch_texture_a, engine.scratch_fbo_b, [0.0, 1.0]),
     ];
     for (read, write, direction) in steps {
-        doc_pass_untyped(engine, &engine.shaders.gaussian_blur)
+        let params = GaussianBlurParams { direction, weights: FloatArray(weights), radius: r as i32 };
+        doc_pass(engine, &engine.shaders.gaussian_blur, params)
             .texture("u_tex", read)
-            .i32("u_radius", r as i32)
-            .f32_array("u_weights[0]", &weights)
-            .vec2("u_direction", direction.0, direction.1)
             .draw(Target::Framebuffer(write));
     }
 }
