@@ -13,20 +13,11 @@
 //!     .draw(Target::Texture(dst));
 //! ```
 //!
-//! While modules are still being moved onto this layer, converted and
-//! unconverted code run side by side on one GL context. To keep that safe a
-//! pass only changes the state it is told to set, and puts that state back
-//! afterwards:
-//!
-//! - [`Blend::Inherit`] and [`Scissor::Inherit`] (the defaults) leave the
-//!   context as found, exactly like the hand-written code they replace.
-//! - A blend mode that enables blending is switched off again after the
-//!   draw, and a scissor rect is disabled again.
-//! - [`Target::Texture`] unbinds the framebuffer afterwards;
-//!   [`Target::Framebuffer`] leaves it bound, as the code it replaces did.
-//!
-//! The `Inherit` variants exist only for that transition and go away once
-//! every module is converted.
+//! Between passes the context is in one known state: blending off and the
+//! scissor test off. A pass that turns either on turns it off again when it
+//! ends, and nothing outside this module can touch them, so a pass that
+//! needs them off has nothing to set. [`Target::Texture`] unbinds the
+//! framebuffer afterwards; [`Target::Framebuffer`] leaves it bound.
 //!
 //! Build and draw one pass before starting the next: a pass makes its
 //! program current when it is created and sets uniforms as it is built.
@@ -71,10 +62,8 @@ pub enum Target {
 /// How a pass combines its output with what the target already holds.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Blend {
-    /// Leave the context's blend state as found.
-    #[default]
-    Inherit,
     /// Replace the destination.
+    #[default]
     Off,
     /// Premultiplied source over destination: `src + dst * (1 - src.a)`.
     PremulOver,
@@ -112,10 +101,8 @@ impl ReadFormat {
 /// Which texels of the target a pass may write.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Scissor {
-    /// Leave the context's scissor state as found.
-    #[default]
-    Inherit,
     /// The whole viewport.
+    #[default]
     Off,
     /// Only `Rect`, in target texels.
     Rect(Rect),
@@ -135,8 +122,8 @@ impl<'a> GpuRef<'a> {
             next_unit: 0,
             has_missing_texture: false,
             viewport: None,
-            scissor: Scissor::Inherit,
-            blend: Blend::Inherit,
+            scissor: Scissor::Off,
+            blend: Blend::Off,
             clear: None,
         }
     }
@@ -152,8 +139,8 @@ impl<'a> GpuRef<'a> {
         }
     }
 
-    /// Fill `texture` with `color`. The context's scissor state still
-    /// applies. Returns `false` if the texture no longer exists.
+    /// Fill `texture` with `color`. Returns `false` if the texture no longer
+    /// exists.
     pub fn clear(self, texture: TextureHandle, color: [f32; 4]) -> bool {
         let (Some(tex), Some((w, h))) = (self.textures.get(texture), self.textures.get_size(texture)) else {
             return false;
@@ -217,7 +204,6 @@ impl<'a> GpuRef<'a> {
             return Err("Failed to upload mask bytes".into());
         }
 
-        gl.disable(GL::BLEND);
         self.fbos.attach_texture(self.render_fbo, dst_tex);
         self.fbos.bind(self.render_fbo);
         gl.viewport(0, 0, w as i32, h as i32);
@@ -451,11 +437,6 @@ impl<'a> Pass<'a> {
         gl.bind_framebuffer(GL::FRAMEBUFFER, Some(&fbo));
         gl.framebuffer_texture_2d(GL::FRAMEBUFFER, GL::COLOR_ATTACHMENT0, GL::TEXTURE_2D, Some(&staging), 0);
         gl.viewport(0, 0, w as i32, h as i32);
-        match self.blend {
-            Blend::Inherit => {}
-            _ => gl.disable(GL::BLEND),
-        }
-
         gl.draw_arrays(GL::TRIANGLES, 0, 3);
 
         let mut pixels = vec![0u8; (w * h * format.bytes_per_texel()) as usize];
@@ -529,8 +510,7 @@ impl<'a> Pass<'a> {
 
         let mut is_scissor_enabled = false;
         match self.scissor {
-            Scissor::Inherit => {}
-            Scissor::Off => gl.disable(GL::SCISSOR_TEST),
+            Scissor::Off => {}
             Scissor::Rect(rect) => {
                 gl.enable(GL::SCISSOR_TEST);
                 gl.scissor(rect.x, rect.y, rect.width as i32, rect.height as i32);
@@ -539,8 +519,7 @@ impl<'a> Pass<'a> {
         }
 
         match self.blend {
-            Blend::Inherit => {}
-            Blend::Off => gl.disable(GL::BLEND),
+            Blend::Off => {}
             Blend::PremulOver => {
                 gl.enable(GL::BLEND);
                 gl.blend_equation(GL::FUNC_ADD);
@@ -578,7 +557,6 @@ pub struct UniformSlot(Option<WebGlUniformLocation>);
 
 /// A pass that has been set up and can draw repeatedly. Made by
 /// [`Pass::begin`]; finish with [`ActivePass::end`].
-#[must_use = "call `end` to put the pass's blend, scissor and target state back"]
 pub struct ActivePass<'a> {
     gpu: GpuRef<'a>,
     program: &'a ShaderProgram,
@@ -633,8 +611,14 @@ impl ActivePass<'_> {
         gl.draw_arrays(GL::TRIANGLES, 0, 3);
     }
 
-    /// Put back the state the pass changed.
-    pub fn end(self) {
+    /// Finish the pass, putting back the state it changed.
+    pub fn end(self) {}
+}
+
+impl Drop for ActivePass<'_> {
+    /// Restores the between-passes state however the pass ends, so an early
+    /// return cannot leave blending or the scissor test on.
+    fn drop(&mut self) {
         let gl = self.gpu.gl;
         if self.blend.enables_blending() {
             gl.disable(GL::BLEND);
@@ -656,7 +640,6 @@ mod tests {
 
     #[test]
     fn only_compositing_modes_enable_blending() {
-        assert!(!Blend::Inherit.enables_blending());
         assert!(!Blend::Off.enables_blending());
         assert!(Blend::PremulOver.enables_blending());
         assert!(Blend::Max.enables_blending());
@@ -664,8 +647,8 @@ mod tests {
     }
 
     #[test]
-    fn a_pass_inherits_blend_and_scissor_unless_told_otherwise() {
-        assert_eq!(Blend::default(), Blend::Inherit);
-        assert_eq!(Scissor::default(), Scissor::Inherit);
+    fn a_pass_replaces_the_whole_target_unless_told_otherwise() {
+        assert_eq!(Blend::default(), Blend::Off);
+        assert_eq!(Scissor::default(), Scissor::Off);
     }
 }

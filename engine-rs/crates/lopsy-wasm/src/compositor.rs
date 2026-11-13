@@ -607,7 +607,7 @@ pub(crate) fn blend_through_scratch(
         Scratch::A => (engine.scratch_texture_a, engine.scratch_fbo_a),
         Scratch::B => (engine.scratch_texture_b, engine.scratch_fbo_b),
     };
-    let scissor = clip.map_or(Scissor::Inherit, Scissor::Rect);
+    let scissor = clip.map_or(Scissor::Off, Scissor::Rect);
 
     let mut pass = doc_pass(engine, program)
         .scissor(scissor)
@@ -806,7 +806,7 @@ fn capture_effect_backdrop(engine: &mut EngineInner, blend_mode: i32, has_behind
 /// Restore a group's cached pre-adjustment pixels into its live scratch
 /// target, skipping re-rendering of its children.
 fn restore_pre_adj_cache(engine: &EngineInner, cache_tex: TextureHandle, target: DocTarget) {
-    copy_doc(engine, cache_tex, target.fbo, Scissor::Inherit);
+    copy_doc(engine, cache_tex, target.fbo, Scissor::Off);
 }
 
 /// Render the mask as a translucent blue overlay on top of the composite.
@@ -1793,14 +1793,14 @@ fn apply_image_adjustments(engine: &EngineInner) {
             return;
         }
         engine.gpu().unbind_textures(units);
-        copy_doc(engine, engine.scratch_texture_a, engine.composite_fbo, Scissor::Inherit);
+        copy_doc(engine, engine.scratch_texture_a, engine.composite_fbo, Scissor::Off);
     }
 
     if has_vignette {
         if !vignette_pass(engine, engine.composite_texture, engine.adjustments.vignette).draw(scratch_a) {
             return;
         }
-        copy_doc(engine, engine.scratch_texture_a, engine.composite_fbo, Scissor::Inherit);
+        copy_doc(engine, engine.scratch_texture_a, engine.composite_fbo, Scissor::Off);
     }
 }
 
@@ -1821,5 +1821,5 @@ fn apply_adjustments_to_texture(engine: &EngineInner, target: DocTarget, adj: &I
     } else {
         engine.scratch_texture_a
     };
-    copy_doc(engine, result, target.fbo, Scissor::Inherit);
+    copy_doc(engine, result, target.fbo, Scissor::Off);
 }
