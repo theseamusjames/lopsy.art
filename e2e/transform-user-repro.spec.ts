@@ -3,7 +3,7 @@
  * Uses the actual shape tool, actual UI interactions, and GPU pixel readback.
  */
 import { test, expect, type Page } from './fixtures';
-import { createDocument, waitForStore, selectTool, setForegroundColor } from './helpers';
+import { createDocument, waitForStore, selectTool, setForegroundColor, getPixelAt } from './helpers';
 
 const isMac = process.platform === 'darwin';
 
@@ -96,6 +96,23 @@ async function cmdClickThumbnail(page: Page) {
   await page.waitForTimeout(300);
 }
 
+/**
+ * The 4-sided polygon dragged from (300, 300) to (400, 400) is the square
+ * 200..399. Turned 45° about its centre it is a diamond whose tips reach
+ * ~158 and ~441, so a point just inside the top tip fills in and the
+ * square's corner empties. `dx` / `dy` follow a later move.
+ */
+async function expectSquareRotated(page: Page, dx = 0, dy = 0) {
+  expect((await getPixelAt(page, 300 + dx, 170 + dy)).a).toBeGreaterThan(0);
+  expect((await getPixelAt(page, 210 + dx, 210 + dy)).a).toBe(0);
+}
+
+/**
+ * Drag the rotate handle of the pending transform. Only the Move tool
+ * rotates pixels through the handles — under any other tool the same drag
+ * belongs to that tool (the Shape tool draws a second shape) — so select
+ * Move first.
+ */
 async function dragRotate(page: Page, angleRadians: number) {
   const info = await page.evaluate(() => {
     const uiStore = (window as unknown as Record<string, unknown>).__uiStore as {
@@ -162,7 +179,7 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
   });
 
   test('shape tool polygon → cmd+click select → rotate 45° → commit → should have content', async ({ page }) => {
-    // Draw a 200x200 polygon (4 sides = diamond)
+    // Draw a 200x200 polygon (4 sides = square)
     await setForegroundColor(page, 0, 0, 0);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'polygon');
@@ -190,11 +207,13 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
     expect(selActive).toBe(true);
 
     // Rotate 45°
+    await selectTool(page, 'move');
     await dragRotate(page, Math.PI / 4);
 
     // Check content still exists after rotation (not lost)
     const afterRotate = await countActiveLayerPixelsGPU(page);
     expect(afterRotate).toBeGreaterThan(shapePixels * 0.5);
+    await expectSquareRotated(page);
 
     // Commit (Escape)
     await page.keyboard.press('Escape');
@@ -203,10 +222,11 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
     // Content should still be there after commit
     const afterCommit = await countActiveLayerPixelsGPU(page);
     expect(afterCommit).toBeGreaterThan(shapePixels * 0.5);
+    await expectSquareRotated(page);
   });
 
   test('shape tool polygon → select → rotate → re-select → move → delete → canvas empty', async ({ page }) => {
-    // Draw diamond
+    // Draw square
     await setForegroundColor(page, 0, 0, 0);
     await selectTool(page, 'shape');
     await setShapeMode(page, 'polygon');
@@ -219,9 +239,11 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
 
     // Select, rotate, commit
     await cmdClickThumbnail(page);
+    await selectTool(page, 'move');
     await dragRotate(page, Math.PI / 4);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(300);
+    await expectSquareRotated(page);
 
     // Re-select the rotated content
     await cmdClickThumbnail(page);
@@ -262,9 +284,51 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
     await cmdClickThumbnail(page);
 
     // Rotate 45° via handle drag
+    await selectTool(page, 'move');
     await dragRotate(page, Math.PI / 4);
+    await expectSquareRotated(page);
 
     // Immediately move (no Escape, no re-select)
+    const start = await docToScreen(page, 300, 300);
+    const end = await docToScreen(page, 400, 200);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x, end.y, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // The move carries the rotated piece, not the original square
+    await expectSquareRotated(page, 100, -100);
+
+    // Delete
+    await page.keyboard.press('Delete');
+    await page.waitForTimeout(300);
+
+    const finalPixels = await countActiveLayerPixelsGPU(page);
+    expect(finalPixels).toBe(0);
+  });
+
+  test('select → draw outside the selection → move → delete → only the new shape remains', async ({ page }) => {
+    await setForegroundColor(page, 0, 0, 0);
+    await selectTool(page, 'shape');
+    await setShapeMode(page, 'polygon');
+    await setPolygonSides(page, 4);
+    await setShapeSetting(page, 'strokeColor', null);
+    await drawShape(page, 300, 300, 400, 400);
+
+    const firstPixels = await countActiveLayerPixelsGPU(page);
+    expect(firstPixels).toBeGreaterThan(1000);
+
+    // Select the layer's content, then draw a second shape on the same
+    // layer, clear of the marquee: square 460..539.
+    await cmdClickThumbnail(page);
+    await drawShape(page, 500, 500, 540, 540);
+
+    const secondPixels = (await countActiveLayerPixelsGPU(page)) - firstPixels;
+    expect(secondPixels).toBeGreaterThan(1000);
+    expect((await getPixelAt(page, 500, 500)).a).toBeGreaterThan(0);
+
+    // Move the selection: only the selected square travels
     await selectTool(page, 'move');
     await page.waitForTimeout(100);
     const start = await docToScreen(page, 300, 300);
@@ -275,12 +339,18 @@ test.describe('User repro: shape tool + transform', { tag: '@chromium' }, () => 
     await page.mouse.up();
     await page.waitForTimeout(300);
 
-    // Delete
+    expect((await getPixelAt(page, 400, 200)).a).toBeGreaterThan(0);
+    expect((await getPixelAt(page, 300, 350)).a).toBe(0);
+    expect((await getPixelAt(page, 500, 500)).a).toBeGreaterThan(0);
+    expect(await countActiveLayerPixelsGPU(page)).toBe(firstPixels + secondPixels);
+
+    // Delete clears the moved square and leaves the second shape in place
     await page.keyboard.press('Delete');
     await page.waitForTimeout(300);
 
-    const finalPixels = await countActiveLayerPixelsGPU(page);
-    expect(finalPixels).toBe(0);
+    expect((await getPixelAt(page, 400, 200)).a).toBe(0);
+    expect((await getPixelAt(page, 500, 500)).a).toBeGreaterThan(0);
+    expect(await countActiveLayerPixelsGPU(page)).toBe(secondPixels);
   });
 });
 
