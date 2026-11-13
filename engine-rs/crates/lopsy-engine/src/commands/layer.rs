@@ -445,7 +445,7 @@ pub fn ensure_float_covers(engine: &mut EngineInner, x: i32, y: i32, w: u32, h: 
 }
 
 pub fn has_float(engine: &EngineInner) -> bool {
-    engine.float_texture.is_some() || !engine.layer_transform.is_empty()
+    engine.float.texture.is_some() || !engine.layer_transform.is_empty()
 }
 
 // ============================================================

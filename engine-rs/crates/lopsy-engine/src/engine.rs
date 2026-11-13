@@ -161,6 +161,23 @@ pub struct ClipboardState {
     pub offset_y: i32,
 }
 
+/// The floating selection the Move tool lifts off a layer, and the transform being applied to it.
+pub struct FloatState {
+    pub texture: Option<TextureHandle>,
+    pub base_texture: Option<TextureHandle>,
+    pub layer_id: Option<String>,
+    pub width: u32,
+    pub height: u32,
+    pub layer_x: i32,
+    pub layer_y: i32,
+    pub transform_mode: u8, // 0=none, 1=affine, 2=perspective
+    pub transform_inv_matrix: [f32; 9],
+    pub transform_center: [f32; 2],
+    pub transform_corners: [f32; 8],
+    pub transform_orig_rect: [f32; 4],
+    pub transform_src_rect: [f32; 4],
+}
+
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
@@ -265,22 +282,9 @@ pub struct EngineInner {
     pub gradient_preview_layer_id: Option<String>,
     // Clipboard
     // Floating selection (for move-with-selection)
-    pub float_texture: Option<TextureHandle>,
-    pub float_base_texture: Option<TextureHandle>,
-    pub float_layer_id: Option<String>,
-    pub float_width: u32,
-    pub float_height: u32,
-    pub float_layer_x: i32,
-    pub float_layer_y: i32,
     // Float transform state (GPU-side affine/perspective)
-    pub float_transform_mode: u8, // 0=none, 1=affine, 2=perspective
-    pub float_transform_inv_matrix: [f32; 9],
-    pub float_transform_center: [f32; 2],
-    pub float_transform_corners: [f32; 8],
-    pub float_transform_orig_rect: [f32; 4],
     /// Document rect of the float's source pixels (x, y, w, h) for the affine
     /// path; w = 0 when unknown.
-    pub float_transform_src_rect: [f32; 4],
     // Multi-layer transform session (see layer_transform_gpu)
     pub layer_transform: Vec<crate::layer_transform_gpu::LayerTransformSlot>,
     // Overlays
@@ -360,6 +364,7 @@ pub struct EngineInner {
     /// screen after the final blit (`stamp_preview_gpu.rs`).
     pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
     pub clipboard: ClipboardState,
+    pub float: FloatState,
 
 }
 
@@ -461,19 +466,6 @@ impl EngineInner {
             liquify_disp_texture: None,
             gradient_preview_texture: None,
             gradient_preview_layer_id: None,
-            float_texture: None,
-            float_base_texture: None,
-            float_layer_id: None,
-            float_width: 0,
-            float_height: 0,
-            float_layer_x: 0,
-            float_layer_y: 0,
-            float_transform_mode: 0,
-            float_transform_inv_matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-            float_transform_center: [0.0, 0.0],
-            float_transform_corners: [0.0; 8],
-            float_transform_orig_rect: [0.0; 4],
-            float_transform_src_rect: [0.0; 4],
             layer_transform: Vec::new(),
             grid_visible: false,
             grid_size: 1.0,
@@ -511,6 +503,21 @@ impl EngineInner {
                 height: 0,
                 offset_x: 0,
                 offset_y: 0,
+            },
+            float: FloatState {
+                texture: None,
+                base_texture: None,
+                layer_id: None,
+                width: 0,
+                height: 0,
+                layer_x: 0,
+                layer_y: 0,
+                transform_mode: 0,
+                transform_inv_matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+                transform_center: [0.0, 0.0],
+                transform_corners: [0.0; 8],
+                transform_orig_rect: [0.0; 4],
+                transform_src_rect: [0.0; 4],
             },
         })
     }
@@ -783,18 +790,18 @@ impl EngineInner {
         self.clipboard.offset_x = 0;
         self.clipboard.offset_y = 0;
         // Float
-        if let Some(tex) = self.float_texture.take() {
+        if let Some(tex) = self.float.texture.take() {
             self.texture_pool.release(tex);
         }
-        if let Some(tex) = self.float_base_texture.take() {
+        if let Some(tex) = self.float.base_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.float_layer_id = None;
-        self.float_width = 0;
-        self.float_height = 0;
-        self.float_layer_x = 0;
-        self.float_layer_y = 0;
-        self.float_transform_mode = 0;
+        self.float.layer_id = None;
+        self.float.width = 0;
+        self.float.height = 0;
+        self.float.layer_x = 0;
+        self.float.layer_y = 0;
+        self.float.transform_mode = 0;
         crate::layer_transform_gpu::end_layer_transform(self);
         // Layer stack and overlays
         self.layer_stack.clear();

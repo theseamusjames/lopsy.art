@@ -55,7 +55,7 @@ pub fn update_layer(engine: &mut EngineInner, desc: LayerDesc) {
     // Preserve these so that syncLayers (pushing content dimensions
     // from the JS model) doesn't corrupt the expanded texture state.
     // A multi-layer transform re-places its layers' textures the same way.
-    let is_float_layer = engine.float_layer_id.as_deref() == Some(desc.id.as_str())
+    let is_float_layer = engine.float.layer_id.as_deref() == Some(desc.id.as_str())
         || crate::layer_transform_gpu::is_in_layer_transform(engine, &desc.id);
     if let Some(existing) = engine.layer_stack.iter_mut().find(|l| l.id == desc.id) {
         if is_float_layer {
@@ -1034,13 +1034,13 @@ pub fn float_selection(
         }
     }
 
-    engine.float_texture = Some(float_tex);
-    engine.float_base_texture = Some(base_tex);
-    engine.float_layer_id = Some(layer_id.to_string());
-    engine.float_width = fw;
-    engine.float_height = fh;
-    engine.float_layer_x = new_x;
-    engine.float_layer_y = new_y;
+    engine.float.texture = Some(float_tex);
+    engine.float.base_texture = Some(base_tex);
+    engine.float.layer_id = Some(layer_id.to_string());
+    engine.float.width = fw;
+    engine.float.height = fh;
+    engine.float.layer_x = new_x;
+    engine.float.layer_y = new_y;
 
     // Write base to layer immediately (so the display shows selected pixels removed)
     composite_float(engine, 0, 0)?;
@@ -1055,7 +1055,7 @@ pub fn restore_float_base(
     engine: &mut EngineInner,
     src_id: &str,
 ) -> Result<(), String> {
-    let base_handle = engine.float_base_texture
+    let base_handle = engine.float.base_texture
         .ok_or("No float base")?;
     let src_handle = *engine.layer_textures.get(src_id)
         .ok_or_else(|| format!("Source {src_id} not found"))?;
@@ -1078,17 +1078,17 @@ pub fn composite_float(
     dx: i32,
     dy: i32,
 ) -> Result<(), String> {
-    let base_handle = engine.float_base_texture
+    let base_handle = engine.float.base_texture
         .ok_or("No float base")?;
-    let float_handle = engine.float_texture
+    let float_handle = engine.float.texture
         .ok_or("No float texture")?;
-    let layer_id = engine.float_layer_id.clone()
+    let layer_id = engine.float.layer_id.clone()
         .ok_or("No float layer ID")?;
     let layer_tex_handle = *engine.layer_textures.get(&layer_id)
         .ok_or("Layer texture not found")?;
 
-    let fw = engine.float_width;
-    let fh = engine.float_height;
+    let fw = engine.float.width;
+    let fh = engine.float.height;
 
     engine.texture_pool.get(base_handle).ok_or("Base texture not found")?;
     engine.texture_pool.get(float_handle).ok_or("Float texture not found")?;
@@ -1116,15 +1116,15 @@ pub fn drop_float(engine: &mut EngineInner) {
     // A float that outgrew the canvas has a size nothing else will ask the
     // pool for; pooling it would keep it alive for good (#1019).
     let doc_size = (engine.doc_width, engine.doc_height);
-    for tex in [engine.float_texture.take(), engine.float_base_texture.take()].into_iter().flatten() {
+    for tex in [engine.float.texture.take(), engine.float.base_texture.take()].into_iter().flatten() {
         if engine.texture_pool.get_size(tex) == Some(doc_size) {
             engine.texture_pool.release(tex);
         } else {
             engine.texture_pool.delete(tex);
         }
     }
-    engine.float_layer_id = None;
-    engine.float_transform_mode = 0;
+    engine.float.layer_id = None;
+    engine.float.transform_mode = 0;
     crate::layer_transform_gpu::end_layer_transform(engine);
 }
 
@@ -1171,13 +1171,13 @@ pub fn ensure_float_covers(
     w: u32,
     h: u32,
 ) -> Result<Option<[i32; 4]>, String> {
-    let layer_id = engine.float_layer_id.clone().ok_or("No float layer ID")?;
-    let float_handle = engine.float_texture.ok_or("No float texture")?;
-    let base_handle = engine.float_base_texture.ok_or("No float base")?;
+    let layer_id = engine.float.layer_id.clone().ok_or("No float layer ID")?;
+    let float_handle = engine.float.texture.ok_or("No float texture")?;
+    let base_handle = engine.float.base_texture.ok_or("No float base")?;
     let layer_handle = *engine.layer_textures.get(&layer_id)
         .ok_or("Layer texture not found")?;
 
-    let (fx, fy, fw, fh) = (engine.float_layer_x, engine.float_layer_y, engine.float_width, engine.float_height);
+    let (fx, fy, fw, fh) = (engine.float.layer_x, engine.float.layer_y, engine.float.width, engine.float.height);
     let current = Rect { x: fx, y: fy, width: fw, height: fh };
     let requested = Rect { x, y, width: w, height: h };
     let Some(grown) = grow_rect_to_cover(current, requested, engine.texture_pool.max_size()) else {
@@ -1196,13 +1196,13 @@ pub fn ensure_float_covers(
     engine.texture_pool.delete(float_handle);
     engine.texture_pool.delete(base_handle);
     engine.texture_pool.delete(layer_handle);
-    engine.float_texture = Some(new_float);
-    engine.float_base_texture = Some(new_base);
+    engine.float.texture = Some(new_float);
+    engine.float.base_texture = Some(new_base);
     engine.layer_textures.insert(layer_id.clone(), new_layer);
-    engine.float_layer_x = min_x;
-    engine.float_layer_y = min_y;
-    engine.float_width = new_w;
-    engine.float_height = new_h;
+    engine.float.layer_x = min_x;
+    engine.float.layer_y = min_y;
+    engine.float.width = new_w;
+    engine.float.height = new_h;
     if let Some(desc) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
         desc.x = min_x;
         desc.y = min_y;
@@ -1220,10 +1220,10 @@ pub fn flip_float(
     engine: &mut EngineInner,
     horizontal: bool,
 ) -> Result<(), String> {
-    let float_handle = engine.float_texture
+    let float_handle = engine.float.texture
         .ok_or("No float texture")?;
-    let fw = engine.float_width;
-    let fh = engine.float_height;
+    let fw = engine.float.width;
+    let fh = engine.float.height;
 
     engine.texture_pool.get(float_handle).ok_or("Float texture not found")?;
 
@@ -1252,10 +1252,10 @@ pub fn rotate_float_90(
     engine: &mut EngineInner,
     clockwise: bool,
 ) -> Result<(), String> {
-    let float_handle = engine.float_texture
+    let float_handle = engine.float.texture
         .ok_or("No float texture")?;
-    let fw = engine.float_width;
-    let fh = engine.float_height;
+    let fw = engine.float.width;
+    let fh = engine.float.height;
 
     engine.texture_pool.get(float_handle).ok_or("Float texture not found")?;
 
@@ -1291,19 +1291,19 @@ pub fn composite_float_affine(
     src_width: f32,
     src_height: f32,
 ) -> Result<(), String> {
-    engine.float_transform_mode = 1;
+    engine.float.transform_mode = 1;
     if inv_matrix.len() >= 9 {
-        engine.float_transform_inv_matrix.copy_from_slice(&inv_matrix[..9]);
+        engine.float.transform_inv_matrix.copy_from_slice(&inv_matrix[..9]);
     }
-    engine.float_transform_center = [src_center_x, src_center_y];
-    engine.float_transform_src_rect = [
+    engine.float.transform_center = [src_center_x, src_center_y];
+    engine.float.transform_src_rect = [
         src_center_x - src_width / 2.0,
         src_center_y - src_height / 2.0,
         src_width.max(0.0),
         src_height.max(0.0),
     ];
-    engine.float_transform_corners[0] = dst_center_x;
-    engine.float_transform_corners[1] = dst_center_y;
+    engine.float.transform_corners[0] = dst_center_x;
+    engine.float.transform_corners[1] = dst_center_y;
     composite_float_transformed(engine)
 }
 
@@ -1317,11 +1317,11 @@ pub fn composite_float_perspective(
     orig_w: f32,
     orig_h: f32,
 ) -> Result<(), String> {
-    engine.float_transform_mode = 2;
+    engine.float.transform_mode = 2;
     if corners.len() >= 8 {
-        engine.float_transform_corners.copy_from_slice(&corners[..8]);
+        engine.float.transform_corners.copy_from_slice(&corners[..8]);
     }
-    engine.float_transform_orig_rect = [orig_x, orig_y, orig_w, orig_h];
+    engine.float.transform_orig_rect = [orig_x, orig_y, orig_w, orig_h];
     composite_float_transformed(engine)
 }
 
@@ -1331,19 +1331,19 @@ pub fn composite_float_perspective(
 fn composite_float_transformed(
     engine: &mut EngineInner,
 ) -> Result<(), String> {
-    let base_handle = engine.float_base_texture
+    let base_handle = engine.float.base_texture
         .ok_or("No float base")?;
-    let float_handle = engine.float_texture
+    let float_handle = engine.float.texture
         .ok_or("No float texture")?;
-    let layer_id = engine.float_layer_id.clone()
+    let layer_id = engine.float.layer_id.clone()
         .ok_or("No float layer ID")?;
     let layer_tex_handle = *engine.layer_textures.get(&layer_id)
         .ok_or("Layer texture not found")?;
 
-    let fw = engine.float_width;
-    let fh = engine.float_height;
-    let lx = engine.float_layer_x as f32;
-    let ly = engine.float_layer_y as f32;
+    let fw = engine.float.width;
+    let fh = engine.float.height;
+    let lx = engine.float.layer_x as f32;
+    let ly = engine.float.layer_y as f32;
 
     engine.texture_pool.get(base_handle).ok_or("Base texture not found")?;
     engine.texture_pool.get(float_handle).ok_or("Float texture not found")?;
@@ -1356,17 +1356,17 @@ fn composite_float_transformed(
     // stale compositor content into the layer texture.
     let tmp = engine.texture_pool.acquire(fw, fh)?;
     engine.texture_pool.get(tmp).ok_or("Tmp texture not found")?;
-    let src_rect = engine.float_transform_src_rect;
-    let params = if engine.float_transform_mode == 1 {
+    let src_rect = engine.float.transform_src_rect;
+    let params = if engine.float.transform_mode == 1 {
         TransformParams::Affine {
-            inv_matrix: engine.float_transform_inv_matrix,
-            src_center: engine.float_transform_center,
-            dst_center: [engine.float_transform_corners[0], engine.float_transform_corners[1]],
+            inv_matrix: engine.float.transform_inv_matrix,
+            src_center: engine.float.transform_center,
+            dst_center: [engine.float.transform_corners[0], engine.float.transform_corners[1]],
         }
     } else {
         TransformParams::Perspective {
-            corners: engine.float_transform_corners,
-            orig_rect: engine.float_transform_orig_rect,
+            corners: engine.float.transform_corners,
+            orig_rect: engine.float.transform_orig_rect,
         }
     };
 
