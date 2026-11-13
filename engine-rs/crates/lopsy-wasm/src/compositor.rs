@@ -473,6 +473,37 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     Ok(())
 }
 
+/// Draw a frame if anything changed since the last one. A failure is
+/// logged, not returned: the next frame tries again.
+pub fn render(engine: &mut EngineInner) {
+    // Every mutation that affects the composite sets needs_recomposite
+    // (via mark_layer_dirty or directly). Skipping clean frames keeps
+    // cursor moves and overlay-only updates from re-blending every layer.
+    // Pan, zoom and channel toggles only set needs_present: the composite
+    // texture is still current, so just the final blit runs.
+    let result = if engine.needs_recomposite {
+        composite(engine)
+    } else if engine.needs_present {
+        present(engine)
+    } else {
+        return;
+    };
+    if let Err(e) = result {
+        crate::host::log(crate::host::LogLevel::Error, &format!("compositor error: {e}"));
+    }
+}
+
+/// The document composited at 16 bits and encoded as a PNG. `color_space`
+/// 1 tags it Display P3; anything else sRGB.
+pub fn export_png_16(engine: &mut EngineInner, color_space: u8) -> Result<Vec<u8>, String> {
+    let pixels = composite_for_export_u16(engine)?;
+    let cs = match color_space {
+        1 => lopsy_core::color::ColorSpace::DisplayP3,
+        _ => lopsy_core::color::ColorSpace::Srgb,
+    };
+    lopsy_core::export::encode_png_16(&pixels, engine.doc_width, engine.doc_height, cs)
+}
+
 /// Draw the composite texture to the screen canvas through the viewport
 /// transform. On its own this is the whole frame when only screen-space
 /// state changed (pan, zoom, channel visibility): the composite texture

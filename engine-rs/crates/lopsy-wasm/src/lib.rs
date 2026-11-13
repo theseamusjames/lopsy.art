@@ -30,6 +30,7 @@ pub mod text_transform_gpu;
 pub mod woff2;
 pub mod variable_instance;
 pub mod host;
+pub mod commands;
 pub mod api;
 
 use wasm_bindgen::prelude::*;
@@ -107,21 +108,7 @@ pub fn clear_all_layers(engine: &mut Engine) {
 
 #[wasm_bindgen(js_name = "render")]
 pub fn render(engine: &mut Engine) {
-    // Every mutation that affects the composite sets needs_recomposite
-    // (via mark_layer_dirty or directly). Skipping clean frames keeps
-    // cursor moves and overlay-only updates from re-blending every layer.
-    // Pan, zoom and channel toggles only set needs_present: the composite
-    // texture is still current, so just the final blit runs.
-    let result = if engine.inner.needs_recomposite {
-        compositor::composite(&mut engine.inner)
-    } else if engine.inner.needs_present {
-        compositor::present(&mut engine.inner)
-    } else {
-        return;
-    };
-    if let Err(e) = result {
-        host::log(host::LogLevel::Error, &format!("compositor error: {e}"));
-    }
+    compositor::render(&mut engine.inner);
 }
 
 #[wasm_bindgen(js_name = "markAllDirty")]
@@ -265,18 +252,7 @@ pub fn composite_for_export(engine: &mut Engine) -> Result<Vec<u8>, JsError> {
 
 #[wasm_bindgen(js_name = "exportPng16")]
 pub fn export_png_16(engine: &mut Engine, color_space: u8) -> Result<Vec<u8>, JsError> {
-    let pixels = compositor::composite_for_export_u16(&mut engine.inner)
-        .map_err(|e| JsError::new(&e))?;
-    let cs = match color_space {
-        1 => lopsy_core::color::ColorSpace::DisplayP3,
-        _ => lopsy_core::color::ColorSpace::Srgb,
-    };
-    lopsy_core::export::encode_png_16(
-        &pixels,
-        engine.inner.doc_width,
-        engine.inner.doc_height,
-        cs,
-    ).map_err(|e| JsError::new(&e))
+    compositor::export_png_16(&mut engine.inner, color_space).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "getCompositeSize")]
