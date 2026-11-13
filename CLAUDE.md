@@ -135,6 +135,7 @@ engine-rs/
       src/
         commands/         # What a host can ask for: plain Rust in, Result<_, String> out
         host.rs           # Logging and clock, installed by the host
+        imaging/          # Adjustments and filters as passes over a source texture; no layers
         engine.rs         # EngineInner struct: holds all GPU state
         compositor.rs     # Per-frame compositing pipeline
         layer_manager.rs  # Texture upload/read/duplicate for layers
