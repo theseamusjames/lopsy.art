@@ -37,7 +37,7 @@ pub fn filter_mesh_warp(
     let gw = grid_width as f32;
     let gh = grid_height as f32;
 
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.mesh_warp,
@@ -123,7 +123,7 @@ pub fn liquify_render(engine: &mut Engine, layer_id: &str, max_disp: f32) {
     let texel_h = 1.0 / h as f32;
 
     let inner = &engine.inner;
-    inner.pass(&inner.shaders.liquify_warp)
+    inner.pass_untyped(&inner.shaders.liquify_warp)
         .texture("u_tex", preview_handle)
         .texture("u_disp", disp_handle)
         .f32("u_maxDisp", max_disp)
@@ -177,7 +177,7 @@ pub fn liquify_apply_dab_gpu(
     // Read the displacement field, write the dabbed field into a fresh
     // texture, and make that the new field.
     let inner = &engine.inner;
-    inner.pass(&inner.shaders.liquify_dab)
+    inner.pass_untyped(&inner.shaders.liquify_dab)
         .texture("u_disp", disp_handle)
         .vec2("u_center", cx, cy)
         .f32("u_radius", radius)

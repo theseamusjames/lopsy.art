@@ -55,7 +55,7 @@ pub fn filter_pattern_fill(
     let lh = layer_h as f32;
     let scale = scale.max(0.01);
 
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.pattern_fill,
@@ -107,7 +107,7 @@ pub fn filter_color_lut(
     let size_f = lut_size as f32;
     let intensity = intensity.clamp(0.0, 1.0);
 
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.color_lut,
@@ -224,7 +224,7 @@ pub fn filter_sunburst(
         layer_y,
     );
 
-    filter_gpu::apply_filter(
+    filter_gpu::apply_filter_untyped(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.sunburst,

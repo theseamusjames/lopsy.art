@@ -62,7 +62,7 @@ pub fn apply_smudge_dab_batch(
             h,
             rect,
             engine
-                .pass(&engine.shaders.smudge_dab)
+                .pass_untyped(&engine.shaders.smudge_dab)
                 .texture("u_sourceTex", tex_handle)
                 .vec2("u_center", cx, cy)
                 .vec2("u_prev", prev_x, prev_y)

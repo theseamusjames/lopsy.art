@@ -32,7 +32,7 @@ pub fn save_filter_preview(engine: &mut Engine, layer_id: &str) {
         return;
     }
 
-    inner.pass(&inner.shaders.blit)
+    inner.pass(&inner.shaders.blit, ())
         .texture("u_tex", tex_handle)
         .blend(Blend::Off)
         .draw(Target::Texture(preview_handle));
@@ -63,7 +63,7 @@ pub fn restore_filter_preview(engine: &mut Engine) {
         return;
     }
 
-    inner.pass(&inner.shaders.blit)
+    inner.pass(&inner.shaders.blit, ())
         .texture("u_tex", preview_handle)
         .blend(Blend::Off)
         .viewport(0, 0, w as i32, h as i32)

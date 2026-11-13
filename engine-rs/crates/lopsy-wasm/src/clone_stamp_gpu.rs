@@ -58,7 +58,7 @@ pub fn apply_clone_stamp_dab_batch(
             h,
             rect,
             engine
-                .pass(&engine.shaders.clone_stamp)
+                .pass_untyped(&engine.shaders.clone_stamp)
                 .texture("u_sourceTex", tex_handle)
                 .vec2("u_center", cx, cy)
                 .f32("u_size", size)

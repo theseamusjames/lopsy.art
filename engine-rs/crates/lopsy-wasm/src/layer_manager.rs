@@ -210,7 +210,7 @@ pub fn duplicate_texture(
     engine.texture_pool.get(dst_handle).ok_or("Dst texture not found")?;
     engine.texture_pool.get(src_handle).ok_or("Src texture not found")?;
 
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", src_handle)
         .viewport(0, 0, sw as i32, sh as i32)
         .draw(Target::Texture(dst_handle));
@@ -285,7 +285,7 @@ pub fn merge_layers(
     engine.gpu().clear(engine.scratch_texture_b, [0.0, 0.0, 0.0, 0.0]);
     engine.texture_pool.get(engine.scratch_texture_b).ok_or("scratch_b not found")?;
     let bottom_opacity = if bake_bottom_opacity { bottom_desc.opacity } else { 1.0 };
-    engine.pass(&engine.shaders.blend_normal)
+    engine.pass_untyped(&engine.shaders.blend_normal)
         .texture("u_srcTex", bottom_handle)
         .texture("u_dstTex", engine.scratch_texture_b)
         .f32("u_opacity", bottom_opacity)
@@ -305,7 +305,7 @@ pub fn merge_layers(
     engine.gpu().unbind_textures(2);
     {
         let shader = engine.shaders.blend_for_mode(top_desc.blend_mode as i32)?;
-        let pass = engine.pass(&shader)
+        let pass = engine.pass_untyped(&shader)
             .texture("u_srcTex", top_handle)
             .texture("u_dstTex", engine.scratch_texture_a)
             .f32("u_opacity", top_desc.opacity)
@@ -336,7 +336,7 @@ pub fn merge_layers(
     let new_tex = engine.texture_pool.acquire(doc_w, doc_h)?;
     engine.texture_pool.get(new_tex).ok_or("new texture not found")?;
     engine.texture_pool.get(engine.scratch_texture_b).ok_or("scratch_b not found")?;
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", engine.scratch_texture_b)
         .draw(Target::Texture(new_tex));
 
@@ -396,7 +396,7 @@ pub fn rotate_texture_90(
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
     // Render rotated into new texture
-    engine.pass(&engine.shaders.rotate90)
+    engine.pass_untyped(&engine.shaders.rotate90)
         .texture("u_tex", tex_handle)
         .i32("u_clockwise", i32::from(clockwise))
         .blend(Blend::Off)
@@ -426,7 +426,7 @@ pub fn scale_texture(
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
     // Bilinear resample in premultiplied space (see premul_sample.glsl).
-    engine.pass(&engine.shaders.blit_resample)
+    engine.pass_untyped(&engine.shaders.blit_resample)
         .texture("u_tex", tex_handle)
         .blend(Blend::Off)
         .draw(Target::Texture(new_tex));
@@ -469,7 +469,7 @@ pub fn resize_canvas_texture(
     let off_x = -(old_layer_x as f32 + offset_x as f32) / old_w as f32;
     let off_y = -(old_layer_y as f32 + offset_y as f32) / old_h as f32;
 
-    engine.pass(&engine.shaders.blit_region)
+    engine.pass_untyped(&engine.shaders.blit_region)
         .texture("u_tex", tex_handle)
         .vec2("u_scale", scale_x, scale_y)
         .vec2("u_offset", off_x, off_y)
@@ -512,7 +512,7 @@ pub fn crop_texture(
     let off_x = (crop_x - layer_x) as f32 / old_w as f32;
     let off_y = (crop_y - layer_y) as f32 / old_h as f32;
 
-    engine.pass(&engine.shaders.blit_region)
+    engine.pass_untyped(&engine.shaders.blit_region)
         .texture("u_tex", tex_handle)
         .vec2("u_scale", scale_x, scale_y)
         .vec2("u_offset", off_x, off_y)
@@ -543,7 +543,7 @@ pub fn flip_texture(
     engine.ensure_scratch_size(w, h)?;
 
     // Render flipped into scratch_a using the flip shader
-    engine.pass(&engine.shaders.flip)
+    engine.pass_untyped(&engine.shaders.flip)
         .texture("u_tex", tex_handle)
         .i32("u_flipH", i32::from(horizontal))
         .i32("u_flipV", i32::from(!horizontal))
@@ -552,7 +552,7 @@ pub fn flip_texture(
 
     // Copy scratch_a → layer texture
     engine.texture_pool.get(engine.scratch_texture_a).ok_or("scratch_a not found")?;
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", engine.scratch_texture_a)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Texture(tex_handle));
@@ -581,7 +581,7 @@ pub fn remap_layer_mask(
     engine.texture_pool.get(new_mask).ok_or("New mask texture not found")?;
 
     let [a, b, c, d, e, f] = inverse;
-    engine.pass(&engine.shaders.mask_remap)
+    engine.pass_untyped(&engine.shaders.mask_remap)
         .texture("u_tex", mask_handle)
         .vec2("u_dstSize", dst_w as f32, dst_h as f32)
         .vec2("u_srcSize", src_w as f32, src_h as f32)
@@ -648,7 +648,7 @@ pub fn clipboard_copy(
         None
     };
 
-    let pass = engine.pass(&engine.shaders.clipboard_copy).texture("u_layerTex", layer_tex_handle);
+    let pass = engine.pass_untyped(&engine.shaders.clipboard_copy).texture("u_layerTex", layer_tex_handle);
     let pass = match mask {
         Some(m) => pass.texture("u_maskTex", m),
         None => pass.i32("u_maskTex", mask_sampler_unit(false)),
@@ -699,7 +699,7 @@ pub fn clipboard_clear_selected(
     let tmp_tex_h = engine.texture_pool.acquire(lw, lh)?;
     engine.texture_pool.get(tmp_tex_h).ok_or("Temp texture not found")?;
 
-    let pass = engine.pass(&engine.shaders.clipboard_clear).texture("u_layerTex", layer_tex_handle);
+    let pass = engine.pass_untyped(&engine.shaders.clipboard_clear).texture("u_layerTex", layer_tex_handle);
     let pass = match mask {
         Some(m) => pass.texture("u_maskTex", m),
         None => pass.i32("u_maskTex", mask_sampler_unit(has_mask)),
@@ -712,7 +712,7 @@ pub fn clipboard_clear_selected(
         .blend(Blend::Off)
         .draw(Target::Texture(tmp_tex_h));
 
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", tmp_tex_h)
         .viewport(0, 0, lw as i32, lh as i32)
         .draw(Target::Texture(layer_tex_handle));
@@ -752,7 +752,7 @@ pub fn clipboard_paste(
     engine.texture_pool.get(dst_handle).ok_or("Dst texture not found")?;
 
     // Blit clipboard → dst
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", clip_tex_handle)
         .viewport(0, 0, clip_w as i32, clip_h as i32)
         .draw(Target::Texture(dst_handle));
@@ -797,7 +797,7 @@ pub fn expand_layer_to_doc_size(
     let new_tex = engine.texture_pool.acquire(new_w, new_h)?;
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
-    engine.pass(&engine.shaders.clipboard_copy)
+    engine.pass_untyped(&engine.shaders.clipboard_copy)
         .texture("u_layerTex", tex_handle)
         .i32("u_maskTex", mask_sampler_unit(false))
         .i32("u_hasMask", 0)
@@ -955,7 +955,7 @@ pub fn float_selection(
     let float_tex = engine.texture_pool.acquire(fw, fh)?;
     engine.texture_pool.get(float_tex).ok_or("Float texture not found")?;
     {
-        let pass = engine.pass(&engine.shaders.clipboard_copy).texture("u_layerTex", layer_tex_handle);
+        let pass = engine.pass_untyped(&engine.shaders.clipboard_copy).texture("u_layerTex", layer_tex_handle);
         let pass = match mask {
             Some(m) => pass.texture("u_maskTex", m),
             None => pass.i32("u_maskTex", mask_sampler_unit(has_mask)),
@@ -980,7 +980,7 @@ pub fn float_selection(
     let base_tex = engine.texture_pool.acquire(fw, fh)?;
     engine.texture_pool.get(base_tex).ok_or("Base texture not found")?;
     {
-        let pass = engine.pass(&engine.shaders.clipboard_clear).texture("u_layerTex", layer_tex_handle);
+        let pass = engine.pass_untyped(&engine.shaders.clipboard_clear).texture("u_layerTex", layer_tex_handle);
         let pass = match mask {
             Some(m) => pass.texture("u_maskTex", m),
             None => pass.i32("u_maskTex", mask_sampler_unit(has_mask)),
@@ -1048,7 +1048,7 @@ pub fn restore_float_base(
     engine.texture_pool.get(base_handle).ok_or("Base texture not found")?;
     let (bw, bh) = engine.texture_pool.get_size(base_handle).unwrap_or((1, 1));
 
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", src_handle)
         .viewport(0, 0, bw as i32, bh as i32)
         .draw(Target::Texture(base_handle));
@@ -1082,7 +1082,7 @@ pub fn composite_float(
     // Blend float (src, at offset dx/dy) onto base (dst) directly into the layer
     // texture in one pass. base_tex and float_tex are both fw×fh, so v_uv maps
     // correctly without the UV-scale mismatch that doc-sized scratch textures cause.
-    engine.pass(&engine.shaders.blend_normal)
+    engine.pass_untyped(&engine.shaders.blend_normal)
         .texture("u_srcTex", float_handle)
         .texture("u_dstTex", base_handle)
         .f32("u_opacity", 1.0)
@@ -1135,7 +1135,7 @@ pub(crate) fn copy_into_larger_texture(
     engine.texture_pool.get(src_handle).ok_or("Source texture not found")?;
     let dst_handle = engine.texture_pool.acquire(dst_w, dst_h)?;
     engine.texture_pool.get(dst_handle).ok_or("Destination texture not found")?;
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", src_handle)
         .blend(Blend::Off)
         .clear([0.0, 0.0, 0.0, 0.0])
@@ -1222,7 +1222,7 @@ pub fn flip_float(
     // Render into scratch_a
     // Full-quad blit back below: scratch must match the float exactly.
     engine.ensure_scratch_size(fw, fh)?;
-    engine.pass(&engine.shaders.flip)
+    engine.pass_untyped(&engine.shaders.flip)
         .texture("u_tex", float_handle)
         .i32("u_flipH", i32::from(horizontal))
         .i32("u_flipV", i32::from(!horizontal))
@@ -1232,7 +1232,7 @@ pub fn flip_float(
 
     // Copy scratch_a back to float texture
     engine.texture_pool.get(engine.scratch_texture_a).ok_or("scratch_a not found")?;
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", engine.scratch_texture_a)
         .viewport(0, 0, fw as i32, fh as i32)
         .draw(Target::Texture(float_handle));
@@ -1256,7 +1256,7 @@ pub fn rotate_float_90(
     // Render into scratch_a
     // Full-quad blit back below: scratch must match the float exactly.
     engine.ensure_scratch_size(fw, fh)?;
-    engine.pass(&engine.shaders.rotate90)
+    engine.pass_untyped(&engine.shaders.rotate90)
         .texture("u_tex", float_handle)
         .i32("u_clockwise", i32::from(clockwise))
         .blend(Blend::Off)
@@ -1265,7 +1265,7 @@ pub fn rotate_float_90(
 
     // Copy scratch_a back to float texture
     engine.texture_pool.get(engine.scratch_texture_a).ok_or("scratch_a not found")?;
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", engine.scratch_texture_a)
         .viewport(0, 0, fw as i32, fh as i32)
         .draw(Target::Texture(float_handle));
@@ -1382,7 +1382,7 @@ fn composite_float_transformed(
 
     // Step 2: Blend tmp (transformed float, fw×fh) onto base → layer texture.
     // Both tmp and base_tex are fw×fh, so v_uv correctly addresses them.
-    engine.pass(&engine.shaders.blend_normal)
+    engine.pass_untyped(&engine.shaders.blend_normal)
         .texture("u_srcTex", tmp)
         .texture("u_dstTex", base_handle)
         .f32("u_opacity", 1.0)
@@ -1498,7 +1498,7 @@ fn fill_texture_in_selection(
 
     // Render filled result into scratch_a
     let [r, g, b, a] = color;
-    let pass = engine.pass(&engine.shaders.selection_fill).texture("u_layerTex", target_handle);
+    let pass = engine.pass_untyped(&engine.shaders.selection_fill).texture("u_layerTex", target_handle);
     let pass = match mask {
         Some(m) => pass.texture("u_maskTex", m),
         None => pass.i32("u_maskTex", mask_sampler_unit(has_mask)),
@@ -1514,7 +1514,7 @@ fn fill_texture_in_selection(
 
     // Copy scratch_a → target texture
     engine.texture_pool.get(engine.scratch_texture_a).ok_or("scratch_a not found")?;
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", engine.scratch_texture_a)
         .viewport(0, 0, tw as i32, th as i32)
         .draw(Target::Texture(target_handle));
@@ -1595,7 +1595,7 @@ pub fn read_clipboard_pixels(engine: &EngineInner) -> Result<Vec<u8>, String> {
 pub const EMPTY_SNAPSHOT: u32 = u32::MAX;
 
 fn blit_texture(engine: &EngineInner, src: TextureHandle, dst: TextureHandle, w: u32, h: u32) {
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", src)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Texture(dst));

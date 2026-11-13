@@ -85,7 +85,7 @@ pub(crate) fn paint_mask_dabs_scissored(
             w,
             h,
             Rect::new(x, y, rw as u32, rh as u32),
-            engine.pass(&engine.shaders.quick_mask_dab)
+            engine.pass_untyped(&engine.shaders.quick_mask_dab)
                 .texture("u_maskTex", tex_handle)
                 .f32("u_size", dab.size)
                 .f32("u_hardness", dab.hardness)
@@ -123,7 +123,7 @@ pub(crate) fn draw_pencil_blocks_gpu(
     let tex_w_i = w as i32;
     let tex_h_i = h as i32;
 
-    let pass = engine.pass(&engine.shaders.pencil_dab)
+    let pass = engine.pass_untyped(&engine.shaders.pencil_dab)
         .vec4("u_color", value, value, value, 1.0)
         .f32("u_size", size)
         .vec2("u_texSize", w as f32, h as f32)

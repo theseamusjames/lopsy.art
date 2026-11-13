@@ -91,7 +91,7 @@ pub fn apply_healing_dab_batch(
             h,
             rect,
             engine
-                .pass(&engine.shaders.healing_dab)
+                .pass_untyped(&engine.shaders.healing_dab)
                 .texture("u_layerTex", tex_handle)
                 .texture("u_meanTex", mean_tex)
                 .vec2("u_center", dx, dy)
@@ -147,7 +147,7 @@ fn render_region_means(
     radius: f32,
 ) {
     engine
-        .pass(&engine.shaders.healing_mean)
+        .pass_untyped(&engine.shaders.healing_mean)
         .texture("u_tex", layer)
         .vec2("u_srcCenter", src_center.0, src_center.1)
         .vec2("u_dstCenter", dst_center.0, dst_center.1)

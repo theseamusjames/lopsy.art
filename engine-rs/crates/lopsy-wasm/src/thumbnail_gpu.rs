@@ -44,7 +44,7 @@ pub fn read_box_thumbnail(
     }
     let (tw, th) = thumbnail_size(w, h, max_size);
 
-    let Some(thumb) = engine.pass(&engine.shaders.thumbnail_box)
+    let Some(thumb) = engine.pass_untyped(&engine.shaders.thumbnail_box)
         .texture("u_tex", src)
         .vec2("u_dstSize", tw as f32, th as f32)
         .i32("u_channel", channel)

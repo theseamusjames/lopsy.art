@@ -67,7 +67,7 @@ pub(crate) fn draw(engine: &mut EngineInner, fb_w: i32, fb_h: i32) {
     };
 
     engine
-        .pass(&engine.shaders.stamp_preview)
+        .pass_untyped(&engine.shaders.stamp_preview)
         .texture("u_layerTex", tex_handle)
         .vec2("u_resolution", fb_w as f32, fb_h as f32)
         .f32("u_zoom", engine.viewport.zoom as f32)

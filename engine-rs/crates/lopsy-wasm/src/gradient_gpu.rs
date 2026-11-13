@@ -41,7 +41,7 @@ pub fn save_gradient_preview(engine: &mut EngineInner, layer_id: &str) {
         return;
     }
 
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", tex_handle)
         .blend(Blend::Off)
         .draw(Target::Texture(preview_handle));
@@ -82,7 +82,7 @@ fn restore_layer_from_preview(engine: &mut EngineInner, layer_id: &str) -> bool 
         return false;
     };
 
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", preview)
         .viewport(0, 0, w as i32, h as i32)
         .blend(Blend::Off)
@@ -211,7 +211,7 @@ pub(crate) enum GradientShape {
 /// Blit `src` into scratch A at `w`×`h`, so a pass can read a texture's
 /// current content while rendering back into it.
 pub(crate) fn copy_to_scratch_a(engine: &EngineInner, src: TextureHandle, w: u32, h: u32) {
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", src)
         .viewport(0, 0, w as i32, h as i32)
         .blend(Blend::Off)
@@ -234,7 +234,7 @@ pub(crate) fn gradient_pass<'a>(
         GradientShape::Linear { .. } => &engine.shaders.gradient_linear,
         GradientShape::Radial { .. } => &engine.shaders.gradient_radial,
     };
-    let mut pass = engine.pass(shader)
+    let mut pass = engine.pass_untyped(shader)
         .texture("u_existingTex", existing)
         .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
         .vec2("u_layerOffset", origin.0, origin.1)

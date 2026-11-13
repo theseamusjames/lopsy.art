@@ -7,6 +7,7 @@ use crate::gpu::context::GpuContext;
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
 use crate::gpu::pass::{Blend, GpuRef, Pass, ReadFormat};
 use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
+use crate::gpu::uniforms::Uniforms;
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
 
 /// Magnetic-lasso state: a precomputed Sobel edge field that the snap
@@ -848,9 +849,16 @@ impl EngineInner {
         GpuRef::new(&self.gpu_ctx, &self.texture_pool, &self.fbo_pool, self.render_fbo)
     }
 
-    /// Start a pass that runs `program`. See `gpu::pass`.
-    pub fn pass<'a>(&'a self, program: &'a ShaderProgram) -> Pass<'a> {
-        self.gpu().pass(program)
+    /// Start a pass that runs `program` with `params` as its uniforms. See
+    /// `gpu::pass`.
+    pub fn pass<'a, P: Uniforms>(&'a self, program: &'a ShaderProgram<P>, params: P) -> Pass<'a, P> {
+        self.gpu().pass(program, params)
+    }
+
+    /// Start a pass that runs a program whose uniforms are still set by
+    /// name.
+    pub fn pass_untyped<'a>(&'a self, program: &'a ShaderProgram) -> Pass<'a> {
+        self.gpu().pass_untyped(program)
     }
 
     /// Upload a one-byte-per-pixel mask into a pooled texture as
@@ -913,7 +921,7 @@ impl EngineInner {
     pub fn read_texture_r8(&self, src: TextureHandle, w: u32, h: u32) -> Option<Vec<u8>> {
         // The blit shader writes vec4(color); the R8 target only keeps the
         // R channel.
-        self.pass(&self.shaders.blit)
+        self.pass(&self.shaders.blit, ())
             .texture("u_tex", src)
             .blend(Blend::Off)
             .read_back(ReadFormat::R8, w, h)
@@ -925,7 +933,7 @@ impl EngineInner {
     /// on software GL); one GPU blit plus an UNSIGNED_BYTE read is fast on
     /// every backend. Use for data that is conceptually 8-bit (masks).
     pub fn read_texture_rgba8(&self, src: TextureHandle, w: u32, h: u32) -> Option<Vec<u8>> {
-        self.pass(&self.shaders.blit)
+        self.pass(&self.shaders.blit, ())
             .texture("u_tex", src)
             .blend(Blend::Off)
             .read_back(ReadFormat::Rgba8, w, h)

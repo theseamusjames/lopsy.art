@@ -109,7 +109,7 @@ pub fn render_shape(
         }
     };
 
-    engine.pass(&engine.shaders.shape_fill)
+    engine.pass_untyped(&engine.shaders.shape_fill)
         .texture("u_dstTex", dst)
         .i32("u_shapeType", shape_type as i32)
         // Convert center from document space to texture space
@@ -134,7 +134,7 @@ pub fn render_shape(
 }
 
 fn copy_texture(engine: &EngineInner, src: TextureHandle, dst: TextureHandle, w: u32, h: u32) {
-    engine.pass(&engine.shaders.blit)
+    engine.pass(&engine.shaders.blit, ())
         .texture("u_tex", src)
         .blend(Blend::Off)
         .viewport(0, 0, w as i32, h as i32)
