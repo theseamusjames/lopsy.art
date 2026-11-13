@@ -2,12 +2,11 @@
 
 
 use crate::engine::EngineInner;
-use crate::filter_gpu;
+use crate::{filter_gpu, imaging};
 use crate::gpu::pass::Target;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::params::filters::{
-    BoxBlurParams, GaussianBlurParams, MotionBlurParams, RadialBlurParams, SharpenParams, SurfaceBlurParams,
-    TiltShiftBlurParams,
+    BoxBlurParams, GaussianBlurParams, SharpenParams,
 };
 use crate::gpu::uniforms::FloatArray;
 
@@ -110,12 +109,7 @@ pub fn filter_unsharp_mask(
 
 pub fn filter_motion_blur(engine: &mut EngineInner, layer_id: &str, angle: f32, distance: u32) {
     if distance == 0 { return; }
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.motion_blur,
-        MotionBlurParams { angle, distance: distance as i32 },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::blur::motion_blur(im, src, angle, distance));
 }
 
 pub fn filter_tilt_shift_blur(
@@ -127,34 +121,13 @@ pub fn filter_tilt_shift_blur(
     angle: f32,
 ) {
     if blur_radius <= 0.0 { return; }
-    let focus_position = focus_position.clamp(0.0, 1.0);
-    let focus_width = focus_width.clamp(0.0, 1.0);
-    let blur_radius = blur_radius.clamp(1.0, 32.0);
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.tilt_shift_blur,
-        TiltShiftBlurParams { focus_position, focus_width, blur_radius, angle },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::blur::tilt_shift_blur(im, src, focus_position, focus_width, blur_radius, angle));
 }
 
-// Surface blur is a non-separable bilateral filter: the shader samples a
-// (2r+1)^2 neighborhood per pixel, so cost grows with the square of the
-// radius. A large radius would run a single draw call long enough to trip
-// the GPU watchdog and drop the WebGL context, so the radius is capped here
-// regardless of what the caller requests.
-const SURFACE_BLUR_MAX_RADIUS: u32 = 50;
 
 pub fn filter_surface_blur(engine: &mut EngineInner, layer_id: &str, radius: u32, threshold: f32) {
     if radius == 0 { return; }
-    let radius = radius.min(SURFACE_BLUR_MAX_RADIUS);
-    let threshold = threshold.clamp(1.0, 255.0) / 255.0;
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.surface_blur,
-        SurfaceBlurParams { radius: radius as i32, threshold },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::blur::surface_blur(im, src, radius, threshold));
 }
 
 pub fn filter_radial_blur(engine: &mut EngineInner, layer_id: &str, amount: u32) {
@@ -162,10 +135,5 @@ pub fn filter_radial_blur(engine: &mut EngineInner, layer_id: &str, amount: u32)
     let Some((_, _, cu, cv)) = super::full_size_doc_center(&mut *engine, layer_id) else {
         return;
     };
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.radial_blur,
-        RadialBlurParams { center: [cu, cv], amount: amount as i32 },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::blur::radial_blur(im, src, [cu, cv], amount));
 }

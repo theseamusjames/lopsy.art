@@ -4,13 +4,12 @@
 
 use super::full_size_doc_center;
 use crate::engine::EngineInner;
-use crate::filter_gpu;
+use crate::{filter_gpu, imaging};
 use crate::gpu::pass::Target;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::params::filters::{
-    BloomCombineParams, BloomThresholdParams, CelShadingParams, ChromaticAberrationParams, EmbossParams,
-    GaussianBlurParams, HalftoneParams, KaleidoscopeParams, LensDistortionParams, OilPaintParams,
-    PixelStretchParams, VoronoiParams,
+    BloomCombineParams, BloomThresholdParams,
+    GaussianBlurParams,
 };
 use crate::gpu::uniforms::FloatArray;
 
@@ -25,13 +24,7 @@ pub fn filter_halftone(engine: &mut EngineInner, layer_id: &str, dot_size: f32, 
     if dot_size < 2.0 {
         return;
     }
-    let density = density.clamp(0.25, 3.0);
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.halftone,
-        HalftoneParams { dot_size, angle, contrast, density },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::stylize::halftone(im, src, dot_size, density, angle, contrast));
 }
 
 pub fn filter_kaleidoscope(engine: &mut EngineInner, layer_id: &str, segments: u32, rotation_degrees: f32) {
@@ -43,38 +36,17 @@ pub fn filter_kaleidoscope(engine: &mut EngineInner, layer_id: &str, segments: u
         return;
     };
 
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.kaleidoscope,
-        KaleidoscopeParams {
-            segments: segments.max(2) as f32,
-            rotation: rotation_degrees.to_radians(),
-            size: [w as f32, h as f32],
-            center: [cu, cv],
-        },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| {
+        imaging::filters::stylize::kaleidoscope(im, src, [w as f32, h as f32], [cu, cv], segments, rotation_degrees)
+    });
 }
 
 pub fn filter_oil_paint(engine: &mut EngineInner, layer_id: &str, radius: f32, sharpness: f32) {
-    let radius = radius.clamp(1.0, 10.0);
-    let sharpness = sharpness.clamp(0.1, 5.0);
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.oil_paint,
-        OilPaintParams { radius, sharpness },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::stylize::oil_paint(im, src, radius, sharpness));
 }
 
 pub fn filter_chromatic_aberration(engine: &mut EngineInner, layer_id: &str, amount: f32, angle_degrees: f32) {
-    let amount = amount.clamp(0.0, 100.0);
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.chromatic_aberration,
-        ChromaticAberrationParams { amount, angle: angle_degrees.to_radians() },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::stylize::chromatic_aberration(im, src, amount, angle_degrees));
 }
 
 pub fn filter_pixel_stretch(
@@ -85,15 +57,7 @@ pub fn filter_pixel_stretch(
     seed: f32,
     rgb_split: f32,
 ) {
-    let amount = amount.clamp(0.0, 200.0);
-    let bands = bands.clamp(2.0, 50.0);
-    let rgb_split = rgb_split.clamp(0.0, 1.0);
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.pixel_stretch,
-        PixelStretchParams { amount, bands, seed, rgb_split },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::stylize::pixel_stretch(im, src, amount, bands, seed, rgb_split));
 }
 
 pub fn filter_lens_distortion(
@@ -103,54 +67,25 @@ pub fn filter_lens_distortion(
     zoom: f32,
     fringing: f32,
 ) {
-    let strength = strength.clamp(-1.0, 1.0);
-    let zoom = zoom.clamp(0.5, 2.0);
-    let fringing = fringing.clamp(0.0, 1.0);
     let Some((_, _, cu, cv)) = full_size_doc_center(&mut *engine, layer_id) else {
         return;
     };
     let doc_long_side = engine.doc_width.max(engine.doc_height).max(1) as f32;
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.lens_distortion,
-        LensDistortionParams {
-            strength,
-            zoom,
-            fringing,
-            center: [cu, cv],
-            radius_scale: doc_long_side,
-        },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| {
+        imaging::filters::stylize::lens_distortion(im, src, [cu, cv], doc_long_side, strength, zoom, fringing)
+    });
 }
 
 pub fn filter_find_edges(engine: &mut EngineInner, layer_id: &str) {
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.find_edges,
-        (),
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::stylize::find_edges(im, src));
 }
 
 pub fn filter_cel_shading(engine: &mut EngineInner, layer_id: &str, levels: u32, edge_strength: f32) {
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.cel_shading,
-        CelShadingParams { levels: levels as i32, edge_strength },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::stylize::cel_shading(im, src, levels, edge_strength));
 }
 
 pub fn filter_emboss(engine: &mut EngineInner, layer_id: &str, angle_degrees: f32, strength: f32, emboss_type: f32) {
-    let strength = strength.clamp(0.0, 1.0);
-    let emboss_type = emboss_type.clamp(0.0, 1.0);
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.emboss,
-        EmbossParams { angle: angle_degrees.to_radians(), strength, emboss_type },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::stylize::emboss(im, src, angle_degrees, strength, emboss_type));
 }
 
 pub fn filter_bloom(
@@ -225,16 +160,5 @@ pub fn filter_voronoi(
     edge_b: f32,
     seed: f32,
 ) {
-    let cell_count = cell_count.clamp(2.0, 200.0);
-    let edge_width = edge_width.clamp(0.0, 20.0);
-    let edge_r = edge_r.clamp(0.0, 1.0);
-    let edge_g = edge_g.clamp(0.0, 1.0);
-    let edge_b = edge_b.clamp(0.0, 1.0);
-    let seed = seed.clamp(0.0, 999.0);
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.voronoi,
-        VoronoiParams { cell_count, edge_width, edge_r, edge_g, edge_b, seed },
-    );
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::stylize::voronoi(im, src, cell_count, edge_width, edge_r, edge_g, edge_b, seed));
 }

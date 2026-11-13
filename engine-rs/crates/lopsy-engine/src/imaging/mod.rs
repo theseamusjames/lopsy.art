@@ -6,6 +6,7 @@
 //! a raw developer with no layer stack would be a third.
 
 pub mod adjustments;
+pub mod filters;
 
 use crate::gpu::pass::GpuRef;
 use crate::gpu::shader::ShaderPrograms;
