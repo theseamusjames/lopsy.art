@@ -4,6 +4,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::Engine;
 use crate::filter_gpu;
+use crate::gpu::params::filters::{ColorLutParams, PatternFillParams, SunburstParams};
 
 /// `stagger_*` offsets alternate rows / columns (brick, half-drop) and
 /// `origin_*` shifts the whole tiling grid; all four are fractions of one tile.
@@ -55,23 +56,19 @@ pub fn filter_pattern_fill(
     let lh = layer_h as f32;
     let scale = scale.max(0.01);
 
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter_with_texture(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.pattern_fill,
-        |pass| {
-            let pass = if is_pattern_live {
-                pass.texture("u_pattern", pattern_handle)
-            } else {
-                pass.i32("u_pattern", 1)
-            };
-            pass
-                .vec2("u_layerSize", lw, lh)
-                .vec2("u_patternSize", pw, ph)
-                .f32("u_scale", scale)
-                .vec2("u_stagger", stagger_x, stagger_y)
-                .vec2("u_origin", origin_x, origin_y)
+        PatternFillParams {
+            layer_size: [lw, lh],
+            pattern_size: [pw, ph],
+            scale,
+            stagger: [stagger_x, stagger_y],
+            origin: [origin_x, origin_y],
         },
+        "u_pattern",
+        is_pattern_live.then_some(pattern_handle),
     );
 
     engine.inner.texture_pool.release(pattern_handle);
@@ -107,20 +104,13 @@ pub fn filter_color_lut(
     let size_f = lut_size as f32;
     let intensity = intensity.clamp(0.0, 1.0);
 
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter_with_texture(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.color_lut,
-        |pass| {
-            let pass = if is_lut_live {
-                pass.texture("u_lut", lut_handle)
-            } else {
-                pass.i32("u_lut", 1)
-            };
-            pass
-                .f32("u_lutSize", size_f)
-                .f32("u_intensity", intensity)
-        },
+        ColorLutParams { lut_size: size_f, intensity },
+        "u_lut",
+        is_lut_live.then_some(lut_handle),
     );
 
     engine.inner.texture_pool.release(lut_handle);
@@ -224,27 +214,26 @@ pub fn filter_sunburst(
         layer_y,
     );
 
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.sunburst,
-        |pass| {
-            pass
-                .f32("u_reach", reach)
-                .f32("u_rays", rays.max(3) as f32)
-                .f32("u_rotation", rotation_degrees.to_radians())
-                .f32("u_length", length.max(0.0))
-                .f32("u_width", width.clamp(0.0, 1.0))
-                .f32("u_taper", taper.clamp(0.0, 1.0))
-                .f32("u_fade", fade.clamp(0.0, 1.0))
-                .f32("u_softness", softness.clamp(0.0, 1.0))
-                .f32("u_jitter", jitter.clamp(0.0, 1.0))
-                .f32("u_seed", seed)
-                .vec2("u_size", w as f32, h as f32)
-                .vec2("u_center", cx, cy)
-                .vec4("u_rayColor", ray_r, ray_g, ray_b, ray_a.clamp(0.0, 1.0))
-                .i32("u_fillGaps", if fill_gaps { 1 } else { 0 })
-                .vec3("u_gapColor", gap_r, gap_g, gap_b)
+        SunburstParams {
+            size: [w as f32, h as f32],
+            center: [cx, cy],
+            reach,
+            rays: rays.max(3) as f32,
+            rotation: rotation_degrees.to_radians(),
+            length: length.max(0.0),
+            width: width.clamp(0.0, 1.0),
+            taper: taper.clamp(0.0, 1.0),
+            fade: fade.clamp(0.0, 1.0),
+            softness: softness.clamp(0.0, 1.0),
+            jitter: jitter.clamp(0.0, 1.0),
+            seed,
+            ray_color: [ray_r, ray_g, ray_b, ray_a.clamp(0.0, 1.0)],
+            fill_gaps: if fill_gaps { 1 } else { 0 },
+            gap_color: [gap_r, gap_g, gap_b],
         },
     );
 }

@@ -3,8 +3,10 @@ precision highp float;
 
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_radius;
-uniform float u_sharpness;
+layout(std140) uniform Params {
+    float u_radius;
+    float u_sharpness;
+};
 
 out vec4 fragColor;
 

@@ -2,8 +2,10 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_amount;    // pixel offset magnitude
-uniform float u_angle;     // direction in radians
+layout(std140) uniform Params {
+    float u_amount; // pixel offset magnitude
+    float u_angle; // direction in radians
+};
 out vec4 fragColor;
 void main() {
     vec2 texSize = vec2(textureSize(u_tex, 0));

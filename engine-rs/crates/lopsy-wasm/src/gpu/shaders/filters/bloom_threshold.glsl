@@ -2,8 +2,10 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_threshold;
-uniform float u_softKnee;
+layout(std140) uniform Params {
+    float u_threshold;
+    float u_softKnee;
+};
 out vec4 fragColor;
 void main() {
     vec4 c = texture(u_tex, v_uv);

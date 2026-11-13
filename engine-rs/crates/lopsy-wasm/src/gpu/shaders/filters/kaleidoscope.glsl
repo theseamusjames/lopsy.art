@@ -2,10 +2,12 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_segments;  // number of mirror segments (2 - 32)
-uniform float u_rotation;  // rotation offset in radians
-uniform vec2 u_size;       // texture size in pixels, for aspect-correct polar math
-uniform vec2 u_center;     // canvas centre in texture UV (not 0.5 when the layer hangs off-canvas)
+layout(std140) uniform Params {
+    float u_segments; // number of mirror segments (2 - 32)
+    float u_rotation; // rotation offset in radians
+    vec2 u_size; // texture size in pixels, for aspect-correct polar math
+    vec2 u_center; // canvas centre in texture UV (not 0.5 when the layer hangs off-canvas)
+};
 out vec4 fragColor;
 
 const float PI = 3.14159265359;

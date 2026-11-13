@@ -2,9 +2,11 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform vec2 u_direction;
-uniform int u_radius;
-uniform int u_step;
+layout(std140) uniform Params {
+    vec2 u_direction;
+    int u_radius;
+    int u_step;
+};
 out vec4 fragColor;
 void main() {
     vec2 texelSize = 1.0 / vec2(textureSize(u_tex, 0));

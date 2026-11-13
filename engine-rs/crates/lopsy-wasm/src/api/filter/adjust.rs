@@ -5,7 +5,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::Engine;
 use crate::filter_gpu;
-use crate::gpu::params::filters::{PosterizeParams, ThresholdParams};
+use crate::gpu::params::filters::{HueSatParams, PosterizeParams, SolarizeParams, ThresholdParams};
 
 #[wasm_bindgen(js_name = "filterBrightnessContrast")]
 pub fn filter_brightness_contrast(
@@ -25,16 +25,11 @@ pub fn filter_hue_saturation(
     engine: &mut Engine, layer_id: &str,
     hue: f32, saturation: f32, lightness: f32,
 ) {
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.hue_sat,
-        |pass| {
-            pass
-                .f32("u_hue", hue)
-                .f32("u_saturation", saturation)
-                .f32("u_lightness", lightness)
-        },
+        HueSatParams { hue, saturation, lightness },
     );
 }
 
@@ -46,16 +41,11 @@ pub fn filter_invert(engine: &mut Engine, layer_id: &str) {
 #[wasm_bindgen(js_name = "filterDesaturate")]
 pub fn filter_desaturate(engine: &mut Engine, layer_id: &str) {
     // Desaturate = hue_sat with saturation = -100
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.hue_sat,
-        |pass| {
-            pass
-                .f32("u_hue", 0.0)
-                .f32("u_saturation", -100.0)
-                .f32("u_lightness", 0.0)
-        },
+        HueSatParams { hue: 0.0, saturation: -100.0, lightness: 0.0 },
     );
 }
 
@@ -81,13 +71,10 @@ pub fn filter_threshold(engine: &mut Engine, layer_id: &str, level: u32) {
 
 #[wasm_bindgen(js_name = "filterSolarize")]
 pub fn filter_solarize(engine: &mut Engine, layer_id: &str, threshold: u32) {
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.solarize,
-        |pass| {
-            pass
-                .f32("u_threshold", threshold as f32 / 255.0)
-        },
+        SolarizeParams { threshold: threshold as f32 / 255.0 },
     );
 }

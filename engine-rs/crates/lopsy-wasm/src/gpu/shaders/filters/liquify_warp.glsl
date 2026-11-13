@@ -6,8 +6,10 @@ out vec4 fragColor;
 
 uniform sampler2D u_tex;
 uniform sampler2D u_disp;
-uniform float u_maxDisp;
-uniform vec2 u_texelSize;
+layout(std140) uniform Params {
+    float u_maxDisp;
+    vec2 u_texelSize;
+};
 
 // 16 bits per axis: (R, G) = high and low byte of the X code, (B, A) those
 // of Y. The code is an exact integer and 32768 is an exact zero, so the

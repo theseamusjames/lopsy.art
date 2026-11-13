@@ -6,8 +6,10 @@ out vec4 fragColor;
 
 uniform sampler2D u_tex;
 uniform sampler2D u_lut;
-uniform float u_lutSize;
-uniform float u_intensity;
+layout(std140) uniform Params {
+    float u_lutSize;
+    float u_intensity;
+};
 
 void main() {
     vec4 color = texture(u_tex, v_uv);

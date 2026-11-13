@@ -5,21 +5,23 @@ in vec2 v_uv;
 out vec4 fragColor;
 
 uniform sampler2D u_tex;
-uniform vec2 u_size;        // layer texture size in pixels
-uniform vec2 u_center;      // burst origin in layer-texture pixels
-uniform float u_reach;      // distance from origin to the farthest document corner
-uniform float u_rays;       // ray count
-uniform float u_rotation;   // radians
-uniform float u_length;     // ray length as a fraction of u_reach
-uniform float u_width;      // lit fraction of each ray's angular slot at the base (0-1)
-uniform float u_taper;      // 0 = wedge, 0.5 = parallel beam, 1 = spike narrowing to its tip
-uniform float u_fade;       // 0 = solid to the tip, 1 = fades out to nothing at the tip
-uniform float u_softness;   // edge feather as a fraction of the ray's half-width
-uniform float u_jitter;     // per-ray length variation (0-1)
-uniform float u_seed;
-uniform vec4 u_rayColor;    // straight RGB + opacity
-uniform int u_fillGaps;     // 1 = paint the gaps between rays with u_gapColor
-uniform vec3 u_gapColor;
+layout(std140) uniform Params {
+    vec2 u_size; // layer texture size in pixels
+    vec2 u_center; // burst origin in layer-texture pixels
+    float u_reach; // distance from origin to the farthest document corner
+    float u_rays; // ray count
+    float u_rotation; // radians
+    float u_length; // ray length as a fraction of u_reach
+    float u_width; // lit fraction of each ray's angular slot at the base (0-1)
+    float u_taper; // 0 = wedge, 0.5 = parallel beam, 1 = spike narrowing to its tip
+    float u_fade; // 0 = solid to the tip, 1 = fades out to nothing at the tip
+    float u_softness; // edge feather as a fraction of the ray's half-width
+    float u_jitter; // per-ray length variation (0-1)
+    float u_seed;
+    vec4 u_rayColor; // straight RGB + opacity
+    int u_fillGaps; // 1 = paint the gaps between rays with u_gapColor
+    vec3 u_gapColor;
+};
 
 const float TAU = 6.28318530718;
 

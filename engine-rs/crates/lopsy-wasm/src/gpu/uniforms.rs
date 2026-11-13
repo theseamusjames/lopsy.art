@@ -195,6 +195,17 @@ impl UniformValue for Mat3 {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FloatArray<const N: usize>(pub [f32; N]);
 
+impl<const N: usize> FloatArray<N> {
+    /// The first `N` of `values`, padded with zeros.
+    pub fn from_slice(values: &[f32]) -> Self {
+        let mut array = [0.0; N];
+        for (slot, value) in array.iter_mut().zip(values) {
+            *slot = *value;
+        }
+        Self(array)
+    }
+}
+
 impl<const N: usize> UniformValue for FloatArray<N> {
     const TYPE: UniformType = UniformType::FloatArray(N);
     fn put(&self, sink: &mut impl UniformSink) {

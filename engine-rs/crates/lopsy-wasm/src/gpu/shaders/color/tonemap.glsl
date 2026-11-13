@@ -2,7 +2,9 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform int u_curve;
+layout(std140) uniform Params {
+    int u_curve;
+};
 out vec4 fragColor;
 vec3 pqOETF(vec3 c) {
     float m1 = 0.1593017578125, m2 = 78.84375;

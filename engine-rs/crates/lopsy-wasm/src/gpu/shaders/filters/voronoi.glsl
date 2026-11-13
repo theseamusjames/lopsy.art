@@ -3,12 +3,14 @@ precision highp float;
 
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_cellCount;
-uniform float u_edgeWidth;
-uniform float u_edgeR;
-uniform float u_edgeG;
-uniform float u_edgeB;
-uniform float u_seed;
+layout(std140) uniform Params {
+    float u_cellCount;
+    float u_edgeWidth;
+    float u_edgeR;
+    float u_edgeG;
+    float u_edgeB;
+    float u_seed;
+};
 
 out vec4 fragColor;
 

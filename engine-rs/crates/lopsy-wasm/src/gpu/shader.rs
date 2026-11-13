@@ -174,6 +174,45 @@ typed_shaders! {
     LAYER_MASK_APPLY: params::core::LayerMaskApplyParams = LAYER_MASK_APPLY_FRAG;
     TRANSFORM_AFFINE: params::core::TransformAffineParams = TRANSFORM_AFFINE_FRAG;
     TRANSFORM_PERSPECTIVE: params::core::TransformPerspectiveParams = TRANSFORM_PERSPECTIVE_FRAG;
+    HUE_SAT: params::filters::HueSatParams = HUE_SAT_FRAG;
+    SOLARIZE: params::filters::SolarizeParams = SOLARIZE_FRAG;
+    SHARPEN: params::filters::SharpenParams = SHARPEN_FRAG;
+    MOTION_BLUR: params::filters::MotionBlurParams = MOTION_BLUR_FRAG;
+    RADIAL_BLUR: params::filters::RadialBlurParams = RADIAL_BLUR_FRAG;
+    FIND_EDGES: () = FIND_EDGES_FRAG;
+    CEL_SHADING: params::filters::CelShadingParams = CEL_SHADING_FRAG;
+    PIXELATE: params::filters::PixelateParams = PIXELATE_FRAG;
+    PIXELATE_BLOCKS: params::filters::PixelateBlocksParams = PIXELATE_BLOCKS_FRAG;
+    HALFTONE: params::filters::HalftoneParams = HALFTONE_FRAG;
+    KALEIDOSCOPE: params::filters::KaleidoscopeParams = KALEIDOSCOPE_FRAG;
+    OIL_PAINT: params::filters::OilPaintParams = OIL_PAINT_FRAG;
+    CHROMATIC_ABERRATION: params::filters::ChromaticAberrationParams = CHROMATIC_ABERRATION_FRAG;
+    PIXEL_STRETCH: params::filters::PixelStretchParams = PIXEL_STRETCH_FRAG;
+    LENS_DISTORTION: params::filters::LensDistortionParams = LENS_DISTORTION_FRAG;
+    TILT_SHIFT_BLUR: params::filters::TiltShiftBlurParams = TILT_SHIFT_BLUR_FRAG;
+    EMBOSS: params::filters::EmbossParams = EMBOSS_FRAG;
+    VORONOI: params::filters::VoronoiParams = VORONOI_FRAG;
+    SURFACE_BLUR: params::filters::SurfaceBlurParams = SURFACE_BLUR_FRAG;
+    SELECTION_MASK_BLEND: params::filters::SelectionMaskBlendParams = SELECTION_MASK_BLEND_FRAG;
+    NOISE: params::filters::NoiseParams = NOISE_FRAG;
+    CLOUDS: params::filters::CloudsParams = CLOUDS_FRAG;
+    SMOKE: params::filters::SmokeParams = SMOKE_FRAG;
+    PATTERN_FILL: params::filters::PatternFillParams = PATTERN_FILL_FRAG;
+    MESH_WARP: params::filters::MeshWarpParams = MESH_WARP_FRAG;
+    LIQUIFY_WARP: params::filters::LiquifyWarpParams = LIQUIFY_WARP_FRAG;
+    LIQUIFY_DAB: params::filters::LiquifyDabParams = LIQUIFY_DAB_FRAG;
+    BLOOM_THRESHOLD: params::filters::BloomThresholdParams = BLOOM_THRESHOLD_FRAG;
+    BLOOM_COMBINE: params::filters::BloomCombineParams = BLOOM_COMBINE_FRAG;
+    FIBERS: params::filters::FibersParams = FIBERS_FRAG;
+    SUNBURST: params::filters::SunburstParams = SUNBURST_FRAG;
+    COLOR_LUT: params::filters::ColorLutParams = COLOR_LUT_FRAG;
+    TEXTURE: params::filters::TextureParams = TEXTURE_FRAG;
+    CHANNEL_EXTRACT: params::filters::ChannelExtractParams = CHANNEL_EXTRACT_FRAG;
+    MASK_LUMINANCE: () = MASK_LUMINANCE_FRAG;
+    GAUSSIAN_BLUR: params::filters::GaussianBlurParams = GAUSSIAN_BLUR_FRAG;
+    BOX_BLUR: params::filters::BoxBlurParams = BOX_BLUR_FRAG;
+    COLOR_CONVERT: params::color::ColorConvertParams = COLOR_CONVERT_FRAG;
+    TONEMAP: params::color::TonemapParams = TONEMAP_FRAG;
 }
 
 /// Marks a program whose uniforms are still set one by one, by name. Each
@@ -499,45 +538,45 @@ pub struct ShaderPrograms {
     pub stroke_apply: ShaderProgram,
     pub color_overlay: ShaderProgram,
     // Filters
-    pub gaussian_blur: ShaderProgram,
-    pub box_blur: ShaderProgram,
+    pub gaussian_blur: ShaderProgram<params::filters::GaussianBlurParams>,
+    pub box_blur: ShaderProgram<params::filters::BoxBlurParams>,
     pub adjustments: ShaderProgram,
-    pub hue_sat: ShaderProgram,
+    pub hue_sat: ShaderProgram<params::filters::HueSatParams>,
     pub invert: ShaderProgram<()>,
     pub posterize: ShaderProgram<params::filters::PosterizeParams>,
     pub threshold: ShaderProgram<params::filters::ThresholdParams>,
-    pub noise: ShaderProgram,
-    pub sharpen: ShaderProgram,
+    pub noise: ShaderProgram<params::filters::NoiseParams>,
+    pub sharpen: ShaderProgram<params::filters::SharpenParams>,
     pub vignette: ShaderProgram,
-    pub motion_blur: ShaderProgram,
-    pub radial_blur: ShaderProgram,
-    pub find_edges: ShaderProgram,
-    pub cel_shading: ShaderProgram,
-    pub clouds: ShaderProgram,
-    pub smoke: ShaderProgram,
-    pub pixelate: ShaderProgram,
-    pub pixelate_blocks: ShaderProgram,
-    pub halftone: ShaderProgram,
-    pub solarize: ShaderProgram,
-    pub kaleidoscope: ShaderProgram,
-    pub oil_paint: ShaderProgram,
-    pub chromatic_aberration: ShaderProgram,
-    pub pixel_stretch: ShaderProgram,
-    pub lens_distortion: ShaderProgram,
-    pub pattern_fill: ShaderProgram,
-    pub mesh_warp: ShaderProgram,
-    pub liquify_warp: ShaderProgram,
-    pub bloom_threshold: ShaderProgram,
-    pub bloom_combine: ShaderProgram,
-    pub tilt_shift_blur: ShaderProgram,
-    pub emboss: ShaderProgram,
-    pub voronoi: ShaderProgram,
-    pub selection_mask_blend: ShaderProgram,
-    pub surface_blur: ShaderProgram,
-    pub fibers: ShaderProgram,
-    pub sunburst: ShaderProgram,
-    pub color_lut: ShaderProgram,
-    pub texture: ShaderProgram,
+    pub motion_blur: ShaderProgram<params::filters::MotionBlurParams>,
+    pub radial_blur: ShaderProgram<params::filters::RadialBlurParams>,
+    pub find_edges: ShaderProgram<()>,
+    pub cel_shading: ShaderProgram<params::filters::CelShadingParams>,
+    pub clouds: ShaderProgram<params::filters::CloudsParams>,
+    pub smoke: ShaderProgram<params::filters::SmokeParams>,
+    pub pixelate: ShaderProgram<params::filters::PixelateParams>,
+    pub pixelate_blocks: ShaderProgram<params::filters::PixelateBlocksParams>,
+    pub halftone: ShaderProgram<params::filters::HalftoneParams>,
+    pub solarize: ShaderProgram<params::filters::SolarizeParams>,
+    pub kaleidoscope: ShaderProgram<params::filters::KaleidoscopeParams>,
+    pub oil_paint: ShaderProgram<params::filters::OilPaintParams>,
+    pub chromatic_aberration: ShaderProgram<params::filters::ChromaticAberrationParams>,
+    pub pixel_stretch: ShaderProgram<params::filters::PixelStretchParams>,
+    pub lens_distortion: ShaderProgram<params::filters::LensDistortionParams>,
+    pub pattern_fill: ShaderProgram<params::filters::PatternFillParams>,
+    pub mesh_warp: ShaderProgram<params::filters::MeshWarpParams>,
+    pub liquify_warp: ShaderProgram<params::filters::LiquifyWarpParams>,
+    pub bloom_threshold: ShaderProgram<params::filters::BloomThresholdParams>,
+    pub bloom_combine: ShaderProgram<params::filters::BloomCombineParams>,
+    pub tilt_shift_blur: ShaderProgram<params::filters::TiltShiftBlurParams>,
+    pub emboss: ShaderProgram<params::filters::EmbossParams>,
+    pub voronoi: ShaderProgram<params::filters::VoronoiParams>,
+    pub selection_mask_blend: ShaderProgram<params::filters::SelectionMaskBlendParams>,
+    pub surface_blur: ShaderProgram<params::filters::SurfaceBlurParams>,
+    pub fibers: ShaderProgram<params::filters::FibersParams>,
+    pub sunburst: ShaderProgram<params::filters::SunburstParams>,
+    pub color_lut: ShaderProgram<params::filters::ColorLutParams>,
+    pub texture: ShaderProgram<params::filters::TextureParams>,
     // Brush — these use fullscreen quad vert for now (dab positioning via uniforms)
     pub brush_dab_circle: ShaderProgram,
     pub brush_dab_alpha: ShaderProgram,
@@ -565,11 +604,11 @@ pub struct ShaderPrograms {
     // Selection
     pub marching_ants: ShaderProgram,
     // Color
-    pub color_convert: ShaderProgram,
-    pub tonemap: ShaderProgram,
-    pub channel_extract: ShaderProgram,
-    pub mask_luminance: ShaderProgram,
-    pub liquify_dab: ShaderProgram,
+    pub color_convert: ShaderProgram<params::color::ColorConvertParams>,
+    pub tonemap: ShaderProgram<params::color::TonemapParams>,
+    pub channel_extract: ShaderProgram<params::filters::ChannelExtractParams>,
+    pub mask_luminance: ShaderProgram<()>,
+    pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
     pub text_glyph: ShaderProgram,
 }
@@ -640,45 +679,45 @@ impl ShaderPrograms {
             stroke_apply: compile_program(gl, v, STROKE_APPLY_FRAG)?,
             color_overlay: compile_program(gl, v, COLOR_OVERLAY_FRAG)?,
             // Filters
-            gaussian_blur: compile_program(gl, v, GAUSSIAN_BLUR_FRAG)?,
-            box_blur: compile_program(gl, v, BOX_BLUR_FRAG)?,
+            gaussian_blur: compile(gl, v, &GAUSSIAN_BLUR)?,
+            box_blur: compile(gl, v, &BOX_BLUR)?,
             adjustments: compile_program(gl, v, ADJUSTMENTS_FRAG)?,
-            hue_sat: compile_program(gl, v, HUE_SAT_FRAG)?,
+            hue_sat: compile(gl, v, &HUE_SAT)?,
             invert: compile(gl, v, &INVERT)?,
             posterize: compile(gl, v, &POSTERIZE)?,
             threshold: compile(gl, v, &THRESHOLD)?,
-            noise: compile_program(gl, v, NOISE_FRAG)?,
-            sharpen: compile_program(gl, v, SHARPEN_FRAG)?,
+            noise: compile(gl, v, &NOISE)?,
+            sharpen: compile(gl, v, &SHARPEN)?,
             vignette: compile_program(gl, v, VIGNETTE_FRAG)?,
-            motion_blur: compile_program(gl, v, MOTION_BLUR_FRAG)?,
-            radial_blur: compile_program(gl, v, RADIAL_BLUR_FRAG)?,
-            find_edges: compile_program(gl, v, FIND_EDGES_FRAG)?,
-            cel_shading: compile_program(gl, v, CEL_SHADING_FRAG)?,
-            clouds: compile_program(gl, v, CLOUDS_FRAG)?,
-            smoke: compile_program(gl, v, SMOKE_FRAG)?,
-            pixelate: compile_program(gl, v, PIXELATE_FRAG)?,
-            pixelate_blocks: compile_program(gl, v, PIXELATE_BLOCKS_FRAG)?,
-            halftone: compile_program(gl, v, HALFTONE_FRAG)?,
-            solarize: compile_program(gl, v, SOLARIZE_FRAG)?,
-            kaleidoscope: compile_program(gl, v, KALEIDOSCOPE_FRAG)?,
-            oil_paint: compile_program(gl, v, OIL_PAINT_FRAG)?,
-            chromatic_aberration: compile_program(gl, v, CHROMATIC_ABERRATION_FRAG)?,
-            pixel_stretch: compile_program(gl, v, PIXEL_STRETCH_FRAG)?,
-            lens_distortion: compile_program(gl, v, LENS_DISTORTION_FRAG)?,
-            pattern_fill: compile_program(gl, v, PATTERN_FILL_FRAG)?,
-            mesh_warp: compile_program(gl, v, MESH_WARP_FRAG)?,
-            liquify_warp: compile_program(gl, v, LIQUIFY_WARP_FRAG)?,
-            bloom_threshold: compile_program(gl, v, BLOOM_THRESHOLD_FRAG)?,
-            bloom_combine: compile_program(gl, v, BLOOM_COMBINE_FRAG)?,
-            tilt_shift_blur: compile_program(gl, v, TILT_SHIFT_BLUR_FRAG)?,
-            emboss: compile_program(gl, v, EMBOSS_FRAG)?,
-            voronoi: compile_program(gl, v, VORONOI_FRAG)?,
-            selection_mask_blend: compile_program(gl, v, SELECTION_MASK_BLEND_FRAG)?,
-            surface_blur: compile_program(gl, v, SURFACE_BLUR_FRAG)?,
-            fibers: compile_program(gl, v, FIBERS_FRAG)?,
-            sunburst: compile_program(gl, v, SUNBURST_FRAG)?,
-            color_lut: compile_program(gl, v, COLOR_LUT_FRAG)?,
-            texture: compile_program(gl, v, TEXTURE_FRAG)?,
+            motion_blur: compile(gl, v, &MOTION_BLUR)?,
+            radial_blur: compile(gl, v, &RADIAL_BLUR)?,
+            find_edges: compile(gl, v, &FIND_EDGES)?,
+            cel_shading: compile(gl, v, &CEL_SHADING)?,
+            clouds: compile(gl, v, &CLOUDS)?,
+            smoke: compile(gl, v, &SMOKE)?,
+            pixelate: compile(gl, v, &PIXELATE)?,
+            pixelate_blocks: compile(gl, v, &PIXELATE_BLOCKS)?,
+            halftone: compile(gl, v, &HALFTONE)?,
+            solarize: compile(gl, v, &SOLARIZE)?,
+            kaleidoscope: compile(gl, v, &KALEIDOSCOPE)?,
+            oil_paint: compile(gl, v, &OIL_PAINT)?,
+            chromatic_aberration: compile(gl, v, &CHROMATIC_ABERRATION)?,
+            pixel_stretch: compile(gl, v, &PIXEL_STRETCH)?,
+            lens_distortion: compile(gl, v, &LENS_DISTORTION)?,
+            pattern_fill: compile(gl, v, &PATTERN_FILL)?,
+            mesh_warp: compile(gl, v, &MESH_WARP)?,
+            liquify_warp: compile(gl, v, &LIQUIFY_WARP)?,
+            bloom_threshold: compile(gl, v, &BLOOM_THRESHOLD)?,
+            bloom_combine: compile(gl, v, &BLOOM_COMBINE)?,
+            tilt_shift_blur: compile(gl, v, &TILT_SHIFT_BLUR)?,
+            emboss: compile(gl, v, &EMBOSS)?,
+            voronoi: compile(gl, v, &VORONOI)?,
+            selection_mask_blend: compile(gl, v, &SELECTION_MASK_BLEND)?,
+            surface_blur: compile(gl, v, &SURFACE_BLUR)?,
+            fibers: compile(gl, v, &FIBERS)?,
+            sunburst: compile(gl, v, &SUNBURST)?,
+            color_lut: compile(gl, v, &COLOR_LUT)?,
+            texture: compile(gl, v, &TEXTURE)?,
             // Brush — assembled from header + variant body + footer
             brush_dab_circle: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_CIRCLE_BODY}{BRUSH_DAB_FOOTER}"))?,
             brush_dab_alpha: compile_program(gl, v, &format!("{BRUSH_DAB_HEADER}{BRUSH_DAB_ALPHA_BODY}{BRUSH_DAB_FOOTER}"))?,
@@ -706,11 +745,11 @@ impl ShaderPrograms {
             // Selection
             marching_ants: compile_program(gl, v, MARCHING_ANTS_FRAG)?,
             // Color
-            color_convert: compile_program(gl, v, COLOR_CONVERT_FRAG)?,
-            tonemap: compile_program(gl, v, TONEMAP_FRAG)?,
-            channel_extract: compile_program(gl, v, CHANNEL_EXTRACT_FRAG)?,
-            mask_luminance: compile_program(gl, v, MASK_LUMINANCE_FRAG)?,
-            liquify_dab: compile_program(gl, v, LIQUIFY_DAB_FRAG)?,
+            color_convert: compile(gl, v, &COLOR_CONVERT)?,
+            tonemap: compile(gl, v, &TONEMAP)?,
+            channel_extract: compile(gl, v, &CHANNEL_EXTRACT)?,
+            mask_luminance: compile(gl, v, &MASK_LUMINANCE)?,
+            liquify_dab: compile(gl, v, &LIQUIFY_DAB)?,
             // Text
             text_glyph: compile_program(gl, v, TEXT_GLYPH_FRAG)?,
         })
@@ -849,7 +888,7 @@ mod tests {
             "a sin()-based hash is not reproducible across backends (Metal fast-math)"
         );
         assert!(code.contains("uvec3 pcg3d(uvec3 v)"));
-        assert!(code.contains("uniform uint u_seed;"));
+        assert!(code.contains("uint u_seed;"));
         assert!(
             code.contains("c & ivec2(0x7FFFFFFF)"),
             "negative lattice cells must be masked before the int -> uint conversion"

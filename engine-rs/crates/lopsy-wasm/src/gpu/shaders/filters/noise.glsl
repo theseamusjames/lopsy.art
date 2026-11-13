@@ -3,13 +3,15 @@ precision highp float;
 precision highp int;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_amount;
-uniform bool u_monochrome;
-// #668 — 0: uniform distribution (previous default); 1: Gaussian via
-// Box-Muller. Gaussian noise is visually softer and looks more like
-// real sensor / film grain.
-uniform bool u_gaussian;
-uniform float u_seed;
+layout(std140) uniform Params {
+    float u_amount;
+    bool u_monochrome;
+    // #668 — 0: uniform distribution (previous default); 1: Gaussian via
+    // Box-Muller. Gaussian noise is visually softer and looks more like
+    // real sensor / film grain.
+    bool u_gaussian;
+    float u_seed;
+};
 out vec4 fragColor;
 
 // PCG3D — Jarzynski & Olano, "Hash Functions for GPU Rendering" (JCGT 2020)

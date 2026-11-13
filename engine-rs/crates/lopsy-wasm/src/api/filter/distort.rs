@@ -5,6 +5,7 @@ use wasm_bindgen::prelude::*;
 use crate::Engine;
 use crate::filter_gpu;
 use crate::gpu::pass::{Blend, Target};
+use crate::gpu::params::filters::{LiquifyDabParams, LiquifyWarpParams, MeshWarpParams};
 
 #[wasm_bindgen(js_name = "filterMeshWarp")]
 pub fn filter_mesh_warp(
@@ -37,21 +38,17 @@ pub fn filter_mesh_warp(
     let gw = grid_width as f32;
     let gh = grid_height as f32;
 
-    filter_gpu::apply_filter_untyped(
+    filter_gpu::apply_filter_with_texture(
         &mut engine.inner,
         layer_id,
         |e| &e.shaders.mesh_warp,
-        |pass| {
-            let pass = if is_grid_live {
-                pass.texture("u_grid", grid_handle)
-            } else {
-                pass.i32("u_grid", 1)
-            };
-            pass
-                .vec2("u_gridSize", gw, gh)
-                .vec2("u_boundsMin", bounds_min_u, bounds_min_v)
-                .vec2("u_boundsMax", bounds_max_u, bounds_max_v)
+        MeshWarpParams {
+            grid_size: [gw, gh],
+            bounds_min: [bounds_min_u, bounds_min_v],
+            bounds_max: [bounds_max_u, bounds_max_v],
         },
+        "u_grid",
+        is_grid_live.then_some(grid_handle),
     );
 
     engine.inner.texture_pool.release(grid_handle);
@@ -123,11 +120,9 @@ pub fn liquify_render(engine: &mut Engine, layer_id: &str, max_disp: f32) {
     let texel_h = 1.0 / h as f32;
 
     let inner = &engine.inner;
-    inner.pass_untyped(&inner.shaders.liquify_warp)
+    inner.pass(&inner.shaders.liquify_warp, LiquifyWarpParams { max_disp, texel_size: [texel_w, texel_h] })
         .texture("u_tex", preview_handle)
         .texture("u_disp", disp_handle)
-        .f32("u_maxDisp", max_disp)
-        .vec2("u_texelSize", texel_w, texel_h)
         .blend(Blend::Off)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Texture(layer_tex_handle));
@@ -177,14 +172,15 @@ pub fn liquify_apply_dab_gpu(
     // Read the displacement field, write the dabbed field into a fresh
     // texture, and make that the new field.
     let inner = &engine.inner;
-    inner.pass_untyped(&inner.shaders.liquify_dab)
+    inner.pass(&inner.shaders.liquify_dab, LiquifyDabParams {
+        center: [cx, cy],
+        radius,
+        pressure,
+        drag: [drag_dx, drag_dy],
+        mode: mode as i32,
+        size: [w as f32, h as f32],
+    })
         .texture("u_disp", disp_handle)
-        .vec2("u_center", cx, cy)
-        .f32("u_radius", radius)
-        .f32("u_pressure", pressure)
-        .vec2("u_drag", drag_dx, drag_dy)
-        .i32("u_mode", mode as i32)
-        .vec2("u_size", w as f32, h as f32)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Texture(scratch));
 

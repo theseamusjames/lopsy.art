@@ -4,9 +4,11 @@ in vec2 v_uv;
 uniform sampler2D u_filtered;
 uniform sampler2D u_original;
 uniform sampler2D u_selMask;
-uniform vec2 u_docSize;
-uniform vec2 u_layerOffset;
-uniform vec2 u_layerSize;
+layout(std140) uniform Params {
+    vec2 u_docSize;
+    vec2 u_layerOffset;
+    vec2 u_layerSize;
+};
 out vec4 fragColor;
 void main() {
     vec4 filtered = texture(u_filtered, v_uv);

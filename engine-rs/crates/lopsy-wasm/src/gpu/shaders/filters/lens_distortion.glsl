@@ -3,11 +3,13 @@ precision highp float;
 
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_strength;
-uniform float u_zoom;
-uniform float u_fringing;
-uniform vec2 u_center;       // canvas centre in texture UV
-uniform float u_radiusScale; // canvas long side in pixels
+layout(std140) uniform Params {
+    float u_strength;
+    float u_zoom;
+    float u_fringing;
+    vec2 u_center; // canvas centre in texture UV
+    float u_radiusScale; // canvas long side in pixels
+};
 out vec4 fragColor;
 
 // #946: the radius is measured in pixels (normalised by the long side),

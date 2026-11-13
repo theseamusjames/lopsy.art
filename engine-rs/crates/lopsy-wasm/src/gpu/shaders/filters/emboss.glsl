@@ -3,9 +3,11 @@ precision highp float;
 
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform float u_angle;    // light direction in radians
-uniform float u_strength; // relief depth 0.0 - 1.0
-uniform float u_type;     // 0.0 = emboss, 1.0 = pillow emboss
+layout(std140) uniform Params {
+    float u_angle; // light direction in radians
+    float u_strength; // relief depth 0.0 - 1.0
+    float u_embossType; // 0.0 = emboss, 1.0 = pillow emboss
+};
 
 out vec4 fragColor;
 
@@ -31,7 +33,7 @@ void main() {
 
     // Normal emboss: directional (highlight one side, shadow the other).
     // Pillow emboss: raised ridges along all edges (highlights both sides).
-    float emboss = (u_type > 0.5 ? abs(diff) : diff) * 0.75;
+    float emboss = (u_embossType > 0.5 ? abs(diff) : diff) * 0.75;
 
     vec3 result = clamp(orig.rgb + vec3(emboss), 0.0, 1.0);
     fragColor = vec4(result, orig.a);
