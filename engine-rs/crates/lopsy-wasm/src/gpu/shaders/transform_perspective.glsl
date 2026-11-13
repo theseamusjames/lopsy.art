@@ -4,17 +4,19 @@ precision highp float;
 in vec2 v_uv;
 
 uniform sampler2D u_floatTex;
-uniform vec2 u_floatSize;
-// Document position of the float texture's origin. The Move tool's float
-// shares the layer's rect; a multi-layer transform's source does not.
-uniform vec2 u_floatOffset;
-uniform vec2 u_layerOffset;
-uniform vec2 u_layerSize;
-uniform vec4 u_origRect;   // x, y, w, h
-// Doc space → unit square. A projective (homography) map, not an inverse
-// bilinear one: bilinear keeps equal spacing along each edge, so a
-// Perspective drag never foreshortened (#927).
-uniform mat3 u_quadToSquare;
+layout(std140) uniform Params {
+    vec2 u_floatSize;
+    // Document position of the float texture's origin. The Move tool's float
+    // shares the layer's rect; a multi-layer transform's source does not.
+    vec2 u_floatOffset;
+    vec2 u_layerOffset;
+    vec2 u_layerSize;
+    vec4 u_origRect; // x, y, w, h
+    // Doc space → unit square. A projective (homography) map, not an inverse
+    // bilinear one: bilinear keeps equal spacing along each edge, so a
+    // Perspective drag never foreshortened (#927).
+    mat3 u_quadToSquare;
+};
 
 out vec4 fragColor;
 

@@ -1,4 +1,4 @@
-use crate::gpu::uniforms::{uniforms, Mat2};
+use crate::gpu::uniforms::{uniforms, Mat2, Mat3};
 
 uniforms! {
     /// `blit_region.glsl`
@@ -100,5 +100,31 @@ uniforms! {
         pub layer_size: [f32; 2],
         pub mask_offset: [f32; 2],
         pub mask_size: [f32; 2],
+    }
+}
+
+uniforms! {
+    /// `transform_affine.glsl`
+    pub struct TransformAffineParams {
+        pub float_size: [f32; 2],
+        pub float_offset: [f32; 2],
+        pub layer_offset: [f32; 2],
+        pub layer_size: [f32; 2],
+        pub inv_matrix: Mat3,
+        pub src_center: [f32; 2],
+        pub dst_center: [f32; 2],
+        pub src_rect: [f32; 4],
+    }
+}
+
+uniforms! {
+    /// `transform_perspective.glsl`
+    pub struct TransformPerspectiveParams {
+        pub float_size: [f32; 2],
+        pub float_offset: [f32; 2],
+        pub layer_offset: [f32; 2],
+        pub layer_size: [f32; 2],
+        pub orig_rect: [f32; 4],
+        pub quad_to_square: Mat3,
     }
 }

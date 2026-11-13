@@ -6,6 +6,8 @@ use lopsy_core::text_transform::{doc_to_raster_linear, transformed_raster_rect, 
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::params::core::TransformAffineParams;
+use crate::gpu::uniforms::Mat3;
 
 /// Upright glyph raster produced by the text renderer.
 pub struct TextRaster<'a> {
@@ -61,17 +63,18 @@ pub fn render_text_raster_transformed(
 
     let result = layer_texture_sized(engine, layer_id, rect.width, rect.height).and_then(|handle| {
         let is_drawn = engine
-            .pass_untyped(&engine.shaders.transform_affine)
+            .pass(&engine.shaders.transform_affine, TransformAffineParams {
+                float_size: [raster.width as f32, raster.height as f32],
+                float_offset: [rect.x as f32, rect.y as f32],
+                layer_offset: [rect.x as f32, rect.y as f32],
+                layer_size: [rect.width as f32, rect.height as f32],
+                inv_matrix: Mat3(inv_matrix),
+                src_center: [src_center.0, src_center.1],
+                dst_center: [anchor.0 as f32, anchor.1 as f32],
+                // Unknown: a text raster has no pinned edges to keep exact.
+                src_rect: [0.0, 0.0, 0.0, 0.0],
+            })
             .texture("u_floatTex", src)
-            .vec2("u_floatSize", raster.width as f32, raster.height as f32)
-            .vec2("u_layerOffset", rect.x as f32, rect.y as f32)
-            .vec2("u_floatOffset", rect.x as f32, rect.y as f32)
-            .vec2("u_layerSize", rect.width as f32, rect.height as f32)
-            .vec2("u_srcCenter", src_center.0, src_center.1)
-            .vec2("u_dstCenter", anchor.0 as f32, anchor.1 as f32)
-            .mat3("u_invMatrix", &inv_matrix)
-            // Uniforms persist per program: clear the float path's source rect.
-            .vec4("u_srcRect", 0.0, 0.0, 0.0, 0.0)
             .blend(Blend::Off)
             .clear([0.0, 0.0, 0.0, 0.0])
             .draw(Target::Texture(handle));

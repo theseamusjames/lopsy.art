@@ -18,7 +18,9 @@ use lopsy_core::geometry::Rect;
 use lopsy_core::homography;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
+use crate::gpu::params::core::{TransformAffineParams, TransformPerspectiveParams};
 use crate::gpu::texture_pool::TextureHandle;
+use crate::gpu::uniforms::Mat3;
 
 /// One layer taking part in a multi-layer transform.
 pub struct LayerTransformSlot {
@@ -56,26 +58,35 @@ pub struct TransformTargets {
     pub content_rect: Option<[f32; 4]>,
 }
 
-/// The affine or perspective transform pass with its uniforms. The caller
-/// adds the target and draws.
-pub fn transform_pass<'a>(engine: &'a EngineInner, params: &TransformParams, t: &TransformTargets) -> Pass<'a> {
-    let shader = match params {
-        TransformParams::Affine { .. } => &engine.shaders.transform_affine,
-        TransformParams::Perspective { .. } => &engine.shaders.transform_perspective,
-    };
-    let pass = engine.pass_untyped(shader)
-        .texture("u_floatTex", t.source)
-        .vec2("u_floatSize", t.source_size.0, t.source_size.1)
-        .vec2("u_floatOffset", t.source_offset.0, t.source_offset.1)
-        .vec2("u_layerOffset", t.layer_offset.0, t.layer_offset.1)
-        .vec2("u_layerSize", t.layer_size.0, t.layer_size.1);
+/// How a transform pass draws into its target texture.
+pub struct TransformDraw {
+    pub target: TextureHandle,
+    pub scissor: Scissor,
+    /// `None` covers the whole target.
+    pub viewport: Option<[i32; 4]>,
+    pub clear: Option<[f32; 4]>,
+}
+
+/// Run the affine or perspective transform. Returns `false`, having drawn
+/// nothing, if the target or the source no longer exists.
+pub fn draw_transform(engine: &EngineInner, params: &TransformParams, t: &TransformTargets, draw: &TransformDraw) -> bool {
+    let float_size = [t.source_size.0, t.source_size.1];
+    let float_offset = [t.source_offset.0, t.source_offset.1];
+    let layer_offset = [t.layer_offset.0, t.layer_offset.1];
+    let layer_size = [t.layer_size.0, t.layer_size.1];
     match params {
         TransformParams::Affine { inv_matrix, src_center, dst_center } => {
-            let r = t.content_rect.unwrap_or([0.0; 4]);
-            pass.vec2("u_srcCenter", src_center[0], src_center[1])
-                .vec2("u_dstCenter", dst_center[0], dst_center[1])
-                .vec4("u_srcRect", r[0], r[1], r[2], r[3])
-                .mat3("u_invMatrix", inv_matrix)
+            let pass = engine.pass(&engine.shaders.transform_affine, TransformAffineParams {
+                float_size,
+                float_offset,
+                layer_offset,
+                layer_size,
+                inv_matrix: Mat3(*inv_matrix),
+                src_center: *src_center,
+                dst_center: *dst_center,
+                src_rect: t.content_rect.unwrap_or([0.0; 4]),
+            });
+            finish_transform(pass.texture("u_floatTex", t.source), draw)
         }
         TransformParams::Perspective { corners, orig_rect } => {
             let corner = |i: usize| [corners[i * 2] as f64, corners[i * 2 + 1] as f64];
@@ -85,10 +96,30 @@ pub fn transform_pass<'a>(engine: &'a EngineInner, params: &TransformParams, t: 
             .map(|m| homography::to_gl_column_major(&m))
             // Degenerate quad: w = 0 everywhere, so every fragment is rejected.
             .unwrap_or([0.0; 9]);
-            pass.mat3("u_quadToSquare", &quad_to_square)
-                .vec4("u_origRect", orig_rect[0], orig_rect[1], orig_rect[2], orig_rect[3])
+            let pass = engine.pass(&engine.shaders.transform_perspective, TransformPerspectiveParams {
+                float_size,
+                float_offset,
+                layer_offset,
+                layer_size,
+                orig_rect: *orig_rect,
+                quad_to_square: Mat3(quad_to_square),
+            });
+            finish_transform(pass.texture("u_floatTex", t.source), draw)
         }
     }
+}
+
+fn finish_transform<P>(pass: Pass<'_, P>, draw: &TransformDraw) -> bool {
+    let pass = pass.blend(Blend::Off).scissor(draw.scissor);
+    let pass = match draw.viewport {
+        Some([x, y, w, h]) => pass.viewport(x, y, w, h),
+        None => pass,
+    };
+    let pass = match draw.clear {
+        Some(color) => pass.clear(color),
+        None => pass,
+    };
+    pass.draw(Target::Texture(draw.target))
 }
 
 fn layer_rect(engine: &EngineInner, layer_id: &str) -> Option<(TextureHandle, Rect)> {
@@ -203,7 +234,7 @@ pub fn composite_layer_transform(engine: &mut EngineInner, params: &TransformPar
             engine.gpu().clear_rect(layer_handle, rect, [0.0, 0.0, 0.0, 0.0]);
         }
         if let Some(rect) = to_local(target) {
-            transform_pass(engine, params, &TransformTargets {
+            draw_transform(engine, params, &TransformTargets {
                 source,
                 source_offset: (source_rect.x as f32, source_rect.y as f32),
                 source_size: (source_rect.width as f32, source_rect.height as f32),
@@ -215,11 +246,12 @@ pub fn composite_layer_transform(engine: &mut EngineInner, params: &TransformPar
                     source_rect.width.saturating_sub(2) as f32,
                     source_rect.height.saturating_sub(2) as f32,
                 ]),
-            })
-            .blend(Blend::Off)
-            .scissor(Scissor::Rect(rect))
-            .viewport(0, 0, layer.width as i32, layer.height as i32)
-            .draw(Target::Texture(layer_handle));
+            }, &TransformDraw {
+                target: layer_handle,
+                scissor: Scissor::Rect(rect),
+                viewport: Some([0, 0, layer.width as i32, layer.height as i32]),
+                clear: None,
+            });
         }
         engine.layer_transform[i].written_rect = Some(target);
         engine.mark_layer_dirty(&layer_id);

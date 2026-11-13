@@ -3,9 +3,9 @@ use lopsy_core::geometry::Rect;
 use lopsy_core::layer::LayerDesc;
 use crate::compositor::mask_doc_offset;
 use crate::engine::EngineInner;
-use crate::gpu::pass::{Blend, Target};
+use crate::gpu::pass::{Blend, Scissor, Target};
 use crate::gpu::texture_pool::TextureHandle;
-use crate::layer_transform_gpu::{TransformParams, TransformTargets};
+use crate::layer_transform_gpu::{TransformDraw, TransformParams, TransformTargets};
 use crate::gpu::params::core::{
     BlitRegionParams, ClipboardClearParams, ClipboardCopyParams, FlipParams, MaskRemapParams, Rotate90Params,
     SelectionFillParams,
@@ -1374,17 +1374,19 @@ fn composite_float_transformed(
     // Step 1: Render transformed float → tmp (fw×fh, correctly sized).
     // The transform shaders filter bilinearly in premultiplied space via
     // texelFetch, so the float texture's own filter mode doesn't matter.
-    crate::layer_transform_gpu::transform_pass(engine, &params, &TransformTargets {
+    crate::layer_transform_gpu::draw_transform(engine, &params, &TransformTargets {
         source: float_handle,
         source_offset: (lx, ly),
         source_size: (fw as f32, fh as f32),
         layer_offset: (lx, ly),
         layer_size: (fw as f32, fh as f32),
         content_rect: Some(src_rect),
-    })
-    .blend(Blend::Off)
-    .clear([0.0, 0.0, 0.0, 0.0])
-    .draw(Target::Texture(tmp));
+    }, &TransformDraw {
+        target: tmp,
+        scissor: Scissor::Off,
+        viewport: None,
+        clear: Some([0.0, 0.0, 0.0, 0.0]),
+    });
 
     // Step 2: Blend tmp (transformed float, fw×fh) onto base → layer texture.
     // Both tmp and base_tex are fw×fh, so v_uv correctly addresses them.

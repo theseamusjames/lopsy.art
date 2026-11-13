@@ -172,6 +172,8 @@ typed_shaders! {
     SELECTION_FILL: params::core::SelectionFillParams = SELECTION_FILL_FRAG;
     CONTENT_BOUNDS_REDUCE: params::core::ContentBoundsReduceParams = CONTENT_BOUNDS_REDUCE_FRAG;
     LAYER_MASK_APPLY: params::core::LayerMaskApplyParams = LAYER_MASK_APPLY_FRAG;
+    TRANSFORM_AFFINE: params::core::TransformAffineParams = TRANSFORM_AFFINE_FRAG;
+    TRANSFORM_PERSPECTIVE: params::core::TransformPerspectiveParams = TRANSFORM_PERSPECTIVE_FRAG;
 }
 
 /// Marks a program whose uniforms are still set one by one, by name. Each
@@ -488,8 +490,8 @@ pub struct ShaderPrograms {
     pub mask_expand: ShaderProgram<()>,
     pub mask_remap: ShaderProgram<params::core::MaskRemapParams>,
     pub quick_mask_translate: ShaderProgram<params::core::QuickMaskTranslateParams>,
-    pub transform_affine: ShaderProgram,
-    pub transform_perspective: ShaderProgram,
+    pub transform_affine: ShaderProgram<params::core::TransformAffineParams>,
+    pub transform_perspective: ShaderProgram<params::core::TransformPerspectiveParams>,
     // Effects
     pub glow: ShaderProgram,
     pub shadow: ShaderProgram,
@@ -629,8 +631,8 @@ impl ShaderPrograms {
             mask_expand: compile(gl, v, &MASK_EXPAND)?,
             mask_remap: compile(gl, v, &MASK_REMAP)?,
             quick_mask_translate: compile(gl, v, &QUICK_MASK_TRANSLATE)?,
-            transform_affine: compile_program(gl, v, TRANSFORM_AFFINE_FRAG)?,
-            transform_perspective: compile_program(gl, v, TRANSFORM_PERSPECTIVE_FRAG)?,
+            transform_affine: compile(gl, v, &TRANSFORM_AFFINE)?,
+            transform_perspective: compile(gl, v, &TRANSFORM_PERSPECTIVE)?,
             // Effects
             glow: compile_program(gl, v, GLOW_FRAG)?,
             shadow: compile_program(gl, v, SHADOW_FRAG)?,
