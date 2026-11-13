@@ -7,12 +7,12 @@ wgpu so one codebase covers WebGPU, Metal, Vulkan and DX12.
 Constraint: the work merges to `main` in reviewable batches, each leaving
 Lopsy unchanged for users. There is no long-lived rewrite branch.
 
-Status: in progress. `scripts/check-gl-debt.mjs` holds the live counts.
+Status: in progress.
 
 | Phase | State |
 |---|---|
-| 0 | Done, in review: CI guards (#1643), verification tooling (#1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
-| 1 | Conversions done, in review: 2,478 of 2,481 raw GL references removed across nine PRs (#1645, #1646, #1648 to #1653, #1667). What is left is the context handle on `EngineInner`, which the cap removes. On #1667's tip the chromium e2e suite without the composition and perf specs passed 1,444 tests with one failure that also fails on the previous engine (`transform-user-repro`, the "move immediately" case), and an old-against-new comparison of that whole suite found no difference that repeats (7,038 checkpoints) |
+| 0 | Done (#1643, #1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
+| 1 | Conversions merged (#1645, #1646, #1648 to #1653, #1667): no raw GL is left outside `gpu/`. The cap (1.5) is in review: the context is private to `gpu/` and the transitional `Inherit` states are gone. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
 | 2–7 | Not started |
 
 ---
@@ -111,7 +111,7 @@ Rules for every PR:
 
 1. No behaviour change unless the PR title says so.
 2. The per-PR checks below pass.
-3. The GL-reference ratchet (Phase 0) does not go up.
+3. No raw GL outside `gpu/` (`scripts/check-gl-debt.mjs`).
 4. New dependencies are pinned and at least seven days old at the time
    they are added.
 
@@ -121,7 +121,7 @@ The full e2e suite takes hours, so it is not run per PR.
 
 **Every PR:**
 
-- CI: wasm build, lint with the ratchet, typecheck, Vitest, `cargo test`.
+- CI: wasm build, lint with the raw-GL check, typecheck, Vitest, `cargo test`.
 - The e2e specs that exercise the code the PR touches, listed in the PR
   description.
 - One full composition whose engine output matches the baseline from
@@ -265,10 +265,17 @@ and can run alongside 1 and 2.
 
 ### Merge order
 
-Nothing here needs stacked branches. Every PR is cut from `main` once
-its prerequisite has merged. Most phases have the same shape: one
-foundation PR, then a fan of PRs that are independent of each other,
-then a cap PR that removes what the fan made obsolete.
+`main` takes squash merges, one commit per PR. A chain of PRs that each
+target the branch below survives that only as a GitHub stack (linked
+with `gh stack` or the stacks API): the stack merges from any PR
+downward in one operation, each PR as its own commit, and GitHub rebases
+what is left. Unlinked, every squash leaves the next PR conflicting.
+Phase 1's nine conversion PRs went in that way.
+
+Most phases have the same shape: one foundation PR, then a fan of PRs
+that are independent of each other, then a cap PR that removes what the
+fan made obsolete. Open them as one stack, or cut each from `main` once
+its prerequisite has merged.
 
 | Phase | Shape |
 |---|---|
@@ -282,23 +289,24 @@ then a cap PR that removes what the fan made obsolete.
 
 What makes the fans safe:
 
-- **Phase 1:** the neutral-state contract, so converted and unconverted
-  modules can interleave in any order, and clusters that each own their
-  shared helper, so none has to wait for another.
+- **Phase 1:** the transitional `Inherit` states, so converted and
+  unconverted modules could interleave in any order, and clusters that
+  each owned their shared helper, so none had to wait for another.
 - **Phases 2 and 5:** each shader's uniform block and source file are
   private to that shader.
 
 Fan PRs are also the ones that parallelise, across people or agent
-worktrees. The only file they all touch is the ratchet allowlist, where
-each lowers different lines.
+worktrees.
 
 Two scheduling constraints:
 
 - **The crate move (3.3)** renames the path of every engine file and
   conflicts with any open engine PR. Do it at a quiet point, between the
   Phase 1 cap and the start of Phase 2, or between Phases 2 and 5.
-- **Sequential PRs can be stacked** to work ahead of review (Phases 3
-  and 6, the two compositor PRs), but nothing requires it.
+- **A stack assumes `main` holds still underneath it.** Another PR
+  merging in between can break a stacked PR without touching its files:
+  in Phase 1 an unrelated fix lowered a file's raw GL count and failed
+  the ratchet baseline the stack had recorded.
 
 ### Phase 0 — Safety net
 
@@ -416,22 +424,16 @@ implemented with the same GL calls the engine makes today, and
 uniforms by name (`.f32("u_opacity", 1.0)`), so each conversion is a
 mechanical one-to-one rewrite.
 
-**Neutral-state contract.** Converted and unconverted code coexist for
-the whole phase, on one GL context. A pass therefore changes only the
-state it is told to set, and puts that state back afterwards:
+**State contract.** Between passes the context is in one known state:
+blending off and the scissor test off. A pass that turns either on turns
+it off again when it ends, from `Drop`, so an early return cannot leave
+it on. `Target::Texture` unbinds the framebuffer afterwards;
+`Target::Framebuffer` leaves it bound.
 
-- `Blend::Inherit` and `Scissor::Inherit`, the defaults, leave the
-  context as found. A converted call site states its blend and scissor
-  only where the hand-written code did.
-- A blend mode that enables blending is switched off again after the
-  draw, and a scissor rect is disabled again.
-- `Target::Texture` unbinds the framebuffer afterwards, as
-  `render_to_texture` did. `Target::Framebuffer` leaves it bound, as the
-  code it replaces did.
-
-The `Inherit` variants exist only for this transition. The cap PR (1.5)
-removes them, so every pass states its full state, and adds state
-caching to skip redundant GL calls.
+While the engine was being converted the contract was weaker: passes had
+`Inherit` blend and scissor states that left the context as found, so
+converted and hand-written GL code could interleave on one context. The
+cap removed them.
 
 **1.2 Convert modules by cluster.** One commit per file, or per function
 group for the large ones. Counts are the ratchet baselines when the
@@ -455,20 +457,19 @@ caller, in the compositor PR.
 
 | PR | Cluster | Files | State |
 |---|---|---|---|
-| #1645 | Foundation | `gpu::pass` and leaf modules: `glyph_atlas` 4, `api/paint` 13, `text_transform_gpu` 20, `content_bounds_gpu` 21 | In review |
-| #1646 | Dab tools | `clone_stamp_gpu` 11, `smudge_gpu` 12, `dab_pass_gpu` 15, `stamp_preview_gpu` 31, `healing_brush_gpu` 37, `coverage_stroke_gpu` 55 | In review |
-| #1648 | Brush | `brush_gpu` 187 | In review |
-| #1649 | Gradients and masks | `gradient_gpu` 72, `mask_paint_gpu` 94, `quick_mask_gpu` 99 | In review |
-| #1650 | Shapes, selection, fill | `api/fill` 28, `selection_gpu` 31, `shape_gpu` 36 | In review |
-| #1651 | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 | In review |
-| #1652 | Staging uploads, readbacks, thumbnails | `thumbnail_gpu` 35, `engine.rs` 117 of 125 | In review |
-| #1653 | Layers | `layer_transform_gpu` 45, `layer_manager` 446 | In review |
-| #1667 | Compositor | `effect_cache_gpu` 40, `compositor` 663, 5 of the last 8 in `engine.rs` | In review |
-| – | Cap | 1.5 | Not started |
+| #1645 | Foundation | `gpu::pass` and leaf modules: `glyph_atlas` 4, `api/paint` 13, `text_transform_gpu` 20, `content_bounds_gpu` 21 | Merged |
+| #1646 | Dab tools | `clone_stamp_gpu` 11, `smudge_gpu` 12, `dab_pass_gpu` 15, `stamp_preview_gpu` 31, `healing_brush_gpu` 37, `coverage_stroke_gpu` 55 | Merged |
+| #1648 | Brush | `brush_gpu` 187 | Merged |
+| #1649 | Gradients and masks | `gradient_gpu` 72, `mask_paint_gpu` 94, `quick_mask_gpu` 99 | Merged |
+| #1650 | Shapes, selection, fill | `api/fill` 28, `selection_gpu` 31, `shape_gpu` 36 | Merged |
+| #1651 | Filters | `filter_gpu` 104, `api/color_mode` 1, `api/filter/`: `adjust` 9, `noise` 17, `preview` 17, `render` 42, `blur` 44, `distort` 57, `stylize` 70 | Merged |
+| #1652 | Staging uploads, readbacks, thumbnails | `thumbnail_gpu` 35, `engine.rs` 117 of 125 | Merged |
+| #1653 | Layers | `layer_transform_gpu` 45, `layer_manager` 446 | Merged |
+| #1667 | Compositor | `effect_cache_gpu` 40, `compositor` 663, 5 of the last 8 in `engine.rs` | Merged |
+| – | Cap | 1.5 | In review |
 
-The PRs so far are stacked in the order listed, because nothing merged
-while they were written. In content each cluster depends only on the
-foundation.
+The cluster PRs were written as a chain and merged together as a GitHub
+stack. In content each cluster depends only on the foundation.
 
 The grouping moved from the first draft of this plan as the shared
 helpers became clear: gradients travel with the two mask modules, which
@@ -531,24 +532,43 @@ closures in `filter_gpu.rs`. Done alongside each module's conversion.
 `tex_image_2d`, `blit_framebuffer` and the canvas upload become methods
 on the backend.
 
-**1.5 Close the door.** What is left outside `gpu/` is the context
-handle itself: the `gl` field on `EngineInner`, passed to the texture
-and framebuffer pools and to the lazy blend-variant compile at about 170
-call sites. The cap:
+**1.5 Close the door.** Done in the cap:
 
-- gives the pools and the shader set their own handle, so `gl` becomes
-  private to `gpu/` and the ratchet becomes a hard ban at zero;
-- removes `Blend::Inherit` and `Scissor::Inherit`, so every pass states
-  its full state. Nothing leaves blending or the scissor test on between
-  passes any more, so this changes no output;
-- has a pass unbind its own textures when it ends, replacing the
-  `unbind_textures` calls feature code makes today;
-- caches blend, scissor, program and framebuffer state to skip the GL
-  calls the two points above would otherwise add;
-- replaces `Target::Framebuffer` and `DocTarget`'s framebuffer half
-  with texture targets, if the benchmark shows re-attaching costs
-  nothing; otherwise the framebuffer pool stays as a `gpu/` detail
-  behind texture handles.
+- The texture pool, the framebuffer pool and the shader set each hold
+  their own handle to the context, instead of being passed it at about
+  190 call sites. `EngineInner` has no `gl` field and `GpuContext`'s is
+  visible only inside `gpu/`, so feature code cannot reach the context
+  at all. `scripts/check-gl-debt.mjs` has no baselines left and fails on
+  any GL type or call named outside `gpu/`.
+- `Blend::Inherit` and `Scissor::Inherit` are gone. `Off` is the default
+  and costs no GL call, because the state contract above already
+  guarantees it; that also drops the explicit disable calls `Off` used
+  to make.
+
+- Uniforms are set through a borrowed location. The cache used to hand
+  out a clone, and cloning a location is a round trip into JS and back,
+  twice per uniform. On the 20-styled-layer benchmark that takes the CPU
+  side of a composite from 6.02 ms to 5.91 ms, about what the compositor
+  conversion had added.
+
+Moved out of the cap, with the reason:
+
+- **A pass unbinding its own textures** goes to Phase 2. One draw still
+  depends on a texture an earlier pass left bound: the
+  `render_layer_plus_stroke` case described above, where the brush
+  texture sampler is whatever the last `end_stroke` set up. Unbinding
+  at the end of every pass would change what that draw samples, so it
+  waits for the typed uniform struct that makes that pass state its own
+  inputs.
+- **Caching program and framebuffer binds** is not done. Blend and
+  scissor needed no cache once the contract made them free. The
+  remaining redundant calls are one `use_program` and one framebuffer
+  bind per pass; the framebuffer pool and the texture pool both bind
+  outside the pass layer, so a cache would have to cover them too.
+- **`Target::Framebuffer` and `DocTarget`'s framebuffer half stay.**
+  They are how the compositor avoids re-attaching a texture for every
+  draw into the composite and scratch targets. They become texture
+  views when the wgpu backend arrives (Phase 6).
 
 End state: `web_sys` GL types appear only in `gpu/` and in engine
 creation.
@@ -737,7 +757,7 @@ Started when a second app is actually being built.
 
 | Risk | Where | Mitigation |
 |---|---|---|
-| Code relies on GL state leaking between draws | Phase 1 | Neutral-state contract; bit-identical parity check; one module per commit for bisecting |
+| Code relies on GL state leaking between draws | Phase 1 | State contract; bit-identical parity check; one module per commit for bisecting |
 | Uniform block layout mismatch | Phase 2 | Layout unit test per struct |
 | Per-dab uniform buffer upload slower on WebGL | Phase 2 | Benchmark; keep individual uniforms for those shaders if needed |
 | Async readback reorders work | Phase 4 | One function per commit; generation checks on interactive paths |
