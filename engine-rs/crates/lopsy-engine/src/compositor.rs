@@ -76,7 +76,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     // that itself needs routing — see `flattenGroupDescendants` on the JS
     // side — so each id maps to exactly one immediate parent group, even
     // when adjusted groups are nested inside one another (#857).
-    let child_to_group: HashMap<String, String> = engine.group_adjustments.iter()
+    let child_to_group: HashMap<String, String> = engine.groups.adjustments.iter()
         .flat_map(|(gid, ga)| ga.child_ids.iter().map(move |cid| (cid.clone(), gid.clone())))
         .collect();
 
@@ -89,9 +89,9 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     // behavior untouched.
     let nested_group_ids: HashSet<String> = {
         let routed_ids: HashSet<&str> =
-            engine.group_adjustments.keys().map(String::as_str).collect();
+            engine.groups.adjustments.keys().map(String::as_str).collect();
         let mut nested = HashSet::new();
-        for (gid, ga) in engine.group_adjustments.iter() {
+        for (gid, ga) in engine.groups.adjustments.iter() {
             for cid in &ga.child_ids {
                 if routed_ids.contains(cid.as_str()) {
                     nested.insert(gid.clone());
@@ -109,7 +109,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     // recompute — `group_pre_adj_valid` itself is only set back to `true`
     // once, at the end of this function, after every group encountered
     // this frame has had a chance to refresh its entry.
-    let cache_was_valid = engine.group_pre_adj_valid;
+    let cache_was_valid = engine.groups.pre_adj_valid;
 
     // Stack of currently-open adjusted-group accumulations, innermost last.
     // A leaf (or nested group marker) whose resolved parent doesn't match
@@ -189,7 +189,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                     refresh_pre_adj_cache(engine, &layer_id, gs_tex);
                 }
 
-                if let Some(ga) = engine.group_adjustments.get(&layer_id) {
+                if let Some(ga) = engine.groups.adjustments.get(&layer_id) {
                     let adj = ga.adjustments.clone();
                     apply_adjustments_to_texture(engine, frame.target, &adj);
                 }
@@ -245,9 +245,9 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                 let is_cache_eligible = !nested_group_ids.contains(&gid);
                 let use_cache = is_cache_eligible
                     && cache_was_valid
-                    && engine.group_pre_adj_cache.contains_key(&gid);
+                    && engine.groups.pre_adj_cache.contains_key(&gid);
                 if use_cache {
-                    let cache_tex = *engine.group_pre_adj_cache.get(&gid).unwrap();
+                    let cache_tex = *engine.groups.pre_adj_cache.get(&gid).unwrap();
                     restore_pre_adj_cache(engine, cache_tex, scratch_target);
                     group_stack.push(GroupFrame { id: gid, target: scratch_target, skip: true });
                     engine.effect_cache.touch(&layer_id);
@@ -467,7 +467,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     // Flipping this only here (not per-group mid-loop) keeps a group
     // recomputed early in the frame from making a still-stale group later
     // in the same frame think it's safe to read its own stale cache entry.
-    engine.group_pre_adj_valid = true;
+    engine.groups.pre_adj_valid = true;
 
     engine.needs_recomposite = false;
     Ok(())
@@ -760,22 +760,22 @@ struct GroupFrame {
 fn acquire_group_scratch_level(engine: &mut EngineInner, depth: usize) -> Result<DocTarget, String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    while engine.group_scratch_levels.len() <= depth {
+    while engine.groups.scratch_levels.len() <= depth {
         let tex = engine.texture_pool.acquire(doc_w, doc_h)?;
         let fbo = engine.fbo_pool.create()?;
         if let Some(gl_tex) = engine.texture_pool.get(tex).cloned() {
             engine.fbo_pool.attach_texture(fbo, &gl_tex);
         }
-        engine.group_scratch_levels.push((tex, fbo));
+        engine.groups.scratch_levels.push((tex, fbo));
     }
-    let (mut tex, fbo) = engine.group_scratch_levels[depth];
+    let (mut tex, fbo) = engine.groups.scratch_levels[depth];
     if engine.texture_pool.get_size(tex) != Some((doc_w, doc_h)) {
         engine.texture_pool.release(tex);
         tex = engine.texture_pool.acquire(doc_w, doc_h)?;
         if let Some(gl_tex) = engine.texture_pool.get(tex).cloned() {
             engine.fbo_pool.attach_texture(fbo, &gl_tex);
         }
-        engine.group_scratch_levels[depth] = (tex, fbo);
+        engine.groups.scratch_levels[depth] = (tex, fbo);
     }
     Ok(DocTarget { tex, fbo })
 }
@@ -790,15 +790,15 @@ fn clear_target(engine: &EngineInner, target: DocTarget) {
 fn get_or_create_pre_adj_cache(engine: &mut EngineInner, group_id: &str) -> Result<TextureHandle, String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    if let Some(&tex) = engine.group_pre_adj_cache.get(group_id) {
+    if let Some(&tex) = engine.groups.pre_adj_cache.get(group_id) {
         if engine.texture_pool.get_size(tex) == Some((doc_w, doc_h)) {
             return Ok(tex);
         }
         engine.texture_pool.release(tex);
-        engine.group_pre_adj_cache.remove(group_id);
+        engine.groups.pre_adj_cache.remove(group_id);
     }
     let tex = engine.texture_pool.acquire(doc_w, doc_h)?;
-    engine.group_pre_adj_cache.insert(group_id.to_string(), tex);
+    engine.groups.pre_adj_cache.insert(group_id.to_string(), tex);
     Ok(tex)
 }
 
@@ -1428,7 +1428,7 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
 
     engine.gpu().clear(engine.composite_texture, bg);
 
-    let child_to_group: HashMap<String, String> = engine.group_adjustments.iter()
+    let child_to_group: HashMap<String, String> = engine.groups.adjustments.iter()
         .flat_map(|(gid, ga)| ga.child_ids.iter().map(move |cid| (cid.clone(), gid.clone())))
         .collect();
     // No pre-adjustment cache here (export is a one-shot render, not a
@@ -1457,7 +1457,7 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         if *layer_type == lopsy_core::layer::LayerType::Group {
             if group_stack.last().map(|f| f.id.as_str()) == Some(layer_id.as_str()) {
                 let frame = group_stack.pop().expect("checked by the condition above");
-                if let Some(ga) = engine.group_adjustments.get(layer_id) {
+                if let Some(ga) = engine.groups.adjustments.get(layer_id) {
                     let adj = ga.adjustments.clone();
                     apply_adjustments_to_texture(engine, frame.target, &adj);
                 }

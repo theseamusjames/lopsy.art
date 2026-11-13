@@ -211,6 +211,14 @@ pub struct OverlayState {
     pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
 }
 
+/// Adjustments attached to layer groups, and the scratch targets and caches their children composite through.
+pub struct GroupState {
+    pub adjustments: HashMap<String, GroupAdjustment>,
+    pub scratch_levels: Vec<(TextureHandle, FramebufferHandle)>,
+    pub pre_adj_cache: HashMap<String, TextureHandle>,
+    pub pre_adj_valid: bool,
+}
+
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
@@ -324,14 +332,12 @@ pub struct EngineInner {
     /// Per-group adjustments — keyed by group layer ID. Each entry holds the
     /// adjustment scalars/LUTs plus a list of child layer IDs (in stack order)
     /// so the compositor can scope the adjustment pass to only those layers.
-    pub group_adjustments: HashMap<String, GroupAdjustment>,
     /// Scratch (texture, FBO) pairs for group-scoped adjustments, indexed by
     /// nesting depth (0 = outermost currently-open adjusted group) rather
     /// than a single slot — a group nested inside another adjusted group
     /// gets its own scratch instead of colliding with its ancestor's (#857).
     /// Allocated lazily and resized on demand; kept for the engine's
     /// lifetime like the other persistent FBOs.
-    pub group_scratch_levels: Vec<(TextureHandle, FramebufferHandle)>,
     /// Pre-adjustment group scratch cache: for each adjusted group (keyed by
     /// group id), caches the composited children so that when only
     /// adjustment values change (not the children), the compositor can skip
@@ -341,8 +347,6 @@ pub struct EngineInner {
     /// only trusted while it's true. Nested groups (an adjusted group that
     /// is itself an ancestor or descendant of another adjusted group) never
     /// populate or read this cache — see `nested_group_ids` in compositor.rs.
-    pub group_pre_adj_cache: HashMap<String, TextureHandle>,
-    pub group_pre_adj_valid: bool,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -375,6 +379,7 @@ pub struct EngineInner {
     pub float: FloatState,
     pub previews: PreviewState,
     pub overlays: OverlayState,
+    pub groups: GroupState,
 
 }
 
@@ -468,10 +473,6 @@ impl EngineInner {
             liquify_disp_texture: None,
             layer_transform: Vec::new(),
             adjustments: ImageAdjustmentState::default(),
-            group_adjustments: HashMap::new(),
-            group_scratch_levels: Vec::new(),
-            group_pre_adj_cache: HashMap::new(),
-            group_pre_adj_valid: false,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
@@ -533,6 +534,12 @@ impl EngineInner {
                 selection_time: 0.0,
                 stamp_preview: None,
             },
+            groups: GroupState {
+                adjustments: HashMap::new(),
+                scratch_levels: Vec::new(),
+                pre_adj_cache: HashMap::new(),
+                pre_adj_valid: false,
+            },
         })
     }
 
@@ -591,7 +598,7 @@ impl EngineInner {
     /// relies on it to know a layer's cached effects are stale.
     pub fn mark_layer_dirty(&mut self, layer_id: &str) {
         self.needs_recomposite = true;
-        self.group_pre_adj_valid = false;
+        self.groups.pre_adj_valid = false;
         let generation = self.next_content_gen;
         self.next_content_gen += 1;
         match self.layer_content_gen.get_mut(layer_id) {
@@ -829,7 +836,7 @@ impl EngineInner {
         self.mlasso.edges = None;
         self.mlasso.width = 0;
         self.mlasso.height = 0;
-        self.group_adjustments.clear();
+        self.groups.adjustments.clear();
         // Image adjustments
         self.adjustments.exposure = 0.0;
         self.adjustments.contrast = 0.0;
@@ -870,7 +877,7 @@ impl EngineInner {
 
     pub fn mark_all_dirty(&mut self) {
         self.needs_recomposite = true;
-        self.group_pre_adj_valid = false;
+        self.groups.pre_adj_valid = false;
     }
 
     /// The GPU objects a [`Pass`] draws with.

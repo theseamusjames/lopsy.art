@@ -290,12 +290,12 @@ pub fn set_group_adjustments(
     // Only the handles are carried — has_* flags reset to false so stale
     // LUTs are never sampled.  If the effect is still active, the
     // matching setGroup*Lut call re-sets has_* = true.
-    if let Some(prev) = engine.group_adjustments.get(group_id) {
+    if let Some(prev) = engine.groups.adjustments.get(group_id) {
         adj.curves_texture = prev.adjustments.curves_texture;
         adj.levels_texture = prev.adjustments.levels_texture;
         adj.gradient_map_texture = prev.adjustments.gradient_map_texture;
     }
-    engine.group_adjustments.insert(
+    engine.groups.adjustments.insert(
         group_id.to_string(),
         crate::engine::GroupAdjustment { adjustments: adj, child_ids },
     );
@@ -304,7 +304,7 @@ pub fn set_group_adjustments(
 }
 
 pub fn remove_group_adjustment(engine: &mut EngineInner, group_id: &str) {
-    if let Some(ga) = engine.group_adjustments.remove(group_id) {
+    if let Some(ga) = engine.groups.adjustments.remove(group_id) {
         if let Some(t) = ga.adjustments.curves_texture {
             engine.texture_pool.release(t);
         }
@@ -314,7 +314,7 @@ pub fn remove_group_adjustment(engine: &mut EngineInner, group_id: &str) {
         if let Some(t) = ga.adjustments.gradient_map_texture {
             engine.texture_pool.release(t);
         }
-        if let Some(t) = engine.group_pre_adj_cache.remove(group_id) {
+        if let Some(t) = engine.groups.pre_adj_cache.remove(group_id) {
             engine.texture_pool.release(t);
         }
         engine.needs_recomposite = true;
@@ -325,22 +325,22 @@ pub fn set_group_curves_lut(engine: &mut EngineInner, group_id: &str, lut: &[u8]
     if lut.len() != 256 * 4 {
         return Err("Group curves LUT must be exactly 256 * 4 bytes".to_string());
     }
-    if !engine.group_adjustments.contains_key(group_id) {
+    if !engine.groups.adjustments.contains_key(group_id) {
         return Err("Group not found — call setGroupAdjustments first".to_string());
     }
-    let existing = engine.group_adjustments.get(group_id).and_then(|g| g.adjustments.curves_texture);
+    let existing = engine.groups.adjustments.get(group_id).and_then(|g| g.adjustments.curves_texture);
     let tex = match existing {
         Some(t) => t,
         None => {
             let t = engine.texture_pool.acquire(256, 1)
                 ?;
-            if let Some(g) = engine.group_adjustments.get_mut(group_id) { g.adjustments.curves_texture = Some(t); }
+            if let Some(g) = engine.groups.adjustments.get_mut(group_id) { g.adjustments.curves_texture = Some(t); }
             t
         }
     };
     engine.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)
         ?;
-    if let Some(g) = engine.group_adjustments.get_mut(group_id) { g.adjustments.has_curves = true; }
+    if let Some(g) = engine.groups.adjustments.get_mut(group_id) { g.adjustments.has_curves = true; }
     engine.needs_recomposite = true;
     Ok(())
 }
@@ -349,28 +349,28 @@ pub fn set_group_levels_lut(engine: &mut EngineInner, group_id: &str, lut: &[u8]
     if lut.len() != 256 * 4 {
         return Err("Group levels LUT must be exactly 256 * 4 bytes".to_string());
     }
-    if !engine.group_adjustments.contains_key(group_id) {
+    if !engine.groups.adjustments.contains_key(group_id) {
         return Err("Group not found — call setGroupAdjustments first".to_string());
     }
-    let existing = engine.group_adjustments.get(group_id).and_then(|g| g.adjustments.levels_texture);
+    let existing = engine.groups.adjustments.get(group_id).and_then(|g| g.adjustments.levels_texture);
     let tex = match existing {
         Some(t) => t,
         None => {
             let t = engine.texture_pool.acquire(256, 1)
                 ?;
-            if let Some(g) = engine.group_adjustments.get_mut(group_id) { g.adjustments.levels_texture = Some(t); }
+            if let Some(g) = engine.groups.adjustments.get_mut(group_id) { g.adjustments.levels_texture = Some(t); }
             t
         }
     };
     engine.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)
         ?;
-    if let Some(g) = engine.group_adjustments.get_mut(group_id) { g.adjustments.has_levels = true; }
+    if let Some(g) = engine.groups.adjustments.get_mut(group_id) { g.adjustments.has_levels = true; }
     engine.needs_recomposite = true;
     Ok(())
 }
 
 pub fn clear_group_adjustments(engine: &mut EngineInner) {
-    let textures_to_release: Vec<_> = engine.group_adjustments.values()
+    let textures_to_release: Vec<_> = engine.groups.adjustments.values()
         .flat_map(|ga| {
             let mut v = Vec::new();
             if let Some(t) = ga.adjustments.curves_texture { v.push(t); }
@@ -382,8 +382,8 @@ pub fn clear_group_adjustments(engine: &mut EngineInner) {
     for tex in textures_to_release {
         engine.texture_pool.release(tex);
     }
-    engine.group_adjustments.clear();
-    for (_, tex) in engine.group_pre_adj_cache.drain() {
+    engine.groups.adjustments.clear();
+    for (_, tex) in engine.groups.pre_adj_cache.drain() {
         engine.texture_pool.release(tex);
     }
     engine.needs_recomposite = true;
@@ -394,7 +394,7 @@ pub fn clear_group_adjustments(engine: &mut EngineInner) {
 // ============================================================
 
 pub fn set_group_invert(engine: &mut EngineInner, group_id: &str, enabled: bool) -> Result<(), String> {
-    let ga = engine.group_adjustments.get_mut(group_id)
+    let ga = engine.groups.adjustments.get_mut(group_id)
         .ok_or_else(|| "Group not found".to_string())?;
     ga.adjustments.invert = enabled;
     engine.needs_recomposite = true;
@@ -402,7 +402,7 @@ pub fn set_group_invert(engine: &mut EngineInner, group_id: &str, enabled: bool)
 }
 
 pub fn set_group_hue_saturation(engine: &mut EngineInner, group_id: &str, hue: f32, saturation: f32, lightness: f32) -> Result<(), String> {
-    let ga = engine.group_adjustments.get_mut(group_id)
+    let ga = engine.groups.adjustments.get_mut(group_id)
         .ok_or_else(|| "Group not found".to_string())?;
     ga.adjustments.hue_shift = hue;
     ga.adjustments.hsl_saturation = saturation;
@@ -417,7 +417,7 @@ pub fn set_group_color_balance(
     mt_r: f32, mt_g: f32, mt_b: f32,
     hi_r: f32, hi_g: f32, hi_b: f32,
 ) -> Result<(), String> {
-    let ga = engine.group_adjustments.get_mut(group_id)
+    let ga = engine.groups.adjustments.get_mut(group_id)
         .ok_or_else(|| "Group not found".to_string())?;
     ga.adjustments.cb_shadows    = [sh_r, sh_g, sh_b];
     ga.adjustments.cb_midtones   = [mt_r, mt_g, mt_b];
@@ -433,7 +433,7 @@ pub fn set_group_color_grading(engine: &mut EngineInner, group_id: &str, values:
     if values.len() != 18 {
         return Err("Color grading values must be exactly 18 floats".to_string());
     }
-    let ga = engine.group_adjustments.get_mut(group_id)
+    let ga = engine.groups.adjustments.get_mut(group_id)
         .ok_or_else(|| "Group not found".to_string())?;
     let wheel = |i: usize| [values[i], values[i + 1], values[i + 2], values[i + 3]];
     ga.adjustments.cg_shadows    = wheel(0);
@@ -448,7 +448,7 @@ pub fn set_group_color_grading(engine: &mut EngineInner, group_id: &str, values:
 }
 
 pub fn set_group_photo_filter(engine: &mut EngineInner, group_id: &str, r: f32, g: f32, b: f32, density: f32, preserve_luminosity: bool) -> Result<(), String> {
-    let ga = engine.group_adjustments.get_mut(group_id)
+    let ga = engine.groups.adjustments.get_mut(group_id)
         .ok_or_else(|| "Group not found".to_string())?;
     ga.adjustments.pf_color = [r, g, b];
     ga.adjustments.pf_density = density;
@@ -458,7 +458,7 @@ pub fn set_group_photo_filter(engine: &mut EngineInner, group_id: &str, r: f32, 
 }
 
 pub fn set_group_black_white(engine: &mut EngineInner, group_id: &str, reds: f32, yellows: f32, greens: f32, cyans: f32, blues: f32, magentas: f32) -> Result<(), String> {
-    let ga = engine.group_adjustments.get_mut(group_id)
+    let ga = engine.groups.adjustments.get_mut(group_id)
         .ok_or_else(|| "Group not found".to_string())?;
     ga.adjustments.bw_reds     = reds;
     ga.adjustments.bw_yellows  = yellows;
@@ -477,7 +477,7 @@ pub fn set_group_channel_mixer(
     gr: f32, gg: f32, gb: f32, gc: f32,
     br: f32, bg: f32, bb: f32, bc: f32,
 ) -> Result<(), String> {
-    let ga = engine.group_adjustments.get_mut(group_id)
+    let ga = engine.groups.adjustments.get_mut(group_id)
         .ok_or_else(|| "Group not found".to_string())?;
     ga.adjustments.cm_r = [rr, rg, rb, rc];
     ga.adjustments.cm_g = [gr, gg, gb, gc];
@@ -491,22 +491,22 @@ pub fn set_group_gradient_map_lut(engine: &mut EngineInner, group_id: &str, lut:
     if lut.len() != 256 * 4 {
         return Err("Gradient map LUT must be exactly 256 * 4 bytes".to_string());
     }
-    if !engine.group_adjustments.contains_key(group_id) {
+    if !engine.groups.adjustments.contains_key(group_id) {
         return Err("Group not found — call setGroupAdjustments first".to_string());
     }
-    let existing = engine.group_adjustments.get(group_id).and_then(|g| g.adjustments.gradient_map_texture);
+    let existing = engine.groups.adjustments.get(group_id).and_then(|g| g.adjustments.gradient_map_texture);
     let tex = match existing {
         Some(t) => t,
         None => {
             let t = engine.texture_pool.acquire(256, 1)
                 ?;
-            if let Some(g) = engine.group_adjustments.get_mut(group_id) { g.adjustments.gradient_map_texture = Some(t); }
+            if let Some(g) = engine.groups.adjustments.get_mut(group_id) { g.adjustments.gradient_map_texture = Some(t); }
             t
         }
     };
     engine.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)
         ?;
-    if let Some(g) = engine.group_adjustments.get_mut(group_id) { g.adjustments.has_gradient_map = true; }
+    if let Some(g) = engine.groups.adjustments.get_mut(group_id) { g.adjustments.has_gradient_map = true; }
     engine.needs_recomposite = true;
     Ok(())
 }

@@ -31,7 +31,7 @@ pub fn add_layer(engine: &mut EngineInner, desc: LayerDesc) -> Result<(), String
     // a new child might belong to a group whose composited children were
     // otherwise assumed unchanged. See mark_layer_dirty for the flag.
     engine.needs_recomposite = true;
-    engine.group_pre_adj_valid = false;
+    engine.groups.pre_adj_valid = false;
     Ok(())
 }
 
@@ -46,7 +46,7 @@ pub fn remove_layer(engine: &mut EngineInner, layer_id: &str) {
     engine.layer_content_gen.remove(layer_id);
     engine.layer_stack.retain(|l| l.id != layer_id);
     engine.needs_recomposite = true;
-    engine.group_pre_adj_valid = false;
+    engine.groups.pre_adj_valid = false;
 }
 
 pub fn update_layer(engine: &mut EngineInner, desc: LayerDesc) {
@@ -75,7 +75,7 @@ pub fn update_layer(engine: &mut EngineInner, desc: LayerDesc) {
     // changed reuses stale composited children until the active layer is
     // switched.
     engine.needs_recomposite = true;
-    engine.group_pre_adj_valid = false;
+    engine.groups.pre_adj_valid = false;
 }
 
 pub fn set_layer_order(engine: &mut EngineInner, order: &[String]) {
@@ -87,7 +87,7 @@ pub fn set_layer_order(engine: &mut EngineInner, order: &[String]) {
     }
     engine.layer_stack = new_stack;
     engine.needs_recomposite = true;
-    engine.group_pre_adj_valid = false;
+    engine.groups.pre_adj_valid = false;
 }
 
 /// Ensure a layer texture exists at the given size, then run a closure to upload data.
