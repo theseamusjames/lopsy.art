@@ -12,7 +12,7 @@ pub fn add_layer(engine: &mut EngineInner, desc: LayerDesc) -> Result<(), String
     // uploadLayerPixels may have already been called for this layer
     // (e.g. cropLayerToContent runs before syncLayers adds the layer).
     if !engine.layer_textures.contains_key(&desc.id) {
-        let tex = engine.texture_pool.acquire(&engine.gl, 1, 1)?;
+        let tex = engine.texture_pool.acquire(1, 1)?;
         engine.layer_textures.insert(desc.id.clone(), tex);
     }
     // Only add to layer_stack if not already present
@@ -99,11 +99,11 @@ where
         let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
         if tw != width || th != height {
             engine.texture_pool.release(tex_handle);
-            let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
+            let new_tex = engine.texture_pool.acquire(width, height)?;
             engine.layer_textures.insert(layer_id.to_string(), new_tex);
         }
     } else {
-        let new_tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
+        let new_tex = engine.texture_pool.acquire(width, height)?;
         engine.layer_textures.insert(layer_id.to_string(), new_tex);
     }
 
@@ -125,7 +125,7 @@ pub fn upload_pixels(
     _offset_y: i32,
 ) -> Result<(), String> {
     with_layer_texture(engine, layer_id, width, height, |eng, tex| {
-        eng.texture_pool.upload_rgba(&eng.gl, tex, 0, 0, width, height, data)
+        eng.texture_pool.upload_rgba(tex, 0, 0, width, height, data)
     })
 }
 
@@ -138,7 +138,7 @@ pub fn upload_pixels_f32(
     height: u32,
 ) -> Result<(), String> {
     with_layer_texture(engine, layer_id, width, height, |eng, tex| {
-        eng.texture_pool.upload_rgba_f32(&eng.gl, tex, 0, 0, width, height, data)
+        eng.texture_pool.upload_rgba_f32(tex, 0, 0, width, height, data)
     })
 }
 
@@ -163,7 +163,7 @@ pub fn upload_pixels_f32_rect(
         return Err(format!("Expected {} floats for a {width}x{height} rect, got {}", width as usize * height as usize * 4, data.len()));
     }
     with_layer_texture(engine, layer_id, texture_width, texture_height, |eng, tex| {
-        eng.texture_pool.upload_rgba_f32(&eng.gl, tex, x as i32, y as i32, width, height, data)
+        eng.texture_pool.upload_rgba_f32(tex, x as i32, y as i32, width, height, data)
     })
 }
 
@@ -177,7 +177,7 @@ pub fn upload_pixels_from_canvas(
     height: u32,
 ) -> Result<(), String> {
     with_layer_texture(engine, layer_id, width, height, |eng, tex| {
-        eng.texture_pool.upload_canvas(&eng.gl, tex, canvas, width, height)
+        eng.texture_pool.upload_canvas(tex, canvas, width, height)
     })
 }
 
@@ -197,11 +197,11 @@ pub fn duplicate_texture(
         let (dw, dh) = engine.texture_pool.get_size(old_dst).unwrap_or((0, 0));
         if dw != sw || dh != sh {
             engine.texture_pool.release(old_dst);
-            let new_tex = engine.texture_pool.acquire(&engine.gl, sw, sh)?;
+            let new_tex = engine.texture_pool.acquire(sw, sh)?;
             engine.layer_textures.insert(dst_id.to_string(), new_tex);
         }
     } else {
-        let new_tex = engine.texture_pool.acquire(&engine.gl, sw, sh)?;
+        let new_tex = engine.texture_pool.acquire(sw, sh)?;
         engine.layer_textures.insert(dst_id.to_string(), new_tex);
     }
 
@@ -304,7 +304,7 @@ pub fn merge_layers(
     engine.texture_pool.get(engine.scratch_texture_a).ok_or("scratch_a not found")?;
     engine.gpu().unbind_textures(2);
     {
-        let shader = engine.shaders.blend_for_mode(&engine.gl, top_desc.blend_mode as i32)?;
+        let shader = engine.shaders.blend_for_mode(top_desc.blend_mode as i32)?;
         let pass = engine.pass(&shader)
             .texture("u_srcTex", top_handle)
             .texture("u_dstTex", engine.scratch_texture_a)
@@ -333,7 +333,7 @@ pub fn merge_layers(
     engine.gpu().unbind_textures(3);
 
     // Step 3: replace bottom texture with doc-sized result from scratch_b
-    let new_tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
+    let new_tex = engine.texture_pool.acquire(doc_w, doc_h)?;
     engine.texture_pool.get(new_tex).ok_or("new texture not found")?;
     engine.texture_pool.get(engine.scratch_texture_b).ok_or("scratch_b not found")?;
     engine.pass(&engine.shaders.blit)
@@ -392,7 +392,7 @@ pub fn rotate_texture_90(
     let new_h = w;
 
     // Allocate a new texture with swapped dimensions
-    let new_tex = engine.texture_pool.acquire(&engine.gl, new_w, new_h)?;
+    let new_tex = engine.texture_pool.acquire(new_w, new_h)?;
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
     // Render rotated into new texture
@@ -422,7 +422,7 @@ pub fn scale_texture(
     engine.texture_pool.get(tex_handle).ok_or("Texture not found")?;
 
     // Allocate new texture at target size
-    let new_tex = engine.texture_pool.acquire(&engine.gl, new_w, new_h)?;
+    let new_tex = engine.texture_pool.acquire(new_w, new_h)?;
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
     // Bilinear resample in premultiplied space (see premul_sample.glsl).
@@ -456,7 +456,7 @@ pub fn resize_canvas_texture(
         .ok_or_else(|| format!("Layer {layer_id} not found"))?;
     engine.texture_pool.get(tex_handle).ok_or("Texture not found")?;
 
-    let new_tex = engine.texture_pool.acquire(&engine.gl, new_w, new_h)?;
+    let new_tex = engine.texture_pool.acquire(new_w, new_h)?;
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
     // Map output UV to source UV:
@@ -500,7 +500,7 @@ pub fn crop_texture(
     let (old_w, old_h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
     engine.texture_pool.get(tex_handle).ok_or("Texture not found")?;
 
-    let new_tex = engine.texture_pool.acquire(&engine.gl, crop_w, crop_h)?;
+    let new_tex = engine.texture_pool.acquire(crop_w, crop_h)?;
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
     // Map output UV [0,1] over crop region to source UV [0,1] over old texture.
@@ -577,7 +577,7 @@ pub fn remap_layer_mask(
     let (src_w, src_h) = engine.texture_pool.get_size(mask_handle).unwrap_or((1, 1));
     engine.texture_pool.get(mask_handle).ok_or("Mask texture not found")?;
 
-    let new_mask = engine.texture_pool.acquire(&engine.gl, dst_w, dst_h)?;
+    let new_mask = engine.texture_pool.acquire(dst_w, dst_h)?;
     engine.texture_pool.get(new_mask).ok_or("New mask texture not found")?;
 
     let [a, b, c, d, e, f] = inverse;
@@ -638,7 +638,7 @@ pub fn clipboard_copy(
     }
 
     // Allocate clipboard texture
-    let clip_tex = engine.texture_pool.acquire(&engine.gl, out_w, out_h)?;
+    let clip_tex = engine.texture_pool.acquire(out_w, out_h)?;
 
     engine.texture_pool.get(layer_tex_handle).ok_or("Layer texture not found")?;
     engine.texture_pool.get(clip_tex).ok_or("Clipboard texture not found")?;
@@ -696,7 +696,7 @@ pub fn clipboard_clear_selected(
         None
     };
 
-    let tmp_tex_h = engine.texture_pool.acquire(&engine.gl, lw, lh)?;
+    let tmp_tex_h = engine.texture_pool.acquire(lw, lh)?;
     engine.texture_pool.get(tmp_tex_h).ok_or("Temp texture not found")?;
 
     let pass = engine.pass(&engine.shaders.clipboard_clear).texture("u_layerTex", layer_tex_handle);
@@ -740,11 +740,11 @@ pub fn clipboard_paste(
         let (dw, dh) = engine.texture_pool.get_size(old_dst).unwrap_or((0, 0));
         if dw != clip_w || dh != clip_h {
             engine.texture_pool.release(old_dst);
-            let new_tex = engine.texture_pool.acquire(&engine.gl, clip_w, clip_h)?;
+            let new_tex = engine.texture_pool.acquire(clip_w, clip_h)?;
             engine.layer_textures.insert(dst_layer_id.to_string(), new_tex);
         }
     } else {
-        let new_tex = engine.texture_pool.acquire(&engine.gl, clip_w, clip_h)?;
+        let new_tex = engine.texture_pool.acquire(clip_w, clip_h)?;
         engine.layer_textures.insert(dst_layer_id.to_string(), new_tex);
     }
 
@@ -794,7 +794,7 @@ pub fn expand_layer_to_doc_size(
 
     engine.texture_pool.get(tex_handle).ok_or("Layer texture not found")?;
 
-    let new_tex = engine.texture_pool.acquire(&engine.gl, new_w, new_h)?;
+    let new_tex = engine.texture_pool.acquire(new_w, new_h)?;
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
     engine.pass(&engine.shaders.clipboard_copy)
@@ -952,7 +952,7 @@ pub fn float_selection(
     // 1. Extract selected pixels into float_texture (clipboard_copy shader).
     // For expanded text layers, boundsOffset/boundsSize cover the full fw×fh region;
     // clipboard_copy clips to the original layer area, leaving transparent padding.
-    let float_tex = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
+    let float_tex = engine.texture_pool.acquire(fw, fh)?;
     engine.texture_pool.get(float_tex).ok_or("Float texture not found")?;
     {
         let pass = engine.pass(&engine.shaders.clipboard_copy).texture("u_layerTex", layer_tex_handle);
@@ -977,7 +977,7 @@ pub fn float_selection(
     // For expanded text layers, the base is fw×fh: cleared to transparent, with the
     // clipboard_clear result rendered into the center [pad_x, pad_y, lw, lh] sub-region
     // via viewport override so v_uv covers the original lw×lh layer texture correctly.
-    let base_tex = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
+    let base_tex = engine.texture_pool.acquire(fw, fh)?;
     engine.texture_pool.get(base_tex).ok_or("Base texture not found")?;
     {
         let pass = engine.pass(&engine.shaders.clipboard_clear).texture("u_layerTex", layer_tex_handle);
@@ -1005,7 +1005,7 @@ pub fn float_selection(
     if fw != lw || fh != lh {
         let old_handle = engine.layer_textures.remove(layer_id).unwrap_or(layer_tex_handle);
         engine.texture_pool.release(old_handle);
-        let new_layer_handle = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
+        let new_layer_handle = engine.texture_pool.acquire(fw, fh)?;
         engine.texture_pool.get(new_layer_handle).ok_or("New layer texture not found")?;
         engine.gpu().clear(new_layer_handle, [0.0, 0.0, 0.0, 0.0]);
         engine.layer_textures.insert(layer_id.to_string(), new_layer_handle);
@@ -1112,7 +1112,7 @@ pub fn drop_float(engine: &mut EngineInner) {
         if engine.texture_pool.get_size(tex) == Some(doc_size) {
             engine.texture_pool.release(tex);
         } else {
-            engine.texture_pool.delete(&engine.gl, tex);
+            engine.texture_pool.delete(tex);
         }
     }
     engine.float_layer_id = None;
@@ -1133,7 +1133,7 @@ pub(crate) fn copy_into_larger_texture(
     off_y: i32,
 ) -> Result<TextureHandle, String> {
     engine.texture_pool.get(src_handle).ok_or("Source texture not found")?;
-    let dst_handle = engine.texture_pool.acquire(&engine.gl, dst_w, dst_h)?;
+    let dst_handle = engine.texture_pool.acquire(dst_w, dst_h)?;
     engine.texture_pool.get(dst_handle).ok_or("Destination texture not found")?;
     engine.pass(&engine.shaders.blit)
         .texture("u_tex", src_handle)
@@ -1185,9 +1185,9 @@ pub fn ensure_float_covers(
 
     // Each growth size is new, so pooling the replaced textures would keep
     // them for good (#1019).
-    engine.texture_pool.delete(&engine.gl, float_handle);
-    engine.texture_pool.delete(&engine.gl, base_handle);
-    engine.texture_pool.delete(&engine.gl, layer_handle);
+    engine.texture_pool.delete(float_handle);
+    engine.texture_pool.delete(base_handle);
+    engine.texture_pool.delete(layer_handle);
     engine.float_texture = Some(new_float);
     engine.float_base_texture = Some(new_base);
     engine.layer_textures.insert(layer_id.clone(), new_layer);
@@ -1349,7 +1349,7 @@ fn composite_float_transformed(
     // texture is 800×600 but only fw×fh pixels are written (viewport clip),
     // so reading it back with v_uv=[0,1] samples the wrong region and leaks
     // stale compositor content into the layer texture.
-    let tmp = engine.texture_pool.acquire(&engine.gl, fw, fh)?;
+    let tmp = engine.texture_pool.acquire(fw, fh)?;
     engine.texture_pool.get(tmp).ok_or("Tmp texture not found")?;
     let src_rect = engine.float_transform_src_rect;
     let params = if engine.float_transform_mode == 1 {
@@ -1541,7 +1541,7 @@ pub fn upload_pixels_u16(
     height: u32,
 ) -> Result<(), String> {
     with_layer_texture(engine, layer_id, width, height, |eng, tex| {
-        eng.texture_pool.upload_rgba_u16(&eng.gl, tex, 0, 0, width, height, data)
+        eng.texture_pool.upload_rgba_u16(tex, 0, 0, width, height, data)
     })
 }
 
@@ -1568,8 +1568,8 @@ pub fn upload_clipboard_pixels(
     if let Some(old) = engine.clipboard_texture.take() {
         engine.texture_pool.release(old);
     }
-    let tex = engine.texture_pool.acquire(&engine.gl, width, height)?;
-    engine.texture_pool.upload_rgba(&engine.gl, tex, 0, 0, width, height, data)?;
+    let tex = engine.texture_pool.acquire(width, height)?;
+    engine.texture_pool.upload_rgba(tex, 0, 0, width, height, data)?;
     engine.clipboard_texture = Some(tex);
     engine.clipboard_width = width;
     engine.clipboard_height = height;
@@ -1609,7 +1609,7 @@ pub fn snapshot_texture(engine: &mut EngineInner, src_handle: TextureHandle) -> 
     if w == 0 || h == 0 {
         return EMPTY_SNAPSHOT;
     }
-    let dst_handle = match engine.texture_pool.acquire(&engine.gl, w, h) {
+    let dst_handle = match engine.texture_pool.acquire(w, h) {
         Ok(h) => h,
         Err(_) => return EMPTY_SNAPSHOT,
     };
@@ -1647,9 +1647,9 @@ fn restore_snapshot_into(
         Some(h) if engine.texture_pool.get_size(h) == Some((sw, sh)) => h,
         Some(h) => {
             engine.texture_pool.release(h);
-            engine.texture_pool.acquire(&engine.gl, sw, sh)?
+            engine.texture_pool.acquire(sw, sh)?
         }
-        None => engine.texture_pool.acquire(&engine.gl, sw, sh)?,
+        None => engine.texture_pool.acquire(sw, sh)?,
     };
 
     engine.texture_pool.get(dst_handle).ok_or_else(|| "Dst texture not found".to_string())?;

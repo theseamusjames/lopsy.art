@@ -120,7 +120,7 @@ pub fn begin_layer_transform(engine: &mut EngineInner, layer_id: &str) -> Result
     let source_rect = Rect::new(content.x - 1, content.y - 1, content.width + 2, content.height + 2);
 
     engine.texture_pool.get(layer_handle).ok_or("Layer texture not found")?;
-    let source = engine.texture_pool.acquire(&engine.gl, source_rect.width, source_rect.height)?;
+    let source = engine.texture_pool.acquire(source_rect.width, source_rect.height)?;
     engine.texture_pool.get(source).ok_or("Source texture not found")?;
     let (off_x, off_y) = (layer.x - source_rect.x, layer.y - source_rect.y);
     engine.pass(&engine.shaders.blit)
@@ -160,11 +160,11 @@ pub fn prepare_layer_transform_target(
 
     // The next render rewrites everything inside the texture, so the grown
     // texture starts empty and the old one is not copied.
-    let new_handle = engine.texture_pool.acquire(&engine.gl, grown.width, grown.height)?;
+    let new_handle = engine.texture_pool.acquire(grown.width, grown.height)?;
     engine.texture_pool.get(new_handle).ok_or("Grown layer texture not found")?;
     engine.gpu().clear(new_handle, [0.0, 0.0, 0.0, 0.0]);
     // Each growth size is new; pooling the old one would keep it for good (#1019).
-    engine.texture_pool.delete(&engine.gl, handle);
+    engine.texture_pool.delete(handle);
     engine.layer_textures.insert(layer_id.to_string(), new_handle);
     if let Some(desc) = engine.layer_stack.iter_mut().find(|l| l.id == layer_id) {
         desc.x = grown.x;
@@ -230,6 +230,6 @@ pub fn composite_layer_transform(engine: &mut EngineInner, params: &TransformPar
 /// Free every source. The layer textures keep what was last rendered.
 pub fn end_layer_transform(engine: &mut EngineInner) {
     for slot in std::mem::take(&mut engine.layer_transform) {
-        engine.texture_pool.delete(&engine.gl, slot.source);
+        engine.texture_pool.delete(slot.source);
     }
 }

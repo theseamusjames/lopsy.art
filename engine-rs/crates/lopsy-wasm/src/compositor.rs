@@ -677,7 +677,7 @@ fn blend_onto_target(
     target: DocTarget,
     clip: Option<Rect>,
 ) -> Result<(), String> {
-    let program = engine.shaders.blend_for_mode(&engine.gl, blend_mode)?;
+    let program = engine.shaders.blend_for_mode(blend_mode)?;
     let source = BlendSource { wraps: layers_wrap(engine), ..*source };
     blend_through_scratch(engine, &program, &source, target, Scratch::A, clip);
     Ok(())
@@ -727,19 +727,19 @@ fn acquire_group_scratch_level(engine: &mut EngineInner, depth: usize) -> Result
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     while engine.group_scratch_levels.len() <= depth {
-        let tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
-        let fbo = engine.fbo_pool.create(&engine.gl)?;
+        let tex = engine.texture_pool.acquire(doc_w, doc_h)?;
+        let fbo = engine.fbo_pool.create()?;
         if let Some(gl_tex) = engine.texture_pool.get(tex).cloned() {
-            engine.fbo_pool.attach_texture(&engine.gl, fbo, &gl_tex);
+            engine.fbo_pool.attach_texture(fbo, &gl_tex);
         }
         engine.group_scratch_levels.push((tex, fbo));
     }
     let (mut tex, fbo) = engine.group_scratch_levels[depth];
     if engine.texture_pool.get_size(tex) != Some((doc_w, doc_h)) {
         engine.texture_pool.release(tex);
-        tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
+        tex = engine.texture_pool.acquire(doc_w, doc_h)?;
         if let Some(gl_tex) = engine.texture_pool.get(tex).cloned() {
-            engine.fbo_pool.attach_texture(&engine.gl, fbo, &gl_tex);
+            engine.fbo_pool.attach_texture(fbo, &gl_tex);
         }
         engine.group_scratch_levels[depth] = (tex, fbo);
     }
@@ -763,7 +763,7 @@ fn get_or_create_pre_adj_cache(engine: &mut EngineInner, group_id: &str) -> Resu
         engine.texture_pool.release(tex);
         engine.group_pre_adj_cache.remove(group_id);
     }
-    let tex = engine.texture_pool.acquire(&engine.gl, doc_w, doc_h)?;
+    let tex = engine.texture_pool.acquire(doc_w, doc_h)?;
     engine.group_pre_adj_cache.insert(group_id.to_string(), tex);
     Ok(tex)
 }
@@ -790,7 +790,7 @@ fn capture_effect_backdrop(engine: &mut EngineInner, blend_mode: i32, has_behind
     if blend_mode == 0 || !has_behind_effects {
         return None;
     }
-    let copy = engine.texture_pool.acquire(&engine.gl, engine.doc_width, engine.doc_height).ok()?;
+    let copy = engine.texture_pool.acquire(engine.doc_width, engine.doc_height).ok()?;
     let is_copied = engine
         .pass(&engine.shaders.blit)
         .blend(Blend::Off)
@@ -871,7 +871,7 @@ fn render_layer_plus_stroke(
     }
     engine.texture_pool.get(layer_handle)?;
     engine.texture_pool.get(stroke_handle)?;
-    let merged = engine.texture_pool.acquire(&engine.gl, tw, th).ok()?;
+    let merged = engine.texture_pool.acquire(tw, th).ok()?;
 
     let is_drawn = engine
         .pass(&engine.shaders.composite)
@@ -903,7 +903,7 @@ fn render_layer_masked_for_effects(
     mask: MaskRef,
 ) -> Option<TextureHandle> {
     engine.texture_pool.get(src_handle)?;
-    let masked = engine.texture_pool.acquire(&engine.gl, tw, th).ok()?;
+    let masked = engine.texture_pool.acquire(tw, th).ok()?;
 
     let is_drawn = engine
         .pass(&engine.shaders.layer_mask_apply)
@@ -984,7 +984,7 @@ fn render_stroke_silhouette(engine: &mut EngineInner, src: EffectSource, stroke:
         reach,
     );
     engine.texture_pool.get(src.handle)?;
-    let out = engine.texture_pool.acquire(&engine.gl, rect.width, rect.height).ok()?;
+    let out = engine.texture_pool.acquire(rect.width, rect.height).ok()?;
     let frame = SilhouetteFrame { src: src.handle, src_w: src.width, src_h: src.height, pad_x: src.x - rect.x, pad_y: src.y - rect.y, w: rect.width, h: rect.height };
 
     // Units 0 and 1 may hold a texture the pool just handed back as `out`.
@@ -1033,7 +1033,7 @@ fn silhouette_by_band(
     reach: f32,
     out: TextureHandle,
 ) -> Option<TextureHandle> {
-    let tmp = engine.texture_pool.acquire(&engine.gl, frame.w, frame.h).ok()?;
+    let tmp = engine.texture_pool.acquire(frame.w, frame.h).ok()?;
     if engine.texture_pool.get(out).is_none() || engine.texture_pool.get(tmp).is_none() {
         engine.texture_pool.release(tmp);
         return None;

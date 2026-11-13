@@ -57,7 +57,7 @@ pub struct Engine {
 #[wasm_bindgen(js_name = "createEngine")]
 pub fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError> {
     let gpu_ctx = GpuContext::new(&canvas).map_err(|e| JsError::new(&e))?;
-    let shaders = ShaderPrograms::compile_all(&gpu_ctx.gl).map_err(|e| JsError::new(&e))?;
+    let shaders = ShaderPrograms::compile_all(&gpu_ctx).map_err(|e| JsError::new(&e))?;
     let inner = EngineInner::new(gpu_ctx, shaders).map_err(|e| JsError::new(&e))?;
     Ok(Engine { inner })
 }

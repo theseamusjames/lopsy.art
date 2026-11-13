@@ -81,11 +81,11 @@ pub fn enter_quick_mask_mode(engine: &mut EngineInner) {
         if let Some(old) = engine.quick_mask_texture.take() {
             engine.texture_pool.release(old);
         }
-        let tex = match engine.texture_pool.acquire(&engine.gl, w, h) {
+        let tex = match engine.texture_pool.acquire(w, h) {
             Ok(t) => t,
             Err(_) => return,
         };
-        engine.texture_pool.set_nearest_filter(&engine.gl, tex);
+        engine.texture_pool.set_nearest_filter(tex);
         // Fully unselected, in the (v, v, v, 1) layout the mask samplers
         // expect. A clear: uploading a zero buffer went through the
         // 16-bytes-per-texel CPU path on every Q press (#1481).
@@ -103,11 +103,11 @@ pub fn enter_quick_mask_mode(engine: &mut EngineInner) {
     }
 
     // Create new quick mask texture at selection mask size
-    let tex = match engine.texture_pool.acquire(&engine.gl, w, h) {
+    let tex = match engine.texture_pool.acquire(w, h) {
         Ok(t) => t,
         Err(_) => return,
     };
-    engine.texture_pool.set_nearest_filter(&engine.gl, tex);
+    engine.texture_pool.set_nearest_filter(tex);
 
     // GPU-to-GPU copy: blit selection mask to quick mask texture
     if engine.texture_pool.get(sel_handle).is_none() {
@@ -195,7 +195,7 @@ pub fn upload_quick_mask_pixels(
 fn copy_texture(engine: &mut EngineInner, src: TextureHandle) -> Option<TextureHandle> {
     let (w, h) = engine.texture_pool.get_size(src)?;
     engine.texture_pool.get(src)?;
-    let dst = engine.texture_pool.acquire(&engine.gl, w, h).ok()?;
+    let dst = engine.texture_pool.acquire(w, h).ok()?;
     if engine.texture_pool.get(dst).is_none() {
         engine.texture_pool.release(dst);
         return None;

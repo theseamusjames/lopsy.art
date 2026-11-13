@@ -34,15 +34,14 @@ pub fn render_text_raster_transformed(
     ).ok_or("Transformed text bounds are empty or too large")?;
     let inv = doc_to_raster_linear(m, raster.scale).ok_or("Text transform is not invertible")?;
 
-    let src = engine.texture_pool.acquire(&engine.gl, raster.width, raster.height)?;
-    if let Err(e) = engine.texture_pool.upload_rgba(
-        &engine.gl, src, 0, 0, raster.width, raster.height, raster.pixels,
+    let src = engine.texture_pool.acquire(raster.width, raster.height)?;
+    if let Err(e) = engine.texture_pool.upload_rgba(src, 0, 0, raster.width, raster.height, raster.pixels,
     ) {
-        engine.texture_pool.delete(&engine.gl, src);
+        engine.texture_pool.delete(src);
         return Err(e);
     }
     if engine.texture_pool.get(src).is_none() {
-        engine.texture_pool.delete(&engine.gl, src);
+        engine.texture_pool.delete(src);
         return Err("Text raster texture missing".to_string());
     }
 
@@ -84,7 +83,7 @@ pub fn render_text_raster_transformed(
     });
 
     // Raster sizes follow the text and the drag; don't pool one-off sizes.
-    engine.texture_pool.delete(&engine.gl, src);
+    engine.texture_pool.delete(src);
     result.map(|_| rect)
 }
 
@@ -103,9 +102,9 @@ fn layer_texture_sized(
             return Ok(current);
         }
         engine.layer_textures.remove(layer_id);
-        engine.texture_pool.delete(&engine.gl, current);
+        engine.texture_pool.delete(current);
     }
-    let handle = engine.texture_pool.acquire(&engine.gl, width, height)?;
+    let handle = engine.texture_pool.acquire(width, height)?;
     engine.layer_textures.insert(layer_id.to_string(), handle);
     Ok(handle)
 }

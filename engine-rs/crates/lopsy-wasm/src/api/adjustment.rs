@@ -188,13 +188,13 @@ pub fn set_image_gradient_map_lut(engine: &mut Engine, lut: &[u8]) -> Result<(),
     let tex = match inner.adjustments.gradient_map_texture {
         Some(t) => t,
         None => {
-            let t = inner.texture_pool.acquire(&inner.gl, 256, 1)
+            let t = inner.texture_pool.acquire(256, 1)
                 .map_err(|e| JsError::new(&e))?;
             inner.adjustments.gradient_map_texture = Some(t);
             t
         }
     };
-    inner.texture_pool.upload_rgba(&inner.gl, tex, 0, 0, 256, 1, lut)
+    inner.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
     inner.adjustments.has_gradient_map = true;
     inner.needs_recomposite = true;
@@ -222,13 +222,13 @@ pub fn set_image_curves_lut(engine: &mut Engine, lut: &[u8]) -> Result<(), JsErr
     let tex = match inner.adjustments.curves_texture {
         Some(t) => t,
         None => {
-            let t = inner.texture_pool.acquire(&inner.gl, 256, 1)
+            let t = inner.texture_pool.acquire(256, 1)
                 .map_err(|e| JsError::new(&e))?;
             inner.adjustments.curves_texture = Some(t);
             t
         }
     };
-    inner.texture_pool.upload_rgba(&inner.gl, tex, 0, 0, 256, 1, lut)
+    inner.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
     inner.adjustments.has_curves = true;
     inner.needs_recomposite = true;
@@ -256,13 +256,13 @@ pub fn set_image_levels_lut(engine: &mut Engine, lut: &[u8]) -> Result<(), JsErr
     let tex = match inner.adjustments.levels_texture {
         Some(t) => t,
         None => {
-            let t = inner.texture_pool.acquire(&inner.gl, 256, 1)
+            let t = inner.texture_pool.acquire(256, 1)
                 .map_err(|e| JsError::new(&e))?;
             inner.adjustments.levels_texture = Some(t);
             t
         }
     };
-    inner.texture_pool.upload_rgba(&inner.gl, tex, 0, 0, 256, 1, lut)
+    inner.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
     inner.adjustments.has_levels = true;
     inner.needs_recomposite = true;
@@ -360,13 +360,13 @@ pub fn set_group_curves_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> 
     let tex = match existing {
         Some(t) => t,
         None => {
-            let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
+            let t = engine.inner.texture_pool.acquire(256, 1)
                 .map_err(|e| JsError::new(&e))?;
             if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.curves_texture = Some(t); }
             t
         }
     };
-    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
+    engine.inner.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
     if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_curves = true; }
     engine.inner.needs_recomposite = true;
@@ -385,13 +385,13 @@ pub fn set_group_levels_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> 
     let tex = match existing {
         Some(t) => t,
         None => {
-            let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
+            let t = engine.inner.texture_pool.acquire(256, 1)
                 .map_err(|e| JsError::new(&e))?;
             if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.levels_texture = Some(t); }
             t
         }
     };
-    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
+    engine.inner.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
     if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_levels = true; }
     engine.inner.needs_recomposite = true;
@@ -536,13 +536,13 @@ pub fn set_group_gradient_map_lut(engine: &mut Engine, group_id: &str, lut: &[u8
     let tex = match existing {
         Some(t) => t,
         None => {
-            let t = engine.inner.texture_pool.acquire(&engine.inner.gl, 256, 1)
+            let t = engine.inner.texture_pool.acquire(256, 1)
                 .map_err(|e| JsError::new(&e))?;
             if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.gradient_map_texture = Some(t); }
             t
         }
     };
-    engine.inner.texture_pool.upload_rgba(&engine.inner.gl, tex, 0, 0, 256, 1, lut)
+    engine.inner.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)
         .map_err(|e| JsError::new(&e))?;
     if let Some(g) = engine.inner.group_adjustments.get_mut(group_id) { g.adjustments.has_gradient_map = true; }
     engine.inner.needs_recomposite = true;

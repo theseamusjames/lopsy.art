@@ -66,19 +66,17 @@ pub fn compute_radial_gradient_t(px: f64, py: f64, cx: f64, cy: f64, radius: f64
 
 #[wasm_bindgen(js_name = "sampleColor")]
 pub fn sample_color(engine: &Engine, x: f64, y: f64, sample_size: u32) -> Vec<u8> {
-    let gl = &engine.inner.gl;
     let ix = x as i32;
     let iy = y as i32;
     let half = (sample_size / 2) as i32;
 
     // Read from composite FBO
-    engine.inner.fbo_pool.bind(gl, engine.inner.composite_fbo);
+    engine.inner.fbo_pool.bind(engine.inner.composite_fbo);
 
-    let mut pixels = engine.inner.texture_pool.read_rgba(
-        gl, ix - half, iy - half, sample_size, sample_size,
+    let mut pixels = engine.inner.texture_pool.read_rgba(ix - half, iy - half, sample_size, sample_size,
     ).unwrap_or_else(|_| vec![0u8; (sample_size * sample_size * 4) as usize]);
 
-    engine.inner.fbo_pool.unbind(gl);
+    engine.inner.fbo_pool.unbind();
 
     // Decode before averaging: the transform out of a native mode is
     // non-linear, so averaging encoded values would not match what the

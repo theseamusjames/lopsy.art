@@ -268,6 +268,8 @@ pub struct ShaderPrograms {
     /// variant is its own `ShaderProgram` with its own uniform-location
     /// cache — locations must never be shared across program variants.
     blend_variants: RefCell<HashMap<i32, Rc<ShaderProgram>>>,
+    /// For compiling a blend variant the first time a document uses its mode.
+    gl: WebGl2RenderingContext,
     pub composite: ShaderProgram,
     pub final_blit: ShaderProgram,
     pub flip: ShaderProgram,
@@ -380,18 +382,19 @@ impl ShaderPrograms {
     /// jank initial load, and most documents only ever use a few modes.
     /// Unknown modes fall back to Normal, matching the old uniform-driven
     /// shader's final `return s;` fallback.
-    pub fn blend_for_mode(&self, gl: &WebGl2RenderingContext, mode: i32) -> Result<Rc<ShaderProgram>, String> {
+    pub fn blend_for_mode(&self, mode: i32) -> Result<Rc<ShaderProgram>, String> {
         let max_mode = lopsy_core::color::BlendMode::ALL.len() as i32 - 1;
         let mode = if (0..=max_mode).contains(&mode) { mode } else { 0 };
         if let Some(program) = self.blend_variants.borrow().get(&mode) {
             return Ok(Rc::clone(program));
         }
-        let program = Rc::new(compile_blend_variant(gl, mode)?);
+        let program = Rc::new(compile_blend_variant(&self.gl, mode)?);
         self.blend_variants.borrow_mut().insert(mode, Rc::clone(&program));
         Ok(program)
     }
 
-    pub fn compile_all(gl: &WebGl2RenderingContext) -> Result<Self, String> {
+    pub fn compile_all(ctx: &crate::gpu::context::GpuContext) -> Result<Self, String> {
+        let gl = &ctx.gl;
         let v = FULLSCREEN_QUAD_VERT;
 
         // Normal mode is seeded eagerly: it was compiled at startup before
@@ -407,6 +410,7 @@ impl ShaderPrograms {
             blit_resample: compile_program(gl, v, BLIT_RESAMPLE_FRAG)?,
             blend_normal,
             blend_variants,
+            gl: gl.clone(),
             composite: compile_program(gl, v, COMPOSITE_FRAG)?,
             final_blit: compile_program(gl, v, FINAL_BLIT_FRAG)?,
             flip: compile_program(gl, v, FLIP_FRAG)?,

@@ -21,8 +21,9 @@ Read SPEC.md for the full product specification.
 - `docs/engine-migration-plan.md` — the plan for moving the engine off
   raw WebGL onto a pass layer and then wgpu. Feature code must not add
   raw GL calls outside `engine-rs/crates/lopsy-wasm/src/gpu/`;
-  `scripts/check-gl-debt.mjs` (part of `npm run lint`) enforces the
-  per-file counts.
+  the WebGL context is private to that directory, and
+  `scripts/check-gl-debt.mjs` (part of `npm run lint`) fails on any GL
+  type or call named outside it.
 
 ## Language & Types
 

@@ -122,9 +122,9 @@ impl EffectCapture {
         if let Some(i) = reuse {
             return Some(self.recycle.swap_remove(i));
         }
-        let handle = engine.texture_pool.acquire(&engine.gl, w, h).ok()?;
+        let handle = engine.texture_pool.acquire(w, h).ok()?;
         // Sampled 1:1 at texel centres, like the scratch it was copied from.
-        engine.texture_pool.set_nearest_filter(&engine.gl, handle);
+        engine.texture_pool.set_nearest_filter(handle);
         Some(handle)
     }
 
@@ -234,7 +234,7 @@ pub fn store_capture(engine: &mut EngineInner, layer_id: &str, key: EffectCacheK
 /// size it has seen, so released cache images would pile up there (#1019).
 pub fn delete_textures(engine: &mut EngineInner, handles: Vec<TextureHandle>) {
     for handle in handles {
-        engine.texture_pool.delete(&engine.gl, handle);
+        engine.texture_pool.delete(handle);
     }
 }
 

@@ -114,9 +114,9 @@ pub fn apply_healing_dab_batch(
 /// without renderable float textures.
 fn ensure_mean_target(engine: &mut EngineInner) -> Option<(TextureHandle, FramebufferHandle)> {
     if engine.healing_mean_target.is_none() {
-        let tex = engine.texture_pool.acquire(&engine.gl, 2, 1).ok()?;
-        engine.texture_pool.set_nearest_filter(&engine.gl, tex);
-        let fbo = match engine.fbo_pool.create(&engine.gl) {
+        let tex = engine.texture_pool.acquire(2, 1).ok()?;
+        engine.texture_pool.set_nearest_filter(tex);
+        let fbo = match engine.fbo_pool.create() {
             Ok(f) => f,
             Err(_) => {
                 engine.texture_pool.release(tex);
@@ -125,7 +125,7 @@ fn ensure_mean_target(engine: &mut EngineInner) -> Option<(TextureHandle, Frameb
         };
         engine
             .fbo_pool
-            .attach_texture(&engine.gl, fbo, engine.texture_pool.get(tex)?);
+            .attach_texture(fbo, engine.texture_pool.get(tex)?);
         engine.healing_mean_target = Some((tex, fbo));
     }
     let (tex, fbo) = engine.healing_mean_target?;

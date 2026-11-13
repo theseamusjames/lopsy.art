@@ -22,12 +22,11 @@ pub fn filter_mesh_warp(
         return;
     }
 
-    let grid_handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, grid_width, grid_height) {
+    let grid_handle = match engine.inner.texture_pool.acquire(grid_width, grid_height) {
         Ok(h) => h,
         Err(_) => return,
     };
-    let _ = engine.inner.texture_pool.upload_rgba(
-        &engine.inner.gl, grid_handle, 0, 0, grid_width, grid_height, grid_data,
+    let _ = engine.inner.texture_pool.upload_rgba(grid_handle, 0, 0, grid_width, grid_height, grid_data,
     );
 
     // The shader reads grid points with texelFetch and interpolates the
@@ -73,15 +72,15 @@ pub fn liquify_init_displacement(
     if let Some(old) = engine.inner.liquify_disp_texture.take() {
         engine.inner.texture_pool.release(old);
     }
-    let handle = match engine.inner.texture_pool.acquire(&engine.inner.gl, width, height) {
+    let handle = match engine.inner.texture_pool.acquire(width, height) {
         Ok(h) => h,
         Err(_) => return,
     };
-    let _ = engine.inner.texture_pool.upload_rgba(&engine.inner.gl, handle, 0, 0, width, height, data);
+    let _ = engine.inner.texture_pool.upload_rgba(handle, 0, 0, width, height, data);
 
     // NEAREST — displacement is per-pixel.
-    engine.inner.texture_pool.set_nearest_filter(&engine.inner.gl, handle);
-    engine.inner.texture_pool.set_clamp_wrap(&engine.inner.gl, handle);
+    engine.inner.texture_pool.set_nearest_filter(handle);
+    engine.inner.texture_pool.set_clamp_wrap(handle);
     engine.inner.liquify_disp_texture = Some(handle);
 }
 
@@ -166,7 +165,7 @@ pub fn liquify_apply_dab_gpu(
         return;
     }
 
-    let scratch = match engine.inner.texture_pool.acquire(&engine.inner.gl, w, h) {
+    let scratch = match engine.inner.texture_pool.acquire(w, h) {
         Ok(s) => s,
         Err(_) => return,
     };

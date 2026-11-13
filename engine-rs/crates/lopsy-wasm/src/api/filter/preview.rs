@@ -24,7 +24,7 @@ pub fn save_filter_preview(engine: &mut Engine, layer_id: &str) {
     if let Some(old) = inner.filter_preview_texture.take() {
         inner.texture_pool.release(old);
     }
-    let preview_handle = match inner.texture_pool.acquire(&inner.gl, w, h) {
+    let preview_handle = match inner.texture_pool.acquire(w, h) {
         Ok(h) => h,
         Err(_) => return,
     };
