@@ -68,3 +68,13 @@ uniforms! {
         pub opacity: f32,
     }
 }
+
+uniforms! {
+    /// `effects/layer_mask_apply.glsl`
+    pub struct LayerMaskApplyParams {
+        pub layer_offset: [f32; 2],
+        pub layer_size: [f32; 2],
+        pub mask_offset: [f32; 2],
+        pub mask_size: [f32; 2],
+    }
+}

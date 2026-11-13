@@ -181,7 +181,7 @@ typed_shaders! {
     CLIPBOARD_CLEAR: params::core::ClipboardClearParams = CLIPBOARD_CLEAR_FRAG;
     SELECTION_FILL: params::core::SelectionFillParams = SELECTION_FILL_FRAG;
     CONTENT_BOUNDS_REDUCE: params::core::ContentBoundsReduceParams = CONTENT_BOUNDS_REDUCE_FRAG;
-    LAYER_MASK_APPLY: params::core::LayerMaskApplyParams = LAYER_MASK_APPLY_FRAG;
+    LAYER_MASK_APPLY: params::effects::LayerMaskApplyParams = LAYER_MASK_APPLY_FRAG;
     TRANSFORM_AFFINE: params::core::TransformAffineParams = TRANSFORM_AFFINE_FRAG;
     TRANSFORM_PERSPECTIVE: params::core::TransformPerspectiveParams = TRANSFORM_PERSPECTIVE_FRAG;
     HUE_SAT: params::filters::HueSatParams = HUE_SAT_FRAG;
@@ -257,10 +257,6 @@ typed_shaders! {
     BLEND: params::composite::BlendParams = BLEND_FRAG;
 }
 
-/// Marks a program whose uniforms are still set one by one, by name. Each
-/// shader moves off it as it gains a `Params` block and a uniform struct.
-pub struct Untyped;
-
 /// A fragment shader's source, tagged with the uniform struct it takes.
 pub struct Shader<P> {
     pub frag: &'static str,
@@ -274,7 +270,7 @@ impl<P> Shader<P> {
 }
 
 /// A linked program. `P` is the uniform struct its passes are created with.
-pub struct ShaderProgram<P = Untyped> {
+pub struct ShaderProgram<P> {
     linked: LinkedProgram,
     marker: PhantomData<fn(P)>,
 }
@@ -491,25 +487,6 @@ fn inject_defines(src: &str, defines: &[(&str, &str)]) -> String {
     }
 }
 
-pub fn compile_program(
-    gl: &WebGl2RenderingContext,
-    vert_src: &str,
-    frag_src: &str,
-) -> Result<ShaderProgram, String> {
-    compile_program_with_defines(gl, vert_src, frag_src, &[])
-}
-
-/// Compiles a program with compile-time `#define`s injected into the
-/// fragment source, for building specialized variants of one GLSL file.
-pub fn compile_program_with_defines(
-    gl: &WebGl2RenderingContext,
-    vert_src: &str,
-    frag_src: &str,
-    defines: &[(&str, &str)],
-) -> Result<ShaderProgram, String> {
-    Ok(ShaderProgram { linked: link(gl, vert_src, frag_src, defines)?, marker: PhantomData })
-}
-
 /// Compiles a shader that takes the uniform struct `P`.
 pub fn compile<P: Uniforms>(
     gl: &WebGl2RenderingContext,
@@ -519,7 +496,8 @@ pub fn compile<P: Uniforms>(
     compile_with_defines(gl, vert_src, shader, &[])
 }
 
-/// [`compile`], with `#define`s injected into the fragment source.
+/// [`compile`], with compile-time `#define`s injected into the fragment
+/// source, for building specialized variants of one GLSL file.
 pub fn compile_with_defines<P: Uniforms>(
     gl: &WebGl2RenderingContext,
     vert_src: &str,
@@ -563,7 +541,7 @@ pub struct ShaderPrograms {
     pub final_blit: ShaderProgram<params::composite::FinalBlitParams>,
     pub flip: ShaderProgram<params::core::FlipParams>,
     pub clipboard_copy: ShaderProgram<params::core::ClipboardCopyParams>,
-    pub layer_mask_apply: ShaderProgram<params::core::LayerMaskApplyParams>,
+    pub layer_mask_apply: ShaderProgram<params::effects::LayerMaskApplyParams>,
     pub clipboard_clear: ShaderProgram<params::core::ClipboardClearParams>,
     pub selection_fill: ShaderProgram<params::core::SelectionFillParams>,
     pub rotate90: ShaderProgram<params::core::Rotate90Params>,

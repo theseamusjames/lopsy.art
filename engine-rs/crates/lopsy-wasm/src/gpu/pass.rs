@@ -34,11 +34,11 @@ use std::marker::PhantomData;
 
 use lopsy_core::geometry::Rect;
 use wasm_bindgen::JsCast;
-use web_sys::{WebGl2RenderingContext as GL, WebGlUniformLocation};
+use web_sys::WebGl2RenderingContext as GL;
 
 use crate::gpu::context::GpuContext;
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
-use crate::gpu::shader::{upload_params, LinkedProgram, ShaderProgram, Untyped};
+use crate::gpu::shader::{upload_params, LinkedProgram, ShaderProgram};
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
 use crate::gpu::uniforms::Uniforms;
 
@@ -124,14 +124,6 @@ impl<'a> GpuRef<'a> {
         let program = program.linked();
         self.gl.use_program(Some(&program.program));
         upload_params(program, self.gl, &params);
-        Pass { raw: RawPass::new(self, program), marker: PhantomData }
-    }
-
-    /// Start a pass that runs a program whose uniforms are still set one by
-    /// one, by name.
-    pub fn pass_untyped(self, program: &'a ShaderProgram) -> Pass<'a> {
-        let program = program.linked();
-        self.gl.use_program(Some(&program.program));
         Pass { raw: RawPass::new(self, program), marker: PhantomData }
     }
 
@@ -285,7 +277,7 @@ impl<'a> GpuRef<'a> {
 /// Build it with the setters, then call [`Pass::draw`]. `P` is the uniform
 /// struct the pass was created with.
 #[must_use = "a pass does nothing until `draw` is called"]
-pub struct Pass<'a, P = Untyped> {
+pub struct Pass<'a, P> {
     raw: RawPass<'a>,
     marker: PhantomData<fn(P)>,
 }
@@ -536,67 +528,9 @@ impl<'a> RawPass<'a> {
     }
 }
 
-impl Pass<'_, Untyped> {
-    pub fn i32(self, name: &str, value: i32) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform1i(Some(loc), value));
-        self
-    }
-
-    pub fn u32(self, name: &str, value: u32) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform1ui(Some(loc), value));
-        self
-    }
-
-    pub fn ivec2(self, name: &str, x: i32, y: i32) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform2i(Some(loc), x, y));
-        self
-    }
-
-    pub fn f32(self, name: &str, value: f32) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform1f(Some(loc), value));
-        self
-    }
-
-    pub fn vec2(self, name: &str, x: f32, y: f32) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform2f(Some(loc), x, y));
-        self
-    }
-
-    pub fn vec3(self, name: &str, x: f32, y: f32, z: f32) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform3f(Some(loc), x, y, z));
-        self
-    }
-
-    pub fn vec4(self, name: &str, x: f32, y: f32, z: f32, w: f32) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform4f(Some(loc), x, y, z, w));
-        self
-    }
-
-    pub fn f32_array(self, name: &str, values: &[f32]) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform1fv_with_f32_array(Some(loc), values));
-        self
-    }
-
-    /// Column-major 2×2 matrix.
-    pub fn mat2(self, name: &str, value: &[f32; 4]) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform_matrix2fv_with_f32_array(Some(loc), false, value));
-        self
-    }
-
-    /// Column-major 3×3 matrix.
-    pub fn mat3(self, name: &str, value: &[f32; 9]) -> Self {
-        self.raw.program.with_location(self.raw.gpu.gl, name, |loc| self.raw.gpu.gl.uniform_matrix3fv_with_f32_array(Some(loc), false, value));
-        self
-    }
-}
-
-/// A uniform of the pass's program, looked up once so a loop of draws can
-/// set it without a name lookup each time.
-pub struct UniformSlot(Option<WebGlUniformLocation>);
-
 /// A pass that has been set up and can draw repeatedly. Made by
 /// [`Pass::begin`]; finish with [`ActivePass::end`].
-pub struct ActivePass<'a, P = Untyped> {
+pub struct ActivePass<'a, P> {
     raw: RawActivePass<'a>,
     marker: PhantomData<fn(P)>,
 }
@@ -607,36 +541,6 @@ struct RawActivePass<'a> {
     target: Target,
     blend: Blend,
     is_scissor_enabled: bool,
-}
-
-impl ActivePass<'_, Untyped> {
-    pub fn slot(&self, name: &str) -> UniformSlot {
-        UniformSlot(self.raw.program.location(self.raw.gpu.gl, name))
-    }
-
-    pub fn set_i32(&self, slot: &UniformSlot, value: i32) {
-        if let Some(loc) = &slot.0 {
-            self.raw.gpu.gl.uniform1i(Some(loc), value);
-        }
-    }
-
-    pub fn set_f32(&self, slot: &UniformSlot, value: f32) {
-        if let Some(loc) = &slot.0 {
-            self.raw.gpu.gl.uniform1f(Some(loc), value);
-        }
-    }
-
-    pub fn set_vec2(&self, slot: &UniformSlot, x: f32, y: f32) {
-        if let Some(loc) = &slot.0 {
-            self.raw.gpu.gl.uniform2f(Some(loc), x, y);
-        }
-    }
-
-    pub fn set_vec4(&self, slot: &UniformSlot, x: f32, y: f32, z: f32, w: f32) {
-        if let Some(loc) = &slot.0 {
-            self.raw.gpu.gl.uniform4f(Some(loc), x, y, z, w);
-        }
-    }
 }
 
 impl<P: Uniforms> ActivePass<'_, P> {
