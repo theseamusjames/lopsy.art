@@ -510,7 +510,7 @@ pub fn export_png_16(engine: &mut EngineInner, color_space: u8) -> Result<Vec<u8
 /// still holds the current document, so no layer is re-blended.
 pub fn present(engine: &mut EngineInner) -> Result<(), String> {
     let (screen_w, screen_h) = engine.gpu().screen_size()?;
-    let channel_mask = engine.channel_mask;
+    let channel_mask = engine.overlays.channel_mask;
     engine
         .pass(&engine.shaders.final_blit, FinalBlitParams {
             resolution: [screen_w as f32, screen_h as f32],
@@ -518,8 +518,8 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
             pan: [engine.viewport.pan_x as f32, engine.viewport.pan_y as f32],
             doc_size: [engine.doc_width as f32, engine.doc_height as f32],
             bg_alpha: engine.bg_color[3],
-            seamless_enabled: if engine.seamless_pattern { 1.0 } else { 0.0 },
-            seamless_dim: if engine.seamless_dim { 1.0 } else { 0.0 },
+            seamless_enabled: if engine.overlays.seamless_pattern { 1.0 } else { 0.0 },
+            seamless_dim: if engine.overlays.seamless_dim { 1.0 } else { 0.0 },
             channel_mask: [channel_mask[0], channel_mask[1], channel_mask[2], channel_mask[3]],
             doc_color_mode: engine.doc_color_mode as i32,
         })
@@ -699,7 +699,7 @@ pub(crate) fn blend_through_scratch(
 
 /// Whether layers tile across the document (seamless pattern with wrap).
 fn layers_wrap(engine: &EngineInner) -> bool {
-    engine.seamless_pattern && engine.seamless_wrap
+    engine.overlays.seamless_pattern && engine.overlays.seamless_wrap
 }
 
 /// Blend a layer-like source onto `target` using the blend shader variant

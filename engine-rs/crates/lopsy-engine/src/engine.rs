@@ -192,6 +192,25 @@ pub struct PreviewState {
     pub gradient_layer_id: Option<String>,
 }
 
+/// What is drawn over the document, and how the document is shown: grid, rulers, guides, cursors, seamless tiling and the channel mask.
+pub struct OverlayState {
+    pub grid_visible: bool,
+    pub grid_size: f32,
+    pub rulers_visible: bool,
+    pub transform_overlay: Option<String>,
+    pub gradient_guide: Option<[f64; 4]>,
+    pub lasso_points: Option<Vec<f64>>,
+    pub crop_rect: Option<[f64; 4]>,
+    pub brush_cursor: Option<[f64; 3]>,
+    pub path_overlay: Option<String>,
+    pub seamless_pattern: bool,
+    pub seamless_dim: bool,
+    pub seamless_wrap: bool,
+    pub channel_mask: [f32; 4],
+    pub selection_time: f64,
+    pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
+}
+
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
@@ -292,25 +311,11 @@ pub struct EngineInner {
     // Multi-layer transform session (see layer_transform_gpu)
     pub layer_transform: Vec<crate::layer_transform_gpu::LayerTransformSlot>,
     // Overlays
-    pub grid_visible: bool,
-    pub grid_size: f32,
-    pub rulers_visible: bool,
-    pub transform_overlay: Option<String>,
-    pub gradient_guide: Option<[f64; 4]>,
-    pub lasso_points: Option<Vec<f64>>,
-    pub crop_rect: Option<[f64; 4]>,
-    pub brush_cursor: Option<[f64; 3]>,
-    pub path_overlay: Option<String>,
-    pub seamless_pattern: bool,
-    pub seamless_dim: bool,
     /// When true (and seamless_pattern is on), layer compositing wraps
     /// modularly at the document edges — content that overhangs one side
     /// reappears on the opposite side. The layer texture itself is untouched
     /// so repeated moves keep transforming the original content, not the
     /// already-wrapped result.
-    pub seamless_wrap: bool,
-    pub channel_mask: [f32; 4],
-    pub selection_time: f64,
     /// Per-document image adjustments — exposure/contrast/highlights/
     /// shadows/whites/blacks/vignette/saturation/vibrance plus curves and
     /// levels LUTs. Applied on the compositor's final pass, not baked into
@@ -366,10 +371,10 @@ pub struct EngineInner {
     pub coverage_strokes: HashMap<String, crate::coverage_stroke_gpu::CoverageStroke>,
     /// Clone Stamp / Healing Brush source preview disc drawn over the
     /// screen after the final blit (`stamp_preview_gpu.rs`).
-    pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
     pub clipboard: ClipboardState,
     pub float: FloatState,
     pub previews: PreviewState,
+    pub overlays: OverlayState,
 
 }
 
@@ -462,20 +467,6 @@ impl EngineInner {
             mask_filter_target: None,
             liquify_disp_texture: None,
             layer_transform: Vec::new(),
-            grid_visible: false,
-            grid_size: 1.0,
-            rulers_visible: false,
-            transform_overlay: None,
-            gradient_guide: None,
-            lasso_points: None,
-            crop_rect: None,
-            brush_cursor: None,
-            path_overlay: None,
-            seamless_pattern: false,
-            seamless_dim: true,
-            seamless_wrap: false,
-            channel_mask: [1.0, 1.0, 1.0, 1.0],
-            selection_time: 0.0,
             adjustments: ImageAdjustmentState::default(),
             group_adjustments: HashMap::new(),
             group_scratch_levels: Vec::new(),
@@ -491,7 +482,6 @@ impl EngineInner {
             effect_cache: crate::effect_cache_gpu::new_cache(),
             healing_mean_target: None,
             coverage_strokes: HashMap::new(),
-            stamp_preview: None,
             clipboard: ClipboardState {
                 texture: None,
                 width: 0,
@@ -525,6 +515,23 @@ impl EngineInner {
                 filter_layer_id: None,
                 gradient_texture: None,
                 gradient_layer_id: None,
+            },
+            overlays: OverlayState {
+                grid_visible: false,
+                grid_size: 1.0,
+                rulers_visible: false,
+                transform_overlay: None,
+                gradient_guide: None,
+                lasso_points: None,
+                crop_rect: None,
+                brush_cursor: None,
+                path_overlay: None,
+                seamless_pattern: false,
+                seamless_dim: true,
+                seamless_wrap: false,
+                channel_mask: [1.0, 1.0, 1.0, 1.0],
+                selection_time: 0.0,
+                stamp_preview: None,
             },
         })
     }
@@ -749,7 +756,7 @@ impl EngineInner {
         }
         self.stroke_sponge_modes.clear();
         self.coverage_strokes.clear();
-        self.stamp_preview = None;
+        self.overlays.stamp_preview = None;
         // Brush tip
         if let Some(tex) = self.brush_tip_texture.take() {
             self.texture_pool.release(tex);
@@ -812,12 +819,12 @@ impl EngineInner {
         crate::layer_transform_gpu::end_layer_transform(self);
         // Layer stack and overlays
         self.layer_stack.clear();
-        self.transform_overlay = None;
-        self.gradient_guide = None;
-        self.lasso_points = None;
-        self.crop_rect = None;
-        self.brush_cursor = None;
-        self.path_overlay = None;
+        self.overlays.transform_overlay = None;
+        self.overlays.gradient_guide = None;
+        self.overlays.lasso_points = None;
+        self.overlays.crop_rect = None;
+        self.overlays.brush_cursor = None;
+        self.overlays.path_overlay = None;
         self.mask_edit_layer_id = None;
         self.mlasso.edges = None;
         self.mlasso.width = 0;

@@ -29,17 +29,17 @@ pub struct StampPreview {
 /// Show `preview`, or hide it with `None`. Only the final blit reruns: the
 /// composite texture does not change.
 pub fn set_stamp_preview(engine: &mut EngineInner, preview: Option<StampPreview>) {
-    if engine.stamp_preview == preview {
+    if engine.overlays.stamp_preview == preview {
         return;
     }
-    engine.stamp_preview = preview;
+    engine.overlays.stamp_preview = preview;
     engine.needs_present = true;
 }
 
 /// Draw the preview over the default framebuffer (`fb_w`×`fb_h` device
 /// pixels). Called by `compositor::present` after the final blit.
 pub(crate) fn draw(engine: &mut EngineInner, fb_w: i32, fb_h: i32) {
-    let Some(preview) = engine.stamp_preview.clone() else {
+    let Some(preview) = engine.overlays.stamp_preview.clone() else {
         return;
     };
     let Some(&tex_handle) = engine.layer_textures.get(&preview.layer_id) else {
