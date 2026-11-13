@@ -10,10 +10,12 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
-uniform int u_pass;         // 0 = rows, 1 = columns
-uniform int u_radius;       // ceil(reach): texels searched on each side
-uniform float u_reachSq;    // reach², the band's squared half-width
-uniform int u_oobSeed;      // 1 = texels beyond the buffer edge are seeds
+layout(std140) uniform Params {
+    int u_pass; // 0 = rows, 1 = columns
+    int u_radius; // ceil(reach): texels searched on each side
+    float u_reachSq; // reach², the band's squared half-width
+    int u_oobSeed; // 1 = texels beyond the buffer edge are seeds
+};
 out vec4 fragColor;
 
 const float NO_SEED = 65535.0;

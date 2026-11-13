@@ -2,17 +2,19 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_srcTex;
-uniform vec4 u_shadowColor;
-uniform vec2 u_offset;     // shadow offset in pixels
-uniform float u_spread;    // 0-100: choke/expand the shadow edge
-uniform float u_opacity;
-uniform vec2 u_texelSize;  // 1/layerWidth, 1/layerHeight
-uniform vec2 u_srcOffset;  // layer position in document pixels
-uniform vec2 u_srcSize;    // layer texture size in pixels
-uniform vec2 u_docSize;    // document size in pixels
-uniform int u_knockout;    // 1 = apply knockout
-uniform float u_layerOpacity; // opacity the layer itself is composited with
-uniform int u_rawAlpha;    // 1 = output raw alpha only (pre-blur extraction)
+layout(std140) uniform Params {
+    vec4 u_shadowColor;
+    vec2 u_offset; // shadow offset in pixels
+    float u_spread; // 0-100: choke/expand the shadow edge
+    float u_opacity;
+    vec2 u_texelSize; // 1/layerWidth, 1/layerHeight
+    vec2 u_srcOffset; // layer position in document pixels
+    vec2 u_srcSize; // layer texture size in pixels
+    vec2 u_docSize; // document size in pixels
+    int u_knockout; // 1 = apply knockout
+    float u_layerOpacity; // opacity the layer itself is composited with
+    int u_rawAlpha; // 1 = output raw alpha only (pre-blur extraction)
+};
 out vec4 fragColor;
 void main() {
     vec2 docPos = v_uv * u_docSize;

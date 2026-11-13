@@ -2,8 +2,10 @@
 precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_srcTex;
-uniform vec4 u_overlayColor;
-uniform float u_opacity;
+layout(std140) uniform Params {
+    vec4 u_overlayColor;
+    float u_opacity;
+};
 out vec4 fragColor;
 void main() {
     vec4 src = texture(u_srcTex, v_uv);

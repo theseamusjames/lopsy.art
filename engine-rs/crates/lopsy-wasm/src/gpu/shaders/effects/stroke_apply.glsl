@@ -3,17 +3,19 @@ precision highp float;
 in vec2 v_uv;
 uniform sampler2D u_bandTex;      // alpha 1 within the stroke reach of the seeds (separable_edt.glsl)
 uniform sampler2D u_origTex;      // original layer texture
-uniform vec4 u_strokeColor;
-uniform float u_opacity;
-uniform int u_position;           // 0=outside (band around orig), 1=inside (band around inverted)
-uniform vec2 u_origOffset;        // original layer position in document pixels
-uniform vec2 u_origSize;          // original layer texture size
-uniform vec2 u_docSize;
-// 1 = output the layer's silhouette grown by the stroke (alpha only), which
-// the drop shadow and outer glow are cast from.
-uniform int u_silhouette;
-uniform int u_knockout;           // 1 = outside stroke drawn behind the layer
-uniform float u_layerOpacity;     // opacity the layer itself is composited with
+layout(std140) uniform Params {
+    vec4 u_strokeColor;
+    float u_opacity;
+    int u_position; // 0=outside (band around orig), 1=inside (band around inverted)
+    vec2 u_origOffset; // original layer position in document pixels
+    vec2 u_origSize; // original layer texture size
+    vec2 u_docSize;
+    // 1 = output the layer's silhouette grown by the stroke (alpha only), which
+    // the drop shadow and outer glow are cast from.
+    int u_silhouette;
+    int u_knockout; // 1 = outside stroke drawn behind the layer
+    float u_layerOpacity; // opacity the layer itself is composited with
+};
 out vec4 fragColor;
 
 float origAlphaAt(vec2 uv) {

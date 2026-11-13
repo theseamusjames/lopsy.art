@@ -3,7 +3,8 @@ use crate::coverage_stroke_gpu::{self, CoverageTool};
 use crate::engine::{EngineInner, ImageAdjustmentState};
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
 use crate::gpu::shader::ShaderProgram;
-use crate::gpu::params::filters::GaussianBlurParams;
+use crate::gpu::params::composite::{BlendParams, CompositeParams, FinalBlitParams};
+use crate::gpu::params::filters::{AdjustmentsParams, GaussianBlurParams, VignetteParams};
 use crate::gpu::uniforms::{FloatArray, Uniforms};
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
@@ -12,6 +13,7 @@ use lopsy_core::effect_cache as fx_extent;
 use lopsy_core::geometry::Rect;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
 use crate::gpu::params::core::LayerMaskApplyParams;
+use crate::gpu::params::effects::{GlowParams, SeparableEdtParams, ShadowParams, StrokeApplyParams};
 
 /// The document-space origin of a layer's mask texture — where mask texel
 /// (0, 0) sits in the document. Every mask reader and writer goes through
@@ -478,19 +480,20 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
     let (screen_w, screen_h) = engine.gpu().screen_size()?;
     let channel_mask = engine.channel_mask;
     engine
-        .pass_untyped(&engine.shaders.final_blit)
+        .pass(&engine.shaders.final_blit, FinalBlitParams {
+            resolution: [screen_w as f32, screen_h as f32],
+            zoom: engine.viewport.zoom as f32,
+            pan: [engine.viewport.pan_x as f32, engine.viewport.pan_y as f32],
+            doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+            bg_alpha: engine.bg_color[3],
+            seamless_enabled: if engine.seamless_pattern { 1.0 } else { 0.0 },
+            seamless_dim: if engine.seamless_dim { 1.0 } else { 0.0 },
+            channel_mask: [channel_mask[0], channel_mask[1], channel_mask[2], channel_mask[3]],
+            doc_color_mode: engine.doc_color_mode as i32,
+        })
         .blend(Blend::Off)
         .viewport(0, 0, screen_w, screen_h)
         .texture("u_compositeTex", engine.composite_texture)
-        .vec2("u_resolution", screen_w as f32, screen_h as f32)
-        .f32("u_zoom", engine.viewport.zoom as f32)
-        .vec2("u_pan", engine.viewport.pan_x as f32, engine.viewport.pan_y as f32)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .f32("u_bgAlpha", engine.bg_color[3])
-        .f32("u_seamlessEnabled", if engine.seamless_pattern { 1.0 } else { 0.0 })
-        .f32("u_seamlessDim", if engine.seamless_dim { 1.0 } else { 0.0 })
-        .vec4("u_channelMask", channel_mask[0], channel_mask[1], channel_mask[2], channel_mask[3])
-        .i32("u_docColorMode", engine.doc_color_mode as i32)
         .draw(Target::Screen);
     crate::stamp_preview_gpu::draw(engine, screen_w, screen_h);
     engine.needs_present = false;
@@ -513,14 +516,6 @@ fn main_target(engine: &EngineInner) -> DocTarget {
 fn doc_pass<'a, P: Uniforms>(engine: &'a EngineInner, program: &'a ShaderProgram<P>, params: P) -> Pass<'a, P> {
     engine
         .pass(program, params)
-        .blend(Blend::Off)
-        .viewport(0, 0, engine.doc_width as i32, engine.doc_height as i32)
-}
-
-/// [`doc_pass`] for a program whose uniforms are still set by name.
-fn doc_pass_untyped<'a>(engine: &'a EngineInner, program: &'a ShaderProgram) -> Pass<'a> {
-    engine
-        .pass_untyped(program)
         .blend(Blend::Off)
         .viewport(0, 0, engine.doc_width as i32, engine.doc_height as i32)
 }
@@ -608,7 +603,7 @@ pub(crate) enum Scratch {
 /// leaving the target as it was, if a texture no longer exists.
 pub(crate) fn blend_through_scratch(
     engine: &EngineInner,
-    program: &ShaderProgram,
+    program: &ShaderProgram<BlendParams>,
     source: &BlendSource,
     target: DocTarget,
     scratch: Scratch,
@@ -620,26 +615,25 @@ pub(crate) fn blend_through_scratch(
     };
     let scissor = clip.map_or(Scissor::Off, Scissor::Rect);
 
-    let mut pass = doc_pass_untyped(engine, program)
+    let doc_size = [engine.doc_width as f32, engine.doc_height as f32];
+    let plain = BlendParams::plain(source.opacity, [source.offset.0, source.offset.1], [source.size.0, source.size.1], doc_size, engine.doc_color_mode);
+    let params = BlendParams {
+        src_premultiplied: i32::from(source.is_premultiplied),
+        wrap_layer: i32::from(source.wraps),
+        overlay_enabled: i32::from(source.overlay.is_some()),
+        overlay_color: source.overlay.map_or([0.0; 3], |overlay| [overlay.color[0], overlay.color[1], overlay.color[2]]),
+        overlay_opacity: source.overlay.map_or(0.0, |overlay| overlay.opacity),
+        has_mask: i32::from(source.mask.is_some()),
+        mask_size: source.mask.map_or([0.0; 2], |mask| [mask.width as f32, mask.height as f32]),
+        mask_offset: source.mask.map_or([0.0; 2], |mask| [mask.offset_x, mask.offset_y]),
+        mask_overlay: i32::from(source.is_mask_overlay),
+        has_backdrop: i32::from(source.backdrop.is_some()),
+        ..plain
+    };
+    let mut pass = doc_pass(engine, program, params)
         .scissor(scissor)
         .texture("u_srcTex", source.texture)
-        .texture("u_dstTex", target.tex)
-        .f32("u_opacity", source.opacity)
-        .i32("u_hasBrushTexture", 0)
-        .vec2("u_srcOffset", source.offset.0, source.offset.1)
-        .vec2("u_srcSize", source.size.0, source.size.1)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .i32("u_srcPremultiplied", i32::from(source.is_premultiplied))
-        .i32("u_docColorMode", engine.doc_color_mode as i32)
-        .i32("u_wrapLayer", i32::from(source.wraps))
-        .i32("u_maskOverlay", i32::from(source.is_mask_overlay));
-    pass = match source.overlay {
-        Some(overlay) => pass
-            .i32("u_overlayEnabled", 1)
-            .vec3("u_overlayColor", overlay.color[0], overlay.color[1], overlay.color[2])
-            .f32("u_overlayOpacity", overlay.opacity),
-        None => pass.i32("u_overlayEnabled", 0),
-    };
+        .texture("u_dstTex", target.tex);
     // A sampler the draw does not read must still not point at a unit that
     // holds the render target, so the unused ones share the source's unit.
     let mut units = 2;
@@ -647,18 +641,15 @@ pub(crate) fn blend_through_scratch(
         Some(mask) => {
             units += 1;
             pass.texture("u_maskTex", mask.texture)
-                .i32("u_hasMask", 1)
-                .vec2("u_maskSize", mask.width as f32, mask.height as f32)
-                .vec2("u_maskOffset", mask.offset_x, mask.offset_y)
         }
-        None => pass.i32("u_maskTex", 0).i32("u_hasMask", 0),
+        None => pass.sampler_unit("u_maskTex", 0),
     };
     pass = match source.backdrop {
         Some(backdrop) => {
             units += 1;
-            pass.texture("u_backdropTex", backdrop).i32("u_hasBackdrop", 1)
+            pass.texture("u_backdropTex", backdrop)
         }
-        None => pass.i32("u_backdropTex", 0).i32("u_hasBackdrop", 0),
+        None => pass.sampler_unit("u_backdropTex", 0),
     };
     if !pass.draw(Target::Framebuffer(scratch_fbo)) {
         return false;
@@ -885,12 +876,10 @@ fn render_layer_plus_stroke(
     let merged = engine.texture_pool.acquire(tw, th).ok()?;
 
     let is_drawn = engine
-        .pass_untyped(&engine.shaders.composite)
+        .pass(&engine.shaders.composite, CompositeParams { opacity: 1.0 })
         .blend(Blend::Off)
         .texture("u_srcTex", stroke_handle)
         .texture("u_dstTex", layer_handle)
-        .f32("u_opacity", 1.0)
-        .vec2("u_strokeTexSize", tw as f32, th as f32)
         .draw(Target::Texture(merged));
     engine.gpu().unbind_textures(2);
     if !is_drawn {
@@ -1063,20 +1052,21 @@ fn silhouette_by_band(
 
     // Band (out) + layer → silhouette (tmp).
     engine
-        .pass_untyped(&engine.shaders.stroke_apply)
+        .pass(&engine.shaders.stroke_apply, StrokeApplyParams {
+            stroke_color: [stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]],
+            opacity: stroke.opacity,
+            position: 0,
+            orig_offset: [frame.pad_x, frame.pad_y],
+            orig_size: [frame.src_w as f32, frame.src_h as f32],
+            doc_size: [fw, fh],
+            silhouette: 1,
+            // An outside ring covers the anti-aliased edge here just as when drawn.
+            knockout: is_behind_stroke(stroke) as i32,
+            layer_opacity: 1.0,
+        })
         .blend(Blend::Off)
         .texture("u_bandTex", out)
         .texture("u_origTex", frame.src)
-        .vec4("u_strokeColor", stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3])
-        .f32("u_opacity", stroke.opacity)
-        .i32("u_position", 0)
-        .vec2("u_origOffset", frame.pad_x, frame.pad_y)
-        .vec2("u_origSize", frame.src_w as f32, frame.src_h as f32)
-        .vec2("u_docSize", fw, fh)
-        .i32("u_silhouette", 1)
-        // An outside ring covers the anti-aliased edge here just as when drawn.
-        .i32("u_knockout", is_behind_stroke(stroke) as i32)
-        .f32("u_layerOpacity", 1.0)
         .draw(Target::Texture(tmp));
 
     engine.texture_pool.release(out);
@@ -1092,18 +1082,27 @@ fn alpha_extract_pass<'a>(
     size: (f32, f32),
     region_size: (f32, f32),
     invert: bool,
-) -> Pass<'a> {
+) -> Pass<'a, GlowParams> {
+    let params = GlowParams {
+        has_orig_tex: 0,
+        glow_color: [0.0; 4],
+        size: 0.0,
+        spread: 0.0,
+        opacity: 0.0,
+        texel_size: [0.0; 2],
+        src_offset: [offset.0, offset.1],
+        src_size: [size.0, size.1],
+        doc_size: [region_size.0, region_size.1],
+        mode: i32::from(invert),
+        raw_alpha: 1,
+        orig_offset: [0.0; 2],
+        orig_size: [0.0; 2],
+    };
     engine
-        .pass_untyped(&engine.shaders.glow)
+        .pass(&engine.shaders.glow, params)
         .blend(Blend::Off)
         .texture("u_srcTex", layer)
-        .i32("u_origTex", 0)
-        .vec2("u_srcOffset", offset.0, offset.1)
-        .vec2("u_srcSize", size.0, size.1)
-        .vec2("u_docSize", region_size.0, region_size.1)
-        .i32("u_rawAlpha", 1)
-        .i32("u_mode", i32::from(invert))
-        .i32("u_hasOrigTex", 0)
+        .sampler_unit("u_origTex", 0)
 }
 
 /// Blur the alpha in scratch B with a separable Gaussian, through scratch A.
@@ -1128,20 +1127,24 @@ fn blur_scratch_b(engine: &EngineInner, blur_radius: u32) {
     }
 }
 
-/// A `glow.glsl` pass over the document with `source` as its input and every
-/// uniform but the raw-alpha and masking switches set from `glow`.
-fn glow_pass<'a>(engine: &'a EngineInner, source: TextureHandle, glow: &GlowDesc, mode: i32, tw: u32, th: u32, layer_x: f32, layer_y: f32) -> Pass<'a> {
-    doc_pass_untyped(engine, &engine.shaders.glow)
-        .texture("u_srcTex", source)
-        .vec4("u_glowColor", glow.color[0], glow.color[1], glow.color[2], glow.color[3])
-        .f32("u_size", glow.size)
-        .f32("u_spread", glow.spread)
-        .f32("u_opacity", glow.opacity)
-        .vec2("u_texelSize", 1.0 / tw as f32, 1.0 / th as f32)
-        .vec2("u_srcOffset", layer_x, layer_y)
-        .vec2("u_srcSize", tw as f32, th as f32)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .i32("u_mode", mode)
+/// `glow.glsl`'s uniforms for colouring `glow` straight from the layer's
+/// own alpha: no raw-alpha output and no separate masking texture.
+fn glow_params(engine: &EngineInner, glow: &GlowDesc, mode: i32, tw: u32, th: u32, layer_x: f32, layer_y: f32) -> GlowParams {
+    GlowParams {
+        has_orig_tex: 0,
+        glow_color: [glow.color[0], glow.color[1], glow.color[2], glow.color[3]],
+        size: glow.size,
+        spread: glow.spread,
+        opacity: glow.opacity,
+        texel_size: [1.0 / tw as f32, 1.0 / th as f32],
+        src_offset: [layer_x, layer_y],
+        src_size: [tw as f32, th as f32],
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        mode,
+        raw_alpha: 0,
+        orig_offset: [0.0; 2],
+        orig_size: [0.0; 2],
+    }
 }
 
 /// Render outer or inner glow.
@@ -1152,21 +1155,20 @@ fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th:
     }
     let scratch_a = Target::Framebuffer(engine.scratch_fbo_a);
     let scratch_b = Target::Framebuffer(engine.scratch_fbo_b);
+    let direct = glow_params(engine, glow, mode, tw, th, layer_x, layer_y);
 
     if blur_radius < 2 {
         // Small size: single pass, no separable blur needed
-        glow_pass(engine, tex_handle, glow, mode, tw, th, layer_x, layer_y)
-            .i32("u_origTex", 0)
-            .i32("u_rawAlpha", 0)
-            .i32("u_hasOrigTex", 0)
+        doc_pass(engine, &engine.shaders.glow, direct)
+            .texture("u_srcTex", tex_handle)
+            .sampler_unit("u_origTex", 0)
             .clear(TRANSPARENT)
             .draw(scratch_a);
     } else {
         // Phase 1: extract raw alpha (outer) or inverted alpha (inner) → scratch_b
-        glow_pass(engine, tex_handle, glow, mode, tw, th, layer_x, layer_y)
-            .i32("u_origTex", 0)
-            .i32("u_rawAlpha", 1)
-            .i32("u_hasOrigTex", 0)
+        doc_pass(engine, &engine.shaders.glow, GlowParams { raw_alpha: 1, ..direct })
+            .texture("u_srcTex", tex_handle)
+            .sampler_unit("u_origTex", 0)
             .clear(TRANSPARENT)
             .draw(scratch_b);
 
@@ -1176,14 +1178,17 @@ fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th:
         // Phase 3: apply spread + masking + color → scratch_a. The blurred
         // alpha in scratch_b is a document-sized source; the original layer
         // masks it through u_origTex.
-        glow_pass(engine, engine.scratch_texture_b, glow, mode, tw, th, layer_x, layer_y)
+        let masked = GlowParams {
+            has_orig_tex: 1,
+            orig_offset: [layer_x, layer_y],
+            orig_size: [tw as f32, th as f32],
+            src_offset: [0.0, 0.0],
+            src_size: [engine.doc_width as f32, engine.doc_height as f32],
+            ..direct
+        };
+        doc_pass(engine, &engine.shaders.glow, masked)
+            .texture("u_srcTex", engine.scratch_texture_b)
             .texture("u_origTex", tex_handle)
-            .i32("u_hasOrigTex", 1)
-            .vec2("u_origOffset", layer_x, layer_y)
-            .vec2("u_origSize", tw as f32, th as f32)
-            .vec2("u_srcOffset", 0.0, 0.0)
-            .vec2("u_srcSize", engine.doc_width as f32, engine.doc_height as f32)
-            .i32("u_rawAlpha", 0)
             .clear(TRANSPARENT)
             .draw(scratch_a);
         engine.gpu().unbind_textures(2);
@@ -1191,21 +1196,6 @@ fn render_glow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, th:
 
     let src_rect = Rect::new(layer_x as i32, layer_y as i32, tw, th);
     emit_effect(engine, out, || if mode == 0 { fx_extent::outer_glow_extent(src_rect, glow) } else { fx_extent::inner_glow_extent(src_rect) });
-}
-
-/// A `shadow.glsl` pass over the document with `source` as its input and
-/// every uniform but the knockout and raw-alpha switches set from `shadow`.
-fn shadow_pass<'a>(engine: &'a EngineInner, source: TextureHandle, shadow: &ShadowDesc, tw: u32, th: u32, layer_x: f32, layer_y: f32) -> Pass<'a> {
-    doc_pass_untyped(engine, &engine.shaders.shadow)
-        .texture("u_srcTex", source)
-        .vec4("u_shadowColor", shadow.color[0], shadow.color[1], shadow.color[2], shadow.color[3])
-        .vec2("u_offset", shadow.offset_x, shadow.offset_y)
-        .f32("u_spread", shadow.spread)
-        .f32("u_opacity", shadow.opacity)
-        .vec2("u_texelSize", 1.0 / tw as f32, 1.0 / th as f32)
-        .vec2("u_srcOffset", layer_x, layer_y)
-        .vec2("u_srcSize", tw as f32, th as f32)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
 }
 
 /// Render drop shadow.
@@ -1216,20 +1206,31 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
     }
     let scratch_a = Target::Framebuffer(engine.scratch_fbo_a);
     let scratch_b = Target::Framebuffer(engine.scratch_fbo_b);
+    // The shadow coloured straight from the layer's alpha, with no knockout.
+    let direct = ShadowParams {
+        shadow_color: [shadow.color[0], shadow.color[1], shadow.color[2], shadow.color[3]],
+        offset: [shadow.offset_x, shadow.offset_y],
+        spread: shadow.spread,
+        opacity: shadow.opacity,
+        texel_size: [1.0 / tw as f32, 1.0 / th as f32],
+        src_offset: [layer_x, layer_y],
+        src_size: [tw as f32, th as f32],
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        knockout: 0,
+        layer_opacity,
+        raw_alpha: 0,
+    };
 
     if blur_radius == 0 {
         // No blur: single pass with spread + knockout + color → scratch_a
-        shadow_pass(engine, tex_handle, shadow, tw, th, layer_x, layer_y)
-            .i32("u_knockout", 1)
-            .f32("u_layerOpacity", layer_opacity)
-            .i32("u_rawAlpha", 0)
+        doc_pass(engine, &engine.shaders.shadow, ShadowParams { knockout: 1, ..direct })
+            .texture("u_srcTex", tex_handle)
             .clear(TRANSPARENT)
             .draw(scratch_a);
     } else {
         // Phase 1: extract raw alpha silhouette → scratch_b
-        shadow_pass(engine, tex_handle, shadow, tw, th, layer_x, layer_y)
-            .i32("u_knockout", 0)
-            .i32("u_rawAlpha", 1)
+        doc_pass(engine, &engine.shaders.shadow, ShadowParams { raw_alpha: 1, ..direct })
+            .texture("u_srcTex", tex_handle)
             .clear(TRANSPARENT)
             .draw(scratch_b);
 
@@ -1239,12 +1240,14 @@ fn render_shadow(engine: &mut EngineInner, tex_handle: TextureHandle, tw: u32, t
         // Phase 3: apply spread + color to blurred alpha → scratch_a. The
         // blurred alpha in scratch_b is a document-sized source that already
         // carries the shadow's offset.
-        shadow_pass(engine, engine.scratch_texture_b, shadow, tw, th, layer_x, layer_y)
-            .vec2("u_srcOffset", 0.0, 0.0)
-            .vec2("u_srcSize", engine.doc_width as f32, engine.doc_height as f32)
-            .vec2("u_offset", 0.0, 0.0)
-            .i32("u_knockout", 0)
-            .i32("u_rawAlpha", 0)
+        let blurred = ShadowParams {
+            src_offset: [0.0, 0.0],
+            src_size: [engine.doc_width as f32, engine.doc_height as f32],
+            offset: [0.0, 0.0],
+            ..direct
+        };
+        doc_pass(engine, &engine.shaders.shadow, blurred)
+            .texture("u_srcTex", engine.scratch_texture_b)
             .clear(TRANSPARENT)
             .draw(scratch_a);
     }
@@ -1335,15 +1338,16 @@ enum StrokeBandPass {
 
 /// One `separable_edt.glsl` pass of the band within `reach` of the seeds
 /// (texels with alpha ≥ 0.5) in `read`.
-fn stroke_band_pass<'a>(engine: &'a EngineInner, read: TextureHandle, pass: StrokeBandPass, reach: f32, is_oob_seed: bool) -> Pass<'a> {
+fn stroke_band_pass<'a>(engine: &'a EngineInner, read: TextureHandle, pass: StrokeBandPass, reach: f32, is_oob_seed: bool) -> Pass<'a, SeparableEdtParams> {
     engine
-        .pass_untyped(&engine.shaders.separable_edt)
+        .pass(&engine.shaders.separable_edt, SeparableEdtParams {
+            pass: matches!(pass, StrokeBandPass::Columns) as i32,
+            radius: lopsy_core::stroke_band::search_radius(reach) as i32,
+            reach_sq: reach * reach,
+            oob_seed: is_oob_seed as i32,
+        })
         .blend(Blend::Off)
         .texture("u_tex", read)
-        .i32("u_pass", matches!(pass, StrokeBandPass::Columns) as i32)
-        .i32("u_radius", lopsy_core::stroke_band::search_radius(reach) as i32)
-        .f32("u_reachSq", reach * reach)
-        .i32("u_oobSeed", is_oob_seed as i32)
 }
 
 /// Replace the seed alpha in scratch_b with the band within `reach` of it
@@ -1362,18 +1366,19 @@ fn render_stroke_band(engine: &EngineInner, reach: f32, is_oob_seed: bool) {
 
 /// Band (scratch_b) + the original layer → the coloured stroke in scratch_a.
 fn render_stroke_apply(engine: &EngineInner, layer: &StrokeLayer, stroke: &StrokeDesc, apply_position: i32, knockout: bool) {
-    doc_pass_untyped(engine, &engine.shaders.stroke_apply)
+    doc_pass(engine, &engine.shaders.stroke_apply, StrokeApplyParams {
+        stroke_color: [stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3]],
+        opacity: stroke.opacity,
+        position: apply_position,
+        orig_offset: [layer.x, layer.y],
+        orig_size: [layer.width as f32, layer.height as f32],
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        silhouette: 0,
+        knockout: knockout as i32,
+        layer_opacity: layer.opacity,
+    })
         .texture("u_bandTex", engine.scratch_texture_b)
         .texture("u_origTex", layer.texture)
-        .vec4("u_strokeColor", stroke.color[0], stroke.color[1], stroke.color[2], stroke.color[3])
-        .f32("u_opacity", stroke.opacity)
-        .i32("u_position", apply_position)
-        .i32("u_knockout", knockout as i32)
-        .f32("u_layerOpacity", layer.opacity)
-        .vec2("u_origOffset", layer.x, layer.y)
-        .vec2("u_origSize", layer.width as f32, layer.height as f32)
-        .vec2("u_docSize", engine.doc_width as f32, engine.doc_height as f32)
-        .i32("u_silhouette", 0)
         .clear(TRANSPARENT)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(2);
@@ -1648,84 +1653,92 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
     Ok(pixels)
 }
 
-/// Set up the adjustments program for a one-off use outside the
-/// compositor (the Brightness / Contrast filter): every adjustment at the
-/// identity except the caller's brightness and contrast, from the same list
-/// the compositor writes (#1163). The unused LUT samplers are pointed at
-/// unit 0, the source texture, so none can alias the render target.
-pub(crate) fn standalone_adjustments(pass: Pass<'_>, brightness: f32, contrast: f32, doc_color_mode: u32) -> Pass<'_> {
+/// `adjustments.glsl`'s uniforms for a one-off use outside the compositor
+/// (the Brightness / Contrast filter): every adjustment at the identity
+/// except the caller's brightness and contrast, from the same list the
+/// compositor writes (#1163).
+pub(crate) fn standalone_adjustments(brightness: f32, contrast: f32, doc_color_mode: u32) -> AdjustmentsParams {
     let adj = ImageAdjustmentState { contrast, ..Default::default() };
-    adjustment_values(pass, &adj, brightness, doc_color_mode)
-        .i32("u_curveLut", 0)
-        .i32("u_levelsLut", 0)
-        .i32("u_gradientLut", 0)
+    adjustment_params(&adj, brightness, doc_color_mode)
+}
+
+/// The adjustments program's LUT samplers, each pointed at unit 0, the
+/// source texture, so none can alias the render target.
+pub(crate) fn park_adjustment_luts<P>(pass: Pass<'_, P>) -> Pass<'_, P> {
+    pass.sampler_unit("u_curveLut", 0)
+        .sampler_unit("u_levelsLut", 0)
+        .sampler_unit("u_gradientLut", 0)
 }
 
 fn has_lut(is_enabled: bool, texture: Option<TextureHandle>) -> bool {
     is_enabled && texture.is_some()
 }
 
+fn flag(is_on: bool) -> f32 {
+    if is_on { 1.0 } else { 0.0 }
+}
+
 /// Every non-sampler uniform of `adjustments.glsl`, including the
 /// `u_has*` LUT flags, derived from `adj`.
-fn adjustment_values<'a>(pass: Pass<'a>, adj: &ImageAdjustmentState, brightness: f32, doc_color_mode: u32) -> Pass<'a> {
-    pass
-        .i32("u_docColorMode", doc_color_mode as i32)
-        .f32("u_brightness", brightness)
-        .f32("u_contrast", adj.contrast / 100.0)
-        .f32("u_exposure", adj.exposure)
-        .f32("u_highlights", adj.highlights)
-        .f32("u_shadows", adj.shadows)
-        .f32("u_whites", adj.whites)
-        .f32("u_blacks", adj.blacks)
-        .f32("u_saturation", adj.saturation / 100.0)
-        .f32("u_vibrance", adj.vibrance / 100.0)
+fn adjustment_params(adj: &ImageAdjustmentState, brightness: f32, doc_color_mode: u32) -> AdjustmentsParams {
+    AdjustmentsParams {
+        brightness,
+        contrast: adj.contrast / 100.0,
+        exposure: adj.exposure,
+        highlights: adj.highlights,
+        shadows: adj.shadows,
+        whites: adj.whites,
+        blacks: adj.blacks,
+        saturation: adj.saturation / 100.0,
+        vibrance: adj.vibrance / 100.0,
+        has_levels: flag(has_lut(adj.has_levels, adj.levels_texture)),
+        has_curves: flag(has_lut(adj.has_curves, adj.curves_texture)),
         // Hue/Saturation
-        .f32("u_hue_shift", adj.hue_shift)
-        .f32("u_hsl_saturation", adj.hsl_saturation)
-        .f32("u_lightness", adj.lightness)
+        hue_shift: adj.hue_shift,
+        hsl_saturation: adj.hsl_saturation,
+        lightness: adj.lightness,
         // Color Balance
-        .vec3("u_cb_shadows", adj.cb_shadows[0], adj.cb_shadows[1], adj.cb_shadows[2])
-        .vec3("u_cb_midtones", adj.cb_midtones[0], adj.cb_midtones[1], adj.cb_midtones[2])
-        .vec3("u_cb_highlights", adj.cb_highlights[0], adj.cb_highlights[1], adj.cb_highlights[2])
+        cb_shadows: adj.cb_shadows,
+        cb_midtones: adj.cb_midtones,
+        cb_highlights: adj.cb_highlights,
         // Photo Filter
-        .vec3("u_pf_color", adj.pf_color[0], adj.pf_color[1], adj.pf_color[2])
-        .f32("u_pf_density", adj.pf_density)
-        .f32("u_pf_luminosity", if adj.pf_preserve_luminosity { 1.0 } else { 0.0 })
+        pf_color: adj.pf_color,
+        pf_density: adj.pf_density,
+        pf_luminosity: flag(adj.pf_preserve_luminosity),
         // Black & White
-        .f32("u_bw_reds", adj.bw_reds)
-        .f32("u_bw_yellows", adj.bw_yellows)
-        .f32("u_bw_greens", adj.bw_greens)
-        .f32("u_bw_cyans", adj.bw_cyans)
-        .f32("u_bw_blues", adj.bw_blues)
-        .f32("u_bw_magentas", adj.bw_magentas)
-        .f32("u_bw_enabled", if adj.bw_enabled { 1.0 } else { 0.0 })
+        bw_reds: adj.bw_reds,
+        bw_yellows: adj.bw_yellows,
+        bw_greens: adj.bw_greens,
+        bw_cyans: adj.bw_cyans,
+        bw_blues: adj.bw_blues,
+        bw_magentas: adj.bw_magentas,
+        bw_enabled: flag(adj.bw_enabled),
         // Channel Mixer
-        .f32("u_cm_rr", adj.cm_r[0] / 100.0)
-        .f32("u_cm_rg", adj.cm_r[1] / 100.0)
-        .f32("u_cm_rb", adj.cm_r[2] / 100.0)
-        .f32("u_cm_rc", adj.cm_r[3])
-        .f32("u_cm_gr", adj.cm_g[0] / 100.0)
-        .f32("u_cm_gg", adj.cm_g[1] / 100.0)
-        .f32("u_cm_gb", adj.cm_g[2] / 100.0)
-        .f32("u_cm_gc", adj.cm_g[3])
-        .f32("u_cm_br", adj.cm_b[0] / 100.0)
-        .f32("u_cm_bg", adj.cm_b[1] / 100.0)
-        .f32("u_cm_bb", adj.cm_b[2] / 100.0)
-        .f32("u_cm_bc", adj.cm_b[3])
-        .f32("u_cm_enabled", if adj.cm_enabled { 1.0 } else { 0.0 })
-        // Invert
-        .f32("u_invert", if adj.invert { 1.0 } else { 0.0 })
+        cm_rr: adj.cm_r[0] / 100.0,
+        cm_rg: adj.cm_r[1] / 100.0,
+        cm_rb: adj.cm_r[2] / 100.0,
+        cm_rc: adj.cm_r[3],
+        cm_gr: adj.cm_g[0] / 100.0,
+        cm_gg: adj.cm_g[1] / 100.0,
+        cm_gb: adj.cm_g[2] / 100.0,
+        cm_gc: adj.cm_g[3],
+        cm_br: adj.cm_b[0] / 100.0,
+        cm_bg: adj.cm_b[1] / 100.0,
+        cm_bb: adj.cm_b[2] / 100.0,
+        cm_bc: adj.cm_b[3],
+        cm_enabled: flag(adj.cm_enabled),
+        invert: flag(adj.invert),
+        has_gradient_map: flag(has_lut(adj.has_gradient_map, adj.gradient_map_texture)),
         // Color Grading
-        .f32("u_cg_enabled", if adj.cg_enabled { 1.0 } else { 0.0 })
-        .vec4("u_cg_shadows", adj.cg_shadows[0], adj.cg_shadows[1], adj.cg_shadows[2], adj.cg_shadows[3])
-        .vec4("u_cg_midtones", adj.cg_midtones[0], adj.cg_midtones[1], adj.cg_midtones[2], adj.cg_midtones[3])
-        .vec4("u_cg_highlights", adj.cg_highlights[0], adj.cg_highlights[1], adj.cg_highlights[2], adj.cg_highlights[3])
-        .vec4("u_cg_global", adj.cg_global[0], adj.cg_global[1], adj.cg_global[2], adj.cg_global[3])
-        .f32("u_cg_exponent", adj.cg_exponent)
-        .f32("u_cg_width", adj.cg_width)
-        .f32("u_hasLevels", if has_lut(adj.has_levels, adj.levels_texture) { 1.0 } else { 0.0 })
-        .f32("u_hasCurves", if has_lut(adj.has_curves, adj.curves_texture) { 1.0 } else { 0.0 })
-        .f32("u_hasGradientMap", if has_lut(adj.has_gradient_map, adj.gradient_map_texture) { 1.0 } else { 0.0 })
+        cg_enabled: flag(adj.cg_enabled),
+        cg_shadows: adj.cg_shadows,
+        cg_midtones: adj.cg_midtones,
+        cg_highlights: adj.cg_highlights,
+        cg_global: adj.cg_global,
+        cg_exponent: adj.cg_exponent,
+        cg_width: adj.cg_width,
+        doc_color_mode: doc_color_mode as i32,
+    }
 }
 
 /// A pass over the document that applies `adj` to `source`: every uniform
@@ -1733,9 +1746,9 @@ fn adjustment_values<'a>(pass: Pass<'a>, adj: &ImageAdjustmentState, brightness:
 /// enables. A LUT sampler that is not in use points at unit 0, the source,
 /// so it cannot alias the render target. Returns the pass and how many
 /// texture units it bound.
-fn adjustments_pass<'a>(engine: &'a EngineInner, source: TextureHandle, adj: &ImageAdjustmentState) -> (Pass<'a>, u32) {
-    let mut pass = doc_pass_untyped(engine, &engine.shaders.adjustments).texture("u_tex", source);
-    pass = adjustment_values(pass, adj, 0.0, engine.doc_color_mode);
+fn adjustments_pass<'a>(engine: &'a EngineInner, source: TextureHandle, adj: &ImageAdjustmentState) -> (Pass<'a, AdjustmentsParams>, u32) {
+    let params = adjustment_params(adj, 0.0, engine.doc_color_mode);
+    let mut pass = doc_pass(engine, &engine.shaders.adjustments, params).texture("u_tex", source);
     let mut units = 1;
     let luts = [
         ("u_levelsLut", has_lut(adj.has_levels, adj.levels_texture), adj.levels_texture),
@@ -1749,18 +1762,16 @@ fn adjustments_pass<'a>(engine: &'a EngineInner, source: TextureHandle, adj: &Im
                 units += 1;
                 pass.texture(name, lut)
             }
-            None => pass.i32(name, 0),
+            None => pass.sampler_unit(name, 0),
         };
     }
     (pass, units)
 }
 
 /// A pass over the document that applies the vignette to `source`.
-fn vignette_pass<'a>(engine: &'a EngineInner, source: TextureHandle, amount: f32) -> Pass<'a> {
-    doc_pass_untyped(engine, &engine.shaders.vignette)
+fn vignette_pass<'a>(engine: &'a EngineInner, source: TextureHandle, amount: f32) -> Pass<'a, VignetteParams> {
+    doc_pass(engine, &engine.shaders.vignette, VignetteParams { amount, doc_color_mode: engine.doc_color_mode as i32 })
         .texture("u_tex", source)
-        .f32("u_amount", amount)
-        .i32("u_docColorMode", engine.doc_color_mode as i32)
 }
 
 /// Returns true if any adjustment in the state is non-default (i.e., would change pixels).

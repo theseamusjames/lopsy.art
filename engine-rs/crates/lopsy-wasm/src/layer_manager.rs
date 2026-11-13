@@ -4,6 +4,7 @@ use lopsy_core::layer::LayerDesc;
 use crate::compositor::mask_doc_offset;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Scissor, Target};
+use crate::gpu::params::composite::BlendParams;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::layer_transform_gpu::{TransformDraw, TransformParams, TransformTargets};
 use crate::gpu::params::core::{
@@ -290,17 +291,17 @@ pub fn merge_layers(
     engine.gpu().clear(engine.scratch_texture_b, [0.0, 0.0, 0.0, 0.0]);
     engine.texture_pool.get(engine.scratch_texture_b).ok_or("scratch_b not found")?;
     let bottom_opacity = if bake_bottom_opacity { bottom_desc.opacity } else { 1.0 };
-    engine.pass_untyped(&engine.shaders.blend_normal)
+    let doc_size = [doc_w as f32, doc_h as f32];
+    let bottom_params = BlendParams::plain(
+        bottom_opacity,
+        [(bottom_desc.x - min_x) as f32, (bottom_desc.y - min_y) as f32],
+        [bw as f32, bh as f32],
+        doc_size,
+        engine.doc_color_mode,
+    );
+    engine.pass(&engine.shaders.blend_normal, bottom_params)
         .texture("u_srcTex", bottom_handle)
         .texture("u_dstTex", engine.scratch_texture_b)
-        .f32("u_opacity", bottom_opacity)
-        .vec2("u_srcOffset", (bottom_desc.x - min_x) as f32, (bottom_desc.y - min_y) as f32)
-        .vec2("u_srcSize", bw as f32, bh as f32)
-        .vec2("u_docSize", doc_w as f32, doc_h as f32)
-        .i32("u_srcPremultiplied", 0)
-        .i32("u_overlayEnabled", 0)
-        .i32("u_hasMask", 0)
-        .i32("u_wrapLayer", 0)
         .viewport(0, 0, doc_w as i32, doc_h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
@@ -310,29 +311,34 @@ pub fn merge_layers(
     engine.gpu().unbind_textures(2);
     {
         let shader = engine.shaders.blend_for_mode(top_desc.blend_mode as i32)?;
-        let pass = engine.pass_untyped(&shader)
-            .texture("u_srcTex", top_handle)
-            .texture("u_dstTex", engine.scratch_texture_a)
-            .f32("u_opacity", top_desc.opacity)
-            .vec2("u_srcOffset", (top_desc.x - min_x) as f32, (top_desc.y - min_y) as f32)
-            .vec2("u_srcSize", tw as f32, th as f32)
-            .vec2("u_docSize", doc_w as f32, doc_h as f32)
-            .i32("u_docColorMode", engine.doc_color_mode as i32)
-            .i32("u_srcPremultiplied", 0)
-            .i32("u_overlayEnabled", 0);
-        let pass = match top_mask_info {
-            Some((mask, mask_w, mask_h)) => {
+        let plain = BlendParams::plain(
+            top_desc.opacity,
+            [(top_desc.x - min_x) as f32, (top_desc.y - min_y) as f32],
+            [tw as f32, th as f32],
+            doc_size,
+            engine.doc_color_mode,
+        );
+        let params = match top_mask_info {
+            Some((_, mask_w, mask_h)) => {
                 let (mask_offset_x, mask_offset_y) =
                     mask_doc_offset(top_desc.layer_type, top_desc.x as f32, top_desc.y as f32);
-                pass.texture("u_maskTex", mask)
-                    .i32("u_hasMask", 1)
-                    .vec2("u_maskSize", mask_w as f32, mask_h as f32)
-                    .vec2("u_maskOffset", mask_offset_x - min_x as f32, mask_offset_y - min_y as f32)
+                BlendParams {
+                    has_mask: 1,
+                    mask_size: [mask_w as f32, mask_h as f32],
+                    mask_offset: [mask_offset_x - min_x as f32, mask_offset_y - min_y as f32],
+                    ..plain
+                }
             }
-            None => pass.i32("u_hasMask", 0),
+            None => plain,
         };
-        pass.i32("u_wrapLayer", 0)
-            .viewport(0, 0, doc_w as i32, doc_h as i32)
+        let pass = engine.pass(&shader, params)
+            .texture("u_srcTex", top_handle)
+            .texture("u_dstTex", engine.scratch_texture_a);
+        let pass = match top_mask_info {
+            Some((mask, _, _)) => pass.texture("u_maskTex", mask),
+            None => pass,
+        };
+        pass.viewport(0, 0, doc_w as i32, doc_h as i32)
             .draw(Target::Framebuffer(engine.scratch_fbo_b));
     }
     engine.gpu().unbind_textures(3);
@@ -1091,18 +1097,11 @@ pub fn composite_float(
     // Blend float (src, at offset dx/dy) onto base (dst) directly into the layer
     // texture in one pass. base_tex and float_tex are both fw×fh, so v_uv maps
     // correctly without the UV-scale mismatch that doc-sized scratch textures cause.
-    engine.pass_untyped(&engine.shaders.blend_normal)
+    let size = [fw as f32, fh as f32];
+    engine.pass(&engine.shaders.blend_normal, BlendParams::plain(1.0, [dx as f32, dy as f32], size, size, engine.doc_color_mode))
         .texture("u_srcTex", float_handle)
         .texture("u_dstTex", base_handle)
-        .f32("u_opacity", 1.0)
-        .vec2("u_srcOffset", dx as f32, dy as f32)
-        .vec2("u_srcSize", fw as f32, fh as f32)
-        .vec2("u_docSize", fw as f32, fh as f32)
-        .i32("u_srcPremultiplied", 0)
-        .i32("u_overlayEnabled", 0)
-        .i32("u_hasMask", 0)
-        .i32("u_maskTex", mask_sampler_unit(false))
-        .i32("u_wrapLayer", 0)
+        .sampler_unit("u_maskTex", mask_sampler_unit(false))
         .blend(Blend::Off)
         .viewport(0, 0, fw as i32, fh as i32)
         .draw(Target::Texture(layer_tex_handle));
@@ -1390,17 +1389,11 @@ fn composite_float_transformed(
 
     // Step 2: Blend tmp (transformed float, fw×fh) onto base → layer texture.
     // Both tmp and base_tex are fw×fh, so v_uv correctly addresses them.
-    engine.pass_untyped(&engine.shaders.blend_normal)
+    let size = [fw as f32, fh as f32];
+    engine.pass(&engine.shaders.blend_normal, BlendParams::plain(1.0, [0.0, 0.0], size, size, engine.doc_color_mode))
         .texture("u_srcTex", tmp)
         .texture("u_dstTex", base_handle)
-        .f32("u_opacity", 1.0)
-        .vec2("u_srcOffset", 0.0, 0.0)
-        .vec2("u_srcSize", fw as f32, fh as f32)
-        .vec2("u_docSize", fw as f32, fh as f32)
-        .i32("u_srcPremultiplied", 0)
-        .i32("u_overlayEnabled", 0)
-        .i32("u_hasMask", 0)
-        .i32("u_maskTex", mask_sampler_unit(false))
+        .sampler_unit("u_maskTex", mask_sampler_unit(false))
         .viewport(0, 0, fw as i32, fh as i32)
         .draw(Target::Texture(layer_tex_handle));
     engine.gpu().unbind_textures(2);
