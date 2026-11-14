@@ -21,11 +21,42 @@ const DEV_SERVER_NOISE = [/ws:\/\/localhost:\d+\/\?token=/];
  *   test.use({ allowConsoleErrors: [/expected: foo/] });
  *   test('invalid input shows message', async () => { ... });
  */
+/**
+ * `window.__readLayerImage`, installed on every page: a layer's pixels as
+ * the engine holds them, layer-local, read through the app's awaited dev
+ * hook. Undefined when the layer has no texture. Declare it in a
+ * `page.evaluate` callback with
+ * `(window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage`.
+ */
+export type ReadLayerImage = (
+  layerId?: string,
+) => Promise<{ data: number[]; width: number; height: number } | undefined>;
+
 export const test = base.extend<{
   allowConsoleErrors: RegExp[];
   _consoleErrorGuard: void;
+  _layerImageReader: void;
 }>({
   allowConsoleErrors: [[], { option: true }],
+
+  _layerImageReader: [
+    async ({ page }, use) => {
+      await page.addInitScript(() => {
+        const w = window as unknown as Record<string, unknown>;
+        w.__readLayerImage = async (layerId?: string) => {
+          const read = w.__readLayerPixels as
+            | ((id?: string) => Promise<{ width: number; height: number; pixels: number[] } | null>)
+            | undefined;
+          const layer = read ? await read(layerId) : null;
+          return layer && layer.width > 0
+            ? { data: layer.pixels, width: layer.width, height: layer.height }
+            : undefined;
+        };
+      });
+      await use();
+    },
+    { auto: true },
+  ],
 
   _consoleErrorGuard: [
     async ({ page, allowConsoleErrors }, use) => {

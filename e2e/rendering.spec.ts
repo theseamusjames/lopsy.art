@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerImage } from './fixtures';
 import {
   setToolOption,
   setForegroundColor,
@@ -188,15 +189,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '04-blue-rect-bottom-right.png') });
 
     // Verify blue pixel data is present at the painted location
-    const pixel = await page.evaluate(() => {
+    const pixel = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return null;
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return null;
@@ -226,15 +227,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '05-four-corners.png') });
 
     // Verify each corner has the expected color
-    const corners = await page.evaluate(() => {
+    const corners = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return null;
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return null;
@@ -330,18 +331,18 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '08-multi-layer.png') });
 
     // Verify both layers have pixel data
-    const layerData = await page.evaluate((layerIds: string[]) => {
+    const layerData = await page.evaluate(async (layerIds: string[]) => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          resolvePixelData: (id: string) => ImageData | undefined;
           document: { layers: Array<{ id: string }> };
         };
       };
       const state = store.getState();
       return {
         layerCount: state.document.layers.length,
-        layer0HasData: !!state.resolvePixelData(layerIds[0]!),
-        layer1HasData: !!state.resolvePixelData(layerIds[1]!),
+        layer0HasData: !!(await readLayerImage(layerIds[0]!)),
+        layer1HasData: !!(await readLayerImage(layerIds[1]!)),
       };
     }, layers);
     expect(layerData.layerCount).toBeGreaterThanOrEqual(3); // 2 raster + root group
@@ -518,15 +519,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '11-gradient-render.png') });
 
     // Verify gradient via store pixel data (WebGL buffer may be swapped)
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return { error: 'no pixel data' };
 
       const midRow = Math.floor(data.height / 2);
@@ -612,17 +613,17 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '12-gradient-in-selection-after.png') });
 
     // Verify: pixel data inside selection has gradient, outside is white
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number; width: number; height: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
       const layer = state.document.layers.find(l => l.id === id);
-      const data = state.resolvePixelData(id);
+      const data = await readLayerImage(id);
 
       if (!data || !layer) return { error: 'no data', hasData: !!data, hasLayer: !!layer };
 
@@ -720,15 +721,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
 
     // Read original pixel (transparent)
-    const before = await page.evaluate(() => {
+    const before = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       return data ? Array.from(data.data.slice(0, 4)) : null;
     });
 
@@ -739,15 +740,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
-    const after = await page.evaluate(() => {
+    const after = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       return data ? Array.from(data.data.slice(0, 4)) : null;
     });
 
@@ -765,14 +766,14 @@ test.describe('WASM/WebGL Rendering', () => {
     await fitToView(page);
     await drawRect(page, 0, 0, 200, 200, { r: 0, g: 255, b: 0 });
 
-    const painted = await page.evaluate(() => {
+    const painted = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
-      const data = store.getState().resolvePixelData(store.getState().document.activeLayerId);
+      const data = await readLayerImage(store.getState().document.activeLayerId);
       return data ? Array.from(data.data.slice(0, 4)) : null;
     });
 
@@ -784,14 +785,14 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.keyboard.press('Control+Shift+z');
     await page.waitForTimeout(300);
 
-    const afterRedo = await page.evaluate(() => {
+    const afterRedo = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
-      const data = store.getState().resolvePixelData(store.getState().document.activeLayerId);
+      const data = await readLayerImage(store.getState().document.activeLayerId);
       return data ? Array.from(data.data.slice(0, 4)) : null;
     });
 
@@ -810,14 +811,14 @@ test.describe('WASM/WebGL Rendering', () => {
     const testColor = { r: 42, g: 137, b: 221, a: 255 };
     await drawRect(page, 0, 0, 100, 100, { r: testColor.r, g: testColor.g, b: testColor.b });
 
-    const result = await page.evaluate(({ r, g, b, a }) => {
+    const result = await page.evaluate(async ({ r, g, b, a }) => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
-      const data = store.getState().resolvePixelData(store.getState().document.activeLayerId);
+      const data = await readLayerImage(store.getState().document.activeLayerId);
       if (!data) return { error: 'no data' };
       // Check center pixel
       const idx = (50 * data.width + 50) * 4;
@@ -964,14 +965,14 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
-      const data = store.getState().resolvePixelData(store.getState().document.activeLayerId);
+      const data = await readLayerImage(store.getState().document.activeLayerId);
       if (!data) return null;
       const idx = (50 * data.width + 50) * 4;
       return [data.data[idx], data.data[idx + 1], data.data[idx + 2]];
@@ -1013,16 +1014,16 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(300);
 
     // Should still have the red paint on the original layer
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: unknown[] };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const layerCount = state.document.layers.length;
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return { layerCount, hasData: false };
       const idx = (100 * data.width + 100) * 4;
       return { layerCount, r: data.data[idx], a: data.data[idx + 3] };
@@ -1113,18 +1114,18 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(400);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: Array<{ id: string; x: number; y: number }>; activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const layerCount = state.document.layers.length;
       const id = state.document.activeLayerId;
       const layer = state.document.layers.find(l => l.id === id);
-      const data = state.resolvePixelData(id);
+      const data = await readLayerImage(id);
       if (!data || !layer) return { layerCount, error: 'no data' };
 
       // Top half should be blue (merged from top layer)
@@ -1179,17 +1180,17 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(400);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: Array<{ id: string; x: number; y: number }>; activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const layerCount = state.document.layers.length;
       const id = state.document.activeLayerId;
-      const data = state.resolvePixelData(id);
+      const data = await readLayerImage(id);
       if (!data) return { layerCount, error: 'no data' };
       // Center pixel should have some content
       const idx = (100 * data.width + 100) * 4;
@@ -1263,15 +1264,15 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return { error: 'no data' };
       // Check center and corner pixels
       const getP = (x: number, y: number) => {
@@ -1354,18 +1355,18 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(400);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { width: number; height: number; activeLayerId: string; layers: Array<{ id: string; x: number; y: number; width: number; height: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const docSize = { w: state.document.width, h: state.document.height };
       const id = state.document.activeLayerId;
       const layer = state.document.layers.find(l => l.id === id);
-      const data = state.resolvePixelData(id);
+      const data = await readLayerImage(id);
       if (!data || !layer) return { docSize, error: 'no data' };
 
       // Check pixel at original position (100, 100) — should be blue
@@ -1426,15 +1427,15 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return { error: 'no data' };
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return { error: 'no layer' };
@@ -1600,15 +1601,15 @@ test.describe('WASM/WebGL Rendering', () => {
       await page.waitForTimeout(200);
     }
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return { error: 'no data' };
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return { error: 'no layer' };
@@ -1783,15 +1784,15 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return { error: 'no data' };
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return { error: 'no layer' };
@@ -1820,15 +1821,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await drawRect(page, 50, 0, 50, 100, { r: 255, g: 255, b: 255 });
 
     // Read the edge pixel before blur
-    const beforeEdge = await page.evaluate(() => {
+    const beforeEdge = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return null;
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return null;
@@ -1885,15 +1886,15 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
 
-    const afterEdge = await page.evaluate(() => {
+    const afterEdge = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return null;
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return null;
@@ -1946,15 +1947,15 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return { error: 'no data' };
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return { error: 'no layer' };
@@ -2049,15 +2050,15 @@ test.describe('WASM/WebGL Rendering', () => {
     // the center is red again (capped, so a genuine restore failure still
     // fails the assertion rather than looping forever).
     const readCenter = () =>
-      page.evaluate(() => {
+      page.evaluate(async () => {
+        const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
           getState: () => {
             document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-            resolvePixelData: (id: string) => ImageData | undefined;
           };
         };
         const state = store.getState();
-        const data = state.resolvePixelData(state.document.activeLayerId);
+        const data = await readLayerImage(state.document.activeLayerId);
         if (!data) return { error: 'no data' } as const;
         const layer = state.document.layers.find((l) => l.id === state.document.activeLayerId);
         if (!layer) return { error: 'no layer' } as const;
@@ -2094,15 +2095,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await drawRect(page, 0, 0, 200, 200, { r: 0, g: 255, b: 0 });
 
     // Verify green is present before erasing
-    const before = await page.evaluate(() => {
+    const before = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return null;
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return null;
@@ -2148,15 +2149,15 @@ test.describe('WASM/WebGL Rendering', () => {
     });
     await page.waitForTimeout(300);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return { error: 'no data' };
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return { error: 'no layer' };
@@ -2199,11 +2200,11 @@ test.describe('WASM/WebGL Rendering', () => {
     // Paint a small 20x20 rect at (180, 140) — triggers crop + potential sparsification
     await drawRect(page, 180, 140, 20, 20, { r: 255, g: 128, b: 0 });
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number; width: number; height: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const pixelData = (window as unknown as Record<string, unknown>).__pixelData as {
@@ -2212,7 +2213,7 @@ test.describe('WASM/WebGL Rendering', () => {
       const state = store.getState();
       const id = state.document.activeLayerId;
       const layer = state.document.layers.find(l => l.id === id);
-      const data = state.resolvePixelData(id);
+      const data = await readLayerImage(id);
       const isSparse = pixelData.hasSparse(id);
       if (!layer || !data) return { error: 'no data' };
 
@@ -2262,16 +2263,16 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(300);
 
-    const afterUndo = await page.evaluate(() => {
+    const afterUndo = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       return {
         x: layer?.x ?? -1,
         y: layer?.y ?? -1,
@@ -2421,15 +2422,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(200);
 
     // Should be back to the last color (128, 128, 128)
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return { error: 'no data' };
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
       if (!layer) return { error: 'no layer' };
@@ -2470,16 +2471,16 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '47-effects-after-undo.png') });
 
     // Verify the drop shadow effect is still enabled after undo of the green paint
-    const effectAfterUndo = await page.evaluate(() => {
+    const effectAfterUndo = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; effects: { dropShadow?: { enabled: boolean } } }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const layer = state.document.layers.find(l => l.id === state.document.activeLayerId);
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data || !layer) return { shadowEnabled: false, hasYellow: false };
       // Check center pixel is yellow (not green)
       const lx = layer.x ?? 0;
@@ -2590,14 +2591,14 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(200);
 
     // Check: with 2 levels, all values should be 0 or 255
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
-      const data = store.getState().resolvePixelData(store.getState().document.activeLayerId);
+      const data = await readLayerImage(store.getState().document.activeLayerId);
       if (!data) return { error: 'no data' };
       const layer = store.getState().document.layers.find(l => l.id === store.getState().document.activeLayerId);
       if (!layer) return { error: 'no layer' };
@@ -2623,17 +2624,17 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '50-large-canvas.png') });
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       return {
         docSize: `${state.document.width}x${state.document.height}`,
-        hasData: !!state.resolvePixelData(state.document.activeLayerId),
+        hasData: !!(await readLayerImage(state.document.activeLayerId)),
       };
     });
 
@@ -2997,15 +2998,15 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(500);
 
     // Verify background is black
-    const bgCheck = await page.evaluate(() => {
+    const bgCheck = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
-      const data = state.resolvePixelData(state.document.activeLayerId);
+      const data = await readLayerImage(state.document.activeLayerId);
       if (!data) return 'no data';
       const mid = (150 * data.width + 150) * 4;
       return [data.data[mid], data.data[mid + 1], data.data[mid + 2], data.data[mid + 3]];
@@ -3155,17 +3156,17 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.waitForTimeout(200);
 
     // Snapshot: verify 3 spots exist (account for crop offset)
-    const after3spots = await page.evaluate(() => {
+    const after3spots = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; name: string; x: number; y: number }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
       const layer = state.document.layers.find(l => l.id === id);
-      const data = state.resolvePixelData(id);
+      const data = await readLayerImage(id);
       if (!data || !layer) return null;
       const lx = layer.x;
       const ly = layer.y;
@@ -3235,18 +3236,18 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '59-after-undo.png') });
 
     // Verify: back to 3 spots, correct positions and colors
-    const afterUndo = await page.evaluate(() => {
+    const afterUndo = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; layers: Array<{ id: string; name: string }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       // Find the bottom layer (should be the only content layer after undo)
       const layer1 = state.document.layers[0];
       if (!layer1) return null;
-      const data = state.resolvePixelData(layer1.id);
+      const data = await readLayerImage(layer1.id);
       if (!data) return { layerCount: state.document.layers.length, hasData: false };
       const lx = layer1.x;
       const ly = layer1.y;
@@ -3415,11 +3416,11 @@ test.describe('WASM/WebGL Rendering', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '60-after-undo.png') });
 
     // Verify: should be back to 3 red spots on 1 layer, no effects
-    const afterUndo = await page.evaluate(({ s1, s2, s3 }) => {
+    const afterUndo = await page.evaluate(async ({ s1, s2, s3 }) => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: Array<{ id: string; name: string; effects: { dropShadow: { enabled: boolean }; stroke: { enabled: boolean } } }> };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
@@ -3434,7 +3435,7 @@ test.describe('WASM/WebGL Rendering', () => {
       // Get Layer 1 data
       const layer1 = layers[0];
       if (!layer1) return { error: 'no layer 1' };
-      const data = state.resolvePixelData(layer1.id);
+      const data = await readLayerImage(layer1.id);
       const hasEffects = layer1.effects.dropShadow.enabled || layer1.effects.stroke.enabled;
 
       return {

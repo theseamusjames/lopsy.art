@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerImage } from './fixtures';
 import { addAdjustment, setGroupBlendMode } from './helpers';
 
 // ---------------------------------------------------------------------------
@@ -1013,11 +1014,11 @@ test.describe('GPU rendering verification', () => {
 
     // Verify the engine would render Layer 1 by checking the descriptor
     // that syncLayers generates for it
-    const check = await page.evaluate(({ layer1Id }) => {
+    const check = await page.evaluate(async ({ layer1Id }) => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: Array<Record<string, unknown>>; layerOrder: string[] };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const s = store.getState();
@@ -1043,7 +1044,7 @@ test.describe('GPU rendering verification', () => {
         }
       }
 
-      const px = s.resolvePixelData(layer1Id);
+      const px = await readLayerImage(layer1Id);
       return {
         visible: l1.visible,
         effectivelyVisible,
