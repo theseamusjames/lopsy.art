@@ -10,6 +10,7 @@ export default tseslint.config(
       'storybook-static/**',
       'node_modules/**',
       'src/engine-wasm/pkg/**',
+      'src/engine-wasm/pkg-wgpu/**',
       'engine-rs/**',
       'e2e/**',
       'scripts/**',

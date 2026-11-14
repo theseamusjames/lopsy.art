@@ -17,6 +17,7 @@ storybook-static
 # Rust build artifacts
 engine-rs/target/
 src/engine-wasm/pkg/
+src/engine-wasm/pkg-wgpu/
 
 # Playwright test artifacts
 test-results/

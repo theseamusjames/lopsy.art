@@ -1,26 +1,32 @@
 use std::fs;
 use std::path::Path;
 
-/// Translate the WGSL shaders to the GLSL ES 3.00 the WebGL backend
-/// compiles, into `$OUT_DIR/shaders/` under the same relative paths.
-/// `gpu::shader` embeds them from there.
+/// Write each shader as the backend compiles it into `$OUT_DIR/shaders/`,
+/// under the same relative paths: the GLSL ES 3.00 translation for WebGL,
+/// or the preprocessed WGSL for wgpu. `gpu::shader` embeds them from there.
 fn translate_shaders(out_dir: &Path) {
     let root = Path::new("src/gpu/shaders");
     println!("cargo:rerun-if-changed={}", root.display());
+    let is_wgpu = std::env::var_os("CARGO_FEATURE_WGPU").is_some();
+    let extension = if is_wgpu { "wgsl" } else { "glsl" };
+    let source = |translated: &'_ lopsy_shaderc::Translated| -> String {
+        if is_wgpu { translated.wgsl.clone() } else { translated.glsl.clone() }
+    };
     let outputs = lopsy_shaderc::translate_all(root).unwrap_or_else(|e| panic!("{e}"));
     for output in &outputs {
-        let dest = out_dir.join("shaders").join(&output.path).with_extension("glsl");
+        let dest = out_dir.join("shaders").join(&output.path).with_extension(extension);
         fs::create_dir_all(dest.parent().unwrap()).unwrap();
-        fs::write(&dest, &output.translated.glsl).unwrap();
+        fs::write(&dest, source(&output.translated)).unwrap();
     }
     for set in lopsy_shaderc::VARIANT_SETS {
-        let variants: Vec<&str> = (0..set.count)
+        let variants: Vec<String> = (0..set.count)
             .map(|value| {
                 let path = Path::new(set.path).with_extension(format!("{value}.wgsl"));
                 let output = outputs.iter().find(|o| o.path == path).expect("a variant was not translated");
-                output.translated.glsl.as_str()
+                source(&output.translated)
             })
             .collect();
+        let variants: Vec<&str> = variants.iter().map(String::as_str).collect();
         let dest = out_dir.join("shaders").join(set.path).with_extension("variants.rs");
         fs::write(&dest, variant_sources(&variants)).unwrap();
     }
