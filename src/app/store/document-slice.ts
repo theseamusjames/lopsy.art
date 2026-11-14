@@ -271,7 +271,7 @@ export interface DocumentSlice {
   fitActiveLayerToCanvas: () => void;
   duplicateLayer: () => void;
   mergeDown: () => void;
-  flattenImage: () => void;
+  flattenImage: () => Promise<void>;
   rasterizeLayerStyle: () => void;
   rasterizeTextLayer: () => void;
   updateLayerEffects: (id: string, effects: Partial<LayerEffects>) => void;
@@ -283,7 +283,7 @@ export interface DocumentSlice {
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
   addBorder: (color: Color, widths: BorderWidths, placement: BorderPlacement) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
-  convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => void;
+  convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => Promise<void>;
 
   // Multi-select
   toggleLayerSelection: (id: string) => void;
@@ -741,12 +741,12 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
-  flattenImage: () => {
+  flattenImage: async () => {
     const s = get();
     flushLayerSync(s);
     // GPU-only (compositeForExport + uploadLayerPixels); no JS pixel
     // map needed (#746).
-    const result = computeFlattenImage(s.document);
+    const result = await computeFlattenImage(s.document);
     if (!result) return;
     s.pushHistory('Flatten Image');
     applyActionResult(set, result);
@@ -961,7 +961,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     rerenderTransformedText(get, set);
   },
 
-  convertColorMode: (newMode, options) => {
+  convertColorMode: async (newMode, options) => {
     const s = get();
     if (s.document.colorMode === newMode) return;
 
@@ -979,7 +979,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     let doc = s.document;
     let pixelsAreEncoded = doc.colorMode === 'lab';
     if (newMode === 'indexed') {
-      const flattened = computeFlattenImage(doc);
+      const flattened = await computeFlattenImage(doc);
       if (flattened?.document) {
         applyActionResult(set, flattened);
         doc = flattened.document;

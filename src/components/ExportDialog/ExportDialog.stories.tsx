@@ -34,7 +34,7 @@ export const JPEGWithQuality: Story = {
 export const WithPreview: Story = {
   name: 'With cached preview source',
   args: {
-    onPreviewSourceRequest: () => {
+    onPreviewSourceRequest: async () => {
       // Cached preview thumbnail — encoded fresh on every option change,
       // but the composite happens once (here, via a fixed placeholder).
       const canvas = document.createElement('canvas');

@@ -30,7 +30,7 @@ interface ExportDialogProps {
    * (the expensive full-document composite happens here). Returning null
    * disables the preview pane.
    */
-  onPreviewSourceRequest?: () => ExportPreviewSourceHandle | null;
+  onPreviewSourceRequest?: () => Promise<ExportPreviewSourceHandle | null>;
 }
 
 export type { ExportDialogProps };
@@ -64,11 +64,21 @@ export function ExportDialog({ onExport, onCancel, onPreviewSourceRequest }: Exp
   // expensive part; caching it lets option changes re-encode cheaply.
   useEffect(() => {
     if (!onPreviewSourceRequest) return;
+    let isCurrent = true;
     setIsPreviewLoading(true);
-    const source = onPreviewSourceRequest();
-    previewSourceRef.current = source;
-    setSourceReady(true);
-    if (!source) setIsPreviewLoading(false);
+    onPreviewSourceRequest()
+      .then((source) => {
+        if (!isCurrent) return;
+        previewSourceRef.current = source;
+        setSourceReady(true);
+        if (!source) setIsPreviewLoading(false);
+      })
+      .catch(() => {
+        if (isCurrent) setIsPreviewLoading(false);
+      });
+    return () => {
+      isCurrent = false;
+    };
   }, [onPreviewSourceRequest]);
 
   const requestPreview = useCallback((opts: ExportOptions) => {

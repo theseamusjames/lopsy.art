@@ -135,7 +135,7 @@ if (import.meta.env.DEV) {
     const w = sizeArr[0] ?? 0;
     const h = sizeArr[1] ?? 0;
     if (!w || !h) return null;
-    const rawPixels = compositeForExport(engine);
+    const rawPixels = await compositeForExport(engine);
     const scale = longEdge / Math.max(w, h);
     const dw = Math.max(1, Math.round(w * scale));
     const dh = Math.max(1, Math.round(h * scale));
