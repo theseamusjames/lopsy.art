@@ -149,7 +149,7 @@ pub const MARCHING_ANTS_FRAG: &str = include_str!("shaders/selection/marching_an
 
 // Color
 pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
-pub const TONEMAP_FRAG: &str = include_str!("shaders/color/tonemap.glsl");
+pub const TONEMAP_FRAG: &str = translated!("color/tonemap");
 
 // Text
 pub const TEXT_GLYPH_FRAG: &str = include_str!("shaders/text/text_glyph.glsl");
