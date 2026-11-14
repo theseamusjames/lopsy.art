@@ -227,7 +227,7 @@ import init, {
   readLayerPixelsForFill as rawReadLayerPixelsForFill,
   bucketFillSolid,
   bucketFillByColorGpu,
-  magneticLassoBegin,
+  magneticLassoBegin as rawMagneticLassoBegin,
   magneticLassoSnap,
   magneticLassoSnapPoint,
   magneticLassoEnd,
@@ -536,7 +536,6 @@ export {
   applyFillToLayer,
   bucketFillSolid,
   bucketFillByColorGpu,
-  magneticLassoBegin,
   magneticLassoSnap,
   magneticLassoSnapPoint,
   magneticLassoEnd,
@@ -681,6 +680,11 @@ export const applyPaletteToLayer = asyncReadback(rawApplyPaletteToLayer);
 export const flattenIntoLayer = asyncReadback(rawFlattenIntoLayer);
 /** Copy the merged document to the clipboard texture. Reads only in a Lab document. */
 export const clipboardCopyMerged = asyncReadback(rawClipboardCopyMerged);
+/**
+ * Read a layer and build the edge field the magnetic lasso snaps to. Until
+ * it resolves there is no field: the caller passes its points through.
+ */
+export const magneticLassoBegin = asyncReadback(rawMagneticLassoBegin);
 export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);

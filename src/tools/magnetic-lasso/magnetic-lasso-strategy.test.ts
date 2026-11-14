@@ -123,9 +123,16 @@ function straightSnap(...args: unknown[]): Float32Array {
   return new Float32Array([fromX, fromY, toX, toY]);
 }
 
+/** Let the engine's edge field for the trace arrive. */
+async function settle(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 beforeEach(() => {
   engine = { __engine: 'mock' };
   magneticLassoBegin.mockReset();
+  magneticLassoBegin.mockImplementation(() => Promise.resolve());
   magneticLassoSnap.mockReset();
   magneticLassoSnapPoint.mockReset();
   magneticLassoEnd.mockClear();
@@ -149,45 +156,82 @@ beforeEach(() => {
 });
 
 describe('magnetic lasso onDown', () => {
-  it('returns undefined when no engine is available', () => {
+  it('returns undefined when no engine is available', async () => {
     engine = null;
     expect(magneticLassoStrategy.onDown(makeCtx(), 'lasso-magnetic')).toBeUndefined();
     expect(magneticLassoBegin).not.toHaveBeenCalled();
   });
 
-  it('returns undefined when the engine cannot begin a trace', () => {
-    magneticLassoBegin.mockImplementation(() => {
-      throw new Error('no layer');
-    });
-    expect(magneticLassoStrategy.onDown(makeCtx(), 'lasso-magnetic')).toBeUndefined();
+  it('traces as a plain lasso when the engine cannot build an edge field', async () => {
+    magneticLassoBegin.mockImplementation(() => Promise.reject(new Error('no layer')));
+    const state = magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 0, y: 0 } }), 'lasso-magnetic');
+    await settle();
+    expect(state).toMatchObject({ drawing: true, tool: 'lasso-magnetic' });
+    magneticLassoStrategy.onMove!(makeState(), { x: 4, y: 0 }, false);
+    expect(magneticLassoSnap).not.toHaveBeenCalled();
+    expect(uiState.lassoPoints).toEqual([{ x: 0, y: 0 }, { x: 4, y: 0 }]);
   });
 
-  it('begins a trace on the active layer with the start snapped to an edge', () => {
+  it('follows the pointer unsnapped until the edge field is ready', async () => {
+    let ready: () => void = () => {};
+    magneticLassoBegin.mockImplementation(() => new Promise<void>((resolve) => { ready = resolve; }));
+    magneticLassoSnapPoint.mockReturnValue(new Float32Array([9, 9]));
+    magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 0, y: 0 } }), 'lasso-magnetic');
+    expect(uiState.lassoPoints).toEqual([{ x: 0, y: 0 }]);
+
+    magneticLassoStrategy.onMove!(makeState(), { x: 4, y: 0 }, false);
+    expect(magneticLassoSnap).not.toHaveBeenCalled();
+    expect(uiState.lassoPoints).toEqual([{ x: 0, y: 0 }, { x: 4, y: 0 }]);
+
+    ready();
+    await settle();
+    // What was traced stays; the next move snaps.
+    expect(uiState.lassoPoints).toEqual([{ x: 0, y: 0 }, { x: 4, y: 0 }]);
+    magneticLassoStrategy.onMove!(makeState(), { x: 6, y: 0 }, false);
+    expect(magneticLassoSnap).toHaveBeenCalled();
+  });
+
+  it('frees an edge field that arrives after its trace ended', async () => {
+    let ready: () => void = () => {};
+    magneticLassoBegin.mockImplementation(() => new Promise<void>((resolve) => { ready = resolve; }));
+    magneticLassoStrategy.onDown(makeCtx(), 'lasso-magnetic');
+    magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 }, upCtx);
+    magneticLassoEnd.mockClear();
+    ready();
+    await settle();
+    expect(magneticLassoEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('begins a trace on the active layer with the start snapped to an edge', async () => {
     magneticLassoSnapPoint.mockReturnValue(new Float32Array([3, 4]));
     const state = magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 1, y: 1 } }), 'lasso-magnetic');
+    await settle();
     expect(magneticLassoBegin.mock.calls[0]![1]).toBe('layer-1');
     expect(uiState.setLassoPoints).toHaveBeenCalledWith([{ x: 3, y: 4 }]);
     expect(state).toMatchObject({ drawing: true, tool: 'lasso-magnetic', startPoint: { x: 1, y: 1 } });
   });
 
-  it('converts the contrast setting into a 1..255 threshold for the snapper', () => {
+  it('converts the contrast setting into a 1..255 threshold for the snapper', async () => {
     ts.settings.magneticLasso = { ...ts.settings.magneticLasso, contrast: 10 };
     magneticLassoStrategy.onDown(makeCtx(), 'lasso-magnetic');
+    await settle();
     // round(10 * 2.55) = 26
     expect(magneticLassoSnapPoint.mock.calls[0]![4]).toBe(26);
     expect(magneticLassoSnapPoint.mock.calls[0]![3]).toBe(10); // radius
   });
 
-  it('falls back to the raw click point when snapping returns nothing', () => {
+  it('falls back to the raw click point when snapping returns nothing', async () => {
     magneticLassoSnapPoint.mockReturnValue(new Float32Array(0));
     magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 5, y: 6 } }), 'lasso-magnetic');
+    await settle();
     expect(uiState.setLassoPoints).toHaveBeenCalledWith([{ x: 5, y: 6 }]);
   });
 });
 
 describe('magnetic lasso onMove', () => {
-  it('updates the live segment with the snapped polyline', () => {
+  it('updates the live segment with the snapped polyline', async () => {
     magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 0, y: 0 } }), 'lasso-magnetic');
+    await settle();
     magneticLassoStrategy.onMove!(makeState(), { x: 4, y: 0 }, false);
     expect(uiState.lassoPoints).toEqual([
       { x: 0, y: 0 },
@@ -195,9 +239,10 @@ describe('magnetic lasso onMove', () => {
     ]);
   });
 
-  it('auto-anchors when the live segment grows past the frequency length', () => {
+  it('auto-anchors when the live segment grows past the frequency length', async () => {
     ts.settings.magneticLasso = { ...ts.settings.magneticLasso, frequency: 5 };
     magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 0, y: 0 } }), 'lasso-magnetic');
+    await settle();
     magneticLassoStrategy.onMove!(makeState(), { x: 8, y: 0 }, false);
     // The 8px segment exceeds frequency 5, so an anchor is committed at the
     // cursor and the preview contains the committed segment.
@@ -213,16 +258,17 @@ describe('magnetic lasso onMove', () => {
     ]);
   });
 
-  it('does nothing when no trace is active', () => {
+  it('does nothing when no trace is active', async () => {
     magneticLassoStrategy.onMove!(makeState(), { x: 4, y: 4 }, false);
     expect(uiState.setLassoPoints).not.toHaveBeenCalled();
   });
 });
 
 describe('magnetic lasso onUp', () => {
-  it('closes the loop and commits a polygon selection', () => {
+  it('closes the loop and commits a polygon selection', async () => {
     ts.settings.magneticLasso = { ...ts.settings.magneticLasso, frequency: 5 };
     magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 0, y: 0 } }), 'lasso-magnetic');
+    await settle();
     magneticLassoStrategy.onMove!(makeState(), { x: 8, y: 0 }, false);
     magneticLassoStrategy.onMove!(makeState(), { x: 8, y: 8 }, false);
     magneticLassoStrategy.onUp!(makeState(), { x: 8, y: 8 }, upCtx);
@@ -244,16 +290,18 @@ describe('magnetic lasso onUp', () => {
     expect(uiState.clearLassoPoints).toHaveBeenCalledTimes(1);
   });
 
-  it('releases the engine trace without selecting when the loop is degenerate', () => {
+  it('releases the engine trace without selecting when the loop is degenerate', async () => {
     magneticLassoStrategy.onDown(makeCtx({ canvasPos: { x: 0, y: 0 } }), 'lasso-magnetic');
+    await settle();
     magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 }, upCtx);
     expect(editorState.setSelection).not.toHaveBeenCalled();
     expect(magneticLassoEnd).toHaveBeenCalledTimes(1);
     expect(uiState.clearLassoPoints).toHaveBeenCalledTimes(1);
   });
 
-  it('a second onUp without a new trace only clears the preview', () => {
+  it('a second onUp without a new trace only clears the preview', async () => {
     magneticLassoStrategy.onDown(makeCtx(), 'lasso-magnetic');
+    await settle();
     magneticLassoStrategy.onUp!(makeState(), { x: 0, y: 0 }, upCtx);
     magneticLassoEnd.mockClear();
     editorState.setSelection.mockClear();

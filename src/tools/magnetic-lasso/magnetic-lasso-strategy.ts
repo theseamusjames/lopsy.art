@@ -28,13 +28,24 @@ import { selectionCombineMode } from '../../selection/selection';
 
 let magneticLassoTrace: MagneticLassoState | null = null;
 
+/**
+ * The engine builds the edge field from a read of the layer, which answers
+ * after the press. Until it has, there is nothing to snap to and the trace
+ * follows the pointer as a plain lasso would, so no move waits on the read.
+ */
+let isEdgeFieldReady = false;
+/** Counts presses, so an answer for an earlier trace is told apart. */
+let traceCount = 0;
+/** The trace is still only its starting point. */
+let isTraceAtStart = false;
+
 function makeMagneticSnapFn(): SnapFn {
   const engine = getEngine();
   const { magneticLasso } = useToolSettingsStore.getState().settings;
   const radius = magneticLasso.width;
   const threshold = Math.max(1, Math.min(255, Math.round(magneticLasso.contrast * 2.55)));
   return (from, to) => {
-    if (!engine) return [from, to];
+    if (!engine || !isEdgeFieldReady) return [from, to];
     const flat = wasmMagneticLassoSnap(engine, from.x, from.y, to.x, to.y, radius, threshold);
     return pointsFromFloat32(flat);
   };
@@ -42,7 +53,7 @@ function makeMagneticSnapFn(): SnapFn {
 
 function snapCursorToEdge(p: Point): Point {
   const engine = getEngine();
-  if (!engine) return p;
+  if (!engine || !isEdgeFieldReady) return p;
   const { magneticLasso } = useToolSettingsStore.getState().settings;
   const radius = magneticLasso.width;
   const threshold = Math.max(1, Math.min(255, Math.round(magneticLasso.contrast * 2.55)));
@@ -60,20 +71,30 @@ export const magneticLassoStrategy: SelectionToolStrategy = {
   onDown(ctx: InteractionContext, _tool: SelectionToolId): InteractionState | undefined {
     const engine = getEngine();
     if (!engine) return undefined;
-    try {
-      wasmMagneticLassoBegin(engine, ctx.activeLayerId);
-    } catch {
-      return undefined;
-    }
-    const { magneticLasso } = useToolSettingsStore.getState().settings;
-    const radius = magneticLasso.width;
-    const threshold = Math.max(1, Math.min(255, Math.round(magneticLasso.contrast * 2.55)));
-    const snapped = wasmMagneticLassoSnapPoint(engine, ctx.canvasPos.x, ctx.canvasPos.y, radius, threshold);
-    const startPoint = snapped.length >= 2
-      ? { x: snapped[0]!, y: snapped[1]! }
-      : ctx.canvasPos;
-    magneticLassoTrace = beginLasso(startPoint);
+    const trace = ++traceCount;
+    isEdgeFieldReady = false;
+    isTraceAtStart = true;
+    magneticLassoTrace = beginLasso(ctx.canvasPos);
     updateMagneticLassoPreview(magneticLassoTrace);
+    const pressedAt = ctx.canvasPos;
+    wasmMagneticLassoBegin(engine, ctx.activeLayerId).then(
+      () => {
+        if (trace !== traceCount || !magneticLassoTrace) {
+          // The trace this field was for has ended; free it unless a newer
+          // trace is waiting for its own.
+          if (!magneticLassoTrace) wasmMagneticLassoEnd(engine);
+          return;
+        }
+        isEdgeFieldReady = true;
+        // Nothing has been traced yet: start on the edge, as a press does
+        // when the field is there from the first move.
+        if (!isTraceAtStart) return;
+        magneticLassoTrace = beginLasso(snapCursorToEdge(pressedAt));
+        updateMagneticLassoPreview(magneticLassoTrace);
+      },
+      // No field: the trace stays a plain lasso.
+      () => {},
+    );
     return {
       drawing: true,
       lastPoint: ctx.canvasPos,
@@ -89,6 +110,7 @@ export const magneticLassoStrategy: SelectionToolStrategy = {
 
   onMove(_state: InteractionState, canvasPos: Point): void {
     if (!magneticLassoTrace) return;
+    isTraceAtStart = false;
     const snap = makeMagneticSnapFn();
     let trace = magneticUpdateCursor(magneticLassoTrace, canvasPos, snap);
     const frequency = useToolSettingsStore.getState().settings.magneticLasso.frequency;
@@ -120,6 +142,7 @@ export const magneticLassoStrategy: SelectionToolStrategy = {
     }
     if (engine) wasmMagneticLassoEnd(engine);
     magneticLassoTrace = null;
+    isEdgeFieldReady = false;
     useUIStore.getState().clearLassoPoints();
   },
 };
