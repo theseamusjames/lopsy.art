@@ -15,7 +15,7 @@ Status: in progress.
 | 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
-| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Every readback the app makes through the bridge now answers with a Promise. Left: the reads inside engine commands, and a synchronous store read only tests reach; see Phase 4 |
+| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Commands that read inside the engine answer with a Promise or no longer read (#1705), and the last synchronous layer read is deleted (#1706). Phase 4 is done on the TypeScript side: nothing above the bridge reads the GPU synchronously. What is left is Rust's, in 6.6; see Phase 4 |
 | 5–7 | Not started |
 
 ---
@@ -937,19 +937,49 @@ whose reads take frames, a tab hidden for good before they answer keeps
 its previous backup; that is the contract change the old `now` mode
 could not survive, and it is not exercised yet.
 
-**Left:**
+**Reads inside engine commands (#1705).** Nine commands read the GPU
+themselves, worked on the bytes and wrote a result back, behind
+synchronous exports.
 
-- **Reads inside engine commands**: mask fill and quick-mask fill,
-  magnetic lasso begin, PSD export, the Lab decode above. These are
-  Rust's to make async in 6.6, and their exports then return a Promise.
-  For magnetic lasso, moves that arrive before the edges are ready
-  should pass the raw point through.
-- **`expandLayerForEditing` and `resolvePixelData`** in the pixel store
-  still call `readLayerAsImageDataSync`. No app code reaches them: only
-  unit tests and e2e helpers that drive the store directly (`rendering`,
-  `layer-groups`, `brush-selection-crossover`, `move-layer`). They go
-  when those helpers read through the bridge instead.
-- `readQuickMaskPixels` has no callers in the app.
+- **Two no longer read.** `cropLayerToContent` (the whole-layer Move
+  grab, and the idle crop after a layer switch) and `beginLayerTransform`
+  (a press on a multi-layer transform handle) took a layer's content
+  bounds inside the engine, on a pointer-down. They now take them as
+  arguments, from the content-rect cache, and check only that the rect
+  still fits the texture. A grab crops and begins at once when the
+  bounds are known and holds the press while they are read when they
+  are not; a crop seeds the cache with its own result. A transform
+  press starts its gesture at once and begins the engine session when
+  the bounds are in, because the press itself (history push, float
+  bake) marks them stale.
+- **Magnetic lasso** (`magneticLassoBegin`) starts its trace at once and
+  follows the pointer as a plain lasso until the edge field arrives,
+  then snaps. A field that arrives after its trace ended is freed.
+- **Six answer with a Promise** and their callers await: mask fill,
+  quick-mask fill, leaving Quick Mask mode, PSD export, the Lab, CMYK
+  and palette conversions, and Flatten Image and Copy Merged for their
+  Lab decode. Leaving Quick Mask ends the mode at once and installs the
+  selection when the read answers.
+
+`extractChannelPixels`, an unused full-size read, went with its shader.
+
+**The synchronous layer read is deleted (#1706).** The pixel store's
+`expandLayerForEditing`, `getOrCreateLayerPixelData` and
+`resolvePixelData` had no app callers left, but 26 e2e specs read layers
+through them. Those specs now use two awaited helpers that
+`e2e/fixtures.ts` installs on every page (`__readLayerImage`,
+layer-local, and `__readLayerInDocument`, document-sized), and
+`move-layer.spec.ts`, which imitated a Move grab by calling the store,
+drives the Brush and Move tools instead. `readLayerAsImageDataSync` and
+`readLayerPixelsSync` are gone.
+
+**Left, all of it Rust's in 6.6:** the six commands above still read
+synchronously inside the engine, as does every readback behind an
+`asyncReadback` export. When the engine's read becomes async their
+exports return a real Promise and nothing above the bridge changes.
+`readQuickMaskPixels` has no callers in the app. One thing noticed and
+not verified: Flatten Image in a Lab document writes the decoded sRGB
+composite into a layer of a Lab document.
 
 ### Phase 5 — WGSL as the shader source
 
