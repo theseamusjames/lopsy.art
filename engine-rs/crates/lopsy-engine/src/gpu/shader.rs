@@ -41,7 +41,7 @@ pub const PREMUL_SAMPLE: &str = include_str!("shaders/premul_sample.glsl");
 pub const LAB_COMMON: &str = include_str!("shaders/lab_common.glsl");
 pub const BLIT_RESAMPLE_FRAG: &str = translated!("blit_resample");
 pub const COMPOSITE_FRAG: &str = translated!("composite");
-pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
+pub const FINAL_BLIT_FRAG: &str = translated!("final_blit");
 pub const FLIP_FRAG: &str = translated!("flip");
 pub const CLIPBOARD_COPY_FRAG: &str = translated!("clipboard_copy");
 pub const CLIPBOARD_CLEAR_FRAG: &str = translated!("clipboard_clear");
@@ -756,7 +756,7 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, typed_shader_checks, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
+        inject_defines, preprocess_frag, typed_shader_checks, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG,
         SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
     };
 
@@ -821,8 +821,9 @@ mod tests {
             assert!(out.contains("c.rgb = labToSrgb(c.rgb)"));
             assert!(out.contains("c.rgb = srgbToLab(c.rgb)"));
         }
-        let blit = preprocess_frag(FINAL_BLIT_FRAG);
-        assert!(blit.contains("vec3 labToSrgb(vec3 encoded)"));
+        let blit = include_str!("shaders/final_blit.wgsl");
+        assert!(blit.contains("//#include lab"), "lab helpers not spliced in");
+        assert!(blit.contains("labToSrgb(color.rgb)"));
     }
 
     #[test]
