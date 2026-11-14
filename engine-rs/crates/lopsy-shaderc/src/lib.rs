@@ -224,7 +224,7 @@ pub fn wgsl_to_glsl(wgsl: &str) -> Result<String, String> {
 fn flatten_params_struct(text: &str, block_name: &str, instance: &str) -> Result<String, String> {
     let struct_open = format!("struct {PARAMS_STRUCT} {{");
     let block_line = format!("layout(std140) uniform {block_name} {{ {PARAMS_STRUCT} {instance}; }};");
-    let mut members: Vec<&str> = Vec::new();
+    let mut members: Vec<String> = Vec::new();
     let mut out = String::with_capacity(text.len());
     let mut is_in_struct = false;
     let mut is_block_written = false;
@@ -233,7 +233,7 @@ fn flatten_params_struct(text: &str, block_name: &str, instance: &str) -> Result
             if line.trim() == "};" {
                 is_in_struct = false;
             } else {
-                members.push(line);
+                members.push(short_matrix_type(line));
             }
         } else if line.trim() == struct_open {
             is_in_struct = true;
@@ -261,6 +261,18 @@ fn flatten_params_struct(text: &str, block_name: &str, instance: &str) -> Result
         return Err(format!("`{PARAMS_STRUCT}` may only be read member by member"));
     }
     Ok(out)
+}
+
+/// naga spells a square matrix `mat3x3`; the hand-written shaders, and the
+/// check of each block against its Rust struct, spell it `mat3`.
+fn short_matrix_type(member: &str) -> String {
+    let mut out = member.to_string();
+    for (long, short) in [("mat2x2 ", "mat2 "), ("mat3x3 ", "mat3 "), ("mat4x4 ", "mat4 ")] {
+        if out.trim_start().starts_with(long) {
+            out = out.replacen(long, short, 1);
+        }
+    }
+    out
 }
 
 fn is_ident(c: char) -> bool {
@@ -336,6 +348,20 @@ mod tests {
         assert!(!glsl.contains("struct Params"));
         assert!(!glsl.contains("_group_0_binding_0_fs"));
         assert!(glsl.contains("u_offset"));
+    }
+
+    #[test]
+    fn a_square_matrix_member_takes_the_short_glsl_name() {
+        let glsl = wgsl_to_glsl(
+            "struct Params { u_colorMatrix: mat3x3<f32>, }
+             @group(0) @binding(0) var<uniform> params: Params;
+             @fragment
+             fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+                 return vec4<f32>(params.u_colorMatrix * vec3<f32>(uv, 1.0), 1.0);
+             }",
+        )
+        .unwrap();
+        assert!(glsl.contains("    mat3 u_colorMatrix;\n"), "{glsl}");
     }
 
     #[test]
