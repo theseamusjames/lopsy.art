@@ -246,11 +246,23 @@ pub fn wgsl_to_glsl(wgsl: &str) -> Result<String, String> {
         let instance = format!("_group_{}_binding_{}_fs", binding.group, binding.binding);
         blocks.push((block_name.clone(), instance));
     }
-    match blocks.as_slice() {
-        [] => Ok(text),
-        [(block_name, instance)] => flatten_params_struct(&text, block_name, instance),
-        _ => Err(format!("expected at most one uniform struct, found {}", blocks.len())),
+    let text = match blocks.as_slice() {
+        [] => text,
+        [(block_name, instance)] => flatten_params_struct(&text, block_name, instance)?,
+        _ => return Err(format!("expected at most one uniform struct, found {}", blocks.len())),
+    };
+    Ok(without_layout_whitespace(&text))
+}
+
+/// Drop indentation and blank lines. Every shader's GLSL is embedded in the
+/// wasm, and naga's layout is about a fifth of its bytes.
+fn without_layout_whitespace(glsl: &str) -> String {
+    let mut out = String::with_capacity(glsl.len());
+    for line in glsl.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        out.push_str(line);
+        out.push('\n');
     }
+    out
 }
 
 /// naga writes a uniform struct as a struct type plus a block holding one
@@ -388,7 +400,7 @@ mod tests {
              }",
         )
         .unwrap();
-        assert!(glsl.contains("layout(std140) uniform Params {\n    float u_levels;\n    vec2 u_offset;\n};\n"), "{glsl}");
+        assert!(glsl.contains("layout(std140) uniform Params {\nfloat u_levels;\nvec2 u_offset;\n};\n"), "{glsl}");
         assert!(!glsl.contains("struct Params"));
         assert!(!glsl.contains("_group_0_binding_0_fs"));
         assert!(glsl.contains("u_offset"));
@@ -405,7 +417,21 @@ mod tests {
              }",
         )
         .unwrap();
-        assert!(glsl.contains("    mat3 u_colorMatrix;\n"), "{glsl}");
+        assert!(glsl.contains("\nmat3 u_colorMatrix;\n"), "{glsl}");
+    }
+
+    #[test]
+    fn generated_glsl_carries_no_indentation_or_blank_lines() {
+        let glsl = wgsl_to_glsl(
+            "@fragment
+             fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+                 if (uv.x > 0.5) { return vec4<f32>(1.0); }
+                 return vec4<f32>(0.0);
+             }",
+        )
+        .unwrap();
+        assert!(glsl.starts_with("#version 300 es\n"));
+        assert!(glsl.lines().all(|line| !line.is_empty() && line == line.trim()), "{glsl}");
     }
 
     #[test]
