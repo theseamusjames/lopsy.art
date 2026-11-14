@@ -15,7 +15,7 @@ Status: in progress.
 | 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
-| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698). The interactive readbacks and the layer backup are not started; see Phase 4 |
+| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701). Left: quick select, wand, fill, feather, content bounds, rasterize style, the filter preview commit and the layer backup; see Phase 4 |
 | 5–7 | Not started |
 
 ---
@@ -831,27 +831,63 @@ runs in the same task, so nothing can change in between.
 that return a Promise. Specs that call the bridge through
 `window.__wasmBridge` await it.
 
+**Readbacks removed, not awaited.** Where the pixels only left the GPU
+to come straight back, the engine got a command that keeps them there
+(#1701):
+
+- **Flatten Image** read the whole composite into JS and uploaded it as
+  the new layer. `flattenIntoLayer` composites into the layer's texture.
+  The flattened layer now keeps the composite's precision; the round
+  trip had quantised it to 8 bits. Convert to Indexed flattens the same
+  way.
+- **Copy Merged** read the composite, cropped and masked it in JS and
+  uploaded the clipboard. `clipboardCopyMerged` uses the pass plain Copy
+  uses. A soft selection edge is therefore kept as coverage, as Copy
+  does; the JS loop kept every pixel the mask touched at full strength.
+- **The pointer-down layer read** for paint tools was unreachable: every
+  paint tool takes the GPU path. It is deleted.
+
+In a Lab document both commands still decode the composite to sRGB on
+the CPU, inside the engine. That read is Rust's to make async in 6.6.
+
+The **eyedropper** awaits `sampleColor` and applies a colour only if no
+newer sample was requested since.
+
+**Where selection reads the GPU.** Dragging a marquee, lasso or
+magnetic lasso reads nothing back per move: the selection mask lives in
+JS and is uploaded, and magnetic lasso snaps on the CPU against edges it
+computed once. The reads are at the ends:
+
+- Magnetic lasso reads the layer once at pointer-down, inside Rust.
+  When that read is async (6.6), moves that arrive first should pass the
+  raw point through until the edges are ready.
+- Feather (marquee commit and Select > Feather) uploads the mask, blurs
+  it on the GPU and reads it back (`readSelectionMask`).
+- Selecting a layer's pixels (Cmd-click a thumbnail, and after paste)
+  reads the layer to build the mask from its alpha (`resolvePixelData`,
+  still on `readLayerAsImageDataSync`).
+
 **Left, with what each needs:**
 
-- **Pointer-down reads in the pixel-data store.** `expandLayerForEditing`
-  and `resolvePixelData` still use `readLayerAsImageDataSync`: a paint
-  tool's pointer-down reads the layer into a JS buffer before the stroke
-  starts. Awaiting there means the first pointer-move can arrive before
-  the read does. This is pixel-data debt (docs/pixel-data-debt.md); the
-  fix is for those tools to stop needing the buffer, not to await it.
+- **Quick select, magic wand, bucket fill** (`readLayerPixelsForFill`).
+  Their pointer-down handler reads the layer and returns the interaction
+  state in one synchronous step. Quick select then grows the selection
+  on every move from those pixels, so it needs the same treatment as
+  magnetic lasso: start the read at pointer-down and hold or pass
+  through the moves until it answers. Wand and fill are single clicks
+  and can apply when the read arrives, checking the layer's content
+  generation first.
+- **Feather** and **select layer pixels** (above): awaitable, but the
+  paste flow calls the second and then relies on the selection existing,
+  so its callers have to await in order.
+- **Content bounds** (`getLayerContentBounds`), **Rasterize Layer Style
+  and Merge Down** (`rasterizeLayerEffects`), the **filter preview
+  commit** (`readLayerCompressed`), **mask bytes** (`readMaskTexture`,
+  already behind a read queue), `readQuickMaskPixels` (no callers).
 - **Layer backup.** `layer-backup-runner` takes a synchronous `readBlob`,
   and its `now` mode (the tab was hidden) finishes every layer before it
   returns. An async read cannot promise that, so the runner's contract
   has to change, not only its signature.
-- **Eyedropper** (`sampleColor`): take the latest result, drop stale
-  ones, as planned.
-- **Bucket fill, magic wand, quick select** (`readLayerPixelsForFill`):
-  check the layer's content generation before applying.
-- **Content bounds** (`getLayerContentBounds`), **selection mask**
-  (`readSelectionMask`), **mask bytes** (`readMaskTexture`, already
-  behind a read queue), **filter preview commit**
-  (`readLayerCompressed`), **Rasterize Layer Style / Merge Down**
-  (`rasterizeLayerEffects`), `readQuickMaskPixels` (no callers).
 
 ### Phase 5 — WGSL as the shader source
 
