@@ -14,8 +14,9 @@ Status: in progress.
 | 0 | Done (#1643, #1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
 | 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
-| 3 | In review as one GitHub stack (#1693, #1694, #1696, #1697): the wasm exports are single calls, the engine lives in its own crate, `EngineInner` is split into subsystems, and the adjustments pass and 25 filters are standalone imaging operations. Ten multi-pass filters are still staged from `commands/`; see 3.5 |
-| 4–7 | Not started |
+| 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
+| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698). The interactive readbacks and the layer backup are not started; see Phase 4 |
+| 5–7 | Not started |
 
 ---
 
@@ -815,6 +816,42 @@ document changes between the request and the result: the eyedropper
 takes the latest result and drops stale ones; fill checks the layer's
 content generation before applying. Undo is unaffected, since history
 snapshots are GPU-side copies with no readback.
+
+**As built so far.** `asyncReadback` in `wasm-bridge.ts` wraps a
+synchronous export so it returns a Promise, resolved or rejected before
+it is returned. A converted caller awaits; on WebGL the continuation
+runs in the same task, so nothing can change in between.
+
+| PR | Functions | Callers converted |
+|---|---|---|
+| #1699 | `compositeForExport`, `exportPng16`, `quantizeCompositeToPalette`, `readLayerPixels`, `readLayerAsImageData` | Export and its preview, Flatten Image, Copy Merged, Convert Color Mode, Define Brush, Define Pattern, project save, Auto Tone / Contrast / Color, perspective crop |
+| #1698 | `readLayerThumbnail`, `readCompositeThumbnail`, `readChannelThumbnail`, `readClipboardPixels` | The thumbnail read queue, Layers / Channels / Navigator panels, group histogram, system clipboard write, paste check |
+
+`flattenImage`, `copyMerged` and `convertColorMode` are now store actions
+that return a Promise. Specs that call the bridge through
+`window.__wasmBridge` await it.
+
+**Left, with what each needs:**
+
+- **Pointer-down reads in the pixel-data store.** `expandLayerForEditing`
+  and `resolvePixelData` still use `readLayerAsImageDataSync`: a paint
+  tool's pointer-down reads the layer into a JS buffer before the stroke
+  starts. Awaiting there means the first pointer-move can arrive before
+  the read does. This is pixel-data debt (docs/pixel-data-debt.md); the
+  fix is for those tools to stop needing the buffer, not to await it.
+- **Layer backup.** `layer-backup-runner` takes a synchronous `readBlob`,
+  and its `now` mode (the tab was hidden) finishes every layer before it
+  returns. An async read cannot promise that, so the runner's contract
+  has to change, not only its signature.
+- **Eyedropper** (`sampleColor`): take the latest result, drop stale
+  ones, as planned.
+- **Bucket fill, magic wand, quick select** (`readLayerPixelsForFill`):
+  check the layer's content generation before applying.
+- **Content bounds** (`getLayerContentBounds`), **selection mask**
+  (`readSelectionMask`), **mask bytes** (`readMaskTexture`, already
+  behind a read queue), **filter preview commit**
+  (`readLayerCompressed`), **Rasterize Layer Style / Merge Down**
+  (`rasterizeLayerEffects`), `readQuickMaskPixels` (no callers).
 
 ### Phase 5 — WGSL as the shader source
 
