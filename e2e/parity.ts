@@ -90,7 +90,7 @@ export async function parityCheckpoint(page: Page, composition: string, name: st
 
     const engine = w.__engineState.getEngine();
     const size = w.__wasmBridge.getCompositeSize(engine);
-    const composite = w.__wasmBridge.compositeForExport(engine);
+    const composite = await w.__wasmBridge.compositeForExport(engine);
     return {
       width: size[0] ?? 0,
       height: size[1] ?? 0,

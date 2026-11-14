@@ -129,7 +129,7 @@ describe('createExportPreviewSession — cached preview thumbnail (#762)', () =>
   });
 
   it('composites exactly once per session', async () => {
-    const session = createExportPreviewSession();
+    const session = await createExportPreviewSession();
     expect(session).not.toBeNull();
     expect(compositeForExportMock).toHaveBeenCalledTimes(1);
 
@@ -143,26 +143,26 @@ describe('createExportPreviewSession — cached preview thumbnail (#762)', () =>
     expect(compositeForExportMock).toHaveBeenCalledTimes(1);
   });
 
-  it('starts a fresh session with a fresh composite', () => {
-    const s1 = createExportPreviewSession();
+  it('starts a fresh session with a fresh composite', async () => {
+    const s1 = await createExportPreviewSession();
     expect(s1).not.toBeNull();
     expect(compositeForExportMock).toHaveBeenCalledTimes(1);
 
-    const s2 = createExportPreviewSession();
+    const s2 = await createExportPreviewSession();
     expect(s2).not.toBeNull();
     expect(compositeForExportMock).toHaveBeenCalledTimes(2);
   });
 
-  it('returns null when the engine is unavailable', () => {
+  it('returns null when the engine is unavailable', async () => {
     getEngineMock.mockReturnValueOnce(null as unknown as typeof fakeEngine);
-    const session = createExportPreviewSession();
+    const session = await createExportPreviewSession();
     expect(session).toBeNull();
     expect(compositeForExportMock).not.toHaveBeenCalled();
   });
 
-  it('returns null when the composite has zero size', () => {
+  it('returns null when the composite has zero size', async () => {
     getCompositeSizeMock.mockReturnValueOnce(new Int32Array([0, 0]));
-    const session = createExportPreviewSession();
+    const session = await createExportPreviewSession();
     expect(session).toBeNull();
     // getCompositeSize was consulted, but the composite was never asked for.
     expect(compositeForExportMock).not.toHaveBeenCalled();

@@ -13,7 +13,7 @@ import type { BrushTipData, BrushPreset } from '../../types/brush';
 
 let brushCounter = 0;
 
-export function defineBrush(asColor: boolean = false): void {
+export async function defineBrush(asColor: boolean = false): Promise<void> {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
   if (!activeId) return;
@@ -39,7 +39,7 @@ export function defineBrush(asColor: boolean = false): void {
   const layerH = dims[1] ?? 0;
   if (layerW === 0 || layerH === 0) return;
 
-  const pixels = readLayerPixels(engine, activeId);
+  const pixels = await readLayerPixels(engine, activeId);
   if (!pixels || pixels.length === 0) return;
 
   const pixelData = new Uint8ClampedArray(pixels.length);

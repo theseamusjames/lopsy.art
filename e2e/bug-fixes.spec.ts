@@ -1027,7 +1027,7 @@ test.describe('Masterpiece: Full Feature Integration', () => {
     // -----------------------------------------------------------------------
     // Export as PNG using compositeForExport
     // -----------------------------------------------------------------------
-    const exportResult = await page.evaluate(() => {
+    const exportResult = await page.evaluate(async () => {
       const engineState = (window as unknown as Record<string, unknown>).__engineState as {
         getEngine: () => unknown;
       } | undefined;
@@ -1044,7 +1044,7 @@ test.describe('Masterpiece: Full Feature Integration', () => {
       const sizeArr = bridge.getCompositeSize(engine);
       const width = sizeArr[0]!;
       const height = sizeArr[1]!;
-      const pixels = bridge.compositeForExport(engine);
+      const pixels = await bridge.compositeForExport(engine);
 
       // Create PNG via offscreen canvas
       const canvas = new OffscreenCanvas(width, height);

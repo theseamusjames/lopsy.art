@@ -180,7 +180,7 @@ export function exportCanvas(format: ExportFormat): void {
   commitLayerTransform();
   flushLayerSync(useEditorStore.getState());
   const docName = useEditorStore.getState().document.name;
-  exportViaEngine(engine, { format, quality: 92, highQuality: false, filename: docName || 'lopsy' });
+  exportViaEngine(engine, { format, quality: 92, highQuality: false, filename: docName || 'lopsy' }).catch(reportExportError);
 }
 
 /**
@@ -194,7 +194,7 @@ export function exportCanvasWithOptions(options: ExportOptions): void {
   // A live multi-layer transform shows its text resampled; baking it re-renders the text sharp.
   commitLayerTransform();
   flushLayerSync(useEditorStore.getState());
-  exportViaEngine(engine, options);
+  exportViaEngine(engine, options).catch(reportExportError);
 }
 
 /**
@@ -215,7 +215,7 @@ export interface ExportPreviewSession {
  * every format/quality change (#762). Returns `null` if the engine or the
  * canvas 2D context is unavailable.
  */
-export function createExportPreviewSession(): ExportPreviewSession | null {
+export async function createExportPreviewSession(): Promise<ExportPreviewSession | null> {
   const engine = getEngine();
   if (!engine) return null;
   finalizePendingStrokeGlobal();
@@ -227,7 +227,7 @@ export function createExportPreviewSession(): ExportPreviewSession | null {
   const height = sizeArr[1] ?? 0;
   if (width === 0 || height === 0) return null;
 
-  const rawPixels = compositeForExport(engine);
+  const rawPixels = await compositeForExport(engine);
   const clamped = new Uint8ClampedArray(width * height * 4);
   clamped.set(rawPixels);
   const imageData = createImageDataFromArray(clamped, width, height);
@@ -274,12 +274,19 @@ export function createExportPreviewSession(): ExportPreviewSession | null {
  * per option change — see #762.
  */
 export async function buildExportPreview(options: ExportOptions): Promise<string | null> {
-  const session = createExportPreviewSession();
+  const session = await createExportPreviewSession();
   if (!session) return null;
   return session.encode(options);
 }
 
-function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, options: ExportOptions): void {
+function reportExportError(err: unknown): void {
+  notifyError(`Failed to export: ${describeError(err)}`);
+}
+
+async function exportViaEngine(
+  engine: NonNullable<ReturnType<typeof getEngine>>,
+  options: ExportOptions,
+): Promise<void> {
   const { format, quality, highQuality, filename } = options;
   const sizeArr = getCompositeSize(engine);
   const srcWidth = sizeArr[0] ?? 0;
@@ -291,7 +298,7 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, opti
   if (format === 'png' && highQuality) {
     try {
       const colorSpace: number = isWideGamut() ? COLOR_SPACE_DISPLAY_P3 : 0;
-      const pngBytes = exportPng16(engine, colorSpace);
+      const pngBytes = await exportPng16(engine, colorSpace);
       const blob = new Blob([pngBytes as BlobPart], { type: 'image/png' });
       addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE }, exportIccProfile())
         .then((b) => downloadBlob(b, 'png', filename))
@@ -302,7 +309,7 @@ function exportViaEngine(engine: NonNullable<ReturnType<typeof getEngine>>, opti
     return;
   }
 
-  const rawPixels = compositeForExport(engine);
+  const rawPixels = await compositeForExport(engine);
   const clamped = new Uint8ClampedArray(srcWidth * srcHeight * 4);
   clamped.set(rawPixels);
   const imageData = createImageDataFromArray(clamped, srcWidth, srcHeight);

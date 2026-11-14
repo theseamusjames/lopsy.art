@@ -17,9 +17,9 @@ import { layerToDescJson } from '../../../engine-wasm/sync-layers';
  * garbage — its texture will be reclaimed engine-side and its JS cache
  * is no longer meaningful.
  */
-export function computeFlattenImage(
+export async function computeFlattenImage(
   doc: DocumentState,
-): ActionResult | undefined {
+): Promise<ActionResult | undefined> {
   if (doc.layers.length <= 1) return undefined;
 
   const { width, height } = doc;
@@ -28,7 +28,7 @@ export function computeFlattenImage(
   const engine = getEngine();
   if (engine) {
     // GPU-side: composite all layers using the same pipeline as export
-    const composited = compositeForExport(engine);
+    const composited = await compositeForExport(engine);
 
     // Register the new layer with the engine BEFORE uploading pixels.
     // This ensures addLayer sees that no texture exists yet and creates a placeholder,

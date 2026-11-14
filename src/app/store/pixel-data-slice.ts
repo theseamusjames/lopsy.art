@@ -9,7 +9,7 @@ import {
   sparseToImageData,
 } from '../../engine/canvas-ops';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
-import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
+import { readLayerAsImageDataSync } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
@@ -226,7 +226,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
 
     // No JS data but GPU has data — read it back.
     if (!existing) {
-      const gpuData = readLayerAsImageData(layerId);
+      const gpuData = readLayerAsImageDataSync(layerId);
       if (gpuData) {
         const { minX, minY, bufW, bufH } = unionBounds(docW, docH, layer.x, layer.y, gpuData.width, gpuData.height);
         const expanded = expandFromCrop(gpuData, layer.x - minX, layer.y - minY, bufW, bufH);
@@ -278,7 +278,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
     if (data) return data;
     const sparseEntry = pixelDataManager.getSparse(layerId);
     if (sparseEntry) return sparseToImageData(sparseEntry.sparse);
-    const gpuData = readLayerAsImageData(layerId);
+    const gpuData = readLayerAsImageDataSync(layerId);
     if (gpuData) return gpuData;
     return undefined;
   },

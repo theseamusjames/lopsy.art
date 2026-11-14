@@ -63,7 +63,7 @@ function writeToSystemClipboard(width: number, height: number): void {
 export interface ClipboardSlice {
   clipboard: ClipboardData | null;
   copy: () => void;
-  copyMerged: () => void;
+  copyMerged: () => Promise<void>;
   cut: () => void;
   /** Paste the internal clipboard in place; returns the new layer's id, or null if nothing was pasted. */
   paste: () => string | null;
@@ -121,13 +121,13 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     }
   },
 
-  copyMerged: () => {
+  copyMerged: async () => {
     const engine = getEngine();
     if (!engine) return;
     const state = get();
     const { width: docW, height: docH } = state.document;
 
-    const rawPixels = compositeForExport(engine);
+    const rawPixels = await compositeForExport(engine);
 
     const sel = state.selection;
     const hasSelection = sel.active && sel.bounds !== null && sel.mask !== null;
