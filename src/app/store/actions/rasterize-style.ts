@@ -2,7 +2,7 @@ import type { DocumentState, Layer } from '../../../types';
 import type { ActionResult } from '../types';
 import { hasEnabledEffects, DEFAULT_EFFECTS } from '../../../layers/layer-model';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import { rasterizeLayerEffects, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
+import { bakeLayerEffects } from '../../../engine-wasm/wasm-bridge';
 import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import { invalidateBitmapCache } from '../../../engine/bitmap-cache';
 
@@ -23,9 +23,8 @@ export function canRasterizeLayerStyle(doc: DocumentState): boolean {
 /**
  * Rasterize the active layer's effects into its own texture.
  *
- * The read + upload happens entirely GPU-side via
- * `rasterizeLayerEffects` + `uploadLayerPixels`; no JS-side pixel
- * buffer is threaded through (#746). The caller does not need to
+ * `bakeLayerEffects` renders and replaces the texture on the GPU; no
+ * pixels are read back (#746). The caller does not need to
  * `resolveAllPixelData` beforehand or `syncPixelDataToGpu` afterward.
  *
  * This mutates the GPU texture directly, so the caller must call
@@ -42,11 +41,7 @@ export function computeRasterizeStyle(
 
   // GPU-side: render layer with effects, then replace layer texture
   // The mask stays on the layer, so it is not baked in as well.
-  const pixels = rasterizeLayerEffects(engine, activeId, false);
-  if (!pixels || pixels.length === 0) return undefined;
-
-  // Upload rasterized result back to the layer's GPU texture
-  uploadLayerPixels(engine, activeId, pixels, doc.width, doc.height, 0, 0);
+  if (!bakeLayerEffects(engine, activeId, false)) return undefined;
 
   // GPU is source of truth for the active layer — drop stale JS pixel
   // data and bitmap cache.

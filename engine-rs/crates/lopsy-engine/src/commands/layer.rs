@@ -254,11 +254,10 @@ pub fn get_layer_content_bounds(engine: &mut EngineInner, layer_id: &str) -> Vec
     }
 }
 
-pub fn rasterize_layer_effects(engine: &mut EngineInner, layer_id: &str, bake_mask: bool) -> Vec<u8> {
-    // Composite the single layer with effects using the GPU pipeline,
-    // then return the document-sized pixel buffer. This ensures the
-    // rasterized output exactly matches the live GPU rendering.
-    compositor::composite_single_layer(&mut *engine, layer_id, bake_mask).unwrap_or_default()
+/// Bake a layer's effects (and, with `bake_mask`, its mask) into its own
+/// texture without reading it back: see `compositor::bake_layer_effects`.
+pub fn bake_layer_effects(engine: &mut EngineInner, layer_id: &str, bake_mask: bool) -> Result<(), String> {
+    compositor::bake_layer_effects(engine, layer_id, bake_mask)
 }
 
 // ============================================================
@@ -670,18 +669,11 @@ pub fn upload_layer_pixels_compressed(engine: &mut EngineInner, layer_id: &str, 
     Ok(())
 }
 
-pub fn read_layer_pixels_compressed_u16(engine: &EngineInner, layer_id: &str) -> Vec<u8> {
-    read_layer_blob_u16(engine, layer_id, false)
-}
-
-/// Same blob as `readLayerPixelsCompressedU16`, LZ4-compressed (flags 2).
-/// Used for the CPU-side backup taken when the tab loses focus, which
-/// holds every raster layer at once (#973).
+/// A layer's content-cropped pixels as a 16-bit blob, LZ4-compressed
+/// (flags 2), that `uploadLayerPixelsCompressedU16` takes back. Used for
+/// the CPU-side backup taken when the tab loses focus, which holds every
+/// raster layer at once (#973).
 pub fn read_layer_pixels_lz4_u16(engine: &EngineInner, layer_id: &str) -> Vec<u8> {
-    read_layer_blob_u16(engine, layer_id, true)
-}
-
-fn read_layer_blob_u16(engine: &EngineInner, layer_id: &str, is_lz4: bool) -> Vec<u8> {
     let tex = match engine.layer_textures.get(layer_id) {
         Some(&t) => t,
         None => return Vec::new(),
@@ -711,11 +703,8 @@ fn read_layer_blob_u16(engine: &EngineInner, layer_id: &str, is_lz4: bool) -> Ve
         (bytes, rect)
     };
     let uncompressed_len = raw_bytes.len() as u32;
-    let (flags, payload) = if is_lz4 {
-        (2i32, lopsy_core::compress::lz4_compress(&raw_bytes))
-    } else {
-        (0i32, raw_bytes)
-    };
+    let flags = 2i32;
+    let payload = lopsy_core::compress::lz4_compress(&raw_bytes);
 
     let mut result = Vec::with_capacity(32 + payload.len());
     result.extend_from_slice(&rect.x.to_le_bytes());
@@ -724,7 +713,7 @@ fn read_layer_blob_u16(engine: &EngineInner, layer_id: &str, is_lz4: bool) -> Ve
     result.extend_from_slice(&(rect.height as i32).to_le_bytes());
     result.extend_from_slice(&(w as i32).to_le_bytes());
     result.extend_from_slice(&(h as i32).to_le_bytes());
-    result.extend_from_slice(&flags.to_le_bytes()); // 0 = raw, 2 = LZ4
+    result.extend_from_slice(&flags.to_le_bytes()); // 2 = LZ4
     result.extend_from_slice(&uncompressed_len.to_le_bytes());
     result.extend_from_slice(&payload);
     result

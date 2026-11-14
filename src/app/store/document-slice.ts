@@ -744,8 +744,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   flattenImage: () => {
     const s = get();
     flushLayerSync(s);
-    // GPU-only (compositeForExport + uploadLayerPixels); no JS pixel
-    // map needed (#746).
+    // GPU-only (flattenIntoLayer); no JS pixel map needed (#746).
     const result = computeFlattenImage(s.document);
     if (!result) return;
     s.pushHistory('Flatten Image');
@@ -759,15 +758,14 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
     // pushHistory must run BEFORE computeRasterizeStyle: that function
     // bakes the effects into the layer's GPU texture as a side effect
-    // (rasterizeLayerEffects + uploadLayerPixels), and pushHistory
+    // (bakeLayerEffects), and pushHistory
     // snapshots whatever is currently on the GPU. Pushing after the bake
     // (the old order) captured the POST-bake texture alongside the
     // pre-bake "effects enabled" metadata, so undo re-enabled the effect
     // on top of pixels that already had it baked in — the same
     // pushHistory-after-mutation bug as #813 and #816 (#903).
     s.pushHistory('Rasterize Layer Style');
-    // GPU-only (rasterizeLayerEffects + uploadLayerPixels for the
-    // active layer). The compute function invalidates the JS pixel
+    // GPU-only (bakeLayerEffects for the active layer). The compute function invalidates the JS pixel
     // cache for the active layer directly (#746).
     const result = computeRasterizeStyle(s.document);
     if (!result) return;

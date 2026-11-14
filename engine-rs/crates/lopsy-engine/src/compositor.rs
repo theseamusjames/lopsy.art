@@ -1653,17 +1653,15 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, St
     Ok(pixels)
 }
 
-/// Composite a single layer with its effects onto a transparent canvas.
-/// Returns (pixels, offsetX, offsetY, width, height) for the rasterized result.
-/// Render one layer with its effects onto a transparent document-sized
-/// target and read it back.
+/// Replace a layer's pixels with the layer and its effects, rendered onto a
+/// transparent document-sized target and copied on the GPU.
 ///
 /// With `bake_mask`, the layer's enabled mask is applied the way the live
 /// compositor applies it: to the content and, through a masked copy, to the
 /// silhouette the effects trace (#977). Merge Down needs that because the
 /// upper layer's mask goes away with it. Rasterize Layer Style keeps the
 /// mask on the layer, so it bakes the unmasked layer.
-pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mask: bool) -> Result<Vec<u8>, String> {
+pub fn bake_layer_effects(engine: &mut EngineInner, layer_id: &str, bake_mask: bool) -> Result<(), String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     engine.ensure_scratch_size(doc_w, doc_h)?;
@@ -1730,10 +1728,16 @@ pub fn composite_single_layer(engine: &mut EngineInner, layer_id: &str, bake_mas
         engine.texture_pool.release(masked);
     }
 
-    let pixels = engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h)?;
-
+    // The live composite was replaced; the next frame must rebuild it.
     engine.needs_recomposite = true;
-    Ok(pixels)
+    crate::layer_manager::with_layer_texture(engine, &lid, doc_w, doc_h, |engine, texture| {
+        let is_copied = engine
+            .pass(&engine.shaders.blit, ())
+            .texture("u_tex", engine.composite_texture)
+            .blend(Blend::Off)
+            .draw(Target::Texture(texture));
+        if is_copied { Ok(()) } else { Err("Bake target texture missing".to_string()) }
+    })
 }
 
 /// `pass` drawn over the whole document, replacing what it covers.

@@ -1,7 +1,7 @@
 import type { DocumentState } from '../../../types';
 import type { ActionResult } from '../types';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import { mergeLayers, rasterizeLayerEffects, updateLayer, uploadLayerPixels } from '../../../engine-wasm/wasm-bridge';
+import { mergeLayers, bakeLayerEffects, updateLayer } from '../../../engine-wasm/wasm-bridge';
 import { layerToDescJson } from '../../../engine-wasm/sync-layers';
 import { DEFAULT_EFFECTS, hasEnabledEffects } from '../../../layers/layer-model';
 import { findParentGroup, removeFromParentGroup } from '../../../layers/group-utils';
@@ -90,16 +90,14 @@ export function computeMergeDown(
   let mergedRect = { x: 0, y: 0, width: doc.width, height: doc.height };
   const engine = getEngine();
   if (engine) {
-    // `rasterizeLayerEffects` bakes the layer's opacity into the pixels
+    // `bakeLayerEffects` bakes the layer's opacity into the pixels
     // (effects keep their own opacity, as in the live composite), so the
     // baked descriptor goes to opacity 1 or `mergeLayers` would apply it
     // a second time (#1007). It also bakes the mask into the content and
     // the effects' silhouette, as the compositor applies it (#977), so the
     // descriptor drops the mask rather than applying it twice.
     if (hasEnabledEffects(topLayer.effects)) {
-      const rasterized = rasterizeLayerEffects(engine, activeId, true);
-      if (rasterized && rasterized.length > 0) {
-        uploadLayerPixels(engine, activeId, rasterized, doc.width, doc.height, 0, 0);
+      if (bakeLayerEffects(engine, activeId, true)) {
         const cleared = { ...topLayer, x: 0, y: 0, width: doc.width, height: doc.height, opacity: 1, effects: DEFAULT_EFFECTS, mask: null };
         updateLayer(engine, layerToDescJson(cleared, topLayer.visible, doc.colorMode));
       }

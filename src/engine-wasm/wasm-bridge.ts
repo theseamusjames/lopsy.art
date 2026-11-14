@@ -46,12 +46,11 @@ import init, {
   getLayerEngineBounds,
   getLayerContentBounds,
   uploadLayerPixelsCompressed,
-  readLayerPixelsCompressedU16,
   readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
   readLayerThumbnail as rawReadLayerThumbnail,
   readCompositeThumbnail as rawReadCompositeThumbnail,
-  rasterizeLayerEffects,
+  bakeLayerEffects as rawBakeLayerEffects,
   duplicateLayerTexture,
   mergeLayers,
   flipLayer,
@@ -184,7 +183,7 @@ import init, {
   clearFilterPreview,
   setSelectionMask,
   featherSelectionMask,
-  readSelectionMask,
+  readSelectionMask as rawReadSelectionMask,
   clearSelection,
   createRectSelection,
   createEllipseSelection,
@@ -226,7 +225,7 @@ import init, {
   cropLayerPixelData,
   floodFill,
   applyFillToLayer,
-  readLayerPixelsForFill,
+  readLayerPixelsForFill as rawReadLayerPixelsForFill,
   bucketFillSolid,
   bucketFillByColorGpu,
   magneticLassoBegin,
@@ -384,7 +383,6 @@ export {
   layerContentGeneration,
   getLayerEngineBounds,
   uploadLayerPixelsCompressed,
-  readLayerPixelsCompressedU16,
   readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
   duplicateLayerTexture,
@@ -629,12 +627,22 @@ export {
   expandLayerToDocSize,
   cropLayerToContent,
   floodFillGraduated,
-  readLayerPixelsForFill,
   getLayerContentBounds,
-  readSelectionMask,
   readQuickMaskPixels,
-  rasterizeLayerEffects,
 };
+
+/**
+ * Bake a layer's effects (and, with `bakeMask`, its mask) into its own
+ * texture on the GPU. False when the engine could not bake it.
+ */
+export function bakeLayerEffects(engine: Engine, layerId: string, bakeMask: boolean): boolean {
+  try {
+    rawBakeLayerEffects(engine, layerId, bakeMask);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Makes a function that reads pixels back from the GPU answer with a
@@ -659,6 +667,10 @@ export const exportPng16 = asyncReadback(rawExportPng16);
 export const quantizeCompositeToPalette = asyncReadback(rawQuantizeCompositeToPalette);
 export const readLayerPixels = asyncReadback(rawReadLayerPixels);
 export const sampleColor = asyncReadback(rawSampleColor);
+/** A layer's pixels in document space, as the wand, bucket fill and quick select read them. */
+export const readLayerPixelsForFill = asyncReadback(rawReadLayerPixelsForFill);
+/** The selection texture's coverage: `[width, height]` as u32 LE, then one byte per pixel. */
+export const readSelectionMask = asyncReadback(rawReadSelectionMask);
 export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);

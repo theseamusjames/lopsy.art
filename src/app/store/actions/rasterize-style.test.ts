@@ -8,7 +8,7 @@ import type { LayerEffects } from '../../../types/effects';
 
 const mocks = vi.hoisted(() => ({
   engine: null as object | null,
-  rasterizeLayerEffects: vi.fn((..._args: unknown[]) => new Uint8Array(4 * 4 * 4)),
+  bakeLayerEffects: vi.fn((..._args: unknown[]) => true),
 }));
 
 vi.mock('../../../engine-wasm/engine-state', () => ({
@@ -17,8 +17,7 @@ vi.mock('../../../engine-wasm/engine-state', () => ({
 }));
 
 vi.mock('../../../engine-wasm/wasm-bridge', () => ({
-  rasterizeLayerEffects: mocks.rasterizeLayerEffects,
-  uploadLayerPixels: () => {},
+  bakeLayerEffects: mocks.bakeLayerEffects,
 }));
 
 function enabledEffects(): LayerEffects {
@@ -86,12 +85,12 @@ describe('computeRasterizeStyle', () => {
   // The layer keeps its mask, so baking it in too would apply it twice.
   it('does not ask the engine to bake the layer mask', () => {
     mocks.engine = {};
-    mocks.rasterizeLayerEffects.mockClear();
+    mocks.bakeLayerEffects.mockClear();
     const doc = makeDoc(enabledEffects());
     computeRasterizeStyle(doc);
     mocks.engine = null;
 
-    expect(mocks.rasterizeLayerEffects).toHaveBeenCalledWith(expect.anything(), doc.activeLayerId, false);
+    expect(mocks.bakeLayerEffects).toHaveBeenCalledWith(expect.anything(), doc.activeLayerId, false);
   });
 });
 

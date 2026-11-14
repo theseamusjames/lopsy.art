@@ -86,6 +86,7 @@ import { getMarqueePreview, setMarqueePreview } from './marquee-preview';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from '../../app/interactions/interaction-types';
 import type { SelectionUpContext } from '../../app/interactions/selection-strategy';
+import { readSelectionMask } from '../../engine-wasm/wasm-bridge';
 
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
   const layer = { id: 'layer-1', x: 0, y: 0, visible: true } as unknown as InteractionContext['activeLayer'];
@@ -635,5 +636,61 @@ describe('confirmMarqueeRegion', () => {
   it('does nothing for a zero-area region', () => {
     confirmMarqueeRegion('rect', { x: 10, y: 10 }, { x: 10, y: 50 });
     expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+});
+
+describe('a feathered marquee', () => {
+  /** A selection read: `[width, height]` as u32 LE, then coverage bytes. */
+  function selectionRead(value: number): Uint8Array {
+    const bytes = new Uint8Array(8 + DOC_W * DOC_H);
+    const header = new DataView(bytes.buffer);
+    header.setUint32(0, DOC_W, true);
+    header.setUint32(4, DOC_H, true);
+    bytes.fill(value, 8);
+    return bytes;
+  }
+
+  async function settle(): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  beforeEach(() => {
+    ts.settings.marquee.feather = 4;
+    vi.mocked(readSelectionMask).mockReset();
+  });
+
+  it('installs the feathered mask once it has been read', async () => {
+    vi.mocked(readSelectionMask).mockResolvedValue(selectionRead(128));
+    confirmMarqueeRegion('rect', { x: 10, y: 20 }, { x: 40, y: 30 });
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    await settle();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    const mask = editorState.setSelection.mock.calls[0]![1] as Uint8ClampedArray;
+    expect(mask[0]).toBe(128);
+  });
+
+  it('keeps the unfeathered shape when the read fails', async () => {
+    vi.mocked(readSelectionMask).mockRejectedValue(new Error('readback failed'));
+    confirmMarqueeRegion('rect', { x: 10, y: 20 }, { x: 40, y: 30 });
+    await settle();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    const mask = editorState.setSelection.mock.calls[0]![1] as Uint8ClampedArray;
+    expect(mask[25 * DOC_W + 20]).toBe(255);
+    expect(mask[0]).toBe(0);
+  });
+
+  it('drops a feather that a newer marquee replaced', async () => {
+    let deliverFirst: (read: Uint8Array) => void = () => {};
+    vi.mocked(readSelectionMask)
+      .mockReturnValueOnce(new Promise<Uint8Array>((resolve) => { deliverFirst = resolve; }))
+      .mockResolvedValueOnce(selectionRead(200));
+    confirmMarqueeRegion('rect', { x: 10, y: 20 }, { x: 40, y: 30 });
+    confirmMarqueeRegion('rect', { x: 50, y: 50 }, { x: 60, y: 60 });
+    await settle();
+    deliverFirst(selectionRead(64));
+    await settle();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    const mask = editorState.setSelection.mock.calls[0]![1] as Uint8ClampedArray;
+    expect(mask[0]).toBe(200);
   });
 });

@@ -9,6 +9,7 @@ const fillQuickMask = vi.fn();
 const fillMask = vi.fn();
 const uploadLayerMask = vi.fn();
 const readMaskTexture = vi.fn();
+const layerContentGeneration = vi.fn((..._args: unknown[]) => 1);
 // #667 fast-path branches ask the engine for the layer texture dimensions to
 // decide "is this layer effectively empty?". Default to a full-size texture
 // so the existing "regular content" tests still hit the CPU flood-fill path;
@@ -26,6 +27,7 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   fillMask: (...args: unknown[]) => fillMask(...args),
   uploadLayerMask: (...args: unknown[]) => uploadLayerMask(...args),
   readMaskTexture: (...args: unknown[]) => readMaskTexture(...args),
+  layerContentGeneration: (...args: unknown[]) => layerContentGeneration(...args),
 }));
 
 // #667 empty-layer fast path also consults the pixel-data manager to
@@ -105,6 +107,13 @@ import { handleFillDown } from './fill-interaction';
 import { isMaskDataStale, materializeAllMaskData, __resetMaskDataSyncForTest } from '../../app/mask-data-sync';
 import type { InteractionContext } from '../../app/interactions/interaction-types';
 
+
+/** Let an awaited GPU read deliver its pixels. */
+async function settle(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
   const layer = { id: 'layer-1', x: 0, y: 0, visible: true } as unknown as InteractionContext['activeLayer'];
   return {
@@ -133,6 +142,7 @@ beforeEach(() => {
   floodFill.mockReset();
   applyFillToLayer.mockClear();
   readLayerPixelsForFill.mockReset();
+  floodFill.mockClear();
   fillQuickMask.mockClear();
   fillMask.mockClear();
   uploadLayerMask.mockClear();
@@ -146,13 +156,14 @@ beforeEach(() => {
   uiState.maskMode = 'off';
   editorState.document.layers = [{ id: 'layer-1', x: 0, y: 0, mask: null }];
   editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
-  readLayerPixelsForFill.mockReturnValue(new Uint8Array(DOC_W * DOC_H * 4));
+  readLayerPixelsForFill.mockResolvedValue(new Uint8Array(DOC_W * DOC_H * 4));
   floodFill.mockReturnValue(new Uint8Array(DOC_W * DOC_H).fill(255));
 });
 
 describe('bucket fill — normal mode', () => {
-  it('flood-fills from the click point and applies the result to the layer', () => {
+  it('flood-fills from the click point and applies the result to the layer', async () => {
     handleFillDown(makeCtx());
+    await settle();
     expect(editorState.pushHistory).toHaveBeenCalledWith('Bucket Fill');
     expect(ts.addRecentColor).toHaveBeenCalledWith(ts.foregroundColor);
 
@@ -183,22 +194,24 @@ describe('bucket fill — normal mode', () => {
     expect(editorState.notifyRender).toHaveBeenCalled();
   });
 
-  it('seeds in document space on an offset layer', () => {
+  it('seeds in document space on an offset layer', async () => {
     editorState.document.layers = [{ id: 'layer-1', x: 2, y: 3, mask: null }];
     handleFillDown(makeCtx({ canvasPos: { x: 3, y: 4 }, layerPos: { x: 1, y: 1 } }));
+    await settle();
     const ff = floodFill.mock.calls[0]!;
     expect(ff[3]).toBe(3);
     expect(ff[4]).toBe(4);
   });
 
-  it('prefers the pixel under the pointer over the rounded position (#1036)', () => {
+  it('prefers the pixel under the pointer over the rounded position (#1036)', async () => {
     handleFillDown(makeCtx({ canvasPos: { x: 5, y: 5 }, pixelPos: { x: 4, y: 4 } }));
+    await settle();
     const ff = floodFill.mock.calls[0]!;
     expect(ff[3]).toBe(4);
     expect(ff[4]).toBe(4);
   });
 
-  it('aborts when clicking outside an active selection', () => {
+  it('aborts when clicking outside an active selection', async () => {
     const selMask = new Uint8ClampedArray(DOC_W * DOC_H); // nothing selected at click
     editorState.selection = {
       active: true,
@@ -208,11 +221,12 @@ describe('bucket fill — normal mode', () => {
       maskHeight: DOC_H,
     };
     handleFillDown(makeCtx());
+    await settle();
     expect(floodFill).not.toHaveBeenCalled();
     expect(applyFillToLayer).not.toHaveBeenCalled();
   });
 
-  it('intersects the flood mask with the active selection', () => {
+  it('intersects the flood mask with the active selection', async () => {
     const selMask = new Uint8ClampedArray(DOC_W * DOC_H);
     // Select only the top half (rows 0..3), which includes the click at (3,4)? No —
     // include row 4 so the click point itself is selected.
@@ -227,14 +241,16 @@ describe('bucket fill — normal mode', () => {
       maskHeight: DOC_H,
     };
     handleFillDown(makeCtx());
+    await settle();
     const fillMaskArg = applyFillToLayer.mock.calls[0]![6] as Uint8Array;
     expect(fillMaskArg[4 * DOC_W + 3]).toBe(255); // inside selection
     expect(fillMaskArg[6 * DOC_W + 3]).toBe(0); // flood hit it, selection vetoed it
   });
 
-  it('does nothing when no engine is available and does not push history', () => {
+  it('does nothing when no engine is available and does not push history', async () => {
     engine = null;
     handleFillDown(makeCtx());
+    await settle();
     // #811 — do not clear redo with a phantom history entry when we
     // cannot actually perform the fill.
     expect(editorState.pushHistory).not.toHaveBeenCalled();
@@ -244,8 +260,9 @@ describe('bucket fill — normal mode', () => {
 
   // #811 — a click on the pasteboard outside the document should be a
   // no-op: no flood-fill, no empty-layer fast path, no history entry.
-  it('ignores a click outside the canvas bounds (#811)', () => {
+  it('ignores a click outside the canvas bounds (#811)', async () => {
     handleFillDown(makeCtx({ layerPos: { x: 100, y: 200 }, canvasPos: { x: 100, y: 200 } }));
+    await settle();
     expect(editorState.pushHistory).not.toHaveBeenCalled();
     expect(bucketFillSolid).not.toHaveBeenCalled();
     expect(bucketFillByColorGpu).not.toHaveBeenCalled();
@@ -253,8 +270,9 @@ describe('bucket fill — normal mode', () => {
     expect(floodFill).not.toHaveBeenCalled();
   });
 
-  it('ignores a click with a negative canvas coordinate (#811)', () => {
+  it('ignores a click with a negative canvas coordinate (#811)', async () => {
     handleFillDown(makeCtx({ layerPos: { x: -5, y: -5 }, canvasPos: { x: -5, y: -5 } }));
+    await settle();
     expect(editorState.pushHistory).not.toHaveBeenCalled();
     expect(bucketFillSolid).not.toHaveBeenCalled();
   });
@@ -264,25 +282,36 @@ describe('bucket fill — normal mode', () => {
   // on the JS side, the next syncLayers frame re-applies the pre-fill
   // offset and double-offsets the result (#722 revert). Every fill path
   // must call syncLayerAfterFullSize to keep the store in step.
-  it('reconciles bounds via syncLayerAfterFullSize after the CPU BFS path', () => {
+  it('drops the fill when the layer changed before its pixels arrived', async () => {
     handleFillDown(makeCtx());
+    layerContentGeneration.mockReturnValueOnce(2);
+    await settle();
+    expect(floodFill).not.toHaveBeenCalled();
+    expect(applyFillToLayer).not.toHaveBeenCalled();
+  });
+
+  it('reconciles bounds via syncLayerAfterFullSize after the CPU BFS path', async () => {
+    handleFillDown(makeCtx());
+    await settle();
     expect(applyFillToLayer).toHaveBeenCalledTimes(1);
     expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
     expect(syncLayerAfterFullSize.mock.calls[0]![1]).toBe('layer-1');
   });
 
-  it('reconciles bounds via syncLayerAfterFullSize on the non-contiguous GPU fast path', () => {
+  it('reconciles bounds via syncLayerAfterFullSize on the non-contiguous GPU fast path', async () => {
     ts.settings.fill.contiguous = false;
     handleFillDown(makeCtx());
+    await settle();
     expect(bucketFillByColorGpu).toHaveBeenCalledTimes(1);
     expect(applyFillToLayer).not.toHaveBeenCalled();
     expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
     ts.settings.fill.contiguous = true;
   });
 
-  it('reconciles bounds via syncLayerAfterFullSize on the empty-layer solid fast path', () => {
+  it('reconciles bounds via syncLayerAfterFullSize on the empty-layer solid fast path', async () => {
     getLayerTextureDimensions.mockReturnValueOnce(new Uint32Array([1, 1]));
     handleFillDown(makeCtx());
+    await settle();
     expect(bucketFillSolid).toHaveBeenCalledTimes(1);
     expect(applyFillToLayer).not.toHaveBeenCalled();
     expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
@@ -290,9 +319,10 @@ describe('bucket fill — normal mode', () => {
 });
 
 describe('bucket fill — quick mask mode', () => {
-  it('fills the quick mask texture instead of the layer', () => {
+  it('fills the quick mask texture instead of the layer', async () => {
     uiState.maskMode = 'quickMask';
     handleFillDown(makeCtx({ canvasPos: { x: 5.6, y: 2.2 } }));
+    await settle();
     expect(editorState.pushHistory).toHaveBeenCalledWith('Quick Mask Fill');
     expect(fillQuickMask).toHaveBeenCalledTimes(1);
     const args = fillQuickMask.mock.calls[0]!;
@@ -306,17 +336,18 @@ describe('bucket fill — quick mask mode', () => {
     expect(applyFillToLayer).not.toHaveBeenCalled();
   });
 
-  it('does nothing without an engine', () => {
+  it('does nothing without an engine', async () => {
     uiState.maskMode = 'quickMask';
     engine = null;
     handleFillDown(makeCtx());
+    await settle();
     expect(fillQuickMask).not.toHaveBeenCalled();
     expect(editorState.notifyRender).not.toHaveBeenCalled();
   });
 });
 
 describe('bucket fill — layer mask mode', () => {
-  it('uploads the current mask, fills it black, and defers the readback', () => {
+  it('uploads the current mask, fills it black, and defers the readback', async () => {
     uiState.maskMode = 'layerMask';
     const maskData = new Uint8ClampedArray(DOC_W * DOC_H).fill(255);
     editorState.document.layers = [
@@ -329,6 +360,7 @@ describe('bucket fill — layer mask mode', () => {
     // layer-local position (which drifts as a raster layer is re-origined)
     // must not be what's forwarded (#907).
     handleFillDown(makeCtx({ canvasPos: { x: 4.4, y: 4.6 }, layerPos: { x: -5.6, y: -5.4 } }));
+    await settle();
 
     expect(editorState.pushHistory).toHaveBeenCalledWith('Mask Fill');
     expect(uploadLayerMask).toHaveBeenCalledTimes(1);
@@ -360,23 +392,26 @@ describe('bucket fill — layer mask mode', () => {
     expect(floodFill).not.toHaveBeenCalled();
   });
 
-  it('does not re-upload a mask the engine already holds', () => {
+  it('does not re-upload a mask the engine already holds', async () => {
     uiState.maskMode = 'layerMask';
     const maskData = new Uint8ClampedArray(DOC_W * DOC_H).fill(255);
     editorState.document.layers = [
       { id: 'layer-1', x: 0, y: 0, mask: { data: maskData, width: DOC_W, height: DOC_H } },
     ];
     handleFillDown(makeCtx());
+    await settle();
     handleFillDown(makeCtx());
+    await settle();
     // The second fill paints over the GPU result of the first; uploading
     // the (still unrefreshed) JS bytes again would wipe that result.
     expect(uploadLayerMask).toHaveBeenCalledTimes(1);
     expect(fillMask).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back to a normal bucket fill when the layer has no mask', () => {
+  it('falls back to a normal bucket fill when the layer has no mask', async () => {
     uiState.maskMode = 'layerMask';
     handleFillDown(makeCtx());
+    await settle();
     expect(editorState.pushHistory).toHaveBeenCalledWith('Bucket Fill');
     expect(fillMask).not.toHaveBeenCalled();
     expect(floodFill).toHaveBeenCalledTimes(1);
