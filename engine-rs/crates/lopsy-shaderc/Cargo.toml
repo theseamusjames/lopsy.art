@@ -1,0 +1,11 @@
+[package]
+name = "lopsy-shaderc"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Build-time shader translation: WGSL to the GLSL ES 3.00 the WebGL backend compiles."
+
+[dependencies]
+# Build-time only: lopsy-engine uses this crate from its build script, so
+# naga never reaches the wasm bundle. 30.0.1 was released 2026-08-22.
+naga = { version = "=30.0.1", default-features = false, features = ["wgsl-in", "glsl-out"] }
