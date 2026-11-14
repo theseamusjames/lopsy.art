@@ -1,7 +1,51 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// Every `.wgsl` shader under `dir`, depth first, leaving out the `include`
+/// directory, whose files are spliced into others and are not shaders.
+fn wgsl_shaders(dir: &Path, found: &mut Vec<PathBuf>) {
+    let mut entries: Vec<PathBuf> = fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+        .flatten()
+        .map(|entry| entry.path())
+        .collect();
+    entries.sort();
+    for path in entries {
+        if path.is_dir() {
+            if path.file_name().is_some_and(|name| name != "include") {
+                wgsl_shaders(&path, found);
+            }
+        } else if path.extension().is_some_and(|ext| ext == "wgsl") {
+            found.push(path);
+        }
+    }
+}
+
+/// Translate the WGSL shaders to the GLSL ES 3.00 the WebGL backend
+/// compiles, into `$OUT_DIR/shaders/` under the same relative paths.
+/// `gpu::shader` embeds them from there.
+fn translate_shaders(out_dir: &Path) {
+    let root = Path::new("src/gpu/shaders");
+    println!("cargo:rerun-if-changed={}", root.display());
+    let include_dir = root.join("include");
+    let include = |name: &str| fs::read_to_string(include_dir.join(format!("{name}.wgsl"))).ok();
+
+    let mut shaders = Vec::new();
+    wgsl_shaders(root, &mut shaders);
+    for path in shaders {
+        let source = fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let glsl = lopsy_shaderc::preprocess(&source, &include, &[])
+            .and_then(|wgsl| lopsy_shaderc::wgsl_to_glsl(&wgsl))
+            .unwrap_or_else(|e| panic!("{}:\n{e}", path.display()));
+        let dest = out_dir.join("shaders").join(path.strip_prefix(root).unwrap()).with_extension("glsl");
+        fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        fs::write(&dest, glsl).unwrap();
+    }
+}
 
 fn main() {
+    translate_shaders(Path::new(&std::env::var("OUT_DIR").unwrap()));
+
     let brushes_dir = Path::new("../../brushes");
     println!("cargo:rerun-if-changed={}", brushes_dir.display());
 

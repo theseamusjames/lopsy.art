@@ -18,8 +18,16 @@ void main() {
 }
 "#;
 
+/// A fragment shader written in WGSL (`shaders/<path>.wgsl`) and translated
+/// to GLSL ES 3.00 by the build script: see `lopsy-shaderc`.
+macro_rules! translated {
+    ($path:literal) => {
+        include_str!(concat!(env!("OUT_DIR"), "/shaders/", $path, ".glsl"))
+    };
+}
+
 // Core shaders
-pub const BLIT_FRAG: &str = include_str!("shaders/blit.glsl");
+pub const BLIT_FRAG: &str = translated!("blit");
 pub const THUMBNAIL_BOX_FRAG: &str = include_str!("shaders/thumbnail_box.glsl");
 pub const BLEND_FRAG: &str = include_str!("shaders/blend.glsl");
 /// Shared GLSL helpers spliced into fragment sources where a
