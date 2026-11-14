@@ -72,7 +72,7 @@ pub const POSTERIZE_FRAG: &str = translated!("filters/posterize");
 pub const THRESHOLD_FRAG: &str = translated!("filters/threshold");
 pub const NOISE_FRAG: &str = include_str!("shaders/filters/noise.glsl");
 pub const SHARPEN_FRAG: &str = translated!("filters/sharpen");
-pub const VIGNETTE_FRAG: &str = include_str!("shaders/filters/vignette.glsl");
+pub const VIGNETTE_FRAG: &str = translated!("filters/vignette");
 pub const MOTION_BLUR_FRAG: &str = translated!("filters/motion_blur");
 pub const RADIAL_BLUR_FRAG: &str = translated!("filters/radial_blur");
 pub const FIND_EDGES_FRAG: &str = translated!("filters/find_edges");
@@ -758,7 +758,7 @@ impl ShaderPrograms {
 mod tests {
     use super::{
         inject_defines, preprocess_frag, typed_shader_checks, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
-        SMUDGE_DAB_FRAG, VIGNETTE_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
+        SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
         TEXTURE_FRAG,
     };
 
@@ -811,8 +811,13 @@ mod tests {
     fn tonal_passes_work_on_decoded_lab() {
         // Adjustments and the vignette scale channel values, which only means
         // "darker" on sRGB; on encoded Lab it drags a/b toward blue (#1365).
-        for src in [ADJUSTMENTS_FRAG, VIGNETTE_FRAG] {
-            let out = preprocess_frag(src);
+        let vignette = include_str!("shaders/filters/vignette.wgsl");
+        assert!(vignette.contains("//#include lab"), "lab helpers not spliced in");
+        assert!(vignette.contains("u_docColorMode: i32,"));
+        assert!(vignette.contains("rgb = labToSrgb(rgb)"));
+        assert!(vignette.contains("rgb = srgbToLab(rgb)"));
+        {
+            let out = preprocess_frag(ADJUSTMENTS_FRAG);
             assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
             assert!(out.contains("int u_docColorMode;"));
             assert!(out.contains("c.rgb = labToSrgb(c.rgb)"));
