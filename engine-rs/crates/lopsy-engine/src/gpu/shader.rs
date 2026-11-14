@@ -60,7 +60,6 @@ pub const BOX_BLUR_FRAG: &str = include_str!("shaders/filters/box_blur.glsl");
 pub const ADJUSTMENTS_FRAG: &str = include_str!("shaders/filters/adjustments.glsl");
 pub const HUE_SAT_FRAG: &str = include_str!("shaders/filters/hue_sat.glsl");
 pub const INVERT_FRAG: &str = include_str!("shaders/filters/invert.glsl");
-pub const CHANNEL_EXTRACT_FRAG: &str = include_str!("shaders/filters/channel_extract.glsl");
 pub const MASK_LUMINANCE_FRAG: &str = include_str!("shaders/filters/mask_luminance.glsl");
 pub const POSTERIZE_FRAG: &str = include_str!("shaders/filters/posterize.glsl");
 pub const THRESHOLD_FRAG: &str = include_str!("shaders/filters/threshold.glsl");
@@ -217,7 +216,6 @@ typed_shaders! {
     SUNBURST: params::filters::SunburstParams = SUNBURST_FRAG;
     COLOR_LUT: params::filters::ColorLutParams = COLOR_LUT_FRAG;
     TEXTURE: params::filters::TextureParams = TEXTURE_FRAG;
-    CHANNEL_EXTRACT: params::filters::ChannelExtractParams = CHANNEL_EXTRACT_FRAG;
     MASK_LUMINANCE: () = MASK_LUMINANCE_FRAG;
     GAUSSIAN_BLUR: params::filters::GaussianBlurParams = GAUSSIAN_BLUR_FRAG;
     BOX_BLUR: params::filters::BoxBlurParams = BOX_BLUR_FRAG;
@@ -626,7 +624,6 @@ pub struct ShaderPrograms {
     // Color
     pub color_convert: ShaderProgram<params::color::ColorConvertParams>,
     pub tonemap: ShaderProgram<params::color::TonemapParams>,
-    pub channel_extract: ShaderProgram<params::filters::ChannelExtractParams>,
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
@@ -765,7 +762,6 @@ impl ShaderPrograms {
             // Color
             color_convert: compile(gl, v, &COLOR_CONVERT)?,
             tonemap: compile(gl, v, &TONEMAP)?,
-            channel_extract: compile(gl, v, &CHANNEL_EXTRACT)?,
             mask_luminance: compile(gl, v, &MASK_LUMINANCE)?,
             liquify_dab: compile(gl, v, &LIQUIFY_DAB)?,
             // Text

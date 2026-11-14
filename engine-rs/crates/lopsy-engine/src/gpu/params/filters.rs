@@ -318,13 +318,6 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/channel_extract.glsl`
-    pub struct ChannelExtractParams {
-        pub channel: i32,
-    }
-}
-
-uniforms! {
     /// `filters/gaussian_blur.glsl`
     pub struct GaussianBlurParams {
         pub direction: [f32; 2],

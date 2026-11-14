@@ -27,11 +27,6 @@ pub fn filter_color_lut(engine: &mut Engine, layer_id: &str, lut_data: &[u8], lu
     lopsy_engine::commands::filter::render::filter_color_lut(&mut engine.inner, layer_id, lut_data, lut_size, intensity)
 }
 
-#[wasm_bindgen(js_name = "extractChannelPixels")]
-pub fn extract_channel_pixels(engine: &mut Engine, layer_id: &str, channel: u32) -> Vec<u8> {
-    lopsy_engine::commands::filter::render::extract_channel_pixels(&mut engine.inner, layer_id, channel)
-}
-
 #[wasm_bindgen(js_name = "readChannelThumbnail")]
 pub fn read_channel_thumbnail(engine: &mut Engine, layer_id: &str, channel: u32, max_size: u32) -> Vec<u8> {
     lopsy_engine::commands::filter::render::read_channel_thumbnail(&mut engine.inner, layer_id, channel, max_size)
