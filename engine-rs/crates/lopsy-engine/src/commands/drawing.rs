@@ -62,13 +62,10 @@ pub fn sample_color(engine: &EngineInner, x: f64, y: f64, sample_size: u32) -> V
     let iy = y as i32;
     let half = (sample_size / 2) as i32;
 
-    // Read from composite FBO
-    engine.fbo_pool.bind(engine.composite_fbo);
-
-    let mut pixels = engine.texture_pool.read_rgba(ix - half, iy - half, sample_size, sample_size,
-    ).unwrap_or_else(|_| vec![0u8; (sample_size * sample_size * 4) as usize]);
-
-    engine.fbo_pool.unbind();
+    let mut pixels = engine
+        .gpu()
+        .read_rgba(engine.composite_texture, ix - half, iy - half, sample_size, sample_size)
+        .unwrap_or_else(|_| vec![0u8; (sample_size * sample_size * 4) as usize]);
 
     // Decode before averaging: the transform out of a native mode is
     // non-linear, so averaging encoded values would not match what the
