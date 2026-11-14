@@ -7,11 +7,11 @@ import {
   restoreFilterPreview,
   clearFilterPreview,
 } from '../../engine-wasm/wasm-bridge';
-import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import type { LutPreset } from '../../filters/color-lut';
 import {
+  commitFilterPreview,
   markFilterTargetWritten,
   peekFilterTarget,
   resolveFilterTarget,
@@ -63,24 +63,7 @@ export function applyColorLut(preset: LutPreset, intensity: number): void {
   const engine = getEngine();
   if (!engine) return;
 
-  let previewPixels: Uint8Array | null = null;
-  runOnFilterTarget(engine, target, () => {
-    previewPixels = readLayerCompressed(target.layerId);
-    restoreFilterPreview(engine);
-  });
-  clearFilterPreview(engine);
-
-  useEditorStore.getState().pushHistory('Color LUT');
-
-  runOnFilterTarget(engine, target, () => {
-    if (previewPixels) {
-      uploadCompressed(target.layerId, previewPixels);
-    } else {
-      filterColorLut(engine, target.layerId, preset.data, preset.size, intensity);
-    }
-  });
-  markFilterTargetWritten(engine, target, true);
-  useEditorStore.getState().notifyRender();
+  commitFilterPreview(engine, target, 'Color LUT', () => filterColorLut(engine, target.layerId, preset.data, preset.size, intensity));
 }
 
 export function applyColorLutDirect(preset: LutPreset, intensity: number): void {

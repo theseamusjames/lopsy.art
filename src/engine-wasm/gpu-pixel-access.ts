@@ -9,7 +9,6 @@ import {
   readLayerPixelsSync,
   getLayerTextureDimensions,
   layerContentGeneration,
-  readLayerPixelsCompressedU16,
   readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
   readLayerThumbnail as wasmReadLayerThumbnail,
@@ -72,20 +71,6 @@ export function readLayerAsImageDataSync(layerId: string): ImageData | null {
   const imageData = new ImageData(clamped, width, height);
   frameCache.set(layerId, imageData);
   return imageData;
-}
-
-/**
- * Read layer pixels as a 16-bit compressed blob (header + u16 pixel data).
- * Preserves RGBA16F precision from the GPU. Not cached — used for undo
- * snapshots, called once per pushHistory.
- */
-export function readLayerCompressed(layerId: string): Uint8Array | null {
-  if (!currentEngine) return null;
-
-  const data = readLayerPixelsCompressedU16(currentEngine, layerId);
-  if (!data || data.length === 0) return null;
-
-  return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
 
 /**

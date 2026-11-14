@@ -6,8 +6,14 @@ import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import {
   beginMaskFilterTarget,
   endMaskFilterTarget,
+  snapshotLayerGpu,
+  restoreFromGpuSnapshot,
+  releaseGpuSnapshot,
+  restoreFilterPreview,
+  clearFilterPreview,
   type Engine,
 } from '../../engine-wasm/wasm-bridge';
+import { EMPTY_HANDLE } from '../store/layer-gpu-capture';
 import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
 import { canReceiveRasterPaint, guardPixelWrite } from '../../layers/paint-target';
 
@@ -94,3 +100,45 @@ export function markFilterTargetWritten(engine: Engine, target: FilterTarget, is
   if (isSettled) syncLayerAfterFullSize(engine, target.layerId);
   clearJsPixelData(target.layerId);
 }
+
+/** Put a kept preview back into the target. False when it could not be. */
+function restoreKeptPreview(engine: Engine, layerId: string, preview: number): boolean {
+  if (preview === EMPTY_HANDLE) return false;
+  try {
+    restoreFromGpuSnapshot(engine, layerId, preview);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Commit a live filter preview as one history step. The preview on screen
+ * is kept in a GPU snapshot while the original comes back for history to
+ * capture, then copied in again, so its pixels never leave the GPU.
+ * `applyFresh` runs the filter again when the preview could not be kept.
+ */
+export function commitFilterPreview(
+  engine: Engine,
+  target: FilterTarget,
+  label: string,
+  applyFresh: () => void,
+): void {
+  let preview = EMPTY_HANDLE;
+  runOnFilterTarget(engine, target, () => {
+    preview = snapshotLayerGpu(engine, target.layerId);
+    restoreFilterPreview(engine);
+  });
+  clearFilterPreview(engine);
+
+  useEditorStore.getState().pushHistory(label);
+
+  runOnFilterTarget(engine, target, () => {
+    if (!restoreKeptPreview(engine, target.layerId, preview)) applyFresh();
+  });
+  // Never part of a history entry, so the ledger does not own it.
+  if (preview !== EMPTY_HANDLE) releaseGpuSnapshot(engine, preview);
+  markFilterTargetWritten(engine, target, true);
+  useEditorStore.getState().notifyRender();
+}
+

@@ -28,6 +28,10 @@ const liquifyInitDisplacement = vi.fn();
 const liquifyRender = vi.fn();
 const liquifyRelease = vi.fn();
 const beginMaskFilterTarget = vi.fn(() => true);
+const EMPTY_SNAPSHOT = 0xFFFFFFFF;
+const snapshotLayerGpu = vi.fn((..._args: unknown[]) => EMPTY_SNAPSHOT);
+const restoreFromGpuSnapshot = vi.fn();
+const releaseGpuSnapshot = vi.fn();
 const endMaskFilterTarget = vi.fn();
 
 vi.mock('../../engine-wasm/wasm-bridge', () => ({
@@ -47,14 +51,12 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
   liquifyRelease,
   beginMaskFilterTarget,
   endMaskFilterTarget,
+  snapshotLayerGpu,
+  restoreFromGpuSnapshot,
+  releaseGpuSnapshot,
 }));
 
-const readLayerCompressed = vi.fn(() => null);
-const uploadCompressed = vi.fn();
-vi.mock('../../engine-wasm/gpu-pixel-access', () => ({
-  readLayerCompressed,
-  uploadCompressed,
-}));
+vi.mock('../../engine-wasm/gpu-pixel-access', () => ({}));
 
 const flushLayerSync = vi.fn();
 const uploadLayerMaskIfChanged = vi.fn();
@@ -176,7 +178,10 @@ beforeEach(() => {
   saveFilterPreview.mockClear();
   restoreFilterPreview.mockClear();
   clearFilterPreview.mockClear();
-  readLayerCompressed.mockReturnValue(null);
+  snapshotLayerGpu.mockReset();
+  snapshotLayerGpu.mockReturnValue(EMPTY_SNAPSHOT);
+  restoreFromGpuSnapshot.mockReset();
+  releaseGpuSnapshot.mockClear();
   clearJsPixelData.mockClear();
   applyMeshWarpGpu.mockClear();
   liquifyRender.mockClear();
@@ -213,6 +218,30 @@ describe('#771 — filter-actions.ts reconciles JS bounds after each engine writ
     const { applyGenericFilterWithPreview } = await import('./filter-actions');
     applyGenericFilterWithPreview('gaussian-blur', { radius: 5 });
     expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
+  });
+
+  it('commits the preview from a GPU snapshot taken before history captures the original', async () => {
+    snapshotLayerGpu.mockReturnValue(7);
+    const order: string[] = [];
+    restoreFilterPreview.mockImplementationOnce(() => { order.push('restore original'); });
+    editorState.pushHistory.mockImplementationOnce(() => { order.push('push history'); });
+    restoreFromGpuSnapshot.mockImplementationOnce(() => { order.push('restore preview'); });
+    const { applyGenericFilterWithPreview } = await import('./filter-actions');
+    applyGenericFilterWithPreview('gaussian-blur', { radius: 5 });
+    expect(order).toEqual(['restore original', 'push history', 'restore preview']);
+    expect(restoreFromGpuSnapshot).toHaveBeenCalledWith(expect.anything(), 'layer-1', 7);
+    expect(releaseGpuSnapshot).toHaveBeenCalledWith(expect.anything(), 7);
+  });
+
+  it('runs the filter again when the preview snapshot cannot be restored', async () => {
+    snapshotLayerGpu.mockReturnValue(7);
+    restoreFromGpuSnapshot.mockImplementationOnce(() => {
+      throw new Error('Invalid snapshot handle');
+    });
+    const { applyColorLut } = await import('./color-lut-actions');
+    applyColorLut({ id: 'lut-1', name: 'Test LUT', data: new Uint8Array(16), size: 2 }, 1);
+    expect(filterColorLut).toHaveBeenCalledTimes(1);
+    expect(releaseGpuSnapshot).toHaveBeenCalledWith(expect.anything(), 7);
   });
 
   it('applyInvert reconciles bounds after filterInvert', async () => {
@@ -270,7 +299,7 @@ describe('#771 — color-lut-actions.ts reconciles JS bounds after each engine w
     expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);
   });
 
-  it('applyColorLut reconciles bounds on the reapply-from-blob commit path', async () => {
+  it('applyColorLut reconciles bounds on the commit path', async () => {
     const { applyColorLut } = await import('./color-lut-actions');
     applyColorLut({ id: 'lut-1', name: 'Test LUT', data: new Uint8Array(16), size: 2 }, 1);
     expect(syncLayerAfterFullSize).toHaveBeenCalledTimes(1);

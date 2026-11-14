@@ -432,11 +432,6 @@ pub fn upload_layer_pixels_compressed(
     lopsy_engine::commands::layer::upload_layer_pixels_compressed(&mut engine.inner, layer_id, compressed).map_err(|e| JsError::new(&e))
 }
 
-#[wasm_bindgen(js_name = "readLayerPixelsCompressedU16")]
-pub fn read_layer_pixels_compressed_u16(engine: &Engine, layer_id: &str) -> Vec<u8> {
-    lopsy_engine::commands::layer::read_layer_pixels_compressed_u16(&engine.inner, layer_id)
-}
-
 #[wasm_bindgen(js_name = "readLayerPixelsLz4U16")]
 pub fn read_layer_pixels_lz4_u16(engine: &Engine, layer_id: &str) -> Vec<u8> {
     lopsy_engine::commands::layer::read_layer_pixels_lz4_u16(&engine.inner, layer_id)

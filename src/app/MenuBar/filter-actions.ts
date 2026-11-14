@@ -10,12 +10,12 @@ import {
   clearFilterPreview,
   type Engine,
 } from '../../engine-wasm/wasm-bridge';
-import { readLayerCompressed, uploadCompressed } from '../../engine-wasm/gpu-pixel-access';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { filterRegistry } from '../../filters/filter-registry';
 import type { FilterDefinition } from '../../filters/filter-types';
 import { syncLayerAfterFullSize } from '../sync-layer-after-full-size';
 import {
+  commitFilterPreview,
   isFilteringMask,
   markFilterTargetWritten,
   resolveFilterTarget,
@@ -134,27 +134,7 @@ export function applyGenericFilterWithPreview(id: FilterDialogId, values: Record
   const engine = getEngine();
   if (!engine) return;
 
-  // Snapshot the current GPU texture (the preview the user is looking at)
-  // so we can restore it after capturing history from the original, then
-  // restore the original so history captures the unfiltered state.
-  let previewPixels: Uint8Array | null = null;
-  runOnFilterTarget(engine, target, () => {
-    previewPixels = readLayerCompressed(target.layerId);
-    restoreFilterPreview(engine);
-  });
-  clearFilterPreview(engine);
-
-  useEditorStore.getState().pushHistory(filter.title);
-
-  runOnFilterTarget(engine, target, () => {
-    if (previewPixels) {
-      uploadCompressed(target.layerId, previewPixels);
-    } else {
-      filter.applyGpu(engine, target.layerId, values);
-    }
-  });
-  markFilterTargetWritten(engine, target, true);
-  useEditorStore.getState().notifyRender();
+  commitFilterPreview(engine, target, filter.title, () => filter.applyGpu(engine, target.layerId, values));
 }
 
 function applyInstantFilter(label: string, run: (engine: Engine, layerId: string) => void): void {
