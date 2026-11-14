@@ -210,7 +210,7 @@ import init, {
   paintMaskDab as rawPaintMaskDab,
   paintMaskDabBatch as rawPaintMaskDabBatch,
   drawMaskPencilLine as rawDrawMaskPencilLine,
-  readMaskTexture,
+  readMaskTexture as rawReadMaskTexture,
   fillMask as rawFillMask,
   remapLayerMask as rawRemapLayerMask,
   fillMaskWithValue as rawFillMaskWithValue,
@@ -536,7 +536,6 @@ export {
   beginQuickMaskMove,
   translateQuickMask,
   endQuickMaskMove,
-  readMaskTexture,
   screenToCanvas,
   cropToContentBounds,
   expandFromCrop,
@@ -672,6 +671,8 @@ export const readLayerPixelsForFill = asyncReadback(rawReadLayerPixelsForFill);
 export const readSelectionMask = asyncReadback(rawReadSelectionMask);
 /** A layer's opaque bounds, texture-local `[x, y, width, height]`; empty when the read failed. */
 export const getLayerContentBounds = asyncReadback(rawGetLayerContentBounds);
+/** A layer mask's coverage, one byte per pixel, sized like the mask texture. */
+export const readMaskTexture = asyncReadback(rawReadMaskTexture);
 export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);

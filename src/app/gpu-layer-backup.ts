@@ -79,7 +79,9 @@ const runner = createLayerBackupRunner({
     // Pending JS pixel data isn't on the GPU yet; masks live in JS and may
     // lag their GPU copy.
     flushLayerSync(useEditorStore.getState());
-    materializeAllMaskData();
+    // Masks are restored from `mask.data`. The reads are started here and
+    // land without the pass waiting for them.
+    void materializeAllMaskData();
   },
   historyKey: currentHistoryKey,
   backupLayers,

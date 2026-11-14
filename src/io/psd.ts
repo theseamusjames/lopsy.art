@@ -90,7 +90,7 @@ function flattenLayerTreeForPsd(
   return result;
 }
 
-export function exportPsdFile(depth: 8 | 16 = 8): void {
+export async function exportPsdFile(depth: 8 | 16 = 8): Promise<void> {
   const engine = getEngine();
   if (!engine) return;
 
@@ -103,7 +103,7 @@ export function exportPsdFile(depth: 8 | 16 = 8): void {
   commitLayerTransform();
   // Layer masks are written from `layer.mask.data`, which lags the GPU
   // until the lazy readback lands (#780).
-  materializeAllMaskData();
+  await materializeAllMaskData();
 
   const edState = useEditorStore.getState();
   flushLayerSync(edState);

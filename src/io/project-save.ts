@@ -245,7 +245,7 @@ export async function saveProject(): Promise<void> {
     commitLayerTransform();
     // Mask readbacks are lazy (#756, #780); read back any mask whose JS
     // copy lags the GPU so the file contains the current mask.
-    materializeAllMaskData();
+    await materializeAllMaskData();
     const state = useEditorStore.getState();
     flushLayerSync(state);
 

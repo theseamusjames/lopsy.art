@@ -54,12 +54,12 @@ describe('mask-data-sync (#780)', () => {
     expect(isMaskDataStale('a')).toBe(true);
   });
 
-  it('materialize reads a stale mask back, stores it, and gates its upload echo', () => {
+  it('materialize reads a stale mask back, stores it, and gates its upload echo', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4]);
-    readMaskTexture.mockReturnValue(bytes);
+    readMaskTexture.mockResolvedValue(bytes);
     markMaskDataStale('a');
 
-    materializeMaskData('a');
+    await materializeMaskData('a');
 
     expect(readMaskTexture).toHaveBeenCalledTimes(1);
     const [id, data] = editorState.updateLayerMaskData.mock.calls[0]! as [string, Uint8ClampedArray];
@@ -69,17 +69,31 @@ describe('mask-data-sync (#780)', () => {
     expect(isMaskDataStale('a')).toBe(false);
   });
 
-  it('materialize is free when the JS copy is already current', () => {
+  it('materialize is free when the JS copy is already current', async () => {
     markMaskDataStale('a');
     markMaskDataFresh('a');
-    materializeAllMaskData();
+    await materializeAllMaskData();
     expect(readMaskTexture).not.toHaveBeenCalled();
   });
 
-  it('ignores a readback whose size no longer matches the mask', () => {
-    readMaskTexture.mockReturnValue(new Uint8Array(9));
+  it('ignores a readback whose size no longer matches the mask', async () => {
+    readMaskTexture.mockResolvedValue(new Uint8Array(9));
     markMaskDataStale('a');
-    materializeMaskData('a');
+    await materializeMaskData('a');
     expect(editorState.updateLayerMaskData).not.toHaveBeenCalled();
+  });
+
+  it('keeps a mask stale when it is written again while its read is out', async () => {
+    let deliver: (bytes: Uint8Array) => void = () => {};
+    readMaskTexture.mockReturnValue(new Promise<Uint8Array>((resolve) => { deliver = resolve; }));
+    markMaskDataStale('a');
+
+    const reading = materializeMaskData('a');
+    markMaskDataStale('a');
+    deliver(new Uint8Array([1, 2, 3, 4]));
+    await reading;
+
+    expect(editorState.updateLayerMaskData).not.toHaveBeenCalled();
+    expect(isMaskDataStale('a')).toBe(true);
   });
 });
