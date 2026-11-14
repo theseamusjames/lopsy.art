@@ -1,7 +1,7 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { useUIStore } from './ui-store';
 import { useEditorStore } from './editor-store';
-import { invalidateBitmapCache, createPaintingCanvas, destroyPaintingCanvas } from '../engine/bitmap-cache';
+import { destroyPaintingCanvas } from '../engine/bitmap-cache';
 import { getEngine } from '../engine-wasm/engine-state';
 import {
   beginStroke, endStroke, hasFloat, dropFloat,
@@ -307,37 +307,6 @@ export function useCanvasInteraction(
         // Finalize any pending GPU stroke so the layer texture includes it
         // before we read pixel data back for non-GPU tools (e.g. move).
         finalizePendingStroke(pendingStrokeRef);
-
-        // Only expand the active layer's pixel data for tools that actually
-        // read/write it via JS. Tools like text, crop, path, eyedropper,
-        // and selection tools don't need pixel data and expanding would
-        // destructively change layer bounds before pushHistory captures
-        // them — causing undo to restore the wrong positions.
-        // Move is excluded: selection moves use the float system (GPU-only)
-        // and non-selection moves call expandLayerForEditing in the handler.
-        // Fill is included: its GPU fast paths call the engine's
-        // ensure_layer_full_size internally, which resets the engine layer
-        // descriptor to a doc-sized texture at the origin. expandLayerForEditing
-        // performs the matching Zustand reconciliation (x/y AND width/height via
-        // withLayerBounds); without it the store keeps the pre-fill offset and
-        // engine-sync re-applies it, double-offsetting the filled content (#722).
-        // Quick Mask Mode paints on the quick mask buffer (not the layer), so
-        // no pixel data expansion is needed — same as non-paint tools.
-        // Layer-mask edit mode paints on the mask texture via gpuMaskDabBatch
-        // and never reads the layer's own RGBA, so expanding + uploading the
-        // full-res layer buffer is pure waste (71.64 MB / stroke at 4K, #733).
-        // Fill is not on this list either: the fill handler owns its own
-        // doc-space coordinate math and reconciles JS bounds after the engine's
-        // ensure_layer_full_size via syncLayerAfterFullSize — no RGBA
-        // round-trip needed (#742).
-        const needsPixelData = isPaintTool && !isQuickMaskMode && !maskEditMode;
-        if (needsPixelData) {
-          const imageData = editorState.expandLayerForEditing(activeLayerId);
-          expandedLayer = useEditorStore.getState().document.layers.find((l) => l.id === activeLayerId)!;
-          layerPos = { x: canvasPos.x - expandedLayer.x, y: canvasPos.y - expandedLayer.y };
-          invalidateBitmapCache(activeLayerId);
-          createPaintingCanvas(activeLayerId, imageData);
-        }
       }
       const ctx = buildContext(e, canvasPos, layerPos, activeLayerId, expandedLayer);
       if (useGpu) {
