@@ -95,7 +95,7 @@ export function applyGpuTransform(invMatrix: Float32Array): void {
   dropFloat(engine);
 
   // Re-select from committed pixel alpha (handles JS data clearing + mask rebuild)
-  selectLayerAlpha(activeLayerId);
+  void selectLayerAlpha(activeLayerId);
 }
 
 /**
@@ -115,7 +115,7 @@ function applyToLiveText(invMatrix: Float32Array): boolean {
       d: invMatrix[4] ?? 1,
     };
     transformTextLayerInDocument(target.layer.id, forward, 'Transform');
-    if (useEditorStore.getState().selection.active) selectLayerAlpha(target.layer.id);
+    if (useEditorStore.getState().selection.active) void selectLayerAlpha(target.layer.id);
     return true;
   }
   return refusePartialTextMove();

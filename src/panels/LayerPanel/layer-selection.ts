@@ -11,6 +11,7 @@ import { combineSelectionMasks } from '../../app/interactions/selection-handlers
 import { createTransformState } from '../../tools/transform/transform';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat } from '../../engine-wasm/wasm-bridge';
+import { readLayerAsImageData } from '../../engine-wasm/gpu-pixel-access';
 import { schedulePrefloat } from '../../app/interactions/prefloat';
 import { recordLayerAlphaSelection } from '../../app/interactions/layer-alpha-selection';
 import { getMaskDocOrigin } from '../../layers/mask-origin';
@@ -22,7 +23,15 @@ export interface SelectLayerAlphaOptions {
   combine?: SelectionCombineMode;
 }
 
-export function selectLayerAlpha(layerId: string, options: SelectLayerAlphaOptions = {}): void {
+let latestAlphaSelect = 0;
+
+/**
+ * Select a layer's opaque pixels. The layer is read from the GPU, so the
+ * selection is in place when the returned promise resolves, not when the
+ * call returns. A newer call, or any selection made while the read was
+ * out, wins: this one then leaves the selection alone.
+ */
+export async function selectLayerAlpha(layerId: string, options: SelectLayerAlphaOptions = {}): Promise<void> {
   const { prefloat = true, combine = 'replace' } = options;
   // Commit any active GPU float so the layer texture has the final pixels
   const engine = getEngine();
@@ -30,13 +39,18 @@ export function selectLayerAlpha(layerId: string, options: SelectLayerAlphaOptio
     dropFloat(engine);
   }
 
+  // The GPU texture is now the only copy, so the read below sees it.
   clearJsPixelData(layerId);
 
+  const request = ++latestAlphaSelect;
+  const selectionAtRequest = useEditorStore.getState().selection.mask;
+  const pixelData = await readLayerAsImageData(layerId).catch(() => null);
+  if (!pixelData || request !== latestAlphaSelect) return;
+
   const editorState = useEditorStore.getState();
+  if (editorState.selection.mask !== selectionAtRequest) return;
   const layer = editorState.document.layers.find((l) => l.id === layerId);
   if (!layer) return;
-  const pixelData = editorState.resolvePixelData(layerId);
-  if (!pixelData) return;
 
   const { width: docW, height: docH } = editorState.document;
   const selMask = new Uint8ClampedArray(docW * docH);

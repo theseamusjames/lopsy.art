@@ -62,7 +62,7 @@ export function pasteInternalClipboard(): void {
   flushLayerSync(useEditorStore.getState());
   // No prefloat: it would grow the layer to the document at (0, 0), and a
   // paste in place keeps the copied size and offset. The first drag floats.
-  selectLayerAlpha(pastedId, { prefloat: false });
+  void selectLayerAlpha(pastedId, { prefloat: false });
 }
 
 export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNewDocument = false): Promise<void> {
@@ -120,7 +120,7 @@ export async function pasteOrOpenBlob(blob: Blob, fallbackName: string, forceNew
     // descriptor before selectLayerAlpha tries to float it.
     const pastedId = useEditorStore.getState().document.activeLayerId;
     if (pastedId) {
-      requestAnimationFrame(() => selectLayerAlpha(pastedId));
+      requestAnimationFrame(() => void selectLayerAlpha(pastedId));
     }
   } else {
     const layerId = crypto.randomUUID();

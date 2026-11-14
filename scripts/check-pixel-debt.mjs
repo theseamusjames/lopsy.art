@@ -74,7 +74,7 @@ const ALLOWLIST = {
   'src/app/mask-data-sync.test.ts': 1,                       // #780 fixture mask
   'src/app/store/mask-history.test.ts': 1,                   // #780 fixture mask
   'src/panels/LayerPanel/LayerPanel.test.ts': 1,             // replacement mask bytes for updateLayerMaskData
-  'src/panels/LayerPanel/layer-selection.test.ts': 1,        // layer-alpha fixture for selectLayerAlpha
+  'src/panels/LayerPanel/layer-selection.test.ts': 4,        // layer-alpha fixture for selectLayerAlpha, +3: late-read fixtures
   'src/panels/LayerPanel/thumbnail-read-queue.test.ts': 1,   // fixture buffer for mocked readback
   'src/layers/mask-remap.test.ts': 1,                  // #1357 fixture mask
   'src/selection/selection-to-path.test.ts': 2,
