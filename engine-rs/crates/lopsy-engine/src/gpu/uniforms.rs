@@ -217,6 +217,19 @@ impl<const N: usize> UniformValue for FloatArray<N> {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec4Array<const N: usize>(pub [[f32; 4]; N]);
 
+impl<const N: usize> Vec4Array<N> {
+    /// `values` packed four to a vector and padded with zeros: value `i` is
+    /// component `i % 4` of vector `i / 4`. A WGSL uniform struct cannot
+    /// hold `array<f32, N>`, so a list of floats travels this way.
+    pub fn from_floats(values: &[f32]) -> Self {
+        let mut array = [[0.0; 4]; N];
+        for (slot, value) in array.as_flattened_mut().iter_mut().zip(values) {
+            *slot = *value;
+        }
+        Self(array)
+    }
+}
+
 impl<const N: usize> UniformValue for Vec4Array<N> {
     const TYPE: UniformType = UniformType::Vec4Array(N);
     fn put(&self, sink: &mut impl UniformSink) {

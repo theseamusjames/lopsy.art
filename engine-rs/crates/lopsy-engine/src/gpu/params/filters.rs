@@ -1,4 +1,4 @@
-use crate::gpu::uniforms::{uniforms, FloatArray};
+use crate::gpu::uniforms::{uniforms, Vec4Array};
 
 uniforms! {
     /// `filters/posterize.glsl`
@@ -321,7 +321,8 @@ uniforms! {
     /// `filters/gaussian_blur.glsl`
     pub struct GaussianBlurParams {
         pub direction: [f32; 2],
-        pub weights: FloatArray<64>,
+        /// 64 weights, four to a vector.
+        pub weights: Vec4Array<16>,
         pub radius: i32,
     }
 }

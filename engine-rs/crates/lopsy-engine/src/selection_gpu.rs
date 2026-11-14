@@ -1,7 +1,7 @@
 use crate::engine::EngineInner;
 use crate::gpu::pass::Target;
 use crate::gpu::params::filters::GaussianBlurParams;
-use crate::gpu::uniforms::FloatArray;
+use crate::gpu::uniforms::Vec4Array;
 
 pub fn set_selection_mask(
     engine: &mut EngineInner,
@@ -46,7 +46,7 @@ pub fn feather_selection_mask(engine: &mut EngineInner, radius: u32) {
 
     let clamped_radius = radius.min(63) as usize;
     let weights = gaussian_weights(clamped_radius);
-    let weights = FloatArray::from_slice(&weights);
+    let weights = Vec4Array::from_floats(&weights);
     let blur_pass = |src, direction: (f32, f32)| {
         engine.pass(&engine.shaders.gaussian_blur, GaussianBlurParams {
             direction: [direction.0, direction.1],

@@ -11,7 +11,7 @@ use crate::gpu::params::filters::{
     BloomCombineParams, BloomThresholdParams,
     GaussianBlurParams,
 };
-use crate::gpu::uniforms::FloatArray;
+use crate::gpu::uniforms::Vec4Array;
 
 pub fn filter_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32) {
     if block_size <= 1 {
@@ -123,7 +123,7 @@ pub fn filter_bloom(
         .draw(Target::Framebuffer(inner.scratch_fbo_b));
 
     // Half-kernel from the centre out.
-    let weights = FloatArray::from_slice(kernel.get(radius as usize..).unwrap_or(&[]));
+    let weights = Vec4Array::from_floats(kernel.get(radius as usize..).unwrap_or(&[]));
     let blur_pass = |src: TextureHandle, direction: (f32, f32)| {
         inner
             .pass(&inner.shaders.gaussian_blur, GaussianBlurParams {

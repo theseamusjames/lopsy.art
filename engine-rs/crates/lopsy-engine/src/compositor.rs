@@ -6,7 +6,7 @@ use crate::gpu::pass::{Blend, Pass, Scissor, Target};
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::params::composite::{BlendParams, CompositeParams, FinalBlitParams};
 use crate::gpu::params::filters::{AdjustmentsParams, GaussianBlurParams, VignetteParams};
-use crate::gpu::uniforms::{FloatArray, Uniforms};
+use crate::gpu::uniforms::{Uniforms, Vec4Array};
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
 use crate::effect_cache_gpu::{self as fx_cache, emit_effect, DocTarget, EffectCacheKey, EffectCapture, EffectOut, Phase};
@@ -1153,7 +1153,7 @@ fn blur_scratch_b(engine: &EngineInner, blur_radius: u32) {
         (engine.scratch_texture_a, engine.scratch_fbo_b, [0.0, 1.0]),
     ];
     for (read, write, direction) in steps {
-        let params = GaussianBlurParams { direction, weights: FloatArray(weights), radius: r as i32 };
+        let params = GaussianBlurParams { direction, weights: Vec4Array::from_floats(&weights), radius: r as i32 };
         doc_pass(engine, &engine.shaders.gaussian_blur, params)
             .texture("u_tex", read)
             .draw(Target::Framebuffer(write));

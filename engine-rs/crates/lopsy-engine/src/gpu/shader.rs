@@ -62,7 +62,7 @@ pub const SEPARABLE_EDT_FRAG: &str = translated!("effects/separable_edt");
 pub const STROKE_APPLY_FRAG: &str = translated!("effects/stroke_apply");
 
 // Filters
-pub const GAUSSIAN_BLUR_FRAG: &str = include_str!("shaders/filters/gaussian_blur.glsl");
+pub const GAUSSIAN_BLUR_FRAG: &str = translated!("filters/gaussian_blur");
 pub const BOX_BLUR_FRAG: &str = translated!("filters/box_blur");
 pub const ADJUSTMENTS_FRAG: &str = include_str!("shaders/filters/adjustments.glsl");
 pub const HUE_SAT_FRAG: &str = translated!("filters/hue_sat");
