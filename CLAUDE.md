@@ -180,7 +180,6 @@ gpu/shaders/
     shadow.glsl           # Drop shadow
     separable_edt.glsl    # Stroke effect band (two-pass Euclidean distance)
     stroke_apply.glsl     # Stroke effect ring from that band
-    color_overlay.glsl    # Color overlay
   filters/
     adjustments.glsl      # Exposure, contrast, highlights, shadows, whites, blacks
     vignette.glsl         # Vignette effect

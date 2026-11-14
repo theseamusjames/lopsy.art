@@ -62,14 +62,6 @@ uniforms! {
 }
 
 uniforms! {
-    /// `effects/color_overlay.glsl`
-    pub struct ColorOverlayParams {
-        pub overlay_color: [f32; 4],
-        pub opacity: f32,
-    }
-}
-
-uniforms! {
     /// `effects/layer_mask_apply.glsl`
     pub struct LayerMaskApplyParams {
         pub layer_offset: [f32; 2],

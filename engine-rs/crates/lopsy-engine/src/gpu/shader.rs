@@ -60,7 +60,6 @@ pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
 pub const LAYER_MASK_APPLY_FRAG: &str = include_str!("shaders/effects/layer_mask_apply.glsl");
 pub const SEPARABLE_EDT_FRAG: &str = include_str!("shaders/effects/separable_edt.glsl");
 pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
-pub const COLOR_OVERLAY_FRAG: &str = translated!("effects/color_overlay");
 
 // Filters
 pub const GAUSSIAN_BLUR_FRAG: &str = include_str!("shaders/filters/gaussian_blur.glsl");
@@ -243,7 +242,6 @@ typed_shaders! {
     SHADOW: params::effects::ShadowParams = SHADOW_FRAG;
     SEPARABLE_EDT: params::effects::SeparableEdtParams = SEPARABLE_EDT_FRAG;
     STROKE_APPLY: params::effects::StrokeApplyParams = STROKE_APPLY_FRAG;
-    COLOR_OVERLAY: params::effects::ColorOverlayParams = COLOR_OVERLAY_FRAG;
     VIGNETTE: params::filters::VignetteParams = VIGNETTE_FRAG;
     ADJUSTMENTS: params::filters::AdjustmentsParams = ADJUSTMENTS_FRAG;
     COMPOSITE: params::composite::CompositeParams = COMPOSITE_FRAG;
@@ -550,7 +548,6 @@ pub struct ShaderPrograms {
     pub shadow: ShaderProgram<params::effects::ShadowParams>,
     pub separable_edt: ShaderProgram<params::effects::SeparableEdtParams>,
     pub stroke_apply: ShaderProgram<params::effects::StrokeApplyParams>,
-    pub color_overlay: ShaderProgram<params::effects::ColorOverlayParams>,
     // Filters
     pub gaussian_blur: ShaderProgram<params::filters::GaussianBlurParams>,
     pub box_blur: ShaderProgram<params::filters::BoxBlurParams>,
@@ -684,7 +681,6 @@ impl ShaderPrograms {
             shadow: compile(gl, v, &SHADOW)?,
             separable_edt: compile(gl, v, &SEPARABLE_EDT)?,
             stroke_apply: compile(gl, v, &STROKE_APPLY)?,
-            color_overlay: compile(gl, v, &COLOR_OVERLAY)?,
             // Filters
             gaussian_blur: compile(gl, v, &GAUSSIAN_BLUR)?,
             box_blur: compile(gl, v, &BOX_BLUR)?,
