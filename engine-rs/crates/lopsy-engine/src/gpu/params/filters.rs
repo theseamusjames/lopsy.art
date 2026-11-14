@@ -314,7 +314,8 @@ uniforms! {
         pub angle: f32,
         pub octaves: f32,
         pub contrast: f32,
-        pub colored: bool,
+        /// 0 or 1.
+        pub colored: i32,
         pub seed: u32,
     }
 }

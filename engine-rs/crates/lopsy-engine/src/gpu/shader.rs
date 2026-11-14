@@ -102,7 +102,7 @@ pub const LIQUIFY_DAB_FRAG: &str = translated!("filters/liquify_dab");
 pub const FIBERS_FRAG: &str = translated!("filters/fibers");
 pub const SUNBURST_FRAG: &str = translated!("filters/sunburst");
 pub const COLOR_LUT_FRAG: &str = translated!("filters/color_lut");
-pub const TEXTURE_FRAG: &str = include_str!("shaders/filters/texture.glsl");
+pub const TEXTURE_FRAG: &str = translated!("filters/texture");
 
 // Brush (assembled from header + variant + footer at compile_all time)
 const BRUSH_DAB_CIRCLE_FRAG: &str = concat!(
@@ -759,7 +759,6 @@ mod tests {
     use super::{
         inject_defines, preprocess_frag, typed_shader_checks, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
         SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
-        TEXTURE_FRAG,
     };
 
     #[test]
@@ -883,7 +882,7 @@ mod tests {
 
     #[test]
     fn texture_is_deterministic_and_alpha_preserving() {
-        let code: String = TEXTURE_FRAG
+        let code: String = include_str!("shaders/filters/texture.wgsl")
             .lines()
             .filter(|l| !l.trim_start().starts_with("//"))
             .collect::<Vec<_>>()
@@ -892,20 +891,20 @@ mod tests {
             !code.contains("fract(sin"),
             "a sin()-based hash is not reproducible across backends (Metal fast-math)"
         );
-        assert!(code.contains("uvec3 pcg3d(uvec3 v)"));
-        assert!(code.contains("uint u_seed;"));
+        assert!(code.contains("fn pcg3d(value: vec3<u32>) -> vec3<u32>"));
+        assert!(code.contains("u_seed: u32,"));
         assert!(
-            code.contains("c & ivec2(0x7FFFFFFF)"),
+            code.contains("c & vec2<i32>(0x7FFFFFFF)"),
             "negative lattice cells must be masked before the int -> uint conversion"
         );
         assert!(
-            code.contains("fragColor = vec4(clamp(c.rgb + t * (u_amount * 0.6), 0.0, 1.0), c.a);"),
+            code.contains("clamp(c.rgb + t * (params.u_amount * 0.6), vec3<f32>(0.0), vec3<f32>(1.0)), c.a);"),
             "texture modulates existing pixels and keeps their alpha"
         );
         // Kind indices must match lopsy_core::filters::texture::TextureKind.
         for (kind, func) in [(1, "ridged("), (2, "canvasWeave("), (3, "fbm("), (4, "cells(")] {
             assert!(
-                code.contains(&format!("if (u_kind == {kind}) return {func}")),
+                code.contains(&format!("if (params.u_kind == {kind}) {{ return {func}")),
                 "kind {kind} does not dispatch to {func}"
             );
         }

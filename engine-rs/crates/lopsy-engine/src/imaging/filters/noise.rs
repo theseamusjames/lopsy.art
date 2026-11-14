@@ -40,7 +40,7 @@ pub fn texture<'a>(im: Imaging<'a>, src: TextureHandle, p: &TextureParams) -> Pa
         angle: p.angle_rad,
         octaves: p.octaves,
         contrast: p.contrast,
-        colored: p.is_colored,
+        colored: i32::from(p.is_colored),
         seed: p.seed,
     };
     im.gpu.pass(&im.shaders.texture, uniforms).texture("u_tex", src)
