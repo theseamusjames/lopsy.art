@@ -19,7 +19,7 @@ use crate::gpu::params::effects::{
 
 /// The document-space origin of a layer's mask texture — where mask texel
 /// (0, 0) sits in the document. Every mask reader and writer goes through
-/// this so they agree: compositing (`blend.glsl`'s `u_maskOffset`), merge,
+/// this so they agree: compositing (`blend.wgsl`'s `u_maskOffset`), merge,
 /// the mask-edit overlay, and the mask brush/pencil/fill/gradient, which
 /// all take document-space coordinates and subtract this origin.
 ///
@@ -203,7 +203,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
                 // accumulating this group's content: an ancestor group's
                 // scratch if this group is nested inside one that's still
                 // open, otherwise the main composite (#857). The scratch
-                // holds straight alpha (blend.glsl un-premultiplies its
+                // holds straight alpha (blend.wgsl un-premultiplies its
                 // output), so it must not be un-premultiplied again — that
                 // over-brightened every partially transparent child pixel,
                 // e.g. a glow's falloff.
@@ -561,7 +561,7 @@ fn copy_doc(engine: &EngineInner, src: TextureHandle, dst: FramebufferHandle, sc
         .draw(Target::Framebuffer(dst));
 }
 
-/// A layer mask as `blend.glsl` reads it: the texture, its size, and where
+/// A layer mask as `blend.wgsl` reads it: the texture, its size, and where
 /// its texel (0, 0) sits in the document (see `mask_doc_offset`).
 #[derive(Clone, Copy)]
 pub(crate) struct MaskRef {
@@ -581,7 +581,7 @@ fn live_mask(engine: &EngineInner, layer_id: &str, offset_x: f32, offset_y: f32)
     Some(MaskRef { texture, width, height, offset_x, offset_y })
 }
 
-/// One source for `blend.glsl`: a texture placed in the document, and how
+/// One source for `blend.wgsl`: a texture placed in the document, and how
 /// it is combined with the target.
 #[derive(Clone, Copy)]
 pub(crate) struct BlendSource<'a> {
@@ -630,7 +630,7 @@ pub(crate) enum Scratch {
     B,
 }
 
-/// Blend `source` over `target` with `program` (a `blend.glsl` variant). The
+/// Blend `source` over `target` with `program` (a `blend.wgsl` variant). The
 /// shader reads the target, so the result is drawn into a scratch and copied
 /// back. With `clip`, both passes only touch that rectangle. Returns `false`,
 /// leaving the target as it was, if a texture no longer exists.
@@ -819,7 +819,7 @@ fn refresh_pre_adj_cache(engine: &mut EngineInner, group_id: &str, src_tex: Text
 
 /// A copy of `target` taken before a non-Normal layer draws its behind
 /// effects, for its blend to read as the backdrop (`u_backdropTex` in
-/// `blend.glsl`). Normal needs none: its result doesn't depend on the
+/// `blend.wgsl`). Normal needs none: its result doesn't depend on the
 /// backdrop's colour. The caller releases the texture.
 fn capture_effect_backdrop(engine: &mut EngineInner, blend_mode: i32, has_behind_effects: bool, target: DocTarget) -> Option<TextureHandle> {
     if blend_mode == 0 || !has_behind_effects {
@@ -1056,7 +1056,7 @@ fn stroke_position_index(stroke: &StrokeDesc) -> i32 {
 }
 
 /// Stroke silhouette: extract alpha, the two-pass Euclidean band
-/// (`separable_edt.glsl`), then `stroke_apply.glsl` folds the ring into the
+/// (`separable_edt.wgsl`), then `stroke_apply.wgsl` folds the ring into the
 /// layer's alpha. Ping-pongs
 /// between `out` and one more pooled texture; returns whichever holds the
 /// result and releases the other.
@@ -1107,7 +1107,7 @@ fn silhouette_by_band(
 }
 
 /// The layer's alpha (inverted with `invert`) at its place in a region of
-/// `region_size`, through `glow.glsl`'s raw-alpha mode.
+/// `region_size`, through `glow.wgsl`'s raw-alpha mode.
 fn alpha_extract_pass<'a>(
     engine: &'a EngineInner,
     layer: TextureHandle,
@@ -1160,7 +1160,7 @@ fn blur_scratch_b(engine: &EngineInner, blur_radius: u32) {
     }
 }
 
-/// `glow.glsl`'s uniforms for colouring `glow` straight from the layer's
+/// `glow.wgsl`'s uniforms for colouring `glow` straight from the layer's
 /// own alpha: no raw-alpha output and no separate masking texture.
 fn glow_params(engine: &EngineInner, glow: &GlowDesc, mode: i32, tw: u32, th: u32, layer_x: f32, layer_y: f32) -> GlowParams {
     GlowParams {
@@ -1369,7 +1369,7 @@ enum StrokeBandPass {
     Columns,
 }
 
-/// One `separable_edt.glsl` pass of the band within `reach` of the seeds
+/// One `separable_edt.wgsl` pass of the band within `reach` of the seeds
 /// (texels with alpha ≥ 0.5) in `read`.
 fn stroke_band_pass<'a>(engine: &'a EngineInner, read: TextureHandle, pass: StrokeBandPass, reach: f32, is_oob_seed: bool) -> Pass<'a, SeparableEdtParams> {
     engine
@@ -1558,7 +1558,7 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
 
     // Native modes composite in their own space; every consumer of this buffer
     // (PNG/JPEG encode, eyedropper, e2e pixel probes) expects sRGB, so decode
-    // here with the same math final_blit.glsl uses for the screen.
+    // here with the same math final_blit.wgsl uses for the screen.
     decode_native_color_mode(engine.doc_color_mode, &mut pixels);
     Ok(pixels)
 }

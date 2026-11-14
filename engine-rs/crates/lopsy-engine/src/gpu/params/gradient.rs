@@ -1,7 +1,7 @@
 use crate::gpu::uniforms::{uniforms, Vec4Array};
 
 uniforms! {
-    /// `gradient/gradient_linear.glsl`
+    /// `gradient/gradient_linear.wgsl`
     pub struct GradientLinearParams {
         pub has_mask: i32,
         pub start: [f32; 2],
@@ -17,7 +17,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `gradient/gradient_radial.glsl`
+    /// `gradient/gradient_radial.wgsl`
     pub struct GradientRadialParams {
         pub has_mask: i32,
         pub center: [f32; 2],

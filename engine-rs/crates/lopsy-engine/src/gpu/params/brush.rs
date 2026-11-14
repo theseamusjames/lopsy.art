@@ -1,7 +1,7 @@
 use crate::gpu::uniforms::{uniforms, Mat2};
 
 uniforms! {
-    /// `brush/eraser_dab.glsl`
+    /// `brush/eraser_dab.wgsl`
     pub struct EraserDabParams {
         pub opacity: f32,
         pub center: [f32; 2],
@@ -14,7 +14,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/pencil_dab.glsl`
+    /// `brush/pencil_dab.wgsl`
     pub struct PencilDabParams {
         pub color: [f32; 4],
         pub center: [f32; 2],
@@ -27,7 +27,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/quick_mask_dab.glsl`
+    /// `brush/quick_mask_dab.wgsl`
     pub struct QuickMaskDabParams {
         pub size: f32,
         pub hardness: f32,
@@ -39,7 +39,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/dodge_burn.glsl` and `brush/sponge.glsl`: apply a stroke's coverage to the layer.
+    /// `brush/dodge_burn.wgsl` and `brush/sponge.wgsl`: apply a stroke's coverage to the layer.
     pub struct CoverageApplyParams {
         pub mode: i32,
         pub exposure: f32,
@@ -47,7 +47,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/dodge_burn_dab.glsl`
+    /// `brush/dodge_burn_dab.wgsl`
     pub struct DodgeBurnDabParams {
         pub center: [f32; 2],
         pub size: f32,
@@ -61,7 +61,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/smudge_dab.glsl`
+    /// `brush/smudge_dab.wgsl`
     pub struct SmudgeDabParams {
         pub center: [f32; 2],
         pub prev: [f32; 2],
@@ -72,7 +72,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/clone_stamp.glsl`
+    /// `brush/clone_stamp.wgsl`
     pub struct CloneStampParams {
         pub source_offset: [f32; 2],
         pub center: [f32; 2],
@@ -82,7 +82,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/healing_dab.glsl`
+    /// `brush/healing_dab.wgsl`
     pub struct HealingDabParams {
         pub center: [f32; 2],
         pub size: f32,
@@ -93,7 +93,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/healing_mean.glsl`
+    /// `brush/healing_mean.wgsl`
     pub struct HealingMeanParams {
         pub src_center: [f32; 2],
         pub dst_center: [f32; 2],
@@ -103,7 +103,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/stamp_preview.glsl`
+    /// `brush/stamp_preview.wgsl`
     pub struct StampPreviewParams {
         pub resolution: [f32; 2],
         pub zoom: f32,
@@ -119,7 +119,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/brush_dab_header.glsl`, shared by the circle, alpha and colour dab shaders.
+    /// `brush/include/brush_dab_header.wgsl`, shared by the circle, alpha and colour dab shaders.
     pub struct BrushDabParams {
         pub brush_color: [f32; 4],
         pub opacity: f32,

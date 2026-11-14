@@ -1,7 +1,7 @@
 //! Box-filtered thumbnails for the Layers, Channels and Navigator panels.
 //!
 //! Each thumbnail pixel averages its whole source footprint on the GPU
-//! (`thumbnail_box.glsl`) and only the thumbnail is read back. A plain
+//! (`thumbnail_box.wgsl`) and only the thumbnail is read back. A plain
 //! LINEAR blit sampled one 2x2 neighbourhood per thumbnail pixel, so a fine
 //! regular pattern aliased: a grid whose period matched the stride showed
 //! only its lines.

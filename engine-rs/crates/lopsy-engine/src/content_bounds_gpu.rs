@@ -16,7 +16,7 @@ const SPAN: u32 = 64;
 /// instead of the whole texture — at 4096² that is 128 KB of float
 /// readback instead of 256 MB, and no 16-million-pixel CPU scan. The
 /// occupancy test matches `crop_to_content_bounds` on a `read_rgba`
-/// result exactly (see `content_bounds_reduce.glsl`).
+/// result exactly (see `content_bounds_reduce.wgsl`).
 pub fn texture_content_bounds(
     engine: &mut EngineInner,
     tex: TextureHandle,

@@ -1,6 +1,6 @@
 //! Parameter model for the unified Texture filter.
 //!
-//! The pattern itself is generated in `texture.glsl`; this module owns the
+//! The pattern itself is generated in `texture.wgsl`; this module owns the
 //! validation and the mapping from dialog values to shader uniforms so the
 //! GPU never sees out-of-range input (NaN sizes, zero stretch, runaway
 //! octave counts).

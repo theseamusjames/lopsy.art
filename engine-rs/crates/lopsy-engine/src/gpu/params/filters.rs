@@ -1,21 +1,21 @@
 use crate::gpu::uniforms::{uniforms, Vec4Array};
 
 uniforms! {
-    /// `filters/posterize.glsl`
+    /// `filters/posterize.wgsl`
     pub struct PosterizeParams {
         pub levels: f32,
     }
 }
 
 uniforms! {
-    /// `filters/threshold.glsl`
+    /// `filters/threshold.wgsl`
     pub struct ThresholdParams {
         pub level: f32,
     }
 }
 
 uniforms! {
-    /// `filters/hue_sat.glsl`
+    /// `filters/hue_sat.wgsl`
     pub struct HueSatParams {
         pub hue: f32,
         pub saturation: f32,
@@ -24,14 +24,14 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/solarize.glsl`
+    /// `filters/solarize.wgsl`
     pub struct SolarizeParams {
         pub threshold: f32,
     }
 }
 
 uniforms! {
-    /// `filters/sharpen.glsl`
+    /// `filters/sharpen.wgsl`
     pub struct SharpenParams {
         pub amount: f32,
         pub threshold: f32,
@@ -39,7 +39,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/motion_blur.glsl`
+    /// `filters/motion_blur.wgsl`
     pub struct MotionBlurParams {
         pub angle: f32,
         pub distance: i32,
@@ -47,7 +47,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/radial_blur.glsl`
+    /// `filters/radial_blur.wgsl`
     pub struct RadialBlurParams {
         pub center: [f32; 2],
         pub amount: i32,
@@ -55,7 +55,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/cel_shading.glsl`
+    /// `filters/cel_shading.wgsl`
     pub struct CelShadingParams {
         pub levels: i32,
         pub edge_strength: f32,
@@ -63,21 +63,21 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/pixelate.glsl`
+    /// `filters/pixelate.wgsl`
     pub struct PixelateParams {
         pub block_size: i32,
     }
 }
 
 uniforms! {
-    /// `filters/pixelate_blocks.glsl`
+    /// `filters/pixelate_blocks.wgsl`
     pub struct PixelateBlocksParams {
         pub block_size: i32,
     }
 }
 
 uniforms! {
-    /// `filters/halftone.glsl`
+    /// `filters/halftone.wgsl`
     pub struct HalftoneParams {
         pub dot_size: f32,
         pub angle: f32,
@@ -87,7 +87,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/kaleidoscope.glsl`
+    /// `filters/kaleidoscope.wgsl`
     pub struct KaleidoscopeParams {
         pub segments: f32,
         pub rotation: f32,
@@ -97,7 +97,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/oil_paint.glsl`
+    /// `filters/oil_paint.wgsl`
     pub struct OilPaintParams {
         pub radius: f32,
         pub sharpness: f32,
@@ -105,7 +105,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/chromatic_aberration.glsl`
+    /// `filters/chromatic_aberration.wgsl`
     pub struct ChromaticAberrationParams {
         pub amount: f32,
         pub angle: f32,
@@ -113,7 +113,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/pixel_stretch.glsl`
+    /// `filters/pixel_stretch.wgsl`
     pub struct PixelStretchParams {
         pub amount: f32,
         pub bands: f32,
@@ -123,7 +123,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/lens_distortion.glsl`
+    /// `filters/lens_distortion.wgsl`
     pub struct LensDistortionParams {
         pub strength: f32,
         pub zoom: f32,
@@ -134,7 +134,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/tilt_shift_blur.glsl`
+    /// `filters/tilt_shift_blur.wgsl`
     pub struct TiltShiftBlurParams {
         pub focus_position: f32,
         pub focus_width: f32,
@@ -144,7 +144,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/emboss.glsl`
+    /// `filters/emboss.wgsl`
     pub struct EmbossParams {
         pub angle: f32,
         pub strength: f32,
@@ -153,7 +153,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/voronoi.glsl`
+    /// `filters/voronoi.wgsl`
     pub struct VoronoiParams {
         pub cell_count: f32,
         pub edge_width: f32,
@@ -165,7 +165,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/surface_blur.glsl`
+    /// `filters/surface_blur.wgsl`
     pub struct SurfaceBlurParams {
         pub radius: i32,
         pub threshold: f32,
@@ -173,7 +173,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/selection_mask_blend.glsl`
+    /// `filters/selection_mask_blend.wgsl`
     pub struct SelectionMaskBlendParams {
         pub doc_size: [f32; 2],
         pub layer_offset: [f32; 2],
@@ -182,7 +182,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/noise.glsl`
+    /// `filters/noise.wgsl`
     pub struct NoiseParams {
         pub amount: f32,
         /// 0 or 1.
@@ -194,7 +194,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/clouds.glsl`
+    /// `filters/clouds.wgsl`
     pub struct CloudsParams {
         pub scale: f32,
         pub seed: f32,
@@ -202,7 +202,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/smoke.glsl`
+    /// `filters/smoke.wgsl`
     pub struct SmokeParams {
         pub scale: f32,
         pub seed: f32,
@@ -211,7 +211,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/pattern_fill.glsl`
+    /// `filters/pattern_fill.wgsl`
     pub struct PatternFillParams {
         pub layer_size: [f32; 2],
         pub pattern_size: [f32; 2],
@@ -222,7 +222,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/mesh_warp.glsl`
+    /// `filters/mesh_warp.wgsl`
     pub struct MeshWarpParams {
         pub grid_size: [f32; 2],
         pub bounds_min: [f32; 2],
@@ -231,7 +231,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/liquify_warp.glsl`
+    /// `filters/liquify_warp.wgsl`
     pub struct LiquifyWarpParams {
         pub max_disp: f32,
         pub texel_size: [f32; 2],
@@ -239,7 +239,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/liquify_dab.glsl`
+    /// `filters/liquify_dab.wgsl`
     pub struct LiquifyDabParams {
         pub center: [f32; 2],
         pub radius: f32,
@@ -251,7 +251,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/bloom_threshold.glsl`
+    /// `filters/bloom_threshold.wgsl`
     pub struct BloomThresholdParams {
         pub threshold: f32,
         pub soft_knee: f32,
@@ -259,14 +259,14 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/bloom_combine.glsl`
+    /// `filters/bloom_combine.wgsl`
     pub struct BloomCombineParams {
         pub intensity: f32,
     }
 }
 
 uniforms! {
-    /// `filters/fibers.glsl`
+    /// `filters/fibers.wgsl`
     pub struct FibersParams {
         pub variance: f32,
         pub strength: f32,
@@ -275,7 +275,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/sunburst.glsl`
+    /// `filters/sunburst.wgsl`
     pub struct SunburstParams {
         pub size: [f32; 2],
         pub center: [f32; 2],
@@ -296,7 +296,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/color_lut.glsl`
+    /// `filters/color_lut.wgsl`
     pub struct ColorLutParams {
         pub lut_size: f32,
         pub intensity: f32,
@@ -304,7 +304,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/texture.glsl`
+    /// `filters/texture.wgsl`
     pub struct TextureParams {
         pub kind: i32,
         pub blend: i32,
@@ -321,7 +321,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/gaussian_blur.glsl`
+    /// `filters/gaussian_blur.wgsl`
     pub struct GaussianBlurParams {
         pub direction: [f32; 2],
         /// 64 weights, four to a vector.
@@ -331,7 +331,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/box_blur.glsl`
+    /// `filters/box_blur.wgsl`
     pub struct BoxBlurParams {
         pub direction: [f32; 2],
         pub radius: i32,
@@ -340,7 +340,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/vignette.glsl`
+    /// `filters/vignette.wgsl`
     pub struct VignetteParams {
         pub amount: f32,
         pub doc_color_mode: i32,
@@ -348,7 +348,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `filters/adjustments.glsl`
+    /// `filters/adjustments.wgsl`
     pub struct AdjustmentsParams {
         pub brightness: f32,
         pub contrast: f32,

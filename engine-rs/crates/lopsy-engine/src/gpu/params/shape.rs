@@ -1,7 +1,7 @@
 use crate::gpu::uniforms::uniforms;
 
 uniforms! {
-    /// `shape/shape_fill.glsl`
+    /// `shape/shape_fill.wgsl`
     pub struct ShapeFillParams {
         pub shape_type: i32,
         pub center: [f32; 2],
@@ -16,14 +16,14 @@ uniforms! {
 }
 
 uniforms! {
-    /// `shape/flood_fill_apply.glsl`
+    /// `shape/flood_fill_apply.wgsl`
     pub struct FloodFillApplyParams {
         pub fill_color: [f32; 4],
     }
 }
 
 uniforms! {
-    /// `shape/bucket_fill_color_match.glsl`
+    /// `shape/bucket_fill_color_match.wgsl`
     pub struct BucketFillColorMatchParams {
         pub has_sel_mask: i32,
         pub sample_uv: [f32; 2],

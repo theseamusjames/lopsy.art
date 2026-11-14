@@ -4,7 +4,7 @@
 //! will compile directly. The WebGL backend needs GLSL ES 3.00, so
 //! `lopsy-engine`'s build script runs every `.wgsl` file through this crate
 //! and embeds the result. The generated GLSL follows the conventions the
-//! hand-written shaders used, so the WebGL backend treats both alike:
+//! WebGL backend was written against:
 //!
 //! - the fragment input is `v_uv` and the output `fragColor`, to link with
 //!   the shared fullscreen vertex shader (GLSL ES 3.00 links varyings by
@@ -13,7 +13,9 @@
 //!   binds it by;
 //! - the uniform struct `Params` becomes one unnamed block,
 //!   `layout(std140) uniform Params { ... };`, whose members are global
-//!   names, as `gpu::uniforms` expects.
+//!   names, as `gpu::uniforms` expects;
+//! - indentation and blank lines are dropped, because every shader's GLSL
+//!   is embedded in the wasm.
 //!
 //! naga is a dependency of this crate only, so it never reaches the wasm
 //! bundle.
