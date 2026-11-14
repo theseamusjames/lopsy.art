@@ -51,7 +51,7 @@ import init, {
   uploadLayerPixelsCompressedU16,
   readLayerThumbnail as rawReadLayerThumbnail,
   readCompositeThumbnail as rawReadCompositeThumbnail,
-  rasterizeLayerEffects,
+  bakeLayerEffects as rawBakeLayerEffects,
   duplicateLayerTexture,
   mergeLayers,
   flipLayer,
@@ -633,8 +633,20 @@ export {
   getLayerContentBounds,
   readSelectionMask,
   readQuickMaskPixels,
-  rasterizeLayerEffects,
 };
+
+/**
+ * Bake a layer's effects (and, with `bakeMask`, its mask) into its own
+ * texture on the GPU. False when the engine could not bake it.
+ */
+export function bakeLayerEffects(engine: Engine, layerId: string, bakeMask: boolean): boolean {
+  try {
+    rawBakeLayerEffects(engine, layerId, bakeMask);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Makes a function that reads pixels back from the GPU answer with a

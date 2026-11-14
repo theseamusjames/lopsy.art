@@ -130,9 +130,9 @@ pub fn get_layer_content_bounds(engine: &mut Engine, layer_id: &str) -> Vec<i32>
     lopsy_engine::commands::layer::get_layer_content_bounds(&mut engine.inner, layer_id)
 }
 
-#[wasm_bindgen(js_name = "rasterizeLayerEffects")]
-pub fn rasterize_layer_effects(engine: &mut Engine, layer_id: &str, bake_mask: bool) -> Vec<u8> {
-    lopsy_engine::commands::layer::rasterize_layer_effects(&mut engine.inner, layer_id, bake_mask)
+#[wasm_bindgen(js_name = "bakeLayerEffects")]
+pub fn bake_layer_effects(engine: &mut Engine, layer_id: &str, bake_mask: bool) -> Result<(), JsError> {
+    lopsy_engine::commands::layer::bake_layer_effects(&mut engine.inner, layer_id, bake_mask).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "duplicateLayerTexture")]

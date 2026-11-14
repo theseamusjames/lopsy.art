@@ -254,11 +254,10 @@ pub fn get_layer_content_bounds(engine: &mut EngineInner, layer_id: &str) -> Vec
     }
 }
 
-pub fn rasterize_layer_effects(engine: &mut EngineInner, layer_id: &str, bake_mask: bool) -> Vec<u8> {
-    // Composite the single layer with effects using the GPU pipeline,
-    // then return the document-sized pixel buffer. This ensures the
-    // rasterized output exactly matches the live GPU rendering.
-    compositor::composite_single_layer(&mut *engine, layer_id, bake_mask).unwrap_or_default()
+/// Bake a layer's effects (and, with `bake_mask`, its mask) into its own
+/// texture without reading it back: see `compositor::bake_layer_effects`.
+pub fn bake_layer_effects(engine: &mut EngineInner, layer_id: &str, bake_mask: bool) -> Result<(), String> {
+    compositor::bake_layer_effects(engine, layer_id, bake_mask)
 }
 
 // ============================================================
