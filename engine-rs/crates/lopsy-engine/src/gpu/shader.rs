@@ -324,9 +324,8 @@ impl UniformSink for ParamUpload<'_> {
             UniformType::Vec4 => gl.uniform4f(location, values[0], values[1], values[2], values[3]),
             UniformType::Mat2 => gl.uniform_matrix2fv_with_f32_array(location, false, values),
             UniformType::Mat3 => gl.uniform_matrix3fv_with_f32_array(location, false, values),
-            UniformType::FloatArray(_) => gl.uniform1fv_with_f32_array(location, values),
             UniformType::Vec4Array(_) => gl.uniform4fv_with_f32_array(location, values),
-            UniformType::Int | UniformType::Uint | UniformType::Bool | UniformType::IVec2 => {}
+            UniformType::Int | UniformType::Uint | UniformType::IVec2 => {}
         }
     }
 
@@ -335,7 +334,7 @@ impl UniformSink for ParamUpload<'_> {
         let Some(location) = self.store(values.iter().map(|v| *v as u32)) else { return };
         let location = Some(location);
         match ty {
-            UniformType::Int | UniformType::Bool => gl.uniform1i(location, values[0]),
+            UniformType::Int => gl.uniform1i(location, values[0]),
             UniformType::Uint => gl.uniform1ui(location, values[0] as u32),
             UniformType::IVec2 => gl.uniform2i(location, values[0], values[1]),
             _ => {}
