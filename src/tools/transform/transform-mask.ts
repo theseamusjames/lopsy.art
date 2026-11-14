@@ -95,7 +95,7 @@ function sampleMask(mask: Uint8ClampedArray, width: number, height: number, p: P
 
 /**
  * Carry a selection mask through a transform exactly as the GPU carries the
- * pixels (`transform_affine.glsl` / `transform_perspective.glsl`): each
+ * pixels (`transform_affine.wgsl` / `transform_perspective.wgsl`): each
  * output pixel centre maps back into the original and the mask is sampled
  * bilinearly there. The anti-aliased edge then matches the transformed
  * pixels' alpha, so clearing or filling the result leaves no fringe.

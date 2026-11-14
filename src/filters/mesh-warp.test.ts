@@ -12,7 +12,7 @@ import {
 
 interface Vec2 { x: number; y: number }
 
-/** Decode grid point `index` the way `gridPoint` in mesh_warp.glsl does. */
+/** Decode grid point `index` the way `gridPoint` in mesh_warp.wgsl does. */
 function gridPoint(data: Uint8Array, index: number): Vec2 {
   const pi = index * 4;
   return {
@@ -24,7 +24,7 @@ function gridPoint(data: Uint8Array, index: number): Vec2 {
 interface Sample { d: Vec2; dX: Vec2; dY: Vec2 }
 
 /**
- * CPU model of `displacementAt` in mesh_warp.glsl for a full-texture warp
+ * CPU model of `displacementAt` in mesh_warp.wgsl for a full-texture warp
  * (bounds 0..1): bilinear interpolation of the decoded grid points and the
  * Jacobian of that interpolation.
  */
@@ -65,7 +65,7 @@ function residual(data: Uint8Array, cols: number, rows: number, src: Vec2, targe
 
 const norm2 = (v: Vec2) => v.x * v.x + v.y * v.y;
 
-/** CPU model of the inverse in mesh_warp.glsl: backtracking Newton steps. */
+/** CPU model of the inverse in mesh_warp.wgsl: backtracking Newton steps. */
 function shaderSourceUv(data: Uint8Array, cols: number, rows: number, uv: Vec2): Vec2 {
   let src = { x: uv.x, y: uv.y };
   for (let i = 0; i < 12; i++) {

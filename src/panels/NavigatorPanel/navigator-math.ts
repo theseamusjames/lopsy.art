@@ -47,7 +47,7 @@ export function computeViewportRect(
   const visibleH = viewportHeight / zoom;
 
   // Doc-space top-left of the visible area
-  // Derived from final_blit.glsl: canvasPos = (screenPos - center - u_pan) / zoom + docSize * 0.5
+  // Derived from final_blit.wgsl: canvasPos = (screenPos - center - u_pan) / zoom + docSize * 0.5
   const docLeft = docWidth / 2 - (viewportWidth / 2 + panX) / zoom;
   const docTop = docHeight / 2 - (viewportHeight / 2 + panY) / zoom;
 

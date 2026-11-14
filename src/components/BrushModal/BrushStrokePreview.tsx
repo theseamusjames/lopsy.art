@@ -114,7 +114,7 @@ function tiledTextureMask(
   const [canvas, ctx] = blankLike(like);
   const pattern = ctx.createPattern(texCanvas, 'repeat');
   if (!pattern) return canvas;
-  // Matches brush_dab_footer.glsl: texel (0, 0) sits half a tile before
+  // Matches include/brush_dab_footer.wgsl: texel (0, 0) sits half a tile before
   // the stroke origin (fract(rel / tile + 0.5)).
   const tileW = texture.width * placement.scale;
   const tileH = texture.height * placement.scale;
@@ -128,7 +128,7 @@ function tiledTextureMask(
   return canvas;
 }
 
-// Mirrors the per-dab texture blend in brush_dab_footer.glsl. The engine
+// Mirrors the per-dab texture blend in include/brush_dab_footer.wgsl. The engine
 // MAX-blends dabs and every mode is monotonic in the dab alpha, so applying
 // the texture to the accumulated stroke gives the same result.
 function applyPreviewTexture(

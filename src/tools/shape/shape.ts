@@ -33,7 +33,7 @@ export function ellipseToPathAnchors(cx: number, cy: number, rx: number, ry: num
 }
 
 /**
- * The regular polygon `shape_fill.glsl`'s `sdPolygon` draws for a drag box
+ * The regular polygon `shape_fill.wgsl`'s `sdPolygon` draws for a drag box
  * centred on (cx, cy) with half extents (rx, ry). Vertex k sits at
  * `centre + r × (sin a, cos a)` for the angles listed here (y points down).
  */

@@ -283,7 +283,7 @@ function toHalf(v: number): number {
   return Math.round(v / step) * step;
 }
 
-/** CPU mirror of liquify_dab.glsl's encodeDisp → texture store → fetchDisp. */
+/** CPU mirror of liquify_dab.wgsl's encodeDisp → texture store → fetchDisp. */
 function shaderRoundTrip(d: number, storeHalf: boolean): number {
   const code = encodeDispCode(d);
   const hi = Math.floor(code / 256);
