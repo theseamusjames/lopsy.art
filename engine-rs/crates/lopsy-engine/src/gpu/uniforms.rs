@@ -37,14 +37,12 @@ pub enum UniformType {
     Float,
     Int,
     Uint,
-    Bool,
     Vec2,
     Vec3,
     Vec4,
     IVec2,
     Mat2,
     Mat3,
-    FloatArray(usize),
     Vec4Array(usize),
 }
 
@@ -55,14 +53,12 @@ impl UniformType {
             UniformType::Float => ("float", None),
             UniformType::Int => ("int", None),
             UniformType::Uint => ("uint", None),
-            UniformType::Bool => ("bool", None),
             UniformType::Vec2 => ("vec2", None),
             UniformType::Vec3 => ("vec3", None),
             UniformType::Vec4 => ("vec4", None),
             UniformType::IVec2 => ("ivec2", None),
             UniformType::Mat2 => ("mat2", None),
             UniformType::Mat3 => ("mat3", None),
-            UniformType::FloatArray(n) => ("float", Some(n)),
             UniformType::Vec4Array(n) => ("vec4", Some(n)),
         }
     }
@@ -70,12 +66,11 @@ impl UniformType {
     /// How many 32-bit values the member holds.
     pub fn components(self) -> usize {
         match self {
-            UniformType::Float | UniformType::Int | UniformType::Uint | UniformType::Bool => 1,
+            UniformType::Float | UniformType::Int | UniformType::Uint => 1,
             UniformType::Vec2 | UniformType::IVec2 => 2,
             UniformType::Vec3 => 3,
             UniformType::Vec4 | UniformType::Mat2 => 4,
             UniformType::Mat3 => 9,
-            UniformType::FloatArray(n) => n,
             UniformType::Vec4Array(n) => 4 * n,
         }
     }
@@ -134,12 +129,6 @@ impl UniformValue for u32 {
     }
 }
 
-impl UniformValue for bool {
-    const TYPE: UniformType = UniformType::Bool;
-    fn put(&self, sink: &mut impl UniformSink) {
-        sink.ints(Self::TYPE, &[i32::from(*self)]);
-    }
-}
 
 impl UniformValue for [f32; 2] {
     const TYPE: UniformType = UniformType::Vec2;
@@ -191,31 +180,22 @@ impl UniformValue for Mat3 {
     }
 }
 
-/// A `float name[N]` member.
+/// A `vec4 name[N]` member.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FloatArray<const N: usize>(pub [f32; N]);
+pub struct Vec4Array<const N: usize>(pub [[f32; 4]; N]);
 
-impl<const N: usize> FloatArray<N> {
-    /// The first `N` of `values`, padded with zeros.
-    pub fn from_slice(values: &[f32]) -> Self {
-        let mut array = [0.0; N];
-        for (slot, value) in array.iter_mut().zip(values) {
+impl<const N: usize> Vec4Array<N> {
+    /// `values` packed four to a vector and padded with zeros: value `i` is
+    /// component `i % 4` of vector `i / 4`. A WGSL uniform struct cannot
+    /// hold `array<f32, N>`, so a list of floats travels this way.
+    pub fn from_floats(values: &[f32]) -> Self {
+        let mut array = [[0.0; 4]; N];
+        for (slot, value) in array.as_flattened_mut().iter_mut().zip(values) {
             *slot = *value;
         }
         Self(array)
     }
 }
-
-impl<const N: usize> UniformValue for FloatArray<N> {
-    const TYPE: UniformType = UniformType::FloatArray(N);
-    fn put(&self, sink: &mut impl UniformSink) {
-        sink.floats(Self::TYPE, &self.0);
-    }
-}
-
-/// A `vec4 name[N]` member.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Vec4Array<const N: usize>(pub [[f32; 4]; N]);
 
 impl<const N: usize> UniformValue for Vec4Array<N> {
     const TYPE: UniformType = UniformType::Vec4Array(N);
@@ -428,9 +408,8 @@ mod tests {
             layer_offset: [f32; 2],
             tint: [f32; 4],
             radius: i32,
-            is_wrapped: bool,
+            is_wrapped: i32,
             stops: Vec4Array<2>,
-            weights: FloatArray<3>,
         }
     }
 
@@ -441,9 +420,8 @@ layout(std140) uniform Params {
     vec2 u_layerOffset; // texels
     vec4 u_tint;
     int u_radius;
-    bool u_isWrapped;
+    int u_isWrapped;
     vec4 u_stops[2];
-    float u_weights[3];
 };
 void main() {}
 ";
@@ -470,9 +448,8 @@ void main() {}
     #[test]
     fn a_struct_lists_its_fields_in_order() {
         let names: Vec<&str> = Example::FIELDS.iter().map(|f| f.name).collect();
-        assert_eq!(names, ["levels", "layer_offset", "tint", "radius", "is_wrapped", "stops", "weights"]);
+        assert_eq!(names, ["levels", "layer_offset", "tint", "radius", "is_wrapped", "stops"]);
         assert_eq!(Example::FIELDS[5].ty, UniformType::Vec4Array(2));
-        assert_eq!(Example::FIELDS[6].ty, UniformType::FloatArray(3));
     }
 
     #[test]
@@ -482,9 +459,8 @@ void main() {}
             layer_offset: [1.0, 2.0],
             tint: [0.1, 0.2, 0.3, 0.4],
             radius: -3,
-            is_wrapped: true,
+            is_wrapped: 1,
             stops: Vec4Array([[1.0; 4], [2.0; 4]]),
-            weights: FloatArray([0.25, 0.5, 0.25]),
         };
         let mut recorder = Recorder::default();
         example.put(&mut recorder);
@@ -508,7 +484,7 @@ void main() {}
         assert!(struct_matches_source::<Example>(&reordered).is_err());
         let retyped = EXAMPLE.replace("int u_radius;", "float u_radius;");
         assert!(struct_matches_source::<Example>(&retyped).is_err());
-        let resized = EXAMPLE.replace("u_weights[3]", "u_weights[4]");
+        let resized = EXAMPLE.replace("u_stops[2]", "u_stops[3]");
         assert!(struct_matches_source::<Example>(&resized).is_err());
     }
 
@@ -534,9 +510,9 @@ void main() {}
         assert_eq!(lines[2], "");
         assert_eq!(lines[3], "uniform float u_levels;");
         assert_eq!(lines[4], "uniform vec2 u_layerOffset; // texels");
-        assert_eq!(lines[9], "uniform float u_weights[3];");
-        assert_eq!(lines[10], "");
-        assert_eq!(lines[11], "void main() {}");
+        assert_eq!(lines[8], "uniform vec4 u_stops[2];");
+        assert_eq!(lines[9], "");
+        assert_eq!(lines[10], "void main() {}");
     }
 
     #[test]

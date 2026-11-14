@@ -8,7 +8,7 @@ use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::params::filters::{
     BoxBlurParams, GaussianBlurParams, SharpenParams,
 };
-use crate::gpu::uniforms::FloatArray;
+use crate::gpu::uniforms::Vec4Array;
 
 pub fn filter_gaussian_blur(engine: &mut EngineInner, layer_id: &str, radius: u32) {
     if radius == 0 { return; }
@@ -23,7 +23,7 @@ pub fn filter_gaussian_blur(engine: &mut EngineInner, layer_id: &str, radius: u3
         if raw_sum > 0.0 {
             for w in &mut weights { *w /= raw_sum; }
         }
-        let weights = FloatArray::from_slice(&weights);
+        let weights = Vec4Array::from_floats(&weights);
         filter_gpu::apply_separable_blur(
             &mut *engine,
             layer_id,
@@ -80,7 +80,7 @@ pub fn filter_unsharp_mask(
         return;
     }
 
-    let weights = FloatArray::from_slice(&kernel);
+    let weights = Vec4Array::from_floats(&kernel);
     let blur_pass = |src: TextureHandle, direction: (f32, f32)| {
         inner
             .pass(&inner.shaders.gaussian_blur, GaussianBlurParams {

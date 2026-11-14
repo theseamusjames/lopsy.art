@@ -1,7 +1,7 @@
 use crate::engine::EngineInner;
 use crate::gpu::params::gradient::{GradientLinearParams, GradientRadialParams};
 use crate::gpu::pass::{Blend, Pass, Target};
-use crate::gpu::uniforms::{FloatArray, Vec4Array};
+use crate::gpu::uniforms::Vec4Array;
 use crate::gpu::texture_pool::TextureHandle;
 
 #[derive(serde::Deserialize)]
@@ -240,7 +240,7 @@ pub(crate) fn draw_gradient(engine: &EngineInner, shape: &GradientShape, stops: 
     }
     let has_mask = i32::from(t.selection.is_some());
     let stops = Vec4Array(colors);
-    let stop_positions = FloatArray(positions);
+    let stop_positions = Vec4Array::from_floats(&positions);
     let stop_count = count as i32;
     let tex_size = [t.w as f32, t.h as f32];
     let doc_size = [engine.doc_width as f32, engine.doc_height as f32];

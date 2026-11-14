@@ -41,7 +41,7 @@ pub const PREMUL_SAMPLE: &str = include_str!("shaders/premul_sample.glsl");
 pub const LAB_COMMON: &str = include_str!("shaders/lab_common.glsl");
 pub const BLIT_RESAMPLE_FRAG: &str = translated!("blit_resample");
 pub const COMPOSITE_FRAG: &str = translated!("composite");
-pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
+pub const FINAL_BLIT_FRAG: &str = translated!("final_blit");
 pub const FLIP_FRAG: &str = translated!("flip");
 pub const CLIPBOARD_COPY_FRAG: &str = translated!("clipboard_copy");
 pub const CLIPBOARD_CLEAR_FRAG: &str = translated!("clipboard_clear");
@@ -62,15 +62,15 @@ pub const SEPARABLE_EDT_FRAG: &str = translated!("effects/separable_edt");
 pub const STROKE_APPLY_FRAG: &str = translated!("effects/stroke_apply");
 
 // Filters
-pub const GAUSSIAN_BLUR_FRAG: &str = include_str!("shaders/filters/gaussian_blur.glsl");
+pub const GAUSSIAN_BLUR_FRAG: &str = translated!("filters/gaussian_blur");
 pub const BOX_BLUR_FRAG: &str = translated!("filters/box_blur");
-pub const ADJUSTMENTS_FRAG: &str = include_str!("shaders/filters/adjustments.glsl");
+pub const ADJUSTMENTS_FRAG: &str = translated!("filters/adjustments");
 pub const HUE_SAT_FRAG: &str = translated!("filters/hue_sat");
 pub const INVERT_FRAG: &str = translated!("filters/invert");
 pub const MASK_LUMINANCE_FRAG: &str = translated!("filters/mask_luminance");
 pub const POSTERIZE_FRAG: &str = translated!("filters/posterize");
 pub const THRESHOLD_FRAG: &str = translated!("filters/threshold");
-pub const NOISE_FRAG: &str = include_str!("shaders/filters/noise.glsl");
+pub const NOISE_FRAG: &str = translated!("filters/noise");
 pub const SHARPEN_FRAG: &str = translated!("filters/sharpen");
 pub const VIGNETTE_FRAG: &str = translated!("filters/vignette");
 pub const MOTION_BLUR_FRAG: &str = translated!("filters/motion_blur");
@@ -102,7 +102,7 @@ pub const LIQUIFY_DAB_FRAG: &str = translated!("filters/liquify_dab");
 pub const FIBERS_FRAG: &str = translated!("filters/fibers");
 pub const SUNBURST_FRAG: &str = translated!("filters/sunburst");
 pub const COLOR_LUT_FRAG: &str = translated!("filters/color_lut");
-pub const TEXTURE_FRAG: &str = include_str!("shaders/filters/texture.glsl");
+pub const TEXTURE_FRAG: &str = translated!("filters/texture");
 
 // Brush (assembled from header + variant + footer at compile_all time)
 const BRUSH_DAB_CIRCLE_FRAG: &str = concat!(
@@ -134,8 +134,8 @@ pub const SPONGE_FRAG: &str = translated!("brush/sponge");
 pub const STAMP_PREVIEW_FRAG: &str = translated!("brush/stamp_preview");
 
 // Gradient
-pub const GRADIENT_LINEAR_FRAG: &str = include_str!("shaders/gradient/gradient_linear.glsl");
-pub const GRADIENT_RADIAL_FRAG: &str = include_str!("shaders/gradient/gradient_radial.glsl");
+pub const GRADIENT_LINEAR_FRAG: &str = translated!("gradient/gradient_linear");
+pub const GRADIENT_RADIAL_FRAG: &str = translated!("gradient/gradient_radial");
 
 // Shape
 pub const SHAPE_FILL_FRAG: &str = translated!("shape/shape_fill");
@@ -324,9 +324,8 @@ impl UniformSink for ParamUpload<'_> {
             UniformType::Vec4 => gl.uniform4f(location, values[0], values[1], values[2], values[3]),
             UniformType::Mat2 => gl.uniform_matrix2fv_with_f32_array(location, false, values),
             UniformType::Mat3 => gl.uniform_matrix3fv_with_f32_array(location, false, values),
-            UniformType::FloatArray(_) => gl.uniform1fv_with_f32_array(location, values),
             UniformType::Vec4Array(_) => gl.uniform4fv_with_f32_array(location, values),
-            UniformType::Int | UniformType::Uint | UniformType::Bool | UniformType::IVec2 => {}
+            UniformType::Int | UniformType::Uint | UniformType::IVec2 => {}
         }
     }
 
@@ -335,7 +334,7 @@ impl UniformSink for ParamUpload<'_> {
         let Some(location) = self.store(values.iter().map(|v| *v as u32)) else { return };
         let location = Some(location);
         match ty {
-            UniformType::Int | UniformType::Bool => gl.uniform1i(location, values[0]),
+            UniformType::Int => gl.uniform1i(location, values[0]),
             UniformType::Uint => gl.uniform1ui(location, values[0] as u32),
             UniformType::IVec2 => gl.uniform2i(location, values[0], values[1]),
             _ => {}
@@ -757,9 +756,8 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, typed_shader_checks, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
+        inject_defines, preprocess_frag, typed_shader_checks, BLEND_FRAG, BLIT_RESAMPLE_FRAG,
         SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
-        TEXTURE_FRAG,
     };
 
     #[test]
@@ -811,20 +809,18 @@ mod tests {
     fn tonal_passes_work_on_decoded_lab() {
         // Adjustments and the vignette scale channel values, which only means
         // "darker" on sRGB; on encoded Lab it drags a/b toward blue (#1365).
-        let vignette = include_str!("shaders/filters/vignette.wgsl");
-        assert!(vignette.contains("//#include lab"), "lab helpers not spliced in");
-        assert!(vignette.contains("u_docColorMode: i32,"));
-        assert!(vignette.contains("rgb = labToSrgb(rgb)"));
-        assert!(vignette.contains("rgb = srgbToLab(rgb)"));
-        {
-            let out = preprocess_frag(ADJUSTMENTS_FRAG);
-            assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
-            assert!(out.contains("int u_docColorMode;"));
-            assert!(out.contains("c.rgb = labToSrgb(c.rgb)"));
-            assert!(out.contains("c.rgb = srgbToLab(c.rgb)"));
+        for src in [
+            include_str!("shaders/filters/adjustments.wgsl"),
+            include_str!("shaders/filters/vignette.wgsl"),
+        ] {
+            assert!(src.contains("//#include lab"), "lab helpers not spliced in");
+            assert!(src.contains("u_docColorMode: i32,"));
+            assert!(src.contains("rgb = labToSrgb(rgb)"));
+            assert!(src.contains("rgb = srgbToLab(rgb)"));
         }
-        let blit = preprocess_frag(FINAL_BLIT_FRAG);
-        assert!(blit.contains("vec3 labToSrgb(vec3 encoded)"));
+        let blit = include_str!("shaders/final_blit.wgsl");
+        assert!(blit.contains("//#include lab"), "lab helpers not spliced in");
+        assert!(blit.contains("labToSrgb(color.rgb)"));
     }
 
     #[test]
@@ -838,11 +834,12 @@ mod tests {
 
     #[test]
     fn photo_filter_runs_after_black_and_white() {
-        let bw = ADJUSTMENTS_FRAG
-            .find("if (u_bwEnabled > 0.5)")
+        let source = include_str!("shaders/filters/adjustments.wgsl");
+        let bw = source
+            .find("if (params.u_bwEnabled > 0.5)")
             .expect("Black & White block");
-        let pf = ADJUSTMENTS_FRAG
-            .find("if (u_pfDensity > 0.001)")
+        let pf = source
+            .find("if (params.u_pfDensity > 0.001)")
             .expect("Photo Filter block");
         assert!(
             bw < pf,
@@ -883,7 +880,7 @@ mod tests {
 
     #[test]
     fn texture_is_deterministic_and_alpha_preserving() {
-        let code: String = TEXTURE_FRAG
+        let code: String = include_str!("shaders/filters/texture.wgsl")
             .lines()
             .filter(|l| !l.trim_start().starts_with("//"))
             .collect::<Vec<_>>()
@@ -892,20 +889,20 @@ mod tests {
             !code.contains("fract(sin"),
             "a sin()-based hash is not reproducible across backends (Metal fast-math)"
         );
-        assert!(code.contains("uvec3 pcg3d(uvec3 v)"));
-        assert!(code.contains("uint u_seed;"));
+        assert!(code.contains("fn pcg3d(value: vec3<u32>) -> vec3<u32>"));
+        assert!(code.contains("u_seed: u32,"));
         assert!(
-            code.contains("c & ivec2(0x7FFFFFFF)"),
+            code.contains("c & vec2<i32>(0x7FFFFFFF)"),
             "negative lattice cells must be masked before the int -> uint conversion"
         );
         assert!(
-            code.contains("fragColor = vec4(clamp(c.rgb + t * (u_amount * 0.6), 0.0, 1.0), c.a);"),
+            code.contains("clamp(c.rgb + t * (params.u_amount * 0.6), vec3<f32>(0.0), vec3<f32>(1.0)), c.a);"),
             "texture modulates existing pixels and keeps their alpha"
         );
         // Kind indices must match lopsy_core::filters::texture::TextureKind.
         for (kind, func) in [(1, "ridged("), (2, "canvasWeave("), (3, "fbm("), (4, "cells(")] {
             assert!(
-                code.contains(&format!("if (u_kind == {kind}) return {func}")),
+                code.contains(&format!("if (params.u_kind == {kind}) {{ return {func}")),
                 "kind {kind} does not dispatch to {func}"
             );
         }
