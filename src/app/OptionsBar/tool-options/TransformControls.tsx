@@ -28,6 +28,7 @@ import { selectLayerAlpha } from '../../../panels/LayerPanel/layer-selection';
 import { commitLiveFloat, withLiveFloatKept } from '../../interactions/live-float';
 import {
   beginLayerTransformSession,
+  beginLayerTransformSessionWhenMeasured,
   getLayerTransformBox,
   isLayerTransformCurrent,
   markLayerTransformDirty,
@@ -144,13 +145,24 @@ export function applyLayerTransformStep(step: (t: TransformState) => TransformSt
   const box = getLayerTransformBox();
   if (!box || refuseTextInLayerTransform(false)) return;
   withLiveFloatKept(() => useEditorStore.getState().pushHistory('Transform'));
+  const applyStep = (): void => {
+    renderLayerTransform(step(useUIStore.getState().layerTransform ?? box));
+    markLayerTransformDirty();
+    commitLiveFloat();
+  };
   if (!isLayerTransformCurrent()) {
     commitLiveFloat();
-    if (!beginLayerTransformSession(box)) return;
+    const begun = beginLayerTransformSession(box);
+    if (begun === 'nothing') return;
+    if (begun === 'unmeasured') {
+      // The layers' content bounds are still being read; step when they are in.
+      void beginLayerTransformSessionWhenMeasured(box).then((isBegun) => {
+        if (isBegun) applyStep();
+      });
+      return;
+    }
   }
-  renderLayerTransform(step(useUIStore.getState().layerTransform ?? box));
-  markLayerTransformDirty();
-  commitLiveFloat();
+  applyStep();
 }
 
 /** Whether the Move tool frames the selected layers (no marquee, several layers or a group). */

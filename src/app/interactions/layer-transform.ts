@@ -37,6 +37,7 @@ import {
   clearLayerContentRectCache,
   onLayerContentRectRefreshed,
   peekLayerContentRectLocal,
+  readLayerContentRectLocal,
 } from '../layer-content-rect';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
@@ -144,20 +145,27 @@ export function isLayerTransformCurrent(): boolean {
 }
 
 /**
- * Lift each target layer's content into a new engine session. The caller
- * bakes any other float first (`commitLiveFloat`). Returns false when there is
- * nothing to transform, or when a target's content bounds are not known yet
- * for the pixels it holds now: they are then being read, the box is drawn
- * again when they land, and the next press begins the session.
+ * What became of a request to begin a session: it began, there was nothing
+ * to transform, or a target's content bounds are not known yet for the
+ * pixels it holds now and are being read.
  */
-export function beginLayerTransformSession(box: TransformState): boolean {
+export type LayerTransformBegin = 'begun' | 'nothing' | 'unmeasured';
+
+/**
+ * Lift each target layer's content into a new engine session. The caller
+ * bakes any other float first (`commitLiveFloat`). Reads nothing: the
+ * engine is handed each layer's content bounds from the content-rect cache.
+ * On `'unmeasured'`, `beginLayerTransformSessionWhenMeasured` begins it as
+ * soon as they are in.
+ */
+export function beginLayerTransformSession(box: TransformState): LayerTransformBegin {
   const engine = getEngine();
-  if (!engine) return false;
+  if (!engine) return 'nothing';
   const targets = currentLayerTransformTargets();
   const measured = new Map<string, Rect>();
   for (const id of targets) {
     const local = peekLayerContentRectLocal(engine, id);
-    if (local === undefined) return false;
+    if (local === undefined) return 'unmeasured';
     if (local) measured.set(id, local);
   }
   const textPlacements = measureTextPlacements(engine, targets);
@@ -166,10 +174,24 @@ export function beginLayerTransformSession(box: TransformState): boolean {
     const [x, y, width = 0, height = 0] = beginLayerTransform(engine, id, local.x, local.y, local.width, local.height);
     if (x !== undefined && y !== undefined && width > 0 && height > 0) contentRects.set(id, { x, y, width, height });
   }
-  if (contentRects.size === 0) return false;
+  if (contentRects.size === 0) return 'nothing';
   live = { layerIds: targets, contentRects, textPlacements };
   useUIStore.getState().setLayerTransform(box);
-  return true;
+  return 'begun';
+}
+
+/**
+ * Begin a session once every target's content bounds have been read, for a
+ * press or a button that found them still out. Resolves to whether it
+ * began; it does not if the selection changed meanwhile.
+ */
+export async function beginLayerTransformSessionWhenMeasured(box: TransformState): Promise<boolean> {
+  const engine = getEngine();
+  if (!engine) return false;
+  const targets = currentLayerTransformTargets();
+  await Promise.all(targets.map((id) => readLayerContentRectLocal(engine, id)));
+  if (getEngine() !== engine || !sameIds(targets, currentLayerTransformTargets())) return false;
+  return beginLayerTransformSession(box) === 'begun';
 }
 
 /**

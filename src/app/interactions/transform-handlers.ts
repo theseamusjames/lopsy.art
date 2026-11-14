@@ -44,6 +44,7 @@ import {
 import { pressGrabsHandle, scalesSelectionOutlineFromHandles } from './handle-tools';
 import {
   beginLayerTransformSession,
+  beginLayerTransformSessionWhenMeasured,
   getLayerTransformBox,
   isLayerTransformCurrent,
   refuseTextInLayerTransform,
@@ -223,7 +224,12 @@ function handleLayerTransformDown(ctx: InteractionContext): InteractionState | n
   withLiveFloatKept(() => editorState.pushHistory('Transform'));
   if (!isLayerTransformCurrent()) {
     commitLiveFloat();
-    if (!beginLayerTransformSession(box)) return null;
+    const begun = beginLayerTransformSession(box);
+    if (begun === 'nothing') return null;
+    // The layers' content bounds are still being read. The gesture starts
+    // now and the session as soon as they are in: a drag renders nothing
+    // until then, and then follows the pointer from where it was pressed.
+    if (begun === 'unmeasured') void beginLayerTransformSessionWhenMeasured(box);
   }
   floatingSelectionRef.current = null;
   persistentTransformRef.current = null;
