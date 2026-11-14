@@ -9,7 +9,7 @@
 //! Only geometry flows out of this module — no pixel data leaves once
 //! `compute_edge_field` has produced the reduced edge field.
 
-/// Luma weights for Rec. 601. Matches `find_edges.glsl` so the tool snaps
+/// Luma weights for Rec. 601. Matches `find_edges.wgsl` so the tool snaps
 /// to the same edges the Find Edges filter highlights.
 const LUMA_R: f32 = 0.299;
 const LUMA_G: f32 = 0.587;

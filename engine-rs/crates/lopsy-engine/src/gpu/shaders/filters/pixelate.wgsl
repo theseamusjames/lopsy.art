@@ -1,5 +1,5 @@
 // Pixelate pass 2: every pixel takes its block's averaged colour and alpha
-// (from pixelate_blocks.glsl), but only where the source pixel had any
+// (from pixelate_blocks.wgsl), but only where the source pixel had any
 // coverage (#1167). Point-sampling the block centre used to delete a
 // partial block whose centre fell outside the content and grow one whose
 // centre fell inside it; keeping the source footprint does neither.

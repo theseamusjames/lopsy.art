@@ -1,14 +1,14 @@
 use crate::gpu::uniforms::uniforms;
 
 uniforms! {
-    /// `composite.glsl`
+    /// `composite.wgsl`
     pub struct CompositeParams {
         pub opacity: f32,
     }
 }
 
 uniforms! {
-    /// `final_blit.glsl`
+    /// `final_blit.wgsl`
     pub struct FinalBlitParams {
         pub resolution: [f32; 2],
         pub zoom: f32,
@@ -23,7 +23,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `blend.glsl`, every blend-mode variant.
+    /// `blend.wgsl`, every blend-mode variant.
     pub struct BlendParams {
         pub opacity: f32,
         pub src_offset: [f32; 2],

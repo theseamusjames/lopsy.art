@@ -29,7 +29,7 @@ pub fn filter_halftone(engine: &mut EngineInner, layer_id: &str, dot_size: f32, 
 
 pub fn filter_kaleidoscope(engine: &mut EngineInner, layer_id: &str, segments: u32, rotation_degrees: f32) {
     // Kaleidoscope's polar math needs the texture's pixel dimensions to stay
-    // isotropic on non-square layers (see kaleidoscope.glsl), and mirrors
+    // isotropic on non-square layers (see kaleidoscope.wgsl), and mirrors
     // around the canvas centre, which moves in UV when the layer hangs past
     // the canvas. Resize up front so both match the texture the shader runs on.
     let Some((w, h, cu, cv)) = full_size_doc_center(&mut *engine, layer_id) else {

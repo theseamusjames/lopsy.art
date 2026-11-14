@@ -1,7 +1,7 @@
 use crate::gpu::uniforms::uniforms;
 
 uniforms! {
-    /// `effects/glow.glsl`
+    /// `effects/glow.wgsl`
     pub struct GlowParams {
         pub has_orig_tex: i32,
         pub glow_color: [f32; 4],
@@ -20,7 +20,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `effects/shadow.glsl`
+    /// `effects/shadow.wgsl`
     pub struct ShadowParams {
         pub shadow_color: [f32; 4],
         pub offset: [f32; 2],
@@ -37,7 +37,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `effects/separable_edt.glsl`
+    /// `effects/separable_edt.wgsl`
     pub struct SeparableEdtParams {
         pub pass: i32,
         pub radius: i32,
@@ -47,7 +47,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `effects/stroke_apply.glsl`
+    /// `effects/stroke_apply.wgsl`
     pub struct StrokeApplyParams {
         pub stroke_color: [f32; 4],
         pub opacity: f32,
@@ -62,7 +62,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `effects/layer_mask_apply.glsl`
+    /// `effects/layer_mask_apply.wgsl`
     pub struct LayerMaskApplyParams {
         pub layer_offset: [f32; 2],
         pub layer_size: [f32; 2],

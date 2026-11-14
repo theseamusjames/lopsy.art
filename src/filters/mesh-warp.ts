@@ -23,7 +23,7 @@ export function createIdentityGrid(cols: number, rows: number): MeshWarpGrid {
 }
 
 /**
- * 16-bit code that decodes to exactly zero displacement. `mesh_warp.glsl`
+ * 16-bit code that decodes to exactly zero displacement. `mesh_warp.wgsl`
  * decodes `(code - DISPLACEMENT_CENTER) / DISPLACEMENT_SCALE`, so these
  * constants must stay in sync with the shader. The zero must be
  * representable or untouched grid points drift content (#909).

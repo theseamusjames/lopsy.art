@@ -15,7 +15,7 @@ describe('colorModeLabel', () => {
 
 describe('luminance8', () => {
   it('uses Rec. 709 weights on the stored 8-bit values', () => {
-    // Matches the engine's grayscale bake and adjustments.glsl.
+    // Matches the engine's grayscale bake and adjustments.wgsl.
     expect(luminance8(255, 0, 0)).toBe(54); // 0.2126 * 255
     expect(luminance8(0, 255, 0)).toBe(182); // 0.7152 * 255
     expect(luminance8(0, 0, 255)).toBe(18); // 0.0722 * 255

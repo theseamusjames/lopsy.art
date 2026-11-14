@@ -7,13 +7,44 @@ use std::path::Path;
 fn translate_shaders(out_dir: &Path) {
     let root = Path::new("src/gpu/shaders");
     println!("cargo:rerun-if-changed={}", root.display());
-    let shaders = lopsy_shaderc::shader_files(root).unwrap_or_else(|e| panic!("{e}"));
-    for path in shaders {
-        let translated = lopsy_shaderc::translate_file(root, &path).unwrap_or_else(|e| panic!("{e}"));
-        let dest = out_dir.join("shaders").join(path.strip_prefix(root).unwrap()).with_extension("glsl");
+    let outputs = lopsy_shaderc::translate_all(root).unwrap_or_else(|e| panic!("{e}"));
+    for output in &outputs {
+        let dest = out_dir.join("shaders").join(&output.path).with_extension("glsl");
         fs::create_dir_all(dest.parent().unwrap()).unwrap();
-        fs::write(&dest, translated.glsl).unwrap();
+        fs::write(&dest, &output.translated.glsl).unwrap();
     }
+    for set in lopsy_shaderc::VARIANT_SETS {
+        let variants: Vec<&str> = (0..set.count)
+            .map(|value| {
+                let path = Path::new(set.path).with_extension(format!("{value}.wgsl"));
+                let output = outputs.iter().find(|o| o.path == path).expect("a variant was not translated");
+                output.translated.glsl.as_str()
+            })
+            .collect();
+        let dest = out_dir.join("shaders").join(set.path).with_extension("variants.rs");
+        fs::write(&dest, variant_sources(&variants)).unwrap();
+    }
+}
+
+/// A `VariantSources` literal for `gpu::shader`. Variant 0 is written whole;
+/// the rest share most of their text, so the lines they all start with and
+/// all end with are written once and each keeps only its middle.
+fn variant_sources(variants: &[&str]) -> String {
+    let rest: Vec<Vec<&str>> = variants[1..].iter().map(|v| v.split_inclusive('\n').collect()).collect();
+    let shortest = rest.iter().map(Vec::len).min().unwrap_or(0);
+    let prefix = (0..shortest).take_while(|&i| rest.iter().all(|v| v[i] == rest[0][i])).count();
+    let suffix = (0..shortest - prefix)
+        .take_while(|&i| rest.iter().all(|v| v[v.len() - 1 - i] == rest[0][rest[0].len() - 1 - i]))
+        .count();
+    let middles: Vec<String> = rest.iter().map(|v| format!("{:?}", v[prefix..v.len() - suffix].concat())).collect();
+    let first = rest.first().map(Vec::as_slice).unwrap_or(&[]);
+    format!(
+        "VariantSources {{\n    first: {:?},\n    prefix: {:?},\n    middles: &[\n        {},\n    ],\n    suffix: {:?},\n}}\n",
+        variants[0],
+        first[..prefix].concat(),
+        middles.join(",\n        "),
+        first[first.len() - suffix..].concat(),
+    )
 }
 
 fn main() {

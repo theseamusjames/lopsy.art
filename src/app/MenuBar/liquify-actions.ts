@@ -2,7 +2,7 @@
  * Liquify tool actions — open/close the session and commit/cancel the warp.
  *
  * The displacement field lives entirely on the GPU as an RGBA8 texture.
- * Each brush dab is applied by a GPU shader (liquify_dab.glsl) — no CPU
+ * Each brush dab is applied by a GPU shader (liquify_dab.wgsl) — no CPU
  * Float32Array or per-pixel encoding needed.
  */
 

@@ -158,36 +158,36 @@ engine-rs/
           pass.rs         # The pass layer: the only way feature code draws
           uniforms.rs     # Typed uniform structs (`uniforms!`) and their checks
           params/         # One uniform struct per shader, grouped like shaders/
-          shaders/        # GLSL source files (see below)
+          shaders/        # WGSL source files (see below)
 ```
 
 ### Key Shaders
 
-Files end in `.wgsl` once ported and `.glsl` until then.
+Every shader is WGSL. `include/` holds the code shaders share.
 
 ```
 gpu/shaders/
-  blend.glsl              # Layer compositing (all blend modes, mask sampling)
-  final_blit.glsl         # Composite → screen (viewport transform, EDR passthrough)
-  blit.glsl               # Texture-to-texture copy
+  blend.wgsl              # Layer compositing (all blend modes, mask sampling)
+  final_blit.wgsl         # Composite → screen (viewport transform, EDR passthrough)
+  blit.wgsl               # Texture-to-texture copy
   brush/
-    brush_dab.glsl        # Brush dab with selection mask support
-    eraser_dab.glsl       # Eraser dab with selection mask support
-    clone_stamp.glsl      # Per-dab clone with bounds checking
-    dodge_burn.glsl       # Dodge/burn dab
+    brush_dab_*.wgsl      # Brush dab: circle, alpha tip, colour tip
+    eraser_dab.wgsl       # Eraser dab with selection mask support
+    clone_stamp.wgsl      # Per-dab clone with bounds checking
+    dodge_burn.wgsl       # Dodge/burn dab
   effects/
-    glow.glsl             # Inner/outer glow (distance field based)
-    shadow.glsl           # Drop shadow
-    separable_edt.glsl    # Stroke effect band (two-pass Euclidean distance)
-    stroke_apply.glsl     # Stroke effect ring from that band
+    glow.wgsl             # Inner/outer glow (distance field based)
+    shadow.wgsl           # Drop shadow
+    separable_edt.wgsl    # Stroke effect band (two-pass Euclidean distance)
+    stroke_apply.wgsl     # Stroke effect ring from that band
   filters/
-    adjustments.glsl      # Exposure, contrast, highlights, shadows, whites, blacks
-    vignette.glsl         # Vignette effect
-    gaussian_blur.glsl    # Two-pass Gaussian blur
-    box_blur.glsl         # Box blur
-    invert.glsl, hue_sat.glsl, sharpen.glsl, noise.glsl, posterize.glsl, threshold.glsl
+    adjustments.wgsl      # Exposure, contrast, highlights, shadows, whites, blacks
+    vignette.wgsl         # Vignette effect
+    gaussian_blur.wgsl    # Two-pass Gaussian blur
+    box_blur.wgsl         # Box blur
+    invert.wgsl, hue_sat.wgsl, sharpen.wgsl, noise.wgsl, posterize.wgsl, threshold.wgsl
   gradient/
-    gradient_linear.glsl, gradient_radial.glsl
+    gradient_linear.wgsl, gradient_radial.wgsl
 ```
 
 ### Adding an engine function JS can call
@@ -201,10 +201,10 @@ time with `host::now_ms`.
 
 ### Shader uniforms
 
-A shader declares every non-sampler uniform in one block,
-`layout(std140) uniform Params { ... };`, and `gpu/params/<family>.rs`
-holds the matching struct, declared with `uniforms!`: field `layer_offset`
-feeds member `u_layerOffset`, in the same order with the same types. A pass
+A shader declares every non-sampler uniform in one struct, `Params`, and
+`gpu/params/<family>.rs` holds the matching Rust struct, declared with
+`uniforms!`: field `layer_offset` feeds member `u_layerOffset`, in the same
+order with the same types. A pass
 is created with that struct, or `()` for a shader that only samples:
 
 ```rust
@@ -213,22 +213,21 @@ engine.pass(&engine.shaders.posterize, PosterizeParams { levels: 4.0 })
     .draw(Target::Texture(dst));
 ```
 
-Adding or changing a uniform means editing the block and the struct
-together; `cargo test` fails when they differ. A new shader is listed in
+Adding or changing a uniform means editing both structs together; `cargo test` fails when they differ. A new shader is listed in
 `typed_shaders!` in `gpu/shader.rs`. There is no way to set a uniform by
 name.
 
-### Shader source: WGSL, being ported from GLSL
+### Shader source: WGSL
 
-Shaders are moving from GLSL to WGSL, one per commit
-(`docs/engine-migration-plan.md`, Phase 5). **Write a new shader in WGSL.**
-`lopsy-engine`'s build script runs every `.wgsl` file under `gpu/shaders/`
-through `lopsy-shaderc` (naga) and `gpu/shader.rs` embeds the generated
-GLSL with `translated!("<path>")`. The conventions, which the translator
-checks:
+Shaders are written in WGSL; the WebGL backend runs GLSL generated from
+them. `lopsy-engine`'s build script runs every `.wgsl` file under
+`gpu/shaders/` through `lopsy-shaderc` (naga) and `gpu/shader.rs` embeds
+the generated GLSL with `translated!("<path>")`. The conventions, which
+the translator checks:
 
 - One fragment entry point, `fs_main(@location(0) uv: vec2<f32>) ->
-  @location(0) vec4<f32>`.
+  @location(0) vec4<f32>`. It may take `@builtin(position)` as well or
+  instead.
 - Uniforms in one struct named `Params`, at `@group(0) @binding(0)`, with
   members named as the Rust struct expects (`u_layerOffset`). Textures and
   samplers follow. Read `params.u_x` member by member; do not pass the
@@ -237,14 +236,23 @@ checks:
   `"u_tex"`.
 - Shared code goes in `gpu/shaders/include/<name>.wgsl` and is spliced in
   with `//#include <name>`.
-- Avoid `array<f32, N>` in `Params` (pack as `array<vec4<f32>, N/4>`),
-  swizzle assignment, and one texture used with two samplers. After an
-  early return that depends on `uv`, sample with `textureSampleLevel`.
+- `Params` cannot hold `array<f32, N>` or `bool`: pack floats as
+  `array<vec4<f32>, N/4>` (`Vec4Array::from_floats`) and use `i32` for a
+  switch. Avoid swizzle assignment and one texture used with two samplers.
+- After a return or `discard` that depends on the pixel, sample with
+  `textureSampleLevel(..., 0.0)`. No texture has mipmaps, so it reads the
+  same texels. A texture read only with `textureLoad` needs no sampler.
+- Constants fold at higher precision than f32. Where an expression of two
+  literals is not exact (`1.0 / 2.4`, `1.0 - 0.8`), type one operand
+  (`1.0 / f32(2.4)`) so it folds as the GPU would compute it.
+- WGSL's `%` truncates; for GLSL's `mod` write `x - y * floor(x / y)`.
+- A choice made when the shader is compiled, not per pixel, is a
+  `//#if NAME == n` branch, built once per value listed in `VARIANT_SETS`
+  in `lopsy-shaderc`. `blend.wgsl` is built once per blend mode this way.
 
 `npm run wgsl:check` compiles every shader's WGSL with headless Chromium's
 WebGPU, which is stricter than naga; CI runs it. Run it when you add or
-change a `.wgsl` file. Porting an existing shader must not change pixels
-beyond one 8-bit step.
+change a `.wgsl` file.
 
 ### Build
 
@@ -280,8 +288,8 @@ Effect images (glows, shadow, stroke) are cached per layer in the live composito
 ### Layer Masks
 
 - Stored as grayscale `Uint8ClampedArray` in the Zustand layer model (`layer.mask`).
-- Uploaded to GPU via `uploadLayerMask()`: the bytes go up as an R8 texture and a GPU pass (`mask_expand.glsl`) expands them into the pooled RGBA mask texture (`EngineInner::upload_mask_texture`). The selection mask uses the same path.
-- Sampled in `blend.glsl` during compositing: mask value multiplies layer alpha.
+- Uploaded to GPU via `uploadLayerMask()`: the bytes go up as an R8 texture and a GPU pass (`mask_expand.wgsl`) expands them into the pooled RGBA mask texture (`EngineInner::upload_mask_texture`). The selection mask uses the same path.
+- Sampled in `blend.wgsl` during compositing: mask value multiplies layer alpha.
 - When mask edit mode is active, `compositor.rs` renders a translucent blue overlay.
 
 ### Selection Mask
@@ -294,7 +302,7 @@ Effect images (glows, shadow, stroke) are cached per layer in the live composito
 
 - `texture_pool.rs` detects `EXT_color_buffer_float` and uses `RGBA16F` textures when available.
 - `engine-state.ts` sets `drawingBufferColorSpace = 'display-p3'` on capable displays.
-- `final_blit.glsl` passes values through without clamping for EDR headroom.
+- `final_blit.wgsl` passes values through without clamping for EDR headroom.
 
 ## Tools
 

@@ -35,7 +35,7 @@ pub fn filter_pattern_fill(
     // #848: expand the layer's texture to the doc union before reading its
     // size. A never-painted layer's texture is still the lazy 1x1
     // placeholder at this point — reading layer_w/layer_h before expansion
-    // sends u_layerSize=(1,1) to pattern_fill.glsl, which then samples the
+    // sends u_layerSize=(1,1) to pattern_fill.wgsl, which then samples the
     // pattern's very first texel for every fragment instead of tiling it.
     let _ = engine.ensure_layer_full_size(layer_id);
 

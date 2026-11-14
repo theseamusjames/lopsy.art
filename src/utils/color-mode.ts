@@ -17,7 +17,7 @@ export function colorModeLabel(mode: DocumentColorMode): string {
 
 /**
  * Rec. 709 luma of an 8-bit sRGB triple, applied to the stored (gamma-encoded)
- * values to match `adjustments.glsl` and the engine's grayscale bake.
+ * values to match `adjustments.wgsl` and the engine's grayscale bake.
  */
 export function luminance8(r: number, g: number, b: number): number {
   return Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);

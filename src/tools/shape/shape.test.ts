@@ -68,7 +68,7 @@ describe('rectangleToPathAnchors (#794)', () => {
 });
 
 /**
- * Line-for-line port of `sdPolygon` in shape_fill.glsl (p relative to the
+ * Line-for-line port of `sdPolygon` in shape_fill.wgsl (p relative to the
  * drag centre, y down), so the path can be checked against the exact
  * geometry the Pixels output rasterizes.
  */

@@ -29,16 +29,14 @@ fn main() -> ExitCode {
 }
 
 fn run(root: &Path, out: &Path) -> Result<usize, String> {
-    let files = lopsy_shaderc::shader_files(root)?;
-    for path in &files {
-        let translated = lopsy_shaderc::translate_file(root, path)?;
-        let relative = path.strip_prefix(root).map_err(|e| e.to_string())?;
-        let dest = out.join(relative);
+    let outputs = lopsy_shaderc::translate_all(root)?;
+    for output in &outputs {
+        let dest = out.join(&output.path);
         let parent = dest.parent().ok_or("a shader path has no parent")?;
         fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
-        fs::write(&dest, &translated.wgsl).map_err(|e| format!("{}: {e}", dest.display()))?;
+        fs::write(&dest, &output.translated.wgsl).map_err(|e| format!("{}: {e}", dest.display()))?;
         let glsl = dest.with_extension("glsl");
-        fs::write(&glsl, &translated.glsl).map_err(|e| format!("{}: {e}", glsl.display()))?;
+        fs::write(&glsl, &output.translated.glsl).map_err(|e| format!("{}: {e}", glsl.display()))?;
     }
-    Ok(files.len())
+    Ok(outputs.len())
 }

@@ -435,7 +435,7 @@ pub fn scale_texture(
     let new_tex = engine.texture_pool.acquire(new_w, new_h)?;
     engine.texture_pool.get(new_tex).ok_or("New texture not found")?;
 
-    // Bilinear resample in premultiplied space (see premul_sample.glsl).
+    // Bilinear resample in premultiplied space (see include/premul_sample.wgsl).
     engine.pass(&engine.shaders.blit_resample, ())
         .texture("u_tex", tex_handle)
         .blend(Blend::Off)

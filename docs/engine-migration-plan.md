@@ -16,7 +16,7 @@ Status: in progress.
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
 | 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Commands that read inside the engine answer with a Promise or no longer read (#1705), and the last synchronous layer read is deleted (#1706). Phase 4 is done on the TypeScript side: nothing above the bridge reads the GPU synchronously. What is left is Rust's, in 6.6; see Phase 4 |
-| 5 | Started. The build step and the first four shaders (`blit`, `invert`, `posterize`, `blit_resample`) are in #1707; eight more (`color_convert`, `mask_expand`, `color_overlay`, `flip`, `threshold`, `rotate90`, `mask_luminance`, `blit_region`) in #1708; eight more (`sharpen`, `solarize`, `pixelate`, `selection_mask_blend`, `bloom_threshold`, `chromatic_aberration`, `opacity_clamp`, `flood_fill_apply`) in #1710; six more (`mask_remap`, `composite`, `tonemap`, `hue_sat`, `color_lut`, `box_blur`) in #1711. Four shaders no pass used are removed (#1712), two of them already ported, so 24 are in WGSL and about 61 remain |
+| 5 | Done, pending merge. Every shader is WGSL, translated to GLSL at build time: 83 programs, plus one `blend` variant per blend mode. The build step and the first 24 shaders are in #1707, #1708, #1710 and #1711; #1712 removes four shaders no pass used. The rest are in #1713 (core and brush support, and a fifth unused shader, `color_overlay`), #1714 (brush tools, transforms, layer effects), #1715 (filters), #1716 (shaders whose uniforms had to change shape) and #1717 (brush dabs, `blend`, and the removal of the GLSL plumbing) |
 | 6–7 | Not started |
 
 ---
@@ -238,7 +238,7 @@ script reports the slowest run as well as the median.
 |---|---|---|
 | 1 | Flat or smaller: the pass layer replaces repeated GL boilerplate | Flat |
 | 2 | Measured: wasm +1.1% raw (4,293,925 bytes against 4,246,140 on the same machine). The typed wrappers are thin over an untyped core; without that it was +4.7% | Measured flat: `wasm-init` 134 ms, `engine-create` 128 ms median; 496 ms on the first run after the build |
-| 5 | Up: generated GLSL is more verbose than hand-written. Measured so far: about +300 bytes of wasm for a small shader and +700 for a larger one; removing four unused shaders (#1712) more than paid for the first 24 | Measured flat. `engine-create` 130 ms median on #1707 and 118 ms after #1712. Generated GLSL compiles as fast as hand-written: for the 24 ported shaders, compiled, linked and drawn once each with the cache defeated, 134 ms fully cold against 141 ms hand-written, and 26 ms against 24 ms afterwards. The first load after a build can still take about a second, because every regenerated source misses the OS shader cache once |
+| 5 | Up 22 KB (0.5%) with every shader generated: 4,336,784 bytes against 4,314,929 on `main`, both built locally. Generated GLSL is more verbose than hand-written; two things keep it small. Indentation and blank lines are dropped (they were about a fifth of the text, 52 KB). And the fifteen non-Normal `blend` variants store the lines they share once, 37 KB for all sixteen instead of 137 KB | Measured flat. `engine-create` 130 ms median on #1707, 118 ms after #1712 and 116 ms with every shader generated (#1717). Generated GLSL compiles as fast as hand-written: for the first 24 ported shaders, compiled, linked and drawn once each with the cache defeated, 134 ms fully cold against 141 ms hand-written, and 26 ms against 24 ms afterwards. The first load after a build can still take about a second, because every regenerated source misses the OS shader cache once |
 | 6 | wgpu adds code (spike S1). It ships as a separate artifact, so a user downloads one backend, not both | Pipelines replace programs; they can be created lazily or asynchronously |
 
 wgpu becomes the default (6.11) only if both numbers are within an
@@ -669,7 +669,8 @@ uniforms and a sampler that neither reads; removed. `marching_ants` and
 `text_glyph` were compiled at startup and used nowhere; removed in
 #1712, with `opacity_clamp` and `tonemap`, which were unused too.
 
-**Left for Phase 5**, where each shader is rewritten anyway. WGSL cannot
+**Left for Phase 5**, where each shader is rewritten anyway (done in
+#1716, and `mat2` as noted under Phase 5). WGSL cannot
 hold these in a uniform struct as they stand:
 
 - `float` arrays (`u_weights[64]`, `u_stopPositions[16]`): pack as
@@ -1023,8 +1024,7 @@ preprocessed WGSL and the GLSL to a directory, for tools.
   WGSL with headless Chromium's WebGPU (SwiftShader) and is a CI job. A
   probe with a `textureSample` after a varying-dependent return, which
   naga accepts, fails it.
-- **Variants** (`BLEND_MODE`) are not wired yet; the `//#if` preprocessing
-  is in the crate and tested, and the build script passes no defines.
+- **Variants** (`BLEND_MODE`) were wired in #1717; see below.
 - **Dependencies.** naga is pinned to 30.0.1. Cargo first resolved
   `naga-types 30.0.2` and `syn 3.0.10`, both under seven days old; they
   are held at 30.0.1 and 3.0.9 in `Cargo.lock`.
@@ -1041,6 +1041,47 @@ engine and on this one, differs only in tests that vary from run to run
 confirmed by isolated reruns on both engines); maximum channel delta 0
 elsewhere. wasm +1,291 bytes for the four shaders. Load time flat:
 `engine-create` 130 ms median, 426 ms on the first run after the build.
+
+**As built, the rest (#1713 to #1717).** No GLSL file is left, and the
+engine no longer rewrites shader text beyond flattening the `Params`
+block: the include splice and the `#define` injection are gone.
+
+- **`blend` is built once per blend mode.** `VARIANT_SETS` in
+  `lopsy-shaderc` names a shader, a define and a count; the build
+  translates the file once per value and the engine compiles the source for
+  the mode a document first uses, as before. Sixteen whole copies would
+  have added about 125 KB. The modes after Normal differ only in the blend
+  function and the helpers it uses, so the build script stores the lines
+  they all start and end with once (`VariantSources`).
+- **Uniform structs changed shape for five shaders.** WGSL allows neither
+  `array<f32, N>` nor `bool` in a uniform struct. Gaussian weights and
+  gradient stop positions travel as `vec4` arrays and the two noise
+  switches and Texture's are `i32`; the float-array and bool uniform types
+  are removed from `gpu::uniforms`.
+- **Constants fold at higher precision in naga than in a GLSL compiler.**
+  An expression of two literals that is not exact in f32 (`1.0 / 2.4` in
+  the Lab conversion, `1.0 - 0.8` in the clone stamp) lands on the
+  neighbouring f32 unless one operand is typed (`1.0 / f32(2.4)`).
+- **Three GLSL habits have no WGSL form** and are written out: `mod` of a
+  value that can be negative (`%` truncates), `smoothstep` with reversed
+  edges (`halftone`), and `inverse(mat2)` (`mesh_warp`).
+- **Sampling after a per-pixel return** uses `textureSampleLevel(..., 0.0)`
+  throughout. No texture in the engine has mipmaps, so the texels are the
+  same.
+- **The cached engine build in CI was keyed on `*.glsl`.** A change to a
+  `.wgsl` file alone would have been tested against a stale engine; the
+  key hashes `*.wgsl` now (#1717).
+
+Measured, in three runs of the instrumented e2e suite against `main`'s
+engine (at the tips of #1713, #1715 and #1717): maximum channel delta 0,
+outside specs that vary from run to run. Two results needed a second
+look. `select-layer-alpha-bounds` differed once under load and matched in
+three isolated reruns, and `effect-cache-invalidation` failed once under
+load on a cache-miss count and passed alone with all 63 checkpoints
+matching. The brush texture is a third case: its rotation is seeded from
+the clock, so the tests that use it differ between any two runs. With the
+seed pinned on both engines, a probe of single dabs through each texture
+blend mode matched exactly.
 
 If S2 fails, this phase instead adds a `.wgsl` file beside each `.glsl`
 file, unused until Phase 6, and the compositions compare the two once
@@ -1127,9 +1168,9 @@ Started when a second app is actually being built.
 
 Still open:
 
-- That naga's GLSL ES output works for the shaders the spike did not
-  port: `adjustments` and the brush dab family.
-- Shader compile time of naga-generated GLSL.
+- The generated GLSL on Firefox and on GPUs other than Apple Metal. The
+  pixel comparisons ran in Chromium on one machine, and `wgsl:check` runs
+  on SwiftShader.
 - wgpu's control over surface colour space and extended range on native.
 - That `koi-fish` and `shapes` repeat exactly on a real GPU; they were
   checked on SwiftShader only.

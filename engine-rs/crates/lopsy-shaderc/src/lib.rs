@@ -4,7 +4,7 @@
 //! will compile directly. The WebGL backend needs GLSL ES 3.00, so
 //! `lopsy-engine`'s build script runs every `.wgsl` file through this crate
 //! and embeds the result. The generated GLSL follows the conventions the
-//! hand-written shaders used, so the WebGL backend treats both alike:
+//! WebGL backend was written against:
 //!
 //! - the fragment input is `v_uv` and the output `fragColor`, to link with
 //!   the shared fullscreen vertex shader (GLSL ES 3.00 links varyings by
@@ -13,7 +13,9 @@
 //!   binds it by;
 //! - the uniform struct `Params` becomes one unnamed block,
 //!   `layout(std140) uniform Params { ... };`, whose members are global
-//!   names, as `gpu::uniforms` expects.
+//!   names, as `gpu::uniforms` expects;
+//! - indentation and blank lines are dropped, because every shader's GLSL
+//!   is embedded in the wasm.
 //!
 //! naga is a dependency of this crate only, so it never reaches the wasm
 //! bundle.
@@ -79,12 +81,56 @@ pub struct Translated {
 /// Preprocess and translate the shader at `path`, taking its includes from
 /// `<root>/include/<name>.wgsl`.
 pub fn translate_file(root: &Path, path: &Path) -> Result<Translated, String> {
+    translate_file_with(root, path, &[])
+}
+
+fn translate_file_with(root: &Path, path: &Path, defines: &Defines) -> Result<Translated, String> {
     let include_dir = root.join("include");
     let include = |name: &str| fs::read_to_string(include_dir.join(format!("{name}.wgsl"))).ok();
     let source = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let wgsl = preprocess(&source, &include, &[]).map_err(|e| format!("{}: {e}", path.display()))?;
+    let wgsl = preprocess(&source, &include, defines).map_err(|e| format!("{}: {e}", path.display()))?;
     let glsl = wgsl_to_glsl(&wgsl).map_err(|e| format!("{}:\n{e}", path.display()))?;
     Ok(Translated { wgsl, glsl })
+}
+
+/// A shader built once per value of one define, for a choice that is made
+/// when the shader is compiled instead of per pixel.
+pub struct VariantSet {
+    /// The shader, relative to the shaders root.
+    pub path: &'static str,
+    pub define: &'static str,
+    /// The define takes each value in `0..count`.
+    pub count: i64,
+}
+
+/// `blend.wgsl` is built once per blend mode.
+pub const VARIANT_SETS: &[VariantSet] = &[VariantSet { path: "blend.wgsl", define: "BLEND_MODE", count: 16 }];
+
+/// One translated shader, or one variant of one.
+pub struct Output {
+    /// Where it belongs under an output root: the shader's own path
+    /// relative to the shaders root, or `<stem>.<value>.wgsl` for a variant.
+    pub path: PathBuf,
+    pub translated: Translated,
+}
+
+/// Translate every shader under `root`, and every variant of the shaders in
+/// [`VARIANT_SETS`].
+pub fn translate_all(root: &Path) -> Result<Vec<Output>, String> {
+    let mut outputs = Vec::new();
+    for path in shader_files(root)? {
+        let relative = path.strip_prefix(root).map_err(|e| e.to_string())?;
+        let Some(set) = VARIANT_SETS.iter().find(|set| Path::new(set.path) == relative) else {
+            outputs.push(Output { path: relative.to_path_buf(), translated: translate_file(root, &path)? });
+            continue;
+        };
+        for value in 0..set.count {
+            let translated = translate_file_with(root, &path, &[(set.define, value)])
+                .map_err(|e| format!("{} = {value}: {e}", set.define))?;
+            outputs.push(Output { path: relative.with_extension(format!("{value}.wgsl")), translated });
+        }
+    }
+    Ok(outputs)
 }
 
 /// The string preprocessing that runs before naga.
@@ -202,11 +248,23 @@ pub fn wgsl_to_glsl(wgsl: &str) -> Result<String, String> {
         let instance = format!("_group_{}_binding_{}_fs", binding.group, binding.binding);
         blocks.push((block_name.clone(), instance));
     }
-    match blocks.as_slice() {
-        [] => Ok(text),
-        [(block_name, instance)] => flatten_params_struct(&text, block_name, instance),
-        _ => Err(format!("expected at most one uniform struct, found {}", blocks.len())),
+    let text = match blocks.as_slice() {
+        [] => text,
+        [(block_name, instance)] => flatten_params_struct(&text, block_name, instance)?,
+        _ => return Err(format!("expected at most one uniform struct, found {}", blocks.len())),
+    };
+    Ok(without_layout_whitespace(&text))
+}
+
+/// Drop indentation and blank lines. Every shader's GLSL is embedded in the
+/// wasm, and naga's layout is about a fifth of its bytes.
+fn without_layout_whitespace(glsl: &str) -> String {
+    let mut out = String::with_capacity(glsl.len());
+    for line in glsl.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        out.push_str(line);
+        out.push('\n');
     }
+    out
 }
 
 /// naga writes a uniform struct as a struct type plus a block holding one
@@ -344,7 +402,7 @@ mod tests {
              }",
         )
         .unwrap();
-        assert!(glsl.contains("layout(std140) uniform Params {\n    float u_levels;\n    vec2 u_offset;\n};\n"), "{glsl}");
+        assert!(glsl.contains("layout(std140) uniform Params {\nfloat u_levels;\nvec2 u_offset;\n};\n"), "{glsl}");
         assert!(!glsl.contains("struct Params"));
         assert!(!glsl.contains("_group_0_binding_0_fs"));
         assert!(glsl.contains("u_offset"));
@@ -361,7 +419,21 @@ mod tests {
              }",
         )
         .unwrap();
-        assert!(glsl.contains("    mat3 u_colorMatrix;\n"), "{glsl}");
+        assert!(glsl.contains("\nmat3 u_colorMatrix;\n"), "{glsl}");
+    }
+
+    #[test]
+    fn generated_glsl_carries_no_indentation_or_blank_lines() {
+        let glsl = wgsl_to_glsl(
+            "@fragment
+             fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+                 if (uv.x > 0.5) { return vec4<f32>(1.0); }
+                 return vec4<f32>(0.0);
+             }",
+        )
+        .unwrap();
+        assert!(glsl.starts_with("#version 300 es\n"));
+        assert!(glsl.lines().all(|line| !line.is_empty() && line == line.trim()), "{glsl}");
     }
 
     #[test]

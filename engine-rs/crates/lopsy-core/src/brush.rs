@@ -74,7 +74,7 @@ pub fn compute_edge_distance(alpha: &[u8], width: usize, height: usize, threshol
 /// Coverage for one pixel of the GPU round-brush dab, at distance `dist`
 /// from the dab centre, for a dab of the given `radius` and `hardness`
 /// (0-1). This mirrors `circleStamp` in
-/// `lopsy-engine/src/gpu/shaders/brush/brush_dab_header.glsl` exactly —
+/// `lopsy-engine/src/gpu/shaders/include/brush_dab_header.wgsl` exactly —
 /// keep the two in sync. It exists so the coverage math (in particular
 /// the small-radius floor fixed for #849) can be unit tested without a
 /// WebGL context.
@@ -116,7 +116,7 @@ fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
 /// every texel a round mask dab of diameter `size` centred at (cx, cy)
 /// can change, or `None` when the dab misses the texture entirely.
 ///
-/// The mask dab shaders (`quick_mask_dab.glsl`) sample at texel centres
+/// The mask dab shaders (`quick_mask_dab.wgsl`) sample at texel centres
 /// (`v_uv * texSize`) and pass through any texel farther than `size / 2`
 /// from the centre unchanged, so scissoring both the dab pass and the
 /// copy-back to this rect is pixel-identical to rendering the full

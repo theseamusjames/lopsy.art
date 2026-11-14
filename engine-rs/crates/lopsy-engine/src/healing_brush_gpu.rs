@@ -137,7 +137,7 @@ fn ensure_mean_target(engine: &mut EngineInner) -> Option<(TextureHandle, Frameb
 
 /// Render the mean RGB of the circle of `radius` around `src_center` into
 /// texel (0, 0) of the mean target and around `dst_center` into texel (1, 0),
-/// with one 2×1 draw of `healing_mean.glsl`. Runs unscissored.
+/// with one 2×1 draw of `healing_mean.wgsl`. Runs unscissored.
 fn render_region_means(
     engine: &EngineInner,
     layer: TextureHandle,

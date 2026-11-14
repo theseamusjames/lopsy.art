@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src/engine-wasm/pkg
-          key: wasm-pkg-${{ hashFiles('engine-rs/**/*.rs', 'engine-rs/**/Cargo.toml', 'engine-rs/**/Cargo.lock', 'engine-rs/**/*.glsl') }}
+          key: wasm-pkg-${{ hashFiles('engine-rs/**/*.rs', 'engine-rs/**/Cargo.toml', 'engine-rs/**/Cargo.lock', 'engine-rs/**/*.wgsl') }}
 
       - name: Cache cargo registry, git, and target
         if: steps.wasm-cache.outputs.cache-hit != 'true'

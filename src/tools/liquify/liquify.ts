@@ -262,8 +262,8 @@ export function applyDab(
 export const MAX_DISP = 2048;
 
 /**
- * 16-bit code that decodes to exactly zero displacement. `liquify_dab.glsl`
- * and `liquify_warp.glsl` decode `(code - DISP_CENTER) / DISP_SCALE *
+ * 16-bit code that decodes to exactly zero displacement. `liquify_dab.wgsl`
+ * and `liquify_warp.wgsl` decode `(code - DISP_CENTER) / DISP_SCALE *
  * MAX_DISP`, so these constants must stay in sync with the shaders. The
  * code is always an integer so the high/low byte split is unambiguous: a
  * fractional zero sat on the carry between (127, 255) and (128, 0) and tore

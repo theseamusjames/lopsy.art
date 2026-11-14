@@ -10,7 +10,7 @@ import { agentDocsPlugin } from './scripts/vite-plugin-agent-docs';
 
 /**
  * Vite plugin that checks whether the WASM build output is older than any
- * Rust/GLSL source file. Prints a warning at dev-server start so stale
+ * Rust or shader source file. Prints a warning at dev-server start so stale
  * builds are immediately obvious.
  */
 function wasmFreshnessCheck(): Plugin {
@@ -46,7 +46,7 @@ function wasmFreshnessCheck(): Plugin {
             if (stat.isDirectory()) {
               if (entry === 'target' || entry === 'pkg') continue;
               walk(full);
-            } else if (/\.(rs|glsl|toml)$/.test(entry) && stat.mtimeMs > wasmMtime) {
+            } else if (/\.(rs|wgsl|toml)$/.test(entry) && stat.mtimeMs > wasmMtime) {
               newerFiles.push(full.replace(root + '/', ''));
             }
           } catch {

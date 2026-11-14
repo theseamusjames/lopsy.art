@@ -1,7 +1,7 @@
 use crate::gpu::uniforms::{uniforms, Mat2, Mat3};
 
 uniforms! {
-    /// `blit_region.glsl`
+    /// `blit_region.wgsl`
     pub struct BlitRegionParams {
         pub scale: [f32; 2],
         pub offset: [f32; 2],
@@ -9,7 +9,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `flip.glsl`
+    /// `flip.wgsl`
     pub struct FlipParams {
         pub flip_h: i32,
         pub flip_v: i32,
@@ -17,14 +17,14 @@ uniforms! {
 }
 
 uniforms! {
-    /// `rotate90.glsl`
+    /// `rotate90.wgsl`
     pub struct Rotate90Params {
         pub clockwise: i32,
     }
 }
 
 uniforms! {
-    /// `mask_remap.glsl`
+    /// `mask_remap.wgsl`
     pub struct MaskRemapParams {
         pub dst_size: [f32; 2],
         pub src_size: [f32; 2],
@@ -34,14 +34,14 @@ uniforms! {
 }
 
 uniforms! {
-    /// `quick_mask_translate.glsl`
+    /// `quick_mask_translate.wgsl`
     pub struct QuickMaskTranslateParams {
         pub offset: [i32; 2],
     }
 }
 
 uniforms! {
-    /// `thumbnail_box.glsl`
+    /// `thumbnail_box.wgsl`
     pub struct ThumbnailBoxParams {
         pub dst_size: [f32; 2],
         pub channel: i32,
@@ -49,7 +49,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `clipboard_copy.glsl`
+    /// `clipboard_copy.wgsl`
     pub struct ClipboardCopyParams {
         pub has_mask: i32,
         pub extend_past_canvas: i32,
@@ -62,7 +62,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `clipboard_clear.glsl`
+    /// `clipboard_clear.wgsl`
     pub struct ClipboardClearParams {
         pub has_mask: i32,
         pub extend_past_canvas: i32,
@@ -73,7 +73,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `selection_fill.glsl`
+    /// `selection_fill.wgsl`
     pub struct SelectionFillParams {
         pub has_mask: i32,
         pub fill_color: [f32; 4],
@@ -84,7 +84,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `content_bounds_reduce.glsl`
+    /// `content_bounds_reduce.wgsl`
     pub struct ContentBoundsReduceParams {
         pub axis: [i32; 2],
         pub span: i32,
@@ -94,7 +94,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `transform_affine.glsl`
+    /// `transform_affine.wgsl`
     pub struct TransformAffineParams {
         pub float_size: [f32; 2],
         pub float_offset: [f32; 2],
@@ -108,7 +108,7 @@ uniforms! {
 }
 
 uniforms! {
-    /// `transform_perspective.glsl`
+    /// `transform_perspective.wgsl`
     pub struct TransformPerspectiveParams {
         pub float_size: [f32; 2],
         pub float_offset: [f32; 2],

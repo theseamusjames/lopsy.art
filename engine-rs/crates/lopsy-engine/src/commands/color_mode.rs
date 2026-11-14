@@ -13,7 +13,7 @@ use crate::gpu::params::color::ColorConvertParams;
 use crate::gpu::uniforms::Mat3;
 
 /// Rec. 709 luma weights, applied to the stored (gamma-encoded) values so the
-/// result matches the Black & White adjustment in `adjustments.glsl`.
+/// result matches the Black & White adjustment in `adjustments.wgsl`.
 const LUMA_R: f32 = 0.2126;
 const LUMA_G: f32 = 0.7152;
 const LUMA_B: f32 = 0.0722;

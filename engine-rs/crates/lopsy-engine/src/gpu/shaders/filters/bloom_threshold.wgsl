@@ -15,8 +15,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     soft = clamp(soft / (2.0 * knee + 0.0001), 0.0, 1.0);
     soft = soft * soft;
     let contribution = max(soft, step(params.u_threshold, brightness));
-    // Carry the contribution in alpha only: gaussian_blur.glsl premultiplies
-    // by alpha and un-premultiplies its result, so bloom_combine.glsl must
+    // Carry the contribution in alpha only: gaussian_blur.wgsl premultiplies
+    // by alpha and un-premultiplies its result, so bloom_combine.wgsl must
     // re-multiply by the blurred alpha to recover a falloff (#959).
     return vec4<f32>(c.rgb, c.a * contribution);
 }

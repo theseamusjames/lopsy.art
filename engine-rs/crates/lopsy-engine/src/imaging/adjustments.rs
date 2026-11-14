@@ -131,7 +131,7 @@ fn flag(is_on: bool) -> f32 {
     if is_on { 1.0 } else { 0.0 }
 }
 
-/// Every non-sampler uniform of `adjustments.glsl`, including the
+/// Every non-sampler uniform of `adjustments.wgsl`, including the
 /// `u_has*` LUT flags, derived from `adj`.
 pub fn params(adj: &ImageAdjustmentState, brightness: f32, doc_color_mode: u32) -> AdjustmentsParams {
     AdjustmentsParams {
