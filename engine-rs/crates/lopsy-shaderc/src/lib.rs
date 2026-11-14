@@ -18,6 +18,9 @@
 //! naga is a dependency of this crate only, so it never reaches the wasm
 //! bundle.
 
+use std::fs;
+use std::path::{Path, PathBuf};
+
 use naga::back::glsl;
 use naga::proc::BoundsCheckPolicies;
 use naga::valid::{Capabilities, ValidationFlags, Validator};
@@ -35,6 +38,54 @@ const NAGA_OUTPUT: &str = "_fs2p_location0";
 
 /// `NAME == value` pairs that select `//#if` branches.
 pub type Defines<'a> = [(&'a str, i64)];
+
+/// Every `.wgsl` shader under `root`, in a stable order. The `include`
+/// directory is left out: its files are spliced into shaders and are not
+/// shaders themselves.
+pub fn shader_files(root: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut found = Vec::new();
+    collect_shader_files(root, &mut found)?;
+    Ok(found)
+}
+
+fn collect_shader_files(dir: &Path, found: &mut Vec<PathBuf>) -> Result<(), String> {
+    let mut entries: Vec<PathBuf> = fs::read_dir(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?
+        .flatten()
+        .map(|entry| entry.path())
+        .collect();
+    entries.sort();
+    for path in entries {
+        if path.is_dir() {
+            if path.file_name().is_some_and(|name| name != "include") {
+                collect_shader_files(&path, found)?;
+            }
+        } else if path.extension().is_some_and(|ext| ext == "wgsl") {
+            found.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// One shader file, translated.
+pub struct Translated {
+    /// The WGSL after preprocessing: what naga parsed, and what a WebGPU
+    /// backend will compile.
+    pub wgsl: String,
+    /// The GLSL ES 3.00 the WebGL backend compiles.
+    pub glsl: String,
+}
+
+/// Preprocess and translate the shader at `path`, taking its includes from
+/// `<root>/include/<name>.wgsl`.
+pub fn translate_file(root: &Path, path: &Path) -> Result<Translated, String> {
+    let include_dir = root.join("include");
+    let include = |name: &str| fs::read_to_string(include_dir.join(format!("{name}.wgsl"))).ok();
+    let source = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let wgsl = preprocess(&source, &include, &[]).map_err(|e| format!("{}: {e}", path.display()))?;
+    let glsl = wgsl_to_glsl(&wgsl).map_err(|e| format!("{}:\n{e}", path.display()))?;
+    Ok(Translated { wgsl, glsl })
+}
 
 /// The string preprocessing that runs before naga.
 ///
