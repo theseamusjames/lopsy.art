@@ -42,13 +42,13 @@ pub const LAB_COMMON: &str = include_str!("shaders/lab_common.glsl");
 pub const BLIT_RESAMPLE_FRAG: &str = translated!("blit_resample");
 pub const COMPOSITE_FRAG: &str = include_str!("shaders/composite.glsl");
 pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
-pub const FLIP_FRAG: &str = include_str!("shaders/flip.glsl");
+pub const FLIP_FRAG: &str = translated!("flip");
 pub const CLIPBOARD_COPY_FRAG: &str = include_str!("shaders/clipboard_copy.glsl");
 pub const CLIPBOARD_CLEAR_FRAG: &str = include_str!("shaders/clipboard_clear.glsl");
 pub const SELECTION_FILL_FRAG: &str = include_str!("shaders/selection_fill.glsl");
-pub const ROTATE90_FRAG: &str = include_str!("shaders/rotate90.glsl");
-pub const BLIT_REGION_FRAG: &str = include_str!("shaders/blit_region.glsl");
-pub const MASK_EXPAND_FRAG: &str = include_str!("shaders/mask_expand.glsl");
+pub const ROTATE90_FRAG: &str = translated!("rotate90");
+pub const BLIT_REGION_FRAG: &str = translated!("blit_region");
+pub const MASK_EXPAND_FRAG: &str = translated!("mask_expand");
 pub const MASK_REMAP_FRAG: &str = include_str!("shaders/mask_remap.glsl");
 pub const QUICK_MASK_TRANSLATE_FRAG: &str = include_str!("shaders/quick_mask_translate.glsl");
 pub const TRANSFORM_AFFINE_FRAG: &str = include_str!("shaders/transform_affine.glsl");
@@ -60,7 +60,7 @@ pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
 pub const LAYER_MASK_APPLY_FRAG: &str = include_str!("shaders/effects/layer_mask_apply.glsl");
 pub const SEPARABLE_EDT_FRAG: &str = include_str!("shaders/effects/separable_edt.glsl");
 pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
-pub const COLOR_OVERLAY_FRAG: &str = include_str!("shaders/effects/color_overlay.glsl");
+pub const COLOR_OVERLAY_FRAG: &str = translated!("effects/color_overlay");
 
 // Filters
 pub const GAUSSIAN_BLUR_FRAG: &str = include_str!("shaders/filters/gaussian_blur.glsl");
@@ -68,9 +68,9 @@ pub const BOX_BLUR_FRAG: &str = include_str!("shaders/filters/box_blur.glsl");
 pub const ADJUSTMENTS_FRAG: &str = include_str!("shaders/filters/adjustments.glsl");
 pub const HUE_SAT_FRAG: &str = include_str!("shaders/filters/hue_sat.glsl");
 pub const INVERT_FRAG: &str = translated!("filters/invert");
-pub const MASK_LUMINANCE_FRAG: &str = include_str!("shaders/filters/mask_luminance.glsl");
+pub const MASK_LUMINANCE_FRAG: &str = translated!("filters/mask_luminance");
 pub const POSTERIZE_FRAG: &str = translated!("filters/posterize");
-pub const THRESHOLD_FRAG: &str = include_str!("shaders/filters/threshold.glsl");
+pub const THRESHOLD_FRAG: &str = translated!("filters/threshold");
 pub const NOISE_FRAG: &str = include_str!("shaders/filters/noise.glsl");
 pub const SHARPEN_FRAG: &str = include_str!("shaders/filters/sharpen.glsl");
 pub const VIGNETTE_FRAG: &str = include_str!("shaders/filters/vignette.glsl");
@@ -148,7 +148,7 @@ pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = include_str!("shaders/shape/bucke
 pub const MARCHING_ANTS_FRAG: &str = include_str!("shaders/selection/marching_ants.glsl");
 
 // Color
-pub const COLOR_CONVERT_FRAG: &str = include_str!("shaders/color/color_convert.glsl");
+pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
 pub const TONEMAP_FRAG: &str = include_str!("shaders/color/tonemap.glsl");
 
 // Text
