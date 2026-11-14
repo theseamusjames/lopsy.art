@@ -7,15 +7,15 @@ use crate::Engine;
 
 #[wasm_bindgen(js_name = "saveFilterPreview")]
 pub fn save_filter_preview(engine: &mut Engine, layer_id: &str) {
-    crate::commands::filter::preview::save_filter_preview(&mut engine.inner, layer_id)
+    lopsy_engine::commands::filter::preview::save_filter_preview(&mut engine.inner, layer_id)
 }
 
 #[wasm_bindgen(js_name = "restoreFilterPreview")]
 pub fn restore_filter_preview(engine: &mut Engine) {
-    crate::commands::filter::preview::restore_filter_preview(&mut engine.inner)
+    lopsy_engine::commands::filter::preview::restore_filter_preview(&mut engine.inner)
 }
 
 #[wasm_bindgen(js_name = "clearFilterPreview")]
 pub fn clear_filter_preview(engine: &mut Engine) {
-    crate::commands::filter::preview::clear_filter_preview(&mut engine.inner)
+    lopsy_engine::commands::filter::preview::clear_filter_preview(&mut engine.inner)
 }

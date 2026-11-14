@@ -489,7 +489,7 @@ Single letter to select tool (e.g., `V` move, `B` brush, `E` eraser, `G` gradien
 
 ### Rust / WASM Rendering Engine
 - **Language**: Rust, compiled to WASM via `wasm-pack`.
-- **Crates**: `lopsy-core` (pure Rust utilities — blend math, color, geometry, compression) and `lopsy-wasm` (WebGL2 engine with `#[wasm_bindgen]` API surface).
+- **Crates**: `lopsy-core` (pure Rust utilities — blend math, color, geometry, compression), `lopsy-engine` (the WebGL2 engine, with no host) and `lopsy-wasm` (the browser host: the `#[wasm_bindgen]` API surface over the engine).
 - **Rendering**: WebGL2 exclusively. All compositing, brush rendering, filters, effects, gradients, and selection operations are GLSL shaders dispatched by the Rust engine. The compositor runs a fullscreen-quad pipeline each frame.
 - **GPU textures**: the engine owns all layer textures, stroke textures, selection masks, and layer masks. Texture allocation goes through a pool (`TexturePool`) supporting both `RGBA8` and `RGBA16F` formats.
 - **WASM bridge**: `src/engine-wasm/wasm-bridge.ts` provides typed wrappers around every `#[wasm_bindgen]` export. `engine-sync.ts` calls these wrappers to push state changes to the engine before each render.

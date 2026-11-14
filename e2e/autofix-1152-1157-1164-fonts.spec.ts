@@ -4,7 +4,7 @@
  * #1164 — the same for a condensed face (Barlow Condensed).
  *
  * Fonts are served offline from the fixtures in
- * engine-rs/crates/lopsy-wasm/tests/fixtures (see font-fixtures.ts).
+ * engine-rs/crates/lopsy-engine/tests/fixtures (see font-fixtures.ts).
  */
 import * as path from 'path';
 import { fileURLToPath } from 'url';

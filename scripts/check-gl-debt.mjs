@@ -15,10 +15,12 @@ import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
-const ENGINE_SRC = join(ROOT, 'engine-rs', 'crates', 'lopsy-wasm', 'src');
+const CRATES = join(ROOT, 'engine-rs', 'crates');
+// The engine, and the wasm host that binds it to JavaScript.
+const SCANNED = ['lopsy-engine', 'lopsy-wasm'];
 
 // The pass layer and its backend live here and are allowed raw GL.
-const BACKEND_DIR = 'gpu/';
+const BACKEND_DIR = 'lopsy-engine/src/gpu/';
 
 const PATTERN = /\bWebGl\w+|\bgl\.[a-z_0-9]+\(/g;
 
@@ -41,8 +43,9 @@ function countReferences(file) {
 }
 
 const counts = new Map();
-for (const file of walk(ENGINE_SRC)) {
-  const rel = relative(ENGINE_SRC, file).split(sep).join('/');
+const files = SCANNED.flatMap((crate) => walk(join(CRATES, crate, 'src')));
+for (const file of files) {
+  const rel = relative(CRATES, file).split(sep).join('/');
   if (rel.startsWith(BACKEND_DIR)) continue;
   const count = countReferences(file);
   if (count > 0) counts.set(rel, count);

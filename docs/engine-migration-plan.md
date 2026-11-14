@@ -13,8 +13,9 @@ Status: in progress.
 |---|---|
 | 0 | Done (#1643, #1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
 | 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
-| 2 | In review as one GitHub stack (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
-| 3–7 | Not started |
+| 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
+| 3 | 3.1 to 3.3 in review as one GitHub stack (#1693, #1694): the wasm exports are single calls, the engine reaches the browser only through `gpu/` and the host hooks, and it lives in its own crate, `lopsy-engine`. 3.4 and 3.5 not started |
+| 4–7 | Not started |
 
 ---
 
@@ -734,6 +735,29 @@ pipeline without the layer machinery.
 
 This differs from the earlier suggestion to do the imaging split during
 Phase 1. Keeping it separate makes both sets of PRs smaller.
+
+**As built (3.1 to 3.3).**
+
+- *3.1.* Every export in `lopsy-wasm/src/api/` is one call into the
+  function of the same name in `lopsy-engine/src/commands/`, which takes
+  `&mut EngineInner` and plain Rust values and returns `Result<_,
+  String>` where it can fail. The 284 bodies were moved by script and
+  are otherwise unchanged. Doc comments went with them, so the generated
+  `.d.ts` no longer carries any; the exported signatures are identical.
+- *3.2.* `host.rs` holds what the engine asks of its host: a log
+  function and a clock, installed by `createEngine`. A canvas passed in
+  for upload is `gpu::ExternalImage`, the backend's name for a
+  host-owned image. Outside `gpu/` the engine names no browser type.
+- *3.3.* Two commits, not one per module family: the GPU layer and host
+  hooks first, which depend on nothing else, then everything else at
+  once, because every other module reaches `EngineInner` and
+  `EngineInner` holds a field from most of them. Files kept their names
+  and relative paths. `lopsy-engine` still depends on `web-sys` and
+  `wasm-bindgen` for the WebGL backend; it has no `#[wasm_bindgen]`
+  item. The wasm grew 0.35% from the split, 0.45% over the two PRs.
+
+Verification is in the two PRs: a whole-suite comparison against the
+engine as it was before Phase 3, for each.
 
 ### Phase 4 — Async readbacks
 

@@ -357,7 +357,7 @@ This plan was verified against the actual codebase (not just SPEC.md or FEATURES
 
 These features were identified as gaps in the original analysis but have since been implemented:
 
-- **Native font handling in engine** (was Tier 2 #10) — Implemented via cosmic-text + swash + GPU glyph atlas in `engine-rs/crates/lopsy-wasm/`. Commits: `d25f3b2`, `9bd58e5`. Supports TTF/OTF/WOFF2, 1700+ Google Fonts, resolution-independent rendering. This was the single highest-payoff item on the roadmap — it deletes the entire "architectural gap" in Section 7 and unblocks text-on-path, underline/strikethrough, and other text features as independent items rather than blocked dependencies.
+- **Native font handling in engine** (was Tier 2 #10) — Implemented via cosmic-text + swash + GPU glyph atlas in `engine-rs/crates/lopsy-engine/`. Commits: `d25f3b2`, `9bd58e5`. Supports TTF/OTF/WOFF2, 1700+ Google Fonts, resolution-independent rendering. This was the single highest-payoff item on the roadmap — it deletes the entire "architectural gap" in Section 7 and unblocks text-on-path, underline/strikethrough, and other text features as independent items rather than blocked dependencies.
 - **Tilt-Shift Blur** (was in Section 4 Filters gap table) — Implemented with interactive canvas overlay: draggable focal boundary lines, circular angle control at document center, floating panel for blur radius + apply/cancel. Cmd-drag snaps angle to 15° increments. Commit: `5b200e7` (feature branch, pending merge to main).
 - **Bloom / Soft Glow** — GPU filter with threshold, soft knee, radius, and intensity controls. Commit: `c4545b6` (PR #272, on main).
 

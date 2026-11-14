@@ -17,7 +17,7 @@ pub fn bucket_fill_solid(
     sel_w: u32,
     sel_h: u32,
 ) {
-    crate::commands::fill::bucket_fill_solid(&mut engine.inner, layer_id, fill_r, fill_g, fill_b, fill_a, selection_mask, sel_w, sel_h)
+    lopsy_engine::commands::fill::bucket_fill_solid(&mut engine.inner, layer_id, fill_r, fill_g, fill_b, fill_a, selection_mask, sel_w, sel_h)
 }
 
 #[wasm_bindgen(js_name = "bucketFillByColorGpu")]
@@ -35,7 +35,7 @@ pub fn bucket_fill_by_color_gpu(
     sel_w: u32,
     sel_h: u32,
 ) {
-    crate::commands::fill::bucket_fill_by_color_gpu(&mut engine.inner, layer_id, doc_x, doc_y, fill_r, fill_g, fill_b, fill_a, tolerance, selection_mask, sel_w, sel_h)
+    lopsy_engine::commands::fill::bucket_fill_by_color_gpu(&mut engine.inner, layer_id, doc_x, doc_y, fill_r, fill_g, fill_b, fill_a, tolerance, selection_mask, sel_w, sel_h)
 }
 
 #[wasm_bindgen(js_name = "floodFill")]
@@ -52,7 +52,7 @@ pub fn flood_fill(
     tolerance: u32,
     contiguous: bool,
 ) -> Vec<u8> {
-    crate::commands::fill::flood_fill(pixel_data, width, height, start_x, start_y, _fill_r, _fill_g, _fill_b, _fill_a, tolerance, contiguous)
+    lopsy_engine::commands::fill::flood_fill(pixel_data, width, height, start_x, start_y, _fill_r, _fill_g, _fill_b, _fill_a, tolerance, contiguous)
 }
 
 #[wasm_bindgen(js_name = "floodFillGraduated")]
@@ -65,7 +65,7 @@ pub fn flood_fill_graduated(
     tolerance: u32,
     contiguous: bool,
 ) -> Vec<u8> {
-    crate::commands::fill::flood_fill_graduated(pixel_data, width, height, start_x, start_y, tolerance, contiguous)
+    lopsy_engine::commands::fill::flood_fill_graduated(pixel_data, width, height, start_x, start_y, tolerance, contiguous)
 }
 
 #[wasm_bindgen(js_name = "applyFillToLayer")]
@@ -80,10 +80,10 @@ pub fn apply_fill_to_layer(
     width: u32,
     height: u32,
 ) {
-    crate::commands::fill::apply_fill_to_layer(&mut engine.inner, layer_id, fill_r, fill_g, fill_b, fill_a, mask, width, height)
+    lopsy_engine::commands::fill::apply_fill_to_layer(&mut engine.inner, layer_id, fill_r, fill_g, fill_b, fill_a, mask, width, height)
 }
 
 #[wasm_bindgen(js_name = "readLayerPixelsForFill")]
 pub fn read_layer_pixels_for_fill(engine: &Engine, layer_id: &str) -> Result<Vec<u8>, JsError> {
-    crate::commands::fill::read_layer_pixels_for_fill(&engine.inner, layer_id).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::fill::read_layer_pixels_for_fill(&engine.inner, layer_id).map_err(|e| JsError::new(&e))
 }

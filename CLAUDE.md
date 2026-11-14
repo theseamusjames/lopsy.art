@@ -20,7 +20,7 @@ Read SPEC.md for the full product specification.
   for each.
 - `docs/engine-migration-plan.md` — the plan for moving the engine off
   raw WebGL onto a pass layer and then wgpu. Feature code must not add
-  raw GL calls outside `engine-rs/crates/lopsy-wasm/src/gpu/`;
+  raw GL calls outside `engine-rs/crates/lopsy-engine/src/gpu/`;
   the WebGL context is private to that directory, and
   `scripts/check-gl-debt.mjs` (part of `npm run lint`) fails on any GL
   type or call named outside it.
@@ -109,7 +109,9 @@ engine-rs/          # Rust/WASM rendering engine (see below)
 
 ## Rust/WASM Engine (`engine-rs/`)
 
-The rendering engine is split into two crates:
+The rendering engine is split into three crates. `lopsy-core` is CPU-only,
+`lopsy-engine` is the engine with no host, and `lopsy-wasm` is the browser
+host that `wasm-pack` builds:
 
 ```
 engine-rs/
@@ -125,9 +127,14 @@ engine-rs/
         sparse.rs       # Sparse pixel storage (from_sparse, to_sparse)
         flood_fill.rs   # Bucket fill algorithm
         selection.rs    # Selection mask operations
-    lopsy-wasm/       # WebGL2 engine, compiled to WASM
+    lopsy-wasm/       # Browser host: wasm-bindgen exports only
       src/
-        lib.rs            # #[wasm_bindgen] API surface — all JS-callable functions
+        lib.rs            # Engine handle, createEngine, a few CPU helpers
+        api/              # One export per command; each is a single call
+    lopsy-engine/     # WebGL2 engine. No #[wasm_bindgen] anywhere
+      src/
+        commands/         # What a host can ask for: plain Rust in, Result<_, String> out
+        host.rs           # Logging and clock, installed by the host
         engine.rs         # EngineInner struct: holds all GPU state
         compositor.rs     # Per-frame compositing pipeline
         layer_manager.rs  # Texture upload/read/duplicate for layers
@@ -180,6 +187,15 @@ gpu/shaders/
   selection/
     marching_ants.glsl    # Animated selection outline
 ```
+
+### Adding an engine function JS can call
+
+Write the logic as a function in `lopsy-engine/src/commands/` that takes
+`&mut EngineInner` and plain Rust values, then add a one-line
+`#[wasm_bindgen]` export in `lopsy-wasm/src/api/` that calls it. An export
+never holds logic, and nothing in `lopsy-engine` outside `gpu/` names
+`wasm_bindgen`, `web_sys` or `js_sys`: log through `host::log` and read the
+time with `host::now_ms`.
 
 ### Shader uniforms
 
