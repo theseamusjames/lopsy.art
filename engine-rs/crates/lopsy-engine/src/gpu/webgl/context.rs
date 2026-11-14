@@ -1,8 +1,9 @@
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 use wasm_bindgen::JsCast;
 
-use crate::gpu::framebuffer::FramebufferPool;
-use crate::gpu::texture_pool::TexturePool;
+use super::framebuffer::FramebufferPool;
+use super::program::Linker;
+use super::texture_pool::TexturePool;
 
 pub struct GpuContext {
     /// The WebGL context. Nothing outside `gpu/` can reach it: feature code
@@ -68,6 +69,11 @@ impl GpuContext {
             TexturePool::new(&self.gl, self.has_half_float, self.max_texture_size()),
             FramebufferPool::new(&self.gl),
         )
+    }
+
+    /// What compiles this context's shaders.
+    pub(in crate::gpu) fn linker(&self) -> Linker {
+        Linker::new(&self.gl)
     }
 
     /// Largest texture edge the context accepts, or `u32::MAX` if it does

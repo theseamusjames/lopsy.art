@@ -1,11 +1,13 @@
-pub mod context;
-pub mod shader;
-pub mod texture_pool;
-pub mod framebuffer;
+//! The engine's GPU layer. Feature code draws through [`pass`] and
+//! allocates through the pools; which graphics API that reaches is the
+//! backend's business.
+
 pub mod params;
 pub mod pass;
+pub mod shader;
 pub mod uniforms;
 
-/// An image the host owns that a texture can be filled from. On the web
-/// this is a canvas; each backend names its own.
-pub type ExternalImage = web_sys::HtmlCanvasElement;
+#[path = "webgl/mod.rs"]
+mod backend;
+
+pub use backend::{context, framebuffer, texture_pool, ExternalImage};

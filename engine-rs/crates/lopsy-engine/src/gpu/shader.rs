@@ -3,21 +3,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
-use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
 
+use crate::gpu::backend::program::{LinkedProgram, Linker};
 use crate::gpu::params;
-use crate::gpu::uniforms::{flatten_params_block, glsl_name, Field, UniformSink, UniformType, Uniforms};
-
-pub const FULLSCREEN_QUAD_VERT: &str = r#"#version 300 es
-precision highp float;
-out vec2 v_uv;
-void main() {
-    float x = float((gl_VertexID & 1) << 2) - 1.0;
-    float y = float((gl_VertexID & 2) << 1) - 1.0;
-    v_uv = vec2(x * 0.5 + 0.5, y * 0.5 + 0.5);
-    gl_Position = vec4(x, y, 0.0, 1.0);
-}
-"#;
+use crate::gpu::uniforms::Uniforms;
 
 /// A fragment shader written in WGSL (`shaders/<path>.wgsl`) and translated
 /// to GLSL ES 3.00 by the build script: see `lopsy-shaderc`.
@@ -275,206 +264,15 @@ pub struct ShaderProgram<P> {
     marker: PhantomData<fn(P)>,
 }
 
-/// The part of a [`ShaderProgram`] that does not depend on its uniform
-/// struct. Everything that works on a program takes this, so that code is
-/// compiled once and not once per shader.
-pub(in crate::gpu) struct LinkedProgram {
-    pub(in crate::gpu) program: WebGlProgram,
-    uniforms: RefCell<HashMap<String, Option<WebGlUniformLocation>>>,
-    params: RefCell<Option<ParamState>>,
-}
-
-/// Where a typed program's `Params` members live, and the values they hold.
-struct ParamState {
-    /// One per field of the uniform struct; `None` where the compiler
-    /// dropped a member the shader variant does not read.
-    locations: Vec<Option<WebGlUniformLocation>>,
-    /// The bits last uploaded, field after field.
-    values: Vec<u32>,
-    is_uploaded: bool,
-}
-
-/// Sets the members whose value differs from what the program holds.
-struct ParamUpload<'a> {
-    gl: &'a WebGl2RenderingContext,
-    state: &'a mut ParamState,
-    field: usize,
-    offset: usize,
-}
-
-impl ParamUpload<'_> {
-    /// Records `bits` as the next field's value. Returns the field's
-    /// location if the value has to be sent.
-    fn store(&mut self, bits: impl ExactSizeIterator<Item = u32> + Clone) -> Option<&WebGlUniformLocation> {
-        let held = &mut self.state.values[self.offset..self.offset + bits.len()];
-        let field = self.field;
-        self.field += 1;
-        self.offset += bits.len();
-        if self.state.is_uploaded && held.iter().copied().eq(bits.clone()) {
-            return None;
-        }
-        for (slot, value) in held.iter_mut().zip(bits) {
-            *slot = value;
-        }
-        self.state.locations[field].as_ref()
-    }
-}
-
-impl UniformSink for ParamUpload<'_> {
-    fn floats(&mut self, ty: UniformType, values: &[f32]) {
-        let gl = self.gl;
-        let Some(location) = self.store(values.iter().map(|v| v.to_bits())) else { return };
-        let location = Some(location);
-        match ty {
-            UniformType::Float => gl.uniform1f(location, values[0]),
-            UniformType::Vec2 => gl.uniform2f(location, values[0], values[1]),
-            UniformType::Vec3 => gl.uniform3f(location, values[0], values[1], values[2]),
-            UniformType::Vec4 => gl.uniform4f(location, values[0], values[1], values[2], values[3]),
-            UniformType::Mat2 => gl.uniform_matrix2fv_with_f32_array(location, false, values),
-            UniformType::Mat3 => gl.uniform_matrix3fv_with_f32_array(location, false, values),
-            UniformType::Vec4Array(_) => gl.uniform4fv_with_f32_array(location, values),
-            UniformType::Int | UniformType::Uint | UniformType::IVec2 => {}
-        }
-    }
-
-    fn ints(&mut self, ty: UniformType, values: &[i32]) {
-        let gl = self.gl;
-        let Some(location) = self.store(values.iter().map(|v| *v as u32)) else { return };
-        let location = Some(location);
-        match ty {
-            UniformType::Int => gl.uniform1i(location, values[0]),
-            UniformType::Uint => gl.uniform1ui(location, values[0] as u32),
-            UniformType::IVec2 => gl.uniform2i(location, values[0], values[1]),
-            _ => {}
-        }
-    }
-}
-
-impl LinkedProgram {
-    fn new(program: WebGlProgram) -> Self {
-        Self { program, uniforms: RefCell::new(HashMap::new()), params: RefCell::new(None) }
-    }
-
-    /// Calls `set` with the location of uniform `name`, if the program has
-    /// one. Locations are cached, and handed out by reference: cloning one
-    /// is a round trip into JS and back, which at a dozen uniforms a pass
-    /// was a large part of what a pass cost on the CPU.
-    pub(in crate::gpu) fn with_location(&self, gl: &WebGl2RenderingContext, name: &str, set: impl FnOnce(&WebGlUniformLocation)) {
-        if !self.uniforms.borrow().contains_key(name) {
-            let location = gl.get_uniform_location(&self.program, name);
-            self.uniforms.borrow_mut().insert(name.to_string(), location);
-        }
-        if let Some(Some(location)) = self.uniforms.borrow().get(name) {
-            set(location);
-        }
-    }
-
-    /// The location of uniform `name`, cloned for a caller that keeps it.
-    pub(in crate::gpu) fn location(&self, gl: &WebGl2RenderingContext, name: &str) -> Option<WebGlUniformLocation> {
-        let mut location = None;
-        self.with_location(gl, name, |found| location = Some(found.clone()));
-        location
-    }
-
-    /// Makes the program's `Params` members hold the struct that `put`
-    /// hands over, whose fields are `fields`. The program must be current.
-    /// A member is only sent when its value changed: uniforms belong to the
-    /// program and keep their value between passes, and they are written
-    /// nowhere else.
-    fn upload(&self, gl: &WebGl2RenderingContext, fields: &'static [Field], put: &dyn Fn(&mut ParamUpload)) {
-        if fields.is_empty() {
-            return;
-        }
-        let mut state = self.params.borrow_mut();
-        let state = state.get_or_insert_with(|| ParamState {
-            locations: fields
-                .iter()
-                .map(|field| gl.get_uniform_location(&self.program, &glsl_name(field.name)))
-                .collect(),
-            values: vec![0; fields.iter().map(|field| field.ty.components()).sum()],
-            is_uploaded: false,
-        });
-        put(&mut ParamUpload { gl, state, field: 0, offset: 0 });
-        state.is_uploaded = true;
-    }
-}
-
 impl<P> ShaderProgram<P> {
     pub(in crate::gpu) fn linked(&self) -> &LinkedProgram {
         &self.linked
     }
 }
 
-/// Uploads `params` as `program`'s uniforms. `P` is the struct the program
-/// was compiled for; see [`LinkedProgram::upload`].
-pub(in crate::gpu) fn upload_params<P: Uniforms>(program: &LinkedProgram, gl: &WebGl2RenderingContext, params: &P) {
-    program.upload(gl, P::FIELDS, &|sink| params.put(sink));
-}
-
-pub fn compile_shader(
-    gl: &WebGl2RenderingContext,
-    source: &str,
-    shader_type: u32,
-) -> Result<WebGlShader, String> {
-    let shader = gl.create_shader(shader_type).ok_or("Failed to create shader")?;
-    gl.shader_source(&shader, source);
-    gl.compile_shader(&shader);
-
-    if gl.get_shader_parameter(&shader, WebGl2RenderingContext::COMPILE_STATUS)
-        .as_bool()
-        .unwrap_or(false)
-    {
-        Ok(shader)
-    } else {
-        let log = gl.get_shader_info_log(&shader).unwrap_or_default();
-        gl.delete_shader(Some(&shader));
-        Err(format!("Shader compile error: {log}"))
-    }
-}
-
-pub fn link_program(
-    gl: &WebGl2RenderingContext,
-    vert: &WebGlShader,
-    frag: &WebGlShader,
-) -> Result<WebGlProgram, String> {
-    let program = gl.create_program().ok_or("Failed to create program")?;
-    gl.attach_shader(&program, vert);
-    gl.attach_shader(&program, frag);
-    gl.link_program(&program);
-
-    if gl.get_program_parameter(&program, WebGl2RenderingContext::LINK_STATUS)
-        .as_bool()
-        .unwrap_or(false)
-    {
-        Ok(program)
-    } else {
-        let log = gl.get_program_info_log(&program).unwrap_or_default();
-        gl.delete_program(Some(&program));
-        Err(format!("Program link error: {log}"))
-    }
-}
-
 /// Compiles a shader that takes the uniform struct `P`.
-pub fn compile<P: Uniforms>(
-    gl: &WebGl2RenderingContext,
-    vert_src: &str,
-    shader: &Shader<P>,
-) -> Result<ShaderProgram<P>, String> {
-    Ok(ShaderProgram { linked: link(gl, vert_src, shader.frag)?, marker: PhantomData })
-}
-
-fn link(
-    gl: &WebGl2RenderingContext,
-    vert_src: &str,
-    frag_src: &str,
-) -> Result<LinkedProgram, String> {
-    let frag_src = flatten_params_block(frag_src);
-    let vert = compile_shader(gl, vert_src, WebGl2RenderingContext::VERTEX_SHADER)?;
-    let frag = compile_shader(gl, &frag_src, WebGl2RenderingContext::FRAGMENT_SHADER)?;
-    let program = link_program(gl, &vert, &frag)?;
-    gl.delete_shader(Some(&vert));
-    gl.delete_shader(Some(&frag));
-    Ok(LinkedProgram::new(program))
+fn compile<P: Uniforms>(linker: &Linker, shader: &Shader<P>) -> Result<ShaderProgram<P>, String> {
+    Ok(ShaderProgram { linked: linker.link(shader.frag)?, marker: PhantomData })
 }
 
 pub struct ShaderPrograms {
@@ -491,7 +289,7 @@ pub struct ShaderPrograms {
     /// cache — locations must never be shared across program variants.
     blend_variants: RefCell<HashMap<i32, Rc<ShaderProgram<params::composite::BlendParams>>>>,
     /// For compiling a blend variant the first time a document uses its mode.
-    gl: WebGl2RenderingContext,
+    linker: Linker,
     pub composite: ShaderProgram<params::composite::CompositeParams>,
     pub final_blit: ShaderProgram<params::composite::FinalBlitParams>,
     pub flip: ShaderProgram<params::core::FlipParams>,
@@ -584,11 +382,11 @@ pub struct ShaderPrograms {
 
 /// Compiles the blend shader specialized for a single blend mode.
 fn compile_blend_variant(
-    gl: &WebGl2RenderingContext,
+    linker: &Linker,
     mode: i32,
 ) -> Result<ShaderProgram<params::composite::BlendParams>, String> {
     let source = BLEND_SOURCES.source(mode as usize);
-    Ok(ShaderProgram { linked: link(gl, FULLSCREEN_QUAD_VERT, &source)?, marker: PhantomData })
+    Ok(ShaderProgram { linked: linker.link(&source)?, marker: PhantomData })
 }
 
 impl ShaderPrograms {
@@ -603,116 +401,115 @@ impl ShaderPrograms {
         if let Some(program) = self.blend_variants.borrow().get(&mode) {
             return Ok(Rc::clone(program));
         }
-        let program = Rc::new(compile_blend_variant(&self.gl, mode)?);
+        let program = Rc::new(compile_blend_variant(&self.linker, mode)?);
         self.blend_variants.borrow_mut().insert(mode, Rc::clone(&program));
         Ok(program)
     }
 
     pub fn compile_all(ctx: &crate::gpu::context::GpuContext) -> Result<Self, String> {
-        let gl = &ctx.gl;
-        let v = FULLSCREEN_QUAD_VERT;
+        let linker = &ctx.linker();
 
         // Normal mode is seeded eagerly: it was compiled at startup before
         // specialization too, so this keeps startup cost unchanged while
         // letting fixed Normal-mode passes grab it infallibly.
-        let blend_normal = Rc::new(compile_blend_variant(gl, 0)?);
+        let blend_normal = Rc::new(compile_blend_variant(linker, 0)?);
         let blend_variants = RefCell::new(HashMap::from([(0, Rc::clone(&blend_normal))]));
 
         Ok(Self {
             // Core
-            blit: compile(gl, v, &BLIT)?,
-            thumbnail_box: compile(gl, v, &THUMBNAIL_BOX)?,
-            blit_resample: compile(gl, v, &BLIT_RESAMPLE)?,
+            blit: compile(linker, &BLIT)?,
+            thumbnail_box: compile(linker, &THUMBNAIL_BOX)?,
+            blit_resample: compile(linker, &BLIT_RESAMPLE)?,
             blend_normal,
             blend_variants,
-            gl: gl.clone(),
-            composite: compile(gl, v, &COMPOSITE)?,
-            final_blit: compile(gl, v, &FINAL_BLIT)?,
-            flip: compile(gl, v, &FLIP)?,
-            clipboard_copy: compile(gl, v, &CLIPBOARD_COPY)?,
-            layer_mask_apply: compile(gl, v, &LAYER_MASK_APPLY)?,
-            clipboard_clear: compile(gl, v, &CLIPBOARD_CLEAR)?,
-            selection_fill: compile(gl, v, &SELECTION_FILL)?,
-            rotate90: compile(gl, v, &ROTATE90)?,
-            blit_region: compile(gl, v, &BLIT_REGION)?,
-            mask_expand: compile(gl, v, &MASK_EXPAND)?,
-            mask_remap: compile(gl, v, &MASK_REMAP)?,
-            quick_mask_translate: compile(gl, v, &QUICK_MASK_TRANSLATE)?,
-            transform_affine: compile(gl, v, &TRANSFORM_AFFINE)?,
-            transform_perspective: compile(gl, v, &TRANSFORM_PERSPECTIVE)?,
+            linker: linker.clone(),
+            composite: compile(linker, &COMPOSITE)?,
+            final_blit: compile(linker, &FINAL_BLIT)?,
+            flip: compile(linker, &FLIP)?,
+            clipboard_copy: compile(linker, &CLIPBOARD_COPY)?,
+            layer_mask_apply: compile(linker, &LAYER_MASK_APPLY)?,
+            clipboard_clear: compile(linker, &CLIPBOARD_CLEAR)?,
+            selection_fill: compile(linker, &SELECTION_FILL)?,
+            rotate90: compile(linker, &ROTATE90)?,
+            blit_region: compile(linker, &BLIT_REGION)?,
+            mask_expand: compile(linker, &MASK_EXPAND)?,
+            mask_remap: compile(linker, &MASK_REMAP)?,
+            quick_mask_translate: compile(linker, &QUICK_MASK_TRANSLATE)?,
+            transform_affine: compile(linker, &TRANSFORM_AFFINE)?,
+            transform_perspective: compile(linker, &TRANSFORM_PERSPECTIVE)?,
             // Effects
-            glow: compile(gl, v, &GLOW)?,
-            shadow: compile(gl, v, &SHADOW)?,
-            separable_edt: compile(gl, v, &SEPARABLE_EDT)?,
-            stroke_apply: compile(gl, v, &STROKE_APPLY)?,
+            glow: compile(linker, &GLOW)?,
+            shadow: compile(linker, &SHADOW)?,
+            separable_edt: compile(linker, &SEPARABLE_EDT)?,
+            stroke_apply: compile(linker, &STROKE_APPLY)?,
             // Filters
-            gaussian_blur: compile(gl, v, &GAUSSIAN_BLUR)?,
-            box_blur: compile(gl, v, &BOX_BLUR)?,
-            adjustments: compile(gl, v, &ADJUSTMENTS)?,
-            hue_sat: compile(gl, v, &HUE_SAT)?,
-            invert: compile(gl, v, &INVERT)?,
-            posterize: compile(gl, v, &POSTERIZE)?,
-            threshold: compile(gl, v, &THRESHOLD)?,
-            noise: compile(gl, v, &NOISE)?,
-            sharpen: compile(gl, v, &SHARPEN)?,
-            vignette: compile(gl, v, &VIGNETTE)?,
-            motion_blur: compile(gl, v, &MOTION_BLUR)?,
-            radial_blur: compile(gl, v, &RADIAL_BLUR)?,
-            find_edges: compile(gl, v, &FIND_EDGES)?,
-            cel_shading: compile(gl, v, &CEL_SHADING)?,
-            clouds: compile(gl, v, &CLOUDS)?,
-            smoke: compile(gl, v, &SMOKE)?,
-            pixelate: compile(gl, v, &PIXELATE)?,
-            pixelate_blocks: compile(gl, v, &PIXELATE_BLOCKS)?,
-            halftone: compile(gl, v, &HALFTONE)?,
-            solarize: compile(gl, v, &SOLARIZE)?,
-            kaleidoscope: compile(gl, v, &KALEIDOSCOPE)?,
-            oil_paint: compile(gl, v, &OIL_PAINT)?,
-            chromatic_aberration: compile(gl, v, &CHROMATIC_ABERRATION)?,
-            pixel_stretch: compile(gl, v, &PIXEL_STRETCH)?,
-            lens_distortion: compile(gl, v, &LENS_DISTORTION)?,
-            pattern_fill: compile(gl, v, &PATTERN_FILL)?,
-            mesh_warp: compile(gl, v, &MESH_WARP)?,
-            liquify_warp: compile(gl, v, &LIQUIFY_WARP)?,
-            bloom_threshold: compile(gl, v, &BLOOM_THRESHOLD)?,
-            bloom_combine: compile(gl, v, &BLOOM_COMBINE)?,
-            tilt_shift_blur: compile(gl, v, &TILT_SHIFT_BLUR)?,
-            emboss: compile(gl, v, &EMBOSS)?,
-            voronoi: compile(gl, v, &VORONOI)?,
-            selection_mask_blend: compile(gl, v, &SELECTION_MASK_BLEND)?,
-            surface_blur: compile(gl, v, &SURFACE_BLUR)?,
-            fibers: compile(gl, v, &FIBERS)?,
-            sunburst: compile(gl, v, &SUNBURST)?,
-            color_lut: compile(gl, v, &COLOR_LUT)?,
-            texture: compile(gl, v, &TEXTURE)?,
+            gaussian_blur: compile(linker, &GAUSSIAN_BLUR)?,
+            box_blur: compile(linker, &BOX_BLUR)?,
+            adjustments: compile(linker, &ADJUSTMENTS)?,
+            hue_sat: compile(linker, &HUE_SAT)?,
+            invert: compile(linker, &INVERT)?,
+            posterize: compile(linker, &POSTERIZE)?,
+            threshold: compile(linker, &THRESHOLD)?,
+            noise: compile(linker, &NOISE)?,
+            sharpen: compile(linker, &SHARPEN)?,
+            vignette: compile(linker, &VIGNETTE)?,
+            motion_blur: compile(linker, &MOTION_BLUR)?,
+            radial_blur: compile(linker, &RADIAL_BLUR)?,
+            find_edges: compile(linker, &FIND_EDGES)?,
+            cel_shading: compile(linker, &CEL_SHADING)?,
+            clouds: compile(linker, &CLOUDS)?,
+            smoke: compile(linker, &SMOKE)?,
+            pixelate: compile(linker, &PIXELATE)?,
+            pixelate_blocks: compile(linker, &PIXELATE_BLOCKS)?,
+            halftone: compile(linker, &HALFTONE)?,
+            solarize: compile(linker, &SOLARIZE)?,
+            kaleidoscope: compile(linker, &KALEIDOSCOPE)?,
+            oil_paint: compile(linker, &OIL_PAINT)?,
+            chromatic_aberration: compile(linker, &CHROMATIC_ABERRATION)?,
+            pixel_stretch: compile(linker, &PIXEL_STRETCH)?,
+            lens_distortion: compile(linker, &LENS_DISTORTION)?,
+            pattern_fill: compile(linker, &PATTERN_FILL)?,
+            mesh_warp: compile(linker, &MESH_WARP)?,
+            liquify_warp: compile(linker, &LIQUIFY_WARP)?,
+            bloom_threshold: compile(linker, &BLOOM_THRESHOLD)?,
+            bloom_combine: compile(linker, &BLOOM_COMBINE)?,
+            tilt_shift_blur: compile(linker, &TILT_SHIFT_BLUR)?,
+            emboss: compile(linker, &EMBOSS)?,
+            voronoi: compile(linker, &VORONOI)?,
+            selection_mask_blend: compile(linker, &SELECTION_MASK_BLEND)?,
+            surface_blur: compile(linker, &SURFACE_BLUR)?,
+            fibers: compile(linker, &FIBERS)?,
+            sunburst: compile(linker, &SUNBURST)?,
+            color_lut: compile(linker, &COLOR_LUT)?,
+            texture: compile(linker, &TEXTURE)?,
             // Brush — assembled from header + variant body + footer
-            brush_dab_circle: compile(gl, v, &BRUSH_DAB_CIRCLE)?,
-            brush_dab_alpha: compile(gl, v, &BRUSH_DAB_ALPHA)?,
-            brush_dab_color: compile(gl, v, &BRUSH_DAB_COLOR)?,
-            eraser_dab: compile(gl, v, &ERASER_DAB)?,
-            pencil_dab: compile(gl, v, &PENCIL_DAB)?,
-            quick_mask_dab: compile(gl, v, &QUICK_MASK_DAB)?,
-            content_bounds_reduce: compile(gl, v, &CONTENT_BOUNDS_REDUCE)?,
-            dodge_burn: compile(gl, v, &DODGE_BURN)?,
-            dodge_burn_dab: compile(gl, v, &DODGE_BURN_DAB)?,
-            smudge_dab: compile(gl, v, &SMUDGE_DAB)?,
-            clone_stamp: compile(gl, v, &CLONE_STAMP)?,
-            healing_dab: compile(gl, v, &HEALING_DAB)?,
-            healing_mean: compile(gl, v, &HEALING_MEAN)?,
-            sponge: compile(gl, v, &SPONGE)?,
-            stamp_preview: compile(gl, v, &STAMP_PREVIEW)?,
+            brush_dab_circle: compile(linker, &BRUSH_DAB_CIRCLE)?,
+            brush_dab_alpha: compile(linker, &BRUSH_DAB_ALPHA)?,
+            brush_dab_color: compile(linker, &BRUSH_DAB_COLOR)?,
+            eraser_dab: compile(linker, &ERASER_DAB)?,
+            pencil_dab: compile(linker, &PENCIL_DAB)?,
+            quick_mask_dab: compile(linker, &QUICK_MASK_DAB)?,
+            content_bounds_reduce: compile(linker, &CONTENT_BOUNDS_REDUCE)?,
+            dodge_burn: compile(linker, &DODGE_BURN)?,
+            dodge_burn_dab: compile(linker, &DODGE_BURN_DAB)?,
+            smudge_dab: compile(linker, &SMUDGE_DAB)?,
+            clone_stamp: compile(linker, &CLONE_STAMP)?,
+            healing_dab: compile(linker, &HEALING_DAB)?,
+            healing_mean: compile(linker, &HEALING_MEAN)?,
+            sponge: compile(linker, &SPONGE)?,
+            stamp_preview: compile(linker, &STAMP_PREVIEW)?,
             // Gradient
-            gradient_linear: compile(gl, v, &GRADIENT_LINEAR)?,
-            gradient_radial: compile(gl, v, &GRADIENT_RADIAL)?,
+            gradient_linear: compile(linker, &GRADIENT_LINEAR)?,
+            gradient_radial: compile(linker, &GRADIENT_RADIAL)?,
             // Shape
-            shape_fill: compile(gl, v, &SHAPE_FILL)?,
-            flood_fill_apply: compile(gl, v, &FLOOD_FILL_APPLY)?,
-            bucket_fill_color_match: compile(gl, v, &BUCKET_FILL_COLOR_MATCH)?,
+            shape_fill: compile(linker, &SHAPE_FILL)?,
+            flood_fill_apply: compile(linker, &FLOOD_FILL_APPLY)?,
+            bucket_fill_color_match: compile(linker, &BUCKET_FILL_COLOR_MATCH)?,
             // Selection
             // Color
-            color_convert: compile(gl, v, &COLOR_CONVERT)?,
-            mask_luminance: compile(gl, v, &MASK_LUMINANCE)?,
-            liquify_dab: compile(gl, v, &LIQUIFY_DAB)?,
+            color_convert: compile(linker, &COLOR_CONVERT)?,
+            mask_luminance: compile(linker, &MASK_LUMINANCE)?,
+            liquify_dab: compile(linker, &LIQUIFY_DAB)?,
             // Text
         })
     }
