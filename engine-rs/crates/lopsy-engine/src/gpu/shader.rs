@@ -72,35 +72,35 @@ pub const POSTERIZE_FRAG: &str = translated!("filters/posterize");
 pub const THRESHOLD_FRAG: &str = translated!("filters/threshold");
 pub const NOISE_FRAG: &str = include_str!("shaders/filters/noise.glsl");
 pub const SHARPEN_FRAG: &str = translated!("filters/sharpen");
-pub const VIGNETTE_FRAG: &str = include_str!("shaders/filters/vignette.glsl");
-pub const MOTION_BLUR_FRAG: &str = include_str!("shaders/filters/motion_blur.glsl");
-pub const RADIAL_BLUR_FRAG: &str = include_str!("shaders/filters/radial_blur.glsl");
-pub const FIND_EDGES_FRAG: &str = include_str!("shaders/filters/find_edges.glsl");
-pub const CEL_SHADING_FRAG: &str = include_str!("shaders/filters/cel_shading.glsl");
-pub const CLOUDS_FRAG: &str = include_str!("shaders/filters/clouds.glsl");
-pub const SMOKE_FRAG: &str = include_str!("shaders/filters/smoke.glsl");
+pub const VIGNETTE_FRAG: &str = translated!("filters/vignette");
+pub const MOTION_BLUR_FRAG: &str = translated!("filters/motion_blur");
+pub const RADIAL_BLUR_FRAG: &str = translated!("filters/radial_blur");
+pub const FIND_EDGES_FRAG: &str = translated!("filters/find_edges");
+pub const CEL_SHADING_FRAG: &str = translated!("filters/cel_shading");
+pub const CLOUDS_FRAG: &str = translated!("filters/clouds");
+pub const SMOKE_FRAG: &str = translated!("filters/smoke");
 pub const PIXELATE_FRAG: &str = translated!("filters/pixelate");
-pub const PIXELATE_BLOCKS_FRAG: &str = include_str!("shaders/filters/pixelate_blocks.glsl");
-pub const HALFTONE_FRAG: &str = include_str!("shaders/filters/halftone.glsl");
+pub const PIXELATE_BLOCKS_FRAG: &str = translated!("filters/pixelate_blocks");
+pub const HALFTONE_FRAG: &str = translated!("filters/halftone");
 pub const SOLARIZE_FRAG: &str = translated!("filters/solarize");
-pub const KALEIDOSCOPE_FRAG: &str = include_str!("shaders/filters/kaleidoscope.glsl");
-pub const OIL_PAINT_FRAG: &str = include_str!("shaders/filters/oil_paint.glsl");
+pub const KALEIDOSCOPE_FRAG: &str = translated!("filters/kaleidoscope");
+pub const OIL_PAINT_FRAG: &str = translated!("filters/oil_paint");
 pub const CHROMATIC_ABERRATION_FRAG: &str = translated!("filters/chromatic_aberration");
-pub const PIXEL_STRETCH_FRAG: &str = include_str!("shaders/filters/pixel_stretch.glsl");
-pub const LENS_DISTORTION_FRAG: &str = include_str!("shaders/filters/lens_distortion.glsl");
-pub const PATTERN_FILL_FRAG: &str = include_str!("shaders/filters/pattern_fill.glsl");
-pub const MESH_WARP_FRAG: &str = include_str!("shaders/filters/mesh_warp.glsl");
-pub const LIQUIFY_WARP_FRAG: &str = include_str!("shaders/filters/liquify_warp.glsl");
+pub const PIXEL_STRETCH_FRAG: &str = translated!("filters/pixel_stretch");
+pub const LENS_DISTORTION_FRAG: &str = translated!("filters/lens_distortion");
+pub const PATTERN_FILL_FRAG: &str = translated!("filters/pattern_fill");
+pub const MESH_WARP_FRAG: &str = translated!("filters/mesh_warp");
+pub const LIQUIFY_WARP_FRAG: &str = translated!("filters/liquify_warp");
 pub const BLOOM_THRESHOLD_FRAG: &str = translated!("filters/bloom_threshold");
-pub const BLOOM_COMBINE_FRAG: &str = include_str!("shaders/filters/bloom_combine.glsl");
-pub const TILT_SHIFT_BLUR_FRAG: &str = include_str!("shaders/filters/tilt_shift_blur.glsl");
-pub const EMBOSS_FRAG: &str = include_str!("shaders/filters/emboss.glsl");
-pub const VORONOI_FRAG: &str = include_str!("shaders/filters/voronoi.glsl");
+pub const BLOOM_COMBINE_FRAG: &str = translated!("filters/bloom_combine");
+pub const TILT_SHIFT_BLUR_FRAG: &str = translated!("filters/tilt_shift_blur");
+pub const EMBOSS_FRAG: &str = translated!("filters/emboss");
+pub const VORONOI_FRAG: &str = translated!("filters/voronoi");
 pub const SELECTION_MASK_BLEND_FRAG: &str = translated!("filters/selection_mask_blend");
-pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.glsl");
-pub const LIQUIFY_DAB_FRAG: &str = include_str!("shaders/filters/liquify_dab.glsl");
-pub const FIBERS_FRAG: &str = include_str!("shaders/filters/fibers.glsl");
-pub const SUNBURST_FRAG: &str = include_str!("shaders/filters/sunburst.glsl");
+pub const SURFACE_BLUR_FRAG: &str = translated!("filters/surface_blur");
+pub const LIQUIFY_DAB_FRAG: &str = translated!("filters/liquify_dab");
+pub const FIBERS_FRAG: &str = translated!("filters/fibers");
+pub const SUNBURST_FRAG: &str = translated!("filters/sunburst");
 pub const COLOR_LUT_FRAG: &str = translated!("filters/color_lut");
 pub const TEXTURE_FRAG: &str = include_str!("shaders/filters/texture.glsl");
 
@@ -758,7 +758,7 @@ impl ShaderPrograms {
 mod tests {
     use super::{
         inject_defines, preprocess_frag, typed_shader_checks, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
-        OIL_PAINT_FRAG, SMUDGE_DAB_FRAG, VIGNETTE_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
+        SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
         TEXTURE_FRAG,
     };
 
@@ -811,8 +811,13 @@ mod tests {
     fn tonal_passes_work_on_decoded_lab() {
         // Adjustments and the vignette scale channel values, which only means
         // "darker" on sRGB; on encoded Lab it drags a/b toward blue (#1365).
-        for src in [ADJUSTMENTS_FRAG, VIGNETTE_FRAG] {
-            let out = preprocess_frag(src);
+        let vignette = include_str!("shaders/filters/vignette.wgsl");
+        assert!(vignette.contains("//#include lab"), "lab helpers not spliced in");
+        assert!(vignette.contains("u_docColorMode: i32,"));
+        assert!(vignette.contains("rgb = labToSrgb(rgb)"));
+        assert!(vignette.contains("rgb = srgbToLab(rgb)"));
+        {
+            let out = preprocess_frag(ADJUSTMENTS_FRAG);
             assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
             assert!(out.contains("int u_docColorMode;"));
             assert!(out.contains("c.rgb = labToSrgb(c.rgb)"));
@@ -847,7 +852,8 @@ mod tests {
 
     #[test]
     fn voronoi_seeds_use_an_exact_integer_hash() {
-        let code: String = VORONOI_FRAG
+        let source = include_str!("shaders/filters/voronoi.wgsl");
+        let code: String = source
             .lines()
             .filter(|l| !l.trim_start().starts_with("//"))
             .collect();
@@ -855,13 +861,13 @@ mod tests {
             !code.contains("sin("),
             "a sin()-based hash is not reproducible across backends (Metal fast-math)"
         );
-        assert!(VORONOI_FRAG.contains("uvec2 pcg2d(uvec2 v)"));
+        assert!(source.contains("fn pcg2d(value: vec2<u32>) -> vec2<u32>"));
         assert!(
-            VORONOI_FRAG.contains("if (x == 0 && y == 0) {"),
+            source.contains("if (x == 0 && y == 0) {"),
             "the nearest seed must be skipped by cell index, not by a recomputed position"
         );
         assert!(
-            !VORONOI_FRAG.contains("dot(between, between) <"),
+            !source.contains("dot(between, between) <"),
             "position-equality self-skip relies on bit-identical float recomputation"
         );
     }
@@ -869,7 +875,8 @@ mod tests {
     #[test]
     fn oil_paint_clamps_variance_before_pow() {
         assert!(
-            OIL_PAINT_FRAG.contains("vec3 v = max(var_sum[i] / count[i] - m * m, vec3(0.0));"),
+            include_str!("shaders/filters/oil_paint.wgsl")
+                .contains("let v = max(varSum[i] / count[i] - m * m, vec3<f32>(0.0));"),
             "negative variance reaches pow() and turns flat colours black on Metal"
         );
     }
