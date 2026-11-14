@@ -6,7 +6,7 @@
  */
 
 import {
-  readLayerPixels,
+  readLayerPixelsSync,
   getLayerTextureDimensions,
   layerContentGeneration,
   readLayerPixelsCompressedU16,
@@ -48,7 +48,7 @@ export function readLayerAsImageData(layerId: string): ImageData | null {
     frameCache.set(layerId, null);
     return null;
   }
-  const pixels = readLayerPixels(currentEngine, layerId);
+  const pixels = readLayerPixelsSync(currentEngine, layerId);
   if (!pixels || pixels.length === 0) {
     frameCache.set(layerId, null);
     return null;

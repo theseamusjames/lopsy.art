@@ -995,7 +995,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     if (engine) {
       const palette =
         newMode === 'indexed'
-          ? paletteFromBytes(quantizeCompositeToPalette(engine, options?.maxColors ?? 256))
+          ? paletteFromBytes(await quantizeCompositeToPalette(engine, options?.maxColors ?? 256))
           : undefined;
       if (palette) {
         nextDocument = { ...nextDocument, indexedPalette: palette };

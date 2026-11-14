@@ -18,7 +18,7 @@ function findActiveLayer(): Layer | undefined {
   return st.document.layers.find((l) => l.id === id);
 }
 
-export function definePattern(): void {
+export async function definePattern(): Promise<void> {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
   if (!activeId) return;
@@ -41,7 +41,7 @@ export function definePattern(): void {
   const layerH = dims[1] ?? 0;
   if (layerW === 0 || layerH === 0) return;
 
-  const pixels = readLayerPixels(engine, activeId);
+  const pixels = await readLayerPixels(engine, activeId);
   if (!pixels || pixels.length === 0) return;
 
   const { selection } = state;

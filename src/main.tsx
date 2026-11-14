@@ -206,9 +206,13 @@ if (import.meta.env.DEV) {
         const w = dims?.[0] ?? 0;
         const h = dims?.[1] ?? 0;
         if (w === 0 || h === 0) { resolve({ width: 0, height: 0, pixels: [] }); return; }
-        const pixels = readLayerPixels(engine, id);
-        if (!pixels || pixels.length === 0) { resolve({ width: 0, height: 0, pixels: [] }); return; }
-        resolve({ width: w, height: h, pixels: Array.from(pixels) });
+        readLayerPixels(engine, id).then(
+          (pixels) => {
+            if (!pixels || pixels.length === 0) { resolve({ width: 0, height: 0, pixels: [] }); return; }
+            resolve({ width: w, height: h, pixels: Array.from(pixels) });
+          },
+          () => resolve(null),
+        );
       });
     });
   };

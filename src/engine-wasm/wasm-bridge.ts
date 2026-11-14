@@ -21,7 +21,7 @@ import init, {
   setBackgroundColor,
   setDocumentColorMode,
   convertLayerToGrayscale,
-  quantizeCompositeToPalette,
+  quantizeCompositeToPalette as rawQuantizeCompositeToPalette,
   applyPaletteToLayer,
   convertLayerToLab,
   convertLayerFromLab,
@@ -32,7 +32,7 @@ import init, {
   setLayerOrder,
   uploadLayerPixels,
   uploadLayerPixelsFromCanvas,
-  readLayerPixels,
+  readLayerPixels as rawReadLayerPixels,
   decodeAndUploadImage,
   decodeAndUploadDng,
   rafPlanBands,
@@ -361,7 +361,6 @@ export {
   setBackgroundColor,
   setDocumentColorMode,
   convertLayerToGrayscale,
-  quantizeCompositeToPalette,
   applyPaletteToLayer,
   convertLayerToLab,
   convertLayerFromLab,
@@ -373,7 +372,6 @@ export {
   setLayerOrder,
   uploadLayerPixels,
   uploadLayerPixelsFromCanvas,
-  readLayerPixels,
   decodeAndUploadImage,
   decodeAndUploadDng,
   rafPlanBands,
@@ -659,6 +657,13 @@ function asyncReadback<Args extends unknown[], Result>(
 
 export const compositeForExport = asyncReadback(rawCompositeForExport);
 export const exportPng16 = asyncReadback(rawExportPng16);
+export const quantizeCompositeToPalette = asyncReadback(rawQuantizeCompositeToPalette);
+export const readLayerPixels = asyncReadback(rawReadLayerPixels);
+/**
+ * The synchronous read behind `readLayerPixels`, for `gpu-pixel-access`'s
+ * per-frame cache until `readLayerAsImageData` and its callers await too.
+ */
+export const readLayerPixelsSync = rawReadLayerPixels;
 
 /**
  * Every export that writes a layer-mask texture goes through this wrapper
