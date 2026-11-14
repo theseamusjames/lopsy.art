@@ -16,7 +16,7 @@ Status: in progress.
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
 | 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Commands that read inside the engine answer with a Promise or no longer read (#1705), and the last synchronous layer read is deleted (#1706). Phase 4 is done on the TypeScript side: nothing above the bridge reads the GPU synchronously. What is left is Rust's, in 6.6; see Phase 4 |
-| 5 | Started. The build step and the first four shaders (`blit`, `invert`, `posterize`, `blit_resample`) are in #1707; eight more (`color_convert`, `mask_expand`, `color_overlay`, `flip`, `threshold`, `rotate90`, `mask_luminance`, `blit_region`) in #1708; eight more (`sharpen`, `solarize`, `pixelate`, `selection_mask_blend`, `bloom_threshold`, `chromatic_aberration`, `opacity_clamp`, `flood_fill_apply`) in #1710; six more (`mask_remap`, `composite`, `tonemap`, `hue_sat`, `color_lut`, `box_blur`) in #1711; about 63 shaders to go |
+| 5 | Started. The build step and the first four shaders (`blit`, `invert`, `posterize`, `blit_resample`) are in #1707; eight more (`color_convert`, `mask_expand`, `color_overlay`, `flip`, `threshold`, `rotate90`, `mask_luminance`, `blit_region`) in #1708; eight more (`sharpen`, `solarize`, `pixelate`, `selection_mask_blend`, `bloom_threshold`, `chromatic_aberration`, `opacity_clamp`, `flood_fill_apply`) in #1710; six more (`mask_remap`, `composite`, `tonemap`, `hue_sat`, `color_lut`, `box_blur`) in #1711. Four shaders no pass used are removed (#1712), two of them already ported, so 24 are in WGSL and about 61 remain |
 | 6–7 | Not started |
 
 ---
@@ -666,8 +666,8 @@ value; where the old value could reach a pixel, it is a behaviour fix.
 
 Also found: `blend.glsl` and `composite.glsl` declared brush-texture
 uniforms and a sampler that neither reads; removed. `marching_ants` and
-`text_glyph` are compiled at startup and used nowhere; left for a
-separate change.
+`text_glyph` were compiled at startup and used nowhere; removed in
+#1712, with `opacity_clamp` and `tonemap`, which were unused too.
 
 **Left for Phase 5**, where each shader is rewritten anyway. WGSL cannot
 hold these in a uniform struct as they stand:
