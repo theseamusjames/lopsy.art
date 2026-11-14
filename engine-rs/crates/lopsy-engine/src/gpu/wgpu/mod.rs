@@ -2,14 +2,9 @@
 //! DX12 through the same code. Compiled in place of `webgl/` when the
 //! `wgpu` cargo feature is on, into a second wasm artifact.
 //!
-//! So far it creates a device, presents to the canvas, allocates textures
-//! and clears them. No pass draws: each operation still to come reports
-//! failure the way its WebGL counterpart does for a missing texture.
-//! docs/engine-migration-plan.md (Phase 6) lists the order they are filled
-//! in.
-
-// What no pass reads yet (shader modules, attachments) is unread.
-#![allow(dead_code)]
+//! It draws: textures, uploads, passes and copies all work. Reading pixels
+//! back is still to come and reports failure. docs/engine-migration-plan.md
+//! (Phase 6) lists the order the rest is filled in.
 
 pub mod context;
 pub mod framebuffer;

@@ -165,6 +165,14 @@ macro_rules! typed_shaders {
                 crate::gpu::uniforms::check::struct_matches_source::<$params>($name.frag),
             )),*]
         }
+
+        #[cfg(all(test, feature = "wgpu"))]
+        fn typed_shader_checks() -> Vec<(&'static str, Result<(), String>)> {
+            vec![$((
+                stringify!($name),
+                crate::gpu::backend::program::check::struct_matches_source::<$params>($name.frag),
+            )),*]
+        }
     };
 }
 
@@ -668,6 +676,32 @@ mod tests {
 
         #[test]
         fn every_typed_shader_declares_its_uniform_struct_as_its_params_block() {
+            let failures: Vec<String> = typed_shader_checks()
+                .into_iter()
+                .filter_map(|(name, result)| result.err().map(|why| format!("{name}: {why}")))
+                .collect();
+            assert!(failures.is_empty(), "{}", failures.join("\n"));
+        }
+    }
+    /// The wgpu build uploads a uniform struct as the bytes of the shader's
+    /// `Params`, so the Rust packing must land every field where naga put
+    /// the member.
+    #[cfg(feature = "wgpu")]
+    mod wgsl_layout {
+        use super::super::*;
+        use crate::gpu::backend::program::check::struct_matches_source;
+
+        #[test]
+        fn every_blend_mode_has_a_variant_that_takes_the_blend_uniforms() {
+            assert_eq!(BLEND_SOURCES.count(), lopsy_core::color::BlendMode::ALL.len());
+            for mode in 0..BLEND_SOURCES.count() {
+                let check = struct_matches_source::<crate::gpu::params::composite::BlendParams>;
+                assert_eq!(check(&BLEND_SOURCES.source(mode)), Ok(()), "mode {mode}");
+            }
+        }
+
+        #[test]
+        fn every_typed_shader_packs_its_uniform_struct_as_its_params_bytes() {
             let failures: Vec<String> = typed_shader_checks()
                 .into_iter()
                 .filter_map(|(name, result)| result.err().map(|why| format!("{name}: {why}")))
