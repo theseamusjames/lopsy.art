@@ -40,7 +40,7 @@ pub const PREMUL_SAMPLE: &str = include_str!("shaders/premul_sample.glsl");
 /// appears.
 pub const LAB_COMMON: &str = include_str!("shaders/lab_common.glsl");
 pub const BLIT_RESAMPLE_FRAG: &str = translated!("blit_resample");
-pub const COMPOSITE_FRAG: &str = include_str!("shaders/composite.glsl");
+pub const COMPOSITE_FRAG: &str = translated!("composite");
 pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
 pub const FLIP_FRAG: &str = translated!("flip");
 pub const CLIPBOARD_COPY_FRAG: &str = include_str!("shaders/clipboard_copy.glsl");
