@@ -148,7 +148,7 @@ pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = include_str!("shaders/shape/bucke
 pub const MARCHING_ANTS_FRAG: &str = include_str!("shaders/selection/marching_ants.glsl");
 
 // Color
-pub const COLOR_CONVERT_FRAG: &str = include_str!("shaders/color/color_convert.glsl");
+pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
 pub const TONEMAP_FRAG: &str = include_str!("shaders/color/tonemap.glsl");
 
 // Text
