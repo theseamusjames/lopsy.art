@@ -238,7 +238,7 @@ script reports the slowest run as well as the median.
 |---|---|---|
 | 1 | Flat or smaller: the pass layer replaces repeated GL boilerplate | Flat |
 | 2 | Measured: wasm +1.1% raw (4,293,925 bytes against 4,246,140 on the same machine). The typed wrappers are thin over an untyped core; without that it was +4.7% | Measured flat: `wasm-init` 134 ms, `engine-create` 128 ms median; 496 ms on the first run after the build |
-| 5 | Up: generated GLSL is more verbose than hand-written | Shader compile time may change; measured in the foundation PR before the fan starts |
+| 5 | Up: generated GLSL is more verbose than hand-written. Measured so far: about +300 bytes of wasm for a small shader and +700 for a larger one; removing four unused shaders (#1712) more than paid for the first 24 | Measured flat. `engine-create` 130 ms median on #1707 and 118 ms after #1712. Generated GLSL compiles as fast as hand-written: for the 24 ported shaders, compiled, linked and drawn once each with the cache defeated, 134 ms fully cold against 141 ms hand-written, and 26 ms against 24 ms afterwards. The first load after a build can still take about a second, because every regenerated source misses the OS shader cache once |
 | 6 | wgpu adds code (spike S1). It ships as a separate artifact, so a user downloads one backend, not both | Pipelines replace programs; they can be created lazily or asynchronously |
 
 wgpu becomes the default (6.11) only if both numbers are within an
