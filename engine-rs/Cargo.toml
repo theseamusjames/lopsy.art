@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/lopsy-core",
     "crates/lopsy-engine",
+    "crates/lopsy-shaderc",
     "crates/lopsy-wasm",
 ]
 

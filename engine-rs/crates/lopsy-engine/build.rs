@@ -1,7 +1,24 @@
 use std::fs;
 use std::path::Path;
 
+/// Translate the WGSL shaders to the GLSL ES 3.00 the WebGL backend
+/// compiles, into `$OUT_DIR/shaders/` under the same relative paths.
+/// `gpu::shader` embeds them from there.
+fn translate_shaders(out_dir: &Path) {
+    let root = Path::new("src/gpu/shaders");
+    println!("cargo:rerun-if-changed={}", root.display());
+    let shaders = lopsy_shaderc::shader_files(root).unwrap_or_else(|e| panic!("{e}"));
+    for path in shaders {
+        let translated = lopsy_shaderc::translate_file(root, &path).unwrap_or_else(|e| panic!("{e}"));
+        let dest = out_dir.join("shaders").join(path.strip_prefix(root).unwrap()).with_extension("glsl");
+        fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        fs::write(&dest, translated.glsl).unwrap();
+    }
+}
+
 fn main() {
+    translate_shaders(Path::new(&std::env::var("OUT_DIR").unwrap()));
+
     let brushes_dir = Path::new("../../brushes");
     println!("cargo:rerun-if-changed={}", brushes_dir.display());
 

@@ -98,6 +98,37 @@ jobs:
       # Plain Node, no install: the script only runs cargo.
       - run: npm run wasm:test
 
+  wgsl-check:
+    name: WGSL compiles on WebGPU
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache cargo registry, git, and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            engine-rs/target
+          key: cargo-shaderc-${{ runner.os }}-${{ hashFiles('engine-rs/**/Cargo.lock') }}
+          restore-keys: |
+            cargo-shaderc-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # naga accepting a shader does not prove WebGPU will: see the script.
+      - run: npm run wgsl:check
+
   lint:
     name: Lint (ESLint + pixel-debt)
     runs-on: ubuntu-latest

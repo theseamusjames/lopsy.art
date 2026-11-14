@@ -18,8 +18,16 @@ void main() {
 }
 "#;
 
+/// A fragment shader written in WGSL (`shaders/<path>.wgsl`) and translated
+/// to GLSL ES 3.00 by the build script: see `lopsy-shaderc`.
+macro_rules! translated {
+    ($path:literal) => {
+        include_str!(concat!(env!("OUT_DIR"), "/shaders/", $path, ".glsl"))
+    };
+}
+
 // Core shaders
-pub const BLIT_FRAG: &str = include_str!("shaders/blit.glsl");
+pub const BLIT_FRAG: &str = translated!("blit");
 pub const THUMBNAIL_BOX_FRAG: &str = include_str!("shaders/thumbnail_box.glsl");
 pub const BLEND_FRAG: &str = include_str!("shaders/blend.glsl");
 /// Shared GLSL helpers spliced into fragment sources where a
@@ -31,7 +39,7 @@ pub const PREMUL_SAMPLE: &str = include_str!("shaders/premul_sample.glsl");
 /// Encoded-CIELAB <-> sRGB conversions, spliced in where `//#include lab`
 /// appears.
 pub const LAB_COMMON: &str = include_str!("shaders/lab_common.glsl");
-pub const BLIT_RESAMPLE_FRAG: &str = include_str!("shaders/blit_resample.glsl");
+pub const BLIT_RESAMPLE_FRAG: &str = translated!("blit_resample");
 pub const COMPOSITE_FRAG: &str = include_str!("shaders/composite.glsl");
 pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
 pub const FLIP_FRAG: &str = include_str!("shaders/flip.glsl");
@@ -59,9 +67,9 @@ pub const GAUSSIAN_BLUR_FRAG: &str = include_str!("shaders/filters/gaussian_blur
 pub const BOX_BLUR_FRAG: &str = include_str!("shaders/filters/box_blur.glsl");
 pub const ADJUSTMENTS_FRAG: &str = include_str!("shaders/filters/adjustments.glsl");
 pub const HUE_SAT_FRAG: &str = include_str!("shaders/filters/hue_sat.glsl");
-pub const INVERT_FRAG: &str = include_str!("shaders/filters/invert.glsl");
+pub const INVERT_FRAG: &str = translated!("filters/invert");
 pub const MASK_LUMINANCE_FRAG: &str = include_str!("shaders/filters/mask_luminance.glsl");
-pub const POSTERIZE_FRAG: &str = include_str!("shaders/filters/posterize.glsl");
+pub const POSTERIZE_FRAG: &str = translated!("filters/posterize");
 pub const THRESHOLD_FRAG: &str = include_str!("shaders/filters/threshold.glsl");
 pub const NOISE_FRAG: &str = include_str!("shaders/filters/noise.glsl");
 pub const SHARPEN_FRAG: &str = include_str!("shaders/filters/sharpen.glsl");

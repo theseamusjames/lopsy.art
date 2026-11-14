@@ -111,7 +111,8 @@ engine-rs/          # Rust/WASM rendering engine (see below)
 
 The rendering engine is split into three crates. `lopsy-core` is CPU-only,
 `lopsy-engine` is the engine with no host, and `lopsy-wasm` is the browser
-host that `wasm-pack` builds:
+host that `wasm-pack` builds. A fourth, `lopsy-shaderc`, runs only in
+`lopsy-engine`'s build script:
 
 ```
 engine-rs/
@@ -127,6 +128,7 @@ engine-rs/
         sparse.rs       # Sparse pixel storage (from_sparse, to_sparse)
         flood_fill.rs   # Bucket fill algorithm
         selection.rs    # Selection mask operations
+    lopsy-shaderc/    # Build-time only: WGSL -> GLSL ES 3.00 through naga
     lopsy-wasm/       # Browser host: wasm-bindgen exports only
       src/
         lib.rs            # Engine handle, createEngine, a few CPU helpers
@@ -159,7 +161,9 @@ engine-rs/
           shaders/        # GLSL source files (see below)
 ```
 
-### Key GLSL Shaders
+### Key Shaders
+
+Files end in `.wgsl` once ported and `.glsl` until then.
 
 ```
 gpu/shaders/
@@ -216,6 +220,34 @@ Adding or changing a uniform means editing the block and the struct
 together; `cargo test` fails when they differ. A new shader is listed in
 `typed_shaders!` in `gpu/shader.rs`. There is no way to set a uniform by
 name.
+
+### Shader source: WGSL, being ported from GLSL
+
+Shaders are moving from GLSL to WGSL, one per commit
+(`docs/engine-migration-plan.md`, Phase 5). **Write a new shader in WGSL.**
+`lopsy-engine`'s build script runs every `.wgsl` file under `gpu/shaders/`
+through `lopsy-shaderc` (naga) and `gpu/shader.rs` embeds the generated
+GLSL with `translated!("<path>")`. The conventions, which the translator
+checks:
+
+- One fragment entry point, `fs_main(@location(0) uv: vec2<f32>) ->
+  @location(0) vec4<f32>`.
+- Uniforms in one struct named `Params`, at `@group(0) @binding(0)`, with
+  members named as the Rust struct expects (`u_layerOffset`). Textures and
+  samplers follow. Read `params.u_x` member by member; do not pass the
+  struct to a function.
+- A texture `u_tex` with its sampler `u_tex_sampler`. A pass binds it as
+  `"u_tex"`.
+- Shared code goes in `gpu/shaders/include/<name>.wgsl` and is spliced in
+  with `//#include <name>`.
+- Avoid `array<f32, N>` in `Params` (pack as `array<vec4<f32>, N/4>`),
+  swizzle assignment, and one texture used with two samplers. After an
+  early return that depends on `uv`, sample with `textureSampleLevel`.
+
+`npm run wgsl:check` compiles every shader's WGSL with headless Chromium's
+WebGPU, which is stricter than naga; CI runs it. Run it when you add or
+change a `.wgsl` file. Porting an existing shader must not change pixels
+beyond one 8-bit step.
 
 ### Build
 
