@@ -585,9 +585,9 @@ test.describe('History - Complex Sequences', () => {
     // Flatten
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { flattenImage: () => void };
+        getState: () => { flattenImage: () => Promise<void> };
       };
-      store.getState().flattenImage();
+      return store.getState().flattenImage();
     });
 
     expect((await getEditorState(page)).document.layers).toHaveLength(2);

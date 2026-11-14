@@ -1173,8 +1173,8 @@ test.describe('WASM/WebGL Rendering', () => {
 
     // Flatten
     await page.evaluate(() => {
-      ((window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { flattenImage: () => void };
+      return ((window as unknown as Record<string, unknown>).__editorStore as {
+        getState: () => { flattenImage: () => Promise<void> };
       }).getState().flattenImage();
     });
     await page.waitForTimeout(400);
