@@ -131,7 +131,7 @@ pub const CLONE_STAMP_FRAG: &str = include_str!("shaders/brush/clone_stamp.glsl"
 pub const HEALING_DAB_FRAG: &str = include_str!("shaders/brush/healing_dab.glsl");
 pub const HEALING_MEAN_FRAG: &str = include_str!("shaders/brush/healing_mean.glsl");
 pub const SPONGE_FRAG: &str = translated!("brush/sponge");
-pub const STAMP_PREVIEW_FRAG: &str = include_str!("shaders/brush/stamp_preview.glsl");
+pub const STAMP_PREVIEW_FRAG: &str = translated!("brush/stamp_preview");
 
 // Gradient
 pub const GRADIENT_LINEAR_FRAG: &str = include_str!("shaders/gradient/gradient_linear.glsl");
