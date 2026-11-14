@@ -102,7 +102,7 @@ pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.g
 pub const LIQUIFY_DAB_FRAG: &str = include_str!("shaders/filters/liquify_dab.glsl");
 pub const FIBERS_FRAG: &str = include_str!("shaders/filters/fibers.glsl");
 pub const SUNBURST_FRAG: &str = include_str!("shaders/filters/sunburst.glsl");
-pub const COLOR_LUT_FRAG: &str = include_str!("shaders/filters/color_lut.glsl");
+pub const COLOR_LUT_FRAG: &str = translated!("filters/color_lut");
 pub const TEXTURE_FRAG: &str = include_str!("shaders/filters/texture.glsl");
 
 // Brush (assembled from header + variant + footer at compile_all time)
