@@ -16,7 +16,8 @@ Status: in progress.
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
 | 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Commands that read inside the engine answer with a Promise or no longer read (#1705), and the last synchronous layer read is deleted (#1706). Phase 4 is done on the TypeScript side: nothing above the bridge reads the GPU synchronously. What is left is Rust's, in 6.6; see Phase 4 |
-| 5–7 | Not started |
+| 5 | Started. The build step and the first four shaders (`blit`, `invert`, `posterize`, `blit_resample`) are in #1707; about 85 shaders to go |
+| 6–7 | Not started |
 
 ---
 
@@ -1005,6 +1006,35 @@ define injection carry over as string preprocessing before naga runs.
 
 Order: `blit` first, then by size, with `blend` and the brush dab
 header, body and footer assembly last.
+
+**As built so far (#1707).** The translation lives in its own crate,
+`lopsy-shaderc`, which `lopsy-engine` uses only from its build script, so
+naga is not in the wasm bundle. It also has a small binary that writes the
+preprocessed WGSL and the GLSL to a directory, for tools.
+
+- **The generated GLSL keeps the hand-written conventions**, so the WebGL
+  backend did not change: the fragment input is renamed to `v_uv` and the
+  output to `fragColor`, each sampler takes its WGSL texture's name, and
+  naga's struct-plus-instance uniform block is rewritten as the one
+  unnamed `layout(std140) uniform Params { ... };` block that
+  `flatten_params_block` and the typed-shader test already expect. No
+  separate binding table was needed for that.
+- **Checked against WebGPU.** `npm run wgsl:check` compiles each shader's
+  WGSL with headless Chromium's WebGPU (SwiftShader) and is a CI job. A
+  probe with a `textureSample` after a varying-dependent return, which
+  naga accepts, fails it.
+- **Variants** (`BLEND_MODE`) are not wired yet; the `//#if` preprocessing
+  is in the crate and tested, and the build script passes no defines.
+- **Dependencies.** naga is pinned to 30.0.1. Cargo first resolved
+  `naga-types 30.0.2` and `syn 3.0.10`, both under seven days old; they
+  are held at 30.0.1 and 3.0.9 in `Cargo.lock`.
+
+Measured on this PR: the whole e2e suite, instrumented, on `main`'s
+engine and on this one, differs only in tests that vary from run to run
+(two of them, `text-rotate-reopen-1527` and `mask-gpu-undo-780`, were
+confirmed by isolated reruns on both engines); maximum channel delta 0
+elsewhere. wasm +1,291 bytes for the four shaders. Load time flat:
+`engine-create` 130 ms median, 426 ms on the first run after the build.
 
 If S2 fails, this phase instead adds a `.wgsl` file beside each `.glsl`
 file, unused until Phase 6, and the compositions compare the two once

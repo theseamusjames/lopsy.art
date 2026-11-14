@@ -15,6 +15,9 @@ skrifa = "0.22"
 etagere = "0.2"
 brotli = { version = "3", default-features = false, features = ["std"] }
 
+[build-dependencies]
+lopsy-shaderc = { path = "../lopsy-shaderc" }
+
 [dependencies.web-sys]
 version = "0.3"
 features = [

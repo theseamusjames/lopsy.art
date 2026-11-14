@@ -362,7 +362,13 @@ pub mod check {
                 } else if code.contains("uniform Params") {
                     return Err(format!("the block must open with exactly `{BLOCK_OPEN}`, found `{code}`"));
                 } else if let Some(rest) = code.strip_prefix("uniform ") {
-                    if !rest.trim_start().starts_with("sampler") {
+                    // naga writes the precision, `uniform highp sampler2D`.
+                    let ty = rest.trim_start();
+                    let ty = ["highp ", "mediump ", "lowp "]
+                        .iter()
+                        .find_map(|precision| ty.strip_prefix(precision))
+                        .unwrap_or(ty);
+                    if !ty.starts_with("sampler") {
                         loose.push(code.to_string());
                     }
                 }
