@@ -122,7 +122,7 @@ const BRUSH_DAB_COLOR_FRAG: &str = concat!(
 );
 pub const ERASER_DAB_FRAG: &str = translated!("brush/eraser_dab");
 pub const PENCIL_DAB_FRAG: &str = translated!("brush/pencil_dab");
-pub const QUICK_MASK_DAB_FRAG: &str = include_str!("shaders/brush/quick_mask_dab.glsl");
+pub const QUICK_MASK_DAB_FRAG: &str = translated!("brush/quick_mask_dab");
 pub const CONTENT_BOUNDS_REDUCE_FRAG: &str = translated!("content_bounds_reduce");
 pub const DODGE_BURN_FRAG: &str = translated!("brush/dodge_burn");
 pub const DODGE_BURN_DAB_FRAG: &str = include_str!("shaders/brush/dodge_burn_dab.glsl");
