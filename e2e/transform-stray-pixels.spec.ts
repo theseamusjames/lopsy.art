@@ -25,7 +25,7 @@ async function docToScreen(page: Page, docX: number, docY: number) {
 
 /** Count opaque pixels on the active layer only (GPU readback) */
 async function countActiveLayerPixelsGPU(page: Page) {
-  return page.evaluate(() => {
+  return page.evaluate(async () => {
     const engineState = (window as unknown as Record<string, unknown>).__engineState as {
       getEngine: () => unknown;
     } | undefined;
@@ -47,7 +47,7 @@ async function countActiveLayerPixelsGPU(page: Page) {
     const dims = bridge.getLayerTextureDimensions(engine, layerId);
     if (!dims || dims[0] === 0 || dims[1] === 0) return 0;
 
-    const pixels = bridge.readLayerPixels(engine, layerId);
+    const pixels = await bridge.readLayerPixels(engine, layerId);
     let count = 0;
     for (let i = 3; i < pixels.length; i += 4) {
       if (pixels[i]! > 0) count++;
