@@ -28,7 +28,7 @@ macro_rules! translated {
 
 // Core shaders
 pub const BLIT_FRAG: &str = translated!("blit");
-pub const THUMBNAIL_BOX_FRAG: &str = include_str!("shaders/thumbnail_box.glsl");
+pub const THUMBNAIL_BOX_FRAG: &str = translated!("thumbnail_box");
 pub const BLEND_FRAG: &str = include_str!("shaders/blend.glsl");
 /// Shared GLSL helpers spliced into fragment sources where a
 /// `//#include hsl` line appears (see `preprocess_frag`).
