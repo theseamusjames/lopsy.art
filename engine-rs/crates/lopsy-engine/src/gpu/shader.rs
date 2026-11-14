@@ -28,7 +28,7 @@ macro_rules! translated {
 
 // Core shaders
 pub const BLIT_FRAG: &str = translated!("blit");
-pub const THUMBNAIL_BOX_FRAG: &str = include_str!("shaders/thumbnail_box.glsl");
+pub const THUMBNAIL_BOX_FRAG: &str = translated!("thumbnail_box");
 pub const BLEND_FRAG: &str = include_str!("shaders/blend.glsl");
 /// Shared GLSL helpers spliced into fragment sources where a
 /// `//#include hsl` line appears (see `preprocess_frag`).
@@ -43,24 +43,23 @@ pub const BLIT_RESAMPLE_FRAG: &str = translated!("blit_resample");
 pub const COMPOSITE_FRAG: &str = translated!("composite");
 pub const FINAL_BLIT_FRAG: &str = include_str!("shaders/final_blit.glsl");
 pub const FLIP_FRAG: &str = translated!("flip");
-pub const CLIPBOARD_COPY_FRAG: &str = include_str!("shaders/clipboard_copy.glsl");
-pub const CLIPBOARD_CLEAR_FRAG: &str = include_str!("shaders/clipboard_clear.glsl");
-pub const SELECTION_FILL_FRAG: &str = include_str!("shaders/selection_fill.glsl");
+pub const CLIPBOARD_COPY_FRAG: &str = translated!("clipboard_copy");
+pub const CLIPBOARD_CLEAR_FRAG: &str = translated!("clipboard_clear");
+pub const SELECTION_FILL_FRAG: &str = translated!("selection_fill");
 pub const ROTATE90_FRAG: &str = translated!("rotate90");
 pub const BLIT_REGION_FRAG: &str = translated!("blit_region");
 pub const MASK_EXPAND_FRAG: &str = translated!("mask_expand");
 pub const MASK_REMAP_FRAG: &str = translated!("mask_remap");
-pub const QUICK_MASK_TRANSLATE_FRAG: &str = include_str!("shaders/quick_mask_translate.glsl");
+pub const QUICK_MASK_TRANSLATE_FRAG: &str = translated!("quick_mask_translate");
 pub const TRANSFORM_AFFINE_FRAG: &str = include_str!("shaders/transform_affine.glsl");
 pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_perspective.glsl");
 
 // Effects
 pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
 pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
-pub const LAYER_MASK_APPLY_FRAG: &str = include_str!("shaders/effects/layer_mask_apply.glsl");
+pub const LAYER_MASK_APPLY_FRAG: &str = translated!("effects/layer_mask_apply");
 pub const SEPARABLE_EDT_FRAG: &str = include_str!("shaders/effects/separable_edt.glsl");
 pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
-pub const COLOR_OVERLAY_FRAG: &str = translated!("effects/color_overlay");
 
 // Filters
 pub const GAUSSIAN_BLUR_FRAG: &str = include_str!("shaders/filters/gaussian_blur.glsl");
@@ -121,18 +120,18 @@ const BRUSH_DAB_COLOR_FRAG: &str = concat!(
     include_str!("shaders/brush/brush_dab_color.glsl"),
     include_str!("shaders/brush/brush_dab_footer.glsl"),
 );
-pub const ERASER_DAB_FRAG: &str = include_str!("shaders/brush/eraser_dab.glsl");
-pub const PENCIL_DAB_FRAG: &str = include_str!("shaders/brush/pencil_dab.glsl");
-pub const QUICK_MASK_DAB_FRAG: &str = include_str!("shaders/brush/quick_mask_dab.glsl");
-pub const CONTENT_BOUNDS_REDUCE_FRAG: &str = include_str!("shaders/content_bounds_reduce.glsl");
-pub const DODGE_BURN_FRAG: &str = include_str!("shaders/brush/dodge_burn.glsl");
+pub const ERASER_DAB_FRAG: &str = translated!("brush/eraser_dab");
+pub const PENCIL_DAB_FRAG: &str = translated!("brush/pencil_dab");
+pub const QUICK_MASK_DAB_FRAG: &str = translated!("brush/quick_mask_dab");
+pub const CONTENT_BOUNDS_REDUCE_FRAG: &str = translated!("content_bounds_reduce");
+pub const DODGE_BURN_FRAG: &str = translated!("brush/dodge_burn");
 pub const DODGE_BURN_DAB_FRAG: &str = include_str!("shaders/brush/dodge_burn_dab.glsl");
 pub const SMUDGE_DAB_FRAG: &str = include_str!("shaders/brush/smudge_dab.glsl");
 pub const CLONE_STAMP_FRAG: &str = include_str!("shaders/brush/clone_stamp.glsl");
 pub const HEALING_DAB_FRAG: &str = include_str!("shaders/brush/healing_dab.glsl");
 pub const HEALING_MEAN_FRAG: &str = include_str!("shaders/brush/healing_mean.glsl");
-pub const SPONGE_FRAG: &str = include_str!("shaders/brush/sponge.glsl");
-pub const STAMP_PREVIEW_FRAG: &str = include_str!("shaders/brush/stamp_preview.glsl");
+pub const SPONGE_FRAG: &str = translated!("brush/sponge");
+pub const STAMP_PREVIEW_FRAG: &str = translated!("brush/stamp_preview");
 
 // Gradient
 pub const GRADIENT_LINEAR_FRAG: &str = include_str!("shaders/gradient/gradient_linear.glsl");
@@ -141,7 +140,7 @@ pub const GRADIENT_RADIAL_FRAG: &str = include_str!("shaders/gradient/gradient_r
 // Shape
 pub const SHAPE_FILL_FRAG: &str = include_str!("shaders/shape/shape_fill.glsl");
 pub const FLOOD_FILL_APPLY_FRAG: &str = translated!("shape/flood_fill_apply");
-pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = include_str!("shaders/shape/bucket_fill_color_match.glsl");
+pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = translated!("shape/bucket_fill_color_match");
 
 // Color
 pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
@@ -243,7 +242,6 @@ typed_shaders! {
     SHADOW: params::effects::ShadowParams = SHADOW_FRAG;
     SEPARABLE_EDT: params::effects::SeparableEdtParams = SEPARABLE_EDT_FRAG;
     STROKE_APPLY: params::effects::StrokeApplyParams = STROKE_APPLY_FRAG;
-    COLOR_OVERLAY: params::effects::ColorOverlayParams = COLOR_OVERLAY_FRAG;
     VIGNETTE: params::filters::VignetteParams = VIGNETTE_FRAG;
     ADJUSTMENTS: params::filters::AdjustmentsParams = ADJUSTMENTS_FRAG;
     COMPOSITE: params::composite::CompositeParams = COMPOSITE_FRAG;
@@ -550,7 +548,6 @@ pub struct ShaderPrograms {
     pub shadow: ShaderProgram<params::effects::ShadowParams>,
     pub separable_edt: ShaderProgram<params::effects::SeparableEdtParams>,
     pub stroke_apply: ShaderProgram<params::effects::StrokeApplyParams>,
-    pub color_overlay: ShaderProgram<params::effects::ColorOverlayParams>,
     // Filters
     pub gaussian_blur: ShaderProgram<params::filters::GaussianBlurParams>,
     pub box_blur: ShaderProgram<params::filters::BoxBlurParams>,
@@ -684,7 +681,6 @@ impl ShaderPrograms {
             shadow: compile(gl, v, &SHADOW)?,
             separable_edt: compile(gl, v, &SEPARABLE_EDT)?,
             stroke_apply: compile(gl, v, &STROKE_APPLY)?,
-            color_overlay: compile(gl, v, &COLOR_OVERLAY)?,
             // Filters
             gaussian_blur: compile(gl, v, &GAUSSIAN_BLUR)?,
             box_blur: compile(gl, v, &BOX_BLUR)?,
