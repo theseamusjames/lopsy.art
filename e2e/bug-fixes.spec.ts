@@ -39,18 +39,18 @@ async function getCompositePixelAt(
   y: number,
 ): Promise<{ r: number; g: number; b: number; a: number }> {
   return page.evaluate(
-    ({ x, y }) => {
+    async ({ x, y }) => {
       const engine = (window as unknown as Record<string, unknown>).__engineState as {
         getEngine: () => unknown;
       } | undefined;
       const bridge = (window as unknown as Record<string, unknown>).__wasmBridge as {
         render: (engine: unknown) => void;
-        sampleColor: (engine: unknown, x: number, y: number, radius: number) => Uint8Array;
+        sampleColor: (engine: unknown, x: number, y: number, radius: number) => Promise<Uint8Array>;
       } | undefined;
       if (!engine || !bridge) return { r: 0, g: 0, b: 0, a: 0 };
       const eng = engine.getEngine();
       bridge.render(eng);
-      const pixel = bridge.sampleColor(eng, x, y, 1);
+      const pixel = await bridge.sampleColor(eng, x, y, 1);
       return { r: pixel[0]!, g: pixel[1]!, b: pixel[2]!, a: pixel[3]! };
     },
     { x, y },
