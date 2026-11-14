@@ -72,7 +72,7 @@ pub const MASK_LUMINANCE_FRAG: &str = translated!("filters/mask_luminance");
 pub const POSTERIZE_FRAG: &str = translated!("filters/posterize");
 pub const THRESHOLD_FRAG: &str = translated!("filters/threshold");
 pub const NOISE_FRAG: &str = include_str!("shaders/filters/noise.glsl");
-pub const SHARPEN_FRAG: &str = include_str!("shaders/filters/sharpen.glsl");
+pub const SHARPEN_FRAG: &str = translated!("filters/sharpen");
 pub const VIGNETTE_FRAG: &str = include_str!("shaders/filters/vignette.glsl");
 pub const MOTION_BLUR_FRAG: &str = include_str!("shaders/filters/motion_blur.glsl");
 pub const RADIAL_BLUR_FRAG: &str = include_str!("shaders/filters/radial_blur.glsl");
@@ -80,24 +80,24 @@ pub const FIND_EDGES_FRAG: &str = include_str!("shaders/filters/find_edges.glsl"
 pub const CEL_SHADING_FRAG: &str = include_str!("shaders/filters/cel_shading.glsl");
 pub const CLOUDS_FRAG: &str = include_str!("shaders/filters/clouds.glsl");
 pub const SMOKE_FRAG: &str = include_str!("shaders/filters/smoke.glsl");
-pub const PIXELATE_FRAG: &str = include_str!("shaders/filters/pixelate.glsl");
+pub const PIXELATE_FRAG: &str = translated!("filters/pixelate");
 pub const PIXELATE_BLOCKS_FRAG: &str = include_str!("shaders/filters/pixelate_blocks.glsl");
 pub const HALFTONE_FRAG: &str = include_str!("shaders/filters/halftone.glsl");
-pub const SOLARIZE_FRAG: &str = include_str!("shaders/filters/solarize.glsl");
+pub const SOLARIZE_FRAG: &str = translated!("filters/solarize");
 pub const KALEIDOSCOPE_FRAG: &str = include_str!("shaders/filters/kaleidoscope.glsl");
 pub const OIL_PAINT_FRAG: &str = include_str!("shaders/filters/oil_paint.glsl");
-pub const CHROMATIC_ABERRATION_FRAG: &str = include_str!("shaders/filters/chromatic_aberration.glsl");
+pub const CHROMATIC_ABERRATION_FRAG: &str = translated!("filters/chromatic_aberration");
 pub const PIXEL_STRETCH_FRAG: &str = include_str!("shaders/filters/pixel_stretch.glsl");
 pub const LENS_DISTORTION_FRAG: &str = include_str!("shaders/filters/lens_distortion.glsl");
 pub const PATTERN_FILL_FRAG: &str = include_str!("shaders/filters/pattern_fill.glsl");
 pub const MESH_WARP_FRAG: &str = include_str!("shaders/filters/mesh_warp.glsl");
 pub const LIQUIFY_WARP_FRAG: &str = include_str!("shaders/filters/liquify_warp.glsl");
-pub const BLOOM_THRESHOLD_FRAG: &str = include_str!("shaders/filters/bloom_threshold.glsl");
+pub const BLOOM_THRESHOLD_FRAG: &str = translated!("filters/bloom_threshold");
 pub const BLOOM_COMBINE_FRAG: &str = include_str!("shaders/filters/bloom_combine.glsl");
 pub const TILT_SHIFT_BLUR_FRAG: &str = include_str!("shaders/filters/tilt_shift_blur.glsl");
 pub const EMBOSS_FRAG: &str = include_str!("shaders/filters/emboss.glsl");
 pub const VORONOI_FRAG: &str = include_str!("shaders/filters/voronoi.glsl");
-pub const SELECTION_MASK_BLEND_FRAG: &str = include_str!("shaders/filters/selection_mask_blend.glsl");
+pub const SELECTION_MASK_BLEND_FRAG: &str = translated!("filters/selection_mask_blend");
 pub const SURFACE_BLUR_FRAG: &str = include_str!("shaders/filters/surface_blur.glsl");
 pub const LIQUIFY_DAB_FRAG: &str = include_str!("shaders/filters/liquify_dab.glsl");
 pub const FIBERS_FRAG: &str = include_str!("shaders/filters/fibers.glsl");
@@ -131,7 +131,7 @@ pub const SMUDGE_DAB_FRAG: &str = include_str!("shaders/brush/smudge_dab.glsl");
 pub const CLONE_STAMP_FRAG: &str = include_str!("shaders/brush/clone_stamp.glsl");
 pub const HEALING_DAB_FRAG: &str = include_str!("shaders/brush/healing_dab.glsl");
 pub const HEALING_MEAN_FRAG: &str = include_str!("shaders/brush/healing_mean.glsl");
-pub const OPACITY_CLAMP_FRAG: &str = include_str!("shaders/brush/opacity_clamp.glsl");
+pub const OPACITY_CLAMP_FRAG: &str = translated!("brush/opacity_clamp");
 pub const SPONGE_FRAG: &str = include_str!("shaders/brush/sponge.glsl");
 pub const STAMP_PREVIEW_FRAG: &str = include_str!("shaders/brush/stamp_preview.glsl");
 
@@ -141,7 +141,7 @@ pub const GRADIENT_RADIAL_FRAG: &str = include_str!("shaders/gradient/gradient_r
 
 // Shape
 pub const SHAPE_FILL_FRAG: &str = include_str!("shaders/shape/shape_fill.glsl");
-pub const FLOOD_FILL_APPLY_FRAG: &str = include_str!("shaders/shape/flood_fill_apply.glsl");
+pub const FLOOD_FILL_APPLY_FRAG: &str = translated!("shape/flood_fill_apply");
 pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = include_str!("shaders/shape/bucket_fill_color_match.glsl");
 
 // Selection
