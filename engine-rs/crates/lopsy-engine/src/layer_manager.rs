@@ -91,7 +91,7 @@ pub fn set_layer_order(engine: &mut EngineInner, order: &[String]) {
 }
 
 /// Ensure a layer texture exists at the given size, then run a closure to upload data.
-fn with_layer_texture<F>(
+pub(crate) fn with_layer_texture<F>(
     engine: &mut EngineInner,
     layer_id: &str,
     width: u32,

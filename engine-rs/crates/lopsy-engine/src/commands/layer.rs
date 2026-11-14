@@ -45,6 +45,12 @@ pub fn set_layer_order(engine: &mut EngineInner, order_json: &str) -> Result<(),
     Ok(())
 }
 
+/// Flatten the document into `layer_id` without reading it back: see
+/// `compositor::flatten_into_layer`.
+pub fn flatten_into_layer(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
+    compositor::flatten_into_layer(engine, layer_id)
+}
+
 pub fn upload_layer_pixels(
     engine: &mut EngineInner,
     layer_id: &str,

@@ -26,6 +26,11 @@ pub fn set_layer_order(engine: &mut Engine, order_json: &str) -> Result<(), JsEr
     lopsy_engine::commands::layer::set_layer_order(&mut engine.inner, order_json).map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "flattenIntoLayer")]
+pub fn flatten_into_layer(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
+    lopsy_engine::commands::layer::flatten_into_layer(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "uploadLayerPixels")]
 pub fn upload_layer_pixels(
     engine: &mut Engine,

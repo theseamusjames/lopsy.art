@@ -271,7 +271,7 @@ export interface DocumentSlice {
   fitActiveLayerToCanvas: () => void;
   duplicateLayer: () => void;
   mergeDown: () => void;
-  flattenImage: () => Promise<void>;
+  flattenImage: () => void;
   rasterizeLayerStyle: () => void;
   rasterizeTextLayer: () => void;
   updateLayerEffects: (id: string, effects: Partial<LayerEffects>) => void;
@@ -741,12 +741,12 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
-  flattenImage: async () => {
+  flattenImage: () => {
     const s = get();
     flushLayerSync(s);
     // GPU-only (compositeForExport + uploadLayerPixels); no JS pixel
     // map needed (#746).
-    const result = await computeFlattenImage(s.document);
+    const result = computeFlattenImage(s.document);
     if (!result) return;
     s.pushHistory('Flatten Image');
     applyActionResult(set, result);
@@ -979,7 +979,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     let doc = s.document;
     let pixelsAreEncoded = doc.colorMode === 'lab';
     if (newMode === 'indexed') {
-      const flattened = await computeFlattenImage(doc);
+      const flattened = computeFlattenImage(doc);
       if (flattened?.document) {
         applyActionResult(set, flattened);
         doc = flattened.document;

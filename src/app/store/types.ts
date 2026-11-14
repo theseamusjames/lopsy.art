@@ -155,7 +155,7 @@ export interface EditorState {
   fitActiveLayerToCanvas: () => void;
   duplicateLayer: () => void;
   mergeDown: () => void;
-  flattenImage: () => Promise<void>;
+  flattenImage: () => void;
   rasterizeLayerStyle: () => void;
   rasterizeTextLayer: () => void;
   updateLayerEffects: (id: string, effects: Partial<LayerEffects>, skipHistory?: boolean) => void;

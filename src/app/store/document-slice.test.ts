@@ -116,14 +116,14 @@ describe('document-slice action orchestration', () => {
     expect(getState().dirtyLayerIds.has(belowId)).toBe(true);
   });
 
-  it('flattenImage + undo restores original layers', async () => {
+  it('flattenImage + undo restores original layers', () => {
     getState().addLayer();
     getState().addLayer();
     const before = layerCount();
     const beforeNames = layerNames();
     expect(before).toBeGreaterThanOrEqual(4);
 
-    await getState().flattenImage();
+    getState().flattenImage();
     expect(layerCount()).toBe(2);
     expect(getState().document.layers[0]!.name).toBe('Background');
 

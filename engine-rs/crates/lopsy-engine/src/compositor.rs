@@ -1563,6 +1563,32 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
     Ok(pixels)
 }
 
+/// Replace `layer_id`'s pixels with the document as export composites it:
+/// every visible layer, effect and adjustment over the background colour.
+/// The composite is copied on the GPU at the layer's own precision. A Lab
+/// document is the exception: its composite is decoded to sRGB on the CPU,
+/// as `composite_for_export` does, and uploaded.
+pub fn flatten_into_layer(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    composite_layers_for_export(engine)?;
+    engine.needs_recomposite = true;
+
+    if engine.doc_color_mode == 1 {
+        let mut pixels = engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h)?;
+        decode_native_color_mode(engine.doc_color_mode, &mut pixels);
+        return crate::layer_manager::upload_pixels(engine, layer_id, &pixels, doc_w, doc_h, 0, 0);
+    }
+
+    crate::layer_manager::with_layer_texture(engine, layer_id, doc_w, doc_h, |engine, texture| {
+        let is_copied = engine
+            .pass(&engine.shaders.blit, ())
+            .texture("u_tex", engine.composite_texture)
+            .blend(Blend::Off)
+            .draw(Target::Texture(texture));
+        if is_copied { Ok(()) } else { Err("Flatten target texture missing".to_string()) }
+    })
+}
+
 /// In-place decode of a composited RGBA8 buffer out of a native color mode.
 /// Mode 0 (RGB, grayscale, indexed) already holds sRGB and is left alone.
 pub fn decode_native_color_mode(doc_color_mode: u32, pixels: &mut [u8]) {
