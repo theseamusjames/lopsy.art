@@ -64,7 +64,7 @@ pub const COLOR_OVERLAY_FRAG: &str = translated!("effects/color_overlay");
 
 // Filters
 pub const GAUSSIAN_BLUR_FRAG: &str = include_str!("shaders/filters/gaussian_blur.glsl");
-pub const BOX_BLUR_FRAG: &str = include_str!("shaders/filters/box_blur.glsl");
+pub const BOX_BLUR_FRAG: &str = translated!("filters/box_blur");
 pub const ADJUSTMENTS_FRAG: &str = include_str!("shaders/filters/adjustments.glsl");
 pub const HUE_SAT_FRAG: &str = translated!("filters/hue_sat");
 pub const INVERT_FRAG: &str = translated!("filters/invert");
