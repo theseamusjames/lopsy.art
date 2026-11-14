@@ -5,21 +5,21 @@ import { createRasterLayer, createGroupLayer } from '../../../layers/layer-model
 import { createDefaultAdjustments } from '../../../filters/adjustment-node-utils';
 import { isAdjustmentAllowedInMode } from '../../../utils/color-mode-capabilities';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import { compositeForExport, uploadLayerPixels, addLayer } from '../../../engine-wasm/wasm-bridge';
+import { flattenIntoLayer, addLayer } from '../../../engine-wasm/wasm-bridge';
 import { layerToDescJson } from '../../../engine-wasm/sync-layers';
 
 /**
  * Flatten the whole document into a single background raster.
  *
- * Compositing happens on the GPU via `compositeForExport`; no JS-side
- * pixel map is consumed (#746). The returned action clears the pixel
+ * The engine composites the document straight into the new layer
+ * (`flattenIntoLayer`); no pixels are read back or uploaded (#746). The returned action clears the pixel
  * manager (empty `layerPixelData`) because every prior layer is now
  * garbage — its texture will be reclaimed engine-side and its JS cache
  * is no longer meaningful.
  */
-export async function computeFlattenImage(
+export function computeFlattenImage(
   doc: DocumentState,
-): Promise<ActionResult | undefined> {
+): ActionResult | undefined {
   if (doc.layers.length <= 1) return undefined;
 
   const { width, height } = doc;
@@ -27,17 +27,11 @@ export async function computeFlattenImage(
 
   const engine = getEngine();
   if (engine) {
-    // GPU-side: composite all layers using the same pipeline as export
-    const composited = await compositeForExport(engine);
-
-    // Register the new layer with the engine BEFORE uploading pixels.
-    // This ensures addLayer sees that no texture exists yet and creates a placeholder,
-    // then uploadLayerPixels replaces it with the correct-size texture.
+    // Register the new layer first so the engine has a slot for it, then
+    // have the engine composite the document straight into it. The pixels
+    // stay on the GPU (#746).
     addLayer(engine, layerToDescJson(flatLayer, true, doc.colorMode));
-
-    if (composited && composited.length > 0) {
-      uploadLayerPixels(engine, flatLayer.id, composited, width, height, 0, 0);
-    }
+    flattenIntoLayer(engine, flatLayer.id);
   }
 
   const pixelData = new Map<string, ImageData>();

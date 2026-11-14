@@ -91,7 +91,7 @@ pub fn set_layer_order(engine: &mut EngineInner, order: &[String]) {
 }
 
 /// Ensure a layer texture exists at the given size, then run a closure to upload data.
-fn with_layer_texture<F>(
+pub(crate) fn with_layer_texture<F>(
     engine: &mut EngineInner,
     layer_id: &str,
     width: u32,
@@ -628,13 +628,28 @@ pub fn clipboard_copy(
     let (lw, lh) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
     let layer_desc = engine.layer_stack.iter().find(|l| l.id == layer_id)
         .ok_or_else(|| format!("Layer desc {layer_id} not found"))?;
-    let layer_x = layer_desc.x as f32;
-    let layer_y = layer_desc.y as f32;
+    let source = Rect::new(layer_desc.x, layer_desc.y, lw, lh);
+    copy_texture_to_clipboard(engine, layer_tex_handle, source, has_selection, bounds_x, bounds_y, bounds_w, bounds_h)
+}
 
+/// Copy `source_texture`, which covers `source` in the document, into the
+/// clipboard texture: the selection's bounds through the selection mask, or
+/// all of it with no selection. Returns (width, height, offset_x, offset_y).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn copy_texture_to_clipboard(
+    engine: &mut EngineInner,
+    source_texture: TextureHandle,
+    source: Rect,
+    has_selection: bool,
+    bounds_x: i32,
+    bounds_y: i32,
+    bounds_w: u32,
+    bounds_h: u32,
+) -> Result<(u32, u32, i32, i32), String> {
     let (out_w, out_h, off_x, off_y) = if has_selection && bounds_w > 0 && bounds_h > 0 {
         (bounds_w, bounds_h, bounds_x, bounds_y)
     } else {
-        (lw, lh, layer_desc.x, layer_desc.y)
+        (source.width, source.height, source.x, source.y)
     };
 
     // Release old clipboard texture
@@ -645,7 +660,7 @@ pub fn clipboard_copy(
     // Allocate clipboard texture
     let clip_tex = engine.texture_pool.acquire(out_w, out_h)?;
 
-    engine.texture_pool.get(layer_tex_handle).ok_or("Layer texture not found")?;
+    engine.texture_pool.get(source_texture).ok_or("Layer texture not found")?;
     engine.texture_pool.get(clip_tex).ok_or("Clipboard texture not found")?;
     let mask = if has_selection {
         engine.selection_mask_texture.filter(|&m| engine.texture_pool.get(m).is_some())
@@ -656,12 +671,12 @@ pub fn clipboard_copy(
     let pass = engine.pass(&engine.shaders.clipboard_copy, ClipboardCopyParams {
         has_mask: i32::from(mask.is_some()),
         extend_past_canvas: 0,
-        layer_offset: [layer_x, layer_y],
-        layer_size: [lw as f32, lh as f32],
+        layer_offset: [source.x as f32, source.y as f32],
+        layer_size: [source.width as f32, source.height as f32],
         bounds_offset: [off_x as f32, off_y as f32],
         bounds_size: [out_w as f32, out_h as f32],
         doc_size: [engine.doc_width as f32, engine.doc_height as f32],
-    }).texture("u_layerTex", layer_tex_handle);
+    }).texture("u_layerTex", source_texture);
     let pass = match mask {
         Some(m) => pass.texture("u_maskTex", m),
         None => pass.sampler_unit("u_maskTex", mask_sampler_unit(false)),

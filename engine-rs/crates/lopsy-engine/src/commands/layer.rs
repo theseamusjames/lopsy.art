@@ -45,6 +45,12 @@ pub fn set_layer_order(engine: &mut EngineInner, order_json: &str) -> Result<(),
     Ok(())
 }
 
+/// Flatten the document into `layer_id` without reading it back: see
+/// `compositor::flatten_into_layer`.
+pub fn flatten_into_layer(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
+    compositor::flatten_into_layer(engine, layer_id)
+}
+
 pub fn upload_layer_pixels(
     engine: &mut EngineInner,
     layer_id: &str,
@@ -350,6 +356,22 @@ pub fn clipboard_copy(
     let (w, h, ox, oy) = layer_manager::clipboard_copy(
         &mut *engine, layer_id, has_selection, bounds_x, bounds_y, bounds_w, bounds_h,
     )?;
+    Ok(vec![w as i32, h as i32, ox, oy])
+}
+
+/// Copy Merged: the flattened document through the selection, into the
+/// clipboard texture, without reading it back. Returns
+/// `[width, height, offset_x, offset_y]`.
+pub fn clipboard_copy_merged(
+    engine: &mut EngineInner,
+    has_selection: bool,
+    bounds_x: i32,
+    bounds_y: i32,
+    bounds_w: u32,
+    bounds_h: u32,
+) -> Result<Vec<i32>, String> {
+    let (w, h, ox, oy) =
+        compositor::copy_merged_to_clipboard(engine, has_selection, bounds_x, bounds_y, bounds_w, bounds_h)?;
     Ok(vec![w as i32, h as i32, ox, oy])
 }
 

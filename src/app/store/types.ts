@@ -155,7 +155,7 @@ export interface EditorState {
   fitActiveLayerToCanvas: () => void;
   duplicateLayer: () => void;
   mergeDown: () => void;
-  flattenImage: () => Promise<void>;
+  flattenImage: () => void;
   rasterizeLayerStyle: () => void;
   rasterizeTextLayer: () => void;
   updateLayerEffects: (id: string, effects: Partial<LayerEffects>, skipHistory?: boolean) => void;
@@ -180,7 +180,7 @@ export interface EditorState {
 
   // Clipboard
   copy: () => void;
-  copyMerged: () => Promise<void>;
+  copyMerged: () => void;
   cut: () => void;
   paste: () => string | null;
   matchesInternalClipboard: (blob: Blob) => Promise<boolean>;

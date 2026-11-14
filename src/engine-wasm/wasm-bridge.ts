@@ -31,6 +31,7 @@ import init, {
   updateLayer,
   setLayerOrder,
   uploadLayerPixels,
+  flattenIntoLayer,
   uploadLayerPixelsFromCanvas,
   readLayerPixels as rawReadLayerPixels,
   decodeAndUploadImage,
@@ -55,6 +56,7 @@ import init, {
   mergeLayers,
   flipLayer,
   clipboardCopy,
+  clipboardCopyMerged,
   clipboardCut,
   clipboardPaste,
   clearSelectedPixels,
@@ -90,7 +92,7 @@ import init, {
   interpolateGradient,
   computeLinearGradientT,
   computeRadialGradientT,
-  sampleColor,
+  sampleColor as rawSampleColor,
   saveShapePreview,
   endShapePreview,
   renderShape,
@@ -371,6 +373,7 @@ export {
   updateLayer,
   setLayerOrder,
   uploadLayerPixels,
+  flattenIntoLayer,
   uploadLayerPixelsFromCanvas,
   decodeAndUploadImage,
   decodeAndUploadDng,
@@ -380,16 +383,15 @@ export {
   getLayerTextureDimensions,
   layerContentGeneration,
   getLayerEngineBounds,
-  getLayerContentBounds,
   uploadLayerPixelsCompressed,
   readLayerPixelsCompressedU16,
   readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
-  rasterizeLayerEffects,
   duplicateLayerTexture,
   mergeLayers,
   flipLayer,
   clipboardCopy,
+  clipboardCopyMerged,
   clipboardCut,
   clipboardPaste,
   clearSelectedPixels,
@@ -424,7 +426,6 @@ export {
   interpolateGradient,
   computeLinearGradientT,
   computeRadialGradientT,
-  sampleColor,
   saveShapePreview,
   endShapePreview,
   renderShape,
@@ -515,7 +516,6 @@ export {
   clearFilterPreview,
   setSelectionMask,
   featherSelectionMask,
-  readSelectionMask,
   clearSelection,
   createRectSelection,
   createEllipseSelection,
@@ -534,7 +534,6 @@ export {
   fillQuickMask,
   renderQuickMaskLinearGradient,
   renderQuickMaskRadialGradient,
-  readQuickMaskPixels,
   uploadQuickMaskPixels,
   beginQuickMaskMove,
   translateQuickMask,
@@ -549,7 +548,6 @@ export {
   cropLayerPixelData,
   floodFill,
   applyFillToLayer,
-  readLayerPixelsForFill,
   bucketFillSolid,
   bucketFillByColorGpu,
   magneticLassoBegin,
@@ -631,6 +629,11 @@ export {
   expandLayerToDocSize,
   cropLayerToContent,
   floodFillGraduated,
+  readLayerPixelsForFill,
+  getLayerContentBounds,
+  readSelectionMask,
+  readQuickMaskPixels,
+  rasterizeLayerEffects,
 };
 
 /**
@@ -655,6 +658,7 @@ export const compositeForExport = asyncReadback(rawCompositeForExport);
 export const exportPng16 = asyncReadback(rawExportPng16);
 export const quantizeCompositeToPalette = asyncReadback(rawQuantizeCompositeToPalette);
 export const readLayerPixels = asyncReadback(rawReadLayerPixels);
+export const sampleColor = asyncReadback(rawSampleColor);
 export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);

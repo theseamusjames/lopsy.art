@@ -1563,6 +1563,56 @@ pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String>
     Ok(pixels)
 }
 
+/// Composite the document as export does and leave it in the composite
+/// texture in sRGB: every visible layer, effect and adjustment over the
+/// background colour. Nothing is read back, except in a Lab document, whose
+/// composite is decoded on the CPU as `composite_for_export` does.
+fn composite_for_reuse(engine: &mut EngineInner) -> Result<(), String> {
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    composite_layers_for_export(engine)?;
+    // The live composite was replaced; the next frame must rebuild it.
+    engine.needs_recomposite = true;
+    if engine.doc_color_mode == 1 {
+        let mut pixels = engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h)?;
+        decode_native_color_mode(engine.doc_color_mode, &mut pixels);
+        engine.texture_pool.upload_rgba(engine.composite_texture, 0, 0, doc_w, doc_h, &pixels)?;
+    }
+    Ok(())
+}
+
+/// Replace `layer_id`'s pixels with the flattened document, copied on the
+/// GPU at the layer's own precision.
+pub fn flatten_into_layer(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    composite_for_reuse(engine)?;
+    crate::layer_manager::with_layer_texture(engine, layer_id, doc_w, doc_h, |engine, texture| {
+        let is_copied = engine
+            .pass(&engine.shaders.blit, ())
+            .texture("u_tex", engine.composite_texture)
+            .blend(Blend::Off)
+            .draw(Target::Texture(texture));
+        if is_copied { Ok(()) } else { Err("Flatten target texture missing".to_string()) }
+    })
+}
+
+/// Copy the flattened document into the clipboard texture: the selection's
+/// bounds through the selection mask, or the whole document with no
+/// selection. Returns (width, height, offset_x, offset_y).
+pub fn copy_merged_to_clipboard(
+    engine: &mut EngineInner,
+    has_selection: bool,
+    bounds_x: i32,
+    bounds_y: i32,
+    bounds_w: u32,
+    bounds_h: u32,
+) -> Result<(u32, u32, i32, i32), String> {
+    composite_for_reuse(engine)?;
+    let document = Rect::new(0, 0, engine.doc_width, engine.doc_height);
+    crate::layer_manager::copy_texture_to_clipboard(
+        engine, engine.composite_texture, document, has_selection, bounds_x, bounds_y, bounds_w, bounds_h,
+    )
+}
+
 /// In-place decode of a composited RGBA8 buffer out of a native color mode.
 /// Mode 0 (RGB, grayscale, indexed) already holds sRGB and is left alone.
 pub fn decode_native_color_mode(doc_color_mode: u32, pixels: &mut [u8]) {
