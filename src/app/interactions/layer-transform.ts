@@ -32,7 +32,12 @@ import {
   hasLayerTransform,
   prepareLayerTransformTarget,
 } from '../../engine-wasm/wasm-bridge';
-import { layerContentRect, clearLayerContentRectCache, onLayerContentRectRefreshed } from '../layer-content-rect';
+import {
+  layerContentRect,
+  clearLayerContentRectCache,
+  onLayerContentRectRefreshed,
+  peekLayerContentRectLocal,
+} from '../layer-content-rect';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
@@ -141,16 +146,24 @@ export function isLayerTransformCurrent(): boolean {
 /**
  * Lift each target layer's content into a new engine session. The caller
  * bakes any other float first (`commitLiveFloat`). Returns false when there is
- * nothing to transform.
+ * nothing to transform, or when a target's content bounds are not known yet
+ * for the pixels it holds now: they are then being read, the box is drawn
+ * again when they land, and the next press begins the session.
  */
 export function beginLayerTransformSession(box: TransformState): boolean {
   const engine = getEngine();
   if (!engine) return false;
   const targets = currentLayerTransformTargets();
+  const measured = new Map<string, Rect>();
+  for (const id of targets) {
+    const local = peekLayerContentRectLocal(engine, id);
+    if (local === undefined) return false;
+    if (local) measured.set(id, local);
+  }
   const textPlacements = measureTextPlacements(engine, targets);
   const contentRects = new Map<string, Rect>();
-  for (const id of targets) {
-    const [x, y, width = 0, height = 0] = beginLayerTransform(engine, id);
+  for (const [id, local] of measured) {
+    const [x, y, width = 0, height = 0] = beginLayerTransform(engine, id, local.x, local.y, local.width, local.height);
     if (x !== undefined && y !== undefined && width > 0 && height > 0) contentRects.set(id, { x, y, width, height });
   }
   if (contentRects.size === 0) return false;

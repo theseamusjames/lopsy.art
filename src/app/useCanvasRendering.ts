@@ -37,7 +37,9 @@ import { stampPreviewDisc } from '../tools/common/stamp-source-preview';
 import { stampSourceState } from '../tools/common/stamp-source-state';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
 
-import { expandLayerToDocSize, cropLayerToContent, hasFloat } from '../engine-wasm/wasm-bridge';
+import { expandLayerToDocSize, hasFloat } from '../engine-wasm/wasm-bridge';
+import { cropLayerToContentIfMeasured } from './crop-layer-to-content';
+import { readLayerContentRectLocal } from './layer-content-rect';
 import { invalidateCachedSnapshot } from './store/history-slice';
 import { handleGpuContextLost, handleGpuContextRestored } from './gpu-context-loss';
 import { backupLayersToCpu, layerBackupTime, pauseLayerBackup, restoreLayerBackup } from './gpu-layer-backup';
@@ -89,33 +91,45 @@ function renderFrameGpu(
         // stall never blocks the switch, and cancel it if the user comes
         // right back to the layer.
         scheduleDeferredCrop(oldId, () => {
-          const eng = getEngine();
-          if (!eng) return;
-          if (useEditorStore.getState().document.activeLayerId === oldId) return;
-          if (hasFloat(eng)) return;
-          const currentOld = useEditorStore.getState().document.layers.find((l) => l.id === oldId);
-          if (!currentOld || currentOld.type !== 'raster') return;
-          invalidateCachedSnapshot(oldId);
-          const result = cropLayerToContent(eng, oldId);
-          if (result.length !== 4 || (result[2] ?? 0) <= 0) return;
-          croppedLayerIds.add(oldId);
-          const boundsChanged =
-            result[0] !== currentOld.x || result[1] !== currentOld.y ||
-            result[2] !== (currentOld.width ?? 0) || result[3] !== (currentOld.height ?? 0);
-          useEditorStore.setState((s) => ({
-            document: {
-              ...s.document,
-              layers: s.document.layers.map((l) =>
-                l.id === oldId
-                  ? { ...l, x: result[0]!, y: result[1]!, width: result[2]!, height: result[3]! }
-                  : l
-              ),
-            },
-            renderVersion: s.renderVersion + 1,
-          }));
-          if (boundsChanged) {
-            clearJsPixelData(oldId);
-          }
+          /** The layer may be cropped: it is still inactive, unfloated and raster. */
+          const croppable = () => {
+            const eng = getEngine();
+            if (!eng) return null;
+            if (useEditorStore.getState().document.activeLayerId === oldId) return null;
+            if (hasFloat(eng)) return null;
+            const currentOld = useEditorStore.getState().document.layers.find((l) => l.id === oldId);
+            if (!currentOld || currentOld.type !== 'raster') return null;
+            return { eng, currentOld };
+          };
+          const first = croppable();
+          if (!first) return;
+          // The content bounds are read first; the crop itself reads nothing.
+          void readLayerContentRectLocal(first.eng, oldId).then(() => {
+            const now = croppable();
+            if (!now || now.eng !== first.eng) return;
+            const { eng, currentOld } = now;
+            invalidateCachedSnapshot(oldId);
+            const result = cropLayerToContentIfMeasured(eng, oldId) ?? [];
+            if (result.length !== 4 || (result[2] ?? 0) <= 0) return;
+            croppedLayerIds.add(oldId);
+            const boundsChanged =
+              result[0] !== currentOld.x || result[1] !== currentOld.y ||
+              result[2] !== (currentOld.width ?? 0) || result[3] !== (currentOld.height ?? 0);
+            useEditorStore.setState((s) => ({
+              document: {
+                ...s.document,
+                layers: s.document.layers.map((l) =>
+                  l.id === oldId
+                    ? { ...l, x: result[0]!, y: result[1]!, width: result[2]!, height: result[3]! }
+                    : l
+                ),
+              },
+              renderVersion: s.renderVersion + 1,
+            }));
+            if (boundsChanged) {
+              clearJsPixelData(oldId);
+            }
+          });
         });
       }
     }

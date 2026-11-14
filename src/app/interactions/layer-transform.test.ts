@@ -173,6 +173,26 @@ describe('getLayerTransformBox', () => {
   });
 });
 
+describe('beginLayerTransformSession', () => {
+  it('hands each layer\'s measured content rect to the engine, which reads nothing', async () => {
+    const box = (await settledBox())!;
+    expect(beginLayerTransformSession(box)).toBe(true);
+    expect(bridge.beginLayerTransform).toHaveBeenCalledWith(expect.anything(), 'a', 10, 20, 30, 40);
+    expect(bridge.beginLayerTransform).toHaveBeenCalledWith(expect.anything(), 'b', 0, 0, 20, 10);
+  });
+
+  it('does not begin while a layer\'s content bounds are still being read', async () => {
+    const box = (await settledBox())!;
+    // New pixels on b: its bounds are stale until they have been read again.
+    versions.set('b', 1);
+    expect(beginLayerTransformSession(box)).toBe(false);
+    expect(bridge.beginLayerTransform).not.toHaveBeenCalled();
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(beginLayerTransformSession(box)).toBe(true);
+  });
+});
+
 describe('renderLayerTransform', () => {
   it('renders every layer about the shared centre into the rect its own content lands in', async () => {
     const box = (await settledBox())!;
