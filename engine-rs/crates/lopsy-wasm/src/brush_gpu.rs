@@ -34,7 +34,7 @@ pub fn begin_stroke(engine: &mut EngineInner, layer_id: &str) -> Result<(), Stri
         acc.wrapping_add((b as u32).wrapping_mul(i as u32 + 1))
             .wrapping_mul(0x85EBCA6Bu32)
     });
-    let seed = seed ^ (js_sys::Date::now() as u32);
+    let seed = seed ^ (crate::host::now_ms() as u32);
     engine.stroke_texture_rotation = (seed as f32 / u32::MAX as f32) * std::f32::consts::TAU;
     engine.stroke_texture_origin_set = false;
 

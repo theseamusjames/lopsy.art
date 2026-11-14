@@ -178,7 +178,7 @@ pub fn upload_pixels_f32_rect(
 pub fn upload_pixels_from_canvas(
     engine: &mut EngineInner,
     layer_id: &str,
-    canvas: &web_sys::HtmlCanvasElement,
+    canvas: &crate::gpu::ExternalImage,
     width: u32,
     height: u32,
 ) -> Result<(), String> {

@@ -46,12 +46,13 @@ impl GpuContext {
             .flatten()
             .is_some();
 
-        web_sys::console::log_1(
+        crate::host::log(
+            crate::host::LogLevel::Info,
             &format!(
                 "[Lopsy GPU] RGBA16F: ext_half={} ext_float={} fbo_ok={} → use_float={}  float_blend={}",
                 has_half_float_ext, has_float_ext,
                 has_half_float, has_half_float, has_float_blend
-            ).into(),
+            ),
         );
 
         Ok(Self {

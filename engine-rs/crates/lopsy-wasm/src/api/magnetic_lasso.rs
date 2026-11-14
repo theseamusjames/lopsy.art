@@ -1,35 +1,13 @@
-//! Magnetic lasso selection tool — CPU-side Sobel edge field plus segment
-//! snapping. Lives separate from `api/selection.rs` because it needs a
-//! persistent edge field on the engine (begin/end lifecycle) while
-//! everything else in selection is stateless mask math.
+//! wasm-bindgen exports for `commands::magnetic_lasso`. Each converts its arguments
+//! and calls the one function of the same name there.
 
 use wasm_bindgen::prelude::*;
 
-use crate::{Engine, api};
-
-// ============================================================
-// Magnetic Lasso
-// ============================================================
-//
-// begin(layerId) reads the active layer's pixels from the GPU, computes a
-// doc-sized Sobel edge-magnitude field, and stores it on the engine. snap()
-// queries that field to pull a candidate segment onto strong edges — only
-// coordinates leave the Rust side. end() frees the field.
+use crate::Engine;
 
 #[wasm_bindgen(js_name = "magneticLassoBegin")]
 pub fn magnetic_lasso_begin(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
-    let doc_w = engine.inner.doc_width;
-    let doc_h = engine.inner.doc_height;
-    if doc_w == 0 || doc_h == 0 {
-        return Err(JsError::new("Document has zero size"));
-    }
-
-    let pixels = api::fill::read_layer_pixels_for_fill(engine, layer_id)?;
-    let edges = lopsy_core::magnetic_lasso::compute_edge_field(&pixels, doc_w, doc_h);
-    engine.inner.mlasso.edges = Some(edges);
-    engine.inner.mlasso.width = doc_w;
-    engine.inner.mlasso.height = doc_h;
-    Ok(())
+    crate::commands::magnetic_lasso::magnetic_lasso_begin(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "magneticLassoSnap")]
@@ -42,42 +20,15 @@ pub fn magnetic_lasso_snap(
     radius: u32,
     threshold: u8,
 ) -> Vec<f32> {
-    let Some(edges) = engine.inner.mlasso.edges.as_ref() else {
-        return vec![from_x, from_y, to_x, to_y];
-    };
-    lopsy_core::magnetic_lasso::snap_segment(
-        edges,
-        engine.inner.mlasso.width,
-        engine.inner.mlasso.height,
-        from_x, from_y, to_x, to_y,
-        radius, threshold,
-    )
+    crate::commands::magnetic_lasso::magnetic_lasso_snap(&engine.inner, from_x, from_y, to_x, to_y, radius, threshold)
 }
 
 #[wasm_bindgen(js_name = "magneticLassoSnapPoint")]
-pub fn magnetic_lasso_snap_point(
-    engine: &Engine,
-    x: f32,
-    y: f32,
-    radius: u32,
-    threshold: u8,
-) -> Vec<f32> {
-    let Some(edges) = engine.inner.mlasso.edges.as_ref() else {
-        return vec![x, y];
-    };
-    let (sx, sy) = lopsy_core::magnetic_lasso::snap_point(
-        edges,
-        engine.inner.mlasso.width,
-        engine.inner.mlasso.height,
-        x, y, radius, threshold,
-    );
-    vec![sx, sy]
+pub fn magnetic_lasso_snap_point(engine: &Engine, x: f32, y: f32, radius: u32, threshold: u8) -> Vec<f32> {
+    crate::commands::magnetic_lasso::magnetic_lasso_snap_point(&engine.inner, x, y, radius, threshold)
 }
 
 #[wasm_bindgen(js_name = "magneticLassoEnd")]
 pub fn magnetic_lasso_end(engine: &mut Engine) {
-    engine.inner.mlasso.edges = None;
-    engine.inner.mlasso.width = 0;
-    engine.inner.mlasso.height = 0;
+    crate::commands::magnetic_lasso::magnetic_lasso_end(&mut engine.inner)
 }
-

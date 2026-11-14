@@ -454,7 +454,7 @@ impl TexturePool {
     pub fn upload_canvas(
         &self,
         handle: TextureHandle,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: &crate::gpu::ExternalImage,
         w: u32,
         h: u32,
     ) -> Result<(), String> {
@@ -663,7 +663,7 @@ fn tex_sub_image_2d_f32(
 /// which fails any e2e test that hits it.
 #[cfg(debug_assertions)]
 fn report_misuse(what: &str, handle: TextureHandle) {
-    web_sys::console::error_1(&format!("[texture-pool] handle {} {what}", handle.0).into());
+    crate::host::log(crate::host::LogLevel::Error, &format!("[texture-pool] handle {} {what}", handle.0));
 }
 
 #[cfg(not(debug_assertions))]
