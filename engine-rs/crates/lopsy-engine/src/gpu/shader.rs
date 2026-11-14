@@ -141,7 +141,7 @@ pub const GRADIENT_RADIAL_FRAG: &str = include_str!("shaders/gradient/gradient_r
 
 // Shape
 pub const SHAPE_FILL_FRAG: &str = include_str!("shaders/shape/shape_fill.glsl");
-pub const FLOOD_FILL_APPLY_FRAG: &str = include_str!("shaders/shape/flood_fill_apply.glsl");
+pub const FLOOD_FILL_APPLY_FRAG: &str = translated!("shape/flood_fill_apply");
 pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = include_str!("shaders/shape/bucket_fill_color_match.glsl");
 
 // Selection
