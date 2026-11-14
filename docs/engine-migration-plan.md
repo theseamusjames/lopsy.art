@@ -15,7 +15,7 @@ Status: in progress.
 | 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
-| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703). Left: mask bytes, the layer backup and the reads inside engine commands; see Phase 4 |
+| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Every readback the app makes through the bridge now answers with a Promise. Left: the reads inside engine commands, and a synchronous store read only tests reach; see Phase 4 |
 | 5–7 | Not started |
 
 ---
@@ -907,29 +907,49 @@ computed once. The reads are at the ends:
   a Move or transform commit) reads the layer to build the mask from its
   alpha, and awaits it (above).
 
-**Left, with what each needs:**
+**Mask bytes and the layer backup (#1704).** `layer.mask.data` already
+lagged the GPU mask; what was synchronous was `materializeMaskData`,
+called wherever JS needed current bytes at once. Each caller now either
+awaits or leaves the mask on the GPU:
 
-- **Mask bytes** (`readMaskTexture`). The lazy refresh is behind a read
-  queue already; the synchronous part is `materializeMaskData`, called
-  where JS needs current bytes at once. Each caller has a way out that
-  keeps the mask on the GPU: Duplicate Layer can copy the mask texture
-  (`snapshotMaskGpu` into the new layer) and mark its bytes stale;
-  Remove Mask can keep a GPU mask snapshot in history instead of the
-  bytes; crop, resize and flip (`remapLayerMaskThrough`) can leave the
-  resampled mask stale and let the queue refresh it; PSD export and
-  project save can await.
-- **The context menu's Define Brush Preset** reads the layer through
-  `getOrCreateLayerPixelData`, the last caller of
-  `readLayerAsImageDataSync` besides tests. It can share the Edit menu's
-  awaited read.
-- `readQuickMaskPixels` has no callers in the app.
+- Save Project and Export PSD await the masks they write.
+- Duplicate Layer copies a lagging mask's texture to the copy
+  (`snapshotMaskGpu` into the new layer) and queues the copy's bytes.
+- Remove Mask records a pixel history entry, which holds the mask as a
+  GPU snapshot, in place of a metadata entry that needed the bytes.
+- Crop, resize, flip and rotate (`remapLayerMaskThrough`) resample on
+  the GPU, give the mask its new size at once, and read the bytes in
+  behind it. Until they land, `mask.data` keeps the old bytes at the old
+  size, marked stale and as already uploaded. A stand-in buffer of the
+  new size would have been a new JS pixel buffer, which the pixel-debt
+  check rejects.
+
+A read that was out while its mask was written again is dropped, by the
+lazy queue (a cancel or newer request disowns it) and by
+`materializeMaskData` (a per-layer write count).
+
+The backup runner's `readBlob` answers with a Promise. A hidden-tab pass
+reads every layer back to back with no idle callback between them and
+commits when the last read has answered; on WebGL that is within the
+task of the request. One loop owns a pass, so a hidden-tab request that
+arrives while a sliced read is out takes that loop over. On a backend
+whose reads take frames, a tab hidden for good before they answer keeps
+its previous backup; that is the contract change the old `now` mode
+could not survive, and it is not exercised yet.
+
+**Left:**
+
 - **Reads inside engine commands**: mask fill and quick-mask fill,
-  magnetic lasso begin, the Lab decode above. These are Rust's to make
-  async in 6.6, and their exports then return a Promise.
-- **Layer backup.** `layer-backup-runner` takes a synchronous `readBlob`,
-  and its `now` mode (the tab was hidden) finishes every layer before it
-  returns. An async read cannot promise that, so the runner's contract
-  has to change, not only its signature.
+  magnetic lasso begin, PSD export, the Lab decode above. These are
+  Rust's to make async in 6.6, and their exports then return a Promise.
+  For magnetic lasso, moves that arrive before the edges are ready
+  should pass the raw point through.
+- **`expandLayerForEditing` and `resolvePixelData`** in the pixel store
+  still call `readLayerAsImageDataSync`. No app code reaches them: only
+  unit tests and e2e helpers that drive the store directly (`rendering`,
+  `layer-groups`, `brush-selection-crossover`, `move-layer`). They go
+  when those helpers read through the bridge instead.
+- `readQuickMaskPixels` has no callers in the app.
 
 ### Phase 5 — WGSL as the shader source
 
