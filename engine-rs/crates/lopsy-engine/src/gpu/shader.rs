@@ -51,7 +51,7 @@ pub const BLIT_REGION_FRAG: &str = translated!("blit_region");
 pub const MASK_EXPAND_FRAG: &str = translated!("mask_expand");
 pub const MASK_REMAP_FRAG: &str = translated!("mask_remap");
 pub const QUICK_MASK_TRANSLATE_FRAG: &str = translated!("quick_mask_translate");
-pub const TRANSFORM_AFFINE_FRAG: &str = include_str!("shaders/transform_affine.glsl");
+pub const TRANSFORM_AFFINE_FRAG: &str = translated!("transform_affine");
 pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_perspective.glsl");
 
 // Effects
