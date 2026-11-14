@@ -163,7 +163,8 @@ engine-rs/
             program.rs      # Shader compilation, linking, uniform upload
             pass.rs         # What a pass does to the WebGL context
           wgpu/           # The wgpu backend, compiled in place of webgl/ by
-                          # `--features wgpu`. An outline so far: nothing draws
+                          # `--features wgpu`. It creates a device, clears and
+                          # presents; no pass draws yet
 ```
 
 ### Key Shaders
@@ -360,7 +361,8 @@ npm run typecheck    # tsc --noEmit
 
 # Rust/WASM engine — ALWAYS use npm run, never call wasm-pack directly
 npm run wasm:build
-npm run wasm:build:wgpu   # the wgpu backend, into src/engine-wasm/pkg-wgpu (not loaded yet)
+npm run wasm:build:wgpu   # the wgpu backend, into src/engine-wasm/pkg-wgpu. The dev server loads
+                          # it for /?renderer=wgpu, or for every page with LOPSY_RENDERER=wgpu
 ```
 
 ## Code Style
