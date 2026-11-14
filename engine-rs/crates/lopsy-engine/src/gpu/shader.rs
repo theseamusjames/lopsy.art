@@ -104,22 +104,11 @@ pub const SUNBURST_FRAG: &str = translated!("filters/sunburst");
 pub const COLOR_LUT_FRAG: &str = translated!("filters/color_lut");
 pub const TEXTURE_FRAG: &str = translated!("filters/texture");
 
-// Brush (assembled from header + variant + footer at compile_all time)
-const BRUSH_DAB_CIRCLE_FRAG: &str = concat!(
-    include_str!("shaders/brush/brush_dab_header.glsl"),
-    include_str!("shaders/brush/brush_dab_circle.glsl"),
-    include_str!("shaders/brush/brush_dab_footer.glsl"),
-);
-const BRUSH_DAB_ALPHA_FRAG: &str = concat!(
-    include_str!("shaders/brush/brush_dab_header.glsl"),
-    include_str!("shaders/brush/brush_dab_alpha.glsl"),
-    include_str!("shaders/brush/brush_dab_footer.glsl"),
-);
-const BRUSH_DAB_COLOR_FRAG: &str = concat!(
-    include_str!("shaders/brush/brush_dab_header.glsl"),
-    include_str!("shaders/brush/brush_dab_color.glsl"),
-    include_str!("shaders/brush/brush_dab_footer.glsl"),
-);
+// Brush: each file is the shared header include, its own computeDab and
+// the shared footer include.
+const BRUSH_DAB_CIRCLE_FRAG: &str = translated!("brush/brush_dab_circle");
+const BRUSH_DAB_ALPHA_FRAG: &str = translated!("brush/brush_dab_alpha");
+const BRUSH_DAB_COLOR_FRAG: &str = translated!("brush/brush_dab_color");
 pub const ERASER_DAB_FRAG: &str = translated!("brush/eraser_dab");
 pub const PENCIL_DAB_FRAG: &str = translated!("brush/pencil_dab");
 pub const QUICK_MASK_DAB_FRAG: &str = translated!("brush/quick_mask_dab");
