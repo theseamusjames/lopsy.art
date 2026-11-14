@@ -4,6 +4,8 @@
 
 
 use crate::engine::EngineInner;
+use crate::gpu::read::Read;
+use crate::task::Cx;
 use crate::{selection_gpu, quick_mask_gpu};
 
 // ============================================================
@@ -20,14 +22,15 @@ pub fn feather_selection_mask(engine: &mut EngineInner, radius: u32) {
     selection_gpu::feather_selection_mask(&mut *engine, radius);
 }
 
-pub fn read_selection_mask(engine: &EngineInner) -> Vec<u8> {
-    let (w, h, mask) = selection_gpu::read_selection_mask(&*engine);
-    if mask.is_empty() { return Vec::new(); }
-    let mut result = Vec::with_capacity(8 + mask.len());
-    result.extend_from_slice(&w.to_le_bytes());
-    result.extend_from_slice(&h.to_le_bytes());
-    result.extend_from_slice(&mask);
-    result
+pub fn read_selection_mask(engine: &EngineInner) -> Read<Vec<u8>> {
+    selection_gpu::read_selection_mask(&*engine).map(|(w, h, mask)| {
+        if mask.is_empty() { return Vec::new(); }
+        let mut result = Vec::with_capacity(8 + mask.len());
+        result.extend_from_slice(&w.to_le_bytes());
+        result.extend_from_slice(&h.to_le_bytes());
+        result.extend_from_slice(&mask);
+        result
+    })
 }
 
 pub fn clear_selection(engine: &mut EngineInner) {
@@ -84,7 +87,7 @@ pub fn enter_quick_mask_mode(engine: &mut EngineInner) {
     quick_mask_gpu::enter_quick_mask_mode(&mut *engine);
 }
 
-pub fn exit_quick_mask_mode(engine: &mut EngineInner) -> Option<Vec<u8>> {
+pub fn exit_quick_mask_mode(engine: &mut EngineInner) -> Read<Option<Vec<u8>>> {
     quick_mask_gpu::exit_quick_mask_mode(&mut *engine)
 }
 
@@ -127,15 +130,15 @@ pub fn draw_quick_mask_pencil_line(
     quick_mask_gpu::draw_quick_mask_pencil_line(&mut *engine, x0, y0, x1, y1, r, g, b, a, size, mode);
 }
 
-pub fn fill_quick_mask(
-    engine: &mut EngineInner,
+pub async fn fill_quick_mask(
+    cx: Cx,
     start_x: u32,
     start_y: u32,
     tolerance: u32,
     contiguous: bool,
     mode: u32,
 ) {
-    quick_mask_gpu::fill_quick_mask(&mut *engine, start_x, start_y, tolerance, contiguous, mode);
+    quick_mask_gpu::fill_quick_mask(&cx, start_x, start_y, tolerance, contiguous, mode).await;
 }
 
 pub fn render_quick_mask_linear_gradient(
@@ -170,14 +173,15 @@ pub fn render_quick_mask_radial_gradient(
 /// `width * height` grayscale bytes). Used by the move tool to snapshot the
 /// quick mask at drag-start so subsequent move events can translate the
 /// painted content with the marquee (#315).
-pub fn read_quick_mask_pixels(engine: &EngineInner) -> Vec<u8> {
-    let (w, h, mask) = quick_mask_gpu::read_quick_mask_pixels(&*engine);
-    if mask.is_empty() { return Vec::new(); }
-    let mut result = Vec::with_capacity(8 + mask.len());
-    result.extend_from_slice(&(w as i32).to_le_bytes());
-    result.extend_from_slice(&(h as i32).to_le_bytes());
-    result.extend_from_slice(&mask);
-    result
+pub fn read_quick_mask_pixels(engine: &EngineInner) -> Read<Vec<u8>> {
+    quick_mask_gpu::read_quick_mask_pixels(&*engine).map(|(w, h, mask)| {
+        if mask.is_empty() { return Vec::new(); }
+        let mut result = Vec::with_capacity(8 + mask.len());
+        result.extend_from_slice(&(w as i32).to_le_bytes());
+        result.extend_from_slice(&(h as i32).to_le_bytes());
+        result.extend_from_slice(&mask);
+        result
+    })
 }
 
 /// Upload single-channel grayscale pixels back into the quick-mask texture.

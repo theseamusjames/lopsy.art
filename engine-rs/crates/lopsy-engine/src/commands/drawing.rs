@@ -7,6 +7,7 @@
 
 
 use crate::engine::EngineInner;
+use crate::gpu::read::Read;
 use crate::{gradient_gpu, layer_manager, shape_gpu};
 
 // ============================================================
@@ -57,20 +58,24 @@ pub fn compute_radial_gradient_t(px: f64, py: f64, cx: f64, cy: f64, radius: f64
 // Eyedropper
 // ============================================================
 
-pub fn sample_color(engine: &EngineInner, x: f64, y: f64, sample_size: u32) -> Vec<u8> {
+pub fn sample_color(engine: &EngineInner, x: f64, y: f64, sample_size: u32) -> Read<Vec<u8>> {
     let ix = x as i32;
     let iy = y as i32;
     let half = (sample_size / 2) as i32;
+    let doc_color_mode = engine.doc_color_mode;
 
-    let mut pixels = engine
+    engine
         .gpu()
         .read_rgba(engine.composite_texture, ix - half, iy - half, sample_size, sample_size)
-        .unwrap_or_else(|_| vec![0u8; (sample_size * sample_size * 4) as usize]);
+        .or(vec![0u8; (sample_size * sample_size * 4) as usize])
+        .map(move |pixels| average_sample(pixels, doc_color_mode, sample_size))
+}
 
+fn average_sample(mut pixels: Vec<u8>, doc_color_mode: u32, sample_size: u32) -> Vec<u8> {
     // Decode before averaging: the transform out of a native mode is
     // non-linear, so averaging encoded values would not match what the
     // user sees under the cursor.
-    crate::compositor::decode_native_color_mode(engine.doc_color_mode, &mut pixels);
+    crate::compositor::decode_native_color_mode(doc_color_mode, &mut pixels);
 
     // Average the sampled pixels
     let count = (sample_size * sample_size) as usize;

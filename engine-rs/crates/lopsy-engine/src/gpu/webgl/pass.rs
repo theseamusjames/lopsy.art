@@ -19,6 +19,7 @@ use super::framebuffer::{FramebufferHandle, FramebufferPool};
 use super::program::{LinkedProgram, ParamSink};
 use super::texture_pool::{TextureHandle, TexturePool};
 use crate::gpu::pass::{Blend, ReadFormat, Scissor, Target};
+use crate::gpu::read::Read;
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::uniforms::Field;
 
@@ -83,13 +84,15 @@ impl<'a> GpuRef<'a> {
 
     /// Read back `w × h` texels of `texture` starting at `(x, y)` as 16-bit
     /// RGBA.
-    pub fn read_rgba_u16(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Result<Vec<u16>, String> {
-        let tex = self.textures.get(texture).ok_or("Texture not found")?;
+    pub fn read_rgba_u16(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Read<Vec<u16>> {
+        let Some(tex) = self.textures.get(texture) else {
+            return Read::failed("Texture not found");
+        };
         self.fbos.attach_texture(self.render_fbo, tex);
         self.fbos.bind(self.render_fbo);
         let result = self.textures.read_rgba_u16(x, y, w, h);
         self.fbos.unbind();
-        result
+        Read::ready(result)
     }
 
     /// Upload `w * h` single-byte values as a temporary R8 texture and run
@@ -195,13 +198,15 @@ impl<'a> GpuRef<'a> {
     }
 
     /// Read back `w × h` texels of `texture` starting at `(x, y)` as RGBA8.
-    pub fn read_rgba(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Result<Vec<u8>, String> {
-        let tex = self.textures.get(texture).ok_or("Texture not found")?;
+    pub fn read_rgba(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Read<Vec<u8>> {
+        let Some(tex) = self.textures.get(texture) else {
+            return Read::failed("Texture not found");
+        };
         self.fbos.attach_texture(self.render_fbo, tex);
         self.fbos.bind(self.render_fbo);
         let result = self.textures.read_rgba(x, y, w, h);
         self.fbos.unbind();
-        result
+        Read::ready(result)
     }
 }
 /// A [`Pass`](crate::gpu::pass::Pass) without its uniform struct's type, so
@@ -264,7 +269,11 @@ impl<'a> RawPass<'a> {
         self.program.with_location(self.gpu.gl, name, |loc| self.gpu.gl.uniform1i(Some(loc), unit));
     }
 
-    pub(in crate::gpu) fn read_back(self, format: ReadFormat, w: u32, h: u32) -> Option<Vec<u8>> {
+    pub(in crate::gpu) fn read_back(self, format: ReadFormat, w: u32, h: u32) -> Read<Vec<u8>> {
+        Read::ready(self.read_back_now(format, w, h).ok_or_else(|| "Readback failed".to_string()))
+    }
+
+    fn read_back_now(self, format: ReadFormat, w: u32, h: u32) -> Option<Vec<u8>> {
         if self.has_missing_texture {
             return None;
         }

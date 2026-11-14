@@ -2,6 +2,7 @@ use lopsy_core::geometry::Rect;
 use lopsy_core::pixel_buffer::{content_rect_from_projections, reduction_steps};
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Scissor, Target};
+use crate::gpu::read::Read;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::params::core::ContentBoundsReduceParams;
 
@@ -22,13 +23,24 @@ pub fn texture_content_bounds(
     tex: TextureHandle,
     w: u32,
     h: u32,
-) -> Result<Rect, String> {
-    let cols = reduce_axis(engine, tex, w, h, Axis::Y)?;
-    if cols.iter().all(|&b| b <= 127) {
-        return Ok(Rect::new(0, 0, 0, 0));
+) -> Read<Rect> {
+    let cols = reduce_axis(engine, tex, w, h, Axis::Y);
+    // With the columns already in hand, an empty layer needs no rows. A
+    // backend that answers later reduces both axes before waiting, so the
+    // two strips are of the same pixels.
+    if let Some(Ok(cols)) = cols.peek() {
+        if is_empty(cols) {
+            return Read::ready(Ok(Rect::new(0, 0, 0, 0)));
+        }
     }
-    let rows = reduce_axis(engine, tex, w, h, Axis::X)?;
-    Ok(content_rect_from_projections(&cols, &rows))
+    let rows = reduce_axis(engine, tex, w, h, Axis::X);
+    cols.join(rows).map(|(cols, rows)| {
+        if is_empty(&cols) { Rect::new(0, 0, 0, 0) } else { content_rect_from_projections(&cols, &rows) }
+    })
+}
+
+fn is_empty(occupancy: &[u8]) -> bool {
+    occupancy.iter().all(|&b| b <= 127)
 }
 
 #[derive(Clone, Copy)]
@@ -46,7 +58,7 @@ fn reduce_axis(
     w: u32,
     h: u32,
     axis: Axis,
-) -> Result<Vec<u8>, String> {
+) -> Read<Vec<u8>> {
     let len = match axis { Axis::X => w, Axis::Y => h };
     let mut cur = src;
     let (mut cur_w, mut cur_h) = (w, h);
@@ -59,13 +71,13 @@ fn reduce_axis(
             Ok(t) => t,
             Err(e) => {
                 if let Some(prev) = owned { engine.texture_pool.release(prev); }
-                return Err(e);
+                return Read::failed(e);
             }
         };
         if engine.texture_pool.get(out).is_none() {
             engine.texture_pool.release(out);
             if let Some(prev) = owned { engine.texture_pool.release(prev); }
-            return Err("reduction texture missing".into());
+            return Read::failed("reduction texture missing");
         }
         draw_reduce_step(engine, cur, (cur_w, cur_h), out, axis, is_first);
         if let Some(prev) = owned.replace(out) {
@@ -77,11 +89,10 @@ fn reduce_axis(
         is_first = false;
     }
 
-    let Some(strip) = owned else { return Err("no reduction step ran".into()) };
+    let Some(strip) = owned else { return Read::failed("no reduction step ran") };
     let rgba = engine.gpu().read_rgba(strip, 0, 0, cur_w, cur_h);
     engine.texture_pool.release(strip);
-    let rgba = rgba?;
-    Ok(rgba.chunks_exact(4).map(|px| px[0]).collect())
+    rgba.map(|rgba| rgba.chunks_exact(4).map(|px| px[0]).collect())
 }
 
 fn draw_reduce_step(

@@ -10,6 +10,7 @@ use lopsy_core::color::BlendMode;
 
 use crate::engine::EngineInner;
 use crate::layer_manager;
+use crate::task::Cx;
 
 // ============================================================
 // PSD Export / Import
@@ -29,10 +30,10 @@ use crate::layer_manager;
 /// correctly.
 ///
 /// Returns the PSD file as bytes.
-pub fn export_psd(
-    engine: &EngineInner,
-    layers_json: &str,
-    mask_data: &[u8],
+pub async fn export_psd(
+    cx: Cx,
+    layers_json: String,
+    mask_data: Vec<u8>,
     depth: u8,
     color_space: u8,
     color_mode: u8,
@@ -69,7 +70,7 @@ pub fn export_psd(
         effects_json: Option<String>,
     }
 
-    let layer_metas: Vec<LayerMeta> = serde_json::from_str(layers_json)
+    let layer_metas: Vec<LayerMeta> = serde_json::from_str(&layers_json)
         .map_err(|e| format!("invalid layers JSON: {e}"))?;
 
     let mut psd_layers = Vec::with_capacity(layer_metas.len());
@@ -91,9 +92,11 @@ pub fn export_psd(
         // dimensions, so we derive the rect from the texture too — this
         // guarantees the rect and pixel_data are always consistent.
         let tex_dims = if group_kind == GroupKind::Normal {
-            engine.layer_textures.get(&meta.id)
-                .and_then(|h| engine.texture_pool.get_size(*h))
-                .unwrap_or((0, 0))
+            cx.with(|engine| {
+                engine.layer_textures.get(&meta.id)
+                    .and_then(|h| engine.texture_pool.get_size(*h))
+                    .unwrap_or((0, 0))
+            })
         } else {
             (0, 0)
         };
@@ -104,14 +107,17 @@ pub fn export_psd(
             tex_dims
         };
 
+        // One layer is read at a time: a backend that answers later holds
+        // each read in GPU memory until it does.
         let pixel_data = if final_w > 0 && final_h > 0 && tex_dims.0 > 0 {
             match psd_depth {
                 PsdDepth::Eight => {
-                    layer_manager::read_pixels(&*engine, &meta.id)
+                    cx.with(|engine| layer_manager::read_pixels(engine, &meta.id))
+                        .await
                         .unwrap_or_default()
                 }
                 PsdDepth::Sixteen => {
-                    match layer_manager::read_pixels_u16(&*engine, &meta.id) {
+                    match cx.with(|engine| layer_manager::read_pixels_u16(engine, &meta.id)).await {
                         Ok(gpu_u16) => {
                             let mut data16 = Vec::with_capacity(gpu_u16.len() * 2);
                             for &val in &gpu_u16 {
@@ -191,9 +197,10 @@ pub fn export_psd(
     let psd_color_mode =
         PsdColorMode::from_u16(color_mode as u16).unwrap_or(PsdColorMode::Rgb);
 
+    let (doc_width, doc_height) = cx.with(|engine| (engine.doc_width, engine.doc_height));
     let doc = PsdDocument {
-        width: engine.doc_width,
-        height: engine.doc_height,
+        width: doc_width,
+        height: doc_height,
         depth: psd_depth,
         color_mode: psd_color_mode,
         layers: psd_layers,

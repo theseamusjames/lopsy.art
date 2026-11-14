@@ -1,6 +1,7 @@
 use crate::engine::EngineInner;
 use crate::gpu::framebuffer::FramebufferHandle;
 use crate::gpu::pass::{Pass, Target};
+use crate::gpu::read::Read;
 use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::imaging::Imaging;
 use crate::gpu::texture_pool::TextureHandle;
@@ -429,20 +430,20 @@ pub fn apply_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32)
 /// GPU-side box-downscaled thumbnail for one channel of a layer texture, as
 /// grey (see `thumbnail_gpu`).
 ///
-/// Returns 8-byte header `[width_u32_le, height_u32_le]` + RGBA pixels.
+/// Reads an 8-byte header `[width_u32_le, height_u32_le]` + RGBA pixels.
 pub fn read_channel_thumbnail(
     engine: &mut EngineInner,
     layer_id: &str,
     channel: u32,
     max_size: u32,
-) -> Vec<u8> {
+) -> Read<Vec<u8>> {
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&h) => h,
-        None => return Vec::new(),
+        None => return Read::ready(Ok(Vec::new())),
     };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
     if engine.texture_pool.get(tex_handle).is_none() {
-        return Vec::new();
+        return Read::ready(Ok(Vec::new()));
     }
     crate::thumbnail_gpu::read_box_thumbnail(engine, tex_handle, w, h, max_size, channel.min(3) as i32)
 }

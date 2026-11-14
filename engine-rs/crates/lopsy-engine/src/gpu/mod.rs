@@ -4,6 +4,7 @@
 
 pub mod params;
 pub mod pass;
+pub mod read;
 pub mod shader;
 pub mod uniforms;
 
@@ -14,3 +15,8 @@ pub mod uniforms;
 mod backend;
 
 pub use backend::{context, framebuffer, texture_pool, ExternalImage};
+
+/// What a task on the wgpu backend is waiting for, for the host that
+/// resumes it (see `task`).
+#[cfg(all(feature = "wgpu", target_arch = "wasm32"))]
+pub use backend::read::take_waiting_on;

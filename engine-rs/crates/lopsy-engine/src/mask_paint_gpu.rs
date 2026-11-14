@@ -3,8 +3,10 @@ use crate::compositor::mask_doc_origin;
 use crate::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
+use crate::gpu::read::Read;
 use crate::gradient_gpu::{copy_to_scratch_a, draw_gradient, GradientShape, GradientTarget};
 use crate::gpu::params::brush::{PencilDabParams, QuickMaskDabParams};
+use crate::task::Cx;
 
 // Every layer-mask writer here takes DOCUMENT-space coordinates and maps
 // them into mask texels with `mask_doc_origin` — the same origin the
@@ -173,8 +175,8 @@ pub fn draw_mask_pencil_line(
     engine.mark_layer_dirty(layer_id);
 }
 
-pub fn fill_mask(
-    engine: &mut EngineInner,
+pub async fn fill_mask(
+    cx: &Cx,
     layer_id: &str,
     doc_x: i32,
     doc_y: i32,
@@ -182,15 +184,19 @@ pub fn fill_mask(
     contiguous: bool,
     mode: u32,
 ) {
-    let Some(&tex_handle) = engine.layer_masks.get(layer_id) else { return };
-    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    let (ox, oy) = mask_doc_origin(engine, layer_id);
-    let local_x = doc_x - ox.round() as i32;
-    let local_y = doc_y - oy.round() as i32;
-    if local_x < 0 || local_y < 0 || local_x >= w as i32 || local_y >= h as i32 { return; }
-    let (start_x, start_y) = (local_x as u32, local_y as u32);
-
-    let Ok(rgba) = engine.gpu().read_rgba(tex_handle, 0, 0, w, h) else { return };
+    let Some((tex_handle, w, h, start_x, start_y, read)) = cx.with(|engine| {
+        let &tex_handle = engine.layer_masks.get(layer_id)?;
+        let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+        let (ox, oy) = mask_doc_origin(engine, layer_id);
+        let local_x = doc_x - ox.round() as i32;
+        let local_y = doc_y - oy.round() as i32;
+        if local_x < 0 || local_y < 0 || local_x >= w as i32 || local_y >= h as i32 { return None; }
+        let read = engine.gpu().read_rgba(tex_handle, 0, 0, w, h);
+        Some((tex_handle, w, h, local_x as u32, local_y as u32, read))
+    }) else {
+        return;
+    };
+    let Ok(rgba) = read.await else { return };
 
     let mut mask = vec![0u8; (w * h) as usize];
     for i in 0..(w * h) as usize {
@@ -236,8 +242,16 @@ pub fn fill_mask(
         rgba_out[i * 4 + 2] = v;
         rgba_out[i * 4 + 3] = 255;
     }
-    let _ = engine.texture_pool.upload_rgba(tex_handle, 0, 0, w, h, &rgba_out);
-    engine.mark_layer_dirty(layer_id);
+    cx.with(|engine| {
+        // The mask may have been removed or resized while the read was out.
+        let is_same_mask = engine.layer_masks.get(layer_id) == Some(&tex_handle)
+            && engine.texture_pool.get_size(tex_handle) == Some((w, h));
+        if !is_same_mask {
+            return;
+        }
+        let _ = engine.texture_pool.upload_rgba(tex_handle, 0, 0, w, h, &rgba_out);
+        engine.mark_layer_dirty(layer_id);
+    });
 }
 
 pub fn render_mask_linear_gradient(
@@ -325,14 +339,17 @@ pub fn render_mask_radial_gradient(
     engine.mark_layer_dirty(layer_id);
 }
 
-pub fn read_mask_texture(engine: &mut EngineInner, layer_id: &str) -> Option<Vec<u8>> {
-    let &handle = engine.layer_masks.get(layer_id)?;
-    let (w, h) = engine.texture_pool.get_size(handle)?;
-    engine.texture_pool.get(handle)?;
+pub fn read_mask_texture(engine: &mut EngineInner, layer_id: &str) -> Read<Option<Vec<u8>>> {
+    let none = || Read::ready(Ok(None));
+    let Some(&handle) = engine.layer_masks.get(layer_id) else { return none() };
+    let Some((w, h)) = engine.texture_pool.get_size(handle) else { return none() };
+    if engine.texture_pool.get(handle).is_none() {
+        return none();
+    }
 
     // R8 staging: 1 byte per pixel back over the bridge instead of 4,
     // and no CPU-side strided extract. See #745 — the RGBA path stalled
     // ~26 s per stroke on a 4K mask (60× worse than linear per pixel,
     // driven by the 16 M-iteration cache-hostile CPU loop).
-    engine.read_texture_r8(handle, w, h)
+    engine.read_texture_r8(handle, w, h).map(Some).or(None)
 }

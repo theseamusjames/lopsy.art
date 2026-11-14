@@ -6,6 +6,7 @@ use lopsy_core::layer::LayerDesc;
 use crate::gpu::context::GpuContext;
 use crate::gpu::framebuffer::{FramebufferHandle, FramebufferPool};
 use crate::gpu::pass::{Blend, GpuRef, Pass, ReadFormat};
+use crate::gpu::read::Read;
 use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::gpu::uniforms::Uniforms;
 use crate::imaging::Imaging;
@@ -834,7 +835,7 @@ impl EngineInner {
     /// path stalled ~26 s per mask stroke on a 4K document (staging
     /// alloc + 64 MB transfer + a 16 M-iteration cache-hostile CPU
     /// loop). R8 removes all three parts of that cost.
-    pub fn read_texture_r8(&self, src: TextureHandle, w: u32, h: u32) -> Option<Vec<u8>> {
+    pub fn read_texture_r8(&self, src: TextureHandle, w: u32, h: u32) -> Read<Vec<u8>> {
         // The blit shader writes vec4(color); the R8 target only keeps the
         // R channel.
         self.pass(&self.shaders.blit, ())
@@ -848,7 +849,7 @@ impl EngineInner {
     /// attachment is the driver's slow path (an 8.4s stall for a 2MP mask
     /// on software GL); one GPU blit plus an UNSIGNED_BYTE read is fast on
     /// every backend. Use for data that is conceptually 8-bit (masks).
-    pub fn read_texture_rgba8(&self, src: TextureHandle, w: u32, h: u32) -> Option<Vec<u8>> {
+    pub fn read_texture_rgba8(&self, src: TextureHandle, w: u32, h: u32) -> Read<Vec<u8>> {
         self.pass(&self.shaders.blit, ())
             .texture("u_tex", src)
             .blend(Blend::Off)

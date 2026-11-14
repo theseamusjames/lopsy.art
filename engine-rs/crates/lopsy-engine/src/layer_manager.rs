@@ -5,7 +5,9 @@ use crate::compositor::mask_doc_offset;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Scissor, Target};
 use crate::gpu::params::composite::BlendParams;
+use crate::gpu::read::Read;
 use crate::gpu::texture_pool::TextureHandle;
+use crate::task::Cx;
 use crate::layer_transform_gpu::{TransformDraw, TransformParams, TransformTargets};
 use crate::gpu::params::core::{
     BlitRegionParams, ClipboardClearParams, ClipboardCopyParams, FlipParams, MaskRemapParams, Rotate90Params,
@@ -851,14 +853,17 @@ pub fn expand_layer_to_doc_size(
 }
 
 /// Texture-local content bounds of a layer (width/height 0 when empty).
-pub fn layer_content_bounds(
-    engine: &mut EngineInner,
+pub async fn layer_content_bounds(
+    cx: &Cx,
     layer_id: &str,
 ) -> Result<lopsy_core::geometry::Rect, String> {
-    let tex_handle = *engine.layer_textures.get(layer_id)
-        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
-    let (tw, th) = engine.texture_pool.get_size(tex_handle).ok_or("Texture not found")?;
-    layer_content_rect(engine, layer_id, tex_handle, tw, th)
+    let (tex_handle, tw, th) = cx.with(|engine| -> Result<_, String> {
+        let tex_handle = *engine.layer_textures.get(layer_id)
+            .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+        let (tw, th) = engine.texture_pool.get_size(tex_handle).ok_or("Texture not found")?;
+        Ok((tex_handle, tw, th))
+    })?;
+    layer_content_rect(cx, layer_id, tex_handle, tw, th).await
 }
 
 /// Whether a rect a host measured earlier still lies inside a texture of
@@ -876,21 +881,28 @@ pub(crate) fn rect_is_within(rect: lopsy_core::geometry::Rect, width: u32, heigh
 /// Texture-local content bounds of a layer. Reduces on the GPU and reads
 /// back `w + h` texels (#1021); falls back to the full readback + CPU scan
 /// if the GPU path fails.
-fn layer_content_rect(
-    engine: &mut EngineInner,
+async fn layer_content_rect(
+    cx: &Cx,
     layer_id: &str,
     tex_handle: crate::gpu::texture_pool::TextureHandle,
     tw: u32,
     th: u32,
 ) -> Result<lopsy_core::geometry::Rect, String> {
-    if engine.texture_pool.get(tex_handle).is_some() {
-        if let Ok(rect) = crate::content_bounds_gpu::texture_content_bounds(engine, tex_handle, tw, th) {
+    let reduced = cx.with(|engine| {
+        engine
+            .texture_pool
+            .get(tex_handle)
+            .is_some()
+            .then(|| crate::content_bounds_gpu::texture_content_bounds(engine, tex_handle, tw, th))
+    });
+    if let Some(reduced) = reduced {
+        if let Ok(rect) = reduced.await {
             return Ok(rect);
         }
     }
     // read_pixels returns top-down pixels: GL row 0 = image top row (textures
     // are stored with image-top at GL-bottom, matching document space).
-    let pixels = read_pixels(engine, layer_id)?;
+    let pixels = cx.with(|engine| read_pixels(engine, layer_id)).await?;
     Ok(lopsy_core::pixel_buffer::crop_to_content_bounds(&pixels, tw, th).1)
 }
 
@@ -1560,13 +1572,16 @@ fn fill_texture_in_selection(
 pub fn read_pixels_u16(
     engine: &EngineInner,
     layer_id: &str,
-) -> Result<Vec<u16>, String> {
-    let tex_handle = engine.layer_textures.get(layer_id)
-        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
-    let (w, h) = engine.texture_pool.get_size(*tex_handle).unwrap_or((0, 0));
-    engine.texture_pool.get(*tex_handle).ok_or("Texture not found")?;
+) -> Read<Vec<u16>> {
+    let Some(&tex_handle) = engine.layer_textures.get(layer_id) else {
+        return Read::failed(format!("Layer {layer_id} not found"));
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return Read::failed("Texture not found");
+    }
 
-    engine.gpu().read_rgba_u16(*tex_handle, 0, 0, w, h)
+    engine.gpu().read_rgba_u16(tex_handle, 0, 0, w, h)
 }
 
 pub fn upload_pixels_u16(
@@ -1584,13 +1599,16 @@ pub fn upload_pixels_u16(
 pub fn read_pixels(
     engine: &EngineInner,
     layer_id: &str,
-) -> Result<Vec<u8>, String> {
-    let tex_handle = engine.layer_textures.get(layer_id)
-        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
-    let (w, h) = engine.texture_pool.get_size(*tex_handle).unwrap_or((0, 0));
-    engine.texture_pool.get(*tex_handle).ok_or("Texture not found")?;
+) -> Read<Vec<u8>> {
+    let Some(&tex_handle) = engine.layer_textures.get(layer_id) else {
+        return Read::failed(format!("Layer {layer_id} not found"));
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return Read::failed("Texture not found");
+    }
 
-    engine.gpu().read_rgba(*tex_handle, 0, 0, w, h)
+    engine.gpu().read_rgba(tex_handle, 0, 0, w, h)
 }
 
 pub fn upload_clipboard_pixels(
@@ -1614,11 +1632,14 @@ pub fn upload_clipboard_pixels(
     Ok(())
 }
 
-pub fn read_clipboard_pixels(engine: &EngineInner) -> Result<Vec<u8>, String> {
-    let tex_handle = engine.clipboard.texture
-        .ok_or("No clipboard texture")?;
+pub fn read_clipboard_pixels(engine: &EngineInner) -> Read<Vec<u8>> {
+    let Some(tex_handle) = engine.clipboard.texture else {
+        return Read::failed("No clipboard texture");
+    };
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
-    engine.texture_pool.get(tex_handle).ok_or("Clipboard texture not found")?;
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return Read::failed("Clipboard texture not found");
+    }
 
     engine.gpu().read_rgba(tex_handle, 0, 0, w, h)
 }

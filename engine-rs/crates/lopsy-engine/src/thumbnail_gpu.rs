@@ -8,6 +8,7 @@
 
 use crate::engine::EngineInner;
 use crate::gpu::pass::ReadFormat;
+use crate::gpu::read::Read;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::params::core::ThumbnailBoxParams;
 
@@ -30,7 +31,7 @@ pub fn thumbnail_size(w: u32, h: u32, max_size: u32) -> (u32, u32) {
 /// Box-downscale `src` (`w`×`h`, straight alpha) to fit `max_size` and
 /// read it back. `channel` is [`COLOUR`] or 0..3 for R, G, B, A as grey.
 ///
-/// Returns an 8-byte header `[width_u32_le, height_u32_le]` + RGBA8 pixels,
+/// Reads an 8-byte header `[width_u32_le, height_u32_le]` + RGBA8 pixels,
 /// or an empty vector when the GPU objects cannot be created.
 pub fn read_box_thumbnail(
     engine: &EngineInner,
@@ -39,24 +40,24 @@ pub fn read_box_thumbnail(
     h: u32,
     max_size: u32,
     channel: i32,
-) -> Vec<u8> {
+) -> Read<Vec<u8>> {
     if w == 0 || h == 0 {
-        return Vec::new();
+        return Read::ready(Ok(Vec::new()));
     }
     let (tw, th) = thumbnail_size(w, h, max_size);
 
-    let Some(thumb) = engine.pass(&engine.shaders.thumbnail_box, ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel })
+    engine
+        .pass(&engine.shaders.thumbnail_box, ThumbnailBoxParams { dst_size: [tw as f32, th as f32], channel })
         .texture("u_tex", src)
         .read_back(ReadFormat::Rgba8, tw, th)
-    else {
-        return Vec::new();
-    };
-
-    let mut result = Vec::with_capacity(8 + thumb.len());
-    result.extend_from_slice(&tw.to_le_bytes());
-    result.extend_from_slice(&th.to_le_bytes());
-    result.extend_from_slice(&thumb);
-    result
+        .map(move |thumb| {
+            let mut result = Vec::with_capacity(8 + thumb.len());
+            result.extend_from_slice(&tw.to_le_bytes());
+            result.extend_from_slice(&th.to_le_bytes());
+            result.extend_from_slice(&thumb);
+            result
+        })
+        .or(Vec::new())
 }
 
 #[cfg(test)]

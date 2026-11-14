@@ -34,6 +34,7 @@ use lopsy_core::geometry::Rect;
 
 use crate::gpu::backend::pass::{RawActivePass, RawPass};
 use crate::gpu::framebuffer::FramebufferHandle;
+use crate::gpu::read::Read;
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::uniforms::Uniforms;
@@ -144,9 +145,9 @@ impl<'a, P> Pass<'a, P> {
     /// Draw the pass into a temporary `w`×`h` 8-bit target and read that
     /// back. Reading an 8-bit target is fast on every driver, where reading
     /// a float one is not, and an R8 target moves a quarter of the bytes.
-    /// Returns `None` if an input texture no longer exists, the staging
-    /// objects cannot be created or the read fails.
-    pub fn read_back(self, format: ReadFormat, w: u32, h: u32) -> Option<Vec<u8>> {
+    /// The read fails if an input texture no longer exists or the staging
+    /// objects cannot be created.
+    pub fn read_back(self, format: ReadFormat, w: u32, h: u32) -> Read<Vec<u8>> {
         self.raw.read_back(format, w, h)
     }
 

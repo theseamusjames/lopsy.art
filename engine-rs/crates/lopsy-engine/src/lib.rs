@@ -38,3 +38,4 @@ pub mod text_transform_gpu;
 pub mod woff2;
 pub mod variable_instance;
 pub mod commands;
+pub mod task;

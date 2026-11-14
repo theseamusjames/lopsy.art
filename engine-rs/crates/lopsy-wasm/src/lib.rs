@@ -1,4 +1,5 @@
 pub mod api;
+mod readback;
 
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
@@ -11,6 +12,8 @@ use lopsy_engine::gpu::context::GpuContext;
 use lopsy_engine::gpu::shader::ShaderPrograms;
 use lopsy_engine::{compositor, host};
 
+use readback::{read, readback_export};
+
 // ============================================================
 // Engine wrapper for wasm_bindgen
 // ============================================================
@@ -18,6 +21,9 @@ use lopsy_engine::{compositor, host};
 #[wasm_bindgen]
 pub struct Engine {
     inner: EngineInner,
+    /// Commands waiting for a readback.
+    #[cfg(feature = "wgpu")]
+    tasks: readback::Tasks,
 }
 
 // ============================================================
@@ -54,7 +60,11 @@ pub async fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError>
 fn engine_on(gpu_ctx: GpuContext) -> Result<Engine, JsError> {
     let shaders = ShaderPrograms::compile_all(&gpu_ctx).map_err(|e| JsError::new(&e))?;
     let inner = EngineInner::new(gpu_ctx, shaders).map_err(|e| JsError::new(&e))?;
-    Ok(Engine { inner })
+    Ok(Engine {
+        inner,
+        #[cfg(feature = "wgpu")]
+        tasks: readback::Tasks::default(),
+    })
 }
 
 #[wasm_bindgen(js_name = "setDocumentSize")]
@@ -228,14 +238,33 @@ pub fn detect_color_space() -> u32 {
 // Export
 // ============================================================
 
-#[wasm_bindgen(js_name = "compositeForExport")]
-pub fn composite_for_export(engine: &mut Engine) -> Result<Vec<u8>, JsError> {
-    compositor::composite_for_export(&mut engine.inner).map_err(|e| JsError::new(&e))
+readback_export! {
+    #[wasm_bindgen(js_name = "compositeForExport")]
+    pub fn composite_for_export(engine) -> Result<Vec<u8>> {
+        read(compositor::composite_for_export(engine))
+    }
 }
 
-#[wasm_bindgen(js_name = "exportPng16")]
-pub fn export_png_16(engine: &mut Engine, color_space: u8) -> Result<Vec<u8>, JsError> {
-    compositor::export_png_16(&mut engine.inner, color_space).map_err(|e| JsError::new(&e))
+readback_export! {
+    #[wasm_bindgen(js_name = "exportPng16")]
+    pub fn export_png_16(engine, color_space: u8) -> Result<Vec<u8>> {
+        read(compositor::export_png_16(engine, color_space))
+    }
+}
+
+/// Continue a command that was waiting for a readback (see `readback`).
+/// WebGL never leaves one waiting.
+#[cfg(not(feature = "wgpu"))]
+#[wasm_bindgen(js_name = "resumeTask")]
+pub fn resume_task(_engine: &mut Engine, _id: u32) -> Result<JsValue, JsError> {
+    Err(JsError::new("No such readback task"))
+}
+
+/// Continue a command that was waiting for a readback (see `readback`).
+#[cfg(feature = "wgpu")]
+#[wasm_bindgen(js_name = "resumeTask")]
+pub fn resume_task(engine: &mut Engine, id: u32) -> Result<JsValue, JsValue> {
+    engine.tasks.resume(&mut engine.inner, id)
 }
 
 #[wasm_bindgen(js_name = "getCompositeSize")]

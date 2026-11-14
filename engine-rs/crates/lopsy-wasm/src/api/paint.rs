@@ -3,6 +3,7 @@
 
 use wasm_bindgen::prelude::*;
 
+use crate::readback::{read, readback_export, task};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "beginStroke")]
@@ -370,17 +371,23 @@ pub fn draw_mask_pencil_line(
     lopsy_engine::commands::paint::draw_mask_pencil_line(&mut engine.inner, layer_id, x0, y0, x1, y1, a, size, mode)
 }
 
-#[wasm_bindgen(js_name = "fillMask")]
-pub fn fill_mask(
-    engine: &mut Engine,
-    layer_id: &str,
-    doc_x: i32,
-    doc_y: i32,
-    tolerance: u32,
-    contiguous: bool,
-    mode: u32,
-) {
-    lopsy_engine::commands::paint::fill_mask(&mut engine.inner, layer_id, doc_x, doc_y, tolerance, contiguous, mode)
+readback_export! {
+    #[wasm_bindgen(js_name = "fillMask")]
+    pub fn fill_mask(
+        engine,
+        layer_id: &str,
+        doc_x: i32,
+        doc_y: i32,
+        tolerance: u32,
+        contiguous: bool,
+        mode: u32,
+    ) -> () {
+        let layer_id = layer_id.to_string();
+        task(|cx| async move {
+            lopsy_engine::commands::paint::fill_mask(cx, layer_id, doc_x, doc_y, tolerance, contiguous, mode).await;
+            Ok(())
+        })
+    }
 }
 
 #[wasm_bindgen(js_name = "renderMaskLinearGradient")]
@@ -408,7 +415,9 @@ pub fn render_mask_radial_gradient(
     lopsy_engine::commands::paint::render_mask_radial_gradient(&mut engine.inner, layer_id, cx, cy, radius, stops_json)
 }
 
-#[wasm_bindgen(js_name = "readMaskTexture")]
-pub fn read_mask_texture(engine: &mut Engine, layer_id: &str) -> Option<Vec<u8>> {
-    lopsy_engine::commands::paint::read_mask_texture(&mut engine.inner, layer_id)
+readback_export! {
+    #[wasm_bindgen(js_name = "readMaskTexture")]
+    pub fn read_mask_texture(engine, layer_id: &str) -> Option<Vec<u8>> {
+        read(lopsy_engine::commands::paint::read_mask_texture(engine, layer_id))
+    }
 }

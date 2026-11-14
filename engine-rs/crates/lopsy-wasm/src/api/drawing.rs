@@ -3,6 +3,7 @@
 
 use wasm_bindgen::prelude::*;
 
+use crate::readback::{read, readback_export};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "renderLinearGradient")]
@@ -55,9 +56,11 @@ pub fn compute_radial_gradient_t(px: f64, py: f64, cx: f64, cy: f64, radius: f64
     lopsy_engine::commands::drawing::compute_radial_gradient_t(px, py, cx, cy, radius)
 }
 
-#[wasm_bindgen(js_name = "sampleColor")]
-pub fn sample_color(engine: &Engine, x: f64, y: f64, sample_size: u32) -> Vec<u8> {
-    lopsy_engine::commands::drawing::sample_color(&engine.inner, x, y, sample_size)
+readback_export! {
+    #[wasm_bindgen(js_name = "sampleColor")]
+    pub fn sample_color(engine, x: f64, y: f64, sample_size: u32) -> Vec<u8> {
+        read(lopsy_engine::commands::drawing::sample_color(engine, x, y, sample_size))
+    }
 }
 
 #[wasm_bindgen(js_name = "saveShapePreview")]
