@@ -185,8 +185,10 @@ uniforms! {
     /// `filters/noise.glsl`
     pub struct NoiseParams {
         pub amount: f32,
-        pub monochrome: bool,
-        pub gaussian: bool,
+        /// 0 or 1.
+        pub monochrome: i32,
+        /// 0 or 1.
+        pub gaussian: i32,
         pub seed: f32,
     }
 }

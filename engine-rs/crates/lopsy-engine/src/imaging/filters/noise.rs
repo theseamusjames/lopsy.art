@@ -9,8 +9,8 @@ use crate::imaging::Imaging;
 pub fn add_noise<'a>(im: Imaging<'a>, src: TextureHandle, amount: f32, monochrome: bool, gaussian: bool, seed: f32) -> Pass<'a, NoiseParams> {
     im.gpu.pass(&im.shaders.noise, NoiseParams {
         amount: amount / 255.0,
-        monochrome,
-        gaussian,
+        monochrome: i32::from(monochrome),
+        gaussian: i32::from(gaussian),
         seed,
     }).texture("u_tex", src)
 }
