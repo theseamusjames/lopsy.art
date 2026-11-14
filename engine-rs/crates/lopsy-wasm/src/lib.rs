@@ -33,10 +33,25 @@ fn console_log(level: host::LogLevel, message: &str) {
     }
 }
 
+#[cfg(not(feature = "wgpu"))]
 #[wasm_bindgen(js_name = "createEngine")]
 pub fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError> {
     host::install(host::Host { log: console_log, now_ms: js_sys::Date::now });
     let gpu_ctx = GpuContext::new(&canvas).map_err(|e| JsError::new(&e))?;
+    engine_on(gpu_ctx)
+}
+
+/// WebGPU hands out its device through a promise, so on wgpu this returns
+/// one too. JS awaits `createEngine` on either backend.
+#[cfg(feature = "wgpu")]
+#[wasm_bindgen(js_name = "createEngine")]
+pub async fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError> {
+    host::install(host::Host { log: console_log, now_ms: js_sys::Date::now });
+    let gpu_ctx = GpuContext::new(&canvas).await.map_err(|e| JsError::new(&e))?;
+    engine_on(gpu_ctx)
+}
+
+fn engine_on(gpu_ctx: GpuContext) -> Result<Engine, JsError> {
     let shaders = ShaderPrograms::compile_all(&gpu_ctx).map_err(|e| JsError::new(&e))?;
     let inner = EngineInner::new(gpu_ctx, shaders).map_err(|e| JsError::new(&e))?;
     Ok(Engine { inner })

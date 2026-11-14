@@ -44,11 +44,47 @@ impl TexturePool {
         0
     }
 
-    pub fn acquire(&mut self, _width: u32, _height: u32) -> Result<TextureHandle, String> {
-        Err(UNAVAILABLE.into())
+    /// A new transparent texture. Nothing is reused yet: `release` destroys
+    /// what `acquire` made.
+    pub fn acquire(&mut self, width: u32, height: u32) -> Result<TextureHandle, String> {
+        if width > self.max_size || height > self.max_size {
+            return Err(format!("texture {width}x{height} exceeds the GPU limit of {}", self.max_size));
+        }
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d { width: width.max(1), height: height.max(1), depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: self.format(),
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let entry = Some(TextureEntry { texture, width, height });
+        let index = match self.entries.iter().position(Option::is_none) {
+            Some(index) => {
+                self.entries[index] = entry;
+                index
+            }
+            None => {
+                self.entries.push(entry);
+                self.entries.len() - 1
+            }
+        };
+        Ok(TextureHandle(index))
     }
 
-    pub fn release(&mut self, _handle: TextureHandle) {}
+    /// The format every pooled texture has.
+    pub(in crate::gpu) fn format(&self) -> wgpu::TextureFormat {
+        if self.use_float { wgpu::TextureFormat::Rgba16Float } else { wgpu::TextureFormat::Rgba8Unorm }
+    }
+
+    pub fn release(&mut self, handle: TextureHandle) {
+        self.delete(handle);
+    }
 
     pub fn delete(&mut self, handle: TextureHandle) {
         if let Some(entry) = self.entries.get_mut(handle.0).and_then(Option::take) {

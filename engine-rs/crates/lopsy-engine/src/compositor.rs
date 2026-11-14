@@ -492,6 +492,7 @@ pub fn render(engine: &mut EngineInner) {
     if let Err(e) = result {
         crate::host::log(crate::host::LogLevel::Error, &format!("compositor error: {e}"));
     }
+    engine.gpu().finish_frame();
 }
 
 /// The document composited at 16 bits and encoded as a PNG. `color_space`
