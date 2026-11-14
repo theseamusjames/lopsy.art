@@ -5,6 +5,7 @@
 // the valid sub-region and destroyed layer content.
 
 import { test, expect } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import { createDocument, waitForStore, drawEllipse, applyFilter } from './helpers';
 
 async function getLayerPixelAt(
@@ -12,17 +13,17 @@ async function getLayerPixelAt(
   x: number,
   y: number,
 ): Promise<{ r: number; g: number; b: number; a: number }> {
-  return page.evaluate(({ x, y }) => {
+  return page.evaluate(async ({ x, y }) => {
+    const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { activeLayerId: string; layers: { id: string; x: number; y: number }[] };
-        getOrCreateLayerPixelData: (id: string) => ImageData;
       };
     };
     const s = store.getState();
     const id = s.document.activeLayerId;
     const layer = s.document.layers.find((l) => l.id === id)!;
-    const data = s.getOrCreateLayerPixelData(id);
+    const data = await readLayerInDocument(id);
     const lx = x - layer.x;
     const ly = y - layer.y;
     if (lx < 0 || ly < 0 || lx >= data.width || ly >= data.height) {

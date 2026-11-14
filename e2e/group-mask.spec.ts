@@ -19,6 +19,7 @@
  *  - Unmasked blue: b>200, r<50
  */
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import { waitForStore, createDocument } from './helpers';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -130,15 +131,15 @@ test.describe('Group Mask — compositor integration', () => {
     // -----------------------------------------------------------------------
     // 2. Paint the raster layer fully red.
     // -----------------------------------------------------------------------
-    await page.evaluate(({ lid }) => {
+    await page.evaluate(async ({ lid }) => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
       const s = store.getState();
-      const data = s.getOrCreateLayerPixelData(lid);
+      const data = await readLayerInDocument(lid);
       for (let i = 0; i < data.data.length; i += 4) {
         data.data[i] = 255; data.data[i + 1] = 0; data.data[i + 2] = 0; data.data[i + 3] = 255;
       }
@@ -261,15 +262,15 @@ test.describe('Group Mask — compositor integration', () => {
     });
 
     // Paint layer blue
-    await page.evaluate(({ lid }) => {
+    await page.evaluate(async ({ lid }) => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
       const s = store.getState();
-      const data = s.getOrCreateLayerPixelData(lid);
+      const data = await readLayerInDocument(lid);
       for (let i = 0; i < data.data.length; i += 4) {
         data.data[i] = 0; data.data[i + 1] = 0; data.data[i + 2] = 255; data.data[i + 3] = 255;
       }
@@ -311,15 +312,15 @@ test.describe('Group Mask — compositor integration', () => {
     });
 
     // Paint layer blue
-    await page.evaluate(({ lid }) => {
+    await page.evaluate(async ({ lid }) => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
       const s = store.getState();
-      const data = s.getOrCreateLayerPixelData(lid);
+      const data = await readLayerInDocument(lid);
       for (let i = 0; i < data.data.length; i += 4) {
         data.data[i] = 0; data.data[i + 1] = 0; data.data[i + 2] = 255; data.data[i + 3] = 255;
       }

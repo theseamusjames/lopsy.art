@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -69,11 +70,11 @@ test.describe('Pixel Stretch Filter', () => {
     test.skip(isMobile, 'filter dialog not reachable on narrow viewport');
     await createDocument(page, 400, 300, false);
 
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
@@ -81,7 +82,7 @@ test.describe('Pixel Stretch Filter', () => {
       const state = store.getState();
       const id = state.document.activeLayerId;
       state.pushHistory('Paint');
-      const data = state.getOrCreateLayerPixelData(id);
+      const data = await readLayerInDocument(id);
       const W = data.width;
       const H = data.height;
       for (let i = 0; i < W * H * 4; i += 4) {

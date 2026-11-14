@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -141,15 +142,15 @@ async function getSelectionMaskAt(page: Page, docX: number, docY: number): Promi
 }
 
 async function countOpaquePixels(page: Page) {
-  return page.evaluate(() => {
+  return page.evaluate(async () => {
+    const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { activeLayerId: string };
-        getOrCreateLayerPixelData: (id: string) => ImageData;
       };
     };
     const state = store.getState();
-    const data = state.getOrCreateLayerPixelData(state.document.activeLayerId);
+    const data = await readLayerInDocument(state.document.activeLayerId);
     if (!data) return 0;
     let count = 0;
     for (let i = 3; i < data.data.length; i += 4) {
@@ -162,15 +163,15 @@ async function countOpaquePixels(page: Page) {
 /** Read a pixel from the active layer at document-local coords. */
 async function getPixelAt(page: Page, x: number, y: number) {
   return page.evaluate(
-    ({ x, y }) => {
+    async ({ x, y }) => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
         };
       };
       const state = store.getState();
-      const data = state.getOrCreateLayerPixelData(state.document.activeLayerId);
+      const data = await readLayerInDocument(state.document.activeLayerId);
       if (!data) return { r: 0, g: 0, b: 0, a: 0 };
       const idx = (y * data.width + x) * 4;
       return {

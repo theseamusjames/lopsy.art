@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -69,11 +70,11 @@ async function paintGradientRect(
   layerId?: string,
 ): Promise<void> {
   await page.evaluate(
-    ({ x, y, w, h, colorStart, colorEnd, direction, lid }) => {
+    async ({ x, y, w, h, colorStart, colorEnd, direction, lid }) => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
@@ -81,7 +82,7 @@ async function paintGradientRect(
       const state = store.getState();
       const id = lid ?? state.document.activeLayerId;
       state.pushHistory('Paint Gradient');
-      const data = state.getOrCreateLayerPixelData(id);
+      const data = await readLayerInDocument(id);
       for (let py = y; py < y + h; py++) {
         for (let px = x; px < x + w; px++) {
           if (px < 0 || px >= data.width || py < 0 || py >= data.height) continue;
@@ -111,11 +112,11 @@ async function paintTriangle(
   layerId?: string,
 ): Promise<void> {
   await page.evaluate(
-    ({ x1, y1, x2, y2, x3, y3, color, lid }) => {
+    async ({ x1, y1, x2, y2, x3, y3, color, lid }) => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
@@ -123,7 +124,7 @@ async function paintTriangle(
       const state = store.getState();
       const id = lid ?? state.document.activeLayerId;
       state.pushHistory('Paint Triangle');
-      const data = state.getOrCreateLayerPixelData(id);
+      const data = await readLayerInDocument(id);
 
       function sign(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
         return (px - bx) * (ay - by) - (ax - bx) * (py - by);
@@ -455,17 +456,17 @@ test.describe('Bug Fix: Clone Stamp', () => {
     // Simulate clone stamp: copy source region to destination
     // Source: (10,10)-(50,50), Destination: (100,100)-(140,140)
     await page.evaluate(
-      (lid) => {
+      async (lid) => {
+        const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
           getState: () => {
-            getOrCreateLayerPixelData: (id: string) => ImageData;
             updateLayerPixelData: (id: string, data: ImageData) => void;
             pushHistory: (label?: string) => void;
           };
         };
         const state = store.getState();
         state.pushHistory('Clone Stamp');
-        const data = state.getOrCreateLayerPixelData(lid);
+        const data = await readLayerInDocument(lid);
         const srcX = 10;
         const srcY = 10;
         const dstX = 100;
@@ -520,17 +521,17 @@ test.describe('Bug Fix: Clone Stamp', () => {
 
     // Clone
     await page.evaluate(
-      (lid) => {
+      async (lid) => {
+        const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
           getState: () => {
-            getOrCreateLayerPixelData: (id: string) => ImageData;
             updateLayerPixelData: (id: string, data: ImageData) => void;
             pushHistory: (label?: string) => void;
           };
         };
         const state = store.getState();
         state.pushHistory('Clone Stamp');
-        const data = state.getOrCreateLayerPixelData(lid);
+        const data = await readLayerInDocument(lid);
         for (let dy = 0; dy < 30; dy++) {
           for (let dx = 0; dx < 30; dx++) {
             const si = (dy * data.width + dx) * 4;

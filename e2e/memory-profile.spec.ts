@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 
 /**
  * Memory profiling test — run headed to include GPU memory.
@@ -215,12 +216,12 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName,
   const s1 = await snapshot(page, 'SNAPSHOT 1: Fresh document');
 
   // === Select Layer 1 and add two dots at opposite corners ===
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
+    const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { layers: Array<{ id: string; name: string }> };
         setActiveLayer: (id: string) => void;
-        getOrCreateLayerPixelData: (id: string) => ImageData;
         updateLayerPixelData: (id: string, data: ImageData) => void;
         pushHistory: (label?: string) => void;
       };
@@ -231,7 +232,7 @@ test('memory profile: sparse layers should be tiny', async ({ page, browserName,
     state.setActiveLayer(layer1.id);
 
     state.pushHistory('Add dots');
-    const data = state.getOrCreateLayerPixelData(layer1.id);
+    const data = await readLayerInDocument(layer1.id);
 
     // Dot at (0, 0) — red
     data.data[0] = 255;

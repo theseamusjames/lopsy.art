@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import type { ReadLayerImage } from './fixtures';
+import type { ReadLayerImage, ReadLayerInDocument } from './fixtures';
 import { addAdjustment, setGroupBlendMode } from './helpers';
 
 // ---------------------------------------------------------------------------
@@ -358,18 +358,18 @@ test.describe('Group Effects Rendering', () => {
 
   test('group adjustments affect the rendered output', async ({ page }) => {
     // Paint white pixels on the background layer
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { layers: Array<{ id: string; type: string }>, rootGroupId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
       const state = store.getState();
       const bgLayer = state.document.layers.find((l) => l.type === 'raster');
       if (!bgLayer) return;
-      const data = state.getOrCreateLayerPixelData(bgLayer.id);
+      const data = await readLayerInDocument(bgLayer.id);
       for (let i = 0; i < data.data.length; i += 4) {
         data.data[i] = 200;
         data.data[i + 1] = 200;
@@ -414,15 +414,15 @@ test.describe('Group Effects Rendering', () => {
     const doc2 = await getDocInfo(page);
     const layerId = doc2.activeLayerId!;
     await page.evaluate(
-      ({ layerId }) => {
+      async ({ layerId }) => {
+        const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
           getState: () => {
-            getOrCreateLayerPixelData: (id: string) => ImageData;
             updateLayerPixelData: (id: string, data: ImageData) => void;
           };
         };
         const state = store.getState();
-        const data = state.getOrCreateLayerPixelData(layerId);
+        const data = await readLayerInDocument(layerId);
         for (let i = 0; i < data.data.length; i += 4) {
           data.data[i] = 255;
           data.data[i + 1] = 0;
@@ -899,15 +899,15 @@ test.describe('Visual rendering after group move', () => {
     const doc1 = await getDocInfo(page);
     const layer1 = doc1.layers.find((l) => l.name === 'Layer 1')!;
     const rootId = doc1.rootGroupId!;
-    await page.evaluate(({ layerId }) => {
+    await page.evaluate(async ({ layerId }) => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
       const s = store.getState();
-      const d = s.getOrCreateLayerPixelData(layerId);
+      const d = await readLayerInDocument(layerId);
       for (let i = 0; i < d.data.length; i += 4) {
         d.data[i] = 255; d.data[i+1] = 0; d.data[i+2] = 0; d.data[i+3] = 255;
       }
@@ -958,15 +958,15 @@ test.describe('GPU rendering verification', () => {
     const rootId = doc1.rootGroupId!;
 
     // Paint red on Layer 1
-    await page.evaluate(({ layerId }) => {
+    await page.evaluate(async ({ layerId }) => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
       const s = store.getState();
-      const d = s.getOrCreateLayerPixelData(layerId);
+      const d = await readLayerInDocument(layerId);
       for (let i = 0; i < d.data.length; i += 4) {
         d.data[i] = 255; d.data[i+1] = 0; d.data[i+2] = 0; d.data[i+3] = 255;
       }
