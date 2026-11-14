@@ -13,19 +13,24 @@ import type { BrushTipData, BrushPreset } from '../../types/brush';
 
 let brushCounter = 0;
 
-export async function defineBrush(asColor: boolean = false): Promise<void> {
+/**
+ * The brush tip the selection cuts out of the active layer, read from the
+ * GPU. Null when there is nothing to cut, after saying so when the cut
+ * came out empty.
+ */
+export async function readSelectionBrushTip(asColor: boolean): Promise<BrushTipData | null> {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
-  if (!activeId) return;
+  if (!activeId) return null;
 
   const engine = getEngine();
-  if (!engine) return;
+  if (!engine) return null;
 
   const { selection } = state;
-  if (!selection.active || !selection.bounds || !selection.mask) return;
+  if (!selection.active || !selection.bounds || !selection.mask) return null;
 
   const activeLayer = state.document.layers.find((l) => l.id === activeId);
-  if (!activeLayer) return;
+  if (!activeLayer) return null;
   const layerX = activeLayer.x ?? 0;
   const layerY = activeLayer.y ?? 0;
 
@@ -33,14 +38,14 @@ export async function defineBrush(asColor: boolean = false): Promise<void> {
   try {
     dims = getLayerTextureDimensions(engine, activeId);
   } catch {
-    return;
+    return null;
   }
   const layerW = dims[0] ?? 0;
   const layerH = dims[1] ?? 0;
-  if (layerW === 0 || layerH === 0) return;
+  if (layerW === 0 || layerH === 0) return null;
 
   const pixels = await readLayerPixels(engine, activeId);
-  if (!pixels || pixels.length === 0) return;
+  if (!pixels || pixels.length === 0) return null;
 
   const pixelData = new Uint8ClampedArray(pixels.length);
   pixelData.set(pixels);
@@ -67,10 +72,13 @@ export async function defineBrush(asColor: boolean = false): Promise<void> {
   const tip: BrushTipData | null = asColor
     ? createColorBrushTipFromSelection(imageData, selectionInfo)
     : createBrushTipFromSelection(imageData, selectionInfo);
-  if (!tip) {
-    notifyInfo(asColor ? EMPTY_COLOR_TIP_MESSAGE : EMPTY_TIP_MESSAGE);
-    return;
-  }
+  if (!tip) notifyInfo(asColor ? EMPTY_COLOR_TIP_MESSAGE : EMPTY_TIP_MESSAGE);
+  return tip;
+}
+
+export async function defineBrush(asColor: boolean = false): Promise<void> {
+  const tip = await readSelectionBrushTip(asColor);
+  if (!tip) return;
 
   const name = prompt('Brush name:');
   if (!name) return;

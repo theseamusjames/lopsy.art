@@ -193,7 +193,6 @@ export interface EditorState {
   notifyRender: () => void;
   cropLayerToContent: (layerId: string) => void;
   expandLayerForEditing: (layerId: string) => ImageData;
-  resolvePixelData: (layerId: string) => ImageData | undefined;
 
   // Canvas
   cropCanvas: (rect: Rect) => void;
