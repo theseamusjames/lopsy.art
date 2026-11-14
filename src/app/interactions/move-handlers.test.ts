@@ -134,6 +134,7 @@ import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import * as bridge from '../../engine-wasm/wasm-bridge';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { flushNudgeMask, forgetLiveFloat } from './live-float';
+import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import { DEFAULT_EFFECTS } from '../../layers/layer-model';
 import type { Layer, RasterLayer, Point } from '../../types';
 
@@ -774,6 +775,93 @@ describe('floated-selection moves mark the layer dirty for history (#925)', () =
     const growOrder = vi.mocked(bridge.ensureFloatCovers).mock.invocationCallOrder[0]!;
     const compositeOrder = vi.mocked(bridge.compositeFloat).mock.invocationCallOrder[0]!;
     expect(growOrder).toBeLessThan(compositeOrder);
+  });
+});
+
+describe('a drag that has to reselect the layer first', () => {
+  // A transform float the engine no longer holds: the press reselects the
+  // layer's pixels, which is read from the GPU, before it can lift them.
+  function makeReselectContext(): InteractionContext {
+    const layer = { id: 'layer-1', type: 'raster', x: 0, y: 0, width: DOC_W, height: DOC_H, locked: false } as unknown as Layer;
+    editorState.document.layers = [layer];
+    editorState.document.activeLayerId = 'layer-1';
+    editorState.selection = {
+      active: true,
+      mask: makeSquareMask(),
+      bounds: { x: 5, y: 5, width: 5, height: 5 },
+      maskWidth: DOC_W,
+      maskHeight: DOC_H,
+    };
+    const canvasPos: Point = { x: 6, y: 6 };
+    return {
+      canvasPos,
+      layerPos: canvasPos,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      activeLayer: layer,
+      activeLayerId: 'layer-1',
+      clientX: 6,
+      clientY: 6,
+      stateRef: { current: { drawing: false, tool: 'move' } as InteractionState },
+      floatingSelectionRef: { current: null },
+      persistentTransformRef: { current: { originalMask: makeSquareMask(), maskWidth: DOC_W, maskHeight: DOC_H } },
+      stampSourceRef: { current: null },
+      stampOffsetRef: { current: null },
+      lastPaintPointRef: { current: null as LastPaintPoint | null },
+    };
+  }
+
+  let finishReselect: () => void = () => {};
+
+  beforeEach(() => {
+    uiState.maskMode = 'off';
+    vi.mocked(bridge.hasFloat).mockReturnValue(false);
+    vi.mocked(bridge.floatSelection).mockClear();
+    vi.mocked(selectLayerAlpha).mockReset();
+    vi.mocked(selectLayerAlpha).mockImplementation(
+      () => new Promise<void>((resolve) => { finishReselect = resolve; }),
+    );
+  });
+
+  afterEach(() => {
+    forgetLiveFloat();
+  });
+
+  async function settle(): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  it('hands back a held gesture and lifts the selection once it is reselected', async () => {
+    const ctx = makeReselectContext();
+    const state = handleMoveDown(ctx);
+    expect(state.drawing).toBe(true);
+    expect(state.startPoint).toBeNull();
+    expect(bridge.floatSelection).not.toHaveBeenCalled();
+
+    // A move before the selection is in place does nothing.
+    handleMoveMove(state, { x: 9, y: 6 }, ctx.floatingSelectionRef);
+    expect(ctx.floatingSelectionRef.current).toBeNull();
+
+    finishReselect();
+    await settle();
+
+    expect(bridge.floatSelection).toHaveBeenCalledTimes(1);
+    expect(state.startPoint).toEqual({ x: 6, y: 6 });
+    expect(ctx.floatingSelectionRef.current).not.toBeNull();
+  });
+
+  it('drops the drag when the pointer is released before the reselect answers', async () => {
+    const ctx = makeReselectContext();
+    const state = handleMoveDown(ctx);
+    handleMoveUp(state, { x: 9, y: 6 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+
+    finishReselect();
+    await settle();
+
+    expect(bridge.floatSelection).not.toHaveBeenCalled();
+    expect(ctx.floatingSelectionRef.current).toBeNull();
+    expect(state.startPoint).toBeNull();
   });
 });
 

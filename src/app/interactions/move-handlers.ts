@@ -198,6 +198,138 @@ function applyTranslatedTransform(layerId: string | null, transform: TransformSt
   useEditorStore.getState().notifyRender();
 }
 
+/** How the Prefloat hands a ready GPU float to the press that uses it. */
+type PrebuiltFloat = ReturnType<typeof consumePrefloat>;
+
+/**
+ * Lift the current selection (or reuse the float already holding it) and
+ * hand back the gesture that drags it.
+ */
+function beginSelectionDrag(
+  ctx: InteractionContext,
+  activeLayerId: string,
+  prebuilt: PrebuiltFloat,
+  isStampingLiveFloat: boolean,
+): InteractionState {
+  const { canvasPos, altKey, floatingSelectionRef, persistentTransformRef } = ctx;
+  const engine = getEngine();
+
+  // If the GPU float was dropped (e.g., by cmd+click re-select),
+  // clear the stale JS refs so we re-float with the current selection.
+  if (floatingSelectionRef.current && engine && !hasFloat(engine)) {
+    floatingSelectionRef.current = null;
+    persistentTransformRef.current = null;
+  }
+
+  // Re-read selection after potential mask rebuild
+  const selNow = useEditorStore.getState().selection;
+
+  if (floatingSelectionRef.current) {
+    // Reuse existing float — GPU already has the textures. For Alt, first
+    // bake the float's current position into the base so the drag leaves
+    // this copy behind and carries a new one, as a fresh Alt float does.
+    if (isStampingLiveFloat && engine && hasFloat(engine)) {
+      restoreFloatBase(engine, activeLayerId);
+    }
+  } else if (prebuilt) {
+    // Prefloat already set up the GPU float
+    floatingSelectionRef.current = {
+      offsetX: 0,
+      offsetY: 0,
+      originalMask: prebuilt.mask,
+      originalBounds: { ...prebuilt.bounds },
+      gpuResident: true,
+    };
+  } else if (engine && selNow.active && selNow.mask) {
+    floatLayerSelection(engine, activeLayerId, { ...selNow, mask: selNow.mask });
+
+    // The float expanded the layer texture; mirror its full rect into the
+    // store. update_layer shields the engine only while the float lives —
+    // a store left at the pre-float width/height outlives it and feeds
+    // stale bounds to later operations and resyncs (#822). The pixel
+    // version waits for handleMoveUp: the lifted float composites back at
+    // (0, 0), and a bump here queued a synchronous thumbnail readback that
+    // landed a few hundred ms into the drag (#1383).
+    reconcileLayerBoundsWithEngine(engine, activeLayerId, { shouldBumpVersion: false });
+
+    if (altKey) {
+      restoreFloatBase(engine, activeLayerId);
+    }
+
+    clearJsPixelData(activeLayerId, { shouldBumpVersion: false });
+
+    floatingSelectionRef.current = {
+      offsetX: 0,
+      offsetY: 0,
+      originalMask: new Uint8ClampedArray(selNow.mask),
+      originalBounds: { ...selNow.bounds! },
+      gpuResident: true,
+    };
+  }
+
+  // Clear persistentTransformRef — transform is committed
+  persistentTransformRef.current = null;
+  const floatRef = floatingSelectionRef.current!;
+  const ownedMask = useEditorStore.getState().selection.mask;
+  if (ownedMask) claimLiveFloat(activeLayerId, ownedMask);
+  const baseFloat: InteractionState = {
+    drawing: true,
+    lastPoint: canvasPos,
+    layerId: activeLayerId,
+    tool: 'move',
+    startPoint: canvasPos,
+    layerStartX: 0,
+    layerStartY: 0,
+    ...DEFAULT_TRANSFORM_FIELDS,
+  };
+  return withMoveGesture(baseFloat, {
+    originalMask: floatRef.originalMask,
+    originalBounds: floatRef.originalBounds,
+  });
+}
+
+/** The press whose drag waits for its layer's pixels to be reselected. */
+let awaitedReselect: InteractionState | null = null;
+
+/**
+ * Reselect the layer's pixels, then begin the drag as `beginSelectionDrag`
+ * does. The gesture is handed back at once, without a start point, so the
+ * press is not lost and moves do nothing until the selection is in place;
+ * from then on the float follows the pointer from where it was pressed.
+ * A release, or another press, before that leaves the reselect and drops
+ * the drag.
+ */
+function beginSelectionDragAfterReselect(
+  ctx: InteractionContext,
+  activeLayerId: string,
+  prebuilt: PrebuiltFloat,
+  isStampingLiveFloat: boolean,
+): InteractionState {
+  const held = withMoveGesture({
+    drawing: true,
+    lastPoint: ctx.canvasPos,
+    layerId: activeLayerId,
+    tool: 'move',
+    startPoint: null,
+    layerStartX: 0,
+    layerStartY: 0,
+    ...DEFAULT_TRANSFORM_FIELDS,
+  }, {});
+  awaitedReselect = held;
+  void selectLayerAlpha(activeLayerId).then(() => {
+    if (awaitedReselect !== held) return;
+    const engine = getEngine();
+    const selAfter = useEditorStore.getState().selection;
+    // Nothing to lift: the gesture stays held and the release drops it.
+    if (!engine || !selAfter.active || !selAfter.mask) return;
+    awaitedReselect = null;
+    const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
+    setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
+    Object.assign(held, beginSelectionDrag(ctx, activeLayerId, prebuilt, isStampingLiveFloat));
+  });
+  return held;
+}
+
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // A drag that starts while an arrow key is still held needs the mask
   // where the ants are.
@@ -351,87 +483,11 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
         // and reselect, matching the old behavior.
         persistentTransformRef.current = null;
         floatingSelectionRef.current = null;
-        selectLayerAlpha(activeLayerId);
-        const selAfter = useEditorStore.getState().selection;
-        if (engine && selAfter.active && selAfter.mask) {
-          const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
-          setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
-        }
+        return beginSelectionDragAfterReselect(ctx, activeLayerId, prebuilt, isStampingLiveFloat);
       }
     }
 
-    // If the GPU float was dropped (e.g., by cmd+click re-select),
-    // clear the stale JS refs so we re-float with the current selection.
-    if (floatingSelectionRef.current && engine && !hasFloat(engine)) {
-      floatingSelectionRef.current = null;
-      persistentTransformRef.current = null;
-    }
-
-    // Re-read selection after potential mask rebuild
-    const selNow = useEditorStore.getState().selection;
-
-    if (floatingSelectionRef.current) {
-      // Reuse existing float — GPU already has the textures. For Alt, first
-      // bake the float's current position into the base so the drag leaves
-      // this copy behind and carries a new one, as a fresh Alt float does.
-      if (isStampingLiveFloat && engine && hasFloat(engine)) {
-        restoreFloatBase(engine, activeLayerId);
-      }
-    } else if (prebuilt) {
-      // Prefloat already set up the GPU float
-      floatingSelectionRef.current = {
-        offsetX: 0,
-        offsetY: 0,
-        originalMask: prebuilt.mask,
-        originalBounds: { ...prebuilt.bounds },
-        gpuResident: true,
-      };
-    } else if (engine && selNow.active && selNow.mask) {
-      floatLayerSelection(engine, activeLayerId, { ...selNow, mask: selNow.mask });
-
-      // The float expanded the layer texture; mirror its full rect into the
-      // store. update_layer shields the engine only while the float lives —
-      // a store left at the pre-float width/height outlives it and feeds
-      // stale bounds to later operations and resyncs (#822). The pixel
-      // version waits for handleMoveUp: the lifted float composites back at
-      // (0, 0), and a bump here queued a synchronous thumbnail readback that
-      // landed a few hundred ms into the drag (#1383).
-      reconcileLayerBoundsWithEngine(engine, activeLayerId, { shouldBumpVersion: false });
-
-      if (altKey) {
-        restoreFloatBase(engine, activeLayerId);
-      }
-
-      clearJsPixelData(activeLayerId, { shouldBumpVersion: false });
-
-      floatingSelectionRef.current = {
-        offsetX: 0,
-        offsetY: 0,
-        originalMask: new Uint8ClampedArray(selNow.mask),
-        originalBounds: { ...selNow.bounds! },
-        gpuResident: true,
-      };
-    }
-
-    // Clear persistentTransformRef — transform is committed
-    persistentTransformRef.current = null;
-    const floatRef = floatingSelectionRef.current!;
-    const ownedMask = useEditorStore.getState().selection.mask;
-    if (ownedMask) claimLiveFloat(activeLayerId, ownedMask);
-    const baseFloat: InteractionState = {
-      drawing: true,
-      lastPoint: canvasPos,
-      layerId: activeLayerId,
-      tool: 'move',
-      startPoint: canvasPos,
-      layerStartX: 0,
-      layerStartY: 0,
-      ...DEFAULT_TRANSFORM_FIELDS,
-    };
-    return withMoveGesture(baseFloat, {
-      originalMask: floatRef.originalMask,
-      originalBounds: floatRef.originalBounds,
-    });
+    return beginSelectionDrag(ctx, activeLayerId, prebuilt, isStampingLiveFloat);
   }
 
   // Crop the layer to content bounds before moving so that only opaque
@@ -701,6 +757,11 @@ export function handleMoveUp(
   _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   useUIStore.getState().clearSnapLines();
+  // Released before the reselect answered: there is no drag to finish.
+  if (awaitedReselect === state) {
+    awaitedReselect = null;
+    return;
+  }
   // Whole-layer down never followed by a move → no history entry, no state
   // change. Clear the pending label so a subsequent gesture starts fresh.
   pendingWholeLayerMoveLabel = null;

@@ -65,7 +65,7 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
     if (!(e.metaKey || e.ctrlKey)) return;
     e.stopPropagation();
     // Shift adds and Alt subtracts, as with the selection tools (#1251).
-    selectLayerAlpha(layerId, { combine: selectionCombineMode(e, hasCombinableSelection()) });
+    void selectLayerAlpha(layerId, { combine: selectionCombineMode(e, hasCombinableSelection()) });
   }, []);
 
   const handleConvertMaskToMarquee = useCallback((layerId: string) => {

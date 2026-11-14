@@ -1,4 +1,4 @@
-import type { BlendMode, Color, LayerEffects, Layer, Rect, DocumentColorMode } from '../../types';
+import type { BlendMode, Color, LayerEffects, Layer, Rect, DocumentColorMode, DocumentState } from '../../types';
 import { planBorder, type BorderPlacement, type BorderWidths } from '../../layers/border';
 import type { AdjustmentNodeType, AdjustmentNode } from '../../types/adjustment-nodes';
 import type { AlignEdge } from '../../tools/move/move';
@@ -8,7 +8,7 @@ import { createImageData } from '../../engine/color-space';
 import { moveLayerToGroup as moveLayerToGroupUtil, getInsertionGroupId, getInsertionOrderIndex, addToGroup as addToGroupUtil, getDescendantIds as getDescendantIdsUtil, buildFlatDisplayList, findParentGroup, isAncestorOf, removeFromParentGroup } from '../../layers/group-utils';
 import { sparseToImageData } from '../../engine/canvas-ops';
 import { getContentBounds } from '../../tools/move/move';
-import { layerContentRect } from '../layer-content-rect';
+import { layerContentRect, readLayerContentRect } from '../layer-content-rect';
 import { getEngine, clearEngine } from '../../engine-wasm/engine-state';
 import { flushLayerSync, rerenderTransformedTextLayers, captureUprightTextAnchors, rerenderTextLayersAt, syncDocumentSize } from '../../engine-wasm/engine-sync';
 import { uploadLayerPixels, fillLayerFrame, getLayerTextureDimensions, getLayerEngineBounds, removeTextLayerState, hasFloat, dropFloat, cropLayerTexture } from '../../engine-wasm/wasm-bridge';
@@ -66,7 +66,8 @@ import {
 /**
  * Document-space content bounds of a layer for Align. JS pixel data, when the
  * layer still has some, is scanned on the CPU; otherwise the bounds come from
- * the GPU reduction (cached by content generation), so nothing is read back.
+ * the GPU reduction (cached by content generation), which `refreshAlignBounds`
+ * has just brought up to date.
  */
 function alignContentBounds(layer: Layer): Rect | null {
   const dense = pixelDataManager.get(layer.id);
@@ -75,6 +76,27 @@ function alignContentBounds(layer: Layer): Rect | null {
   if (sparse) return getContentBounds(sparseToImageData(sparse.sparse), layer.x, layer.y);
   const engine = getEngine();
   return engine ? layerContentRect(engine, layer.id) : null;
+}
+
+/**
+ * Read, on the GPU, the content bounds this Align will ask for and does not
+ * have: only the layers being aligned, and none when a marquee supplies the
+ * bounds. A dry run with stand-in bounds finds which those are.
+ */
+async function refreshAlignBounds(
+  doc: DocumentState,
+  selection: Parameters<typeof computeAlignLayer>[2],
+  edge: AlignEdge,
+): Promise<void> {
+  const engine = getEngine();
+  if (!engine) return;
+  const asked = new Set<string>();
+  computeAlignLayer(doc, (layer) => {
+    asked.add(layer.id);
+    return { x: layer.x, y: layer.y, width: 1, height: 1 };
+  }, selection, 0, edge);
+  const onGpu = [...asked].filter((id) => !pixelDataManager.get(id) && !pixelDataManager.getSparse(id));
+  await Promise.all(onGpu.map((id) => readLayerContentRect(engine, id)));
 }
 
 /** Apply an ActionResult: if it carries pixel data, push it to the manager;
@@ -267,7 +289,7 @@ export interface DocumentSlice {
   moveLayer: (fromIndex: number, toIndex: number) => void;
   dropLayer: (layerId: string, target: LayerDropTarget) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
-  alignLayer: (edge: AlignEdge) => void;
+  alignLayer: (edge: AlignEdge) => Promise<void>;
   fitActiveLayerToCanvas: () => void;
   duplicateLayer: () => void;
   mergeDown: () => void;
@@ -617,8 +639,9 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set(computeUpdatePosition(get().document, get().renderVersion, id, x, y));
   },
 
-  alignLayer: (edge) => {
+  alignLayer: async (edge) => {
     finalizePendingStrokeGlobal();
+    await refreshAlignBounds(get().document, get().selection, edge);
     const s = get();
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
     const result = computeAlignLayer(s.document, alignContentBounds, s.selection, s.renderVersion, edge);

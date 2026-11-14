@@ -151,7 +151,7 @@ export interface EditorState {
   moveLayer: (fromIndex: number, toIndex: number) => void;
   dropLayer: (layerId: string, target: import('./actions/drop-layer').LayerDropTarget) => void;
   updateLayerPosition: (id: string, x: number, y: number) => void;
-  alignLayer: (edge: AlignEdge) => void;
+  alignLayer: (edge: AlignEdge) => Promise<void>;
   fitActiveLayerToCanvas: () => void;
   duplicateLayer: () => void;
   mergeDown: () => void;

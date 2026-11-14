@@ -15,7 +15,7 @@ Status: in progress.
 | 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
-| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702). Left: selecting a layer's pixels, content bounds, mask bytes and the layer backup; see Phase 4 |
+| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703). Left: mask bytes, the layer backup and the reads inside engine commands; see Phase 4 |
 | 5–7 | Not started |
 
 ---
@@ -878,6 +878,18 @@ lands on newer state.
   one's pixels. No pointer-move waits on the read.
 - **Feather** installs the feathered mask when its read arrives
   (#1702). A selection made in the meantime, feathered or not, wins.
+- **Selecting a layer's pixels** (`selectLayerAlpha`) returns a promise
+  and installs the selection when the layer has been read (#1703); a
+  newer request or any selection made in the meantime wins. The Move
+  tool calls it on pointer-down when a transform float is gone. That
+  press hands back a held gesture with no start point, so moves do
+  nothing until the selection is in place, and the float then follows
+  the pointer from where it was pressed. A release first drops the drag.
+- **Content bounds** (#1703). `layerContentRect` stays synchronous for
+  the multi-layer Move box, which is drawn and hit-tested every frame:
+  it returns the last rect known and asks for a redraw when a newer one
+  has been read. `readLayerContentRect` is the awaited form that Align,
+  Flip and Rotate Layer use; one read per layer is shared between them.
 
 **Where selection reads the GPU.** Dragging a marquee, lasso or
 magnetic lasso reads nothing back per move: the selection mask lives in
@@ -893,23 +905,24 @@ computed once. The reads are at the ends:
   uploads the mask, blurs it on the GPU and awaits `readSelectionMask`.
 - Selecting a layer's pixels (Cmd-click a thumbnail, after paste, after
   a Move or transform commit) reads the layer to build the mask from its
-  alpha (`resolvePixelData`, still on `readLayerAsImageDataSync`).
+  alpha, and awaits it (above).
 
 **Left, with what each needs:**
 
-- **Selecting a layer's pixels** (`selectLayerAlpha`). Paste, the Move
-  tool's fallback, the flip and rotate buttons and the text transform
-  all call it and several read the selection in the next statement.
-  Either every caller awaits in order, or the selection mask lives in
-  the engine and JS holds its bytes lazily, as layer masks already do.
-  The second removes the read from all of them and is the larger change.
-- **Content bounds** (`getLayerContentBounds`). `layerContentRect` is
-  read synchronously by the transform box, align, flip and rotate. It is
-  cached per content generation, so it reads once per change. The box
-  can show the cached rect and refresh behind it; the click-driven
-  actions can await.
-- **Mask bytes** (`readMaskTexture`), already behind a read queue, and
-  `readQuickMaskPixels` (no callers in the app).
+- **Mask bytes** (`readMaskTexture`). The lazy refresh is behind a read
+  queue already; the synchronous part is `materializeMaskData`, called
+  where JS needs current bytes at once. Each caller has a way out that
+  keeps the mask on the GPU: Duplicate Layer can copy the mask texture
+  (`snapshotMaskGpu` into the new layer) and mark its bytes stale;
+  Remove Mask can keep a GPU mask snapshot in history instead of the
+  bytes; crop, resize and flip (`remapLayerMaskThrough`) can leave the
+  resampled mask stale and let the queue refresh it; PSD export and
+  project save can await.
+- **The context menu's Define Brush Preset** reads the layer through
+  `getOrCreateLayerPixelData`, the last caller of
+  `readLayerAsImageDataSync` besides tests. It can share the Edit menu's
+  awaited read.
+- `readQuickMaskPixels` has no callers in the app.
 - **Reads inside engine commands**: mask fill and quick-mask fill,
   magnetic lasso begin, the Lab decode above. These are Rust's to make
   async in 6.6, and their exports then return a Promise.

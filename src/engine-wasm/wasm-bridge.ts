@@ -44,7 +44,7 @@ import init, {
   getLayerTextureDimensions,
   layerContentGeneration,
   getLayerEngineBounds,
-  getLayerContentBounds,
+  getLayerContentBounds as rawGetLayerContentBounds,
   uploadLayerPixelsCompressed,
   readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
@@ -627,7 +627,6 @@ export {
   expandLayerToDocSize,
   cropLayerToContent,
   floodFillGraduated,
-  getLayerContentBounds,
   readQuickMaskPixels,
 };
 
@@ -671,6 +670,8 @@ export const sampleColor = asyncReadback(rawSampleColor);
 export const readLayerPixelsForFill = asyncReadback(rawReadLayerPixelsForFill);
 /** The selection texture's coverage: `[width, height]` as u32 LE, then one byte per pixel. */
 export const readSelectionMask = asyncReadback(rawReadSelectionMask);
+/** A layer's opaque bounds, texture-local `[x, y, width, height]`; empty when the read failed. */
+export const getLayerContentBounds = asyncReadback(rawGetLayerContentBounds);
 export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);

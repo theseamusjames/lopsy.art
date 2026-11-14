@@ -208,7 +208,7 @@ export function handleTextTransformUp(state: InteractionState): void {
     return;
   }
   editor.pushHistory('Transform', gesture.before);
-  if (gesture.reselectAlpha) selectLayerAlpha(state.layerId);
+  if (gesture.reselectAlpha) void selectLayerAlpha(state.layerId);
   editor.notifyRender();
 }
 
@@ -241,5 +241,5 @@ export function releaseCoveringTextSelection(): void {
 export function finishTextBodyMove(): void {
   const layerId = reselectAfterMove;
   reselectAfterMove = null;
-  if (layerId) selectLayerAlpha(layerId);
+  if (layerId) void selectLayerAlpha(layerId);
 }
