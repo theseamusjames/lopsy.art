@@ -6,6 +6,7 @@
 
 pub mod gpu;
 pub mod host;
+pub mod imaging;
 pub mod engine;
 pub mod compositor;
 pub mod effect_cache_gpu;

@@ -14,7 +14,7 @@ Status: in progress.
 | 0 | Done (#1643, #1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
 | 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
-| 3 | 3.1 to 3.3 in review as one GitHub stack (#1693, #1694): the wasm exports are single calls, the engine reaches the browser only through `gpu/` and the host hooks, and it lives in its own crate, `lopsy-engine`. 3.4 and 3.5 not started |
+| 3 | In review as one GitHub stack (#1693, #1694, #1696, #1697): the wasm exports are single calls, the engine lives in its own crate, `EngineInner` is split into subsystems, and the adjustments pass and 25 filters are standalone imaging operations. Ten multi-pass filters are still staged from `commands/`; see 3.5 |
 | 4–7 | Not started |
 
 ---
@@ -756,8 +756,35 @@ Phase 1. Keeping it separate makes both sets of PRs smaller.
   `wasm-bindgen` for the WebGL backend; it has no `#[wasm_bindgen]`
   item. The wasm grew 0.35% from the split, 0.45% over the two PRs.
 
-Verification is in the two PRs: a whole-suite comparison against the
-engine as it was before Phase 3, for each.
+- *3.4.* Six structs, one commit each, moved by script: `ClipboardState`,
+  `FloatState`, `PreviewState`, `OverlayState`, `GroupState` and
+  `BrushState`. `EngineInner` went from about 120 fields to 45. Only
+  access paths changed (`engine.float_width` is `engine.float.width`).
+  What is left on `EngineInner` is the GPU objects, the layer stack and
+  textures, document and viewport state, selection, snapshots, text and
+  a few single-purpose fields.
+- *3.5.* `imaging/` holds operations that know nothing about documents
+  or layers. Each takes an `Imaging` (the GPU and the shader set), a
+  source texture and its own parameters, and returns the pass; the
+  caller says where it draws.
+  - `imaging::adjustments` is the develop pipeline: the adjustments
+    pass, its parameter list, the vignette and `ImageAdjustmentState`.
+    The compositor and the Brightness / Contrast filter call the same
+    function.
+  - `imaging::filters` has 25 single-pass filters. Each clamps its own
+    parameters. The command keeps what needs the document: the no-op
+    guard and, for radial blur, kaleidoscope and lens distortion, the
+    layer geometry they are centred with.
+  - **Not moved.** Ten filters still run from `commands/filter/`,
+    because they stage several passes through the engine's scratch
+    targets or upload a second texture: Gaussian blur, box blur, unsharp
+    mask, bloom, pixelate, sunburst, pattern fill, colour LUT, mesh warp
+    and the colour-mode conversions. Moving them needs an imaging-side
+    way to ask for scratch targets, which nothing provides yet. Liquify
+    is a tool session, not a filter, and stays with the document.
+
+Verification is in the PRs: a whole-suite comparison against the engine
+as it was before the step, for each.
 
 ### Phase 4 — Async readbacks
 

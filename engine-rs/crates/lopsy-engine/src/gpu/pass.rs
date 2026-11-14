@@ -127,6 +127,11 @@ impl<'a> GpuRef<'a> {
         Pass { raw: RawPass::new(self, program), marker: PhantomData }
     }
 
+    /// Whether `texture` still names a live texture.
+    pub fn has_texture(self, texture: TextureHandle) -> bool {
+        self.textures.get(texture).is_some()
+    }
+
     /// Unbind the textures on units `0..count`, leaving unit 0 active. A
     /// texture left bound to a sampler unit while it is also a render target
     /// is a feedback loop, and some drivers then discard the draw. Call this

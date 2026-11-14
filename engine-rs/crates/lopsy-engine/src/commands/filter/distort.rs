@@ -39,7 +39,7 @@ pub fn filter_mesh_warp(
     filter_gpu::apply_filter_with_texture(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.mesh_warp,
+        |s| &s.mesh_warp,
         MeshWarpParams {
             grid_size: [gw, gh],
             bounds_min: [bounds_min_u, bounds_min_v],

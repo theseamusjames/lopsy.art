@@ -1,7 +1,8 @@
 use crate::engine::EngineInner;
 use crate::gpu::framebuffer::FramebufferHandle;
 use crate::gpu::pass::{Pass, Target};
-use crate::gpu::shader::ShaderProgram;
+use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
+use crate::imaging::Imaging;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::uniforms::Uniforms;
 use crate::gpu::params::filters::{ChannelExtractParams, PixelateBlocksParams, PixelateParams, SelectionMaskBlendParams};
@@ -126,7 +127,7 @@ pub fn end_mask_filter_target(engine: &mut EngineInner) {
     let Some(target) = engine.mask_filter_target.take() else { return };
     let id = target.layer_id.as_str();
 
-    apply_filter_full_layer(engine, id, |e| &e.shaders.mask_luminance, ());
+    apply_filter_full_layer(engine, id, |s| &s.mask_luminance, ());
 
     let (cur_x, cur_y) = engine.layer_stack.iter()
         .find(|l| l.id == id)
@@ -191,26 +192,24 @@ pub(crate) fn commit_scratch_a_to_layer(engine: &mut EngineInner, layer_id: &str
 /// with the layer bound as `u_tex` and `params` as the shader's uniforms.
 ///
 /// `get_shader` is called lazily to borrow the shader from the engine — this lets callers
-/// pass e.g. `|e| &e.shaders.noise` without fighting the borrow checker.
+/// pass e.g. `|s| &s.noise` without fighting the borrow checker.
 pub fn apply_filter<P: Uniforms>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
     params: P,
 ) {
-    apply_filter_inner(engine, layer_id, |e, tex| e.pass(get_shader(e), params).texture("u_tex", tex), true, true);
+    apply_filter_inner(engine, layer_id, |im, tex| im.gpu.pass(get_shader(im.shaders), params).texture("u_tex", tex), true, true);
 }
 
-/// [`apply_filter`] with `extra` adding to the filter's pass, for a shader
-/// that needs more than the layer bound.
-pub fn apply_filter_with<P: Uniforms>(
+/// Apply an imaging operation to a layer: `op` is handed the layer's
+/// texture and returns the pass that filters it.
+pub fn apply_op<P>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
-    params: P,
-    extra: impl for<'a> FnOnce(Pass<'a, P>) -> Pass<'a, P>,
+    op: impl for<'a> FnOnce(Imaging<'a>, TextureHandle) -> Pass<'a, P>,
 ) {
-    apply_filter_inner(engine, layer_id, |e, tex| extra(e.pass(get_shader(e), params).texture("u_tex", tex)), true, true);
+    apply_filter_inner(engine, layer_id, op, true, true);
 }
 
 /// [`apply_filter`] for a shader that samples a second texture through
@@ -219,7 +218,7 @@ pub fn apply_filter_with<P: Uniforms>(
 pub fn apply_filter_with_texture<P: Uniforms>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
     params: P,
     sampler: &str,
     texture: Option<TextureHandle>,
@@ -227,8 +226,8 @@ pub fn apply_filter_with_texture<P: Uniforms>(
     apply_filter_inner(
         engine,
         layer_id,
-        |e, tex| {
-            let pass = e.pass(get_shader(e), params).texture("u_tex", tex);
+        |im, tex| {
+            let pass = im.gpu.pass(get_shader(im.shaders), params).texture("u_tex", tex);
             match texture {
                 Some(texture) => pass.texture(sampler, texture),
                 None => pass.sampler_unit(sampler, 1),
@@ -245,10 +244,10 @@ pub fn apply_filter_with_texture<P: Uniforms>(
 pub fn apply_filter_full_layer<P: Uniforms>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
     params: P,
 ) {
-    apply_filter_inner(engine, layer_id, |e, tex| e.pass(get_shader(e), params).texture("u_tex", tex), false, true);
+    apply_filter_inner(engine, layer_id, |im, tex| im.gpu.pass(get_shader(im.shaders), params).texture("u_tex", tex), false, true);
 }
 
 /// Like `apply_filter_full_layer`, for shaders that read only the texel
@@ -259,10 +258,10 @@ pub fn apply_filter_full_layer<P: Uniforms>(
 pub fn apply_pointwise_filter_full_layer<P: Uniforms>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
     params: P,
 ) {
-    apply_filter_inner(engine, layer_id, |e, tex| e.pass(get_shader(e), params).texture("u_tex", tex), false, false);
+    apply_filter_inner(engine, layer_id, |im, tex| im.gpu.pass(get_shader(im.shaders), params).texture("u_tex", tex), false, false);
 }
 
 /// `start_pass` starts the filter's pass with the layer texture it is
@@ -270,7 +269,7 @@ pub fn apply_pointwise_filter_full_layer<P: Uniforms>(
 fn apply_filter_inner<P>(
     engine: &mut EngineInner,
     layer_id: &str,
-    start_pass: impl for<'a> FnOnce(&'a EngineInner, TextureHandle) -> Pass<'a, P>,
+    start_pass: impl for<'a> FnOnce(Imaging<'a>, TextureHandle) -> Pass<'a, P>,
     respect_selection: bool,
     expand_to_document: bool,
 ) {
@@ -307,7 +306,7 @@ fn apply_filter_inner<P>(
     }
 
     // Render the filter into scratch A
-    start_pass(engine, tex_handle)
+    start_pass(engine.imaging(), tex_handle)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
@@ -330,7 +329,7 @@ fn apply_filter_inner<P>(
 pub fn apply_separable_blur<P: Uniforms>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&EngineInner) -> &ShaderProgram<P>,
+    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
     params: impl Fn([f32; 2]) -> P,
 ) {
     // See note in apply_filter: ensure layer/scratch dimensions match so
@@ -349,13 +348,13 @@ pub fn apply_separable_blur<P: Uniforms>(
     }
 
     // Pass 1: horizontal (layer -> scratch A)
-    engine.pass(get_shader(engine), params([1.0, 0.0]))
+    engine.pass(get_shader(&engine.shaders), params([1.0, 0.0]))
         .texture("u_tex", tex_handle)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
 
     // Pass 2: vertical (scratch A -> scratch B)
-    engine.pass(get_shader(engine), params([0.0, 1.0]))
+    engine.pass(get_shader(&engine.shaders), params([0.0, 1.0]))
         .texture("u_tex", engine.scratch_texture_a)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_b));

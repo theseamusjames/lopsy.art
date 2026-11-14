@@ -34,7 +34,7 @@ pub fn convert_layer_to_grayscale(engine: &mut EngineInner, layer_id: &str) {
     filter_gpu::apply_pointwise_filter_full_layer(
         &mut *engine,
         layer_id,
-        |e| &e.shaders.color_convert,
+        |s| &s.color_convert,
         ColorConvertParams { color_matrix: Mat3(GRAYSCALE_MATRIX) },
     );
 }
