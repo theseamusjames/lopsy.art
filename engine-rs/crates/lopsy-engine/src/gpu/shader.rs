@@ -51,15 +51,15 @@ pub const BLIT_REGION_FRAG: &str = translated!("blit_region");
 pub const MASK_EXPAND_FRAG: &str = translated!("mask_expand");
 pub const MASK_REMAP_FRAG: &str = translated!("mask_remap");
 pub const QUICK_MASK_TRANSLATE_FRAG: &str = translated!("quick_mask_translate");
-pub const TRANSFORM_AFFINE_FRAG: &str = include_str!("shaders/transform_affine.glsl");
-pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_perspective.glsl");
+pub const TRANSFORM_AFFINE_FRAG: &str = translated!("transform_affine");
+pub const TRANSFORM_PERSPECTIVE_FRAG: &str = translated!("transform_perspective");
 
 // Effects
-pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
-pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
+pub const GLOW_FRAG: &str = translated!("effects/glow");
+pub const SHADOW_FRAG: &str = translated!("effects/shadow");
 pub const LAYER_MASK_APPLY_FRAG: &str = translated!("effects/layer_mask_apply");
-pub const SEPARABLE_EDT_FRAG: &str = include_str!("shaders/effects/separable_edt.glsl");
-pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
+pub const SEPARABLE_EDT_FRAG: &str = translated!("effects/separable_edt");
+pub const STROKE_APPLY_FRAG: &str = translated!("effects/stroke_apply");
 
 // Filters
 pub const GAUSSIAN_BLUR_FRAG: &str = include_str!("shaders/filters/gaussian_blur.glsl");
@@ -125,11 +125,11 @@ pub const PENCIL_DAB_FRAG: &str = translated!("brush/pencil_dab");
 pub const QUICK_MASK_DAB_FRAG: &str = translated!("brush/quick_mask_dab");
 pub const CONTENT_BOUNDS_REDUCE_FRAG: &str = translated!("content_bounds_reduce");
 pub const DODGE_BURN_FRAG: &str = translated!("brush/dodge_burn");
-pub const DODGE_BURN_DAB_FRAG: &str = include_str!("shaders/brush/dodge_burn_dab.glsl");
-pub const SMUDGE_DAB_FRAG: &str = include_str!("shaders/brush/smudge_dab.glsl");
-pub const CLONE_STAMP_FRAG: &str = include_str!("shaders/brush/clone_stamp.glsl");
-pub const HEALING_DAB_FRAG: &str = include_str!("shaders/brush/healing_dab.glsl");
-pub const HEALING_MEAN_FRAG: &str = include_str!("shaders/brush/healing_mean.glsl");
+pub const DODGE_BURN_DAB_FRAG: &str = translated!("brush/dodge_burn_dab");
+pub const SMUDGE_DAB_FRAG: &str = translated!("brush/smudge_dab");
+pub const CLONE_STAMP_FRAG: &str = translated!("brush/clone_stamp");
+pub const HEALING_DAB_FRAG: &str = translated!("brush/healing_dab");
+pub const HEALING_MEAN_FRAG: &str = translated!("brush/healing_mean");
 pub const SPONGE_FRAG: &str = translated!("brush/sponge");
 pub const STAMP_PREVIEW_FRAG: &str = translated!("brush/stamp_preview");
 
@@ -138,7 +138,7 @@ pub const GRADIENT_LINEAR_FRAG: &str = include_str!("shaders/gradient/gradient_l
 pub const GRADIENT_RADIAL_FRAG: &str = include_str!("shaders/gradient/gradient_radial.glsl");
 
 // Shape
-pub const SHAPE_FILL_FRAG: &str = include_str!("shaders/shape/shape_fill.glsl");
+pub const SHAPE_FILL_FRAG: &str = translated!("shape/shape_fill");
 pub const FLOOD_FILL_APPLY_FRAG: &str = translated!("shape/flood_fill_apply");
 pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = translated!("shape/bucket_fill_color_match");
 
