@@ -15,7 +15,7 @@ Status: in progress.
 | 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
-| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701). Left: quick select, wand, fill, feather, content bounds, rasterize style, the filter preview commit and the layer backup; see Phase 4 |
+| 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702). Left: selecting a layer's pixels, content bounds, mask bytes and the layer backup; see Phase 4 |
 | 5–7 | Not started |
 
 ---
@@ -850,8 +850,34 @@ to come straight back, the engine got a command that keeps them there
 In a Lab document both commands still decode the composite to sRGB on
 the CPU, inside the engine. That read is Rust's to make async in 6.6.
 
-The **eyedropper** awaits `sampleColor` and applies a colour only if no
-newer sample was requested since.
+Two more went the same way (#1702):
+
+- **Rasterize Layer Style and Merge Down** read the rendered layer and
+  uploaded the same bytes. `bakeLayerEffects` copies the render into the
+  layer's texture, at the composite's precision.
+- **The filter and Color LUT preview commit** read the previewed layer
+  as a compressed blob, restored the original for history, and uploaded
+  the blob. `commitFilterPreview` holds the preview in a GPU snapshot
+  across the history push. The snapshot is never in a history entry, so
+  the commit releases it itself. `readLayerPixelsCompressedU16` is gone;
+  the layer backup keeps the LZ4 read.
+
+**Awaited reads and how each stays correct.** A click that takes a few
+milliseconds longer is fine; what matters is that a late answer never
+lands on newer state.
+
+- The **eyedropper** awaits `sampleColor` and applies a colour only if
+  no newer sample was requested since.
+- The **magic wand** and the **contiguous bucket fill** apply when the
+  pixels arrive (#1702). The fill is dropped if the layer's content
+  generation changed in between. The wand's combine mode is the one held
+  at the click.
+- **Quick select** starts its stroke at pointer-down (#1702). Points
+  that arrive before the pixels are queued and applied when they land; a
+  stroke released early is finished then; a newer stroke drops the older
+  one's pixels. No pointer-move waits on the read.
+- **Feather** installs the feathered mask when its read arrives
+  (#1702). A selection made in the meantime, feathered or not, wins.
 
 **Where selection reads the GPU.** Dragging a marquee, lasso or
 magnetic lasso reads nothing back per move: the selection mask lives in
@@ -861,29 +887,32 @@ computed once. The reads are at the ends:
 - Magnetic lasso reads the layer once at pointer-down, inside Rust.
   When that read is async (6.6), moves that arrive first should pass the
   raw point through until the edges are ready.
-- Feather (marquee commit and Select > Feather) uploads the mask, blurs
-  it on the GPU and reads it back (`readSelectionMask`).
-- Selecting a layer's pixels (Cmd-click a thumbnail, and after paste)
-  reads the layer to build the mask from its alpha (`resolvePixelData`,
-  still on `readLayerAsImageDataSync`).
+- Quick select reads the layer once at pointer-down and queues moves
+  until it answers (above).
+- Feather (a marquee, lasso or wand commit, and Select > Feather)
+  uploads the mask, blurs it on the GPU and awaits `readSelectionMask`.
+- Selecting a layer's pixels (Cmd-click a thumbnail, after paste, after
+  a Move or transform commit) reads the layer to build the mask from its
+  alpha (`resolvePixelData`, still on `readLayerAsImageDataSync`).
 
 **Left, with what each needs:**
 
-- **Quick select, magic wand, bucket fill** (`readLayerPixelsForFill`).
-  Their pointer-down handler reads the layer and returns the interaction
-  state in one synchronous step. Quick select then grows the selection
-  on every move from those pixels, so it needs the same treatment as
-  magnetic lasso: start the read at pointer-down and hold or pass
-  through the moves until it answers. Wand and fill are single clicks
-  and can apply when the read arrives, checking the layer's content
-  generation first.
-- **Feather** and **select layer pixels** (above): awaitable, but the
-  paste flow calls the second and then relies on the selection existing,
-  so its callers have to await in order.
-- **Content bounds** (`getLayerContentBounds`), **Rasterize Layer Style
-  and Merge Down** (`rasterizeLayerEffects`), the **filter preview
-  commit** (`readLayerCompressed`), **mask bytes** (`readMaskTexture`,
-  already behind a read queue), `readQuickMaskPixels` (no callers).
+- **Selecting a layer's pixels** (`selectLayerAlpha`). Paste, the Move
+  tool's fallback, the flip and rotate buttons and the text transform
+  all call it and several read the selection in the next statement.
+  Either every caller awaits in order, or the selection mask lives in
+  the engine and JS holds its bytes lazily, as layer masks already do.
+  The second removes the read from all of them and is the larger change.
+- **Content bounds** (`getLayerContentBounds`). `layerContentRect` is
+  read synchronously by the transform box, align, flip and rotate. It is
+  cached per content generation, so it reads once per change. The box
+  can show the cached rect and refresh behind it; the click-driven
+  actions can await.
+- **Mask bytes** (`readMaskTexture`), already behind a read queue, and
+  `readQuickMaskPixels` (no callers in the app).
+- **Reads inside engine commands**: mask fill and quick-mask fill,
+  magnetic lasso begin, the Lab decode above. These are Rust's to make
+  async in 6.6, and their exports then return a Promise.
 - **Layer backup.** `layer-backup-runner` takes a synchronous `readBlob`,
   and its `now` mode (the tab was hidden) finishes every layer before it
   returns. An async read cannot promise that, so the runner's contract
