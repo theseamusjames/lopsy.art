@@ -64,7 +64,7 @@ pub const STROKE_APPLY_FRAG: &str = translated!("effects/stroke_apply");
 // Filters
 pub const GAUSSIAN_BLUR_FRAG: &str = translated!("filters/gaussian_blur");
 pub const BOX_BLUR_FRAG: &str = translated!("filters/box_blur");
-pub const ADJUSTMENTS_FRAG: &str = include_str!("shaders/filters/adjustments.glsl");
+pub const ADJUSTMENTS_FRAG: &str = translated!("filters/adjustments");
 pub const HUE_SAT_FRAG: &str = translated!("filters/hue_sat");
 pub const INVERT_FRAG: &str = translated!("filters/invert");
 pub const MASK_LUMINANCE_FRAG: &str = translated!("filters/mask_luminance");
@@ -756,7 +756,7 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, typed_shader_checks, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG,
+        inject_defines, preprocess_frag, typed_shader_checks, BLEND_FRAG, BLIT_RESAMPLE_FRAG,
         SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
     };
 
@@ -809,17 +809,14 @@ mod tests {
     fn tonal_passes_work_on_decoded_lab() {
         // Adjustments and the vignette scale channel values, which only means
         // "darker" on sRGB; on encoded Lab it drags a/b toward blue (#1365).
-        let vignette = include_str!("shaders/filters/vignette.wgsl");
-        assert!(vignette.contains("//#include lab"), "lab helpers not spliced in");
-        assert!(vignette.contains("u_docColorMode: i32,"));
-        assert!(vignette.contains("rgb = labToSrgb(rgb)"));
-        assert!(vignette.contains("rgb = srgbToLab(rgb)"));
-        {
-            let out = preprocess_frag(ADJUSTMENTS_FRAG);
-            assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
-            assert!(out.contains("int u_docColorMode;"));
-            assert!(out.contains("c.rgb = labToSrgb(c.rgb)"));
-            assert!(out.contains("c.rgb = srgbToLab(c.rgb)"));
+        for src in [
+            include_str!("shaders/filters/adjustments.wgsl"),
+            include_str!("shaders/filters/vignette.wgsl"),
+        ] {
+            assert!(src.contains("//#include lab"), "lab helpers not spliced in");
+            assert!(src.contains("u_docColorMode: i32,"));
+            assert!(src.contains("rgb = labToSrgb(rgb)"));
+            assert!(src.contains("rgb = srgbToLab(rgb)"));
         }
         let blit = include_str!("shaders/final_blit.wgsl");
         assert!(blit.contains("//#include lab"), "lab helpers not spliced in");
@@ -837,11 +834,12 @@ mod tests {
 
     #[test]
     fn photo_filter_runs_after_black_and_white() {
-        let bw = ADJUSTMENTS_FRAG
-            .find("if (u_bwEnabled > 0.5)")
+        let source = include_str!("shaders/filters/adjustments.wgsl");
+        let bw = source
+            .find("if (params.u_bwEnabled > 0.5)")
             .expect("Black & White block");
-        let pf = ADJUSTMENTS_FRAG
-            .find("if (u_pfDensity > 0.001)")
+        let pf = source
+            .find("if (params.u_pfDensity > 0.001)")
             .expect("Photo Filter block");
         assert!(
             bw < pf,
