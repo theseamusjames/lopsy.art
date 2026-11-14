@@ -165,7 +165,7 @@ const ALLOWLIST = {
   'src/panels/ChannelsPanel/ChannelsPanel.tsx': 1,           // GPU readback creates ImageData for thumbnail
   'src/tools/crop/perspective-crop.ts': 1,                   // #441 — port homography warp to GPU
   'src/tools/liquify/liquify.ts': 2,                         // #443 — port displacement map to GPU
-  'src/tools/quick-select/quick-select-interaction.ts': 5,   // quick-select pixel readback, port pending
+  'src/tools/quick-select/quick-select-interaction.ts': 4,   // quick-select pixel readback, port pending
   'src/tools/quick-select/quick-select.ts': 2,               // quick-select mask build, port pending
   'src/tools/path/boolean-ops.ts': 3,                        // canvas-based boolean ops; see #465 (DOM-in-tools cleanup)
 
