@@ -55,7 +55,7 @@ pub const TRANSFORM_AFFINE_FRAG: &str = translated!("transform_affine");
 pub const TRANSFORM_PERSPECTIVE_FRAG: &str = translated!("transform_perspective");
 
 // Effects
-pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
+pub const GLOW_FRAG: &str = translated!("effects/glow");
 pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
 pub const LAYER_MASK_APPLY_FRAG: &str = translated!("effects/layer_mask_apply");
 pub const SEPARABLE_EDT_FRAG: &str = include_str!("shaders/effects/separable_edt.glsl");
