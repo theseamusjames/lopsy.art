@@ -47,8 +47,8 @@ import { useEditorStore } from '../editor-store';
 import { growSelection, shrinkSelection, selectionBounds } from '../../selection/selection';
 import { notifyInfo } from '../notifications-store';
 import { getEngine } from '../../engine-wasm/engine-state';
-import { setSelectionMask, featherSelectionMask, readSelectionMask } from '../../engine-wasm/wasm-bridge';
 import { seedSelectionMaskRef } from '../../engine-wasm/sync-state';
+import { featherMaskOnGpu } from '../interactions/selection-handlers';
 import { createTransformState } from '../../tools/transform/transform';
 import { useUIStore } from '../ui-store';
 import { commitLiveFloat } from '../interactions/live-float';
@@ -272,43 +272,41 @@ export function MenuBar() {
     const sel = editor.selection;
     if (!sel.active || !sel.mask) { setSelectDialog(null); return; }
     const { width: docW, height: docH } = editor.document;
-    let newMask: Uint8ClampedArray;
-    if (selectDialog === 'feather') {
-      const engine = getEngine();
-      if (engine) {
-        const u8Mask = new Uint8Array(sel.mask.buffer, sel.mask.byteOffset, sel.mask.byteLength);
-        setSelectionMask(engine, u8Mask, docW, docH);
-        featherSelectionMask(engine, amount);
-        const readback = readSelectionMask(engine);
-        if (readback.length >= 8) {
-          const dv = new DataView(readback.buffer, readback.byteOffset, readback.byteLength);
-          const rw = dv.getUint32(0, true);
-          const rh = dv.getUint32(4, true);
-          newMask = new Uint8ClampedArray(readback.buffer, readback.byteOffset + 8, rw * rh);
+    const dialog = selectDialog;
+    const apply = (newMask: Uint8ClampedArray): void => {
+      const newBounds = selectionBounds(newMask, docW, docH);
+      if (newBounds) {
+        editor.pushHistoryMetadata(SELECT_DIALOG_LABELS[dialog]);
+        editor.setSelection(newBounds, newMask, docW, docH);
+        useUIStore.getState().setTransform(createTransformState(newBounds));
+      } else {
+        // An empty result would read as "no selection", which Delete, Fill
+        // and filters treat as the whole layer (#1026). Keep the selection.
+        notifyInfo('No pixels would remain selected. The selection was not changed.');
+      }
+    };
+    const engine = getEngine();
+    if (dialog === 'feather' && engine) {
+      const before = sel.mask;
+      featherMaskOnGpu(engine, before, docW, docH, amount)
+        .catch(() => null)
+        .then((feathered) => {
+          // The selection changed while the feather was being read.
+          if (useEditorStore.getState().selection.mask !== before) return;
+          if (!feathered) {
+            apply(before);
+            return;
+          }
           // #763: the feathered bytes are already on the GPU — seed the
           // tracked ref so the next syncSelection skips the echo upload.
-          seedSelectionMaskRef(engine, newMask);
-        } else {
-          newMask = sel.mask;
-        }
-      } else {
-        newMask = sel.mask;
-      }
-    } else {
-      newMask = selectDialog === 'grow'
-        ? growSelection(sel.mask, docW, docH, amount)
-        : shrinkSelection(sel.mask, docW, docH, amount);
+          seedSelectionMaskRef(engine, feathered.mask);
+          apply(feathered.mask);
+        })
+        .finally(() => setSelectDialog(null));
+      return;
     }
-    const newBounds = selectionBounds(newMask, docW, docH);
-    if (newBounds) {
-      editor.pushHistoryMetadata(SELECT_DIALOG_LABELS[selectDialog]);
-      editor.setSelection(newBounds, newMask, docW, docH);
-      useUIStore.getState().setTransform(createTransformState(newBounds));
-    } else {
-      // An empty result would read as "no selection", which Delete, Fill
-      // and filters treat as the whole layer (#1026). Keep the selection.
-      notifyInfo('No pixels would remain selected. The selection was not changed.');
-    }
+    if (dialog === 'feather') apply(sel.mask);
+    else apply(dialog === 'grow' ? growSelection(sel.mask, docW, docH, amount) : shrinkSelection(sel.mask, docW, docH, amount));
     setSelectDialog(null);
   }, [selectDialog]);
 

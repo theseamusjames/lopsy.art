@@ -14,6 +14,7 @@ import {
   type SelectionCombineOp,
 } from '../../selection/selection';
 import { getEngine } from '../../engine-wasm/engine-state';
+import type { Engine } from '../../engine-wasm/wasm-bridge';
 import {
   createRectSelection as wasmCreateRectSelection,
   createEllipseSelection as wasmCreateEllipseSelection,
@@ -68,25 +69,28 @@ export function constrainMarqueeSize(
   return { w: w0, h: w0 / ratio };
 }
 
+export interface FeatheredMask {
+  mask: Uint8ClampedArray;
+  width: number;
+  height: number;
+}
+
 /**
- * Feather a freshly built shape mask with the marquees' shared Feather
- * radius. Returns null when there is nothing to feather (radius 0, no
- * engine, or the feather wiped the shape out). The feathered bytes are left
- * in the engine's selection texture.
+ * Feather `mask` on the GPU and read the result. The feathered bytes are
+ * left in the engine's selection texture. Null when the read came back
+ * empty.
  */
-function featherShapeMask(
+export async function featherMaskOnGpu(
+  engine: Engine,
   mask: Uint8ClampedArray,
   docW: number,
   docH: number,
-): { mask: Uint8ClampedArray; width: number; height: number } | null {
-  const featherRadius = useToolSettingsStore.getState().settings.marquee.feather;
-  if (featherRadius <= 0) return null;
-  const engine = getEngine();
-  if (!engine) return null;
+  radius: number,
+): Promise<FeatheredMask | null> {
   const u8Mask = new Uint8Array(mask.buffer, mask.byteOffset, mask.byteLength);
   setSelectionMask(engine, u8Mask, docW, docH);
-  featherSelectionMask(engine, featherRadius);
-  const readback = readSelectionMask(engine);
+  featherSelectionMask(engine, radius);
+  const readback = await readSelectionMask(engine);
   if (readback.length < 8) return null;
   const dv = new DataView(readback.buffer, readback.byteOffset, readback.byteLength);
   const width = dv.getUint32(0, true);
@@ -98,29 +102,78 @@ function featherShapeMask(
   };
 }
 
+/**
+ * Feather a freshly built shape mask with the marquees' shared Feather
+ * radius. Returns null, at once, when there is nothing to feather (radius
+ * 0 or no engine); the promise resolves to null when the feather wiped the
+ * shape out.
+ */
+function featherShapeMask(
+  mask: Uint8ClampedArray,
+  docW: number,
+  docH: number,
+): Promise<FeatheredMask | null> | null {
+  const featherRadius = useToolSettingsStore.getState().settings.marquee.feather;
+  if (featherRadius <= 0) return null;
+  const engine = getEngine();
+  if (!engine) return null;
+  return featherMaskOnGpu(engine, mask, docW, docH, featherRadius).catch(() => null);
+}
+
+let latestFeatherCommit = 0;
+
+/**
+ * Run `apply` with the feathered shape once it has been read. A selection
+ * made in the meantime, feathered or not, replaces this one: its result
+ * is dropped rather than installed over the newer selection.
+ */
+function whenFeathered(
+  pending: Promise<FeatheredMask | null>,
+  apply: (feathered: FeatheredMask | null) => void,
+): void {
+  const commit = ++latestFeatherCommit;
+  const selectionAtRequest = useEditorStore.getState().selection.mask;
+  void pending.then((feathered) => {
+    if (commit !== latestFeatherCommit) return;
+    if (useEditorStore.getState().selection.mask !== selectionAtRequest) return;
+    apply(feathered);
+  });
+}
+
+function installSelection(
+  bounds: { x: number; y: number; width: number; height: number },
+  mask: Uint8ClampedArray,
+  docW: number,
+  docH: number,
+): void {
+  useEditorStore.getState().setSelection(bounds, mask, docW, docH);
+  useUIStore.getState().setTransform(createTransformState(bounds));
+}
+
 export function commitFeatheredSelection(
   bounds: { x: number; y: number; width: number; height: number },
   mask: Uint8ClampedArray,
   docW: number,
   docH: number,
 ): void {
-  const editorState = useEditorStore.getState();
-  const feathered = featherShapeMask(mask, docW, docH);
-  if (feathered) {
-    const newBounds = selectionBounds(feathered.mask, feathered.width, feathered.height);
-    if (newBounds) {
-      editorState.setSelection(newBounds, feathered.mask, feathered.width, feathered.height);
-      // #763: the feathered bytes were just written to the GPU by
-      // featherSelectionMask — record them as the tracked reference so
-      // the next syncSelection skips the echo upload.
-      const engine = getEngine();
-      if (engine) seedSelectionMaskRef(engine, feathered.mask);
-      useUIStore.getState().setTransform(createTransformState(newBounds));
+  const pending = featherShapeMask(mask, docW, docH);
+  if (!pending) {
+    installSelection(bounds, mask, docW, docH);
+    return;
+  }
+  whenFeathered(pending, (feathered) => {
+    const newBounds = feathered ? selectionBounds(feathered.mask, feathered.width, feathered.height) : null;
+    if (!feathered || !newBounds) {
+      installSelection(bounds, mask, docW, docH);
       return;
     }
-  }
-  editorState.setSelection(bounds, mask, docW, docH);
-  useUIStore.getState().setTransform(createTransformState(bounds));
+    installSelection(newBounds, feathered.mask, feathered.width, feathered.height);
+    // #763: the feathered bytes were just written to the GPU by
+    // featherSelectionMask — record them as the tracked reference so
+    // the next syncSelection skips the echo upload.
+    const engine = getEngine();
+    if (engine) seedSelectionMaskRef(engine, feathered.mask);
+  });
 }
 
 /** The selection mask a new shape can combine with, if one is active. */
@@ -177,19 +230,21 @@ export function commitSelectionShape(
     commitFeatheredSelection(bounds, mask, docW, docH);
     return;
   }
-  const editorState = useEditorStore.getState();
-  editorState.pushHistoryMetadata(SELECTION_COMBINE_LABELS[mode]);
-  const feathered = featherShapeMask(mask, docW, docH);
-  const shape = feathered && feathered.width === docW && feathered.height === docH ? feathered.mask : mask;
-  const combined = combineSelectionMasks(existing, shape, mode);
-  const combinedBounds = selectionBounds(combined, docW, docH);
-  if (!combinedBounds) {
-    editorState.clearSelection();
-    useUIStore.getState().setTransform(null);
-    return;
-  }
-  editorState.setSelection(combinedBounds, combined, docW, docH);
-  useUIStore.getState().setTransform(createTransformState(combinedBounds));
+  useEditorStore.getState().pushHistoryMetadata(SELECTION_COMBINE_LABELS[mode]);
+  const combineWith = (feathered: FeatheredMask | null): void => {
+    const shape = feathered && feathered.width === docW && feathered.height === docH ? feathered.mask : mask;
+    const combined = combineSelectionMasks(existing, shape, mode);
+    const combinedBounds = selectionBounds(combined, docW, docH);
+    if (!combinedBounds) {
+      useEditorStore.getState().clearSelection();
+      useUIStore.getState().setTransform(null);
+      return;
+    }
+    installSelection(combinedBounds, combined, docW, docH);
+  };
+  const pending = featherShapeMask(mask, docW, docH);
+  if (pending) whenFeathered(pending, combineWith);
+  else combineWith(null);
 }
 
 export function createRectSelection(

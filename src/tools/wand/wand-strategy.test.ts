@@ -105,8 +105,7 @@ function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContex
 
 /** Let an awaited GPU read deliver its pixels. */
 async function settle(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 function wandResultMask(): Uint8Array {
@@ -231,7 +230,7 @@ describe('wand strategy', () => {
     new DataView(feathered.buffer).setUint32(4, DOC_H, true);
     feathered[8 + 2 * DOC_W + 2] = 200;
     feathered[8 + 2 * DOC_W + 1] = 60;
-    vi.mocked(readSelectionMask).mockReturnValue(feathered);
+    vi.mocked(readSelectionMask).mockResolvedValue(feathered);
     const existing = new Uint8ClampedArray(DOC_W * DOC_H);
     existing[7 * DOC_W + 7] = 255;
     editorState.selection = {

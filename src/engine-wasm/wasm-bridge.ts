@@ -184,7 +184,7 @@ import init, {
   clearFilterPreview,
   setSelectionMask,
   featherSelectionMask,
-  readSelectionMask,
+  readSelectionMask as rawReadSelectionMask,
   clearSelection,
   createRectSelection,
   createEllipseSelection,
@@ -630,7 +630,6 @@ export {
   cropLayerToContent,
   floodFillGraduated,
   getLayerContentBounds,
-  readSelectionMask,
   readQuickMaskPixels,
 };
 
@@ -672,6 +671,8 @@ export const readLayerPixels = asyncReadback(rawReadLayerPixels);
 export const sampleColor = asyncReadback(rawSampleColor);
 /** A layer's pixels in document space, as the wand, bucket fill and quick select read them. */
 export const readLayerPixelsForFill = asyncReadback(rawReadLayerPixelsForFill);
+/** The selection texture's coverage: `[width, height]` as u32 LE, then one byte per pixel. */
+export const readSelectionMask = asyncReadback(rawReadSelectionMask);
 export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);
