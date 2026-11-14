@@ -78,10 +78,10 @@ export function readLayerAsImageDataSync(layerId: string): ImageData | null {
  * backup that survives a WebGL context loss (#973). Upload it back with
  * `uploadCompressed`.
  */
-export function readLayerBackupBlob(layerId: string): Uint8Array | null {
+export async function readLayerBackupBlob(layerId: string): Promise<Uint8Array | null> {
   if (!currentEngine) return null;
 
-  const data = readLayerPixelsLz4U16(currentEngine, layerId);
+  const data = await readLayerPixelsLz4U16(currentEngine, layerId);
   if (!data || data.length === 0) return null;
 
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);

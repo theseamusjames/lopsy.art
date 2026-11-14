@@ -46,7 +46,7 @@ import init, {
   getLayerEngineBounds,
   getLayerContentBounds as rawGetLayerContentBounds,
   uploadLayerPixelsCompressed,
-  readLayerPixelsLz4U16,
+  readLayerPixelsLz4U16 as rawReadLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
   readLayerThumbnail as rawReadLayerThumbnail,
   readCompositeThumbnail as rawReadCompositeThumbnail,
@@ -383,7 +383,6 @@ export {
   layerContentGeneration,
   getLayerEngineBounds,
   uploadLayerPixelsCompressed,
-  readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
   duplicateLayerTexture,
   mergeLayers,
@@ -673,6 +672,8 @@ export const readSelectionMask = asyncReadback(rawReadSelectionMask);
 export const getLayerContentBounds = asyncReadback(rawGetLayerContentBounds);
 /** A layer mask's coverage, one byte per pixel, sized like the mask texture. */
 export const readMaskTexture = asyncReadback(rawReadMaskTexture);
+/** A layer's content-cropped pixels as an LZ4 16-bit blob, for the context-loss backup. */
+export const readLayerPixelsLz4U16 = asyncReadback(rawReadLayerPixelsLz4U16);
 export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);

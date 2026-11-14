@@ -16,9 +16,11 @@
  * In `idle` mode (window blur) a pass reads one layer per idle callback, so
  * the event never blocks for the whole document; `pause` (window focus)
  * stops it, and an edit between slices abandons it — the stamps keep what
- * was read for the next pass. In `now` mode (tab hidden) the pass finishes
- * synchronously: the user isn't looking, and a hidden tab's timers may not
- * run.
+ * was read for the next pass. In `now` mode (tab hidden) the pass reads
+ * every layer back to back with no idle callback between them: the user
+ * isn't looking, and a hidden tab's timers may not run. Each read answers
+ * with a promise, so the pass commits when the last one has; on WebGL the
+ * answers are immediate and that is within the task of the request.
  *
  * A document whose backup would exceed `maxBytes` is remembered as too large
  * for its history key, so leaving the window again without an edit reads
@@ -70,7 +72,7 @@ export interface LayerBackupDeps {
   backupLayers: () => readonly BackupLayer[];
   /** Null when the layer (or the engine) is gone. */
   stamp: (layerId: string) => LayerStamp | null;
-  readBlob: (layerId: string) => Uint8Array | null;
+  readBlob: (layerId: string) => Promise<Uint8Array | null>;
   /** Run `callback` when the main thread is idle; returns a canceller. */
   scheduleIdle: (callback: () => void) => () => void;
   now: () => number;
@@ -151,6 +153,10 @@ interface Pass {
   next: number;
   totalBytes: number;
   readonly out: Map<string, LayerBackup>;
+  /** Stop after each readback and wait for the next idle callback. */
+  isSliced: boolean;
+  /** A read is out; the loop that asked for it carries the pass on. */
+  isRunning: boolean;
 }
 
 export function createLayerBackupRunner(deps: LayerBackupDeps): LayerBackupRunner {
@@ -195,11 +201,11 @@ export function createLayerBackupRunner(deps: LayerBackupDeps): LayerBackupRunne
       markTooLarge(key);
       return null;
     }
-    return { key, layers, next: 0, totalBytes: 0, out: new Map() };
+    return { key, layers, next: 0, totalBytes: 0, out: new Map(), isSliced: true, isRunning: false };
   }
 
-  /** Back up one layer; returns whether that took a readback. */
-  function backUpLayer(current: Pass, layer: BackupLayer): boolean {
+  /** Back up one layer; resolves to whether that took a readback. */
+  async function backUpLayer(current: Pass, layer: BackupLayer): Promise<boolean> {
     const stamp = deps.stamp(layer.id);
     const record = records.get(layer.id);
     let blob: Uint8Array | null;
@@ -209,10 +215,10 @@ export function createLayerBackupRunner(deps: LayerBackupDeps): LayerBackupRunne
       blob = record.blob;
       bytes = record.bytes;
     } else {
-      blob = deps.readBlob(layer.id);
-      bytes = blob?.byteLength ?? 0;
       reads++;
       isRead = true;
+      blob = await deps.readBlob(layer.id).catch(() => null);
+      bytes = blob?.byteLength ?? 0;
       if (stamp) records.set(layer.id, { stamp, bytes, blob });
       else records.delete(layer.id);
     }
@@ -222,23 +228,38 @@ export function createLayerBackupRunner(deps: LayerBackupDeps): LayerBackupRunne
   }
 
   /**
-   * Advance `current` until it has done one readback (`isSliced`) or every
-   * layer is in. Commits a finished pass; returns whether it is still open.
+   * Carry `current` on until it has done one readback (when sliced) or
+   * every layer is in, and commit it when it is whole. A pass that was
+   * replaced, reset or edited past while a read was out is left alone:
+   * what it read stays in the records for the next pass.
    */
-  function advance(current: Pass, isSliced: boolean): boolean {
-    while (current.next < current.layers.length) {
-      const layer = current.layers[current.next];
-      current.next++;
-      if (!layer) continue;
-      const isRead = backUpLayer(current, layer);
-      if (current.totalBytes > deps.maxBytes()) {
-        markTooLarge(current.key);
-        return false;
+  async function advance(current: Pass): Promise<void> {
+    if (current.isRunning) return;
+    current.isRunning = true;
+    try {
+      while (current.next < current.layers.length) {
+        const layer = current.layers[current.next];
+        current.next++;
+        if (!layer) continue;
+        const isRead = await backUpLayer(current, layer);
+        if (pass !== current) return;
+        if (isRead && !isSameHistoryKey(current.key, deps.historyKey())) {
+          pass = null;
+          return;
+        }
+        if (current.totalBytes > deps.maxBytes()) {
+          markTooLarge(current.key);
+          return;
+        }
+        if (isRead && current.isSliced && current.next < current.layers.length) {
+          scheduleSlice();
+          return;
+        }
       }
-      if (isRead && isSliced && current.next < current.layers.length) return true;
+      commit(current);
+    } finally {
+      current.isRunning = false;
     }
-    commit(current);
-    return false;
   }
 
   function scheduleSlice(): void {
@@ -261,7 +282,7 @@ export function createLayerBackupRunner(deps: LayerBackupDeps): LayerBackupRunne
       pass = null;
       return;
     }
-    if (advance(current, true)) scheduleSlice();
+    void advance(current);
   }
 
   function request(mode: BackupMode): void {
@@ -284,11 +305,13 @@ export function createLayerBackupRunner(deps: LayerBackupDeps): LayerBackupRunne
     if (!pass || !isSameHistoryKey(pass.key, key)) pass = startPass(key);
     const current = pass;
     if (!current) return;
+    current.isSliced = mode !== 'now';
     if (mode === 'now') {
-      advance(current, false);
+      void advance(current);
       return;
     }
-    scheduleSlice();
+    // A read still out reschedules the pass itself when it answers.
+    if (!current.isRunning) scheduleSlice();
   }
 
   return {
