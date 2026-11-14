@@ -60,7 +60,7 @@ pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
 pub const LAYER_MASK_APPLY_FRAG: &str = include_str!("shaders/effects/layer_mask_apply.glsl");
 pub const SEPARABLE_EDT_FRAG: &str = include_str!("shaders/effects/separable_edt.glsl");
 pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
-pub const COLOR_OVERLAY_FRAG: &str = include_str!("shaders/effects/color_overlay.glsl");
+pub const COLOR_OVERLAY_FRAG: &str = translated!("effects/color_overlay");
 
 // Filters
 pub const GAUSSIAN_BLUR_FRAG: &str = include_str!("shaders/filters/gaussian_blur.glsl");
