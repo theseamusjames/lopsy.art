@@ -263,7 +263,7 @@ export async function saveProject(): Promise<void> {
 
       // Read pixel data for raster layers (not groups — they have no texture)
       if (layer.type !== 'group') {
-        const imageData = readLayerAsImageData(layer.id);
+        const imageData = await readLayerAsImageData(layer.id);
         if (imageData) {
           const raw = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
           const compressed = await compressBytes(raw);

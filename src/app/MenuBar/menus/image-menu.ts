@@ -351,11 +351,11 @@ function getActiveGroupId(): string | null {
   return doc.rootGroupId ?? null;
 }
 
-function getActiveLayerPixels(): Uint8ClampedArray | null {
+async function getActiveLayerPixels(): Promise<Uint8ClampedArray | null> {
   const state = useEditorStore.getState();
   const activeId = state.document.activeLayerId;
   if (!activeId) return null;
-  const imageData = readLayerAsImageData(activeId);
+  const imageData = await readLayerAsImageData(activeId);
   return imageData?.data ?? null;
 }
 
@@ -382,8 +382,8 @@ function addAdjustmentAndCommit(node: AdjustmentNode, label: string): void {
   state.notifyRender();
 }
 
-export function applyAutoTone(): void {
-  const pixels = getActiveLayerPixels();
+export async function applyAutoTone(): Promise<void> {
+  const pixels = await getActiveLayerPixels();
   if (!pixels) return;
 
   const levels = computeAutoTone(pixels);
@@ -396,8 +396,8 @@ export function applyAutoTone(): void {
   addAdjustmentAndCommit(node, 'Auto Tone');
 }
 
-export function applyAutoContrast(): void {
-  const pixels = getActiveLayerPixels();
+export async function applyAutoContrast(): Promise<void> {
+  const pixels = await getActiveLayerPixels();
   if (!pixels) return;
 
   const levels = computeAutoContrast(pixels);
@@ -410,8 +410,8 @@ export function applyAutoContrast(): void {
   addAdjustmentAndCommit(node, 'Auto Contrast');
 }
 
-export function applyAutoColor(): void {
-  const pixels = getActiveLayerPixels();
+export async function applyAutoColor(): Promise<void> {
+  const pixels = await getActiveLayerPixels();
   if (!pixels) return;
 
   const curves = computeAutoColor(pixels);

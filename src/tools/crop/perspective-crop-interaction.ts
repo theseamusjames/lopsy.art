@@ -8,7 +8,7 @@
 
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
-import type { Point } from '../../types';
+import type { Layer, Point } from '../../types';
 import { useUIStore } from '../../app/ui-store';
 import { useEditorStore } from '../../app/editor-store';
 import { computePerspectiveTransform, applyPerspectiveWarp, inferOutputSize } from './perspective-crop';
@@ -113,7 +113,7 @@ export function handlePerspectiveCropUp(_state: InteractionState): void {
  * Commit the perspective crop: warp pixels and resize the document.
  * Called from the options bar "Apply" button.
  */
-export function commitPerspectiveCrop(): void {
+export async function commitPerspectiveCrop(): Promise<void> {
   const uiState = useUIStore.getState();
   const editorState = useEditorStore.getState();
   const quad = uiState.perspectiveCropQuad;
@@ -128,13 +128,13 @@ export function commitPerspectiveCrop(): void {
   editorState.pushHistory('Perspective Crop');
 
   // Warp every raster layer
-  const updatedLayers = doc.layers.map((layer) => {
+  const warpLayer = async (layer: Layer): Promise<Layer> => {
     if (layer.type !== 'raster') {
       return layer;
     }
 
     // Read current layer pixels from GPU
-    const srcImageData = readLayerAsImageData(layer.id);
+    const srcImageData = await readLayerAsImageData(layer.id);
     if (!srcImageData) return layer;
 
     // Build the warp matrix: maps [0,outW]×[0,outH] → quad corners in doc-space.
@@ -154,7 +154,11 @@ export function commitPerspectiveCrop(): void {
     uploadLayerPixels(engine, layer.id, new Uint8Array(warped.data.buffer), warped.width, warped.height, 0, 0);
 
     return { ...layer, x: 0, y: 0, width: outWidth, height: outHeight };
-  });
+  };
+  const updatedLayers: Layer[] = [];
+  for (const layer of doc.layers) {
+    updatedLayers.push(await warpLayer(layer));
+  }
 
   // Resize the document and update layers
   useEditorStore.setState((s) => ({

@@ -25,10 +25,23 @@ export function setEngine(engine: Engine): void {
 }
 
 /**
- * Read a layer's GPU texture as ImageData.
+ * Read a layer's GPU texture as ImageData. Answers with a Promise: WebGPU
+ * cannot read back synchronously (see `asyncReadback` in wasm-bridge).
  * Results are cached per frame — call clearFrameCache() at the start of each render frame.
  */
-export function readLayerAsImageData(layerId: string): ImageData | null {
+export function readLayerAsImageData(layerId: string): Promise<ImageData | null> {
+  try {
+    return Promise.resolve(readLayerAsImageDataSync(layerId));
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+/**
+ * The synchronous read behind `readLayerAsImageData`, for the pixel-data
+ * store's pointer-down paths until they await too.
+ */
+export function readLayerAsImageDataSync(layerId: string): ImageData | null {
   if (!currentEngine) return null;
 
   const cached = frameCache.get(layerId);

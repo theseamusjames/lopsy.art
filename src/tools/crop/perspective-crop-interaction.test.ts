@@ -227,20 +227,20 @@ describe('commitPerspectiveCrop', () => {
     return img;
   }
 
-  it('does nothing without a quad', () => {
-    commitPerspectiveCrop();
+  it('does nothing without a quad', async () => {
+    await commitPerspectiveCrop();
     expect(editorState.pushHistory).not.toHaveBeenCalled();
     expect(setState).not.toHaveBeenCalled();
   });
 
-  it('does nothing without an engine', () => {
+  it('does nothing without an engine', async () => {
     uiState.perspectiveCropQuad = axisAlignedQuad();
     engine = null;
-    commitPerspectiveCrop();
+    await commitPerspectiveCrop();
     expect(editorState.pushHistory).not.toHaveBeenCalled();
   });
 
-  it('warps raster layers, resizes the document, and resets the quad', () => {
+  it('warps raster layers, resizes the document, and resets the quad', async () => {
     uiState.perspectiveCropQuad = axisAlignedQuad();
     editorState.document.layers = [
       { id: 'layer-1', type: 'raster', x: 0, y: 0, width: 200, height: 100 },
@@ -248,7 +248,7 @@ describe('commitPerspectiveCrop', () => {
     ];
     readLayerAsImageData.mockReturnValue(grayImage(200, 100));
 
-    commitPerspectiveCrop();
+    await commitPerspectiveCrop();
 
     expect(editorState.pushHistory).toHaveBeenCalledWith('Perspective Crop');
     // Only the raster layer is read back and re-uploaded.
@@ -280,7 +280,7 @@ describe('commitPerspectiveCrop', () => {
     expect(uiState.setPerspectiveCropDragging).toHaveBeenLastCalledWith(null);
   });
 
-  it('translates the quad into layer-local space for offset layers', () => {
+  it('translates the quad into layer-local space for offset layers', async () => {
     // Layer shifted by (20, 10): the same quad now starts at the layer origin,
     // so the warped output samples the layer's own top-left pixel.
     uiState.perspectiveCropQuad = axisAlignedQuad();
@@ -295,7 +295,7 @@ describe('commitPerspectiveCrop', () => {
     img.data[3] = 255;
     readLayerAsImageData.mockReturnValue(img);
 
-    commitPerspectiveCrop();
+    await commitPerspectiveCrop();
 
     const bytes = uploadLayerPixels.mock.calls[0]![2] as Uint8Array;
     // Output pixel (0,0) maps to layer-local (0,0) — the red marker.
@@ -303,13 +303,13 @@ describe('commitPerspectiveCrop', () => {
     expect(bytes[1]).toBe(0);
   });
 
-  it('skips raster layers whose pixels cannot be read', () => {
+  it('skips raster layers whose pixels cannot be read', async () => {
     uiState.perspectiveCropQuad = axisAlignedQuad();
     editorState.document.layers = [
       { id: 'layer-1', type: 'raster', x: 0, y: 0, width: 200, height: 100 },
     ];
     readLayerAsImageData.mockReturnValue(null);
-    commitPerspectiveCrop();
+    await commitPerspectiveCrop();
     expect(uploadLayerPixels).not.toHaveBeenCalled();
     // Document still resizes.
     expect(editorState.document.width).toBe(100);
