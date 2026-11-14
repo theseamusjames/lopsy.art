@@ -7,9 +7,3 @@ uniforms! {
     }
 }
 
-uniforms! {
-    /// `color/tonemap.glsl`
-    pub struct TonemapParams {
-        pub curve: i32,
-    }
-}

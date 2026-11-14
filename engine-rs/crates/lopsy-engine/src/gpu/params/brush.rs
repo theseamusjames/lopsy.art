@@ -103,13 +103,6 @@ uniforms! {
 }
 
 uniforms! {
-    /// `brush/opacity_clamp.glsl`
-    pub struct OpacityClampParams {
-        pub max_opacity: f32,
-    }
-}
-
-uniforms! {
     /// `brush/stamp_preview.glsl`
     pub struct StampPreviewParams {
         pub resolution: [f32; 2],
