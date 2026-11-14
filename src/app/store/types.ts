@@ -180,7 +180,7 @@ export interface EditorState {
 
   // Clipboard
   copy: () => void;
-  copyMerged: () => Promise<void>;
+  copyMerged: () => void;
   cut: () => void;
   paste: () => string | null;
   matchesInternalClipboard: (blob: Blob) => Promise<boolean>;

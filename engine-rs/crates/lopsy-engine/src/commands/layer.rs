@@ -359,6 +359,22 @@ pub fn clipboard_copy(
     Ok(vec![w as i32, h as i32, ox, oy])
 }
 
+/// Copy Merged: the flattened document through the selection, into the
+/// clipboard texture, without reading it back. Returns
+/// `[width, height, offset_x, offset_y]`.
+pub fn clipboard_copy_merged(
+    engine: &mut EngineInner,
+    has_selection: bool,
+    bounds_x: i32,
+    bounds_y: i32,
+    bounds_w: u32,
+    bounds_h: u32,
+) -> Result<Vec<i32>, String> {
+    let (w, h, ox, oy) =
+        compositor::copy_merged_to_clipboard(engine, has_selection, bounds_x, bounds_y, bounds_w, bounds_h)?;
+    Ok(vec![w as i32, h as i32, ox, oy])
+}
+
 pub fn clipboard_cut(
     engine: &mut EngineInner,
     layer_id: &str,

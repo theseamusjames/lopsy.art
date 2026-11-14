@@ -234,6 +234,19 @@ pub fn clipboard_copy(
     lopsy_engine::commands::layer::clipboard_copy(&mut engine.inner, layer_id, has_selection, bounds_x, bounds_y, bounds_w, bounds_h).map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "clipboardCopyMerged")]
+pub fn clipboard_copy_merged(
+    engine: &mut Engine,
+    has_selection: bool,
+    bounds_x: i32,
+    bounds_y: i32,
+    bounds_w: u32,
+    bounds_h: u32,
+) -> Result<Vec<i32>, JsError> {
+    lopsy_engine::commands::layer::clipboard_copy_merged(&mut engine.inner, has_selection, bounds_x, bounds_y, bounds_w, bounds_h)
+        .map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "clipboardCut")]
 pub fn clipboard_cut(
     engine: &mut Engine,
