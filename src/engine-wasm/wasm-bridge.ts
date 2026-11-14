@@ -201,7 +201,8 @@ import init, {
   fillQuickMask as rawFillQuickMask,
   renderQuickMaskLinearGradient,
   renderQuickMaskRadialGradient,
-  readQuickMaskPixels,
+  readQuickMaskPixels as rawReadQuickMaskPixels,
+  resumeTask,
   uploadQuickMaskPixels,
   beginQuickMaskMove,
   translateQuickMask,
@@ -613,7 +614,6 @@ export {
   expandLayerToDocSize,
   cropLayerToContent,
   floodFillGraduated,
-  readQuickMaskPixels,
 };
 
 /**
@@ -630,17 +630,47 @@ export function bakeLayerEffects(engine: Engine, layerId: string, bakeMask: bool
 }
 
 /**
- * Makes a function that reads pixels back from the GPU answer with a
- * Promise. WebGPU cannot read back synchronously, so callers are written
- * for a backend that answers later; on WebGL the read has already happened
- * and the Promise is resolved (or rejected, if the read threw) on return.
+ * What a wgpu export answers with while its readback is still out: the
+ * command is parked in the engine under `lopsyTask` until `ready` resolves.
  */
-function asyncReadback<Args extends unknown[], Result>(
+interface PendingReadback {
+  lopsyTask: number;
+  ready: Promise<void>;
+}
+
+function isPendingReadback(value: unknown): value is PendingReadback {
+  return typeof value === 'object' && value !== null && 'lopsyTask' in value;
+}
+
+/**
+ * Wait for a parked command's readback, resume it, and repeat until it
+ * answers with its value. A command with several readbacks parks once for
+ * each.
+ */
+async function finishReadback<Result>(engine: Engine, pending: PendingReadback): Promise<Result> {
+  let step: unknown = pending;
+  while (isPendingReadback(step)) {
+    await step.ready;
+    step = resumeTask(engine, step.lopsyTask);
+  }
+  return step as Result;
+}
+
+/**
+ * Makes a function that reads pixels back from the GPU answer with a
+ * Promise. WebGPU cannot read back synchronously: there the engine answers
+ * with a parked command, which this waits out. On WebGL the read has
+ * already happened and the Promise is resolved (or rejected, if the read
+ * threw) on return.
+ */
+function asyncReadback<Args extends [Engine, ...unknown[]], Result>(
   read: (...args: Args) => Result,
 ): (...args: Args) => Promise<Result> {
   return (...args: Args): Promise<Result> => {
     try {
-      return Promise.resolve(read(...args));
+      const value: unknown = read(...args);
+      if (isPendingReadback(value)) return finishReadback<Result>(args[0], value);
+      return Promise.resolve(value as Result);
     } catch (err) {
       return Promise.reject(err);
     }
@@ -689,6 +719,8 @@ export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);
 export const readClipboardPixels = asyncReadback(rawReadClipboardPixels);
+/** The quick mask's coverage: `[width, height]` as i32 LE, then one byte per pixel. */
+export const readQuickMaskPixels = asyncReadback(rawReadQuickMaskPixels);
 
 /**
  * Every export that writes a layer-mask texture goes through this wrapper

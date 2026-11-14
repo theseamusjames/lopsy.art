@@ -36,10 +36,24 @@ export function rendererPlugin(options: RendererPluginOptions): Plugin {
       const importerPath = importer.split('?')[0]?.replace(/\\/g, '/') ?? '';
       return importerPath.endsWith(BRIDGE) ? SELECTOR_ID : null;
     },
+    configureServer(server) {
+      // The selector lists the package's exports, so a rebuilt package
+      // needs a new one. Vite does not tie a generated module to the files
+      // it was made from.
+      const glue = [join(options.root, WEBGL_GLUE), join(options.root, WGPU_GLUE)];
+      const refresh = (file: string) => {
+        if (!glue.includes(file)) return;
+        const selector = server.moduleGraph.getModuleById(SELECTOR_ID);
+        if (selector) server.moduleGraph.invalidateModule(selector);
+        server.ws.send({ type: 'full-reload' });
+      };
+      server.watcher.add(glue);
+      server.watcher.on('add', refresh);
+      server.watcher.on('change', refresh);
+    },
     load(id) {
       if (id !== SELECTOR_ID) return null;
       const webglGlue = join(options.root, WEBGL_GLUE);
-      this.addWatchFile(webglGlue);
       return renderSelectorModule({
         exportNames: glueExportNames(readFileSync(webglGlue, 'utf8')),
         webglUrl: `/${WEBGL_GLUE}`,
