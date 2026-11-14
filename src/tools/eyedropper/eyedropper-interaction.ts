@@ -6,20 +6,29 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { sampleColor as wasmSampleColor } from '../../engine-wasm/wasm-bridge';
 import { coalesceToAnimationFrame } from '../../utils/raf-coalesce';
 
-/** Sample one composited pixel from the GPU at the given canvas-space point. */
-function gpuSampleColorAt(canvasX: number, canvasY: number): { r: number; g: number; b: number; a: number } | null {
-  const engine = getEngine();
-  if (!engine) return null;
-  const rgba = wasmSampleColor(engine, canvasX, canvasY, 1);
-  if (rgba.length < 4) return null;
-  return { r: rgba[0]!, g: rgba[1]!, b: rgba[2]!, a: rgba[3]! / 255 };
-}
+/**
+ * Counts sample requests. A readback may answer after a newer one was
+ * asked for (the pointer moved on); only the newest request's colour is
+ * applied.
+ */
+let latestSampleRequest = 0;
 
+/** Sample one composited pixel from the GPU and make it the foreground colour. */
 function sampleAndApply(x: number, y: number): void {
-  const gpuColor = gpuSampleColorAt(x, y);
-  if (gpuColor) {
-    useToolSettingsStore.getState().setForegroundColor(gpuColor);
-  }
+  const engine = getEngine();
+  if (!engine) return;
+  const request = ++latestSampleRequest;
+  wasmSampleColor(engine, x, y, 1)
+    .then((rgba) => {
+      if (request !== latestSampleRequest || rgba.length < 4) return;
+      useToolSettingsStore.getState().setForegroundColor({
+        r: rgba[0]!,
+        g: rgba[1]!,
+        b: rgba[2]!,
+        a: rgba[3]! / 255,
+      });
+    })
+    .catch(() => {});
 }
 
 // `readPixels` is a pipeline-synchronizing call — issuing it once per
@@ -30,8 +39,8 @@ const coalescedSample = coalesceToAnimationFrame(sampleAndApply);
 export function handleEyedropperDown(ctx: InteractionContext): InteractionState {
   const { canvasPos, activeLayerId, activeLayer } = ctx;
 
-  // Sample the down-click synchronously; the user expects the color to
-  // update instantly on click even before the next frame.
+  // Ask for the down-click's colour at once, not on the next frame; the
+  // user expects it to update on click.
   const pixel = seedPixel(ctx);
   sampleAndApply(pixel.x, pixel.y);
 

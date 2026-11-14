@@ -65,9 +65,10 @@ describe('eyedropper interaction', () => {
     engine = { __engine: 'mock' };
   });
 
-  it('samples the composite at the canvas position and sets the foreground color', () => {
-    sampleColor.mockReturnValue(new Uint8Array([10, 20, 30, 255]));
+  it('samples the composite at the canvas position and sets the foreground color', async () => {
+    sampleColor.mockResolvedValue(new Uint8Array([10, 20, 30, 255]));
     handleEyedropperDown(makeCtx());
+    await Promise.resolve();
     expect(sampleColor).toHaveBeenCalledTimes(1);
     const args = sampleColor.mock.calls[0]!;
     expect(args[1]).toBe(25);
@@ -75,14 +76,15 @@ describe('eyedropper interaction', () => {
     expect(ts.setForegroundColor).toHaveBeenCalledWith({ r: 10, g: 20, b: 30, a: 1 });
   });
 
-  it('normalizes alpha from 0..255 to 0..1', () => {
-    sampleColor.mockReturnValue(new Uint8Array([0, 0, 0, 128]));
+  it('normalizes alpha from 0..255 to 0..1', async () => {
+    sampleColor.mockResolvedValue(new Uint8Array([0, 0, 0, 128]));
     handleEyedropperDown(makeCtx());
+    await Promise.resolve();
     expect(ts.setForegroundColor).toHaveBeenCalledWith({ r: 0, g: 0, b: 0, a: 128 / 255 });
   });
 
-  it('returns a drawing state carrying the layer offset for later moves', () => {
-    sampleColor.mockReturnValue(new Uint8Array([1, 2, 3, 255]));
+  it('returns a drawing state carrying the layer offset for later moves', async () => {
+    sampleColor.mockResolvedValue(new Uint8Array([1, 2, 3, 255]));
     const layer = { id: 'layer-1', x: 100, y: 200, visible: true } as unknown as InteractionContext['activeLayer'];
     const state = handleEyedropperDown(makeCtx({ activeLayer: layer }));
     expect(state.tool).toBe('eyedropper');
@@ -92,31 +94,34 @@ describe('eyedropper interaction', () => {
     expect(state.lastPoint).toEqual({ x: 25, y: 35 });
   });
 
-  it('does not set a color when the engine returns a short result', () => {
-    sampleColor.mockReturnValue(new Uint8Array([1, 2]));
+  it('does not set a color when the engine returns a short result', async () => {
+    sampleColor.mockResolvedValue(new Uint8Array([1, 2]));
     handleEyedropperDown(makeCtx());
+    await Promise.resolve();
     expect(ts.setForegroundColor).not.toHaveBeenCalled();
   });
 
-  it('does not set a color when no engine is available', () => {
+  it('does not set a color when no engine is available', async () => {
     engine = null;
     handleEyedropperDown(makeCtx());
+    await Promise.resolve();
     expect(sampleColor).not.toHaveBeenCalled();
     expect(ts.setForegroundColor).not.toHaveBeenCalled();
   });
 
-  it('move samples at layer-local position translated back to canvas space', () => {
-    sampleColor.mockReturnValue(new Uint8Array([5, 6, 7, 255]));
+  it('move samples at layer-local position translated back to canvas space', async () => {
+    sampleColor.mockResolvedValue(new Uint8Array([5, 6, 7, 255]));
     handleEyedropperMove(makeState({ layerStartX: 100, layerStartY: 200 }), { x: 10, y: 15 });
     flushEyedropperSample();
     const args = sampleColor.mock.calls[0]!;
     expect(args[1]).toBe(110);
     expect(args[2]).toBe(215);
+    await Promise.resolve();
     expect(ts.setForegroundColor).toHaveBeenCalledWith({ r: 5, g: 6, b: 7, a: 1 });
   });
 
-  it('move with negative coordinates still forwards them to the sampler', () => {
-    sampleColor.mockReturnValue(new Uint8Array(0));
+  it('move with negative coordinates still forwards them to the sampler', async () => {
+    sampleColor.mockResolvedValue(new Uint8Array(0));
     handleEyedropperMove(makeState(), { x: -5, y: -8 });
     flushEyedropperSample();
     const args = sampleColor.mock.calls[0]!;
@@ -125,11 +130,24 @@ describe('eyedropper interaction', () => {
     expect(ts.setForegroundColor).not.toHaveBeenCalled();
   });
 
+  it('drops a sample that answers after a newer one was requested', async () => {
+    let answerFirst: (rgba: Uint8Array) => void = () => {};
+    sampleColor.mockReturnValueOnce(new Promise<Uint8Array>((resolve) => { answerFirst = resolve; }));
+    sampleColor.mockResolvedValueOnce(new Uint8Array([9, 9, 9, 255]));
+    handleEyedropperDown(makeCtx());
+    handleEyedropperDown(makeCtx());
+    await Promise.resolve();
+    answerFirst(new Uint8Array([1, 1, 1, 255]));
+    await Promise.resolve();
+    expect(ts.setForegroundColor).toHaveBeenCalledTimes(1);
+    expect(ts.setForegroundColor).toHaveBeenCalledWith({ r: 9, g: 9, b: 9, a: 1 });
+  });
+
   // Issue #641 regression: readPixels is a pipeline-synchronizing call.
   // Every pointer event should NOT trigger a sample — they should be
   // coalesced to at most one sample per animation frame.
-  it('coalesces bursts of moves into a single sample per frame (issue #641)', () => {
-    sampleColor.mockReturnValue(new Uint8Array([1, 2, 3, 255]));
+  it('coalesces bursts of moves into a single sample per frame (issue #641)', async () => {
+    sampleColor.mockResolvedValue(new Uint8Array([1, 2, 3, 255]));
     const state = makeState({ layerStartX: 0, layerStartY: 0 });
 
     // Simulate a burst of 10 pointer-move events within one frame.
