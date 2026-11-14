@@ -58,15 +58,6 @@ impl VariantSources {
 /// `blend.wgsl`, one variant per blend mode in `BlendMode::ALL` order.
 pub const BLEND_SOURCES: VariantSources = include!(concat!(env!("OUT_DIR"), "/shaders/blend.variants.rs"));
 pub const BLEND_FRAG: &str = BLEND_SOURCES.first;
-/// Shared GLSL helpers spliced into fragment sources where a
-/// `//#include hsl` line appears (see `preprocess_frag`).
-pub const HSL_COMMON: &str = include_str!("shaders/hsl_common.glsl");
-/// Premultiplied bilinear sampling of straight-alpha textures, spliced in
-/// where `//#include premul_sample` appears.
-pub const PREMUL_SAMPLE: &str = include_str!("shaders/premul_sample.glsl");
-/// Encoded-CIELAB <-> sRGB conversions, spliced in where `//#include lab`
-/// appears.
-pub const LAB_COMMON: &str = include_str!("shaders/lab_common.glsl");
 pub const BLIT_RESAMPLE_FRAG: &str = translated!("blit_resample");
 pub const COMPOSITE_FRAG: &str = translated!("composite");
 pub const FINAL_BLIT_FRAG: &str = translated!("final_blit");
@@ -173,7 +164,7 @@ macro_rules! typed_shaders {
         fn typed_shader_checks() -> Vec<(&'static str, Result<(), String>)> {
             vec![$((
                 stringify!($name),
-                crate::gpu::uniforms::check::struct_matches_source::<$params>(&preprocess_frag($name.frag)),
+                crate::gpu::uniforms::check::struct_matches_source::<$params>($name.frag),
             )),*]
         }
     };
@@ -463,65 +454,21 @@ pub fn link_program(
     }
 }
 
-/// Minimal include preprocessor: splices shared helper blocks into a
-/// fragment source. GLSL ES has no #include; this keeps the RGB<->HSL
-/// math in one file instead of three diverging copies.
-fn preprocess_frag(src: &str) -> String {
-    src.replace("//#include hsl", HSL_COMMON)
-        .replace("//#include premul_sample", PREMUL_SAMPLE)
-        .replace("//#include lab", LAB_COMMON)
-}
-
-/// Injects `#define NAME VALUE` lines into a GLSL source. The `#version`
-/// directive must stay on the first line, so the defines are spliced in
-/// immediately after it (or prepended when there is no `#version`).
-fn inject_defines(src: &str, defines: &[(&str, &str)]) -> String {
-    if defines.is_empty() {
-        return src.to_string();
-    }
-    let mut block = String::new();
-    for (name, value) in defines {
-        block.push_str("#define ");
-        block.push_str(name);
-        block.push(' ');
-        block.push_str(value);
-        block.push('\n');
-    }
-    match src.find('\n') {
-        Some(pos) if src.starts_with("#version") => {
-            format!("{}\n{}{}", &src[..pos], block, &src[pos + 1..])
-        }
-        _ => format!("{block}{src}"),
-    }
-}
-
 /// Compiles a shader that takes the uniform struct `P`.
 pub fn compile<P: Uniforms>(
     gl: &WebGl2RenderingContext,
     vert_src: &str,
     shader: &Shader<P>,
 ) -> Result<ShaderProgram<P>, String> {
-    compile_with_defines(gl, vert_src, shader, &[])
-}
-
-/// [`compile`], with compile-time `#define`s injected into the fragment
-/// source, for building specialized variants of one GLSL file.
-pub fn compile_with_defines<P: Uniforms>(
-    gl: &WebGl2RenderingContext,
-    vert_src: &str,
-    shader: &Shader<P>,
-    defines: &[(&str, &str)],
-) -> Result<ShaderProgram<P>, String> {
-    Ok(ShaderProgram { linked: link(gl, vert_src, shader.frag, defines)?, marker: PhantomData })
+    Ok(ShaderProgram { linked: link(gl, vert_src, shader.frag)?, marker: PhantomData })
 }
 
 fn link(
     gl: &WebGl2RenderingContext,
     vert_src: &str,
     frag_src: &str,
-    defines: &[(&str, &str)],
 ) -> Result<LinkedProgram, String> {
-    let frag_src = flatten_params_block(&inject_defines(&preprocess_frag(frag_src), defines));
+    let frag_src = flatten_params_block(frag_src);
     let vert = compile_shader(gl, vert_src, WebGl2RenderingContext::VERTEX_SHADER)?;
     let frag = compile_shader(gl, &frag_src, WebGl2RenderingContext::FRAGMENT_SHADER)?;
     let program = link_program(gl, &vert, &frag)?;
@@ -641,7 +588,7 @@ fn compile_blend_variant(
     mode: i32,
 ) -> Result<ShaderProgram<params::composite::BlendParams>, String> {
     let source = BLEND_SOURCES.source(mode as usize);
-    Ok(ShaderProgram { linked: link(gl, FULLSCREEN_QUAD_VERT, &source, &[])?, marker: PhantomData })
+    Ok(ShaderProgram { linked: link(gl, FULLSCREEN_QUAD_VERT, &source)?, marker: PhantomData })
 }
 
 impl ShaderPrograms {
@@ -774,39 +721,9 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, typed_shader_checks, BLEND_SOURCES, BLIT_RESAMPLE_FRAG,
+        typed_shader_checks, BLEND_SOURCES, BLIT_RESAMPLE_FRAG,
         SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
     };
-
-    #[test]
-    fn injects_defines_after_version_directive() {
-        let src = "#version 300 es\nprecision highp float;\nvoid main() {}\n";
-        let out = inject_defines(src, &[("BLEND_MODE", "7")]);
-        assert_eq!(
-            out,
-            "#version 300 es\n#define BLEND_MODE 7\nprecision highp float;\nvoid main() {}\n"
-        );
-    }
-
-    #[test]
-    fn injects_multiple_defines_in_order() {
-        let src = "#version 300 es\nvoid main() {}\n";
-        let out = inject_defines(src, &[("A", "1"), ("B", "2")]);
-        assert_eq!(out, "#version 300 es\n#define A 1\n#define B 2\nvoid main() {}\n");
-    }
-
-    #[test]
-    fn prepends_defines_when_no_version_directive() {
-        let src = "precision highp float;\nvoid main() {}\n";
-        let out = inject_defines(src, &[("BLEND_MODE", "3")]);
-        assert_eq!(out, "#define BLEND_MODE 3\nprecision highp float;\nvoid main() {}\n");
-    }
-
-    #[test]
-    fn empty_defines_returns_source_unchanged() {
-        let src = "#version 300 es\nvoid main() {}\n";
-        assert_eq!(inject_defines(src, &[]), src);
-    }
 
     #[test]
     fn resampling_shaders_filter_in_premultiplied_space() {
@@ -816,10 +733,8 @@ mod tests {
             BLIT_RESAMPLE_FRAG,
             SMUDGE_DAB_FRAG,
         ] {
-            let out = preprocess_frag(src);
-            assert!(!out.contains("//#include"), "unresolved include");
-            assert!(out.contains("vec4 samplePremulBilinear("));
-            assert!(!out.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
+            assert!(src.contains("vec4 samplePremulBilinear("));
+            assert!(!src.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
         }
     }
 
