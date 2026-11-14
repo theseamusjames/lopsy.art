@@ -20,20 +20,27 @@ export const wandStrategy: SelectionToolStrategy = {
       = useToolSettingsStore.getState().settings.wand;
     const editorState = useEditorStore.getState();
     const { width: docW, height: docH } = editorState.document;
-    const pixelData = wasmReadLayerPixelsForFill(engine, ctx.activeLayerId);
     const { x: cx, y: cy } = seedPixel(ctx);
-    const wandMaskRaw = wandGraduated
-      ? wasmFloodFillGraduated(pixelData, docW, docH, cx, cy, wandTolerance, wandContiguous)
-      : wasmFloodFill(pixelData, docW, docH, cx, cy, 0, 0, 0, 0, wandTolerance, wandContiguous);
-    const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
-
+    // The modifiers held at the click decide the mode, not those held
+    // when the pixels arrive.
     const mode = selectionCombineMode(ctx, hasCombinableSelection());
-    const wandBounds = selectionBounds(wandMask, docW, docH);
-    if (wandBounds) {
-      commitSelectionShape(wandBounds, wandMask, docW, docH, mode);
-    } else if (mode === 'replace') {
-      editorState.clearSelection();
-    }
+    wasmReadLayerPixelsForFill(engine, ctx.activeLayerId)
+      .then((pixelData) => {
+        const { document } = useEditorStore.getState();
+        if (getEngine() !== engine || document.width !== docW || document.height !== docH) return;
+        const wandMaskRaw = wandGraduated
+          ? wasmFloodFillGraduated(pixelData, docW, docH, cx, cy, wandTolerance, wandContiguous)
+          : wasmFloodFill(pixelData, docW, docH, cx, cy, 0, 0, 0, 0, wandTolerance, wandContiguous);
+        const wandMask = new Uint8ClampedArray(wandMaskRaw.buffer, wandMaskRaw.byteOffset, wandMaskRaw.byteLength);
+
+        const wandBounds = selectionBounds(wandMask, docW, docH);
+        if (wandBounds) {
+          commitSelectionShape(wandBounds, wandMask, docW, docH, mode);
+        } else if (mode === 'replace') {
+          useEditorStore.getState().clearSelection();
+        }
+      })
+      .catch(() => {});
     return undefined;
   },
 };

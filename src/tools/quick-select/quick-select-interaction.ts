@@ -1,9 +1,10 @@
 /**
  * Quick Selection tool — interaction handler.
  *
- * Reads layer pixels from the GPU on pointer-down, then applies
+ * Asks the GPU for the layer's pixels on pointer-down and applies
  * applyQuickSelectStroke on every pointer-move to grow/shrink the
- * selection mask in real time.
+ * selection mask in real time. The stroke begins at once: points that
+ * arrive before the pixels do are queued and applied when they land.
  */
 
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
@@ -32,6 +33,14 @@ interface QuickSelectSession {
 
 let session: QuickSelectSession | null = null;
 
+/** A stroke whose pixels are still on their way from the GPU. */
+interface AwaitedStroke {
+  /** The pointer came up before the pixels arrived. */
+  hasEnded: boolean;
+}
+
+let awaited: AwaitedStroke | null = null;
+
 export function handleQuickSelectDown(ctx: InteractionContext): InteractionState | undefined {
   const engine = getEngine();
   if (!engine) return undefined;
@@ -39,56 +48,38 @@ export function handleQuickSelectDown(ctx: InteractionContext): InteractionState
   const { canvasPos, activeLayerId } = ctx;
   const editorState = useEditorStore.getState();
   const { width: docW, height: docH } = editorState.document;
-
-  // Read layer pixels from GPU (same path the wand tool uses)
-  let rawPixels: Uint8Array;
-  try {
-    rawPixels = readLayerPixelsForFill(engine, activeLayerId);
-  } catch {
-    return undefined;
-  }
-
-  const { quickSelect } = useToolSettingsStore.getState().settings;
   const priorMask = editorState.selection.mask
     ? new Uint8ClampedArray(editorState.selection.mask)
     : null;
-  const strokeMask = priorMask
-    ? new Uint8ClampedArray(priorMask)
-    : new Uint8ClampedArray(docW * docH);
 
-  // Seed the selection with the single click point immediately
-  const seedMask = applyQuickSelectStroke(
-    {
-      pixels: new Uint8ClampedArray(rawPixels.buffer, rawPixels.byteOffset, rawPixels.byteLength),
-      width: docW,
-      height: docH,
-      radius: quickSelect.size,
-      tolerance: quickSelect.tolerance,
-      edgeStrength: quickSelect.edgeStrength,
-    },
-    {
-      points: [canvasPos],
-      existingMask: strokeMask,
-      mode: quickSelect.mode,
-    },
-  );
+  const stroke: AwaitedStroke = { hasEnded: false };
+  awaited = stroke;
+  session = null;
+  // The click point seeds the selection; it is applied with any moves
+  // that queue behind it once the pixels are here.
+  pendingPoints.length = 0;
+  pendingPoints.push(canvasPos);
 
-  session = {
-    pixels: new Uint8ClampedArray(rawPixels.buffer, rawPixels.byteOffset, rawPixels.byteLength),
-    docWidth: docW,
-    docHeight: docH,
-    strokeMask: seedMask,
-    priorMask,
-  };
-
-  // Update live selection
-  const bounds = selectionBounds(seedMask, docW, docH);
-  if (bounds) {
-    editorState.setSelection(bounds, seedMask, docW, docH);
-    useUIStore.getState().setTransform(createTransformState(bounds));
-  } else {
-    editorState.clearSelection();
-  }
+  // Same read the wand tool uses
+  readLayerPixelsForFill(engine, activeLayerId)
+    .then((rawPixels) => {
+      if (awaited !== stroke) return;
+      awaited = null;
+      session = {
+        pixels: new Uint8ClampedArray(rawPixels.buffer, rawPixels.byteOffset, rawPixels.byteLength),
+        docWidth: docW,
+        docHeight: docH,
+        strokeMask: priorMask ? new Uint8ClampedArray(priorMask) : new Uint8ClampedArray(docW * docH),
+        priorMask,
+      };
+      applyPendingPoints();
+      if (stroke.hasEnded) session = null;
+    })
+    .catch(() => {
+      if (awaited !== stroke) return;
+      awaited = null;
+      pendingPoints.length = 0;
+    });
 
   return {
     drawing: true,
@@ -152,12 +143,18 @@ export function handleQuickSelectMove(
   state: InteractionState,
   canvasPos: { x: number; y: number },
 ): void {
-  if (!session || !state.lastPoint) return;
+  if ((!session && !awaited) || !state.lastPoint) return;
   pendingPoints.push(canvasPos);
   coalescedApply();
 }
 
 export function handleQuickSelectUp(): void {
+  // The pixels are not here yet: the queued points are applied, and the
+  // session dropped, when they arrive.
+  if (awaited) {
+    awaited.hasEnded = true;
+    return;
+  }
   // Flush any pending stroke application before dropping the session,
   // otherwise the last few move samples would be silently lost.
   coalescedApply.flush();

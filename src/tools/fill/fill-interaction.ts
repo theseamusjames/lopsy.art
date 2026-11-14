@@ -18,6 +18,7 @@ import {
   getLayerTextureDimensions,
   fillQuickMask as wasmFillQuickMask,
   fillMask as wasmFillMask,
+  layerContentGeneration,
 } from '../../engine-wasm/wasm-bridge';
 import { uploadLayerMaskIfChanged } from '../../engine-wasm/engine-sync';
 
@@ -144,29 +145,38 @@ export function handleFillDown(ctx: InteractionContext): void {
 
   // Contiguous fill: BFS is sequential — still runs on CPU via the
   // WASM flood-fill routine — but we compose the result on GPU.
-  const pixelData = wasmReadLayerPixelsForFill(engine, activeLayerId);
-  const fillMask = wasmFloodFill(
-    pixelData, docW, docH,
-    canvasX, canvasY,
-    color.r, color.g, color.b, Math.round(color.a * 255),
-    tolerance, contiguous,
-  );
+  const selMask = selection.active ? selection.mask : null;
+  const read = wasmReadLayerPixelsForFill(engine, activeLayerId);
+  const generation = layerContentGeneration(engine, activeLayerId);
+  read
+    .then((pixelData) => {
+      // The pixels describe the layer as it was at the click. If it was
+      // painted, restored or removed before they arrived, the fill would
+      // flood a region that is no longer there.
+      if (getEngine() !== engine || layerContentGeneration(engine, activeLayerId) !== generation) return;
+      const fillMask = wasmFloodFill(
+        pixelData, docW, docH,
+        canvasX, canvasY,
+        color.r, color.g, color.b, Math.round(color.a * 255),
+        tolerance, contiguous,
+      );
 
-  if (selection.active && selection.mask) {
-    const selMask = selection.mask;
-    for (let i = 0; i < fillMask.length && i < selMask.length; i++) {
-      fillMask[i] = Math.round((fillMask[i]! * (selMask[i] ?? 0)) / 255);
-    }
-  }
+      if (selMask) {
+        for (let i = 0; i < fillMask.length && i < selMask.length; i++) {
+          fillMask[i] = Math.round((fillMask[i]! * (selMask[i] ?? 0)) / 255);
+        }
+      }
 
-  wasmApplyFillToLayer(
-    engine, activeLayerId,
-    color.r / 255, color.g / 255, color.b / 255, color.a,
-    fillMask, docW, docH,
-  );
-  syncLayerAfterFullSize(engine, activeLayerId);
-  clearJsPixelData(activeLayerId);
-  editorState.notifyRender();
+      wasmApplyFillToLayer(
+        engine, activeLayerId,
+        color.r / 255, color.g / 255, color.b / 255, color.a,
+        fillMask, docW, docH,
+      );
+      syncLayerAfterFullSize(engine, activeLayerId);
+      clearJsPixelData(activeLayerId);
+      useEditorStore.getState().notifyRender();
+    })
+    .catch(() => {});
 }
 
 /**

@@ -82,6 +82,13 @@ function twoBandImage(): Uint8Array {
   return px;
 }
 
+
+/** Let an awaited GPU read deliver its pixels. */
+async function settle(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContext {
   const layer = { id: 'layer-1', x: 0, y: 0, visible: true } as unknown as InteractionContext['activeLayer'];
   return {
@@ -127,7 +134,7 @@ function lastSetSelectionMask(): Uint8ClampedArray {
 beforeEach(() => {
   engine = { __engine: 'mock' };
   readLayerPixelsForFill.mockReset();
-  readLayerPixelsForFill.mockReturnValue(twoBandImage());
+  readLayerPixelsForFill.mockResolvedValue(twoBandImage());
   editorState.setSelection.mockClear();
   editorState.clearSelection.mockClear();
   editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
@@ -139,22 +146,31 @@ beforeEach(() => {
 });
 
 describe('quick select down', () => {
-  it('returns undefined when no engine is available', () => {
+  it('returns undefined when no engine is available', async () => {
     engine = null;
     expect(handleQuickSelectDown(makeCtx())).toBeUndefined();
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 
-  it('returns undefined when the GPU readback fails', () => {
-    readLayerPixelsForFill.mockImplementation(() => {
-      throw new Error('readback failed');
-    });
-    expect(handleQuickSelectDown(makeCtx())).toBeUndefined();
+  it('leaves the selection alone when the GPU readback fails', async () => {
+    readLayerPixelsForFill.mockRejectedValue(new Error('readback failed'));
+    handleQuickSelectDown(makeCtx());
+    handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    await settle();
+    flushQuickSelect();
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    expect(editorState.clearSelection).not.toHaveBeenCalled();
+  });
+
+  it('starts the stroke before the pixels arrive', () => {
+    const state = handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    expect(state).toMatchObject({ drawing: true, tool: 'quick-select' });
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 
-  it('seeds the selection with the clicked color region', () => {
+  it('seeds the selection with the clicked color region', async () => {
     const state = handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    await settle();
     expect(state).toMatchObject({ drawing: true, tool: 'quick-select' });
     expect(editorState.setSelection).toHaveBeenCalledTimes(1);
     const [bounds, mask, w, h] = editorState.setSelection.mock.calls[0]! as [
@@ -172,7 +188,7 @@ describe('quick select down', () => {
     expect(uiState.setTransform).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves a prior selection when adding', () => {
+  it('preserves a prior selection when adding', async () => {
     const prior = new Uint8ClampedArray(DOC_W * DOC_H);
     prior[10 * DOC_W + 10] = 255; // a blue-region pixel selected earlier
     editorState.selection = {
@@ -183,12 +199,13 @@ describe('quick select down', () => {
       maskHeight: DOC_H,
     };
     handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    await settle();
     const mask = lastSetSelectionMask();
     expect(mask[10 * DOC_W + 10]).toBe(255); // prior selection kept
     expect(mask[2 * DOC_W + 2]).toBe(255); // red region added
   });
 
-  it('subtract mode removes the clicked region from a prior selection', () => {
+  it('subtract mode removes the clicked region from a prior selection', async () => {
     ts.settings.quickSelect.mode = 'subtract';
     const prior = new Uint8ClampedArray(DOC_W * DOC_H).fill(255);
     editorState.selection = {
@@ -199,6 +216,7 @@ describe('quick select down', () => {
       maskHeight: DOC_H,
     };
     handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    await settle();
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
       Uint8ClampedArray,
@@ -208,7 +226,7 @@ describe('quick select down', () => {
     expect(bounds).toEqual({ x: 0, y: 6, width: DOC_W, height: 6 });
   });
 
-  it('clears the selection when subtracting leaves nothing', () => {
+  it('clears the selection when subtracting leaves nothing', async () => {
     ts.settings.quickSelect.mode = 'subtract';
     const prior = new Uint8ClampedArray(DOC_W * DOC_H);
     for (let y = 0; y < 6; y++) {
@@ -222,14 +240,16 @@ describe('quick select down', () => {
       maskHeight: DOC_H,
     };
     handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    await settle();
     expect(editorState.clearSelection).toHaveBeenCalledTimes(1);
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 });
 
 describe('quick select move', () => {
-  it('grows the stroke mask into newly visited regions', () => {
+  it('grows the stroke mask into newly visited regions', async () => {
     handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    await settle();
     editorState.setSelection.mockClear();
     handleQuickSelectMove(makeState(), { x: 2, y: 9 });
     flushQuickSelect();
@@ -238,14 +258,15 @@ describe('quick select move', () => {
     expect(mask[9 * DOC_W + 2]).toBe(255); // blue band from the move
   });
 
-  it('does nothing without an active session', () => {
+  it('does nothing without an active session', async () => {
     handleQuickSelectMove(makeState(), { x: 5, y: 5 });
     flushQuickSelect();
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 
-  it('does nothing after the stroke is finished', () => {
+  it('does nothing after the stroke is finished', async () => {
     handleQuickSelectDown(makeCtx());
+    await settle();
     handleQuickSelectUp();
     editorState.setSelection.mockClear();
     handleQuickSelectMove(makeState(), { x: 2, y: 9 });
@@ -253,13 +274,53 @@ describe('quick select move', () => {
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 
+  it('applies moves that arrived before the pixels did', async () => {
+    handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    flushQuickSelect();
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+    await settle();
+    const mask = lastSetSelectionMask();
+    expect(mask[2 * DOC_W + 2]).toBe(255);
+    expect(mask[9 * DOC_W + 2]).toBe(255);
+  });
+
+  it('finishes a stroke released before the pixels arrived', async () => {
+    handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    handleQuickSelectMove(makeState(), { x: 2, y: 9 });
+    handleQuickSelectUp();
+    await settle();
+    const mask = lastSetSelectionMask();
+    expect(mask[2 * DOC_W + 2]).toBe(255);
+    expect(mask[9 * DOC_W + 2]).toBe(255);
+    editorState.setSelection.mockClear();
+    handleQuickSelectMove(makeState(), { x: 2, y: 2 });
+    flushQuickSelect();
+    expect(editorState.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('drops the pixels of a stroke a newer stroke replaced', async () => {
+    let deliverFirst: (pixels: Uint8Array) => void = () => {};
+    readLayerPixelsForFill.mockReturnValueOnce(new Promise<Uint8Array>((resolve) => { deliverFirst = resolve; }));
+    handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 9 } }));
+    handleQuickSelectUp();
+    handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    await settle();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    deliverFirst(twoBandImage());
+    await settle();
+    expect(editorState.setSelection).toHaveBeenCalledTimes(1);
+    expect(lastSetSelectionMask()[9 * DOC_W + 2]).toBe(0);
+  });
+
   // Issue #643 regression: allocating a fresh docW×docH mask and calling
   // setSelection per pointer-move forces syncSelection to re-upload the
   // whole mask to the GPU every frame. Coalescing to rAF caps the mask
   // rebuild + setSelection at once per rendered frame regardless of how
   // many pointer-move events fire.
-  it('coalesces bursts of moves into a single setSelection per frame (issue #643)', () => {
+  it('coalesces bursts of moves into a single setSelection per frame (issue #643)', async () => {
     handleQuickSelectDown(makeCtx({ canvasPos: { x: 2, y: 2 } }));
+    await settle();
     editorState.setSelection.mockClear();
     for (let i = 0; i < 10; i++) {
       handleQuickSelectMove(makeState(), { x: 2 + i * 0.1, y: 9 });

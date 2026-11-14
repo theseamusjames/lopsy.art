@@ -226,7 +226,7 @@ import init, {
   cropLayerPixelData,
   floodFill,
   applyFillToLayer,
-  readLayerPixelsForFill,
+  readLayerPixelsForFill as rawReadLayerPixelsForFill,
   bucketFillSolid,
   bucketFillByColorGpu,
   magneticLassoBegin,
@@ -629,7 +629,6 @@ export {
   expandLayerToDocSize,
   cropLayerToContent,
   floodFillGraduated,
-  readLayerPixelsForFill,
   getLayerContentBounds,
   readSelectionMask,
   readQuickMaskPixels,
@@ -671,6 +670,8 @@ export const exportPng16 = asyncReadback(rawExportPng16);
 export const quantizeCompositeToPalette = asyncReadback(rawQuantizeCompositeToPalette);
 export const readLayerPixels = asyncReadback(rawReadLayerPixels);
 export const sampleColor = asyncReadback(rawSampleColor);
+/** A layer's pixels in document space, as the wand, bucket fill and quick select read them. */
+export const readLayerPixelsForFill = asyncReadback(rawReadLayerPixelsForFill);
 export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);

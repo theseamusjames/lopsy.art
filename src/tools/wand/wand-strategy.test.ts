@@ -102,6 +102,13 @@ function makeCtx(overrides: Partial<InteractionContext> = {}): InteractionContex
 }
 
 /** A wand result mask covering the 2x2 block at (2,2)..(3,3). */
+
+/** Let an awaited GPU read deliver its pixels. */
+async function settle(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function wandResultMask(): Uint8Array {
   const m = new Uint8Array(DOC_W * DOC_H);
   for (const [x, y] of [[2, 2], [3, 2], [2, 3], [3, 3]]) {
@@ -122,12 +129,12 @@ describe('wand strategy', () => {
     engine = { __engine: 'mock' };
     editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
     ts.settings.wand = { tolerance: 40, contiguous: true, graduated: false };
-    readLayerPixelsForFill.mockReturnValue(new Uint8Array(DOC_W * DOC_H * 4));
+    readLayerPixelsForFill.mockResolvedValue(new Uint8Array(DOC_W * DOC_H * 4));
     floodFill.mockReturnValue(wandResultMask());
     floodFillGraduated.mockReturnValue(wandResultMask());
   });
 
-  it('returns undefined without an engine and leaves the selection untouched', () => {
+  it('returns undefined without an engine and leaves the selection untouched', async () => {
     engine = null;
     const result = wandStrategy.onDown(makeCtx(), 'wand');
     expect(result).toBeUndefined();
@@ -135,8 +142,9 @@ describe('wand strategy', () => {
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
 
-  it('flood-fills at the pixel under the click with the configured tolerance', () => {
+  it('flood-fills at the pixel under the click with the configured tolerance', async () => {
     wandStrategy.onDown(makeCtx({ canvasPos: { x: 2.4, y: 2.6 } }), 'wand');
+    await settle();
     expect(floodFill).toHaveBeenCalledTimes(1);
     const args = floodFill.mock.calls[0]!;
     // (pixels, docW, docH, cx, cy, r, g, b, a, tolerance, contiguous)
@@ -148,8 +156,9 @@ describe('wand strategy', () => {
     expect(args[10]).toBe(true);
   });
 
-  it('commits the wand mask as the selection with correct bounds', () => {
+  it('commits the wand mask as the selection with correct bounds', async () => {
     wandStrategy.onDown(makeCtx(), 'wand');
+    await settle();
     expect(editorState.setSelection).toHaveBeenCalledTimes(1);
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
@@ -161,14 +170,15 @@ describe('wand strategy', () => {
     expect(uiState.setTransform).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the graduated flood fill when the setting is enabled', () => {
+  it('uses the graduated flood fill when the setting is enabled', async () => {
     ts.settings.wand.graduated = true;
     wandStrategy.onDown(makeCtx(), 'wand');
+    await settle();
     expect(floodFillGraduated).toHaveBeenCalledTimes(1);
     expect(floodFill).not.toHaveBeenCalled();
   });
 
-  it('shift-click adds the wand result to the existing selection', () => {
+  it('shift-click adds the wand result to the existing selection', async () => {
     const existing = new Uint8ClampedArray(DOC_W * DOC_H);
     existing[0] = 255; // pixel (0,0) already selected
     editorState.selection = {
@@ -179,6 +189,7 @@ describe('wand strategy', () => {
       maskHeight: DOC_H,
     };
     wandStrategy.onDown(makeCtx({ shiftKey: true }), 'wand');
+    await settle();
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
       Uint8ClampedArray,
@@ -189,7 +200,7 @@ describe('wand strategy', () => {
     expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Add to Selection');
   });
 
-  it('shift+alt-click intersects the wand result with the existing selection', () => {
+  it('shift+alt-click intersects the wand result with the existing selection', async () => {
     const existing = new Uint8ClampedArray(DOC_W * DOC_H);
     existing[0] = 255;
     existing[2 * DOC_W + 2] = 255;
@@ -201,6 +212,7 @@ describe('wand strategy', () => {
       maskHeight: DOC_H,
     };
     wandStrategy.onDown(makeCtx({ shiftKey: true, altKey: true }), 'wand');
+    await settle();
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
       Uint8ClampedArray,
@@ -212,7 +224,7 @@ describe('wand strategy', () => {
     expect(editorState.pushHistoryMetadata).toHaveBeenCalledWith('Intersect Selection');
   });
 
-  it('feathers only the added region, not the selection it joins', () => {
+  it('feathers only the added region, not the selection it joins', async () => {
     ts.settings.marquee.feather = 4;
     const feathered = new Uint8Array(8 + DOC_W * DOC_H);
     new DataView(feathered.buffer).setUint32(0, DOC_W, true);
@@ -231,6 +243,7 @@ describe('wand strategy', () => {
     };
     try {
       wandStrategy.onDown(makeCtx({ shiftKey: true }), 'wand');
+      await settle();
     } finally {
       ts.settings.marquee.feather = 0;
     }
@@ -247,7 +260,7 @@ describe('wand strategy', () => {
     expect(uploaded[2 * DOC_W + 2]).toBe(255);
   });
 
-  it('alt-click subtracts the wand result from the existing selection', () => {
+  it('alt-click subtracts the wand result from the existing selection', async () => {
     const existing = new Uint8ClampedArray(DOC_W * DOC_H).fill(255);
     editorState.selection = {
       active: true,
@@ -257,6 +270,7 @@ describe('wand strategy', () => {
       maskHeight: DOC_H,
     };
     wandStrategy.onDown(makeCtx({ altKey: true }), 'wand');
+    await settle();
     const [, mask] = editorState.setSelection.mock.calls[0]! as [
       unknown,
       Uint8ClampedArray,
@@ -265,7 +279,7 @@ describe('wand strategy', () => {
     expect(mask[0]).toBe(255); // rest preserved
   });
 
-  it('replaces the existing selection when no modifier is held', () => {
+  it('replaces the existing selection when no modifier is held', async () => {
     const existing = new Uint8ClampedArray(DOC_W * DOC_H);
     existing[0] = 255;
     editorState.selection = {
@@ -276,6 +290,7 @@ describe('wand strategy', () => {
       maskHeight: DOC_H,
     };
     wandStrategy.onDown(makeCtx(), 'wand');
+    await settle();
     const [bounds, mask] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
       Uint8ClampedArray,
@@ -284,7 +299,7 @@ describe('wand strategy', () => {
     expect(bounds).toEqual({ x: 2, y: 2, width: 2, height: 2 });
   });
 
-  it('ignores an existing mask whose dimensions do not match the document', () => {
+  it('ignores an existing mask whose dimensions do not match the document', async () => {
     editorState.selection = {
       active: true,
       mask: new Uint8ClampedArray(4 * 4).fill(255),
@@ -293,6 +308,7 @@ describe('wand strategy', () => {
       maskHeight: 4,
     };
     wandStrategy.onDown(makeCtx({ shiftKey: true }), 'wand');
+    await settle();
     const [bounds] = editorState.setSelection.mock.calls[0]! as [
       { x: number; y: number; width: number; height: number },
     ];
@@ -301,9 +317,10 @@ describe('wand strategy', () => {
     expect(editorState.pushHistoryMetadata).not.toHaveBeenCalled();
   });
 
-  it('clears the selection when the wand finds nothing', () => {
+  it('clears the selection when the wand finds nothing', async () => {
     floodFill.mockReturnValue(new Uint8Array(DOC_W * DOC_H));
     wandStrategy.onDown(makeCtx(), 'wand');
+    await settle();
     expect(editorState.clearSelection).toHaveBeenCalledTimes(1);
     expect(editorState.setSelection).not.toHaveBeenCalled();
   });
