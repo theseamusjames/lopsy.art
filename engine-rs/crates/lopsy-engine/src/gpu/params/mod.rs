@@ -8,6 +8,4 @@ pub mod core;
 pub mod effects;
 pub mod filters;
 pub mod gradient;
-pub mod selection;
 pub mod shape;
-pub mod text;

@@ -131,7 +131,6 @@ pub const SMUDGE_DAB_FRAG: &str = include_str!("shaders/brush/smudge_dab.glsl");
 pub const CLONE_STAMP_FRAG: &str = include_str!("shaders/brush/clone_stamp.glsl");
 pub const HEALING_DAB_FRAG: &str = include_str!("shaders/brush/healing_dab.glsl");
 pub const HEALING_MEAN_FRAG: &str = include_str!("shaders/brush/healing_mean.glsl");
-pub const OPACITY_CLAMP_FRAG: &str = translated!("brush/opacity_clamp");
 pub const SPONGE_FRAG: &str = include_str!("shaders/brush/sponge.glsl");
 pub const STAMP_PREVIEW_FRAG: &str = include_str!("shaders/brush/stamp_preview.glsl");
 
@@ -144,15 +143,8 @@ pub const SHAPE_FILL_FRAG: &str = include_str!("shaders/shape/shape_fill.glsl");
 pub const FLOOD_FILL_APPLY_FRAG: &str = translated!("shape/flood_fill_apply");
 pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = include_str!("shaders/shape/bucket_fill_color_match.glsl");
 
-// Selection
-pub const MARCHING_ANTS_FRAG: &str = include_str!("shaders/selection/marching_ants.glsl");
-
 // Color
 pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
-pub const TONEMAP_FRAG: &str = translated!("color/tonemap");
-
-// Text
-pub const TEXT_GLYPH_FRAG: &str = include_str!("shaders/text/text_glyph.glsl");
 
 /// Declares the typed shaders: each source tagged with the uniform struct
 /// its passes are created with. A test checks every struct against its
@@ -228,14 +220,11 @@ typed_shaders! {
     GAUSSIAN_BLUR: params::filters::GaussianBlurParams = GAUSSIAN_BLUR_FRAG;
     BOX_BLUR: params::filters::BoxBlurParams = BOX_BLUR_FRAG;
     COLOR_CONVERT: params::color::ColorConvertParams = COLOR_CONVERT_FRAG;
-    TONEMAP: params::color::TonemapParams = TONEMAP_FRAG;
     GRADIENT_LINEAR: params::gradient::GradientLinearParams = GRADIENT_LINEAR_FRAG;
     GRADIENT_RADIAL: params::gradient::GradientRadialParams = GRADIENT_RADIAL_FRAG;
     SHAPE_FILL: params::shape::ShapeFillParams = SHAPE_FILL_FRAG;
     FLOOD_FILL_APPLY: params::shape::FloodFillApplyParams = FLOOD_FILL_APPLY_FRAG;
     BUCKET_FILL_COLOR_MATCH: params::shape::BucketFillColorMatchParams = BUCKET_FILL_COLOR_MATCH_FRAG;
-    MARCHING_ANTS: params::selection::MarchingAntsParams = MARCHING_ANTS_FRAG;
-    TEXT_GLYPH: params::text::TextGlyphParams = TEXT_GLYPH_FRAG;
     ERASER_DAB: params::brush::EraserDabParams = ERASER_DAB_FRAG;
     PENCIL_DAB: params::brush::PencilDabParams = PENCIL_DAB_FRAG;
     QUICK_MASK_DAB: params::brush::QuickMaskDabParams = QUICK_MASK_DAB_FRAG;
@@ -245,7 +234,6 @@ typed_shaders! {
     CLONE_STAMP: params::brush::CloneStampParams = CLONE_STAMP_FRAG;
     HEALING_DAB: params::brush::HealingDabParams = HEALING_DAB_FRAG;
     HEALING_MEAN: params::brush::HealingMeanParams = HEALING_MEAN_FRAG;
-    OPACITY_CLAMP: params::brush::OpacityClampParams = OPACITY_CLAMP_FRAG;
     SPONGE: params::brush::CoverageApplyParams = SPONGE_FRAG;
     STAMP_PREVIEW: params::brush::StampPreviewParams = STAMP_PREVIEW_FRAG;
     BRUSH_DAB_CIRCLE: params::brush::BrushDabParams = BRUSH_DAB_CIRCLE_FRAG;
@@ -617,7 +605,6 @@ pub struct ShaderPrograms {
     pub clone_stamp: ShaderProgram<params::brush::CloneStampParams>,
     pub healing_dab: ShaderProgram<params::brush::HealingDabParams>,
     pub healing_mean: ShaderProgram<params::brush::HealingMeanParams>,
-    pub opacity_clamp: ShaderProgram<params::brush::OpacityClampParams>,
     pub sponge: ShaderProgram<params::brush::CoverageApplyParams>,
     pub stamp_preview: ShaderProgram<params::brush::StampPreviewParams>,
     // Gradient
@@ -628,14 +615,11 @@ pub struct ShaderPrograms {
     pub flood_fill_apply: ShaderProgram<params::shape::FloodFillApplyParams>,
     pub bucket_fill_color_match: ShaderProgram<params::shape::BucketFillColorMatchParams>,
     // Selection
-    pub marching_ants: ShaderProgram<params::selection::MarchingAntsParams>,
     // Color
     pub color_convert: ShaderProgram<params::color::ColorConvertParams>,
-    pub tonemap: ShaderProgram<params::color::TonemapParams>,
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
-    pub text_glyph: ShaderProgram<params::text::TextGlyphParams>,
 }
 
 /// Compiles the blend shader specialized for a single blend mode.
@@ -755,7 +739,6 @@ impl ShaderPrograms {
             clone_stamp: compile(gl, v, &CLONE_STAMP)?,
             healing_dab: compile(gl, v, &HEALING_DAB)?,
             healing_mean: compile(gl, v, &HEALING_MEAN)?,
-            opacity_clamp: compile(gl, v, &OPACITY_CLAMP)?,
             sponge: compile(gl, v, &SPONGE)?,
             stamp_preview: compile(gl, v, &STAMP_PREVIEW)?,
             // Gradient
@@ -766,14 +749,11 @@ impl ShaderPrograms {
             flood_fill_apply: compile(gl, v, &FLOOD_FILL_APPLY)?,
             bucket_fill_color_match: compile(gl, v, &BUCKET_FILL_COLOR_MATCH)?,
             // Selection
-            marching_ants: compile(gl, v, &MARCHING_ANTS)?,
             // Color
             color_convert: compile(gl, v, &COLOR_CONVERT)?,
-            tonemap: compile(gl, v, &TONEMAP)?,
             mask_luminance: compile(gl, v, &MASK_LUMINANCE)?,
             liquify_dab: compile(gl, v, &LIQUIFY_DAB)?,
             // Text
-            text_glyph: compile(gl, v, &TEXT_GLYPH)?,
         })
     }
 }
