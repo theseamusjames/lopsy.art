@@ -24,15 +24,15 @@ function makeDoc(layerCount: number): DocumentState {
 }
 
 describe('computeFlattenImage', () => {
-  it('returns undefined when only 1 layer', () => {
+  it('returns undefined when only 1 layer', async () => {
     const doc = makeDoc(1);
-    const result = computeFlattenImage(doc);
+    const result = await computeFlattenImage(doc);
     expect(result).toBeUndefined();
   });
 
-  it('creates single layer from multiple layers', () => {
+  it('creates single layer from multiple layers', async () => {
     const doc = makeDoc(2);
-    const result = computeFlattenImage(doc)!;
+    const result = (await computeFlattenImage(doc))!;
     // Flattened result: one raster layer + one root group
     expect(result.document!.layers).toHaveLength(2);
     expect(result.document!.layerOrder).toHaveLength(2);
@@ -41,21 +41,21 @@ describe('computeFlattenImage', () => {
     expect(result.document!.rootGroupId).toBeDefined();
   });
 
-  it('clears JS pixel data (GPU is source of truth)', () => {
+  it('clears JS pixel data (GPU is source of truth)', async () => {
     const doc = makeDoc(2);
-    const result = computeFlattenImage(doc)!;
+    const result = (await computeFlattenImage(doc))!;
     // No JS pixel data — compositing happens on GPU
     expect(result.layerPixelData!.size).toBe(0);
   });
 
-  it('seeds the default adjustments allowed in the document color mode', () => {
-    const rootTypes = (colorMode: DocumentState['colorMode']) => {
-      const root = computeFlattenImage({ ...makeDoc(2), colorMode })!.document!.layers[1]!;
+  it('seeds the default adjustments allowed in the document color mode', async () => {
+    const rootTypes = async (colorMode: DocumentState['colorMode']) => {
+      const root = (await computeFlattenImage({ ...makeDoc(2), colorMode }))!.document!.layers[1]!;
       return root.type === 'group' ? root.adjustments.map((n) => n.type) : [];
     };
-    expect(rootTypes('rgb')).toEqual(['levels', 'curves', 'exposure', 'hue-saturation', 'color-grading']);
+    expect(await rootTypes('rgb')).toEqual(['levels', 'curves', 'exposure', 'hue-saturation', 'color-grading']);
     for (const mode of ['grayscale', 'lab', 'cmyk'] as const) {
-      expect(rootTypes(mode)).toEqual(['levels', 'curves', 'exposure']);
+      expect(await rootTypes(mode)).toEqual(['levels', 'curves', 'exposure']);
     }
   });
 });

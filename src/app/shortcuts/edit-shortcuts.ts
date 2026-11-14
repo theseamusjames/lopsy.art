@@ -18,7 +18,7 @@ export function handleEditShortcut(
   if (e.key === 'c' || e.key === 'C') {
     e.preventDefault();
     if (e.shiftKey) {
-      useEditorStore.getState().copyMerged();
+      void useEditorStore.getState().copyMerged();
     } else {
       useEditorStore.getState().copy();
     }

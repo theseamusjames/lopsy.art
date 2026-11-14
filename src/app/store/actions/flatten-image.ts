@@ -12,14 +12,15 @@ import { layerToDescJson } from '../../../engine-wasm/sync-layers';
  * Flatten the whole document into a single background raster.
  *
  * The engine composites the document straight into the new layer
- * (`flattenIntoLayer`); no pixels are read back or uploaded (#746). The returned action clears the pixel
+ * (`flattenIntoLayer`); no pixels are read back or uploaded (#746), except
+ * in a Lab document, whose composite the engine decodes on the CPU. The returned action clears the pixel
  * manager (empty `layerPixelData`) because every prior layer is now
  * garbage — its texture will be reclaimed engine-side and its JS cache
  * is no longer meaningful.
  */
-export function computeFlattenImage(
+export async function computeFlattenImage(
   doc: DocumentState,
-): ActionResult | undefined {
+): Promise<ActionResult | undefined> {
   if (doc.layers.length <= 1) return undefined;
 
   const { width, height } = doc;
@@ -31,7 +32,7 @@ export function computeFlattenImage(
     // have the engine composite the document straight into it. The pixels
     // stay on the GPU (#746).
     addLayer(engine, layerToDescJson(flatLayer, true, doc.colorMode));
-    flattenIntoLayer(engine, flatLayer.id);
+    await flattenIntoLayer(engine, flatLayer.id);
   }
 
   const pixelData = new Map<string, ImageData>();

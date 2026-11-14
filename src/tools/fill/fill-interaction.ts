@@ -40,8 +40,10 @@ export function handleFillDown(ctx: InteractionContext): void {
 
     const { x: startX, y: startY } = seedPixel(ctx);
 
-    wasmFillQuickMask(engine, startX, startY, tolerance, contiguous, 0);
-    editorState.notifyRender();
+    // The engine reads the quick mask to flood it; draw when it has.
+    void wasmFillQuickMask(engine, startX, startY, tolerance, contiguous, 0)
+      .catch(() => {})
+      .then(() => useEditorStore.getState().notifyRender());
     return;
   }
 
@@ -64,12 +66,14 @@ export function handleFillDown(ctx: InteractionContext): void {
     const { x: startX, y: startY } = seedPixel(ctx);
 
     // mode 1 = fill black (hide), matching brush behavior
-    wasmFillMask(engine, activeLayerId, startX, startY, tolerance, contiguous, 1);
-
-    // The fill's own GPU work (and any earlier stroke's) is still queued;
-    // read the result back once it has drained rather than right now (#780).
-    scheduleMaskDataRefresh(activeLayerId);
-    editorState.notifyRender();
+    void wasmFillMask(engine, activeLayerId, startX, startY, tolerance, contiguous, 1)
+      .catch(() => {})
+      .then(() => {
+        // The fill's own GPU work (and any earlier stroke's) is still queued;
+        // read the result back once it has drained rather than right now (#780).
+        scheduleMaskDataRefresh(activeLayerId);
+        useEditorStore.getState().notifyRender();
+      });
     return;
   }
 

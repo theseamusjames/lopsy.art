@@ -28,7 +28,7 @@ export function createLayerMenu(): MenuDef {
         action: () => useEditorStore.getState().mergeDown(),
         disabled: disableMergeDown,
       },
-      { label: 'Flatten Image', action: () => useEditorStore.getState().flattenImage() },
+      { label: 'Flatten Image', action: () => void useEditorStore.getState().flattenImage() },
     ],
   };
 }
