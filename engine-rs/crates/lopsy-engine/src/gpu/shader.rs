@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -29,7 +30,34 @@ macro_rules! translated {
 // Core shaders
 pub const BLIT_FRAG: &str = translated!("blit");
 pub const THUMBNAIL_BOX_FRAG: &str = translated!("thumbnail_box");
-pub const BLEND_FRAG: &str = include_str!("shaders/blend.glsl");
+/// The generated GLSL of a shader that is built once per value of a define
+/// (`lopsy_shaderc::VARIANT_SETS`). Variant 0 is stored whole. The others
+/// are mostly the same text, so what they all start and end with is stored
+/// once and each keeps only its middle.
+pub struct VariantSources {
+    first: &'static str,
+    prefix: &'static str,
+    middles: &'static [&'static str],
+    suffix: &'static str,
+}
+
+impl VariantSources {
+    pub fn count(&self) -> usize {
+        1 + self.middles.len()
+    }
+
+    /// The source of variant `index`, which must be below `count()`.
+    pub fn source(&self, index: usize) -> Cow<'static, str> {
+        match index {
+            0 => Cow::Borrowed(self.first),
+            n => Cow::Owned([self.prefix, self.middles[n - 1], self.suffix].concat()),
+        }
+    }
+}
+
+/// `blend.wgsl`, one variant per blend mode in `BlendMode::ALL` order.
+pub const BLEND_SOURCES: VariantSources = include!(concat!(env!("OUT_DIR"), "/shaders/blend.variants.rs"));
+pub const BLEND_FRAG: &str = BLEND_SOURCES.first;
 /// Shared GLSL helpers spliced into fragment sources where a
 /// `//#include hsl` line appears (see `preprocess_frag`).
 pub const HSL_COMMON: &str = include_str!("shaders/hsl_common.glsl");
@@ -612,7 +640,8 @@ fn compile_blend_variant(
     gl: &WebGl2RenderingContext,
     mode: i32,
 ) -> Result<ShaderProgram<params::composite::BlendParams>, String> {
-    compile_with_defines(gl, FULLSCREEN_QUAD_VERT, &BLEND, &[("BLEND_MODE", &mode.to_string())])
+    let source = BLEND_SOURCES.source(mode as usize);
+    Ok(ShaderProgram { linked: link(gl, FULLSCREEN_QUAD_VERT, &source, &[])?, marker: PhantomData })
 }
 
 impl ShaderPrograms {
@@ -745,7 +774,7 @@ impl ShaderPrograms {
 #[cfg(test)]
 mod tests {
     use super::{
-        inject_defines, preprocess_frag, typed_shader_checks, BLEND_FRAG, BLIT_RESAMPLE_FRAG,
+        inject_defines, preprocess_frag, typed_shader_checks, BLEND_SOURCES, BLIT_RESAMPLE_FRAG,
         SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
     };
 
@@ -815,10 +844,28 @@ mod tests {
     #[test]
     fn blend_modes_work_on_decoded_lab() {
         // Multiply/Screen/… on encoded Lab turned a grey Multiply blue (#1372).
-        let out = preprocess_frag(BLEND_FRAG);
-        assert!(out.contains("vec3 srgbToLab(vec3 srgb)"), "lab helpers not spliced in");
-        assert!(out.contains("int u_docColorMode;"));
-        assert!(out.contains("srgbToLab(blendMode(labToSrgb(src.rgb), labToSrgb(backdrop.rgb)))"));
+        let source = include_str!("shaders/blend.wgsl");
+        assert!(source.contains("//#include lab"), "lab helpers not spliced in");
+        assert!(source.contains("u_docColorMode: i32,"));
+        assert!(source.contains("srgbToLab(blendMode(labToSrgb(srcRGB), labToSrgb(backdrop.rgb)))"));
+    }
+
+    #[test]
+    fn every_blend_mode_has_a_variant_that_takes_the_blend_uniforms() {
+        assert_eq!(BLEND_SOURCES.count(), lopsy_core::color::BlendMode::ALL.len());
+        for mode in 0..BLEND_SOURCES.count() {
+            let check = crate::gpu::uniforms::check::struct_matches_source::<crate::gpu::params::composite::BlendParams>;
+            assert_eq!(check(&BLEND_SOURCES.source(mode)), Ok(()), "mode {mode}");
+        }
+    }
+
+    #[test]
+    fn only_normal_skips_the_blend_function() {
+        // Normal is a plain lerp: it must not decode Lab or read the backdrop.
+        assert!(!BLEND_SOURCES.source(0).contains("blendMode("));
+        for mode in 1..BLEND_SOURCES.count() {
+            assert!(BLEND_SOURCES.source(mode).contains("vec3 blendMode("), "mode {mode}");
+        }
     }
 
     #[test]

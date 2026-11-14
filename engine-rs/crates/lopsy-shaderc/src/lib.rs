@@ -79,12 +79,56 @@ pub struct Translated {
 /// Preprocess and translate the shader at `path`, taking its includes from
 /// `<root>/include/<name>.wgsl`.
 pub fn translate_file(root: &Path, path: &Path) -> Result<Translated, String> {
+    translate_file_with(root, path, &[])
+}
+
+fn translate_file_with(root: &Path, path: &Path, defines: &Defines) -> Result<Translated, String> {
     let include_dir = root.join("include");
     let include = |name: &str| fs::read_to_string(include_dir.join(format!("{name}.wgsl"))).ok();
     let source = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let wgsl = preprocess(&source, &include, &[]).map_err(|e| format!("{}: {e}", path.display()))?;
+    let wgsl = preprocess(&source, &include, defines).map_err(|e| format!("{}: {e}", path.display()))?;
     let glsl = wgsl_to_glsl(&wgsl).map_err(|e| format!("{}:\n{e}", path.display()))?;
     Ok(Translated { wgsl, glsl })
+}
+
+/// A shader built once per value of one define, for a choice that is made
+/// when the shader is compiled instead of per pixel.
+pub struct VariantSet {
+    /// The shader, relative to the shaders root.
+    pub path: &'static str,
+    pub define: &'static str,
+    /// The define takes each value in `0..count`.
+    pub count: i64,
+}
+
+/// `blend.wgsl` is built once per blend mode.
+pub const VARIANT_SETS: &[VariantSet] = &[VariantSet { path: "blend.wgsl", define: "BLEND_MODE", count: 16 }];
+
+/// One translated shader, or one variant of one.
+pub struct Output {
+    /// Where it belongs under an output root: the shader's own path
+    /// relative to the shaders root, or `<stem>.<value>.wgsl` for a variant.
+    pub path: PathBuf,
+    pub translated: Translated,
+}
+
+/// Translate every shader under `root`, and every variant of the shaders in
+/// [`VARIANT_SETS`].
+pub fn translate_all(root: &Path) -> Result<Vec<Output>, String> {
+    let mut outputs = Vec::new();
+    for path in shader_files(root)? {
+        let relative = path.strip_prefix(root).map_err(|e| e.to_string())?;
+        let Some(set) = VARIANT_SETS.iter().find(|set| Path::new(set.path) == relative) else {
+            outputs.push(Output { path: relative.to_path_buf(), translated: translate_file(root, &path)? });
+            continue;
+        };
+        for value in 0..set.count {
+            let translated = translate_file_with(root, &path, &[(set.define, value)])
+                .map_err(|e| format!("{} = {value}: {e}", set.define))?;
+            outputs.push(Output { path: relative.with_extension(format!("{value}.wgsl")), translated });
+        }
+    }
+    Ok(outputs)
 }
 
 /// The string preprocessing that runs before naga.
