@@ -57,7 +57,7 @@ pub const TRANSFORM_PERSPECTIVE_FRAG: &str = include_str!("shaders/transform_per
 // Effects
 pub const GLOW_FRAG: &str = include_str!("shaders/effects/glow.glsl");
 pub const SHADOW_FRAG: &str = include_str!("shaders/effects/shadow.glsl");
-pub const LAYER_MASK_APPLY_FRAG: &str = include_str!("shaders/effects/layer_mask_apply.glsl");
+pub const LAYER_MASK_APPLY_FRAG: &str = translated!("effects/layer_mask_apply");
 pub const SEPARABLE_EDT_FRAG: &str = include_str!("shaders/effects/separable_edt.glsl");
 pub const STROKE_APPLY_FRAG: &str = include_str!("shaders/effects/stroke_apply.glsl");
 
