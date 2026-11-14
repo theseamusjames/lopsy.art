@@ -32,7 +32,7 @@ import {
   hasLayerTransform,
   prepareLayerTransformTarget,
 } from '../../engine-wasm/wasm-bridge';
-import { layerContentRect, clearLayerContentRectCache } from '../layer-content-rect';
+import { layerContentRect, clearLayerContentRectCache, onLayerContentRectRefreshed } from '../layer-content-rect';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
@@ -68,6 +68,10 @@ interface LiveSession {
 }
 
 let live: LiveSession | null = null;
+
+// The box is drawn from the last content rect known; draw again when a
+// newer one has been read.
+onLayerContentRectRefreshed(() => useEditorStore.getState().notifyRender());
 
 /** The layers a multi-layer transform would move right now, or [] when the Move tool would not show one. */
 export function currentLayerTransformTargets(): string[] {

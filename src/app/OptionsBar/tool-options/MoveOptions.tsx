@@ -32,7 +32,7 @@ export function MoveOptions() {
       // Several layers selected: turn them together about their shared centre.
       applyLayerTransformStep((t) => rotateTransform90(t, dir));
     } else {
-      rotateActiveLayer(dir);
+      void rotateActiveLayer(dir);
     }
   };
 
@@ -40,7 +40,7 @@ export function MoveOptions() {
     // A live multi-layer transform holds the selected layers' pixels; bake
     // it so the align measures and moves what the box shows.
     if (getLayerTransformBox()) commitLiveFloat();
-    alignLayer(edge);
+    void alignLayer(edge);
   };
 
   return (

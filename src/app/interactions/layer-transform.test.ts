@@ -11,7 +11,7 @@ const bridge = vi.hoisted(() => {
   return {
     state,
     getLayerEngineBounds: vi.fn((_e: unknown, id: string) => state.engineBounds.get(id) ?? []),
-    getLayerContentBounds: vi.fn((_e: unknown, id: string) => state.contentBounds.get(id) ?? []),
+    getLayerContentBounds: vi.fn((_e: unknown, id: string) => Promise.resolve(state.contentBounds.get(id) ?? [])),
     layerContentGeneration: vi.fn((_e: unknown, id: string) => state.contentGen.get(id) ?? 0),
     hasLayerTransform: vi.fn(() => state.isLive),
     beginLayerTransform: vi.fn((_e: unknown, id: string) => {
@@ -90,9 +90,30 @@ beforeEach(() => {
   ui.maskMode = 'off';
 });
 
+/** The box once every content rect it asked for has been read. */
+async function settledBox(): Promise<TransformState | null> {
+  getLayerTransformBox();
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  return getLayerTransformBox();
+}
+
 describe('getLayerTransformBox', () => {
-  it('frames the union of the selected layers\' content', () => {
-    expect(getLayerTransformBox()?.originalBounds).toEqual({ x: 10, y: 20, width: 110, height: 40 });
+  it('has no box until the content rects are read, then asks for a redraw', async () => {
+    expect(getLayerTransformBox()).toBeNull();
+    expect(editor.notifyRender).not.toHaveBeenCalled();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(editor.notifyRender).toHaveBeenCalled();
+    expect(getLayerTransformBox()).not.toBeNull();
+  });
+
+  it('asks once for a rect that is still on its way', () => {
+    getLayerTransformBox();
+    getLayerTransformBox();
+    expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(2);
+  });
+
+  it('frames the union of the selected layers\' content', async () => {
+    expect((await settledBox())?.originalBounds).toEqual({ x: 10, y: 20, width: 110, height: 40 });
   });
 
   it('shows nothing with a marquee, one layer, another tool or a mask mode', () => {
@@ -112,8 +133,8 @@ describe('getLayerTransformBox', () => {
     expect(getLayerTransformBox()).toBeNull();
   });
 
-  it('follows a layer drag without reading its pixels again', () => {
-    getLayerTransformBox();
+  it('follows a layer drag without reading its pixels again', async () => {
+    await settledBox();
     expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(2);
 
     bridge.state.engineBounds.set('b', [130, 70, 20, 10]);
@@ -126,8 +147,8 @@ describe('getLayerTransformBox', () => {
     expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(3);
   });
 
-  it('reads nothing back for a history step that leaves the pixels alone (#1293)', () => {
-    getLayerTransformBox();
+  it('reads nothing back for a history step that leaves the pixels alone (#1293)', async () => {
+    await settledBox();
     expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(2);
 
     // A visibility toggle, rename or opacity change pushes history only.
@@ -137,22 +158,24 @@ describe('getLayerTransformBox', () => {
     expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(2);
   });
 
-  it('re-reads only the layer whose texture the engine rewrote (#1293)', () => {
-    getLayerTransformBox();
+  it('re-reads only the layer whose texture the engine rewrote (#1293)', async () => {
+    await settledBox();
     expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(2);
 
     // An undo restore (or any GPU write) bumps the layer's content generation.
     bridge.state.contentGen.set('a', 7);
     bridge.state.contentBounds.set('a', [0, 0, 5, 5]);
-    expect(getLayerTransformBox()?.originalBounds).toEqual({ x: 0, y: 0, width: 120, height: 60 });
+    // The last rect known stands in until the new one has been read.
+    expect(getLayerTransformBox()?.originalBounds).toEqual({ x: 10, y: 20, width: 110, height: 40 });
+    expect((await settledBox())?.originalBounds).toEqual({ x: 0, y: 0, width: 120, height: 60 });
     expect(bridge.getLayerContentBounds).toHaveBeenCalledTimes(3);
     expect(bridge.getLayerContentBounds).toHaveBeenLastCalledWith(expect.anything(), 'a');
   });
 });
 
 describe('renderLayerTransform', () => {
-  it('renders every layer about the shared centre into the rect its own content lands in', () => {
-    const box = getLayerTransformBox()!;
+  it('renders every layer about the shared centre into the rect its own content lands in', async () => {
+    const box = (await settledBox())!;
     expect(beginLayerTransformSession(box)).toBe(true);
     expect(bridge.beginLayerTransform).toHaveBeenCalledTimes(2);
 
@@ -169,8 +192,8 @@ describe('renderLayerTransform', () => {
     expect(ui.layerTransform).toBe(turned);
   });
 
-  it('does nothing once the engine has dropped the session', () => {
-    const box = getLayerTransformBox()!;
+  it('does nothing once the engine has dropped the session', async () => {
+    const box = (await settledBox())!;
     beginLayerTransformSession(box);
     bridge.state.isLive = false;
     renderLayerTransform({ ...box, rotation: 1 });

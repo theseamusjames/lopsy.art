@@ -2,12 +2,12 @@ import { useEditorStore } from '../../editor-store';
 import { getEngine } from '../../../engine-wasm/engine-state';
 import {
   flipLayer,
-  getLayerContentBounds,
   getLayerEngineBounds,
   rotateLayer90,
   setDocumentSize,
 } from '../../../engine-wasm/wasm-bridge';
 import { readLayerAsImageData } from '../../../engine-wasm/gpu-pixel-access';
+import { readLayerContentRectLocal } from '../../layer-content-rect';
 import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import { computeAutoTone, computeAutoContrast, computeAutoColor } from '../../../filters/auto-enhance';
 import type { Layer, GroupLayer, DocumentColorMode, TextLayer } from '../../../types';
@@ -26,7 +26,7 @@ import {
 import type { AdjustmentNode } from '../../../types/adjustment-nodes';
 import type { MenuDef, MenuItem } from './types';
 import type { Engine } from '../../../engine-wasm/wasm-bridge';
-import { rotatedTextureOrigin, type Rect } from '../../../layers/rotate-90';
+import { rotatedTextureOrigin } from '../../../layers/rotate-90';
 import { planGroupFlip, planLayerFlip, type FlipAxis, type GroupFlipMember } from '../../../layers/flip';
 import { getDescendantIds } from '../../../layers/group-utils';
 import { flushLayerSync } from '../../../engine-wasm/engine-sync';
@@ -61,11 +61,11 @@ export function flipActiveLayer(axis: FlipAxis): void {
     return;
   }
   if (layer.type === 'group') {
-    flipGroup(engine, layer, axis);
+    void flipGroup(engine, layer, axis);
     return;
   }
 
-  flipRasterLayer(engine, activeId, axis);
+  void flipRasterLayer(engine, activeId, axis);
 }
 
 /**
@@ -73,12 +73,14 @@ export function flipActiveLayer(axis: FlipAxis): void {
  * is document-sized, so the texture is then moved so the content mirrors
  * about its own bounds instead of jumping across the document.
  */
-function flipRasterLayer(engine: Engine, layerId: string, axis: FlipAxis): void {
-  const state = useEditorStore.getState();
+async function flipRasterLayer(engine: Engine, layerId: string, axis: FlipAxis): Promise<void> {
   // Push pending store positions and JS pixels so the rects read are current.
-  flushLayerSync(state);
+  flushLayerSync(useEditorStore.getState());
+  const content = await readLayerContentRectLocal(engine, layerId);
+  if (getEngine() !== engine) return;
+  const state = useEditorStore.getState();
   const [x = 0, y = 0, width = 0, height = 0] = getLayerEngineBounds(engine, layerId);
-  const origin = planLayerFlip({ x, y, width, height }, readContentRect(engine, layerId), axis);
+  const origin = planLayerFlip({ x, y, width, height }, content, axis);
   if (!origin) return;
 
   state.pushHistory(flipLabel(axis));
@@ -107,10 +109,10 @@ function flipRasterLayer(engine: Engine, layerId: string, axis: FlipAxis): void 
  * texture is mirrored in place and moved to the mirror of its position
  * within the group's combined content bounds.
  */
-function flipGroup(engine: Engine, group: GroupLayer, axis: FlipAxis): void {
-  const state = useEditorStore.getState();
-  const byId = new Map(state.document.layers.map((l) => [l.id, l]));
-  const leaves = getDescendantIds(state.document.layers, group.id)
+async function flipGroup(engine: Engine, group: GroupLayer, axis: FlipAxis): Promise<void> {
+  const before = useEditorStore.getState();
+  const byId = new Map(before.document.layers.map((l) => [l.id, l]));
+  const leaves = getDescendantIds(before.document.layers, group.id)
     .map((id) => byId.get(id))
     .filter((l): l is Layer => l !== undefined && l.type !== 'group');
   if (leaves.some((l) => l.type === 'text')) {
@@ -121,10 +123,13 @@ function flipGroup(engine: Engine, group: GroupLayer, axis: FlipAxis): void {
 
   // Push pending store positions and JS pixels to the engine so the texture
   // rects and content bounds read below are current.
-  flushLayerSync(state);
-  const members: GroupFlipMember[] = leaves.map((l) => {
+  flushLayerSync(before);
+  const contents = await Promise.all(leaves.map((l) => readLayerContentRectLocal(engine, l.id)));
+  if (getEngine() !== engine) return;
+  const state = useEditorStore.getState();
+  const members: GroupFlipMember[] = leaves.map((l, i) => {
     const [, , width = 0, height = 0] = getLayerEngineBounds(engine, l.id);
-    return { id: l.id, texture: { x: l.x, y: l.y, width, height }, content: readContentRect(engine, l.id) };
+    return { id: l.id, texture: { x: l.x, y: l.y, width, height }, content: contents[i] ?? null };
   });
   const origins = planGroupFlip(members, axis);
   if (origins.size === 0) return;
@@ -165,24 +170,18 @@ function groupMirror(
   return null;
 }
 
-/** Opaque-content rect of a layer, texture-local; null when the layer is empty. */
-function readContentRect(engine: Engine, layerId: string): Rect | null {
-  const bounds = getLayerContentBounds(engine, layerId);
-  if (bounds.length < 4) return null;
-  const width = bounds[2]!;
-  const height = bounds[3]!;
-  if (width <= 0 || height <= 0) return null;
-  return { x: bounds[0]!, y: bounds[1]!, width, height };
-}
-
-export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
-  const state = useEditorStore.getState();
-  const activeId = state.document.activeLayerId;
+export async function rotateActiveLayer(direction: 'cw' | 'ccw'): Promise<void> {
+  const activeId = useEditorStore.getState().document.activeLayerId;
   if (!activeId) return;
 
   const engine = getEngine();
   if (!engine) return;
 
+  const activeType = useEditorStore.getState().document.layers.find((l) => l.id === activeId)?.type;
+  const measured = activeType === 'raster' ? await readLayerContentRectLocal(engine, activeId) : null;
+  if (getEngine() !== engine) return;
+
+  const state = useEditorStore.getState();
   const layer = state.document.layers.find((l) => l.id === activeId);
   const label = direction === 'cw' ? 'Rotate Layer 90° CW' : 'Rotate Layer 90° CCW';
   if (layer?.type === 'text') {
@@ -195,7 +194,7 @@ export function rotateActiveLayer(direction: 'cw' | 'ccw'): void {
 
   state.pushHistory(label);
   const texture = { x: layer.x, y: layer.y, width: layer.width, height: layer.height };
-  const content = readContentRect(engine, activeId) ?? { x: 0, y: 0, width: layer.width, height: layer.height };
+  const content = measured ?? { x: 0, y: 0, width: layer.width, height: layer.height };
   rotateLayer90(engine, activeId, direction === 'cw');
 
   const origin = rotatedTextureOrigin(texture, content, direction);
