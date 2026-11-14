@@ -34,8 +34,8 @@ pre-warp preview before pushing). A guard that decides *whether* to
 push (e.g. "are there enabled effects to bake") must be checked
 first and kept side-effect-free so it's safe to call before
 `pushHistory` without doing the mutation twice. A test that only
-compares JS-side/metadata-derived pixel dimensions (e.g.
-`getOrCreateLayerPixelData(id).width`) will NOT catch this class of
+compares JS-side/metadata-derived pixel dimensions (e.g. the store
+layer's `width`) will NOT catch this class of
 bug — it requires reading actual GPU content via `__readLayerPixels`
 before/after undo and comparing opaque pixel counts or values.
 

@@ -6,7 +6,7 @@
  */
 
 import {
-  readLayerPixelsSync,
+  readLayerPixels,
   getLayerTextureDimensions,
   layerContentGeneration,
   readLayerPixelsLz4U16,
@@ -28,27 +28,16 @@ export function setEngine(engine: Engine): void {
  * cannot read back synchronously (see `asyncReadback` in wasm-bridge).
  * Results are cached per frame — call clearFrameCache() at the start of each render frame.
  */
-export function readLayerAsImageData(layerId: string): Promise<ImageData | null> {
-  try {
-    return Promise.resolve(readLayerAsImageDataSync(layerId));
-  } catch (err) {
-    return Promise.reject(err);
-  }
-}
-
-/**
- * The synchronous read behind `readLayerAsImageData`, for the pixel-data
- * store's pointer-down paths until they await too.
- */
-export function readLayerAsImageDataSync(layerId: string): ImageData | null {
-  if (!currentEngine) return null;
+export async function readLayerAsImageData(layerId: string): Promise<ImageData | null> {
+  const engine = currentEngine;
+  if (!engine) return null;
 
   const cached = frameCache.get(layerId);
   if (cached !== undefined) return cached;
 
   let dims: Uint32Array | undefined;
   try {
-    dims = getLayerTextureDimensions(currentEngine, layerId);
+    dims = getLayerTextureDimensions(engine, layerId);
   } catch {
     // Group layers and other non-raster layers have no GPU texture
     frameCache.set(layerId, null);
@@ -60,8 +49,11 @@ export function readLayerAsImageDataSync(layerId: string): ImageData | null {
     frameCache.set(layerId, null);
     return null;
   }
-  const pixels = readLayerPixelsSync(currentEngine, layerId);
-  if (!pixels || pixels.length === 0) {
+  const pixels = await readLayerPixels(engine, layerId);
+  // Resized, or the engine replaced, while the read was out: these bytes
+  // no longer describe the layer.
+  if (engine !== currentEngine || pixels.length !== width * height * 4) return null;
+  if (pixels.length === 0) {
     frameCache.set(layerId, null);
     return null;
   }

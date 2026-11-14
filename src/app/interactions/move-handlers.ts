@@ -535,7 +535,7 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
 
   // Crop the layer to content bounds before moving so that only opaque
   // pixels are repositioned — transparent areas should stay behind. Use
-  // the GPU-side crop rather than expandLayerForEditing + cropLayerToContent,
+  // the GPU-side crop rather than a JS-side expand + cropLayerToContent,
   // which used to force a full JS-side GPU→CPU readback + CPU alpha scan +
   // 67 MB ImageData allocation on the pointer-down that begins the drag
   // (issue #701). The WASM path crops the actual GPU texture in place and
