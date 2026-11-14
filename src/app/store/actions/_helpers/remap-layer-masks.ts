@@ -3,13 +3,15 @@ import type { Engine } from '../../../../engine-wasm/wasm-bridge';
 import { remapLayerMask } from '../../../../engine-wasm/wasm-bridge';
 import { seedMaskDataRef } from '../../../../engine-wasm/sync-state';
 import { planMaskRemap, type Affine } from '../../../../layers/mask-remap';
-import { markMaskDataFresh, readMask } from '../../../mask-data-sync';
+import { markMaskDataStale, materializeMaskData } from '../../../mask-data-sync';
 
 /**
  * Carry `after`'s mask through an operation that moved the layer's content
  * by `forward` (old → new document space). The GPU mask is resampled in
- * place and read straight back, so `mask.data` and its dimensions match
- * the texture and the next sync has nothing to re-upload.
+ * place and the mask takes its new dimensions at once. `mask.data` keeps the
+ * old bytes until the resampled ones have been read: they are marked stale
+ * and as already uploaded, so nothing sends them or trusts them meanwhile,
+ * and the caller does not wait for the read.
  */
 export function remapLayerMaskThrough(
   engine: Engine | null,
@@ -24,11 +26,10 @@ export function remapLayerMaskThrough(
   if (!plan) return after;
   const { a, b, c, d, e, f } = plan.inverse;
   remapLayerMask(engine, after.id, plan.width, plan.height, a, b, c, d, e, f);
-  const data = readMask(after.id);
-  if (!data || data.length !== plan.width * plan.height) return after;
-  seedMaskDataRef(engine, after.id, data);
-  markMaskDataFresh(after.id);
-  return { ...after, mask: { ...after.mask, data, width: plan.width, height: plan.height } } as Layer;
+  seedMaskDataRef(engine, after.id, after.mask.data);
+  markMaskDataStale(after.id);
+  void materializeMaskData(after.id);
+  return { ...after, mask: { ...after.mask, width: plan.width, height: plan.height } } as Layer;
 }
 
 /**

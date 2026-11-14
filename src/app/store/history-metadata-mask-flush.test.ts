@@ -57,7 +57,7 @@ describe('pushHistoryMetadata does not drain pending mask reads (#782, #780)', (
   });
 
   it('leaves the queued mask read for the idle queue', () => {
-    const reader = vi.fn(() => new Uint8ClampedArray([9, 9, 9, 9]));
+    const reader = vi.fn(() => Promise.resolve(new Uint8ClampedArray([9, 9, 9, 9])));
     const cb = vi.fn();
     requestMaskRead('layer-1', reader, cb);
     expect(pendingMaskReadCount()).toBe(1);

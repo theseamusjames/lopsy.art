@@ -354,7 +354,7 @@ describe('bucket fill — layer mask mode', () => {
       { id: 'layer-1', x: 0, y: 0, mask: { data: maskData, width: DOC_W, height: DOC_H } },
     ];
     const updated = new Uint8Array(DOC_W * DOC_H).fill(127);
-    readMaskTexture.mockReturnValue(updated);
+    readMaskTexture.mockResolvedValue(updated);
 
     // The engine maps document coords onto the mask's own origin, so the
     // layer-local position (which drifts as a raster layer is re-origined)
@@ -382,7 +382,7 @@ describe('bucket fill — layer mask mode', () => {
     expect(editorState.updateLayerMaskData).not.toHaveBeenCalled();
     expect(isMaskDataStale('layer-1')).toBe(true);
 
-    materializeAllMaskData();
+    await materializeAllMaskData();
     expect(readMaskTexture).toHaveBeenCalledTimes(1);
     expect(editorState.updateLayerMaskData).toHaveBeenCalledTimes(1);
     const [layerId, newMask] = editorState.updateLayerMaskData.mock.calls[0]! as [string, Uint8ClampedArray];

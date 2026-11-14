@@ -70,8 +70,9 @@ const ALLOWLIST = {
   'src/filters/surface-blur.test.ts': 5,
   'src/io/project-save.test.ts': 1,
   'src/panels/AdjustmentsPanel/histogram-compute.test.ts': 2,
-  'src/app/mask-read-queue.test.ts': 14,                     // +4: rAF quiescence tests for #760
+  'src/app/mask-read-queue.test.ts': 17,                     // +4: rAF quiescence tests for #760, +3: disowned-read fixtures
   'src/app/mask-data-sync.test.ts': 1,                       // #780 fixture mask
+  'src/app/store/actions/mask-gpu-carry.test.ts': 1,         // fixture mask for the GPU copy and remap
   'src/app/store/mask-history.test.ts': 1,                   // #780 fixture mask
   'src/panels/LayerPanel/LayerPanel.test.ts': 1,             // replacement mask bytes for updateLayerMaskData
   'src/panels/LayerPanel/layer-selection.test.ts': 4,        // layer-alpha fixture for selectLayerAlpha, +3: late-read fixtures

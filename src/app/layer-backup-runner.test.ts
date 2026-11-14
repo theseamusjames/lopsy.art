@@ -90,8 +90,16 @@ interface Harness {
   setEngine: (engine: object) => void;
   edit: () => void;
   write: (id: string) => void;
-  runIdle: () => void;
+  runIdle: () => Promise<void>;
   key: () => HistoryKey;
+  /** Keep reads out until `release` is called. */
+  hold: () => void;
+  release: () => void;
+}
+
+/** Let the reads a pass has started deliver their blobs. */
+async function settle(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 function raster(id: string): BackupLayer {
@@ -108,6 +116,8 @@ function harness(ids: string[], blobBytes = 100): Harness {
   const readsOf: string[] = [];
   const warnings: string[] = [];
   const scheduled: Array<() => void> = [];
+  let isHolding = false;
+  const held: Array<() => void> = [];
   const h: Harness = {
     runner: undefined as unknown as LayerBackupRunner,
     layers: ids.map(raster),
@@ -120,10 +130,18 @@ function harness(ids: string[], blobBytes = 100): Harness {
     setEngine: (e) => { engine = e; },
     edit: () => { undoTop = {}; },
     write: (id) => { generations.set(id, nextGen++); },
-    runIdle: () => {
-      while (scheduled.length > 0) scheduled.shift()!();
+    runIdle: async () => {
+      while (scheduled.length > 0) {
+        scheduled.shift()!();
+        await settle();
+      }
     },
     key: () => ({ undoTop, undoLength: 1, redoTop: undefined, redoLength: 0, layers: h.layers }),
+    hold: () => { isHolding = true; },
+    release: () => {
+      isHolding = false;
+      while (held.length > 0) held.shift()!();
+    },
   };
   for (const id of ids) h.write(id);
   h.runner = createLayerBackupRunner({
@@ -134,7 +152,9 @@ function harness(ids: string[], blobBytes = 100): Harness {
     stamp: (id) => ({ engine, generation: generations.get(id) ?? 0, width: 10, height: 10 }),
     readBlob: (id) => {
       readsOf.push(id);
-      return new Uint8Array(blobBytes);
+      const blob = new Uint8Array(blobBytes);
+      if (!isHolding) return Promise.resolve(blob);
+      return new Promise<Uint8Array>((resolve) => { held.push(() => resolve(blob)); });
     },
     scheduleIdle: (callback) => {
       scheduled.push(callback);
@@ -156,27 +176,75 @@ describe('layer backup runner', () => {
     h = harness(['a', 'b', 'c']);
   });
 
-  it('a hidden tab backs every layer up before returning', () => {
+  it('a hidden tab backs every layer up without waiting for idle time', async () => {
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toEqual(['a', 'b', 'c']);
     expect([...h.runner.committed()!.layers.keys()]).toEqual(['a', 'b', 'c']);
     expect(h.runner.committed()!.takenAt).toBe(1234);
+    expect(h.scheduled).toHaveLength(0);
   });
 
-  it('does nothing when the history key is unchanged since the backup', () => {
+  it('commits nothing until the last read has answered', async () => {
+    h.hold();
     h.runner.request('now');
-    h.runner.request('now');
+    await settle();
+    expect(h.readsOf).toEqual(['a']);
+    expect(h.runner.committed()).toBeNull();
+    h.release();
+    await settle();
+    expect(h.readsOf).toEqual(['a', 'b', 'c']);
+    expect(h.runner.committed()!.layers.size).toBe(3);
+  });
+
+  it('a hidden tab takes over a sliced pass whose read is still out', async () => {
+    h.hold();
     h.runner.request('idle');
+    h.scheduled.shift()!();
+    await settle();
+    expect(h.readsOf).toEqual(['a']);
+
+    h.runner.request('now');
+    h.release();
+    await settle();
+
+    // One loop read each layer once and committed once, with no idle slice left.
+    expect(h.readsOf).toEqual(['a', 'b', 'c']);
+    expect(h.runner.stats().committed).toBe(1);
+    expect(h.scheduled).toHaveLength(0);
+  });
+
+  it('abandons a pass the document was edited past while a read was out', async () => {
+    h.hold();
+    h.runner.request('now');
+    await settle();
+    h.edit();
+    h.release();
+    await settle();
+    expect(h.readsOf).toEqual(['a']);
+    expect(h.runner.committed()).toBeNull();
+    expect(h.runner.stats().isPassPending).toBe(false);
+  });
+
+  it('does nothing when the history key is unchanged since the backup', async () => {
+    h.runner.request('now');
+    await settle();
+    h.runner.request('now');
+    await settle();
+    h.runner.request('idle');
+    await settle();
     expect(h.readsOf).toHaveLength(3);
     expect(h.scheduled).toHaveLength(0);
   });
 
-  it('re-reads only the layer written since the last backup (#1221)', () => {
+  it('re-reads only the layer written since the last backup (#1221)', async () => {
     h.runner.request('now');
+    await settle();
     const before = h.runner.committed()!;
     h.write('b');
     h.edit();
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toEqual(['a', 'b', 'c', 'b']);
     const after = h.runner.committed()!;
     expect(after).not.toBe(before);
@@ -184,104 +252,129 @@ describe('layer backup runner', () => {
     expect(after.layers.get('b')!.blob).not.toBe(before.layers.get('b')!.blob);
   });
 
-  it('pairs a reused blob with the current layer model', () => {
+  it('pairs a reused blob with the current layer model', async () => {
     h.runner.request('now');
+    await settle();
     const moved = { ...h.layers[0]!, x: 40 } as BackupLayer;
     h.layers = [moved, h.layers[1]!, h.layers[2]!];
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toHaveLength(3);
     expect(h.runner.committed()!.layers.get('a')!.layer).toBe(moved);
   });
 
-  it('reads everything again on a new engine', () => {
+  it('reads everything again on a new engine', async () => {
     h.runner.request('now');
+    await settle();
     h.setEngine({});
     h.edit();
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toHaveLength(6);
   });
 
-  it('drops deleted layers and reads added ones', () => {
+  it('drops deleted layers and reads added ones', async () => {
     h.runner.request('now');
+    await settle();
     h.layers = [h.layers[0]!, raster('d')];
     h.write('d');
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toEqual(['a', 'b', 'c', 'd']);
     expect([...h.runner.committed()!.layers.keys()]).toEqual(['a', 'd']);
   });
 
-  it('a blur reads one layer per idle callback and commits only when all are in', () => {
+  it('a blur reads one layer per idle callback and commits only when all are in', async () => {
     h.runner.request('idle');
+    await settle();
     expect(h.readsOf).toEqual([]);
     expect(h.runner.committed()).toBeNull();
     h.scheduled.shift()!();
+    await settle();
     expect(h.readsOf).toEqual(['a']);
     expect(h.runner.committed()).toBeNull();
     expect(h.runner.stats().isPassPending).toBe(true);
     h.scheduled.shift()!();
+    await settle();
     expect(h.runner.committed()).toBeNull();
     h.scheduled.shift()!();
+    await settle();
     expect(h.readsOf).toEqual(['a', 'b', 'c']);
     expect(h.runner.committed()?.layers.size).toBe(3);
     expect(h.scheduled).toHaveLength(0);
     expect(h.runner.stats().isPassPending).toBe(false);
   });
 
-  it('a partial pass never replaces the last complete backup', () => {
+  it('a partial pass never replaces the last complete backup', async () => {
     h.runner.request('now');
+    await settle();
     const complete = h.runner.committed();
     h.write('a');
     h.write('b');
     h.edit();
     h.runner.request('idle');
+    await settle();
     h.scheduled.shift()!();
+    await settle();
     expect(h.runner.committed()).toBe(complete);
   });
 
-  it('focus pauses a pass, and the next blur resumes it without re-reading', () => {
+  it('focus pauses a pass, and the next blur resumes it without re-reading', async () => {
     h.runner.request('idle');
+    await settle();
     h.scheduled.shift()!();
+    await settle();
     h.runner.pause();
     expect(h.scheduled).toHaveLength(0);
     h.runner.request('idle');
-    h.runIdle();
+    await settle();
+    await h.runIdle();
     expect(h.readsOf).toEqual(['a', 'b', 'c']);
     expect(h.runner.committed()?.layers.size).toBe(3);
   });
 
-  it('an edit between slices abandons the pass but keeps what it read', () => {
+  it('an edit between slices abandons the pass but keeps what it read', async () => {
     h.runner.request('idle');
+    await settle();
     h.scheduled.shift()!();
+    await settle();
     h.write('c');
     h.edit();
-    h.runIdle();
+    await h.runIdle();
     expect(h.runner.committed()).toBeNull();
     expect(h.runner.stats().isPassPending).toBe(false);
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toEqual(['a', 'b', 'c']);
     expect(h.runner.committed()?.layers.size).toBe(3);
   });
 
-  it('a hidden tab finishes a pass a blur started', () => {
+  it('a hidden tab finishes a pass a blur started', async () => {
     h.runner.request('idle');
+    await settle();
     h.scheduled.shift()!();
+    await settle();
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toEqual(['a', 'b', 'c']);
     expect(h.runner.committed()?.layers.size).toBe(3);
     expect(h.scheduled).toHaveLength(0);
   });
 
-  it('a context lost mid-pass ends it and keeps the last backup', () => {
+  it('a context lost mid-pass ends it and keeps the last backup', async () => {
     h.runner.request('now');
+    await settle();
     const complete = h.runner.committed();
     h.write('a');
     h.edit();
     h.runner.request('idle');
+    await settle();
     h.setLost(true);
-    h.runIdle();
+    await h.runIdle();
     expect(h.readsOf).toHaveLength(3);
     expect(h.runner.committed()).toBe(complete);
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toHaveLength(3);
   });
 });
@@ -293,53 +386,64 @@ describe('layer backup runner over the size cap (#1222)', () => {
     h.setMax(250);
   });
 
-  it('stops reading once over the cap, drops the backup and warns', () => {
+  it('stops reading once over the cap, drops the backup and warns', async () => {
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toEqual(['a', 'b', 'c']);
     expect(h.runner.committed()).toBeNull();
     expect(h.warnings).toEqual([TOO_LARGE_WARNING]);
     expect(h.runner.stats().tooLarge).toBe(1);
   });
 
-  it('drops an older complete backup too', () => {
+  it('drops an older complete backup too', async () => {
     h.setMax(1000);
     h.runner.request('now');
+    await settle();
     h.setMax(250);
     h.write('a');
     h.edit();
     h.runner.request('now');
+    await settle();
     expect(h.runner.committed()).toBeNull();
   });
 
-  it('remembers the failure: leaving again without an edit reads nothing', () => {
+  it('remembers the failure: leaving again without an edit reads nothing', async () => {
     h.runner.request('now');
+    await settle();
     h.runner.request('now');
+    await settle();
     h.runner.request('idle');
-    h.runIdle();
+    await settle();
+    await h.runIdle();
     expect(h.readsOf).toHaveLength(3);
     expect(h.warnings).toHaveLength(1);
   });
 
-  it('skips a new key whose unchanged layers alone exceed the cap', () => {
+  it('skips a new key whose unchanged layers alone exceed the cap', async () => {
     h.runner.request('now');
+    await settle();
     h.edit();
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toHaveLength(3);
     expect(h.runner.stats().tooLarge).toBe(2);
     expect(h.warnings).toHaveLength(2);
   });
 
-  it('tries again once the document fits', () => {
+  it('tries again once the document fits', async () => {
     h.runner.request('now');
+    await settle();
     h.layers = [h.layers[0]!];
     h.runner.request('now');
+    await settle();
     expect(h.readsOf).toEqual(['a', 'b', 'c', 'a']);
     expect(h.runner.committed()?.layers.size).toBe(1);
   });
 
-  it('a sliced pass stops at the cap too', () => {
+  it('a sliced pass stops at the cap too', async () => {
     h.runner.request('idle');
-    h.runIdle();
+    await settle();
+    await h.runIdle();
     expect(h.readsOf).toEqual(['a', 'b', 'c']);
     expect(h.runner.committed()).toBeNull();
     expect(h.runner.stats().isPassPending).toBe(false);

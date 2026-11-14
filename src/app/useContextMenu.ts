@@ -3,9 +3,8 @@ import type { ContextMenuItem } from '../components/ContextMenu/ContextMenu';
 import { useEditorStore } from './editor-store';
 import { useToolSettingsStore, abrBrushToPreset } from './tool-settings-store';
 import { useUIStore } from './ui-store';
-import { createBrushTipFromSelection, EMPTY_TIP_MESSAGE } from '../tools/brush/brush-from-selection';
-import { notifyInfo } from './notifications-store';
 import { selectAll } from './MenuBar/menus/select-menu';
+import { readSelectionBrushTip } from './MenuBar/brush-actions';
 
 interface ContextMenuState {
   visible: boolean;
@@ -35,34 +34,17 @@ export function useContextMenu() {
     const items: ContextMenuItem[] = [];
 
     if (hasSelection && selection.bounds && selection.mask) {
-      const bounds = selection.bounds;
-      const mask = selection.mask;
-      const maskWidth = selection.maskWidth;
-      const maskHeight = selection.maskHeight;
-
       items.push({
         label: 'Define Brush Preset',
         action: () => {
-          const activeLayerId = editorState.document.activeLayerId;
-          if (!activeLayerId) return;
-
-          const imageData = editorState.getOrCreateLayerPixelData(activeLayerId);
-          const tip = createBrushTipFromSelection(imageData, {
-            bounds,
-            mask,
-            maskWidth,
-            maskHeight,
+          void readSelectionBrushTip(false).then((tip) => {
+            if (!tip) return;
+            const preset = abrBrushToPreset('Custom Brush', tip);
+            const toolStore = useToolSettingsStore.getState();
+            toolStore.addPreset(preset);
+            toolStore.setActivePreset(preset.id);
+            useUIStore.getState().setShowBrushModal(true);
           });
-          if (!tip) {
-            notifyInfo(EMPTY_TIP_MESSAGE);
-            return;
-          }
-
-          const preset = abrBrushToPreset('Custom Brush', tip);
-          const toolStore = useToolSettingsStore.getState();
-          toolStore.addPreset(preset);
-          toolStore.setActivePreset(preset.id);
-          useUIStore.getState().setShowBrushModal(true);
         },
       });
 

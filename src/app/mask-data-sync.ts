@@ -12,9 +12,11 @@
  *
  * A layer id is "stale" from the moment its GPU mask is written until a
  * readback lands. Callers that must have current bytes on the JS side
- * call `materializeMaskData` / `materializeAllMaskData`, which pay the
- * synchronous readback only for stale masks and only at moments that
- * are not on the paint hot path (save, export, duplicate, remove mask).
+ * await `materializeMaskData` / `materializeAllMaskData`, which read only
+ * stale masks and only at moments that are not on the paint hot path
+ * (save, export). Anything that can leave the mask on the GPU does that
+ * instead: Duplicate Layer copies the texture, Remove Mask keeps a GPU
+ * snapshot in history.
  */
 
 import { useEditorStore } from './editor-store';
@@ -24,12 +26,22 @@ import { seedMaskDataRef } from '../engine-wasm/sync-state';
 import { requestMaskRead, cancelMaskRead } from './mask-read-queue';
 
 const staleIds = new Set<string>();
+/**
+ * How many times each layer's GPU mask has been written. A read that was
+ * out while the count moved describes an older mask.
+ */
+const writeCounts = new Map<string, number>();
+
+function noteMaskWritten(layerId: string): void {
+  staleIds.add(layerId);
+  writeCounts.set(layerId, (writeCounts.get(layerId) ?? 0) + 1);
+}
 
 /** Read a layer's GPU mask back as bytes, sized like the mask texture. */
-export function readMask(layerId: string): Uint8ClampedArray | null {
+export async function readMask(layerId: string): Promise<Uint8ClampedArray | null> {
   const engine = getEngine();
   if (!engine) return null;
-  const bytes = readMaskTexture(engine, layerId);
+  const bytes = await readMaskTexture(engine, layerId);
   return bytes ? new Uint8ClampedArray(bytes) : null;
 }
 
@@ -52,13 +64,13 @@ function applyReadback(layerId: string, data: Uint8ClampedArray): void {
  * can't fire mid-stroke and stall on the dab backlog.
  */
 export function markMaskDataStale(layerId: string): void {
-  staleIds.add(layerId);
+  noteMaskWritten(layerId);
   cancelMaskRead(layerId);
 }
 
 /** The GPU mask has been written; refresh the JS bytes once the GPU is idle. */
 export function scheduleMaskDataRefresh(layerId: string): void {
-  staleIds.add(layerId);
+  noteMaskWritten(layerId);
   requestMaskRead(layerId, () => readMask(layerId), (data) => applyReadback(layerId, data));
 }
 
@@ -72,16 +84,22 @@ export function isMaskDataStale(layerId: string): boolean {
   return staleIds.has(layerId);
 }
 
-/** Synchronously bring one layer's `mask.data` up to date with the GPU. */
-export function materializeMaskData(layerId: string): void {
+/**
+ * Bring one layer's `mask.data` up to date with the GPU. If the mask is
+ * written again while the read is out, the bytes are dropped and the
+ * layer stays stale.
+ */
+export async function materializeMaskData(layerId: string): Promise<void> {
   if (!staleIds.has(layerId)) return;
   cancelMaskRead(layerId);
+  const written = writeCounts.get(layerId) ?? 0;
   let data: Uint8ClampedArray | null = null;
   try {
-    data = readMask(layerId);
+    data = await readMask(layerId);
   } catch (e) {
     console.error('[Lopsy] mask readback failed:', e);
   }
+  if ((writeCounts.get(layerId) ?? 0) !== written) return;
   if (data) {
     applyReadback(layerId, data);
   } else {
@@ -90,13 +108,14 @@ export function materializeMaskData(layerId: string): void {
   }
 }
 
-/** Synchronously bring every stale `mask.data` up to date with the GPU. */
-export function materializeAllMaskData(): void {
-  for (const id of [...staleIds]) materializeMaskData(id);
+/** Bring every stale `mask.data` up to date with the GPU. */
+export async function materializeAllMaskData(): Promise<void> {
+  await Promise.all([...staleIds].map((id) => materializeMaskData(id)));
 }
 
 /** Test-only: forget all staleness without reading anything. */
 export function __resetMaskDataSyncForTest(): void {
   for (const id of staleIds) cancelMaskRead(id);
   staleIds.clear();
+  writeCounts.clear();
 }

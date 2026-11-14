@@ -1,9 +1,40 @@
-import type { DocumentState } from '../../../types';
+import type { DocumentState, Layer } from '../../../types';
 import type { ActionResult } from '../types';
 import { duplicateLayer as duplicateLayerModel } from '../../../layers/layer-model';
 import { findParentGroup, addToGroup, isGroupLayer, getDescendantIds } from '../../../layers/group-utils';
 import { getEngine } from '../../../engine-wasm/engine-state';
-import { duplicateLayerTexture } from '../../../engine-wasm/wasm-bridge';
+import {
+  duplicateLayerTexture,
+  snapshotMaskGpu,
+  restoreMaskFromGpuSnapshot,
+  releaseGpuSnapshot,
+  type Engine,
+} from '../../../engine-wasm/wasm-bridge';
+import { seedMaskDataRef } from '../../../engine-wasm/sync-state';
+import { isMaskDataStale, scheduleMaskDataRefresh } from '../../mask-data-sync';
+import { EMPTY_MASK_HANDLE } from '../mask-history';
+
+/**
+ * Give `duplicate` its source's GPU mask when the source's JS bytes lag it
+ * (a mask stroke whose lazy readback has not landed, #780). The copy then
+ * shows the mask as painted without reading it back; its own bytes are
+ * marked as already uploaded and refreshed by the read queue.
+ */
+function carryGpuMask(engine: Engine, source: Layer, duplicate: Layer): void {
+  if (!source.mask || !duplicate.mask || !isMaskDataStale(source.id)) return;
+  const copy = snapshotMaskGpu(engine, source.id);
+  if (copy === EMPTY_MASK_HANDLE) return;
+  try {
+    restoreMaskFromGpuSnapshot(engine, duplicate.id, copy);
+    seedMaskDataRef(engine, duplicate.id, duplicate.mask.data);
+    scheduleMaskDataRefresh(duplicate.id);
+  } catch (e) {
+    console.error('[Lopsy] mask copy failed:', duplicate.id, e);
+  } finally {
+    // Never part of a history entry, so the ledger does not own it.
+    releaseGpuSnapshot(engine, copy);
+  }
+}
 
 /**
  * Duplicate the active layer (or a group and all descendants) on the GPU.
@@ -47,6 +78,7 @@ export function computeDuplicateLayer(
       if (engine && !isGroupLayer(orig)) {
         duplicateLayerTexture(engine, id, dup.id);
       }
+      if (engine) carryGpuMask(engine, orig, dup);
     }
 
     // The copy goes in as one contiguous block, in the source's own stacking
@@ -95,6 +127,7 @@ export function computeDuplicateLayer(
 
   if (engine) {
     duplicateLayerTexture(engine, activeId, newId);
+    carryGpuMask(engine, layer, newLayer);
   }
 
   let layers = [...doc.layers, newLayer];

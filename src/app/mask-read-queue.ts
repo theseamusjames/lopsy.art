@@ -1,8 +1,8 @@
 /**
  * Deferred queue for layer-mask GPU readbacks.
  *
- * `readMaskTexture` is a synchronous `glReadPixels` that forces a GPU
- * pipeline flush. A full-canvas mask stroke queues a lot of GPU work
+ * On WebGL `readMaskTexture` is a `glReadPixels` that forces a GPU
+ * pipeline flush before its promise is even created. A full-canvas mask stroke queues a lot of GPU work
  * (dab batches + full-frame composites); if the readback fires before
  * that queue drains, it blocks the main thread for the entire time the
  * GPU is still catching up — 2–2.7 s on a 4K canvas (#756, #760). A
@@ -23,7 +23,7 @@
  * the on-demand `materializeMaskData` for readers that need current bytes.
  */
 
-export type MaskReader = () => Uint8ClampedArray | null;
+export type MaskReader = () => Promise<Uint8ClampedArray | null>;
 export type MaskCallback = (data: Uint8ClampedArray) => void;
 
 interface QueuedRead {
@@ -118,6 +118,12 @@ function scheduleFlush(cb: () => void): Handle {
 }
 
 const pending = new Map<string, QueuedRead>();
+/**
+ * Reads that have left for the GPU. A cancel, or a newer request for the
+ * layer, disowns the one in flight: its bytes describe a mask that has
+ * been written since and must not be handed on.
+ */
+const inFlight = new Map<string, QueuedRead>();
 let scheduled: Handle | null = null;
 
 function drainOne(layerId: string): void {
@@ -128,19 +134,29 @@ function drainOne(layerId: string): void {
     scheduled.cancel();
     scheduled = null;
   }
-  let data: Uint8ClampedArray | null = null;
+  inFlight.set(layerId, entry);
+  let read: Promise<Uint8ClampedArray | null>;
   try {
-    data = entry.reader();
+    read = entry.reader();
   } catch (e) {
-    console.error('[Lopsy] mask readback failed:', e);
-    return;
+    read = Promise.reject(e);
   }
-  if (!data) return;
-  try {
-    entry.cb(data);
-  } catch (e) {
-    console.error('[Lopsy] mask readback callback failed:', e);
-  }
+  read.then(
+    (data) => {
+      if (inFlight.get(layerId) !== entry) return;
+      inFlight.delete(layerId);
+      if (!data) return;
+      try {
+        entry.cb(data);
+      } catch (e) {
+        console.error('[Lopsy] mask readback callback failed:', e);
+      }
+    },
+    (e) => {
+      if (inFlight.get(layerId) === entry) inFlight.delete(layerId);
+      console.error('[Lopsy] mask readback failed:', e);
+    },
+  );
 }
 
 function flushAll(): void {
@@ -163,19 +179,20 @@ export function requestMaskRead(
   reader: MaskReader,
   cb: MaskCallback,
 ): void {
+  inFlight.delete(layerId);
   pending.set(layerId, { reader, cb });
   if (scheduled === null) {
     scheduled = scheduleFlush(flushAll);
   }
 }
 
-/** Synchronously drain the queued read (if any) for `layerId`. */
+/** Start the queued read (if any) for `layerId` now. */
 export function flushPendingMaskRead(layerId: string): void {
   if (!pending.has(layerId)) return;
   drainOne(layerId);
 }
 
-/** Synchronously drain every queued read. */
+/** Start every queued read now. */
 export function flushAllPendingMaskReads(): void {
   if (pending.size === 0) return;
   const handle = scheduled;
@@ -188,6 +205,7 @@ export function flushAllPendingMaskReads(): void {
 
 /** Drop a queued read without running it (e.g. layer was deleted). */
 export function cancelMaskRead(layerId: string): void {
+  inFlight.delete(layerId);
   if (!pending.delete(layerId)) return;
   if (pending.size === 0 && scheduled !== null) {
     scheduled.cancel();

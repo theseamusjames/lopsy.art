@@ -36,10 +36,14 @@ export interface PixelDataSlice {
   notifyRender: () => void;
   cropLayerToContent: (layerId: string) => void;
   expandLayerForEditing: (layerId: string) => ImageData;
+  /**
+   * A layer's pixels from whichever copy exists, read synchronously. Only
+   * tests reach this; app code awaits `readLayerAsImageData` instead.
+   */
+  resolvePixelData: (layerId: string) => ImageData | undefined;
   /** Read-only: returns ImageData from JS cache, sparse storage, or GPU
    *  readback (in that order). Returns at the layer's stored dimensions
    *  (not full canvas). */
-  resolvePixelData: (layerId: string) => ImageData | undefined;
 }
 
 /** Apply a new (x, y, width, height) to the given layer in document.layers. */
@@ -74,7 +78,7 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
   getOrCreateLayerPixelData: (layerId: string) => {
     // Always returns a full-canvas-size ImageData, expanding cropped/sparse layers.
     // All callers are write operations (filters, paste, fill, etc.) that need
-    // the full canvas area. Read-only code uses resolvePixelData().
+    // the full canvas area.
     return get().expandLayerForEditing(layerId);
   },
 

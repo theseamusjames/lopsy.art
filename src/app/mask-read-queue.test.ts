@@ -8,6 +8,12 @@ import {
   __resetMaskReadQueueForTest,
 } from './mask-read-queue';
 
+/** Let a read that has been started deliver its bytes. */
+async function settle(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe('mask-read-queue', () => {
   beforeEach(() => {
     __resetMaskReadQueueForTest();
@@ -31,8 +37,8 @@ describe('mask-read-queue', () => {
     __resetMaskReadQueueForTest();
   });
 
-  it('does not invoke the reader synchronously', () => {
-    const reader = vi.fn(() => new Uint8ClampedArray(4));
+  it('does not invoke the reader synchronously', async () => {
+    const reader = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
     const cb = vi.fn();
     requestMaskRead('l1', reader, cb);
     expect(reader).not.toHaveBeenCalled();
@@ -40,58 +46,63 @@ describe('mask-read-queue', () => {
     expect(pendingMaskReadCount()).toBe(1);
   });
 
-  it('runs the read on the idle fallback timer', () => {
+  it('runs the read on the idle fallback timer', async () => {
     const bytes = new Uint8ClampedArray([1, 2, 3, 4]);
-    const reader = vi.fn(() => bytes);
+    const reader = vi.fn(() => Promise.resolve(bytes));
     const cb = vi.fn();
     requestMaskRead('l1', reader, cb);
     vi.advanceTimersByTime(300);
+    await settle();
     expect(reader).toHaveBeenCalledTimes(1);
     expect(cb).toHaveBeenCalledWith(bytes);
     expect(pendingMaskReadCount()).toBe(0);
   });
 
-  it('coalesces multiple requests for the same layer', () => {
-    const first = vi.fn(() => new Uint8ClampedArray(4));
-    const second = vi.fn(() => new Uint8ClampedArray(4));
+  it('coalesces multiple requests for the same layer', async () => {
+    const first = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
+    const second = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
     const firstCb = vi.fn();
     const secondCb = vi.fn();
     requestMaskRead('l1', first, firstCb);
     requestMaskRead('l1', second, secondCb);
     vi.advanceTimersByTime(300);
+    await settle();
     expect(first).not.toHaveBeenCalled();
     expect(firstCb).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledTimes(1);
     expect(secondCb).toHaveBeenCalledTimes(1);
   });
 
-  it('flushPendingMaskRead runs one layer synchronously', () => {
+  it('flushPendingMaskRead starts the read for one layer at once', async () => {
     const bytes = new Uint8ClampedArray([9, 9, 9, 9]);
-    const reader = vi.fn(() => bytes);
+    const reader = vi.fn(() => Promise.resolve(bytes));
     const cb = vi.fn();
     requestMaskRead('l1', reader, cb);
     flushPendingMaskRead('l1');
+    await settle();
     expect(reader).toHaveBeenCalledTimes(1);
     expect(cb).toHaveBeenCalledWith(bytes);
     expect(pendingMaskReadCount()).toBe(0);
     // Subsequent timer fire is a no-op.
     vi.advanceTimersByTime(300);
+    await settle();
     expect(reader).toHaveBeenCalledTimes(1);
   });
 
-  it('flushPendingMaskRead is a no-op when no read is queued', () => {
+  it('flushPendingMaskRead is a no-op when no read is queued', async () => {
     flushPendingMaskRead('missing');
     expect(pendingMaskReadCount()).toBe(0);
   });
 
-  it('flushAllPendingMaskReads drains every queued layer', () => {
-    const readerA = vi.fn(() => new Uint8ClampedArray(4));
-    const readerB = vi.fn(() => new Uint8ClampedArray(4));
+  it('flushAllPendingMaskReads drains every queued layer', async () => {
+    const readerA = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
+    const readerB = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
     const cbA = vi.fn();
     const cbB = vi.fn();
     requestMaskRead('a', readerA, cbA);
     requestMaskRead('b', readerB, cbB);
     flushAllPendingMaskReads();
+    await settle();
     expect(readerA).toHaveBeenCalledTimes(1);
     expect(readerB).toHaveBeenCalledTimes(1);
     expect(cbA).toHaveBeenCalledTimes(1);
@@ -99,38 +110,67 @@ describe('mask-read-queue', () => {
     expect(pendingMaskReadCount()).toBe(0);
   });
 
-  it('cancelMaskRead drops a pending read without running it', () => {
-    const reader = vi.fn(() => new Uint8ClampedArray(4));
+  it('cancelMaskRead drops a pending read without running it', async () => {
+    const reader = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
     const cb = vi.fn();
     requestMaskRead('l1', reader, cb);
     cancelMaskRead('l1');
     vi.advanceTimersByTime(300);
+    await settle();
     expect(reader).not.toHaveBeenCalled();
     expect(cb).not.toHaveBeenCalled();
     expect(pendingMaskReadCount()).toBe(0);
   });
 
-  it('skips the callback when the reader returns null', () => {
+  it('skips the callback when the reader returns null', async () => {
     const cb = vi.fn();
-    requestMaskRead('l1', () => null, cb);
+    requestMaskRead('l1', () => Promise.resolve(null), cb);
     vi.advanceTimersByTime(300);
+    await settle();
     expect(cb).not.toHaveBeenCalled();
   });
 
-  it('does not throw when a reader throws — the queue keeps working', () => {
+  it('does not throw when a reader throws — the queue keeps working', async () => {
     const goodCb = vi.fn();
     requestMaskRead('bad', () => { throw new Error('boom'); }, () => {});
-    requestMaskRead('good', () => new Uint8ClampedArray([1, 2, 3, 4]), goodCb);
+    requestMaskRead('good', () => Promise.resolve(new Uint8ClampedArray([1, 2, 3, 4])), goodCb);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     flushAllPendingMaskReads();
+    await settle();
     expect(goodCb).toHaveBeenCalledTimes(1);
     spy.mockRestore();
   });
 
-  it('does not schedule when the queue empties from a cancel', () => {
-    requestMaskRead('l1', () => new Uint8ClampedArray(4), () => {});
+  it('drops the bytes of a read that was cancelled while it was out', async () => {
+    let deliver: (bytes: Uint8ClampedArray) => void = () => {};
+    const cb = vi.fn();
+    requestMaskRead('l1', () => new Promise<Uint8ClampedArray>((resolve) => { deliver = resolve; }), cb);
+    flushPendingMaskRead('l1');
+    cancelMaskRead('l1');
+    deliver(new Uint8ClampedArray(4));
+    await settle();
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('drops the bytes of a read that a newer request replaced while it was out', async () => {
+    let deliver: (bytes: Uint8ClampedArray) => void = () => {};
+    const staleCb = vi.fn();
+    const freshCb = vi.fn();
+    requestMaskRead('l1', () => new Promise<Uint8ClampedArray>((resolve) => { deliver = resolve; }), staleCb);
+    flushPendingMaskRead('l1');
+    requestMaskRead('l1', () => Promise.resolve(new Uint8ClampedArray([7, 7, 7, 7])), freshCb);
+    deliver(new Uint8ClampedArray(4));
+    flushPendingMaskRead('l1');
+    await settle();
+    expect(staleCb).not.toHaveBeenCalled();
+    expect(freshCb).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not schedule when the queue empties from a cancel', async () => {
+    requestMaskRead('l1', () => Promise.resolve(new Uint8ClampedArray(4)), () => {});
     cancelMaskRead('l1');
     vi.advanceTimersByTime(300);
+    await settle();
     expect(pendingMaskReadCount()).toBe(0);
   });
 });
@@ -193,19 +233,20 @@ describe('mask-read-queue — rAF quiescence detection (#760)', () => {
     for (const cb of cbs) cb(now);
   }
 
-  it('does not fire the read while frames are long (GPU is bottlenecked)', () => {
-    const reader = vi.fn(() => new Uint8ClampedArray(4));
+  it('does not fire the read while frames are long (GPU is bottlenecked)', async () => {
+    const reader = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
     const cb = vi.fn();
     requestMaskRead('l1', reader, cb);
     // Simulate slow frames (100 ms each) — quiescence never reached.
     for (let i = 0; i < 10; i++) tick(100);
+    await settle();
     expect(reader).not.toHaveBeenCalled();
     expect(cb).not.toHaveBeenCalled();
     expect(pendingMaskReadCount()).toBe(1);
   });
 
-  it('fires the read after two consecutive quick frames', () => {
-    const reader = vi.fn(() => new Uint8ClampedArray(4));
+  it('fires the read after two consecutive quick frames', async () => {
+    const reader = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
     const cb = vi.fn();
     requestMaskRead('l1', reader, cb);
     // First tick just records the timestamp (no delta yet), then two quiet
@@ -213,29 +254,33 @@ describe('mask-read-queue — rAF quiescence detection (#760)', () => {
     tick(0);
     tick(17);
     tick(17);
+    await settle();
     expect(reader).toHaveBeenCalledTimes(1);
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
-  it('quiet-frame counter resets after a long frame', () => {
-    const reader = vi.fn(() => new Uint8ClampedArray(4));
+  it('quiet-frame counter resets after a long frame', async () => {
+    const reader = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
     const cb = vi.fn();
     requestMaskRead('l1', reader, cb);
     tick(0);
     tick(17);      // 1 quiet frame
     tick(100);     // long frame — reset
     tick(17);      // 1 quiet frame — not yet enough
+    await settle();
     expect(reader).not.toHaveBeenCalled();
     tick(17);      // 2 quiet frames — fire
+    await settle();
     expect(reader).toHaveBeenCalledTimes(1);
   });
 
-  it('force-fires after the 3 s hard cap even if frames stay slow', () => {
-    const reader = vi.fn(() => new Uint8ClampedArray(4));
+  it('force-fires after the 3 s hard cap even if frames stay slow', async () => {
+    const reader = vi.fn(() => Promise.resolve(new Uint8ClampedArray(4)));
     const cb = vi.fn();
     requestMaskRead('l1', reader, cb);
     // ~30 slow frames each 100 ms → 3 s total.
     for (let i = 0; i < 32; i++) tick(100);
+    await settle();
     expect(reader).toHaveBeenCalledTimes(1);
   });
 });

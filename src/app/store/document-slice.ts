@@ -51,7 +51,6 @@ import { computeAlignLayer } from './actions/align-layer';
 import { computeFitLayer } from './actions/fit-layer';
 import { computeAddLayerMask } from './actions/add-layer-mask';
 import { computeRemoveLayerMask } from './actions/remove-layer-mask';
-import { materializeAllMaskData, materializeMaskData } from '../mask-data-sync';
 import {
   computeSetActiveLayer,
   computeToggleVisibility,
@@ -721,9 +720,6 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   duplicateLayer: () => {
-    // The duplicate's mask is uploaded from `mask.data`, which can lag the
-    // GPU until the lazy readback lands (#780).
-    materializeAllMaskData();
     const s = get();
     if (!allowLayerCreation(s.document)) return;
     const sparseIds = [...pixelDataManager.sparseMap().keys()];
@@ -868,13 +864,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
   },
 
   removeLayerMask: (id) => {
-    // Undoing the removal re-uploads the mask from this snapshot's
-    // `mask.data`, so it must match the GPU first (#780).
-    materializeMaskData(id);
     const s = get();
     const result = computeRemoveLayerMask(s.document, s.renderVersion, id);
     if (!result) return;
-    s.pushHistoryMetadata('Remove Mask');
+    // A pixel entry, not a metadata one: it holds the mask as a GPU
+    // snapshot, so undo brings back what was painted even while
+    // `mask.data` still lags the GPU (#780).
+    s.pushHistory('Remove Mask');
     set(result);
   },
 
