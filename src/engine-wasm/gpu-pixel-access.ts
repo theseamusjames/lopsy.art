@@ -135,10 +135,10 @@ export function uploadCompressed(layerId: string, data: Uint8Array): void {
 /**
  * Read a layer's GPU texture as a downscaled thumbnail ImageData.
  */
-export function readLayerThumbnail(layerId: string, maxSize: number): ImageData | null {
+export async function readLayerThumbnail(layerId: string, maxSize: number): Promise<ImageData | null> {
   if (!currentEngine) return null;
 
-  const result = wasmReadLayerThumbnail(currentEngine, layerId, maxSize);
+  const result = await wasmReadLayerThumbnail(currentEngine, layerId, maxSize);
   if (!result || result.length < 8) return null;
 
   // The WASM function prepends an 8-byte header: [tw: u32 LE, th: u32 LE]

@@ -35,29 +35,30 @@ function guardCopySource(layer: Layer | undefined, action: 'copied' | 'cut'): bo
 
 function writeToSystemClipboard(width: number, height: number): void {
   const seq = beginSystemClipboardWrite();
-  try {
-    const engine = getEngine();
-    if (!engine) return;
-    const pixels = readClipboardPixels(engine);
-    const buf = new ArrayBuffer(pixels.byteLength);
-    new Uint8Array(buf).set(pixels);
-    const clamped = new Uint8ClampedArray(buf);
-    const canvas = new OffscreenCanvas(width, height);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const imageData = new ImageData(clamped, width, height);
-    ctx.putImageData(imageData, 0, 0);
-    canvas.convertToBlob({ type: 'image/png' }).then((blob) => {
-      if (typeof navigator.clipboard?.write !== 'function') return;
-      if (!isSystemClipboardWriteCurrent(seq)) return;
+  const engine = getEngine();
+  if (!engine) return;
+  readClipboardPixels(engine)
+    .then((pixels) => {
+      const buf = new ArrayBuffer(pixels.byteLength);
+      new Uint8Array(buf).set(pixels);
+      const clamped = new Uint8ClampedArray(buf);
+      const canvas = new OffscreenCanvas(width, height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      const imageData = new ImageData(clamped, width, height);
+      ctx.putImageData(imageData, 0, 0);
+      return canvas.convertToBlob({ type: 'image/png' });
+    })
+    .then((blob) => {
+      if (!blob) return undefined;
+      if (typeof navigator.clipboard?.write !== 'function') return undefined;
+      if (!isSystemClipboardWriteCurrent(seq)) return undefined;
       const item = new ClipboardItem({ 'image/png': blob });
-      navigator.clipboard.write([item])
-        .then(() => completeSystemClipboardWrite(seq))
-        .catch(() => {});
-    }).catch(() => {});
-  } catch {
-    // System clipboard write is best-effort
-  }
+      return navigator.clipboard.write([item]).then(() => completeSystemClipboardWrite(seq));
+    })
+    .catch(() => {
+      // System clipboard write is best-effort
+    });
 }
 
 export interface ClipboardSlice {
@@ -267,7 +268,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     // caller's paste() from operating on a released clipboard.
     let clipPixels: Uint8Array;
     try {
-      clipPixels = readClipboardPixels(engine);
+      clipPixels = await readClipboardPixels(engine);
     } catch {
       return false;
     }
