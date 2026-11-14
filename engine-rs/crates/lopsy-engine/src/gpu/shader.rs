@@ -84,7 +84,7 @@ pub const PIXELATE_BLOCKS_FRAG: &str = translated!("filters/pixelate_blocks");
 pub const HALFTONE_FRAG: &str = translated!("filters/halftone");
 pub const SOLARIZE_FRAG: &str = translated!("filters/solarize");
 pub const KALEIDOSCOPE_FRAG: &str = translated!("filters/kaleidoscope");
-pub const OIL_PAINT_FRAG: &str = include_str!("shaders/filters/oil_paint.glsl");
+pub const OIL_PAINT_FRAG: &str = translated!("filters/oil_paint");
 pub const CHROMATIC_ABERRATION_FRAG: &str = translated!("filters/chromatic_aberration");
 pub const PIXEL_STRETCH_FRAG: &str = translated!("filters/pixel_stretch");
 pub const LENS_DISTORTION_FRAG: &str = translated!("filters/lens_distortion");
@@ -758,7 +758,7 @@ impl ShaderPrograms {
 mod tests {
     use super::{
         inject_defines, preprocess_frag, typed_shader_checks, ADJUSTMENTS_FRAG, BLEND_FRAG, BLIT_RESAMPLE_FRAG, FINAL_BLIT_FRAG,
-        OIL_PAINT_FRAG, SMUDGE_DAB_FRAG, VIGNETTE_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
+        SMUDGE_DAB_FRAG, VIGNETTE_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG, VORONOI_FRAG,
         TEXTURE_FRAG,
     };
 
@@ -869,7 +869,8 @@ mod tests {
     #[test]
     fn oil_paint_clamps_variance_before_pow() {
         assert!(
-            OIL_PAINT_FRAG.contains("vec3 v = max(var_sum[i] / count[i] - m * m, vec3(0.0));"),
+            include_str!("shaders/filters/oil_paint.wgsl")
+                .contains("let v = max(varSum[i] / count[i] - m * m, vec3<f32>(0.0));"),
             "negative variance reaches pow() and turns flat colours black on Metal"
         );
     }
