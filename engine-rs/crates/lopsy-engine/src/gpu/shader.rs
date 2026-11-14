@@ -134,8 +134,8 @@ pub const SPONGE_FRAG: &str = translated!("brush/sponge");
 pub const STAMP_PREVIEW_FRAG: &str = translated!("brush/stamp_preview");
 
 // Gradient
-pub const GRADIENT_LINEAR_FRAG: &str = include_str!("shaders/gradient/gradient_linear.glsl");
-pub const GRADIENT_RADIAL_FRAG: &str = include_str!("shaders/gradient/gradient_radial.glsl");
+pub const GRADIENT_LINEAR_FRAG: &str = translated!("gradient/gradient_linear");
+pub const GRADIENT_RADIAL_FRAG: &str = translated!("gradient/gradient_radial");
 
 // Shape
 pub const SHAPE_FILL_FRAG: &str = translated!("shape/shape_fill");
