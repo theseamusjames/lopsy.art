@@ -189,8 +189,6 @@ gpu/shaders/
     invert.glsl, hue_sat.glsl, sharpen.glsl, noise.glsl, posterize.glsl, threshold.glsl
   gradient/
     gradient_linear.glsl, gradient_radial.glsl
-  selection/
-    marching_ants.glsl    # Animated selection outline
 ```
 
 ### Adding an engine function JS can call
