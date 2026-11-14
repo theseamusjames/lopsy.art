@@ -5,7 +5,7 @@ use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::imaging::Imaging;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::uniforms::Uniforms;
-use crate::gpu::params::filters::{ChannelExtractParams, PixelateBlocksParams, PixelateParams, SelectionMaskBlendParams};
+use crate::gpu::params::filters::{PixelateBlocksParams, PixelateParams, SelectionMaskBlendParams};
 
 /// Blend the filtered result with the original layer texture
 /// using the selection mask. Writes the blended result back to the layer texture.
@@ -424,32 +424,6 @@ pub fn apply_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32)
         .draw(Target::Framebuffer(engine.scratch_fbo_b));
 
     commit_scratch_b(engine, layer_id, tex_handle, w, h, has_selection);
-}
-
-/// Render a single channel of a layer texture as grayscale into a scratch
-/// FBO and read back the result as RGBA pixels. `channel`: 0=R, 1=G, 2=B, 3=A.
-pub fn extract_channel_pixels(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    channel: u32,
-) -> Vec<u8> {
-    let tex_handle = match engine.layer_textures.get(layer_id) {
-        Some(&h) => h,
-        None => return Vec::new(),
-    };
-    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
-    if w == 0 || h == 0 { return Vec::new(); }
-    if engine.texture_pool.get(tex_handle).is_none() {
-        return Vec::new();
-    }
-
-    engine.pass(&engine.shaders.channel_extract, ChannelExtractParams { channel: channel as i32 })
-        .texture("u_tex", tex_handle)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Framebuffer(engine.scratch_fbo_a));
-
-    engine.gpu().read_rgba(engine.scratch_texture_a, 0, 0, w, h)
-        .unwrap_or_default()
 }
 
 /// GPU-side box-downscaled thumbnail for one channel of a layer texture, as

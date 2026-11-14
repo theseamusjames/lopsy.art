@@ -88,7 +88,7 @@ const ALLOWLIST = {
   'src/tools/crop/perspective-crop.test.ts': 3,             // see #441 (delete with prod file)
   'src/tools/fill/fill-interaction.test.ts': 4,              // +1: #780 no-re-upload fixture
   'src/tools/gradient/gradient-interaction.test.ts': 3,        // #732 mask-mode fixture buffer
-  'src/tools/magnetic-lasso/magnetic-lasso-strategy.test.ts': 4,
+  'src/tools/magnetic-lasso/magnetic-lasso-strategy.test.ts': 5, // +1: unsnapped-trace fixture
   'src/tools/magnetic-lasso/magnetic-lasso.test.ts': 2,
   'src/tools/marquee/marquee-strategy.test.ts': 10,      // +1: add/subtract/intersect selection fixture, +1: #1188 move-clip fixture
   'src/tools/move/move.test.ts': 1,

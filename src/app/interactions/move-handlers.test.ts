@@ -54,6 +54,26 @@ vi.mock('../../panels/LayerPanel/layer-selection', () => ({
   selectLayerAlpha: vi.fn(),
 }));
 
+// Content bounds are measured unless a test says otherwise, so a grab crops
+// and begins at once.
+const contentRects = vi.hoisted(() => ({
+  isMeasured: true,
+  finishRead: (() => {}) as () => void,
+}));
+vi.mock('../layer-content-rect', () => ({
+  peekLayerContentRectLocal: vi.fn(() => (contentRects.isMeasured ? { x: 0, y: 0, width: 1, height: 1 } : undefined)),
+  readLayerContentRectLocal: vi.fn(() => new Promise<null>((resolve) => {
+    contentRects.finishRead = () => {
+      contentRects.isMeasured = true;
+      resolve(null);
+    };
+  })),
+  noteLayerCroppedToContent: vi.fn(),
+  layerContentRect: vi.fn(() => null),
+  clearLayerContentRectCache: vi.fn(),
+  onLayerContentRectRefreshed: vi.fn(),
+}));
+
 vi.mock('../store/clear-js-pixel-data', () => ({
   clearJsPixelData: vi.fn(),
 }));
@@ -775,6 +795,82 @@ describe('floated-selection moves mark the layer dirty for history (#925)', () =
     const growOrder = vi.mocked(bridge.ensureFloatCovers).mock.invocationCallOrder[0]!;
     const compositeOrder = vi.mocked(bridge.compositeFloat).mock.invocationCallOrder[0]!;
     expect(growOrder).toBeLessThan(compositeOrder);
+  });
+});
+
+describe('a whole-layer grab whose content bounds are still being read', () => {
+  const layer = {
+    id: 'raster-1', name: 'Raster', type: 'raster', visible: true, locked: false, opacity: 1,
+    blendMode: 'normal', x: 0, y: 0, width: DOC_W, height: DOC_H, clipToBelow: false,
+    effects: DEFAULT_EFFECTS, mask: null,
+  } as RasterLayer;
+
+  function makeGrabContext(): InteractionContext {
+    editorState.document.layers = [layer];
+    editorState.document.activeLayerId = layer.id;
+    editorState.document.selectedLayerIds = [layer.id];
+    editorState.selection = { active: false, mask: null, bounds: null, maskWidth: 0, maskHeight: 0 };
+    const canvasPos: Point = { x: 10, y: 10 };
+    return {
+      canvasPos,
+      layerPos: canvasPos,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      activeLayer: layer,
+      activeLayerId: layer.id,
+      clientX: 10,
+      clientY: 10,
+      stateRef: { current: { drawing: false, tool: 'move' } as InteractionState },
+      floatingSelectionRef: { current: null },
+      persistentTransformRef: { current: null },
+      stampSourceRef: { current: null },
+      stampOffsetRef: { current: null },
+      lastPaintPointRef: { current: null as LastPaintPoint | null },
+    };
+  }
+
+  beforeEach(() => {
+    uiState.maskMode = 'off';
+    contentRects.isMeasured = false;
+    vi.mocked(bridge.cropLayerToContent).mockReset();
+    vi.mocked(bridge.cropLayerToContent).mockReturnValue(new Float64Array([4, 5, 12, 8]));
+  });
+
+  afterEach(() => {
+    contentRects.isMeasured = true;
+  });
+
+  async function settle(): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  it('holds the press, then crops and begins from the pressed point', async () => {
+    const ctx = makeGrabContext();
+    const state = handleMoveDown(ctx);
+    expect(state.drawing).toBe(true);
+    expect(state.startPoint).toBeNull();
+    expect(bridge.cropLayerToContent).not.toHaveBeenCalled();
+
+    contentRects.finishRead();
+    await settle();
+
+    expect(bridge.cropLayerToContent).toHaveBeenCalledTimes(1);
+    expect(state.startPoint).toEqual({ x: 10, y: 10 });
+    expect(state.layerStartX).toBe(4);
+    expect(state.layerStartY).toBe(5);
+  });
+
+  it('drops the drag when the pointer is released before the bounds arrive', async () => {
+    const ctx = makeGrabContext();
+    const state = handleMoveDown(ctx);
+    handleMoveUp(state, { x: 14, y: 10 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+
+    contentRects.finishRead();
+    await settle();
+
+    expect(bridge.cropLayerToContent).not.toHaveBeenCalled();
+    expect(state.startPoint).toBeNull();
   });
 });
 

@@ -217,8 +217,15 @@ pub fn expand_layer_to_doc_size(engine: &mut Engine, layer_id: &str) -> Vec<f64>
 }
 
 #[wasm_bindgen(js_name = "cropLayerToContent")]
-pub fn crop_layer_to_content(engine: &mut Engine, layer_id: &str) -> Vec<f64> {
-    lopsy_engine::commands::layer::crop_layer_to_content(&mut engine.inner, layer_id)
+pub fn crop_layer_to_content(
+    engine: &mut Engine,
+    layer_id: &str,
+    content_x: i32,
+    content_y: i32,
+    content_width: u32,
+    content_height: u32,
+) -> Vec<f64> {
+    lopsy_engine::commands::layer::crop_layer_to_content(&mut engine.inner, layer_id, content_x, content_y, content_width, content_height)
 }
 
 #[wasm_bindgen(js_name = "clipboardCopy")]
@@ -318,8 +325,15 @@ pub fn has_float(engine: &Engine) -> bool {
 }
 
 #[wasm_bindgen(js_name = "beginLayerTransform")]
-pub fn begin_layer_transform(engine: &mut Engine, layer_id: &str) -> Result<Vec<i32>, JsError> {
-    lopsy_engine::commands::layer::begin_layer_transform(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
+pub fn begin_layer_transform(
+    engine: &mut Engine,
+    layer_id: &str,
+    content_x: i32,
+    content_y: i32,
+    content_width: u32,
+    content_height: u32,
+) -> Result<Vec<i32>, JsError> {
+    lopsy_engine::commands::layer::begin_layer_transform(&mut engine.inner, layer_id, content_x, content_y, content_width, content_height).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "prepareLayerTransformTarget")]

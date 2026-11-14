@@ -201,7 +201,7 @@ export async function exportPsdFile(depth: 8 | 16 = 8): Promise<void> {
   // PSD header color mode: grayscale documents write a single gray channel;
   // every other Lopsy mode round-trips as RGB.
   const psdColorMode = useEditorStore.getState().document.colorMode === 'grayscale' ? 1 : 3;
-  const psdBytes = exportPsd(engine, layersJson, allMaskData, depth, isWideGamut() ? 1 : 0, psdColorMode);
+  const psdBytes = await exportPsd(engine, layersJson, allMaskData, depth, isWideGamut() ? 1 : 0, psdColorMode);
 
   const blob = new Blob([psdBytes.slice().buffer], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);

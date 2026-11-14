@@ -333,11 +333,20 @@ pub fn expand_layer_to_doc_size(engine: &mut EngineInner, layer_id: &str) -> Vec
     }
 }
 
-/// Crop a raster layer's GPU texture to the bounding box of its non-transparent
-/// pixels. Returns [new_x, new_y, new_w, new_h] on success, or [] on error.
+/// Crop a raster layer's GPU texture to its content bounds, given
+/// texture-local as the host read them with `get_layer_content_bounds`.
+/// Returns [new_x, new_y, new_w, new_h] on success, or [] on error.
 /// If fully transparent, returns [x, y, 0, 0].
-pub fn crop_layer_to_content(engine: &mut EngineInner, layer_id: &str) -> Vec<f64> {
-    match layer_manager::crop_layer_to_content(&mut *engine, layer_id) {
+pub fn crop_layer_to_content(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    content_x: i32,
+    content_y: i32,
+    content_width: u32,
+    content_height: u32,
+) -> Vec<f64> {
+    let content = lopsy_core::geometry::Rect::new(content_x, content_y, content_width, content_height);
+    match layer_manager::crop_layer_to_content(&mut *engine, layer_id, content) {
         Ok([x, y, w, h]) => vec![x as f64, y as f64, w as f64, h as f64],
         Err(_) => vec![],
     }
@@ -473,10 +482,20 @@ pub fn has_float(engine: &EngineInner) -> bool {
 // Multi-layer transform (see layer_transform_gpu)
 // ============================================================
 
-/// Lift a layer's content into the multi-layer transform session. Returns its
-/// document rect [x, y, w, h], or [] for an empty layer (left out).
-pub fn begin_layer_transform(engine: &mut EngineInner, layer_id: &str) -> Result<Vec<i32>, String> {
-    layer_transform_gpu::begin_layer_transform(&mut *engine, layer_id)
+/// Lift a layer's content into the multi-layer transform session. The
+/// content bounds are given texture-local, as the host read them with
+/// `get_layer_content_bounds`. Returns the content's document rect
+/// [x, y, w, h], or [] for an empty layer (left out).
+pub fn begin_layer_transform(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    content_x: i32,
+    content_y: i32,
+    content_width: u32,
+    content_height: u32,
+) -> Result<Vec<i32>, String> {
+    let content = lopsy_core::geometry::Rect::new(content_x, content_y, content_width, content_height);
+    layer_transform_gpu::begin_layer_transform(&mut *engine, layer_id, content)
         .map(|r| r.map(|r| vec![r.x, r.y, r.width as i32, r.height as i32]).unwrap_or_default())
         
 }

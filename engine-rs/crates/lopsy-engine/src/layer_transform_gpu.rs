@@ -134,18 +134,23 @@ pub fn is_in_layer_transform(engine: &EngineInner, layer_id: &str) -> bool {
     engine.layer_transform.iter().any(|s| s.layer_id == layer_id)
 }
 
-/// Lift `layer_id`'s content into the session. Returns its document rect, or
-/// None for an empty layer (nothing to transform), which is left out.
-pub fn begin_layer_transform(engine: &mut EngineInner, layer_id: &str) -> Result<Option<Rect>, String> {
+/// Lift `layer_id`'s content into the session. `local` is its texture-local
+/// content rect as the host last measured it; nothing is read here. Returns
+/// the content's document rect, or None for an empty layer (nothing to
+/// transform), which is left out.
+pub fn begin_layer_transform(engine: &mut EngineInner, layer_id: &str, local: Rect) -> Result<Option<Rect>, String> {
     if let Some(slot) = engine.layer_transform.iter().find(|s| s.layer_id == layer_id) {
         let r = slot.source_rect;
         return Ok(Some(Rect::new(r.x + 1, r.y + 1, r.width - 2, r.height - 2)));
     }
     let (layer_handle, layer) = layer_rect(engine, layer_id)
         .ok_or_else(|| format!("Layer {layer_id} not found"))?;
-    let local = crate::layer_manager::layer_content_bounds(engine, layer_id)?;
     if local.width == 0 || local.height == 0 {
         return Ok(None);
+    }
+    let (texture_width, texture_height) = engine.texture_pool.get_size(layer_handle).unwrap_or((0, 0));
+    if !crate::layer_manager::rect_is_within(local, texture_width, texture_height) {
+        return Err(format!("Content rect does not fit the texture of layer {layer_id}"));
     }
     let content = Rect::new(layer.x + local.x, layer.y + local.y, local.width, local.height);
     let source_rect = Rect::new(content.x - 1, content.y - 1, content.width + 2, content.height + 2);

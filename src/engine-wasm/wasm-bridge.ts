@@ -22,16 +22,16 @@ import init, {
   setDocumentColorMode,
   convertLayerToGrayscale,
   quantizeCompositeToPalette as rawQuantizeCompositeToPalette,
-  applyPaletteToLayer,
-  convertLayerToLab,
-  convertLayerFromLab,
-  bakeCmykGamut,
+  applyPaletteToLayer as rawApplyPaletteToLayer,
+  convertLayerToLab as rawConvertLayerToLab,
+  convertLayerFromLab as rawConvertLayerFromLab,
+  bakeCmykGamut as rawBakeCmykGamut,
   addLayer,
   removeLayer,
   updateLayer,
   setLayerOrder,
   uploadLayerPixels,
-  flattenIntoLayer,
+  flattenIntoLayer as rawFlattenIntoLayer,
   uploadLayerPixelsFromCanvas,
   readLayerPixels as rawReadLayerPixels,
   decodeAndUploadImage,
@@ -55,7 +55,7 @@ import init, {
   mergeLayers,
   flipLayer,
   clipboardCopy,
-  clipboardCopyMerged,
+  clipboardCopyMerged as rawClipboardCopyMerged,
   clipboardCut,
   clipboardPaste,
   clearSelectedPixels,
@@ -170,7 +170,6 @@ import init, {
   filterVoronoi,
   filterPatternFill,
   filterColorLut,
-  extractChannelPixels,
   readChannelThumbnail as rawReadChannelThumbnail,
   filterMeshWarp,
   liquifyInitDisplacement,
@@ -195,11 +194,11 @@ import init, {
   getSelectionEdges,
   createPolygonMask,
   enterQuickMaskMode,
-  exitQuickMaskMode,
+  exitQuickMaskMode as rawExitQuickMaskMode,
   paintQuickMaskDab,
   paintQuickMaskDabBatch,
   drawQuickMaskPencilLine,
-  fillQuickMask,
+  fillQuickMask as rawFillQuickMask,
   renderQuickMaskLinearGradient,
   renderQuickMaskRadialGradient,
   readQuickMaskPixels,
@@ -228,7 +227,7 @@ import init, {
   readLayerPixelsForFill as rawReadLayerPixelsForFill,
   bucketFillSolid,
   bucketFillByColorGpu,
-  magneticLassoBegin,
+  magneticLassoBegin as rawMagneticLassoBegin,
   magneticLassoSnap,
   magneticLassoSnapPoint,
   magneticLassoEnd,
@@ -291,7 +290,7 @@ import init, {
   clearBrushTexture,
   setBrushTextureState,
   clearAllLayers,
-  exportPsd,
+  exportPsd as rawExportPsd,
   parsePsd,
   decodeAndUploadPsdLayer,
   getPsdLayerMask,
@@ -362,17 +361,12 @@ export {
   setBackgroundColor,
   setDocumentColorMode,
   convertLayerToGrayscale,
-  applyPaletteToLayer,
-  convertLayerToLab,
-  convertLayerFromLab,
-  bakeCmykGamut,
   clearAllLayers,
   addLayer,
   removeLayer,
   updateLayer,
   setLayerOrder,
   uploadLayerPixels,
-  flattenIntoLayer,
   uploadLayerPixelsFromCanvas,
   decodeAndUploadImage,
   decodeAndUploadDng,
@@ -388,7 +382,6 @@ export {
   mergeLayers,
   flipLayer,
   clipboardCopy,
-  clipboardCopyMerged,
   clipboardCut,
   clipboardPaste,
   clearSelectedPixels,
@@ -501,7 +494,6 @@ export {
   filterVoronoi,
   filterPatternFill,
   filterColorLut,
-  extractChannelPixels,
   filterMeshWarp,
   liquifyInitDisplacement,
   liquifyRender,
@@ -524,11 +516,9 @@ export {
   getSelectionEdges,
   createPolygonMask,
   enterQuickMaskMode,
-  exitQuickMaskMode,
   paintQuickMaskDab,
   paintQuickMaskDabBatch,
   drawQuickMaskPencilLine,
-  fillQuickMask,
   renderQuickMaskLinearGradient,
   renderQuickMaskRadialGradient,
   uploadQuickMaskPixels,
@@ -546,7 +536,6 @@ export {
   applyFillToLayer,
   bucketFillSolid,
   bucketFillByColorGpu,
-  magneticLassoBegin,
   magneticLassoSnap,
   magneticLassoSnapPoint,
   magneticLassoEnd,
@@ -606,7 +595,6 @@ export {
   uploadBrushTexture,
   clearBrushTexture,
   setBrushTextureState,
-  exportPsd,
   parsePsd,
   decodeAndUploadPsdLayer,
   getPsdLayerMask,
@@ -674,6 +662,29 @@ export const getLayerContentBounds = asyncReadback(rawGetLayerContentBounds);
 export const readMaskTexture = asyncReadback(rawReadMaskTexture);
 /** A layer's content-cropped pixels as an LZ4 16-bit blob, for the context-loss backup. */
 export const readLayerPixelsLz4U16 = asyncReadback(rawReadLayerPixelsLz4U16);
+
+// Commands that read the GPU inside the engine, work on the bytes and write
+// the result back. They answer with a Promise for the same reason a readback
+// does, so their callers do not change when the engine's read becomes async.
+/** Flood-fill the quick mask from a seed. */
+export const fillQuickMask = asyncReadback(rawFillQuickMask);
+/** Leave Quick Mask mode; resolves to the selection mask it painted, if any. */
+export const exitQuickMaskMode = asyncReadback(rawExitQuickMaskMode);
+/** Encode the document as a PSD. */
+export const exportPsd = asyncReadback(rawExportPsd);
+export const convertLayerToLab = asyncReadback(rawConvertLayerToLab);
+export const convertLayerFromLab = asyncReadback(rawConvertLayerFromLab);
+export const bakeCmykGamut = asyncReadback(rawBakeCmykGamut);
+export const applyPaletteToLayer = asyncReadback(rawApplyPaletteToLayer);
+/** Flatten the document into a layer. Reads only in a Lab document, to decode it. */
+export const flattenIntoLayer = asyncReadback(rawFlattenIntoLayer);
+/** Copy the merged document to the clipboard texture. Reads only in a Lab document. */
+export const clipboardCopyMerged = asyncReadback(rawClipboardCopyMerged);
+/**
+ * Read a layer and build the edge field the magnetic lasso snaps to. Until
+ * it resolves there is no field: the caller passes its points through.
+ */
+export const magneticLassoBegin = asyncReadback(rawMagneticLassoBegin);
 export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);
@@ -703,7 +714,7 @@ export const removeLayerMask = markingMaskDirty(rawRemoveLayerMask);
 export const paintMaskDab = markingMaskDirty(rawPaintMaskDab);
 export const paintMaskDabBatch = markingMaskDirty(rawPaintMaskDabBatch);
 export const drawMaskPencilLine = markingMaskDirty(rawDrawMaskPencilLine);
-export const fillMask = markingMaskDirty(rawFillMask);
+export const fillMask = asyncReadback(markingMaskDirty(rawFillMask));
 export const remapLayerMask = markingMaskDirty(rawRemapLayerMask);
 export const fillMaskWithValue = markingMaskDirty(rawFillMaskWithValue);
 export const renderMaskLinearGradient = markingMaskDirty(rawRenderMaskLinearGradient);

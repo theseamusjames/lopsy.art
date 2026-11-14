@@ -113,24 +113,15 @@ pub fn filter_color_lut(
     engine.texture_pool.release(lut_handle);
 }
 
-pub fn extract_channel_pixels(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    channel: u32,
-) -> Vec<u8> {
-    filter_gpu::extract_channel_pixels(&mut *engine, layer_id, channel)
-}
-
 /// GPU-side downscaled thumbnail for a single channel of a layer texture.
 ///
 /// Box-downscales the channel on the GPU into a small RGBA8 texture (each
 /// thumbnail pixel averages its whole source footprint), then reads back
 /// only the thumbnail-sized pixels.
 ///
-/// Replaces `readLayerAsImageData` + `extractChannelPixels` in
-/// ChannelsPanel — those combined to move ~67 MB per channel per
-/// pixel-version bump on a 4K layer even though the panel displays 40×20
-/// thumbnails (#683).
+/// A full-size channel read moved ~67 MB per channel per pixel-version
+/// bump on a 4K layer even though the panel displays 40×20 thumbnails
+/// (#683).
 ///
 /// Returns 8-byte header [width_u32_le, height_u32_le] + RGBA pixels.
 pub fn read_channel_thumbnail(

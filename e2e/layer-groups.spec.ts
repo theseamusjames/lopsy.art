@@ -72,11 +72,12 @@ async function getDocInfo(page: Page): Promise<DocInfo> {
 
 async function callStore(page: Page, method: string, ...args: unknown[]) {
   await page.evaluate(
-    ({ method, args }) => {
+    async ({ method, args }) => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => Record<string, (...a: unknown[]) => unknown>;
       };
-      store.getState()[method]!(...args);
+      // Some actions answer with a promise; wait for those to finish.
+      await store.getState()[method]!(...args);
     },
     { method, args },
   );

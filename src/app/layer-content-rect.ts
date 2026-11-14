@@ -112,6 +112,33 @@ export async function readLayerContentRectLocal(engine: Engine, layerId: string)
   return cached && cached.key === key ? cached.rect : readLocal(engine, layerId, key);
 }
 
+/**
+ * The texture-local content rect if it is known for the pixels the layer
+ * holds now: a rect, or null for an empty layer. Undefined when it is not
+ * known yet, in which case it is being read and
+ * `onLayerContentRectRefreshed` fires when it lands. For a pointer-down
+ * that must decide at once and cannot use a stand-in.
+ */
+export function peekLayerContentRectLocal(engine: Engine, layerId: string): Rect | null | undefined {
+  const { key } = describeLayer(engine, layerId);
+  const cached = cache.get(layerId);
+  if (cached && cached.key === key) return cached.rect;
+  if (pending.get(layerId)?.key !== key) {
+    void readLocal(engine, layerId, key).then(() => onRefreshed?.());
+  }
+  return undefined;
+}
+
+/**
+ * Record that a layer's texture was just cropped to its content, so its
+ * content fills the texture and the next ask reads nothing.
+ */
+export function noteLayerCroppedToContent(engine: Engine, layerId: string, width: number, height: number): void {
+  const { key } = describeLayer(engine, layerId);
+  pending.delete(layerId);
+  cache.set(layerId, { key, rect: { x: 0, y: 0, width, height } });
+}
+
 /** `readLayerContentRectLocal` in document space. */
 export async function readLayerContentRect(engine: Engine, layerId: string): Promise<Rect | null> {
   const { x, y } = describeLayer(engine, layerId);

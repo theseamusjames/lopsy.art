@@ -850,10 +850,6 @@ pub fn expand_layer_to_doc_size(
     Ok([min_x, min_y, new_w as i32, new_h as i32])
 }
 
-/// Crop a layer's GPU texture to the bounding box of its non-transparent
-/// pixels. Returns [new_x, new_y, new_w, new_h] on success.
-/// If the layer is fully transparent, returns [x, y, 0, 0] (no resize).
-/// Counterpart to expand_layer_to_doc_size — called when a layer is deactivated.
 /// Texture-local content bounds of a layer (width/height 0 when empty).
 pub fn layer_content_bounds(
     engine: &mut EngineInner,
@@ -863,6 +859,18 @@ pub fn layer_content_bounds(
         .ok_or_else(|| format!("Layer {layer_id} not found"))?;
     let (tw, th) = engine.texture_pool.get_size(tex_handle).ok_or("Texture not found")?;
     layer_content_rect(engine, layer_id, tex_handle, tw, th)
+}
+
+/// Whether a rect a host measured earlier still lies inside a texture of
+/// this size. An empty rect always does.
+pub(crate) fn rect_is_within(rect: lopsy_core::geometry::Rect, width: u32, height: u32) -> bool {
+    if rect.width == 0 || rect.height == 0 {
+        return true;
+    }
+    rect.x >= 0
+        && rect.y >= 0
+        && rect.x as i64 + rect.width as i64 <= width as i64
+        && rect.y as i64 + rect.height as i64 <= height as i64
 }
 
 /// Texture-local content bounds of a layer. Reduces on the GPU and reads
@@ -886,13 +894,23 @@ fn layer_content_rect(
     Ok(lopsy_core::pixel_buffer::crop_to_content_bounds(&pixels, tw, th).1)
 }
 
+/// Crop a layer's GPU texture to `content`, the texture-local bounding box
+/// of its non-transparent pixels as the host last measured it
+/// (`layer_content_bounds`). Nothing is read here, so the crop can run on a
+/// pointer-down. Returns [new_x, new_y, new_w, new_h] on success; an empty
+/// `content` returns [x, y, 0, 0] and leaves the texture alone.
+/// Counterpart to expand_layer_to_doc_size — called when a layer is deactivated.
 pub fn crop_layer_to_content(
     engine: &mut EngineInner,
     layer_id: &str,
+    content: lopsy_core::geometry::Rect,
 ) -> Result<[i32; 4], String> {
     let tex_handle = *engine.layer_textures.get(layer_id)
         .ok_or_else(|| format!("Layer {layer_id} not found"))?;
     let (tw, th) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    if !rect_is_within(content, tw, th) {
+        return Err(format!("Content rect does not fit the {tw}x{th} texture of layer {layer_id}"));
+    }
 
     let (layer_x, layer_y) = {
         let desc = engine.layer_stack.iter().find(|l| l.id == layer_id)
@@ -900,7 +918,7 @@ pub fn crop_layer_to_content(
         (desc.x, desc.y)
     };
 
-    let crop_rect = layer_content_rect(engine, layer_id, tex_handle, tw, th)?;
+    let crop_rect = content;
 
     if crop_rect.width == 0 || crop_rect.height == 0 {
         return Ok([layer_x, layer_y, 0, 0]);
@@ -1715,7 +1733,21 @@ pub fn restore_mask_from_snapshot(engine: &mut EngineInner, layer_id: &str, snap
 
 #[cfg(test)]
 mod tests {
-    use super::merge_rect;
+    use super::{merge_rect, rect_is_within};
+    use lopsy_core::geometry::Rect;
+
+    #[test]
+    fn a_measured_rect_must_lie_inside_the_texture() {
+        assert!(rect_is_within(Rect::new(0, 0, 10, 10), 10, 10));
+        assert!(rect_is_within(Rect::new(3, 4, 5, 6), 10, 10));
+        assert!(!rect_is_within(Rect::new(6, 0, 5, 5), 10, 10));
+        assert!(!rect_is_within(Rect::new(0, -1, 5, 5), 10, 10));
+    }
+
+    #[test]
+    fn an_empty_measured_rect_fits_any_texture() {
+        assert!(rect_is_within(Rect::new(40, 40, 0, 0), 10, 10));
+    }
 
     #[test]
     fn merge_rect_is_the_document_when_both_layers_fit() {

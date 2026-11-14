@@ -20,8 +20,9 @@ import {
   compositeFloat,
   hasFloat,
   setSelectionMask,
-  cropLayerToContent as cropLayerToContentGpu,
 } from '../../engine-wasm/wasm-bridge';
+import { cropLayerToContentIfMeasured } from '../crop-layer-to-content';
+import { peekLayerContentRectLocal, readLayerContentRectLocal } from '../layer-content-rect';
 import type { Engine } from '../../engine-wasm/wasm-bridge';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
 import type {
@@ -288,22 +289,21 @@ function beginSelectionDrag(
   });
 }
 
-/** The press whose drag waits for its layer's pixels to be reselected. */
-let awaitedReselect: InteractionState | null = null;
+/** The press whose drag waits on a read of the GPU. */
+let heldPress: InteractionState | null = null;
 
 /**
- * Reselect the layer's pixels, then begin the drag as `beginSelectionDrag`
- * does. The gesture is handed back at once, without a start point, so the
- * press is not lost and moves do nothing until the selection is in place;
- * from then on the float follows the pointer from where it was pressed.
- * A release, or another press, before that leaves the reselect and drops
- * the drag.
+ * Hand a press back at once and begin its drag when `ready` resolves. The
+ * gesture has no start point until then, so moves do nothing; from then on
+ * the drag follows the pointer from where it was pressed, so no pointer
+ * event waits on the read. A release, or another press, first drops the
+ * drag, and so does `begin` returning null.
  */
-function beginSelectionDragAfterReselect(
+function holdPressUntil(
   ctx: InteractionContext,
   activeLayerId: string,
-  prebuilt: PrebuiltFloat,
-  isStampingLiveFloat: boolean,
+  ready: Promise<unknown>,
+  begin: () => InteractionState | null,
 ): InteractionState {
   const held = withMoveGesture({
     drawing: true,
@@ -315,19 +315,63 @@ function beginSelectionDragAfterReselect(
     layerStartY: 0,
     ...DEFAULT_TRANSFORM_FIELDS,
   }, {});
-  awaitedReselect = held;
-  void selectLayerAlpha(activeLayerId).then(() => {
-    if (awaitedReselect !== held) return;
+  heldPress = held;
+  void ready.then(() => {
+    if (heldPress !== held) return;
+    const begun = begin();
+    // Nothing to drag: the gesture stays held and the release drops it.
+    if (!begun) return;
+    heldPress = null;
+    Object.assign(held, begun);
+  }, () => {});
+  return held;
+}
+
+/**
+ * Reselect the layer's pixels, which reads the layer, then begin the drag
+ * as `beginSelectionDrag` does.
+ */
+function beginSelectionDragAfterReselect(
+  ctx: InteractionContext,
+  activeLayerId: string,
+  prebuilt: PrebuiltFloat,
+  isStampingLiveFloat: boolean,
+): InteractionState {
+  return holdPressUntil(ctx, activeLayerId, selectLayerAlpha(activeLayerId), () => {
     const engine = getEngine();
     const selAfter = useEditorStore.getState().selection;
-    // Nothing to lift: the gesture stays held and the release drops it.
-    if (!engine || !selAfter.active || !selAfter.mask) return;
-    awaitedReselect = null;
+    if (!engine || !selAfter.active || !selAfter.mask) return null;
     const maskBytes = new Uint8Array(selAfter.mask.buffer, selAfter.mask.byteOffset, selAfter.mask.byteLength);
     setSelectionMask(engine, maskBytes, selAfter.maskWidth, selAfter.maskHeight);
-    Object.assign(held, beginSelectionDrag(ctx, activeLayerId, prebuilt, isStampingLiveFloat));
+    return beginSelectionDrag(ctx, activeLayerId, prebuilt, isStampingLiveFloat);
   });
-  return held;
+}
+
+/** The raster layers a whole-layer grab crops to their content first. */
+function grabbedRasterIds(ctx: InteractionContext, activeLayerId: string): string[] {
+  const { document } = useEditorStore.getState();
+  const ids = ctx.activeLayer.type === 'raster' ? [activeLayerId] : [];
+  for (const id of document.selectedLayerIds ?? []) {
+    if (id === activeLayerId) continue;
+    const layer = document.layers.find((l) => l.id === id);
+    if (layer && !layer.locked && layer.type === 'raster') ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * Begin a whole-layer drag. Each grabbed layer is cropped to its content
+ * first, which needs its content bounds: when they are all known the drag
+ * begins at once, otherwise the press is held while they are read.
+ */
+function beginWholeLayerDragWhenMeasured(ctx: InteractionContext, activeLayerId: string): InteractionState {
+  const engine = getEngine();
+  const unmeasured = engine
+    ? grabbedRasterIds(ctx, activeLayerId).filter((id) => peekLayerContentRectLocal(engine, id) === undefined)
+    : [];
+  if (!engine || unmeasured.length === 0) return beginWholeLayerDrag(ctx, activeLayerId);
+  const measuring = Promise.all(unmeasured.map((id) => readLayerContentRectLocal(engine, id)));
+  return holdPressUntil(ctx, activeLayerId, measuring, () => beginWholeLayerDrag(ctx, activeLayerId));
 }
 
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
@@ -341,7 +385,6 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   const {
     canvasPos,
     altKey,
-    activeLayer,
     floatingSelectionRef,
     persistentTransformRef,
   } = ctx;
@@ -499,6 +542,12 @@ export function handleMoveDown(ctx: InteractionContext): InteractionState {
   // returns the new bounds so the Zustand layer can be aligned to match.
   // Raster-only: text/shape/group layers have no crop-to-content concept
   // and their GPU textures aren't managed the same way.
+  return beginWholeLayerDragWhenMeasured(ctx, activeLayerId);
+}
+
+/** Crop the grabbed layers to their content and hand back the gesture that drags them. */
+function beginWholeLayerDrag(ctx: InteractionContext, activeLayerId: string): InteractionState {
+  const { canvasPos, activeLayer } = ctx;
   const { x: croppedX, y: croppedY } = cropLayerAndReadPosition(activeLayer, activeLayerId);
 
   // Multi-layer move (issue #707): when several layers are selected, drag
@@ -544,8 +593,10 @@ function cropLayerAndReadPosition(
   let y = layer.y;
   const engine = getEngine();
   if (!engine || layer.type !== 'raster') return { x, y };
-  const bounds = cropLayerToContentGpu(engine, layerId);
-  if (bounds.length !== 4 || (bounds[2] ?? 0) <= 0) return { x, y };
+  // Bounds not known for these pixels (they are being read): move the
+  // texture as it is. The crop is a tidy-up, not a correctness step.
+  const bounds = cropLayerToContentIfMeasured(engine, layerId);
+  if (!bounds || bounds.length !== 4 || (bounds[2] ?? 0) <= 0) return { x, y };
   const newX = bounds[0]!;
   const newY = bounds[1]!;
   const newW = bounds[2]!;
@@ -757,15 +808,16 @@ export function handleMoveUp(
   _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   useUIStore.getState().clearSnapLines();
-  // Released before the reselect answered: there is no drag to finish.
-  if (awaitedReselect === state) {
-    awaitedReselect = null;
-    return;
-  }
   // Whole-layer down never followed by a move → no history entry, no state
   // change. Clear the pending label so a subsequent gesture starts fresh.
   pendingWholeLayerMoveLabel = null;
   endMaskFollow();
+  // Released before the read the press was held for answered: there is no
+  // drag to finish.
+  if (heldPress === state) {
+    heldPress = null;
+    return;
+  }
 
   // Flush any pending quick-mask translate so the final drop position is
   // materialized on the GPU before we clear the drag target.

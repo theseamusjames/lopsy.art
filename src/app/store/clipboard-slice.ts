@@ -63,7 +63,7 @@ function writeToSystemClipboard(width: number, height: number): void {
 export interface ClipboardSlice {
   clipboard: ClipboardData | null;
   copy: () => void;
-  copyMerged: () => void;
+  copyMerged: () => Promise<void>;
   cut: () => void;
   /** Paste the internal clipboard in place; returns the new layer's id, or null if nothing was pasted. */
   paste: () => string | null;
@@ -121,7 +121,7 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     }
   },
 
-  copyMerged: () => {
+  copyMerged: async () => {
     const engine = getEngine();
     if (!engine) return;
     const sel = get().selection;
@@ -138,8 +138,9 @@ export const createClipboardSlice: SliceCreator<ClipboardSlice> = (set, get) => 
     const bh = hasSelection && sel.bounds ? Math.round(sel.bounds.height) : 0;
 
     // The engine composites the document and copies it into the clipboard
-    // texture through the selection; nothing is read back.
-    const result = clipboardCopyMerged(engine, hasSelection, bx, by, bw, bh);
+    // texture through the selection. Nothing is read back, except in a Lab
+    // document, whose composite the engine decodes on the CPU.
+    const result = await clipboardCopyMerged(engine, hasSelection, bx, by, bw, bh);
     if (result.length < 4) return;
     const clipW = result[0]!;
     const clipH = result[1]!;

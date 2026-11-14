@@ -292,7 +292,7 @@ export interface DocumentSlice {
   fitActiveLayerToCanvas: () => void;
   duplicateLayer: () => void;
   mergeDown: () => void;
-  flattenImage: () => void;
+  flattenImage: () => Promise<void>;
   rasterizeLayerStyle: () => void;
   rasterizeTextLayer: () => void;
   updateLayerEffects: (id: string, effects: Partial<LayerEffects>) => void;
@@ -760,11 +760,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     for (const id of sparseIds) get().cropLayerToContent(id);
   },
 
-  flattenImage: () => {
+  flattenImage: async () => {
     const s = get();
     flushLayerSync(s);
     // GPU-only (flattenIntoLayer); no JS pixel map needed (#746).
-    const result = computeFlattenImage(s.document);
+    const result = await computeFlattenImage(s.document);
     if (!result) return;
     s.pushHistory('Flatten Image');
     applyActionResult(set, result);
@@ -996,7 +996,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     let doc = s.document;
     let pixelsAreEncoded = doc.colorMode === 'lab';
     if (newMode === 'indexed') {
-      const flattened = computeFlattenImage(doc);
+      const flattened = await computeFlattenImage(doc);
       if (flattened?.document) {
         applyActionResult(set, flattened);
         doc = flattened.document;
@@ -1023,11 +1023,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       for (const id of layersWithPixels(doc)) {
         // Decode out of the old mode before encoding into the new one, so a
         // bake never runs on values from the previous color space.
-        if (pixelsAreEncoded) convertLayerFromLab(engine, id);
+        if (pixelsAreEncoded) await convertLayerFromLab(engine, id);
         if (newMode === 'grayscale') convertLayerToGrayscale(engine, id);
-        if (newMode === 'lab') convertLayerToLab(engine, id);
-        if (newMode === 'cmyk') bakeCmykGamut(engine, id);
-        if (paletteBytes) applyPaletteToLayer(engine, id, paletteBytes, options?.dither ?? false);
+        if (newMode === 'lab') await convertLayerToLab(engine, id);
+        if (newMode === 'cmyk') await bakeCmykGamut(engine, id);
+        if (paletteBytes) await applyPaletteToLayer(engine, id, paletteBytes, options?.dither ?? false);
         // GPU is now source of truth — drop stale JS pixel data.
         invalidateBitmapCache(id);
         pixelDataManager.remove(id);

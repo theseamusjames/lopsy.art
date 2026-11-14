@@ -814,9 +814,9 @@ test.describe('Composition 3: Photo Editing Workflow', () => {
 
     await page.evaluate(() => {
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
-        getState: () => { flattenImage: () => void };
+        getState: () => { flattenImage: () => Promise<void> };
       };
-      store.getState().flattenImage();
+      return store.getState().flattenImage();
     });
     await page.waitForTimeout(300);
 
