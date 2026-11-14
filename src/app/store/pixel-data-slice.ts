@@ -1,15 +1,10 @@
 import type { Layer } from '../../types';
 import type { SliceCreator } from './types';
-import { createImageData } from '../../engine/color-space';
 import {
   cropToContentBounds,
-  expandFromCrop,
   toSparsePixelData,
-  fromSparsePixelData,
-  sparseToImageData,
 } from '../../engine/canvas-ops';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
-import { readLayerAsImageDataSync } from '../../engine-wasm/gpu-pixel-access';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { uploadLayerPixels } from '../../engine-wasm/wasm-bridge';
 import { pixelDataManager } from '../../engine/pixel-data-manager';
@@ -31,19 +26,9 @@ export interface PixelDataSlice {
   dirtyLayerIds: Set<string>;
   renderVersion: number;
   documentVersion: number;
-  getOrCreateLayerPixelData: (layerId: string) => ImageData;
   updateLayerPixelData: (layerId: string, data: ImageData) => void;
   notifyRender: () => void;
   cropLayerToContent: (layerId: string) => void;
-  expandLayerForEditing: (layerId: string) => ImageData;
-  /**
-   * A layer's pixels from whichever copy exists, read synchronously. Only
-   * tests reach this; app code awaits `readLayerAsImageData` instead.
-   */
-  resolvePixelData: (layerId: string) => ImageData | undefined;
-  /** Read-only: returns ImageData from JS cache, sparse storage, or GPU
-   *  readback (in that order). Returns at the layer's stored dimensions
-   *  (not full canvas). */
 }
 
 /** Apply a new (x, y, width, height) to the given layer in document.layers. */
@@ -57,30 +42,10 @@ function withLayerBounds(
   );
 }
 
-/** Union of canvas area and layer content area so that off-canvas content
- *  is preserved (non-destructive move). */
-function unionBounds(
-  docW: number, docH: number,
-  cx: number, cy: number, cw: number, ch: number,
-): { minX: number; minY: number; bufW: number; bufH: number } {
-  const minX = Math.min(0, cx);
-  const minY = Math.min(0, cy);
-  const maxX = Math.max(docW, cx + cw);
-  const maxY = Math.max(docH, cy + ch);
-  return { minX, minY, bufW: maxX - minX, bufH: maxY - minY };
-}
-
 export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => ({
   dirtyLayerIds: new Set(),
   renderVersion: 0,
   documentVersion: 0,
-
-  getOrCreateLayerPixelData: (layerId: string) => {
-    // Always returns a full-canvas-size ImageData, expanding cropped/sparse layers.
-    // All callers are write operations (filters, paste, fill, etc.) that need
-    // the full canvas area.
-    return get().expandLayerForEditing(layerId);
-  },
 
   updateLayerPixelData: (layerId: string, data: ImageData) => {
     pixelDataManager.setDense(layerId, data);
@@ -173,117 +138,5 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
       dirtyLayerIds: new Set(state.dirtyLayerIds).add(layerId),
       renderVersion: state.renderVersion + 1,
     });
-  },
-
-  expandLayerForEditing: (layerId: string) => {
-    const state = get();
-    const layer = state.document.layers.find((l) => l.id === layerId);
-
-    // Non-raster (text/shape/group/adjustment) — just return existing
-    // dense data or an empty canvas-sized surface.
-    if (!layer || layer.type !== 'raster') {
-      const existing = pixelDataManager.get(layerId);
-      if (existing) return existing;
-      // Return a temporary empty buffer without persisting it.
-      // The GPU is the source of truth for non-raster layers that have no
-      // JS pixel data (e.g. a freshly duplicated text layer whose texture
-      // was copied via duplicateLayerTexture). Storing empty data here
-      // would cause syncLayers to overwrite the valid GPU texture.
-      return createImageData(state.document.width, state.document.height);
-    }
-
-    const docW = state.document.width;
-    const docH = state.document.height;
-
-    // Sparse data first — expand into a dense ImageData sized to cover both
-    // the canvas and the layer's content rect. layer.x/y is authoritative
-    // (sparse offsets may be stale after an updateLayerPosition call).
-    const sparseEntry = pixelDataManager.getSparse(layerId);
-    if (sparseEntry) {
-      const { minX, minY, bufW, bufH } = unionBounds(
-        docW, docH,
-        layer.x, layer.y,
-        sparseEntry.sparse.width, sparseEntry.sparse.height,
-      );
-      const expanded = fromSparsePixelData(
-        sparseEntry.sparse, bufW, bufH,
-        layer.x - minX, layer.y - minY,
-      );
-      pixelDataManager.setDense(layerId, expanded);
-      set({
-        document: {
-          ...state.document,
-          layers: withLayerBounds(state.document.layers, layerId, {
-            x: minX, y: minY, width: bufW, height: bufH,
-          }),
-        },
-      });
-      return expanded;
-    }
-
-    const existing = pixelDataManager.get(layerId);
-
-    // Already covers the full canvas and all content is on-canvas.
-    if (existing && layer.x === 0 && layer.y === 0 && existing.width >= docW && existing.height >= docH) {
-      return existing;
-    }
-
-    // No JS data but GPU has data — read it back.
-    if (!existing) {
-      const gpuData = readLayerAsImageDataSync(layerId);
-      if (gpuData) {
-        const { minX, minY, bufW, bufH } = unionBounds(docW, docH, layer.x, layer.y, gpuData.width, gpuData.height);
-        const expanded = expandFromCrop(gpuData, layer.x - minX, layer.y - minY, bufW, bufH);
-        pixelDataManager.setDense(layerId, expanded);
-        set({
-          document: {
-            ...state.document,
-            layers: withLayerBounds(state.document.layers, layerId, {
-              x: minX, y: minY, width: bufW, height: bufH,
-            }),
-          },
-        });
-        return expanded;
-      }
-    }
-
-    // Expand cropped data, preserving off-canvas content.
-    if (existing) {
-      const { minX, minY, bufW, bufH } = unionBounds(docW, docH, layer.x, layer.y, existing.width, existing.height);
-      const expanded = expandFromCrop(existing, layer.x - minX, layer.y - minY, bufW, bufH);
-      pixelDataManager.setDense(layerId, expanded);
-      set({
-        document: {
-          ...state.document,
-          layers: withLayerBounds(state.document.layers, layerId, {
-            x: minX, y: minY, width: bufW, height: bufH,
-          }),
-        },
-      });
-      return expanded;
-    }
-
-    // Nothing anywhere — create an empty canvas-sized surface.
-    const empty = createImageData(docW, docH);
-    pixelDataManager.setDense(layerId, empty);
-    set({
-      document: {
-        ...state.document,
-        layers: withLayerBounds(state.document.layers, layerId, {
-          x: 0, y: 0, width: docW, height: docH,
-        }),
-      },
-    });
-    return empty;
-  },
-
-  resolvePixelData: (layerId: string) => {
-    const data = pixelDataManager.get(layerId);
-    if (data) return data;
-    const sparseEntry = pixelDataManager.getSparse(layerId);
-    if (sparseEntry) return sparseToImageData(sparseEntry.sparse);
-    const gpuData = readLayerAsImageDataSync(layerId);
-    if (gpuData) return gpuData;
-    return undefined;
   },
 });

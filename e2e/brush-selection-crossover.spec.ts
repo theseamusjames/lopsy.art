@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerImage } from './fixtures';
 import { setToolOption, setForegroundColor, drawEllipse, setActiveLayer, setBrushModalOption, closeBrushModal, addLayer } from './helpers';
 
 async function waitForStore(page: Page) {
@@ -117,18 +118,18 @@ async function addTransparentLayerAndActivate(page: Page): Promise<string> {
 
 /** Build a selection from the layer's alpha (equivalent to cmd-clicking the thumbnail). */
 async function selectLayerAlpha(page: Page, layerId: string) {
-  await page.evaluate((lid) => {
+  await page.evaluate(async (lid) => {
+    const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { width: number; height: number; layers: Array<{ id: string; x: number; y: number }> };
-        resolvePixelData: (id: string) => ImageData | null;
         setSelection: (bounds: { x: number; y: number; width: number; height: number }, mask: Uint8ClampedArray, w: number, h: number) => void;
       };
     };
     const state = store.getState();
     const layer = state.document.layers.find((l) => l.id === lid);
     if (!layer) return;
-    const pixels = state.resolvePixelData(lid);
+    const pixels = await readLayerImage(lid);
     if (!pixels) return;
     const docW = state.document.width;
     const docH = state.document.height;

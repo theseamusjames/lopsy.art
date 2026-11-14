@@ -42,7 +42,6 @@ const editorState = {
   addPath: vi.fn((anchors: PathAnchor[], closed: boolean) => {
     setEditor({ paths: [...editorState.paths, { id: 'added', anchors, closed }], selectedPathId: 'added' });
   }),
-  getOrCreateLayerPixelData: vi.fn(() => ({})),
   updateLayerPixelData: vi.fn(),
   notifyRender: vi.fn(),
 };
@@ -155,7 +154,6 @@ describe('strokePathOnEnter', () => {
     const [, layerId, bytes, x, y, w, h] = compositePatchOntoLayer.mock.calls[0]!;
     expect([layerId, x, y, w, h]).toEqual(['layer-1', 10, 20, 3, 2]);
     expect((bytes as Uint8Array).byteLength).toBe(24);
-    expect(editorState.getOrCreateLayerPixelData).not.toHaveBeenCalled();
     expect(editorState.updateLayerPixelData).not.toHaveBeenCalled();
     expect(syncLayerAfterFullSize).toHaveBeenCalledWith(expect.anything(), 'layer-1');
     expect(clearJsPixelData).toHaveBeenCalledWith('layer-1');

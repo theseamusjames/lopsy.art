@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import type { ReadLayerImage } from './fixtures';
 import { getWebGLRenderer, isSoftwareRenderer, waitForStore } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -220,16 +221,16 @@ test.describe('Brush performance', () => {
     console.log(report);
 
     // Drawn content analysis
-    const drawnPixels = await page.evaluate(() => {
+    const drawnPixels = await page.evaluate(async () => {
+      const readLayerImage = (window as unknown as { __readLayerImage: ReadLayerImage }).__readLayerImage;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          resolvePixelData: (id: string) => ImageData | undefined;
         };
       };
       const state = store.getState();
       const activeId = state.document.activeLayerId;
-      const data = state.resolvePixelData(activeId);
+      const data = await readLayerImage(activeId);
       if (!data) return 0;
       let count = 0;
       const d = data.data;

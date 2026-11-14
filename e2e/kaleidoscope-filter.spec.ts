@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { waitForStore, createDocument, drawRect, drawEllipse, getPixelAt, applyFilter } from './helpers';
@@ -81,16 +82,16 @@ test.describe('Kaleidoscope Filter', () => {
     // filter runs. With an even number of segments (6) aligned at rotation 0,
     // pixel (cx + dx, cy) should equal pixel (cx - dx, cy) because the
     // kaleidoscope mirrors wedges across the horizontal axis.
-    const symmetryOk = await page.evaluate(() => {
+    const symmetryOk = await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const data = state.getOrCreateLayerPixelData(id);
+      const data = await readLayerInDocument(id);
       const w = data.width;
       const h = data.height;
       const cx = Math.floor(w / 2);

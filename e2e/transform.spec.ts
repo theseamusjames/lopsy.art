@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 
 // Helper: access the editor store from the page context
 async function getEditorState(page: Page) {
@@ -806,17 +807,17 @@ test.describe('Free Transform', () => {
     // 3. Draw a red horizontal L shape on layer 2
     //    Horizontal bar: (200,250) to (500,270)
     //    Vertical bar:   (200,250) to (220,350)
-    await page.evaluate((layerId) => {
+    await page.evaluate(async (layerId) => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { width: number; height: number };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           notifyRender: () => void;
         };
       };
       const state = store.getState();
-      const imgData = state.getOrCreateLayerPixelData(layerId);
+      const imgData = await readLayerInDocument(layerId);
       const w = state.document.width;
       // Horizontal bar
       for (let y = 250; y < 270; y++) {
@@ -964,18 +965,18 @@ test.describe('Free Transform', () => {
 
   test('move then rotate then move does not snap back', async ({ page }) => {
     // Paint a distinct shape so rotation is visually obvious
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           notifyRender: () => void;
         };
       };
       const state = store.getState();
       const { width: w } = state.document;
-      const imgData = state.getOrCreateLayerPixelData(state.document.activeLayerId);
+      const imgData = await readLayerInDocument(state.document.activeLayerId);
       // Draw a horizontal red bar at (300,280)-(500,300)
       for (let y = 280; y < 300; y++) {
         for (let x = 300; x < 500; x++) {
@@ -1110,18 +1111,18 @@ test.describe('Free Transform', () => {
 
   test('move selection over other content then rotate only transforms original selection', async ({ page }) => {
     // 1. Paint a RED block at (350,250)-(450,350) and a BLUE block at (500,250)-(600,350)
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           notifyRender: () => void;
         };
       };
       const state = store.getState();
       const { width: w } = state.document;
-      const imgData = state.getOrCreateLayerPixelData(state.document.activeLayerId);
+      const imgData = await readLayerInDocument(state.document.activeLayerId);
 
       // Red block
       for (let y = 250; y < 350; y++) {

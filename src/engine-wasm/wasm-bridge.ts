@@ -689,11 +689,6 @@ export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
 export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
 export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);
 export const readClipboardPixels = asyncReadback(rawReadClipboardPixels);
-/**
- * The synchronous read behind `readLayerPixels`, for `gpu-pixel-access`'s
- * per-frame cache until `readLayerAsImageData` and its callers await too.
- */
-export const readLayerPixelsSync = rawReadLayerPixels;
 
 /**
  * Every export that writes a layer-mask texture goes through this wrapper

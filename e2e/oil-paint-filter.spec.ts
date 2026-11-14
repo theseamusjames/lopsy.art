@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { waitForStore, createDocument, drawRect } from './helpers';
@@ -31,11 +32,11 @@ test.describe('Oil Paint Filter', () => {
     // needs variance to smooth — flat regions show no effect. This pattern
     // combines smooth color fields with strong per-pixel noise so the filter's
     // painterly smoothing is clearly visible in the before/after.
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
@@ -43,7 +44,7 @@ test.describe('Oil Paint Filter', () => {
       const state = store.getState();
       const id = state.document.activeLayerId;
       state.pushHistory('Paint');
-      const data = state.getOrCreateLayerPixelData(id);
+      const data = await readLayerInDocument(id);
       const W = data.width;
       const H = data.height;
       let seed = 1;

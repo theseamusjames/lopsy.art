@@ -188,12 +188,9 @@ export interface EditorState {
   pasteGpuLayer: (layerId: string, width: number, height: number) => void;
 
   // Pixel data
-  getOrCreateLayerPixelData: (layerId: string) => ImageData;
   updateLayerPixelData: (layerId: string, data: ImageData) => void;
   notifyRender: () => void;
   cropLayerToContent: (layerId: string) => void;
-  expandLayerForEditing: (layerId: string) => ImageData;
-  resolvePixelData: (layerId: string) => ImageData | undefined;
 
   // Canvas
   cropCanvas: (rect: Rect) => void;

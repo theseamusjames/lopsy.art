@@ -109,7 +109,6 @@ const editorState = {
   pushPrebuiltSnapshot: vi.fn(),
   duplicateLayer: vi.fn(),
   updateLayerPosition: vi.fn(),
-  expandLayerForEditing: vi.fn(),
   cropLayerToContent: vi.fn(),
 };
 
@@ -327,8 +326,8 @@ describe('handleMoveMove (quick-mask + marquee move)', () => {
 });
 
 describe('handleMoveDown — whole-layer move grab (issue #701)', () => {
-  // The whole-layer move grab used to call `editorState.expandLayerForEditing`
-  // and `editorState.cropLayerToContent` on pointer-down. Those two together
+  // The whole-layer move grab used to expand the layer into a JS buffer and
+  // call `editorState.cropLayerToContent` on pointer-down. Those two together
   // did a full GPU→CPU readback (`readLayerPixels`) plus a JS-side ImageData
   // allocation (67 MB at 4096×4096) plus a CPU alpha scan — all on the frame
   // the user starts dragging. The fix routes the crop through the WASM
@@ -386,7 +385,6 @@ describe('handleMoveDown — whole-layer move grab (issue #701)', () => {
       maskHeight: 0,
     };
     editorState.pushHistory.mockClear();
-    editorState.expandLayerForEditing.mockClear();
     editorState.cropLayerToContent.mockClear();
     uiState.maskMode = 'off';
     vi.mocked(bridge.cropLayerToContent).mockReset();
@@ -402,7 +400,6 @@ describe('handleMoveDown — whole-layer move grab (issue #701)', () => {
     expect(vi.mocked(bridge.cropLayerToContent).mock.calls[0]![1]).toBe(baseRaster.id);
 
     // The JS-side CPU-scan path must not run — that's the whole point.
-    expect(editorState.expandLayerForEditing).not.toHaveBeenCalled();
     expect(editorState.cropLayerToContent).not.toHaveBeenCalled();
   });
 

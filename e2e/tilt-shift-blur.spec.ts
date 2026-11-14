@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -60,11 +61,11 @@ async function readPixel(page: Page, x: number, y: number) {
 }
 
 function paintHorizontalStripes(page: Page) {
-  return page.evaluate(() => {
+  return page.evaluate(async () => {
+    const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => {
         document: { activeLayerId: string };
-        getOrCreateLayerPixelData: (id: string) => ImageData;
         updateLayerPixelData: (id: string, data: ImageData) => void;
         pushHistory: (label?: string) => void;
       };
@@ -72,7 +73,7 @@ function paintHorizontalStripes(page: Page) {
     const state = store.getState();
     const id = state.document.activeLayerId;
     state.pushHistory('Paint');
-    const data = state.getOrCreateLayerPixelData(id);
+    const data = await readLayerInDocument(id);
     const W = data.width;
     const H = data.height;
     const stripeHeight = 20;

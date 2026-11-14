@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import { waitForStore } from './helpers';
 
 async function getJSHeapUsedMB(page: import('@playwright/test').Page): Promise<number> {
@@ -60,12 +61,12 @@ test.describe('Layer memory', () => {
     const baseline = await getJSHeapUsedMB(page);
 
     for (let i = 0; i < 5; i++) {
-      await page.evaluate(() => {
+      await page.evaluate(async () => {
+        const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
           getState: () => {
             addLayer: () => void;
             document: { activeLayerId: string };
-            getOrCreateLayerPixelData: (id: string) => ImageData;
             updateLayerPixelData: (id: string, data: ImageData) => void;
             pushHistory: () => void;
           };
@@ -75,7 +76,7 @@ test.describe('Layer memory', () => {
         const s2 = store.getState();
         const layerId = s2.document.activeLayerId;
         s2.pushHistory();
-        const data = s2.getOrCreateLayerPixelData(layerId);
+        const data = await readLayerInDocument(layerId);
         // Paint a single 10x10 dot near center
         for (let y = 1500; y < 1510; y++) {
           for (let x = 2000; x < 2010; x++) {
@@ -115,12 +116,12 @@ test.describe('Layer memory', () => {
     // Add 5 layers, each with dots at opposite corners
     // (content bounds span full canvas, but actual pixels are tiny)
     for (let i = 0; i < 5; i++) {
-      await page.evaluate(() => {
+      await page.evaluate(async () => {
+        const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
         const store = (window as unknown as Record<string, unknown>).__editorStore as {
           getState: () => {
             addLayer: () => void;
             document: { activeLayerId: string; width: number; height: number };
-            getOrCreateLayerPixelData: (id: string) => ImageData;
             updateLayerPixelData: (id: string, data: ImageData) => void;
             pushHistory: () => void;
           };
@@ -132,7 +133,7 @@ test.describe('Layer memory', () => {
         const docW = s2.document.width;
         const docH = s2.document.height;
         s2.pushHistory();
-        const data = s2.getOrCreateLayerPixelData(layerId);
+        const data = await readLayerInDocument(layerId);
 
         // Dot at top-left corner
         for (let y = 0; y < 5; y++) {

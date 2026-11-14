@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import { waitForStore } from './helpers';
 
 async function getJSHeapUsedMB(page: import('@playwright/test').Page): Promise<number> {
@@ -22,7 +23,6 @@ test.describe('Layer memory (realistic 4K scenario)', () => {
         getState: () => {
           createDocument: (w: number, h: number, t: boolean) => void;
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
         };
       };
@@ -72,11 +72,11 @@ test.describe('Layer memory (realistic 4K scenario)', () => {
     console.log(`After adding layer 3: ${afterLayer3.toFixed(1)}MB`);
 
     // Step 5: Paint dots in corners on layer 3
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
@@ -84,7 +84,7 @@ test.describe('Layer memory (realistic 4K scenario)', () => {
       const s = store.getState();
       const layerId = s.document.activeLayerId;
       s.pushHistory();
-      const data = s.getOrCreateLayerPixelData(layerId);
+      const data = await readLayerInDocument(layerId);
       const w = s.document.width;
       const h = s.document.height;
 

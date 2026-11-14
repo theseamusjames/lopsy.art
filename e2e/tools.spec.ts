@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import {
   setToolOption,
   setForegroundColor as setFgColor,
@@ -1341,18 +1342,18 @@ test.describe('Filters', () => {
     });
 
     // Apply invert filter via evaluate
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const src = state.getOrCreateLayerPixelData(id);
+      const src = await readLayerInDocument(id);
       const w = state.document.width;
       const h = state.document.height;
       const result = new ImageData(w, h);
@@ -1408,18 +1409,18 @@ test.describe('Filters', () => {
     });
 
     // Apply desaturate
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const src = state.getOrCreateLayerPixelData(id);
+      const src = await readLayerInDocument(id);
       const result = new ImageData(src.width, src.height);
       for (let i = 0; i < src.data.length; i += 4) {
         const r = src.data[i] ?? 0;
@@ -1539,18 +1540,18 @@ test.describe('Filters', () => {
     });
 
     // Apply box blur via store
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const src = state.getOrCreateLayerPixelData(id);
+      const src = await readLayerInDocument(id);
       const w = src.width;
       const h = src.height;
       const radius = 3;
@@ -1623,18 +1624,18 @@ test.describe('Filters', () => {
     });
 
     // Apply uniform noise
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
       };
       const state = store.getState();
       const id = state.document.activeLayerId;
-      const src = state.getOrCreateLayerPixelData(id);
+      const src = await readLayerInDocument(id);
       const result = new ImageData(src.width, src.height);
       const amount = 50;
       for (let i = 0; i < src.data.length; i += 4) {
@@ -1950,12 +1951,12 @@ test.describe('Comprehensive Scenarios', () => {
     expect(selState.selection.active).toBe(true);
 
     // Fill the selection using the store (Edit > Fill behavior)
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const edStore = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number; height: number };
           selection: { active: boolean; mask: Uint8ClampedArray | null; maskWidth: number };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: () => void;
         };
@@ -1966,7 +1967,7 @@ test.describe('Comprehensive Scenarios', () => {
       const state = edStore.getState();
       const color = toolStore.getState().foregroundColor;
       state.pushHistory();
-      const data = state.getOrCreateLayerPixelData(state.document.activeLayerId);
+      const data = await readLayerInDocument(state.document.activeLayerId);
       const sel = state.selection;
       if (sel.active && sel.mask) {
         for (let y = 0; y < data.height; y++) {
@@ -1996,15 +1997,15 @@ test.describe('Comprehensive Scenarios', () => {
     expect(afterDeselect.selection.active).toBe(false);
 
     // Verify pixels inside the selection area are filled (black foreground = a:255)
-    const fillResult = await page.evaluate(() => {
+    const fillResult = await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string; width: number };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
         };
       };
       const state = store.getState();
-      const data = state.getOrCreateLayerPixelData(state.document.activeLayerId);
+      const data = await readLayerInDocument(state.document.activeLayerId);
       const insideIdx = (150 * data.width + 200) * 4;
       const outsideIdx = (50 * data.width + 50) * 4;
       return { insideA: data.data[insideIdx + 3]!, outsideA: data.data[outsideIdx + 3]! };

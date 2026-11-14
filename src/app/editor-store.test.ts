@@ -17,6 +17,8 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
 }
 
 const { useEditorStore } = await import('./editor-store');
+const { pixelDataManager } = await import('../engine/pixel-data-manager');
+const { sparseToImageData } = await import('../engine/canvas-ops');
 
 describe('editor-store history', () => {
   beforeEach(() => {
@@ -30,14 +32,21 @@ describe('editor-store history', () => {
     expect(useEditorStore.getState().undoStack.length).toBe(1);
   });
 
+  /** First byte of the layer's JS-side pixels; 0 when it holds none. */
+  function firstJsPixel(layerId: string): number {
+    const dense = pixelDataManager.get(layerId);
+    if (dense) return dense.data[0] ?? 0;
+    const sparse = pixelDataManager.getSparse(layerId);
+    return sparse ? sparseToImageData(sparse.sparse).data[0] ?? 0 : 0;
+  }
+
   it('undo restores previous state', () => {
     const state = useEditorStore.getState();
     const layerId = state.document.activeLayerId!;
 
     // Record current pixel state
     state.pushHistory();
-    const originalData = state.getOrCreateLayerPixelData(layerId);
-    const originalFirstPixel = originalData.data[0];
+    const originalFirstPixel = firstJsPixel(layerId);
 
     // Modify pixel data
     const modified = new ImageData(10, 10);
@@ -46,8 +55,7 @@ describe('editor-store history', () => {
 
     // Undo should restore original
     useEditorStore.getState().undo();
-    const restored = useEditorStore.getState().getOrCreateLayerPixelData(layerId);
-    expect(restored.data[0]).toBe(originalFirstPixel);
+    expect(firstJsPixel(layerId)).toBe(originalFirstPixel);
   });
 
   it('undo restores the selection to its pre-edit position', () => {

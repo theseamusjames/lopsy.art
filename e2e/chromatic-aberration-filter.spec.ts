@@ -1,4 +1,5 @@
 import { test, expect, type Page } from './fixtures';
+import type { ReadLayerInDocument } from './fixtures';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -53,11 +54,11 @@ test.describe('Chromatic Aberration Filter', () => {
     // Paint a pattern with sharp color boundaries: a bright white rectangle
     // on a black background. Chromatic aberration will create visible
     // red/blue fringing at the left and right edges of the white region.
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
@@ -65,7 +66,7 @@ test.describe('Chromatic Aberration Filter', () => {
       const state = store.getState();
       const id = state.document.activeLayerId;
       state.pushHistory('Paint');
-      const data = state.getOrCreateLayerPixelData(id);
+      const data = await readLayerInDocument(id);
       const W = data.width;
       const H = data.height;
       // Black background
@@ -220,11 +221,11 @@ test.describe('Chromatic Aberration Filter', () => {
     await createDocument(page, 200, 200, false);
 
     // Paint a simple pattern
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const readLayerInDocument = (window as unknown as { __readLayerInDocument: ReadLayerInDocument }).__readLayerInDocument;
       const store = (window as unknown as Record<string, unknown>).__editorStore as {
         getState: () => {
           document: { activeLayerId: string };
-          getOrCreateLayerPixelData: (id: string) => ImageData;
           updateLayerPixelData: (id: string, data: ImageData) => void;
           pushHistory: (label?: string) => void;
         };
@@ -232,7 +233,7 @@ test.describe('Chromatic Aberration Filter', () => {
       const state = store.getState();
       const id = state.document.activeLayerId;
       state.pushHistory('Paint');
-      const data = state.getOrCreateLayerPixelData(id);
+      const data = await readLayerInDocument(id);
       for (let i = 0; i < data.width * data.height * 4; i += 4) {
         data.data[i] = 200;
         data.data[i + 1] = 100;
