@@ -11,12 +11,12 @@ use crate::stamp_preview_gpu::StampPreview;
 // ============================================================
 
 pub fn set_grid_visible(engine: &mut EngineInner, visible: bool) {
-    engine.grid_visible = visible;
+    engine.overlays.grid_visible = visible;
     engine.needs_recomposite = true;
 }
 
 pub fn set_grid_size(engine: &mut EngineInner, size: f32) {
-    engine.grid_size = size;
+    engine.overlays.grid_size = size;
     engine.needs_recomposite = true;
 }
 
@@ -84,19 +84,19 @@ pub fn clear_stamp_source_preview(engine: &mut EngineInner) {
 }
 
 pub fn set_rulers_visible(engine: &mut EngineInner, visible: bool) {
-    engine.rulers_visible = visible;
+    engine.overlays.rulers_visible = visible;
     engine.needs_recomposite = true;
 }
 
 pub fn set_seamless_pattern(engine: &mut EngineInner, enabled: bool, dim: bool, wrap: bool) {
-    engine.seamless_pattern = enabled;
-    engine.seamless_dim = dim;
-    engine.seamless_wrap = wrap;
+    engine.overlays.seamless_pattern = enabled;
+    engine.overlays.seamless_dim = dim;
+    engine.overlays.seamless_wrap = wrap;
     engine.needs_recomposite = true;
 }
 
 pub fn set_channel_mask(engine: &mut EngineInner, r: f32, g: f32, b: f32, a: f32) {
-    engine.channel_mask = [r, g, b, a];
+    engine.overlays.channel_mask = [r, g, b, a];
     engine.needs_present = true;
 }
 

@@ -32,7 +32,7 @@ pub fn save_gradient_preview(engine: &mut EngineInner, layer_id: &str) {
         return;
     }
 
-    if let Some(old) = engine.gradient_preview_texture.take() {
+    if let Some(old) = engine.previews.gradient_texture.take() {
         engine.texture_pool.release(old);
     }
     let preview_handle = match engine.texture_pool.acquire(w, h) {
@@ -48,15 +48,15 @@ pub fn save_gradient_preview(engine: &mut EngineInner, layer_id: &str) {
         .blend(Blend::Off)
         .draw(Target::Texture(preview_handle));
 
-    engine.gradient_preview_texture = Some(preview_handle);
-    engine.gradient_preview_layer_id = Some(layer_id.to_string());
+    engine.previews.gradient_texture = Some(preview_handle);
+    engine.previews.gradient_layer_id = Some(layer_id.to_string());
 }
 
 pub fn end_gradient_preview(engine: &mut EngineInner) {
-    if let Some(h) = engine.gradient_preview_texture.take() {
+    if let Some(h) = engine.previews.gradient_texture.take() {
         engine.texture_pool.release(h);
     }
-    engine.gradient_preview_layer_id = None;
+    engine.previews.gradient_layer_id = None;
 }
 
 /// If a gradient preview snapshot exists for this layer, copy it over the
@@ -65,8 +65,8 @@ pub fn end_gradient_preview(engine: &mut EngineInner) {
 /// (a per-frame copy of the current layer into scratch_a, sampled as the
 /// "existing" texture) when no preview is active.
 fn restore_layer_from_preview(engine: &mut EngineInner, layer_id: &str) -> bool {
-    let has_preview = engine.gradient_preview_layer_id.as_deref() == Some(layer_id)
-        && engine.gradient_preview_texture.is_some();
+    let has_preview = engine.previews.gradient_layer_id.as_deref() == Some(layer_id)
+        && engine.previews.gradient_texture.is_some();
     if !has_preview {
         return false;
     }
@@ -78,7 +78,7 @@ fn restore_layer_from_preview(engine: &mut EngineInner, layer_id: &str) -> bool 
     if engine.texture_pool.get(tex_handle).is_none() {
         return false;
     }
-    let Some(preview) = engine.gradient_preview_texture
+    let Some(preview) = engine.previews.gradient_texture
         .filter(|&p| engine.texture_pool.get(p).is_some())
     else {
         return false;

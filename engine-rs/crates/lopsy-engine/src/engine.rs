@@ -152,6 +152,145 @@ impl Default for ImageAdjustmentState {
     }
 }
 
+/// Pixels copied or cut from a layer, held on the GPU until pasted.
+pub struct ClipboardState {
+    pub texture: Option<TextureHandle>,
+    pub width: u32,
+    pub height: u32,
+    pub offset_x: i32,
+    pub offset_y: i32,
+}
+
+/// The floating selection the Move tool lifts off a layer, and the transform being applied to it.
+pub struct FloatState {
+    pub texture: Option<TextureHandle>,
+    pub base_texture: Option<TextureHandle>,
+    pub layer_id: Option<String>,
+    pub width: u32,
+    pub height: u32,
+    pub layer_x: i32,
+    pub layer_y: i32,
+    pub transform_mode: u8, // 0=none, 1=affine, 2=perspective
+    pub transform_inv_matrix: [f32; 9],
+    pub transform_center: [f32; 2],
+    pub transform_corners: [f32; 8],
+    pub transform_orig_rect: [f32; 4],
+    /// Document rect of the float's source pixels (x, y, w, h) for the affine
+    /// path; w = 0 when unknown.
+    pub transform_src_rect: [f32; 4],
+}
+
+/// Pre-edit copies of a layer kept while a shape, filter or gradient is previewed live.
+pub struct PreviewState {
+    pub shape_texture: Option<TextureHandle>,
+    pub shape_layer_id: Option<String>,
+    pub shape_x: i32,
+    pub shape_y: i32,
+    pub shape_w: u32,
+    pub shape_h: u32,
+    pub filter_texture: Option<TextureHandle>,
+    pub filter_layer_id: Option<String>,
+    pub gradient_texture: Option<TextureHandle>,
+    pub gradient_layer_id: Option<String>,
+}
+
+/// What is drawn over the document, and how the document is shown: grid, rulers, guides, cursors, seamless tiling and the channel mask.
+pub struct OverlayState {
+    pub grid_visible: bool,
+    pub grid_size: f32,
+    pub rulers_visible: bool,
+    pub transform_overlay: Option<String>,
+    pub gradient_guide: Option<[f64; 4]>,
+    pub lasso_points: Option<Vec<f64>>,
+    pub crop_rect: Option<[f64; 4]>,
+    pub brush_cursor: Option<[f64; 3]>,
+    pub path_overlay: Option<String>,
+    pub seamless_pattern: bool,
+    pub seamless_dim: bool,
+    /// When true (and seamless_pattern is on), layer compositing wraps
+    /// modularly at the document edges — content that overhangs one side
+    /// reappears on the opposite side. The layer texture itself is untouched
+    /// so repeated moves keep transforming the original content, not the
+    /// already-wrapped result.
+    pub seamless_wrap: bool,
+    pub channel_mask: [f32; 4],
+    pub selection_time: f64,
+    /// Clone Stamp / Healing Brush source preview disc drawn over the
+    /// screen after the final blit (`stamp_preview_gpu.rs`).
+    pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
+}
+
+/// Adjustments attached to layer groups, and the scratch targets and caches their children composite through.
+pub struct GroupState {
+    /// Per-group adjustments — keyed by group layer ID. Each entry holds the
+    /// adjustment scalars/LUTs plus a list of child layer IDs (in stack order)
+    /// so the compositor can scope the adjustment pass to only those layers.
+    pub adjustments: HashMap<String, GroupAdjustment>,
+    /// Scratch (texture, FBO) pairs for group-scoped adjustments, indexed by
+    /// nesting depth (0 = outermost currently-open adjusted group) rather
+    /// than a single slot — a group nested inside another adjusted group
+    /// gets its own scratch instead of colliding with its ancestor's (#857).
+    /// Allocated lazily and resized on demand; kept for the engine's
+    /// lifetime like the other persistent FBOs.
+    pub scratch_levels: Vec<(TextureHandle, FramebufferHandle)>,
+    /// Pre-adjustment group scratch cache: for each adjusted group (keyed by
+    /// group id), caches the composited children so that when only
+    /// adjustment values change (not the children), the compositor can skip
+    /// re-blending all children and just re-apply the adjustment shader to
+    /// this cached texture. `group_pre_adj_valid` is the global "nothing has
+    /// changed since these caches were built" flag; individual entries are
+    /// only trusted while it's true. Nested groups (an adjusted group that
+    /// is itself an ancestor or descendant of another adjusted group) never
+    /// populate or read this cache — see `nested_group_ids` in compositor.rs.
+    pub pre_adj_cache: HashMap<String, TextureHandle>,
+    pub pre_adj_valid: bool,
+}
+
+/// The brush being painted with (tip, texture, dab transform) and the strokes in progress.
+pub struct BrushState {
+    pub stroke_textures: HashMap<String, TextureHandle>,
+    pub stroke_opacity: HashMap<String, f32>,
+    pub stroke_use_brush_texture: HashMap<String, bool>,
+    pub stroke_fbo: Option<FramebufferHandle>,
+    /// Dodge/burn per-stroke coverage texture: a scalar strength field
+    /// (RGBA, all four channels equal) MAX-accumulated across dabs so
+    /// overlapping dabs within one stroke don't compound. Baked into the
+    /// layer on `end_dodge_burn_stroke` via the dodge_burn shader with
+    /// `u_exposure = 1.0`.
+    pub stroke_dodge_textures: HashMap<String, TextureHandle>,
+    /// Per-frame compositor preview: the result of applying the coverage
+    /// texture to the layer, so the user sees their in-progress stroke
+    /// without touching the source pixels.
+    pub stroke_dodge_preview_textures: HashMap<String, TextureHandle>,
+    /// 0 = dodge, 1 = burn — captured on `begin_dodge_burn_stroke` so the
+    /// compositor preview and bake share the mode.
+    pub stroke_dodge_modes: HashMap<String, u32>,
+    pub stroke_sponge_textures: HashMap<String, TextureHandle>,
+    pub stroke_sponge_preview_textures: HashMap<String, TextureHandle>,
+    pub stroke_sponge_modes: HashMap<String, u32>,
+    pub tip_texture: Option<TextureHandle>,
+    pub tip_width: u32,
+    pub tip_height: u32,
+    pub has_tip: bool,
+    pub tip_is_color: bool,
+    pub angle: f32,
+    /// Row-major 2x2 map from a dab's local offset to the tip-space offset
+    /// it samples. Symmetry copies set it to the inverse of their
+    /// reflection/rotation so each copy carries a mirrored/rotated tip.
+    pub dab_transform: [f32; 4],
+    pub sub_brush_tips: Vec<Option<(TextureHandle, u32, u32, bool)>>,
+    pub saved_primary_tip: Option<(TextureHandle, u32, u32, bool)>,
+    pub stroke_texture_origin: (f32, f32),
+    pub stroke_texture_rotation: f32,
+    pub stroke_texture_origin_set: bool,
+    pub texture: Option<TextureHandle>,
+    pub texture_width: u32,
+    pub texture_height: u32,
+    pub has_texture: bool,
+    pub texture_scale: f32,
+    pub texture_blend_mode: u32,
+}
+
 pub struct EngineInner {
     pub gpu_ctx: GpuContext,
     pub shaders: ShaderPrograms,
@@ -184,52 +323,6 @@ pub struct EngineInner {
     /// writes the composite texture outside `composite` must set
     /// `needs_recomposite` instead.
     pub needs_present: bool,
-    // Brush state
-    pub stroke_textures: HashMap<String, TextureHandle>,
-    pub stroke_opacity: HashMap<String, f32>,
-    pub stroke_use_brush_texture: HashMap<String, bool>,
-    pub stroke_fbo: Option<FramebufferHandle>,
-    /// Dodge/burn per-stroke coverage texture: a scalar strength field
-    /// (RGBA, all four channels equal) MAX-accumulated across dabs so
-    /// overlapping dabs within one stroke don't compound. Baked into the
-    /// layer on `end_dodge_burn_stroke` via the dodge_burn shader with
-    /// `u_exposure = 1.0`.
-    pub stroke_dodge_textures: HashMap<String, TextureHandle>,
-    /// Per-frame compositor preview: the result of applying the coverage
-    /// texture to the layer, so the user sees their in-progress stroke
-    /// without touching the source pixels.
-    pub stroke_dodge_preview_textures: HashMap<String, TextureHandle>,
-    /// 0 = dodge, 1 = burn — captured on `begin_dodge_burn_stroke` so the
-    /// compositor preview and bake share the mode.
-    pub stroke_dodge_modes: HashMap<String, u32>,
-    pub stroke_sponge_textures: HashMap<String, TextureHandle>,
-    pub stroke_sponge_preview_textures: HashMap<String, TextureHandle>,
-    pub stroke_sponge_modes: HashMap<String, u32>,
-    // Custom brush tip
-    pub brush_tip_texture: Option<TextureHandle>,
-    pub brush_tip_width: u32,
-    pub brush_tip_height: u32,
-    pub brush_has_tip: bool,
-    pub brush_tip_is_color: bool,
-    pub brush_angle: f32,
-    /// Row-major 2x2 map from a dab's local offset to the tip-space offset
-    /// it samples. Symmetry copies set it to the inverse of their
-    /// reflection/rotation so each copy carries a mirrored/rotated tip.
-    pub brush_dab_transform: [f32; 4],
-    // Sub-brush tip cache: pre-processed textures to avoid per-dab Gaussian blur
-    pub sub_brush_tips: Vec<Option<(TextureHandle, u32, u32, bool)>>,
-    pub saved_primary_tip: Option<(TextureHandle, u32, u32, bool)>,
-    // Per-stroke texture state (origin + rotation for stroke-relative UV)
-    pub stroke_texture_origin: (f32, f32),
-    pub stroke_texture_rotation: f32,
-    pub stroke_texture_origin_set: bool,
-    // Custom brush texture
-    pub brush_texture: Option<TextureHandle>,
-    pub brush_texture_width: u32,
-    pub brush_texture_height: u32,
-    pub brush_has_texture: bool,
-    pub brush_texture_scale: f32,
-    pub brush_texture_blend_mode: u32,
     // Selection
     pub selection_mask_texture: Option<TextureHandle>,
     pub quick_mask_texture: Option<TextureHandle>,
@@ -237,95 +330,17 @@ pub struct EngineInner {
     /// began; every frame of the move re-derives the quick mask from them.
     pub quick_mask_move_base: Option<TextureHandle>,
     pub quick_mask_move_marquee: Option<TextureHandle>,
-    // Shape preview (stores pre-drag layer content for live preview)
-    pub shape_preview_texture: Option<TextureHandle>,
-    pub shape_preview_layer_id: Option<String>,
-    pub shape_preview_x: i32,
-    pub shape_preview_y: i32,
-    pub shape_preview_w: u32,
-    pub shape_preview_h: u32,
-    // Filter preview (stores pre-filter layer content for live preview)
-    pub filter_preview_texture: Option<TextureHandle>,
-    pub filter_preview_layer_id: Option<String>,
     /// Set while a filter runs on a layer mask (see `filter_gpu::begin_mask_filter_target`).
     pub mask_filter_target: Option<crate::filter_gpu::MaskFilterTarget>,
     // Liquify persistent displacement texture (lives for the session)
     pub liquify_disp_texture: Option<TextureHandle>,
-    // Gradient preview (stores pre-drag layer content for live preview)
-    pub gradient_preview_texture: Option<TextureHandle>,
-    pub gradient_preview_layer_id: Option<String>,
-    // Clipboard
-    pub clipboard_texture: Option<TextureHandle>,
-    pub clipboard_width: u32,
-    pub clipboard_height: u32,
-    pub clipboard_offset_x: i32,
-    pub clipboard_offset_y: i32,
-    // Floating selection (for move-with-selection)
-    pub float_texture: Option<TextureHandle>,
-    pub float_base_texture: Option<TextureHandle>,
-    pub float_layer_id: Option<String>,
-    pub float_width: u32,
-    pub float_height: u32,
-    pub float_layer_x: i32,
-    pub float_layer_y: i32,
-    // Float transform state (GPU-side affine/perspective)
-    pub float_transform_mode: u8, // 0=none, 1=affine, 2=perspective
-    pub float_transform_inv_matrix: [f32; 9],
-    pub float_transform_center: [f32; 2],
-    pub float_transform_corners: [f32; 8],
-    pub float_transform_orig_rect: [f32; 4],
-    /// Document rect of the float's source pixels (x, y, w, h) for the affine
-    /// path; w = 0 when unknown.
-    pub float_transform_src_rect: [f32; 4],
     // Multi-layer transform session (see layer_transform_gpu)
     pub layer_transform: Vec<crate::layer_transform_gpu::LayerTransformSlot>,
-    // Overlays
-    pub grid_visible: bool,
-    pub grid_size: f32,
-    pub rulers_visible: bool,
-    pub transform_overlay: Option<String>,
-    pub gradient_guide: Option<[f64; 4]>,
-    pub lasso_points: Option<Vec<f64>>,
-    pub crop_rect: Option<[f64; 4]>,
-    pub brush_cursor: Option<[f64; 3]>,
-    pub path_overlay: Option<String>,
-    pub seamless_pattern: bool,
-    pub seamless_dim: bool,
-    /// When true (and seamless_pattern is on), layer compositing wraps
-    /// modularly at the document edges — content that overhangs one side
-    /// reappears on the opposite side. The layer texture itself is untouched
-    /// so repeated moves keep transforming the original content, not the
-    /// already-wrapped result.
-    pub seamless_wrap: bool,
-    pub channel_mask: [f32; 4],
-    pub selection_time: f64,
     /// Per-document image adjustments — exposure/contrast/highlights/
     /// shadows/whites/blacks/vignette/saturation/vibrance plus curves and
     /// levels LUTs. Applied on the compositor's final pass, not baked into
     /// pixels.
     pub adjustments: ImageAdjustmentState,
-    /// Per-group adjustments — keyed by group layer ID. Each entry holds the
-    /// adjustment scalars/LUTs plus a list of child layer IDs (in stack order)
-    /// so the compositor can scope the adjustment pass to only those layers.
-    pub group_adjustments: HashMap<String, GroupAdjustment>,
-    /// Scratch (texture, FBO) pairs for group-scoped adjustments, indexed by
-    /// nesting depth (0 = outermost currently-open adjusted group) rather
-    /// than a single slot — a group nested inside another adjusted group
-    /// gets its own scratch instead of colliding with its ancestor's (#857).
-    /// Allocated lazily and resized on demand; kept for the engine's
-    /// lifetime like the other persistent FBOs.
-    pub group_scratch_levels: Vec<(TextureHandle, FramebufferHandle)>,
-    /// Pre-adjustment group scratch cache: for each adjusted group (keyed by
-    /// group id), caches the composited children so that when only
-    /// adjustment values change (not the children), the compositor can skip
-    /// re-blending all children and just re-apply the adjustment shader to
-    /// this cached texture. `group_pre_adj_valid` is the global "nothing has
-    /// changed since these caches were built" flag; individual entries are
-    /// only trusted while it's true. Nested groups (an adjusted group that
-    /// is itself an ancestor or descendant of another adjusted group) never
-    /// populate or read this cache — see `nested_group_ids` in compositor.rs.
-    pub group_pre_adj_cache: HashMap<String, TextureHandle>,
-    pub group_pre_adj_valid: bool,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -352,9 +367,12 @@ pub struct EngineInner {
     /// Texels touched by the in-progress Dodge / Burn or Sponge stroke on
     /// each layer (`coverage_stroke_gpu.rs`).
     pub coverage_strokes: HashMap<String, crate::coverage_stroke_gpu::CoverageStroke>,
-    /// Clone Stamp / Healing Brush source preview disc drawn over the
-    /// screen after the final blit (`stamp_preview_gpu.rs`).
-    pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
+    pub clipboard: ClipboardState,
+    pub float: FloatState,
+    pub previews: PreviewState,
+    pub overlays: OverlayState,
+    pub groups: GroupState,
+    pub brush: BrushState,
 }
 
 pub struct SnapshotTexture {
@@ -411,88 +429,14 @@ impl EngineInner {
             doc_color_mode: 0,
             needs_recomposite: true,
             needs_present: true,
-            stroke_textures: HashMap::new(),
-            stroke_opacity: HashMap::new(),
-            stroke_use_brush_texture: HashMap::new(),
-            stroke_fbo: None,
-            stroke_dodge_textures: HashMap::new(),
-            stroke_dodge_preview_textures: HashMap::new(),
-            stroke_dodge_modes: HashMap::new(),
-            stroke_sponge_textures: HashMap::new(),
-            stroke_sponge_preview_textures: HashMap::new(),
-            stroke_sponge_modes: HashMap::new(),
-            brush_tip_texture: None,
-            brush_tip_width: 0,
-            brush_tip_height: 0,
-            brush_has_tip: false,
-            brush_tip_is_color: false,
-            brush_angle: 0.0,
-            brush_dab_transform: [1.0, 0.0, 0.0, 1.0],
-            sub_brush_tips: Vec::new(),
-            saved_primary_tip: None,
-            stroke_texture_origin: (0.0, 0.0),
-            stroke_texture_rotation: 0.0,
-            stroke_texture_origin_set: false,
-            brush_texture: None,
-            brush_texture_width: 0,
-            brush_texture_height: 0,
-            brush_has_texture: false,
-            brush_texture_scale: 1.0,
-            brush_texture_blend_mode: 0,
             selection_mask_texture: None,
             quick_mask_texture: None,
             quick_mask_move_base: None,
             quick_mask_move_marquee: None,
-            shape_preview_texture: None,
-            shape_preview_layer_id: None,
-            shape_preview_x: 0,
-            shape_preview_y: 0,
-            shape_preview_w: 0,
-            shape_preview_h: 0,
-            filter_preview_texture: None,
-            filter_preview_layer_id: None,
             mask_filter_target: None,
             liquify_disp_texture: None,
-            gradient_preview_texture: None,
-            gradient_preview_layer_id: None,
-            clipboard_texture: None,
-            clipboard_width: 0,
-            clipboard_height: 0,
-            clipboard_offset_x: 0,
-            clipboard_offset_y: 0,
-            float_texture: None,
-            float_base_texture: None,
-            float_layer_id: None,
-            float_width: 0,
-            float_height: 0,
-            float_layer_x: 0,
-            float_layer_y: 0,
-            float_transform_mode: 0,
-            float_transform_inv_matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-            float_transform_center: [0.0, 0.0],
-            float_transform_corners: [0.0; 8],
-            float_transform_orig_rect: [0.0; 4],
-            float_transform_src_rect: [0.0; 4],
             layer_transform: Vec::new(),
-            grid_visible: false,
-            grid_size: 1.0,
-            rulers_visible: false,
-            transform_overlay: None,
-            gradient_guide: None,
-            lasso_points: None,
-            crop_rect: None,
-            brush_cursor: None,
-            path_overlay: None,
-            seamless_pattern: false,
-            seamless_dim: true,
-            seamless_wrap: false,
-            channel_mask: [1.0, 1.0, 1.0, 1.0],
-            selection_time: 0.0,
             adjustments: ImageAdjustmentState::default(),
-            group_adjustments: HashMap::new(),
-            group_scratch_levels: Vec::new(),
-            group_pre_adj_cache: HashMap::new(),
-            group_pre_adj_valid: false,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
@@ -503,7 +447,93 @@ impl EngineInner {
             effect_cache: crate::effect_cache_gpu::new_cache(),
             healing_mean_target: None,
             coverage_strokes: HashMap::new(),
-            stamp_preview: None,
+            clipboard: ClipboardState {
+                texture: None,
+                width: 0,
+                height: 0,
+                offset_x: 0,
+                offset_y: 0,
+            },
+            float: FloatState {
+                texture: None,
+                base_texture: None,
+                layer_id: None,
+                width: 0,
+                height: 0,
+                layer_x: 0,
+                layer_y: 0,
+                transform_mode: 0,
+                transform_inv_matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+                transform_center: [0.0, 0.0],
+                transform_corners: [0.0; 8],
+                transform_orig_rect: [0.0; 4],
+                transform_src_rect: [0.0; 4],
+            },
+            previews: PreviewState {
+                shape_texture: None,
+                shape_layer_id: None,
+                shape_x: 0,
+                shape_y: 0,
+                shape_w: 0,
+                shape_h: 0,
+                filter_texture: None,
+                filter_layer_id: None,
+                gradient_texture: None,
+                gradient_layer_id: None,
+            },
+            overlays: OverlayState {
+                grid_visible: false,
+                grid_size: 1.0,
+                rulers_visible: false,
+                transform_overlay: None,
+                gradient_guide: None,
+                lasso_points: None,
+                crop_rect: None,
+                brush_cursor: None,
+                path_overlay: None,
+                seamless_pattern: false,
+                seamless_dim: true,
+                seamless_wrap: false,
+                channel_mask: [1.0, 1.0, 1.0, 1.0],
+                selection_time: 0.0,
+                stamp_preview: None,
+            },
+            groups: GroupState {
+                adjustments: HashMap::new(),
+                scratch_levels: Vec::new(),
+                pre_adj_cache: HashMap::new(),
+                pre_adj_valid: false,
+            },
+            brush: BrushState {
+                stroke_textures: HashMap::new(),
+                stroke_opacity: HashMap::new(),
+                stroke_use_brush_texture: HashMap::new(),
+                stroke_fbo: None,
+                stroke_dodge_textures: HashMap::new(),
+                stroke_dodge_preview_textures: HashMap::new(),
+                stroke_dodge_modes: HashMap::new(),
+                stroke_sponge_textures: HashMap::new(),
+                stroke_sponge_preview_textures: HashMap::new(),
+                stroke_sponge_modes: HashMap::new(),
+                tip_texture: None,
+                tip_width: 0,
+                tip_height: 0,
+                has_tip: false,
+                tip_is_color: false,
+                angle: 0.0,
+                dab_transform: [1.0, 0.0, 0.0, 1.0],
+                sub_brush_tips: Vec::new(),
+                saved_primary_tip: None,
+                stroke_texture_origin: (0.0, 0.0),
+                stroke_texture_rotation: 0.0,
+                stroke_texture_origin_set: false,
+                texture: None,
+                texture_width: 0,
+                texture_height: 0,
+                has_texture: false,
+                texture_scale: 1.0,
+                texture_blend_mode: 0,
+            },
         })
     }
 
@@ -562,7 +592,7 @@ impl EngineInner {
     /// relies on it to know a layer's cached effects are stale.
     pub fn mark_layer_dirty(&mut self, layer_id: &str) {
         self.needs_recomposite = true;
-        self.group_pre_adj_valid = false;
+        self.groups.pre_adj_valid = false;
         let generation = self.next_content_gen;
         self.next_content_gen += 1;
         match self.layer_content_gen.get_mut(layer_id) {
@@ -704,40 +734,40 @@ impl EngineInner {
         crate::effect_cache_gpu::clear(self);
         self.layer_content_gen.clear();
         // Stroke textures
-        for (_, tex) in self.stroke_textures.drain() {
+        for (_, tex) in self.brush.stroke_textures.drain() {
             self.texture_pool.release(tex);
         }
-        self.stroke_opacity.clear();
-        if let Some(fbo) = self.stroke_fbo.take() {
+        self.brush.stroke_opacity.clear();
+        if let Some(fbo) = self.brush.stroke_fbo.take() {
             self.fbo_pool.release(fbo);
         }
         // Dodge/burn stroke state
-        for (_, tex) in self.stroke_dodge_textures.drain() {
+        for (_, tex) in self.brush.stroke_dodge_textures.drain() {
             self.texture_pool.release(tex);
         }
-        for (_, tex) in self.stroke_dodge_preview_textures.drain() {
+        for (_, tex) in self.brush.stroke_dodge_preview_textures.drain() {
             self.texture_pool.release(tex);
         }
-        self.stroke_dodge_modes.clear();
-        for (_, tex) in self.stroke_sponge_textures.drain() {
+        self.brush.stroke_dodge_modes.clear();
+        for (_, tex) in self.brush.stroke_sponge_textures.drain() {
             self.texture_pool.release(tex);
         }
-        for (_, tex) in self.stroke_sponge_preview_textures.drain() {
+        for (_, tex) in self.brush.stroke_sponge_preview_textures.drain() {
             self.texture_pool.release(tex);
         }
-        self.stroke_sponge_modes.clear();
+        self.brush.stroke_sponge_modes.clear();
         self.coverage_strokes.clear();
-        self.stamp_preview = None;
+        self.overlays.stamp_preview = None;
         // Brush tip
-        if let Some(tex) = self.brush_tip_texture.take() {
+        if let Some(tex) = self.brush.tip_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.brush_has_tip = false;
+        self.brush.has_tip = false;
         // Brush texture
-        if let Some(tex) = self.brush_texture.take() {
+        if let Some(tex) = self.brush.texture.take() {
             self.texture_pool.release(tex);
         }
-        self.brush_has_texture = false;
+        self.brush.has_texture = false;
         // Selection mask
         if let Some(tex) = self.selection_mask_texture.take() {
             self.texture_pool.release(tex);
@@ -748,59 +778,59 @@ impl EngineInner {
         }
         crate::quick_mask_gpu::end_quick_mask_move(self);
         // Shape preview
-        if let Some(tex) = self.shape_preview_texture.take() {
+        if let Some(tex) = self.previews.shape_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.shape_preview_layer_id = None;
+        self.previews.shape_layer_id = None;
         // Filter preview
-        if let Some(tex) = self.filter_preview_texture.take() {
+        if let Some(tex) = self.previews.filter_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.filter_preview_layer_id = None;
+        self.previews.filter_layer_id = None;
         // Liquify displacement
         if let Some(tex) = self.liquify_disp_texture.take() {
             self.texture_pool.release(tex);
         }
         // Gradient preview
-        if let Some(tex) = self.gradient_preview_texture.take() {
+        if let Some(tex) = self.previews.gradient_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.gradient_preview_layer_id = None;
+        self.previews.gradient_layer_id = None;
         // Clipboard
-        if let Some(tex) = self.clipboard_texture.take() {
+        if let Some(tex) = self.clipboard.texture.take() {
             self.texture_pool.release(tex);
         }
-        self.clipboard_width = 0;
-        self.clipboard_height = 0;
-        self.clipboard_offset_x = 0;
-        self.clipboard_offset_y = 0;
+        self.clipboard.width = 0;
+        self.clipboard.height = 0;
+        self.clipboard.offset_x = 0;
+        self.clipboard.offset_y = 0;
         // Float
-        if let Some(tex) = self.float_texture.take() {
+        if let Some(tex) = self.float.texture.take() {
             self.texture_pool.release(tex);
         }
-        if let Some(tex) = self.float_base_texture.take() {
+        if let Some(tex) = self.float.base_texture.take() {
             self.texture_pool.release(tex);
         }
-        self.float_layer_id = None;
-        self.float_width = 0;
-        self.float_height = 0;
-        self.float_layer_x = 0;
-        self.float_layer_y = 0;
-        self.float_transform_mode = 0;
+        self.float.layer_id = None;
+        self.float.width = 0;
+        self.float.height = 0;
+        self.float.layer_x = 0;
+        self.float.layer_y = 0;
+        self.float.transform_mode = 0;
         crate::layer_transform_gpu::end_layer_transform(self);
         // Layer stack and overlays
         self.layer_stack.clear();
-        self.transform_overlay = None;
-        self.gradient_guide = None;
-        self.lasso_points = None;
-        self.crop_rect = None;
-        self.brush_cursor = None;
-        self.path_overlay = None;
+        self.overlays.transform_overlay = None;
+        self.overlays.gradient_guide = None;
+        self.overlays.lasso_points = None;
+        self.overlays.crop_rect = None;
+        self.overlays.brush_cursor = None;
+        self.overlays.path_overlay = None;
         self.mask_edit_layer_id = None;
         self.mlasso.edges = None;
         self.mlasso.width = 0;
         self.mlasso.height = 0;
-        self.group_adjustments.clear();
+        self.groups.adjustments.clear();
         // Image adjustments
         self.adjustments.exposure = 0.0;
         self.adjustments.contrast = 0.0;
@@ -841,7 +871,7 @@ impl EngineInner {
 
     pub fn mark_all_dirty(&mut self) {
         self.needs_recomposite = true;
-        self.group_pre_adj_valid = false;
+        self.groups.pre_adj_valid = false;
     }
 
     /// The GPU objects a [`Pass`] draws with.

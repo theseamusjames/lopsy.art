@@ -121,16 +121,16 @@ pub fn upload_brush_tip(engine: &mut EngineInner, data: &[u8], width: u32, heigh
         rgba[i * 4 + 2] = 0;
         rgba[i * 4 + 3] = 255;
     }
-    if let Some(old) = engine.brush_tip_texture.take() {
+    if let Some(old) = engine.brush.tip_texture.take() {
         engine.texture_pool.release(old);
     }
     let tex = engine.texture_pool.acquire(width, height)
         ?;
     engine.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         ?;
-    engine.brush_tip_texture = Some(tex);
-    engine.brush_tip_width = width;
-    engine.brush_tip_height = height;
+    engine.brush.tip_texture = Some(tex);
+    engine.brush.tip_width = width;
+    engine.brush.tip_height = height;
     Ok(())
 }
 
@@ -150,34 +150,34 @@ pub fn upload_brush_tip_rgba(engine: &mut EngineInner, data: &[u8], width: u32, 
         rgba[off + 2] = (data[off + 2] as f32 * a + 0.5) as u8;
         rgba[off + 3] = data[off + 3];
     }
-    if let Some(old) = engine.brush_tip_texture.take() {
+    if let Some(old) = engine.brush.tip_texture.take() {
         engine.texture_pool.release(old);
     }
     let tex = engine.texture_pool.acquire(width, height)
         ?;
     engine.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         ?;
-    engine.brush_tip_texture = Some(tex);
-    engine.brush_tip_width = width;
-    engine.brush_tip_height = height;
-    engine.brush_tip_is_color = true;
+    engine.brush.tip_texture = Some(tex);
+    engine.brush.tip_width = width;
+    engine.brush.tip_height = height;
+    engine.brush.tip_is_color = true;
     Ok(())
 }
 
 pub fn clear_brush_tip(engine: &mut EngineInner) {
-    if let Some(tex) = engine.brush_tip_texture.take() {
+    if let Some(tex) = engine.brush.tip_texture.take() {
         engine.texture_pool.release(tex);
     }
-    engine.brush_tip_width = 0;
-    engine.brush_tip_height = 0;
-    engine.brush_has_tip = false;
-    engine.brush_tip_is_color = false;
+    engine.brush.tip_width = 0;
+    engine.brush.tip_height = 0;
+    engine.brush.has_tip = false;
+    engine.brush.tip_is_color = false;
 }
 
 pub fn set_brush_tip_state(engine: &mut EngineInner, has_tip: bool, angle: f32, is_color: bool) {
-    engine.brush_has_tip = has_tip;
-    engine.brush_angle = angle;
-    engine.brush_tip_is_color = is_color;
+    engine.brush.has_tip = has_tip;
+    engine.brush.angle = angle;
+    engine.brush.tip_is_color = is_color;
 }
 
 /// Set the per-dab sample transform used by the brush dab shaders (row-major
@@ -185,15 +185,15 @@ pub fn set_brush_tip_state(engine: &mut EngineInner, has_tip: bool, angle: f32, 
 /// copy passes the inverse of its linear map so the tip is reflected or
 /// rotated along with the dab position.
 pub fn set_brush_dab_transform(engine: &mut EngineInner, m00: f32, m01: f32, m10: f32, m11: f32) {
-    engine.brush_dab_transform = [m00, m01, m10, m11];
+    engine.brush.dab_transform = [m00, m01, m10, m11];
 }
 
 pub fn cache_sub_brush_tip(engine: &mut EngineInner, index: u32, data: &[u8], width: u32, height: u32) -> Result<(), String> {
     let idx = index as usize;
-    while engine.sub_brush_tips.len() <= idx {
-        engine.sub_brush_tips.push(None);
+    while engine.brush.sub_brush_tips.len() <= idx {
+        engine.brush.sub_brush_tips.push(None);
     }
-    if let Some((old_handle, _, _, _)) = engine.sub_brush_tips[idx].take() {
+    if let Some((old_handle, _, _, _)) = engine.brush.sub_brush_tips[idx].take() {
         engine.texture_pool.release(old_handle);
     }
     let pixel_count = (width * height) as usize;
@@ -236,16 +236,16 @@ pub fn cache_sub_brush_tip(engine: &mut EngineInner, index: u32, data: &[u8], wi
         ?;
     engine.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         ?;
-    engine.sub_brush_tips[idx] = Some((tex, width, height, false));
+    engine.brush.sub_brush_tips[idx] = Some((tex, width, height, false));
     Ok(())
 }
 
 pub fn cache_sub_brush_tip_rgba(engine: &mut EngineInner, index: u32, data: &[u8], width: u32, height: u32) -> Result<(), String> {
     let idx = index as usize;
-    while engine.sub_brush_tips.len() <= idx {
-        engine.sub_brush_tips.push(None);
+    while engine.brush.sub_brush_tips.len() <= idx {
+        engine.brush.sub_brush_tips.push(None);
     }
-    if let Some((old_handle, _, _, _)) = engine.sub_brush_tips[idx].take() {
+    if let Some((old_handle, _, _, _)) = engine.brush.sub_brush_tips[idx].take() {
         engine.texture_pool.release(old_handle);
     }
     let pixel_count = (width * height) as usize;
@@ -266,54 +266,54 @@ pub fn cache_sub_brush_tip_rgba(engine: &mut EngineInner, index: u32, data: &[u8
         ?;
     engine.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         ?;
-    engine.sub_brush_tips[idx] = Some((tex, width, height, true));
+    engine.brush.sub_brush_tips[idx] = Some((tex, width, height, true));
     Ok(())
 }
 
 pub fn activate_sub_brush_tip(engine: &mut EngineInner, index: u32, angle: f32, is_color: bool) {
-    if engine.saved_primary_tip.is_none() {
-        engine.saved_primary_tip = Some((
-            engine.brush_tip_texture.unwrap_or(TextureHandle(usize::MAX)),
-            engine.brush_tip_width,
-            engine.brush_tip_height,
-            engine.brush_tip_is_color,
+    if engine.brush.saved_primary_tip.is_none() {
+        engine.brush.saved_primary_tip = Some((
+            engine.brush.tip_texture.unwrap_or(TextureHandle(usize::MAX)),
+            engine.brush.tip_width,
+            engine.brush.tip_height,
+            engine.brush.tip_is_color,
         ));
     }
     let idx = index as usize;
-    if let Some(Some((tex, w, h, cached_is_color))) = engine.sub_brush_tips.get(idx) {
-        engine.brush_tip_texture = Some(*tex);
-        engine.brush_tip_width = *w;
-        engine.brush_tip_height = *h;
-        engine.brush_has_tip = true;
-        engine.brush_angle = angle;
-        engine.brush_tip_is_color = if is_color { true } else { *cached_is_color };
+    if let Some(Some((tex, w, h, cached_is_color))) = engine.brush.sub_brush_tips.get(idx) {
+        engine.brush.tip_texture = Some(*tex);
+        engine.brush.tip_width = *w;
+        engine.brush.tip_height = *h;
+        engine.brush.has_tip = true;
+        engine.brush.angle = angle;
+        engine.brush.tip_is_color = if is_color { true } else { *cached_is_color };
     } else {
-        engine.brush_has_tip = false;
-        engine.brush_angle = angle;
-        engine.brush_tip_is_color = false;
+        engine.brush.has_tip = false;
+        engine.brush.angle = angle;
+        engine.brush.tip_is_color = false;
     }
 }
 
 pub fn deactivate_sub_brush_tip(engine: &mut EngineInner) {
-    if let Some((tex, w, h, is_color)) = engine.saved_primary_tip.take() {
+    if let Some((tex, w, h, is_color)) = engine.brush.saved_primary_tip.take() {
         if tex.0 == usize::MAX {
-            engine.brush_tip_texture = None;
+            engine.brush.tip_texture = None;
         } else {
-            engine.brush_tip_texture = Some(tex);
+            engine.brush.tip_texture = Some(tex);
         }
-        engine.brush_tip_width = w;
-        engine.brush_tip_height = h;
-        engine.brush_tip_is_color = is_color;
+        engine.brush.tip_width = w;
+        engine.brush.tip_height = h;
+        engine.brush.tip_is_color = is_color;
     }
 }
 
 pub fn clear_sub_brush_tip_cache(engine: &mut EngineInner) {
-    for entry in engine.sub_brush_tips.drain(..) {
+    for entry in engine.brush.sub_brush_tips.drain(..) {
         if let Some((handle, _, _, _)) = entry {
             engine.texture_pool.release(handle);
         }
     }
-    engine.saved_primary_tip = None;
+    engine.brush.saved_primary_tip = None;
 }
 
 pub fn upload_brush_texture(engine: &mut EngineInner, data: &[u8], width: u32, height: u32) -> Result<(), String> {
@@ -325,7 +325,7 @@ pub fn upload_brush_texture(engine: &mut EngineInner, data: &[u8], width: u32, h
         rgba[i * 4 + 2] = v;
         rgba[i * 4 + 3] = 255;
     }
-    if let Some(old) = engine.brush_texture.take() {
+    if let Some(old) = engine.brush.texture.take() {
         engine.texture_pool.release(old);
     }
     let tex = engine.texture_pool.acquire(width, height)
@@ -333,25 +333,25 @@ pub fn upload_brush_texture(engine: &mut EngineInner, data: &[u8], width: u32, h
     engine.texture_pool.upload_rgba(tex, 0, 0, width, height, &rgba)
         ?;
     engine.texture_pool.set_repeat_wrap(tex);
-    engine.brush_texture = Some(tex);
-    engine.brush_texture_width = width;
-    engine.brush_texture_height = height;
+    engine.brush.texture = Some(tex);
+    engine.brush.texture_width = width;
+    engine.brush.texture_height = height;
     Ok(())
 }
 
 pub fn clear_brush_texture(engine: &mut EngineInner) {
-    if let Some(tex) = engine.brush_texture.take() {
+    if let Some(tex) = engine.brush.texture.take() {
         engine.texture_pool.release(tex);
     }
-    engine.brush_texture_width = 0;
-    engine.brush_texture_height = 0;
-    engine.brush_has_texture = false;
+    engine.brush.texture_width = 0;
+    engine.brush.texture_height = 0;
+    engine.brush.has_texture = false;
 }
 
 pub fn set_brush_texture_state(engine: &mut EngineInner, has_texture: bool, scale: f32, blend_mode: u32) {
-    engine.brush_has_texture = has_texture;
-    engine.brush_texture_scale = scale;
-    engine.brush_texture_blend_mode = blend_mode;
+    engine.brush.has_texture = has_texture;
+    engine.brush.texture_scale = scale;
+    engine.brush.texture_blend_mode = blend_mode;
 }
 
 // Built-in brush tip bitmaps — auto-generated from engine-rs/brushes/*.png

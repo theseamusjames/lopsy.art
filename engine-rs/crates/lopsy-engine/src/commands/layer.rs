@@ -374,7 +374,7 @@ pub fn clipboard_cut(
 
 /// Clear pixels in the selection (or whole layer) without touching the
 /// retained internal clipboard. Delete/Backspace uses this instead of
-/// `clipboardCut` — `clipboardCut` re-copies into `engine.clipboard_texture`
+/// `clipboardCut` — `clipboardCut` re-copies into `engine.clipboard.texture`
 /// as a side effect, which clobbers a paste-in-place copy made earlier with
 /// `clipboardCopy`/`clipboardCut` (see #870).
 pub fn clear_selected_pixels(
@@ -445,7 +445,7 @@ pub fn ensure_float_covers(engine: &mut EngineInner, x: i32, y: i32, w: u32, h: 
 }
 
 pub fn has_float(engine: &EngineInner) -> bool {
-    engine.float_texture.is_some() || !engine.layer_transform.is_empty()
+    engine.float.texture.is_some() || !engine.layer_transform.is_empty()
 }
 
 // ============================================================
