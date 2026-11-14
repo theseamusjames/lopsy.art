@@ -46,7 +46,7 @@ export function NavigatorPanel() {
   // (move, transform, marquee, gradient, crop, mesh warp, tilt shift) was
   // still paying a full-composite readback five times a second.
   useEffect(() => {
-    const update = () => {
+    const update = async (): Promise<void> => {
       const thumbCanvas = thumbnailCanvasRef.current;
       if (!thumbCanvas) return;
       const engine = getEngine();
@@ -55,7 +55,8 @@ export function NavigatorPanel() {
       const maxDim = Math.max(thumbnailSize.width, thumbnailSize.height);
       if (maxDim === 0) return;
 
-      const data = readCompositeThumbnail(engine, maxDim);
+      const data = await readCompositeThumbnail(engine, maxDim);
+      if (thumbnailCanvasRef.current !== thumbCanvas) return;
       if (data.length < 8) return;
 
       const tw = data[0]! | (data[1]! << 8) | (data[2]! << 16) | (data[3]! << 24);
@@ -73,9 +74,12 @@ export function NavigatorPanel() {
       ctx.putImageData(imageData, 0, 0);
     };
 
-    if (!useUIStore.getState().isInteracting) update();
+    const refresh = (): void => {
+      update().catch(() => {});
+    };
+    if (!useUIStore.getState().isInteracting) refresh();
     const scheduler = createNavigatorScheduler({
-      read: update,
+      read: refresh,
       intervalMs: THUMBNAIL_UPDATE_INTERVAL_MS,
       getContentVersion: getCompositeInputVersion,
     });

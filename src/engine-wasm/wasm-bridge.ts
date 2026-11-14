@@ -48,8 +48,8 @@ import init, {
   readLayerPixelsCompressedU16,
   readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
-  readLayerThumbnail,
-  readCompositeThumbnail,
+  readLayerThumbnail as rawReadLayerThumbnail,
+  readCompositeThumbnail as rawReadCompositeThumbnail,
   rasterizeLayerEffects,
   duplicateLayerTexture,
   mergeLayers,
@@ -58,7 +58,7 @@ import init, {
   clipboardCut,
   clipboardPaste,
   clearSelectedPixels,
-  readClipboardPixels,
+  readClipboardPixels as rawReadClipboardPixels,
   uploadClipboardPixels,
   beginStroke,
   prewarmStroke,
@@ -170,7 +170,7 @@ import init, {
   filterPatternFill,
   filterColorLut,
   extractChannelPixels,
-  readChannelThumbnail,
+  readChannelThumbnail as rawReadChannelThumbnail,
   filterMeshWarp,
   liquifyInitDisplacement,
   liquifyRender,
@@ -385,8 +385,6 @@ export {
   readLayerPixelsCompressedU16,
   readLayerPixelsLz4U16,
   uploadLayerPixelsCompressedU16,
-  readLayerThumbnail,
-  readCompositeThumbnail,
   rasterizeLayerEffects,
   duplicateLayerTexture,
   mergeLayers,
@@ -395,7 +393,6 @@ export {
   clipboardCut,
   clipboardPaste,
   clearSelectedPixels,
-  readClipboardPixels,
   uploadClipboardPixels,
   beginStroke,
   prewarmStroke,
@@ -507,7 +504,6 @@ export {
   filterPatternFill,
   filterColorLut,
   extractChannelPixels,
-  readChannelThumbnail,
   filterMeshWarp,
   liquifyInitDisplacement,
   liquifyRender,
@@ -659,6 +655,10 @@ export const compositeForExport = asyncReadback(rawCompositeForExport);
 export const exportPng16 = asyncReadback(rawExportPng16);
 export const quantizeCompositeToPalette = asyncReadback(rawQuantizeCompositeToPalette);
 export const readLayerPixels = asyncReadback(rawReadLayerPixels);
+export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
+export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
+export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);
+export const readClipboardPixels = asyncReadback(rawReadClipboardPixels);
 /**
  * The synchronous read behind `readLayerPixels`, for `gpu-pixel-access`'s
  * per-frame cache until `readLayerAsImageData` and its callers await too.

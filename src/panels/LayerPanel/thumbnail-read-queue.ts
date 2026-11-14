@@ -20,7 +20,7 @@
  * already drained.
  */
 
-type ThumbnailReader = () => ImageData | null;
+type ThumbnailReader = () => Promise<ImageData | null>;
 type ThumbnailCallback = (thumb: ImageData | null) => void;
 
 interface QueuedRead {
@@ -67,18 +67,24 @@ function flush(): void {
   for (const entry of pending) entries.push(entry);
   pending.clear();
   for (const [, req] of entries) {
-    let thumb: ImageData | null = null;
+    let read: Promise<ImageData | null>;
     try {
-      thumb = req.reader();
+      read = req.reader();
     } catch (e) {
-      console.error('[Lopsy] thumbnail readback failed:', e);
-      thumb = null;
+      read = Promise.reject(e);
     }
-    try {
-      req.cb(thumb);
-    } catch (e) {
-      console.error('[Lopsy] thumbnail callback failed:', e);
-    }
+    read
+      .catch((e: unknown) => {
+        console.error('[Lopsy] thumbnail readback failed:', e);
+        return null;
+      })
+      .then((thumb) => {
+        try {
+          req.cb(thumb);
+        } catch (e) {
+          console.error('[Lopsy] thumbnail callback failed:', e);
+        }
+      });
   }
 }
 

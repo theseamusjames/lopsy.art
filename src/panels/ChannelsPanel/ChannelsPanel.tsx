@@ -36,23 +36,23 @@ interface ChannelThumbnailProps {
   pixelVersion: number;
 }
 
-function readThumbForChannel(
+async function readThumbForChannel(
   layerId: string,
   channel: ChannelId | 'rgb',
-): ImageData | null {
+): Promise<ImageData | null> {
   const engine = getEngine();
   if (!engine) return null;
 
   // Both bridge functions return an 8-byte header [tw_u32_le, th_u32_le]
   // followed by RGBA pixels — full documentation in the Rust side.
-  const data = channel === 'rgb'
+  const data = await (channel === 'rgb'
     ? readLayerThumbnail(engine, layerId, THUMB_MAX)
     : readChannelThumbnail(
       engine,
       layerId,
       channel === 'r' ? 0 : channel === 'g' ? 1 : channel === 'b' ? 2 : 3,
       THUMB_MAX,
-    );
+    ));
 
   if (data.length < 8) return null;
   const tw = data[0]! | (data[1]! << 8) | (data[2]! << 16) | (data[3]! << 24);
