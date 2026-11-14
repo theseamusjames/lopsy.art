@@ -6,6 +6,7 @@ import {
   expandFromCrop,
   toSparsePixelData,
   fromSparsePixelData,
+  sparseToImageData,
 } from '../../engine/canvas-ops';
 import { invalidateBitmapCache } from '../../engine/bitmap-cache';
 import { readLayerAsImageDataSync } from '../../engine-wasm/gpu-pixel-access';
@@ -35,6 +36,11 @@ export interface PixelDataSlice {
   notifyRender: () => void;
   cropLayerToContent: (layerId: string) => void;
   expandLayerForEditing: (layerId: string) => ImageData;
+  /**
+   * A layer's pixels from whichever copy exists, read synchronously. Only
+   * tests reach this; app code awaits `readLayerAsImageData` instead.
+   */
+  resolvePixelData: (layerId: string) => ImageData | undefined;
   /** Read-only: returns ImageData from JS cache, sparse storage, or GPU
    *  readback (in that order). Returns at the layer's stored dimensions
    *  (not full canvas). */
@@ -269,5 +275,15 @@ export const createPixelDataSlice: SliceCreator<PixelDataSlice> = (set, get) => 
       },
     });
     return empty;
+  },
+
+  resolvePixelData: (layerId: string) => {
+    const data = pixelDataManager.get(layerId);
+    if (data) return data;
+    const sparseEntry = pixelDataManager.getSparse(layerId);
+    if (sparseEntry) return sparseToImageData(sparseEntry.sparse);
+    const gpuData = readLayerAsImageDataSync(layerId);
+    if (gpuData) return gpuData;
+    return undefined;
   },
 });
