@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { canvasColorSpace } from '../../engine/color-space';
 import { getWasmMemoryBytes } from '../../engine-wasm/wasm-bridge';
 import { runningRenderer, type Renderer } from '../../engine-wasm/renderer-choice';
+import { isScreenHdr, onScreenHdrChange } from '../../engine-wasm/screen-output';
 import { colorModeLabel } from '../../utils/color-mode';
 import styles from './StatusBar.module.css';
 
@@ -29,6 +30,7 @@ export function StatusBar() {
   const cursorX = useUIStore((s) => s.cursorPosition.x);
   const cursorY = useUIStore((s) => s.cursorPosition.y);
   const [memoryUsage, setMemoryUsage] = useState('');
+  const isHdr = useSyncExternalStore(onScreenHdrChange, isScreenHdr);
   // Chosen once per page load, before any document exists to show this bar.
   const renderer = runningRenderer();
 
@@ -158,7 +160,7 @@ export function StatusBar() {
           <span className={styles.divider} />
         </>
       )}
-      <span className={styles.item}>{colorSpaceLabel}</span>
+      <span className={styles.item}>{isHdr ? `${colorSpaceLabel} HDR` : colorSpaceLabel}</span>
     </footer>
   );
 }

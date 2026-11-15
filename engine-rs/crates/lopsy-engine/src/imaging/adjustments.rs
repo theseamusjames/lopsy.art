@@ -133,7 +133,21 @@ fn flag(is_on: bool) -> f32 {
 
 /// Every non-sampler uniform of `adjustments.wgsl`, including the
 /// `u_has*` LUT flags, derived from `adj`.
-pub fn params(adj: &ImageAdjustmentState, brightness: f32, doc_color_mode: u32) -> AdjustmentsParams {
+/// What becomes of values the tone controls push above white.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OverWhite {
+    /// Clipped to white: for anything stored, exported or blended further.
+    Clipped,
+    /// Kept, for the last thing drawn before an HDR screen, which shows it
+    /// brighter than white. Not kept where an adjustment rebuilds the
+    /// colour afterwards (Invert, Black & White, Gradient Map): what was
+    /// set aside would be added to a colour it no longer belongs to. Lab
+    /// documents clip when they re-encode.
+    Kept,
+}
+
+pub fn params(adj: &ImageAdjustmentState, brightness: f32, doc_color_mode: u32, over_white: OverWhite) -> AdjustmentsParams {
+    let rebuilds_colour = adj.invert || adj.bw_enabled || has_lut(adj.has_gradient_map, adj.gradient_map_texture);
     AdjustmentsParams {
         brightness,
         contrast: adj.contrast / 100.0,
@@ -191,6 +205,7 @@ pub fn params(adj: &ImageAdjustmentState, brightness: f32, doc_color_mode: u32) 
         cg_exponent: adj.cg_exponent,
         cg_width: adj.cg_width,
         doc_color_mode: doc_color_mode as i32,
+        keep_over_white: flag(over_white == OverWhite::Kept && !rebuilds_colour),
     }
 }
 
@@ -205,8 +220,11 @@ pub fn pass<'a>(
     adj: &ImageAdjustmentState,
     brightness: f32,
     color_mode: u32,
+    over_white: OverWhite,
 ) -> (Pass<'a, AdjustmentsParams>, u32) {
-    let mut pass = im.gpu.pass(&im.shaders.adjustments, params(adj, brightness, color_mode)).texture("u_tex", source);
+    let mut pass = im.gpu
+        .pass(&im.shaders.adjustments, params(adj, brightness, color_mode, over_white))
+        .texture("u_tex", source);
     let mut units = 1;
     let luts = [
         ("u_levelsLut", has_lut(adj.has_levels, adj.levels_texture), adj.levels_texture),
@@ -237,7 +255,7 @@ pub fn brightness_contrast<'a>(
     color_mode: u32,
 ) -> Pass<'a, AdjustmentsParams> {
     let adj = ImageAdjustmentState { contrast, ..Default::default() };
-    pass(im, source, &adj, brightness, color_mode).0
+    pass(im, source, &adj, brightness, color_mode, OverWhite::Clipped).0
 }
 
 /// The pass that applies a vignette of `amount` to `source`.

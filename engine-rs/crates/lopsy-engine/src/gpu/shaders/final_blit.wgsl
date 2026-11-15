@@ -9,6 +9,9 @@ struct Params {
     u_channelMask: vec4<f32>,
     // Document color mode: 0 = sRGB-backed (RGB, grayscale, indexed, CMYK), 1 = Lab.
     u_docColorMode: i32,
+    // 1 for an 8-bit screen, where the dither hides banding; 0 for a float
+    // one (HDR), which has the precision and would only show the noise.
+    u_dither: f32,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_compositeTex: texture_2d<f32>;
@@ -135,7 +138,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     // backends: WebGPU's own fragment position counts rows down.
     let n0 = fract(sin(dot(pixel, vec2<f32>(12.9898, 78.233))) * 43758.5453);
     let n1 = fract(sin(dot(pixel, vec2<f32>(63.7264, 10.873))) * 28637.1136);
-    let dither = (n0 + n1 - 1.0) / 255.0;
+    let dither = (n0 + n1 - 1.0) / 255.0 * params.u_dither;
 
     return vec4<f32>(color.rgb + dither, color.a);
 }
