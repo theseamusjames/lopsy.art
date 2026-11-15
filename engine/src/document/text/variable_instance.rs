@@ -15,7 +15,7 @@ use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::raw::TableProvider;
 use skrifa::{FontRef, GlyphId, MetadataProvider, Tag};
 
-use crate::woff2::build_sfnt;
+use crate::document::text::woff2::build_sfnt;
 
 const WGHT: Tag = Tag::new(b"wght");
 
@@ -283,10 +283,10 @@ pub fn instantiate_wght(data: &[u8], index: u32, weight: u16) -> Option<Vec<u8>>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::woff2::decode_woff2;
+    use crate::document::text::woff2::decode_woff2;
 
     fn montserrat() -> Vec<u8> {
-        decode_woff2(include_bytes!("../tests/fixtures/Montserrat-wght-latin.woff2")).expect("decodes")
+        decode_woff2(include_bytes!("../../../tests/fixtures/Montserrat-wght-latin.woff2")).expect("decodes")
     }
 
     fn advance_of(data: &[u8], c: char) -> f32 {

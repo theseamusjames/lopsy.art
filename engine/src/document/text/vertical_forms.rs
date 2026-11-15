@@ -78,7 +78,7 @@ pub fn vertical_glyph(
 mod tests {
     use super::*;
 
-    const TEST_FONT: &[u8] = include_bytes!("../tests/fixtures/LopsyVerticalTest.ttf");
+    const TEST_FONT: &[u8] = include_bytes!("../../../tests/fixtures/LopsyVerticalTest.ttf");
     const INTER: &[u8] = include_bytes!("fonts/Inter-Regular.ttf");
 
     fn glyph_of(face: &Face, c: char) -> u16 {

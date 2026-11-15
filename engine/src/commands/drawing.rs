@@ -8,7 +8,7 @@
 
 use crate::engine::EngineInner;
 use crate::gpu::read::Read;
-use crate::{gradient_gpu, layer_manager, shape_gpu};
+use crate::{document::paint::gradient_gpu, document::layer_manager, document::paint::shape_gpu};
 
 // ============================================================
 // Gradient
@@ -75,7 +75,7 @@ fn average_sample(mut pixels: Vec<u8>, doc_color_mode: u32, sample_size: u32) ->
     // Decode before averaging: the transform out of a native mode is
     // non-linear, so averaging encoded values would not match what the
     // user sees under the cursor.
-    crate::compositor::decode_native_color_mode(doc_color_mode, &mut pixels);
+    crate::document::compositor::decode_native_color_mode(doc_color_mode, &mut pixels);
 
     // Average the sampled pixels
     let count = (sample_size * sample_size) as usize;

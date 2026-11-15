@@ -4,7 +4,7 @@
 
 use super::full_size_doc_center;
 use crate::engine::EngineInner;
-use crate::{filter_gpu, imaging};
+use crate::{document::filter_gpu, imaging};
 
 pub fn filter_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32) {
     if block_size <= 1 {

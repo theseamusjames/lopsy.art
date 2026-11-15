@@ -143,17 +143,20 @@ engine/
     task.rs           # `Cx`: lends the engine to an async command one poll at a time
     imaging/          # Adjustments and filters as passes over a source texture; no layers
     engine.rs         # EngineInner struct: holds all GPU state
-    compositor.rs     # Per-frame compositing pipeline
-    layer_manager.rs  # Texture upload/read/duplicate for layers
-    brush_gpu.rs      # Brush & eraser dab rendering (GPU)
-    clone_stamp_gpu.rs # Clone stamp per-dab rendering
-    filter_gpu.rs     # GPU filter dispatch (blur, invert, etc.)
-    gradient_gpu.rs   # Linear/radial gradient rendering
-    shape_gpu.rs      # Shape rasterization (rect, ellipse, polygon)
-    selection_gpu.rs  # Selection mask GPU operations
-    dodge_burn_gpu.rs # Dodge/burn tool
-    overlay_renderer.rs # Grid, rulers, marching ants, brush cursor
-    color_mgmt.rs     # ICC profile, wide-gamut support
+    document/         # What makes an image a document. Works on the layer stack
+      compositor.rs     # Per-frame compositing pipeline
+      layer_manager.rs  # Texture upload/read/duplicate for layers
+      filter_gpu.rs     # Applies an imaging operation to a layer (selection, write-back)
+      selection_gpu.rs  # Selection mask GPU operations
+      effect_cache_gpu.rs # Cached glow, shadow and stroke images per layer
+      overlay_renderer.rs # Grid, rulers, marching ants, brush cursor
+      paint/            # Tools that put pixels on a layer
+        brush_gpu.rs      # Brush & eraser dab rendering (GPU)
+        clone_stamp_gpu.rs # Clone stamp per-dab rendering
+        dodge_burn_gpu.rs # Dodge/burn tool
+        gradient_gpu.rs   # Linear/radial gradient rendering
+        shape_gpu.rs      # Shape rasterization (rect, ellipse, polygon)
+      text/             # Font decoding, shaping, glyph atlas, text rendering
     gpu/
       pass.rs         # The pass layer: the only way feature code draws
       shader.rs       # The typed shader list and the compiled programs

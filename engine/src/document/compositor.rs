@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use crate::coverage_stroke_gpu::{self, CoverageTool};
+use crate::document::paint::coverage_stroke_gpu::{self, CoverageTool};
 use crate::engine::{EngineInner, ImageAdjustmentState};
 use crate::imaging::adjustments::{self, OverWhite};
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
@@ -11,7 +11,7 @@ use crate::gpu::params::filters::{AdjustmentsParams, GaussianBlurParams, Vignett
 use crate::gpu::uniforms::{Uniforms, Vec4Array};
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::framebuffer::FramebufferHandle;
-use crate::effect_cache_gpu::{self as fx_cache, emit_effect, DocTarget, EffectCacheKey, EffectCapture, EffectOut, Phase};
+use crate::document::effect_cache_gpu::{self as fx_cache, emit_effect, DocTarget, EffectCacheKey, EffectCapture, EffectOut, Phase};
 use lopsy_core::effect_cache as fx_extent;
 use lopsy_core::geometry::Rect;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc, ColorOverlayDesc};
@@ -543,7 +543,7 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
         .viewport(0, 0, screen_w, screen_h)
         .texture("u_compositeTex", engine.composite_texture)
         .draw(Target::Screen);
-    crate::stamp_preview_gpu::draw(engine, screen_w, screen_h);
+    crate::document::paint::stamp_preview_gpu::draw(engine, screen_w, screen_h);
     engine.needs_present = false;
     Ok(())
 }
@@ -1620,7 +1620,7 @@ async fn with_composite_for_reuse<T>(
 pub async fn flatten_into_layer(cx: &Cx, layer_id: &str) -> Result<(), String> {
     with_composite_for_reuse(cx, |engine| {
         let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
-        crate::layer_manager::with_layer_texture(engine, layer_id, doc_w, doc_h, |engine, texture| {
+        crate::document::layer_manager::with_layer_texture(engine, layer_id, doc_w, doc_h, |engine, texture| {
             let is_copied = engine
                 .pass(&engine.shaders.blit, ())
                 .texture("u_tex", engine.composite_texture)
@@ -1645,7 +1645,7 @@ pub async fn copy_merged_to_clipboard(
 ) -> Result<(u32, u32, i32, i32), String> {
     with_composite_for_reuse(cx, |engine| {
         let document = Rect::new(0, 0, engine.doc_width, engine.doc_height);
-        crate::layer_manager::copy_texture_to_clipboard(
+        crate::document::layer_manager::copy_texture_to_clipboard(
             engine, engine.composite_texture, document, has_selection, bounds_x, bounds_y, bounds_w, bounds_h,
         )
     })
@@ -1772,7 +1772,7 @@ pub fn bake_layer_effects(engine: &mut EngineInner, layer_id: &str, bake_mask: b
 
     // The live composite was replaced; the next frame must rebuild it.
     engine.needs_recomposite = true;
-    crate::layer_manager::with_layer_texture(engine, &lid, doc_w, doc_h, |engine, texture| {
+    crate::document::layer_manager::with_layer_texture(engine, &lid, doc_w, doc_h, |engine, texture| {
         let is_copied = engine
             .pass(&engine.shaders.blit, ())
             .texture("u_tex", engine.composite_texture)

@@ -9,7 +9,7 @@
 use lopsy_core::color::BlendMode;
 
 use crate::engine::EngineInner;
-use crate::layer_manager;
+use crate::document::layer_manager;
 use crate::task::Cx;
 
 // ============================================================

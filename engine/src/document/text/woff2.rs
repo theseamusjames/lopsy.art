@@ -973,7 +973,7 @@ mod tests {
         // css2 latin subset of IM Fell DW Pica SC: its table directory uses
         // known-tag indices 17 (gasp), 19 (kern) and 28 (GSUB), which the
         // old tag table mapped to the wrong tables.
-        let woff2: &[u8] = include_bytes!("../tests/fixtures/IMFellDWPicaSC-latin.woff2");
+        let woff2: &[u8] = include_bytes!("../../../tests/fixtures/IMFellDWPicaSC-latin.woff2");
         let sfnt = decode_woff2(woff2).expect("decodes");
         let tags: Vec<u32> = sfnt_tables(&sfnt).into_iter().map(|(t, _)| t).collect();
         for t in [b"gasp", b"kern", b"GSUB", b"glyf", b"loca", b"cmap"] {
@@ -1004,7 +1004,7 @@ mod tests {
         use skrifa::raw::{tables::glyf::Glyph, TableProvider};
         use skrifa::MetadataProvider;
 
-        let woff2: &[u8] = include_bytes!("../tests/fixtures/IMFellDWPica-latin.woff2");
+        let woff2: &[u8] = include_bytes!("../../../tests/fixtures/IMFellDWPica-latin.woff2");
         let sfnt = decode_woff2(woff2).expect("decodes");
         let font = skrifa::FontRef::new(&sfnt).expect("parses");
         let gid = font.charmap().map('\u{00B7}').expect("maps U+00B7");

@@ -7,7 +7,7 @@
 
 use lopsy_core::{cmyk, lab, quantize};
 
-use crate::{compositor, filter_gpu, imaging, layer_manager};
+use crate::{document::compositor, document::filter_gpu, imaging, document::layer_manager};
 use crate::engine::EngineInner;
 use crate::gpu::read::Read;
 use crate::task::Cx;

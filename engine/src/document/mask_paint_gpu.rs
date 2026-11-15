@@ -1,10 +1,10 @@
 use lopsy_core::geometry::Rect;
-use crate::compositor::mask_doc_origin;
-use crate::dab_pass_gpu::scratch_dab_pass;
+use crate::document::compositor::mask_doc_origin;
+use crate::document::paint::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
 use crate::gpu::read::Read;
-use crate::gradient_gpu::{copy_to_scratch_a, draw_gradient, GradientShape, GradientTarget};
+use crate::document::paint::gradient_gpu::{copy_to_scratch_a, draw_gradient, GradientShape, GradientTarget};
 use crate::gpu::params::brush::{PencilDabParams, QuickMaskDabParams};
 use crate::task::Cx;
 
@@ -263,7 +263,7 @@ pub fn render_mask_linear_gradient(
     end_y: f64,
     stops_json: &str,
 ) {
-    let stops: Vec<crate::gradient_gpu::GradientStop> = match serde_json::from_str(stops_json) {
+    let stops: Vec<crate::document::paint::gradient_gpu::GradientStop> = match serde_json::from_str(stops_json) {
         Ok(s) => s,
         Err(_) => return,
     };
@@ -305,7 +305,7 @@ pub fn render_mask_radial_gradient(
     radius: f64,
     stops_json: &str,
 ) {
-    let stops: Vec<crate::gradient_gpu::GradientStop> = match serde_json::from_str(stops_json) {
+    let stops: Vec<crate::document::paint::gradient_gpu::GradientStop> = match serde_json::from_str(stops_json) {
         Ok(s) => s,
         Err(_) => return,
     };

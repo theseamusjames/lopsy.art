@@ -6,7 +6,7 @@ use crate::gpu::pass::Target;
 use crate::gpu::read::Read;
 
 use crate::engine::EngineInner;
-use crate::{layer_manager};
+use crate::{document::layer_manager};
 use crate::gpu::params::shape::{BucketFillColorMatchParams, FloodFillApplyParams};
 
 /// #667 — Fast path: fill an entire layer with a solid color, optionally

@@ -3,8 +3,8 @@
 
 
 use crate::engine::EngineInner;
-use crate::{overlay_renderer, stamp_preview_gpu};
-use crate::stamp_preview_gpu::StampPreview;
+use crate::{document::overlay_renderer, document::paint::stamp_preview_gpu};
+use crate::document::paint::stamp_preview_gpu::StampPreview;
 
 // ============================================================
 // Tool UI Overlays

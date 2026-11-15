@@ -11,7 +11,7 @@ use crate::engine::EngineInner;
 use crate::gpu::read::Read;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::task::Cx;
-use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, healing_brush_gpu, mask_paint_gpu, smudge_gpu, sponge_gpu};
+use crate::{document::paint::brush_gpu, document::paint::clone_stamp_gpu, document::paint::dodge_burn_gpu, document::paint::healing_brush_gpu, document::mask_paint_gpu, document::paint::smudge_gpu, document::paint::sponge_gpu};
 
 // ============================================================
 // Brush / Paint Operations

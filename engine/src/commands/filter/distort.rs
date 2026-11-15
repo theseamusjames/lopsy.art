@@ -2,7 +2,7 @@
 
 
 use crate::engine::EngineInner;
-use crate::{filter_gpu, imaging};
+use crate::{document::filter_gpu, imaging};
 use crate::gpu::pass::{Blend, Target};
 use crate::gpu::params::filters::{LiquifyDabParams, LiquifyWarpParams};
 
