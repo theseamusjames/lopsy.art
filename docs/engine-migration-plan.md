@@ -16,8 +16,8 @@ Status: in progress.
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
 | 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Commands that read inside the engine answer with a Promise or no longer read (#1705), and the last synchronous layer read is deleted (#1706). Phase 4 is done on the TypeScript side: nothing above the bridge reads the GPU synchronously. What is left is Rust's, in 6.6; see Phase 4 |
-| 5 | Done, pending merge. Every shader is WGSL, translated to GLSL at build time: 83 programs, plus one `blend` variant per blend mode. The build step and the first 24 shaders are in #1707, #1708, #1710 and #1711; #1712 removes four shaders no pass used. The rest are in #1713 (core and brush support, and a fifth unused shader, `color_overlay`), #1714 (brush tools, transforms, layer effects), #1715 (filters), #1716 (shaders whose uniforms had to change shape) and #1717 (brush dabs, `blend`, and the removal of the GLSL plumbing) |
-| 6 | Done except for making wgpu the default, pending merge. The wgpu backend (`--features wgpu`, a second wasm artifact) renders everything the WebGL one does through the same pass layer (#1718 to #1720, #1722, #1725); readbacks are futures the backend completes, and a lost device is recovered like a lost context (#1726); the e2e suite runs on it, with document pixels within 1 per channel of WebGL's, and render tests run from `cargo test` on a native GPU (#1727); and the production build ships both, WebGL by default, chosen in View > Renderer (#1728). Results under Phase 6 |
+| 5 | Done. Every shader is WGSL, translated to GLSL at build time: 83 programs, plus one `blend` variant per blend mode. The build step and the first 24 shaders are in #1707, #1708, #1710 and #1711; #1712 removes four shaders no pass used. The rest are in #1713 (core and brush support, and a fifth unused shader, `color_overlay`), #1714 (brush tools, transforms, layer effects), #1715 (filters), #1716 (shaders whose uniforms had to change shape) and #1717 (brush dabs, `blend`, and the removal of the GLSL plumbing) |
+| 6 | Done except for making wgpu the default. The wgpu backend (`--features wgpu`, a second wasm artifact) renders everything the WebGL one does through the same pass layer (#1718 to #1720, #1722, #1725); readbacks are futures the backend completes, and a lost device is recovered like a lost context (#1726); the e2e suite runs on it, with document pixels within 1 per channel of WebGL's, and render tests run from `cargo test` on a native GPU (#1727); and the production build ships both, WebGL by default, chosen in View > Renderer (#1728). Results under Phase 6 |
 | 7 | Not started |
 
 ---
@@ -1432,10 +1432,12 @@ in the other 60, by kind:
   a texel boundary of the document (its edge, at many zooms): the
   interpolated `uv` differs in its last bit between the two rasterizers
   and the nearest texel flips. One WebGL implementation differs from
-  another the same way. Snapping the screen position to the pixel centre
-  in `final_blit` would make both exact and equal, and would change which
-  side WebGL falls on at about half of those ties, so it is not done
-  here.
+  another the same way. Fixed afterwards: `final_blit` now takes the
+  pixel's centre from `floor(uv * resolution) + 0.5`, which is exact, and
+  on the 32 specs that showed these the two builds' screens then differ
+  by at most 1 per channel (one record aside, a stroke that ends a dab
+  later). The WebGL build's screen changed on those tie pixels and
+  nowhere else.
 - **Layer rectangles** in 5 specs: a layer still holds its uncropped
   texture on WebGL at the checkpoint and has been cropped to its content
   on wgpu, where the harness waits for the deferred crop. The composites
@@ -1544,11 +1546,24 @@ What is still open:
   extended tone mapping on wgpu, and `drawingBufferStorage` on WebGL;
   neither has it.
 - **One submit per pass.** Not a cost that shows: see 6.9.
-- **`gpu-limits.ts` probes WebGL** for the largest texture. The wgpu
-  device is asked for the adapter's limit, which may differ.
 - **`resumeTask` on a destroyed engine.** A readback that is out when its
   engine is destroyed rejects with `EngineGoneError`; a command that had
   more to do after the read is dropped with it.
+
+Closed after the stack merged:
+
+- **Texture limits.** `gpu-limits.ts` probed WebGL for the largest
+  texture whichever engine ran. On a page that runs wgpu it now uses the
+  WebGPU adapter's limit, noted by the probe that decides whether wgpu
+  can run.
+- **First use.** wgpu makes a pipeline the first time it is drawn with,
+  so the question was what that costs. In a fresh browser profile on the
+  M4 Max (dev build, median of five launches each): the first frame of a
+  new 1920 x 1080 document takes 16 ms on wgpu against 13 ms warm, and
+  17 ms against 16 ms on WebGL; the first brush stroke takes 107 ms
+  against 83 ms warm on wgpu, and 142 ms against 83 ms on WebGL. wgpu's
+  first use costs less than WebGL's, so pipelines are not created ahead
+  of time. The OS shader cache was not cleared between launches.
 
 ### Phase 7 — Multiple consumers
 
@@ -1608,5 +1623,6 @@ Still open:
 - The wgpu build anywhere but Chromium on macOS: not Firefox, Safari,
   Windows, Linux or a phone. Its pixels were compared on SwiftShader
   only; on Metal it was measured for speed and looked at by hand.
-- What the wgpu build's first frames cost while pipelines are created.
+- What the wgpu build's first frames cost with the OS shader cache
+  empty. With it warm they cost no more than WebGL's; see Phase 6.
 - The four long compositions and Firefox on the wgpu build.
