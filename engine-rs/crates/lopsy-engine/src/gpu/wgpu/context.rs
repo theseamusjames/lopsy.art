@@ -250,6 +250,20 @@ impl GpuContext {
         self.device.limits().max_texture_dimension_2d
     }
 
+    /// Say whether what is drawn to the canvas is Display P3, as a
+    /// wide-gamut page sets `drawingBufferColorSpace` on a WebGL canvas.
+    /// Returns `false` for a context with no canvas.
+    pub fn set_wide_gamut(&self, is_display_p3: bool) -> bool {
+        let Some(screen) = &self.screen else { return false };
+        let wanted = if is_display_p3 { wgpu::SurfaceColorSpace::DisplayP3 } else { wgpu::SurfaceColorSpace::Auto };
+        let mut config = screen.config.borrow_mut();
+        if config.color_space != wanted {
+            config.color_space = wanted;
+            screen.surface.configure(&self.device, &config);
+        }
+        true
+    }
+
     /// Destroy the device, as losing it would: every operation after this
     /// does nothing and the host is told through `host::gpu_lost`. WebGPU
     /// offers no other way to rehearse a loss.

@@ -462,6 +462,13 @@ impl EngineInner {
         self.needs_present = true;
     }
 
+    /// Tell the screen whether its pixels are Display P3. Returns `false`
+    /// on a backend where the host sets that on the canvas itself (WebGL).
+    pub fn set_screen_wide_gamut(&mut self, is_display_p3: bool) -> bool {
+        self.needs_present = true;
+        self.gpu_ctx.set_wide_gamut(is_display_p3)
+    }
+
     pub fn set_background_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.bg_color = [r, g, b, a];
         self.needs_recomposite = true;

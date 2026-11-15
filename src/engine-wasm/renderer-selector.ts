@@ -1,63 +1,92 @@
 /**
- * Source of the module the dev server puts between `wasm-bridge.ts` and the
- * engine package, so one page load can run either renderer build:
- * `?renderer=wgpu` loads `pkg-wgpu`, anything else `pkg`. Pure: the Vite
- * plugin (scripts/vite-plugin-renderer.ts) does the file reading.
+ * Source of the module that stands between `wasm-bridge.ts` and the engine
+ * package, so one page load can run either build of the engine. Pure: the
+ * Vite plugin (scripts/vite-plugin-renderer.ts) does the file reading.
  *
- * Production builds do not use it. They import `pkg` directly.
+ * The bridge imports the package's functions by name, and an import cannot
+ * be chosen at run time. So the generated module imports the WebGL package
+ * statically and exports a function of the same name for each of the
+ * package's, which calls whichever package is running. Its default export,
+ * the wasm `init` the bridge already awaits before anything else, decides
+ * which that is (renderer-choice.ts): the WebGL package it already holds,
+ * or the wgpu one, which it imports then.
+ *
+ * The exported functions never change, so code may keep one in a constant
+ * or a table when its module loads, before the choice is made: the bridge
+ * does (`asyncReadback(rawReadLayerPixels)`). A class cannot be stood in
+ * for that way, so a class is exported as a binding that is pointed at the
+ * running package's; do not keep a class in a constant at load.
+ *
+ * A page that runs WebGL loads nothing of the wgpu build.
  */
 
-export type Renderer = 'webgl' | 'wgpu';
+import type { Renderer } from './renderer-choice';
 
 export interface SelectorOptions {
-  /** Names the engine package exports, besides its default export. */
-  exportNames: readonly string[];
-  /** URL of the WebGL build's JS glue. */
+  /** What the engine package exports, besides its default export. */
+  exports: readonly GlueExport[];
+  /** Module id of the WebGL build's JS glue. */
   webglUrl: string;
-  /** URL of the wgpu build's JS glue, or null when it has not been built. */
+  /** Module id of the wgpu build's JS glue, or null when it has not been built. */
   wgpuUrl: string | null;
-  /** What a page without `?renderer=` gets. */
+  /** Module id of renderer-choice.ts. */
+  choiceUrl: string;
+  /** What a page that names no renderer gets. */
   defaultRenderer: Renderer;
 }
 
-const EXPORT_DECLARATION = /^export\s+(?:async\s+)?(?:function|class)\s+([A-Za-z_$][\w$]*)/gm;
+export interface GlueExport {
+  name: string;
+  kind: 'function' | 'class';
+}
+
+const EXPORT_DECLARATION = /^export\s+(?:async\s+)?(function|class)\s+([A-Za-z_$][\w$]*)/gm;
 const EXPORT_LIST = /^export\s*\{([^}]*)\}/gm;
 
 /** Named exports of a wasm-bindgen JS glue file, in source order. */
-export function glueExportNames(source: string): string[] {
-  const names: string[] = [];
+export function glueExports(source: string): GlueExport[] {
+  const found = new Map<string, GlueExport>();
   for (const match of source.matchAll(EXPORT_DECLARATION)) {
-    if (match[1]) names.push(match[1]);
+    const name = match[2];
+    if (name) found.set(name, { name, kind: match[1] === 'class' ? 'class' : 'function' });
   }
   for (const match of source.matchAll(EXPORT_LIST)) {
     for (const item of (match[1] ?? '').split(',')) {
       const [local, exported] = item.trim().split(/\s+as\s+/);
       const name = exported ?? local;
-      if (name && name !== 'default') names.push(name);
+      if (!local || !name || name === 'default' || found.has(name)) continue;
+      const isClass = new RegExp(`^class\\s+${local.replace(/\$/g, '\\$')}\\b`, 'm').test(source);
+      found.set(name, { name, kind: isClass ? 'class' : 'function' });
     }
   }
-  return [...new Set(names)];
+  return [...found.values()];
 }
-
-export function parseRenderer(value: string | null | undefined): Renderer | null {
-  return value === 'wgpu' || value === 'webgl' ? value : null;
-}
-
-const MISSING_WGPU_BUILD = 'The wgpu engine build is missing. Run: npm run wasm:build:wgpu';
 
 export function renderSelectorModule(options: SelectorOptions): string {
-  const loadWgpu = options.wgpuUrl
-    ? `await import(${JSON.stringify(options.wgpuUrl)})`
-    : `(() => { throw new Error(${JSON.stringify(MISSING_WGPU_BUILD)}); })()`;
-  return [
-    `const search = typeof location === 'undefined' ? '' : location.search;`,
-    `const asked = new URLSearchParams(search).get('renderer');`,
-    `const renderer = asked === 'wgpu' || asked === 'webgl' ? asked : ${JSON.stringify(options.defaultRenderer)};`,
-    `const glue = renderer === 'wgpu'`,
-    `  ? ${loadWgpu}`,
-    `  : await import(${JSON.stringify(options.webglUrl)});`,
-    `export default glue.default;`,
-    `export const { ${options.exportNames.join(', ')} } = glue;`,
-    '',
-  ].join('\n');
+  const quote = (value: string) => JSON.stringify(value);
+  const hasWgpuBuild = options.wgpuUrl !== null;
+  const classes = options.exports.filter((item) => item.kind === 'class').map((item) => item.name);
+  const functions = options.exports.filter((item) => item.kind === 'function').map((item) => item.name);
+  const lines = [
+    `import * as webgl from ${quote(options.webglUrl)};`,
+    `import { canUseWebGpu, noteRunningRenderer, requestedRenderer } from ${quote(options.choiceUrl)};`,
+    `let active = webgl;`,
+    ...classes.map((name) => `export let ${name} = webgl.${name};`),
+    // `apply` with `arguments` forwards a call without allocating.
+    ...functions.map((name) => `export function ${name}() { return active.${name}.apply(undefined, arguments); }`),
+    `export default async function init(input) {`,
+    `  const renderer = requestedRenderer(${quote(options.defaultRenderer)}, ${String(hasWgpuBuild)});`,
+  ];
+  if (options.wgpuUrl !== null) {
+    lines.push(
+      `  if (renderer === 'wgpu' && (await canUseWebGpu())) {`,
+      `    active = await import(${quote(options.wgpuUrl)});`,
+      ...classes.map((name) => `    ${name} = active.${name};`),
+      `    noteRunningRenderer('wgpu');`,
+      `    return active.default(input);`,
+      `  }`,
+    );
+  }
+  lines.push(`  noteRunningRenderer('webgl');`, `  return webgl.default(input);`, `}`, '');
+  return lines.join('\n');
 }

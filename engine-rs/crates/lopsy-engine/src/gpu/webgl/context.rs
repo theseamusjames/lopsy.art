@@ -63,6 +63,11 @@ impl GpuContext {
         })
     }
 
+    /// The page sets `drawingBufferColorSpace` on a WebGL canvas itself.
+    pub fn set_wide_gamut(&self, _is_display_p3: bool) -> bool {
+        false
+    }
+
     /// Rehearsing a loss is the page's to do here, through the
     /// `WEBGL_lose_context` extension on the canvas.
     pub fn lose_device(&self) -> bool {

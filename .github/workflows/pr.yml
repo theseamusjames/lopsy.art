@@ -111,7 +111,7 @@ jobs:
       # layout naga computed for its shader, and the render tests, which
       # skip themselves on a runner with no GPU.
       - name: Rust tests (wgpu backend)
-        run: cd engine-rs && cargo test -p lopsy-engine --features native
+        run: npm run wasm:test:wgpu
 
   wgsl-check:
     name: WGSL compiles on WebGPU

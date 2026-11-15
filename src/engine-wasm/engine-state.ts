@@ -6,10 +6,11 @@
  */
 
 import type { Engine } from './wasm-bridge';
-import { initWasm, createEngine, clearAllLayers, rendererName } from './wasm-bridge';
+import { initWasm, createEngine, clearAllLayers, rendererName, setScreenWideGamut } from './wasm-bridge';
 import { resetTrackedState, cacheSubBrushTips } from './engine-sync';
 import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
 import { canvasColorSpace } from '../engine/color-space';
+import { markRendererFailed } from './renderer-choice';
 import { ENGINE_CREATE_TIMING, recordStartupTiming } from './startup-timing';
 import { useToolSettingsStore } from '../app/tool-settings-store';
 
@@ -104,7 +105,16 @@ async function startEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   import('../tools/brush/builtin-brushes').then((m) => m.loadBuiltinBitmapBrushes()).catch(() => {});
   const createStart = performance.now();
   // The wgpu build's createEngine returns a promise; the WebGL one does not.
-  engine = await createEngine(canvas);
+  try {
+    engine = await createEngine(canvas);
+  } catch (err) {
+    // A reload of this tab then runs WebGL: the adapter probe that let
+    // wgpu be chosen cannot tell that the device will fail to start.
+    if (isWgpuRenderer() && markRendererFailed()) {
+      throw new Error(`WebGPU could not start (${err instanceof Error ? err.message : String(err)}). Reload the page to use WebGL.`);
+    }
+    throw err;
+  }
   recordStartupTiming(ENGINE_CREATE_TIMING, createStart);
   engineCanvas = canvas;
   isWgpuDeviceLost = false;
@@ -112,8 +122,11 @@ async function startEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   // Enable wide-gamut / EDR output if the display supports it.
   // The WASM engine already uses RGBA16F textures; setting the drawing buffer
   // color space to display-p3 tells the compositor to preserve values > 1.0.
-  // A WebGPU canvas has no WebGL context to set it on.
-  if (!isWgpuRenderer()) {
+  // A WebGPU canvas has no WebGL context to set it on: the engine sets the
+  // colour space when it configures the canvas.
+  if (isWgpuRenderer()) {
+    setScreenWideGamut(engine, canvasColorSpace === 'display-p3');
+  } else {
     try {
       const gl = canvas.getContext('webgl2');
       if (gl && canvasColorSpace === 'display-p3') {
