@@ -1555,12 +1555,11 @@ What is still open:
   (Chromium) on two adapters (SwiftShader, and Metal on an M4 Max). It
   has not run in Firefox or Safari, on Windows or Linux, or on a phone.
   Flip the default after it has been used as the opt-in on those.
-- **EDR.** Both canvases are 8 bits per channel. In a Display P3 session
-  the wgpu surface is configured as Display P3 (`setScreenWideGamut`), as
-  the page sets `drawingBufferColorSpace` on a WebGL canvas, so wide gamut
-  shows the same on both. Headroom above 1.0 needs a float surface and
-  extended tone mapping on wgpu, and `drawingBufferStorage` on WebGL;
-  neither has it.
+- **HDR editing.** The wgpu canvas is HDR on an HDR display and the
+  document's own adjustments show above white there (added after the
+  stack merged). That is rendering only: decode, adjustments, blending,
+  tools and export all work in 0..1. `docs/hdr-support.md` lists what
+  editing in HDR needs.
 - **One submit per pass.** Not a cost that shows: see 6.9.
 - **`resumeTask` on a destroyed engine.** A readback that is out when its
   engine is destroyed rejects with `EngineGoneError`; a command that had
@@ -1593,7 +1592,9 @@ Started when a second app is actually being built.
   host calls.
 - **Repo layout.** Move `engine-rs/` to `engine/` and `src/` to
   `apps/lopsy-web/`. Large diffs, purely mechanical, one directory per
-  PR.
+  PR. `docs/hdr-support.md` goes into `apps/lopsy-web/` with the app: it
+  says that full HDR support needs engine work for HDR editing, beyond
+  the HDR rendering that exists.
 
 ---
 
