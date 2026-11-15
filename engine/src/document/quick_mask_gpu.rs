@@ -2,7 +2,7 @@ use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
 use crate::gpu::read::Read;
 use crate::gpu::texture_pool::TextureHandle;
-use crate::gradient_gpu::{copy_to_scratch_a, draw_gradient, GradientShape, GradientStop, GradientTarget};
+use crate::document::paint::gradient_gpu::{copy_to_scratch_a, draw_gradient, GradientShape, GradientStop, GradientTarget};
 use crate::gpu::params::core::QuickMaskTranslateParams;
 use crate::task::Cx;
 
@@ -304,8 +304,8 @@ pub fn paint_quick_mask_dab_batch(
     mode: u32,
 ) {
     let Some(tex_handle) = engine.quick_mask_texture else { return };
-    let dab = crate::mask_paint_gpu::MaskDab { size, hardness, opacity, mode };
-    crate::mask_paint_gpu::paint_mask_dabs_scissored(engine, tex_handle, points, (0.0, 0.0), dab);
+    let dab = crate::document::mask_paint_gpu::MaskDab { size, hardness, opacity, mode };
+    crate::document::mask_paint_gpu::paint_mask_dabs_scissored(engine, tex_handle, points, (0.0, 0.0), dab);
     engine.needs_recomposite = true;
 }
 
@@ -327,7 +327,7 @@ pub fn draw_quick_mask_pencil_line(
     // layer-mask pencil (one scissored draw per point, no CPU uploads).
     let Some(tex_handle) = engine.quick_mask_texture else { return };
     let value = if mode == 0 { a } else { 0.0 };
-    crate::mask_paint_gpu::draw_pencil_blocks_gpu(engine, tex_handle, x0, y0, x1, y1, size, value);
+    crate::document::mask_paint_gpu::draw_pencil_blocks_gpu(engine, tex_handle, x0, y0, x1, y1, size, value);
     engine.needs_recomposite = true;
 }
 

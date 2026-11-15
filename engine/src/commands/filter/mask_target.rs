@@ -2,7 +2,7 @@
 
 
 use crate::engine::EngineInner;
-use crate::filter_gpu;
+use crate::document::filter_gpu;
 
 /// Until `endMaskFilterTarget`, filter calls for `layer_id` read and write
 /// its mask. Returns false when the layer has no mask on the engine.

@@ -1,6 +1,6 @@
 use lopsy_core::dab_rect::dab_rect;
 
-use crate::dab_pass_gpu::scratch_dab_pass;
+use crate::document::paint::dab_pass_gpu::scratch_dab_pass;
 use crate::engine::EngineInner;
 use crate::gpu::params::brush::CloneStampParams;
 

@@ -96,7 +96,7 @@ pub fn begin_mask_filter_target(engine: &mut EngineInner, layer_id: &str) -> boo
         None => return false,
     };
     let mask_size = engine.texture_pool.get_size(mask_handle).unwrap_or((1, 1));
-    let (ox, oy) = crate::compositor::mask_doc_origin(engine, layer_id);
+    let (ox, oy) = crate::document::compositor::mask_doc_origin(engine, layer_id);
     let mask_origin = (ox as i32, oy as i32);
 
     let layer_texture = engine.layer_textures.insert(layer_id.to_string(), mask_handle);
@@ -137,7 +137,7 @@ pub fn end_mask_filter_target(engine: &mut EngineInner) {
         .and_then(|&h| engine.texture_pool.get_size(h));
     if (cur_x, cur_y) != target.mask_origin || cur_size != Some(target.mask_size) {
         let (mw, mh) = target.mask_size;
-        let _ = crate::layer_manager::crop_texture(
+        let _ = crate::document::layer_manager::crop_texture(
             engine, id, cur_x, cur_y, target.mask_origin.0, target.mask_origin.1, mw, mh,
         );
     }
@@ -302,5 +302,5 @@ pub fn read_channel_thumbnail(
     if engine.texture_pool.get(tex_handle).is_none() {
         return Read::ready(Ok(Vec::new()));
     }
-    crate::thumbnail_gpu::read_box_thumbnail(engine, tex_handle, w, h, max_size, channel.min(3) as i32)
+    crate::document::thumbnail_gpu::read_box_thumbnail(engine, tex_handle, w, h, max_size, channel.min(3) as i32)
 }

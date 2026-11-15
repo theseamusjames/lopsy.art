@@ -149,7 +149,7 @@ pub fn begin_layer_transform(engine: &mut EngineInner, layer_id: &str, local: Re
         return Ok(None);
     }
     let (texture_width, texture_height) = engine.texture_pool.get_size(layer_handle).unwrap_or((0, 0));
-    if !crate::layer_manager::rect_is_within(local, texture_width, texture_height) {
+    if !crate::document::layer_manager::rect_is_within(local, texture_width, texture_height) {
         return Err(format!("Content rect does not fit the texture of layer {layer_id}"));
     }
     let content = Rect::new(layer.x + local.x, layer.y + local.y, local.width, local.height);

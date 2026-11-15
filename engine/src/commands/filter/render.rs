@@ -2,7 +2,7 @@
 
 
 use crate::engine::EngineInner;
-use crate::{filter_gpu, imaging};
+use crate::{document::filter_gpu, imaging};
 use crate::gpu::read::Read;
 use crate::imaging::filters::render::{PatternTiling, SunburstRays};
 

@@ -10,7 +10,7 @@ use lopsy_core::geometry;
 use lopsy_engine::engine::EngineInner;
 use lopsy_engine::gpu::context::GpuContext;
 use lopsy_engine::gpu::shader::ShaderPrograms;
-use lopsy_engine::{compositor, host};
+use lopsy_engine::{document::compositor, host};
 
 use readback::{read, readback_export};
 

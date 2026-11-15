@@ -13,9 +13,9 @@ use swash::scale::{ScaleContext, Render, Source, StrikeWith};
 use swash::shape::ShapeContext;
 use swash::zeno::{Format, Transform, Vector};
 
-use crate::glyph_atlas::GlyphAtlas;
-use crate::ligature_split::{expand_run_glyphs, find_ligature_splits, LigatureSplit};
-use crate::vertical_forms::{vertical_glyph, VerticalAlternateCache};
+use crate::document::text::glyph_atlas::GlyphAtlas;
+use crate::document::text::ligature_split::{expand_run_glyphs, find_ligature_splits, LigatureSplit};
+use crate::document::text::vertical_forms::{vertical_glyph, VerticalAlternateCache};
 
 pub struct TextLayerState {
     pub buffer: Buffer,
@@ -392,7 +392,7 @@ impl TextRendererState {
     /// cosmic-text only uses a family's face when its weight equals the
     /// request exactly; anything else falls through to other families. So:
     /// an exact face wins; otherwise a variable face whose `wght` axis covers
-    /// the request is instanced at that weight (see [`crate::variable_instance`]);
+    /// the request is instanced at that weight (see [`crate::document::text::variable_instance`]);
     /// otherwise the request snaps to the nearest weight the family ships.
     fn resolve_weight(&mut self, family: &str, style: Style, stretch: Stretch, requested: u16) -> u16 {
         let weights: Vec<u16> = self
@@ -422,11 +422,11 @@ impl TextRendererState {
             .filter(|face| face.style == style && face.stretch == stretch)
             .find_map(|face| {
                 let instance = db.with_face_data(face.id, |data, index| {
-                    let (min, _, max) = crate::variable_instance::wght_axis_range(data, index)?;
+                    let (min, _, max) = crate::document::text::variable_instance::wght_axis_range(data, index)?;
                     if (weight as f32) < min || (weight as f32) > max {
                         return None;
                     }
-                    crate::variable_instance::instantiate_wght(data, index, weight)
+                    crate::document::text::variable_instance::instantiate_wght(data, index, weight)
                 })??;
                 Some((instance, face.families.clone()))
             });
@@ -1985,11 +1985,11 @@ mod tests {
     }
 
     fn im_fell_sc() -> Vec<u8> {
-        crate::woff2::decode_woff2(include_bytes!("../tests/fixtures/IMFellDWPicaSC-latin.woff2")).expect("decodes")
+        crate::document::text::woff2::decode_woff2(include_bytes!("../../../tests/fixtures/IMFellDWPicaSC-latin.woff2")).expect("decodes")
     }
 
     fn montserrat_css2() -> Vec<u8> {
-        crate::woff2::decode_woff2(include_bytes!("../tests/fixtures/Montserrat-wght-latin.woff2")).expect("decodes")
+        crate::document::text::woff2::decode_woff2(include_bytes!("../../../tests/fixtures/Montserrat-wght-latin.woff2")).expect("decodes")
     }
 
     #[test]
@@ -2060,7 +2060,7 @@ mod tests {
     /// box and 。 (U+3002) a block in its lower-left quadrant, neither with a
     /// vertical alternate.
     fn vertical_forms_font() -> &'static [u8] {
-        include_bytes!("../tests/fixtures/LopsyVerticalTest.ttf")
+        include_bytes!("../../../tests/fixtures/LopsyVerticalTest.ttf")
     }
 
     /// Ink bounding box `[left, top, right, bottom]` in layout space (the
@@ -2423,7 +2423,7 @@ mod tests {
 
     /// Load a css2 latin subset and return the (style, stretch) it declares.
     fn load_css2_fixture(renderer: &mut TextRendererState, woff2: &[u8], family: &str) -> (Style, Stretch) {
-        let ttf = crate::woff2::decode_woff2(woff2).expect("decodes");
+        let ttf = crate::document::text::woff2::decode_woff2(woff2).expect("decodes");
         renderer.load_font_as(&ttf, Some(family)).expect("loads");
         let face = renderer.family_faces(family).next().expect("face");
         (face.style, face.stretch)
@@ -2434,7 +2434,7 @@ mod tests {
         let mut renderer = make_renderer();
         let attrs = load_css2_fixture(
             &mut renderer,
-            include_bytes!("../tests/fixtures/IMFellEnglish-Italic-latin.woff2"),
+            include_bytes!("../../../tests/fixtures/IMFellEnglish-Italic-latin.woff2"),
             "IM Fell English",
         );
         assert_eq!(attrs, (Style::Italic, Stretch::Normal), "fixture must be an italic face");
@@ -2463,7 +2463,7 @@ mod tests {
         let mut renderer = make_renderer();
         load_css2_fixture(
             &mut renderer,
-            include_bytes!("../tests/fixtures/IMFellEnglish-latin.woff2"),
+            include_bytes!("../../../tests/fixtures/IMFellEnglish-latin.woff2"),
             "IM Fell English",
         );
 
@@ -2494,7 +2494,7 @@ mod tests {
         let mut renderer = make_renderer();
         load_css2_fixture(
             &mut renderer,
-            include_bytes!("../tests/fixtures/IMFellEnglish-latin.woff2"),
+            include_bytes!("../../../tests/fixtures/IMFellEnglish-latin.woff2"),
             "IM Fell English",
         );
         renderer.set_text_content("plain", &im_fell_english_props("firefly", 0.0)).expect("ok");
@@ -2514,7 +2514,7 @@ mod tests {
         let mut renderer = make_renderer();
         let attrs = load_css2_fixture(
             &mut renderer,
-            include_bytes!("../tests/fixtures/BarlowCondensed-latin.woff2"),
+            include_bytes!("../../../tests/fixtures/BarlowCondensed-latin.woff2"),
             "Barlow Condensed",
         );
         assert_eq!(attrs, (Style::Normal, Stretch::Condensed), "fixture must be a condensed face");

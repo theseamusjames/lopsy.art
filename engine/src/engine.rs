@@ -103,7 +103,7 @@ pub struct OverlayState {
     pub selection_time: f64,
     /// Clone Stamp / Healing Brush source preview disc drawn over the
     /// screen after the final blit (`stamp_preview_gpu.rs`).
-    pub stamp_preview: Option<crate::stamp_preview_gpu::StampPreview>,
+    pub stamp_preview: Option<crate::document::paint::stamp_preview_gpu::StampPreview>,
 }
 
 /// Adjustments attached to layer groups, and the scratch targets and caches their children composite through.
@@ -219,11 +219,11 @@ pub struct EngineInner {
     pub quick_mask_move_base: Option<TextureHandle>,
     pub quick_mask_move_marquee: Option<TextureHandle>,
     /// Set while a filter runs on a layer mask (see `filter_gpu::begin_mask_filter_target`).
-    pub mask_filter_target: Option<crate::filter_gpu::MaskFilterTarget>,
+    pub mask_filter_target: Option<crate::document::filter_gpu::MaskFilterTarget>,
     // Liquify persistent displacement texture (lives for the session)
     pub liquify_disp_texture: Option<TextureHandle>,
     // Multi-layer transform session (see layer_transform_gpu)
-    pub layer_transform: Vec<crate::layer_transform_gpu::LayerTransformSlot>,
+    pub layer_transform: Vec<crate::document::layer_transform_gpu::LayerTransformSlot>,
     /// Per-document image adjustments — exposure/contrast/highlights/
     /// shadows/whites/blacks/vignette/saturation/vibrance plus curves and
     /// levels LUTs. Applied on the compositor's final pass, not baked into
@@ -235,7 +235,7 @@ pub struct EngineInner {
     /// while the tool is actively tracing).
     pub mlasso: MagneticLassoState,
     // Text rendering
-    pub text_renderer: Option<crate::text_gpu::TextRendererState>,
+    pub text_renderer: Option<crate::document::text::text_gpu::TextRendererState>,
     // Undo snapshot texture store — GPU-side texture copies for instant
     // snapshots via blit (~1ms) instead of readback+compress (~100ms).
     pub snapshot_textures: Vec<Option<SnapshotTexture>>,
@@ -248,13 +248,13 @@ pub struct EngineInner {
     pub next_content_gen: u64,
     /// The live compositor's cache of each layer's effect images; see
     /// `effect_cache_gpu.rs`.
-    pub effect_cache: crate::effect_cache_gpu::EffectCache,
+    pub effect_cache: crate::document::effect_cache_gpu::EffectCache,
     /// 2×1 target the Healing Brush renders its source / destination region
     /// means into, created on first use (`healing_brush_gpu.rs`).
     pub healing_mean_target: Option<(TextureHandle, FramebufferHandle)>,
     /// Texels touched by the in-progress Dodge / Burn or Sponge stroke on
     /// each layer (`coverage_stroke_gpu.rs`).
-    pub coverage_strokes: HashMap<String, crate::coverage_stroke_gpu::CoverageStroke>,
+    pub coverage_strokes: HashMap<String, crate::document::paint::coverage_stroke_gpu::CoverageStroke>,
     pub clipboard: ClipboardState,
     pub float: FloatState,
     pub previews: PreviewState,
@@ -332,7 +332,7 @@ impl EngineInner {
             snapshot_free_list: Vec::new(),
             layer_content_gen: HashMap::new(),
             next_content_gen: 1,
-            effect_cache: crate::effect_cache_gpu::new_cache(),
+            effect_cache: crate::document::effect_cache_gpu::new_cache(),
             healing_mean_target: None,
             coverage_strokes: HashMap::new(),
             clipboard: ClipboardState {
@@ -561,7 +561,7 @@ impl EngineInner {
         // synchronous full-texture FLOAT read plus a lossy 8-bit re-upload
         // on the first stroke after every Move (#1380).
         let new_tex = if self.texture_pool.get(layer_tex).is_some() && lw > 0 && lh > 0 {
-            crate::layer_manager::copy_into_larger_texture(
+            crate::document::layer_manager::copy_into_larger_texture(
                 self, layer_tex, lw, lh, new_w, new_h, layer_x - min_x, layer_y - min_y,
             )?
         } else {
@@ -630,7 +630,7 @@ impl EngineInner {
         for (_, tex) in self.layer_masks.drain() {
             self.texture_pool.release(tex);
         }
-        crate::effect_cache_gpu::clear(self);
+        crate::document::effect_cache_gpu::clear(self);
         self.layer_content_gen.clear();
         // Stroke textures
         for (_, tex) in self.brush.stroke_textures.drain() {
@@ -675,7 +675,7 @@ impl EngineInner {
         if let Some(tex) = self.quick_mask_texture.take() {
             self.texture_pool.release(tex);
         }
-        crate::quick_mask_gpu::end_quick_mask_move(self);
+        crate::document::quick_mask_gpu::end_quick_mask_move(self);
         // Shape preview
         if let Some(tex) = self.previews.shape_texture.take() {
             self.texture_pool.release(tex);
@@ -716,7 +716,7 @@ impl EngineInner {
         self.float.layer_x = 0;
         self.float.layer_y = 0;
         self.float.transform_mode = 0;
-        crate::layer_transform_gpu::end_layer_transform(self);
+        crate::document::layer_transform_gpu::end_layer_transform(self);
         // Layer stack and overlays
         self.layer_stack.clear();
         self.overlays.transform_overlay = None;

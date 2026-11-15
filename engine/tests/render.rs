@@ -23,7 +23,7 @@ use lopsy_engine::gpu::read::Read;
 use lopsy_engine::gpu::shader::ShaderPrograms;
 use lopsy_engine::gpu::texture_pool::TextureHandle;
 use lopsy_engine::imaging::adjustments::{self, ImageAdjustmentState, OverWhite};
-use lopsy_engine::{commands, compositor, host, task};
+use lopsy_engine::{commands, document::compositor, host, task};
 
 /// Everything the engine logged as an error: GPU validation errors arrive
 /// here through the device's uncaptured-error handler.

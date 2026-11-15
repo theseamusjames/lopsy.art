@@ -17,7 +17,7 @@ use lopsy_core::geometry::Rect;
 use crate::engine::EngineInner;
 use crate::gpu::read::Read;
 use crate::task::Cx;
-use crate::{compositor, layer_manager, layer_transform_gpu, thumbnail_gpu};
+use crate::{document::compositor, document::layer_manager, document::layer_transform_gpu, document::thumbnail_gpu};
 
 // ============================================================
 // Layer Management
@@ -915,7 +915,7 @@ pub fn lose_gpu_device(engine: &EngineInner) -> bool {
 /// bytes, hits, misses]`. `bytes` is the VRAM its cached images hold;
 /// hits and misses count per-layer lookups since the engine started.
 pub fn effect_cache_stats(engine: &EngineInner) -> Vec<f64> {
-    let stats = crate::effect_cache_gpu::stats(&*engine);
+    let stats = crate::document::effect_cache_gpu::stats(&*engine);
     vec![
         f64::from(stats.entries),
         f64::from(stats.images),

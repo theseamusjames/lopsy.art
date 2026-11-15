@@ -15,7 +15,7 @@
 use lopsy_core::effect_cache::{CacheStats, CachedImage, EffectCacheStore};
 use lopsy_core::geometry::Rect;
 use lopsy_core::layer::{GlowDesc, ShadowDesc, StrokeDesc};
-use crate::compositor::{blend_through_scratch, BlendSource, Scratch};
+use crate::document::compositor::{blend_through_scratch, BlendSource, Scratch};
 use crate::engine::EngineInner;
 use crate::gpu::framebuffer::FramebufferHandle;
 use crate::gpu::texture_pool::TextureHandle;

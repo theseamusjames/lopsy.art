@@ -2,7 +2,7 @@
 
 
 use crate::engine::EngineInner;
-use crate::{filter_gpu, imaging};
+use crate::{document::filter_gpu, imaging};
 use lopsy_core::filters::texture::TextureParams;
 
 pub fn filter_add_noise(

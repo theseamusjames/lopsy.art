@@ -1,4 +1,4 @@
-use crate::coverage_stroke_gpu::{self as coverage, CoverageTool};
+use crate::document::paint::coverage_stroke_gpu::{self as coverage, CoverageTool};
 use crate::engine::EngineInner;
 
 /// Begin a dodge/burn stroke on `layer_id` (`mode` 0 = dodge, 1 = burn).

@@ -1,14 +1,14 @@
 use lopsy_core::float_growth::grow_rect_to_cover;
 use lopsy_core::geometry::Rect;
 use lopsy_core::layer::LayerDesc;
-use crate::compositor::mask_doc_offset;
+use crate::document::compositor::mask_doc_offset;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Scissor, Target};
 use crate::gpu::params::composite::BlendParams;
 use crate::gpu::read::Read;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::task::Cx;
-use crate::layer_transform_gpu::{TransformDraw, TransformParams, TransformTargets};
+use crate::document::layer_transform_gpu::{TransformDraw, TransformParams, TransformTargets};
 use crate::gpu::params::core::{
     BlitRegionParams, ClipboardClearParams, ClipboardCopyParams, FlipParams, MaskRemapParams, Rotate90Params,
     SelectionFillParams,
@@ -44,7 +44,7 @@ pub fn remove_layer(engine: &mut EngineInner, layer_id: &str) {
     if let Some(mask) = engine.layer_masks.remove(layer_id) {
         engine.texture_pool.release(mask);
     }
-    crate::effect_cache_gpu::evict_layer(engine, layer_id);
+    crate::document::effect_cache_gpu::evict_layer(engine, layer_id);
     engine.layer_content_gen.remove(layer_id);
     engine.layer_stack.retain(|l| l.id != layer_id);
     engine.needs_recomposite = true;
@@ -58,7 +58,7 @@ pub fn update_layer(engine: &mut EngineInner, desc: LayerDesc) {
     // from the JS model) doesn't corrupt the expanded texture state.
     // A multi-layer transform re-places its layers' textures the same way.
     let is_float_layer = engine.float.layer_id.as_deref() == Some(desc.id.as_str())
-        || crate::layer_transform_gpu::is_in_layer_transform(engine, &desc.id);
+        || crate::document::layer_transform_gpu::is_in_layer_transform(engine, &desc.id);
     if let Some(existing) = engine.layer_stack.iter_mut().find(|l| l.id == desc.id) {
         if is_float_layer {
             let (px, py, pw, ph) = (existing.x, existing.y, existing.width, existing.height);
@@ -893,7 +893,7 @@ async fn layer_content_rect(
             .texture_pool
             .get(tex_handle)
             .is_some()
-            .then(|| crate::content_bounds_gpu::texture_content_bounds(engine, tex_handle, tw, th))
+            .then(|| crate::document::content_bounds_gpu::texture_content_bounds(engine, tex_handle, tw, th))
     });
     if let Some(reduced) = reduced {
         if let Ok(rect) = reduced.await {
@@ -1170,7 +1170,7 @@ pub fn drop_float(engine: &mut EngineInner) {
     }
     engine.float.layer_id = None;
     engine.float.transform_mode = 0;
-    crate::layer_transform_gpu::end_layer_transform(engine);
+    crate::document::layer_transform_gpu::end_layer_transform(engine);
 }
 
 /// Copy `src` (src_w×src_h) into a freshly acquired, transparent dst_w×dst_h
@@ -1418,7 +1418,7 @@ fn composite_float_transformed(
     // Step 1: Render transformed float → tmp (fw×fh, correctly sized).
     // The transform shaders filter bilinearly in premultiplied space via
     // texelFetch, so the float texture's own filter mode doesn't matter.
-    crate::layer_transform_gpu::draw_transform(engine, &params, &TransformTargets {
+    crate::document::layer_transform_gpu::draw_transform(engine, &params, &TransformTargets {
         source: float_handle,
         source_offset: (lx, ly),
         source_size: (fw as f32, fh as f32),
@@ -1517,7 +1517,7 @@ pub fn fill_mask_with_value(
 ) -> Result<(), String> {
     let mask_handle = *engine.layer_masks.get(layer_id)
         .ok_or_else(|| format!("Layer {layer_id} has no mask"))?;
-    let origin = crate::compositor::mask_doc_origin(engine, layer_id);
+    let origin = crate::document::compositor::mask_doc_origin(engine, layer_id);
     let v = value.clamp(0.0, 1.0);
     fill_texture_in_selection(engine, mask_handle, origin, [v, v, v, 1.0])?;
     engine.mark_layer_dirty(layer_id);

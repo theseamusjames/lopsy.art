@@ -6,7 +6,7 @@
 use crate::engine::EngineInner;
 use crate::gpu::read::Read;
 use crate::task::Cx;
-use crate::{selection_gpu, quick_mask_gpu};
+use crate::{document::selection_gpu, document::quick_mask_gpu};
 
 // ============================================================
 // Selection

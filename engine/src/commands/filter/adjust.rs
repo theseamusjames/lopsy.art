@@ -3,7 +3,7 @@
 
 
 use crate::engine::EngineInner;
-use crate::{filter_gpu, imaging};
+use crate::{document::filter_gpu, imaging};
 
 pub fn filter_brightness_contrast(
     engine: &mut EngineInner, layer_id: &str, brightness: f32, contrast: f32,

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use lopsy_core::dab_rect::{dab_rect, DirtyRect};
 use lopsy_core::geometry::Rect;
 
-use crate::dab_pass_gpu::copy_scratch_a_to;
+use crate::document::paint::dab_pass_gpu::copy_scratch_a_to;
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
 use crate::gpu::shader::{ShaderProgram, ShaderPrograms};

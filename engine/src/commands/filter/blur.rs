@@ -2,7 +2,7 @@
 
 
 use crate::engine::EngineInner;
-use crate::{filter_gpu, imaging};
+use crate::{document::filter_gpu, imaging};
 
 pub fn filter_gaussian_blur(engine: &mut EngineInner, layer_id: &str, radius: u32) {
     if radius == 0 { return; }

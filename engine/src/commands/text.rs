@@ -1,9 +1,9 @@
 //! WASM API surface for native text rendering.
 
 use crate::engine::EngineInner;
-use crate::layer_manager;
-use crate::text_gpu::{raster_key, TextRendererState};
-use crate::text_transform_gpu::{render_text_raster_transformed, TextRaster};
+use crate::document::layer_manager;
+use crate::document::text::text_gpu::{raster_key, TextRendererState};
+use crate::document::text::text_transform_gpu::{render_text_raster_transformed, TextRaster};
 use lopsy_core::text_transform::{TextMatrix, MAX_TEXT_RASTER_EDGE};
 
 fn ensure_text_renderer(engine: &mut EngineInner) -> &mut TextRendererState {
@@ -29,8 +29,8 @@ pub fn load_font_data_for_family(engine: &mut EngineInner, font_data: &[u8], fam
 fn load_font_bytes(engine: &mut EngineInner, font_data: &[u8], family: Option<&str>) -> Result<(), String> {
     let tr = ensure_text_renderer(engine);
     let decoded;
-    let sfnt = if crate::woff2::is_woff2(font_data) {
-        decoded = crate::woff2::decode_woff2(font_data).ok_or_else(|| "WOFF2 decode failed".to_string())?;
+    let sfnt = if crate::document::text::woff2::is_woff2(font_data) {
+        decoded = crate::document::text::woff2::decode_woff2(font_data).ok_or_else(|| "WOFF2 decode failed".to_string())?;
         decoded.as_slice()
     } else {
         font_data
