@@ -8,7 +8,7 @@ import { usePatternStore } from './app/pattern-store';
 import { useShortcutStore } from './app/store/shortcut-store';
 import { useDockStore } from './panels/dock/dock-store';
 import { pixelDataManager } from './engine/pixel-data-manager';
-import { getEngine, getEngineCanvas, isWgpuRenderer } from './engine-wasm/engine-state';
+import { getEngine, getEngineCanvas, isWgpuRenderer, engineStarted } from './engine-wasm/engine-state';
 import { render as renderWasm, markAllDirty, readLayerPixels, getLayerTextureDimensions, initWasm, isFontLoaded, liveGpuSnapshotCount, effectCacheStats } from './engine-wasm/wasm-bridge';
 import {
   syncDocumentSize,
@@ -55,6 +55,7 @@ declare global {
     __pixelData?: typeof pixelDataManager;
     __readCompositedPixels?: () => Promise<ReadPixelsResult>;
     __parkedReadbacks?: () => number;
+    __engineStarted?: () => Promise<unknown>;
     __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
     __gpuSnapshotCount?: () => number;
     __effectCacheStats?: () => EffectCacheStats | null;
@@ -114,10 +115,12 @@ if (import.meta.env.DEV) {
   // E2e tests that read or mutate pixel state go through this singleton.
   window.__pixelData = pixelDataManager;
   window.__parkedReadbacks = parkedReadbackCount;
+  window.__engineStarted = engineStarted;
   // Read composited pixels from the WebGL canvas by triggering a render
   // inside requestAnimationFrame and reading before buffer swap.
   // Returns screen-sized pixels (includes workspace background).
-  window.__readCompositedPixels = () => {
+  window.__readCompositedPixels = async () => {
+    await engineStarted();
     return new Promise<ReadPixelsResult>((resolve) => {
       requestAnimationFrame(() => {
         const engine = getEngine();
@@ -215,7 +218,8 @@ if (import.meta.env.DEV) {
     return { entries, images, bytes, budgetBytes, hits, misses };
   };
   window.__textFrameOffsetMeasureCount = textFrameOffsetMeasureCount;
-  window.__readLayerPixels = (layerId?: string) => {
+  window.__readLayerPixels = async (layerId?: string) => {
+    await engineStarted();
     return new Promise<ReadPixelsResult>((resolve) => {
       requestAnimationFrame(() => {
         const engine = getEngine();
