@@ -272,22 +272,22 @@ straight alpha — blend it with `premultiplied = false`.
 
 ## Read layer texture size AFTER ensure_layer_full_size, not before (#848)
 
-`apply_filter`/`apply_filter_inner` (filter_gpu.rs) call
+`apply_op`/`apply_staged` (filter_gpu.rs) call
 `engine.ensure_layer_full_size(layer_id)` internally, but only right
 before they read the layer texture for the actual pass. If a caller
 reads `texture_pool.get_size(tex_handle)` *before* invoking
-`apply_filter` — e.g. to compute a shader uniform like
+`apply_op` — e.g. to compute a shader uniform like
 `u_layerSize` — it sees the lazy 1x1 placeholder size on a
-never-painted layer, not the doc-sized texture `apply_filter` is about
-to expand it to. `filter_pattern_fill` (api/filter/render.rs) had
+never-painted layer, not the doc-sized texture `apply_op` is about
+to expand it to. `filter_pattern_fill` (commands/filter/render.rs) had
 exactly this bug: `u_layerSize=(1,1)` made every fragment sample the
 pattern texture's first texel, producing a solid block instead of a
 tile. Fix: call `ensure_layer_full_size` (or `ensure_layer_covers`,
 both idempotent no-ops when already correct) yourself before reading
 the size, same as the precedent fix in `fill_with_color` (#765). Other
 call sites that read `texture_pool.get_size` directly are safe only if
-they don't need that size *before* delegating to `apply_filter` /
-`apply_separable_blur`.
+they don't need that size *before* delegating to `apply_op` /
+`apply_staged`.
 
 ## E2E: prove "no GPU readback on this event" by counting readPixels
 
@@ -543,14 +543,14 @@ Patch `enable`/`disable` (SCISSOR_TEST), `scissor`, `viewport` and
 dab-sized and that the scissor test is off when the event ends — see
 `apps/lopsy-web/e2e/retouch-dab-scissor-1219.spec.ts`.
 
-## `apply_filter*` grows the layer to the document — JS must follow or not use it
+## `apply_op` / `apply_staged` grow the layer to the document — JS must follow or not use them
 
-`apply_filter` / `apply_filter_full_layer` call `ensure_layer_full_size`,
+`apply_op` and `apply_staged` call `ensure_layer_full_size`,
 which re-origins a cropped layer's texture to `min(0, x)`. A caller that
 doesn't then run `syncLayerAfterFullSize` (or otherwise update `x`/`y`/size)
 leaves the store with the old cropped origin, and the next descriptor push
 draws the content at twice its offset (#771, #783, #1367). For per-texel
-shaders (colour matrices) use `apply_pointwise_filter_full_layer`, which
+shaders (colour matrices) use `apply_pointwise_op_full_layer`, which
 keeps the texture's geometry and sizes the scratch to it.
 
 ## Lab documents: anything written into a texture must be Lab-encoded
