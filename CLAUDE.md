@@ -136,7 +136,8 @@ engine-rs/
     lopsy-engine/     # WebGL2 engine. No #[wasm_bindgen] anywhere
       src/
         commands/         # What a host can ask for: plain Rust in, Result<_, String> out
-        host.rs           # Logging and clock, installed by the host
+        host.rs           # Logging, clock and "the GPU is gone", installed by the host
+        task.rs           # `Cx`: lends the engine to an async command one poll at a time
         imaging/          # Adjustments and filters as passes over a source texture; no layers
         engine.rs         # EngineInner struct: holds all GPU state
         compositor.rs     # Per-frame compositing pipeline
@@ -162,9 +163,10 @@ engine-rs/
             framebuffer.rs  # FBO pool for render-to-texture
             program.rs      # Shader compilation, linking, uniform upload
             pass.rs         # What a pass does to the WebGL context
+          read.rs         # `Read<T>`: a readback the backend completes when it can
           wgpu/           # The wgpu backend, compiled in place of webgl/ by
-                          # `--features wgpu`. It creates a device, clears and
-                          # presents; no pass draws yet
+                          # `--features wgpu`: the same modules as webgl/, plus
+            read.rs         # texture -> buffer -> mapped bytes, as a `Read`
 ```
 
 ### Key Shaders
@@ -204,6 +206,27 @@ Write the logic as a function in `lopsy-engine/src/commands/` that takes
 never holds logic, and nothing in `lopsy-engine` outside `gpu/` names
 `wasm_bindgen`, `web_sys` or `js_sys`: log through `host::log` and read the
 time with `host::now_ms`.
+
+A command that reads pixels back cannot return them directly: WebGPU has
+no synchronous read. It returns a `gpu::read::Read<T>` (use `map` to work
+on the pixels), or, when it needs the engine again after the read, it is
+an `async fn` that takes a `task::Cx` and owned arguments and borrows the
+engine with `cx.with(|engine| ...)`, re-checking that what it read is
+still there before writing. Its export is declared with `readback_export!`
+(`lopsy-wasm/src/readback.rs`) and wrapped in `asyncReadback` in
+`wasm-bridge.ts`: pass `'any-time'` only for a read whose result changes
+nothing in the document (a thumbnail, the eyedropper).
+
+### Two builds, one page
+
+`npm run build` builds the engine twice: WebGL (`pkg/`, the default) and
+wgpu (`pkg-wgpu/`). `wasm-bridge.ts` imports `./pkg/lopsy_wasm`, which
+Vite resolves to a generated module (`scripts/vite-plugin-renderer.ts`,
+source in `src/engine-wasm/renderer-selector.ts`) that forwards each call
+to the build this page load chose (`renderer-choice.ts`: `?renderer=`,
+then View > Renderer, then `LOPSY_RENDERER`, else WebGL). Code that must
+differ by backend asks `isWgpuRenderer()` in `engine-state.ts`; there
+should be very little of it.
 
 ### Shader uniforms
 
@@ -272,7 +295,7 @@ Output goes to `src/engine-wasm/pkg/` (gitignored generated files). The JS bridg
 
 1. **JS → Engine**: `engine-sync.ts` runs before each frame. It diffs Zustand state against `TrackedState` and calls WASM functions (`addLayer`, `updateLayer`, `uploadLayerPixels`, `setViewport`, etc.) only when values change. `resetTrackedState()` forces a full re-sync (used after undo/redo).
 2. **Engine → GPU**: The Rust engine owns all WebGL2 state. `compositor.rs` runs the per-frame pipeline: clear → iterate layers → blend with effects → apply image adjustments → final blit to screen.
-3. **GPU → JS**: `gpu-pixel-access.ts` provides `readLayerAsImageData()` and `readLayerThumbnail()` for when JS needs pixel data. Readbacks return a Promise (`asyncReadback` in `wasm-bridge.ts`); when pixels would only come straight back, add an engine command that keeps them on the GPU instead (`flattenIntoLayer`, `bakeLayerEffects`, `clipboardCopyMerged`).
+3. **GPU → JS**: `gpu-pixel-access.ts` provides `readLayerAsImageData()` and `readLayerThumbnail()` for when JS needs pixel data. Readbacks return a Promise (`asyncReadback` in `wasm-bridge.ts`), which on wgpu resolves a frame or more later: re-read the store after awaiting one, and do not act on state captured before it; when pixels would only come straight back, add an engine command that keeps them on the GPU instead (`flattenIntoLayer`, `bakeLayerEffects`, `clipboardCopyMerged`).
 
 ### Compositor Pipeline (`compositor.rs`)
 
@@ -361,8 +384,12 @@ npm run typecheck    # tsc --noEmit
 
 # Rust/WASM engine — ALWAYS use npm run, never call wasm-pack directly
 npm run wasm:build
-npm run wasm:build:wgpu   # the wgpu backend, into src/engine-wasm/pkg-wgpu. The dev server loads
-                          # it for /?renderer=wgpu, or for every page with LOPSY_RENDERER=wgpu
+npm run wasm:build:wgpu   # the wgpu backend, into src/engine-wasm/pkg-wgpu. A page loads it for
+                          # /?renderer=wgpu, or every page does with LOPSY_RENDERER=wgpu
+npm run wasm:test:wgpu    # the wgpu backend's Rust tests, including render tests on this machine's GPU
+
+LOPSY_RENDERER=wgpu npm run test:e2e   # the e2e suite on the wgpu build (about three times slower)
+LOPSY_GPU=hardware npx playwright test e2e/brush-perf-6k.spec.ts   # on the real GPU, either renderer
 ```
 
 ## Code Style
