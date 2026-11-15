@@ -63,8 +63,13 @@ members = [
     "core",
     "shaderc",
     "hosts/wasm",
+    "hosts/cli",
 ]
 # Without this, a bare `cargo test` here would build only the engine.
+# `hosts/cli` is left out on purpose: it turns on the engine's `native`
+# feature, and features are unified across what one command builds, so
+# with it in the list `cargo test` would test the wgpu backend and never
+# the WebGL one. Build and test it by name: `-p lopsy-cli`.
 default-members = [
     ".",
     "core",

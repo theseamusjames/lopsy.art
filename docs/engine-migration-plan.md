@@ -1588,13 +1588,25 @@ Started when a second app is actually being built.
   Split into a shared device, a `Document` that owns layer textures and
   compositor state, and a `Surface` that presents one. Needed for a file
   browser grid and for bulk export.
+- **CLI host.** Done: `engine/hosts/cli` builds `lopsy`, which runs each
+  input PNG through the engine on a native GPU and writes the result
+  (`lopsy --op blur=8 --op invert --out done *.png`). It is the first
+  host that is not a page, and it holds no image logic: it starts the
+  engine headless and calls `commands/`.
 - **FFI host.** A C interface over the same engine functions the wasm
   host calls.
-- **Repo layout.** Move `engine/` to `engine/` and `src/` to
-  `apps/lopsy-web/`. Large diffs, purely mechanical, one directory per
-  PR. `docs/hdr-support.md` goes into `apps/lopsy-web/` with the app: it
-  says that full HDR support needs engine work for HDR editing, beyond
-  the HDR rendering that exists.
+- **Repo layout.** Large diffs, purely mechanical, one directory per
+  PR.
+  - Done: the engine workspace moved from `engine-rs/` to `engine/`, with
+    the engine crate at its top (`engine-rs/crates/lopsy-engine` before)
+    and `core/`, `shaderc/` and `hosts/wasm/` beside it. Paths elsewhere
+    in this document are written as they are now.
+  - Done: the engine's layer, paint and text code is under
+    `engine/src/document/`.
+  - To do: `src/` and the rest of the web app to `apps/lopsy-web/`.
+    `docs/hdr-support.md` goes there with it: it says that full HDR
+    support needs engine work for HDR editing, beyond the HDR rendering
+    that exists.
 
 ---
 
