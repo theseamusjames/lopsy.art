@@ -115,7 +115,10 @@ jobs:
 
   wgsl-check:
     name: WGSL compiles on WebGPU
-    runs-on: ubuntu-latest
+    # Not `ubuntu-latest`: the pinned Playwright installs no Chromium on
+    # Ubuntu 26.04, which that label now gives ("Playwright does not
+    # support chromium on ubuntu26.04-x64"). Move this with Playwright.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
