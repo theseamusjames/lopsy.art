@@ -904,6 +904,13 @@ pub fn live_gpu_snapshot_count(engine: &EngineInner) -> u32 {
     engine.snapshot_textures.iter().filter(|s| s.is_some()).count() as u32
 }
 
+/// Lose the GPU device on purpose, to rehearse recovery. Returns `false`
+/// on a backend that cannot: WebGL, where the page uses the
+/// `WEBGL_lose_context` extension instead.
+pub fn lose_gpu_device(engine: &EngineInner) -> bool {
+    engine.gpu_ctx.lose_device()
+}
+
 /// The live compositor's effect cache: `[entries, images, bytes, budget
 /// bytes, hits, misses]`. `bytes` is the VRAM its cached images hold;
 /// hits and misses count per-layer lookups since the engine started.

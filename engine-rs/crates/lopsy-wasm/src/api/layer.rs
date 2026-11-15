@@ -527,6 +527,11 @@ pub fn live_gpu_snapshot_count(engine: &Engine) -> u32 {
     lopsy_engine::commands::layer::live_gpu_snapshot_count(&engine.inner)
 }
 
+#[wasm_bindgen(js_name = "loseGpuDevice")]
+pub fn lose_gpu_device(engine: &Engine) -> bool {
+    lopsy_engine::commands::layer::lose_gpu_device(&engine.inner)
+}
+
 #[wasm_bindgen(js_name = "effectCacheStats")]
 pub fn effect_cache_stats(engine: &Engine) -> Vec<f64> {
     lopsy_engine::commands::layer::effect_cache_stats(&engine.inner)

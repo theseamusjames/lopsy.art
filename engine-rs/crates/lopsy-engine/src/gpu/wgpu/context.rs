@@ -189,6 +189,10 @@ impl GpuContext {
         device.on_uncaptured_error(Arc::new(|error| {
             host::log(LogLevel::Error, &format!("[Lopsy GPU] {error}"));
         }));
+        device.set_device_lost_callback(|reason, message| {
+            host::log(LogLevel::Error, &format!("[Lopsy GPU] device lost ({reason:?}): {message}"));
+            host::gpu_lost(&message);
+        });
 
         let (width, height) = canvas_size(canvas);
         let mut config = surface
@@ -244,6 +248,14 @@ impl GpuContext {
     /// Largest texture edge the device accepts.
     pub fn max_texture_size(&self) -> u32 {
         self.device.limits().max_texture_dimension_2d
+    }
+
+    /// Destroy the device, as losing it would: every operation after this
+    /// does nothing and the host is told through `host::gpu_lost`. WebGPU
+    /// offers no other way to rehearse a loss.
+    pub fn lose_device(&self) -> bool {
+        self.device.destroy();
+        true
     }
 
     /// Size of the canvas in device pixels.

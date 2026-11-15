@@ -20,6 +20,8 @@
  * already drained.
  */
 
+import { EngineGoneError } from '../../engine-wasm/wasm-bridge';
+
 type ThumbnailReader = () => Promise<ImageData | null>;
 type ThumbnailCallback = (thumb: ImageData | null) => void;
 
@@ -75,7 +77,9 @@ function flush(): void {
     }
     read
       .catch((e: unknown) => {
-        console.error('[Lopsy] thumbnail readback failed:', e);
+        // A read still out when its engine went has nothing to report: the
+        // engine that replaces it draws the thumbnail again.
+        if (!(e instanceof EngineGoneError)) console.error('[Lopsy] thumbnail readback failed:', e);
         return null;
       })
       .then((thumb) => {

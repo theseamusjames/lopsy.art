@@ -63,6 +63,12 @@ impl GpuContext {
         })
     }
 
+    /// Rehearsing a loss is the page's to do here, through the
+    /// `WEBGL_lose_context` extension on the canvas.
+    pub fn lose_device(&self) -> bool {
+        false
+    }
+
     /// The texture and framebuffer pools for this context.
     pub fn create_pools(&self) -> (TexturePool, FramebufferPool) {
         (

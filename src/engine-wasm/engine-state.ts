@@ -6,7 +6,7 @@
  */
 
 import type { Engine } from './wasm-bridge';
-import { initWasm, createEngine, clearAllLayers } from './wasm-bridge';
+import { initWasm, createEngine, clearAllLayers, rendererName } from './wasm-bridge';
 import { resetTrackedState, cacheSubBrushTips } from './engine-sync';
 import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
 import { canvasColorSpace } from '../engine/color-space';
@@ -24,6 +24,36 @@ declare global {
   }
 }
 let engineCanvas: HTMLCanvasElement | null = null;
+
+/**
+ * The window event the wgpu engine raises when its device is lost. A WebGL
+ * canvas fires `webglcontextlost` and `webglcontextrestored` itself.
+ */
+export const GPU_LOST_EVENT = 'lopsy-gpu-lost';
+
+/** Set between a wgpu device loss and the engine that replaces it. */
+let isWgpuDeviceLost = false;
+
+/** Whether the engine draws through WebGPU. Only known once the wasm is loaded. */
+export function isWgpuRenderer(): boolean {
+  return rendererName() === 'wgpu';
+}
+
+/** Record that the wgpu device is gone, until `initEngine` makes a new one. */
+export function markWgpuDeviceLost(): void {
+  isWgpuDeviceLost = true;
+}
+
+/**
+ * Whether the engine's GPU objects are gone: a lost WebGL context, a lost
+ * WebGPU device, or no engine canvas at all.
+ */
+export function isGpuContextLost(): boolean {
+  if (!engineCanvas) return true;
+  if (isWgpuRenderer()) return isWgpuDeviceLost;
+  const gl = engineCanvas.getContext('webgl2');
+  return !gl || gl.isContextLost();
+}
 
 // Resources held by the current engine that must be released on
 // destroyEngine. Without this, WebGL context-loss → initEngine adds a new
@@ -48,17 +78,21 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   engine = await createEngine(canvas);
   recordStartupTiming(ENGINE_CREATE_TIMING, createStart);
   engineCanvas = canvas;
+  isWgpuDeviceLost = false;
 
   // Enable wide-gamut / EDR output if the display supports it.
   // The WASM engine already uses RGBA16F textures; setting the drawing buffer
   // color space to display-p3 tells the compositor to preserve values > 1.0.
-  try {
-    const gl = canvas.getContext('webgl2');
-    if (gl && canvasColorSpace === 'display-p3') {
-      gl.drawingBufferColorSpace = 'display-p3';
+  // A WebGPU canvas has no WebGL context to set it on.
+  if (!isWgpuRenderer()) {
+    try {
+      const gl = canvas.getContext('webgl2');
+      if (gl && canvasColorSpace === 'display-p3') {
+        gl.drawingBufferColorSpace = 'display-p3';
+      }
+    } catch {
+      // drawingBufferColorSpace not supported — fall back silently
     }
-  } catch {
-    // drawingBufferColorSpace not supported — fall back silently
   }
   setGpuPixelEngine(engine);
 

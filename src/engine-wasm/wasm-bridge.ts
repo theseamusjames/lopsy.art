@@ -15,6 +15,8 @@ import init, {
   clearGpuSnapshots,
   liveGpuSnapshotCount,
   effectCacheStats,
+  loseGpuDevice,
+  rendererName,
   createEngine,
   setDocumentSize,
   setViewport,
@@ -356,6 +358,8 @@ export {
   clearGpuSnapshots,
   liveGpuSnapshotCount,
   effectCacheStats,
+  loseGpuDevice,
+  rendererName,
   createEngine,
   setDocumentSize,
   setViewport,
@@ -643,6 +647,22 @@ function isPendingReadback(value: unknown): value is PendingReadback {
 }
 
 /**
+ * A readback whose engine was destroyed while it was out: after a lost
+ * WebGPU device, or when the canvas unmounts. Its pixels no longer exist.
+ */
+export class EngineGoneError extends Error {
+  constructor() {
+    super('The engine was destroyed while a readback was out');
+    this.name = 'EngineGoneError';
+  }
+}
+
+/** wasm-bindgen zeroes an object's pointer when it is freed. */
+function isFreed(engine: Engine): boolean {
+  return (engine as unknown as { __wbg_ptr?: number }).__wbg_ptr === 0;
+}
+
+/**
  * Wait for a parked command's readback, resume it, and repeat until it
  * answers with its value. A command with several readbacks parks once for
  * each.
@@ -651,6 +671,7 @@ async function finishReadback<Result>(engine: Engine, pending: PendingReadback):
   let step: unknown = pending;
   while (isPendingReadback(step)) {
     await step.ready;
+    if (isFreed(engine)) throw new EngineGoneError();
     step = resumeTask(engine, step.lopsyTask);
   }
   return step as Result;

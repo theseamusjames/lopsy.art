@@ -39,10 +39,33 @@ fn console_log(level: host::LogLevel, message: &str) {
     }
 }
 
+/// Which backend this build of the engine draws with: `"webgl"` or `"wgpu"`.
+#[wasm_bindgen(js_name = "rendererName")]
+pub fn renderer_name() -> String {
+    if cfg!(feature = "wgpu") { "wgpu" } else { "webgl" }.to_string()
+}
+
+/// The event the window receives when the wgpu device is lost. The page
+/// answers it by creating the engine again (`useCanvasRendering.ts`).
+#[cfg(feature = "wgpu")]
+const GPU_LOST_EVENT: &str = "lopsy-gpu-lost";
+
+#[cfg(feature = "wgpu")]
+fn announce_gpu_lost(_reason: &str) {
+    let Some(window) = web_sys::window() else { return };
+    if let Ok(event) = web_sys::Event::new(GPU_LOST_EVENT) {
+        let _ = window.dispatch_event(&event);
+    }
+}
+
+/// A WebGL canvas fires `webglcontextlost` itself.
+#[cfg(not(feature = "wgpu"))]
+fn announce_gpu_lost(_reason: &str) {}
+
 #[cfg(not(feature = "wgpu"))]
 #[wasm_bindgen(js_name = "createEngine")]
 pub fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError> {
-    host::install(host::Host { log: console_log, now_ms: js_sys::Date::now });
+    host::install(host::Host { log: console_log, now_ms: js_sys::Date::now, gpu_lost: announce_gpu_lost });
     let gpu_ctx = GpuContext::new(&canvas).map_err(|e| JsError::new(&e))?;
     engine_on(gpu_ctx)
 }
@@ -52,7 +75,7 @@ pub fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError> {
 #[cfg(feature = "wgpu")]
 #[wasm_bindgen(js_name = "createEngine")]
 pub async fn create_engine(canvas: HtmlCanvasElement) -> Result<Engine, JsError> {
-    host::install(host::Host { log: console_log, now_ms: js_sys::Date::now });
+    host::install(host::Host { log: console_log, now_ms: js_sys::Date::now, gpu_lost: announce_gpu_lost });
     let gpu_ctx = GpuContext::new(&canvas).await.map_err(|e| JsError::new(&e))?;
     engine_on(gpu_ctx)
 }
