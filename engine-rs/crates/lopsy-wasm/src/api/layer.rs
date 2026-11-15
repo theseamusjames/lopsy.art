@@ -4,6 +4,7 @@
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
+use crate::readback::{read, readback_export, task};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "addLayer")]
@@ -26,9 +27,12 @@ pub fn set_layer_order(engine: &mut Engine, order_json: &str) -> Result<(), JsEr
     lopsy_engine::commands::layer::set_layer_order(&mut engine.inner, order_json).map_err(|e| JsError::new(&e))
 }
 
-#[wasm_bindgen(js_name = "flattenIntoLayer")]
-pub fn flatten_into_layer(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
-    lopsy_engine::commands::layer::flatten_into_layer(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
+readback_export! {
+    #[wasm_bindgen(js_name = "flattenIntoLayer")]
+    pub fn flatten_into_layer(engine, layer_id: &str) -> Result<()> {
+        let layer_id = layer_id.to_string();
+        task(|cx| lopsy_engine::commands::layer::flatten_into_layer(cx, layer_id))
+    }
 }
 
 #[wasm_bindgen(js_name = "uploadLayerPixels")]
@@ -55,9 +59,11 @@ pub fn upload_layer_pixels_from_canvas(
     lopsy_engine::commands::layer::upload_layer_pixels_from_canvas(&mut engine.inner, layer_id, canvas, width, height).map_err(|e| JsError::new(&e))
 }
 
-#[wasm_bindgen(js_name = "readLayerPixels")]
-pub fn read_layer_pixels(engine: &Engine, layer_id: &str) -> Result<Vec<u8>, JsError> {
-    lopsy_engine::commands::layer::read_layer_pixels(&engine.inner, layer_id).map_err(|e| JsError::new(&e))
+readback_export! {
+    #[wasm_bindgen(js_name = "readLayerPixels")]
+    pub fn read_layer_pixels(engine, layer_id: &str) -> Result<Vec<u8>> {
+        read(lopsy_engine::commands::layer::read_layer_pixels(engine, layer_id))
+    }
 }
 
 #[wasm_bindgen(js_name = "decodeAndUploadImage")]
@@ -125,9 +131,12 @@ pub fn get_layer_engine_bounds(engine: &Engine, layer_id: &str) -> Vec<i32> {
     lopsy_engine::commands::layer::get_layer_engine_bounds(&engine.inner, layer_id)
 }
 
-#[wasm_bindgen(js_name = "getLayerContentBounds")]
-pub fn get_layer_content_bounds(engine: &mut Engine, layer_id: &str) -> Vec<i32> {
-    lopsy_engine::commands::layer::get_layer_content_bounds(&mut engine.inner, layer_id)
+readback_export! {
+    #[wasm_bindgen(js_name = "getLayerContentBounds")]
+    pub fn get_layer_content_bounds(engine, layer_id: &str) -> Vec<i32> {
+        let layer_id = layer_id.to_string();
+        task(|cx| async move { Ok(lopsy_engine::commands::layer::get_layer_content_bounds(cx, layer_id).await) })
+    }
 }
 
 #[wasm_bindgen(js_name = "bakeLayerEffects")]
@@ -241,17 +250,18 @@ pub fn clipboard_copy(
     lopsy_engine::commands::layer::clipboard_copy(&mut engine.inner, layer_id, has_selection, bounds_x, bounds_y, bounds_w, bounds_h).map_err(|e| JsError::new(&e))
 }
 
-#[wasm_bindgen(js_name = "clipboardCopyMerged")]
-pub fn clipboard_copy_merged(
-    engine: &mut Engine,
-    has_selection: bool,
-    bounds_x: i32,
-    bounds_y: i32,
-    bounds_w: u32,
-    bounds_h: u32,
-) -> Result<Vec<i32>, JsError> {
-    lopsy_engine::commands::layer::clipboard_copy_merged(&mut engine.inner, has_selection, bounds_x, bounds_y, bounds_w, bounds_h)
-        .map_err(|e| JsError::new(&e))
+readback_export! {
+    #[wasm_bindgen(js_name = "clipboardCopyMerged")]
+    pub fn clipboard_copy_merged(
+        engine,
+        has_selection: bool,
+        bounds_x: i32,
+        bounds_y: i32,
+        bounds_w: u32,
+        bounds_h: u32,
+    ) -> Result<Vec<i32>> {
+        task(|cx| lopsy_engine::commands::layer::clipboard_copy_merged(cx, has_selection, bounds_x, bounds_y, bounds_w, bounds_h))
+    }
 }
 
 #[wasm_bindgen(js_name = "clipboardCut")]
@@ -277,9 +287,11 @@ pub fn clipboard_paste(engine: &mut Engine, dst_layer_id: &str) -> Result<(), Js
     lopsy_engine::commands::layer::clipboard_paste(&mut engine.inner, dst_layer_id).map_err(|e| JsError::new(&e))
 }
 
-#[wasm_bindgen(js_name = "readClipboardPixels")]
-pub fn read_clipboard_pixels(engine: &Engine) -> Result<Vec<u8>, JsError> {
-    lopsy_engine::commands::layer::read_clipboard_pixels(&engine.inner).map_err(|e| JsError::new(&e))
+readback_export! {
+    #[wasm_bindgen(js_name = "readClipboardPixels")]
+    pub fn read_clipboard_pixels(engine) -> Result<Vec<u8>> {
+        read(lopsy_engine::commands::layer::read_clipboard_pixels(engine))
+    }
 }
 
 #[wasm_bindgen(js_name = "uploadClipboardPixels")]
@@ -446,9 +458,11 @@ pub fn upload_layer_pixels_compressed(
     lopsy_engine::commands::layer::upload_layer_pixels_compressed(&mut engine.inner, layer_id, compressed).map_err(|e| JsError::new(&e))
 }
 
-#[wasm_bindgen(js_name = "readLayerPixelsLz4U16")]
-pub fn read_layer_pixels_lz4_u16(engine: &Engine, layer_id: &str) -> Vec<u8> {
-    lopsy_engine::commands::layer::read_layer_pixels_lz4_u16(&engine.inner, layer_id)
+readback_export! {
+    #[wasm_bindgen(js_name = "readLayerPixelsLz4U16")]
+    pub fn read_layer_pixels_lz4_u16(engine, layer_id: &str) -> Vec<u8> {
+        read(lopsy_engine::commands::layer::read_layer_pixels_lz4_u16(engine, layer_id))
+    }
 }
 
 #[wasm_bindgen(js_name = "uploadLayerPixelsCompressedU16")]
@@ -460,14 +474,18 @@ pub fn upload_layer_pixels_compressed_u16(
     lopsy_engine::commands::layer::upload_layer_pixels_compressed_u16(&mut engine.inner, layer_id, compressed).map_err(|e| JsError::new(&e))
 }
 
-#[wasm_bindgen(js_name = "readLayerThumbnail")]
-pub fn read_layer_thumbnail(engine: &Engine, layer_id: &str, max_size: u32) -> Vec<u8> {
-    lopsy_engine::commands::layer::read_layer_thumbnail(&engine.inner, layer_id, max_size)
+readback_export! {
+    #[wasm_bindgen(js_name = "readLayerThumbnail")]
+    pub fn read_layer_thumbnail(engine, layer_id: &str, max_size: u32) -> Vec<u8> {
+        read(lopsy_engine::commands::layer::read_layer_thumbnail(engine, layer_id, max_size))
+    }
 }
 
-#[wasm_bindgen(js_name = "readCompositeThumbnail")]
-pub fn read_composite_thumbnail(engine: &Engine, max_size: u32) -> Vec<u8> {
-    lopsy_engine::commands::layer::read_composite_thumbnail(&engine.inner, max_size)
+readback_export! {
+    #[wasm_bindgen(js_name = "readCompositeThumbnail")]
+    pub fn read_composite_thumbnail(engine, max_size: u32) -> Vec<u8> {
+        read(lopsy_engine::commands::layer::read_composite_thumbnail(engine, max_size))
+    }
 }
 
 #[wasm_bindgen(js_name = "snapshotLayerGpu")]
@@ -507,6 +525,11 @@ pub fn clear_gpu_snapshots(engine: &mut Engine) {
 #[wasm_bindgen(js_name = "liveGpuSnapshotCount")]
 pub fn live_gpu_snapshot_count(engine: &Engine) -> u32 {
     lopsy_engine::commands::layer::live_gpu_snapshot_count(&engine.inner)
+}
+
+#[wasm_bindgen(js_name = "loseGpuDevice")]
+pub fn lose_gpu_device(engine: &Engine) -> bool {
+    lopsy_engine::commands::layer::lose_gpu_device(&engine.inner)
 }
 
 #[wasm_bindgen(js_name = "effectCacheStats")]

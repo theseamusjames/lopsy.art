@@ -3,6 +3,7 @@
 
 use wasm_bindgen::prelude::*;
 
+use crate::readback::{read, readback_export};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "bucketFillSolid")]
@@ -83,7 +84,9 @@ pub fn apply_fill_to_layer(
     lopsy_engine::commands::fill::apply_fill_to_layer(&mut engine.inner, layer_id, fill_r, fill_g, fill_b, fill_a, mask, width, height)
 }
 
-#[wasm_bindgen(js_name = "readLayerPixelsForFill")]
-pub fn read_layer_pixels_for_fill(engine: &Engine, layer_id: &str) -> Result<Vec<u8>, JsError> {
-    lopsy_engine::commands::fill::read_layer_pixels_for_fill(&engine.inner, layer_id).map_err(|e| JsError::new(&e))
+readback_export! {
+    #[wasm_bindgen(js_name = "readLayerPixelsForFill")]
+    pub fn read_layer_pixels_for_fill(engine, layer_id: &str) -> Result<Vec<u8>> {
+        read(lopsy_engine::commands::fill::read_layer_pixels_for_fill(engine, layer_id))
+    }
 }

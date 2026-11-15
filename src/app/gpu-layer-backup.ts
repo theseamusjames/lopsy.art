@@ -17,7 +17,7 @@
  * behind a loading overlay. Edits made after the last backup are lost.
  */
 
-import { getEngine, getEngineCanvas } from '../engine-wasm/engine-state';
+import { getEngine, isGpuContextLost } from '../engine-wasm/engine-state';
 import { readLayerBackupBlob, readLayerContentStamp, uploadCompressed } from '../engine-wasm/gpu-pixel-access';
 import { flushLayerSync } from '../engine-wasm/engine-sync';
 import { useEditorStore } from './editor-store';
@@ -46,11 +46,6 @@ function currentHistoryKey(): HistoryKey {
     redoLength: s.redoStack.length,
     layers: s.document.layers,
   };
-}
-
-function isGpuContextLost(): boolean {
-  const gl = getEngineCanvas()?.getContext('webgl2');
-  return !gl || gl.isContextLost();
 }
 
 function backupLayers(): BackupLayer[] {

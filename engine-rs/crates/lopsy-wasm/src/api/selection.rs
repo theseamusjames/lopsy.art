@@ -3,6 +3,7 @@
 
 use wasm_bindgen::prelude::*;
 
+use crate::readback::{read, readback_export, task};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "setSelectionMask")]
@@ -15,9 +16,11 @@ pub fn feather_selection_mask(engine: &mut Engine, radius: u32) {
     lopsy_engine::commands::selection::feather_selection_mask(&mut engine.inner, radius)
 }
 
-#[wasm_bindgen(js_name = "readSelectionMask")]
-pub fn read_selection_mask(engine: &Engine) -> Vec<u8> {
-    lopsy_engine::commands::selection::read_selection_mask(&engine.inner)
+readback_export! {
+    #[wasm_bindgen(js_name = "readSelectionMask")]
+    pub fn read_selection_mask(engine) -> Vec<u8> {
+        read(lopsy_engine::commands::selection::read_selection_mask(engine))
+    }
 }
 
 #[wasm_bindgen(js_name = "clearSelection")]
@@ -75,9 +78,11 @@ pub fn enter_quick_mask_mode(engine: &mut Engine) {
     lopsy_engine::commands::selection::enter_quick_mask_mode(&mut engine.inner)
 }
 
-#[wasm_bindgen(js_name = "exitQuickMaskMode")]
-pub fn exit_quick_mask_mode(engine: &mut Engine) -> Option<Vec<u8>> {
-    lopsy_engine::commands::selection::exit_quick_mask_mode(&mut engine.inner)
+readback_export! {
+    #[wasm_bindgen(js_name = "exitQuickMaskMode")]
+    pub fn exit_quick_mask_mode(engine) -> Option<Vec<u8>> {
+        read(lopsy_engine::commands::selection::exit_quick_mask_mode(engine))
+    }
 }
 
 #[wasm_bindgen(js_name = "paintQuickMaskDab")]
@@ -122,16 +127,21 @@ pub fn draw_quick_mask_pencil_line(
     lopsy_engine::commands::selection::draw_quick_mask_pencil_line(&mut engine.inner, x0, y0, x1, y1, r, g, b, a, size, mode)
 }
 
-#[wasm_bindgen(js_name = "fillQuickMask")]
-pub fn fill_quick_mask(
-    engine: &mut Engine,
-    start_x: u32,
-    start_y: u32,
-    tolerance: u32,
-    contiguous: bool,
-    mode: u32,
-) {
-    lopsy_engine::commands::selection::fill_quick_mask(&mut engine.inner, start_x, start_y, tolerance, contiguous, mode)
+readback_export! {
+    #[wasm_bindgen(js_name = "fillQuickMask")]
+    pub fn fill_quick_mask(
+        engine,
+        start_x: u32,
+        start_y: u32,
+        tolerance: u32,
+        contiguous: bool,
+        mode: u32,
+    ) -> () {
+        task(|cx| async move {
+            lopsy_engine::commands::selection::fill_quick_mask(cx, start_x, start_y, tolerance, contiguous, mode).await;
+            Ok(())
+        })
+    }
 }
 
 #[wasm_bindgen(js_name = "renderQuickMaskLinearGradient")]
@@ -151,9 +161,11 @@ pub fn render_quick_mask_radial_gradient(engine: &mut Engine, cx: f64, cy: f64, 
     lopsy_engine::commands::selection::render_quick_mask_radial_gradient(&mut engine.inner, cx, cy, radius, stops_json)
 }
 
-#[wasm_bindgen(js_name = "readQuickMaskPixels")]
-pub fn read_quick_mask_pixels(engine: &Engine) -> Vec<u8> {
-    lopsy_engine::commands::selection::read_quick_mask_pixels(&engine.inner)
+readback_export! {
+    #[wasm_bindgen(js_name = "readQuickMaskPixels")]
+    pub fn read_quick_mask_pixels(engine) -> Vec<u8> {
+        read(lopsy_engine::commands::selection::read_quick_mask_pixels(engine))
+    }
 }
 
 #[wasm_bindgen(js_name = "uploadQuickMaskPixels")]

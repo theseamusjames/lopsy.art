@@ -3,6 +3,8 @@ use crate::coverage_stroke_gpu::{self, CoverageTool};
 use crate::engine::{EngineInner, ImageAdjustmentState};
 use crate::imaging::adjustments;
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
+use crate::gpu::read::Read;
+use crate::task::Cx;
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::params::composite::{BlendParams, CompositeParams, FinalBlitParams};
 use crate::gpu::params::filters::{AdjustmentsParams, GaussianBlurParams, VignetteParams};
@@ -497,13 +499,14 @@ pub fn render(engine: &mut EngineInner) {
 
 /// The document composited at 16 bits and encoded as a PNG. `color_space`
 /// 1 tags it Display P3; anything else sRGB.
-pub fn export_png_16(engine: &mut EngineInner, color_space: u8) -> Result<Vec<u8>, String> {
-    let pixels = composite_for_export_u16(engine)?;
+pub fn export_png_16(engine: &mut EngineInner, color_space: u8) -> Read<Vec<u8>> {
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
     let cs = match color_space {
         1 => lopsy_core::color::ColorSpace::DisplayP3,
         _ => lopsy_core::color::ColorSpace::Srgb,
     };
-    lopsy_core::export::encode_png_16(&pixels, engine.doc_width, engine.doc_height, cs)
+    composite_for_export_u16(engine)
+        .and_then(move |pixels| lopsy_core::export::encode_png_16(&pixels, doc_w, doc_h, cs))
 }
 
 /// Draw the composite texture to the screen canvas through the viewport
@@ -1546,72 +1549,96 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
 }
 
 /// Composite for export — render to FBO, readPixels
-pub fn composite_for_export(engine: &mut EngineInner) -> Result<Vec<u8>, String> {
+pub fn composite_for_export(engine: &mut EngineInner) -> Read<Vec<u8>> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    composite_layers_for_export(engine)?;
+    if let Err(e) = composite_layers_for_export(engine) {
+        return Read::failed(e);
+    }
     // The export render replaced the live composite (no quick mask, no
     // in-progress strokes), so the next frame must rebuild it rather than
     // only re-present it.
     engine.needs_recomposite = true;
 
-    let mut pixels = engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h)?;
-
     // Native modes composite in their own space; every consumer of this buffer
     // (PNG/JPEG encode, eyedropper, e2e pixel probes) expects sRGB, so decode
     // here with the same math final_blit.wgsl uses for the screen.
-    decode_native_color_mode(engine.doc_color_mode, &mut pixels);
-    Ok(pixels)
+    let doc_color_mode = engine.doc_color_mode;
+    engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
+        decode_native_color_mode(doc_color_mode, &mut pixels);
+        pixels
+    })
 }
 
 /// Composite the document as export does and leave it in the composite
 /// texture in sRGB: every visible layer, effect and adjustment over the
 /// background colour. Nothing is read back, except in a Lab document, whose
 /// composite is decoded on the CPU as `composite_for_export` does.
-fn composite_for_reuse(engine: &mut EngineInner) -> Result<(), String> {
-    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
-    composite_layers_for_export(engine)?;
-    // The live composite was replaced; the next frame must rebuild it.
-    engine.needs_recomposite = true;
-    if engine.doc_color_mode == 1 {
-        let mut pixels = engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h)?;
-        decode_native_color_mode(engine.doc_color_mode, &mut pixels);
+///
+/// `then` runs on the engine as soon as that composite is in place, with no
+/// frame in between: the next frame rebuilds the live composite over it.
+async fn with_composite_for_reuse<T>(
+    cx: &Cx,
+    then: impl FnOnce(&mut EngineInner) -> Result<T, String>,
+) -> Result<T, String> {
+    let lab = cx.with(|engine| -> Result<_, String> {
+        let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+        composite_layers_for_export(engine)?;
+        // The live composite was replaced; the next frame must rebuild it.
+        engine.needs_recomposite = true;
+        let is_lab = engine.doc_color_mode == 1;
+        Ok(is_lab.then(|| (engine.gpu().read_rgba(engine.composite_texture, 0, 0, doc_w, doc_h), doc_w, doc_h)))
+    })?;
+    let Some((read, doc_w, doc_h)) = lab else {
+        return cx.with(then);
+    };
+    let mut pixels = read.await?;
+    decode_native_color_mode(1, &mut pixels);
+    cx.with(|engine| {
+        if (engine.doc_width, engine.doc_height) != (doc_w, doc_h) {
+            return Err("The document was resized while it was being flattened".to_string());
+        }
         engine.texture_pool.upload_rgba(engine.composite_texture, 0, 0, doc_w, doc_h, &pixels)?;
-    }
-    Ok(())
+        engine.needs_recomposite = true;
+        then(engine)
+    })
 }
 
 /// Replace `layer_id`'s pixels with the flattened document, copied on the
 /// GPU at the layer's own precision.
-pub fn flatten_into_layer(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
-    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
-    composite_for_reuse(engine)?;
-    crate::layer_manager::with_layer_texture(engine, layer_id, doc_w, doc_h, |engine, texture| {
-        let is_copied = engine
-            .pass(&engine.shaders.blit, ())
-            .texture("u_tex", engine.composite_texture)
-            .blend(Blend::Off)
-            .draw(Target::Texture(texture));
-        if is_copied { Ok(()) } else { Err("Flatten target texture missing".to_string()) }
+pub async fn flatten_into_layer(cx: &Cx, layer_id: &str) -> Result<(), String> {
+    with_composite_for_reuse(cx, |engine| {
+        let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+        crate::layer_manager::with_layer_texture(engine, layer_id, doc_w, doc_h, |engine, texture| {
+            let is_copied = engine
+                .pass(&engine.shaders.blit, ())
+                .texture("u_tex", engine.composite_texture)
+                .blend(Blend::Off)
+                .draw(Target::Texture(texture));
+            if is_copied { Ok(()) } else { Err("Flatten target texture missing".to_string()) }
+        })
     })
+    .await
 }
 
 /// Copy the flattened document into the clipboard texture: the selection's
 /// bounds through the selection mask, or the whole document with no
 /// selection. Returns (width, height, offset_x, offset_y).
-pub fn copy_merged_to_clipboard(
-    engine: &mut EngineInner,
+pub async fn copy_merged_to_clipboard(
+    cx: &Cx,
     has_selection: bool,
     bounds_x: i32,
     bounds_y: i32,
     bounds_w: u32,
     bounds_h: u32,
 ) -> Result<(u32, u32, i32, i32), String> {
-    composite_for_reuse(engine)?;
-    let document = Rect::new(0, 0, engine.doc_width, engine.doc_height);
-    crate::layer_manager::copy_texture_to_clipboard(
-        engine, engine.composite_texture, document, has_selection, bounds_x, bounds_y, bounds_w, bounds_h,
-    )
+    with_composite_for_reuse(cx, |engine| {
+        let document = Rect::new(0, 0, engine.doc_width, engine.doc_height);
+        crate::layer_manager::copy_texture_to_clipboard(
+            engine, engine.composite_texture, document, has_selection, bounds_x, bounds_y, bounds_w, bounds_h,
+        )
+    })
+    .await
 }
 
 /// In-place decode of a composited RGBA8 buffer out of a native color mode.
@@ -1624,34 +1651,37 @@ pub fn decode_native_color_mode(doc_color_mode: u32, pixels: &mut [u8]) {
 
 /// Composite for export at 16-bit precision — same pipeline as
 /// `composite_for_export` but reads back as u16 RGBA.
-pub fn composite_for_export_u16(engine: &mut EngineInner) -> Result<Vec<u16>, String> {
+pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    composite_layers_for_export(engine)?;
+    if let Err(e) = composite_layers_for_export(engine) {
+        return Read::failed(e);
+    }
     engine.needs_recomposite = true;
 
     apply_image_adjustments(engine);
 
-    let mut pixels = engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h)?;
-    // Lab is stored 8-bit-encoded even in a 16-bit texture, so decoding steps
-    // down to bytes and back; the extra precision is in the alpha/geometry, not
-    // the encoded Lab channels.
-    if engine.doc_color_mode == 1 {
-        for px in pixels.chunks_exact_mut(4) {
-            let mut rgba8 = [
-                (px[0] >> 8) as u8,
-                (px[1] >> 8) as u8,
-                (px[2] >> 8) as u8,
-                (px[3] >> 8) as u8,
-            ];
-            lopsy_core::lab::lab_pixels_to_srgb(&mut rgba8);
-            px[0] = u16::from(rgba8[0]) * 257;
-            px[1] = u16::from(rgba8[1]) * 257;
-            px[2] = u16::from(rgba8[2]) * 257;
+    let is_lab = engine.doc_color_mode == 1;
+    engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
+        // Lab is stored 8-bit-encoded even in a 16-bit texture, so decoding steps
+        // down to bytes and back; the extra precision is in the alpha/geometry, not
+        // the encoded Lab channels.
+        if is_lab {
+            for px in pixels.chunks_exact_mut(4) {
+                let mut rgba8 = [
+                    (px[0] >> 8) as u8,
+                    (px[1] >> 8) as u8,
+                    (px[2] >> 8) as u8,
+                    (px[3] >> 8) as u8,
+                ];
+                lopsy_core::lab::lab_pixels_to_srgb(&mut rgba8);
+                px[0] = u16::from(rgba8[0]) * 257;
+                px[1] = u16::from(rgba8[1]) * 257;
+                px[2] = u16::from(rgba8[2]) * 257;
+            }
         }
-    }
-
-    Ok(pixels)
+        pixels
+    })
 }
 
 /// Replace a layer's pixels with the layer and its effects, rendered onto a

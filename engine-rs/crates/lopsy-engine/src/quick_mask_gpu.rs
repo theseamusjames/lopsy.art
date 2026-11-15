@@ -1,28 +1,34 @@
 use crate::engine::EngineInner;
 use crate::gpu::pass::{Blend, Target};
+use crate::gpu::read::Read;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gradient_gpu::{copy_to_scratch_a, draw_gradient, GradientShape, GradientStop, GradientTarget};
 use crate::gpu::params::core::QuickMaskTranslateParams;
+use crate::task::Cx;
 
 /// Flood-fill the quick mask texture. Reads the mask from the GPU, runs a
 /// region-fill based on mask-value tolerance, and writes the result back.
 ///
 /// `mode` 0 = brush (fill matched region to white/selected),
 ///        1 = eraser (fill matched region to black/unselected).
-pub fn fill_quick_mask(
-    engine: &mut EngineInner,
+pub async fn fill_quick_mask(
+    cx: &Cx,
     start_x: u32,
     start_y: u32,
     tolerance: u32,
     contiguous: bool,
     mode: u32,
 ) {
-    let Some(tex_handle) = engine.quick_mask_texture else { return };
-    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-
-    // Read mask texture as RGBA
-    if engine.texture_pool.get(tex_handle).is_none() { return; }
-    let Ok(rgba) = engine.gpu().read_rgba(tex_handle, 0, 0, w, h) else { return };
+    let Some((tex_handle, w, h, read)) = cx.with(|engine| {
+        let tex_handle = engine.quick_mask_texture?;
+        let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+        engine.texture_pool.get(tex_handle)?;
+        // Read mask texture as RGBA
+        Some((tex_handle, w, h, engine.gpu().read_rgba(tex_handle, 0, 0, w, h)))
+    }) else {
+        return;
+    };
+    let Ok(rgba) = read.await else { return };
 
     // Extract grayscale from RGBA
     let mut mask = vec![0u8; (w * h) as usize];
@@ -67,10 +73,16 @@ pub fn fill_quick_mask(
         }
     }
 
-    if let Err(e) = engine.expand_mask_bytes_into(tex_handle, &mask, w, h) {
-        crate::host::log(crate::host::LogLevel::Warn, &format!("fill_quick_mask: {e}"));
-    }
-    engine.needs_recomposite = true;
+    cx.with(|engine| {
+        // The mask may have been left or replaced while the read was out.
+        if engine.quick_mask_texture != Some(tex_handle) || engine.texture_pool.get_size(tex_handle) != Some((w, h)) {
+            return;
+        }
+        if let Err(e) = engine.expand_mask_bytes_into(tex_handle, &mask, w, h) {
+            crate::host::log(crate::host::LogLevel::Warn, &format!("fill_quick_mask: {e}"));
+        }
+        engine.needs_recomposite = true;
+    });
 }
 
 /// Enter quick mask mode: copy selection_mask_texture to quick_mask_texture
@@ -130,43 +142,43 @@ pub fn enter_quick_mask_mode(engine: &mut EngineInner) {
 /// Exit quick mask mode: read back the quick mask texture as single-channel
 /// grayscale data. Returns the mask data so the TS side can convert it to
 /// a selection.
-pub fn exit_quick_mask_mode(engine: &mut EngineInner) -> Option<Vec<u8>> {
+pub fn exit_quick_mask_mode(engine: &mut EngineInner) -> Read<Option<Vec<u8>>> {
+    let none = || Read::ready(Ok(None));
     end_quick_mask_move(engine);
-    let handle = engine.quick_mask_texture.take()?;
-    let (w, h) = engine.texture_pool.get_size(handle)?;
+    let Some(handle) = engine.quick_mask_texture.take() else { return none() };
+    let Some((w, h)) = engine.texture_pool.get_size(handle) else { return none() };
 
     // Read RGBA from the texture
     if engine.texture_pool.get(handle).is_none() {
-        return None;
+        return none();
     }
-    let rgba = engine.gpu().read_rgba(handle, 0, 0, w, h).ok();
+    let rgba = engine.gpu().read_rgba(handle, 0, 0, w, h);
     engine.texture_pool.release(handle);
     engine.needs_recomposite = true;
 
     // Extract single-channel from RGBA (R channel is the mask value)
-    rgba.map(|data| {
+    rgba.map(move |data| {
         let mut single = vec![0u8; (w * h) as usize];
         for i in 0..(w * h) as usize {
             single[i] = data[i * 4];
         }
-        single
+        Some(single)
     })
+    .or(None)
 }
 
 /// Read the quick mask texture as single-channel grayscale pixels.
 /// Returns `(width, height, mask_bytes)` on success, or `(0, 0, vec![])`
 /// when no quick mask texture is active.
-pub fn read_quick_mask_pixels(engine: &EngineInner) -> (u32, u32, Vec<u8>) {
-    let Some(handle) = engine.quick_mask_texture else { return (0, 0, Vec::new()) };
-    let Some((w, h)) = engine.texture_pool.get_size(handle) else { return (0, 0, Vec::new()) };
-    if engine.texture_pool.get(handle).is_none() { return (0, 0, Vec::new()); }
+pub fn read_quick_mask_pixels(engine: &EngineInner) -> Read<(u32, u32, Vec<u8>)> {
+    let none = || Read::ready(Ok((0, 0, Vec::new())));
+    let Some(handle) = engine.quick_mask_texture else { return none() };
+    let Some((w, h)) = engine.texture_pool.get_size(handle) else { return none() };
+    if engine.texture_pool.get(handle).is_none() { return none(); }
 
     // R8 staging: 1 byte per pixel back over the bridge instead of 4,
     // and no CPU-side strided extract (#745).
-    match engine.read_texture_r8(handle, w, h) {
-        Some(data) => (w, h, data),
-        None => (0, 0, Vec::new()),
-    }
+    engine.read_texture_r8(handle, w, h).map(move |data| (w, h, data)).or((0, 0, Vec::new()))
 }
 
 /// Upload single-channel grayscale pixels into the quick mask texture as

@@ -8,7 +8,9 @@
 
 
 use crate::engine::EngineInner;
+use crate::gpu::read::Read;
 use crate::gpu::texture_pool::TextureHandle;
+use crate::task::Cx;
 use crate::{brush_gpu, clone_stamp_gpu, dodge_burn_gpu, healing_brush_gpu, mask_paint_gpu, smudge_gpu, sponge_gpu};
 
 // ============================================================
@@ -505,12 +507,12 @@ pub fn draw_mask_pencil_line(
     mask_paint_gpu::draw_mask_pencil_line(&mut *engine, layer_id, x0, y0, x1, y1, a, size, mode);
 }
 
-pub fn fill_mask(
-    engine: &mut EngineInner, layer_id: &str,
+pub async fn fill_mask(
+    cx: Cx, layer_id: String,
     doc_x: i32, doc_y: i32,
     tolerance: u32, contiguous: bool, mode: u32,
 ) {
-    mask_paint_gpu::fill_mask(&mut *engine, layer_id, doc_x, doc_y, tolerance, contiguous, mode);
+    mask_paint_gpu::fill_mask(&cx, &layer_id, doc_x, doc_y, tolerance, contiguous, mode).await;
 }
 
 pub fn render_mask_linear_gradient(
@@ -527,6 +529,6 @@ pub fn render_mask_radial_gradient(
     mask_paint_gpu::render_mask_radial_gradient(&mut *engine, layer_id, cx, cy, radius, stops_json);
 }
 
-pub fn read_mask_texture(engine: &mut EngineInner, layer_id: &str) -> Option<Vec<u8>> {
+pub fn read_mask_texture(engine: &mut EngineInner, layer_id: &str) -> Read<Option<Vec<u8>>> {
     mask_paint_gpu::read_mask_texture(&mut *engine, layer_id)
 }

@@ -3,11 +3,15 @@
 
 use wasm_bindgen::prelude::*;
 
+use crate::readback::{readback_export, task};
 use crate::Engine;
 
-#[wasm_bindgen(js_name = "magneticLassoBegin")]
-pub fn magnetic_lasso_begin(engine: &mut Engine, layer_id: &str) -> Result<(), JsError> {
-    lopsy_engine::commands::magnetic_lasso::magnetic_lasso_begin(&mut engine.inner, layer_id).map_err(|e| JsError::new(&e))
+readback_export! {
+    #[wasm_bindgen(js_name = "magneticLassoBegin")]
+    pub fn magnetic_lasso_begin(engine, layer_id: &str) -> Result<()> {
+        let layer_id = layer_id.to_string();
+        task(|cx| lopsy_engine::commands::magnetic_lasso::magnetic_lasso_begin(cx, layer_id))
+    }
 }
 
 #[wasm_bindgen(js_name = "magneticLassoSnap")]

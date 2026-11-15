@@ -15,6 +15,8 @@ use lopsy_core::layer::LayerDesc;
 use lopsy_core::geometry::Rect;
 
 use crate::engine::EngineInner;
+use crate::gpu::read::Read;
+use crate::task::Cx;
 use crate::{compositor, layer_manager, layer_transform_gpu, thumbnail_gpu};
 
 // ============================================================
@@ -47,8 +49,8 @@ pub fn set_layer_order(engine: &mut EngineInner, order_json: &str) -> Result<(),
 
 /// Flatten the document into `layer_id` without reading it back: see
 /// `compositor::flatten_into_layer`.
-pub fn flatten_into_layer(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
-    compositor::flatten_into_layer(engine, layer_id)
+pub async fn flatten_into_layer(cx: Cx, layer_id: String) -> Result<(), String> {
+    compositor::flatten_into_layer(&cx, &layer_id).await
 }
 
 pub fn upload_layer_pixels(
@@ -75,7 +77,7 @@ pub fn upload_layer_pixels_from_canvas(
         
 }
 
-pub fn read_layer_pixels(engine: &EngineInner, layer_id: &str) -> Result<Vec<u8>, String> {
+pub fn read_layer_pixels(engine: &EngineInner, layer_id: &str) -> Read<Vec<u8>> {
     layer_manager::read_pixels(&*engine, layer_id)
         
 }
@@ -247,8 +249,8 @@ pub fn get_layer_engine_bounds(engine: &EngineInner, layer_id: &str) -> Vec<i32>
     vec![x, y, w as i32, h as i32]
 }
 
-pub fn get_layer_content_bounds(engine: &mut EngineInner, layer_id: &str) -> Vec<i32> {
-    match layer_manager::layer_content_bounds(&mut *engine, layer_id) {
+pub async fn get_layer_content_bounds(cx: Cx, layer_id: String) -> Vec<i32> {
+    match layer_manager::layer_content_bounds(&cx, &layer_id).await {
         Ok(rect) => vec![rect.x, rect.y, rect.width as i32, rect.height as i32],
         Err(_) => Vec::new(),
     }
@@ -370,8 +372,8 @@ pub fn clipboard_copy(
 /// Copy Merged: the flattened document through the selection, into the
 /// clipboard texture, without reading it back. Returns
 /// `[width, height, offset_x, offset_y]`.
-pub fn clipboard_copy_merged(
-    engine: &mut EngineInner,
+pub async fn clipboard_copy_merged(
+    cx: Cx,
     has_selection: bool,
     bounds_x: i32,
     bounds_y: i32,
@@ -379,7 +381,7 @@ pub fn clipboard_copy_merged(
     bounds_h: u32,
 ) -> Result<Vec<i32>, String> {
     let (w, h, ox, oy) =
-        compositor::copy_merged_to_clipboard(engine, has_selection, bounds_x, bounds_y, bounds_w, bounds_h)?;
+        compositor::copy_merged_to_clipboard(&cx, has_selection, bounds_x, bounds_y, bounds_w, bounds_h).await?;
     Ok(vec![w as i32, h as i32, ox, oy])
 }
 
@@ -424,7 +426,7 @@ pub fn clipboard_paste(
         
 }
 
-pub fn read_clipboard_pixels(engine: &EngineInner) -> Result<Vec<u8>, String> {
+pub fn read_clipboard_pixels(engine: &EngineInner) -> Read<Vec<u8>> {
     layer_manager::read_clipboard_pixels(&*engine)
         
 }
@@ -692,24 +694,26 @@ pub fn upload_layer_pixels_compressed(engine: &mut EngineInner, layer_id: &str, 
 /// (flags 2), that `uploadLayerPixelsCompressedU16` takes back. Used for
 /// the CPU-side backup taken when the tab loses focus, which holds every
 /// raster layer at once (#973).
-pub fn read_layer_pixels_lz4_u16(engine: &EngineInner, layer_id: &str) -> Vec<u8> {
+pub fn read_layer_pixels_lz4_u16(engine: &EngineInner, layer_id: &str) -> Read<Vec<u8>> {
     let tex = match engine.layer_textures.get(layer_id) {
         Some(&t) => t,
-        None => return Vec::new(),
+        None => return Read::ready(Ok(Vec::new())),
     };
     let (w, h) = engine.texture_pool.get_size(tex).unwrap_or((0, 0));
     if w == 0 || h == 0 {
-        return Vec::new();
+        return Read::ready(Ok(Vec::new()));
     }
+    layer_manager::read_pixels_u16(engine, layer_id).map(move |pixels| lz4_u16_blob(pixels, w, h)).or(Vec::new())
+}
+
+/// A `w` by `h` layer's 16-bit pixels cropped to their content and packed
+/// as the backup blob; empty for a layer with no content.
+fn lz4_u16_blob(pixels: Vec<u16>, w: u32, h: u32) -> Vec<u8> {
 
     // Crop and convert to LE bytes in one pass, dropping the full-size
     // Vec<u16> before building the byte buffer. This keeps peak WASM
     // allocation at ~2× the cropped layer size instead of ~4×.
     let (raw_bytes, rect) = {
-        let pixels = match layer_manager::read_pixels_u16(&*engine, layer_id) {
-            Ok(p) => p,
-            Err(_) => return Vec::new(),
-        };
         let (cropped, rect) = lopsy_core::pixel_buffer::crop_to_content_bounds_u16(&pixels, w, h);
         drop(pixels);
         if cropped.is_empty() {
@@ -810,13 +814,13 @@ pub fn upload_layer_pixels_compressed_u16(engine: &mut EngineInner, layer_id: &s
     Ok(())
 }
 
-pub fn read_layer_thumbnail(engine: &EngineInner, layer_id: &str, max_size: u32) -> Vec<u8> {
+pub fn read_layer_thumbnail(engine: &EngineInner, layer_id: &str, max_size: u32) -> Read<Vec<u8>> {
     let tex_handle = match engine.layer_textures.get(layer_id) {
         Some(&t) => t,
-        None => return Vec::new(),
+        None => return Read::ready(Ok(Vec::new())),
     };
     if engine.texture_pool.get(tex_handle).is_none() {
-        return Vec::new();
+        return Read::ready(Ok(Vec::new()));
     }
     let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((0, 0));
     thumbnail_gpu::read_box_thumbnail(&*engine, tex_handle, w, h, max_size, thumbnail_gpu::COLOUR)
@@ -832,10 +836,10 @@ pub fn read_layer_thumbnail(engine: &EngineInner, layer_id: &str, max_size: u32)
 /// five times a second even with the app idle. See issue #681.
 ///
 /// Returns 8-byte header [width_u32_le, height_u32_le] + RGBA pixels.
-pub fn read_composite_thumbnail(engine: &EngineInner, max_size: u32) -> Vec<u8> {
+pub fn read_composite_thumbnail(engine: &EngineInner, max_size: u32) -> Read<Vec<u8>> {
     let composite = engine.composite_texture;
     if engine.texture_pool.get(composite).is_none() {
-        return Vec::new();
+        return Read::ready(Ok(Vec::new()));
     }
     let (w, h) = (engine.doc_width, engine.doc_height);
     thumbnail_gpu::read_box_thumbnail(&*engine, composite, w, h, max_size, thumbnail_gpu::COLOUR)
@@ -898,6 +902,13 @@ pub fn clear_gpu_snapshots(engine: &mut EngineInner) {
 /// GPU cost of the undo history (#1005).
 pub fn live_gpu_snapshot_count(engine: &EngineInner) -> u32 {
     engine.snapshot_textures.iter().filter(|s| s.is_some()).count() as u32
+}
+
+/// Lose the GPU device on purpose, to rehearse recovery. Returns `false`
+/// on a backend that cannot: WebGL, where the page uses the
+/// `WEBGL_lose_context` extension instead.
+pub fn lose_gpu_device(engine: &EngineInner) -> bool {
+    engine.gpu_ctx.lose_device()
 }
 
 /// The live compositor's effect cache: `[entries, images, bytes, budget

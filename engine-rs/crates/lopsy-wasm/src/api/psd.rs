@@ -3,18 +3,22 @@
 
 use wasm_bindgen::prelude::*;
 
+use crate::readback::{readback_export, task};
 use crate::Engine;
 
-#[wasm_bindgen(js_name = "exportPsd")]
-pub fn export_psd(
-    engine: &Engine,
-    layers_json: &str,
-    mask_data: &[u8],
-    depth: u8,
-    color_space: u8,
-    color_mode: u8,
-) -> Result<Vec<u8>, JsError> {
-    lopsy_engine::commands::psd::export_psd(&engine.inner, layers_json, mask_data, depth, color_space, color_mode).map_err(|e| JsError::new(&e))
+readback_export! {
+    #[wasm_bindgen(js_name = "exportPsd")]
+    pub fn export_psd(
+        engine,
+        layers_json: &str,
+        mask_data: &[u8],
+        depth: u8,
+        color_space: u8,
+        color_mode: u8,
+    ) -> Result<Vec<u8>> {
+        let (layers_json, mask_data) = (layers_json.to_string(), mask_data.to_vec());
+        task(|cx| lopsy_engine::commands::psd::export_psd(cx, layers_json, mask_data, depth, color_space, color_mode))
+    }
 }
 
 #[wasm_bindgen(js_name = "parsePsd")]

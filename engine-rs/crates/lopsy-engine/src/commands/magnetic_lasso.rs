@@ -5,6 +5,7 @@
 
 
 use crate::engine::EngineInner;
+use crate::task::Cx;
 use crate::{commands};
 
 // ============================================================
@@ -16,18 +17,22 @@ use crate::{commands};
 // queries that field to pull a candidate segment onto strong edges — only
 // coordinates leave the Rust side. end() frees the field.
 
-pub fn magnetic_lasso_begin(engine: &mut EngineInner, layer_id: &str) -> Result<(), String> {
-    let doc_w = engine.doc_width;
-    let doc_h = engine.doc_height;
-    if doc_w == 0 || doc_h == 0 {
-        return Err("Document has zero size".to_string());
-    }
+pub async fn magnetic_lasso_begin(cx: Cx, layer_id: String) -> Result<(), String> {
+    let (doc_w, doc_h, read) = cx.with(|engine| -> Result<_, String> {
+        let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+        if doc_w == 0 || doc_h == 0 {
+            return Err("Document has zero size".to_string());
+        }
+        Ok((doc_w, doc_h, commands::fill::read_layer_pixels_for_fill(engine, &layer_id)))
+    })?;
 
-    let pixels = commands::fill::read_layer_pixels_for_fill(engine, layer_id)?;
+    let pixels = read.await?;
     let edges = lopsy_core::magnetic_lasso::compute_edge_field(&pixels, doc_w, doc_h);
-    engine.mlasso.edges = Some(edges);
-    engine.mlasso.width = doc_w;
-    engine.mlasso.height = doc_h;
+    cx.with(|engine| {
+        engine.mlasso.edges = Some(edges);
+        engine.mlasso.width = doc_w;
+        engine.mlasso.height = doc_h;
+    });
     Ok(())
 }
 

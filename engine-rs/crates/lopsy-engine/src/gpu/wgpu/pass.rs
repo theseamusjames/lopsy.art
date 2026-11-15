@@ -18,11 +18,15 @@ use lopsy_core::geometry::Rect;
 use super::context::{quad_bytes, GpuContext};
 use super::framebuffer::{FramebufferHandle, FramebufferPool};
 use super::program::{BindingKind, LinkedProgram, ParamSink};
+use super::read::{halves_to_u16, halves_to_u8, read_texels};
 use super::texture_pool::{TextureHandle, TexturePool};
-use super::UNAVAILABLE;
 use crate::gpu::pass::{Blend, ReadFormat, Scissor, Target};
+use crate::gpu::read::Read;
 use crate::gpu::shader::ShaderProgram;
 use crate::gpu::uniforms::Field;
+
+/// Bytes in one texel of a pooled `rgba16float` texture.
+const HALF_RGBA_BYTES: u32 = 8;
 
 /// The GPU objects a pass draws with, borrowed from the engine.
 #[derive(Clone, Copy)]
@@ -264,12 +268,23 @@ impl<'a> GpuRef<'a> {
         Ok((width as i32, height as i32))
     }
 
-    pub fn read_rgba(self, _texture: TextureHandle, _x: i32, _y: i32, _w: u32, _h: u32) -> Result<Vec<u8>, String> {
-        Err(UNAVAILABLE.into())
+    /// Read back `w × h` texels of `texture` starting at `(x, y)` as RGBA8.
+    pub fn read_rgba(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Read<Vec<u8>> {
+        let Some(texture) = self.textures.get(texture) else {
+            return Read::failed("Texture not found");
+        };
+        let texels = read_texels(self.ctx, texture, x, y, w, h, HALF_RGBA_BYTES);
+        Read::later(async move { Ok(halves_to_u8(&texels.await?)) })
     }
 
-    pub fn read_rgba_u16(self, _texture: TextureHandle, _x: i32, _y: i32, _w: u32, _h: u32) -> Result<Vec<u16>, String> {
-        Err(UNAVAILABLE.into())
+    /// Read back `w × h` texels of `texture` starting at `(x, y)` as 16-bit
+    /// RGBA.
+    pub fn read_rgba_u16(self, texture: TextureHandle, x: i32, y: i32, w: u32, h: u32) -> Read<Vec<u16>> {
+        let Some(texture) = self.textures.get(texture) else {
+            return Read::failed("Texture not found");
+        };
+        let texels = read_texels(self.ctx, texture, x, y, w, h, HALF_RGBA_BYTES);
+        Read::later(async move { Ok(halves_to_u16(&texels.await?)) })
     }
 }
 
@@ -346,8 +361,46 @@ impl<'a> RawPass<'a> {
         bound.push((binding, unit.max(0) as usize));
     }
 
-    pub(in crate::gpu) fn read_back(self, _format: ReadFormat, _w: u32, _h: u32) -> Option<Vec<u8>> {
-        None
+    /// Draw the pass into a temporary 8-bit target of `w` by `h` and read
+    /// that. As on WebGL the draw covers the target with blending off,
+    /// whatever viewport, scissor or blend the pass was given.
+    pub(in crate::gpu) fn read_back(mut self, format: ReadFormat, w: u32, h: u32) -> Read<Vec<u8>> {
+        if self.has_missing_texture || w == 0 || h == 0 {
+            return Read::failed("Readback failed");
+        }
+        let (format, bytes_per_texel) = match format {
+            ReadFormat::R8 => (wgpu::TextureFormat::R8Unorm, 1),
+            ReadFormat::Rgba8 => (wgpu::TextureFormat::Rgba8Unorm, 4),
+        };
+        let ctx = self.gpu.ctx;
+        let staging = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let target = Resolved {
+            view: staging.create_view(&wgpu::TextureViewDescriptor::default()),
+            format,
+            width: w,
+            height: h,
+            is_screen: false,
+            is_fresh: false,
+        };
+        self.viewport = None;
+        self.scissor = Scissor::Off;
+        self.blend = Blend::Off;
+        self.clear = None;
+        self.begin_on(target).draw();
+
+        let texels = read_texels(ctx, &staging, 0, 0, w, h, bytes_per_texel);
+        // The copy is already submitted; the texture goes once it has run.
+        staging.destroy();
+        Read::later(texels)
     }
 
     pub(in crate::gpu) fn draw(self, target: Target) -> bool {
@@ -413,11 +466,15 @@ impl<'a> RawPass<'a> {
         })
     }
 
-    pub(in crate::gpu) fn begin(mut self, target: Target) -> Option<RawActivePass<'a>> {
+    pub(in crate::gpu) fn begin(self, target: Target) -> Option<RawActivePass<'a>> {
         if self.has_missing_texture {
             return None;
         }
         let target = self.gpu.resolve(target)?;
+        Some(self.begin_on(target))
+    }
+
+    fn begin_on(mut self, target: Resolved) -> RawActivePass<'a> {
         let placement = Placement::of(&target, self.viewport, self.scissor);
 
         // A shader's `Params` is never shorter than what was packed for it,
@@ -439,7 +496,7 @@ impl<'a> RawPass<'a> {
             }),
         };
         active.state.get_mut().open(self.gpu, self.clear, self.scissor);
-        Some(active)
+        active
     }
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { useEditorStore } from './editor-store';
 import { useUIStore } from './ui-store';
 import { useToolSettingsStore } from './tool-settings-store';
-import { initEngine, getEngine, getEngineCanvas, destroyEngine } from '../engine-wasm/engine-state';
+import { initEngine, getEngine, getEngineCanvas, destroyEngine, markWgpuDeviceLost, GPU_LOST_EVENT } from '../engine-wasm/engine-state';
 import { describeError, notifyError } from './notifications-store';
 import {
   syncDocumentSize,
@@ -317,7 +317,7 @@ export function useCanvasRendering(
       handleGpuContextLost(layerBackupTime());
     };
     const handleContextRestored = () => {
-      console.warn('[Lopsy] WebGL context restored — reinitializing');
+      console.warn('[Lopsy] Graphics restored — reinitializing');
       initEngine(canvas)
         .then(async (engine) => {
           const backupTakenAt = layerBackupTime();
@@ -328,8 +328,20 @@ export function useCanvasRendering(
           markAllLayersDirty(engine);
         })
         .catch((err) => {
-          notifyError(`Failed to restore WebGL: ${describeError(err)}`);
+          notifyError(`Failed to restore graphics: ${describeError(err)}`);
         });
+    };
+    // A WebGPU device does not come back: its loss is the cue to make a new
+    // engine on a new device. The dead engine goes first, so its listeners
+    // and timers do not outlive it.
+    const handleDeviceLost = () => {
+      if (!engineReadyRef.current) return;
+      console.error('[Lopsy] WebGPU device lost');
+      engineReadyRef.current = false;
+      markWgpuDeviceLost();
+      handleGpuContextLost(layerBackupTime());
+      destroyEngine();
+      handleContextRestored();
     };
     // Back layer pixels up to the CPU while the user is away, so a context
     // loss can be recovered from (#973). A blurred window may still be in
@@ -342,6 +354,7 @@ export function useCanvasRendering(
     const handleWindowFocus = () => pauseLayerBackup();
     canvas.addEventListener('webglcontextlost', handleContextLost);
     canvas.addEventListener('webglcontextrestored', handleContextRestored);
+    window.addEventListener(GPU_LOST_EVENT, handleDeviceLost);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
@@ -371,6 +384,7 @@ export function useCanvasRendering(
       engineReadyRef.current = false;
       canvas.removeEventListener('webglcontextlost', handleContextLost);
       canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+      window.removeEventListener(GPU_LOST_EVENT, handleDeviceLost);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);

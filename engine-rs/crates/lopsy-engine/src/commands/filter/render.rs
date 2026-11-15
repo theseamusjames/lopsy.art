@@ -3,6 +3,7 @@
 
 use crate::engine::EngineInner;
 use crate::filter_gpu;
+use crate::gpu::read::Read;
 use crate::gpu::params::filters::{ColorLutParams, PatternFillParams, SunburstParams};
 
 /// `stagger_*` offsets alternate rows / columns (brick, half-drop) and
@@ -129,7 +130,7 @@ pub fn read_channel_thumbnail(
     layer_id: &str,
     channel: u32,
     max_size: u32,
-) -> Vec<u8> {
+) -> Read<Vec<u8>> {
     filter_gpu::read_channel_thumbnail(&mut *engine, layer_id, channel, max_size)
 }
 

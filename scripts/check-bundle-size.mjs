@@ -27,9 +27,14 @@ const MARGIN = 0.03;
 // Bytes, as built by CI, which is where this check is enforced. A local
 // build can differ by a percent or two (a macOS build of the same source
 // came out 1.8% larger). `gzip` is what a typical visitor downloads.
+//
+// Raised in Phase 6.6 by what that step measurably added to a local build
+// (39.5 KB of wasm, 0.9%; 1.5 KB of glue): a readback became a future the
+// backend completes, and each of the 26 read exports a task that can wait
+// for one. The wgpu build needs both, and the two builds share the engine.
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 4_228_519, gzip: 1_824_653 },
-  'lopsy_wasm.js': { raw: 197_925, gzip: 20_680 },
+  'lopsy_wasm_bg.wasm': { raw: 4_268_054, gzip: 1_841_000 },
+  'lopsy_wasm.js': { raw: 199_416, gzip: 21_014 },
 };
 
 function format(bytes) {

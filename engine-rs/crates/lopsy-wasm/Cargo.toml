@@ -30,4 +30,7 @@ version = "=0.3.107"
 features = [
     "HtmlCanvasElement",
     "console",
+    "Event",
+    "EventTarget",
+    "Window",
 ]

@@ -3,6 +3,7 @@
 //! selection-mask machinery that only `floodFill` and its callers need.
 
 use crate::gpu::pass::Target;
+use crate::gpu::read::Read;
 
 use crate::engine::EngineInner;
 use crate::{layer_manager};
@@ -251,7 +252,7 @@ fn upload_doc_mask_to_layer_tex(
     Some(mask_tex)
 }
 
-pub fn read_layer_pixels_for_fill(engine: &EngineInner, layer_id: &str) -> Result<Vec<u8>, String> {
+pub fn read_layer_pixels_for_fill(engine: &EngineInner, layer_id: &str) -> Read<Vec<u8>> {
     // Return a doc-space pixel buffer. The layer texture is in layer-local
     // coordinates and may be offset from the document origin (e.g. after
     // align-bottom layer.y = doc_h - layer_h), so we always place it at
@@ -261,35 +262,37 @@ pub fn read_layer_pixels_for_fill(engine: &EngineInner, layer_id: &str) -> Resul
     let doc_w = eng.doc_width as i32;
     let doc_h = eng.doc_height as i32;
     if doc_w <= 0 || doc_h <= 0 {
-        return Ok(Vec::new());
+        return Read::ready(Ok(Vec::new()));
     }
 
-    let tex_handle = eng.layer_textures.get(layer_id)
-        .ok_or_else(|| format!("Layer {layer_id} not found"))?;
+    let Some(tex_handle) = eng.layer_textures.get(layer_id) else {
+        return Read::failed(format!("Layer {layer_id} not found"));
+    };
     let (tw, th) = eng.texture_pool.get_size(*tex_handle).unwrap_or((0, 0));
 
     let layer = eng.layer_stack.iter().find(|l| l.id == layer_id);
     let lx = layer.map_or(0, |l| l.x);
     let ly = layer.map_or(0, |l| l.y);
 
-    let small = layer_manager::read_pixels(eng, layer_id)?;
-    let mut result = vec![0u8; (doc_w as usize) * (doc_h as usize) * 4];
+    layer_manager::read_pixels(eng, layer_id).map(move |small| {
+        let mut result = vec![0u8; (doc_w as usize) * (doc_h as usize) * 4];
 
-    let tw_i = tw as i32;
-    let th_i = th as i32;
-    for sy in 0..th_i {
-        let dy = ly + sy;
-        if dy < 0 { continue; }
-        if dy >= doc_h { break; }
-        for sx in 0..tw_i {
-            let dx = lx + sx;
-            if dx < 0 { continue; }
-            if dx >= doc_w { break; }
-            let si = ((sy * tw_i + sx) * 4) as usize;
-            let di = ((dy * doc_w + dx) * 4) as usize;
-            result[di..di + 4].copy_from_slice(&small[si..si + 4]);
+        let tw_i = tw as i32;
+        let th_i = th as i32;
+        for sy in 0..th_i {
+            let dy = ly + sy;
+            if dy < 0 { continue; }
+            if dy >= doc_h { break; }
+            for sx in 0..tw_i {
+                let dx = lx + sx;
+                if dx < 0 { continue; }
+                if dx >= doc_w { break; }
+                let si = ((sy * tw_i + sx) * 4) as usize;
+                let di = ((dy * doc_w + dx) * 4) as usize;
+                result[di..di + 4].copy_from_slice(&small[si..si + 4]);
+            }
         }
-    }
 
-    Ok(result)
+        result
+    })
 }

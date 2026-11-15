@@ -1,5 +1,6 @@
 use crate::engine::EngineInner;
 use crate::gpu::pass::Target;
+use crate::gpu::read::Read;
 use crate::gpu::params::filters::GaussianBlurParams;
 use crate::gpu::uniforms::Vec4Array;
 
@@ -74,24 +75,25 @@ pub fn feather_selection_mask(engine: &mut EngineInner, radius: u32) {
 
 /// Read the current selection mask texture back from the GPU as a single-channel
 /// byte array. Returns (width, height, mask_bytes). Empty if no mask is set.
-pub fn read_selection_mask(engine: &EngineInner) -> (u32, u32, Vec<u8>) {
+pub fn read_selection_mask(engine: &EngineInner) -> Read<(u32, u32, Vec<u8>)> {
+    let none = || Read::ready(Ok((0, 0, Vec::new())));
     let mask_handle = match engine.selection_mask_texture {
         Some(h) => h,
-        None => return (0, 0, Vec::new()),
+        None => return none(),
     };
     let (w, h) = engine.texture_pool.get_size(mask_handle).unwrap_or((0, 0));
-    if w == 0 || h == 0 { return (0, 0, Vec::new()); }
+    if w == 0 || h == 0 { return none(); }
     if engine.texture_pool.get(mask_handle).is_none() {
-        return (0, 0, Vec::new());
+        return none();
     }
 
-    let rgba = engine.gpu().read_rgba(mask_handle, 0, 0, w, h).unwrap_or_default();
-
-    let mut mask = vec![0u8; (w * h) as usize];
-    for i in 0..(w * h) as usize {
-        mask[i] = rgba.get(i * 4).copied().unwrap_or(0);
-    }
-    (w, h, mask)
+    engine.gpu().read_rgba(mask_handle, 0, 0, w, h).or(Vec::new()).map(move |rgba| {
+        let mut mask = vec![0u8; (w * h) as usize];
+        for i in 0..(w * h) as usize {
+            mask[i] = rgba.get(i * 4).copied().unwrap_or(0);
+        }
+        (w, h, mask)
+    })
 }
 
 fn gaussian_weights(radius: usize) -> Vec<f32> {
