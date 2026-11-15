@@ -14,7 +14,7 @@ Status: in progress.
 | 0 | Done (#1643, #1644). Spikes S1 and S2 done (results under Phase 0); S3 not run |
 | 1 | Done (#1645, #1646, #1648 to #1653, #1667, cap #1683): no raw GL is left outside `gpu/` and the context is private to it. Milestone run on the cap, chromium: 1,449 e2e tests passed, 7 skipped, 1 failed (`history › redo all steps after undoing everything`, which passes on a re-run on either engine), and 7,065 checkpoints compared against `main`'s engine show no difference that repeats. Firefox and `brush-perf-6k` were not run |
 | 2 | Done (#1685 to #1691): every shader takes a typed uniform struct and the by-name setters are gone. Results under Phase 2 |
-| 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
+| 3 | Done (#1693, #1694, #1696, #1697; the last filters moved into `imaging/` after Phase 6, see 3.5) |
 | 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Commands that read inside the engine answer with a Promise or no longer read (#1705), and the last synchronous layer read is deleted (#1706). Phase 4 is done on the TypeScript side: nothing above the bridge reads the GPU synchronously. What is left is Rust's, in 6.6; see Phase 4 |
 | 5 | Done. Every shader is WGSL, translated to GLSL at build time: 83 programs, plus one `blend` variant per blend mode. The build step and the first 24 shaders are in #1707, #1708, #1710 and #1711; #1712 removes four shaders no pass used. The rest are in #1713 (core and brush support, and a fifth unused shader, `color_overlay`), #1714 (brush tools, transforms, layer effects), #1715 (filters), #1716 (shaders whose uniforms had to change shape) and #1717 (brush dabs, `blend`, and the removal of the GLSL plumbing) |
 | 6 | Done except for making wgpu the default. The wgpu backend (`--features wgpu`, a second wasm artifact) renders everything the WebGL one does through the same pass layer (#1718 to #1720, #1722, #1725); readbacks are futures the backend completes, and a lost device is recovered like a lost context (#1726); the e2e suite runs on it, with document pixels within 1 per channel of WebGL's, and render tests run from `cargo test` on a native GPU (#1727); and the production build ships both, WebGL by default, chosen in View > Renderer (#1728). Results under Phase 6 |
@@ -780,13 +780,29 @@ Phase 1. Keeping it separate makes both sets of PRs smaller.
     parameters. The command keeps what needs the document: the no-op
     guard and, for radial blur, kaleidoscope and lens distortion, the
     layer geometry they are centred with.
-  - **Not moved.** Ten filters still run from `commands/filter/`,
-    because they stage several passes through the engine's scratch
-    targets or upload a second texture: Gaussian blur, box blur, unsharp
-    mask, bloom, pixelate, sunburst, pattern fill, colour LUT, mesh warp
-    and the colour-mode conversions. Moving them needs an imaging-side
-    way to ask for scratch targets, which nothing provides yet. Liquify
-    is a tool session, not a filter, and stays with the document.
+  - **Moved after Phase 6.** Ten operations were first left in
+    `commands/filter/`, because they stage several passes through the
+    engine's scratch targets or sample a second texture. They are in
+    `imaging/` now:
+    - An operation of several passes (Gaussian blur, box blur, unsharp
+      mask, bloom, pixelate) takes the source's size and an
+      `imaging::Scratch`, two targets the caller lends it, and returns
+      which one holds the result (`Staged`). `filter_gpu::apply_staged`
+      lends the engine's and writes the result back to the layer, through
+      the selection when there is one.
+    - An operation that samples a second texture (pattern fill, colour
+      LUT, mesh warp) is handed it. Uploading the bytes stays with the
+      command, which owns the texture pool.
+    - Sunburst and the grayscale conversion were single passes built in
+      the command and are ordinary imaging passes.
+    - A Gaussian blur of more than 63 px is three strided box blurs. The
+      command still writes each back to the layer before the next, as it
+      always has, so with a selection the mask is applied three times. A
+      caller without a layer would run the three through the scratch
+      targets itself.
+    - The Lab, CMYK and palette conversions read the layer back and
+      convert on the CPU with `lopsy-core`; they stay commands. Liquify
+      is a tool session, not a filter, and stays with the document.
 
 Verification is in the PRs: a whole-suite comparison against the engine
 as it was before the step, for each.

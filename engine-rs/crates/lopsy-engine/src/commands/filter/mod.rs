@@ -1,8 +1,8 @@
 //! GPU-accelerated one-shot filters (Filter menu actions).
 //!
-//! Each filter is a thin `#[wasm_bindgen]` wrapper that composes a shader
-//! program with its uniforms via `filter_gpu::apply_filter` (or
-//! `apply_separable_blur` for multi-pass effects). Grouped by category
+//! Each filter is an operation from `imaging::filters` applied to a layer
+//! by `filter_gpu::apply_op` (or `apply_staged` for one of several
+//! passes). Grouped by category
 //! to mirror `lopsy-core/src/filters/`:
 //!
 //!   - `blur`    — gaussian, box, unsharp, motion, radial

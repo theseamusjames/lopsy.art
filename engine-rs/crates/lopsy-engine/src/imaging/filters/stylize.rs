@@ -1,7 +1,12 @@
-use crate::gpu::params::filters::{CelShadingParams, ChromaticAberrationParams, EmbossParams, HalftoneParams, KaleidoscopeParams, LensDistortionParams, OilPaintParams, PixelStretchParams, VoronoiParams};
+use crate::gpu::params::filters::{
+    BloomCombineParams, BloomThresholdParams, CelShadingParams, ChromaticAberrationParams, EmbossParams,
+    GaussianBlurParams, HalftoneParams, KaleidoscopeParams, LensDistortionParams, OilPaintParams,
+    PixelStretchParams, PixelateBlocksParams, PixelateParams, VoronoiParams,
+};
 use crate::gpu::pass::Pass;
 use crate::gpu::texture_pool::TextureHandle;
-use crate::imaging::Imaging;
+use crate::gpu::uniforms::Vec4Array;
+use crate::imaging::{Imaging, Scratch, Staged};
 
 pub fn find_edges<'a>(im: Imaging<'a>, src: TextureHandle) -> Pass<'a, ()> {
     im.gpu.pass(&im.shaders.find_edges, ()).texture("u_tex", src)
@@ -91,4 +96,69 @@ pub fn lens_distortion<'a>(
         radius_scale,
     };
     im.gpu.pass(&im.shaders.lens_distortion, params).texture("u_tex", src)
+}
+
+/// Bloom: the bright pixels, blurred by `radius` and added back.
+#[allow(clippy::too_many_arguments)]
+pub fn bloom(
+    im: Imaging<'_>,
+    src: TextureHandle,
+    (w, h): (u32, u32),
+    scratch: Scratch,
+    threshold: f32,
+    soft_knee: f32,
+    radius: u32,
+    intensity: f32,
+) -> Staged {
+    let threshold = threshold.clamp(0.0, 1.0);
+    let soft_knee = soft_knee.clamp(0.0, 1.0);
+    let intensity = intensity.clamp(0.0, 5.0);
+    let kernel = lopsy_core::filters::blur::gaussian_kernel(radius);
+
+    // The bright pixels into scratch B.
+    im.gpu.pass(&im.shaders.bloom_threshold, BloomThresholdParams { threshold, soft_knee })
+        .texture("u_tex", src)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(scratch.b.target());
+
+    // Half-kernel from the centre out.
+    let weights = Vec4Array::from_floats(kernel.get(radius as usize..).unwrap_or(&[]));
+    let blur_pass = |from: TextureHandle, direction: [f32; 2]| {
+        im.gpu
+            .pass(&im.shaders.gaussian_blur, GaussianBlurParams { direction, weights, radius: radius as i32 })
+            .texture("u_tex", from)
+            .viewport(0, 0, w as i32, h as i32)
+    };
+    blur_pass(scratch.b.texture, [1.0, 0.0]).draw(scratch.a.target());
+    blur_pass(scratch.a.texture, [0.0, 1.0]).draw(scratch.b.target());
+
+    // The source plus the blurred bright pixels (scratch B) into scratch A.
+    im.gpu.pass(&im.shaders.bloom_combine, BloomCombineParams { intensity })
+        .texture("u_tex", src)
+        .texture("u_bloomTex", scratch.b.texture)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(scratch.a.target());
+    Staged::A
+}
+
+/// Pixelate (#1167): every pixel of the source footprint takes its block's
+/// alpha-weighted mean colour and the mean alpha of the block's covered
+/// pixels. The first pass reduces each block to one texel of scratch A
+/// (each source texel is read once, whatever the block size); the second
+/// expands the blocks into scratch B, masked by the source alpha.
+pub fn pixelate(im: Imaging<'_>, src: TextureHandle, (w, h): (u32, u32), scratch: Scratch, block_size: u32) -> Staged {
+    let blocks_w = w.div_ceil(block_size);
+    let blocks_h = h.div_ceil(block_size);
+
+    im.gpu.pass(&im.shaders.pixelate_blocks, PixelateBlocksParams { block_size: block_size as i32 })
+        .texture("u_tex", src)
+        .viewport(0, 0, blocks_w as i32, blocks_h as i32)
+        .draw(scratch.a.target());
+
+    im.gpu.pass(&im.shaders.pixelate, PixelateParams { block_size: block_size as i32 })
+        .texture("u_tex", src)
+        .texture("u_blocks", scratch.a.texture)
+        .viewport(0, 0, w as i32, h as i32)
+        .draw(scratch.b.target());
+    Staged::B
 }

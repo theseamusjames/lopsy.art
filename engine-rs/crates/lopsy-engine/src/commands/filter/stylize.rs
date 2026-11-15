@@ -5,19 +5,14 @@
 use super::full_size_doc_center;
 use crate::engine::EngineInner;
 use crate::{filter_gpu, imaging};
-use crate::gpu::pass::Target;
-use crate::gpu::texture_pool::TextureHandle;
-use crate::gpu::params::filters::{
-    BloomCombineParams, BloomThresholdParams,
-    GaussianBlurParams,
-};
-use crate::gpu::uniforms::Vec4Array;
 
 pub fn filter_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32) {
     if block_size <= 1 {
         return;
     }
-    filter_gpu::apply_pixelate(&mut *engine, layer_id, block_size);
+    filter_gpu::apply_staged(engine, layer_id, |im, src, size, scratch| {
+        imaging::filters::stylize::pixelate(im, src, size, scratch, block_size)
+    });
 }
 
 pub fn filter_halftone(engine: &mut EngineInner, layer_id: &str, dot_size: f32, density: f32, angle: f32, contrast: f32) {
@@ -97,57 +92,9 @@ pub fn filter_bloom(
     intensity: f32,
 ) {
     if radius == 0 { return; }
-
-    let threshold = threshold.clamp(0.0, 1.0);
-    let soft_knee = soft_knee.clamp(0.0, 1.0);
-    let intensity = intensity.clamp(0.0, 5.0);
-
-    let _ = engine.ensure_layer_full_size(layer_id);
-
-    let kernel = lopsy_core::filters::blur::gaussian_kernel(radius);
-
-    let tex_handle = match engine.layer_textures.get(layer_id) {
-        Some(&h) => h,
-        None => return,
-    };
-    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    if engine.texture_pool.get(tex_handle).is_none() {
-        return;
-    }
-    let inner = &*engine;
-
-    // Pass 1: Threshold — extract bright pixels (layer → scratch B)
-    inner.pass(&inner.shaders.bloom_threshold, BloomThresholdParams { threshold, soft_knee })
-        .texture("u_tex", tex_handle)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Framebuffer(inner.scratch_fbo_b));
-
-    // Half-kernel from the centre out.
-    let weights = Vec4Array::from_floats(kernel.get(radius as usize..).unwrap_or(&[]));
-    let blur_pass = |src: TextureHandle, direction: (f32, f32)| {
-        inner
-            .pass(&inner.shaders.gaussian_blur, GaussianBlurParams {
-                direction: [direction.0, direction.1],
-                weights,
-                radius: radius as i32,
-            })
-            .texture("u_tex", src)
-            .viewport(0, 0, w as i32, h as i32)
-    };
-    // Pass 2: Horizontal blur (scratch B → scratch A)
-    blur_pass(inner.scratch_texture_b, (1.0, 0.0)).draw(Target::Framebuffer(inner.scratch_fbo_a));
-    // Pass 3: Vertical blur (scratch A → scratch B)
-    blur_pass(inner.scratch_texture_a, (0.0, 1.0)).draw(Target::Framebuffer(inner.scratch_fbo_b));
-
-    // Pass 4: Combine — add bloom onto original (layer + scratch B → scratch A)
-    inner.pass(&inner.shaders.bloom_combine, BloomCombineParams { intensity })
-        .texture("u_tex", tex_handle)
-        .texture("u_bloomTex", inner.scratch_texture_b)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Framebuffer(inner.scratch_fbo_a));
-
-    // Bloomed result is in scratch A; confine it to the selection (#1176).
-    filter_gpu::commit_scratch_a_to_layer(&mut *engine, layer_id);
+    filter_gpu::apply_staged(engine, layer_id, |im, src, size, scratch| {
+        imaging::filters::stylize::bloom(im, src, size, scratch, threshold, soft_knee, radius, intensity)
+    });
 }
 
 pub fn filter_voronoi(

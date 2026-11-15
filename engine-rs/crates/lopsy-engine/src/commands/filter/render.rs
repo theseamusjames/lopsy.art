@@ -2,9 +2,9 @@
 
 
 use crate::engine::EngineInner;
-use crate::filter_gpu;
+use crate::{filter_gpu, imaging};
 use crate::gpu::read::Read;
-use crate::gpu::params::filters::{ColorLutParams, PatternFillParams, SunburstParams};
+use crate::imaging::filters::render::{PatternTiling, SunburstRays};
 
 /// `stagger_*` offsets alternate rows / columns (brick, half-drop) and
 /// `origin_*` shifts the whole tiling grid; all four are fractions of one tile.
@@ -49,26 +49,16 @@ pub fn filter_pattern_fill(
     };
     let (layer_w, layer_h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
 
-    let pw = pattern_width as f32;
-    let ph = pattern_height as f32;
-    let lw = layer_w as f32;
-    let lh = layer_h as f32;
-    let scale = scale.max(0.01);
-
-    filter_gpu::apply_filter_with_texture(
-        &mut *engine,
-        layer_id,
-        |s| &s.pattern_fill,
-        PatternFillParams {
-            layer_size: [lw, lh],
-            pattern_size: [pw, ph],
-            scale,
-            stagger: [stagger_x, stagger_y],
-            origin: [origin_x, origin_y],
-        },
-        "u_pattern",
-        is_pattern_live.then_some(pattern_handle),
-    );
+    let pattern = is_pattern_live.then_some(pattern_handle);
+    let tiling = PatternTiling {
+        pattern_size: (pattern_width, pattern_height),
+        scale,
+        stagger: [stagger_x, stagger_y],
+        origin: [origin_x, origin_y],
+    };
+    filter_gpu::apply_op(engine, layer_id, |im, src| {
+        imaging::filters::render::pattern_fill(im, src, (layer_w, layer_h), pattern, tiling)
+    });
 
     engine.texture_pool.release(pattern_handle);
 }
@@ -99,17 +89,8 @@ pub fn filter_color_lut(
     engine.texture_pool.set_linear_filter(lut_handle);
     engine.texture_pool.set_clamp_wrap(lut_handle);
 
-    let size_f = lut_size as f32;
-    let intensity = intensity.clamp(0.0, 1.0);
-
-    filter_gpu::apply_filter_with_texture(
-        &mut *engine,
-        layer_id,
-        |s| &s.color_lut,
-        ColorLutParams { lut_size: size_f, intensity },
-        "u_lut",
-        is_lut_live.then_some(lut_handle),
-    );
+    let lut = is_lut_live.then_some(lut_handle);
+    filter_gpu::apply_op(engine, layer_id, |im, src| imaging::filters::render::color_lut(im, src, lut, lut_size, intensity));
 
     engine.texture_pool.release(lut_handle);
 }
@@ -200,28 +181,23 @@ pub fn filter_sunburst(
         layer_y,
     );
 
-    filter_gpu::apply_filter(
-        &mut *engine,
-        layer_id,
-        |s| &s.sunburst,
-        SunburstParams {
-            size: [w as f32, h as f32],
-            center: [cx, cy],
-            reach,
-            rays: rays.max(3) as f32,
-            rotation: rotation_degrees.to_radians(),
-            length: length.max(0.0),
-            width: width.clamp(0.0, 1.0),
-            taper: taper.clamp(0.0, 1.0),
-            fade: fade.clamp(0.0, 1.0),
-            softness: softness.clamp(0.0, 1.0),
-            jitter: jitter.clamp(0.0, 1.0),
-            seed,
-            ray_color: [ray_r, ray_g, ray_b, ray_a.clamp(0.0, 1.0)],
-            fill_gaps: if fill_gaps { 1 } else { 0 },
-            gap_color: [gap_r, gap_g, gap_b],
-        },
-    );
+    let rays = SunburstRays {
+        rays,
+        rotation_degrees,
+        length,
+        width,
+        taper,
+        fade,
+        softness,
+        jitter,
+        seed,
+        ray_color: [ray_r, ray_g, ray_b, ray_a],
+        fill_gaps,
+        gap_color: [gap_r, gap_g, gap_b],
+    };
+    filter_gpu::apply_op(engine, layer_id, |im, src| {
+        imaging::filters::render::sunburst(im, src, (w, h), [cx, cy], reach, rays)
+    });
 }
 
 #[cfg(test)]

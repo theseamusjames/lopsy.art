@@ -7,38 +7,17 @@
 
 use lopsy_core::{cmyk, lab, quantize};
 
-use crate::{compositor, filter_gpu, layer_manager};
+use crate::{compositor, filter_gpu, imaging, layer_manager};
 use crate::engine::EngineInner;
-use crate::gpu::params::color::ColorConvertParams;
 use crate::gpu::read::Read;
 use crate::task::Cx;
-use crate::gpu::uniforms::Mat3;
-
-/// Rec. 709 luma weights, applied to the stored (gamma-encoded) values so the
-/// result matches the Black & White adjustment in `adjustments.wgsl`.
-const LUMA_R: f32 = 0.2126;
-const LUMA_G: f32 = 0.7152;
-const LUMA_B: f32 = 0.0722;
-
-/// Column-major mat3 that maps every output channel to the same luma value,
-/// yielding R=G=B. `uniform_matrix3fv` consumes columns in order.
-const GRAYSCALE_MATRIX: [f32; 9] = [
-    LUMA_R, LUMA_R, LUMA_R,
-    LUMA_G, LUMA_G, LUMA_G,
-    LUMA_B, LUMA_B, LUMA_B,
-];
 
 /// Bake a layer to grayscale (R=G=B), leaving alpha untouched.
 ///
 /// Runs on the whole layer even when a selection is active: a document mode
 /// conversion must not leave part of a layer in the previous color space.
 pub fn convert_layer_to_grayscale(engine: &mut EngineInner, layer_id: &str) {
-    filter_gpu::apply_pointwise_filter_full_layer(
-        &mut *engine,
-        layer_id,
-        |s| &s.color_convert,
-        ColorConvertParams { color_matrix: Mat3(GRAYSCALE_MATRIX) },
-    );
+    filter_gpu::apply_pointwise_op_full_layer(engine, layer_id, imaging::filters::adjust::grayscale);
 }
 
 /// Read a layer's texture, transform it on the CPU, and upload it back.
