@@ -29,7 +29,7 @@ const MARGIN = 0.03;
 // came out 1.8% larger). `gzip` is what a typical visitor downloads.
 const BUDGET = {
   'lopsy_wasm_bg.wasm': { raw: 4_228_519, gzip: 1_824_653 },
-  'lopsy_wasm.js': { raw: 236_107, gzip: 26_666 },
+  'lopsy_wasm.js': { raw: 197_925, gzip: 20_680 },
 };
 
 function format(bytes) {
