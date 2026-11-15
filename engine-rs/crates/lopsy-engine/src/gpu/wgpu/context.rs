@@ -145,6 +145,11 @@ struct Screen {
     canvas: HtmlCanvasElement,
     surface: wgpu::Surface<'static>,
     config: RefCell<wgpu::SurfaceConfiguration>,
+    /// The 8-bit format the canvas prefers, used unless it is HDR.
+    sdr_format: wgpu::TextureFormat,
+    /// Whether the browser can configure the canvas as `rgba16float`,
+    /// which extended range needs.
+    can_be_float: bool,
     /// The surface texture for the frame in progress, from the first screen
     /// pass until `present`.
     frame: RefCell<Option<wgpu::SurfaceTexture>>,
@@ -159,6 +164,9 @@ pub(in crate::gpu) struct ScreenTarget {
     pub(in crate::gpu) height: u32,
     pub(in crate::gpu) is_first_pass: bool,
 }
+
+/// The canvas format that carries values above 1.0.
+const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 impl GpuContext {
     /// WebGPU hands out its adapter and device through promises, so unlike
@@ -184,6 +192,8 @@ impl GpuContext {
         // only `Opaque` for a canvas but configures it with this one.
         config.alpha_mode = wgpu::CompositeAlphaMode::PreMultiplied;
         surface.configure(&device, &config);
+        let sdr_format = config.format;
+        let can_be_float = surface.get_capabilities(&adapter).formats.contains(&HDR_FORMAT);
 
         host::log(
             LogLevel::Info,
@@ -200,6 +210,8 @@ impl GpuContext {
             canvas: canvas.clone(),
             surface,
             config: RefCell::new(config),
+            sdr_format,
+            can_be_float,
             frame: RefCell::new(None),
         };
         Self::on_device(device, queue, Some(screen))
@@ -250,18 +262,37 @@ impl GpuContext {
         self.device.limits().max_texture_dimension_2d
     }
 
-    /// Say whether what is drawn to the canvas is Display P3, as a
-    /// wide-gamut page sets `drawingBufferColorSpace` on a WebGL canvas.
-    /// Returns `false` for a context with no canvas.
-    pub fn set_wide_gamut(&self, is_display_p3: bool) -> bool {
+    /// Tell the canvas what the pixels drawn to it are: Display P3 or
+    /// sRGB, as a wide-gamut page sets `drawingBufferColorSpace` on a WebGL
+    /// canvas, and whether values above 1.0 are brighter than white (HDR)
+    /// or clipped to it. Returns whether the canvas is HDR afterwards:
+    /// false with no canvas, or where the browser cannot make a float one.
+    ///
+    /// An HDR canvas is `rgba16float` with extended tone mapping. The final
+    /// blit writes gamma-encoded values, which is what the extended colour
+    /// spaces carry.
+    pub fn set_screen_output(&self, is_display_p3: bool, wants_hdr: bool) -> bool {
         let Some(screen) = &self.screen else { return false };
-        let wanted = if is_display_p3 { wgpu::SurfaceColorSpace::DisplayP3 } else { wgpu::SurfaceColorSpace::Auto };
+        let is_hdr = wants_hdr && screen.can_be_float;
+        let color_space = match (is_display_p3, is_hdr) {
+            (false, false) => wgpu::SurfaceColorSpace::Auto,
+            (true, false) => wgpu::SurfaceColorSpace::DisplayP3,
+            (false, true) => wgpu::SurfaceColorSpace::ExtendedSrgb,
+            (true, true) => wgpu::SurfaceColorSpace::ExtendedDisplayP3,
+        };
+        let format = if is_hdr { HDR_FORMAT } else { screen.sdr_format };
         let mut config = screen.config.borrow_mut();
-        if config.color_space != wanted {
-            config.color_space = wanted;
+        if config.color_space != color_space || config.format != format {
+            config.color_space = color_space;
+            config.format = format;
             screen.surface.configure(&self.device, &config);
         }
-        true
+        is_hdr
+    }
+
+    /// Whether the canvas keeps values above 1.0. See `set_screen_output`.
+    pub fn is_screen_hdr(&self) -> bool {
+        self.screen.as_ref().is_some_and(|screen| screen.config.borrow().format == HDR_FORMAT)
     }
 
     /// Destroy the device, as losing it would: every operation after this

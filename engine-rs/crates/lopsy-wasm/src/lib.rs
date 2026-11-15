@@ -100,11 +100,13 @@ pub fn set_viewport(engine: &mut Engine, zoom: f64, pan_x: f64, pan_y: f64, scre
     engine.inner.set_viewport(zoom, pan_x, pan_y, screen_w, screen_h);
 }
 
-/// On wgpu, say whether the canvas is Display P3. WebGL returns false:
-/// there the page sets the drawing buffer's colour space itself.
-#[wasm_bindgen(js_name = "setScreenWideGamut")]
-pub fn set_screen_wide_gamut(engine: &mut Engine, is_display_p3: bool) -> bool {
-    engine.inner.set_screen_wide_gamut(is_display_p3)
+/// On wgpu, say whether the canvas is Display P3 and whether it should be
+/// HDR: values above 1.0 shown brighter than white. Returns whether it is
+/// HDR afterwards. WebGL returns false: there the page sets the drawing
+/// buffer's colour space itself, and the buffer is 8 bits a channel.
+#[wasm_bindgen(js_name = "setScreenOutput")]
+pub fn set_screen_output(engine: &mut Engine, is_display_p3: bool, wants_hdr: bool) -> bool {
+    engine.inner.set_screen_output(is_display_p3, wants_hdr)
 }
 
 #[wasm_bindgen(js_name = "setBackgroundColor")]

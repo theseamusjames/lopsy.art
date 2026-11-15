@@ -66,6 +66,9 @@ struct Params {
     // node below assumes sRGB channels, so Lab pixels are decoded first and
     // re-encoded at the end.
     u_docColorMode: i32,
+    // 1 to keep what the tone controls push above white, for an HDR screen;
+    // 0 to clip it, as every other use does.
+    u_keepOverWhite: f32,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
@@ -167,6 +170,10 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
         rgb = mix(vec3<f32>(gray2), rgb, 1.0 + boost);
     }
 
+    // Everything below works on values in 0..1. What exposure and the tone
+    // controls pushed past white is set aside here and added back at the
+    // end, where an HDR screen shows it brighter than white.
+    let overWhite = max(rgb - vec3<f32>(1.0), vec3<f32>(0.0)) * params.u_keepOverWhite;
     rgb = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
 
     // Levels: master first on every channel, then per-channel remap.
@@ -292,6 +299,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
         let grade = params.u_cgGlobal + params.u_cgShadows * shadowW + params.u_cgMidtones * midtoneW + params.u_cgHighlights * highlightW;
         rgb = softOffset(rgb, grade.rgb + grade.a);
     }
+
+    rgb += overWhite;
 
     if (isLab) { rgb = srgbToLab(rgb); }
     return vec4<f32>(rgb, c.a);

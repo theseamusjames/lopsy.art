@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { canvasColorSpace } from '../../engine/color-space';
 import { getWasmMemoryBytes } from '../../engine-wasm/wasm-bridge';
+import { runningRenderer, type Renderer } from '../../engine-wasm/renderer-choice';
+import { isScreenHdr, onScreenHdrChange } from '../../engine-wasm/screen-output';
 import { colorModeLabel } from '../../utils/color-mode';
 import styles from './StatusBar.module.css';
 
 const colorSpaceLabel = canvasColorSpace === 'display-p3' ? 'Display P3' : 'sRGB';
+const RENDERER_LABELS: Record<Renderer, string> = { webgl: 'WebGL', wgpu: 'WebGPU' };
 
 // #671 zoom-scrub bounds: horizontal drag sweeps [10%, 400%] at ~1%/pixel.
 const ZOOM_SCRUB_MIN = 0.1;
@@ -27,6 +30,9 @@ export function StatusBar() {
   const cursorX = useUIStore((s) => s.cursorPosition.x);
   const cursorY = useUIStore((s) => s.cursorPosition.y);
   const [memoryUsage, setMemoryUsage] = useState('');
+  const isHdr = useSyncExternalStore(onScreenHdrChange, isScreenHdr);
+  // Chosen once per page load, before any document exists to show this bar.
+  const renderer = runningRenderer();
 
   useEffect(() => {
     const update = () => {
@@ -148,7 +154,13 @@ export function StatusBar() {
           <span className={styles.divider} />
         </>
       )}
-      <span className={styles.item}>{colorSpaceLabel}</span>
+      {renderer && (
+        <>
+          <span className={styles.item}>{RENDERER_LABELS[renderer]}</span>
+          <span className={styles.divider} />
+        </>
+      )}
+      <span className={styles.item}>{isHdr ? `${colorSpaceLabel} HDR` : colorSpaceLabel}</span>
     </footer>
   );
 }

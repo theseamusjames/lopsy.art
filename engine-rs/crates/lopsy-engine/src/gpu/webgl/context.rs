@@ -63,8 +63,14 @@ impl GpuContext {
         })
     }
 
-    /// The page sets `drawingBufferColorSpace` on a WebGL canvas itself.
-    pub fn set_wide_gamut(&self, _is_display_p3: bool) -> bool {
+    /// The page sets `drawingBufferColorSpace` on a WebGL canvas itself,
+    /// and the drawing buffer is 8 bits a channel: never HDR.
+    pub fn set_screen_output(&self, _is_display_p3: bool, _wants_hdr: bool) -> bool {
+        false
+    }
+
+    /// Whether the canvas keeps values above 1.0.
+    pub fn is_screen_hdr(&self) -> bool {
         false
     }
 

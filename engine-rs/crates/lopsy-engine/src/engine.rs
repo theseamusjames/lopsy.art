@@ -462,11 +462,15 @@ impl EngineInner {
         self.needs_present = true;
     }
 
-    /// Tell the screen whether its pixels are Display P3. Returns `false`
-    /// on a backend where the host sets that on the canvas itself (WebGL).
-    pub fn set_screen_wide_gamut(&mut self, is_display_p3: bool) -> bool {
-        self.needs_present = true;
-        self.gpu_ctx.set_wide_gamut(is_display_p3)
+    /// Tell the screen whether its pixels are Display P3, and whether
+    /// values above 1.0 should show brighter than white (HDR). Returns
+    /// whether the screen is HDR afterwards: never on WebGL, where the host
+    /// sets the colour space on the canvas itself and the canvas is 8-bit.
+    pub fn set_screen_output(&mut self, is_display_p3: bool, wants_hdr: bool) -> bool {
+        // The document's adjustments keep or clip what goes above white
+        // by whether the screen is HDR, so the composite is rebuilt.
+        self.needs_recomposite = true;
+        self.gpu_ctx.set_screen_output(is_display_p3, wants_hdr)
     }
 
     pub fn set_background_color(&mut self, r: f32, g: f32, b: f32, a: f32) {

@@ -400,5 +400,6 @@ uniforms! {
         pub cg_exponent: f32,
         pub cg_width: f32,
         pub doc_color_mode: i32,
+        pub keep_over_white: f32,
     }
 }

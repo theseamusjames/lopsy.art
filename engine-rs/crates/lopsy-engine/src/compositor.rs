@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crate::coverage_stroke_gpu::{self, CoverageTool};
 use crate::engine::{EngineInner, ImageAdjustmentState};
-use crate::imaging::adjustments;
+use crate::imaging::adjustments::{self, OverWhite};
 use crate::gpu::pass::{Blend, Pass, Scissor, Target};
 use crate::gpu::read::Read;
 use crate::task::Cx;
@@ -194,7 +194,17 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
 
                 if let Some(ga) = engine.groups.adjustments.get(&layer_id) {
                     let adj = ga.adjustments.clone();
-                    apply_adjustments_to_texture(engine, frame.target, &adj);
+                    // The outermost group, with nothing drawn after it, is
+                    // the document's own adjustments: on an HDR screen what
+                    // they push above white is shown, not clipped. Anything
+                    // blended further would treat it as a colour.
+                    let is_last_drawn = group_stack.is_empty() && idx + 1 == n;
+                    let over_white = if is_last_drawn && engine.gpu_ctx.is_screen_hdr() {
+                        OverWhite::Kept
+                    } else {
+                        OverWhite::Clipped
+                    };
+                    apply_adjustments_to_texture(engine, frame.target, &adj, over_white);
                 }
                 // Look up the group's mask (same path as individual layer masks).
                 // A group's own scratch is always doc-sized/doc-origin (#850),
@@ -527,6 +537,7 @@ pub fn present(engine: &mut EngineInner) -> Result<(), String> {
             seamless_dim: if engine.overlays.seamless_dim { 1.0 } else { 0.0 },
             channel_mask: [channel_mask[0], channel_mask[1], channel_mask[2], channel_mask[3]],
             doc_color_mode: engine.doc_color_mode as i32,
+            dither: if engine.gpu_ctx.is_screen_hdr() { 0.0 } else { 1.0 },
         })
         .blend(Blend::Off)
         .viewport(0, 0, screen_w, screen_h)
@@ -1464,7 +1475,7 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
                 let frame = group_stack.pop().expect("checked by the condition above");
                 if let Some(ga) = engine.groups.adjustments.get(layer_id) {
                     let adj = ga.adjustments.clone();
-                    apply_adjustments_to_texture(engine, frame.target, &adj);
+                    apply_adjustments_to_texture(engine, frame.target, &adj, OverWhite::Clipped);
                 }
                 // Same opacity / blend mode / mask handling as the live
                 // compositor, so exports match the canvas. Blend onto the
@@ -1778,8 +1789,13 @@ fn over_document<'a, P>(engine: &EngineInner, pass: Pass<'a, P>) -> Pass<'a, P> 
 
 /// The adjustments in `adj` applied to `source`, over the document. Returns
 /// the pass and how many texture units it bound.
-fn adjustments_pass<'a>(engine: &'a EngineInner, source: TextureHandle, adj: &ImageAdjustmentState) -> (Pass<'a, AdjustmentsParams>, u32) {
-    let (pass, units) = adjustments::pass(engine.imaging(), source, adj, 0.0, engine.doc_color_mode);
+fn adjustments_pass<'a>(
+    engine: &'a EngineInner,
+    source: TextureHandle,
+    adj: &ImageAdjustmentState,
+    over_white: OverWhite,
+) -> (Pass<'a, AdjustmentsParams>, u32) {
+    let (pass, units) = adjustments::pass(engine.imaging(), source, adj, 0.0, engine.doc_color_mode, over_white);
     (over_document(engine, pass), units)
 }
 
@@ -1823,7 +1839,7 @@ fn apply_image_adjustments(engine: &EngineInner) {
     let scratch_a = Target::Framebuffer(engine.scratch_fbo_a);
 
     if has_adjustments {
-        let (pass, units) = adjustments_pass(engine, engine.composite_texture, &engine.adjustments);
+        let (pass, units) = adjustments_pass(engine, engine.composite_texture, &engine.adjustments, OverWhite::Clipped);
         if !pass.draw(scratch_a) {
             return;
         }
@@ -1843,8 +1859,8 @@ fn apply_image_adjustments(engine: &EngineInner) {
 /// via the adjustments shader (→ scratch_b via the vignette when there is
 /// one), then copied back. Used for per-group adjustments, where the source
 /// is the group scratch (transparent background) rather than the composite.
-fn apply_adjustments_to_texture(engine: &EngineInner, target: DocTarget, adj: &ImageAdjustmentState) {
-    let (pass, units) = adjustments_pass(engine, target.tex, adj);
+fn apply_adjustments_to_texture(engine: &EngineInner, target: DocTarget, adj: &ImageAdjustmentState, over_white: OverWhite) {
+    let (pass, units) = adjustments_pass(engine, target.tex, adj, over_white);
     if !pass.draw(Target::Framebuffer(engine.scratch_fbo_a)) {
         return;
     }

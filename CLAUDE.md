@@ -176,7 +176,7 @@ Every shader is WGSL. `include/` holds the code shaders share.
 ```
 gpu/shaders/
   blend.wgsl              # Layer compositing (all blend modes, mask sampling)
-  final_blit.wgsl         # Composite → screen (viewport transform, EDR passthrough)
+  final_blit.wgsl         # Composite → screen (viewport transform; no clamp, for an HDR canvas)
   blit.wgsl               # Texture-to-texture copy
   brush/
     brush_dab_*.wgsl      # Brush dab: circle, alpha tip, colour tip
@@ -331,7 +331,7 @@ Effect images (glows, shadow, stroke) are cached per layer in the live composito
 
 - `texture_pool.rs` detects `EXT_color_buffer_float` and uses `RGBA16F` textures when available.
 - `engine-state.ts` sets `drawingBufferColorSpace = 'display-p3'` on capable displays.
-- `final_blit.wgsl` passes values through without clamping for EDR headroom.
+- `final_blit.wgsl` passes values through without clamping. On the wgpu engine the canvas is HDR (`rgba16float`, extended tone mapping) while the display is (`screen-output.ts`, `setScreenOutput`), and the document's own adjustments then keep what they push above white (`OverWhite::Kept`). Everything else in the pipeline is 0..1: `docs/hdr-support.md` lists what HDR editing would need.
 
 ## Tools
 

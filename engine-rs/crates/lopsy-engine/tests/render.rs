@@ -22,6 +22,7 @@ use lopsy_engine::gpu::pass::{Blend, Scissor, Target};
 use lopsy_engine::gpu::read::Read;
 use lopsy_engine::gpu::shader::ShaderPrograms;
 use lopsy_engine::gpu::texture_pool::TextureHandle;
+use lopsy_engine::imaging::adjustments::{self, ImageAdjustmentState, OverWhite};
 use lopsy_engine::{commands, compositor, host, task};
 
 /// Everything the engine logged as an error: GPU validation errors arrive
@@ -381,6 +382,35 @@ fn a_filter_a_thumbnail_and_content_bounds_agree_on_one_layer() {
     let thumbnail = now(commands::layer::read_layer_thumbnail(&engine, "art", 4));
     assert_eq!(thumbnail[..8], [4, 0, 0, 0, 4, 0, 0, 0]);
     assert_eq!(thumbnail.len(), 8 + 4 * 4 * 4);
+    assert_no_gpu_errors();
+}
+
+/// 80% grey with one stop of exposure is 1.6. Float textures hold that, but
+/// a read clips it, so each case takes the stop off again and reads that.
+fn exposed_then_unexposed(engine: &mut EngineInner, over_white: OverWhite, adj: ImageAdjustmentState) -> [u8; 4] {
+    let grey = solid(engine, 2, 2, [204, 204, 204, 255]);
+    let bright = engine.texture_pool.acquire(2, 2).unwrap();
+    let back = engine.texture_pool.acquire(2, 2).unwrap();
+    let up = ImageAdjustmentState { exposure: 1.0, ..adj };
+    let down = ImageAdjustmentState { exposure: -1.0, ..Default::default() };
+    assert!(adjustments::pass(engine.imaging(), grey, &up, 0.0, 0, over_white).0.draw(Target::Texture(bright)));
+    assert!(adjustments::pass(engine.imaging(), bright, &down, 0.0, 0, OverWhite::Clipped).0.draw(Target::Texture(back)));
+    texels(engine, back)[0][0]
+}
+
+#[test]
+fn adjustments_keep_what_goes_over_white_only_when_asked() {
+    let Some(mut engine) = engine(4, 4) else { return };
+    let plain = ImageAdjustmentState::default;
+
+    // Clipped at white, then halved: 50% grey.
+    assert_eq!(exposed_then_unexposed(&mut engine, OverWhite::Clipped, plain()), [128, 128, 128, 255]);
+    // Kept at 1.6, then halved: the 80% grey it started as.
+    assert_eq!(exposed_then_unexposed(&mut engine, OverWhite::Kept, plain()), [204, 204, 204, 255]);
+    // An adjustment that rebuilds the colour clips even when asked to keep:
+    // inverted white is black, and the excess is not added to it.
+    let inverted = ImageAdjustmentState { invert: true, ..plain() };
+    assert_eq!(exposed_then_unexposed(&mut engine, OverWhite::Kept, inverted), [0, 0, 0, 255]);
     assert_no_gpu_errors();
 }
 

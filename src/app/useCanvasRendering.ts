@@ -36,6 +36,7 @@ import { getMarqueePreview } from '../tools/marquee/marquee-preview';
 import { stampPreviewDisc } from '../tools/common/stamp-source-preview';
 import { stampSourceState } from '../tools/common/stamp-source-state';
 import { clearFrameCache } from '../engine-wasm/gpu-pixel-access';
+import { onScreenHdrChange } from '../engine-wasm/screen-output';
 
 import { expandLayerToDocSize, hasFloat } from '../engine-wasm/wasm-bridge';
 import { cropLayerToContentIfMeasured } from './crop-layer-to-content';
@@ -294,6 +295,9 @@ function renderFrame(
 
 /** Mounts of the engine canvas whose effect has run and not been cleaned up. */
 let liveCanvasMounts = 0;
+
+// Turning HDR on or off reconfigures the canvas, which empties it.
+onScreenHdrChange(() => useEditorStore.getState().notifyRender());
 
 export function useCanvasRendering(
   canvasRef: RefObject<HTMLCanvasElement | null>,
