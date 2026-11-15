@@ -3,9 +3,10 @@
 Lopsy can show HDR. It cannot yet edit in it. This note says where the
 line is, so that "HDR" in the status bar is not read as more than it is.
 
-> When the repository is restructured (`docs/engine-migration-plan.md`,
-> Phase 7, "Repo layout"), this file moves into the Lopsy app's folder,
-> `apps/lopsy-web/`, with the rest of the app's docs.
+> This note lives with the app because the app is where "HDR" is shown.
+> Most of the work it lists is in the engine (`engine/`, at the
+> repository root): full HDR support needs the engine to edit in HDR, not
+> only to render it.
 
 ## What exists: HDR rendering
 

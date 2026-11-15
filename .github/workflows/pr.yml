@@ -37,7 +37,7 @@ jobs:
         id: wasm-cache
         uses: actions/cache@v4
         with:
-          path: src/engine-wasm/pkg
+          path: apps/lopsy-web/src/engine-wasm/pkg
           key: wasm-pkg-${{ hashFiles('engine/**/*.rs', 'engine/**/Cargo.toml', 'engine/**/Cargo.lock', 'engine/**/*.wgsl') }}
 
       - name: Cache cargo registry, git, and target
@@ -74,13 +74,13 @@ jobs:
         if: steps.wasm-cache.outputs.cache-hit != 'true'
         run: |
           npm run wasm:build:wgpu
-          wc -c src/engine-wasm/pkg-wgpu/lopsy_wasm_bg.wasm src/engine-wasm/pkg-wgpu/lopsy_wasm.js
+          wc -c apps/lopsy-web/src/engine-wasm/pkg-wgpu/lopsy_wasm_bg.wasm apps/lopsy-web/src/engine-wasm/pkg-wgpu/lopsy_wasm.js
 
       - name: Upload WASM pkg artifact
         uses: actions/upload-artifact@v4
         with:
           name: wasm-pkg
-          path: src/engine-wasm/pkg
+          path: apps/lopsy-web/src/engine-wasm/pkg
           retention-days: 1
 
   rust-test:
@@ -163,7 +163,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: wasm-pkg
-          path: src/engine-wasm/pkg
+          path: apps/lopsy-web/src/engine-wasm/pkg
       - run: npm run lint
 
   typecheck:
@@ -182,7 +182,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: wasm-pkg
-          path: src/engine-wasm/pkg
+          path: apps/lopsy-web/src/engine-wasm/pkg
       - run: npm run typecheck
 
   test:
@@ -201,5 +201,5 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: wasm-pkg
-          path: src/engine-wasm/pkg
+          path: apps/lopsy-web/src/engine-wasm/pkg
       - run: npm run test

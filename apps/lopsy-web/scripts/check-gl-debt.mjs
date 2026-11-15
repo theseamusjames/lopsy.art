@@ -15,7 +15,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+// The repository root: this script is in apps/lopsy-web/scripts.
+const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..');
 // The engine, and the wasm host that binds it to JavaScript.
 const SCANNED = ['engine/src', 'engine/hosts/wasm/src'];
 

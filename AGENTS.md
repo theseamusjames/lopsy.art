@@ -14,7 +14,7 @@ Lopsy is not a clone of any existing software. Do not replicate the UI patterns,
 
 The codebase has two main parts: a TypeScript frontend and a Rust rendering engine.
 
-### TypeScript (`src/`)
+### TypeScript (`apps/lopsy-web/src/`)
 
 - `app/` — App shell, menu bar, canvas interaction, and the Zustand store (document model, history, selection, UI state). Store actions live in `app/store/actions/`.
 - `tools/` — One directory per tool (brush, eraser, move, shape, text, etc.). Each tool has a pure logic module (`tool.ts`) that handles input and produces document operations, plus an options bar component (`ToolOptions.tsx`). Tool logic must not import React or DOM APIs.

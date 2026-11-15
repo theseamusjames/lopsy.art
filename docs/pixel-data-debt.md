@@ -10,7 +10,7 @@ the reason each exception exists and the plan to retire it.
 
 New code **must not** introduce new violations. Reduce, don't grow.
 
-The authoritative per-file budget is `scripts/check-pixel-debt.mjs`,
+The authoritative per-file budget is `apps/lopsy-web/scripts/check-pixel-debt.mjs`,
 which runs as part of `npm run lint`. This doc explains the *why* behind
 each category; the script enforces the *how many*.
 
@@ -41,7 +41,7 @@ matching section here in the same PR.
 
 ## §1 — Active pixel-data debt
 
-### `src/engine/pixel-data.ts` — ImageData orchestration layer
+### `apps/lopsy-web/src/engine/pixel-data.ts` — ImageData orchestration layer
 
 Holds per-layer `ImageData` in the `pixelDataManager`, supports dense +
 sparse storage, and re-uploads to the GPU on mutation.
@@ -61,7 +61,7 @@ last CPU filter path is retired, this slice collapses into a thin
 **Tracked layers:** raster only. Text, shape, group, and adjustment
 layers are not cached here.
 
-### `src/tools/text/**` — text rasterization via `<canvas>`
+### `apps/lopsy-web/src/tools/text/**` — text rasterization via `<canvas>`
 
 Text layers currently render through `CanvasRenderingContext2D.fillText`
 into an `ImageData`, which is then uploaded to a layer texture.
@@ -80,9 +80,9 @@ opaque upload. No other code leaks through this boundary.
 
 ## §2 — Layer-mask CPU paint path (migration pending)
 
-`handleMaskPaintMove` in `src/app/interactions/paint-handlers.ts` runs a
+`handleMaskPaintMove` in `apps/lopsy-web/src/app/interactions/paint-handlers.ts` runs a
 CPU per-pixel loop against a `Uint8ClampedArray` owned by the layer
-model. `src/app/interactions/mask-buffer.ts` keeps a shared preview
+model. `apps/lopsy-web/src/app/interactions/mask-buffer.ts` keeps a shared preview
 buffer that `useCanvasRendering` uploads to the GPU each frame. The
 nudge path in `useCanvasInteraction.ts` allocates a fresh full-size
 mask buffer; `move-handlers.ts` and `quick-mask-move.ts` clone mask
@@ -90,15 +90,15 @@ data to preserve a snapshot during a drag.
 
 **Allowlisted files in this category:**
 
-- `src/app/interactions/move-handlers.ts` — drag-clones of `selection.mask`.
-- `src/app/interactions/quick-mask-move.ts` — full-size mask alloc on commit.
-- `src/app/store/actions/add-layer-mask.ts` — initial mask allocation.
-- `src/app/useCanvasInteraction.ts` — nudge/mask copies.
-- `src/app/mask-data-sync.ts` — wraps the lazy GPU mask readback that
+- `apps/lopsy-web/src/app/interactions/move-handlers.ts` — drag-clones of `selection.mask`.
+- `apps/lopsy-web/src/app/interactions/quick-mask-move.ts` — full-size mask alloc on commit.
+- `apps/lopsy-web/src/app/store/actions/add-layer-mask.ts` — initial mask allocation.
+- `apps/lopsy-web/src/app/useCanvasInteraction.ts` — nudge/mask copies.
+- `apps/lopsy-web/src/app/mask-data-sync.ts` — wraps the lazy GPU mask readback that
   refreshes `layer.mask.data` for save/export/thumbnail. Undo no longer
   depends on these bytes: history holds GPU mask snapshots (#780).
-- `src/engine/mask-utils.ts` — mask surface ↔ RGBA helpers.
-- `src/tools/fill/fill-interaction.ts` — bucket fill writes mask data when active.
+- `apps/lopsy-web/src/engine/mask-utils.ts` — mask surface ↔ RGBA helpers.
+- `apps/lopsy-web/src/tools/fill/fill-interaction.ts` — bucket fill writes mask data when active.
 
 **Why it's still here.** The mask is conceptually a scalar field but
 uploaded as RGBA. The GPU brush/eraser shaders are written for RGBA
@@ -109,12 +109,12 @@ additive/subtractive mask coverage. A proper migration wants:
    blending of a fill value `{0.0, 1.0}` with a soft-hardness falloff.
 2. New WASM APIs `paintMaskBrushDab`, `paintMaskEraserDab`,
    `paintMaskBrushDabBatch`, `paintMaskEraserDabBatch` in
-   `src/engine-wasm/wasm-bridge.ts`.
+   `apps/lopsy-web/src/engine-wasm/wasm-bridge.ts`.
 3. Readback on stroke end (via a new `readLayerMaskBytes` helper) so
    the `layer.mask.data` byte array stays the source of truth for undo
    snapshots and PSD export. `resetTrackedState` must preserve the mask
    version across that readback.
-4. Delete `src/app/interactions/mask-buffer.ts`, delete the CPU
+4. Delete `apps/lopsy-web/src/app/interactions/mask-buffer.ts`, delete the CPU
    `handleMaskPaintMove` and its imports, and delete
    `createMaskSurface` if nothing else uses it.
 
@@ -130,11 +130,11 @@ budget.
 
 | File                                                       | Issue | What it does                                  |
 |------------------------------------------------------------|-------|-----------------------------------------------|
-| `src/tools/crop/perspective-crop.ts`                       | #441  | Projective warp + bilinear interp             |
-| `src/tools/liquify/liquify.ts`                             | #443  | Displacement-map liquify CPU pipeline         |
-| `src/tools/quick-select/quick-select-interaction.ts`       | tbd   | GPU pixel readback into mask                  |
-| `src/tools/quick-select/quick-select.ts`                   | tbd   | Magic-wand mask build                         |
-| `src/tools/path/boolean-ops.ts`                            | #465  | Path boolean ops rendered through `<canvas>`  |
+| `apps/lopsy-web/src/tools/crop/perspective-crop.ts`                       | #441  | Projective warp + bilinear interp             |
+| `apps/lopsy-web/src/tools/liquify/liquify.ts`                             | #443  | Displacement-map liquify CPU pipeline         |
+| `apps/lopsy-web/src/tools/quick-select/quick-select-interaction.ts`       | tbd   | GPU pixel readback into mask                  |
+| `apps/lopsy-web/src/tools/quick-select/quick-select.ts`                   | tbd   | Magic-wand mask build                         |
+| `apps/lopsy-web/src/tools/path/boolean-ops.ts`                            | #465  | Path boolean ops rendered through `<canvas>`  |
 
 The `selection.ts` feather pass is also in this category but it isn't
 listed above because the GPU helper (`featherSelectionMask` in
@@ -154,15 +154,15 @@ and import/export plumbing that runs once per brush, not per dab.
 
 | File                                                       | Why                                              |
 |------------------------------------------------------------|--------------------------------------------------|
-| `src/app/tool-settings-store.ts`                           | Built-in tip generation (procedural circle etc.) |
-| `src/app/MenuBar/brush-actions.ts`                         | brush-from-selection / brush-from-layer rasterize |
-| `src/components/BrushModal/BrushDabPreview.tsx`            | Modal-side preview blur                          |
-| `src/components/BrushModal/BrushModal.tsx`                 | Imported texture image → grayscale               |
-| `src/tools/brush/abr-parser.ts`                            | Photoshop `.abr` binary import                   |
-| `src/tools/brush/brush-from-selection.ts`                  | "Define brush from selection" rasterize          |
-| `src/tools/brush/brush.ts`                                 | `interpolatePoints` scratch (single Float64)     |
-| `src/tools/brush/builtin-brushes.ts`                       | PNG → grayscale tip decode                       |
-| `src/tools/brush/preset-io.ts`                             | Base64 → bytes for preset import                 |
+| `apps/lopsy-web/src/app/tool-settings-store.ts`                           | Built-in tip generation (procedural circle etc.) |
+| `apps/lopsy-web/src/app/MenuBar/brush-actions.ts`                         | brush-from-selection / brush-from-layer rasterize |
+| `apps/lopsy-web/src/components/BrushModal/BrushDabPreview.tsx`            | Modal-side preview blur                          |
+| `apps/lopsy-web/src/components/BrushModal/BrushModal.tsx`                 | Imported texture image → grayscale               |
+| `apps/lopsy-web/src/tools/brush/abr-parser.ts`                            | Photoshop `.abr` binary import                   |
+| `apps/lopsy-web/src/tools/brush/brush-from-selection.ts`                  | "Define brush from selection" rasterize          |
+| `apps/lopsy-web/src/tools/brush/brush.ts`                                 | `interpolatePoints` scratch (single Float64)     |
+| `apps/lopsy-web/src/tools/brush/builtin-brushes.ts`                       | PNG → grayscale tip decode                       |
+| `apps/lopsy-web/src/tools/brush/preset-io.ts`                             | Base64 → bytes for preset import                 |
 
 These can stay CPU-side — they run on user action (import / define / open
 modal), not on every frame. Mark as "OK" unless they grow further.
@@ -193,7 +193,7 @@ implementation plan, or it does not land.
 
 ## Enforcement
 
-The linter rule lives at `scripts/check-pixel-debt.mjs` and runs as part
+The linter rule lives at `apps/lopsy-web/scripts/check-pixel-debt.mjs` and runs as part
 of `npm run lint`. It rejects `new ImageData`, `new Uint8ClampedArray`,
 and `new Float32Array` outside an explicit allowlist. The allowlist is
 the canonical, machine-readable shape of this document — its comments

@@ -8,7 +8,7 @@ Comparators: **Adobe Photoshop**, **Affinity Photo**, **GIMP**, **Procreate** (p
 
 ---
 
-## What Lopsy Already Has (Verified against code + FEATURES.md)
+## What Lopsy Already Has (Verified against code + apps/lopsy-web/FEATURES.md)
 
 - **Tools**: Move, Brush (with ABR import + presets + symmetry), Pencil (with symmetry), Eraser (with symmetry), Spray, Fill (paint bucket), Gradient (Linear + Radial only — not 5 types), Clone Stamp, Dodge/Burn, Smudge, Marquee (Rect/Ellipse), Lasso, Magnetic Lasso, Magic Wand, Shape (ellipse + N-sided polygon — rect = 4 sides), Text (point + area, with native Rust font engine — see below), Pen/Path (with anchor toggle, path→selection, stroke path), Free Transform (free/skew/distort/perspective), Crop, Eyedropper, Mesh Warp (interactive grid 3×3–6×6, selection-bound)
 - **Native Text Engine**: Text rendering uses cosmic-text + swash in the Rust/WASM engine with a GPU glyph atlas (1024×1024, etagere shelf-packed). Supports TTF, OTF, and WOFF2 font loading (WOFF2 decoded to SFNT in Rust via custom Brotli decompressor). Fonts loaded dynamically via font-loader.ts (TTF from CDN preferred, WOFF2 fallback). Inter Regular bundled as fallback. Canvas2D `fillText` is no longer used — all text is shaped and rasterized engine-side.
@@ -16,7 +16,7 @@ Comparators: **Adobe Photoshop**, **Affinity Photo**, **GIMP**, **Procreate** (p
 - **Adjustments** (per-group, non-destructive GPU pass): Exposure, Contrast, Highlights, Shadows, Whites, Blacks, Vignette, Saturation, Vibrance, Curves (per-channel, monotone cubic Hermite), Levels (per-channel with gamma)
 - **Layer Effects**: Drop Shadow, Outer Glow, Inner Glow, Color Overlay, Stroke (EDT)
 - **16 Blend Modes**: Full standard set including HSL modes
-- **Layer types**: Raster, Text, Shape, Group only — *FEATURES.md lists "Adjustment" and "Fill" as layer types but they don't exist in the actual type union (`src/types/layers.ts`); aspirational docs*
+- **Layer types**: Raster, Text, Shape, Group only — *apps/lopsy-web/FEATURES.md lists "Adjustment" and "Fill" as layer types but they don't exist in the actual type union (`apps/lopsy-web/src/types/layers.ts`); aspirational docs*
 - **Layer masks** (grayscale pixel), **Clipping masks** (clip-to-below)
 - **Rulers, Guides, Grid** with toggle; **Snap-to-grid** and **Snap-to-guides** working on Move and Transform tools (`ui-store.ts` has `snapToGrid` + toggle)
 - **Import**: PNG, JPEG, WebP, GIF, BMP, PSD, DNG
@@ -274,7 +274,7 @@ Several adjustment types are missing from the group adjustment model entirely. W
 
 1. **Dynamic adjustment list on groups** — Replace flat `ImageAdjustments` with `AdjustmentNode[]` on `GroupLayer`. New node types: Color Balance, Gradient Map, Hue/Saturation (non-destructive), Black & White, Photo Filter, Channel Mixer, Invert. UI becomes a reorderable list with per-node toggle. Unblocks: full non-destructive grading.
 2. **Group masks** — Wire `GroupLayer.mask` into the compositor (apply mask to group FBO after compositing children, same path as layer masks). `LayerBase.mask` already carries the field; compositor doesn't sample it yet.
-3. **Fill Layers** (Solid Color, Gradient, Pattern) — New `LayerType`. *FEATURES.md already lists these but they're not in the type union — bring docs and code into alignment.* GPU fill primitives already implemented.
+3. **Fill Layers** (Solid Color, Gradient, Pattern) — New `LayerType`. *apps/lopsy-web/FEATURES.md already lists these but they're not in the type union — bring docs and code into alignment.* GPU fill primitives already implemented.
 4. **Feather selection + graduated Magic Wand** — Gaussian blur pass on the selection mask (Feather menu item); change Magic Wand output from binary 0/255 to distance-based falloff so soft selections work without a separate Color Range tool.
 5. **Quick Mask Mode** — Toggle to paint selection as red overlay using existing layer-mask machinery and brush tools.
 6. **Healing Brush** — Clone stamp variant that blends texture by sampling surrounding context (GPU shader). Cornerstone of photo retouching.
@@ -328,25 +328,25 @@ Several adjustment types are missing from the group adjustment model entirely. W
 
 | Feature | Key Files |
 |---|---|
-| Dynamic adjustment list | `src/types/layers.ts` (new `AdjustmentNode` type, replace `ImageAdjustments` on `GroupLayer`), `src/filters/image-adjustments.ts`, `src/engine-wasm/engine-sync.ts` (`syncGroupAdjustments`), `src/panels/AdjustmentsPanel/`, `engine/.../compositor.rs` |
-| Group masks | `engine/.../compositor.rs` (sample group mask FBO after child composite), `engine/.../layer_manager.rs`, `src/engine-wasm/wasm-bridge.ts` |
-| Group nesting depth limit | `src/app/store/actions/add-layer.ts` (enforce max depth on group creation), `src/io/psd.ts` (flatten on import beyond depth 2) |
-| Fill Layers | `src/types/layers.ts` (new `FillLayer` type), `src/app/store/document-slice.ts`, `src/panels/LayerPanel/`, `engine/.../layer_manager.rs`, **and update FEATURES.md to match reality** |
-| Feather selection + graduated Wand | `src/selection/selection.ts`, `src/app/MenuBar/menus/select-menu.ts`, `src/tools/wand/` (graduated output mode), GPU: `engine/.../selection_gpu.rs`, `engine/.../api/fill.rs` (flood fill output) |
-| Quick Mask Mode | `src/app/ui-store.ts` (mode flag), `src/panels/LayerPanel/` (toggle UI), `engine/.../compositor.rs` (red overlay rendering — already used for mask edit mode) |
-| Healing Brush | New `src/tools/healing/`, new GLSL shader, `engine/.../lib.rs` API surface |
-| Navigator Panel | New `src/panels/NavigatorPanel/` |
-| Export Dialog | New `src/components/ExportDialog/` + `src/app/MenuBar/menus/file-menu.ts` (extend `ExportFormat` for TIFF/AVIF) |
-| Save/Load Project | New `src/io/project.ts`, `src/app/MenuBar/menus/file-menu.ts` |
+| Dynamic adjustment list | `apps/lopsy-web/src/types/layers.ts` (new `AdjustmentNode` type, replace `ImageAdjustments` on `GroupLayer`), `apps/lopsy-web/src/filters/image-adjustments.ts`, `apps/lopsy-web/src/engine-wasm/engine-sync.ts` (`syncGroupAdjustments`), `apps/lopsy-web/src/panels/AdjustmentsPanel/`, `engine/.../compositor.rs` |
+| Group masks | `engine/.../compositor.rs` (sample group mask FBO after child composite), `engine/.../layer_manager.rs`, `apps/lopsy-web/src/engine-wasm/wasm-bridge.ts` |
+| Group nesting depth limit | `apps/lopsy-web/src/app/store/actions/add-layer.ts` (enforce max depth on group creation), `apps/lopsy-web/src/io/psd.ts` (flatten on import beyond depth 2) |
+| Fill Layers | `apps/lopsy-web/src/types/layers.ts` (new `FillLayer` type), `apps/lopsy-web/src/app/store/document-slice.ts`, `apps/lopsy-web/src/panels/LayerPanel/`, `engine/.../layer_manager.rs`, **and update apps/lopsy-web/FEATURES.md to match reality** |
+| Feather selection + graduated Wand | `apps/lopsy-web/src/selection/selection.ts`, `apps/lopsy-web/src/app/MenuBar/menus/select-menu.ts`, `apps/lopsy-web/src/tools/wand/` (graduated output mode), GPU: `engine/.../selection_gpu.rs`, `engine/.../api/fill.rs` (flood fill output) |
+| Quick Mask Mode | `apps/lopsy-web/src/app/ui-store.ts` (mode flag), `apps/lopsy-web/src/panels/LayerPanel/` (toggle UI), `engine/.../compositor.rs` (red overlay rendering — already used for mask edit mode) |
+| Healing Brush | New `apps/lopsy-web/src/tools/healing/`, new GLSL shader, `engine/.../lib.rs` API surface |
+| Navigator Panel | New `apps/lopsy-web/src/panels/NavigatorPanel/` |
+| Export Dialog | New `apps/lopsy-web/src/components/ExportDialog/` + `apps/lopsy-web/src/app/MenuBar/menus/file-menu.ts` (extend `ExportFormat` for TIFF/AVIF) |
+| Save/Load Project | New `apps/lopsy-web/src/io/project.ts`, `apps/lopsy-web/src/app/MenuBar/menus/file-menu.ts` |
 
 ---
 
 ## Verification Status
 
-This plan was verified against the actual codebase (not just SPEC.md or FEATURES.md, which sometimes diverge). Confirmed via direct search:
+This plan was verified against the actual codebase (not just apps/lopsy-web/SPEC.md or apps/lopsy-web/FEATURES.md, which sometimes diverge). Confirmed via direct search:
 
-- **FEATURES.md is partly aspirational** — it lists Adjustment and Fill as layer types, but `src/types/layers.ts` only defines Raster/Text/Shape/Group. The compositor wires per-group adjustments but there are no standalone adjustment/fill layer instances.
-- **SPEC.md is also partly aspirational** — it claims pixel grid at high zoom, artboards, 5 gradient types, and 50-step max history. None of these match the code: no pixel grid implementation, no artboards (zero refs), only Linear/Radial gradient, unlimited history.
+- **apps/lopsy-web/FEATURES.md is partly aspirational** — it lists Adjustment and Fill as layer types, but `apps/lopsy-web/src/types/layers.ts` only defines Raster/Text/Shape/Group. The compositor wires per-group adjustments but there are no standalone adjustment/fill layer instances.
+- **apps/lopsy-web/SPEC.md is also partly aspirational** — it claims pixel grid at high zoom, artboards, 5 gradient types, and 50-step max history. None of these match the code: no pixel grid implementation, no artboards (zero refs), only Linear/Radial gradient, unlimited history.
 - **Snap to grid/guides is real** — `ui-store.ts` has `snapToGrid` + toggle, used by Move and Transform. Don't include in gap list.
 - **Magic Wand outputs binary 0/255** — confirmed in the flood fill path. The graduated-output enhancement is the simpler answer than a separate Color Range tool.
 - **Mesh Warp is interactive but grid-based** (3×3 to 6×6) — different category from Liquify's free-form push/pull/twirl brush.

@@ -22,7 +22,8 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
-const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+// The repository root: this script is in apps/lopsy-web/scripts.
+const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..');
 const SHADERS = join(ROOT, 'engine/src/gpu/shaders');
 
 function wgslFiles(dir) {

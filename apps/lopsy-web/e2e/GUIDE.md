@@ -1,5 +1,9 @@
 # E2E Test Writing Guide
 
+> Paths and commands in this guide are relative to `apps/lopsy-web/`. Run
+> `npx playwright test ...` from that directory; `npm run test:e2e` works
+> from there or from the repository root.
+
 This guide captures hard-won knowledge about writing meaningful e2e tests for Lopsy. If you're fixing a failing test or adding a new one, read this first — most of the pitfalls below were learned the painful way.
 
 ## The golden rule

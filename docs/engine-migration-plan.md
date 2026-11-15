@@ -28,7 +28,7 @@ Measured on `main` at the time of writing:
 
 | Fact | Number |
 |---|---|
-| Raw GL references (`gl.*` calls, `WebGl*` types and constants) outside `gpu/`, as counted by `scripts/check-gl-debt.mjs` | 2,481 across 32 files |
+| Raw GL references (`gl.*` calls, `WebGl*` types and constants) outside `gpu/`, as counted by `apps/lopsy-web/scripts/check-gl-debt.mjs` | 2,481 across 32 files |
 | Largest holders | `compositor.rs` 663, `layer_manager.rs` 446, `brush_gpu.rs` 187, `engine.rs` 125 |
 | Functions with raw GL types in their signature | ~50 |
 | Per-uniform `gl.uniform*` call sites, by string name | ~750 |
@@ -115,7 +115,7 @@ Rules for every PR:
 
 1. No behaviour change unless the PR title says so.
 2. The per-PR checks below pass.
-3. No raw GL outside `gpu/` (`scripts/check-gl-debt.mjs`).
+3. No raw GL outside `gpu/` (`apps/lopsy-web/scripts/check-gl-debt.mjs`).
 4. New dependencies are pinned and at least seven days old at the time
    they are added.
 
@@ -167,7 +167,7 @@ would make `photoediting` usable too.
 a PR that converts a group of tools also compares the old and new engine
 on the specs that exercise them:
 
-1. `python3 scripts/parity-ab-instrument.py <spec>...` adds a checkpoint
+1. `python3 apps/lopsy-web/scripts/parity-ab-instrument.py <spec>...` adds a checkpoint
    after every screenshot step and at the end of every test in those
    specs: the engine's export composite, a hash of every layer, and the
    canvas pixels (which also show what is drawn only to the screen).
@@ -175,7 +175,7 @@ on the specs that exercise them:
 3. `git checkout <base> -- engine && npm run wasm:build`, run them
    again into a second directory, then `git checkout HEAD -- engine`
    and rebuild.
-4. `node scripts/parity-compare.mjs <old-dir> <new-dir>`.
+4. `node apps/lopsy-web/scripts/parity-compare.mjs <old-dir> <new-dir>`.
 5. `git checkout -- e2e` to drop the instrumentation.
 
 A checkpoint that differs is only a regression if it repeats: tests that
@@ -200,7 +200,7 @@ Bundle size and initial load time are tracked through the whole
 migration, not only at the end.
 
 **Bundle size, every PR.** `npm run wasm:size`
-(`scripts/check-bundle-size.mjs`) runs in the CI wasm build job. It
+(`apps/lopsy-web/scripts/check-bundle-size.mjs`) runs in the CI wasm build job. It
 measures the wasm binary and its JS glue, raw and gzipped, and fails if
 either is more than 3% over the budget recorded in the script, unless
 the PR raises the budget explicitly. The margin absorbs toolchain drift.
@@ -212,7 +212,7 @@ PR CI does not run `vite build`.
 **Initial load time, at milestones and on PRs that change startup
 work.** Those PRs are the Phase 2 and Phase 5 foundations and everything
 in Phase 6 from 6.2 on. `npm run build && npm run perf:load`
-(`scripts/measure-load-time.mjs`) serves the production build and does
+(`apps/lopsy-web/scripts/measure-load-time.mjs`) serves the production build and does
 several cold loads, each in a freshly launched browser on the real GPU:
 SwiftShader's shader compile time is not representative. It reads two
 User Timing measures the app records:
@@ -319,8 +319,8 @@ No engine code changes. Two PRs: CI guards (0.1, 0.2) and the
 composition parity tooling with baselines (0.3, 0.4). The spikes are not
 merged.
 
-**0.1 GL-reference ratchet.** Add `scripts/check-gl-debt.mjs`, modelled
-on `scripts/check-pixel-debt.mjs`: a per-file allowlist of how many raw
+**0.1 GL-reference ratchet.** Add `apps/lopsy-web/scripts/check-gl-debt.mjs`, modelled
+on `apps/lopsy-web/scripts/check-pixel-debt.mjs`: a per-file allowlist of how many raw
 GL references each file outside `gpu/` may contain. Counts may only go
 down. Wire it into `npm run lint`. This is the smallest possible first
 change and it makes progress visible from then on.
@@ -330,13 +330,13 @@ change and it makes progress visible from then on.
 **0.3 Composition parity check.** Reuse the existing composition specs
 instead of building a new scene suite.
 
-- `e2e/parity.ts` adds `parityCheckpoint(page, composition, name)`.
+- `apps/lopsy-web/e2e/parity.ts` adds `parityCheckpoint(page, composition, name)`.
   When `PARITY_OUT` is set it writes the engine's output at that point:
   the export composite as raw bytes and a hash of every layer. It does
   not use page screenshots, which include UI chrome. Without
   `PARITY_OUT` it does nothing. `koi-fish` and `shapes` call it at each
   of their existing screenshot steps.
-- `scripts/parity-compare.mjs` compares two output directories and
+- `apps/lopsy-web/scripts/parity-compare.mjs` compares two output directories and
   reports the largest per-channel difference.
 - `npm run parity:record` writes `.parity/baseline`; run it on `main`.
 - `npm run parity:check` writes `.parity/current` on the branch and
@@ -501,7 +501,7 @@ could not be done mechanically:
   (`GpuRef::screen_size`) instead of reaching into the GL context.
 
 Benchmarked on the real GPU (ANGLE Metal, M4 Max) with
-`e2e/effect-cache-perf.spec.ts`, a 4000×4000 document with 20 styled
+`apps/lopsy-web/e2e/effect-cache-perf.spec.ts`, a 4000×4000 document with 20 styled
 layers: brushing and panning take the same time per input event on the
 old and new engine (18 ms and 19 ms). A forced full composite takes
 8.3 ms against 8.4 ms including the GPU drain; its CPU side went from
@@ -543,7 +543,7 @@ on the backend.
   their own handle to the context, instead of being passed it at about
   190 call sites. `EngineInner` has no `gl` field and `GpuContext`'s is
   visible only inside `gpu/`, so feature code cannot reach the context
-  at all. `scripts/check-gl-debt.mjs` has no baselines left and fails on
+  at all. `apps/lopsy-web/scripts/check-gl-debt.mjs` has no baselines left and fails on
   any GL type or call named outside `gpu/`.
 - `Blend::Inherit` and `Scissor::Inherit` are gone. `Off` is the default
   and costs no GL call, because the state contract above already
@@ -987,7 +987,7 @@ synchronous exports.
 `expandLayerForEditing`, `getOrCreateLayerPixelData` and
 `resolvePixelData` had no app callers left, but 26 e2e specs read layers
 through them. Those specs now use two awaited helpers that
-`e2e/fixtures.ts` installs on every page (`__readLayerImage`,
+`apps/lopsy-web/e2e/fixtures.ts` installs on every page (`__readLayerImage`,
 layer-local, and `__readLayerInDocument`, document-sized), and
 `move-layer.spec.ts`, which imitated a Move grab by calling the store,
 drives the Brush and Move tools instead. `readLayerAsImageDataSync` and
@@ -1197,7 +1197,7 @@ signature in the table, with wgpu 30.0.1 behind them and no device:
 creating a context failed, and each operation reported failure the way
 the WebGL one does for a missing texture. `npm run wasm:build:wgpu`
 builds it to
-`src/engine-wasm/pkg-wgpu/`, and CI builds it after the default
+`apps/lopsy-web/src/engine-wasm/pkg-wgpu/`, and CI builds it after the default
 artifact and prints its size. That size (4,128,980 bytes of wasm then)
 says nothing yet: with no pass drawing, most of the engine is removed as
 dead code.
@@ -1253,8 +1253,8 @@ There is no automated test of the wgpu build in a browser yet.
 
 *Loading the second build (6.2, #1722).* The dev server puts a generated
 module between `wasm-bridge.ts` and the engine package
-(`scripts/vite-plugin-renderer.ts`, source in
-`src/engine-wasm/renderer-selector.ts`). It awaits one of the two builds
+(`apps/lopsy-web/scripts/vite-plugin-renderer.ts`, source in
+`apps/lopsy-web/src/engine-wasm/renderer-selector.ts`). It awaits one of the two builds
 and re-exports its names: `?renderer=wgpu` picks `pkg-wgpu`,
 `?renderer=webgl` picks `pkg`, and a page that names neither gets
 `LOPSY_RENDERER`, or WebGL when that is unset. Playwright runs against
@@ -1387,7 +1387,7 @@ change before the suite meant anything there:
 
 - **Waiting.** Specs wait a fixed time and then look. On wgpu what they
   wait for (a crop, a thumbnail, the start of a drag) follows a readback
-  that answers frames later. `installSettledWaits` (`e2e/parity.ts`,
+  that answers frames later. `installSettledWaits` (`apps/lopsy-web/e2e/parity.ts`,
   installed by `waitForStore`) makes `page.evaluate` wait first for the
   engine to have started and to have no readback out
   (`window.__parkedReadbacks`), and `waitForTimeout` and `waitForSelector`
@@ -1603,10 +1603,16 @@ Started when a second app is actually being built.
     in this document are written as they are now.
   - Done: the engine's layer, paint and text code is under
     `engine/src/document/`.
-  - To do: `src/` and the rest of the web app to `apps/lopsy-web/`.
-    `docs/hdr-support.md` goes there with it: it says that full HDR
-    support needs engine work for HDR editing, beyond the HDR rendering
-    that exists.
+  - Done: the web app moved to `apps/lopsy-web/`: `src/`, `e2e/`,
+    `public/`, the build and test configs, `scripts/`, and the app's
+    content (`tutorials/`, `blog/`, `FEATURES.md`, `SKILL.md`, `SPEC.md`).
+    The repository root is an npm workspace whose scripts forward to the
+    app, so `npm run dev`, `npm run test:e2e` and the rest run from the
+    root as before. `CLAUDE.md` is split three ways: a root file that
+    says where to look, and one each in `apps/lopsy-web/` and `engine/`
+    with the rules for working there. `apps/lopsy-web/docs/hdr-support.md`
+    went with the app: it says that full HDR support needs engine work
+    for HDR editing, beyond the HDR rendering that exists.
 
 ---
 

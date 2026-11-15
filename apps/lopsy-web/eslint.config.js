@@ -11,7 +11,6 @@ export default tseslint.config(
       'node_modules/**',
       'src/engine-wasm/pkg/**',
       'src/engine-wasm/pkg-wgpu/**',
-      'engine/**',
       'e2e/**',
       'scripts/**',
       '.storybook/**',
