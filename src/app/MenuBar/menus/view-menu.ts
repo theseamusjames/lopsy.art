@@ -2,10 +2,30 @@ import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { nextZoomLevel } from '../../../utils/zoom-levels';
 import { RULER_UNITS, RULER_UNIT_LABELS } from '../../rendering/ruler-units';
+import { hasWebGpu, runningRenderer, storedRenderer, storeRenderer, type Renderer } from '../../../engine-wasm/renderer-choice';
+import { notifyInfo } from '../../notifications-store';
 import type { MenuDef } from './types';
+
+const RENDERER_NAMES: Record<Renderer, string> = { webgl: 'WebGL', wgpu: 'WebGPU' };
+const RENDERER_LABELS: Record<Renderer, string> = { webgl: 'WebGL', wgpu: 'WebGPU (Experimental)' };
+
+/**
+ * The engine's two builds are separate downloads, chosen before either is
+ * fetched, so a new choice takes effect on the next page load.
+ */
+function chooseRenderer(renderer: Renderer): void {
+  storeRenderer(renderer);
+  const name = RENDERER_NAMES[renderer];
+  notifyInfo(
+    runningRenderer() === renderer
+      ? `Lopsy is using the ${name} renderer.`
+      : `Lopsy will use the ${name} renderer the next time it loads. Reload the page to switch now.`,
+  );
+}
 
 export function createViewMenu(): MenuDef {
   const ui = useUIStore.getState();
+  const preferredRenderer = storedRenderer() ?? runningRenderer() ?? 'webgl';
   return {
     label: 'View',
     items: [
@@ -92,6 +112,16 @@ export function createViewMenu(): MenuDef {
         label: 'Show Seamless Pattern',
         checked: ui.showSeamlessPattern,
         action: () => useUIStore.getState().toggleSeamlessPattern(),
+      },
+      { separator: true, label: '' },
+      {
+        label: 'Renderer',
+        submenu: (['webgl', 'wgpu'] as const).map((renderer) => ({
+          label: RENDERER_LABELS[renderer],
+          checked: preferredRenderer === renderer,
+          disabled: renderer === 'wgpu' && !hasWebGpu(),
+          action: () => chooseRenderer(renderer),
+        })),
       },
     ],
   };

@@ -10,6 +10,7 @@ import { initWasm, createEngine, clearAllLayers, rendererName, setScreenWideGamu
 import { resetTrackedState, cacheSubBrushTips } from './engine-sync';
 import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
 import { canvasColorSpace } from '../engine/color-space';
+import { markRendererFailed } from './renderer-choice';
 import { ENGINE_CREATE_TIMING, recordStartupTiming } from './startup-timing';
 import { useToolSettingsStore } from '../app/tool-settings-store';
 
@@ -104,7 +105,16 @@ async function startEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   import('../tools/brush/builtin-brushes').then((m) => m.loadBuiltinBitmapBrushes()).catch(() => {});
   const createStart = performance.now();
   // The wgpu build's createEngine returns a promise; the WebGL one does not.
-  engine = await createEngine(canvas);
+  try {
+    engine = await createEngine(canvas);
+  } catch (err) {
+    // A reload of this tab then runs WebGL: the adapter probe that let
+    // wgpu be chosen cannot tell that the device will fail to start.
+    if (isWgpuRenderer() && markRendererFailed()) {
+      throw new Error(`WebGPU could not start (${err instanceof Error ? err.message : String(err)}). Reload the page to use WebGL.`);
+    }
+    throw err;
+  }
   recordStartupTiming(ENGINE_CREATE_TIMING, createStart);
   engineCanvas = canvas;
   isWgpuDeviceLost = false;
