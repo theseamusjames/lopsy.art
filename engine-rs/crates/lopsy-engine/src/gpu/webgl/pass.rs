@@ -182,6 +182,10 @@ impl<'a> GpuRef<'a> {
         true
     }
 
+    /// Show what the frame's screen passes drew. A WebGL canvas shows its
+    /// drawing buffer without being asked.
+    pub fn finish_frame(self) {}
+
     /// Size of the canvas [`Target::Screen`] draws to, in device pixels.
     pub fn screen_size(self) -> Result<(i32, i32), String> {
         let canvas = self.gl.canvas().ok_or("WebGL canvas missing")?;

@@ -17,7 +17,7 @@ Status: in progress.
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
 | 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Commands that read inside the engine answer with a Promise or no longer read (#1705), and the last synchronous layer read is deleted (#1706). Phase 4 is done on the TypeScript side: nothing above the bridge reads the GPU synchronously. What is left is Rust's, in 6.6; see Phase 4 |
 | 5 | Done, pending merge. Every shader is WGSL, translated to GLSL at build time: 83 programs, plus one `blend` variant per blend mode. The build step and the first 24 shaders are in #1707, #1708, #1710 and #1711; #1712 removes four shaders no pass used. The rest are in #1713 (core and brush support, and a fifth unused shader, `color_overlay`), #1714 (brush tools, transforms, layer effects), #1715 (filters), #1716 (shaders whose uniforms had to change shape) and #1717 (brush dabs, `blend`, and the removal of the GLSL plumbing) |
-| 6 | Started. The wasm-bindgen bump wgpu needs is #1718; the WebGL backend is in `gpu/webgl/` behind a compile-time seam (#1719); and `--features wgpu` builds an outline of the wgpu backend into a second artifact that nothing loads (6.1, #1720). No wgpu code draws yet |
+| 6 | Started. The wasm-bindgen bump wgpu needs is #1718; the WebGL backend is in `gpu/webgl/` behind a compile-time seam (#1719); `--features wgpu` builds the wgpu backend into a second artifact (6.1, #1720); and that build creates a WebGPU device, allocates and clears textures and presents to the canvas, loaded on the dev server by `?renderer=wgpu` (6.2, #1722). No pass draws yet |
 | 7 | Not started |
 
 ---
@@ -1103,7 +1103,7 @@ default bundle does not change until rollout.
 |---|---|---|
 | 6.0 | wasm-bindgen 0.2.130; the WebGL backend moved to `gpu/webgl/` | done: #1718, #1719 |
 | 6.1 | `gpu/wgpu` skeleton; CI builds the second artifact; nothing loads it | done: #1720 |
-| 6.2 | Device and surface creation, clear, present; `?renderer=wgpu` in dev builds | 1 |
+| 6.2 | Device and surface creation, clear, present; `?renderer=wgpu` in dev builds | done: #1722 |
 | 6.3 | Texture pool, byte uploads, external-image upload | 1 |
 | 6.4 | Passes: pipeline cache keyed by program, blend and target format; bind groups; uniform buffer; scissor | 1 |
 | 6.5 | Texture-to-texture copy | 1 |
@@ -1117,7 +1117,7 @@ default bundle does not change until rollout.
 PR 1 is the largest in the plan, but it is all new code behind a cargo
 feature that the default build does not compile.
 
-**As built so far (6.0 and 6.1).**
+**As built so far (6.0 to 6.2).**
 
 *wasm-bindgen 0.2.130 (#1718).* One lockfile serves both backends, so the
 bump changes the default build and went first, alone. Three things came
@@ -1158,10 +1158,10 @@ What a backend provides, as the engine uses it today:
 
 | Piece | What the engine calls |
 |---|---|
-| `GpuContext` | `new(canvas)`, `create_pools`, `max_texture_size`, the two float capability flags, and a `Linker` that turns a fragment source into a program |
+| `GpuContext` | `new(canvas)` (`async` on wgpu), `create_pools`, `max_texture_size`, the two float capability flags, and a `Linker` that turns a fragment source into a program |
 | `TexturePool` | acquire, release, delete; `get` (used outside `gpu/` only to ask whether a handle is live) and `get_size`; filter and wrap setters; uploads from `u8`, `u16`, `f32` and a canvas |
 | `FramebufferPool` | create, attach a texture, release |
-| `GpuRef` | start a pass; clear a texture or a rect of one; copy a region; draw one-byte data into a texture; canvas size; RGBA8 and 16-bit readback |
+| `GpuRef` | start a pass; clear a texture or a rect of one; copy a region; draw one-byte data into a texture; canvas size; RGBA8 and 16-bit readback; `finish_frame` |
 | a pass | textures by sampler name, viewport, scissor, blend, clear; draw once, or begin and draw many times with changed uniforms; draw into a small 8-bit target and read it back |
 
 One read went around that surface: the eyedropper bound the composite
@@ -1176,13 +1176,15 @@ suite ran at the tip of #1720, which adds no code to the default build:
 `paste-in-place-selection`, which differ between any two runs. Where the
 4.6 KB comes from was not found.
 
-*The outline (6.1, #1720).* `gpu/wgpu/` has every type and signature in
-the table, with wgpu 30.0.1 behind them and no device: creating a context
-fails, and each operation reports failure the way the WebGL one does for
-a missing texture. `npm run wasm:build:wgpu` builds it to
-`src/engine-wasm/pkg-wgpu/`, and CI builds it after the default artifact
-and prints its size. That size (4,128,980 bytes of wasm) says nothing
-yet: with no pass drawing, most of the engine is removed as dead code.
+*The outline (6.1, #1720).* `gpu/wgpu/` began as every type and
+signature in the table, with wgpu 30.0.1 behind them and no device:
+creating a context failed, and each operation reported failure the way
+the WebGL one does for a missing texture. `npm run wasm:build:wgpu`
+builds it to
+`src/engine-wasm/pkg-wgpu/`, and CI builds it after the default
+artifact and prints its size. That size (4,128,980 bytes of wasm then)
+says nothing yet: with no pass drawing, most of the engine is removed as
+dead code.
 
 The default build is unchanged by it. Built before and after, the two
 wasm files are the same size and differ in three bytes, which are the
@@ -1195,16 +1197,85 @@ earlier. They are held at 30.0.1 in the lockfile. Of the 26 crates the
 feature adds to it, the newest is 15 days old. Check the whole lockfile
 diff, not only the crate named in the manifest.
 
-What the split showed the next steps have to handle, none of it done:
+*A device and a frame (6.2, #1722).* With the feature on, the engine
+starts on a real device and shows a frame:
 
-- **Creating a context is synchronous today.** `createEngine` calls
-  `GpuContext::new(canvas)` and returns. WebGPU hands out its adapter and
-  device through promises, so under the feature the host's `createEngine`
-  becomes `async` and awaits them before building the engine (6.2).
-  `initEngine` in `engine-state.ts` is already `async`.
-- **The bridge imports one package.** `wasm-bridge.ts` re-exports from
-  `./pkg/lopsy_wasm` statically, so `?renderer=wgpu` needs the bridge to
-  be able to load `pkg-wgpu` in its place (6.2).
+- `GpuContext::new` is `async`. It requests an adapter and a device and
+  configures the canvas. `createEngine` is `async` under the feature, and
+  `initEngine` awaits it on either backend; the WebGL export is as it was.
+- The texture pool allocates (`rgba16float`; nothing is reused yet, so
+  `release` destroys) and `GpuRef::clear` fills a texture.
+- A pass aimed at the screen takes the frame's surface texture, first
+  resizing the surface if the canvas changed size, and clears it.
+  `GpuRef::finish_frame`, called at the end of `compositor::render`,
+  presents it. On WebGL `finish_frame` does nothing.
+- Uncaptured device errors are logged through the host, so a validation
+  error shows in the console with its message.
+
+Three things the wgpu API does not make obvious:
+
+- **Texture size.** A WebGPU device allows 8192 unless asked for more.
+  The context asks for the adapter's limit (16384 on the M4 Max, the
+  same as WebGL there).
+- **Alpha.** wgpu lists only `Opaque` for a canvas surface, but
+  configures the canvas premultiplied when told to. The context sets
+  `PreMultiplied`, as a WebGL canvas is by default: with a transparent
+  clear the workspace shows through, where `Opaque` gave black.
+- **`cargo test --features wgpu` builds the backend for the machine it
+  runs on**, where `SurfaceTarget::Canvas` does not exist. Creating the
+  canvas surface is compiled for wasm only; elsewhere it reports an
+  error. The native host (6.10) draws without a surface.
+
+Checked by hand in Chromium on Metal: `?renderer=wgpu` logs
+`wgpu BrowserWebGpu: surface Bgra8Unorm PreMultiplied, max texture
+16384`, every shader module is accepted without a validation error, a
+build with a temporary opaque clear colour filled the canvas with it and
+kept doing so after the window was resized, and the committed
+transparent clear shows the workspace behind the canvas. Layer uploads
+fail with "The wgpu backend cannot draw yet" and the app carries on.
+There is no automated test of the wgpu build in a browser yet.
+
+*Loading the second build (6.2, #1722).* The dev server puts a generated
+module between `wasm-bridge.ts` and the engine package
+(`scripts/vite-plugin-renderer.ts`, source in
+`src/engine-wasm/renderer-selector.ts`). It awaits one of the two builds
+and re-exports its names: `?renderer=wgpu` picks `pkg-wgpu`,
+`?renderer=webgl` picks `pkg`, and a page that names neither gets
+`LOPSY_RENDERER`, or WebGL when that is unset. Playwright runs against
+the dev server, so `LOPSY_RENDERER=wgpu` will run the whole e2e suite on
+wgpu for 6.8 without a spec changing.
+
+The plugin applies to `vite serve` only. A production build imports
+`pkg` directly and contains nothing of the wgpu build: `dist/` has one
+wasm file and no reference to `pkg-wgpu`. Choosing a build at run time
+in production is 6.11, and it is a real change: the bridge re-exports
+about 310 functions from a static import, and a static import cannot be
+chosen per page load.
+
+The default build after 6.2: wasm 4,357,742 bytes (13 more, from the
+helper `createEngine` now shares with its async twin), JS glue
+identical. `engine-create` 135 ms and `wasm-init` 136 ms median over
+seven cold loads, against 129 ms each before; both moved together and
+only the first can be affected by this change. The wgpu artifact is
+4,262,793 bytes of wasm and 218,871 of JS, still not a number to plan
+by.
+
+What the next steps have to handle, none of it done:
+
+- **Production cannot choose a renderer.** See above (6.11).
+- **Wide gamut.** `initEngine` sets `drawingBufferColorSpace` on the
+  WebGL context. On wgpu `getContext('webgl2')` returns null, so nothing
+  is set and the surface is plain `bgra8unorm` sRGB. Display P3 and EDR
+  headroom need the surface configured with a colour space, a float
+  format and extended tone mapping (6.8).
+- **Context loss.** The canvas listens for `webglcontextlost` and
+  `webglcontextrestored`, which a WebGPU canvas never fires (6.7).
+- **Two engines on one canvas.** React StrictMode mounts twice in dev, so
+  two engines are created on the same canvas and the second to configure
+  it owns it. That is the surviving engine today because the two
+  creations finish in the order they started; nothing enforces it. The
+  restore path re-creates an engine on the same canvas too (6.7).
+- **The texture pool reuses nothing** (6.3).
 - **Framebuffers.** WebGPU has none. The engine uses one only as a name
   for the texture attached to it, which is what the wgpu
   `FramebufferPool` stores.
@@ -1219,6 +1290,9 @@ What the split showed the next steps have to handle, none of it done:
   test that the Rust packing matches it, as `struct_matches_source` does
   for the GLSL block (6.4). `ActivePass::set` between draws needs a
   buffer per draw or dynamic offsets.
+- **A screen pass only clears.** The first one in a frame starts from a
+  transparent texture and later ones keep what is there; that stays true
+  once they draw (6.4).
 - **The pass layer still has synchronous reads** (`read_rgba`,
   `read_rgba_u16`, `Pass::read_back`). They are the Rust half of Phase 4
   and become asynchronous in 6.6.

@@ -2,14 +2,13 @@
 //! DX12 through the same code. Compiled in place of `webgl/` when the
 //! `wgpu` cargo feature is on, into a second wasm artifact.
 //!
-//! So far this is the outline the engine compiles against: every type and
-//! signature the WebGL backend offers, with a device behind none of them.
-//! Creating a context fails, so nothing can reach the operations below it,
-//! and each of those reports failure the way its WebGL counterpart does for
-//! a missing texture. docs/engine-migration-plan.md (Phase 6) lists the
-//! order they are filled in.
+//! So far it creates a device, presents to the canvas, allocates textures
+//! and clears them. No pass draws: each operation still to come reports
+//! failure the way its WebGL counterpart does for a missing texture.
+//! docs/engine-migration-plan.md (Phase 6) lists the order they are filled
+//! in.
 
-// Nothing constructs a context yet, so most of what it would own is unread.
+// What no pass reads yet (shader modules, attachments) is unread.
 #![allow(dead_code)]
 
 pub mod context;

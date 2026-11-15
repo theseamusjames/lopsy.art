@@ -48,8 +48,39 @@ impl<'a> GpuRef<'a> {
     /// nothing left bound to undo.
     pub fn unbind_textures(self, _count: u32) {}
 
-    pub fn clear(self, _texture: TextureHandle, _color: [f32; 4]) -> bool {
-        false
+    /// Fill `texture` with `color`.
+    pub fn clear(self, texture: TextureHandle, color: [f32; 4]) -> bool {
+        let Some(texture) = self.textures.get(texture) else {
+            return false;
+        };
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.run_empty_pass(&view, wgpu::LoadOp::Clear(to_color(color)));
+        true
+    }
+
+    /// A render pass that draws nothing: what it does is its load
+    /// operation.
+    fn run_empty_pass(self, view: &wgpu::TextureView, load: wgpu::LoadOp<wgpu::Color>) {
+        let mut encoder = self.ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations { load, store: wgpu::StoreOp::Store },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        self.ctx.queue.submit([encoder.finish()]);
+    }
+
+    /// Show what the frame's screen passes drew.
+    pub fn finish_frame(self) {
+        self.ctx.present();
     }
 
     pub fn clear_rect(self, _texture: TextureHandle, _rect: Rect, _color: [f32; 4]) -> bool {
@@ -72,8 +103,10 @@ impl<'a> GpuRef<'a> {
         Err(UNAVAILABLE.into())
     }
 
+    /// Size of the canvas [`Target::Screen`] draws to, in device pixels.
     pub fn screen_size(self) -> Result<(i32, i32), String> {
-        Err(UNAVAILABLE.into())
+        let (width, height) = self.ctx.screen_size();
+        Ok((width as i32, height as i32))
     }
 
     pub fn read_rgba(self, _texture: TextureHandle, _x: i32, _y: i32, _w: u32, _h: u32) -> Result<Vec<u8>, String> {
@@ -109,7 +142,15 @@ impl<'a> RawPass<'a> {
         None
     }
 
-    pub(in crate::gpu) fn draw(self, _target: Target) -> bool {
+    /// No pass draws yet. One aimed at the screen still takes the frame's
+    /// texture, so the canvas shows a cleared frame.
+    pub(in crate::gpu) fn draw(self, target: Target) -> bool {
+        if let Target::Screen = target {
+            if let Some(screen) = self.gpu.ctx.screen_target() {
+                let load = if screen.is_first_pass { wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT) } else { wgpu::LoadOp::Load };
+                self.gpu.run_empty_pass(&screen.view, load);
+            }
+        }
         false
     }
 
@@ -131,4 +172,8 @@ impl RawActivePass<'_> {
     pub(in crate::gpu) fn draw(&self) {}
 
     pub(in crate::gpu) fn draw_in(&mut self, _rect: Rect) {}
+}
+
+fn to_color(color: [f32; 4]) -> wgpu::Color {
+    wgpu::Color { r: color[0].into(), g: color[1].into(), b: color[2].into(), a: color[3].into() }
 }

@@ -105,7 +105,7 @@ uploaded as RGBA. The GPU brush/eraser shaders are written for RGBA
 color painting with MAX-blend dab accumulation — not quite right for
 additive/subtractive mask coverage. A proper migration wants:
 
-1. A dedicated `mask_paint_dab.glsl` shader that does source-over
+1. A dedicated `mask_paint_dab.wgsl` shader that does source-over
    blending of a fill value `{0.0, 1.0}` with a soft-hardness falloff.
 2. New WASM APIs `paintMaskBrushDab`, `paintMaskEraserDab`,
    `paintMaskBrushDabBatch`, `paintMaskEraserDabBatch` in

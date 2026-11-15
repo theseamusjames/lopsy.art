@@ -44,7 +44,8 @@ export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   await initWasm();
   import('../tools/brush/builtin-brushes').then((m) => m.loadBuiltinBitmapBrushes()).catch(() => {});
   const createStart = performance.now();
-  engine = createEngine(canvas);
+  // The wgpu build's createEngine returns a promise; the WebGL one does not.
+  engine = await createEngine(canvas);
   recordStartupTiming(ENGINE_CREATE_TIMING, createStart);
   engineCanvas = canvas;
 

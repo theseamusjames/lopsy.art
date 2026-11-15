@@ -7,6 +7,7 @@ import { statSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { sitePlugin } from './scripts/vite-plugin-site';
 import { agentDocsPlugin } from './scripts/vite-plugin-agent-docs';
+import { rendererPlugin } from './scripts/vite-plugin-renderer';
 
 /**
  * Vite plugin that checks whether the WASM build output is older than any
@@ -75,6 +76,7 @@ export default defineConfig({
     wasm(),
     topLevelAwait(),
     wasmFreshnessCheck(),
+    rendererPlugin({ root: resolve(__dirname) }),
     sitePlugin({
       tutorialsDir: resolve(__dirname, 'tutorials'),
       blogDir: resolve(__dirname, 'blog'),
