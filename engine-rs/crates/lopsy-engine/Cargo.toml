@@ -3,8 +3,17 @@ name = "lopsy-engine"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# Build the wgpu backend (gpu/wgpu) in place of the WebGL one (gpu/webgl).
+# The two are never compiled together: see gpu/mod.rs.
+wgpu = ["dep:wgpu"]
+
 [dependencies]
 lopsy-core = { path = "../lopsy-core" }
+# WebGPU only. wgpu's own WebGL backend would add about 3 MB to the wasm
+# (docs/engine-migration-plan.md, spike S1); the hand-written one in
+# gpu/webgl is the fallback. 30.0.1 was released 2026-08-22.
+wgpu = { version = "=30.0.1", optional = true, default-features = false, features = ["std", "webgpu", "wgsl"] }
 wasm-bindgen = "=0.2.130"
 js-sys = "=0.3.107"
 serde = { version = "1", features = ["derive"] }

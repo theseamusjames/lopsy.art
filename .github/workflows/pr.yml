@@ -67,6 +67,15 @@ jobs:
       - name: Check engine bundle size
         run: npm run wasm:size
 
+      # The wgpu backend is a second artifact that nothing loads yet
+      # (docs/engine-migration-plan.md, Phase 6). Building it here keeps it
+      # compiling and shows its size as it grows.
+      - name: Build WASM (wgpu backend)
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: |
+          npm run wasm:build:wgpu
+          wc -c src/engine-wasm/pkg-wgpu/lopsy_wasm_bg.wasm src/engine-wasm/pkg-wgpu/lopsy_wasm.js
+
       - name: Upload WASM pkg artifact
         uses: actions/upload-artifact@v4
         with:

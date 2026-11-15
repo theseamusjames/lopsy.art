@@ -8,11 +8,20 @@ use crate::gpu::backend::program::{LinkedProgram, Linker};
 use crate::gpu::params;
 use crate::gpu::uniforms::Uniforms;
 
-/// A fragment shader written in WGSL (`shaders/<path>.wgsl`) and translated
-/// to GLSL ES 3.00 by the build script: see `lopsy-shaderc`.
+/// A fragment shader written in WGSL (`shaders/<path>.wgsl`), as the
+/// backend compiles it. The build script (see `lopsy-shaderc`) translates
+/// it to GLSL ES 3.00 for WebGL; wgpu takes the WGSL with its includes
+/// spliced in.
+#[cfg(not(feature = "wgpu"))]
 macro_rules! translated {
     ($path:literal) => {
         include_str!(concat!(env!("OUT_DIR"), "/shaders/", $path, ".glsl"))
+    };
+}
+#[cfg(feature = "wgpu")]
+macro_rules! translated {
+    ($path:literal) => {
+        include_str!(concat!(env!("OUT_DIR"), "/shaders/", $path, ".wgsl"))
     };
 }
 
@@ -149,7 +158,7 @@ macro_rules! typed_shaders {
     ($($name:ident: $params:ty = $frag:expr;)*) => {
         $(pub const $name: Shader<$params> = Shader::new($frag);)*
 
-        #[cfg(test)]
+        #[cfg(all(test, not(feature = "wgpu")))]
         fn typed_shader_checks() -> Vec<(&'static str, Result<(), String>)> {
             vec![$((
                 stringify!($name),
@@ -517,24 +526,6 @@ impl ShaderPrograms {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        typed_shader_checks, BLEND_SOURCES, BLIT_RESAMPLE_FRAG,
-        SMUDGE_DAB_FRAG, TRANSFORM_AFFINE_FRAG, TRANSFORM_PERSPECTIVE_FRAG,
-    };
-
-    #[test]
-    fn resampling_shaders_filter_in_premultiplied_space() {
-        for src in [
-            TRANSFORM_AFFINE_FRAG,
-            TRANSFORM_PERSPECTIVE_FRAG,
-            BLIT_RESAMPLE_FRAG,
-            SMUDGE_DAB_FRAG,
-        ] {
-            assert!(src.contains("vec4 samplePremulBilinear("));
-            assert!(!src.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
-        }
-    }
-
     #[test]
     fn tonal_passes_work_on_decoded_lab() {
         // Adjustments and the vignette scale channel values, which only means
@@ -560,24 +551,6 @@ mod tests {
         assert!(source.contains("//#include lab"), "lab helpers not spliced in");
         assert!(source.contains("u_docColorMode: i32,"));
         assert!(source.contains("srgbToLab(blendMode(labToSrgb(srcRGB), labToSrgb(backdrop.rgb)))"));
-    }
-
-    #[test]
-    fn every_blend_mode_has_a_variant_that_takes_the_blend_uniforms() {
-        assert_eq!(BLEND_SOURCES.count(), lopsy_core::color::BlendMode::ALL.len());
-        for mode in 0..BLEND_SOURCES.count() {
-            let check = crate::gpu::uniforms::check::struct_matches_source::<crate::gpu::params::composite::BlendParams>;
-            assert_eq!(check(&BLEND_SOURCES.source(mode)), Ok(()), "mode {mode}");
-        }
-    }
-
-    #[test]
-    fn only_normal_skips_the_blend_function() {
-        // Normal is a plain lerp: it must not decode Lab or read the backdrop.
-        assert!(!BLEND_SOURCES.source(0).contains("blendMode("));
-        for mode in 1..BLEND_SOURCES.count() {
-            assert!(BLEND_SOURCES.source(mode).contains("vec3 blendMode("), "mode {mode}");
-        }
     }
 
     #[test]
@@ -656,12 +629,50 @@ mod tests {
         }
     }
 
-    #[test]
-    fn every_typed_shader_declares_its_uniform_struct_as_its_params_block() {
-        let failures: Vec<String> = typed_shader_checks()
-            .into_iter()
-            .filter_map(|(name, result)| result.err().map(|why| format!("{name}: {why}")))
-            .collect();
-        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    /// What the generated GLSL holds. The wgpu build embeds WGSL in its
+    /// place, so these are for the WebGL build.
+    #[cfg(not(feature = "wgpu"))]
+    mod generated_glsl {
+        use super::super::*;
+
+        #[test]
+        fn only_normal_skips_the_blend_function() {
+            // Normal is a plain lerp: it must not decode Lab or read the backdrop.
+            assert!(!BLEND_SOURCES.source(0).contains("blendMode("));
+            for mode in 1..BLEND_SOURCES.count() {
+                assert!(BLEND_SOURCES.source(mode).contains("vec3 blendMode("), "mode {mode}");
+            }
+        }
+
+        #[test]
+        fn resampling_shaders_filter_in_premultiplied_space() {
+            for src in [
+                TRANSFORM_AFFINE_FRAG,
+                TRANSFORM_PERSPECTIVE_FRAG,
+                BLIT_RESAMPLE_FRAG,
+                SMUDGE_DAB_FRAG,
+            ] {
+                assert!(src.contains("vec4 samplePremulBilinear("));
+                assert!(!src.contains("texture(u_floatTex"), "straight-alpha hardware filtering");
+            }
+        }
+
+        #[test]
+        fn every_blend_mode_has_a_variant_that_takes_the_blend_uniforms() {
+            assert_eq!(BLEND_SOURCES.count(), lopsy_core::color::BlendMode::ALL.len());
+            for mode in 0..BLEND_SOURCES.count() {
+                let check = crate::gpu::uniforms::check::struct_matches_source::<crate::gpu::params::composite::BlendParams>;
+                assert_eq!(check(&BLEND_SOURCES.source(mode)), Ok(()), "mode {mode}");
+            }
+        }
+
+        #[test]
+        fn every_typed_shader_declares_its_uniform_struct_as_its_params_block() {
+            let failures: Vec<String> = typed_shader_checks()
+                .into_iter()
+                .filter_map(|(name, result)| result.err().map(|why| format!("{name}: {why}")))
+                .collect();
+            assert!(failures.is_empty(), "{}", failures.join("\n"));
+        }
     }
 }
