@@ -52,7 +52,7 @@ fn sampleMinified(texelPos: vec2<f32>, isSeamless: bool) -> vec4<f32> {
 }
 
 @fragment
-fn fs_main(@builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     let screenPos = vec2<f32>(uv.x, 1.0 - uv.y) * params.u_resolution;
 
     let center = params.u_resolution * 0.5;
@@ -125,7 +125,10 @@ fn fs_main(@builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>) -
         color = mix(vec4<f32>(0.18, 0.18, 0.18, 1.0), color, 0.75);
     }
 
-    let seed = position.xy;
+    // The centre of this screen pixel, counted up from the bottom: what
+    // WebGL's fragment position is. WebGPU counts the screen's rows down,
+    // and the dither has to be the same pattern on both.
+    let seed = floor(uv * params.u_resolution) + 0.5;
     let n0 = fract(sin(dot(seed, vec2<f32>(12.9898, 78.233))) * 43758.5453);
     let n1 = fract(sin(dot(seed, vec2<f32>(63.7264, 10.873))) * 28637.1136);
     let dither = (n0 + n1 - 1.0) / 255.0;

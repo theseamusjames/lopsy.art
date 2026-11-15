@@ -383,3 +383,24 @@ fn a_filter_a_thumbnail_and_content_bounds_agree_on_one_layer() {
     assert_eq!(thumbnail.len(), 8 + 4 * 4 * 4);
     assert_no_gpu_errors();
 }
+
+#[test]
+fn bloom_keeps_the_layer_and_adds_a_glow() {
+    let Some(mut engine) = engine(16, 16) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 16, 16, 1.0)).expect("layer");
+    // A white square on a dark, opaque ground.
+    let mut pixels = vec![[20u8, 20, 30, 255]; 256];
+    for y in 6..10 {
+        for x in 6..10 {
+            pixels[y * 16 + x] = WHITE;
+        }
+    }
+    commands::layer::upload_layer_pixels(&mut engine, "art", pixels.as_flattened(), 16, 16, 0, 0).expect("pixels");
+    commands::filter::stylize::filter_bloom(&mut engine, "art", 0.5, 0.5, 3, 1.0);
+    let bloomed = now(commands::layer::read_layer_pixels(&engine, "art"));
+    let at = |x: usize, y: usize| -> [u8; 4] { bloomed[(y * 16 + x) * 4..][..4].try_into().unwrap() };
+    assert_eq!(at(7, 7), WHITE, "the bright square stays");
+    assert_eq!(at(0, 0)[3], 255, "the ground stays opaque");
+    assert!(at(5, 7)[0] > 20, "light spills onto the ground beside the square: {:?}", at(5, 7));
+    assert_no_gpu_errors();
+}
