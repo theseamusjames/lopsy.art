@@ -356,7 +356,7 @@ pub fn set_brush_texture_state(engine: &mut EngineInner, has_texture: bool, scal
     engine.brush.texture_blend_mode = blend_mode;
 }
 
-// Built-in brush tip bitmaps — auto-generated from engine-rs/brushes/*.png
+// Built-in brush tip bitmaps — auto-generated from engine/brushes/*.png
 include!(concat!(env!("OUT_DIR"), "/builtin_brushes.rs"));
 
 pub fn get_builtin_brush_tip(name: &str) -> Option<Vec<u8>> {

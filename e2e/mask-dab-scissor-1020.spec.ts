@@ -22,7 +22,7 @@ skipOnWgpu(test, 'records scissor rects set on the WebGL context');
  * hide and reveal (brush and eraser), and dabs that hang off the texture
  * edges and corners. The per-dab cost itself is GPU time that WebGL does
  * not expose; the scissor bounds are unit-tested in
- * `lopsy-core/src/brush.rs` (`circle_dab_scissor_rect`).
+ * `engine/core/src/brush.rs` (`circle_dab_scissor_rect`).
  */
 
 const DOC_W = 360;

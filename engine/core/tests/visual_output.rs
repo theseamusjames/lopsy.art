@@ -1,4 +1,4 @@
-//! Visual output tests — generates PNG images to engine-rs/test-output/ for human review.
+//! Visual output tests — generates PNG images to engine/test-output/ for human review.
 //! Run with: cargo test -p lopsy-core --test visual_output -- --nocapture
 
 use std::fs;
@@ -16,8 +16,6 @@ use lopsy_core::selection;
 
 fn output_dir() -> PathBuf {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
         .parent()
         .unwrap()
         .join("test-output");

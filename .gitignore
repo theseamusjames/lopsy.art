@@ -15,7 +15,7 @@ tutorials/**/*.lopsy
 storybook-static
 
 # Rust build artifacts
-engine-rs/target/
+engine/target/
 src/engine-wasm/pkg/
 src/engine-wasm/pkg-wgpu/
 
@@ -26,7 +26,7 @@ test-results/
 # Step screenshots the parity compositions write on every run
 e2e/screenshots/comp2-*.png
 e2e/screenshots/koi-fish-*.png
-engine-rs/test-output/
+engine/test-output/
 tests/screenshots/
 
 .claude/worktrees

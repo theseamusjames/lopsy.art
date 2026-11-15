@@ -1,4 +1,4 @@
-//! Brush visual output tests — generates PNGs to engine-rs/test-output/
+//! Brush visual output tests — generates PNGs to engine/test-output/
 //! Run with: cargo test -p lopsy-core --test brush_visual -- --nocapture
 
 use std::fs;
@@ -7,7 +7,6 @@ use lopsy_core::brush::{generate_brush_stamp, interpolate_points, interpolate_po
 
 fn output_dir() -> PathBuf {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap()
         .parent().unwrap()
         .join("test-output");
     fs::create_dir_all(&dir).unwrap();

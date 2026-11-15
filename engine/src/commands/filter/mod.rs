@@ -3,7 +3,7 @@
 //! Each filter is an operation from `imaging::filters` applied to a layer
 //! by `filter_gpu::apply_op` (or `apply_staged` for one of several
 //! passes). Grouped by category
-//! to mirror `lopsy-core/src/filters/`:
+//! to mirror `engine/core/src/filters/`:
 //!
 //!   - `blur`    — gaussian, box, unsharp, motion, radial
 //!   - `adjust`  — brightness/contrast, hue/sat, invert, desaturate,

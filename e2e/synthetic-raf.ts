@@ -1,7 +1,7 @@
 /**
  * Builds an uncompressed Fujifilm RAF in memory, so RAF import can be tested
  * without the (large, non-redistributable) camera samples. Mirrors
- * engine-rs/crates/lopsy-core/tests/support/synthetic_raf.rs.
+ * engine/core/tests/support/synthetic_raf.rs.
  *
  * The scene is a neutral gray ramp: brightness rises steeply with sensor x
  * and gently with sensor y, so the EXIF orientation and any misplaced or

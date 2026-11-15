@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src/engine-wasm/pkg
-          key: wasm-pkg-${{ hashFiles('engine-rs/**/*.rs', 'engine-rs/**/Cargo.toml', 'engine-rs/**/Cargo.lock', 'engine-rs/**/*.wgsl') }}
+          key: wasm-pkg-${{ hashFiles('engine/**/*.rs', 'engine/**/Cargo.toml', 'engine/**/Cargo.lock', 'engine/**/*.wgsl') }}
 
       - name: Cache cargo registry, git, and target
         if: steps.wasm-cache.outputs.cache-hit != 'true'
@@ -47,8 +47,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            engine-rs/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('engine-rs/**/Cargo.lock') }}
+            engine/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('engine/**/Cargo.lock') }}
           restore-keys: |
             cargo-${{ runner.os }}-
 
@@ -99,8 +99,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            engine-rs/target
-          key: cargo-test-${{ runner.os }}-${{ hashFiles('engine-rs/**/Cargo.lock') }}
+            engine/target
+          key: cargo-test-${{ runner.os }}-${{ hashFiles('engine/**/Cargo.lock') }}
           restore-keys: |
             cargo-test-${{ runner.os }}-
 
@@ -133,8 +133,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            engine-rs/target
-          key: cargo-shaderc-${{ runner.os }}-${{ hashFiles('engine-rs/**/Cargo.lock') }}
+            engine/target
+          key: cargo-shaderc-${{ runner.os }}-${{ hashFiles('engine/**/Cargo.lock') }}
           restore-keys: |
             cargo-shaderc-${{ runner.os }}-
 

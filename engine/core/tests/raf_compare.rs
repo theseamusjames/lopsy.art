@@ -13,11 +13,9 @@ use std::fs;
 use std::path::PathBuf;
 
 fn samples_dir() -> PathBuf {
-    // CARGO_MANIFEST_DIR = engine-rs/crates/lopsy-core
+    // CARGO_MANIFEST_DIR = engine/core
     // three parents up → repo root
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
         .parent()
         .unwrap()
         .parent()

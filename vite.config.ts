@@ -20,7 +20,7 @@ function wasmFreshnessCheck(): Plugin {
     buildStart() {
       const root = resolve(__dirname);
       const wasmFile = join(root, 'src/engine-wasm/pkg/lopsy_wasm_bg.wasm');
-      const srcDir = join(root, 'engine-rs/crates');
+      const srcDir = join(root, 'engine');
 
       let wasmMtime: number;
       try {
