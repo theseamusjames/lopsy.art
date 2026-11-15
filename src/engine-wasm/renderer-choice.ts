@@ -65,18 +65,38 @@ export function requestedRenderer(fallback: Renderer, hasWgpuBuild: boolean): Re
   });
 }
 
+interface WebGpuAdapter {
+  limits?: { maxTextureDimension2D?: number };
+}
+
+let adapterTextureLimit: number | null = null;
+
 /**
  * Whether the browser will hand out a WebGPU adapter. `navigator.gpu`
  * exists in browsers that then refuse one: on a blocklisted GPU, or with
- * hardware acceleration off.
+ * hardware acceleration off. Notes the adapter's largest texture side,
+ * which is what the wgpu engine asks its device for.
  */
 export async function canUseWebGpu(): Promise<boolean> {
   try {
-    const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
-    return gpu !== undefined && (await gpu.requestAdapter()) !== null;
+    const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<WebGpuAdapter | null> } }).gpu;
+    if (gpu === undefined) return false;
+    const adapter = await gpu.requestAdapter();
+    if (adapter === null) return false;
+    const limit = adapter.limits?.maxTextureDimension2D;
+    adapterTextureLimit = typeof limit === 'number' && limit > 0 ? limit : null;
+    return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * The largest texture side the WebGPU adapter allows, or null until
+ * `canUseWebGpu` has been answered with one.
+ */
+export function webGpuTextureLimit(): number | null {
+  return adapterTextureLimit;
 }
 
 /** Whether the browser has WebGPU at all. */

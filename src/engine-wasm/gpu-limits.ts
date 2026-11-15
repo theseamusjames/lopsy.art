@@ -1,13 +1,23 @@
 import { maxDocumentSide } from '../utils/document-size';
+import { runningRenderer, webGpuTextureLimit } from './renderer-choice';
 
 let cachedMaxTextureSize: number | null | undefined;
 
 /**
- * The GPU's `MAX_TEXTURE_SIZE`, probed once from a throwaway WebGL2
- * context. The New Document dialog runs before the engine exists, so this
- * can't ask the engine. Returns null where WebGL2 isn't available.
+ * The largest texture side the GPU allows. The New Document dialog runs
+ * before the engine exists, so this can't ask the engine.
+ *
+ * On a page that runs the wgpu engine it is the WebGPU adapter's limit,
+ * which that engine's device is created with and which can be smaller
+ * than WebGL's on the same GPU. Otherwise, and until the renderer has
+ * been chosen, it is `MAX_TEXTURE_SIZE` probed once from a throwaway
+ * WebGL2 context. Returns null where neither is available.
  */
 export function getGpuMaxTextureSize(): number | null {
+  if (runningRenderer() === 'wgpu') {
+    const limit = webGpuTextureLimit();
+    if (limit !== null) return limit;
+  }
   if (cachedMaxTextureSize !== undefined) return cachedMaxTextureSize;
   cachedMaxTextureSize = null;
   if (typeof document === 'undefined') return cachedMaxTextureSize;
