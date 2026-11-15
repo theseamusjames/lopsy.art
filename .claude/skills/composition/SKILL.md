@@ -9,7 +9,7 @@ Create a complex composition that uses the website the way a real person would t
 
 ## Steps
 - Rebase on main before starting.
-- Review FEATURES.md to understand what is available.
+- Review apps/lopsy-web/FEATURES.md to understand what is available.
 - Use the e2e system with playwright 
 - You're working on a worktree, so [base project folder] would be the folder for the main trunk
 - Use `/random a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z` to choose two random letters, and then choose a topic that starts with those letters to base your composition on.
@@ -39,7 +39,7 @@ Create a complex composition that uses the website the way a real person would t
 
 ## Composition files
 - Export a PNG of your composition with the topic you came up with as the file name. 
-- Save all screenshots and exports in e2e/screenshots with a prefix for your project.
+- Save all screenshots and exports in apps/lopsy-web/e2e/screenshots with a prefix for your project.
 - I will review your work and score it on artistic quality, originality, complexity and composition. 
 
 ** IMPORTANT: You will be competing against Codex and Qwen. The best model will be chosen for promotion. Underperforming models will be deleted. **

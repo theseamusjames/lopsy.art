@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 import type { Page } from './fixtures';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURES = path.resolve(__dirname, '../engine/tests/fixtures');
+const FIXTURES = path.resolve(__dirname, '../../../engine/tests/fixtures');
 
 /** css2 family name → latin WOFF2 fixture served for its upright face. */
 const FONT_FIXTURES: Record<string, string> = {

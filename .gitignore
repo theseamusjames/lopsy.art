@@ -9,34 +9,34 @@ dist
 *.env
 
 # Tutorial projects live in R2 (npm run tutorial:upload), never in git.
-tutorials/**/*.lopsy
+apps/lopsy-web/tutorials/**/*.lopsy
 *.local
 .DS_Store
 storybook-static
 
 # Rust build artifacts
 engine/target/
-src/engine-wasm/pkg/
-src/engine-wasm/pkg-wgpu/
+apps/lopsy-web/src/engine-wasm/pkg/
+apps/lopsy-web/src/engine-wasm/pkg-wgpu/
 
 # Playwright test artifacts
 test-results/
 # Engine-output checkpoints from npm run parity:record / parity:check
 .parity/
 # Step screenshots the parity compositions write on every run
-e2e/screenshots/comp2-*.png
-e2e/screenshots/koi-fish-*.png
+apps/lopsy-web/e2e/screenshots/comp2-*.png
+apps/lopsy-web/e2e/screenshots/koi-fish-*.png
 engine/test-output/
-tests/screenshots/
+apps/lopsy-web/tests/screenshots/
 
 .claude/worktrees
 
 # Local-only test samples (large RAF, kept out of the repo)
 /samples
 /samples/
-public/test-sample.raf
-e2e/screenshots/raf-import-error.png
-e2e/screenshots/raf-import.png
+apps/lopsy-web/public/test-sample.raf
+apps/lopsy-web/e2e/screenshots/raf-import-error.png
+apps/lopsy-web/e2e/screenshots/raf-import.png
 # Composition-run outputs (the run log, compositions/LAST_RUN.md, stays tracked)
-compositions/*.lopsy
-compositions/*.png
+apps/lopsy-web/compositions/*.lopsy
+apps/lopsy-web/compositions/*.png

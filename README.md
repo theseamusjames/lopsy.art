@@ -23,6 +23,16 @@ The rendering pipeline is GPU-accelerated via WebGL 2, compiled from Rust to Web
 
 Lopsy supports canvases up to 32,000 x 32,000 pixels, Display P3 wide-gamut color on supported displays, and pen tablet pressure sensitivity.
 
+## Repository layout
+
+| Path | What it is |
+| ---- | ---------- |
+| `apps/lopsy-web/` | The web app: React and TypeScript, its tests, and the site's tutorials and blog |
+| `engine/` | The Rust rendering engine, and the hosts that embed it: `hosts/wasm` for the browser, `hosts/cli` for the command line |
+| `docs/` | Documents about the repository as a whole |
+
+`npm` scripts run from the repository root, which forwards them to the app.
+
 ## Contributing
 
 PRs must pass four required CI checks before merge:
