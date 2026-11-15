@@ -1,12 +1,7 @@
 import { test, expect, type Page } from './fixtures';
-import {
-  waitForStore,
-  createDocument,
-  docToScreen,
-  addLayer,
-  setActiveLayer,
-  selectTool,
-} from './helpers';
+import { waitForStore, createDocument, docToScreen, addLayer, setActiveLayer, selectTool, skipOnWgpu } from './helpers';
+
+skipOnWgpu(test, 'counts uploads on the WebGL context');
 
 // Watchdog follow-ups on full-document GPU transfers inside key holds and
 // quick-mask moves:

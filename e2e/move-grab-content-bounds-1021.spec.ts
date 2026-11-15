@@ -1,14 +1,7 @@
 import { test, expect, type Page } from './fixtures';
-import {
-  waitForStore,
-  createDocument,
-  selectTool,
-  setToolOption,
-  setForegroundColor,
-  docToScreen,
-  undo,
-  getPixelAt,
-} from './helpers';
+import { waitForStore, createDocument, selectTool, setToolOption, setForegroundColor, docToScreen, undo, getPixelAt, skipOnWgpu } from './helpers';
+
+skipOnWgpu(test, 'counts readPixels on the WebGL context, and a click shorter than a readback does not start a grab on wgpu');
 
 /**
  * #1021 — a Move grab must not read the whole layer back to find its

@@ -1,13 +1,7 @@
 import { test, expect, type Page } from './fixtures';
-import {
-  waitForStore,
-  createDocument,
-  docToScreen,
-  addLayer,
-  setActiveLayer,
-  setForegroundColor,
-  selectTool,
-} from './helpers';
+import { waitForStore, createDocument, docToScreen, addLayer, setActiveLayer, setForegroundColor, selectTool, skipOnWgpu } from './helpers';
+
+skipOnWgpu(test, 'counts readPixels on the WebGL context');
 
 // #1018 — dragging a scale handle past the canvas grows the float on every
 // pointer-move, and each growth used to bump the layer's pixel version. The

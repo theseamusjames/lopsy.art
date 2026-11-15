@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { installSettledWaits } from './parity';
 
 // ---------------------------------------------------------------------------
 // Store access — typed wrapper to avoid repeating the cast boilerplate
@@ -74,6 +75,8 @@ export async function createDocument(page: Page, width = 400, height = 300, tran
 }
 
 export async function waitForStore(page: Page): Promise<void> {
+  // Specs that take `test` straight from Playwright get no fixture.
+  installSettledWaits(page);
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
 }
 
@@ -986,4 +989,14 @@ export async function loseAndRestoreGraphics(page: Page, settleMs = 1500): Promi
     await restored;
   });
   await page.waitForTimeout(settleMs);
+}
+
+/**
+ * Skip a spec file on the wgpu build (`LOPSY_RENDERER=wgpu`) when what it
+ * asserts is how the WebGL backend does something: it counts `readPixels`,
+ * `texSubImage2D` or `scissor` calls on the WebGL context, which the wgpu
+ * build never makes. Call it at the top of the file with why.
+ */
+export function skipOnWgpu(test: { skip: (condition: boolean, description: string) => void }, why: string): void {
+  test.skip(process.env.LOPSY_RENDERER === 'wgpu', `WebGL only: ${why}`);
 }

@@ -36,23 +36,68 @@ interface CheckpointRecord {
 }
 
 /**
- * Wait for the engine to finish what a readback started. On wgpu a
- * readback answers some frames later, and what follows it (the crop of a
- * layer left behind, a thumbnail) has not happened until it does; on WebGL
- * the same work ran the moment it was asked for. Recording before then
- * compares a document mid-change with a finished one.
+ * Wait for the engine to be where a WebGL engine already is when a spec
+ * next looks at it. Two things take time on wgpu and none on WebGL:
+ *
+ * - Starting. WebGL creates the engine in one blocking call, so a spec
+ *   cannot act between a document appearing and its engine existing. The
+ *   wgpu engine waits for an adapter and a device first.
+ * - Readbacks. One answers some frames later, and what follows it (a
+ *   bucket fill, the crop of a layer left behind, a thumbnail) has not
+ *   happened until it does.
+ *
+ * Recording or asserting before then compares a document mid-change with
+ * a finished one.
  */
-export async function settleEngine(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const parked = (window as unknown as { __parkedReadbacks?: () => number }).__parkedReadbacks;
+export async function settleEngine(
+  page: Page,
+  evaluate: Page['evaluate'] = page.evaluate.bind(page),
+): Promise<void> {
+  await evaluate(async () => {
+    const w = window as unknown as { __parkedReadbacks?: () => number; __engineStarted?: () => Promise<unknown> };
+    await w.__engineStarted?.();
+    const parked = w.__parkedReadbacks;
     if (!parked || parked() === 0) return;
-    const deadline = performance.now() + 5000;
+    const deadline = performance.now() + 30_000;
     // What a readback's answer sets off may read back in turn.
     while (parked() > 0 && performance.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
   });
+}
+
+const settledPages = new WeakSet<Page>();
+
+/**
+ * On WebGL a bucket fill, Define Pattern, a mode conversion or the crop of
+ * a layer left behind has finished by the time the call that asked for it
+ * returns, and specs lean on that: they act, then look. On wgpu the
+ * readback behind each of those answers some frames later. So with
+ * `LOPSY_RENDERER=wgpu`, before a spec looks at the page (`evaluate`) and
+ * after it waits (`waitForTimeout`, `waitForSelector`), the engine is
+ * settled first (`settleEngine`). Does nothing on WebGL, or twice.
+ */
+export function installSettledWaits(page: Page): void {
+  if (process.env.LOPSY_RENDERER !== 'wgpu' || settledPages.has(page)) return;
+  settledPages.add(page);
+  const evaluate = page.evaluate.bind(page);
+  const wait = page.waitForTimeout.bind(page);
+  const waitForSelector = page.waitForSelector.bind(page);
+  const settle = () => settleEngine(page, evaluate).catch(() => undefined);
+  page.evaluate = (async (...args: Parameters<typeof evaluate>) => {
+    await settle();
+    return evaluate(...args);
+  }) as typeof page.evaluate;
+  page.waitForTimeout = async (timeout: number) => {
+    await wait(timeout);
+    await settle();
+  };
+  page.waitForSelector = (async (...args: Parameters<typeof waitForSelector>) => {
+    const found = await waitForSelector(...args);
+    await settle();
+    return found;
+  }) as typeof page.waitForSelector;
 }
 
 export async function parityCheckpoint(page: Page, composition: string, name: string): Promise<void> {

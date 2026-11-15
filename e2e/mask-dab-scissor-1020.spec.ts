@@ -1,5 +1,7 @@
 import { test, expect, type Page } from './fixtures';
-import { waitForStore, createDocument, selectTool, setToolOption, docToScreen, setForegroundColor } from './helpers';
+import { waitForStore, createDocument, selectTool, setToolOption, docToScreen, setForegroundColor, skipOnWgpu } from './helpers';
+
+skipOnWgpu(test, 'records scissor rects set on the WebGL context');
 
 /**
  * #1020 — layer-mask and Quick Mask brush dabs are scissored to each

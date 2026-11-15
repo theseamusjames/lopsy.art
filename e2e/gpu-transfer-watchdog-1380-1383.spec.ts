@@ -1,14 +1,7 @@
 import { test, expect, type Page } from './fixtures';
-import {
-  waitForStore,
-  createDocument,
-  docToScreen,
-  addLayer,
-  setActiveLayer,
-  setForegroundColor,
-  selectTool,
-  getPixelAt,
-} from './helpers';
+import { waitForStore, createDocument, docToScreen, addLayer, setActiveLayer, setForegroundColor, selectTool, getPixelAt, skipOnWgpu } from './helpers';
+
+skipOnWgpu(test, 'counts uploads and readPixels on the WebGL context');
 
 // Watchdog follow-ups on GPU transfers made inside interactive gestures:
 // #1380 growing a layer read it back to the CPU as FLOAT and re-uploaded it,

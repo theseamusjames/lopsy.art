@@ -601,6 +601,8 @@ test.describe('Document color mode', () => {
     await selectColorMode(page, 'Lab Color');
     await openColorPanel(page);
 
+    // The conversion finishes when its readbacks do; the sliders follow it.
+    await expect(page.locator('[class*="sliders"] span[class*="label"]').first()).toHaveText('L');
     const sliderLabels = await page.locator('[class*="sliders"] span[class*="label"]').allTextContents();
     expect(sliderLabels).toContain('L');
     expect(sliderLabels).toContain('a');
@@ -662,6 +664,8 @@ test.describe('Document color mode', () => {
     await selectColorMode(page, 'CMYK Color');
     await openColorPanel(page);
 
+    // The conversion finishes when its readbacks do; the sliders follow it.
+    await expect(page.locator('[class*="sliders"] span[class*="label"]').first()).toHaveText('C');
     const labels = await page.locator('[class*="sliders"] span[class*="label"]').allTextContents();
     expect(labels).toEqual(expect.arrayContaining(['C', 'M', 'Y', 'K']));
     expect(labels).not.toContain('R');
