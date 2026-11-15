@@ -573,10 +573,8 @@ about it:
 - **Losing the GPU**: use `loseAndRestoreGraphics(page)` from `helpers.ts`,
   which loses the WebGL context or destroys the WebGPU device, whichever
   the page has, with `allowConsoleErrors: GRAPHICS_LOSS_ERRORS`.
-- **Pixels**: document pixels match WebGL to within 1 per channel. Screen
-  pixels can also differ where a pixel centre lands exactly on a texel
-  boundary (a one-pixel column at the document's edge, say), so probe a
-  pixel or two inside an edge, not on it.
+- **Pixels**: document and screen pixels match WebGL to within 1 per
+  channel, so compare with a tolerance of at least 1.
 
 `LOPSY_GPU=hardware` runs the chromium project on the machine's GPU instead
 of SwiftShader, for specs that measure time (`brush-perf-6k`).
