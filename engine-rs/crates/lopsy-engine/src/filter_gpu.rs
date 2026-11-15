@@ -2,11 +2,9 @@ use crate::engine::EngineInner;
 use crate::gpu::framebuffer::FramebufferHandle;
 use crate::gpu::pass::{Pass, Target};
 use crate::gpu::read::Read;
-use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
-use crate::imaging::Imaging;
+use crate::imaging::{Imaging, Scratch, Staged};
 use crate::gpu::texture_pool::TextureHandle;
-use crate::gpu::uniforms::Uniforms;
-use crate::gpu::params::filters::{PixelateBlocksParams, PixelateParams, SelectionMaskBlendParams};
+use crate::gpu::params::filters::SelectionMaskBlendParams;
 
 /// Blend the filtered result with the original layer texture
 /// using the selection mask. Writes the blended result back to the layer texture.
@@ -128,7 +126,9 @@ pub fn end_mask_filter_target(engine: &mut EngineInner) {
     let Some(target) = engine.mask_filter_target.take() else { return };
     let id = target.layer_id.as_str();
 
-    apply_filter_full_layer(engine, id, |s| &s.mask_luminance, ());
+    // The whole mask, selection or not, grown to the document like any
+    // filtered layer.
+    apply_filter_inner(engine, id, |im, tex| im.gpu.pass(&im.shaders.mask_luminance, ()).texture("u_tex", tex), false, true);
 
     let (cur_x, cur_y) = engine.layer_stack.iter()
         .find(|l| l.id == id)
@@ -161,48 +161,6 @@ pub fn end_mask_filter_target(engine: &mut EngineInner) {
     engine.mark_layer_dirty(id);
 }
 
-/// Write a filter result that a multi-pass filter left in scratch A back
-/// into the layer. With a selection active the untouched layer is copied
-/// into scratch B and the two are mixed through the selection mask, as
-/// `apply_filter` does; otherwise scratch A is blitted over the layer.
-/// Scratch B is overwritten, so callers must be done with it.
-pub(crate) fn commit_scratch_a_to_layer(engine: &mut EngineInner, layer_id: &str) {
-    let tex_handle = match engine.layer_textures.get(layer_id) {
-        Some(&h) => h,
-        None => return,
-    };
-    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    if engine.texture_pool.get(tex_handle).is_none() {
-        return;
-    }
-
-    if engine.selection_mask_texture.is_some() {
-        let scratch_fbo_b = engine.scratch_fbo_b;
-        copy_layer_to_scratch(engine, layer_id, scratch_fbo_b);
-        let scratch_a = engine.scratch_texture_a;
-        let scratch_b = engine.scratch_texture_b;
-        blend_with_selection_mask(engine, layer_id, scratch_a, scratch_b);
-    } else {
-        blit_scratch_to(engine, engine.scratch_texture_a, tex_handle, w, h);
-    }
-
-    engine.mark_layer_dirty(layer_id);
-}
-
-/// Apply a shader program to a layer's texture (read from layer, render to scratch, copy back),
-/// with the layer bound as `u_tex` and `params` as the shader's uniforms.
-///
-/// `get_shader` is called lazily to borrow the shader from the engine — this lets callers
-/// pass e.g. `|s| &s.noise` without fighting the borrow checker.
-pub fn apply_filter<P: Uniforms>(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
-    params: P,
-) {
-    apply_filter_inner(engine, layer_id, |im, tex| im.gpu.pass(get_shader(im.shaders), params).texture("u_tex", tex), true, true);
-}
-
 /// Apply an imaging operation to a layer: `op` is handed the layer's
 /// texture and returns the pass that filters it.
 pub fn apply_op<P>(
@@ -213,56 +171,58 @@ pub fn apply_op<P>(
     apply_filter_inner(engine, layer_id, op, true, true);
 }
 
-/// [`apply_filter`] for a shader that samples a second texture through
-/// `sampler`. With no texture to give it, the sampler is pointed at the
-/// unit after the layer's with nothing bound.
-pub fn apply_filter_with_texture<P: Uniforms>(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
-    params: P,
-    sampler: &str,
-    texture: Option<TextureHandle>,
-) {
-    apply_filter_inner(
-        engine,
-        layer_id,
-        |im, tex| {
-            let pass = im.gpu.pass(get_shader(im.shaders), params).texture("u_tex", tex);
-            match texture {
-                Some(texture) => pass.texture(sampler, texture),
-                None => pass.sampler_unit(sampler, 1),
-            }
-        },
-        true,
-        true,
-    );
-}
-
-/// Like `apply_filter`, but always transforms the whole layer even when a
-/// selection is active. Document-wide operations (color mode conversion) must
-/// not leave part of a layer in the old color space.
-pub fn apply_filter_full_layer<P: Uniforms>(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
-    params: P,
-) {
-    apply_filter_inner(engine, layer_id, |im, tex| im.gpu.pass(get_shader(im.shaders), params).texture("u_tex", tex), false, true);
-}
-
-/// Like `apply_filter_full_layer`, for shaders that read only the texel
-/// they write (colour matrices). The layer keeps its texture origin and
-/// size: growing it to the document would re-origin the texture behind the
+/// [`apply_op`] for an operation that reads only the texel it writes (a
+/// colour matrix), run on the whole layer even when a selection is active:
+/// a document-wide change (a colour mode conversion) must not leave part
+/// of a layer as it was. The layer keeps its texture origin and size:
+/// growing it to the document would re-origin the texture behind the
 /// caller's back, and a caller that then pushes the layer's old cropped
 /// `x`/`y` draws the content at twice its offset (#1367).
-pub fn apply_pointwise_filter_full_layer<P: Uniforms>(
+pub fn apply_pointwise_op_full_layer<P>(
     engine: &mut EngineInner,
     layer_id: &str,
-    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
-    params: P,
+    op: impl for<'a> FnOnce(Imaging<'a>, TextureHandle) -> Pass<'a, P>,
 ) {
-    apply_filter_inner(engine, layer_id, |im, tex| im.gpu.pass(get_shader(im.shaders), params).texture("u_tex", tex), false, false);
+    apply_filter_inner(engine, layer_id, op, false, false);
+}
+
+/// Apply an imaging operation of several passes to a layer. `op` is handed
+/// the layer's texture, its size and the engine's scratch targets, and
+/// says which of them it left the result in; that is written back to the
+/// layer, through the selection mask when there is one.
+pub fn apply_staged(
+    engine: &mut EngineInner,
+    layer_id: &str,
+    op: impl FnOnce(Imaging<'_>, TextureHandle, (u32, u32), Scratch) -> Staged,
+) {
+    // Scratch targets are sized to the document. See `apply_filter_inner`.
+    let _ = engine.ensure_layer_full_size(layer_id);
+
+    let tex_handle = match engine.layer_textures.get(layer_id) {
+        Some(&h) => h,
+        None => return,
+    };
+    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
+    if engine.texture_pool.get(tex_handle).is_none() {
+        return;
+    }
+
+    let scratch = engine.scratch();
+    let (result, other) = match op(engine.imaging(), tex_handle, (w, h), scratch) {
+        Staged::A => (scratch.a, scratch.b),
+        Staged::B => (scratch.b, scratch.a),
+    };
+
+    if engine.selection_mask_texture.is_some() {
+        // The layer still holds the original: save it in the other scratch
+        // target and mix the two through the selection mask (#1176).
+        copy_layer_to_scratch(engine, layer_id, other.framebuffer);
+        blend_with_selection_mask(engine, layer_id, result.texture, other.texture);
+    } else {
+        blit_scratch_to(engine, result.texture, tex_handle, w, h);
+    }
+
+    engine.mark_layer_dirty(layer_id);
 }
 
 /// `start_pass` starts the filter's pass with the layer texture it is
@@ -322,109 +282,6 @@ fn apply_filter_inner<P>(
     }
 
     engine.mark_layer_dirty(layer_id);
-}
-
-/// Two-pass separable blur (horizontal then vertical). `params` gives the
-/// shader's uniforms for a blur along the direction it is handed.
-/// Used for both Gaussian and box blur.
-pub fn apply_separable_blur<P: Uniforms>(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    get_shader: impl Fn(&ShaderPrograms) -> &ShaderProgram<P>,
-    params: impl Fn([f32; 2]) -> P,
-) {
-    // See note in apply_filter: ensure layer/scratch dimensions match so
-    // pass 2 doesn't sample garbage outside the layer's sub-region.
-    let _ = engine.ensure_layer_full_size(layer_id);
-
-    let has_selection = engine.selection_mask_texture.is_some();
-
-    let tex_handle = match engine.layer_textures.get(layer_id) {
-        Some(&h) => h,
-        None => return,
-    };
-    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    if engine.texture_pool.get(tex_handle).is_none() {
-        return;
-    }
-
-    // Pass 1: horizontal (layer -> scratch A)
-    engine.pass(get_shader(&engine.shaders), params([1.0, 0.0]))
-        .texture("u_tex", tex_handle)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Framebuffer(engine.scratch_fbo_a));
-
-    // Pass 2: vertical (scratch A -> scratch B)
-    engine.pass(get_shader(&engine.shaders), params([0.0, 1.0]))
-        .texture("u_tex", engine.scratch_texture_a)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Framebuffer(engine.scratch_fbo_b));
-
-    commit_scratch_b(engine, layer_id, tex_handle, w, h, has_selection);
-}
-
-/// Write a filter result held in scratch B back to the layer — through the
-/// selection mask when there is one. The layer texture must still hold the
-/// original pixels; scratch A is overwritten.
-fn commit_scratch_b(
-    engine: &mut EngineInner,
-    layer_id: &str,
-    layer: TextureHandle,
-    w: u32,
-    h: u32,
-    has_selection: bool,
-) {
-    if has_selection {
-        // Save the original layer to scratch A (layer still untouched).
-        let scratch_fbo_a = engine.scratch_fbo_a;
-        copy_layer_to_scratch(engine, layer_id, scratch_fbo_a);
-        // Blend: filtered (scratch B) with original (scratch A) using selection mask → layer
-        let scratch_b = engine.scratch_texture_b;
-        let scratch_a = engine.scratch_texture_a;
-        blend_with_selection_mask(engine, layer_id, scratch_b, scratch_a);
-    } else {
-        // Copy scratch B back to layer texture (original path)
-        blit_scratch_to(engine, engine.scratch_texture_b, layer, w, h);
-    }
-
-    engine.mark_layer_dirty(layer_id);
-}
-
-/// Pixelate (#1167): every pixel of the source footprint takes its block's
-/// alpha-weighted mean colour and the mean alpha of the block's covered
-/// pixels. Pass 1 reduces each block to one texel of scratch A (each layer
-/// texel is read once, whatever the block size); pass 2 expands the blocks
-/// into scratch B, masked by the source alpha.
-pub fn apply_pixelate(engine: &mut EngineInner, layer_id: &str, block_size: u32) {
-    let _ = engine.ensure_layer_full_size(layer_id);
-
-    let has_selection = engine.selection_mask_texture.is_some();
-
-    let tex_handle = match engine.layer_textures.get(layer_id) {
-        Some(&h) => h,
-        None => return,
-    };
-    let (w, h) = engine.texture_pool.get_size(tex_handle).unwrap_or((1, 1));
-    if engine.texture_pool.get(tex_handle).is_none() {
-        return;
-    }
-    let blocks_w = w.div_ceil(block_size);
-    let blocks_h = h.div_ceil(block_size);
-
-    // Pass 1: block averages (layer -> scratch A, blocks_w x blocks_h)
-    engine.pass(&engine.shaders.pixelate_blocks, PixelateBlocksParams { block_size: block_size as i32 })
-        .texture("u_tex", tex_handle)
-        .viewport(0, 0, blocks_w as i32, blocks_h as i32)
-        .draw(Target::Framebuffer(engine.scratch_fbo_a));
-
-    // Pass 2: expand blocks over the source footprint (-> scratch B, w x h)
-    engine.pass(&engine.shaders.pixelate, PixelateParams { block_size: block_size as i32 })
-        .texture("u_tex", tex_handle)
-        .texture("u_blocks", engine.scratch_texture_a)
-        .viewport(0, 0, w as i32, h as i32)
-        .draw(Target::Framebuffer(engine.scratch_fbo_b));
-
-    commit_scratch_b(engine, layer_id, tex_handle, w, h, has_selection);
 }
 
 /// GPU-side box-downscaled thumbnail for one channel of a layer texture, as

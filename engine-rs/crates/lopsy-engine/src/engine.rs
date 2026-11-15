@@ -9,7 +9,7 @@ use crate::gpu::pass::{Blend, GpuRef, Pass, ReadFormat};
 use crate::gpu::read::Read;
 use crate::gpu::shader::{ShaderProgram, ShaderPrograms};
 use crate::gpu::uniforms::Uniforms;
-use crate::imaging::Imaging;
+use crate::imaging::{Imaging, Scratch, ScratchTarget};
 use crate::gpu::texture_pool::{TextureHandle, TexturePool};
 
 /// Magnetic-lasso state: a precomputed Sobel edge field that the snap
@@ -772,6 +772,16 @@ impl EngineInner {
     /// What a stateless imaging operation draws with. See `imaging`.
     pub fn imaging(&self) -> Imaging<'_> {
         Imaging { gpu: self.gpu(), shaders: &self.shaders }
+    }
+
+    /// The engine's two scratch targets, for an imaging operation of
+    /// several passes. They are the size `ensure_scratch_size` last gave
+    /// them: the document's, or a layer's.
+    pub fn scratch(&self) -> Scratch {
+        Scratch {
+            a: ScratchTarget { texture: self.scratch_texture_a, framebuffer: self.scratch_fbo_a },
+            b: ScratchTarget { texture: self.scratch_texture_b, framebuffer: self.scratch_fbo_b },
+        }
     }
 
     /// The GPU objects a [`Pass`] draws with.

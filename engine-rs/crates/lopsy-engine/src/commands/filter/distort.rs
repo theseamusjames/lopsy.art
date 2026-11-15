@@ -2,9 +2,9 @@
 
 
 use crate::engine::EngineInner;
-use crate::filter_gpu;
+use crate::{filter_gpu, imaging};
 use crate::gpu::pass::{Blend, Target};
-use crate::gpu::params::filters::{LiquifyDabParams, LiquifyWarpParams, MeshWarpParams};
+use crate::gpu::params::filters::{LiquifyDabParams, LiquifyWarpParams};
 
 pub fn filter_mesh_warp(
     engine: &mut EngineInner,
@@ -28,26 +28,17 @@ pub fn filter_mesh_warp(
     let _ = engine.texture_pool.upload_rgba(grid_handle, 0, 0, grid_width, grid_height, grid_data,
     );
 
-    // The shader reads grid points with texelFetch and interpolates the
-    // decoded 16-bit offsets itself: hardware filtering would blend the high
-    // and low bytes separately at the texture's own precision (#1160).
-    let is_grid_live = engine.texture_pool.get(grid_handle).is_some();
-
-    let gw = grid_width as f32;
-    let gh = grid_height as f32;
-
-    filter_gpu::apply_filter_with_texture(
-        &mut *engine,
-        layer_id,
-        |s| &s.mesh_warp,
-        MeshWarpParams {
-            grid_size: [gw, gh],
-            bounds_min: [bounds_min_u, bounds_min_v],
-            bounds_max: [bounds_max_u, bounds_max_v],
-        },
-        "u_grid",
-        is_grid_live.then_some(grid_handle),
-    );
+    let grid = engine.texture_pool.get(grid_handle).is_some().then_some(grid_handle);
+    filter_gpu::apply_op(engine, layer_id, |im, src| {
+        imaging::filters::distort::mesh_warp(
+            im,
+            src,
+            grid,
+            (grid_width, grid_height),
+            [bounds_min_u, bounds_min_v],
+            [bounds_max_u, bounds_max_v],
+        )
+    });
 
     engine.texture_pool.release(grid_handle);
 }
