@@ -53,7 +53,13 @@ fn sampleMinified(texelPos: vec2<f32>, isSeamless: bool) -> vec4<f32> {
 
 @fragment
 fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
-    let screenPos = vec2<f32>(uv.x, 1.0 - uv.y) * params.u_resolution;
+    // The centre of this screen pixel, exactly, counted up from the bottom as
+    // WebGL's fragment position is. `uv` is interpolated, and its rounding
+    // error differs from one GPU to the next and between WebGL and WebGPU:
+    // where a pixel centre lands on a texel boundary (the document's edge, at
+    // many zooms) that error would decide which texel the pixel shows.
+    let pixel = floor(uv * params.u_resolution) + 0.5;
+    let screenPos = vec2<f32>(pixel.x, params.u_resolution.y - pixel.y);
 
     let center = params.u_resolution * 0.5;
     var canvasPos = (screenPos - center - params.u_pan) / params.u_zoom + params.u_docSize * 0.5;
@@ -125,12 +131,10 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
         color = mix(vec4<f32>(0.18, 0.18, 0.18, 1.0), color, 0.75);
     }
 
-    // The centre of this screen pixel, counted up from the bottom: what
-    // WebGL's fragment position is. WebGPU counts the screen's rows down,
-    // and the dither has to be the same pattern on both.
-    let seed = floor(uv * params.u_resolution) + 0.5;
-    let n0 = fract(sin(dot(seed, vec2<f32>(12.9898, 78.233))) * 43758.5453);
-    let n1 = fract(sin(dot(seed, vec2<f32>(63.7264, 10.873))) * 28637.1136);
+    // Seeded by the pixel, so the dither is the same pattern on both
+    // backends: WebGPU's own fragment position counts rows down.
+    let n0 = fract(sin(dot(pixel, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+    let n1 = fract(sin(dot(pixel, vec2<f32>(63.7264, 10.873))) * 28637.1136);
     let dither = (n0 + n1 - 1.0) / 255.0;
 
     return vec4<f32>(color.rgb + dither, color.a);
