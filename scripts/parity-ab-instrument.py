@@ -36,13 +36,14 @@ for name in specs:
     j = last_import
     while not src[j].rstrip().endswith(';'): j += 1
     helper = f"""// TEMP A/B instrumentation — not for commit
-import {{ parityCheckpoint as __parity }} from './parity';
+import {{ parityCheckpoint as __parity, settleEngine as __settle }} from './parity';
 import {{ test as __pwTest }} from '@playwright/test';
 import {{ mkdirSync as __mk, writeFileSync as __wf }} from 'node:fs';
 let __n = 0;
 async function __pc(page: import('@playwright/test').Page, tag = 'shot'): Promise<void> {{
   const out = process.env.PARITY_OUT;
   if (!out) return;
+  await __settle(page);
   const title = __pwTest.info().title.replace(/[^a-z0-9]+/gi, '-').slice(0, 60);
   const id = `${{title}}-${{String(__n++).padStart(2, '0')}}-${{tag}}`;
   const canvas = await page.evaluate(async () => {{
@@ -80,7 +81,7 @@ async function __pc(page: import('@playwright/test').Page, tag = 'shot'): Promis
       const out: Array<{{ name: string; sha256: string }}> = [];
       out.push({{ name: 'composite-thumbnail', sha256: await sha(await br.readCompositeThumbnail(engine, 256)) }});
       out.push({{ name: 'selection-mask', sha256: await sha(await br.readSelectionMask(engine)) }});
-      out.push({{ name: 'quick-mask', sha256: await sha(br.readQuickMaskPixels(engine)) }});
+      out.push({{ name: 'quick-mask', sha256: await sha(await br.readQuickMaskPixels(engine)) }});
       for (const [i, id] of doc.layerOrder.entries()) {{
         out.push({{ name: `layer-thumbnail:${{i}}`, sha256: await sha(await br.readLayerThumbnail(engine, id, 64)) }});
         for (let c = 0; c < 4; c++) {{

@@ -70,7 +70,36 @@ export function getEngineCanvas(): HTMLCanvasElement | null {
   return engineCanvas;
 }
 
-export async function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
+/** The engine being started, and the canvas it is for. */
+let starting: { canvas: HTMLCanvasElement; engine: Promise<Engine> } | null = null;
+
+/**
+ * Start the engine on `canvas`. A call made while one is already starting
+ * on the same canvas joins it: React's StrictMode mounts the canvas twice,
+ * and two engines on one canvas is one too many. On wgpu, where creating
+ * an engine takes real time, the second would also leave a stretch with no
+ * engine at all once the first is thrown away.
+ */
+export function initEngine(canvas: HTMLCanvasElement): Promise<Engine> {
+  if (starting?.canvas === canvas) return starting.engine;
+  const started = startEngine(canvas).finally(() => {
+    if (starting?.engine === started) starting = null;
+  });
+  starting = { canvas, engine: started };
+  return started;
+}
+
+/**
+ * The engine, once the one being started (if any) has started: null when
+ * none exists and none is on its way. WebGL creates an engine in one
+ * blocking call, so nothing can look in the meantime; wgpu waits for its
+ * adapter and device, and something can.
+ */
+export function engineStarted(): Promise<Engine | null> {
+  return starting ? starting.engine.catch(() => null) : Promise.resolve(engine);
+}
+
+async function startEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   await initWasm();
   import('../tools/brush/builtin-brushes').then((m) => m.loadBuiltinBitmapBrushes()).catch(() => {});
   const createStart = performance.now();

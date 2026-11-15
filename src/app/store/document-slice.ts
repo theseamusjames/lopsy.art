@@ -44,6 +44,7 @@ import { computeResizeImage, scaleGuidesForResize, scalePathsForResize } from '.
 import { computeConvertColorMode, layersWithPixels, paletteFromBytes, paletteToBytes } from './actions/convert-color-mode';
 import { colorModeLabel, convertColorToDocMode } from '../../utils/color-mode';
 import { getColorModeCapabilities } from '../../utils/color-mode-capabilities';
+import { runInOrder } from '../../utils/run-in-order';
 import { notifyInfo } from '../notifications-store';
 import { convertLayerToGrayscale, quantizeCompositeToPalette, applyPaletteToLayer, convertLayerToLab, convertLayerFromLab, bakeCmykGamut } from '../../engine-wasm/wasm-bridge';
 import { useToolSettingsStore } from '../tool-settings-store';
@@ -228,6 +229,13 @@ function syncPixelDataToGpu(
  * (Photoshop parity), so every layer-creating action is refused while that
  * mode is active. Returns true when the action may proceed.
  */
+/**
+ * A conversion reads the document's mode, reads layers back and then sets
+ * the mode. A WebGPU readback answers frames later, so a second conversion
+ * picked meanwhile would still see the old mode: it waits for the first.
+ */
+const convertColorModesInOrder = runInOrder();
+
 function allowLayerCreation(doc: { readonly colorMode: DocumentColorMode }): boolean {
   if (getColorModeCapabilities(doc.colorMode).canAddLayers) return true;
   notifyInfo(`${colorModeLabel(doc.colorMode)} mode does not support layers. Convert to RGB first.`);
@@ -978,7 +986,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     rerenderTransformedText(get, set);
   },
 
-  convertColorMode: async (newMode, options) => {
+  convertColorMode: (newMode, options) => convertColorModesInOrder(async () => {
     const s = get();
     if (s.document.colorMode === newMode) return;
 
@@ -1046,7 +1054,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     ts.setBackgroundColor(convertColorToDocMode(ts.backgroundColor, newMode, palette));
 
     s.notifyRender();
-  },
+  }),
 
   toggleLayerSelection: (id) => {
     const doc = get().document;

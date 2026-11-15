@@ -107,6 +107,12 @@ jobs:
       # Plain Node, no install: the script only runs cargo.
       - run: npm run wasm:test
 
+      # The wgpu backend's own tests: every uniform struct against the
+      # layout naga computed for its shader, and the render tests, which
+      # skip themselves on a runner with no GPU.
+      - name: Rust tests (wgpu backend)
+        run: cd engine-rs && cargo test -p lopsy-engine --features native
+
   wgsl-check:
     name: WGSL compiles on WebGPU
     runs-on: ubuntu-latest

@@ -7,7 +7,7 @@ import {
   setDocumentSize,
 } from '../../../engine-wasm/wasm-bridge';
 import { readLayerAsImageData } from '../../../engine-wasm/gpu-pixel-access';
-import { readLayerContentRectLocal } from '../../layer-content-rect';
+import { readLayerContentRectLocal, readLayerContentRectsLocal } from '../../layer-content-rect';
 import { pixelDataManager } from '../../../engine/pixel-data-manager';
 import { computeAutoTone, computeAutoContrast, computeAutoColor } from '../../../filters/auto-enhance';
 import type { Layer, GroupLayer, DocumentColorMode, TextLayer } from '../../../types';
@@ -124,10 +124,14 @@ async function flipGroup(engine: Engine, group: GroupLayer, axis: FlipAxis): Pro
   // Push pending store positions and JS pixels to the engine so the texture
   // rects and content bounds read below are current.
   flushLayerSync(before);
-  const contents = await Promise.all(leaves.map((l) => readLayerContentRectLocal(engine, l.id)));
+  const contents = await readLayerContentRectsLocal(engine, leaves.map((l) => l.id));
   if (getEngine() !== engine) return;
+  // A layer may have been cropped or moved while the bounds were being
+  // read, so where each one is comes from the store as it is now.
   const state = useEditorStore.getState();
-  const members: GroupFlipMember[] = leaves.map((l, i) => {
+  const current = new Map(state.document.layers.map((l) => [l.id, l]));
+  const members: GroupFlipMember[] = leaves.map((leaf, i) => {
+    const l = current.get(leaf.id) ?? leaf;
     const [, , width = 0, height = 0] = getLayerEngineBounds(engine, l.id);
     return { id: l.id, texture: { x: l.x, y: l.y, width, height }, content: contents[i] ?? null };
   });

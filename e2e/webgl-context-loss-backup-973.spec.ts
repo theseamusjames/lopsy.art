@@ -1,10 +1,10 @@
 import { test, expect, type Page } from './fixtures';
-import { createDocument, docToScreen, moveLayerTo, selectTool, setForegroundColor, waitForStore, getEditorState } from './helpers';
+import { createDocument, docToScreen, moveLayerTo, selectTool, setForegroundColor, waitForStore, getEditorState, GRAPHICS_LOSS_ERRORS, loseAndRestoreGraphics } from './helpers';
 
 // #973: layer pixels are backed up to the CPU when the window loses focus,
 // and restored behind a loading overlay after a WebGL context loss.
 
-test.use({ allowConsoleErrors: [/\[Lopsy\] WebGL context lost/] });
+test.use({ allowConsoleErrors: GRAPHICS_LOSS_ERRORS });
 
 async function dragDoc(page: Page, from: [number, number], to: [number, number]): Promise<void> {
   const a = await docToScreen(page, from[0], from[1]);
@@ -71,21 +71,6 @@ async function overlaysSeen(page: Page): Promise<string[]> {
   return page.evaluate(() => (window as unknown as { __overlaysSeen: string[] }).__overlaysSeen);
 }
 
-async function loseAndRestoreContext(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const canvas = document.querySelector('[data-testid="canvas-container"] canvas') as HTMLCanvasElement;
-    const ext = canvas.getContext('webgl2')!.getExtension('WEBGL_lose_context')!;
-    const restored = new Promise<void>((resolve) => {
-      canvas.addEventListener('webglcontextrestored', () => resolve(), { once: true });
-    });
-    ext.loseContext();
-    await new Promise((r) => setTimeout(r, 300));
-    ext.restoreContext();
-    await restored;
-  });
-  await page.waitForTimeout(1500);
-}
-
 test.describe('WebGL context loss backup (#973)', () => {
   test.beforeEach(async ({ page, isMobile }) => {
     test.skip(isMobile, 'uses the desktop Edit menu');
@@ -110,7 +95,7 @@ test.describe('WebGL context loss backup (#973)', () => {
     expect((await compositeAt(page, 300, 150))[2]).toBeGreaterThan(180);
 
     await watchLoadingOverlay(page);
-    await loseAndRestoreContext(page);
+    await loseAndRestoreGraphics(page);
 
     expect(await overlaysSeen(page)).toContain('Restoring your layers after a graphics reset…');
     await expect(page.getByRole('dialog', { name: /Restoring your layers/ })).toHaveCount(0);
@@ -152,7 +137,7 @@ test.describe('WebGL context loss backup (#973)', () => {
     expect((await compositeAt(page, 250, 200))[0]).toBeGreaterThan(180);
     expect((await compositeAt(page, 100, 100))[1]).toBeGreaterThan(180);
 
-    await loseAndRestoreContext(page);
+    await loseAndRestoreGraphics(page);
 
     // The move came after the backup, so the square is back at its old spot.
     const back = await compositeAt(page, 100, 100);
@@ -167,7 +152,7 @@ test.describe('WebGL context loss backup (#973)', () => {
     test.setTimeout(120_000);
     await setForegroundColor(page, 200, 0, 0);
     await marqueeFill(page, 50, 50, 150, 150);
-    await loseAndRestoreContext(page);
+    await loseAndRestoreGraphics(page);
     const toasts = page.locator('[role="status"][aria-live="polite"]');
     await expect(toasts).toContainText('could not be recovered');
   });

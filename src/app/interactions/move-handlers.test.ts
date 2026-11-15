@@ -830,6 +830,8 @@ describe('a whole-layer grab whose content bounds are still being read', () => {
   beforeEach(() => {
     uiState.maskMode = 'off';
     contentRects.isMeasured = false;
+    vi.mocked(editorState.pushHistory).mockClear();
+    vi.mocked(editorState.updateLayerPosition).mockClear();
     vi.mocked(bridge.cropLayerToContent).mockReset();
     vi.mocked(bridge.cropLayerToContent).mockReturnValue(new Float64Array([4, 5, 12, 8]));
   });
@@ -858,16 +860,65 @@ describe('a whole-layer grab whose content bounds are still being read', () => {
     expect(state.layerStartY).toBe(5);
   });
 
-  it('drops the drag when the pointer is released before the bounds arrive', async () => {
+  it('finishes the drag when the pointer is released before the bounds arrive', async () => {
     const ctx = makeGrabContext();
     const state = handleMoveDown(ctx);
     handleMoveUp(state, { x: 14, y: 10 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+    expect(editorState.updateLayerPosition).not.toHaveBeenCalled();
 
     contentRects.finishRead();
     await settle();
 
-    expect(bridge.cropLayerToContent).not.toHaveBeenCalled();
+    // Cropped to (4, 5), then dragged 4 px right from where it was pressed.
+    expect(bridge.cropLayerToContent).toHaveBeenCalledTimes(1);
+    expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+    expect(editorState.pushHistory).toHaveBeenCalledWith('Move');
+    expect(editorState.updateLayerPosition).toHaveBeenCalledWith(layer.id, 8, 5);
+  });
+
+  it('goes to where the pointer got to when the bounds arrive after the last move', async () => {
+    const ctx = makeGrabContext();
+    const state = handleMoveDown(ctx);
+    handleMoveMove(state, { x: 12, y: 10 }, ctx.floatingSelectionRef);
+    handleMoveMove(state, { x: 14, y: 13 }, ctx.floatingSelectionRef);
+    expect(editorState.updateLayerPosition).not.toHaveBeenCalled();
+
+    contentRects.finishRead();
+    await settle();
+
+    expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+    expect(editorState.updateLayerPosition).toHaveBeenCalledTimes(1);
+    expect(editorState.updateLayerPosition).toHaveBeenCalledWith(layer.id, 8, 8);
+
+    // The release adds nothing: the layer is already where it was dropped.
+    handleMoveUp(state, { x: 14, y: 13 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+    expect(editorState.pushHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it('records nothing for a click released before the bounds arrive', async () => {
+    const ctx = makeGrabContext();
+    const state = handleMoveDown(ctx);
+    handleMoveUp(state, { x: 10, y: 10 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+
+    contentRects.finishRead();
+    await settle();
+
+    expect(editorState.pushHistory).not.toHaveBeenCalled();
+    expect(editorState.updateLayerPosition).not.toHaveBeenCalled();
+  });
+
+  it('drops a released drag when another press comes before the bounds arrive', async () => {
+    const ctx = makeGrabContext();
+    const state = handleMoveDown(ctx);
+    handleMoveUp(state, { x: 14, y: 10 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+    const second = handleMoveDown(makeGrabContext());
+
+    contentRects.finishRead();
+    await settle();
+
     expect(state.startPoint).toBeNull();
+    expect(second.startPoint).toEqual({ x: 10, y: 10 });
+    expect(editorState.updateLayerPosition).not.toHaveBeenCalled();
   });
 });
 
@@ -944,17 +995,19 @@ describe('a drag that has to reselect the layer first', () => {
     expect(ctx.floatingSelectionRef.current).not.toBeNull();
   });
 
-  it('drops the drag when the pointer is released before the reselect answers', async () => {
+  it('lifts and drops the selection when the pointer is released before the reselect answers', async () => {
     const ctx = makeReselectContext();
     const state = handleMoveDown(ctx);
     handleMoveUp(state, { x: 9, y: 6 }, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+    expect(bridge.floatSelection).not.toHaveBeenCalled();
 
     finishReselect();
     await settle();
 
-    expect(bridge.floatSelection).not.toHaveBeenCalled();
-    expect(ctx.floatingSelectionRef.current).toBeNull();
-    expect(state.startPoint).toBeNull();
+    expect(bridge.floatSelection).toHaveBeenCalledTimes(1);
+    expect(state.startPoint).toEqual({ x: 6, y: 6 });
+    expect(ctx.floatingSelectionRef.current?.offsetX).toBe(3);
+    expect(ctx.floatingSelectionRef.current?.offsetY).toBe(0);
   });
 });
 

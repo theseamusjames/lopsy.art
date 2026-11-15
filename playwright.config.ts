@@ -17,6 +17,13 @@ const checkoutRoot = dirname(fileURLToPath(import.meta.url));
 const portOffset = createHash('sha256').update(checkoutRoot).digest().readUInt16BE(0) % 1000;
 const port = Number(process.env.VITE_PORT ?? 41000 + portOffset);
 
+/**
+ * `LOPSY_RENDERER=wgpu` runs the suite on the wgpu build of the engine: the
+ * dev server loads it for every page (scripts/vite-plugin-renderer.ts), and
+ * headless Chromium needs these to offer WebGPU on SwiftShader.
+ */
+const webgpuArgs = process.env.LOPSY_RENDERER === 'wgpu' ? ['--enable-unsafe-webgpu', '--enable-unsafe-swiftshader'] : [];
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 600000,
@@ -39,6 +46,7 @@ export default defineConfig({
             '--enable-webgl',
             '--enable-webgl2-compute-context',
             '--ignore-gpu-blocklist',
+            ...webgpuArgs,
           ],
         },
       },
@@ -70,6 +78,7 @@ export default defineConfig({
             '--enable-webgl',
             '--enable-webgl2-compute-context',
             '--ignore-gpu-blocklist',
+            ...webgpuArgs,
           ],
         },
       },

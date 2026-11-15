@@ -1,5 +1,7 @@
 import { test, expect, type Page } from './fixtures';
-import { waitForStore, createDocument, selectTool, setToolOption, drawRect, docToScreen } from './helpers';
+import { waitForStore, createDocument, selectTool, setToolOption, drawRect, docToScreen, skipOnWgpu } from './helpers';
+
+skipOnWgpu(test, 'records scissor rects set on the WebGL context');
 
 /**
  * #1219 — Clone Stamp, Healing Brush, Smudge, Dodge / Burn and Sponge dabs

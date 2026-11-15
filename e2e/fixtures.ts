@@ -1,4 +1,5 @@
 import { test as base } from '@playwright/test';
+import { installSettledWaits } from './parity';
 
 export { expect } from '@playwright/test';
 export type { Page } from '@playwright/test';
@@ -44,8 +45,18 @@ export const test = base.extend<{
   allowConsoleErrors: RegExp[];
   _consoleErrorGuard: void;
   _layerImageReader: void;
+  _settledWaits: void;
 }>({
   allowConsoleErrors: [[], { option: true }],
+
+  // See `installSettledWaits`: only wgpu needs it.
+  _settledWaits: [
+    async ({ page }, use) => {
+      installSettledWaits(page);
+      await use();
+    },
+    { auto: true },
+  ],
 
   _layerImageReader: [
     async ({ page }, use) => {

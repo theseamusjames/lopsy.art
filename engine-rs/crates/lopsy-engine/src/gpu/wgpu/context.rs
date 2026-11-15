@@ -14,7 +14,8 @@ pub struct GpuContext {
     /// pools.
     pub(in crate::gpu) device: wgpu::Device,
     pub(in crate::gpu) queue: wgpu::Queue,
-    screen: Screen,
+    /// The canvas the engine presents to; a headless context has none.
+    screen: Option<Screen>,
     pub(in crate::gpu) draw: DrawState,
     pub has_half_float: bool,
     pub has_float_blend: bool,
@@ -172,27 +173,7 @@ impl GpuContext {
             })
             .await
             .map_err(|e| format!("WebGPU adapter: {e}"))?;
-
-        // WebGPU's default limit is 8192, below what the same GPU allows
-        // through WebGL. Ask for everything the adapter offers.
-        let max_texture_size = adapter.limits().max_texture_dimension_2d;
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                required_limits: wgpu::Limits {
-                    max_texture_dimension_2d: max_texture_size,
-                    ..wgpu::Limits::default()
-                },
-                ..Default::default()
-            })
-            .await
-            .map_err(|e| format!("WebGPU device: {e}"))?;
-        device.on_uncaptured_error(Arc::new(|error| {
-            host::log(LogLevel::Error, &format!("[Lopsy GPU] {error}"));
-        }));
-        device.set_device_lost_callback(|reason, message| {
-            host::log(LogLevel::Error, &format!("[Lopsy GPU] device lost ({reason:?}): {message}"));
-            host::gpu_lost(&message);
-        });
+        let (device, queue) = request_device(&adapter).await?;
 
         let (width, height) = canvas_size(canvas);
         let mut config = surface
@@ -207,24 +188,43 @@ impl GpuContext {
         host::log(
             LogLevel::Info,
             &format!(
-                "[Lopsy GPU] wgpu {:?}: surface {:?} {:?}, max texture {max_texture_size}",
+                "[Lopsy GPU] wgpu {:?}: surface {:?} {:?}, max texture {}",
                 adapter.get_info().backend,
                 config.format,
                 config.alpha_mode,
+                device.limits().max_texture_dimension_2d,
             ),
         );
 
+        let screen = Screen {
+            canvas: canvas.clone(),
+            surface,
+            config: RefCell::new(config),
+            frame: RefCell::new(None),
+        };
+        Self::on_device(device, queue, Some(screen))
+    }
+
+    /// A context with no canvas: it draws into textures and reads them
+    /// back, and a pass aimed at the screen draws nothing. For a host that
+    /// is not a page: render tests, and later export without a window.
+    pub async fn headless() -> Result<Self, String> {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .await
+            .map_err(|e| format!("GPU adapter: {e}"))?;
+        let (device, queue) = request_device(&adapter).await?;
+        Self::on_device(device, queue, None)
+    }
+
+    fn on_device(device: wgpu::Device, queue: wgpu::Queue, screen: Option<Screen>) -> Result<Self, String> {
         let draw = DrawState::new(&device, &queue)?;
         Ok(Self {
             device,
             queue,
             draw,
-            screen: Screen {
-                canvas: canvas.clone(),
-                surface,
-                config: RefCell::new(config),
-                frame: RefCell::new(None),
-            },
+            screen,
             // WebGPU requires `rgba16float` to be renderable, blendable and
             // filterable, so there is nothing to probe.
             has_half_float: true,
@@ -258,16 +258,16 @@ impl GpuContext {
         true
     }
 
-    /// Size of the canvas in device pixels.
-    pub(in crate::gpu) fn screen_size(&self) -> (u32, u32) {
-        canvas_size(&self.screen.canvas)
+    /// Size of the canvas in device pixels; `None` without a canvas.
+    pub(in crate::gpu) fn screen_size(&self) -> Option<(u32, u32)> {
+        self.screen.as_ref().map(|screen| canvas_size(&screen.canvas))
     }
 
     /// The view a screen pass draws into, starting a frame if none is in
     /// progress. `None` when the surface has no texture to give, which
     /// skips the frame.
     pub(in crate::gpu) fn screen_target(&self) -> Option<ScreenTarget> {
-        let screen = &self.screen;
+        let screen = self.screen.as_ref()?;
         let mut frame = screen.frame.borrow_mut();
         let is_first_pass = frame.is_none();
         if is_first_pass {
@@ -281,7 +281,7 @@ impl GpuContext {
 
     /// Hand the frame in progress, if any, to the canvas.
     pub(in crate::gpu) fn present(&self) {
-        if let Some(frame) = self.screen.frame.borrow_mut().take() {
+        if let Some(frame) = self.screen.as_ref().and_then(|screen| screen.frame.borrow_mut().take()) {
             self.queue.present(frame);
         }
     }
@@ -324,6 +324,31 @@ fn canvas_surface(instance: &wgpu::Instance, canvas: &HtmlCanvasElement) -> Resu
 #[cfg(not(target_arch = "wasm32"))]
 fn canvas_surface(_instance: &wgpu::Instance, _canvas: &HtmlCanvasElement) -> Result<wgpu::Surface<'static>, String> {
     Err("A canvas surface exists only in the browser".into())
+}
+
+/// Ask for a device with everything the adapter offers that the engine
+/// uses beyond WebGPU's defaults, and route its errors to the host.
+async fn request_device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::Queue), String> {
+    // WebGPU's default texture limit is 8192, below what the same GPU
+    // allows through WebGL.
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            required_limits: wgpu::Limits {
+                max_texture_dimension_2d: adapter.limits().max_texture_dimension_2d,
+                ..wgpu::Limits::default()
+            },
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| format!("GPU device: {e}"))?;
+    device.on_uncaptured_error(Arc::new(|error| {
+        host::log(LogLevel::Error, &format!("[Lopsy GPU] {error}"));
+    }));
+    device.set_device_lost_callback(|reason, message| {
+        host::log(LogLevel::Error, &format!("[Lopsy GPU] device lost ({reason:?}): {message}"));
+        host::gpu_lost(&message);
+    });
+    Ok((device, queue))
 }
 
 /// A surface cannot be zero-sized, which a canvas is while it is hidden.

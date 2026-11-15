@@ -292,12 +292,30 @@ function beginSelectionDrag(
 /** The press whose drag waits on a read of the GPU. */
 let heldPress: InteractionState | null = null;
 
+/** Where the pointer has got to since a held press, if it has moved. */
+let heldPointer: Point | null = null;
+
+/** Where and how a held press was released, when it was released first. */
+interface HeldRelease {
+  canvasPos: Point;
+  wholeLayerMoveLabel: string | null;
+}
+let heldRelease: HeldRelease | null = null;
+
+function dropHeldPress(): void {
+  heldPress = null;
+  heldPointer = null;
+  heldRelease = null;
+}
+
 /**
  * Hand a press back at once and begin its drag when `ready` resolves. The
- * gesture has no start point until then, so moves do nothing; from then on
- * the drag follows the pointer from where it was pressed, so no pointer
- * event waits on the read. A release, or another press, first drops the
- * drag, and so does `begin` returning null.
+ * gesture has no start point until then, so no pointer event waits on the
+ * read: moves and a release are noted, and when the drag begins it goes to
+ * where the pointer has got to and, if it was released, is finished there.
+ * A WebGL read answers before any pointer event, a WebGPU one a frame or
+ * more later, and a quick drag must move the layer on both. Another press
+ * first drops the drag, and so does `begin` returning null.
  */
 function holdPressUntil(
   ctx: InteractionContext,
@@ -316,14 +334,26 @@ function holdPressUntil(
     ...DEFAULT_TRANSFORM_FIELDS,
   }, {});
   heldPress = held;
+  heldPointer = null;
+  heldRelease = null;
   void ready.then(() => {
     if (heldPress !== held) return;
+    const release = heldRelease;
+    const pointer = release?.canvasPos ?? heldPointer;
     const begun = begin();
-    // Nothing to drag: the gesture stays held and the release drops it.
-    if (!begun) return;
-    heldPress = null;
+    if (!begun) {
+      // Nothing to drag: a held gesture stays held until its release.
+      if (release) dropHeldPress();
+      return;
+    }
+    dropHeldPress();
     Object.assign(held, begun);
-  }, () => {});
+    if (release) pendingWholeLayerMoveLabel = release.wholeLayerMoveLabel;
+    if (pointer) handleMoveMove(held, pointer, ctx.floatingSelectionRef);
+    if (release) handleMoveUp(held, release.canvasPos, ctx.floatingSelectionRef, ctx.persistentTransformRef);
+  }, () => {
+    if (heldPress === held) dropHeldPress();
+  });
   return held;
 }
 
@@ -375,6 +405,7 @@ function beginWholeLayerDragWhenMeasured(ctx: InteractionContext, activeLayerId:
 }
 
 export function handleMoveDown(ctx: InteractionContext): InteractionState {
+  dropHeldPress();
   // A drag that starts while an arrow key is still held needs the mask
   // where the ants are.
   flushNudgeMask();
@@ -681,7 +712,10 @@ export function handleMoveMove(
   canvasPos: Point,
   floatingSelectionRef: MutableRefObject<FloatingSelection | null>,
 ): void {
-  if (!state.startPoint) return;
+  if (!state.startPoint) {
+    if (heldPress === state) heldPointer = canvasPos;
+    return;
+  }
   const dragDx = Math.round(canvasPos.x - state.startPoint.x);
   const dragDy = Math.round(canvasPos.y - state.startPoint.y);
   // #444 — move-tool snapshots live on the `move` gesture variant.
@@ -808,14 +842,15 @@ export function handleMoveUp(
   _persistentTransformRef: MutableRefObject<PersistentTransform | null>,
 ): void {
   useUIStore.getState().clearSnapLines();
+  const wholeLayerMoveLabel = pendingWholeLayerMoveLabel;
   // Whole-layer down never followed by a move → no history entry, no state
   // change. Clear the pending label so a subsequent gesture starts fresh.
   pendingWholeLayerMoveLabel = null;
   endMaskFollow();
-  // Released before the read the press was held for answered: there is no
-  // drag to finish.
+  // Released before the read the press was held for answered: the drag is
+  // finished from here when it does (`holdPressUntil`).
   if (heldPress === state) {
-    heldPress = null;
+    heldRelease = { canvasPos, wholeLayerMoveLabel };
     return;
   }
 

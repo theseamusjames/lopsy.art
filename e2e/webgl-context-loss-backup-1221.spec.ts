@@ -1,12 +1,12 @@
 import { test, expect, type Page } from './fixtures';
-import { addLayer, createDocument, docToScreen, getEditorState, selectTool, setForegroundColor, waitForStore } from './helpers';
+import { addLayer, createDocument, docToScreen, getEditorState, selectTool, setForegroundColor, waitForStore, GRAPHICS_LOSS_ERRORS, loseAndRestoreGraphics } from './helpers';
 
 // #1221: leaving the window re-reads only the layers changed since the last
 // context-loss backup, in idle slices. #1222: a document over the backup cap
 // is not read again until it changes, nor when its unchanged layers alone
 // are known to exceed the cap.
 
-test.use({ allowConsoleErrors: [/\[Lopsy\] WebGL context lost/] });
+test.use({ allowConsoleErrors: GRAPHICS_LOSS_ERRORS });
 
 interface BackupStats {
   reads: number;
@@ -68,21 +68,6 @@ async function compositeAt(page: Page, docX: number, docY: number): Promise<numb
   }, { sx: screen.x, sy: screen.y });
 }
 
-async function loseAndRestoreContext(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const canvas = document.querySelector('[data-testid="canvas-container"] canvas') as HTMLCanvasElement;
-    const ext = canvas.getContext('webgl2')!.getExtension('WEBGL_lose_context')!;
-    const restored = new Promise<void>((resolve) => {
-      canvas.addEventListener('webglcontextrestored', () => resolve(), { once: true });
-    });
-    ext.loseContext();
-    await new Promise((r) => setTimeout(r, 300));
-    ext.restoreContext();
-    await restored;
-  });
-  await page.waitForTimeout(1500);
-}
-
 /** Two painted layers over the background: red on the first, blue on the active second. */
 async function paintTwoLayers(page: Page): Promise<void> {
   await addLayer(page);
@@ -126,7 +111,7 @@ test.describe('Incremental context-loss backup (#1221, #1222)', () => {
     expect(third.reads).toBe(second.reads);
     expect(third.committed).toBe(2);
 
-    await loseAndRestoreContext(page);
+    await loseAndRestoreGraphics(page);
     const toasts = page.locator('[role="status"][aria-live="polite"]');
     await expect(toasts).toContainText('Layers were recovered from the backup');
 
@@ -175,7 +160,7 @@ test.describe('Incremental context-loss backup (#1221, #1222)', () => {
     const fits = await leaveWindow(page);
     expect(fits.committed).toBe(1);
 
-    await loseAndRestoreContext(page);
+    await loseAndRestoreGraphics(page);
     const red = await compositeAt(page, 90, 90);
     expect(red[0]).toBeGreaterThan(180);
     expect(red[2]).toBeLessThan(60);

@@ -292,6 +292,9 @@ function renderFrame(
   renderFrameGpu(overlayCanvas, container, antPhaseRef, prevActiveLayerRef, croppedLayerIds);
 }
 
+/** Mounts of the engine canvas whose effect has run and not been cleaned up. */
+let liveCanvasMounts = 0;
+
 export function useCanvasRendering(
   canvasRef: RefObject<HTMLCanvasElement | null>,
   containerRef: RefObject<HTMLDivElement | null>,
@@ -359,12 +362,14 @@ export function useCanvasRendering(
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
 
+    liveCanvasMounts++;
     initEngine(canvas)
       .then((engine) => {
         if (cancelled) {
-          // Only destroy if this engine is still the current global engine.
-          // In StrictMode, a second mount may have already replaced it.
-          if (getEngine() === engine) {
+          // This mount is gone. In StrictMode a second mount of the same
+          // canvas has joined this engine's start and owns it now; with no
+          // mount left, nobody does.
+          if (liveCanvasMounts === 0 && getEngine() === engine) {
             destroyEngine();
           }
           return;
@@ -381,6 +386,7 @@ export function useCanvasRendering(
 
     return () => {
       cancelled = true;
+      liveCanvasMounts--;
       engineReadyRef.current = false;
       canvas.removeEventListener('webglcontextlost', handleContextLost);
       canvas.removeEventListener('webglcontextrestored', handleContextRestored);
