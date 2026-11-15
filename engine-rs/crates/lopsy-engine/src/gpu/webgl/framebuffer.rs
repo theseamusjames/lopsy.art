@@ -43,7 +43,7 @@ impl FramebufferPool {
         }
     }
 
-    pub fn bind(&self, handle: FramebufferHandle) {
+    pub(in crate::gpu) fn bind(&self, handle: FramebufferHandle) {
         let gl = &self.gl;
         if let Some(entry) = self.entries.get(handle.0) {
             gl.bind_framebuffer(WebGl2RenderingContext::FRAMEBUFFER, Some(&entry.fbo));
@@ -53,7 +53,7 @@ impl FramebufferPool {
     /// Copy the `(x, y, width, height)` region of `src`'s colour attachment
     /// to `dst_origin` in `dst`'s, texel for texel. Leaves both bound (read
     /// and draw); callers rebind or `unbind` afterwards.
-    pub fn blit_region(
+    pub(in crate::gpu) fn blit_region(
         &self,
         src: FramebufferHandle,
         dst: FramebufferHandle,

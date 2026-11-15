@@ -46,7 +46,7 @@ impl TexturePool {
 
     /// Verify RGBA16F is actually renderable on this GPU.
     /// Some browsers report the extension but the FBO is incomplete.
-    pub fn verify_float_renderable(gl: &WebGl2RenderingContext) -> bool {
+    pub(in crate::gpu) fn verify_float_renderable(gl: &WebGl2RenderingContext) -> bool {
         let tex = match gl.create_texture() {
             Some(t) => t,
             None => return false,
@@ -500,7 +500,7 @@ impl TexturePool {
     /// Read pixels from the currently-bound FBO as u16 RGBA.
     /// Preserves 16-bit precision from RGBA16F textures; losslessly
     /// upscales u8 data on RGBA8 textures.
-    pub fn read_rgba_u16(
+    pub(in crate::gpu) fn read_rgba_u16(
         &self,
         x: i32,
         y: i32,
@@ -588,7 +588,7 @@ impl TexturePool {
 
     /// Read pixels from the currently-bound FBO as u8 RGBA.
     /// Handles float→u8 conversion when using RGBA16F textures.
-    pub fn read_rgba(
+    pub(in crate::gpu) fn read_rgba(
         &self,
         x: i32,
         y: i32,

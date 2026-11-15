@@ -20,10 +20,10 @@ Read SPEC.md for the full product specification.
   for each.
 - `docs/engine-migration-plan.md` — the plan for moving the engine off
   raw WebGL onto a pass layer and then wgpu. Feature code must not add
-  raw GL calls outside `engine-rs/crates/lopsy-engine/src/gpu/`;
-  the WebGL context is private to that directory, and
+  raw GL calls outside
+  `engine-rs/crates/lopsy-engine/src/gpu/webgl/`, the WebGL backend:
   `scripts/check-gl-debt.mjs` (part of `npm run lint`) fails on any GL
-  type or call named outside it.
+  type or call named anywhere else, and the context is private to `gpu/`.
 
 ## Language & Types
 
@@ -151,14 +151,17 @@ engine-rs/
         overlay_renderer.rs # Grid, rulers, marching ants, brush cursor
         color_mgmt.rs     # ICC profile, wide-gamut support
         gpu/
-          context.rs      # WebGL2 context wrapper, extension detection
-          texture_pool.rs # Texture allocation, RGBA8/RGBA16F, upload/read
-          framebuffer.rs  # FBO pool for render-to-texture
-          shader.rs       # Shader compilation, program linking, the typed shader list
           pass.rs         # The pass layer: the only way feature code draws
+          shader.rs       # The typed shader list and the compiled programs
           uniforms.rs     # Typed uniform structs (`uniforms!`) and their checks
           params/         # One uniform struct per shader, grouped like shaders/
           shaders/        # WGSL source files (see below)
+          webgl/          # The WebGL2 backend: the only code that names WebGL
+            context.rs      # WebGL2 context wrapper, extension detection
+            texture_pool.rs # Texture allocation, RGBA8/RGBA16F, upload/read
+            framebuffer.rs  # FBO pool for render-to-texture
+            program.rs      # Shader compilation, linking, uniform upload
+            pass.rs         # What a pass does to the WebGL context
 ```
 
 ### Key Shaders

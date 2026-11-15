@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// Ban on raw WebGL in the Rust engine outside `gpu/`, per
-// docs/engine-migration-plan.md (Phase 1).
+// Ban on raw WebGL in the Rust engine outside `gpu/webgl/`, per
+// docs/engine-migration-plan.md (Phases 1 and 6).
 //
 // Feature code draws through the pass layer (`gpu/pass.rs`) and allocates
 // through the texture and framebuffer pools. The WebGL context itself is
 // private to `gpu/`, so most violations do not compile; this check also
-// catches GL types and constants named from outside it.
+// catches GL types and constants named from outside the WebGL backend,
+// which keeps the rest of `gpu/` the same for every backend.
 //
 // A "reference" is a `WebGl*` type or constant path, or a `gl.method(`
 // call.
@@ -20,7 +21,7 @@ const CRATES = join(ROOT, 'engine-rs', 'crates');
 const SCANNED = ['lopsy-engine', 'lopsy-wasm'];
 
 // The pass layer and its backend live here and are allowed raw GL.
-const BACKEND_DIR = 'lopsy-engine/src/gpu/';
+const BACKEND_DIR = 'lopsy-engine/src/gpu/webgl/';
 
 const PATTERN = /\bWebGl\w+|\bgl\.[a-z_0-9]+\(/g;
 
@@ -61,10 +62,10 @@ for (const [file, count] of counts) {
 }
 
 if (errors.length > 0) {
-  console.error('Raw GL outside gpu/:\n');
+  console.error('Raw GL outside gpu/webgl/:\n');
   for (const error of errors) console.error(`  ${error}`);
-  console.error('\nSee docs/engine-migration-plan.md (Phase 1).');
+  console.error('\nSee docs/engine-migration-plan.md (Phases 1 and 6).');
   process.exit(1);
 }
 
-console.log('No raw GL outside gpu/.');
+console.log('No raw GL outside gpu/webgl/.');
