@@ -8,7 +8,7 @@ import { usePatternStore } from './app/pattern-store';
 import { useShortcutStore } from './app/store/shortcut-store';
 import { useDockStore } from './panels/dock/dock-store';
 import { pixelDataManager } from './engine/pixel-data-manager';
-import { getEngine, getEngineCanvas } from './engine-wasm/engine-state';
+import { getEngine, getEngineCanvas, isWgpuRenderer } from './engine-wasm/engine-state';
 import { render as renderWasm, markAllDirty, readLayerPixels, getLayerTextureDimensions, initWasm, isFontLoaded, liveGpuSnapshotCount, effectCacheStats } from './engine-wasm/wasm-bridge';
 import {
   syncDocumentSize,
@@ -68,6 +68,36 @@ declare global {
   }
 }
 
+/**
+ * What a WebGPU canvas shows, in the shape WebGL's `readPixels` gives: bottom
+ * row first and premultiplied. A WebGPU canvas has no `readPixels`, but
+ * until the task that drew it ends it can be drawn into a 2D canvas, which
+ * hands back straight alpha, top row first.
+ */
+function readPresentedCanvas(canvas: HTMLCanvasElement): ReadPixelsResult {
+  const { width, height } = canvas;
+  const copy = document.createElement('canvas');
+  copy.width = width;
+  copy.height = height;
+  const ctx = copy.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(canvas, 0, 0);
+  const straight = ctx.getImageData(0, 0, width, height).data;
+  const pixels = new Array<number>(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const from = (height - 1 - y) * width * 4;
+    const to = y * width * 4;
+    for (let i = 0; i < width * 4; i += 4) {
+      const alpha = straight[from + i + 3] ?? 0;
+      pixels[to + i] = Math.round(((straight[from + i] ?? 0) * alpha) / 255);
+      pixels[to + i + 1] = Math.round(((straight[from + i + 1] ?? 0) * alpha) / 255);
+      pixels[to + i + 2] = Math.round(((straight[from + i + 2] ?? 0) * alpha) / 255);
+      pixels[to + i + 3] = alpha;
+    }
+  }
+  return { width, height, pixels };
+}
+
 // Expose stores for e2e tests
 if (import.meta.env.DEV) {
   window.__editorStore = useEditorStore;
@@ -107,6 +137,7 @@ if (import.meta.env.DEV) {
         // sees fresh drawing-buffer content in this same task.
         markAllDirty(engine);
         renderWasm(engine);
+        if (isWgpuRenderer()) { resolve(readPresentedCanvas(canvas)); return; }
         const gl = canvas.getContext('webgl2');
         if (!gl) { resolve(null); return; }
         const w = canvas.width;

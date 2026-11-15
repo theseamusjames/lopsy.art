@@ -1,11 +1,11 @@
 import { test, expect, type Page } from './fixtures';
-import { createDocument, docToScreen, setToolOption, waitForStore } from './helpers';
+import { createDocument, docToScreen, setToolOption, waitForStore, GRAPHICS_LOSS_ERRORS, loseAndRestoreGraphics } from './helpers';
 
 // #1088: the context-loss backup (#973) skipped text layers, assuming they
 // re-render from their model — but nothing re-rendered them on the fresh
 // engine, so every live text layer came back blank.
 
-test.use({ allowConsoleErrors: [/\[Lopsy\] WebGL context lost/] });
+test.use({ allowConsoleErrors: GRAPHICS_LOSS_ERRORS });
 
 interface TextRead { id: string; x: number; y: number; width: number; height: number; glyph: [number, number] | null; opaque: number }
 
@@ -46,21 +46,6 @@ async function compositeAt(page: Page, docX: number, docY: number): Promise<numb
   }, { sx: screen.x, sy: screen.y });
 }
 
-async function loseAndRestoreContext(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const canvas = document.querySelector('[data-testid="canvas-container"] canvas') as HTMLCanvasElement;
-    const ext = canvas.getContext('webgl2')!.getExtension('WEBGL_lose_context')!;
-    const restored = new Promise<void>((resolve) => {
-      canvas.addEventListener('webglcontextrestored', () => resolve(), { once: true });
-    });
-    ext.loseContext();
-    await new Promise((r) => setTimeout(r, 300));
-    ext.restoreContext();
-    await restored;
-  });
-  await page.waitForTimeout(1500);
-}
-
 test('a live text layer comes back after a context loss (#1088)', async ({ page, isMobile }) => {
   test.skip(isMobile, 'text tool options bar requires desktop viewport');
   test.setTimeout(180_000);
@@ -92,7 +77,7 @@ test('a live text layer comes back after a context loss (#1088)', async ({ page,
     return stats.committed > 0 && !stats.isPassPending;
   }), { timeout: 10_000 }).toBe(true);
 
-  await loseAndRestoreContext(page);
+  await loseAndRestoreGraphics(page);
   await expect(page.locator('[role="status"][aria-live="polite"]')).toContainText('Layers were recovered from the backup');
 
   const after = await readText(page);

@@ -943,3 +943,47 @@ export async function expectPointerReachable(locator: Locator): Promise<void> {
   });
   expect(isHitTarget, 'element is rendered but not the hit target at its own centre/corners').toBe(true);
 }
+
+/**
+ * Console errors the app logs when the GPU goes away under it. One pattern:
+ * Playwright reads a longer array given to `test.use` as a value with its
+ * options.
+ */
+export const GRAPHICS_LOSS_ERRORS = [
+  /\[Lopsy\] WebGL context lost|\[Lopsy\] WebGPU device lost|\[Lopsy GPU\] device lost/,
+];
+
+/**
+ * Take the GPU away from the engine and let it come back: lose and restore
+ * the WebGL context through `WEBGL_lose_context`, or destroy the WebGPU
+ * device, which the app answers with a new engine. Resolves once the app
+ * has had `settleMs` to rebuild.
+ */
+export async function loseAndRestoreGraphics(page: Page, settleMs = 1500): Promise<void> {
+  await page.evaluate(async () => {
+    const w = window as unknown as {
+      __wasmBridge: { rendererName: () => string; loseGpuDevice: (engine: unknown) => boolean };
+      __engineState: { getEngine: () => unknown };
+    };
+    if (w.__wasmBridge.rendererName() === 'wgpu') {
+      const lost = w.__engineState.getEngine();
+      w.__wasmBridge.loseGpuDevice(lost);
+      for (let i = 0; i < 400; i++) {
+        const engine = w.__engineState.getEngine();
+        if (engine && engine !== lost) return;
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      throw new Error('no engine replaced the one whose device was lost');
+    }
+    const canvas = document.querySelector('[data-testid="canvas-container"] canvas') as HTMLCanvasElement;
+    const ext = canvas.getContext('webgl2')!.getExtension('WEBGL_lose_context')!;
+    const restored = new Promise<void>((resolve) => {
+      canvas.addEventListener('webglcontextrestored', () => resolve(), { once: true });
+    });
+    ext.loseContext();
+    await new Promise((r) => setTimeout(r, 300));
+    ext.restoreContext();
+    await restored;
+  });
+  await page.waitForTimeout(settleMs);
+}

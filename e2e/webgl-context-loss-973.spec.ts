@@ -1,11 +1,11 @@
 import { test, expect, type Page } from './fixtures';
-import { createDocument, docToScreen, selectTool, setForegroundColor, waitForStore } from './helpers';
+import { createDocument, docToScreen, selectTool, setForegroundColor, waitForStore, GRAPHICS_LOSS_ERRORS, loseAndRestoreGraphics } from './helpers';
 
 // #973: a WebGL context loss wiped every layer with no warning, and ⌘Z after
 // the restore threw "Invalid snapshot handle" because the undo stack still
 // pointed at GPU textures from the lost context.
 
-test.use({ allowConsoleErrors: [/\[Lopsy\] WebGL context lost/] });
+test.use({ allowConsoleErrors: GRAPHICS_LOSS_ERRORS });
 
 async function historyLabels(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -52,21 +52,6 @@ async function compositeAt(page: Page, docX: number, docY: number): Promise<numb
   }, { sx: screen.x, sy: screen.y });
 }
 
-async function loseAndRestoreContext(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const canvas = document.querySelector('[data-testid="canvas-container"] canvas') as HTMLCanvasElement;
-    const ext = canvas.getContext('webgl2')!.getExtension('WEBGL_lose_context')!;
-    const restored = new Promise<void>((resolve) => {
-      canvas.addEventListener('webglcontextrestored', () => resolve(), { once: true });
-    });
-    ext.loseContext();
-    await new Promise((r) => setTimeout(r, 300));
-    ext.restoreContext();
-    await restored;
-  });
-  await page.waitForTimeout(1000);
-}
-
 test.describe('WebGL context loss (#973)', () => {
   test.beforeEach(({ isMobile }) => {
     test.skip(isMobile, 'uses the desktop Edit menu');
@@ -83,7 +68,7 @@ test.describe('WebGL context loss (#973)', () => {
     await marqueeFill(page, 50, 50, 150, 150);
     expect((await historyLabels(page)).length).toBeGreaterThan(1);
 
-    await loseAndRestoreContext(page);
+    await loseAndRestoreGraphics(page, 1000);
     await page.screenshot({ path: 'e2e/screenshots/webgl-context-loss-973.png' });
 
     const toasts = page.locator('[role="status"][aria-live="polite"]').filter({ has: page.getByRole('button', { name: 'Dismiss' }) });

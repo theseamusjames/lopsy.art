@@ -80,7 +80,7 @@ async function __pc(page: import('@playwright/test').Page, tag = 'shot'): Promis
       const out: Array<{{ name: string; sha256: string }}> = [];
       out.push({{ name: 'composite-thumbnail', sha256: await sha(await br.readCompositeThumbnail(engine, 256)) }});
       out.push({{ name: 'selection-mask', sha256: await sha(await br.readSelectionMask(engine)) }});
-      out.push({{ name: 'quick-mask', sha256: await sha(br.readQuickMaskPixels(engine)) }});
+      out.push({{ name: 'quick-mask', sha256: await sha(await br.readQuickMaskPixels(engine)) }});
       for (const [i, id] of doc.layerOrder.entries()) {{
         out.push({{ name: `layer-thumbnail:${{i}}`, sha256: await sha(await br.readLayerThumbnail(engine, id, 64)) }});
         for (let c = 0; c < 4; c++) {{
