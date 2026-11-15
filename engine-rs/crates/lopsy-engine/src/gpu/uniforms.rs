@@ -76,6 +76,41 @@ impl UniformType {
     }
 }
 
+#[cfg(any(feature = "wgpu", test))]
+impl UniformType {
+    /// The member's alignment and size in bytes in a WGSL uniform struct.
+    pub fn wgsl_align_and_size(self) -> (u32, u32) {
+        match self {
+            UniformType::Float | UniformType::Int | UniformType::Uint => (4, 4),
+            UniformType::Vec2 | UniformType::IVec2 => (8, 8),
+            UniformType::Vec3 => (16, 12),
+            UniformType::Vec4 => (16, 16),
+            UniformType::Mat2 => (8, 16),
+            // Three vec3 columns, each in a 16-byte slot.
+            UniformType::Mat3 => (16, 48),
+            UniformType::Vec4Array(n) => (16, 16 * n as u32),
+        }
+    }
+}
+
+/// Where each field of a uniform struct starts in the bytes of its WGSL
+/// `Params` struct, and the struct's size. A backend that uploads the
+/// struct as one buffer writes each field at its offset.
+#[cfg(any(feature = "wgpu", test))]
+pub fn wgsl_layout(fields: &[Field]) -> (Vec<u32>, u32) {
+    let mut offsets = Vec::with_capacity(fields.len());
+    let mut end = 0u32;
+    let mut struct_align = 1u32;
+    for field in fields {
+        let (align, size) = field.ty.wgsl_align_and_size();
+        let offset = end.next_multiple_of(align);
+        offsets.push(offset);
+        end = offset + size;
+        struct_align = struct_align.max(align);
+    }
+    (offsets, end.next_multiple_of(struct_align))
+}
+
 /// One field of a uniform struct.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Field {
@@ -425,6 +460,23 @@ layout(std140) uniform Params {
 };
 void main() {}
 ";
+
+    fn field(ty: UniformType) -> Field {
+        Field { name: "x", ty }
+    }
+
+    #[test]
+    fn wgsl_members_are_aligned_and_the_struct_padded_to_its_widest() {
+        use UniformType::*;
+        // The same struct lopsy-shaderc's reflection test lays out with naga.
+        assert_eq!(wgsl_layout(&[field(Float), field(Vec2), field(Vec3), field(Mat3)]), (vec![0, 8, 16, 32], 80));
+        // A scalar fits in the tail of a vec3.
+        assert_eq!(wgsl_layout(&[field(Vec3), field(Float)]), (vec![0, 12], 16));
+        assert_eq!(wgsl_layout(&[field(Float), field(Float), field(Vec2)]), (vec![0, 4, 8], 16));
+        assert_eq!(wgsl_layout(&[field(Int), field(Vec4Array(2)), field(Float)]), (vec![0, 16, 48], 64));
+        assert_eq!(wgsl_layout(&[field(Float), field(Mat2), field(IVec2)]), (vec![0, 8, 24], 32));
+        assert_eq!(wgsl_layout(&[]), (vec![], 0));
+    }
 
     #[derive(Default)]
     struct Recorder(Vec<(UniformType, Vec<u32>)>);

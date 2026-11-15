@@ -9,8 +9,9 @@ fn translate_shaders(out_dir: &Path) {
     println!("cargo:rerun-if-changed={}", root.display());
     let is_wgpu = std::env::var_os("CARGO_FEATURE_WGPU").is_some();
     let extension = if is_wgpu { "wgsl" } else { "glsl" };
+    // wgpu binds by layout, so its text opens with the shader's reflection.
     let source = |translated: &'_ lopsy_shaderc::Translated| -> String {
-        if is_wgpu { translated.wgsl.clone() } else { translated.glsl.clone() }
+        if is_wgpu { translated.reflection.header() + &translated.wgsl } else { translated.glsl.clone() }
     };
     let outputs = lopsy_shaderc::translate_all(root).unwrap_or_else(|e| panic!("{e}"));
     for output in &outputs {

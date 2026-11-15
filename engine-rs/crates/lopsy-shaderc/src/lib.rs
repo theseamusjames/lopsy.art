@@ -76,6 +76,95 @@ pub struct Translated {
     pub wgsl: String,
     /// The GLSL ES 3.00 the WebGL backend compiles.
     pub glsl: String,
+    /// What a WebGPU backend has to know to bind the shader's resources.
+    pub reflection: Reflection,
+}
+
+/// A shader's `@group(0)` resources, as naga lays them out.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Reflection {
+    /// Byte size of the `Params` struct, 0 for a shader without one.
+    pub params_size: u32,
+    /// Each `Params` member and its byte offset, in declaration order.
+    pub members: Vec<(String, u32)>,
+    /// Every texture and sampler the shader declares, read or not.
+    pub bindings: Vec<Binding>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Binding {
+    pub index: u32,
+    pub kind: BindingKind,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindingKind {
+    Texture,
+    Sampler,
+}
+
+/// The line a reflection header starts with.
+pub const REFLECTION_PREFIX: &str = "//#reflect ";
+
+impl Reflection {
+    /// One WGSL comment line holding the reflection, for a backend to read
+    /// back from the top of the shader text it is handed:
+    /// `//#reflect size=32 members=u_a:0,u_b:16 bindings=1:t:u_tex,2:s:u_tex_sampler`.
+    pub fn header(&self) -> String {
+        let members: Vec<String> = self.members.iter().map(|(name, offset)| format!("{name}:{offset}")).collect();
+        let bindings: Vec<String> = self
+            .bindings
+            .iter()
+            .map(|b| {
+                let kind = match b.kind {
+                    BindingKind::Texture => 't',
+                    BindingKind::Sampler => 's',
+                };
+                format!("{}:{kind}:{}", b.index, b.name)
+            })
+            .collect();
+        format!(
+            "{REFLECTION_PREFIX}size={} members={} bindings={}\n",
+            self.params_size,
+            members.join(","),
+            bindings.join(","),
+        )
+    }
+}
+
+/// Read the resources preprocessed WGSL declares in `@group(0)`.
+pub fn reflect(wgsl: &str) -> Result<Reflection, String> {
+    let module = naga::front::wgsl::parse_str(wgsl).map_err(|e| e.emit_to_string(wgsl))?;
+    let mut reflection = Reflection::default();
+    for (_, var) in module.global_variables.iter() {
+        let Some(binding) = &var.binding else { continue };
+        if binding.group != 0 {
+            return Err(format!("binding {} is in group {}; every resource is in group 0", binding.binding, binding.group));
+        }
+        let name = var.name.clone().ok_or("a bound global has no name")?;
+        match &module.types[var.ty].inner {
+            naga::TypeInner::Struct { members, span } if var.space == AddressSpace::Uniform => {
+                if binding.binding != 0 {
+                    return Err(format!("the uniform struct is at binding {}, not 0", binding.binding));
+                }
+                reflection.params_size = *span;
+                for member in members {
+                    let member_name = member.name.clone().ok_or("a uniform struct member has no name")?;
+                    reflection.members.push((member_name, member.offset));
+                }
+            }
+            naga::TypeInner::Image { .. } => {
+                reflection.bindings.push(Binding { index: binding.binding, kind: BindingKind::Texture, name });
+            }
+            naga::TypeInner::Sampler { .. } => {
+                reflection.bindings.push(Binding { index: binding.binding, kind: BindingKind::Sampler, name });
+            }
+            _ => return Err(format!("`{name}` is neither a uniform struct, a texture nor a sampler")),
+        }
+    }
+    reflection.bindings.sort_by_key(|b| b.index);
+    Ok(reflection)
 }
 
 /// Preprocess and translate the shader at `path`, taking its includes from
@@ -90,7 +179,8 @@ fn translate_file_with(root: &Path, path: &Path, defines: &Defines) -> Result<Tr
     let source = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let wgsl = preprocess(&source, &include, defines).map_err(|e| format!("{}: {e}", path.display()))?;
     let glsl = wgsl_to_glsl(&wgsl).map_err(|e| format!("{}:\n{e}", path.display()))?;
-    Ok(Translated { wgsl, glsl })
+    let reflection = reflect(&wgsl).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(Translated { wgsl, glsl, reflection })
 }
 
 /// A shader built once per value of one define, for a choice that is made
@@ -372,6 +462,57 @@ mod tests {
     use super::*;
 
     const NO_INCLUDES: &dyn Fn(&str) -> Option<String> = &|_| None;
+
+    #[test]
+    fn reflection_lists_the_uniform_layout_and_every_declared_binding() {
+        let reflection = reflect(
+            "struct Params {
+                 u_strength: f32,
+                 u_size: vec2<f32>,
+                 u_tint: vec3<f32>,
+                 u_matrix: mat3x3<f32>,
+             }
+             @group(0) @binding(0) var<uniform> params: Params;
+             @group(0) @binding(1) var u_tex: texture_2d<f32>;
+             @group(0) @binding(2) var u_tex_sampler: sampler;
+             @group(0) @binding(3) var u_unread: texture_2d<f32>;
+             @fragment
+             fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+                 return textureSample(u_tex, u_tex_sampler, uv) * params.u_strength;
+             }",
+        )
+        .unwrap();
+        assert_eq!(reflection.params_size, 80);
+        assert_eq!(
+            reflection.members,
+            [("u_strength".to_string(), 0), ("u_size".to_string(), 8), ("u_tint".to_string(), 16), ("u_matrix".to_string(), 32)]
+        );
+        let bindings: Vec<(u32, BindingKind, &str)> =
+            reflection.bindings.iter().map(|b| (b.index, b.kind, b.name.as_str())).collect();
+        assert_eq!(
+            bindings,
+            [(1, BindingKind::Texture, "u_tex"), (2, BindingKind::Sampler, "u_tex_sampler"), (3, BindingKind::Texture, "u_unread")]
+        );
+        assert_eq!(
+            reflection.header(),
+            "//#reflect size=80 members=u_strength:0,u_size:8,u_tint:16,u_matrix:32 bindings=1:t:u_tex,2:s:u_tex_sampler,3:t:u_unread\n"
+        );
+    }
+
+    #[test]
+    fn a_shader_without_uniforms_reflects_an_empty_struct() {
+        let reflection = reflect(
+            "@group(0) @binding(0) var u_tex: texture_2d<f32>;
+             @fragment
+             fn fs_main(@builtin(position) p: vec4<f32>) -> @location(0) vec4<f32> {
+                 return textureLoad(u_tex, vec2<i32>(p.xy), 0);
+             }",
+        )
+        .unwrap();
+        assert_eq!(reflection.params_size, 0);
+        assert!(reflection.members.is_empty());
+        assert_eq!(reflection.header(), "//#reflect size=0 members= bindings=0:t:u_tex\n");
+    }
 
     #[test]
     fn a_sampling_shader_links_with_the_shared_vertex_shader() {

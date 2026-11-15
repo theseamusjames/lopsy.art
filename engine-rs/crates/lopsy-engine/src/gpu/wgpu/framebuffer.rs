@@ -3,11 +3,18 @@ use std::cell::RefCell;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FramebufferHandle(pub usize);
 
+/// A texture a framebuffer names, with the view a pass draws into.
+#[derive(Clone)]
+pub(in crate::gpu) struct Attachment {
+    pub(in crate::gpu) texture: wgpu::Texture,
+    pub(in crate::gpu) view: wgpu::TextureView,
+}
+
 /// WebGPU has no framebuffer objects: a render pass names the texture it
 /// draws into. A framebuffer here is a name for whichever texture was last
 /// attached to it, which is all the engine uses one for.
 pub struct FramebufferPool {
-    attachments: RefCell<Vec<Option<wgpu::Texture>>>,
+    attachments: RefCell<Vec<Option<Attachment>>>,
 }
 
 impl FramebufferPool {
@@ -23,12 +30,16 @@ impl FramebufferPool {
 
     pub fn attach_texture(&self, handle: FramebufferHandle, texture: &wgpu::Texture) {
         if let Some(slot) = self.attachments.borrow_mut().get_mut(handle.0) {
-            *slot = Some(texture.clone());
+            let is_attached = slot.as_ref().is_some_and(|attached| attached.texture == *texture);
+            if !is_attached {
+                let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+                *slot = Some(Attachment { texture: texture.clone(), view });
+            }
         }
     }
 
     /// The texture attached to `handle`.
-    pub(in crate::gpu) fn attachment(&self, handle: FramebufferHandle) -> Option<wgpu::Texture> {
+    pub(in crate::gpu) fn attachment(&self, handle: FramebufferHandle) -> Option<Attachment> {
         self.attachments.borrow().get(handle.0).cloned().flatten()
     }
 
