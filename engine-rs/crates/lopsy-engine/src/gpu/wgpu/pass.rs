@@ -264,7 +264,7 @@ impl<'a> GpuRef<'a> {
 
     /// Size of the canvas [`Target::Screen`] draws to, in device pixels.
     pub fn screen_size(self) -> Result<(i32, i32), String> {
-        let (width, height) = self.ctx.screen_size();
+        let (width, height) = self.ctx.screen_size().ok_or("This engine has no screen")?;
         Ok((width as i32, height as i32))
     }
 

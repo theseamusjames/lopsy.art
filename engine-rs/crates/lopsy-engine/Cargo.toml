@@ -7,6 +7,10 @@ edition = "2021"
 # Build the wgpu backend (gpu/wgpu) in place of the WebGL one (gpu/webgl).
 # The two are never compiled together: see gpu/mod.rs.
 wgpu = ["dep:wgpu"]
+# The wgpu backend on a real GPU outside the browser: Metal, Vulkan or
+# DX12. For render tests (`cargo test --features native`) and hosts that
+# are not a web page. The wasm build never enables it.
+native = ["wgpu", "wgpu/metal", "wgpu/vulkan", "wgpu/dx12"]
 
 [dependencies]
 lopsy-core = { path = "../lopsy-core" }
@@ -23,6 +27,11 @@ swash = "0.1"
 skrifa = "0.22"
 etagere = "0.2"
 brotli = { version = "3", default-features = false, features = ["std"] }
+
+# Render tests on a real GPU; see the file's header.
+[[test]]
+name = "render"
+required-features = ["native"]
 
 [build-dependencies]
 lopsy-shaderc = { path = "../lopsy-shaderc" }
