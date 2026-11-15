@@ -134,6 +134,7 @@ engine/
       src/
         lib.rs            # Engine handle, createEngine, a few CPU helpers
         api/              # One export per command; each is a single call
+    cli/            # lopsy-cli: the `lopsy` binary, the engine on a native GPU with no browser
   Cargo.toml        # The workspace, and the lopsy-engine crate
   build.rs          # Translates the shaders and embeds the built-in brushes
   tests/            # Render tests on a native GPU (`--features native`)
@@ -224,6 +225,14 @@ still there before writing. Its export is declared with `readback_export!`
 nothing in the document (a thumbnail, the eyedropper).
 
 ### Two builds, one page
+
+A host is what embeds the engine: it starts it and calls `commands/`.
+`hosts/wasm` is the browser's. `hosts/cli` is a second, and shows what a
+host that is not a page needs: `GpuContext::headless()`, a `Host` for
+logging and time, and a `block_on` that polls. It is a workspace member
+but not a default one, because it turns on the engine's `native` feature
+and cargo would then build every other member's engine with it too: build
+and test it with `-p lopsy-cli`.
 
 `npm run build` builds the engine twice: WebGL (`pkg/`, the default) and
 wgpu (`pkg-wgpu/`). `wasm-bridge.ts` imports `./pkg/lopsy_wasm`, which
@@ -392,7 +401,10 @@ npm run typecheck    # tsc --noEmit
 npm run wasm:build
 npm run wasm:build:wgpu   # the wgpu backend, into src/engine-wasm/pkg-wgpu. A page loads it for
                           # /?renderer=wgpu, or every page does with LOPSY_RENDERER=wgpu
-npm run wasm:test:wgpu    # the wgpu backend's Rust tests, including render tests on this machine's GPU
+npm run wasm:test:wgpu    # the wgpu backend's Rust tests and the command-line host's, on this machine's GPU
+
+# The command-line host: each PNG through the engine on the native GPU, results in out/
+cd engine && cargo run -p lopsy-cli -- --op blur=8 --op invert --out out photo.png
 
 LOPSY_RENDERER=wgpu npm run test:e2e   # the e2e suite on the wgpu build (about three times slower)
 LOPSY_GPU=hardware npx playwright test e2e/brush-perf-6k.spec.ts   # on the real GPU, either renderer

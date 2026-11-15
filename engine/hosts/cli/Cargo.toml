@@ -1,0 +1,17 @@
+[package]
+name = "lopsy-cli"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "A command-line host for the Lopsy engine: batch image operations on a native GPU, with no browser."
+
+[[bin]]
+name = "lopsy"
+path = "src/main.rs"
+
+[dependencies]
+lopsy-core = { path = "../../core" }
+# `native`: the wgpu backend on Metal, Vulkan or DX12.
+lopsy-engine = { path = "../..", features = ["native"] }
+# Already in the lockfile through lopsy-core, which decodes with it.
+png = "0.17"

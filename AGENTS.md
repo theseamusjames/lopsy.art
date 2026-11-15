@@ -27,10 +27,11 @@ The codebase has two main parts: a TypeScript frontend and a Rust rendering engi
 
 ### Rust engine (`engine/`)
 
-Three crates:
+Four crates:
 
 - `lopsy-core` — Pure Rust utilities with no web dependencies: blend mode math, brush geometry, color conversions, flood fill, selection masks, pixel buffer operations.
 - `lopsy-engine` — The rendering engine, with no host. Contains the compositor pipeline, layer texture management, GPU brush/shape/gradient/filter rendering, overlay rendering (grid, rulers, marching ants), all GLSL shaders, and `commands/`, the functions a host calls.
+- `lopsy-cli` — A command-line host (`engine/hosts/cli`): the `lopsy` binary runs PNGs through the engine on a native GPU, with no browser.
 - `lopsy-wasm` — The browser host: the `#[wasm_bindgen]` exports, each one call into `lopsy-engine::commands`. It is the crate `wasm-pack` builds.
 
 The WASM bridge exposes functions like `addLayer`, `updateLayer`, `uploadLayerPixels`, `setViewport`, etc. The compositor runs each frame: iterate layers, blend with effects, apply adjustments, blit to screen.

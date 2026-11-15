@@ -10,7 +10,7 @@
     "wasm:build:wgpu": "rm -rf src/engine-wasm/pkg-wgpu && cd engine && wasm-pack build hosts/wasm --target web --out-dir ../../../src/engine-wasm/pkg-wgpu -- --features wgpu",
     "wasm:build:dev": "rm -rf src/engine-wasm/pkg && cd engine && wasm-pack build hosts/wasm --target web --dev --out-dir ../../../src/engine-wasm/pkg",
     "wasm:test": "cd engine && cargo test",
-    "wasm:test:wgpu": "cd engine && cargo test -p lopsy-engine --features native",
+    "wasm:test:wgpu": "cd engine && cargo test -p lopsy-engine --features native && cargo test -p lopsy-cli",
     "wasm:size": "node scripts/check-bundle-size.mjs",
     "wgsl:check": "node scripts/check-wgsl-webgpu.mjs",
     "perf:load": "node scripts/measure-load-time.mjs",
