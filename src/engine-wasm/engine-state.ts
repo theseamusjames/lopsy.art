@@ -6,7 +6,7 @@
  */
 
 import type { Engine } from './wasm-bridge';
-import { initWasm, createEngine, clearAllLayers, rendererName } from './wasm-bridge';
+import { initWasm, createEngine, clearAllLayers, rendererName, setScreenWideGamut } from './wasm-bridge';
 import { resetTrackedState, cacheSubBrushTips } from './engine-sync';
 import { setEngine as setGpuPixelEngine } from './gpu-pixel-access';
 import { canvasColorSpace } from '../engine/color-space';
@@ -112,8 +112,11 @@ async function startEngine(canvas: HTMLCanvasElement): Promise<Engine> {
   // Enable wide-gamut / EDR output if the display supports it.
   // The WASM engine already uses RGBA16F textures; setting the drawing buffer
   // color space to display-p3 tells the compositor to preserve values > 1.0.
-  // A WebGPU canvas has no WebGL context to set it on.
-  if (!isWgpuRenderer()) {
+  // A WebGPU canvas has no WebGL context to set it on: the engine sets the
+  // colour space when it configures the canvas.
+  if (isWgpuRenderer()) {
+    setScreenWideGamut(engine, canvasColorSpace === 'display-p3');
+  } else {
     try {
       const gl = canvas.getContext('webgl2');
       if (gl && canvasColorSpace === 'display-p3') {

@@ -100,6 +100,13 @@ pub fn set_viewport(engine: &mut Engine, zoom: f64, pan_x: f64, pan_y: f64, scre
     engine.inner.set_viewport(zoom, pan_x, pan_y, screen_w, screen_h);
 }
 
+/// On wgpu, say whether the canvas is Display P3. WebGL returns false:
+/// there the page sets the drawing buffer's colour space itself.
+#[wasm_bindgen(js_name = "setScreenWideGamut")]
+pub fn set_screen_wide_gamut(engine: &mut Engine, is_display_p3: bool) -> bool {
+    engine.inner.set_screen_wide_gamut(is_display_p3)
+}
+
 #[wasm_bindgen(js_name = "setBackgroundColor")]
 pub fn set_background_color(engine: &mut Engine, r: f32, g: f32, b: f32, a: f32) {
     engine.inner.set_background_color(r, g, b, a);

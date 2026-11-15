@@ -26,6 +26,7 @@ import { compositeForExport, getCompositeSize, parkedReadbackCount } from './eng
 import { flushLayerSync, textFrameOffsetMeasureCount } from './engine-wasm/engine-sync';
 import { prefetchFontPreviewsBlob } from './utils/font-loader';
 import { canvasPixelRatio } from './app/rendering/display-pixel-ratio';
+import { contextOptions } from './engine/color-space';
 import { layerBackupStats, setLayerBackupMaxBytesForTest } from './app/gpu-layer-backup';
 import type { LayerBackupStats } from './app/layer-backup-runner';
 import './styles/fonts.css';
@@ -81,7 +82,9 @@ function readPresentedCanvas(canvas: HTMLCanvasElement): ReadPixelsResult {
   const copy = document.createElement('canvas');
   copy.width = width;
   copy.height = height;
-  const ctx = copy.getContext('2d', { willReadFrequently: true });
+  // In the canvas's own colour space, so the copy converts nothing and the
+  // bytes are the ones a WebGL readPixels would return.
+  const ctx = copy.getContext('2d', { ...contextOptions, willReadFrequently: true });
   if (!ctx) return null;
   ctx.drawImage(canvas, 0, 0);
   const straight = ctx.getImageData(0, 0, width, height).data;
