@@ -17,7 +17,7 @@ Status: in progress.
 | 3 | Done (#1693, #1694, #1696, #1697), except that ten multi-pass filters are still staged from `commands/`; see 3.5 |
 | 4 | Export, thumbnail and clipboard readbacks answer with a Promise (#1699, #1698); Flatten Image and Copy Merged no longer read back, and the eyedropper awaits (#1701); Rasterize Layer Style, Merge Down and the filter preview commit no longer read back, and wand, bucket fill, quick select and feather await (#1702); selecting a layer's pixels and content bounds no longer block (#1703); mask bytes stay on the GPU and the layer backup awaits its reads (#1704). Commands that read inside the engine answer with a Promise or no longer read (#1705), and the last synchronous layer read is deleted (#1706). Phase 4 is done on the TypeScript side: nothing above the bridge reads the GPU synchronously. What is left is Rust's, in 6.6; see Phase 4 |
 | 5 | Done, pending merge. Every shader is WGSL, translated to GLSL at build time: 83 programs, plus one `blend` variant per blend mode. The build step and the first 24 shaders are in #1707, #1708, #1710 and #1711; #1712 removes four shaders no pass used. The rest are in #1713 (core and brush support, and a fifth unused shader, `color_overlay`), #1714 (brush tools, transforms, layer effects), #1715 (filters), #1716 (shaders whose uniforms had to change shape) and #1717 (brush dabs, `blend`, and the removal of the GLSL plumbing) |
-| 6 | Done except for making wgpu the default, pending merge. The wgpu backend (`--features wgpu`, a second wasm artifact) renders everything the WebGL one does through the same pass layer (#1718 to #1720, #1722, #PRDRAW); readbacks are futures the backend completes, and a lost device is recovered like a lost context (#PRREAD); the e2e suite runs on it, with document pixels within 1 per channel of WebGL's, and render tests run from `cargo test` on a native GPU (#PRPARITY); and the production build ships both, WebGL by default, chosen in View > Renderer (#PRROLL). Results under Phase 6 |
+| 6 | Done except for making wgpu the default, pending merge. The wgpu backend (`--features wgpu`, a second wasm artifact) renders everything the WebGL one does through the same pass layer (#1718 to #1720, #1722, #1725); readbacks are futures the backend completes, and a lost device is recovered like a lost context (#1726); the e2e suite runs on it, with document pixels within 1 per channel of WebGL's, and render tests run from `cargo test` on a native GPU (#1727); and the production build ships both, WebGL by default, chosen in View > Renderer (#1728). Results under Phase 6 |
 | 7 | Not started |
 
 ---
@@ -240,7 +240,7 @@ script reports the slowest run as well as the median.
 | 1 | Flat or smaller: the pass layer replaces repeated GL boilerplate | Flat |
 | 2 | Measured: wasm +1.1% raw (4,293,925 bytes against 4,246,140 on the same machine). The typed wrappers are thin over an untyped core; without that it was +4.7% | Measured flat: `wasm-init` 134 ms, `engine-create` 128 ms median; 496 ms on the first run after the build |
 | 5 | Up 22 KB (0.5%) with every shader generated: 4,336,784 bytes against 4,314,929 on `main`, both built locally. Generated GLSL is more verbose than hand-written; two things keep it small. Indentation and blank lines are dropped (they were about a fifth of the text, 52 KB). And the fifteen non-Normal `blend` variants store the lines they share once, 37 KB for all sixteen instead of 137 KB | Measured flat. `engine-create` 130 ms median on #1707, 118 ms after #1712 and 116 ms with every shader generated (#1717). Generated GLSL compiles as fast as hand-written: for the first 24 ported shaders, compiled, linked and drawn once each with the cache defeated, 134 ms fully cold against 141 ms hand-written, and 26 ms against 24 ms afterwards. The first load after a build can still take about a second, because every regenerated source misses the OS shader cache once |
-| 6 | The default (WebGL) wasm is 4,397,635 bytes, 0.9% up on 6.2: futures for readbacks and a task per read export (#PRREAD). The budget in `check-bundle-size.mjs` is raised by that. The wgpu wasm is a separate artifact of 4,581,251 bytes, fetched only by a page that runs it | WebGL measured flat (`wasm-init` 128 to 142 ms, `engine-create` 124 to 146 ms median over three sets of seven loads). wgpu: 173 ms and 66 ms; pipelines are created lazily |
+| 6 | The default (WebGL) wasm is 4,397,635 bytes, 0.9% up on 6.2: futures for readbacks and a task per read export (#1726). The budget in `check-bundle-size.mjs` is raised by that. The wgpu wasm is a separate artifact of 4,581,251 bytes, fetched only by a page that runs it | WebGL measured flat (`wasm-init` 128 to 142 ms, `engine-create` 124 to 146 ms median over three sets of seven loads). wgpu: 173 ms and 66 ms; pipelines are created lazily |
 
 wgpu becomes the default (6.11) only if both numbers are within an
 agreed margin of the WebGL path. As measured in 6.9: the wgpu wasm is
@@ -1107,15 +1107,15 @@ default bundle does not change until rollout.
 | 6.0 | wasm-bindgen 0.2.130; the WebGL backend moved to `gpu/webgl/` | done: #1718, #1719 |
 | 6.1 | `gpu/wgpu` skeleton; CI builds the second artifact; nothing loads it | done: #1720 |
 | 6.2 | Device and surface creation, clear, present; `?renderer=wgpu` in dev builds | done: #1722 |
-| 6.3 | Texture pool, byte uploads, external-image upload | done: #PRDRAW |
-| 6.4 | Passes: pipeline cache keyed by program, blend and target format; bind groups; uniform buffer; scissor | done: #PRDRAW |
-| 6.5 | Texture-to-texture copy | done: #PRDRAW |
-| 6.6 | Async readback and thumbnails | done: #PRREAD |
-| 6.7 | Device loss wired to the existing backup and restore path | done: #PRREAD |
-| 6.8 | The e2e suite on wgpu against the WebGL baseline; fix differences; fix the tolerance | done: #PRPARITY |
-| 6.9 | `brush-perf-6k` and cold load on both backends | done: #PRROLL |
-| 6.10 | Headless native host; render tests runnable from `cargo test` | done: #PRPARITY |
-| 6.11 | Rollout: opt-in setting (done: #PRROLL), then default where WebGPU exists, WebGL otherwise (not done) |
+| 6.3 | Texture pool, byte uploads, external-image upload | done: #1725 |
+| 6.4 | Passes: pipeline cache keyed by program, blend and target format; bind groups; uniform buffer; scissor | done: #1725 |
+| 6.5 | Texture-to-texture copy | done: #1725 |
+| 6.6 | Async readback and thumbnails | done: #1726 |
+| 6.7 | Device loss wired to the existing backup and restore path | done: #1726 |
+| 6.8 | The e2e suite on wgpu against the WebGL baseline; fix differences; fix the tolerance | done: #1727 |
+| 6.9 | `brush-perf-6k` and cold load on both backends | done: #1728 |
+| 6.10 | Headless native host; render tests runnable from `cargo test` | done: #1727 |
+| 6.11 | Rollout: opt-in setting (done: #1728), then default where WebGPU exists, WebGL otherwise (not done) |
 
 **As built.**
 
@@ -1260,7 +1260,7 @@ only the first can be affected by this change. The wgpu artifact is
 4,262,793 bytes of wasm and 218,871 of JS, still not a number to plan
 by.
 
-*Drawing (6.3 to 6.5, #PRDRAW).* With the feature on, the engine renders
+*Drawing (6.3 to 6.5, #1725).* With the feature on, the engine renders
 a document.
 
 - **Reflection at build time.** `lopsy-shaderc` reports, for each shader,
@@ -1305,7 +1305,7 @@ What the two APIs do differently, and how the backend hides it:
 | A copy or read that leaves a texture | clipped; zeros outside | Rejected. The rect is clipped first and the rest zero-filled |
 | An unread sampler | reads texture unit 0 | Must be bound: the blank texture |
 
-*Readback (6.6, #PRREAD).* WebGPU in the browser cannot read a texture
+*Readback (6.6, #1726).* WebGPU in the browser cannot read a texture
 back synchronously. A readback is now a value the backend completes when
 it can:
 
@@ -1332,7 +1332,7 @@ it can:
 The default build pays for this in size: 4,397,277 bytes of wasm, 39.5 KB
 more than before the step, for the futures and the 26 exports' tasks.
 
-*Device loss (6.7, #PRREAD).* A WebGL canvas announces a lost and a
+*Device loss (6.7, #1726).* A WebGL canvas announces a lost and a
 restored context. A WebGPU device is simply gone. The wgpu context's
 device-lost callback reaches the page through a new `host::gpu_lost`
 and a `lopsy-gpu-lost` window event, and the page answers as it answers
@@ -1365,7 +1365,7 @@ animation frames arrived about once a second), a frame drawn to a
 WebGPU canvas after a new device was configured did not appear until a
 later frame was drawn. A WebGL canvas keeps what was drawn to it.
 
-*Parity (6.8, #PRPARITY).* `LOPSY_RENDERER=wgpu` runs the whole e2e
+*Parity (6.8, #1727).* `LOPSY_RENDERER=wgpu` runs the whole e2e
 suite on the wgpu build, on SwiftShader's WebGPU. Three things had to
 change before the suite meant anything there:
 
@@ -1450,7 +1450,7 @@ in the other 60, by kind:
 Not covered: the four long compositions and the perf specs, which the
 instrumented run leaves out; Firefox; a real GPU, for pixels.
 
-*Performance (6.9, #PRROLL).* `LOPSY_GPU=hardware` runs the chromium
+*Performance (6.9, #1728).* `LOPSY_GPU=hardware` runs the chromium
 project on the machine's GPU instead of SwiftShader, on either renderer.
 `brush-perf-6k` (6000 x 4000, dev build, M4 Max on Metal, the range over
 three runs each):
@@ -1484,7 +1484,7 @@ a pipeline is made the first time it is drawn with, so some of what WebGL
 pays in `engine-create` wgpu pays in its first frames. That was not
 measured.
 
-*A native host (6.10, #PRPARITY).* `GpuContext::headless()` makes the
+*A native host (6.10, #1727).* `GpuContext::headless()` makes the
 context with no canvas, and the `native` cargo feature adds wgpu's Metal,
 Vulkan and DX12 backends. `cargo test -p lopsy-engine --features native`
 then runs 16 render tests through the pass layer on a real GPU: each row
@@ -1495,7 +1495,7 @@ a thumbnail. `npm run wasm:test:wgpu` is the same command. A GPU validation erro
 with no adapter they skip themselves; CI runs them with the wgpu
 feature's other tests.
 
-*Choosing a renderer (6.11, #PRROLL).* Production can now run either
+*Choosing a renderer (6.11, #1728).* Production can now run either
 build, and WebGL stays the default.
 
 The obstacle was that `wasm-bridge.ts` imports about 310 functions from
