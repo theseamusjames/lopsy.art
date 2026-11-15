@@ -1405,22 +1405,22 @@ recorded from `main`'s engine:
 
 | | WebGL build | wgpu build |
 |---|---|---|
-| Tests | 1,451 passed, 7 skipped, 0 failed, twice | 1,432 passed, 25 skipped, 1 failed; then 1,431 passed, 2 failed |
+| Tests | 1,451 passed, 7 skipped, 0 failed | 1,433 passed, 25 skipped, 0 failed |
 | Time, 6 workers | 18 min | 18 min |
 | Specs with any difference | 3, all ones that differ between any two runs (`brush-jitter-texture`, `layer-dnd-autoscroll`, `paste-in-place-selection`) | see below |
 
-The three wgpu failures were each an ordering the app had only ever seen
-one way round, and are fixed: the Move drag above; a second colour-mode
+That is the third pair of full runs. The first two on wgpu had one and
+two failures, each an ordering the app had only ever seen one way round,
+and each fixed before the run above: the Move drag; a second colour-mode
 conversion picked while the first was still reading back, which found the
 old mode and did nothing (conversions run one at a time now,
 `utils/run-in-order.ts`); and a dev hook that paired a layer's pixels
-with the size it had before a crop. After the fixes the three specs ran
-four more times instrumented on wgpu with document pixels identical to
-WebGL's, and the Move specs 195 times without a failure. The whole suite
-has not been run again since the last two fixes.
+with the size it had before a crop. The WebGL build passed all three
+times with the same result.
 
-On wgpu, of 412 spec files' records, 344 are identical to WebGL's in
-every checkpoint. The differences in the rest, by kind:
+On wgpu, 406 of the baseline's 412 spec files ran (six are skipped), and
+346 of them are identical to WebGL's in every checkpoint. The differences
+in the other 60, by kind:
 
 - **Document pixels** (the composite and each layer, read back): 25
   records in 9 specs differ, in 1 to 16 pixels each, by 1 per channel.
@@ -1441,11 +1441,11 @@ every checkpoint. The differences in the rest, by kind:
   on wgpu, where the harness waits for the deferred crop. The composites
   are identical.
 - Readback hashes (thumbnails) differ wherever one of the above does.
-- `text-rotate-reopen-1527` differed in the second run only: the text
-  layer was two rows taller, the raster from before its re-render. It
-  matched in the first run and in four runs afterwards.
-- The six skipped spec files, and `brush-jitter-texture` and
-  `layer-dnd-autoscroll`, which differ between any two runs.
+- `text-rotate-reopen-1527` differed in the second of the three runs
+  only: the text layer was two rows taller, the raster from before its
+  re-render. Not explained further.
+- `brush-jitter-texture` and `layer-dnd-autoscroll`, which differ
+  between any two runs.
 
 Not covered: the four long compositions and the perf specs, which the
 instrumented run leaves out; Firefox; a real GPU, for pixels.
