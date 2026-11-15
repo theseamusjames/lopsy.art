@@ -1,4 +1,5 @@
 import { test as base } from '@playwright/test';
+import { settleEngine } from './parity';
 
 export { expect } from '@playwright/test';
 export type { Page } from '@playwright/test';
@@ -44,8 +45,27 @@ export const test = base.extend<{
   allowConsoleErrors: RegExp[];
   _consoleErrorGuard: void;
   _layerImageReader: void;
+  _settledWaits: void;
 }>({
   allowConsoleErrors: [[], { option: true }],
+
+  // On wgpu a readback answers some frames later, so work a spec used to
+  // find finished after a fixed wait (a bucket fill, the crop of a layer
+  // left behind) may still be out. There every `waitForTimeout` also waits
+  // for the engine's outstanding readbacks. WebGL never has any.
+  _settledWaits: [
+    async ({ page }, use) => {
+      if (process.env.LOPSY_RENDERER === 'wgpu') {
+        const wait = page.waitForTimeout.bind(page);
+        page.waitForTimeout = async (timeout: number) => {
+          await wait(timeout);
+          await settleEngine(page).catch(() => undefined);
+        };
+      }
+      await use();
+    },
+    { auto: true },
+  ],
 
   _layerImageReader: [
     async ({ page }, use) => {

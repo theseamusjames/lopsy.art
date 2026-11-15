@@ -668,13 +668,30 @@ function isFreed(engine: Engine): boolean {
  * each.
  */
 async function finishReadback<Result>(engine: Engine, pending: PendingReadback): Promise<Result> {
-  let step: unknown = pending;
-  while (isPendingReadback(step)) {
-    await step.ready;
-    if (isFreed(engine)) throw new EngineGoneError();
-    step = resumeTask(engine, step.lopsyTask);
+  parkedReadbacks++;
+  try {
+    let step: unknown = pending;
+    while (isPendingReadback(step)) {
+      await step.ready;
+      if (isFreed(engine)) throw new EngineGoneError();
+      step = resumeTask(engine, step.lopsyTask);
+    }
+    return step as Result;
+  } finally {
+    parkedReadbacks--;
   }
-  return step as Result;
+}
+
+let parkedReadbacks = 0;
+
+/**
+ * How many readbacks are out: commands the engine has parked until their
+ * pixels arrive. Always 0 on WebGL. A test that records the document's
+ * state waits for this to reach 0, since work that follows a readback (a
+ * deferred crop, a thumbnail) has not happened yet.
+ */
+export function parkedReadbackCount(): number {
+  return parkedReadbacks;
 }
 
 /**

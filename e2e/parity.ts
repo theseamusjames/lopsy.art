@@ -35,9 +35,30 @@ interface CheckpointRecord {
   layers: LayerRecord[];
 }
 
+/**
+ * Wait for the engine to finish what a readback started. On wgpu a
+ * readback answers some frames later, and what follows it (the crop of a
+ * layer left behind, a thumbnail) has not happened until it does; on WebGL
+ * the same work ran the moment it was asked for. Recording before then
+ * compares a document mid-change with a finished one.
+ */
+export async function settleEngine(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const parked = (window as unknown as { __parkedReadbacks?: () => number }).__parkedReadbacks;
+    if (!parked || parked() === 0) return;
+    const deadline = performance.now() + 5000;
+    // What a readback's answer sets off may read back in turn.
+    while (parked() > 0 && performance.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  });
+}
+
 export async function parityCheckpoint(page: Page, composition: string, name: string): Promise<void> {
   const outDir = process.env.PARITY_OUT;
   if (!outDir) return;
+  await settleEngine(page);
 
   const record = await page.evaluate(async (): Promise<CheckpointRecord> => {
     interface ReadResult { width: number; height: number; pixels: number[] }

@@ -22,7 +22,7 @@ import { finalizePendingStrokeGlobal } from './app/interactions/pending-stroke';
 import { saveProject } from './io/project-save';
 import { loadProject } from './io/project-load';
 import { importRafFile } from './io/raf';
-import { compositeForExport, getCompositeSize } from './engine-wasm/wasm-bridge';
+import { compositeForExport, getCompositeSize, parkedReadbackCount } from './engine-wasm/wasm-bridge';
 import { flushLayerSync, textFrameOffsetMeasureCount } from './engine-wasm/engine-sync';
 import { prefetchFontPreviewsBlob } from './utils/font-loader';
 import { canvasPixelRatio } from './app/rendering/display-pixel-ratio';
@@ -54,6 +54,7 @@ declare global {
     __dockStore?: typeof useDockStore;
     __pixelData?: typeof pixelDataManager;
     __readCompositedPixels?: () => Promise<ReadPixelsResult>;
+    __parkedReadbacks?: () => number;
     __readLayerPixels?: (layerId?: string) => Promise<ReadPixelsResult>;
     __gpuSnapshotCount?: () => number;
     __effectCacheStats?: () => EffectCacheStats | null;
@@ -112,6 +113,7 @@ if (import.meta.env.DEV) {
   // Pixel-data Maps used to live on the store; they live on the manager now.
   // E2e tests that read or mutate pixel state go through this singleton.
   window.__pixelData = pixelDataManager;
+  window.__parkedReadbacks = parkedReadbackCount;
   // Read composited pixels from the WebGL canvas by triggering a render
   // inside requestAnimationFrame and reading before buffer swap.
   // Returns screen-sized pixels (includes workspace background).
