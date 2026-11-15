@@ -3,10 +3,12 @@ import { useUIStore } from '../ui-store';
 import { useEditorStore } from '../editor-store';
 import { canvasColorSpace } from '../../engine/color-space';
 import { getWasmMemoryBytes } from '../../engine-wasm/wasm-bridge';
+import { runningRenderer, type Renderer } from '../../engine-wasm/renderer-choice';
 import { colorModeLabel } from '../../utils/color-mode';
 import styles from './StatusBar.module.css';
 
 const colorSpaceLabel = canvasColorSpace === 'display-p3' ? 'Display P3' : 'sRGB';
+const RENDERER_LABELS: Record<Renderer, string> = { webgl: 'WebGL', wgpu: 'WebGPU' };
 
 // #671 zoom-scrub bounds: horizontal drag sweeps [10%, 400%] at ~1%/pixel.
 const ZOOM_SCRUB_MIN = 0.1;
@@ -27,6 +29,8 @@ export function StatusBar() {
   const cursorX = useUIStore((s) => s.cursorPosition.x);
   const cursorY = useUIStore((s) => s.cursorPosition.y);
   const [memoryUsage, setMemoryUsage] = useState('');
+  // Chosen once per page load, before any document exists to show this bar.
+  const renderer = runningRenderer();
 
   useEffect(() => {
     const update = () => {
@@ -145,6 +149,12 @@ export function StatusBar() {
       {colorMode !== 'rgb' && (
         <>
           <span className={`${styles.item} ${styles.colorMode}`}>{colorModeLabel(colorMode)}</span>
+          <span className={styles.divider} />
+        </>
+      )}
+      {renderer && (
+        <>
+          <span className={styles.item}>{RENDERER_LABELS[renderer]}</span>
           <span className={styles.divider} />
         </>
       )}

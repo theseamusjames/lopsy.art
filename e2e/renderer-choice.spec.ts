@@ -48,6 +48,12 @@ test.describe('View > Renderer', () => {
     const initial = await startedRenderer(page);
     const other = initial === 'webgl' ? 'wgpu' : 'webgl';
     const labels = { webgl: 'WebGL', wgpu: 'WebGPU (Experimental)' } as const;
+    const names = { webgl: 'WebGL', wgpu: 'WebGPU' } as const;
+    const statusBar = page.locator('[aria-label="Status bar"]');
+
+    // The status bar names the engine this page is running.
+    await expect(statusBar).toContainText(names[initial as 'webgl' | 'wgpu']);
+    await expect(statusBar).not.toContainText(names[other]);
 
     // Choosing the renderer already running changes nothing but the store.
     let submenu = await openRendererSubmenu(page);
@@ -71,6 +77,7 @@ test.describe('View > Renderer', () => {
     await page.reload();
     const expected = other === 'wgpu' && !(await canRunWebGpu(page)) ? 'webgl' : other;
     expect(await startedRenderer(page)).toBe(expected);
+    await expect(statusBar).toContainText(names[expected]);
 
     // And the menu shows the stored choice as the checked one.
     submenu = await openRendererSubmenu(page);
