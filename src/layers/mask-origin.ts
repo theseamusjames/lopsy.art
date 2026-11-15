@@ -3,7 +3,7 @@ import { getDescendantIds } from './group-utils';
 
 /**
  * Document-space position of a layer mask's texel (0, 0). Mirrors
- * `mask_doc_offset` in engine-rs `compositor.rs`, which is where the
+ * `mask_doc_offset` in the engine's `compositor.rs`, which is where the
  * compositor samples the mask.
  *
  * Raster and group masks are document-anchored (created doc-sized at the

@@ -5,7 +5,7 @@
 //   WGSL_ANGLE=metal npm run wgsl:check    on the real GPU instead
 //
 // The engine's shaders are written in WGSL and translated to GLSL at build
-// time by naga (engine-rs/crates/lopsy-shaderc). naga accepting a file does
+// time by naga (engine/shaderc). naga accepting a file does
 // not prove a WebGPU implementation will: Chromium's compiler rejects, for
 // one, a `textureSample` after an early return that depends on a varying.
 // The WebGL backend would never notice, so this check does.
@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
-const SHADERS = join(ROOT, 'engine-rs/crates/lopsy-engine/src/gpu/shaders');
+const SHADERS = join(ROOT, 'engine/src/gpu/shaders');
 
 function wgslFiles(dir) {
   return readdirSync(dir).sort().flatMap((name) => {
@@ -55,7 +55,7 @@ let exitCode = 0;
 try {
   const translated = spawnSync(
     'cargo',
-    ['run', '--quiet', '--manifest-path', join(ROOT, 'engine-rs/Cargo.toml'), '-p', 'lopsy-shaderc', '--', SHADERS, outDir],
+    ['run', '--quiet', '--manifest-path', join(ROOT, 'engine/Cargo.toml'), '-p', 'lopsy-shaderc', '--', SHADERS, outDir],
     { stdio: ['ignore', 'inherit', 'inherit'] },
   );
   if (translated.status !== 0) throw new Error('lopsy-shaderc failed');

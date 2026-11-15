@@ -21,7 +21,7 @@ Read SPEC.md for the full product specification.
 - `docs/engine-migration-plan.md` — the plan for moving the engine off
   raw WebGL onto a pass layer and then wgpu. Feature code must not add
   raw GL calls outside
-  `engine-rs/crates/lopsy-engine/src/gpu/webgl/`, the WebGL backend:
+  `engine/src/gpu/webgl/`, the WebGL backend:
   `scripts/check-gl-debt.mjs` (part of `npm run lint`) fails on any GL
   type or call named anywhere else, and the context is private to `gpu/`.
 
@@ -88,7 +88,7 @@ blog/               # Blog posts: <slug>/index.md + images. Copy _template/
 public/
   fonts/            # Self-hosted woff2 font files
 e2e/                # Playwright end-to-end tests
-engine-rs/          # Rust/WASM rendering engine (see below)
+engine/          # Rust/WASM rendering engine (see below)
 ```
 
 ## Styling
@@ -102,71 +102,74 @@ engine-rs/          # Rust/WASM rendering engine (see below)
 ## Architecture
 
 - **Separate logic from UI**. Each tool has a pure logic module (`tool.ts`) that is framework-agnostic — no React, no DOM. React components call into the logic module.
-- **GPU-first rendering via Rust/WASM**. The rendering pipeline is a Rust crate (`engine-rs/`) compiled to WASM via `wasm-pack`. All pixel data lives in GPU textures managed by the Rust engine. JS never touches raw pixels in the render path.
+- **GPU-first rendering via Rust/WASM**. The rendering pipeline is a Rust crate (`engine/`) compiled to WASM via `wasm-pack`. All pixel data lives in GPU textures managed by the Rust engine. JS never touches raw pixels in the render path.
 - **State**: Zustand store holds the document model (layers, history, selection, UI). Each frame, `engine-sync.ts` diffs the Zustand state against tracked engine state and pushes only what changed to the WASM engine via typed bridge functions.
 - **No backend**. Everything runs in the browser. No API calls for core functionality.
 - **Web Workers** for heavy computation (filters, image encode/decode). Keep the main thread free.
 
-## Rust/WASM Engine (`engine-rs/`)
+## Rust/WASM Engine (`engine/`)
 
-The rendering engine is split into three crates. `lopsy-core` is CPU-only,
-`lopsy-engine` is the engine with no host, and `lopsy-wasm` is the browser
-host that `wasm-pack` builds. A fourth, `lopsy-shaderc`, runs only in
-`lopsy-engine`'s build script:
+The rendering engine is a Cargo workspace in `engine/`. The engine crate
+itself (`lopsy-engine`, with no host) is at its top; `core/` is CPU-only
+(`lopsy-core`); `hosts/wasm/` is the browser host that `wasm-pack` builds
+(`lopsy-wasm`); and `shaderc/` (`lopsy-shaderc`) runs only in the engine's
+build script:
 
 ```
-engine-rs/
-  crates/
-    lopsy-core/       # Pure Rust utilities (no web dependencies)
-      src/
-        blend.rs        # Blend mode math
-        brush.rs        # Brush dab geometry
-        color.rs        # Color space conversions
-        compress.rs     # RLE compression for undo snapshots
-        layer.rs        # Layer descriptor types (GlowDesc, ShadowDesc, etc.)
-        pixel_buffer.rs # crop_to_content_bounds, pixel utilities
-        sparse.rs       # Sparse pixel storage (from_sparse, to_sparse)
-        flood_fill.rs   # Bucket fill algorithm
-        selection.rs    # Selection mask operations
-    lopsy-shaderc/    # Build-time only: WGSL -> GLSL ES 3.00 through naga
-    lopsy-wasm/       # Browser host: wasm-bindgen exports only
+engine/
+  core/             # lopsy-core: pure Rust utilities (no web dependencies)
+    src/
+      blend.rs        # Blend mode math
+      brush.rs        # Brush dab geometry
+      color.rs        # Color space conversions
+      compress.rs     # RLE compression for undo snapshots
+      layer.rs        # Layer descriptor types (GlowDesc, ShadowDesc, etc.)
+      pixel_buffer.rs # crop_to_content_bounds, pixel utilities
+      sparse.rs       # Sparse pixel storage (from_sparse, to_sparse)
+      flood_fill.rs   # Bucket fill algorithm
+      selection.rs    # Selection mask operations
+  shaderc/          # lopsy-shaderc: build-time only, WGSL -> GLSL ES 3.00 through naga
+  hosts/
+    wasm/           # lopsy-wasm: browser host, wasm-bindgen exports only
       src/
         lib.rs            # Engine handle, createEngine, a few CPU helpers
         api/              # One export per command; each is a single call
-    lopsy-engine/     # WebGL2 engine. No #[wasm_bindgen] anywhere
-      src/
-        commands/         # What a host can ask for: plain Rust in, Result<_, String> out
-        host.rs           # Logging, clock and "the GPU is gone", installed by the host
-        task.rs           # `Cx`: lends the engine to an async command one poll at a time
-        imaging/          # Adjustments and filters as passes over a source texture; no layers
-        engine.rs         # EngineInner struct: holds all GPU state
-        compositor.rs     # Per-frame compositing pipeline
-        layer_manager.rs  # Texture upload/read/duplicate for layers
-        brush_gpu.rs      # Brush & eraser dab rendering (GPU)
-        clone_stamp_gpu.rs # Clone stamp per-dab rendering
-        filter_gpu.rs     # GPU filter dispatch (blur, invert, etc.)
-        gradient_gpu.rs   # Linear/radial gradient rendering
-        shape_gpu.rs      # Shape rasterization (rect, ellipse, polygon)
-        selection_gpu.rs  # Selection mask GPU operations
-        dodge_burn_gpu.rs # Dodge/burn tool
-        overlay_renderer.rs # Grid, rulers, marching ants, brush cursor
-        color_mgmt.rs     # ICC profile, wide-gamut support
-        gpu/
-          pass.rs         # The pass layer: the only way feature code draws
-          shader.rs       # The typed shader list and the compiled programs
-          uniforms.rs     # Typed uniform structs (`uniforms!`) and their checks
-          params/         # One uniform struct per shader, grouped like shaders/
-          shaders/        # WGSL source files (see below)
-          webgl/          # The WebGL2 backend: the only code that names WebGL
-            context.rs      # WebGL2 context wrapper, extension detection
-            texture_pool.rs # Texture allocation, RGBA8/RGBA16F, upload/read
-            framebuffer.rs  # FBO pool for render-to-texture
-            program.rs      # Shader compilation, linking, uniform upload
-            pass.rs         # What a pass does to the WebGL context
-          read.rs         # `Read<T>`: a readback the backend completes when it can
-          wgpu/           # The wgpu backend, compiled in place of webgl/ by
-                          # `--features wgpu`: the same modules as webgl/, plus
-            read.rs         # texture -> buffer -> mapped bytes, as a `Read`
+  Cargo.toml        # The workspace, and the lopsy-engine crate
+  build.rs          # Translates the shaders and embeds the built-in brushes
+  tests/            # Render tests on a native GPU (`--features native`)
+  src/              # lopsy-engine: the engine. No #[wasm_bindgen] anywhere
+    commands/         # What a host can ask for: plain Rust in, Result<_, String> out
+    host.rs           # Logging, clock and "the GPU is gone", installed by the host
+    task.rs           # `Cx`: lends the engine to an async command one poll at a time
+    imaging/          # Adjustments and filters as passes over a source texture; no layers
+    engine.rs         # EngineInner struct: holds all GPU state
+    compositor.rs     # Per-frame compositing pipeline
+    layer_manager.rs  # Texture upload/read/duplicate for layers
+    brush_gpu.rs      # Brush & eraser dab rendering (GPU)
+    clone_stamp_gpu.rs # Clone stamp per-dab rendering
+    filter_gpu.rs     # GPU filter dispatch (blur, invert, etc.)
+    gradient_gpu.rs   # Linear/radial gradient rendering
+    shape_gpu.rs      # Shape rasterization (rect, ellipse, polygon)
+    selection_gpu.rs  # Selection mask GPU operations
+    dodge_burn_gpu.rs # Dodge/burn tool
+    overlay_renderer.rs # Grid, rulers, marching ants, brush cursor
+    color_mgmt.rs     # ICC profile, wide-gamut support
+    gpu/
+      pass.rs         # The pass layer: the only way feature code draws
+      shader.rs       # The typed shader list and the compiled programs
+      uniforms.rs     # Typed uniform structs (`uniforms!`) and their checks
+      params/         # One uniform struct per shader, grouped like shaders/
+      shaders/        # WGSL source files (see below)
+      webgl/          # The WebGL2 backend: the only code that names WebGL
+        context.rs      # WebGL2 context wrapper, extension detection
+        texture_pool.rs # Texture allocation, RGBA8/RGBA16F, upload/read
+        framebuffer.rs  # FBO pool for render-to-texture
+        program.rs      # Shader compilation, linking, uniform upload
+        pass.rs         # What a pass does to the WebGL context
+      read.rs         # `Read<T>`: a readback the backend completes when it can
+      wgpu/           # The wgpu backend, compiled in place of webgl/ by
+                      # `--features wgpu`: the same modules as webgl/, plus
+        read.rs         # texture -> buffer -> mapped bytes, as a `Read`
 ```
 
 ### Key Shaders
@@ -200,9 +203,9 @@ gpu/shaders/
 
 ### Adding an engine function JS can call
 
-Write the logic as a function in `lopsy-engine/src/commands/` that takes
+Write the logic as a function in `engine/src/commands/` that takes
 `&mut EngineInner` and plain Rust values, then add a one-line
-`#[wasm_bindgen]` export in `lopsy-wasm/src/api/` that calls it. An export
+`#[wasm_bindgen]` export in `engine/hosts/wasm/src/api/` that calls it. An export
 never holds logic, and nothing in `lopsy-engine` outside `gpu/` names
 `wasm_bindgen`, `web_sys` or `js_sys`: log through `host::log` and read the
 time with `host::now_ms`.
@@ -213,7 +216,7 @@ on the pixels), or, when it needs the engine again after the read, it is
 an `async fn` that takes a `task::Cx` and owned arguments and borrows the
 engine with `cx.with(|engine| ...)`, re-checking that what it read is
 still there before writing. Its export is declared with `readback_export!`
-(`lopsy-wasm/src/readback.rs`) and wrapped in `asyncReadback` in
+(`engine/hosts/wasm/src/readback.rs`) and wrapped in `asyncReadback` in
 `wasm-bridge.ts`: pass `'any-time'` only for a read whose result changes
 nothing in the document (a thumbnail, the eyedropper).
 
@@ -286,7 +289,7 @@ change a `.wgsl` file.
 ### Build
 
 ```bash
-cd engine-rs && wasm-pack build crates/lopsy-wasm --target web --out-dir ../../src/engine-wasm/pkg
+cd engine && wasm-pack build hosts/wasm --target web --out-dir ../../../src/engine-wasm/pkg
 ```
 
 Output goes to `src/engine-wasm/pkg/` (gitignored generated files). The JS bridge in `src/engine-wasm/wasm-bridge.ts` re-exports typed functions from the pkg.
@@ -303,7 +306,7 @@ Each frame: clear composite FBO → for each visible layer: render behind-effect
 
 When only the viewport (or channel mask) changed, `render` skips all of that and runs just the final blit (`compositor::present`) from the existing composite texture: those setters set `needs_present`, not `needs_recomposite`. Anything that writes the composite texture outside `composite()` (export, single-layer bake) must set `needs_recomposite`.
 
-Effect images (glows, shadow, stroke) are cached per layer in the live compositor (`effect_cache_gpu.rs`, policy in `lopsy-core/src/effect_cache.rs`) and replayed until the layer's content generation, position, opacity, mask state or effect settings change. The content generation is bumped by `mark_layer_dirty(id)`, so **every layer- or mask-texture writer must call `mark_layer_dirty` with the id it wrote** — a writer that doesn't leaves stale effects on screen. Export and Rasterize Layer Style never use the cache. The live compositor also scissors each layer blend (`blend_layer_rect_onto_target`) and effect blend (`EffectOut::clip`) to its rectangle — exact because the blend shader passes the destination through outside the source; seamless wrap keeps the full pass.
+Effect images (glows, shadow, stroke) are cached per layer in the live compositor (`effect_cache_gpu.rs`, policy in `engine/core/src/effect_cache.rs`) and replayed until the layer's content generation, position, opacity, mask state or effect settings change. The content generation is bumped by `mark_layer_dirty(id)`, so **every layer- or mask-texture writer must call `mark_layer_dirty` with the id it wrote** — a writer that doesn't leaves stale effects on screen. Export and Rasterize Layer Style never use the cache. The live compositor also scissors each layer blend (`blend_layer_rect_onto_target`) and effect blend (`EffectOut::clip`) to its rectangle — exact because the blend shader passes the destination through outside the source; seamless wrap keeps the full pass.
 
 ### Undo/Redo and GPU Textures
 

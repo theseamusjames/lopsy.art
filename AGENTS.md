@@ -25,7 +25,7 @@ The codebase has two main parts: a TypeScript frontend and a Rust rendering engi
 - `layers/`, `history/`, `selection/` — Layer model, undo/redo system, and selection operations.
 - `styles/` — Design tokens in CSS custom properties (`tokens.css`). All colors, spacing, radii, and font sizes come from here.
 
-### Rust engine (`engine-rs/`)
+### Rust engine (`engine/`)
 
 Three crates:
 

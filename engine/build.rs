@@ -57,7 +57,7 @@ fn variant_sources(variants: &[&str]) -> String {
 fn main() {
     translate_shaders(Path::new(&std::env::var("OUT_DIR").unwrap()));
 
-    let brushes_dir = Path::new("../../brushes");
+    let brushes_dir = Path::new("brushes");
     println!("cargo:rerun-if-changed={}", brushes_dir.display());
 
     let out_dir = std::env::var("OUT_DIR").unwrap();

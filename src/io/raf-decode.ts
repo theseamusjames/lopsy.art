@@ -3,7 +3,7 @@
  * decompress, white balance); then the frame is cut into row bands that
  * every worker renders (demosaic, denoise, tone, sharpen) concurrently.
  * Bands carry enough overlapping context rows that stitching them is exact
- * (see `BAND_HALO_ROWS` in engine-rs/crates/lopsy-core/src/raf/mod.rs).
+ * (see `BAND_HALO_ROWS` in engine/core/src/raf/mod.rs).
  *
  * Workers are spawned per import and terminated afterwards, which also
  * hands their (never-shrinking) WASM memory back to the browser.

@@ -74,7 +74,7 @@ pub fn compute_edge_distance(alpha: &[u8], width: usize, height: usize, threshol
 /// Coverage for one pixel of the GPU round-brush dab, at distance `dist`
 /// from the dab centre, for a dab of the given `radius` and `hardness`
 /// (0-1). This mirrors `circleStamp` in
-/// `lopsy-engine/src/gpu/shaders/include/brush_dab_header.wgsl` exactly —
+/// `engine/src/gpu/shaders/include/brush_dab_header.wgsl` exactly —
 /// keep the two in sync. It exists so the coverage math (in particular
 /// the small-radius floor fixed for #849) can be unit tested without a
 /// WebGL context.

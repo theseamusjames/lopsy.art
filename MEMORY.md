@@ -133,7 +133,7 @@ Playwright Chromium build (2026-06).
 Vitest. `cargo fmt --check` fails with ~1,190 pre-existing diffs
 repo-wide — don't reformat unrelated files; check that your own hunks
 are clean by diffing the violation count against a pristine checkout
-(`git archive HEAD engine-rs | tar -x -C /tmp/...`).
+(`git archive HEAD engine | tar -x -C /tmp/...`).
 
 ## Font loading: catalog-baked TTF paths + latin css2 subset
 

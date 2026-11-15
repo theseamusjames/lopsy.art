@@ -1,6 +1,6 @@
 # Engine Migration Plan: WebGL → portable engine on wgpu
 
-Goal: turn `engine-rs/` into an engine that several apps can consume
+Goal: turn `engine/` into an engine that several apps can consume
 (Lopsy web, a native Lopsy, a raw editor, iOS apps), rendering through
 wgpu so one codebase covers WebGPU, Metal, Vulkan and DX12.
 
@@ -172,8 +172,8 @@ on the specs that exercise them:
    specs: the engine's export composite, a hash of every layer, and the
    canvas pixels (which also show what is drawn only to the screen).
 2. Run the specs with `PARITY_OUT` set, on the new engine.
-3. `git checkout <base> -- engine-rs && npm run wasm:build`, run them
-   again into a second directory, then `git checkout HEAD -- engine-rs`
+3. `git checkout <base> -- engine && npm run wasm:build`, run them
+   again into a second directory, then `git checkout HEAD -- engine`
    and rebuild.
 4. `node scripts/parity-compare.mjs <old-dir> <new-dir>`.
 5. `git checkout -- e2e` to drop the instrumentation.
@@ -743,8 +743,8 @@ Phase 1. Keeping it separate makes both sets of PRs smaller.
 
 **As built (3.1 to 3.3).**
 
-- *3.1.* Every export in `lopsy-wasm/src/api/` is one call into the
-  function of the same name in `lopsy-engine/src/commands/`, which takes
+- *3.1.* Every export in `engine/hosts/wasm/src/api/` is one call into the
+  function of the same name in `engine/src/commands/`, which takes
   `&mut EngineInner` and plain Rust values and returns `Result<_,
   String>` where it can fail. The 284 bodies were moved by script and
   are otherwise unchanged. Doc comments went with them, so the generated
@@ -1590,7 +1590,7 @@ Started when a second app is actually being built.
   browser grid and for bulk export.
 - **FFI host.** A C interface over the same engine functions the wasm
   host calls.
-- **Repo layout.** Move `engine-rs/` to `engine/` and `src/` to
+- **Repo layout.** Move `engine/` to `engine/` and `src/` to
   `apps/lopsy-web/`. Large diffs, purely mechanical, one directory per
   PR. `docs/hdr-support.md` goes into `apps/lopsy-web/` with the app: it
   says that full HDR support needs engine work for HDR editing, beyond

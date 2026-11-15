@@ -13,7 +13,7 @@ wgpu = ["dep:wgpu"]
 native = ["wgpu", "wgpu/metal", "wgpu/vulkan", "wgpu/dx12"]
 
 [dependencies]
-lopsy-core = { path = "../lopsy-core" }
+lopsy-core = { path = "core" }
 # WebGPU only. wgpu's own WebGL backend would add about 3 MB to the wasm
 # (docs/engine-migration-plan.md, spike S1); the hand-written one in
 # gpu/webgl is the fallback. 30.0.1 was released 2026-08-22.
@@ -34,7 +34,7 @@ name = "render"
 required-features = ["native"]
 
 [build-dependencies]
-lopsy-shaderc = { path = "../lopsy-shaderc" }
+lopsy-shaderc = { path = "shaderc" }
 
 [dependencies.web-sys]
 version = "=0.3.107"
@@ -51,3 +51,32 @@ features = [
     "WebGlVertexArrayObject",
     "ImageBitmap",
 ]
+
+# The engine crate lives here, at the top of the workspace: `src/` is the
+# engine (gpu, imaging, commands, the document's layers and compositor),
+# `core/` the CPU-only code it stands on, `shaderc/` its build-time shader
+# translator, and `hosts/` what embeds it.
+[workspace]
+resolver = "2"
+members = [
+    ".",
+    "core",
+    "shaderc",
+    "hosts/wasm",
+]
+# Without this, a bare `cargo test` here would build only the engine.
+default-members = [
+    ".",
+    "core",
+    "shaderc",
+    "hosts/wasm",
+]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+# Unwinding cannot cross the WASM boundary anyway — abort keeps the
+# binary smaller and failure behavior explicit.
+panic = "abort"
+strip = "debuginfo"

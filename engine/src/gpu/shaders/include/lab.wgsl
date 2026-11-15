@@ -1,6 +1,6 @@
 // Encoded CIELAB <-> sRGB, shared through `//#include lab`.
 // Lab documents store encoded CIELAB in their textures (L in R, a in G,
-// b in B; see lopsy-core/src/lab.rs). These mirror that module's math
+// b in B; see engine/core/src/lab.rs). These mirror that module's math
 // exactly, so a GPU decode/encode agrees with the CPU export path.
 const LAB_D50_WHITE = vec3<f32>(0.9642, 1.0000, 0.8249);
 const LAB_DELTA: f32 = 6.0 / 29.0;

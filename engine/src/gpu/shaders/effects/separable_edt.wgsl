@@ -1,5 +1,5 @@
 // Wide Stroke band as an exact Euclidean distance test, in two separable
-// passes (CPU statement and tests: lopsy-core/src/stroke_band.rs).
+// passes (CPU statement and tests: engine/core/src/stroke_band.rs).
 // Pass 0 (rows): seeds are texels with alpha >= 0.5; writes the distance to
 // the nearest seed in the texel's row, split over R (high byte) and G (low
 // byte) so it survives an RGBA8 target exactly.
