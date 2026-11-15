@@ -2,7 +2,7 @@
 // Measures initial load time of the production build, per
 // docs/engine-migration-plan.md ("Budgets").
 //
-//   npm run build && node scripts/measure-load-time.mjs [--runs N] [--headed] [--software]
+//   npm run build && node scripts/measure-load-time.mjs [--runs N] [--headed] [--software] [--renderer wgpu]
 //
 // Serves dist/ with `vite preview`, then does N cold loads, each in a
 // freshly launched browser so nothing is cached. Per load it reports:
@@ -16,6 +16,11 @@
 // compiled-shader cache across browser launches, so only that run pays
 // the full compile. That is what a first-time visitor pays, so it is
 // reported separately instead of being averaged away.
+//
+// `--renderer wgpu` loads `/?renderer=wgpu`, the wgpu build of the engine,
+// where engineCreate is the WebGPU device plus the shader modules (its
+// pipelines are made when first drawn with). The wasm files fetched are
+// listed, which shows the build that ran.
 //
 // The GPU renderer string is printed too, because shader compile time on
 // SwiftShader (software GL) says little about a real GPU; pass --software
@@ -36,6 +41,9 @@ const runsFlag = args.indexOf('--runs');
 const runs = runsFlag === -1 ? 7 : Number(args[runsFlag + 1]);
 const headed = args.includes('--headed');
 const software = args.includes('--software');
+const rendererFlag = args.indexOf('--renderer');
+const renderer = rendererFlag === -1 ? null : args[rendererFlag + 1];
+const pageUrl = renderer ? `${URL_BASE}?renderer=${renderer}` : URL_BASE;
 
 if (!existsSync(join(ROOT, 'dist', 'index.html'))) {
   console.error('No production build in dist/. Run: npm run build');
@@ -73,13 +81,16 @@ async function measureOnce() {
     headless: !headed,
     // The default headless shell has no GPU; the full Chromium binary does.
     channel: 'chromium',
-    args: software
-      ? ['--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist']
-      : ['--ignore-gpu-blocklist', '--enable-gpu'],
+    args: [
+      ...(software
+        ? ['--use-gl=angle', '--use-angle=swiftshader', '--ignore-gpu-blocklist']
+        : ['--ignore-gpu-blocklist', '--enable-gpu']),
+      ...(renderer === 'wgpu' ? ['--enable-unsafe-webgpu'] : []),
+    ],
   });
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-    await page.goto(URL_BASE, { waitUntil: 'load' });
+    await page.goto(pageUrl, { waitUntil: 'load' });
     await page.waitForFunction(() => performance.getEntriesByName('lopsy:wasm-init').length > 0);
     await page
       .getByRole('dialog', { name: 'New Document' })
@@ -90,15 +101,16 @@ async function measureOnce() {
     return await page.evaluate(() => {
       const wasmInit = performance.getEntriesByName('lopsy:wasm-init')[0];
       const engineCreate = performance.getEntriesByName('lopsy:engine-create')[0];
-      const wasmResource = performance
+      const wasmResources = performance
         .getEntriesByType('resource')
-        .find((entry) => entry.name.endsWith('.wasm'));
+        .filter((entry) => entry.name.endsWith('.wasm'));
       const gl = document.createElement('canvas').getContext('webgl2');
       const info = gl?.getExtension('WEBGL_debug_renderer_info');
       return {
         wasmInit: wasmInit.duration,
         engineCreate: engineCreate.duration,
-        wasmTransfer: wasmResource ? wasmResource.transferSize : 0,
+        wasmTransfer: wasmResources.reduce((sum, entry) => sum + entry.transferSize, 0),
+        wasmFiles: wasmResources.map((entry) => entry.name.split('/').pop()).join(', '),
         renderer: gl && info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : 'unknown',
       };
     });
@@ -123,6 +135,7 @@ try {
 }
 
 console.log(`\nrenderer: ${samples[0].renderer}`);
+console.log(`wasm fetched: ${samples[0].wasmFiles}`);
 console.log(`${runs} cold loads (median / slowest):`);
 for (const key of ['wasmInit', 'engineCreate']) {
   const values = samples.map((s) => s[key]);
