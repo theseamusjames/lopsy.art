@@ -686,12 +686,14 @@ let parkedReadbacks = 0;
 
 /**
  * How many readbacks are out: commands the engine has parked until their
- * pixels arrive. Always 0 on WebGL. A test that records the document's
- * state waits for this to reach 0, since work that follows a readback (a
- * deferred crop, a thumbnail) has not happened yet.
+ * pixels arrive, plus one while in-turn reads are waiting their turn or a
+ * caller has yet to act on one that just answered. Always 0 on WebGL. A
+ * test that records the document's state waits for this to reach 0, since
+ * work that follows a readback (a deferred crop, a thumbnail) has not
+ * happened yet.
  */
 export function parkedReadbackCount(): number {
-  return parkedReadbacks;
+  return parkedReadbacks + (turn === null ? 0 : 1);
 }
 
 /**
