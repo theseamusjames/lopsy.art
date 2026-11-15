@@ -130,6 +130,23 @@ export function peekLayerContentRectLocal(engine: Engine, layerId: string): Rect
 }
 
 /**
+ * Texture-local content rects of several layers, each true of its layer as
+ * it is when this resolves. A rect awaited from `readLayerContentRectLocal`
+ * is the layer's as it was when asked, and on a backend whose reads answer
+ * later something else waiting on the same read can change the layer before
+ * the caller gets to act: the crop of a layer the user has just left does.
+ * So the rects are taken from the cache for the layers as they now are, and
+ * read again for any that changed.
+ */
+export async function readLayerContentRectsLocal(engine: Engine, layerIds: readonly string[]): Promise<(Rect | null)[]> {
+  for (;;) {
+    await Promise.all(layerIds.map((id) => readLayerContentRectLocal(engine, id)));
+    const rects = layerIds.map((id) => peekLayerContentRectLocal(engine, id));
+    if (rects.every((rect): rect is Rect | null => rect !== undefined)) return rects;
+  }
+}
+
+/**
  * Record that a layer's texture was just cropped to its content, so its
  * content fills the texture and the next ask reads nothing.
  */

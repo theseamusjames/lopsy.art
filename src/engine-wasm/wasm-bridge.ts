@@ -695,23 +695,67 @@ export function parkedReadbackCount(): number {
 }
 
 /**
+ * Settles when every in-turn readback issued so far has answered and what
+ * awaited it has run; null when none is out.
+ */
+let turn: Promise<unknown> | null = null;
+
+/**
+ * The turn passes a task after `until` settles, not in the same one: the
+ * caller that awaited the readback acts on it some microtasks later, and
+ * the next read must come after that.
+ */
+function holdTurn(until: Promise<unknown>): void {
+  const mine: Promise<void> = until
+    .then(noop, noop)
+    .then(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
+    .then(() => {
+      if (turn === mine) turn = null;
+    });
+  turn = mine;
+}
+
+function noop(): void {}
+
+/**
  * Makes a function that reads pixels back from the GPU answer with a
  * Promise. WebGPU cannot read back synchronously: there the engine answers
  * with a parked command, which this waits out. On WebGL the read has
  * already happened and the Promise is resolved (or rejected, if the read
  * threw) on return.
+ *
+ * `order` matters only while a readback is out, so only on wgpu. A caller
+ * usually changes the document with what it read: the crop of a layer left
+ * behind, a flip, a fill. On WebGL nothing can come between such a read and
+ * the change that follows it. So an `'in-turn'` read issued while another
+ * is out waits for that one to answer and for its caller to act on it, and
+ * then reads what that left. `'any-time'` is for reads nothing is changed
+ * by, which need not wait and are not waited for: thumbnails, the
+ * eyedropper.
  */
 function asyncReadback<Args extends [Engine, ...unknown[]], Result>(
   read: (...args: Args) => Result,
+  order: 'in-turn' | 'any-time' = 'in-turn',
 ): (...args: Args) => Promise<Result> {
   return (...args: Args): Promise<Result> => {
-    try {
-      const value: unknown = read(...args);
-      if (isPendingReadback(value)) return finishReadback<Result>(args[0], value);
-      return Promise.resolve(value as Result);
-    } catch (err) {
-      return Promise.reject(err);
+    const issue = (): { answer: Promise<Result>; isParked: boolean } => {
+      try {
+        const value: unknown = read(...args);
+        if (isPendingReadback(value)) return { answer: finishReadback<Result>(args[0], value), isParked: true };
+        return { answer: Promise.resolve(value as Result), isParked: false };
+      } catch (err) {
+        return { answer: Promise.reject(err), isParked: false };
+      }
+    };
+    if (order === 'any-time') return issue().answer;
+    if (turn === null) {
+      const issued = issue();
+      if (issued.isParked) holdTurn(issued.answer);
+      return issued.answer;
     }
+    const answer = turn.then(() => issue().answer);
+    holdTurn(answer);
+    return answer;
   };
 }
 
@@ -719,7 +763,7 @@ export const compositeForExport = asyncReadback(rawCompositeForExport);
 export const exportPng16 = asyncReadback(rawExportPng16);
 export const quantizeCompositeToPalette = asyncReadback(rawQuantizeCompositeToPalette);
 export const readLayerPixels = asyncReadback(rawReadLayerPixels);
-export const sampleColor = asyncReadback(rawSampleColor);
+export const sampleColor = asyncReadback(rawSampleColor, 'any-time');
 /** A layer's pixels in document space, as the wand, bucket fill and quick select read them. */
 export const readLayerPixelsForFill = asyncReadback(rawReadLayerPixelsForFill);
 /** The selection texture's coverage: `[width, height]` as u32 LE, then one byte per pixel. */
@@ -753,9 +797,9 @@ export const clipboardCopyMerged = asyncReadback(rawClipboardCopyMerged);
  * it resolves there is no field: the caller passes its points through.
  */
 export const magneticLassoBegin = asyncReadback(rawMagneticLassoBegin);
-export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail);
-export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail);
-export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail);
+export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail, 'any-time');
+export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail, 'any-time');
+export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail, 'any-time');
 export const readClipboardPixels = asyncReadback(rawReadClipboardPixels);
 /** The quick mask's coverage: `[width, height]` as i32 LE, then one byte per pixel. */
 export const readQuickMaskPixels = asyncReadback(rawReadQuickMaskPixels);
