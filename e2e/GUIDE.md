@@ -547,6 +547,40 @@ class of bug where the entire texture fills with garbage.
 
 ---
 
+## Running on the WebGPU engine
+
+The suite runs against either build of the engine. WebGL is the default;
+`LOPSY_RENDERER=wgpu npx playwright test ...` runs the wgpu build (build it
+first with `npm run wasm:build:wgpu`). A spec should pass on both without
+knowing which it has. What differs, and what the harness already does
+about it:
+
+- **Readbacks answer later.** On WebGL a GPU read is done when the call
+  returns. On wgpu it answers a frame or more later, and so does whatever
+  the app does with it: the crop of a layer left behind, a thumbnail, the
+  start of a Move drag. On wgpu `page.evaluate` therefore first waits for
+  the engine to have nothing out, and `waitForTimeout` and
+  `waitForSelector` wait for it afterwards (`installSettledWaits` in
+  `parity.ts`, installed by `waitForStore`). So read state through
+  `page.evaluate` after a wait, as the specs already do; prefer
+  `expect(locator).toHaveText(...)` over reading the DOM straight after an
+  input.
+- **`__readCompositedPixels` reads the presented canvas** on both, bottom
+  row first, premultiplied.
+- **A spec that asserts how WebGL does something** (it counts `readPixels`,
+  `texSubImage2D` or `scissor` calls on the context) calls
+  `skipOnWgpu(test, why)` at the top of the file.
+- **Losing the GPU**: use `loseAndRestoreGraphics(page)` from `helpers.ts`,
+  which loses the WebGL context or destroys the WebGPU device, whichever
+  the page has, with `allowConsoleErrors: GRAPHICS_LOSS_ERRORS`.
+- **Pixels**: document pixels match WebGL to within 1 per channel. Screen
+  pixels can also differ where a pixel centre lands exactly on a texel
+  boundary (a one-pixel column at the document's edge, say), so probe a
+  pixel or two inside an edge, not on it.
+
+`LOPSY_GPU=hardware` runs the chromium project on the machine's GPU instead
+of SwiftShader, for specs that measure time (`brush-perf-6k`).
+
 ## Choosing what to assert
 
 ### Read pixel content, not store plumbing
