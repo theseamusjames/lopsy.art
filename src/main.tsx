@@ -239,13 +239,18 @@ if (import.meta.env.DEV) {
         syncLayers(engine, doc.layers, doc.layerOrder, state.dirtyLayerIds, doc.colorMode);
         const id = layerId ?? doc.activeLayerId;
         if (!id) { resolve({ width: 0, height: 0, pixels: [] }); return; }
-        const dims = getLayerTextureDimensions(engine, id);
-        const w = dims?.[0] ?? 0;
-        const h = dims?.[1] ?? 0;
-        if (w === 0 || h === 0) { resolve({ width: 0, height: 0, pixels: [] }); return; }
+        if ((getLayerTextureDimensions(engine, id)?.[0] ?? 0) === 0) { resolve({ width: 0, height: 0, pixels: [] }); return; }
         readLayerPixels(engine, id).then(
           (pixels) => {
             if (!pixels || pixels.length === 0) { resolve({ width: 0, height: 0, pixels: [] }); return; }
+            // The size as it is now: on wgpu the read waits its turn, and a
+            // crop ahead of it may have resized the texture since it was
+            // asked. If the texture changed again while the read was out,
+            // read again.
+            const dims = getLayerTextureDimensions(engine, id);
+            const w = dims?.[0] ?? 0;
+            const h = dims?.[1] ?? 0;
+            if (pixels.length !== w * h * 4) { resolve(window.__readLayerPixels?.(layerId) ?? null); return; }
             resolve({ width: w, height: h, pixels: Array.from(pixels) });
           },
           () => resolve(null),

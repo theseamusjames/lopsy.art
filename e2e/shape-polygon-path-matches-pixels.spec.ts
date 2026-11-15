@@ -44,8 +44,10 @@ async function compareOutlines(page: Page, fillLayerId: string, strokeLayerId: s
       id?: string,
     ) => Promise<{ width: number; height: number; pixels: number[] } | null>;
     const opaqueMask = async (id: string): Promise<Uint8Array> => {
-      const layer = store.getState().document.layers.find((l) => l.id === id)!;
       const res = await readFn(id);
+      // After the read: a deferred crop that lands while it is out moves the
+      // layer, and the pixels read are the cropped ones.
+      const layer = store.getState().document.layers.find((l) => l.id === id)!;
       const mask = new Uint8Array(w * h);
       if (!res) return mask;
       for (let y = 0; y < res.height; y++) {
