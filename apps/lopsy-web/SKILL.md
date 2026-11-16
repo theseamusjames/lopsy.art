@@ -66,7 +66,7 @@ It opens <https://lopsy.art/> headless at 1600×1000 and listens on
 | `DRIVER_PORT` | `47391` | Change if the port is taken. |
 | `OUT_DIR` | `./lopsy-out` | Where screenshots, exports and projects are written. |
 | `HEADED` | unset | `1` shows the browser window. |
-| `REAL_GPU` | unset | `1` drops the SwiftShader flags. Much faster on a machine with a GPU. |
+| `REAL_GPU` | unset | `1` uses the GPU instead of SwiftShader (on Linux through ANGLE's GL/EGL backend). Much faster on a machine with a GPU. |
 
 ## The technique
 
@@ -153,10 +153,13 @@ const PORT = Number(process.env.DRIVER_PORT ?? 47391);
 const OUT = process.env.OUT_DIR ?? './lopsy-out';
 fs.mkdirSync(OUT, { recursive: true });
 
+// SwiftShader makes WebGL2 work on any headless/CI machine; a real GPU is much
+// faster. Headless Chromium on Linux falls back to SwiftShader unless ANGLE is
+// told to use the GPU's GL driver; elsewhere no flags pick the GPU.
+const GPU_ARGS = process.platform === 'linux' ? ['--use-gl=angle', '--use-angle=gl-egl', '--ignore-gpu-blocklist'] : [];
 const browser = await chromium.launch({
   headless: process.env.HEADED !== '1',
-  // A real GPU is much faster; SwiftShader makes WebGL2 work on headless/CI machines.
-  args: process.env.REAL_GPU === '1' ? [] : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
+  args: process.env.REAL_GPU === '1' ? GPU_ARGS : ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'],
 });
 const context = await browser.newContext({
   viewport: { width: 1600, height: 1000 },
@@ -168,6 +171,15 @@ page.setDefaultTimeout(15000);
 page.on('dialog', (d) => d.accept());
 await page.goto(LOPSY_URL);
 await page.getByRole('dialog', { name: 'New Document' }).waitFor();
+const RENDERER = await page.evaluate(() => {
+  const gl = document.createElement('canvas').getContext('webgl2');
+  const info = gl?.getExtension('WEBGL_debug_renderer_info');
+  return gl ? String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER)) : 'no WebGL2';
+});
+console.log(`renderer: ${RENDERER}`);
+if (process.env.REAL_GPU === '1' && /SwiftShader/i.test(RENDERER)) {
+  console.log('warning: REAL_GPU=1 but the browser fell back to SwiftShader; adjust GPU_ARGS (see SKILL.md)');
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -362,11 +374,14 @@ const h = {
   // ---- text ------------------------------------------------------------------------
   // Point text in the current FG colour. Click in EMPTY canvas: a click inside an
   // existing text layer's box edits that layer instead. Tab commits.
+  // Size and font are set AFTER the click: set while a committed text layer is
+  // active (as it is after the previous h.text), they would restyle that layer.
   async text(x, y, str, { font, size } = {}) {
     await h.tool('text');
+    await h.click(x, y);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // let the edit start
     if (size) await h.option('Size', size);
     if (font) await h.font(font);
-    await h.click(x, y);
     await page.keyboard.type(str);
     await page.keyboard.press('Tab');
     await sleep(300);
@@ -704,8 +719,9 @@ These are by design, and the helpers already handle most of them:
   edits that layer (and loads its font and size) instead of creating a new
   one. Create new text in empty canvas and move it afterwards. Tab commits,
   Escape cancels, and plain Enter inserts a newline. Changing font or size
-  with a text layer active restyles *that* layer, so set them before you
-  click.
+  with a committed text layer active restyles *that* layer, and a new text
+  layer is active straight after Tab. So click to start the new text first,
+  then set font and size while it is being edited, as `h.text` does.
 - **`Cmd+A` selects the canvas, not the layers.** It selects every layer
   only while keyboard focus is inside the Layers panel, which `h.blur()`
   clears. While editing text it selects the text.
@@ -723,7 +739,11 @@ These are by design, and the helpers already handle most of them:
   Filters, blurs and effects on large canvases can take tens of seconds.
   Keep documents around 1000–2000 px on the long side, keep the default 15 s
   locator timeout, give filter dialogs up to 2 minutes, and use
-  `REAL_GPU=1` when the machine has a GPU. Many live layer effects slow every
+  `REAL_GPU=1` when the machine has a GPU. The driver prints the WebGL
+  renderer at startup: if it names SwiftShader under `REAL_GPU=1`, the GPU
+  was not picked up. Edit `GPU_ARGS` in the driver for your platform (on
+  Linux, `--use-angle=vulkan --enable-features=Vulkan --ignore-gpu-blocklist`
+  is the other combination known to work). Many live layer effects slow every
   later operation down. Once a layer's look is final, bake it with
   **Rasterize Layer Style** in its effects drawer.
 - **Colours look more saturated than their hex values.** On a Display P3
