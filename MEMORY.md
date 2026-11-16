@@ -653,3 +653,12 @@ value is then the x it was pulled from.
 `npm run wasm:build` has wasm-pack download binaryen for `wasm-opt`; when
 the sandbox can't reach that GitHub release the build fails. `npm run
 wasm:build:dev` skips `wasm-opt` and is enough for running e2e tests.
+
+## WebGL: unbind sampler units before drawing into a texture the compositor samples
+On WebGL a draw into a texture that is still bound to a texture unit for
+sampling is a feedback loop and is silently dropped. The compositor
+leaves the last layer/mask textures it sampled bound, so the first draw
+after a frame into one of them (a pencil click on a layer mask, #1660)
+vanished while drags worked, because each later segment followed a pass
+that rebound the units. Writers that render straight into a layer or mask
+texture call `engine.gpu().unbind_textures(n)` first (a no-op on wgpu).

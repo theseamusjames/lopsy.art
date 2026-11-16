@@ -122,6 +122,13 @@ pub(crate) fn draw_pencil_blocks_gpu(
     let points = lopsy_core::brush::interpolate_points(x0, y0, x1, y1, 1.0);
     if points.len() < 2 { return; }
 
+    // The compositor leaves the mask it sampled bound to a texture unit,
+    // and drawing into a texture that is still bound for sampling is a
+    // WebGL feedback loop: the draw is dropped. A drag got away with it
+    // because each later segment followed a pencil pass, but a click or a
+    // Shift+click line is the first draw after a frame (#1660).
+    engine.gpu().unbind_textures(4);
+
     let half = (size / 2.0).floor() as i32;
     let block = size.ceil() as i32;
     let tex_w_i = w as i32;
