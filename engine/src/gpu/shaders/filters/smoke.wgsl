@@ -5,10 +5,10 @@ struct Params {
 }
 @group(0) @binding(0) var<uniform> params: Params;
 
+//#include lattice_hash
+
 fn hash(p: vec2<f32>) -> f32 {
-    var p3 = fract(p.xyx * 0.1031 + params.u_seed * 0.01);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
+    return lattice_hash(p, params.u_seed);
 }
 
 fn noise(p: vec2<f32>) -> f32 {
