@@ -29,7 +29,8 @@ const B: usize = 2;
 const VOTED: usize = 12;
 
 /// How far a pixel's result reaches into the mosaic: the voted image, the
-/// 9-tap blur of its colour difference and that blur's slope.
+/// 9-tap blur of its colour difference and that blur's slope. The blurred
+/// gradient of `find_directionless` reaches one pixel less.
 pub(super) const REACH: usize = VOTED + 4 + 2;
 
 const TILE: usize = 240;
@@ -75,6 +76,21 @@ const SATURATION_RAMP: (f32, f32) = (0.15, 0.35);
 /// Green disagreement, relative to green, below which a colour-difference
 /// sample counts as fully sure.
 const SURE_SPAN: f32 = 0.03;
+
+// The correction also applies, whatever those three conditions say, where
+// the vote's premise fails outright: the four greens disagree by much of
+// the local brightness and the structure around has no single direction (a
+// glyph a few pixels across). False colour there is dense enough to tint
+// the smooth colour difference itself, so the colour-edge and saturation
+// conditions, which read it, refuse exactly the pixels that most need the
+// correction.
+
+/// Largest green disagreement within two pixels, relative to luma.
+const SPREAD_RAMP: (f32, f32) = (0.6, 0.9);
+/// Coherence of the green gradient under the 9-tap blur: 0 where it points
+/// every way, 1 along a single edge. An edge keeps its vote however much
+/// the greens disagree across it.
+const COHERENCE_RAMP: (f32, f32) = (0.6, 0.8);
 
 /// A red or blue site. `toward` steps to the one green it touches that has
 /// no green neighbour (the lone green); `across` is the perpendicular axis,
@@ -259,6 +275,11 @@ struct Scratch {
     weight_smooth: Vec<f32>,
     chroma_smooth: [Vec<f32>; 2],
     green_smooth: Vec<f32>,
+    /// Products of the voted green's gradient (xx, xy, yy) and their blurs.
+    gradient: [Vec<f32>; 3],
+    gradient_smooth: [Vec<f32>; 3],
+    /// How far the correction applies regardless of its other conditions.
+    directionless: Vec<f32>,
     blur_rows: Vec<f32>,
     columns: Vec<usize>,
 }
@@ -283,6 +304,9 @@ impl Scratch {
             weight_smooth: plane(),
             chroma_smooth: [plane(), plane()],
             green_smooth: plane(),
+            gradient: [plane(), plane(), plane()],
+            gradient_smooth: [plane(), plane(), plane()],
+            directionless: plane(),
             blur_rows: plane(),
             columns: vec![0; STRIDE],
         }
@@ -317,6 +341,7 @@ pub(super) fn demosaic(raw: &[f32], w: usize, h: usize, layout: &Layout) -> Vec<
             vote(padded_rows, padded_cols, &mut scratch);
             weigh_chroma(layout, padded_rows, padded_cols, &mut scratch);
             smooth_chroma(padded_rows, padded_cols, &mut scratch);
+            find_directionless(padded_rows, padded_cols, &mut scratch);
             for row in 0..rows {
                 let out_row = &mut out[((top + row) * w + left) * 3..][..cols * 3];
                 settle_row(layout, &scratch, row + REACH, cols, out_row);
@@ -620,17 +645,17 @@ fn green_span(planes: &[f32], index: usize) -> (f32, f32) {
 
 const BINOMIAL_9: [f32; 9] = [1.0, 8.0, 28.0, 56.0, 70.0, 56.0, 28.0, 8.0, 1.0];
 
-/// 9-tap binomial blur each way. `source` must be valid `VOTED` pixels in
-/// from the padded edge; `smooth` is then valid at `VOTED + 4`.
-fn blur9(source: &[f32], rows_blurred: &mut [f32], smooth: &mut [f32], rows: usize, cols: usize) {
-    for pr in VOTED..rows - VOTED {
-        for index in pr * STRIDE + VOTED + 4..pr * STRIDE + cols - VOTED - 4 {
+/// 9-tap binomial blur each way. `source` must be valid `inset` pixels in
+/// from the padded edge; `smooth` is then valid at `inset + 4`.
+fn blur9(source: &[f32], rows_blurred: &mut [f32], smooth: &mut [f32], rows: usize, cols: usize, inset: usize) {
+    for pr in inset..rows - inset {
+        for index in pr * STRIDE + inset + 4..pr * STRIDE + cols - inset - 4 {
             let taps = &source[index - 4..=index + 4];
             rows_blurred[index] = taps.iter().zip(BINOMIAL_9).map(|(v, w)| v * w).sum::<f32>() / 256.0;
         }
     }
-    for pr in VOTED + 4..rows - VOTED - 4 {
-        for index in pr * STRIDE + VOTED + 4..pr * STRIDE + cols - VOTED - 4 {
+    for pr in inset + 4..rows - inset - 4 {
+        for index in pr * STRIDE + inset + 4..pr * STRIDE + cols - inset - 4 {
             let mut total = 0.0f32;
             for (tap, weight) in BINOMIAL_9.into_iter().enumerate() {
                 total += rows_blurred[shifted(index, (tap as isize - 4) * S)] * weight;
@@ -643,16 +668,74 @@ fn blur9(source: &[f32], rows_blurred: &mut [f32], smooth: &mut [f32], rows: usi
 /// The local colour difference as a weighted mean of the samples, and a
 /// blurred green to measure it against.
 fn smooth_chroma(rows: usize, cols: usize, scratch: &mut Scratch) {
-    blur9(&scratch.weight, &mut scratch.blur_rows, &mut scratch.weight_smooth, rows, cols);
+    blur9(&scratch.weight, &mut scratch.blur_rows, &mut scratch.weight_smooth, rows, cols, VOTED);
     for k in 0..2 {
-        blur9(&scratch.weighted_chroma[k], &mut scratch.blur_rows, &mut scratch.chroma_smooth[k], rows, cols);
+        blur9(&scratch.weighted_chroma[k], &mut scratch.blur_rows, &mut scratch.chroma_smooth[k], rows, cols, VOTED);
         for pr in VOTED + 4..rows - VOTED - 4 {
             for index in pr * STRIDE + VOTED + 4..pr * STRIDE + cols - VOTED - 4 {
                 scratch.chroma_smooth[k][index] /= scratch.weight_smooth[index];
             }
         }
     }
-    blur9(&scratch.voted[AREA..2 * AREA], &mut scratch.blur_rows, &mut scratch.green_smooth, rows, cols);
+    blur9(&scratch.voted[AREA..2 * AREA], &mut scratch.blur_rows, &mut scratch.green_smooth, rows, cols, VOTED);
+}
+
+/// The brightness the correction measures differences against.
+#[inline]
+fn brightness(scratch: &Scratch, index: usize) -> f32 {
+    scratch.green_smooth[index].max(0.0) + 0.01
+}
+
+/// Marks where the vote had nothing to go on: the directional greens
+/// disagree by much of the local brightness, and the gradient of the voted
+/// green, gathered over the blur, has no dominant direction. Its coherence
+/// is the relative gap between the two eigenvalues of the blurred gradient
+/// products (the structure tensor).
+///
+/// The gradient needs one pixel more of the voted image than the blur's
+/// own inset, so the blurred products are valid `VOTED + 5` pixels in. They
+/// are only built for a tile that has disagreement somewhere to judge.
+fn find_directionless(rows: usize, cols: usize, scratch: &mut Scratch) {
+    for pr in REACH - 2..rows - REACH + 2 {
+        for index in pr * STRIDE + REACH..pr * STRIDE + cols - REACH {
+            scratch.blur_rows[index] = scratch.span[index - 2..=index + 2].iter().copied().fold(0.0, f32::max);
+        }
+    }
+    let mut any = false;
+    for pr in REACH..rows - REACH {
+        for index in pr * STRIDE + REACH..pr * STRIDE + cols - REACH {
+            let spread = (-2..=2).map(|row| scratch.blur_rows[shifted(index, row * S)]).fold(0.0, f32::max);
+            let disagreement = ramp(spread / brightness(scratch, index), SPREAD_RAMP);
+            scratch.directionless[index] = disagreement;
+            any |= disagreement > 0.0;
+        }
+    }
+    if !any {
+        return;
+    }
+    let green = &scratch.voted[AREA..2 * AREA];
+    for pr in VOTED + 1..rows - VOTED - 1 {
+        for index in pr * STRIDE + VOTED + 1..pr * STRIDE + cols - VOTED - 1 {
+            let across = green[index + 1] - green[index - 1];
+            let down = green[index + STRIDE] - green[index - STRIDE];
+            scratch.gradient[0][index] = across * across;
+            scratch.gradient[1][index] = across * down;
+            scratch.gradient[2][index] = down * down;
+        }
+    }
+    for k in 0..3 {
+        blur9(&scratch.gradient[k], &mut scratch.blur_rows, &mut scratch.gradient_smooth[k], rows, cols, VOTED + 1);
+    }
+    let [xx, xy, yy] = &scratch.gradient_smooth;
+    for pr in REACH..rows - REACH {
+        for index in pr * STRIDE + REACH..pr * STRIDE + cols - REACH {
+            if scratch.directionless[index] > 0.0 {
+                let gap = (xx[index] - yy[index]).hypot(2.0 * xy[index]);
+                let coherence = gap / (xx[index] + yy[index] + f32::MIN_POSITIVE);
+                scratch.directionless[index] *= 1.0 - ramp(coherence, COHERENCE_RAMP);
+            }
+        }
+    }
 }
 
 #[inline]
@@ -662,7 +745,8 @@ fn ramp(value: f32, (from, to): (f32, f32)) -> f32 {
 
 /// Writes one output row, correcting the voted image where the vote had no
 /// consistent direction and the local colour difference is small and even
-/// (neutral fine detail). There the smooth colour difference is trusted
+/// (neutral fine detail), and wherever `find_directionless` says the vote
+/// had nothing to go on. There the smooth colour difference is trusted
 /// over the per-pixel one: at a red or blue site green moves toward what
 /// the site's own sample implies under it, but never outside the span of
 /// the four directional greens, so it stays an interpolation of measured
@@ -686,12 +770,13 @@ fn settle_row(layout: &Layout, scratch: &Scratch, padded_row: usize, cols: usize
         rgb[own] = scratch.mosaic[index];
         let mut trust = 1.0 - ramp(scratch.consistency[index], CONSISTENCY_RAMP);
         if trust > 0.0 {
-            let luma = scratch.green_smooth[index].max(0.0) + 0.01;
+            let luma = brightness(scratch, index);
             let slope = |p: &[f32]| (p[index + 2] - p[index - 2]).hypot(p[index + 2 * STRIDE] - p[index - 2 * STRIDE]);
             let edge = slope(smooth_red).max(slope(smooth_blue)) / luma;
             let saturation = smooth_red[index].hypot(smooth_blue[index]) / luma;
             trust *= (1.0 - ramp(edge, COLOUR_EDGE_RAMP)) * (1.0 - ramp(saturation, SATURATION_RAMP));
         }
+        let trust = trust.max(scratch.directionless[index]);
         if trust > 0.0 {
             let voted_green = rgb[G];
             if let Site::Colour(site) = site {
@@ -744,6 +829,41 @@ mod tests {
                 (state % 1000) as f32 / 1000.0
             })
             .collect()
+    }
+
+    /// Light rings five pixels across on a dark ground, every 11 pixels so
+    /// they fall on each phase of the pattern. Neutral: one value per pixel.
+    fn rings(w: usize, h: usize) -> Vec<f32> {
+        (0..w * h)
+            .map(|i| {
+                let mut cover = 0.0;
+                for sub in 0..16 {
+                    let y = (i / w) as f32 + (sub / 4) as f32 / 4.0 + 0.125;
+                    let x = (i % w) as f32 + (sub % 4) as f32 / 4.0 + 0.125;
+                    let (dy, dx) = (y.rem_euclid(11.0) - 5.5, x.rem_euclid(11.0) - 5.5);
+                    if (dx.hypot(dy) - 2.5).abs() < 0.7 {
+                        cover += 1.0 / 16.0;
+                    }
+                }
+                0.02 + 0.08 * cover
+            })
+            .collect()
+    }
+
+    #[test]
+    fn neutral_glyphs_a_few_pixels_across_stay_neutral() {
+        let (w, h) = (132, 132);
+        let scene = rings(w, h);
+        let rgb = demosaic(&scene, w, h, &Layout::new(&PATTERN).unwrap());
+        let error: f32 = rgb
+            .chunks_exact(3)
+            .zip(&scene)
+            .map(|(pixel, value)| pixel.iter().map(|channel| (channel - value).abs()).sum::<f32>() / (value + 0.01))
+            .sum();
+        // The vote alone leaves 0.048: its false colour tints the smooth colour
+        // difference, and the colour-edge and saturation conditions then refuse it.
+        let mean = error / (w * h) as f32;
+        assert!(mean < 0.025, "mean relative error {mean}");
     }
 
     #[test]
