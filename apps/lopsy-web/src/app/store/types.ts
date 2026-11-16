@@ -199,6 +199,7 @@ export interface EditorState {
     color: import('../../types').Color,
     widths: import('../../layers/border').BorderWidths,
     placement: import('../../layers/border').BorderPlacement,
+    corners?: import('../../layers/border').BorderCorners,
   ) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
   convertColorMode: (

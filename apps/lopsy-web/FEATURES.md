@@ -1978,6 +1978,21 @@ for Crop / Canvas Size / Image Size, `invalidateLayers()` for Rotate Image, and
     under Placement reads *New size: W × H px* for Expand, *Canvas stays W × H
     px* for Overlay, *Enter a border width.* while every width is 0, and the
     maximum side length when the expanded canvas would be too large.
+  - **Rounded corners.** A **Rounded corners** checkbox under **Corners**
+    (off by default) shows **Inner radius (px)** and **Outer radius (px)**
+    fields, both starting at **20** and read like the widths (whole pixels;
+    blank, negative or junk is 0, which keeps that corner square). The outer
+    radius rounds the four corners of the canvas: the Border layer is
+    transparent outside them. The inner radius rounds the corners of the
+    window, so the border color fills into them. The outer radius is limited
+    to half the canvas's short side and the inner to half the window's; the
+    curved edges are antialiased. With Overlay the window is the rectangle the
+    widths leave (an Overlay with no window ignores the inner radius). With
+    Expand canvas and an inner radius above 0, the layer instead goes at the
+    top of the project group, transparent over the old canvas's rectangle, so
+    its rounded inner corners cover the content's corners; with only an outer
+    radius it stays a solid layer at the bottom. Unchecking the box applies a
+    square border whatever the fields hold.
   - **The result.** The new layer is named **Border**, is document-sized, and
     becomes the active and only selected layer. Expand moves guides and paths
     with the content by the left and top widths, as Canvas Size does. The

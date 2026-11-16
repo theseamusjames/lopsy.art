@@ -11,7 +11,7 @@ use crate::task::Cx;
 use crate::document::layer_transform_gpu::{TransformDraw, TransformParams, TransformTargets};
 use crate::gpu::params::core::{
     BlitRegionParams, ClipboardClearParams, ClipboardCopyParams, FlipParams, MaskRemapParams, Rotate90Params,
-    SelectionFillParams,
+    FrameFillParams, SelectionFillParams,
 };
 use crate::gpu::uniforms::Mat2;
 
@@ -1479,11 +1479,19 @@ pub fn fill_with_color(
 /// Replace a layer's pixels with a solid color everywhere except `hole`
 /// (document space), which is left transparent. Ignores the selection: a
 /// border is drawn against the canvas, not whatever happens to be selected.
+///
+/// `outer_radius` rounds the corners of the document's rectangle (pixels
+/// outside it become transparent) and `inner_radius` the hole's, so the
+/// color fills into the hole's corners. Both are clamped to half the short
+/// side of their rectangle and antialiased; with both at 0 the frame is
+/// square and hard-edged.
 pub fn fill_layer_frame(
     engine: &mut EngineInner,
     layer_id: &str,
     color: [f32; 4],
     hole: Option<Rect>,
+    outer_radius: f32,
+    inner_radius: f32,
 ) -> Result<(), String> {
     let _ = engine.ensure_layer_full_size(layer_id);
 
@@ -1494,6 +1502,29 @@ pub fn fill_layer_frame(
         .ok_or_else(|| format!("Layer desc {layer_id} not found"))?;
     let (tw, th) = engine.texture_pool.get_size(layer_tex_handle).unwrap_or((1, 1));
     engine.texture_pool.get(layer_tex_handle).ok_or("Layer texture not found")?;
+
+    let outer_radius = clamp_corner_radius(outer_radius, engine.doc_width, engine.doc_height);
+    let inner_radius = hole.map_or(0.0, |r| clamp_corner_radius(inner_radius, r.width, r.height));
+
+    if outer_radius > 0.0 || inner_radius > 0.0 {
+        let to_texture = |x: i32, y: i32, w: u32, h: u32| {
+            [(x - origin_x) as f32, (y - origin_y) as f32, w as f32, h as f32]
+        };
+        let hole_rect = hole.map_or([0.0; 4], |r| to_texture(r.x, r.y, r.width, r.height));
+        engine.pass(&engine.shaders.frame_fill, FrameFillParams {
+            color,
+            outer_rect: to_texture(0, 0, engine.doc_width, engine.doc_height),
+            hole_rect,
+            outer_radius,
+            inner_radius,
+            has_hole: i32::from(hole.is_some()),
+        })
+            .blend(Blend::Off)
+            .viewport(0, 0, tw as i32, th as i32)
+            .draw(Target::Texture(layer_tex_handle));
+        engine.mark_layer_dirty(layer_id);
+        return Ok(());
+    }
 
     let texture_hole = hole
         .map(|r| Rect::new(r.x - origin_x, r.y - origin_y, r.width, r.height))
@@ -1506,6 +1537,15 @@ pub fn fill_layer_frame(
 
     engine.mark_layer_dirty(layer_id);
     Ok(())
+}
+
+/// A corner radius no larger than half the short side of a `width` x
+/// `height` rectangle, and 0 for a negative or non-finite one.
+pub fn clamp_corner_radius(radius: f32, width: u32, height: u32) -> f32 {
+    if !radius.is_finite() || radius <= 0.0 {
+        return 0.0;
+    }
+    radius.min(width.min(height) as f32 / 2.0)
 }
 
 /// GPU-side fill of a layer's mask with a grey `value` (0 = hide,
@@ -1754,8 +1794,22 @@ pub fn restore_mask_from_snapshot(engine: &mut EngineInner, layer_id: &str, snap
 
 #[cfg(test)]
 mod tests {
-    use super::{merge_rect, rect_is_within};
+    use super::{clamp_corner_radius, merge_rect, rect_is_within};
     use lopsy_core::geometry::Rect;
+
+    #[test]
+    fn a_corner_radius_is_at_most_half_the_short_side() {
+        assert_eq!(clamp_corner_radius(12.0, 200, 150), 12.0);
+        assert_eq!(clamp_corner_radius(500.0, 200, 150), 75.0);
+        assert_eq!(clamp_corner_radius(40.0, 31, 90), 15.5);
+    }
+
+    #[test]
+    fn a_negative_or_non_finite_corner_radius_is_square() {
+        assert_eq!(clamp_corner_radius(-3.0, 100, 100), 0.0);
+        assert_eq!(clamp_corner_radius(f32::NAN, 100, 100), 0.0);
+        assert_eq!(clamp_corner_radius(f32::INFINITY, 100, 100), 0.0);
+    }
 
     #[test]
     fn a_measured_rect_must_lie_inside_the_texture() {

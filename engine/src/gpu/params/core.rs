@@ -84,6 +84,18 @@ uniforms! {
 }
 
 uniforms! {
+    /// `frame_fill.wgsl`
+    pub struct FrameFillParams {
+        pub color: [f32; 4],
+        pub outer_rect: [f32; 4],
+        pub hole_rect: [f32; 4],
+        pub outer_radius: f32,
+        pub inner_radius: f32,
+        pub has_hole: i32,
+    }
+}
+
+uniforms! {
     /// `content_bounds_reduce.wgsl`
     pub struct ContentBoundsReduceParams {
         pub axis: [i32; 2],

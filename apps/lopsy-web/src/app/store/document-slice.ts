@@ -1,5 +1,5 @@
 import type { BlendMode, Color, LayerEffects, Layer, Rect, DocumentColorMode, DocumentState } from '../../types';
-import { planBorder, type BorderPlacement, type BorderWidths } from '../../layers/border';
+import { planBorder, type BorderCorners, type BorderPlacement, type BorderWidths } from '../../layers/border';
 import type { AdjustmentNodeType, AdjustmentNode } from '../../types/adjustment-nodes';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
@@ -310,7 +310,7 @@ export interface DocumentSlice {
   updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => void;
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
-  addBorder: (color: Color, widths: BorderWidths, placement: BorderPlacement) => void;
+  addBorder: (color: Color, widths: BorderWidths, placement: BorderPlacement, corners?: BorderCorners) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
   convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => Promise<void>;
 
@@ -930,13 +930,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     translateCanvasOverlays(get, set, offset.x, offset.y);
   },
 
-  addBorder: (color, widths, placement) => {
+  addBorder: (color, widths, placement, corners) => {
     finalizePendingStrokeGlobal();
     const s = get();
     if (!allowLayerCreation(s.document)) return;
     const engine = getEngine();
     if (!engine) return;
-    const plan = planBorder(s.document.width, s.document.height, widths, placement, getMaxDocumentSide());
+    const plan = planBorder(s.document.width, s.document.height, widths, placement, getMaxDocumentSide(), corners);
     if (!plan) return;
     s.pushHistory('Border');
 
@@ -946,7 +946,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       ));
       translateCanvasOverlays(get, set, plan.offsetX, plan.offsetY);
     }
-    const { document, layerId } = computeAddBorderLayer(get().document, placement);
+    const { document, layerId } = computeAddBorderLayer(get().document, plan.layerPosition);
     set((state) => ({ document, renderVersion: state.renderVersion + 1 }));
 
     // The fill writes the engine's texture directly, so the engine must
@@ -956,7 +956,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const hole = plan.hole ?? { x: 0, y: 0, width: 0, height: 0 };
     fillLayerFrame(
       engine, layerId, color.r / 255, color.g / 255, color.b / 255, color.a,
-      hole.x, hole.y, hole.width, hole.height,
+      hole.x, hole.y, hole.width, hole.height, plan.outerRadius, plan.innerRadius,
     );
     pixelDataManager.bumpVersion(layerId);
     set((state) => ({ dirtyLayerIds: new Set(state.dirtyLayerIds).add(layerId) }));
