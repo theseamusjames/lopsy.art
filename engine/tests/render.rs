@@ -434,3 +434,33 @@ fn bloom_keeps_the_layer_and_adds_a_glow() {
     assert!(at(5, 7)[0] > 20, "light spills onto the ground beside the square: {:?}", at(5, 7));
     assert_no_gpu_errors();
 }
+
+#[test]
+fn undo_snapshots_of_a_large_layer_restore_bit_for_bit() {
+    // Big enough that an interpolated UV strays off the texel centre: a
+    // filtered copy then mixed in a sliver of the neighbour, and antialiased
+    // edges came back a step off (#1741).
+    let (width, height) = (1500u32, 2100u32);
+    let Some(mut engine) = engine(width, height) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, width, height, 1.0)).expect("layer");
+    let pixels: Vec<u8> = (0..height)
+        .flat_map(|y| (0..width).map(move |x| (x, y)))
+        .flat_map(|(x, y)| [(x % 251) as u8, (y % 241) as u8, ((x * 7 + y * 3) % 256) as u8, ((x ^ y) % 256) as u8])
+        .collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", &pixels, width, height, 0, 0).expect("pixels");
+    let read = |engine: &EngineInner| now(lopsy_engine::document::layer_manager::read_pixels_u16(engine, "art"));
+    let original = read(&engine);
+
+    let mut current = commands::layer::snapshot_layer_gpu(&mut engine, "art");
+    for trip in 0..4 {
+        commands::layer::restore_from_gpu_snapshot(&mut engine, "art", current).expect("restore");
+        let next = commands::layer::snapshot_layer_gpu(&mut engine, "art");
+        commands::layer::release_gpu_snapshot(&mut engine, current);
+        current = next;
+        let restored = read(&engine);
+        assert_eq!(restored.len(), original.len());
+        let differing = original.iter().zip(&restored).filter(|(a, b)| a != b).count();
+        assert_eq!(differing, 0, "trip {trip}: {differing} half-float values changed");
+    }
+    assert_no_gpu_errors();
+}

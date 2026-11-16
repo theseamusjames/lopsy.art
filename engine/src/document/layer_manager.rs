@@ -218,10 +218,7 @@ pub fn duplicate_texture(
     engine.texture_pool.get(dst_handle).ok_or("Dst texture not found")?;
     engine.texture_pool.get(src_handle).ok_or("Src texture not found")?;
 
-    engine.pass(&engine.shaders.blit, ())
-        .texture("u_tex", src_handle)
-        .viewport(0, 0, sw as i32, sh as i32)
-        .draw(Target::Texture(dst_handle));
+    copy_texture_exact(engine, src_handle, dst_handle, sw, sh);
 
     engine.mark_layer_dirty(dst_id);
     Ok(())
@@ -1691,8 +1688,11 @@ pub fn read_clipboard_pixels(engine: &EngineInner) -> Read<Vec<u8>> {
 /// Sentinel returned when there is nothing to snapshot.
 pub const EMPTY_SNAPSHOT: u32 = u32::MAX;
 
-fn blit_texture(engine: &EngineInner, src: TextureHandle, dst: TextureHandle, w: u32, h: u32) {
-    engine.pass(&engine.shaders.blit, ())
+/// Copy `src` into `dst` (both `w × h`) texel for texel. Undo snapshots
+/// must come back bit-exact, which a filtered blit does not guarantee on a
+/// large texture (#1741).
+fn copy_texture_exact(engine: &EngineInner, src: TextureHandle, dst: TextureHandle, w: u32, h: u32) {
+    engine.pass(&engine.shaders.copy_exact, ())
         .texture("u_tex", src)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Texture(dst));
@@ -1714,7 +1714,7 @@ pub fn snapshot_texture(engine: &mut EngineInner, src_handle: TextureHandle) -> 
         engine.texture_pool.release(dst_handle);
         return EMPTY_SNAPSHOT;
     }
-    blit_texture(engine, src_handle, dst_handle, w, h);
+    copy_texture_exact(engine, src_handle, dst_handle, w, h);
 
     let snap = crate::engine::SnapshotTexture { handle: dst_handle, width: w, height: h };
     if let Some(free_id) = engine.snapshot_free_list.pop() {
@@ -1751,7 +1751,7 @@ fn restore_snapshot_into(
 
     engine.texture_pool.get(dst_handle).ok_or_else(|| "Dst texture not found".to_string())?;
     engine.texture_pool.get(snap_handle).ok_or_else(|| "Snapshot texture not found".to_string())?;
-    blit_texture(engine, snap_handle, dst_handle, sw, sh);
+    copy_texture_exact(engine, snap_handle, dst_handle, sw, sh);
     Ok(dst_handle)
 }
 

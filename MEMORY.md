@@ -662,3 +662,12 @@ after a frame into one of them (a pencil click on a layer mask, #1660)
 vanished while drags worked, because each later segment followed a pass
 that rebound the units. Writers that render straight into a layer or mask
 texture call `engine.gpu().unbind_textures(n)` first (a no-op on wgpu).
+
+## A 1:1 copy through the `blit` shader is not exact on a large texture
+`blit.wgsl` samples the pool's linear-filtered textures at the interpolated
+UV. On a 1500×2100 texture that UV lands a hair off the texel centre, the
+sample takes a sliver of the neighbour, and antialiased edges shift by a
+step (49 → 50) — even on SwiftShader. Undo snapshots drifted that way on
+every trip (#1741). A copy that must be bit-exact (snapshot, restore,
+Duplicate Layer) goes through `copy_exact.wgsl`, which uses `textureLoad`
+at the fragment's integer position.

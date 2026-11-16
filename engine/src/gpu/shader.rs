@@ -27,6 +27,7 @@ macro_rules! translated {
 
 // Core shaders
 pub const BLIT_FRAG: &str = translated!("blit");
+pub const COPY_EXACT_FRAG: &str = translated!("copy_exact");
 pub const THUMBNAIL_BOX_FRAG: &str = translated!("thumbnail_box");
 /// The generated GLSL of a shader that is built once per value of a define
 /// (`lopsy_shaderc::VARIANT_SETS`). Variant 0 is stored whole. The others
@@ -179,6 +180,7 @@ macro_rules! typed_shaders {
 
 typed_shaders! {
     BLIT: () = BLIT_FRAG;
+    COPY_EXACT: () = COPY_EXACT_FRAG;
     INVERT: () = INVERT_FRAG;
     POSTERIZE: params::filters::PosterizeParams = POSTERIZE_FRAG;
     THRESHOLD: params::filters::ThresholdParams = THRESHOLD_FRAG;
@@ -297,6 +299,8 @@ fn compile<P: Uniforms>(linker: &Linker, shader: &Shader<P>) -> Result<ShaderPro
 pub struct ShaderPrograms {
     // Core
     pub blit: ShaderProgram<()>,
+    /// Texel-for-texel copy between textures of one size; never filters.
+    pub copy_exact: ShaderProgram<()>,
     pub thumbnail_box: ShaderProgram<params::core::ThumbnailBoxParams>,
     pub blit_resample: ShaderProgram<()>,
     /// Blend program specialized for Normal mode (BLEND_MODE 0). Compiled at
@@ -438,6 +442,7 @@ impl ShaderPrograms {
         Ok(Self {
             // Core
             blit: compile(linker, &BLIT)?,
+            copy_exact: compile(linker, &COPY_EXACT)?,
             thumbnail_box: compile(linker, &THUMBNAIL_BOX)?,
             blit_resample: compile(linker, &BLIT_RESAMPLE)?,
             blend_normal,
