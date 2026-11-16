@@ -440,8 +440,10 @@ pub fn fill_layer_frame(
     hole_y: i32,
     hole_w: u32,
     hole_h: u32,
+    outer_radius: f32,
+    inner_radius: f32,
 ) -> Result<(), JsError> {
-    lopsy_engine::commands::layer::fill_layer_frame(&mut engine.inner, layer_id, r, g, b, a, hole_x, hole_y, hole_w, hole_h).map_err(|e| JsError::new(&e))
+    lopsy_engine::commands::layer::fill_layer_frame(&mut engine.inner, layer_id, r, g, b, a, hole_x, hole_y, hole_w, hole_h, outer_radius, inner_radius).map_err(|e| JsError::new(&e))
 }
 
 #[wasm_bindgen(js_name = "fillMaskWithValue")]

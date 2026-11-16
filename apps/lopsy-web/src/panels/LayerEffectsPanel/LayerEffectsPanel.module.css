@@ -198,3 +198,29 @@
 .colorSwatch {
   background-color: var(--swatch-color);
 }
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.rowCopyBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 2px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.rowCopyBtn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}

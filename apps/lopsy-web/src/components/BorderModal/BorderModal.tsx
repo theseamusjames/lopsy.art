@@ -7,6 +7,8 @@ import {
   parseBorderWidth,
   planBorder,
   uniformBorderWidths,
+  SQUARE_CORNERS,
+  type BorderCorners,
   type BorderPlacement,
   type BorderPlan,
   type BorderWidths,
@@ -25,6 +27,7 @@ const SIDES: readonly { key: Side; label: string }[] = [
 ];
 
 const DEFAULT_WIDTH = '20';
+const DEFAULT_RADIUS = '20';
 
 interface BorderModalProps {
   onClose: () => void;
@@ -43,6 +46,9 @@ export function BorderModal({ onClose }: BorderModalProps) {
   const [sideWidths, setSideWidths] = useState<Record<Side, string>>({
     top: DEFAULT_WIDTH, bottom: DEFAULT_WIDTH, left: DEFAULT_WIDTH, right: DEFAULT_WIDTH,
   });
+  const [isRounded, setIsRounded] = useState(false);
+  const [innerRadius, setInnerRadius] = useState(DEFAULT_RADIUS);
+  const [outerRadius, setOuterRadius] = useState(DEFAULT_RADIUS);
 
   const widths = useMemo<BorderWidths>(() => (sides === 'symmetric'
     ? uniformBorderWidths(parseBorderWidth(width))
@@ -52,13 +58,16 @@ export function BorderModal({ onClose }: BorderModalProps) {
       bottom: parseBorderWidth(sideWidths.bottom),
       left: parseBorderWidth(sideWidths.left),
     }), [sides, width, sideWidths]);
-  const plan = planBorder(docWidth, docHeight, widths, placement, getMaxDocumentSide());
+  const corners = useMemo<BorderCorners>(() => (isRounded
+    ? { outer: parseBorderWidth(outerRadius), inner: parseBorderWidth(innerRadius) }
+    : SQUARE_CORNERS), [isRounded, outerRadius, innerRadius]);
+  const plan = planBorder(docWidth, docHeight, widths, placement, getMaxDocumentSide(), corners);
 
   const handleApply = useCallback(() => {
     if (!plan) return;
-    addBorder(color, widths, placement);
+    addBorder(color, widths, placement, corners);
     onClose();
-  }, [plan, addBorder, color, widths, placement, onClose]);
+  }, [plan, addBorder, color, widths, placement, corners, onClose]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     // The hex field claims Enter to commit its own edit.
@@ -160,6 +169,43 @@ export function BorderModal({ onClose }: BorderModalProps) {
                 />
                 Overlay
               </label>
+            </fieldset>
+            <fieldset className={styles.group}>
+              <legend className={styles.fieldLabel}>Corners</legend>
+              <label className={styles.radio}>
+                <input
+                  type="checkbox"
+                  checked={isRounded}
+                  onChange={(e) => setIsRounded(e.target.checked)}
+                />
+                Rounded corners
+              </label>
+              {isRounded && (
+                <div className={styles.sideGrid}>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Inner radius (px)</span>
+                    <input
+                      className={styles.fieldInput}
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={innerRadius}
+                      onChange={(e) => setInnerRadius(e.target.value)}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Outer radius (px)</span>
+                    <input
+                      className={styles.fieldInput}
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={outerRadius}
+                      onChange={(e) => setOuterRadius(e.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
             </fieldset>
             <p className={styles.info} aria-live="polite">
               {describePlan(plan, widths, docWidth, docHeight)}

@@ -1,5 +1,5 @@
 import type { BlendMode, Color, LayerEffects, Layer, Rect, DocumentColorMode, DocumentState } from '../../types';
-import { planBorder, type BorderPlacement, type BorderWidths } from '../../layers/border';
+import { planBorder, type BorderCorners, type BorderPlacement, type BorderWidths } from '../../layers/border';
 import type { AdjustmentNodeType, AdjustmentNode } from '../../types/adjustment-nodes';
 import type { AlignEdge } from '../../tools/move/move';
 import { createRasterLayer, createGroupLayer } from '../../layers/layer-model';
@@ -288,6 +288,12 @@ export interface DocumentSlice {
   setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
   addAdjustmentNode: (groupId: string, nodeType: AdjustmentNodeType) => void;
   removeAdjustmentNode: (groupId: string, nodeId: string) => void;
+  setGroupAdjustmentNodes: (
+    groupId: string,
+    nodes: readonly AdjustmentNode[],
+    adjustmentsEnabled: boolean,
+    label: string,
+  ) => void;
   updateAdjustmentNode: (groupId: string, nodeId: string, params: Partial<AdjustmentNode>) => void;
   toggleAdjustmentNode: (groupId: string, nodeId: string) => void;
   reorderAdjustmentNodes: (groupId: string, nodeIds: readonly string[]) => void;
@@ -310,7 +316,7 @@ export interface DocumentSlice {
   updateLayerMaskData: (layerId: string, maskData: Uint8ClampedArray) => void;
   cropCanvas: (rect: Rect) => void;
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
-  addBorder: (color: Color, widths: BorderWidths, placement: BorderPlacement) => void;
+  addBorder: (color: Color, widths: BorderWidths, placement: BorderPlacement, corners?: BorderCorners) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
   convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => Promise<void>;
 
@@ -575,6 +581,20 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
         ? { ...l, adjustments: l.adjustments.filter((n) => n.id !== nodeId) }
         : l,
     );
+    set({ document: { ...doc, layers } });
+  },
+
+  setGroupAdjustmentNodes: (groupId, nodes, adjustmentsEnabled, label) => {
+    const s = get();
+    if (!s.document.layers.some((l) => l.id === groupId && l.type === 'group')) return;
+    s.pushHistoryMetadata(label);
+    const doc = get().document;
+    const layers = doc.layers.map((l) => {
+      if (l.id !== groupId || l.type !== 'group') return l;
+      // Same reason as addAdjustmentNode: pass-through would ignore them.
+      const blendMode = nodes.length > 0 && l.blendMode === 'pass-through' ? 'normal' : l.blendMode;
+      return { ...l, blendMode, adjustments: [...nodes], adjustmentsEnabled };
+    });
     set({ document: { ...doc, layers } });
   },
 
@@ -930,13 +950,13 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     translateCanvasOverlays(get, set, offset.x, offset.y);
   },
 
-  addBorder: (color, widths, placement) => {
+  addBorder: (color, widths, placement, corners) => {
     finalizePendingStrokeGlobal();
     const s = get();
     if (!allowLayerCreation(s.document)) return;
     const engine = getEngine();
     if (!engine) return;
-    const plan = planBorder(s.document.width, s.document.height, widths, placement, getMaxDocumentSide());
+    const plan = planBorder(s.document.width, s.document.height, widths, placement, getMaxDocumentSide(), corners);
     if (!plan) return;
     s.pushHistory('Border');
 
@@ -946,7 +966,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       ));
       translateCanvasOverlays(get, set, plan.offsetX, plan.offsetY);
     }
-    const { document, layerId } = computeAddBorderLayer(get().document, placement);
+    const { document, layerId } = computeAddBorderLayer(get().document, plan.layerPosition);
     set((state) => ({ document, renderVersion: state.renderVersion + 1 }));
 
     // The fill writes the engine's texture directly, so the engine must
@@ -956,7 +976,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     const hole = plan.hole ?? { x: 0, y: 0, width: 0, height: 0 };
     fillLayerFrame(
       engine, layerId, color.r / 255, color.g / 255, color.b / 255, color.a,
-      hole.x, hole.y, hole.width, hole.height,
+      hole.x, hole.y, hole.width, hole.height, plan.outerRadius, plan.innerRadius,
     );
     pixelDataManager.bumpVersion(layerId);
     set((state) => ({ dirtyLayerIds: new Set(state.dirtyLayerIds).add(layerId) }));

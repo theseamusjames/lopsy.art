@@ -41,7 +41,8 @@ const ALLOWLIST = {
   'src/app/interactions/mask-edit-move-guard.test.ts': 1, // selection-mask fixture
   'src/app/interactions/path-stroke.test.ts': 1,      // #1292 stroke-patch fixture
   'src/app/interactions/prefloat.test.ts': 6,         // #1076 selection-mask fixtures
-  'src/app/interactions/float-layer-selection.test.ts': 1, // #1605 selection-mask fixtures
+  'src/app/interactions/float-layer-selection.test.ts': 2, // #1605 selection-mask fixtures, +1: #1675 scaled-selection fixture
+  'src/app/interactions/transform-lift-mask.test.ts': 2,   // #1675 selection-mask fixtures
   'src/app/interactions/selection-nudge.test.ts': 1,  // #1480 selection-mask fixture
   'src/app/store/actions/add-layer-mask.test.ts': 2,      // #1545 selection-mask fixtures
   'src/app/store/actions/align-layer.test.ts': 3,         // +1: #1517 marquee-over-multi-select fixture mask
@@ -130,6 +131,7 @@ const ALLOWLIST = {
   'src/selection/selection.ts': 15,                          // see #442 — feather pass should move to existing GPU helper; +1: #1038 grow/shrink distance grid; +1: #1188 translateSelectionMask (moved from marquee-strategy.ts)
   'src/tools/lasso/lasso.ts': 1,
   'src/tools/transform/transform-mask.ts': 1,
+  'src/app/interactions/transform-lift-mask.ts': 2,         // #1675 lift mask for a transformed selection
 
   // ──────────────────────────────────────────────────────────────────────
   // GPU readback — explicitly OK per the policy table.

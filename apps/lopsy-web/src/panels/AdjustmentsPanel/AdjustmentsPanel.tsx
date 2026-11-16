@@ -1,11 +1,13 @@
 import { useCallback, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { Eye, EyeOff, X, ChevronDown, ChevronRight, GripVertical, Trash2, Plus } from 'lucide-react';
+import { Eye, EyeOff, X, ChevronDown, ChevronRight, GripVertical, Trash2, Plus, Copy, ClipboardPaste } from 'lucide-react';
 import { IconButton } from '../../components/IconButton/IconButton';
 import type { DragProps } from '../../app/hooks/useDraggablePanel';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
+import { useEffectsClipboardStore } from '../../app/effects-clipboard-store';
+import { canPasteOnto, pasteGroupAdjustments } from '../../app/effects-clipboard';
 import type { BlendMode, GroupLayer } from '../../types';
 import type {
   AdjustmentNode,
@@ -78,6 +80,9 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
   const colorMode = useEditorStore((s) => s.document.colorMode);
   const rootGroupId = useEditorStore((s) => s.document.rootGroupId);
   const updateLayerBlendMode = useEditorStore((s) => s.updateLayerBlendMode);
+  const setGroupAdjustmentNodes = useEditorStore((s) => s.setGroupAdjustmentNodes);
+  const effectsClipboard = useEffectsClipboardStore((s) => s.clipboard);
+  const setEffectsClipboard = useEffectsClipboardStore((s) => s.setClipboard);
 
   const [addMenu, setAddMenu] = useState<AddMenuPlacement | null>(null);
   const showAddMenu = addMenu !== null;
@@ -107,6 +112,34 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
     ) as GroupLayer | undefined;
     const lastNode = updated?.adjustments[updated.adjustments.length - 1];
     if (lastNode) setExpandedNodeId(lastNode.id);
+  };
+
+  const handleCopyAll = () => {
+    setEffectsClipboard({ kind: 'group-adjustments', nodes, adjustmentsEnabled });
+  };
+
+  const handleCopyNode = (node: AdjustmentNode) => {
+    setEffectsClipboard({ kind: 'group-adjustment', node });
+  };
+
+  const handlePaste = () => {
+    if (!effectsClipboard) return;
+    const isSingle = effectsClipboard.kind === 'group-adjustment';
+    const result = pasteGroupAdjustments(
+      nodes,
+      adjustmentsEnabled,
+      effectsClipboard,
+      (node) => isAdjustmentAllowedInMode(node.type, colorMode),
+      () => crypto.randomUUID(),
+    );
+    setGroupAdjustmentNodes(
+      group.id,
+      result.nodes,
+      result.adjustmentsEnabled,
+      isSingle ? 'Paste Adjustment' : 'Paste Adjustments',
+    );
+    const last = result.nodes[result.nodes.length - 1];
+    if (isSingle && last && result.nodes.length > nodes.length) setExpandedNodeId(last.id);
   };
 
   const handleDragStart = (idx: number) => {
@@ -181,6 +214,7 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
             onToggleExpand={() => setExpandedNodeId(expandedNodeId === node.id ? null : node.id)}
             onToggleEnabled={() => toggleAdjustmentNode(group.id, node.id)}
             onRemove={() => removeAdjustmentNode(group.id, node.id)}
+            onCopy={() => handleCopyNode(node)}
             onChange={(params) => updateAdjustmentNode(group.id, node.id, params)}
             onDragStart={() => handleDragStart(idx)}
             onDragOver={(e) => handleDragOver(e, idx)}
@@ -190,45 +224,66 @@ export function AdjustmentsPanel({ showHeader, dragProps }: AdjustmentsPanelProp
         ))}
       </div>
       <div className={styles.footer}>
-        <div className={styles.addMenuWrapper}>
+        <div className={styles.footerActions}>
+          <div className={styles.addMenuWrapper}>
+            <button
+              type="button"
+              className={styles.textBtn}
+              onClick={handleToggleAddMenu}
+              aria-label="Add Adjustment"
+              aria-expanded={showAddMenu}
+            >
+              <Plus size={12} className={styles.addIcon} />
+              Add Adjustment
+            </button>
+            {addMenu && createPortal(
+              <div
+                className={`${styles.addMenu} ${addMenu.isAbove ? styles.addMenuAbove : ''}`}
+                role="menu"
+                aria-label="Adjustment types"
+                style={{
+                  '--menu-y': `${addMenu.y}px`,
+                  '--menu-left': `${addMenu.left}px`,
+                  '--menu-max-height': `${addMenu.maxHeight}px`,
+                } as React.CSSProperties}
+              >
+                {ADD_MENU_TYPES.filter((type) => isAdjustmentAllowedInMode(type, colorMode)).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    role="menuitem"
+                    className={styles.addMenuItem}
+                    onClick={() => handleAddNode(type)}
+                  >
+                    {ADJUSTMENT_NODE_LABELS[type]}
+                    {LEGACY_ONLY_TYPES.has(type) && (
+                      <span className={styles.comingSoon}> (soon)</span>
+                    )}
+                  </button>
+                ))}
+              </div>,
+              document.body,
+            )}
+          </div>
           <button
             type="button"
-            className={styles.textBtn}
-            onClick={handleToggleAddMenu}
-            aria-label="Add Adjustment"
-            aria-expanded={showAddMenu}
+            className={styles.iconBtn}
+            onClick={handleCopyAll}
+            aria-label="Copy adjustments"
+            title="Copy adjustments"
           >
-            <Plus size={12} className={styles.addIcon} />
-            Add Adjustment
+            <Copy size={14} />
           </button>
-          {addMenu && createPortal(
-            <div
-              className={`${styles.addMenu} ${addMenu.isAbove ? styles.addMenuAbove : ''}`}
-              role="menu"
-              aria-label="Adjustment types"
-              style={{
-                '--menu-y': `${addMenu.y}px`,
-                '--menu-left': `${addMenu.left}px`,
-                '--menu-max-height': `${addMenu.maxHeight}px`,
-              } as React.CSSProperties}
-            >
-              {ADD_MENU_TYPES.filter((type) => isAdjustmentAllowedInMode(type, colorMode)).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  role="menuitem"
-                  className={styles.addMenuItem}
-                  onClick={() => handleAddNode(type)}
-                >
-                  {ADJUSTMENT_NODE_LABELS[type]}
-                  {LEGACY_ONLY_TYPES.has(type) && (
-                    <span className={styles.comingSoon}> (soon)</span>
-                  )}
-                </button>
-              ))}
-            </div>,
-            document.body,
-          )}
+          <button
+            type="button"
+            className={styles.iconBtn}
+            onClick={handlePaste}
+            disabled={!canPasteOnto(effectsClipboard, 'group')}
+            aria-label="Paste adjustments"
+            title="Paste adjustments"
+          >
+            <ClipboardPaste size={14} />
+          </button>
         </div>
         <button
           type="button"
@@ -252,6 +307,7 @@ interface NodeRowProps {
   onToggleExpand: () => void;
   onToggleEnabled: () => void;
   onRemove: () => void;
+  onCopy: () => void;
   onChange: (params: Partial<AdjustmentNode>) => void;
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
@@ -261,7 +317,7 @@ interface NodeRowProps {
 
 function AdjustmentNodeRow({
   node, isExpanded, isDragOver,
-  onToggleExpand, onToggleEnabled, onRemove, onChange,
+  onToggleExpand, onToggleEnabled, onRemove, onCopy, onChange,
   onDragStart, onDragOver, onDrop, onDragEnd,
 }: NodeRowProps) {
   // One `Edit <Node>` history entry per gesture: re-armed by each pointer
@@ -315,6 +371,15 @@ function AdjustmentNodeRow({
           aria-label={node.enabled ? 'Disable node' : 'Enable node'}
         >
           {node.enabled ? <Eye size={12} /> : <EyeOff size={12} />}
+        </button>
+        <button
+          type="button"
+          className={styles.nodeIconBtn}
+          onClick={onCopy}
+          aria-label={`Copy ${ADJUSTMENT_NODE_LABELS[node.type]} adjustment`}
+          title={`Copy ${ADJUSTMENT_NODE_LABELS[node.type]} adjustment`}
+        >
+          <Copy size={12} />
         </button>
         <button
           type="button"

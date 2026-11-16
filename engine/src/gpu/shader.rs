@@ -27,6 +27,7 @@ macro_rules! translated {
 
 // Core shaders
 pub const BLIT_FRAG: &str = translated!("blit");
+pub const COPY_EXACT_FRAG: &str = translated!("copy_exact");
 pub const THUMBNAIL_BOX_FRAG: &str = translated!("thumbnail_box");
 /// The generated GLSL of a shader that is built once per value of a define
 /// (`lopsy_shaderc::VARIANT_SETS`). Variant 0 is stored whole. The others
@@ -63,6 +64,7 @@ pub const FLIP_FRAG: &str = translated!("flip");
 pub const CLIPBOARD_COPY_FRAG: &str = translated!("clipboard_copy");
 pub const CLIPBOARD_CLEAR_FRAG: &str = translated!("clipboard_clear");
 pub const SELECTION_FILL_FRAG: &str = translated!("selection_fill");
+pub const FRAME_FILL_FRAG: &str = translated!("frame_fill");
 pub const ROTATE90_FRAG: &str = translated!("rotate90");
 pub const BLIT_REGION_FRAG: &str = translated!("blit_region");
 pub const MASK_EXPAND_FRAG: &str = translated!("mask_expand");
@@ -178,6 +180,7 @@ macro_rules! typed_shaders {
 
 typed_shaders! {
     BLIT: () = BLIT_FRAG;
+    COPY_EXACT: () = COPY_EXACT_FRAG;
     INVERT: () = INVERT_FRAG;
     POSTERIZE: params::filters::PosterizeParams = POSTERIZE_FRAG;
     THRESHOLD: params::filters::ThresholdParams = THRESHOLD_FRAG;
@@ -192,6 +195,7 @@ typed_shaders! {
     CLIPBOARD_COPY: params::core::ClipboardCopyParams = CLIPBOARD_COPY_FRAG;
     CLIPBOARD_CLEAR: params::core::ClipboardClearParams = CLIPBOARD_CLEAR_FRAG;
     SELECTION_FILL: params::core::SelectionFillParams = SELECTION_FILL_FRAG;
+    FRAME_FILL: params::core::FrameFillParams = FRAME_FILL_FRAG;
     CONTENT_BOUNDS_REDUCE: params::core::ContentBoundsReduceParams = CONTENT_BOUNDS_REDUCE_FRAG;
     LAYER_MASK_APPLY: params::effects::LayerMaskApplyParams = LAYER_MASK_APPLY_FRAG;
     TRANSFORM_AFFINE: params::core::TransformAffineParams = TRANSFORM_AFFINE_FRAG;
@@ -295,6 +299,8 @@ fn compile<P: Uniforms>(linker: &Linker, shader: &Shader<P>) -> Result<ShaderPro
 pub struct ShaderPrograms {
     // Core
     pub blit: ShaderProgram<()>,
+    /// Texel-for-texel copy between textures of one size; never filters.
+    pub copy_exact: ShaderProgram<()>,
     pub thumbnail_box: ShaderProgram<params::core::ThumbnailBoxParams>,
     pub blit_resample: ShaderProgram<()>,
     /// Blend program specialized for Normal mode (BLEND_MODE 0). Compiled at
@@ -314,6 +320,7 @@ pub struct ShaderPrograms {
     pub layer_mask_apply: ShaderProgram<params::effects::LayerMaskApplyParams>,
     pub clipboard_clear: ShaderProgram<params::core::ClipboardClearParams>,
     pub selection_fill: ShaderProgram<params::core::SelectionFillParams>,
+    pub frame_fill: ShaderProgram<params::core::FrameFillParams>,
     pub rotate90: ShaderProgram<params::core::Rotate90Params>,
     pub blit_region: ShaderProgram<params::core::BlitRegionParams>,
     pub mask_expand: ShaderProgram<()>,
@@ -435,6 +442,7 @@ impl ShaderPrograms {
         Ok(Self {
             // Core
             blit: compile(linker, &BLIT)?,
+            copy_exact: compile(linker, &COPY_EXACT)?,
             thumbnail_box: compile(linker, &THUMBNAIL_BOX)?,
             blit_resample: compile(linker, &BLIT_RESAMPLE)?,
             blend_normal,
@@ -447,6 +455,7 @@ impl ShaderPrograms {
             layer_mask_apply: compile(linker, &LAYER_MASK_APPLY)?,
             clipboard_clear: compile(linker, &CLIPBOARD_CLEAR)?,
             selection_fill: compile(linker, &SELECTION_FILL)?,
+            frame_fill: compile(linker, &FRAME_FILL)?,
             rotate90: compile(linker, &ROTATE90)?,
             blit_region: compile(linker, &BLIT_REGION)?,
             mask_expand: compile(linker, &MASK_EXPAND)?,

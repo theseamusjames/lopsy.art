@@ -1179,6 +1179,15 @@ Contents:
 2. Below it, a 150 px left column holding a fixed five-row list — Drop Shadow, Stroke, Outer Glow, Inner Glow, Color Overlay — with **Rasterize Layer Style** pinned to its foot, disabled until at least one effect is enabled. Each row has a checkbox that enables the effect; clicking anywhere else on the row (or toggling its checkbox) selects it for editing. Drop Shadow is selected when the drawer opens, and again when it comes back from a group's Adjustments list; moving between non-group layers with the drawer open keeps the selected row. The drawer always edits the **active** layer alone — other layers in a multi-selection are left as they are. The order is fixed; effects cannot be reordered.
 3. To the right of that column, the selected effect's property form.
 
+### Copying and pasting effects
+
+The drawer header holds **Copy effects** and **Paste effects** icon buttons beside the close `X`, and every effect row has its own **Copy <Effect> effect** button. They use an in-app clipboard (not the system clipboard) that lasts for the page session, across documents, and holds one thing at a time — a later copy replaces it.
+
+- **Copy effects** takes all five effects of the active layer, enabled or not. Pasting it **overwrites every effect** on the target layer, so effects the source had off are switched off on the target too. The layer's blend mode is not part of the copy.
+- **Copy <Effect> effect** takes that one effect's settings. A layer carries exactly one of each effect, so pasting it **replaces that effect's settings and switches it on** — even when it was off on the source — and leaves the other four as they were. The pasted effect becomes the selected row.
+- **Paste effects** is disabled until the clipboard holds a layer's effects: an empty clipboard, or a group's adjustments, leaves it greyed out. Each paste is one undo step, *Paste Effects* or *Paste <Effect>*.
+- The group Adjustments drawer has its own Copy / Paste buttons (see [Image Adjustments](#image-adjustments-non-destructive)); the two kinds never paste onto each other.
+
 ### Shared behavior
 
 - **Render order is fixed** and unrelated to the list order: outer glow → drop shadow → an `outside` stroke → the layer itself (color overlay applied inline to its RGB) → inner glow → an `inside` or `center` stroke. Outer glow is drawn *before* the drop shadow, so an overlapping shadow sits on top of the glow.
@@ -1280,6 +1289,7 @@ The Add menu is filtered by the document's color mode: outside RGB, the chroma-p
 
 Per-node controls (header):
 - **Eye** icon — enable / disable this node without removing it
+- **Copy** — copy this node to the effects clipboard (`Copy <Node> adjustment`)
 - **Trash** — remove
 - **Chevron** — expand / collapse the node's body. Expansion is **exclusive**: only one node is open at a time, and opening a second collapses the first. The open-node state is panel-local, so closing the drawer forgets which node was expanded.
 - Drag the header (grip) to reorder; sliders inside the body don't trigger the reorder drag. It is native HTML5 drag-and-drop with no insertion line: the node row under the pointer, body included, tints, and the dragged node takes that row's index, so it lands below the row when dragged down and above it when dragged up. Releasing on its own row or outside the list does nothing and records no history.
@@ -1288,6 +1298,8 @@ Per-node controls (header):
 - **Parameter edits are undoable one gesture at a time.** The first change after a pointer press inside a node's controls — or after focus leaves one of them — pushes `Edit <Node>` (`Edit Exposure`, `Edit Vignette`, …); the rest of that slider drag, or of that typing session, folds into the same entry. A press that changes nothing records nothing, and each new press re-arms, so two drags of the same slider are two rows. Keyboard steps coalesce the same way: a run of ↑ / ↓ presses in a value box, or of arrow keys on a focused slider bar, is one `Edit <Node>` row until the pointer is pressed inside the controls again or focus leaves one of them (`isEditArmedRef` in `AdjustmentsPanel.tsx`). The sliders themselves carry no `onDragStart` / `onCommit`; the arming lives on the node row.
 
 Panel footer: **Add Adjustment** opens the type menu — a popup floating over the page beside the button (above it, or below when there is more room there), capped at 260 px and scrolling past that, so a short drawer never clips it; Escape closes it — and the eye button beside it is a **group-wide bypass** that mutes the entire stack in one click without changing any individual node's enabled state — the whole group is skipped before it reaches the engine, so a bypassed stack costs nothing to render. The bypass is per-group and is saved in the `.lopsy` project, so a document reopens with the same groups muted. The bypass records no history entry, and undo/redo leave it as it is: restoring any snapshot keeps each group's current bypass. The type menu stays open until an entry is picked or **Add Adjustment** is clicked again — clicking elsewhere does not close it. An empty stack reads *"No adjustments yet. Add one below."*
+
+**Copy and paste.** Beside **Add Adjustment** the footer has **Copy adjustments** and **Paste adjustments** icon buttons, sharing the in-app clipboard of the layer-effects drawer (see [Copying and pasting effects](#copying-and-pasting-effects)). Copy adjustments takes the group's whole stack and its bypass switch; pasting it **replaces** the target group's stack and bypass. A node's own Copy button takes that node, and pasting it **appends** a copy to the end of the stack and expands it — pasting twice adds two. Pasted nodes get fresh ids, so a stack pasted back onto its own group is independent of the original. Paste is disabled until the clipboard holds adjustments (a layer's effects do not count), node types the document's color mode does not allow are left out, and a non-empty paste switches a Pass Through group to Normal, as Add Adjustment does. Each paste is one undo step, *Paste Adjustments* or *Paste Adjustment*.
 
 **Nested groups each keep their own stack.** An adjusted group inside another adjusted group — the root group included — is finalized with its own adjustments first, and its output is then blended into the parent's scratch, so the parent's nodes apply on top. The compositor tracks groups with a stack (`group_stack` in `composite()` and the export path) and a per-group pre-adjustment cache that it bypasses for groups taking part in nesting. `engine-sync`'s `flattenGroupDescendants` stops descending at a nested group that is itself routed for adjustments or a mask, so every layer maps to exactly one immediate adjusted parent.
 
@@ -1978,6 +1990,21 @@ for Crop / Canvas Size / Image Size, `invalidateLayers()` for Rotate Image, and
     under Placement reads *New size: W × H px* for Expand, *Canvas stays W × H
     px* for Overlay, *Enter a border width.* while every width is 0, and the
     maximum side length when the expanded canvas would be too large.
+  - **Rounded corners.** A **Rounded corners** checkbox under **Corners**
+    (off by default) shows **Inner radius (px)** and **Outer radius (px)**
+    fields, both starting at **20** and read like the widths (whole pixels;
+    blank, negative or junk is 0, which keeps that corner square). The outer
+    radius rounds the four corners of the canvas: the Border layer is
+    transparent outside them. The inner radius rounds the corners of the
+    window, so the border color fills into them. The outer radius is limited
+    to half the canvas's short side and the inner to half the window's; the
+    curved edges are antialiased. With Overlay the window is the rectangle the
+    widths leave (an Overlay with no window ignores the inner radius). With
+    Expand canvas and an inner radius above 0, the layer instead goes at the
+    top of the project group, transparent over the old canvas's rectangle, so
+    its rounded inner corners cover the content's corners; with only an outer
+    radius it stays a solid layer at the bottom. Unchecking the box applies a
+    square border whatever the fields hold.
   - **The result.** The new layer is named **Border**, is document-sized, and
     becomes the active and only selected layer. Expand moves guides and paths
     with the content by the left and top widths, as Canvas Size does. The

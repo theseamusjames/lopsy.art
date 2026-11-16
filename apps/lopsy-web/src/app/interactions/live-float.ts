@@ -6,7 +6,8 @@ import { clearJsPixelData } from '../store/clear-js-pixel-data';
 import { reconcileLayerBoundsWithEngine } from '../reconcile-layer-bounds';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { hasFloat, dropFloat, setSelectionMask } from '../../engine-wasm/wasm-bridge';
-import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
+import { createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
+import { transformSelectionOfLayer } from './transform-lift-mask';
 import { cancelPrefloat, commitUnmovedPrefloat } from './prefloat';
 import { commitLayerTransform, forgetLayerTransform } from './layer-transform';
 import { translateSelectionMask } from './quick-mask-move';
@@ -221,7 +222,7 @@ function commitMoveFloat(): void {
     const editor = useEditorStore.getState();
     const layerId = committed?.layerId ?? editor.document.activeLayerId;
     if (hadTransform && committed && editor.selection.mask === committed.mask) {
-      bakeTransformIntoSelection();
+      bakeTransformIntoSelection(committed.layerId);
     }
     dropFloat(engine);
     if (layerId) {
@@ -240,12 +241,12 @@ function commitMoveFloat(): void {
  * and the ants draw it through `uiStore.transform`. Once the float is gone
  * that transform has nothing left to apply to, so the mask takes it on.
  */
-function bakeTransformIntoSelection(): void {
+function bakeTransformIntoSelection(layerId: string): void {
   const transform = useUIStore.getState().transform;
   const editor = useEditorStore.getState();
   const sel = editor.selection;
   if (!sel.active || !sel.mask || !transform || !isShapeChangingTransform(transform)) return;
-  const { mask, bounds } = applyTransformToMask(sel.mask, sel.maskWidth, sel.maskHeight, transform);
+  const { mask, bounds } = transformSelectionOfLayer(layerId, sel.mask, sel.maskWidth, sel.maskHeight, transform);
   if (!bounds) return;
   editor.setSelection(bounds, mask, sel.maskWidth, sel.maskHeight);
   useUIStore.getState().setTransform(createTransformState(bounds, transform.mode));

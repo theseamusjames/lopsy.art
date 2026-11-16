@@ -653,3 +653,32 @@ value is then the x it was pulled from.
 `npm run wasm:build` has wasm-pack download binaryen for `wasm-opt`; when
 the sandbox can't reach that GitHub release the build fails. `npm run
 wasm:build:dev` skips `wasm-opt` and is enough for running e2e tests.
+
+## WebGL: unbind sampler units before drawing into a texture the compositor samples
+On WebGL a draw into a texture that is still bound to a texture unit for
+sampling is a feedback loop and is silently dropped. The compositor
+leaves the last layer/mask textures it sampled bound, so the first draw
+after a frame into one of them (a pencil click on a layer mask, #1660)
+vanished while drags worked, because each later segment followed a pass
+that rebound the units. Writers that render straight into a layer or mask
+texture call `engine.gpu().unbind_textures(n)` first (a no-op on wgpu).
+
+## A 1:1 copy through the `blit` shader is not exact on a large texture
+`blit.wgsl` samples the pool's linear-filtered textures at the interpolated
+UV. On a 1500×2100 texture that UV lands a hair off the texel centre, the
+sample takes a sliver of the neighbour, and antialiased edges shift by a
+step (49 → 50) — even on SwiftShader. Undo snapshots drifted that way on
+every trip (#1741). A copy that must be bit-exact (snapshot, restore,
+Duplicate Layer) goes through `copy_exact.wgsl`, which uses `textureLoad`
+at the fragment's integer position.
+
+## Lifting a resampled edge through its own mask leaves a fringe
+A selection carried through a Move-tool scale/rotate (`applyTransformToMask`)
+and the resampled pixels share the same bilinear edge, so a lift through
+that mask takes `alpha × mask` and leaves `alpha × (1 − mask)` behind. Once
+the float is gone (Undo → Redo, or a bake) the next Move drag left a faint
+outline (#1675). `transform-lift-mask.ts` remembers such masks (by array
+identity, per layer) and `floatLayerSelection` lifts through a mask with the
+resampling's coverage divided back out. While a transform is still pending
+the store's `selection` deliberately holds the *pre-transform* mask and
+bounds; the float and the ants re-derive from it through `uiStore.transform`.

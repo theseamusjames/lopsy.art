@@ -10,6 +10,8 @@ vi.mock('../../engine-wasm/wasm-bridge', () => ({
 const bridge = await import('../../engine-wasm/wasm-bridge');
 const { floatLayerSelection } = await import('./float-layer-selection');
 const { recordLayerAlphaSelection, forgetLayerAlphaSelection } = await import('./layer-alpha-selection');
+const { transformSelectionOfLayer } = await import('./transform-lift-mask');
+const { createTransformState } = await import('../../tools/transform/transform');
 
 const engine = {} as unknown as Parameters<typeof floatLayerSelection>[0];
 
@@ -55,5 +57,18 @@ describe('floatLayerSelection', () => {
     forgetLayerAlphaSelection();
     floatLayerSelection(engine, 'a', { mask, maskWidth: 4, maskHeight: 4 });
     expect(calls()).toEqual(['setSelectionMask', 'floatSelection', 'compositeFloat']);
+  });
+
+  it('lifts a scaled selection through its lift mask, then reinstalls the selection (#1675)', () => {
+    const original = new Uint8ClampedArray(64);
+    for (let y = 2; y < 6; y++) for (let x = 2; x < 6; x++) original[y * 8 + x] = 255;
+    const transform = { ...createTransformState({ x: 2, y: 2, width: 4, height: 4 }), scaleX: 1.3, scaleY: 1.3 };
+    const { mask } = transformSelectionOfLayer('a', original, 8, 8, transform);
+    floatLayerSelection(engine, 'a', { mask, maskWidth: 8, maskHeight: 8 });
+    expect(calls()).toEqual(['setSelectionMask', 'floatSelection', 'compositeFloat', 'setSelectionMask']);
+    const [lifted, installed] = vi.mocked(bridge.setSelectionMask).mock.calls.map((c) => Array.from(c[1] as Uint8Array));
+    expect(lifted).toEqual(Array.from(mask, (v) => (v > 0 ? 255 : 0)));
+    expect(installed).toEqual(Array.from(mask));
+    expect(lifted).not.toEqual(installed);
   });
 });

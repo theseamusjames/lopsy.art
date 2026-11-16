@@ -4,6 +4,7 @@ import styles from './IconButton.module.css';
 interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'type'> {
   icon: ReactNode;
   label: string;
+  /** Marks the button as a toggle: sets `aria-pressed` as well as the active style. Omit for plain buttons. */
   isActive?: boolean;
   onClick?: () => void;
   size?: 'sm' | 'md';
@@ -13,7 +14,7 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
 export function IconButton({
   icon,
   label,
-  isActive = false,
+  isActive,
   onClick,
   size = 'sm',
   disabled = false,
@@ -33,6 +34,7 @@ export function IconButton({
       className={className}
       onClick={onClick}
       aria-label={label}
+      aria-pressed={isActive}
       title={label}
       disabled={disabled}
       type="button"
