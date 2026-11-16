@@ -454,3 +454,19 @@
 .addIcon {
   margin-right: 4px;
 }
+
+.footerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.iconBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.iconBtn:disabled:hover {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+}

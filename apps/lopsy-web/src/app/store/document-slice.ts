@@ -288,6 +288,12 @@ export interface DocumentSlice {
   setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
   addAdjustmentNode: (groupId: string, nodeType: AdjustmentNodeType) => void;
   removeAdjustmentNode: (groupId: string, nodeId: string) => void;
+  setGroupAdjustmentNodes: (
+    groupId: string,
+    nodes: readonly AdjustmentNode[],
+    adjustmentsEnabled: boolean,
+    label: string,
+  ) => void;
   updateAdjustmentNode: (groupId: string, nodeId: string, params: Partial<AdjustmentNode>) => void;
   toggleAdjustmentNode: (groupId: string, nodeId: string) => void;
   reorderAdjustmentNodes: (groupId: string, nodeIds: readonly string[]) => void;
@@ -575,6 +581,20 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
         ? { ...l, adjustments: l.adjustments.filter((n) => n.id !== nodeId) }
         : l,
     );
+    set({ document: { ...doc, layers } });
+  },
+
+  setGroupAdjustmentNodes: (groupId, nodes, adjustmentsEnabled, label) => {
+    const s = get();
+    if (!s.document.layers.some((l) => l.id === groupId && l.type === 'group')) return;
+    s.pushHistoryMetadata(label);
+    const doc = get().document;
+    const layers = doc.layers.map((l) => {
+      if (l.id !== groupId || l.type !== 'group') return l;
+      // Same reason as addAdjustmentNode: pass-through would ignore them.
+      const blendMode = nodes.length > 0 && l.blendMode === 'pass-through' ? 'normal' : l.blendMode;
+      return { ...l, blendMode, adjustments: [...nodes], adjustmentsEnabled };
+    });
     set({ document: { ...doc, layers } });
   },
 

@@ -143,6 +143,12 @@ export interface EditorState {
   setGroupAdjustmentsEnabled: (groupId: string, enabled: boolean) => void;
   addAdjustmentNode: (groupId: string, nodeType: import('../../types/adjustment-nodes').AdjustmentNodeType) => void;
   removeAdjustmentNode: (groupId: string, nodeId: string) => void;
+  setGroupAdjustmentNodes: (
+    groupId: string,
+    nodes: readonly import('../../types/adjustment-nodes').AdjustmentNode[],
+    adjustmentsEnabled: boolean,
+    label: string,
+  ) => void;
   updateAdjustmentNode: (groupId: string, nodeId: string, params: Partial<import('../../types/adjustment-nodes').AdjustmentNode>) => void;
   toggleAdjustmentNode: (groupId: string, nodeId: string) => void;
   reorderAdjustmentNodes: (groupId: string, nodeIds: readonly string[]) => void;

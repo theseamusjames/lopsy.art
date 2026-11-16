@@ -606,6 +606,9 @@ of `Drop Shadow`, `Outer Glow`, `Inner Glow`, `Stroke`, `Color Overlay`.
 Settings are keyed by the slider label (`Size`, `Opacity`, `Blur`,
 `Offset X`, `Offset Y`, `Width`...). Colour labels are `Shadow color`,
 `Glow color`, `Stroke color` and `Overlay color`.
+To give a second layer the same style, open the styled layer's drawer,
+click `Copy effects`, open the other layer's drawer and click
+`Paste effects`; it replaces all five effects in one undo step.
 
 **Blend modes and opacity.** `h.blendMode(layer, 'Multiply')` and
 `h.opacity(layer, 60)`. Mode names are as they appear in the list:
@@ -769,7 +772,7 @@ CSS class names are hashed in production.
 | Layer row | `[data-layer-id]`, identified by its `button[aria-label="Layer effects for <name>"]`; the active row's class contains `_active_` |
 | Row controls | `Hide layer` / `Show layer`, `Lock layer`, `Opacity N% for <name>` (opens a `<name> opacity` range), `Drag to reorder <name>`, `Edit mask for <name>` |
 | Rename | Double-click the row's name, then fill `input[aria-label="Layer name"]` and press Enter |
-| Effects drawer | `[data-testid="effects-drawer"]`, with checkboxes `Enable <Effect>`, blend mode `[aria-labelledby="blend-mode-label"]`, close button `Close effects` (the same in both the layer-effects and group-adjustments modes; File → New closes the drawer) |
+| Effects drawer | `[data-testid="effects-drawer"]`, with checkboxes `Enable <Effect>`, blend mode `[aria-labelledby="blend-mode-label"]`, close button `Close effects` (the same in both the layer-effects and group-adjustments modes; File → New closes the drawer). `Copy effects` / `Paste effects` in a layer's drawer header and `Copy <Effect> effect` on each row; `Copy adjustments` / `Paste adjustments` beside a group's `Add Adjustment` and `Copy <Node> adjustment` on each node. A full copy overwrites on paste, a single effect replaces that effect (switched on), a single adjustment is appended |
 | Dialogs | `role="dialog"` named after their title: `New Document`, `Gaussian Blur`, `Gradient Editor`, `Feather Selection`... |
 | Fonts | The options-bar `button[aria-haspopup="listbox"]`, then `Search fonts` and a `role="option"` |
 | Text colour | The options-bar `[aria-label="Text color"]` swatch (`data-mixed="true"` and "–" when the text holds several colours) opens `role="dialog"` `Text color picker` |

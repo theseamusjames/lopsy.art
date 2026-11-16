@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react';
-import { X } from 'lucide-react';
+import { ClipboardPaste, Copy, X } from 'lucide-react';
 import { useEditorStore } from '../../app/editor-store';
 import { getColorModeCapabilities } from '../../utils/color-mode-capabilities';
 import { useUIStore } from '../../app/ui-store';
 import { IconButton } from '../../components/IconButton/IconButton';
 import type { DragProps } from '../../app/hooks/useDraggablePanel';
+import { useEffectsClipboardStore } from '../../app/effects-clipboard-store';
+import { canPasteOnto, pasteLayerEffects, type EffectKey } from '../../app/effects-clipboard';
 import type { BlendMode, LayerEffects } from '../../types';
 import { BlendModeSelect } from '../../components/BlendModeSelect/BlendModeSelect';
 import { DropShadowForm } from './DropShadowForm';
@@ -12,8 +14,6 @@ import { StrokeForm } from './StrokeForm';
 import { GlowForm } from './GlowForm';
 import { ColorOverlayForm } from './ColorOverlayForm';
 import styles from './LayerEffectsPanel.module.css';
-
-type EffectKey = 'dropShadow' | 'stroke' | 'outerGlow' | 'innerGlow' | 'colorOverlay';
 
 const EFFECT_LIST: { key: EffectKey; label: string }[] = [
   { key: 'dropShadow', label: 'Drop Shadow' },
@@ -35,6 +35,8 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
   const rasterizeLayerStyle = useEditorStore((s) => s.rasterizeLayerStyle);
   const setShowEffectsDrawer = useUIStore((s) => s.setShowEffectsDrawer);
   const colorMode = useEditorStore((s) => s.document.colorMode);
+  const effectsClipboard = useEffectsClipboardStore((s) => s.clipboard);
+  const setEffectsClipboard = useEffectsClipboardStore((s) => s.setClipboard);
 
   const [selectedEffect, setSelectedEffect] = useState<EffectKey>('dropShadow');
 
@@ -94,6 +96,26 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
     [activeLayerId, updateLayerBlendMode],
   );
 
+  const handleCopyAll = () => {
+    if (!effects) return;
+    setEffectsClipboard({ kind: 'layer-effects', effects });
+  };
+
+  const handleCopyEffect = (key: EffectKey) => {
+    if (!effects) return;
+    setEffectsClipboard({ kind: 'layer-effect', key, effects });
+  };
+
+  const handlePaste = () => {
+    if (!activeLayerId || !effects || !effectsClipboard) return;
+    const isSingle = effectsClipboard.kind === 'layer-effect';
+    useEditorStore.getState().pushHistoryMetadata(
+      isSingle ? `Paste ${effectLabel(effectsClipboard.key)}` : 'Paste Effects',
+    );
+    updateLayerEffects(activeLayerId, pasteLayerEffects(effects, effectsClipboard), true);
+    if (isSingle) setSelectedEffect(effectsClipboard.key);
+  };
+
   if (!activeLayer) {
     return (
       <div className={styles.drawer}>
@@ -152,11 +174,24 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
     <div className={styles.drawer}>
       <div className={styles.drawerHeader} {...dragProps}>
         <span className={styles.drawerTitle}>Layer Effects</span>
-        <IconButton
-          icon={<X size={14} />}
-          label="Close effects"
-          onClick={() => setShowEffectsDrawer(false)}
-        />
+        <div className={styles.headerActions}>
+          <IconButton
+            icon={<Copy size={14} />}
+            label="Copy effects"
+            onClick={handleCopyAll}
+          />
+          <IconButton
+            icon={<ClipboardPaste size={14} />}
+            label="Paste effects"
+            disabled={!canPasteOnto(effectsClipboard, 'layer')}
+            onClick={handlePaste}
+          />
+          <IconButton
+            icon={<X size={14} />}
+            label="Close effects"
+            onClick={() => setShowEffectsDrawer(false)}
+          />
+        </div>
       </div>
       <BlendModeSelect
         value={activeLayer.blendMode}
@@ -189,6 +224,18 @@ export function LayerEffectsPanel({ dragProps }: LayerEffectsPanelProps) {
                   onClick={(e) => e.stopPropagation()}
                 />
                 <span className={styles.effectLabel}>{label}</span>
+                <button
+                  type="button"
+                  className={styles.rowCopyBtn}
+                  aria-label={`Copy ${label} effect`}
+                  title={`Copy ${label} effect`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCopyEffect(key);
+                  }}
+                >
+                  <Copy size={12} />
+                </button>
               </div>
             );
           })}
