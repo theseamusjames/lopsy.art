@@ -17,6 +17,7 @@ import { commitLiveFloatBeforeEdit, forgetLiveFloat } from '../interactions/live
 import { resumeMeshWarpPreview, suspendMeshWarpPreview } from '../interactions/mesh-warp-history';
 import { snapshotGpuMasks, withCurrentMaskStaleness, restoreMasksAfterUndo } from './mask-history';
 import { useUIStore } from '../ui-store';
+import { transformSelectionOfLayer } from '../interactions/transform-lift-mask';
 import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
 import { addSnapshotHandles, createSnapshotHandleLedger } from './snapshot-ledger';
 
@@ -427,12 +428,12 @@ function syncTransformAfterHistoryRestore(selection: SelectionData): void {
  * (#991). Record the outline the user sees instead: the mask baked through
  * the transform.
  */
-function historySelection(selection: SelectionData): SelectionData {
+function historySelection(selection: SelectionData, layerId: string | null): SelectionData {
   const transform = useUIStore.getState().transform;
   if (!selection.active || !transform || !isShapeChangingTransform(transform)) return selection;
-  const { mask, bounds } = applyTransformToMask(
-    selection.mask, selection.maskWidth, selection.maskHeight, transform,
-  );
+  const { mask, bounds } = layerId
+    ? transformSelectionOfLayer(layerId, selection.mask, selection.maskWidth, selection.maskHeight, transform)
+    : applyTransformToMask(selection.mask, selection.maskWidth, selection.maskHeight, transform);
   if (!bounds) return selection;
   return { ...selection, mask, bounds };
 }
@@ -440,7 +441,7 @@ function historySelection(selection: SelectionData): SelectionData {
 function liveHistoryState(state: EditorState): LiveHistoryState {
   return {
     document: state.document,
-    selection: historySelection(state.selection),
+    selection: historySelection(state.selection, state.document.activeLayerId),
     paths: state.paths,
     selectedPathId: state.selectedPathId,
     guides: useUIStore.getState().guides,
@@ -645,7 +646,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const snapshot: HistorySnapshot = {
       kind: 'pixels',
       document,
-      selection: historySelection(state.selection),
+      selection: historySelection(state.selection, state.document.activeLayerId),
       gpuSnapshots,
       maskSnapshots,
       label,
@@ -692,7 +693,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     const snapshot: HistorySnapshot = {
       kind: 'metadata',
       document: state.document,
-      selection: historySelection(state.selection),
+      selection: historySelection(state.selection, state.document.activeLayerId),
       label,
       paths: state.paths,
       selectedPathId: state.selectedPathId,

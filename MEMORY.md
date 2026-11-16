@@ -671,3 +671,14 @@ step (49 → 50) — even on SwiftShader. Undo snapshots drifted that way on
 every trip (#1741). A copy that must be bit-exact (snapshot, restore,
 Duplicate Layer) goes through `copy_exact.wgsl`, which uses `textureLoad`
 at the fragment's integer position.
+
+## Lifting a resampled edge through its own mask leaves a fringe
+A selection carried through a Move-tool scale/rotate (`applyTransformToMask`)
+and the resampled pixels share the same bilinear edge, so a lift through
+that mask takes `alpha × mask` and leaves `alpha × (1 − mask)` behind. Once
+the float is gone (Undo → Redo, or a bake) the next Move drag left a faint
+outline (#1675). `transform-lift-mask.ts` remembers such masks (by array
+identity, per layer) and `floatLayerSelection` lifts through a mask with the
+resampling's coverage divided back out. While a transform is still pending
+the store's `selection` deliberately holds the *pre-transform* mask and
+bounds; the float and the ants re-derive from it through `uiStore.transform`.
