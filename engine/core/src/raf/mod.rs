@@ -19,6 +19,7 @@
 pub mod base_curves;
 pub mod compression;
 pub mod dcp;
+mod markesteijn;
 pub mod wb_presets;
 pub mod xtrans;
 
@@ -113,10 +114,9 @@ pub struct RafMosaic {
 }
 
 /// How far (in rows) any `render_rgb` output pixel reaches into the mosaic:
-/// green interpolation 4, then two refine passes of chroma 2 + green 4, the
-/// final chroma 2, three 3×3 chroma medians 3, the separable chroma median 1,
-/// the bilateral 2 and the unsharp mask 1.
-pub const RENDER_REACH_ROWS: u32 = 4 + 2 * (2 + 4) + 2 + 3 + 1 + 2 + 1;
+/// the demosaic, the separable chroma median 1, the bilateral 2 and the
+/// unsharp mask 1.
+pub const RENDER_REACH_ROWS: u32 = markesteijn::REACH as u32 + 1 + 2 + 1;
 
 /// Rows of mosaic context rendered above and below each band and then
 /// discarded. At least `RENDER_REACH_ROWS`, so a band's output matches the
