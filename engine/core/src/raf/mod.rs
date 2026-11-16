@@ -43,7 +43,7 @@ pub enum DemosaicMode {
 #[derive(Clone, Copy)]
 pub struct RafDecodeOpts {
     pub demosaic: DemosaicMode,
-    /// Whether to apply post-demosaic chroma + luma denoise.
+    /// Whether to apply the post-demosaic chroma denoise.
     pub denoise: bool,
 }
 
@@ -114,9 +114,8 @@ pub struct RafMosaic {
 }
 
 /// How far (in rows) any `render_rgb` output pixel reaches into the mosaic:
-/// the demosaic, the separable chroma median 1, the bilateral 2 and the
-/// unsharp mask 1.
-pub const RENDER_REACH_ROWS: u32 = markesteijn::REACH as u32 + 1 + 2 + 1;
+/// the demosaic, the separable chroma median 1 and the unsharp mask 1.
+pub const RENDER_REACH_ROWS: u32 = markesteijn::REACH as u32 + 1 + 1;
 
 /// Rows of mosaic context rendered above and below each band and then
 /// discarded. At least `RENDER_REACH_ROWS`, so a band's output matches the
@@ -216,7 +215,7 @@ pub fn read_raf(data: &[u8]) -> Result<RafImage, String> {
 ///
 /// `opts.demosaic` selects the X-Trans demosaic algorithm (Bayer path is
 /// always bilinear regardless). `opts.denoise` gates the chroma-median
-/// and luma-bilateral post-demosaic passes.
+/// post-demosaic pass.
 pub fn read_raf_opts(data: &[u8], opts: RafDecodeOpts) -> Result<RafImage, String> {
     let RafMosaic { params, mosaic, exif_info, debug_log } = prepare_raf(data, opts)?;
     let rgb = render_rgb(&mosaic, params.width as usize, params.height as usize, &params);
@@ -508,7 +507,7 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
         cam_to_srgb[6], cam_to_srgb[7], cam_to_srgb[8]
     );
     raf_log!("[RAF] denoise: {}", if opts.denoise {
-        "chroma separable median r=1, luma bilateral r=2 σ=0.03"
+        "chroma separable median r=1"
     } else {
         "skipped"
     });
@@ -552,14 +551,6 @@ pub fn render_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) 
         // Radius 1 (3-wide separable median) removes isolated false-color speckle
         // while leaving real color edges and fine detail intact.
         denoise_chroma(&mut rgb_f32, w, h);
-
-        // ── Luma denoise (bilateral, linear space) ──────────────────
-        // Mild grain reduction on real sensor noise. The green-sublattice weave
-        // that previously required a radius-3 bilateral to span the full 6×6 CFA
-        // period is now eliminated at the demosaic phase, so a lighter pass
-        // suffices. range_sigma ~0.03 bridges only same-level sensor grain;
-        // real edges (much larger step) are unaffected.
-        denoise_luma_bilateral(&mut rgb_f32, w, h, 2, 0.03);
     }
 
     // ── Film-sim saturation (linear space) ─────────────────────
@@ -1289,103 +1280,6 @@ fn denoise_chroma(rgb: &mut [f32], w: usize, h: usize) {
     }
 }
 
-/// Edge-preserving luma noise reduction. Smooths luminance in flat regions
-/// (sensor grain, residual demosaic texture) while leaving edges and fine
-/// detail intact, by bilaterally weighting neighbours by both spatial distance
-/// and luma similarity. Chroma is preserved exactly: only the luma is filtered
-/// and RGB is rescaled by the luma ratio.
-fn denoise_luma_bilateral(rgb: &mut [f32], w: usize, h: usize, radius: i32, range_sigma: f32) {
-    if w == 0 || h == 0 || radius <= 0 {
-        return;
-    }
-    let n = w * h;
-
-    // Luma plane (Rec.709) for every pixel in the current linear-light RGB.
-    let mut luma = vec![0.0f32; n];
-    for i in 0..n {
-        let o = i * 3;
-        luma[i] = 0.2126 * rgb[o] + 0.7152 * rgb[o + 1] + 0.0722 * rgb[o + 2];
-    }
-
-    // Precompute spatial Gaussian weights for the (2r+1)×(2r+1) window.
-    // Spatial sigma ≈ radius/2 keeps most weight near the centre, so real
-    // detail is only marginally affected even when range_sigma is generous.
-    let r = radius as usize;
-    let side = 2 * r + 1;
-    let spatial_sigma = radius as f32 * 0.5;
-    let two_ss = 2.0 * spatial_sigma * spatial_sigma;
-    let mut spatial_w = vec![0.0f32; side * side];
-    for dy in 0..side {
-        for dx in 0..side {
-            let ddx = dx as f32 - r as f32;
-            let ddy = dy as f32 - r as f32;
-            spatial_w[dy * side + dx] = (-(ddx * ddx + ddy * ddy) / two_ss).exp();
-        }
-    }
-
-    let two_rs = 2.0 * range_sigma * range_sigma;
-
-    // Precompute the range weight exp(-dl²/2σ²) into a LUT keyed by |dl|. The
-    // weight is negligible beyond ~4σ, so tabulating |dl| over [0, 4σ] and
-    // treating anything past it as zero replaces a per-sample exp() (the hot-
-    // path cost across a 40 MP image) with an index + load.
-    const RANGE_LUT_N: usize = 1024;
-    let range_max = (4.0 * range_sigma).max(1e-6);
-    let inv_step = (RANGE_LUT_N as f32 - 1.0) / range_max;
-    let mut range_lut = vec![0.0f32; RANGE_LUT_N];
-    for k in 0..RANGE_LUT_N {
-        let d = k as f32 / inv_step;
-        range_lut[k] = (-(d * d) / two_rs).exp();
-    }
-
-    let mut luma_smooth = vec![0.0f32; n];
-
-    for row in 0..h {
-        for col in 0..w {
-            let l_center = luma[row * w + col];
-            let mut sum_w = 0.0f32;
-            let mut sum_wl = 0.0f32;
-
-            let is_interior = row >= r && row + r < h && col >= r && col + r < w;
-            for dy in 0..side {
-                let nr = (row as i32 + dy as i32 - r as i32).clamp(0, h as i32 - 1) as usize;
-                let row_off = nr * w;
-                let sw_off = dy * side;
-                for dx in 0..side {
-                    let nc = if is_interior {
-                        col + dx - r
-                    } else {
-                        (col as i32 + dx as i32 - r as i32).clamp(0, w as i32 - 1) as usize
-                    };
-                    let l_nb = luma[row_off + nc];
-                    // Range weight via LUT: only same-level (noisy) neighbours
-                    // contribute; across a real edge the weight collapses to 0.
-                    let idx = ((l_center - l_nb).abs() * inv_step) as usize;
-                    let range_w = if idx < RANGE_LUT_N { range_lut[idx] } else { 0.0 };
-                    let w_ij = spatial_w[sw_off + dx] * range_w;
-                    sum_w += w_ij;
-                    sum_wl += w_ij * l_nb;
-                }
-            }
-
-            luma_smooth[row * w + col] = if sum_w > 1e-8 { sum_wl / sum_w } else { l_center };
-        }
-    }
-
-    // Rescale RGB by the smoothed/original luma ratio to update only luminance;
-    // chroma ratios are kept exactly — same pattern as unsharp_mask_luma.
-    for i in 0..n {
-        let l_orig = luma[i];
-        if l_orig > 1e-4 {
-            let scale = luma_smooth[i] / l_orig;
-            let o = i * 3;
-            rgb[o]     *= scale;
-            rgb[o + 1] *= scale;
-            rgb[o + 2] *= scale;
-        }
-    }
-}
-
 /// 3×3 median filter on a single-channel plane, edge-clamped. Returns a new
 /// buffer. Preserves edges far better than a box blur; removes isolated
 /// false-color speckle without desaturating adjacent real-color pixels.
@@ -1931,94 +1825,6 @@ mod tests {
             spread_after < spread_before * 0.5,
             "off-color pixel chroma not sufficiently reduced: before={spread_before:.3} after={spread_after:.3}"
         );
-    }
-
-    #[test]
-    fn denoise_luma_bilateral_smooths_flat_noise() {
-        // A flat gray field with alternating ±0.02 luma jitter (fixed, deterministic)
-        // should come out smoother (lower variance) while preserving the mean
-        // and keeping the output exactly neutral (R==G==B).
-        let w = 16;
-        let h = 16;
-        let base = 0.15f32; // in linear space, near the raw's ~30% range
-        let mut rgb: Vec<f32> = (0..w * h)
-            .flat_map(|i| {
-                let v = base + if i % 2 == 0 { 0.02 } else { -0.02 };
-                [v, v, v]
-            })
-            .collect();
-
-        let variance_before = {
-            let mean = rgb.iter().step_by(3).map(|&v| v as f64).sum::<f64>() / (w * h) as f64;
-            rgb.iter().step_by(3).map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / (w * h) as f64
-        };
-        let mean_before = rgb.iter().step_by(3).map(|&v| v as f64).sum::<f64>() / (w * h) as f64;
-
-        denoise_luma_bilateral(&mut rgb, w, h, 2, 0.04);
-
-        let variance_after = {
-            let mean = rgb.iter().step_by(3).map(|&v| v as f64).sum::<f64>() / (w * h) as f64;
-            rgb.iter().step_by(3).map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / (w * h) as f64
-        };
-        let mean_after = rgb.iter().step_by(3).map(|&v| v as f64).sum::<f64>() / (w * h) as f64;
-
-        assert!(
-            variance_after < variance_before,
-            "bilateral filter did not reduce variance: before={variance_before:.6} after={variance_after:.6}"
-        );
-        assert!(
-            (mean_after - mean_before).abs() < 1e-3,
-            "mean luma shifted: before={mean_before:.5} after={mean_after:.5}"
-        );
-        // Chroma must stay neutral (R==G==B) throughout.
-        for i in 0..w * h {
-            let o = i * 3;
-            assert!(
-                (rgb[o] - rgb[o + 1]).abs() < 1e-5 && (rgb[o + 1] - rgb[o + 2]).abs() < 1e-5,
-                "chroma shifted at pixel {i}: R={} G={} B={}", rgb[o], rgb[o+1], rgb[o+2]
-            );
-        }
-    }
-
-    #[test]
-    fn denoise_luma_bilateral_preserves_edge() {
-        // A sharp luma step edge (left half 0.2, right half 0.6) should be
-        // preserved: range_sigma=0.04 << 0.4 step so bilateral weights across
-        // the edge collapse to near zero.
-        let w = 20;
-        let h = 5;
-        let dark = 0.2f32;
-        let bright = 0.6f32;
-        let mut rgb: Vec<f32> = (0..w * h)
-            .flat_map(|i| {
-                let col = i % w;
-                let v = if col < w / 2 { dark } else { bright };
-                [v, v, v]
-            })
-            .collect();
-
-        denoise_luma_bilateral(&mut rgb, w, h, 2, 0.04);
-
-        // Pixels well away from the border (≥radius pixels) must keep their values.
-        let r = 2usize;
-        for row in 0..h {
-            // Dark side, columns far from edge
-            for col in 0..w / 2 - r {
-                let v = rgb[(row * w + col) * 3];
-                assert!(
-                    (v - dark).abs() < 0.01,
-                    "dark side blurred at ({row},{col}): got {v:.4} expected ≈{dark}"
-                );
-            }
-            // Bright side, columns far from edge
-            for col in w / 2 + r..w {
-                let v = rgb[(row * w + col) * 3];
-                assert!(
-                    (v - bright).abs() < 0.01,
-                    "bright side blurred at ({row},{col}): got {v:.4} expected ≈{bright}"
-                );
-            }
-        }
     }
 
     #[test]
