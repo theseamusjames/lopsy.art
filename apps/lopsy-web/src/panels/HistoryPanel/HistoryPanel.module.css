@@ -1,8 +1,9 @@
 .list {
   display: flex;
   flex-direction: column;
-  min-height: 120px;
-  max-height: 250px;
+  /* Fill the dock pane, whatever height it has, and scroll inside it. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
