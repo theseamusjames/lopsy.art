@@ -100,7 +100,14 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     // the same side. Dividing by the long side thinned edges by the aspect.
     let edgePx = params.u_edgeWidth / texSize.y * params.u_cellCount;
     // The line is centred on the boundary, Edge Width px across in total.
-    let edge = 1.0 - smoothstep(0.0, max(edgePx, 0.001), 2.0 * edgeDist);
+    // Edge Width 0 draws no line at all (#1747): clamping it to a hairline
+    // instead blackened every pixel whose centre fell on a border, which
+    // peppered the flat cells with isolated dark dots.
+    let edge = select(
+        0.0,
+        1.0 - smoothstep(0.0, max(edgePx, 0.001), 2.0 * edgeDist),
+        params.u_edgeWidth > 0.0,
+    );
 
     let edgeColor = vec3<f32>(params.u_edgeR, params.u_edgeG, params.u_edgeB);
     let finalColor = mix(cellColor.rgb, edgeColor, edge);
