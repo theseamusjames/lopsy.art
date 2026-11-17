@@ -6,6 +6,7 @@ import type { FontEntry, FontCategory } from '../../utils/font-catalog';
 import { extractFamilyName, loadGoogleFontPreview } from '../../utils/font-loader';
 import { mergeLocalFonts } from '../../utils/local-fonts';
 import { useLocalFontsStore, useFontEntry, loadLocalFontToDom } from '../../app/local-fonts-store';
+import { focusTextInputSink } from '../../app/text-input-sink';
 import { previewFontFamily } from '../../utils/font-urls';
 import { useVirtualScroll } from './useVirtualScroll';
 import styles from './FontPicker.module.css';
@@ -144,6 +145,10 @@ export function FontPicker({ value, onChange }: FontPickerProps) {
           : `'${entry.family}', ${fallback}`;
       onChange(familyVal);
       close();
+      // The focused search field or option is about to unmount, which would
+      // drop focus on <body>. Hand it back to the text being edited (so IME
+      // and emoji-picker input keep arriving), or else to the trigger.
+      if (!focusTextInputSink()) triggerRef.current?.focus();
     },
     [onChange, close],
   );

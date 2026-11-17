@@ -681,7 +681,11 @@ geometry.
 **Groups.** Click `New Group` in the Layers panel toolbar and add layers
 while a layer inside it is active. A new layer is always inserted directly
 above the active layer, and inside the group if the active layer is a group.
-Group effects and adjustment layers apply to everything inside the group.
+A group's blend mode and adjustments apply to everything inside it, but a
+group has **no layer effects**: its drawer (the row's *Group effects*
+button) shows only Blend and the adjustment list, so `h.effect()` on a group
+fails. Set effects on each layer instead; **Copy effects** on one layer and
+**Paste effects** on the others makes that quick.
 
 **Guides and grid.** **View → Show Grid** turns snapping on the first time,
 which quantizes marquee and Shape drags (a shape's centre and corner both

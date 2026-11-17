@@ -39,7 +39,7 @@ vi.mock('../../app/tool-settings-store', () => ({
   useToolSettingsStore: { getState: () => ts },
 }));
 
-import { handleSmudgeDown, handleSmudgeMove, handleSmudgeUp } from './smudge-interaction';
+import { handleSmudgeDown, handleSmudgeMove, handleSmudgeUp, smudgeSpacing } from './smudge-interaction';
 import type { InteractionContext, InteractionState } from '../../app/interactions/interaction-types';
 import { DEFAULT_TRANSFORM_FIELDS } from '../../app/interactions/interaction-types';
 
@@ -108,14 +108,14 @@ describe('smudge down', () => {
   it('shift-click pulls the smudge along the full line from the last paint point', () => {
     const ctx = makeCtx({
       shiftKey: true,
-      layerPos: { x: 20, y: 0 },
+      layerPos: { x: 8, y: 0 },
       lastPaintPointRef: { current: { point: { x: 0, y: 0 }, layerId: 'layer-1' } },
     });
     handleSmudgeDown(ctx);
     expect(applySmudgeDab).not.toHaveBeenCalled();
     const pts = applySmudgeDabBatch.mock.calls[0]![2] as Float64Array;
-    // Leading pair is the stroke origin, then dabs at spacing 10: x=10, 20.
-    expect(Array.from(pts)).toEqual([0, 0, 10, 0, 20, 0]);
+    // Leading pair is the stroke origin, then dabs at spacing 2 (5 % of 40).
+    expect(Array.from(pts)).toEqual([0, 0, 2, 0, 4, 0, 6, 0, 8, 0]);
   });
 
   it('shift-click from another layer behaves like a fresh dab', () => {
@@ -139,20 +139,43 @@ describe('smudge down', () => {
 });
 
 describe('smudge move', () => {
-  it('prepends the previous point so the smudge drags continuously', () => {
+  it('prepends the previous dab so the smudge drags continuously', () => {
     const state = makeState({ lastPoint: { x: 0, y: 0 } });
-    handleSmudgeMove(state, { x: 30, y: 0 });
+    handleSmudgeMove(state, { x: 6, y: 0 });
     const pts = applySmudgeDabBatch.mock.calls[0]![2] as Float64Array;
-    expect(Array.from(pts)).toEqual([0, 0, 10, 0, 20, 0, 30, 0]);
-    expect(state.lastPoint).toEqual({ x: 30, y: 0 });
+    expect(Array.from(pts)).toEqual([0, 0, 2, 0, 4, 0, 6, 0]);
+    expect(state.lastPoint).toEqual({ x: 6, y: 0 });
     expect(editorState.notifyRender).toHaveBeenCalled();
   });
 
-  it('short moves still carry the prev point plus the destination', () => {
+  it('a move shorter than one step lays no dab and keeps the anchor', () => {
     const state = makeState({ lastPoint: { x: 5, y: 5 } });
-    handleSmudgeMove(state, { x: 7, y: 5 });
-    const pts = applySmudgeDabBatch.mock.calls[0]![2] as Float64Array;
-    expect(Array.from(pts)).toEqual([5, 5, 7, 5]);
+    handleSmudgeMove(state, { x: 6, y: 5 });
+    expect(applySmudgeDabBatch).not.toHaveBeenCalled();
+    expect(state.lastPoint).toEqual({ x: 5, y: 5 });
+  });
+
+  it('lays the same dabs for a fast drag and a slow one (#1759)', () => {
+    ts.settings.smudge = { size: 20, strength: 90 };
+    const dabsFor = (stepPx: number): number[] => {
+      applySmudgeDabBatch.mockClear();
+      const state = makeState({ lastPoint: { x: 0, y: 0 } });
+      for (let y = stepPx; y <= 30; y += stepPx) handleSmudgeMove(state, { x: 0, y });
+      return applySmudgeDabBatch.mock.calls.flatMap((call) => Array.from(call[2] as Float64Array).slice(2));
+    };
+    const fast = dabsFor(15);
+    const slow = dabsFor(1);
+    expect(fast).toEqual(slow);
+    // Size 20 → 1 px pitch: one dab per pixel of travel, 30 in all.
+    expect(fast.length / 2).toBe(30);
+  });
+
+  it('carries the distance short of a step over to the next move', () => {
+    const state = makeState({ lastPoint: { x: 0, y: 0 } });
+    handleSmudgeMove(state, { x: 3, y: 0 });
+    handleSmudgeMove(state, { x: 4, y: 0 });
+    const second = applySmudgeDabBatch.mock.calls[1]![2] as Float64Array;
+    expect(Array.from(second)).toEqual([2, 0, 4, 0]);
   });
 
   it('passes the strength as a 0..1 fraction', () => {
@@ -172,6 +195,8 @@ describe('smudge move', () => {
     handleSmudgeMove(state, { x: 10, y: 0 });
     expect(applySmudgeDabBatch).not.toHaveBeenCalled();
     expect(state.lastPoint).toEqual({ x: 10, y: 0 });
+    expect(smudgeSpacing(40)).toBe(2);
+    expect(smudgeSpacing(10)).toBe(1);
   });
 });
 

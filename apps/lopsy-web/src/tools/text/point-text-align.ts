@@ -21,9 +21,14 @@ export function isPointTextLayout(areaWidth: number | null, isVertical: boolean)
  * How far to move a point-text anchor when its alignment changes so the block
  * stays where it is: the widest line keeps its place and the others realign
  * against it, instead of the whole block swinging around the old anchor.
+ *
+ * The shift is rounded to a whole pixel: the anchor becomes the layer's
+ * position, and a block of odd or fractional width would otherwise leave the
+ * layer off the pixel grid for good (nudges move it by whole pixels).
  */
 export function alignmentAnchorShift(from: TextAlign, to: TextAlign, blockWidth: number): number {
-  return (anchorShareOfWidth(to) - anchorShareOfWidth(from)) * blockWidth;
+  // `+ 0` turns the -0 that Math.round gives for small negative shifts into 0.
+  return Math.round((anchorShareOfWidth(to) - anchorShareOfWidth(from)) * blockWidth) + 0;
 }
 
 /**

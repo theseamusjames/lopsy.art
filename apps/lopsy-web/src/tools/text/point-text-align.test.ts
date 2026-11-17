@@ -36,6 +36,15 @@ describe('alignmentAnchorShift', () => {
     expect(alignmentAnchorShift('center', 'left', 200)).toBe(-100);
   });
 
+  it('rounds the shift to a whole pixel so the layer stays on the pixel grid', () => {
+    // A 172.45 px block: centring would move the anchor by 86.225 px.
+    expect(alignmentAnchorShift('left', 'center', 172.45)).toBe(86);
+    expect(alignmentAnchorShift('left', 'right', 172.45)).toBe(172);
+    expect(alignmentAnchorShift('center', 'right', 101)).toBe(51);
+    expect(Number.isInteger(alignmentAnchorShift('right', 'center', 33.3))).toBe(true);
+    expect(Object.is(alignmentAnchorShift('center', 'left', 0.6), 0)).toBe(true);
+  });
+
   it('does not move the anchor when the alignment is unchanged or the block is empty', () => {
     expect(alignmentAnchorShift('center', 'center', 200)).toBe(0);
     expect(alignmentAnchorShift('left', 'justify', 200)).toBe(0);

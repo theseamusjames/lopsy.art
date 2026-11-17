@@ -428,11 +428,13 @@ export function useCanvasInteraction(
         case 'meshWarp':
           handleMeshWarpMove(canvasPos);
           return;
+        // Ctrl stands in for Cmd (angle snap, aspect lock) on Windows/Linux,
+        // where metaKey is the Super key the OS keeps for itself.
         case 'transform':
-          handleTransformMove(state, canvasPos, e.metaKey);
+          handleTransformMove(state, canvasPos, e.metaKey || e.ctrlKey);
           return;
         case 'textTransform':
-          handleTextTransformMove(state, canvasPos, e.metaKey);
+          handleTextTransformMove(state, canvasPos, e.metaKey || e.ctrlKey);
           return;
         case 'idle':
           return;

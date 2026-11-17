@@ -45,6 +45,8 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
     // out at 75% alpha and the far edge bled half a pixel (#1466). Instead,
     // keep the taps inside the source and weight by exact edge coverage.
     var coverage = 1.0;
+    var inLo = vec2<f32>(-1e30);
+    var inHi = vec2<f32>(1e30);
     if (isAxisAligned) {
         let s0 = params.u_srcRect.xy;
         let s1 = params.u_srcRect.xy + params.u_srcRect.zw;
@@ -58,16 +60,58 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
         if (coverage <= 0.0) {
             return vec4<f32>(0.0);
         }
-        let inLo = s0 + 0.5;
-        let inHi = max(inLo, s1 - 0.5);
-        srcDoc = clamp(srcDoc, inLo, inHi);
+        inLo = s0 + 0.5;
+        inHi = max(inLo, s1 - 0.5);
     }
 
-    let floatUV = (srcDoc - params.u_floatOffset) / params.u_floatSize;
+    // Minification (#1748): one output pixel covers the parallelogram
+    // spanned by the inverse map's columns in the source. A single bilinear
+    // tap reads only 2x2 texels of it, so below 50% whole rows and columns
+    // were skipped and thin slanted lines broke into dashes. Average a grid
+    // of taps across the footprint instead (a box filter), about one tap
+    // per source texel along each axis, capped at 16. Above ~67% one
+    // bilinear tap already reads every texel, and is kept.
+    let stepX = vec2<f32>(params.u_invMatrix[0][0], params.u_invMatrix[0][1]);
+    let stepY = vec2<f32>(params.u_invMatrix[1][0], params.u_invMatrix[1][1]);
+    let tapsX = i32(clamp(floor(length(stepX) + 0.5), 1.0, 16.0));
+    let tapsY = i32(clamp(floor(length(stepY) + 0.5), 1.0, 16.0));
 
-    if (floatUV.x < 0.0 || floatUV.x > 1.0 || floatUV.y < 0.0 || floatUV.y > 1.0) {
+    if (tapsX == 1 && tapsY == 1) {
+        let floatUV = (clamp(srcDoc, inLo, inHi) - params.u_floatOffset) / params.u_floatSize;
+        if (floatUV.x < 0.0 || floatUV.x > 1.0 || floatUV.y < 0.0 || floatUV.y > 1.0) {
+            return vec4<f32>(0.0);
+        }
+        let c = samplePremulBilinear(u_floatTex, floatUV);
+        return vec4<f32>(c.rgb, c.a * coverage);
+    }
+
+    // Skip pixels whose whole footprint misses the source pixels, so the
+    // tap grid only runs where there is content.
+    if (params.u_srcRect.z > 0.0 && params.u_srcRect.w > 0.0) {
+        let reach = 0.5 * (abs(stepX) + abs(stepY)) + 1.0;
+        let r0 = params.u_srcRect.xy;
+        let r1 = params.u_srcRect.xy + params.u_srcRect.zw;
+        if (any(srcDoc + reach < r0) || any(srcDoc - reach > r1)) {
+            return vec4<f32>(0.0);
+        }
+    }
+
+    var sum = vec4<f32>(0.0);
+    for (var iy: i32 = 0; iy < tapsY; iy++) {
+        let fy = (f32(iy) + 0.5) / f32(tapsY) - 0.5;
+        for (var ix: i32 = 0; ix < tapsX; ix++) {
+            let fx = (f32(ix) + 0.5) / f32(tapsX) - 0.5;
+            let tap = clamp(srcDoc + fx * stepX + fy * stepY, inLo, inHi);
+            let tapUV = (tap - params.u_floatOffset) / params.u_floatSize;
+            if (tapUV.x < 0.0 || tapUV.x > 1.0 || tapUV.y < 0.0 || tapUV.y > 1.0) {
+                continue;
+            }
+            sum += bilinearPremul(u_floatTex, tapUV);
+        }
+    }
+    let m = sum / f32(tapsX * tapsY);
+    if (m.a < 1e-6) {
         return vec4<f32>(0.0);
     }
-    let c = samplePremulBilinear(u_floatTex, floatUV);
-    return vec4<f32>(c.rgb, c.a * coverage);
+    return vec4<f32>(m.rgb / m.a, m.a * coverage);
 }
