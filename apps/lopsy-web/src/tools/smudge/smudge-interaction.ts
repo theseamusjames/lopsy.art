@@ -10,7 +10,17 @@ import {
 } from '../../engine-wasm/wasm-bridge';
 import { syncLayerAfterFullSize } from '../../app/sync-layer-after-full-size';
 import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
-import { interpolateFlat } from '../common/dab-interpolation';
+import { interpolateDeferred, interpolateFlat } from '../common/dab-interpolation';
+
+/**
+ * Distance between smudge dabs. Each dab drags the pixels by the step it
+ * takes and blends them in with a soft falloff, so at the 25 % pitch the
+ * other tools use the falloff of every dab shows as a separate band down the
+ * trail. A 5 % pitch (never under 1 px) keeps the smear continuous.
+ */
+export function smudgeSpacing(size: number): number {
+  return Math.max(1, size * 0.05);
+}
 
 export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
   const { activeLayerId, activeLayer, shiftKey } = ctx;
@@ -34,8 +44,7 @@ export function handleSmudgeDown(ctx: InteractionContext): InteractionState {
       && ctx.lastPaintPointRef.current.layerId === activeLayerId;
     if (shiftLine) {
       const from = ctx.lastPaintPointRef.current!.point;
-      const spacing = Math.max(1, size * 0.25);
-      const interior = interpolateFlat(from, layerPos, spacing);
+      const interior = interpolateFlat(from, layerPos, smudgeSpacing(size));
       const pts = new Float64Array(interior.length + 2);
       pts[0] = from.x;
       pts[1] = from.y;
@@ -63,19 +72,23 @@ export function handleSmudgeMove(state: InteractionState, layerLocalPos: Point):
   if (!state.lastPoint) return;
   const { size, strength: strengthPercent } = useToolSettingsStore.getState().settings.smudge;
   const strength = strengthPercent / 100;
-  const spacing = Math.max(1, size * 0.25);
+
+  // `lastPoint` is the last dab, not the last pointer sample: dabs are laid
+  // a fixed distance apart along the drag whatever the pointer speed, and
+  // the distance short of the next step carries over to the next move.
+  const from = state.lastPoint;
+  const dabs = interpolateDeferred(from, layerLocalPos, smudgeSpacing(size));
+  if (dabs.length === 0) return;
 
   const engine = getEngine();
   if (engine && state.layerId) {
-    const from = state.lastPoint;
-    const interior = interpolateFlat(from, layerLocalPos, spacing);
-    const pts = new Float64Array(interior.length + 2);
+    const pts = new Float64Array(dabs.length + 2);
     pts[0] = from.x;
     pts[1] = from.y;
-    pts.set(interior, 2);
+    pts.set(dabs, 2);
     gpuSmudgeDabBatch(engine, state.layerId, pts, size, strength);
   }
-  state.lastPoint = layerLocalPos;
+  state.lastPoint = { x: dabs[dabs.length - 2] ?? from.x, y: dabs[dabs.length - 1] ?? from.y };
   useEditorStore.getState().notifyRender();
 }
 

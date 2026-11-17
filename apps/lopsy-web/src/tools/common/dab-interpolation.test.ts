@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolateFlat } from './dab-interpolation';
+import { interpolateDeferred, interpolateFlat } from './dab-interpolation';
 
 describe('interpolateFlat', () => {
   it('returns just the destination when the segment is shorter than spacing', () => {
@@ -22,5 +22,17 @@ describe('interpolateFlat', () => {
   it('handles zero-length segments without dividing by zero', () => {
     const out = interpolateFlat({ x: 5, y: 5 }, { x: 5, y: 5 }, 1);
     expect(Array.from(out)).toEqual([5, 5]);
+  });
+});
+
+describe('interpolateDeferred', () => {
+  it('emits nothing for a segment shorter than one step', () => {
+    expect(interpolateDeferred({ x: 0, y: 0 }, { x: 2, y: 0 }, 5).length).toBe(0);
+    expect(interpolateDeferred({ x: 5, y: 5 }, { x: 5, y: 5 }, 1).length).toBe(0);
+  });
+
+  it('stops at the last whole step, leaving the remainder for later', () => {
+    const out = interpolateDeferred({ x: 0, y: 0 }, { x: 11, y: 0 }, 5);
+    expect(Array.from(out)).toEqual([5, 0, 10, 0]);
   });
 });
