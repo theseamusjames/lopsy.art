@@ -8,7 +8,9 @@ fn fetchPremul(tex: texture_2d<f32>, p: vec2<i32>, maxP: vec2<i32>) -> vec4<f32>
     return vec4<f32>(c.rgb * c.a, c.a);
 }
 
-fn samplePremulBilinear(tex: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
+// The same bilinear tap, left premultiplied: taps that are averaged
+// together (a minification filter) must be summed premultiplied.
+fn bilinearPremul(tex: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
     let size = vec2<i32>(textureDimensions(tex, 0));
     let maxP = size - 1;
     let p = uv * vec2<f32>(size) - 0.5;
@@ -18,7 +20,11 @@ fn samplePremulBilinear(tex: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
     let c10 = fetchPremul(tex, i0 + vec2<i32>(1, 0), maxP);
     let c01 = fetchPremul(tex, i0 + vec2<i32>(0, 1), maxP);
     let c11 = fetchPremul(tex, i0 + vec2<i32>(1, 1), maxP);
-    let m = mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
+    return mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
+}
+
+fn samplePremulBilinear(tex: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
+    let m = bilinearPremul(tex, uv);
     if (m.a < 1e-6) { return vec4<f32>(0.0); }
     return vec4<f32>(m.rgb / m.a, m.a);
 }
