@@ -156,7 +156,9 @@ test.describe('Liquify Bloat keeps the image continuous (#945)', () => {
     await page.waitForTimeout(200);
 
     await page.locator('[data-testid="liquify-apply"]').click();
-    await panel.waitFor({ state: 'hidden', timeout: 5000 });
+    // Apply/Cancel flush the queued warp dabs on the GPU; under SwiftShader with
+    // parallel workers that takes several seconds, so 5s was flaky.
+    await panel.waitFor({ state: 'hidden', timeout: 30000 });
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'liquify-bloat-grid-after.png') });
 
