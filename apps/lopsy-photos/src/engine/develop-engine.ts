@@ -14,6 +14,7 @@
 
 import initWasm, {
   addLayer,
+  setClippingWarning as engineSetClippingWarning,
   autoTone as engineAutoTone,
   clearImageDetail,
   clearImageLocalContrast,
@@ -152,6 +153,8 @@ export interface DevelopEngine {
   /** A JPEG of the current edit, long edge at most `maxSize`. */
   renderPreview(maxSize: number, quality?: number): Promise<Blob>;
   exportImage(options: ExportOptions): Promise<Blob>;
+  /** Paints clipped pixels on the live frame only (any channel at or past white red, at or below black blue); exports are unaffected. */
+  setClippingWarning(shadows: boolean, highlights: boolean): void;
   dispose(): void;
 }
 
@@ -690,6 +693,14 @@ class PhotoEngine implements DevelopEngine {
     this.invalidate();
   }
 
+  private clippingWarning = { shadows: false, highlights: false };
+
+  setClippingWarning(shadows: boolean, highlights: boolean): void {
+    this.clippingWarning = { shadows, highlights };
+    engineSetClippingWarning(this.engine, shadows, highlights);
+    this.invalidate();
+  }
+
   setInteractive(isInteractive: boolean): void {
     if (this.isInteractive === isInteractive) return;
     this.isInteractive = isInteractive;
@@ -868,6 +879,21 @@ class PhotoEngine implements DevelopEngine {
   }
 
   async exportImage(options: ExportOptions): Promise<Blob> {
+    const { shadows, highlights } = this.clippingWarning;
+    if (!shadows && !highlights) return this.exportClean(options);
+    // Exports and previews draw through the live path too: never with the warning on.
+    engineSetClippingWarning(this.engine, false, false);
+    try {
+      return await this.exportClean(options);
+    } finally {
+      if (!this.isDisposed) {
+        engineSetClippingWarning(this.engine, this.clippingWarning.shadows, this.clippingWarning.highlights);
+        this.invalidate();
+      }
+    }
+  }
+
+  private async exportClean(options: ExportOptions): Promise<Blob> {
     const image = this.imageSize();
     if (!image || this.isDisposed) throw new Error('No photo is loaded');
     const space = options.colorSpace === 'display-p3' ? DISPLAY_P3 : SRGB;
