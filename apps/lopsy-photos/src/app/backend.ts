@@ -6,7 +6,7 @@
  * double. `backend-registry.ts` picks one.
  */
 
-import type { AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
+import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
 import type { StorageQuota } from '@lopsy/photos-core/storage/types';
 
@@ -17,6 +17,18 @@ export interface Connection {
   readonly session: LibrarySession;
   /** For the header: the account email, "This browser" or the folder's name. */
   readonly accountLabel: string;
+}
+
+export interface LoadOriginalOptions {
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (loadedBytes: number, totalBytes: number | null) => void;
+}
+
+/** What the Edit view renders when edits settle. */
+export interface EditPreviews {
+  readonly thumb: Blob;
+  readonly screen: Blob;
+  readonly recipeHash: string;
 }
 
 export type ExportFormat = 'jpeg' | 'png';
@@ -66,6 +78,8 @@ export interface ReconnectOffer {
 export interface ConnectOptions {
   /** Reopen the last storage of this kind (the saved folder, the last Google account) instead of asking afresh. */
   readonly reconnect?: boolean;
+  /** Take the library over from another tab that has it open. */
+  readonly takeOver?: boolean;
 }
 
 export interface PhotosBackend {
@@ -92,8 +106,20 @@ export interface PhotosBackend {
   /** Starts importing files into the library. Each photo appears in the view as soon as it is read. */
   startImport(files: readonly File[], session: LibrarySession, options?: Partial<ImportOptions>): ImportJob;
 
+  /** Continues imports a reload interrupted, as one job; null when there are none. */
+  resumeImports(session: LibrarySession): Promise<ImportJob | null>;
+
   /** A stored preview's JPEG. */
   readPreview(session: LibrarySession, ref: PreviewRef): Promise<Blob>;
+
+  /** The original file, from the device cache or downloaded (with progress). */
+  loadOriginal(session: LibrarySession, asset: Asset, options?: LoadOriginalOptions): Promise<Blob>;
+
+  /** Keeps the original in the device cache while it is open in Edit. Returns the release. */
+  pinOriginal(session: LibrarySession, asset: Asset): () => void;
+
+  /** Stores the Edit view's rendered previews as the version's thumb and screen, replacing the old ones. */
+  storeEditPreviews(session: LibrarySession, versionId: VersionId, previews: EditPreviews): Promise<void>;
 
   /** Tombstones the assets and moves their original files to the storage's trash. */
   trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void>;
