@@ -22,7 +22,9 @@ async function openLiquify(page: Page): Promise<void> {
  */
 async function applyLiquify(page: Page): Promise<void> {
   await page.locator('[data-testid="liquify-apply"]').click();
-  await page.locator('[data-testid="liquify-panel"]').waitFor({ state: 'hidden', timeout: 5000 });
+  // Apply/Cancel flush the queued warp dabs on the GPU; under SwiftShader with
+  // parallel workers that takes several seconds, so 5s was flaky.
+  await page.locator('[data-testid="liquify-panel"]').waitFor({ state: 'hidden', timeout: 30000 });
   await page.waitForTimeout(200);
 }
 
@@ -31,7 +33,9 @@ async function applyLiquify(page: Page): Promise<void> {
  */
 async function cancelLiquify(page: Page): Promise<void> {
   await page.locator('[data-testid="liquify-panel"] button:has-text("Cancel")').click();
-  await page.locator('[data-testid="liquify-panel"]').waitFor({ state: 'hidden', timeout: 5000 });
+  // Apply/Cancel flush the queued warp dabs on the GPU; under SwiftShader with
+  // parallel workers that takes several seconds, so 5s was flaky.
+  await page.locator('[data-testid="liquify-panel"]').waitFor({ state: 'hidden', timeout: 30000 });
   await page.waitForTimeout(200);
 }
 
