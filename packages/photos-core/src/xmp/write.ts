@@ -89,7 +89,9 @@ export function writeXmp(asset: Asset, version: Version | null): string {
   if (version) {
     attributes.push(...crsAttributes(version.recipe));
     const paths = recipeToPaths(version.recipe);
+    // Areas stay in the library: their geometry has no faithful XMP form here.
     for (const key of Object.keys(paths).sort()) {
+      if (key.startsWith('areas.')) continue;
       attributes.push(`lpp:${key}="${escapeXml(JSON.stringify(paths[key]))}"`);
     }
   }

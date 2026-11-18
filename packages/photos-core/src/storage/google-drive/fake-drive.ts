@@ -72,6 +72,8 @@ export interface FakeDrive {
   contentOf(id: string): Uint8Array | null;
   /** Adds a file as if another app or the user made it (for Picker adoption tests). */
   seedFile(file: { name: string; parentId?: string; mimeType?: string; content?: Uint8Array; appProperties?: Record<string, string> }): string;
+  /** Whether anyone with the link can view the file: an `anyone` permission on it or on a folder it is in. */
+  isSharedWithAnyone(id: string): boolean;
 }
 
 interface FakeFile {
@@ -126,6 +128,7 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
   const changes: ChangeEntry[] = [];
   const failures: FakeFailure[] = [];
   const generatedIds = new Set<string>();
+  const permissions = new Map<string, { readonly id: string; readonly type: string; readonly role: string }[]>();
   const requests: FakeDriveRequest[] = [];
 
   function newId(prefix: string): string {
@@ -223,7 +226,40 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
       version: String(file.version),
       appProperties: { ...file.appProperties },
       trashed: isTrashed(file),
+      webViewLink: isFolder ? `https://drive.google.com/drive/folders/${file.id}` : `https://drive.google.com/file/d/${file.id}/view`,
     };
+  }
+
+  function sharedWithAnyone(id: string): boolean {
+    let current = files.get(id);
+    for (let depth = 0; current && depth < 1000; depth++) {
+      if ((permissions.get(current.id) ?? []).some((permission) => permission.type === 'anyone')) return true;
+      const parent: string | undefined = current.parents[0];
+      current = parent === undefined ? undefined : files.get(parent);
+    }
+    return false;
+  }
+
+  async function routePermissions(request: Request, id: string, permissionId: string | null): Promise<Response> {
+    const file = requireFile(id);
+    const list = permissions.get(file.id) ?? [];
+    if (permissionId === null && request.method === 'GET') return json(200, { permissions: list });
+    if (permissionId === null && request.method === 'POST') {
+      const body = parseJsonObject(await request.text());
+      if (body.type !== 'anyone' || body.role !== 'reader') throw new HttpError(400, 'invalid', 'The fake supports only anyone/reader permissions');
+      // Drive keeps one `anyone` permission per file: asking again returns it.
+      const existing = list.find((permission) => permission.type === 'anyone');
+      if (existing) return json(200, existing);
+      const permission = { id: 'anyoneWithLink', type: 'anyone', role: 'reader' };
+      permissions.set(file.id, [...list, permission]);
+      return json(200, permission);
+    }
+    if (permissionId !== null && request.method === 'DELETE') {
+      if (!list.some((permission) => permission.id === permissionId)) throw new HttpError(404, 'notFound', 'Permission not found');
+      permissions.set(file.id, list.filter((permission) => permission.id !== permissionId));
+      return new Response(null, { status: 204 });
+    }
+    throw new HttpError(404, 'notFound', 'No fake route for that permissions request');
   }
 
   async function createFile(metadata: Record<string, unknown>, content: Uint8Array): Promise<FakeFile> {
@@ -484,6 +520,10 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
       return json(200, resource(await createFile(parseJsonObject(await request.text()), new Uint8Array(0))));
     }
 
+    const permissionMatch = new RegExp(`^${API}/files/([^/]+)/permissions(?:/([^/]+))?$`).exec(path);
+    if (permissionMatch?.[1] !== undefined) {
+      return routePermissions(request, decodeURIComponent(permissionMatch[1]), permissionMatch[2] === undefined ? null : decodeURIComponent(permissionMatch[2]));
+    }
     const fileMatch = new RegExp(`^${API}/files/([^/]+)$`).exec(path);
     if (fileMatch?.[1] !== undefined) {
       const id = decodeURIComponent(fileMatch[1]);
@@ -583,6 +623,7 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
       const file = files.get(id);
       return file ? file.content.slice() : null;
     },
+    isSharedWithAnyone: (id) => sharedWithAnyone(id),
     seedFile: (input) => {
       const content = input.content ?? new Uint8Array(0);
       const file: FakeFile = {

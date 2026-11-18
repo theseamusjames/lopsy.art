@@ -164,4 +164,21 @@ export interface StorageAdapter {
   listChanges(cursor: string): Promise<ChangePage>;
 
   getQuota(): Promise<StorageQuota>;
+
+  /**
+   * Optional: the storage's own web page for a file or folder (Drive's web
+   * UI), for "Show in Drive". Absent on storage that has none.
+   */
+  webLink?(id: FileId): Promise<string>;
+
+  /**
+   * Optional: makes the file or folder (and, for a folder, everything in
+   * it) viewable by anyone who has the link, and returns the link. Only
+   * call it after the user confirmed exactly that. Absent on storage that
+   * cannot share.
+   */
+  shareLink?(id: FileId): Promise<string>;
+
+  /** Optional, with `shareLink`: ends link sharing of the file or folder. */
+  unshare?(id: FileId): Promise<void>;
 }

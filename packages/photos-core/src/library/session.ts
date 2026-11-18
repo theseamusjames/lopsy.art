@@ -29,6 +29,7 @@ import {
   sanitizeRecipeValues,
   type RecipeGroupId,
   DEFAULT_RECIPE,
+  removedAreaValues,
   recipeHash,
   recipeToPaths,
   type CropRect,
@@ -409,6 +410,14 @@ class Session implements PhotosLibrarySession {
     this.emit([{ t: 'set', kind: 'version', id: versionId, fields: { deleted: true } }]);
   }
 
+  setPrimaryVersion(assetId: AssetId, versionId: VersionId): void {
+    const version = this.getView().versions.get(versionId);
+    if (!version || version.deleted || version.assetId !== assetId) {
+      throw new Error(`${versionId} is not a live version of ${assetId}`);
+    }
+    this.emit([{ t: 'set', kind: 'asset', id: assetId, fields: { primaryVersionId: versionId } }]);
+  }
+
   editRecipe(versionId: VersionId, changes: Readonly<Record<string, Json>>, label: string): void {
     const fields: Record<string, Json> = {};
     for (const [path, value] of Object.entries(changes)) fields[`recipe.${path}`] = value;
@@ -417,7 +426,11 @@ class Session implements PhotosLibrarySession {
   }
 
   setRecipe(versionId: VersionId, recipe: Recipe, label: string): void {
-    this.emit([{ t: 'set', kind: 'version', id: versionId, fields: recipeFields(recipe) }], {
+    const current = this.getView().versions.get(versionId)?.recipe;
+    const fields = recipeFields(recipe);
+    // An area left out of the new recipe is deleted, not left as it was.
+    if (current) for (const [path, value] of Object.entries(removedAreaValues(current, recipe))) fields[`recipe.${path}`] = value;
+    this.emit([{ t: 'set', kind: 'version', id: versionId, fields }], {
       id: newId(this.now()),
       label,
     });
@@ -551,8 +564,13 @@ class Session implements PhotosLibrarySession {
     this.emit([{ t: 'set', kind: 'album', id: albumId, fields: { deleted: true } }]);
   }
 
-  setAlbumMember(albumId: AlbumId, assetId: AssetId, present: boolean): void {
-    this.emit([{ t: 'member', kind: 'album', id: albumId, set: 'assets', member: assetId, present }]);
+  setAlbumMember(albumId: AlbumId, assetId: AssetId, present: boolean, versionId: VersionId | null = null): void {
+    if (versionId === null) {
+      this.emit([{ t: 'member', kind: 'album', id: albumId, set: 'assets', member: assetId, present }]);
+      return;
+    }
+    if (assetId.includes('/') || versionId.includes('/')) throw new Error('Invalid album member');
+    this.emit([{ t: 'member', kind: 'album', id: albumId, set: 'versions', member: `${assetId}/${versionId}`, present }]);
   }
 
   setOriginalStatus(assetIds: readonly AssetId[], status: OriginalStatus): void {

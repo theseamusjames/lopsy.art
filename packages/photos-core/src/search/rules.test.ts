@@ -17,7 +17,7 @@ const a2 = asset({
 });
 const a3 = asset({ id: 'r3', rating: 0, capturedAt: null, importedAt: '2026-01-02T00:00:00.000Z', exposure: null, camera: null });
 const lib = view([a1, a2, a3], {
-  albums: [{ id: 'al', name: 'Best', assetIds: ['r2', 'r3'], deleted: false }],
+  albums: [{ id: 'al', name: 'Best', assetIds: ['r2', 'r3'], members: [{ assetId: 'r2', versionId: null }, { assetId: 'r3', versionId: null }], deleted: false }],
 });
 
 const ids = (rule: SearchRule) => filterAssets(lib, rule, true).map((a) => a.id);
@@ -67,7 +67,7 @@ describe('search rules', () => {
   it('sees album changes in a new view with the same compiled rule', () => {
     const predicate = compileSearch({ kind: 'inAlbum', albumId: 'al' });
     expect(predicate(a1, lib)).toBe(false);
-    const changed = { ...lib, albums: new Map([['al', { id: 'al', name: 'Best', assetIds: ['r1'], deleted: false }]]) };
+    const changed = { ...lib, albums: new Map([['al', { id: 'al', name: 'Best', assetIds: ['r1'], members: [{ assetId: 'r1', versionId: null }], deleted: false }]]) };
     expect(predicate(a1, changed)).toBe(true);
   });
 });

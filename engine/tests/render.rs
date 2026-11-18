@@ -558,6 +558,26 @@ fn the_detail_stages_change_the_composite_and_clear_back() {
 }
 
 #[test]
+fn areas_change_exports_but_their_overlay_never_does() {
+    let Some(mut engine) = engine(16, 8) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 16, 8, 1.0)).expect("layer");
+    commands::layer::upload_layer_pixels(&mut engine, "art", &[[100u8, 110, 120, 255]; 128].concat(), 16, 8, 0, 0).expect("pixels");
+    let plain = now(compositor::composite_for_export(&mut engine));
+    let mut area = [0.0f32; 16];
+    area[2] = 1.0;
+    area[5] = 16.0;
+    area[9] = 1.0;
+    commands::develop::set_image_areas(&mut engine, &area).expect("areas");
+    let applied = now(compositor::composite_for_export(&mut engine));
+    assert_ne!(applied, plain);
+    commands::develop::set_image_area_overlay(&mut engine, 0);
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), applied);
+    commands::develop::clear_image_areas(&mut engine);
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), plain);
+    assert_no_gpu_errors();
+}
+
+#[test]
 fn the_develop_histogram_counts_the_displayed_pixels() {
     let Some(mut engine) = engine(8, 4) else { return };
     commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");

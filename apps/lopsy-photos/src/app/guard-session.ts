@@ -19,6 +19,7 @@ export const COMMANDS: ReadonlySet<string> = new Set([
   'createVersion',
   'renameVersion',
   'deleteVersion',
+  'setPrimaryVersion',
   'editRecipe',
   'setRecipe',
   'setPreview',

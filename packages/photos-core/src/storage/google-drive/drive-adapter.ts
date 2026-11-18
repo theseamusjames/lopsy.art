@@ -319,6 +319,55 @@ export class GoogleDriveAdapter implements StorageAdapter {
     return { changes, cursor: nextCursor, hasMore: next !== null };
   }
 
+  /** The file's page in Drive's web UI (`webViewLink`). */
+  async webLink(id: FileId): Promise<string> {
+    const body = await this.json({ method: 'GET', url: this.url(`/files/${encodeURIComponent(id)}`, { fields: 'webViewLink,mimeType' }) });
+    if (isRecord(body) && isString(body.webViewLink)) return body.webViewLink;
+    const isFolder = isRecord(body) && body.mimeType === DRIVE_FOLDER_MIME_TYPE;
+    return isFolder
+      ? `https://drive.google.com/drive/folders/${encodeURIComponent(id)}`
+      : `https://drive.google.com/file/d/${encodeURIComponent(id)}/view`;
+  }
+
+  /**
+   * Anyone with the link may view: one `anyone` reader permission. On a
+   * folder, Drive's inherited permissions cover what is in it. drive.file
+   * lets the app share the files it created, which export folders are.
+   */
+  async shareLink(id: FileId): Promise<string> {
+    await this.json({
+      method: 'POST',
+      url: this.url(`/files/${encodeURIComponent(id)}/permissions`, { fields: 'id' }),
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify({ role: 'reader', type: 'anyone', allowFileDiscovery: false }),
+    });
+    return this.webLink(id);
+  }
+
+  /** Removes every `anyone` permission, so the link stops working. */
+  async unshare(id: FileId): Promise<void> {
+    const body = await this.json({
+      method: 'GET',
+      url: this.url(`/files/${encodeURIComponent(id)}/permissions`, { fields: 'permissions(id,type)', pageSize: '100' }),
+    });
+    const permissions = isRecord(body) && Array.isArray(body.permissions) ? body.permissions : [];
+    for (const permission of permissions) {
+      if (!isRecord(permission) || permission.type !== 'anyone' || !isString(permission.id)) continue;
+      const permissionId = permission.id;
+      try {
+        await this.withRetry(undefined, async () => {
+          await this.attempt({
+            method: 'DELETE',
+            url: this.url(`/files/${encodeURIComponent(id)}/permissions/${encodeURIComponent(permissionId)}`, { fields: 'id' }),
+          });
+        });
+      } catch (error) {
+        // Already gone (another device stopped sharing first) is the outcome wanted.
+        if (!isStorageError(error) || error.code !== 'not-found') throw error;
+      }
+    }
+  }
+
   async getQuota(): Promise<StorageQuota> {
     const body = await this.json({ method: 'GET', url: this.url('/about', { fields: 'storageQuota(limit,usage)' }) });
     const quota = isRecord(body) && isRecord(body.storageQuota) ? body.storageQuota : {};

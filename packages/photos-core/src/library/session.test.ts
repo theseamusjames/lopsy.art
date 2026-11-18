@@ -105,7 +105,7 @@ describe('openLibrary', () => {
     const view = session.getView();
     expect(view.assets.get(assetId)).toMatchObject({ rating: 5, label: 'red', title: 'Harbour', keywords: ['sea'], deleted: false });
     expect(view.versions.get(v2)).toMatchObject({ name: 'Mono', thumb: { fileId: 'p1', recipeHash: DEFAULT_HASH, width: 512, height: 341 } });
-    expect(view.albums.get(album)).toEqual({ id: album, name: 'Trip 2026', assetIds: [assetId], deleted: false });
+    expect(view.albums.get(album)).toEqual({ id: album, name: 'Trip 2026', assetIds: [assetId], members: [{ assetId, versionId: null }], deleted: false });
     expect(view.settings.get('export.quality')).toBe(90);
     session.deleteVersion(v2);
     session.deleteAlbum(album);

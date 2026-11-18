@@ -55,3 +55,13 @@ uniforms! {
         pub haze_amount: f32,
     }
 }
+
+uniforms! {
+    /// `develop/areas.wgsl`
+    pub struct AreasParams {
+        pub areas: Vec4Array<32>,
+        pub count: i32,
+        pub mode: i32,
+        pub overlay: i32,
+    }
+}
