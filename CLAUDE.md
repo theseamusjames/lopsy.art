@@ -27,6 +27,9 @@ What you may be looking for:
   `apps/lopsy-web/docs/hdr-support.md`.
 - **The engine migration (WebGL to a pass layer to wgpu) and this layout**:
   `docs/engine-migration-plan.md`.
+- **The spec for Lopsy Photos**, a planned photo library and RAW editor
+  that stores originals in the user's Google Drive and hands off to
+  Lopsy: `docs/lopsy-photos-spec.md`.
 - **Where pixel buffers still live in JavaScript**:
   `docs/pixel-data-debt.md`.
 - **Contributor workflow for AI-assisted PRs**: `AGENTS.md`.
