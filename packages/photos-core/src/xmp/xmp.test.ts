@@ -96,7 +96,8 @@ describe('readXmp', () => {
     });
     const recipe = x ? recipeFromXmp(x, 6) : null;
     expect(recipe?.tone).toEqual({ exposure: 0.65, contrast: 12, highlights: -48, shadows: 35, whites: 5, blacks: -10 });
-    expect(recipe?.whiteBalance).toEqual(DEFAULT_RECIPE.whiteBalance);
+    // Custom 5600 K against the 5500 K reference: a touch warmer; RAW tint +8 is about +5.3 of ours.
+    expect(recipe?.whiteBalance).toEqual({ mode: 'custom', temperature: 3, tint: 5.33 });
     expect(recipe?.framing.rotate).toBe(0);
     expect(x ? recipeFromXmp(x, 1)?.framing.rotate : null).toBe(90);
   });
