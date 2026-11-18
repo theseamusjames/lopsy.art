@@ -56,7 +56,9 @@ export type ImportItemState =
   | 'uploading'
   | 'verifying'
   | 'done'
-  | 'failed';
+  | 'failed'
+  /** The JPEG half of a RAW+JPEG pair, left out because `rawPlusJpeg` is 'raw-only'. */
+  | 'skipped';
 
 export interface ImportItem {
   readonly id: string;

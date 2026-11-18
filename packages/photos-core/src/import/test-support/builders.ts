@@ -107,7 +107,7 @@ function writeIfd(w: Writer, spec: IfdSpec): number {
 }
 
 /** A TIFF structure (header plus IFDs) with offsets relative to its first byte. */
-export function buildTiff(ifd0: IfdSpec, littleEndian = true): Uint8Array {
+export function buildTiff(ifd0: IfdSpec, littleEndian = true): Uint8Array<ArrayBuffer> {
   const w = new Writer(littleEndian);
   w.alloc(8);
   w.put(0, littleEndian ? [0x49, 0x49] : [0x4d, 0x4d]);
@@ -117,7 +117,7 @@ export function buildTiff(ifd0: IfdSpec, littleEndian = true): Uint8Array {
   return Uint8Array.from(w.bytes);
 }
 
-function concat(parts: readonly (readonly number[] | Uint8Array)[]): Uint8Array {
+function concat(parts: readonly (readonly number[] | Uint8Array)[]): Uint8Array<ArrayBuffer> {
   const total = parts.reduce((n, p) => n + p.length, 0);
   const out = new Uint8Array(total);
   let at = 0;
@@ -133,7 +133,7 @@ function ascii(text: string): number[] {
 }
 
 /** A JPEG's marker structure: optional APP1 EXIF, a SOF frame header, an empty scan. */
-export function buildJpeg(options: { width: number; height: number; exif?: Uint8Array; frameMarker?: number }): Uint8Array {
+export function buildJpeg(options: { width: number; height: number; exif?: Uint8Array; frameMarker?: number }): Uint8Array<ArrayBuffer> {
   const parts: (readonly number[] | Uint8Array)[] = [[0xff, 0xd8]];
   if (options.exif) {
     const length = 2 + 6 + options.exif.length;
@@ -154,7 +154,7 @@ function u32le(v: number): number[] {
 }
 
 /** A PNG's chunk structure: IHDR, optional eXIf, IEND (CRCs are zero; readers skip them). */
-export function buildPng(options: { width: number; height: number; exif?: Uint8Array }): Uint8Array {
+export function buildPng(options: { width: number; height: number; exif?: Uint8Array }): Uint8Array<ArrayBuffer> {
   const chunk = (type: string, data: readonly number[] | Uint8Array) => concat([u32be(data.length), ascii(type), data, [0, 0, 0, 0]]);
   const parts = [
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
@@ -166,7 +166,7 @@ export function buildPng(options: { width: number; height: number; exif?: Uint8A
 }
 
 /** A WebP's RIFF structure: VP8X (extended) or VP8L (lossless) with an optional EXIF chunk. */
-export function buildWebp(options: { width: number; height: number; kind: 'vp8x' | 'vp8l'; exif?: Uint8Array }): Uint8Array {
+export function buildWebp(options: { width: number; height: number; kind: 'vp8x' | 'vp8l'; exif?: Uint8Array }): Uint8Array<ArrayBuffer> {
   const chunk = (type: string, data: readonly number[] | Uint8Array) =>
     concat([ascii(type), u32le(data.length), data, data.length % 2 === 1 ? [0] : []]);
   const w = options.width - 1;
