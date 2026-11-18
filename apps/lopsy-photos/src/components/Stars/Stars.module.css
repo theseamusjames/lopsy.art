@@ -1,0 +1,35 @@
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.on {
+  color: var(--star-on);
+  fill: var(--star-on);
+}
+
+.off {
+  color: var(--color-text-disabled);
+}
+
+.button {
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--color-bg-hover);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-accent);
+}
+
+.stars[data-mixed='true'] .on {
+  fill: none;
+}

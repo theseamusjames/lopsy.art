@@ -1,0 +1,115 @@
+import { useCallback, useState } from 'react';
+import { Cloud, CloudOff, Download, Keyboard, LoaderCircle, LogOut, TriangleAlert, CloudCheck } from 'lucide-react';
+import { getBackend } from '../../app/backend-registry';
+import { useSyncStatus } from '../../app/hooks';
+import { useUi } from '../../app/store';
+import { clearPreviewCache } from '../../app/preview-cache';
+import { Button } from '../Button/Button';
+import { IconButton } from '../IconButton/IconButton';
+import { ImportButton } from '../ImportButton/ImportButton';
+import { Popover } from '../Popover/Popover';
+import { SyncPanel } from '../SyncPanel/SyncPanel';
+import { ShortcutHelp } from '../ShortcutHelp/ShortcutHelp';
+import { describeSync } from '../SyncPanel/sync-words';
+import styles from './Header.module.css';
+
+export function Header() {
+  const connection = useUi((s) => s.connection);
+  const dialog = useUi((s) => s.dialog);
+  const openDialog = useUi((s) => s.openDialog);
+  const selectionSize = useUi((s) => s.selection.ids.size);
+  const focus = useUi((s) => s.selection.focus);
+  const status = useSyncStatus();
+  const [leaving, setLeaving] = useState(false);
+  const closePopover = useCallback(() => openDialog(null), [openDialog]);
+
+  if (!connection) return null;
+  const exportCount = selectionSize > 0 ? selectionSize : focus !== null ? 1 : 0;
+
+  const icon =
+    status.state === 'syncing' ? (
+      <LoaderCircle size={16} className={styles.spin} />
+    ) : status.state === 'offline' ? (
+      <CloudOff size={16} />
+    ) : status.state === 'error' || status.state === 'paused' ? (
+      <TriangleAlert size={16} />
+    ) : status.pendingOps > 0 ? (
+      <Cloud size={16} />
+    ) : (
+      <CloudCheck size={16} />
+    );
+
+  const signOut = async () => {
+    setLeaving(true);
+    try {
+      await getBackend().disconnect(connection.session);
+    } finally {
+      clearPreviewCache();
+      useUi.getState().setConnection(null);
+    }
+  };
+
+  return (
+    <header className={styles.header}>
+      <div className={styles.identity}>
+        <span className={styles.brand}>Lopsy Photos</span>
+        <span className={styles.where} title={connection.accountLabel}>
+          {connection.accountLabel}
+        </span>
+      </div>
+
+      <div className={styles.actions}>
+        <div className={styles.anchor}>
+          <button
+            type="button"
+            className={styles.sync}
+            data-state={status.state}
+            onClick={() => openDialog(dialog === 'sync' ? null : 'sync')}
+            aria-expanded={dialog === 'sync'}
+            title={describeSync(status)}
+          >
+            {icon}
+            <span className={styles.syncText}>
+              {status.state === 'idle' && status.pendingOps === 0 ? 'Saved' : describeSync(status).split(' — ')[0]}
+            </span>
+          </button>
+          {dialog === 'sync' && (
+            <Popover onClose={closePopover} label="Saving and storage">
+              <SyncPanel />
+            </Popover>
+          )}
+        </div>
+
+        <ImportButton />
+        <Button
+          disabled={exportCount === 0}
+          onClick={() => openDialog('export')}
+          title={exportCount === 0 ? 'Select photos to export them' : undefined}
+        >
+          <Download size={14} />
+          Export{exportCount > 0 ? ` ${exportCount.toLocaleString()}` : ''}
+        </Button>
+
+        <div className={styles.anchor}>
+          <IconButton
+            label="Keyboard shortcuts"
+            icon={<Keyboard size={16} />}
+            active={dialog === 'help'}
+            onClick={() => openDialog(dialog === 'help' ? null : 'help')}
+          />
+          {dialog === 'help' && (
+            <Popover onClose={closePopover} label="Keyboard shortcuts">
+              <ShortcutHelp />
+            </Popover>
+          )}
+        </div>
+        <IconButton
+          label="Close this library"
+          icon={<LogOut size={16} />}
+          disabled={leaving}
+          onClick={() => void signOut()}
+        />
+      </div>
+    </header>
+  );
+}

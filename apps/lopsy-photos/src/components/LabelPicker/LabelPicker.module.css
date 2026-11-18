@@ -1,0 +1,56 @@
+.picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.swatch,
+.none {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-round);
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.swatch[data-label='red'] {
+  background: var(--label-red);
+}
+.swatch[data-label='yellow'] {
+  background: var(--label-yellow);
+}
+.swatch[data-label='green'] {
+  background: var(--label-green);
+}
+.swatch[data-label='blue'] {
+  background: var(--label-blue);
+}
+.swatch[data-label='purple'] {
+  background: var(--label-purple);
+}
+
+.swatch[aria-checked='true'] {
+  border-color: var(--color-text-primary);
+  box-shadow: 0 0 0 2px var(--color-bg-secondary) inset;
+}
+
+.none {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-color: var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+
+.none[aria-checked='true'] {
+  border-color: var(--color-text-primary);
+  color: var(--color-text-primary);
+}
+
+.swatch:focus-visible,
+.none:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
