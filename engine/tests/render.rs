@@ -435,6 +435,91 @@ fn bloom_keeps_the_layer_and_adds_a_glow() {
     assert_no_gpu_errors();
 }
 
+/// A 16×16 layer of linear camera RGB: smooth ramps, saturated colours and
+/// values over white, as `rafRenderLinearBand` produces.
+fn linear_camera_rgb(size: u32) -> Vec<f32> {
+    (0..size * size)
+        .flat_map(|i| {
+            let (x, y) = ((i % size) as f32 / (size - 1) as f32, (i / size) as f32 / (size - 1) as f32);
+            [x * 1.6, (x * y).sqrt() * 0.9, (1.0 - y) * 0.7 + 0.002, 1.0]
+        })
+        .collect()
+}
+
+/// The develop pass over the composite against
+/// `lopsy_core::raf::develop::develop_reference`. Returns the largest
+/// difference, in 16-bit steps, on channels both clip to 0..1.
+fn develop_on_the_gpu_vs_reference(settings: &lopsy_core::raf::develop::RawDevelopSettings) -> Option<u32> {
+    let size = 16u32;
+    let mut engine = engine(size, size)?;
+    commands::layer::add_layer(&mut engine, &layer_json("raw", 0, 0, size, size, 1.0)).expect("layer");
+    let linear = linear_camera_rgb(size);
+    commands::layer::upload_layer_pixels_f32_rect(&mut engine, "raw", size, size, 0, 0, size, size, &linear)
+        .expect("pixels");
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(settings).unwrap()).expect("develop");
+    let gpu = now(compositor::composite_for_export_u16(&mut engine));
+    let expected = lopsy_core::raf::develop::develop_reference(&linear, settings);
+    let worst = gpu
+        .iter()
+        .zip(&expected)
+        .map(|(&g, &e)| (g as i64 - (e.clamp(0.0, 1.0) * 65535.0).round() as i64).unsigned_abs() as u32)
+        .max()
+        .unwrap();
+    assert_no_gpu_errors();
+    Some(worst)
+}
+
+fn develop_settings() -> lopsy_core::raf::develop::RawDevelopSettings {
+    use lopsy_core::raf::{base_curves, develop};
+    develop::RawDevelopSettings {
+        wb_ratio: [1.0, 1.0, 1.0],
+        // A neutralized X-Trans cam→sRGB matrix (rows sum to 1).
+        cam_to_rgb: [1.71, -0.62, -0.09, -0.21, 1.48, -0.27, 0.04, -0.47, 1.43],
+        exposure_ev: develop::baseline_exposure_ev(),
+        saturation: 1.2,
+        highlight_desaturation: true,
+        base_curve: Some(base_curves::curve_lut(base_curves::curve_for_film_mode(None)).to_vec()),
+    }
+}
+
+#[test]
+fn the_raw_develop_stage_matches_its_cpu_reference() {
+    // The layer and the composite are half floats, so the inputs carry
+    // about 1/2048 of relative error into a gamma-encoded output.
+    let Some(worst) = develop_on_the_gpu_vs_reference(&develop_settings()) else { return };
+    eprintln!("raw develop, defaults: worst {worst} of 65535");
+    assert!(worst <= 160, "worst difference {worst} 16-bit steps");
+
+    let warm = lopsy_core::raf::develop::RawDevelopSettings {
+        wb_ratio: [1.15, 1.0, 0.82],
+        exposure_ev: develop_settings().exposure_ev - 0.7,
+        base_curve: None,
+        highlight_desaturation: false,
+        ..develop_settings()
+    };
+    let worst = develop_on_the_gpu_vs_reference(&warm).unwrap();
+    eprintln!("raw develop, warm and darker, no curve: worst {worst} of 65535");
+    assert!(worst <= 160, "worst difference {worst} 16-bit steps");
+}
+
+#[test]
+fn without_a_raw_develop_stage_the_composite_is_unchanged() {
+    let Some(mut engine) = engine(6, 4) else { return };
+    engine.set_background_color(1.0, 1.0, 1.0, 1.0);
+    commands::layer::add_layer(&mut engine, &layer_json("ink", 1, 2, 3, 1, 0.5)).expect("layer");
+    commands::layer::upload_layer_pixels(&mut engine, "ink", &[BLUE; 3].concat(), 3, 1, 0, 0).expect("pixels");
+    let before = now(compositor::composite_for_export(&mut engine));
+    commands::develop::set_raw_develop_json(&mut engine, &serde_json::to_string(&develop_settings()).unwrap())
+        .expect("develop");
+    assert!(engine.needs_recomposite);
+    let developed = now(compositor::composite_for_export(&mut engine));
+    assert_ne!(before, developed);
+    commands::develop::clear_raw_develop(&mut engine);
+    assert!(engine.raw_develop.is_none() && engine.needs_recomposite);
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), before);
+    assert_no_gpu_errors();
+}
+
 #[test]
 fn undo_snapshots_of_a_large_layer_restore_bit_for_bit() {
     // Big enough that an interpolated UV strays off the texel centre: a
