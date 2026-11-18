@@ -118,6 +118,13 @@ async function renderBands(
   await Promise.all(workers.map(drain));
 }
 
+export interface RafPrepared {
+  readonly binned: RafBandPixels | null;
+  readonly developDefaultsJson: string;
+  readonly autoWbRatio: [number, number, number] | null;
+  readonly profilesJson: string | null;
+}
+
 export interface RafDecodeOptions {
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: RafDecodeProgress) => void;
@@ -126,7 +133,7 @@ export interface RafDecodeOptions {
   /** With `linear`: also bin the whole frame to at least this long edge for a first view. */
   readonly binnedLongEdge?: number;
   /** Once the frame is prepared, before any band: the binned first view (if asked for) and the develop defaults. */
-  readonly onPrepared?: (meta: RafPrepareMeta, prepared: { binned: RafBandPixels | null; developDefaultsJson: string }) => void;
+  readonly onPrepared?: (meta: RafPrepareMeta, prepared: RafPrepared) => void;
 }
 
 /**
@@ -153,7 +160,12 @@ export async function decodeRafInWorkers(
     const prepared = await call(first, { kind: 'prepare', data, binnedLongEdge }, [], signal);
     if (prepared.kind !== 'prepared') throw new Error(`RAF worker sent ${prepared.kind} instead of the prepared frame`);
     const meta = JSON.parse(prepared.metaJson) as RafPrepareMeta;
-    onPrepared?.(meta, { binned: prepared.binned, developDefaultsJson: prepared.developDefaultsJson });
+    onPrepared?.(meta, {
+      binned: prepared.binned,
+      developDefaultsJson: prepared.developDefaultsJson,
+      autoWbRatio: prepared.autoWbRatio,
+      profilesJson: prepared.profilesJson,
+    });
     await renderBands(
       workers,
       prepared.mosaic,

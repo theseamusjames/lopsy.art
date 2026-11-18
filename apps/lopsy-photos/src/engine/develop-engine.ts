@@ -14,12 +14,14 @@
 
 import initWasm, {
   addLayer,
+  autoTone as engineAutoTone,
   clearRawDevelop,
   createEngine,
   decodeAndUploadDng,
   decodeAndUploadImage,
   exportPng16,
   flipLayer,
+  readDevelopHistogram,
   removeLayer,
   render,
   rotateLayer90,
@@ -55,7 +57,8 @@ import {
 } from './recipe-to-adjustments';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
-import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, type RawDevelopSettings } from './raw-develop';
+import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
+import { parseDevelopProfiles, profilesFor, type DevelopProfile } from './profiles';
 
 export { DecodeAbortedError };
 
@@ -74,7 +77,24 @@ export interface ExportOptions {
   readonly maxSize?: number;
 }
 
+/** What the loaded photo offers the Edit view. */
+export interface PhotoInfo {
+  /** Developed by the engine's RAW stage: white balance in camera space, profiles. */
+  readonly isRaw: boolean;
+  /** Auto white balance's answer, as slider values; null when there is none (not RAW). */
+  readonly autoWhiteBalance: { readonly temperature: number; readonly tint: number } | null;
+  /** The Profile menu. */
+  readonly profiles: readonly DevelopProfile[];
+}
+
+export type ToneValues = Recipe['tone'];
+
 export interface DevelopEngine {
+  photoInfo(): PhotoInfo;
+  /** 4 × 256 bins (R, G, B, luminance) of the displayed render; null when the engine cannot read one now. */
+  readHistogram(): Promise<Uint32Array | null>;
+  /** Auto tone for `recipe`: renders it, reads its histogram and returns the tone values the engine suggests. */
+  autoTone(recipe: Recipe): Promise<ToneValues>;
   /** Decodes `source` into the engine, replacing any image already loaded. Resolves with its oriented size. */
   load(source: Blob, format: ImageFormat, onProgress?: (progress: LoadProgress) => void): Promise<Size>;
   /** Renders `recipe` from the next frame on. Cheap when nothing changed. */
@@ -185,6 +205,8 @@ class PhotoEngine implements DevelopEngine {
   /** The RAW develop stage's defaults for this photo; null for an image that is not RAW. */
   private rawDefaults: RawDevelopSettings | null = null;
   private appliedRawJson: string | null = null;
+  private autoWb: { temperature: number; tint: number } | null = null;
+  private engineProfiles: DevelopProfile[] = [];
   /** Oriented size, before framing. */
   private sourceSize: Size | null = null;
   private framing: Framing = { rotate: 0, flipH: false };
@@ -287,6 +309,8 @@ class PhotoEngine implements DevelopEngine {
         onPrepared: (_meta, prepared) => {
           if (signal.aborted || this.isDisposed || !isLinear) return;
           this.setRawDefaults(parseRawDevelopSettings(prepared.developDefaultsJson));
+          this.autoWb = prepared.autoWbRatio ? temperatureTintFor(prepared.autoWbRatio) : null;
+          this.engineProfiles = prepared.profilesJson ? parseDevelopProfiles(prepared.profilesJson) : [];
           const binned = prepared.binned;
           if (!binned) return;
           const layer = this.resetLayer(binned.width, binned.height);
@@ -431,7 +455,11 @@ class PhotoEngine implements DevelopEngine {
   private setRawDefaults(defaults: RawDevelopSettings | null): void {
     this.rawDefaults = defaults;
     this.appliedRawJson = null;
-    if (!defaults) clearRawDevelop(this.engine);
+    if (!defaults) {
+      this.autoWb = null;
+      this.engineProfiles = [];
+      clearRawDevelop(this.engine);
+    }
   }
 
   private applyRecipe(): void {
@@ -442,7 +470,7 @@ class PhotoEngine implements DevelopEngine {
       this.invalidate();
     }
     if (this.rawDefaults) {
-      const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe));
+      const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe, this.engineProfiles));
       if (json !== this.appliedRawJson) {
         setRawDevelop(this.engine, json);
         this.appliedRawJson = json;
@@ -463,6 +491,37 @@ class PhotoEngine implements DevelopEngine {
     const size = framedSize(this.sourceSize.width, this.sourceSize.height, target.rotate);
     this.sizeDocument(size.width, size.height);
     if (this.view.isFit) this.fit();
+  }
+
+  photoInfo(): PhotoInfo {
+    const isRaw = this.rawDefaults !== null;
+    return { isRaw, autoWhiteBalance: this.autoWb, profiles: profilesFor(isRaw, this.engineProfiles) };
+  }
+
+  async readHistogram(): Promise<Uint32Array | null> {
+    if (!this.sourceSize || this.isDisposed) return null;
+    render(this.engine);
+    // WebGL answers at once; a wgpu build parks the read, which this POC does not wait for.
+    const bins: unknown = readDevelopHistogram(this.engine);
+    return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
+  }
+
+  async autoTone(recipe: Recipe): Promise<ToneValues> {
+    this.setRecipe(recipe);
+    const bins = await this.readHistogram();
+    if (!bins) return recipe.tone;
+    const answer: unknown = JSON.parse(engineAutoTone(bins, JSON.stringify(recipe.tone)));
+    if (typeof answer !== 'object' || answer === null) return recipe.tone;
+    const v = answer as Record<string, unknown>;
+    const num = (key: keyof ToneValues) => (typeof v[key] === 'number' && Number.isFinite(v[key]) ? (v[key] as number) : recipe.tone[key]);
+    return {
+      exposure: num('exposure'),
+      contrast: num('contrast'),
+      highlights: num('highlights'),
+      shadows: num('shadows'),
+      whites: num('whites'),
+      blacks: num('blacks'),
+    };
   }
 
   imageSize(): Size | null {

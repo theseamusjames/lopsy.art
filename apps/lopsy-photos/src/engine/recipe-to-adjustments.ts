@@ -75,7 +75,9 @@ export function recipeToAdjustments(recipe: Recipe, options: { readonly isRaw?: 
     shadows: tone.shadows,
     whites: tone.whites,
     blacks: tone.blacks,
-    saturation: color.saturation,
+    // Monochrome on an image that is not RAW: no colour left after the
+    // adjustments' saturation (the RAW stage has its own, see raw-develop.ts).
+    saturation: !isRaw && recipe.profile.id === 'monochrome' ? -100 : color.saturation,
     vibrance: color.vibrance,
     vignette: finish.vignette,
     photoFilter: isRaw ? NO_PHOTO_FILTER : whiteBalanceFilter(whiteBalance.temperature, whiteBalance.tint),

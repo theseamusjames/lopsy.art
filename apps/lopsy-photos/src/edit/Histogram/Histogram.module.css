@@ -1,0 +1,68 @@
+.histogram {
+  position: relative;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: 72px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.red,
+.green,
+.blue {
+  mix-blend-mode: screen;
+  opacity: 0.7;
+}
+
+.red {
+  fill: #d04a4a;
+}
+
+.green {
+  fill: #4ab04a;
+}
+
+.blue {
+  fill: #4a6ad0;
+}
+
+.luminance {
+  fill: none;
+  stroke: var(--color-text-secondary);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.clipShadows,
+.clipHighlights {
+  position: absolute;
+  top: calc(var(--space-3) + 4px);
+  width: 0;
+  height: 0;
+  border-top: 7px solid var(--color-text-disabled);
+}
+
+.clipShadows {
+  left: calc(var(--space-4) + 4px);
+  border-right: 7px solid transparent;
+}
+
+.clipHighlights {
+  right: calc(var(--space-4) + 4px);
+  border-left: 7px solid transparent;
+}
+
+.clipShadows[data-clipped] {
+  border-top-color: var(--color-accent);
+}
+
+.clipHighlights[data-clipped] {
+  border-top-color: var(--color-warning);
+}

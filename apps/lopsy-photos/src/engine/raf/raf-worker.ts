@@ -9,7 +9,9 @@
 
 import {
   initSync,
+  rafAutoWhiteBalance,
   rafDevelopDefaults,
+  rafDevelopProfiles,
   rafPrepare,
   rafRenderBand,
   rafRenderBinnedLinear,
@@ -30,6 +32,12 @@ function takeBand(band: RafRenderedBand): RafBandPixels {
   } finally {
     band.free();
   }
+}
+
+function autoWbRatio(binned: RafBandPixels | null): [number, number, number] | null {
+  if (!binned) return null;
+  const [r = 1, g = 1, b = 1] = rafAutoWhiteBalance(binned.pixels);
+  return [r, g, b];
 }
 
 function handle(req: RafWorkerRequest): void {
@@ -53,6 +61,8 @@ function handle(req: RafWorkerRequest): void {
           developDefaultsJson: rafDevelopDefaults(paramsJson),
           mosaic,
           binned,
+          autoWbRatio: autoWbRatio(binned),
+          profilesJson: rafDevelopProfiles(paramsJson),
         },
         transfer,
       );
