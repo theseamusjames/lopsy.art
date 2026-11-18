@@ -141,18 +141,33 @@ fn noise_reduction(engine: &mut EngineInner, s: &DetailSettings) -> Result<(), S
 /// Sharpening on the composite, when the document's detail settings sharpen.
 pub fn apply_sharpening(engine: &mut EngineInner) {
     let Some(s) = engine.detail.filter(DetailSettings::sharpens) else { return };
-    if let Err(e) = sharpening(engine, &s) {
+    if let Err(e) = sharpening(engine, &s, false) {
         log_error("Sharpening", &e);
     }
 }
 
-fn sharpening(engine: &mut EngineInner, s: &DetailSettings) -> Result<(), String> {
+/// The live frame's sharpening: as `apply_sharpening`, or, while
+/// `engine.detail_mask_view` is on and detail settings are set, the
+/// sharpening edge mask as grey (white where it sharpens fully) in place of
+/// the image. Exports call `apply_sharpening` and never show the mask.
+pub fn apply_sharpening_live(engine: &mut EngineInner) {
+    if !engine.detail_mask_view {
+        apply_sharpening(engine);
+        return;
+    }
+    let Some(s) = engine.detail else { return };
+    if let Err(e) = sharpening(engine, &s, true) {
+        log_error("Sharpening mask", &e);
+    }
+}
+
+fn sharpening(engine: &mut EngineInner, s: &DetailSettings, mask_view: bool) -> Result<(), String> {
     let program = engine.shaders.detail_sharpen()?;
     let (w, h) = (engine.doc_width, engine.doc_height);
     // σ is at most 3 full-resolution pixels, so never a pyramid.
     let blurred = blur(engine, engine.composite_texture, w, h, s.sharpen_sigma().min(detail::PYRAMID_SIGMA))?;
     let drawn = engine
-        .pass(&program, DetailSharpenParams { amount: s.amount / 100.0, edges: s.edges })
+        .pass(&program, DetailSharpenParams { amount: s.amount / 100.0, edges: s.edges, mask_view: i32::from(mask_view) })
         .texture("u_tex", engine.composite_texture)
         .texture("u_blurred", blurred.tex)
         .blend(Blend::Off)

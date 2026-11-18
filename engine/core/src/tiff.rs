@@ -22,11 +22,14 @@ pub fn encode_tiff_16(pixels: &[u16], width: u32, height: u32, color_space: Colo
     if w == 0 || h == 0 {
         return Err("TIFF: empty image".to_string());
     }
-    let expected = w * h * SAMPLES;
+    let expected = w
+        .checked_mul(h)
+        .and_then(|n| n.checked_mul(SAMPLES))
+        .ok_or("TIFF: image size overflows")?;
     if pixels.len() < expected {
         return Err(format!("TIFF: pixel data too short: expected {expected} u16 values, got {}", pixels.len()));
     }
-    let row_bytes = w * SAMPLES * 2;
+    let row_bytes = w.checked_mul(SAMPLES * 2).ok_or("TIFF: image size overflows")?;
     let rows_per_strip = (STRIP_TARGET_BYTES / row_bytes).clamp(1, h);
     let strip_count = h.div_ceil(rows_per_strip);
 
@@ -115,6 +118,11 @@ pub fn encode_tiff_16(pixels: &[u16], width: u32, height: u32, color_space: Colo
         }
     }
     out.extend_from_slice(&0u32.to_le_bytes()); // no next IFD
+    // Offsets are 32-bit. Every one written above is below the final length,
+    // so if that fits, none of the `as u32` conversions truncated.
+    if u32::try_from(out.len()).is_err() {
+        return Err("TIFF: the file would exceed 4 GB, past what 32-bit offsets address".to_string());
+    }
     Ok(out)
 }
 
@@ -226,6 +234,11 @@ mod tests {
             assert_eq!((dw, dh), (w, h));
             assert_eq!(back, px, "{w}x{h}");
         }
+    }
+
+    #[test]
+    fn sizes_that_overflow_are_errors() {
+        assert!(encode_tiff_16(&[], u32::MAX, u32::MAX, ColorSpace::Srgb).is_err());
     }
 
     #[test]

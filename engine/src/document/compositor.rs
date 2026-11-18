@@ -472,9 +472,11 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     apply_image_adjustments(engine);
     apply_color_mixer(engine);
     apply_areas(engine, AreasMode::Apply);
-    crate::develop::detail::apply_sharpening(engine);
+    crate::develop::detail::apply_sharpening_live(engine);
+    apply_finish(engine);
     // The selected area's mask, on screen only: exports composite again.
     apply_areas(engine, AreasMode::Overlay);
+    apply_clipping_warning(engine);
 
     // 4b. Quick mask overlay: translucent blue tint over unselected areas
     if engine.quick_mask_texture.is_some() {
@@ -1460,13 +1462,35 @@ fn render_stroke_apply(engine: &EngineInner, layer: &StrokeLayer, stroke: &Strok
 /// `composite` it has no in-progress stroke / preview handling and no
 /// group pre-adjustment cache.
 fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
-    composite_layers_for_export_with(engine, true)
+    composite_layers_for_export_with(engine, ExportFinish::Full)
 }
 
 /// `composite_layers_for_export`, with the colour mixer left out when
 /// `with_mixer` is false: a caller that applies the image adjustments
 /// after this runs the mixer after them itself, to keep the live order.
-fn composite_layers_for_export_with(engine: &mut EngineInner, with_mixer: bool) -> Result<(), String> {
+/// How far `composite_layers_for_export_with` takes the composite.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ExportFinish {
+    /// Every stage the export applies after the layers.
+    Full,
+    /// Up to the image adjustments, which the caller applies, followed by
+    /// the colour mixer, areas and sharpening.
+    BeforeAdjustments,
+    /// The blended layers only: no RAW develop or any later stage.
+    LayersOnly,
+}
+
+/// The document's layers composited into the composite texture, before the
+/// RAW develop stage and everything after it: for a RAW document, camera
+/// RGB at the as-shot white balance. The next frame rebuilds the live
+/// composite.
+pub fn composite_layers_only(engine: &mut EngineInner) -> Result<(), String> {
+    let result = composite_layers_for_export_with(engine, ExportFinish::LayersOnly);
+    engine.needs_recomposite = true;
+    result
+}
+
+fn composite_layers_for_export_with(engine: &mut EngineInner, finish: ExportFinish) -> Result<(), String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     let bg = engine.bg_color;
@@ -1586,14 +1610,18 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, with_mixer: bool) 
         }
     }
 
+    if finish == ExportFinish::LayersOnly {
+        return Ok(());
+    }
     // Exports develop a RAW composite as the live frame does.
     apply_raw_develop(engine);
     crate::develop::detail::apply_noise_reduction(engine);
     crate::develop::detail::apply_local_contrast(engine);
-    if with_mixer {
+    if finish == ExportFinish::Full {
         apply_color_mixer(engine);
         apply_areas(engine, AreasMode::Apply);
         crate::develop::detail::apply_sharpening(engine);
+        apply_finish(engine);
     }
 
     Ok(())
@@ -1705,7 +1733,7 @@ pub fn decode_native_color_mode(doc_color_mode: u32, pixels: &mut [u8]) {
 pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    if let Err(e) = composite_layers_for_export_with(engine, false) {
+    if let Err(e) = composite_layers_for_export_with(engine, ExportFinish::BeforeAdjustments) {
         return Read::failed(e);
     }
     engine.needs_recomposite = true;
@@ -1714,6 +1742,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
     apply_color_mixer(engine);
     apply_areas(engine, AreasMode::Apply);
     crate::develop::detail::apply_sharpening(engine);
+    apply_finish(engine);
 
     let is_lab = engine.doc_color_mode == 1;
     engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
@@ -1890,6 +1919,62 @@ fn apply_raw_develop(engine: &EngineInner) {
     let (pass, units) = crate::develop::pass(engine, &program, engine.composite_texture, state);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(units);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+/// The shaped vignette and grain over the composite, last in the develop
+/// chain, when set and active.
+fn apply_finish(engine: &EngineInner) {
+    let Some(s) = engine.finish.filter(lopsy_core::finish::FinishSettings::is_active) else {
+        return;
+    };
+    let program = match engine.shaders.finish() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Finish shader: {e}"));
+            return;
+        }
+    };
+    let params = crate::gpu::params::develop::FinishParams {
+        vignette: [s.vignette, s.size, s.roundness, s.feather],
+        grain: [s.grain, s.grain_size, s.roughness, s.pixel_scale],
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        seed: s.seed,
+    };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+/// The clipping warning over the live composite (never in exports): blue
+/// where any channel is at or below 0, red where any is at or above 1.
+fn apply_clipping_warning(engine: &EngineInner) {
+    let (shadows, highlights) = engine.clipping_warning;
+    if !shadows && !highlights {
+        return;
+    }
+    let program = match engine.shaders.clip_warning() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Clipping warning shader: {e}"));
+            return;
+        }
+    };
+    let params = crate::gpu::params::develop::ClipWarningParams { shadows: i32::from(shadows), highlights: i32::from(highlights) };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
     if !is_drawn {
         return;
     }
