@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { Asset, AssetId, LibrarySession, LibraryView, PreviewRef, SyncStatus, Version } from '@lopsy/photos-core/library/types';
 import type { ImportItemState, ImportJob, ImportProgress } from '@lopsy/photos-core/import/types';
 import type { ExportJob, ExportProgress } from './backend';
+import type { DownloadProgress, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
 import { useUi } from './store';
 import { findAssets, type FacetFilter, type FindResult } from '../library/finding';
 import { parseTextQuery, TextIndex } from '@lopsy/photos-core/search/text';
@@ -161,6 +162,14 @@ export function useImportProgress(job: ImportJob | null): ImportProgress | null 
   return useSyncExternalStore(
     job ? (l) => job.subscribe(l) : noSubscribe,
     () => (job ? job.getProgress() : null),
+  );
+}
+
+/** The All download's progress (Keep originals), or null when it is not running for this library. */
+export function useOriginalsDownload(download: OriginalsDownload | null): DownloadProgress | null {
+  return useSyncExternalStore(
+    download ? (l) => download.subscribe(l) : noSubscribe,
+    () => (download ? download.getProgress() : null),
   );
 }
 

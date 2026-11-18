@@ -70,3 +70,24 @@
   color: var(--color-error);
   font-size: var(--font-size-sm);
 }
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: none;
+  padding: 0;
+  margin: var(--space-1) 0;
+}
+
+.legend {
+  margin-bottom: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.hint {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}

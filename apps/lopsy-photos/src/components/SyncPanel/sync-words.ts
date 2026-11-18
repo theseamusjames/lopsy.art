@@ -1,4 +1,5 @@
 import type { SyncStatus } from '@lopsy/photos-core/library/types';
+import type { DownloadProgress } from '@lopsy/photos-core/cache/keep-originals';
 
 /** The sync state in the UI's words. */
 export function describeSync(status: SyncStatus): string {
@@ -28,4 +29,24 @@ export function formatWhen(iso: string | null, now = Date.now()): string {
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
   return new Date(t).toLocaleString();
+}
+
+/** Keep originals: All, in the UI's words. */
+export function describeDownload(progress: DownloadProgress): string {
+  const count = `${progress.done.toLocaleString('en-US')} of ${progress.total.toLocaleString('en-US')}`;
+  const failed = progress.failed > 0 ? ` ${progress.failed.toLocaleString('en-US')} could not be downloaded.` : '';
+  switch (progress.state) {
+    case 'running':
+      return `Downloading originals: ${count}`;
+    case 'paused':
+      return `Paused: ${count} originals on this device`;
+    case 'full':
+      return `Stopped: this device is nearly full. ${count} originals on this device.`;
+    case 'done':
+      return progress.failed > 0
+        ? `${count} originals on this device.${failed}`
+        : `All ${progress.total.toLocaleString('en-US')} originals are on this device.`;
+    case 'stopped':
+      return `${count} originals on this device`;
+  }
 }

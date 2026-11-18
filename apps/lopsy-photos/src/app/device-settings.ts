@@ -1,6 +1,26 @@
 /** Settings that belong to this device, kept in localStorage. */
 
+import { parseKeepOriginals, type KeepOriginals } from '@lopsy/photos-core/cache/keep-originals';
+
 export type DriveAddMode = 'move' | 'leave';
+
+export const KEEP_ORIGINALS_KEY = 'lopsy-photos.keep-originals';
+
+export function loadKeepOriginals(): KeepOriginals {
+  try {
+    return parseKeepOriginals(localStorage.getItem(KEEP_ORIGINALS_KEY));
+  } catch {
+    return parseKeepOriginals(null);
+  }
+}
+
+export function saveKeepOriginals(mode: KeepOriginals): void {
+  try {
+    localStorage.setItem(KEEP_ORIGINALS_KEY, mode);
+  } catch {
+    // Blocked storage: the choice lasts for this page only.
+  }
+}
 
 export const DRIVE_ADD_KEY = 'lopsy-photos.drive-add';
 
