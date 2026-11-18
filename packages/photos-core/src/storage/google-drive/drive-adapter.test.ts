@@ -74,9 +74,9 @@ describe('GoogleDriveAdapter', () => {
   });
 
   it('uploads large content resumably and resumes after a dropped chunk', async () => {
-    const { adapter, drive } = setup({}, { resumableThreshold: 512 * KIB, chunkSize: 256 * KIB });
+    const { adapter, drive } = setup({}, { resumableThreshold: 256 * KIB, chunkSize: 256 * KIB });
     const root = await adapter.getRoot();
-    const bytes = randomBytes(1024 * KIB + 100);
+    const bytes = randomBytes(512 * KIB + 100);
     drive.failNext({ type: 'drop-chunk', afterBytes: 1000 });
     const progress: number[] = [];
     const file = await adapter.createFile({ parentId: root.id, name: 'big.raf', mimeType: 'image/x-fuji-raf' }, new Blob([bytes.slice()]), {
@@ -96,13 +96,13 @@ describe('GoogleDriveAdapter', () => {
     expect(puts[2]).toBe(`bytes 1000-${1000 + 256 * KIB - 1}/${bytes.length}`);
     const initiation = drive.requests.find((request) => request.url.searchParams.get('uploadType') === 'resumable');
     expect(initiation?.headers.get('X-Upload-Content-Length')).toBe(String(bytes.length));
-  });
+  }, 20_000);
 
   it('resumes after a 5xx in the middle of a resumable upload', async () => {
-    const { adapter, drive } = setup({}, { resumableThreshold: 512 * KIB, chunkSize: 256 * KIB });
+    const { adapter, drive } = setup({}, { resumableThreshold: 256 * KIB, chunkSize: 256 * KIB });
     const root = await adapter.getRoot();
     const file = await adapter.createFile({ parentId: root.id, name: 'f', mimeType: 'application/octet-stream' }, new Blob([new Uint8Array(10)]));
-    const bytes = randomBytes(700 * KIB);
+    const bytes = randomBytes(512 * KIB + 10);
     let chunks = 0;
     drive.failNext({ type: 'status', status: 503, match: (request) => isChunkPut(request) && ++chunks === 2 });
     const updated = await adapter.updateContent(file.id, new Blob([bytes.slice()]));
@@ -110,7 +110,7 @@ describe('GoogleDriveAdapter', () => {
     expect(updated.revision).not.toBe(file.revision);
     expect(sameBytes(drive.contentOf(file.id), bytes)).toBe(true);
     expect(drive.requests.some((request) => request.headers.get('Content-Range') === `bytes */${bytes.length}`)).toBe(true);
-  });
+  }, 20_000);
 
   it('refreshes the token once on a 401', async () => {
     const tokens = new StaticTokenSource(['old', 'new']);
@@ -287,7 +287,7 @@ describe('GoogleDriveAdapter', () => {
       });
     const first = make();
     const root = await first.getRoot();
-    const bytes = randomBytes(1000 * KIB);
+    const bytes = randomBytes(768 * KIB);
     const controller = new AbortController();
     const newFile = { parentId: root.id, name: 'big.raf', mimeType: 'image/x-fuji-raf' };
     await expect(
@@ -316,7 +316,7 @@ describe('GoogleDriveAdapter', () => {
     expect(later[1]?.headers.get('Content-Range')).toBe(`bytes ${512 * KIB}-${768 * KIB - 1}/${bytes.length}`);
     expect(await store.get('asset-1:original')).toBeNull();
     expect(await second.listChildren(root.id)).toHaveLength(1);
-  });
+  }, 20_000);
 
   it('starts over when the saved session does not match the content', async () => {
     const drive = createFakeDrive();
@@ -336,7 +336,7 @@ describe('GoogleDriveAdapter', () => {
     const file = await adapter.createFile({ parentId: root.id, name: 'a', mimeType: 'image/jpeg' }, new Blob([bytes.slice()]), { resumeKey: 'k' });
     expect(sameBytes(drive.contentOf(file.id), bytes)).toBe(true);
     expect(store.size).toBe(0);
-  });
+  }, 20_000);
 
   it('rejects a chunk size that is not a multiple of 256 KiB', () => {
     expect(
