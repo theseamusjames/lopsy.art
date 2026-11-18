@@ -3,7 +3,7 @@ import { CopyPlus, Pencil, Star, Trash2 } from 'lucide-react';
 import { useLibraryView, useSession } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { deleteVersionOf, makeShownVersion, newVersion } from '../../app/commands';
-import { parseItem, versionItemId, versionsByAsset, type ItemId } from '../../library/items';
+import { itemForVersion, parseItem, versionsByAsset, type ItemId } from '../../library/items';
 import { selectOne } from '../../library/selection';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
@@ -24,7 +24,6 @@ export function VersionStrip({ itemId }: VersionStripProps) {
   const [renaming, setRenaming] = useState<string | null>(null);
   if (!asset) return null;
   const current = versionId ?? asset.primaryVersionId;
-  const itemFor = (id: string) => (id === asset.primaryVersionId ? asset.id : versionItemId(asset.id, id));
 
   return (
     <div className={styles.strip} role="group" aria-label="Versions">
@@ -56,7 +55,7 @@ export function VersionStrip({ itemId }: VersionStripProps) {
               type="button"
               className={styles.name}
               aria-pressed={v.id === current}
-              onClick={() => useUi.getState().setSelection(selectOne(itemFor(v.id)))}
+              onClick={() => useUi.getState().setSelection(selectOne(itemForVersion(view, asset.id, v.id)))}
               onDoubleClick={() => setRenaming(v.id)}
             >
               {v.name}

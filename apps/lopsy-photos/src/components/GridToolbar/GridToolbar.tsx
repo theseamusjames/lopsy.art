@@ -4,8 +4,7 @@ import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useLibraryView, useSavedSearches } from '../../app/hooks';
 import { datePrefixLabel } from '../../library/finding';
 import { THUMB_SIZE, useUi } from '../../app/store';
-import { currentVersions, newVersion, openCompare, openCull, runCommand } from '../../app/commands';
-import { openInLopsy } from '../../app/lopsy-handoff';
+import { newVersion, openCompare, openCull, openFocusedInLopsy, runCommand } from '../../app/commands';
 import { PresetMenu } from '../PresetMenu/PresetMenu';
 import { MoreMenu } from '../MoreMenu/MoreMenu';
 import { formatChord, SHORTCUTS, type CommandId } from '../../shortcuts/registry';
@@ -185,11 +184,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
                 hint: single ? 'With layers, painting and text' : 'Select one photo first',
                 icon: <Paintbrush size={14} />,
                 disabled: !single,
-                run: () => {
-                  const session = useUi.getState().connection?.session;
-                  const target = currentVersions()[0];
-                  if (session && target !== undefined) openInLopsy(session, target.assetId, target.versionId);
-                },
+                run: openFocusedInLopsy,
               },
               {
                 label: 'Group bursts',

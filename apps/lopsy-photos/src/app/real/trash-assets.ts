@@ -6,10 +6,11 @@
  * that empties itself.
  */
 
-import type { AssetId, LibrarySession } from '@lopsy/photos-core/library/types';
+import type { AssetId, LibrarySession, LibraryView } from '@lopsy/photos-core/library/types';
 import { isStorageError } from '@lopsy/photos-core/storage/errors';
 import type { FileId } from '@lopsy/photos-core/storage/types';
 import { unguarded, writeRefusal } from '../guard-session';
+import { plural } from '../../import/import-summary';
 
 export class TrashRefusedError extends Error {
   constructor(message: string) {
@@ -18,21 +19,21 @@ export class TrashRefusedError extends Error {
   }
 }
 
-export async function trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
+/** The session for a delete or restore, or the reason it may not write (read-only, another tab). */
+function writable(session: LibrarySession): LibrarySession {
   const raw = unguarded(session);
   const refusal = writeRefusal(raw);
   if (refusal !== null) throw new TrashRefusedError(refusal);
+  return raw;
+}
 
-  const view = raw.getView();
-  const ids = new Set(assetIds);
-  const originals: string[] = [];
-  const previews: string[] = [];
+/** The files that go to the trash with the photos and come back with them: originals, then renders and previews. */
+function filesOf(view: LibraryView, ids: ReadonlySet<AssetId>): { originals: FileId[]; previews: FileId[] } {
+  const originals: FileId[] = [];
+  const previews: FileId[] = [];
   for (const id of ids) {
     const asset = view.assets.get(id);
-    if (!asset || asset.deleted) {
-      ids.delete(id);
-      continue;
-    }
+    if (!asset) continue;
     originals.push(asset.fileId);
     if (asset.renderFileId) previews.push(asset.renderFileId);
   }
@@ -41,7 +42,15 @@ export async function trashAssets(session: LibrarySession, assetIds: readonly As
     if (version.thumb) previews.push(version.thumb.fileId);
     if (version.screen) previews.push(version.screen.fileId);
   }
+  return { originals, previews };
+}
+
+export async function trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
+  const raw = writable(session);
+  const view = raw.getView();
+  const ids = new Set(assetIds.filter((id) => view.assets.get(id)?.deleted === false));
   if (ids.size === 0) return;
+  const { originals, previews } = filesOf(view, ids);
 
   // The record first: throws (read-only, lock lost) before any file moves.
   // Kept out of library history: undoing it there would bring the record
@@ -53,7 +62,7 @@ export async function trashAssets(session: LibrarySession, assetIds: readonly As
   // that empties itself.
   await raw.whenDurable();
 
-  const failed: string[] = [];
+  const failed: FileId[] = [];
   for (const fileId of originals) {
     try {
       await raw.adapter.trash(fileId);
@@ -65,7 +74,7 @@ export async function trashAssets(session: LibrarySession, assetIds: readonly As
   await Promise.allSettled(previews.map((fileId) => raw.adapter.trash(fileId)));
   if (failed.length > 0) {
     throw new Error(
-      `The photos left the library, but ${failed.length} original${failed.length === 1 ? '' : 's'} could not be moved to the trash. Check library in Settings lists ${failed.length === 1 ? 'it' : 'them'}.`,
+      `The photos left the library, but ${plural(failed.length, 'original')} could not be moved to the trash. Check library in Settings lists ${failed.length === 1 ? 'it' : 'them'}.`,
     );
   }
 }
@@ -97,7 +106,7 @@ export async function trashLeftoverOriginals(session: LibrarySession, fileIds: r
     }
   }
   if (failed.length > 0) {
-    throw new Error(`${failed.length} original${failed.length === 1 ? '' : 's'} could not be moved to the trash. Try again later.`);
+    throw new Error(`${plural(failed.length, 'original')} could not be moved to the trash. Try again later.`);
   }
   return moved;
 }
@@ -108,26 +117,13 @@ export async function trashLeftoverOriginals(session: LibrarySession, fileIds: r
  * for good are skipped; the photo comes back and Check library reports it.
  */
 export async function untrashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
-  const raw = unguarded(session);
-  const refusal = writeRefusal(raw);
-  if (refusal !== null) throw new TrashRefusedError(refusal);
+  const raw = writable(session);
   const view = raw.getView();
   const ids = new Set(assetIds.filter((id) => view.assets.get(id)?.deleted === true));
   if (ids.size === 0) return;
   // Out of library history too, for the same reason: undoing a restore there would
   // delete the record and leave the files out of the trash.
   raw.withoutLibraryHistory(() => raw.restoreAssets([...ids]));
-  const files: FileId[] = [];
-  for (const id of ids) {
-    const asset = view.assets.get(id);
-    if (!asset) continue;
-    files.push(asset.fileId);
-    if (asset.renderFileId) files.push(asset.renderFileId);
-  }
-  for (const version of view.versions.values()) {
-    if (!ids.has(version.assetId)) continue;
-    if (version.thumb) files.push(version.thumb.fileId);
-    if (version.screen) files.push(version.screen.fileId);
-  }
-  await Promise.allSettled(files.map((fileId) => raw.adapter.untrash(fileId)));
+  const { originals, previews } = filesOf(view, ids);
+  await Promise.allSettled([...originals, ...previews].map((fileId) => raw.adapter.untrash(fileId)));
 }
