@@ -297,6 +297,20 @@ impl<P> ShaderProgram<P> {
     }
 }
 
+/// The program in `slot`, compiling it with `make` the first time. A failed
+/// compile is not cached, so a later call tries again.
+fn lazily<P>(
+    slot: &RefCell<Option<Rc<ShaderProgram<P>>>>,
+    make: impl FnOnce() -> Result<ShaderProgram<P>, String>,
+) -> Result<Rc<ShaderProgram<P>>, String> {
+    if let Some(program) = slot.borrow().as_ref() {
+        return Ok(Rc::clone(program));
+    }
+    let program = Rc::new(make()?);
+    *slot.borrow_mut() = Some(Rc::clone(&program));
+    Ok(program)
+}
+
 /// Compiles a shader that takes the uniform struct `P`.
 fn compile<P: Uniforms>(linker: &Linker, shader: &Shader<P>) -> Result<ShaderProgram<P>, String> {
     Ok(ShaderProgram { linked: linker.link(shader.frag)?, marker: PhantomData })
@@ -406,8 +420,10 @@ pub struct ShaderPrograms {
     // Color
     pub color_convert: ShaderProgram<params::color::ColorConvertParams>,
     // Develop
-    pub raw_develop: ShaderProgram<params::develop::RawDevelopParams>,
-    pub color_mixer: ShaderProgram<params::develop::ColorMixerParams>,
+    /// The Photos develop passes, compiled on first use (`raw_develop()`,
+    /// `color_mixer()`) so a Lopsy session never links them.
+    raw_develop: RefCell<Option<Rc<ShaderProgram<params::develop::RawDevelopParams>>>>,
+    color_mixer: RefCell<Option<Rc<ShaderProgram<params::develop::ColorMixerParams>>>>,
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
@@ -437,6 +453,16 @@ impl ShaderPrograms {
         let program = Rc::new(compile_blend_variant(&self.linker, mode)?);
         self.blend_variants.borrow_mut().insert(mode, Rc::clone(&program));
         Ok(program)
+    }
+
+    /// `develop/raw_develop.wgsl`, compiled the first time it is asked for.
+    pub fn raw_develop(&self) -> Result<Rc<ShaderProgram<params::develop::RawDevelopParams>>, String> {
+        lazily(&self.raw_develop, || compile(&self.linker, &RAW_DEVELOP))
+    }
+
+    /// `develop/color_mixer.wgsl`, compiled the first time it is asked for.
+    pub fn color_mixer(&self) -> Result<Rc<ShaderProgram<params::develop::ColorMixerParams>>, String> {
+        lazily(&self.color_mixer, || compile(&self.linker, &COLOR_MIXER))
     }
 
     pub fn compile_all(ctx: &crate::gpu::context::GpuContext) -> Result<Self, String> {
@@ -543,8 +569,8 @@ impl ShaderPrograms {
             // Selection
             // Color
             color_convert: compile(linker, &COLOR_CONVERT)?,
-            raw_develop: compile(linker, &RAW_DEVELOP)?,
-            color_mixer: compile(linker, &COLOR_MIXER)?,
+            raw_develop: RefCell::new(None),
+            color_mixer: RefCell::new(None),
             mask_luminance: compile(linker, &MASK_LUMINANCE)?,
             liquify_dab: compile(linker, &LIQUIFY_DAB)?,
             // Text

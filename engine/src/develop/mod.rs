@@ -30,6 +30,7 @@ use lopsy_core::raf::develop::RawDevelopSettings;
 use crate::engine::EngineInner;
 use crate::gpu::params::develop::RawDevelopParams;
 use crate::gpu::pass::Pass;
+use crate::gpu::shader::ShaderProgram;
 use crate::gpu::texture_pool::TextureHandle;
 use crate::gpu::uniforms::Mat3;
 
@@ -79,11 +80,17 @@ pub fn params(state: &RawDevelopState) -> RawDevelopParams {
     }
 }
 
-/// The develop pass over `source`. Without a curve, the LUT sampler points
+/// The develop pass over `source`, with `program` from
+/// `engine.shaders.raw_develop()`. Without a curve, the LUT sampler points
 /// at unit 0, the source, so it cannot alias the render target. Returns the
 /// pass and how many texture units it bound.
-pub fn pass<'a>(engine: &'a EngineInner, source: TextureHandle, state: &RawDevelopState) -> (Pass<'a, RawDevelopParams>, u32) {
-    let pass = engine.pass(&engine.shaders.raw_develop, params(state)).texture("u_tex", source);
+pub fn pass<'a>(
+    engine: &'a EngineInner,
+    program: &'a ShaderProgram<RawDevelopParams>,
+    source: TextureHandle,
+    state: &RawDevelopState,
+) -> (Pass<'a, RawDevelopParams>, u32) {
+    let pass = engine.pass(program, params(state)).texture("u_tex", source);
     match state.curve_texture.filter(|&h| engine.gpu().has_texture(h)) {
         Some(lut) => (pass.texture("u_curveLut", lut), 2),
         None => (pass.sampler_unit("u_curveLut", 0), 1),

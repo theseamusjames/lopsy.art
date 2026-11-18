@@ -1854,11 +1854,19 @@ fn apply_raw_develop(engine: &EngineInner) {
     let Some(state) = engine.raw_develop.as_ref() else {
         return;
     };
-    let (pass, units) = crate::develop::pass(engine, engine.composite_texture, state);
-    if !over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a)) {
+    let program = match engine.shaders.raw_develop() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("RAW develop shader: {e}"));
+            return;
+        }
+    };
+    let (pass, units) = crate::develop::pass(engine, &program, engine.composite_texture, state);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(units);
+    if !is_drawn {
         return;
     }
-    engine.gpu().unbind_textures(units);
     doc_pass(engine, &engine.shaders.copy_exact, ())
         .texture("u_tex", engine.scratch_texture_a)
         .draw(Target::Framebuffer(engine.composite_fbo));
@@ -1874,11 +1882,19 @@ fn apply_color_mixer(engine: &EngineInner) {
     let params = crate::gpu::params::develop::ColorMixerParams {
         values: crate::gpu::uniforms::Vec4Array::from_floats(values),
     };
-    let pass = engine.pass(&engine.shaders.color_mixer, params).texture("u_tex", engine.composite_texture);
-    if !over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a)) {
+    let program = match engine.shaders.color_mixer() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Color mixer shader: {e}"));
+            return;
+        }
+    };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
+    if !is_drawn {
         return;
     }
-    engine.gpu().unbind_textures(1);
     doc_pass(engine, &engine.shaders.copy_exact, ())
         .texture("u_tex", engine.scratch_texture_a)
         .draw(Target::Framebuffer(engine.composite_fbo));

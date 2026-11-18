@@ -42,7 +42,14 @@ pub fn set_raw_develop(engine: &mut EngineInner, settings: RawDevelopSettings) -
                 old_texture = None;
                 t
             }
-            None => engine.texture_pool.acquire(CURVE_WIDTH, rows)?,
+            None => match engine.texture_pool.acquire(CURVE_WIDTH, rows) {
+                Ok(t) => t,
+                Err(e) => {
+                    // Keep the previous stage (and its texture) as it was.
+                    engine.raw_develop = previous;
+                    return Err(e);
+                }
+            },
         };
         if let Err(e) = engine.texture_pool.upload_rgba_f32(texture, 0, 0, CURVE_WIDTH, rows, &texels) {
             engine.texture_pool.release(texture);
