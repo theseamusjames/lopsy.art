@@ -212,6 +212,28 @@ describe('GoogleDriveAdapter', () => {
     expect(sleeps).toHaveLength(2);
   });
 
+  it('adopts a file it did not create by moving it', async () => {
+    const { adapter, drive } = setup();
+    const root = await adapter.getRoot();
+    const library = await adapter.createFolder(root.id, 'Lopsy Photos');
+    const picked = drive.seedFile({ name: 'IMG_1.JPG', mimeType: 'image/jpeg', content: new Uint8Array([1, 2, 3]) });
+    const moved = await adapter.move(picked, library.id);
+    expect(moved.parentId).toBe(library.id);
+    expect(drive.requests[drive.requests.length - 1]?.url.searchParams.get('removeParents')).toBe(drive.rootId);
+    expect(new Uint8Array(await (await adapter.readContent(picked)).arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  it('serves CORS headers when asked, for page.route', async () => {
+    const drive = createFakeDrive({ cors: true });
+    const preflight = await drive.fetch('https://www.googleapis.com/drive/v3/files', { method: 'OPTIONS' });
+    expect(preflight.status).toBe(204);
+    const response = await drive.fetch('https://www.googleapis.com/drive/v3/about?fields=storageQuota', {
+      headers: { Authorization: 'Bearer test-token' },
+    });
+    expect(response.headers.get('Access-Control-Expose-Headers')).toContain('Location');
+    expect(response.status).toBe(200);
+  });
+
   it('rejects a chunk size that is not a multiple of 256 KiB', () => {
     expect(
       () => new GoogleDriveAdapter({ tokenSource: new StaticTokenSource(), label: 'x', chunkSize: 1000 }),

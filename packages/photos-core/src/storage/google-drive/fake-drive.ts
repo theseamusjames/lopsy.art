@@ -48,6 +48,12 @@ export interface FakeDriveOptions {
   readonly maxPageSize?: number;
   readonly now?: () => Date;
   readonly account?: { readonly sub: string; readonly email: string; readonly name: string };
+  /**
+   * Answers CORS preflights and adds CORS headers, for serving the fake to a
+   * page through Playwright's page.route (the page's origin differs from
+   * googleapis.com there).
+   */
+  readonly cors?: boolean;
 }
 
 export interface FakeDrive {
@@ -505,6 +511,15 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
   }
 
   async function handle(request: Request): Promise<Response> {
+    if (!options.cors) return handleDrive(request);
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
+    const response = await handleDrive(request);
+    const headers = new Headers(response.headers);
+    for (const [key, value] of Object.entries(CORS_HEADERS)) headers.set(key, value);
+    return new Response(response.body, { status: response.status, headers });
+  }
+
+  async function handleDrive(request: Request): Promise<Response> {
     try {
       return await route(request);
     } catch (error) {
@@ -567,6 +582,13 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
     },
   };
 }
+
+const CORS_HEADERS: Readonly<Record<string, string>> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, Content-Range, Range, X-Upload-Content-Type, X-Upload-Content-Length',
+  'Access-Control-Expose-Headers': 'Location, Range, Content-Range, Retry-After',
+};
 
 function defaultReason(status: number): string {
   if (status === 401) return 'authError';
