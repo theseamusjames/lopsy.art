@@ -39,6 +39,7 @@ import { CropTool } from '../CropTool/CropTool';
 import { AreasPanel, areaTitle } from '../AreasPanel/AreasPanel';
 import { AreasOverlay } from '../AreasOverlay/AreasOverlay';
 import { useAreas } from './use-areas';
+import { WhiteBalanceMenu } from '../WhiteBalanceMenu/WhiteBalanceMenu';
 import { LevelTool } from '../LevelTool/LevelTool';
 import { SplitView } from '../SplitView/SplitView';
 import { FULL_RECT, levelAngle, recipeCrop, toFramed, type Rect } from '../../engine/crop';
@@ -869,6 +870,15 @@ export function EditView({
           )}
           {GROUPS.map((group) => (
             <Fragment key={group.id}>
+            {group.id === 'whiteBalance' && (
+              <WhiteBalanceMenu
+                recipe={shownRecipe}
+                auto={autoWhiteBalance}
+                presets={[]}
+                isDisabled={!canEdit || isBefore}
+                onCommit={commit}
+              />
+            )}
             <ControlGroup
               group={group}
               recipe={shownRecipe}

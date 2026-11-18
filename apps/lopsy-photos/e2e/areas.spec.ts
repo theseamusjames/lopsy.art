@@ -4,7 +4,7 @@
  * in exports, and undone like any edit.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { imageStats, openGeneratedImage, openHarness, waitForPreview, waitForReady } from './harness';
+import { imageStats, openGeneratedImage, openHarness, settledPreview, waitForPreview, waitForReady } from './harness';
 
 /** Mean brightness (0..255) of a region of export `index`, as fractions of its size. */
 async function exportRegionMean(page: Page, index: number, region: { x: number; y: number; w: number; h: number }): Promise<number> {
@@ -58,6 +58,7 @@ test.describe('Areas', () => {
     await expect(panel.getByRole('button', { name: 'Area 1' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('areas-overlay')).toBeVisible();
     // The new linear area is full at a quarter of the height and gone at three quarters.
+    const previewsBefore = await page.evaluate(() => window.__photosHarness?.previews.length ?? 0);
     await setAreaValue(page, 'Area 1', 'Exposure', '-1');
     expect(await steps(page)).toEqual(['Add linear area', 'Area 1 exposure −1.00']);
 
@@ -66,10 +67,8 @@ test.describe('Areas', () => {
     const bottom = await exportRegionMean(page, first, { x: 0.05, y: 0.83, w: 0.9, h: 0.15 });
     expect(top).toBeLessThan(bottom - 20);
 
-    // The screen previews show it too.
-    const previewIndex = await page.evaluate(() => (window.__photosHarness?.previews.length ?? 1) - 1);
-    await waitForPreview(page, previewIndex);
-    const last = await page.evaluate(() => (window.__photosHarness?.previews.length ?? 1) - 1);
+    // The previews rendered once the edit settled show it too.
+    const last = await settledPreview(page, previewsBefore);
     const screenTop = await imageStats(page, { kind: 'preview', index: last, which: 'screen', half: 'top' });
     const screenBottom = await imageStats(page, { kind: 'preview', index: last, which: 'screen', half: 'bottom' });
     expect(screenTop.mean).toBeLessThan(screenBottom.mean - 10);
