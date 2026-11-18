@@ -61,10 +61,18 @@ test.describe('Edit view on a RAF', () => {
     // White balance in camera space moves colour, not brightness.
     expect(Math.abs(warm.mean - cool.mean)).toBeLessThan(25);
 
+    // RAW gets the camera's profiles and Auto white balance.
+    await expect(page.getByRole('combobox', { name: 'Profile' }).locator('option')).toContainText(['Camera look', 'Neutral', 'Monochrome']);
+    await page.getByRole('button', { name: 'Auto White balance' }).click();
+    await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('Auto white balance');
+    await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
+    await waitForPreview(page, 2, 5 * 60_000);
+    const balanced = await imageStats(page, { kind: 'preview', index: 2, which: 'screen' });
+
     await raiseExposure(page, 10);
     await expect(page.getByLabel('Exposure value')).toHaveValue('+1.00');
-    await waitForPreview(page, 2, 5 * 60_000);
-    const bright = await imageStats(page, { kind: 'preview', index: 2, which: 'screen' });
-    expect(bright.mean).toBeGreaterThan(cool.mean + 10);
+    await waitForPreview(page, 3, 5 * 60_000);
+    const bright = await imageStats(page, { kind: 'preview', index: 3, which: 'screen' });
+    expect(bright.mean).toBeGreaterThan(balanced.mean + 10);
   });
 });

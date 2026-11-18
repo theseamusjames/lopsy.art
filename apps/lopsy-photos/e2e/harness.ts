@@ -40,18 +40,19 @@ export async function openGeneratedImage(
   width = 640,
   height = 480,
   type: 'image/jpeg' | 'image/png' | 'image/webp' = 'image/jpeg',
+  colors: readonly [string, string, string] = ['#203040', '#c08060', '#707070'],
 ): Promise<void> {
   await page.evaluate(
-    async ({ width, height, type }) => {
+    async ({ width, height, type, colors }) => {
       const canvas = new OffscreenCanvas(width, height);
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('no 2d context');
       const gradient = ctx.createLinearGradient(0, 0, width, 0);
-      gradient.addColorStop(0, '#203040');
-      gradient.addColorStop(1, '#c08060');
+      gradient.addColorStop(0, colors[0]);
+      gradient.addColorStop(1, colors[1]);
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#707070';
+      ctx.fillStyle = colors[2];
       ctx.fillRect(width / 4, height / 4, width / 2, height / 2);
       const blob = await canvas.convertToBlob({ type, quality: 0.9 });
       const name = `generated.${type === 'image/jpeg' ? 'jpg' : type.slice(6)}`;
@@ -62,7 +63,7 @@ export async function openGeneratedImage(
       input.files = transfer.files;
       input.dispatchEvent(new Event('change', { bubbles: true }));
     },
-    { width, height, type },
+    { width, height, type, colors },
   );
 }
 
