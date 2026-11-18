@@ -11,6 +11,13 @@ function notFound(name: string): DOMException {
   return new DOMException(`${name} was not found`, 'NotFoundError');
 }
 
+let pendingWriteFailures = 0;
+
+/** Makes the next `count` writes to any fake file fail as if the disk were full. */
+export function failNextWrites(count = 1): void {
+  pendingWriteFailures = count;
+}
+
 export class FakeWritable {
   private readonly parts: Blob[] = [];
   private done = false;
@@ -19,6 +26,10 @@ export class FakeWritable {
 
   async write(data: WriteData): Promise<void> {
     if (this.done) throw new TypeError('The stream is closed');
+    if (pendingWriteFailures > 0) {
+      pendingWriteFailures -= 1;
+      throw new DOMException('The disk is full', 'QuotaExceededError');
+    }
     if (data instanceof Blob) this.parts.push(data);
     else if (typeof data === 'string') this.parts.push(new Blob([data]));
     else if (data instanceof ArrayBuffer) this.parts.push(new Blob([data.slice(0)]));

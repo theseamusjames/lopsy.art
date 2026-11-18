@@ -6,7 +6,10 @@
  * `_headers` blocks whose path matches add their headers; a directory
  * serves its index.html; nothing found is a 404.
  *
- *   node scripts/serve-site.mjs [--dir dist] [--port 4180]
+ *   node scripts/serve-site.mjs [--dir dist] [--port 4180] [--host 127.0.0.1]
+ *
+ * Listens on the loopback interface only, unless --host or SITE_HOST says
+ * otherwise (0.0.0.0 to reach it from another device on the network).
  */
 
 import { createServer } from 'node:http';
@@ -21,6 +24,7 @@ const arg = (name, fallback) => {
 };
 const dir = resolve(root, arg('--dir', 'dist'));
 const port = Number(arg('--port', process.env.PORT ?? '4180'));
+const host = arg('--host', process.env.SITE_HOST ?? '127.0.0.1');
 if (!existsSync(join(dir, 'index.html'))) {
   console.error(`serve-site: ${dir}/index.html is missing. Run npm run build:site first.`);
   process.exit(1);
@@ -133,6 +137,6 @@ createServer((request, response) => {
     return;
   }
   response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Not found');
-}).listen(port, () => {
-  console.log(`serve-site: ${dir} at http://localhost:${port}/`);
+}).listen(port, host, () => {
+  console.log(`serve-site: ${dir} at http://${host}:${port}/`);
 });
