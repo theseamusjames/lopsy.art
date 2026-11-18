@@ -58,9 +58,17 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 - **Selection.** Click selects one; ⌘/Ctrl-click adds or removes; Shift
   extends; ⌘A selects every photo shown and ⌘D selects none. Arrow keys
   move the focus; Shift+←/→ grows the selection.
-- **Photo actions** (a tile's menu): Look at it large, New version, Copy
-  edits…, Paste edits, Edit in Lopsy, Export…, Move to the trash….
-- **Drag** photos onto an album in the sidebar to add them.
+- **Versions as tiles.** A photo's tile shows its *shown* version; its
+  version badge opens the others as tiles of their own right after it,
+  each with its own preview, and folds them back. **Show this version for
+  the photo** (a version tile's menu) makes that version the one the
+  photo shows in the grid and in albums.
+- **Photo actions** (a tile's menu): Look at it large, Edit, New version,
+  Show this version for the photo, Copy edits…, Paste edits, Edit in
+  Lopsy, Export…, Move to the trash….
+- **Drag** photos onto an album in the sidebar to add them; dragging a
+  version's own tile adds just that version, which the album then shows
+  as its own tile.
 
 ### Single, Compare and Cull
 
@@ -98,8 +106,9 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 
 - **New version**: another edit of the same photo, starting from the
   current one; the original file is untouched. Versions are listed under
-  the photo (named, renamed, deleted); the grid shows the photo's
-  primary version.
+  the photo and in the Edit view (named, renamed, deleted); the grid
+  shows the photo's shown version, and deleting it makes the next one
+  shown.
 - **Copy edits…** (⇧⌘C) asks which groups to copy; **Paste edits**
   (⇧⌘V) puts them on the selected photos, as one step, changing nothing
   else.
@@ -126,6 +135,12 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 - **Photos already in the library are skipped** (by SHA-256), and the
   picked files are never changed.
 - **Edits to start from**: none ("as the camera took them") or a preset.
+- **XMP sidecars.** A `.xmp` picked or dropped with its photo
+  (`<name>.xmp` or `<name>.<ext>.xmp`) is not imported as a file: its
+  rating, label, title, caption, keywords and Lightroom / Camera Raw edits
+  (`crs:`, mapped approximately onto the recipe: tone, presence, detail,
+  colour by hue, crop and straighten) are applied to the photo it belongs
+  to, also when that photo is already in the library.
 - Each file is hashed, uploaded into `Originals/<year>/<month>/`, checked
   against its hash, and added with its metadata (capture time,
   orientation, camera, lens, exposure, GPS). Previews (512 and 2048 px)
@@ -136,20 +151,34 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 
 ## Edit view
 
-Opened with Enter, **Edit** in Single view, or double-click. One photo, an
-in-memory history and a panel of groups; edits are saved to the version as
-they are made, and previews are rendered when the edit settles and on
-leaving.
+Opened with Enter, **Edit** in Single view, or double-click. One photo, a
+left column, the image and a panel of groups; edits are saved to the
+version as they are made, and previews are rendered when the edit settles
+and on leaving.
 
-- **Loading.** RAF decodes on a pool of workers into the engine's RAW
-  develop stage, with a quick binned first view while the full size
-  develops; DNG through the engine's decoder; 16-bit PNG at full depth;
-  JPEG and WebP through the browser.
+- **Loading and working size.** RAF decodes on a pool of workers into the
+  engine's RAW develop stage; DNG through the engine's decoder; 16-bit PNG
+  at full depth; JPEG and WebP through the browser. Editing starts on a
+  *working image* sized to the view (at most 4096 px on its long edge),
+  so a large photo is editable quickly; zooming to 50 % or closer loads
+  the full resolution ("Loading full resolution…"), and full-size
+  exports always render from it.
+- **Left column**: **Presets** (apply one, or **Save preset…** from this
+  edit, choosing its groups), **Versions** (switch, rename, **New
+  version**) and **History** (every step; clicking one goes back to it).
+  The column folds away. A **filmstrip** of the photos around this one
+  moves between them.
 - **Toolbar.** Library (back), Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y), Rotate left,
-  Rotate right, Flip, **Crop**, **Before** (or hold `\`), Fit (⌘0), 100%
-  (⌘1) with a zoom readout, **Edit in Lopsy** and **Export**. The image
-  pans by dragging and zooms with the wheel.
-- **Histogram** of the rendered edit, updated as it changes.
+  Rotate right, Flip, Flip vertical, **Crop**, **Areas**, **Before** (or
+  hold `\`), **Split** (before and after side by side, with a divider to
+  drag), Fit (⌘0), 100% (⌘1) with a zoom readout, Copy edits / Paste edits
+  (⇧⌘C, ⇧⌘V), **Edit in Lopsy** and **Export**. The image pans by
+  dragging and zooms with the wheel.
+- **Histogram** of the rendered edit, updated as it changes, with shadow
+  and highlight clipping indicators that light when any channel has more
+  than a trace at black or white.
+- **Straighten**: Angle (−45..45°), and **Level**: draw along something
+  that should be level (or upright) to set it.
 - **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
   not listed a second time), then the engine's film looks with Provia
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
@@ -166,7 +195,7 @@ leaving.
   release is one history step ("White balance: Daylight", "White
   balance: picked").
 - **Tone**: Exposure, Contrast, Highlights, Shadows, Whites, Blacks, with
-  **Auto**.
+  **Auto**, which the engine sets conservatively from the histogram.
 - **Color**: Vibrance, Saturation.
 - **Curves**: a luminance curve and red, green and blue curves, edited by
   dragging points.
@@ -174,6 +203,10 @@ leaving.
   orange, yellow, green, aqua, blue, purple, magenta).
 - **Color Grading**: shadows, midtones, highlights and global wheels
   (hue, saturation, luminance), Blending and Balance.
+- **Local contrast**: Large details, Small details, Haze.
+- **Sharpness & noise**: Sharpen, Radius, Edges only, Noise, Color noise,
+  Keep detail. While a slider drags these passes are left out, and they
+  come back when it settles.
 - **Finish**: Vignette.
 - Every group has a **Reset**; each slider has a typed value field, and
   double-clicking a slider resets it. Each change is one history step
@@ -181,15 +214,22 @@ leaving.
 - **Crop** tool: drag the frame; **Aspect** Free, Original, 1 : 1,
   4 : 5, 3 : 2 or 16 : 9, made landscape or portrait; Reset, Done (Enter)
   or Cancel (Escape). The crop follows rotation.
-- Recipes also carry local contrast, sharpening and noise reduction,
-  which the engine renders; the panel has no controls for them yet.
+- **Areas** (toolbar): add **Linear** (a gradient across the photo) or
+  **Radial** (an ellipse) areas, up to eight, each with Amount, Invert, a
+  name, Delete, and its own Exposure, Contrast, Highlights, Shadows,
+  Temperature, Tint and Saturation. The selected area's mask shows in red
+  on screen, and handles on the image move it, resize it, turn it and set
+  its feather; each drag or slider release is one history step ("Area:
+  move"). Areas are stored on the unrotated photo, so they follow
+  rotation, flips, straightening and the crop.
 
 ## Export
 
 - **Export…** (header, tile menu, Edit view): the selected photos'
   versions, rendered by the engine at full quality.
-- **File type**: JPEG (small files, for sharing) or PNG (no compression
-  loss, 16-bit); TIFF is listed but this build cannot write it yet.
+- **File type**: JPEG (small files, for sharing), PNG (no compression
+  loss, 16-bit) or 16-bit TIFF (for printing and further editing; always
+  the full image).
   **Quality** for JPEG. **Size**: Full size, Large 3840 px, For the web
   2048 px, Small 1080 px (never larger than the photo). **Colours**: the
   output colour space.
@@ -198,6 +238,10 @@ leaving.
 - **Metadata**: all of it, copyright only, or none.
 - **Export presets**: *Made by Lopsy* ones and *Yours*, saved, renamed
   and deleted from the dialog.
+- **After an export into the library** (Google Drive): **Show in Drive**
+  opens the export's folder, and **Copy share link** shares that folder
+  with anyone who has the link, only after a confirmation that says
+  exactly that.
 - An export can **keep going in the background** while the user goes on.
 
 ## Lopsy round trips
@@ -252,7 +296,8 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   - *Adding from Google Drive* (Drive libraries).
   - *Library health*: **Check library** verifies that every photo's
     original is still in storage and unchanged, and marks the ones that
-    are not.
+    are not. When a delete left originals of deleted photos outside the
+    trash, it offers to move them there.
 
 ## Keyboard shortcuts
 
