@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryLocalStore } from './local-store';
 import { DEFAULT_RECIPE, recipeHash } from './recipe';
-import { openLibrary } from './session';
+import { NotADocumentError, openLibrary } from './session';
 import { TestAdapter } from './test-support/test-adapter';
 import type { LibrarySession, NewAsset } from './types';
 
@@ -165,5 +165,23 @@ describe('stale local writes', () => {
     const hash = recipeHash(a.getView().versions.get(versionId)!.recipe);
     a.setPreview(versionId, 'thumb', { fileId: 'new', recipeHash: hash, width: 512, height: 512 });
     expect(a.getView().versions.get(versionId)?.thumb?.fileId).toBe('new');
+  });
+});
+
+describe('setAssetFacts', () => {
+  it('updates a document after an in-place re-save, and refuses originals', async () => {
+    const { a, b } = await twoDevices();
+    const original = [...a.getView().assets.keys()][0]!;
+    const { assetId } = a.addAsset({ ...PHOTO, kind: 'document', format: 'lopsy', fileId: 'doc-1', renderFileId: 'r-1' });
+    a.setAssetFacts(assetId, { sha256: 'b'.repeat(64), byteSize: 99, width: 640, height: 480, renderFileId: 'r-2' });
+    await sync(a, b);
+    expect(b.getView().assets.get(assetId)).toMatchObject({
+      sha256: 'b'.repeat(64),
+      byteSize: 99,
+      width: 640,
+      height: 480,
+      renderFileId: 'r-2',
+    });
+    expect(() => a.setAssetFacts(original, { sha256: 'c'.repeat(64) })).toThrow(NotADocumentError);
   });
 });

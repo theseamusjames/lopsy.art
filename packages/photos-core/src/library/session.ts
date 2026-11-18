@@ -35,6 +35,7 @@ import { SyncEngine, type SyncTimers } from './sync';
 import type {
   AlbumId,
   AssetId,
+  AssetFacts,
   AssetMarks,
   HistoryStep,
   Json,
@@ -232,6 +233,22 @@ function analyseHistory(writes: readonly RecipeWrite[]): StepInfo[] {
 export interface PhotosLibrarySession extends LibrarySession {
   /** Records what a repair found for the assets' originals (shown as a badge). */
   setOriginalStatus(assetIds: readonly AssetId[], status: OriginalStatus): void;
+  /**
+   * Updates a document's file facts after it was saved again in place
+   * (spec 6.12). Documents only: an original's facts never change, and the
+   * originals cache keys on its sha256. Throws for anything else.
+   */
+  setAssetFacts(assetId: AssetId, facts: DocumentFacts): void;
+}
+
+/** The file facts a re-saved document can change. */
+export type DocumentFacts = Partial<Pick<AssetFacts, 'sha256' | 'byteSize' | 'width' | 'height' | 'renderFileId'>>;
+
+export class NotADocumentError extends Error {
+  constructor(assetId: AssetId) {
+    super(`Asset ${assetId} is not a document; an original's facts never change.`);
+    this.name = 'NotADocumentError';
+  }
 }
 
 class Session implements PhotosLibrarySession {
@@ -516,6 +533,19 @@ class Session implements PhotosLibrarySession {
       undefined,
       true,
     );
+  }
+
+  setAssetFacts(assetId: AssetId, facts: DocumentFacts): void {
+    const kind = this.merge.get('asset', assetId)?.fields.get('kind')?.value;
+    if (kind !== 'document') throw new NotADocumentError(assetId);
+    const fields: Record<string, Json> = {};
+    if (facts.sha256 !== undefined) fields.sha256 = facts.sha256;
+    if (facts.byteSize !== undefined) fields.byteSize = facts.byteSize;
+    if (facts.width !== undefined) fields.width = facts.width;
+    if (facts.height !== undefined) fields.height = facts.height;
+    if (facts.renderFileId !== undefined) fields.renderFileId = facts.renderFileId;
+    if (Object.keys(fields).length === 0) return;
+    this.emit([{ t: 'set', kind: 'asset', id: assetId, fields }]);
   }
 
   setSetting(key: string, value: Json): void {
