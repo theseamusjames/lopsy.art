@@ -14,7 +14,7 @@ import { NO_FACETS, type FacetFilter } from '../library/finding';
 import type { CopiedEdits } from '../library/recipe-copy';
 
 export type ViewMode = 'grid' | 'single' | 'compare' | 'cull';
-export type DialogName = 'import' | 'export' | 'delete' | 'help' | 'sync' | 'settings' | 'copy-edits' | null;
+export type DialogName = 'import' | 'export' | 'delete' | 'help' | 'sync' | 'settings' | 'copy-edits' | 'new-version' | null;
 
 export interface EditTarget {
   readonly assetId: AssetId;

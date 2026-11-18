@@ -23,6 +23,11 @@ test('new version, edit it, copy its edits onto another photo', async ({ page })
   // A second version, shown as its own tile in the photo's stack.
   await first.click({ button: 'right' });
   await page.getByRole('menu', { name: 'Photo actions' }).getByRole('menuitem', { name: 'New version' }).click();
+  // It asks for a name, with the suggestion selected: Enter keeps it.
+  const nameBox = page.getByRole('dialog', { name: 'New version' }).getByRole('textbox', { name: 'Version name' });
+  await expect(nameBox).toHaveValue('Version 2');
+  expect(await nameBox.evaluate((el) => (el instanceof HTMLInputElement ? [el.selectionStart, el.selectionEnd] : null))).toEqual([0, 9]);
+  await page.keyboard.press('Enter');
   const version = page.locator('[role="gridcell"][title="first.jpg (Version 2)"]');
   await expect(version).toBeVisible();
   await expect(version).toHaveAttribute('aria-selected', 'true');
@@ -80,7 +85,15 @@ test('a version in an album, made the shown one, then deleted', async ({ page })
 
   await photo.click({ button: 'right' });
   await page.getByRole('menu', { name: 'Photo actions' }).getByRole('menuitem', { name: 'New version' }).click();
+  await page.getByRole('button', { name: 'Create' }).click();
   await expect(version).toHaveAttribute('aria-selected', 'true');
+  // The stack's badge folds and opens it, every time.
+  for (let i = 0; i < 3; i++) {
+    await photo.getByRole('button', { name: '2 versions' }).click();
+    await expect(version).toHaveCount(0);
+    await photo.getByRole('button', { name: '2 versions' }).click();
+    await expect(version).toBeVisible();
+  }
 
   // Only the version goes in the album.
   const sidebar = page.getByRole('navigation', { name: 'Library' });

@@ -95,10 +95,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
               title={burstOpen ? 'Fold this burst back into one photo' : `A burst of ${burst} photos: show them all`}
               aria-label={`Burst of ${burst} photos`}
               aria-expanded={burstOpen}
-              onClick={(e) => {
-                e.stopPropagation();
-                useUi.getState().toggleBurst(assetId);
-              }}
+              {...stackToggle(assetId)}
             >
               <Images size={11} />
               {burst}
@@ -115,10 +112,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
               }
               aria-label={`${documents} Lopsy document${documents === 1 ? '' : 's'}`}
               aria-expanded={burstOpen}
-              onClick={(e) => {
-                e.stopPropagation();
-                useUi.getState().toggleBurst(assetId);
-              }}
+              {...stackToggle(assetId)}
             >
               <Paintbrush size={11} />
               {documents}
@@ -142,10 +136,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
                 title={burstOpen ? 'Fold the versions back into one tile' : `${versions} versions: show them all`}
                 aria-label={`${versions} versions`}
                 aria-expanded={burstOpen}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  useUi.getState().toggleBurst(assetId);
-                }}
+                {...stackToggle(assetId)}
               >
                 <Copy size={11} />
                 {versions}
@@ -162,3 +153,27 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
     </div>
   );
 });
+
+/**
+ * A stack badge's handlers. The press is kept from the tile, which is
+ * draggable and selects on click, so the badge opens and folds its stack
+ * every time instead of now and then starting a drag or a selection.
+ */
+function stackToggle(assetId: string) {
+  return {
+    draggable: false,
+    onMouseDown: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    onDragStart: (e: React.DragEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    onDoubleClick: (e: React.MouseEvent) => e.stopPropagation(),
+    onClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      useUi.getState().toggleBurst(assetId);
+    },
+  };
+}

@@ -141,14 +141,30 @@ export function deleteVersionOf(assetId: AssetId, versionId: VersionId): void {
 /** Makes a new version of the focused tile's version (same edits), opens its stack and selects it. */
 export function newVersion(): void {
   const ui = useUi.getState();
+  if (ui.selection.focus === null && ui.selection.ids.size === 0) return;
+  ui.openDialog('new-version');
+}
+
+/** The name New version offers: the first "Version N" the photo does not use. */
+export function suggestedVersionName(): string {
+  const ui = useUi.getState();
+  const id = ui.selection.focus ?? [...ui.selection.ids][0];
+  if (id === undefined) return 'Version 2';
+  const names = (versionsByAsset(session().getView()).get(parseItem(id).assetId) ?? []).map((v) => v.name);
+  return nextVersionName(names);
+}
+
+/** Creates the version New version asked for, named `name`. */
+export function createNamedVersion(name: string): void {
+  const ui = useUi.getState();
+  ui.openDialog(null);
   const id = ui.selection.focus ?? [...ui.selection.ids][0];
   if (id === undefined) return;
   const view = session().getView();
   const { assetId } = parseItem(id);
   const from = itemVersionId(id, view);
   const source = from === null ? undefined : view.versions.get(from);
-  const names = (versionsByAsset(view).get(assetId) ?? []).map((v) => v.name);
-  const versionId = session().createVersion(assetId, nextVersionName(names), source?.recipe);
+  const versionId = session().createVersion(assetId, name.trim() || suggestedVersionName(), source?.recipe);
   if (!versionId) return;
   if (!ui.expandedBursts.has(assetId)) ui.toggleBurst(assetId);
   ui.setSelection(selectOne(versionItemId(assetId, versionId)));
