@@ -56,13 +56,34 @@ export interface GoogleTokenSourceOptions {
   /** The OAuth client ID of the Cloud project. */
   readonly clientId: string;
   readonly now?: () => number;
+  /**
+   * The Google account (`sub`) this library belongs to, when reconnecting.
+   * Every grant is checked against it, so picking another account in
+   * Google's chooser cannot attach that account's Drive to this library.
+   */
+  readonly expectedAccountId?: string;
+  /** For the userinfo check; default globalThis.fetch. */
+  readonly fetch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+}
+
+/** Thrown when Google granted a token for another account than `expectedAccountId`. */
+export class AccountMismatchError extends StorageError {
+  constructor(readonly actualAccountId: string) {
+    super('auth', 'Signed in as a different Google account than the one this library belongs to. Sign in with that account.');
+    this.name = 'AccountMismatchError';
+  }
+}
+
+interface Grant {
+  readonly value: string;
+  readonly expiresAt: number;
 }
 
 export class GoogleTokenSource implements TokenSource {
   private token: { readonly value: string; readonly expiresAt: number } | null = null;
   private client: TokenClient | null = null;
   private oauth2: Oauth2 | null = null;
-  private pending: { resolve: (token: string) => void; reject: (error: unknown) => void } | null = null;
+  private pending: { resolve: (grant: Grant) => void; reject: (error: unknown) => void } | null = null;
   private inFlight: Promise<string> | null = null;
   private readonly now: () => number;
 
@@ -77,7 +98,8 @@ export class GoogleTokenSource implements TokenSource {
     if (token && remaining > MIN_VALIDITY_MS) {
       try {
         return await this.request('none');
-      } catch {
+      } catch (error) {
+        if (error instanceof AccountMismatchError) throw error;
         return token.value;
       }
     }
@@ -116,14 +138,16 @@ export class GoogleTokenSource implements TokenSource {
 
   private request(prompt: string): Promise<string> {
     if (this.inFlight) return this.inFlight;
-    const flight = this.ensureClient().then(
-      (client) =>
-        new Promise<string>((resolve, reject) => {
-          this.pending = { resolve, reject };
-          const hint = lastEmail();
-          client.requestAccessToken({ prompt, ...(hint === null ? {} : { login_hint: hint }) });
-        }),
-    );
+    const flight = this.ensureClient()
+      .then(
+        (client) =>
+          new Promise<Grant>((resolve, reject) => {
+            this.pending = { resolve, reject };
+            const hint = lastEmail();
+            client.requestAccessToken({ prompt, ...(hint === null ? {} : { login_hint: hint }) });
+          }),
+      )
+      .then((grant) => this.accept(grant));
     this.inFlight = flight;
     const clear = (): void => {
       if (this.inFlight === flight) this.inFlight = null;
@@ -156,6 +180,20 @@ export class GoogleTokenSource implements TokenSource {
     return this.client;
   }
 
+  /** Keeps a grant once it is known to be for the expected account. */
+  private async accept(grant: Grant): Promise<string> {
+    const expected = this.options.expectedAccountId;
+    if (expected !== undefined) {
+      const account = await fetchGoogleAccount(grant.value, this.options.fetch);
+      if (account.id !== expected) {
+        this.token = null;
+        throw new AccountMismatchError(account.id);
+      }
+    }
+    this.token = grant;
+    return grant.value;
+  }
+
   private onResponse(response: TokenResponse): void {
     if (response.error || !response.access_token) {
       this.settle(new StorageError('auth', response.error_description ?? response.error ?? 'Google returned no token'));
@@ -168,16 +206,15 @@ export class GoogleTokenSource implements TokenSource {
       return;
     }
     const seconds = Number(response.expires_in ?? 3600);
-    this.token = { value: response.access_token, expiresAt: this.now() + (Number.isFinite(seconds) ? seconds : 3600) * 1000 };
-    this.settle(null, response.access_token);
+    this.settle(null, { value: response.access_token, expiresAt: this.now() + (Number.isFinite(seconds) ? seconds : 3600) * 1000 });
   }
 
-  private settle(error: StorageError | null, token?: string): void {
+  private settle(error: StorageError | null, grant?: Grant): void {
     const pending = this.pending;
     this.pending = null;
     if (!pending) return;
-    if (error) pending.reject(error);
-    else pending.resolve(token ?? '');
+    if (error || !grant) pending.reject(error ?? new StorageError('auth', 'Google returned no token'));
+    else pending.resolve(grant);
   }
 }
 
