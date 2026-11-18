@@ -10,6 +10,7 @@ import type { ImportJob } from '@lopsy/photos-core/import/types';
 import type { Connection, ExportJob, StorageChoice } from './backend';
 import { EMPTY_SELECTION, type Selection } from '../library/selection';
 import type { Collection, SortOrder } from '../library/asset-query';
+import { NO_FACETS, type FacetFilter } from '../library/finding';
 
 export type ViewMode = 'grid' | 'single' | 'compare' | 'cull';
 export type DialogName = 'import' | 'export' | 'delete' | 'help' | 'sync' | null;
@@ -27,6 +28,10 @@ export interface UiState {
   readonly collection: Collection;
   readonly sort: SortOrder;
   readonly text: string;
+  readonly facets: FacetFilter;
+  readonly groupBursts: boolean;
+  /** Burst covers shown open. */
+  readonly expandedBursts: ReadonlySet<AssetId>;
   readonly thumbSize: number;
   readonly selection: Selection;
   readonly mode: ViewMode;
@@ -48,6 +53,9 @@ export interface UiState {
   setCollection(collection: Collection): void;
   setSort(sort: SortOrder): void;
   setText(text: string): void;
+  setFacets(facets: FacetFilter): void;
+  setGroupBursts(on: boolean): void;
+  toggleBurst(coverId: AssetId): void;
   setThumbSize(size: number): void;
   setSelection(selection: Selection): void;
   setMode(mode: ViewMode): void;
@@ -70,6 +78,9 @@ export const useUi = create<UiState>()((set) => ({
   collection: { kind: 'all' },
   sort: { key: 'captured', descending: true },
   text: '',
+  facets: NO_FACETS,
+  groupBursts: false,
+  expandedBursts: new Set<AssetId>(),
   thumbSize: THUMB_SIZE.initial,
   selection: EMPTY_SELECTION,
   mode: 'grid',
@@ -97,9 +108,18 @@ export const useUi = create<UiState>()((set) => ({
       exportJob: null,
       pendingImport: null,
     }),
-  setCollection: (collection) => set({ collection, selection: EMPTY_SELECTION, mode: 'grid' }),
+  setCollection: (collection) => set({ collection, selection: EMPTY_SELECTION, mode: 'grid', facets: NO_FACETS }),
   setSort: (sort) => set({ sort }),
   setText: (text) => set({ text }),
+  setFacets: (facets) => set({ facets }),
+  setGroupBursts: (groupBursts) => set({ groupBursts, expandedBursts: new Set() }),
+  toggleBurst: (coverId) =>
+    set((s) => {
+      const next = new Set(s.expandedBursts);
+      if (next.has(coverId)) next.delete(coverId);
+      else next.add(coverId);
+      return { expandedBursts: next };
+    }),
   setThumbSize: (thumbSize) => set({ thumbSize }),
   setSelection: (selection) => set({ selection }),
   setMode: (mode) => set({ mode }),

@@ -5,7 +5,10 @@ import type { Asset, AssetId, LibrarySession, LibraryView, PreviewRef, SyncStatu
 import type { ImportItemState, ImportJob, ImportProgress } from '@lopsy/photos-core/import/types';
 import type { ExportJob, ExportProgress } from './backend';
 import { useUi } from './store';
-import { queryAssets, versionCounts, type Collection, type SortOrder } from '../library/asset-query';
+import { findAssets, type FacetFilter, type FindResult } from '../library/finding';
+import { parseTextQuery, TextIndex } from '@lopsy/photos-core/search/text';
+import { readSavedSearches, type SavedSearch } from '@lopsy/photos-core/search/rules';
+import { versionCounts, type Collection, type SortOrder } from '../library/asset-query';
 import { loadPreviewUrl, peekPreviewUrl } from './preview-cache';
 
 export function useSession(): LibrarySession {
@@ -40,26 +43,75 @@ export function usePrimaryVersion(asset: Asset | null): Version | null {
   return asset === null ? null : (view.versions.get(asset.primaryVersionId) ?? null);
 }
 
-interface OrderedMemo {
+interface FindMemo {
   view: LibraryView;
   collection: Collection;
   sort: SortOrder;
   text: string;
-  ids: readonly AssetId[];
+  facets: FacetFilter;
+  groupBursts: boolean;
+  expanded: ReadonlySet<AssetId>;
+  result: FindResult;
 }
-let orderedMemo: OrderedMemo | null = null;
+let findMemo: FindMemo | null = null;
 
-/** The ids the grid shows, in order; shared by every caller for the same inputs. */
-export function useOrderedIds(): readonly AssetId[] {
+/** One text index per session, updated (incrementally) when the view changes. */
+const textIndexes = new WeakMap<LibrarySession, TextIndex>();
+
+let savedMemo: { settings: LibraryView['settings']; list: readonly SavedSearch[] } | null = null;
+
+/** The library's saved searches, read once per settings change. */
+export function useSavedSearches(): readonly SavedSearch[] {
   const view = useLibraryView();
+  if (savedMemo && savedMemo.settings === view.settings) return savedMemo.list;
+  savedMemo = { settings: view.settings, list: readSavedSearches(view) };
+  return savedMemo.list;
+}
+
+/** What the grid shows and the filter bar counts; computed once per change of its inputs, shared by every caller. */
+export function useFindResult(): FindResult {
+  const session = useSession();
+  const view = useLibraryView();
+  const savedSearches = useSavedSearches();
   const collection = useUi((s) => s.collection);
   const sort = useUi((s) => s.sort);
   const text = useUi((s) => s.text);
-  const m = orderedMemo;
-  if (m && m.view === view && m.collection === collection && m.sort === sort && m.text === text) return m.ids;
-  const ids = queryAssets(view, { collection, sort, text });
-  orderedMemo = { view, collection, sort, text, ids };
-  return ids;
+  const facets = useUi((s) => s.facets);
+  const groupBursts = useUi((s) => s.groupBursts);
+  const expanded = useUi((s) => s.expandedBursts);
+  const m = findMemo;
+  if (
+    m &&
+    m.view === view &&
+    m.collection === collection &&
+    m.sort === sort &&
+    m.text === text &&
+    m.facets === facets &&
+    m.groupBursts === groupBursts &&
+    m.expanded === expanded
+  ) {
+    return m.result;
+  }
+  let textMatch: ((asset: Asset) => boolean) | null = null;
+  if (text.trim() !== '') {
+    let index = textIndexes.get(session);
+    if (!index) {
+      index = new TextIndex();
+      textIndexes.set(session, index);
+    }
+    index.update(view);
+    const query = parseTextQuery(text);
+    const idx = index;
+    textMatch = (asset) => idx.matches(asset.id, query);
+  }
+  const result = findAssets(view, { collection, sort, text, facets, groupBursts, expanded, savedSearches }, textMatch);
+  findMemo = { view, collection, sort, text, facets, groupBursts, expanded, result };
+  return result;
+}
+
+/** The ids the grid shows, in order. */
+export function useOrderedIds(): readonly AssetId[] {
+  return useFindResult().ids;
 }
 
 let versionMemo: { view: LibraryView; counts: ReadonlyMap<AssetId, number> } | null = null;

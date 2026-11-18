@@ -112,3 +112,15 @@
   font-weight: var(--font-weight-ui);
   letter-spacing: 0.3px;
 }
+
+.burst {
+  border: none;
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: var(--font-ui);
+}
+
+.burst:hover,
+.burst[aria-expanded='true'] {
+  background: var(--color-accent);
+}

@@ -10,6 +10,7 @@ import { DropZone } from '../DropZone/DropZone';
 import { EmptyState } from '../EmptyState/EmptyState';
 import { ExportDialog } from '../ExportDialog/ExportDialog';
 import { GridToolbar } from '../GridToolbar/GridToolbar';
+import { FilterBar } from '../FilterBar/FilterBar';
 import { Header } from '../Header/Header';
 import { ImportSheet } from '../ImportSheet/ImportSheet';
 import { ImportStrip } from '../ImportStrip/ImportStrip';
@@ -109,6 +110,7 @@ export function LibraryScreen() {
         ) : (
           <>
             {!libraryEmpty && <GridToolbar orderedIds={orderedIds} />}
+            {!libraryEmpty && <FilterBar />}
             {orderedIds.length === 0 ? (
               <EmptyState libraryEmpty={libraryEmpty} collection={collection} searching={text.trim() !== ''} />
             ) : (

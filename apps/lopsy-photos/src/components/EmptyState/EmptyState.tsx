@@ -23,6 +23,12 @@ function message(collection: Collection, searching: boolean): string {
       return 'This album is empty. Drag photos from the grid onto its name in the sidebar to add them.';
     case 'keyword':
       return 'No photos have this keyword any more.';
+    case 'date':
+      return 'No photos from this date.';
+    case 'import':
+      return 'Nothing from this import is left in the library.';
+    case 'saved':
+      return 'No photos match this saved search.';
   }
 }
 

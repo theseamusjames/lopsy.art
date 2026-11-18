@@ -1,6 +1,10 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Album as AlbumIcon, Clock, EyeOff, Images, Pencil, Plus, Tag, Trash2 } from 'lucide-react';
-import { useLibraryView, useSession } from '../../app/hooks';
+import { Album as AlbumIcon, CalendarDays, Clock, EyeOff, Images, Pencil, Plus, Search, Tag, Trash2, Upload } from 'lucide-react';
+import { useLibraryView, useSavedSearches, useSession } from '../../app/hooks';
+import { buildDateTree } from '@lopsy/photos-core/search/dates';
+import { writeSavedSearches } from '@lopsy/photos-core/search/rules';
+import { datePrefixLabel, importBatches } from '../../library/finding';
+import { Disclosure } from '../Disclosure/Disclosure';
 import { useUi } from '../../app/store';
 import { ASSET_DRAG_TYPE, readDraggedIds } from '../../app/drag';
 import { sameCollection, sidebarCounts, type Collection } from '../../library/asset-query';
@@ -13,6 +17,24 @@ export function Sidebar() {
   const collection = useUi((s) => s.collection);
   const setCollection = useUi((s) => s.setCollection);
   const counts = useMemo(() => sidebarCounts(view), [view]);
+  const saved = useSavedSearches();
+  const dates = useMemo(() => buildDateTree([...view.assets.values()].filter((a) => !a.deleted && !a.setAside)), [view.assets]);
+  const imports = useMemo(() => importBatches(view), [view]);
+  const [openDates, setOpenDates] = useState<ReadonlySet<string>>(new Set());
+  const [renamingSearch, setRenamingSearch] = useState<string | null>(null);
+  const [showAllImports, setShowAllImports] = useState(false);
+  const toggleDate = (key: string) =>
+    setOpenDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const renameSearch = (id: string, next: string) => {
+    const trimmed = next.trim();
+    if (trimmed !== '') writeSavedSearches(session, saved.map((x) => (x.id === id ? { ...x, name: trimmed } : x)));
+    setRenamingSearch(null);
+  };
   const albums = useMemo(
     () => [...view.albums.values()].filter((a) => !a.deleted).sort((a, b) => a.name.localeCompare(b.name)),
     [view],
@@ -145,6 +167,104 @@ export function Sidebar() {
           ),
         )}
         {editing === 'new' && <div className={styles.editRow}>{nameInput}</div>}
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Saved searches</h2>
+        </div>
+        {saved.length === 0 && <p className={styles.empty}>Narrow the photos with the filters above the grid, then Save search.</p>}
+        {saved.map((search) =>
+          renamingSearch === search.id ? (
+            <div key={search.id} className={styles.editRow}>
+              <input
+                className={styles.input}
+                autoFocus
+                defaultValue={search.name}
+                aria-label="Saved search name"
+                onBlur={(e) => renameSearch(search.id, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    setRenamingSearch(null);
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <div key={search.id} className={styles.albumRow}>
+              {item({ kind: 'saved', searchId: search.id }, <Search size={14} />, search.name, undefined)}
+              <span className={styles.rowActions}>
+                <IconButton size="sm" label={`Rename ${search.name}`} icon={<Pencil size={12} />} onClick={() => setRenamingSearch(search.id)} />
+                <IconButton
+                  size="sm"
+                  label={`Delete the saved search ${search.name}`}
+                  icon={<Trash2 size={12} />}
+                  onClick={() => {
+                    writeSavedSearches(session, saved.filter((x) => x.id !== search.id));
+                    if (collection.kind === 'saved' && collection.searchId === search.id) setCollection({ kind: 'all' });
+                  }}
+                />
+              </span>
+            </div>
+          ),
+        )}
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Dates</h2>
+        </div>
+        {dates.length === 0 && <p className={styles.empty}>No dates yet.</p>}
+        {dates.map((year) => (
+          <div key={year.year}>
+            {item(
+              { kind: 'date', prefix: year.year },
+              <Disclosure open={openDates.has(year.year)} onToggle={() => toggleDate(year.year)} />,
+              year.year,
+              year.count,
+            )}
+            {openDates.has(year.year) &&
+              year.months.map((month) => (
+                <div key={month.month} className={styles.nested}>
+                  {item(
+                    { kind: 'date', prefix: month.month },
+                    <Disclosure open={openDates.has(month.month)} onToggle={() => toggleDate(month.month)} />,
+                    datePrefixLabel(month.month).replace(/ \d{4}$/, ''),
+                    month.count,
+                  )}
+                  {openDates.has(month.month) &&
+                    month.days.map((day) => (
+                      <div key={day.day} className={styles.nested}>
+                        {item({ kind: 'date', prefix: day.day }, <CalendarDays size={14} />, datePrefixLabel(day.day), day.count)}
+                      </div>
+                    ))}
+                </div>
+              ))}
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Imports</h2>
+        </div>
+        {imports.slice(0, showAllImports ? imports.length : 6).map((batch) => (
+          <div key={batch.importId}>
+            {item(
+              { kind: 'import', importId: batch.importId },
+              <Upload size={14} />,
+              new Date(batch.importedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
+              batch.count,
+            )}
+          </div>
+        ))}
+        {imports.length > 6 && (
+          <button type="button" className={styles.more} onClick={() => setShowAllImports((v) => !v)}>
+            {showAllImports ? 'Show fewer' : `Show all ${imports.length}`}
+          </button>
+        )}
       </div>
 
       <div className={styles.section}>
