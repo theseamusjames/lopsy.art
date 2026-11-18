@@ -247,6 +247,8 @@ pub struct EngineInner {
     pub area_overlay: i32,
     /// (shadows, highlights) clipping warnings on the live frame only.
     pub clipping_warning: (bool, bool),
+    /// Show the sharpening edge mask in place of the live frame.
+    pub detail_mask_view: bool,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -350,6 +352,7 @@ impl EngineInner {
             areas: None,
             area_overlay: -1,
             clipping_warning: (false, false),
+            detail_mask_view: false,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,

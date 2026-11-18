@@ -152,6 +152,14 @@ pub fn set_image_area_overlay(engine: &mut EngineInner, index: i32) {
     engine.needs_recomposite = true;
 }
 
+/// Show the sharpening edge mask as grey on the live frame (white where it
+/// sharpens fully) while `on`, for Alt-drag on the sharpening sliders. Needs
+/// detail settings; never in exports.
+pub fn set_image_detail_mask_view(engine: &mut EngineInner, on: bool) {
+    engine.detail_mask_view = on;
+    engine.needs_recomposite = true;
+}
+
 /// Mark clipped pixels on the live frame (never in exports): shadows in
 /// blue where any channel is at or below 0, highlights in red where any is
 /// at or above 1, after the whole develop chain.

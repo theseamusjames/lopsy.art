@@ -472,7 +472,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     apply_image_adjustments(engine);
     apply_color_mixer(engine);
     apply_areas(engine, AreasMode::Apply);
-    crate::develop::detail::apply_sharpening(engine);
+    crate::develop::detail::apply_sharpening_live(engine);
     // The selected area's mask, on screen only: exports composite again.
     apply_areas(engine, AreasMode::Overlay);
     apply_clipping_warning(engine);

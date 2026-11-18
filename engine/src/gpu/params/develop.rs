@@ -44,6 +44,7 @@ uniforms! {
     pub struct DetailSharpenParams {
         pub amount: f32,
         pub edges: f32,
+        pub mask_view: i32,
     }
 }
 

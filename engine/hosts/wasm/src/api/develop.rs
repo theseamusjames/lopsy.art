@@ -123,3 +123,10 @@ readback_export! {
         read(lopsy_engine::commands::develop::sample_neutral_white_balance(engine, x, y, radius))
     }
 }
+
+/// Show the sharpening edge mask as grey on screen while `on` (needs
+/// `setImageDetail`); never in exports.
+#[wasm_bindgen(js_name = "setImageDetailMaskView")]
+pub fn set_image_detail_mask_view(engine: &mut Engine, on: bool) {
+    lopsy_engine::commands::develop::set_image_detail_mask_view(&mut engine.inner, on)
+}
