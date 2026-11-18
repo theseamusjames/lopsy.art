@@ -5,8 +5,13 @@
  * File format (binary):
  *   [4 bytes: manifest JSON byte length (uint32 LE)]
  *   [N bytes: manifest JSON (UTF-8)]
- *   [for each layer with pixel data: gzip-compressed raw RGBA bytes]
+ *   [for each layer with pixel data: its pixels, as `layerPixelFormat` says]
  *   [for each layer with mask data: raw mask bytes]
+ *
+ * Layer pixels are 16 bits a channel from v3 (`rgba16-lz4`): the engine's
+ * own content-cropped LZ4 blob, which keeps the depth the layer textures
+ * hold (half floats) instead of rounding to 8 bits. v1 and v2 files hold
+ * gzip-compressed 8-bit RGBA (`rgba8-gzip`) and still load.
  *
  * The manifest contains enough metadata to reconstruct the full layer stack.
  * Pixel data blobs are referenced by index in the manifest's pixelDataIndex.
@@ -14,7 +19,7 @@
 
 import { useEditorStore } from '../app/editor-store';
 import { getEngine } from '../engine-wasm/engine-state';
-import { readLayerAsImageData } from '../engine-wasm/gpu-pixel-access';
+import { readLayerBackupBlob } from '../engine-wasm/gpu-pixel-access';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
 import { commitLayerTransform } from '../app/interactions/layer-transform';
 import { flushLayerSync } from '../engine-wasm/engine-sync';
@@ -24,13 +29,15 @@ import type { Layer, TextTransform } from '../types/layers';
 import type { DocumentColorMode } from '../types/color-mode';
 import type { StoredPath } from '../types/paths';
 import { useUIStore, type Guide } from '../app/ui-store';
+import { rgba16BlobSize, type LayerPixelFormat } from './layer-pixel-format';
 
 const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LOPSY\0"
 /**
  * v2: drop shadows and outer glows are cast from the layer plus its Stroke
  * (`STROKED_SILHOUETTE_VERSION`); v1 effects are migrated on load.
+ * v3: layer pixels are stored at 16 bits a channel (`rgba16-lz4`).
  */
-export const FORMAT_VERSION = 2;
+export const FORMAT_VERSION = 3;
 
 export interface LopsyManifest {
   readonly version: number;
@@ -52,6 +59,8 @@ export interface LopsyManifest {
   readonly paths?: readonly StoredPath[];
   /** Canvas guides. Absent in files saved before these were serialized. */
   readonly guides?: readonly Guide[];
+  /** How layer pixels are stored. Absent before v3 → `rgba8-gzip`. */
+  readonly layerPixelFormat?: LayerPixelFormat;
 }
 
 // Serialized layer — all layer fields except pixel data (which is stored as blobs)
@@ -200,34 +209,6 @@ export function serializeLayer(
   return base;
 }
 
-async function compressBytes(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new CompressionStream('gzip');
-  const writer = stream.writable.getWriter();
-  // Copy to a plain ArrayBuffer to satisfy the WritableStreamDefaultWriter
-  // overloads which require ArrayBufferView<ArrayBuffer> (not SharedArrayBuffer).
-  const copyBuf = new Uint8Array(bytes.length);
-  copyBuf.set(bytes);
-  writer.write(copyBuf);
-  writer.close();
-
-  const chunks: Uint8Array[] = [];
-  const reader = stream.readable.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-
-  const totalLen = chunks.reduce((s, c) => s + c.length, 0);
-  const result = new Uint8Array(totalLen);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return result;
-}
-
 /**
  * Save the current project to a .lopsy file and trigger a download.
  */
@@ -261,20 +242,19 @@ export async function saveProject(): Promise<void> {
       let pixelWidth = 0;
       let pixelHeight = 0;
 
-      // Read pixel data for raster layers (not groups — they have no texture)
+      // Read pixel data for raster layers (not groups — they have no texture).
+      // A layer with no content has no blob, as an empty texture reads as none.
       if (layer.type !== 'group') {
-        const imageData = await readLayerAsImageData(layer.id);
-        if (imageData) {
-          const raw = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
-          const compressed = await compressBytes(raw);
+        const blob = await readLayerBackupBlob(layer.id);
+        const size = blob ? rgba16BlobSize(blob) : null;
+        if (blob && size) {
           pixelDataIndex = pixelBlobs.length;
-          pixelBlobs.push(compressed);
-          // Record the blob's true dimensions. For text/shape layers these
+          pixelBlobs.push(blob);
+          // Record the bitmap's true dimensions. For text/shape layers these
           // differ from the layer's logical width/height (e.g. text width is
-          // the box width, not the rendered bitmap), so the load path can't
-          // infer them and must read them back from here.
-          pixelWidth = imageData.width;
-          pixelHeight = imageData.height;
+          // the box width, not the rendered bitmap).
+          pixelWidth = size.width;
+          pixelHeight = size.height;
         }
       }
 
@@ -303,6 +283,7 @@ export async function saveProject(): Promise<void> {
       dpi: doc.dpi,
       paths: state.paths,
       guides: useUIStore.getState().guides,
+      layerPixelFormat: 'rgba16-lz4',
     };
 
     const manifestJson = JSON.stringify(manifest);

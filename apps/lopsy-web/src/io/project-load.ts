@@ -7,7 +7,7 @@
 import { useEditorStore } from '../app/editor-store';
 import { useUIStore } from '../app/ui-store';
 import { getEngine } from '../engine-wasm/engine-state';
-import { initWasm, uploadLayerPixels, uploadLayerMask } from '../engine-wasm/wasm-bridge';
+import { initWasm, uploadLayerPixels, uploadLayerMask, uploadLayerPixelsCompressedU16 } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync, syncDocumentSize, forgetTextLayerLayout } from '../engine-wasm/engine-sync';
 import { extractFamilyName } from '../utils/font-loader';
 import { pixelDataManager } from '../engine/pixel-data-manager';
@@ -302,6 +302,12 @@ export async function loadProject(file: File): Promise<void> {
 
         const blob = blobs[s.pixelDataIndex];
         if (!blob) continue;
+
+        if (manifest.layerPixelFormat === 'rgba16-lz4') {
+          // Placed at the layer's x/y, which flushLayerSync gave the engine above.
+          uploadLayerPixelsCompressedU16(engine, s.id, blob);
+          continue;
+        }
 
         const decompressed = await decompressBytes(blob);
         // Prefer the recorded blob dimensions; fall back to the layer's logical
