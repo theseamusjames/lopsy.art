@@ -2,7 +2,11 @@
 //! set or clear a document's develop settings. The settings are data read
 //! by the compositor every frame; no layer pixels change.
 
+use lopsy_core::develop_stats;
 use lopsy_core::raf::develop::RawDevelopSettings;
+
+use crate::document::{compositor, thumbnail_gpu};
+use crate::gpu::read::Read;
 
 use crate::develop::{curve_texels, RawDevelopState, CURVE_WIDTH};
 use crate::engine::EngineInner;
@@ -66,6 +70,30 @@ pub fn clear_raw_develop(engine: &mut EngineInner) {
         engine.texture_pool.release(texture);
     }
     engine.needs_recomposite = true;
+}
+
+/// Long edge of the downscaled copy the histogram is counted from.
+pub const HISTOGRAM_MAX_EDGE: u32 = 512;
+
+/// The histogram of what the user sees: the composite after the RAW
+/// develop stage and the image adjustments (before the final blit),
+/// box-downscaled on the GPU to at most `HISTOGRAM_MAX_EDGE` on its long
+/// edge, read back as RGBA8 and binned on the CPU into 4 × 256 bins: red,
+/// green, blue, then Rec. 709 luminance of the encoded values
+/// (`lopsy_core::develop_stats`). Draws the frame first if it is stale.
+/// Changes nothing in the document. A Lab document's composite is encoded
+/// Lab, so its bins are not RGB.
+pub fn read_develop_histogram(engine: &mut EngineInner) -> Read<Vec<u32>> {
+    if engine.needs_recomposite {
+        compositor::render(engine);
+    }
+    let composite = engine.composite_texture;
+    if engine.texture_pool.get(composite).is_none() {
+        return Read::ready(Ok(vec![0; develop_stats::HISTOGRAM_LEN]));
+    }
+    let (w, h) = (engine.doc_width, engine.doc_height);
+    thumbnail_gpu::read_box_thumbnail(&*engine, composite, w, h, HISTOGRAM_MAX_EDGE, thumbnail_gpu::COLOUR)
+        .map(|thumb| develop_stats::histogram_from_rgba8(thumb.get(8..).unwrap_or(&[])))
 }
 
 /// `set_raw_develop` with the settings as the JSON `setRawDevelop` takes.

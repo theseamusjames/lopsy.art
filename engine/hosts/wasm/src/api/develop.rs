@@ -6,6 +6,7 @@
 
 use wasm_bindgen::prelude::*;
 
+use crate::readback::{read, readback_export};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "setRawDevelop")]
@@ -16,4 +17,30 @@ pub fn set_raw_develop(engine: &mut Engine, json: &str) -> Result<(), JsError> {
 #[wasm_bindgen(js_name = "clearRawDevelop")]
 pub fn clear_raw_develop(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_raw_develop(&mut engine.inner)
+}
+
+readback_export! {
+    /// 1024 bins of the displayed result: red 0..=255, green, blue, then
+    /// Rec. 709 luminance of the encoded values. Wrap with `'any-time'`.
+    #[wasm_bindgen(js_name = "readDevelopHistogram")]
+    pub fn read_develop_histogram(engine) -> Result<Vec<u32>> {
+        read(lopsy_engine::commands::develop::read_develop_histogram(engine))
+    }
+}
+
+/// Auto tone: the histogram (as `readDevelopHistogram` returns it) of the
+/// render with `currentJson` applied, and the current
+/// `{exposure, contrast, highlights, shadows, whites, blacks}`; returns the
+/// new values as the same JSON.
+#[wasm_bindgen(js_name = "autoTone")]
+pub fn auto_tone(histogram: &[u32], current_json: &str) -> Result<String, JsError> {
+    lopsy_core::develop_stats::auto_tone_json(histogram, current_json).map_err(|e| JsError::new(&e))
+}
+
+/// Grey-world white balance of linear camera RGB (RGBA f32 from
+/// `rafRenderBinnedLinear` or `rafRenderLinearBand`): `[r, g, b]` wbRatio
+/// multipliers relative to as shot, green = 1.
+#[wasm_bindgen(js_name = "rafAutoWhiteBalance")]
+pub fn raf_auto_white_balance(linear_rgba: &[f32]) -> Vec<f32> {
+    lopsy_core::develop_stats::auto_white_balance(linear_rgba).to_vec()
 }
