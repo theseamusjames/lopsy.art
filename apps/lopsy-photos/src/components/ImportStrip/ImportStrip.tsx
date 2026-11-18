@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { useImportProgress } from '../../app/hooks';
 import { useUi } from '../../app/store';
+import { getBackend } from '../../app/backend-registry';
 import { estimateLeft, importStats } from '../../import/import-progress';
 import { formatBytes, plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
@@ -28,18 +29,30 @@ export function ImportStrip() {
     return () => clearInterval(t);
   }, [progress]);
 
+  const resume = () => {
+    const session = useUi.getState().connection?.session;
+    if (!session) return;
+    getBackend()
+      .resumeImports(session)
+      .then((next) => setImportJob(next))
+      .catch((error: unknown) => console.warn('The import could not be resumed', error));
+  };
+
   const stats = useMemo(() => (progress ? importStats(progress) : null), [progress]);
   if (!job || !progress || !stats) return null;
 
   const left = progress.finished ? null : estimateLeft(stats, now - started.current);
-  const headline = progress.finished
+  const paused = progress.finished && stats.paused > 0;
+  const headline = paused
+    ? `Import paused · ${plural(stats.paused, 'photo')} still to go`
+    : progress.finished
     ? `Imported ${plural(stats.done, 'photo')}${stats.duplicates > 0 ? `, skipped ${stats.duplicates} already in the library` : ''}`
     : `Importing ${stats.settled.toLocaleString()} of ${plural(stats.total, 'photo')} · ${formatBytes(stats.totalBytes - stats.sentBytes)} left`;
 
   return (
     <section className={styles.strip} aria-label="Import" aria-live="polite">
       <div className={styles.row}>
-        {progress.finished && <Check size={16} className={styles.ok} />}
+        {progress.finished && !paused && <Check size={16} className={styles.ok} />}
         <span className={styles.headline}>{headline}</span>
         {left && <span className={styles.muted}>{left}</span>}
         {stats.failed.length > 0 && (
@@ -48,12 +61,21 @@ export function ImportStrip() {
           </Button>
         )}
         <span className={styles.spacer} />
-        {progress.finished ? (
+        {paused ? (
+          <Button size="sm" variant="primary" onClick={resume}>
+            Resume
+          </Button>
+        ) : progress.finished ? (
           <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
         ) : (
-          <Button size="sm" onClick={() => job.cancel()}>
-            Stop
-          </Button>
+          <>
+            <Button size="sm" onClick={() => job.pause()}>
+              Pause
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => job.cancel()}>
+              Stop
+            </Button>
+          </>
         )}
       </div>
       {!progress.finished && (

@@ -36,6 +36,9 @@ interface StartScreenProps {
   error: string | null;
   onChoose: (choice: StorageChoice) => void;
   onReconnect: (offer: ReconnectOffer) => void;
+  /** The library another tab of this browser has open, if opening it was refused for that. */
+  busyKind: StorageChoice | null;
+  onTakeOver: (kind: StorageChoice) => void;
 }
 
 function reopenWords(offer: ReconnectOffer): string {
@@ -49,7 +52,7 @@ function reopenWords(offer: ReconnectOffer): string {
   }
 }
 
-export function StartScreen({ choices, offer, connecting, error, onChoose, onReconnect }: StartScreenProps) {
+export function StartScreen({ choices, offer, connecting, error, onChoose, onReconnect, busyKind, onTakeOver }: StartScreenProps) {
   return (
     <main className={styles.screen}>
       <div className={styles.column}>
@@ -60,7 +63,17 @@ export function StartScreen({ choices, offer, connecting, error, onChoose, onRec
         </p>
         <p className={styles.lead}>Your photos are stored where you choose, never on Lopsy’s servers.</p>
 
-        {offer && (
+        {busyKind && (
+          <div className={styles.busy} role="alert">
+            <p>This library is open in another tab. Only one tab can change it at a time.</p>
+            <Button variant="primary" onClick={() => onTakeOver(busyKind)}>
+              Use it here
+            </Button>
+            <p className={styles.busyNote}>The other tab stops saving changes and asks to be reloaded.</p>
+          </div>
+        )}
+
+        {offer && !busyKind && (
           <div className={styles.reopen}>
             <Button variant="primary" size="lg" disabled={connecting !== null} onClick={() => onReconnect(offer)}>
               {connecting === offer.kind ? <LoaderCircle size={16} className={styles.spin} /> : CHOICES[offer.kind].icon}

@@ -3,7 +3,7 @@
  * importer and the export job.
  */
 
-import type { AssetId, LibrarySession, PreviewRef } from '@lopsy/photos-core/library/types';
+import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
 import type { StorageAdapter, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { ExportProgress as CoreProgress, ExportResult } from '@lopsy/photos-core/export/types';
@@ -14,7 +14,11 @@ import { GoogleDriveAdapter } from '@lopsy/photos-core/storage/google-drive/driv
 import { IndexedDbUploadSessionStore } from '@lopsy/photos-core/storage/google-drive/upload-sessions';
 import { fetchGoogleAccount, GoogleTokenSource } from '@lopsy/photos-core/auth/google-token-source';
 import { isStorageError } from '@lopsy/photos-core/storage/errors';
-import { startImport } from '@lopsy/photos-core/import/importer';
+import { resumeImports, startImport } from '@lopsy/photos-core/import/importer';
+import { OpfsStagingStore, type StagingStore } from '@lopsy/photos-core/import/staging';
+import { IndexedDbImportQueueStore, type ImportQueueStore } from '@lopsy/photos-core/import/queue-store';
+import { openAccountCaches, type AccountCaches } from '@lopsy/photos-core/cache/account-caches';
+import { LibraryBusyError } from '@lopsy/photos-core/library/lock';
 import { createBrowserPreviewRenderer } from '@lopsy/photos-core/import/browser-preview-renderer';
 import { startExport } from '@lopsy/photos-core/export/exporter';
 import {
@@ -22,6 +26,8 @@ import {
   ConnectCancelled,
   type Connection,
   type ConnectOptions,
+  type EditPreviews,
+  type LoadOriginalOptions,
   type ExportJob,
   type ExportProgress,
   type ExportRequest,
@@ -40,7 +46,37 @@ import {
 } from './connection-memory';
 import { ensureReadWrite, loadFolderHandle, pickFolder, saveFolderHandle } from './folder-handle-store';
 import { fromCoreProgress, toExportDestination, toExportSelection, toExportSettings } from './export-mapping';
-import { getPreviewSource } from './preview-source';
+import { getPreviewSource, setPreviewSource } from './preview-source';
+import { storeEditPreviews } from './edit-previews';
+import { guardSession } from '../guard-session';
+import { showToast } from '../toasts';
+import { downloadBlob } from '../download';
+
+/** What a session needs beyond the LibrarySession itself. */
+interface SessionExtras {
+  readonly kind: StorageChoice;
+  readonly tokenSource: GoogleTokenSource | null;
+  /** Device caches; null for the browser's own storage, whose files are already on the device. */
+  readonly caches: AccountCaches | null;
+  readonly staging: StagingStore | null;
+  readonly queue: ImportQueueStore | null;
+}
+
+/** The device-cache folder for an account: the Google `sub`, or 'local' for a picked folder. */
+export function cacheAccountId(kind: StorageChoice, owner: string): string | null {
+  if (kind === 'browser') return null;
+  if (kind === 'local-folder') return 'local';
+  return /^[A-Za-z0-9_-]{1,128}$/.test(owner) ? owner : null;
+}
+
+async function optional<T>(open: () => Promise<T>): Promise<T | null> {
+  try {
+    return await open();
+  } catch (error) {
+    console.warn('A device store could not be opened; carrying on without it', error);
+    return null;
+  }
+}
 
 interface Opened {
   readonly adapter: StorageAdapter;
@@ -58,16 +94,7 @@ function today(): string {
 /** Hands a finished download export to the browser. */
 function downloadResult(result: ExportResult): void {
   const file = result.zip ?? result.files[0];
-  if (!file) return;
-  const url = URL.createObjectURL(file.blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = file.name;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  // Give the download a moment to start before the URL goes.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  if (file) downloadBlob(file.blob, file.name);
 }
 
 function messageOf(error: unknown): string {
@@ -75,7 +102,9 @@ function messageOf(error: unknown): string {
 }
 
 export class RealBackend implements PhotosBackend {
-  private readonly tokenSources = new WeakMap<LibrarySession, GoogleTokenSource>();
+  private readonly extras = new WeakMap<LibrarySession, SessionExtras>();
+  /** Storage opened for a library another tab holds, kept so "Use it here" needs no second sign-in. */
+  private busy: { readonly kind: StorageChoice; readonly opened: Opened } | null = null;
   private readonly previewRenderer = createBrowserPreviewRenderer();
 
   listStorageOptions(): readonly StorageChoice[] {
@@ -89,13 +118,30 @@ export class RealBackend implements PhotosBackend {
   }
 
   async connect(kind: StorageChoice, options: ConnectOptions = {}): Promise<Connection> {
-    const opened = await this.openStorage(kind, options.reconnect === true);
-    const session = await openLibrary({
-      adapter: opened.adapter,
-      store: new IndexedDbLocalStore(libraryStoreName(kind, opened.owner)),
-      deviceName: describeDevice(navigator.userAgent),
-    });
-    if (opened.tokenSource) this.tokenSources.set(session, opened.tokenSource);
+    const reuse = options.takeOver === true && this.busy?.kind === kind ? this.busy.opened : null;
+    this.busy = null;
+    const opened = reuse ?? (await this.openStorage(kind, options.reconnect === true));
+    let rawSession: LibrarySession;
+    try {
+      rawSession = await openLibrary({
+        adapter: opened.adapter,
+        store: new IndexedDbLocalStore(libraryStoreName(kind, opened.owner)),
+        deviceName: describeDevice(navigator.userAgent),
+        takeOver: options.takeOver === true,
+      });
+    } catch (error) {
+      if (error instanceof LibraryBusyError) this.busy = { kind, opened };
+      throw error;
+    }
+    const session = guardSession(rawSession, (message) => showToast(message));
+    const accountId = cacheAccountId(kind, opened.owner);
+    const [caches, staging, queue] = await Promise.all([
+      accountId === null ? null : optional(() => openAccountCaches(accountId)),
+      optional(() => OpfsStagingStore.open(session.libraryId)),
+      optional(() => IndexedDbImportQueueStore.open()),
+    ]);
+    this.extras.set(session, { kind, tokenSource: opened.tokenSource, caches, staging, queue });
+    setPreviewSource(caches ? { read: (s, ref) => caches.previews.readPreview(s.adapter, ref.fileId) } : null);
     saveLastConnection({ kind, label: opened.label });
     return { session, accountLabel: opened.label };
   }
@@ -146,17 +192,52 @@ export class RealBackend implements PhotosBackend {
   }
 
   async reauthorize(session: LibrarySession): Promise<void> {
-    const tokenSource = this.tokenSources.get(session);
+    const tokenSource = this.extras.get(session)?.tokenSource;
     if (tokenSource) await tokenSource.requestInteractive();
     await session.syncNow();
   }
 
   startImport(files: readonly File[], session: LibrarySession, options: Partial<ImportOptions> = {}): ImportJob {
-    return startImport(files, { session, previewRenderer: this.previewRenderer, options });
+    const extras = this.extras.get(session);
+    return startImport(files, {
+      session,
+      previewRenderer: this.previewRenderer,
+      options,
+      ...(extras?.queue ? { queueStore: extras.queue } : {}),
+      ...(extras?.staging ? { staging: extras.staging } : {}),
+    });
+  }
+
+  async resumeImports(session: LibrarySession): Promise<ImportJob | null> {
+    const extras = this.extras.get(session);
+    if (!extras?.queue) return null;
+    return resumeImports({
+      session,
+      previewRenderer: this.previewRenderer,
+      queueStore: extras.queue,
+      ...(extras.staging ? { staging: extras.staging } : {}),
+    });
   }
 
   readPreview(session: LibrarySession, ref: PreviewRef): Promise<Blob> {
     return getPreviewSource().read(session, ref);
+  }
+
+  loadOriginal(session: LibrarySession, asset: Asset, options: LoadOriginalOptions = {}): Promise<Blob> {
+    const caches = this.extras.get(session)?.caches;
+    if (caches) return caches.originals.readOriginal(session.adapter, asset, options);
+    return session.adapter.readContent(asset.fileId, options.signal ? { signal: options.signal } : {});
+  }
+
+  pinOriginal(session: LibrarySession, asset: Asset): () => void {
+    const caches = this.extras.get(session)?.caches;
+    if (!caches) return () => {};
+    caches.originals.pin(asset.sha256);
+    return () => caches.originals.unpin(asset.sha256);
+  }
+
+  storeEditPreviews(session: LibrarySession, versionId: VersionId, previews: EditPreviews): Promise<void> {
+    return storeEditPreviews(session, versionId, previews, this.extras.get(session)?.caches?.previews ?? null);
   }
 
   async trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
@@ -260,7 +341,8 @@ export class RealBackend implements PhotosBackend {
   }
 
   async disconnect(session: LibrarySession): Promise<void> {
-    const tokenSource = this.tokenSources.get(session);
+    const tokenSource = this.extras.get(session)?.tokenSource;
+    setPreviewSource(null);
     try {
       await session.close();
     } finally {
