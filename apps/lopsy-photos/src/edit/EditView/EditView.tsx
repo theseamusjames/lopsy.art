@@ -84,6 +84,13 @@ export function EditView({
   const savedRecipe = committed?.base === version.recipe ? applyChanges(version.recipe, committed.changes) : version.recipe;
   const shownRecipe = useMemo(() => (draft ? applyChanges(savedRecipe, draft) : savedRecipe), [savedRecipe, draft]);
 
+  // A committed edit only bridges the moment until the library hands back
+  // the new recipe; once it has, an undo back to the old recipe object must
+  // not bring the edit back.
+  useEffect(() => {
+    setCommitted(null);
+  }, [version.recipe]);
+
   useEffect(() => {
     engine?.setRecipe(isBefore ? beforeRecipe(shownRecipe) : shownRecipe);
   }, [engine, shownRecipe, isBefore]);
