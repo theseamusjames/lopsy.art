@@ -83,7 +83,11 @@ export class TestMemoryAdapter implements StorageAdapter {
     return this.entry(id).file;
   }
 
+  /** The `resumeKey` of every createFile call, in order (undefined when none). */
+  readonly resumeKeys: (string | undefined)[] = [];
+
   async createFile(file: NewFile, content: Blob, options?: WriteOptions): Promise<StoredFile> {
+    this.resumeKeys.push(options?.resumeKey);
     this.entry(file.parentId);
     const signal = options?.signal;
     const aborted = () => new StorageError('aborted', 'Upload cancelled');
