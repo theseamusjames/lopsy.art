@@ -42,8 +42,9 @@ test.describe('Edit view on a RAF', () => {
     const fitPercent = Number((await page.getByTestId('zoom-readout').textContent())?.replace('%', ''));
     expect(fitPercent).toBeLessThan(50);
 
+    // On RAW files Temperature reads and takes Kelvin.
     const temperature = page.getByLabel('Temperature value');
-    await temperature.fill('60');
+    await temperature.fill('9000');
     await temperature.press('Enter');
     await waitForPreview(page, 0, 5 * 60_000);
     const warm = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
@@ -52,7 +53,7 @@ test.describe('Edit view on a RAF', () => {
     expect(warm.mean).toBeLessThan(250);
     expect(warm.spread).toBeGreaterThan(5);
 
-    await temperature.fill('-60');
+    await temperature.fill('3000');
     await temperature.press('Enter');
     await waitForPreview(page, 1, 5 * 60_000);
     const cool = await imageStats(page, { kind: 'preview', index: 1, which: 'screen' });
@@ -62,7 +63,7 @@ test.describe('Edit view on a RAF', () => {
 
     // RAW gets the camera's profiles and Auto white balance.
     const profiles = page.getByRole('combobox', { name: 'Profile' }).locator('option');
-    await expect(profiles).toContainText(['Camera', 'Velvia', 'Neutral', 'Monochrome']);
+    await expect(profiles).toContainText(['Camera', 'Standard', 'Neutral', 'Monochrome']);
     await page.getByRole('button', { name: 'Auto White balance' }).click();
     await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('Auto white balance');
     await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
