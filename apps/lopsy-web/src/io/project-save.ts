@@ -1,6 +1,6 @@
 /**
- * Project Save — serializes the full Lopsy document state to a .lopsy file
- * and triggers a browser download.
+ * Project Save — serializes the full Lopsy document state to .lopsy bytes
+ * (serializeProject) and saves them as a download (saveProject).
  *
  * File format (binary):
  *   [4 bytes: manifest JSON byte length (uint32 LE)]
@@ -229,119 +229,124 @@ async function compressBytes(bytes: Uint8Array): Promise<Uint8Array> {
 }
 
 /**
+ * Serialize the current document to `.lopsy` bytes. Pending strokes and
+ * transforms are committed first so the file holds what the user sees.
+ * Throws when the engine is not ready or a readback fails.
+ */
+export async function serializeProject(): Promise<ArrayBuffer> {
+  if (!getEngine()) throw new Error('engine not ready.');
+
+  finalizePendingStrokeGlobal();
+  // A live multi-layer transform shows its text resampled; baking it
+  // re-renders that text sharp, which is what the file must hold (#1527).
+  commitLayerTransform();
+  // Mask readbacks are lazy (#756, #780); read back any mask whose JS
+  // copy lags the GPU so the file contains the current mask.
+  await materializeAllMaskData();
+  const state = useEditorStore.getState();
+  flushLayerSync(state);
+
+  const { document: doc } = state;
+
+  const pixelBlobs: Uint8Array[] = [];
+  const maskBlobs: Uint8Array[] = [];
+
+  const serializedLayers: SerializedLayer[] = [];
+  for (const layer of doc.layers) {
+    let pixelDataIndex = -1;
+    let maskDataIndex = -1;
+    let pixelWidth = 0;
+    let pixelHeight = 0;
+
+    // Read pixel data for raster layers (not groups — they have no texture)
+    if (layer.type !== 'group') {
+      const imageData = await readLayerAsImageData(layer.id);
+      if (imageData) {
+        const raw = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
+        const compressed = await compressBytes(raw);
+        pixelDataIndex = pixelBlobs.length;
+        pixelBlobs.push(compressed);
+        // Record the blob's true dimensions. For text/shape layers these
+        // differ from the layer's logical width/height (e.g. text width is
+        // the box width, not the rendered bitmap), so the load path can't
+        // infer them and must read them back from here.
+        pixelWidth = imageData.width;
+        pixelHeight = imageData.height;
+      }
+    }
+
+    // Read mask data if present
+    if (layer.mask && layer.mask.data.length > 0) {
+      const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
+      maskDataIndex = maskBlobs.length;
+      maskBlobs.push(maskBytes);
+    }
+
+    serializedLayers.push(serializeLayer(layer, pixelDataIndex, maskDataIndex, pixelWidth, pixelHeight));
+  }
+
+  const manifest: LopsyManifest = {
+    version: FORMAT_VERSION,
+    documentName: doc.name,
+    documentWidth: doc.width,
+    documentHeight: doc.height,
+    backgroundColor: doc.backgroundColor,
+    layers: serializedLayers,
+    layerOrder: doc.layerOrder,
+    rootGroupId: doc.rootGroupId ?? null,
+    activeLayerId: doc.activeLayerId ?? null,
+    colorMode: doc.colorMode,
+    indexedPalette: doc.indexedPalette,
+    dpi: doc.dpi,
+    paths: state.paths,
+    guides: useUIStore.getState().guides,
+  };
+
+  const manifestJson = JSON.stringify(manifest);
+  const manifestBytes = new TextEncoder().encode(manifestJson);
+
+  // Build the pixel-blob size table: [count: u32 LE][size0: u32 LE][size1: u32 LE]...
+  const allBlobs = [...pixelBlobs, ...maskBlobs];
+  const blobSizeTableLen = (1 + allBlobs.length) * 4;
+  const blobSizeTable = new Uint8Array(blobSizeTableLen);
+  const blobSizeView = new DataView(blobSizeTable.buffer);
+  blobSizeView.setUint32(0, allBlobs.length, true);
+  let offset = 4;
+  for (const blob of allBlobs) {
+    blobSizeView.setUint32(offset, blob.length, true);
+    offset += 4;
+  }
+
+  // Header: magic(6) + version(2) + manifest length(4)
+  const header = new Uint8Array(12);
+  header.set(LOPSY_MAGIC, 0);
+  const headerView = new DataView(header.buffer);
+  headerView.setUint16(6, FORMAT_VERSION, true);
+  headerView.setUint32(8, manifestBytes.length, true);
+
+  const parts = [header, manifestBytes, blobSizeTable, ...allBlobs];
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let cursor = 0;
+  for (const part of parts) {
+    out.set(part, cursor);
+    cursor += part.length;
+  }
+  return out.buffer;
+}
+
+/**
  * Save the current project to a .lopsy file and trigger a download.
  */
 export async function saveProject(): Promise<void> {
-  const engine = getEngine();
-  if (!engine) {
+  if (!getEngine()) {
     notifyError('Cannot save: engine not ready.');
     return;
   }
 
   try {
-    finalizePendingStrokeGlobal();
-    // A live multi-layer transform shows its text resampled; baking it
-    // re-renders that text sharp, which is what the file must hold (#1527).
-    commitLayerTransform();
-    // Mask readbacks are lazy (#756, #780); read back any mask whose JS
-    // copy lags the GPU so the file contains the current mask.
-    await materializeAllMaskData();
-    const state = useEditorStore.getState();
-    flushLayerSync(state);
-
-    const { document: doc } = state;
-
-    const pixelBlobs: Uint8Array[] = [];
-    const maskBlobs: Uint8Array[] = [];
-
-    const serializedLayers: SerializedLayer[] = [];
-    for (const layer of doc.layers) {
-      let pixelDataIndex = -1;
-      let maskDataIndex = -1;
-      let pixelWidth = 0;
-      let pixelHeight = 0;
-
-      // Read pixel data for raster layers (not groups — they have no texture)
-      if (layer.type !== 'group') {
-        const imageData = await readLayerAsImageData(layer.id);
-        if (imageData) {
-          const raw = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
-          const compressed = await compressBytes(raw);
-          pixelDataIndex = pixelBlobs.length;
-          pixelBlobs.push(compressed);
-          // Record the blob's true dimensions. For text/shape layers these
-          // differ from the layer's logical width/height (e.g. text width is
-          // the box width, not the rendered bitmap), so the load path can't
-          // infer them and must read them back from here.
-          pixelWidth = imageData.width;
-          pixelHeight = imageData.height;
-        }
-      }
-
-      // Read mask data if present
-      if (layer.mask && layer.mask.data.length > 0) {
-        const maskBytes = new Uint8Array(layer.mask.data.buffer, layer.mask.data.byteOffset, layer.mask.data.byteLength);
-        maskDataIndex = maskBlobs.length;
-        maskBlobs.push(maskBytes);
-      }
-
-      serializedLayers.push(serializeLayer(layer, pixelDataIndex, maskDataIndex, pixelWidth, pixelHeight));
-    }
-
-    const manifest: LopsyManifest = {
-      version: FORMAT_VERSION,
-      documentName: doc.name,
-      documentWidth: doc.width,
-      documentHeight: doc.height,
-      backgroundColor: doc.backgroundColor,
-      layers: serializedLayers,
-      layerOrder: doc.layerOrder,
-      rootGroupId: doc.rootGroupId ?? null,
-      activeLayerId: doc.activeLayerId ?? null,
-      colorMode: doc.colorMode,
-      indexedPalette: doc.indexedPalette,
-      dpi: doc.dpi,
-      paths: state.paths,
-      guides: useUIStore.getState().guides,
-    };
-
-    const manifestJson = JSON.stringify(manifest);
-    const manifestBytes = new TextEncoder().encode(manifestJson);
-
-    // Build the pixel-blob size table: [count: u32 LE][size0: u32 LE][size1: u32 LE]...
-    const allBlobs = [...pixelBlobs, ...maskBlobs];
-    const blobSizeTableLen = (1 + allBlobs.length) * 4;
-    const blobSizeTable = new Uint8Array(blobSizeTableLen);
-    const blobSizeView = new DataView(blobSizeTable.buffer);
-    blobSizeView.setUint32(0, allBlobs.length, true);
-    let offset = 4;
-    for (const blob of allBlobs) {
-      blobSizeView.setUint32(offset, blob.length, true);
-      offset += 4;
-    }
-
-    // Header: magic(6) + version(2) + manifest length(4)
-    const header = new Uint8Array(12);
-    header.set(LOPSY_MAGIC, 0);
-    const headerView = new DataView(header.buffer);
-    headerView.setUint16(6, FORMAT_VERSION, true);
-    headerView.setUint32(8, manifestBytes.length, true);
-
-    // Copy each Uint8Array into a plain ArrayBuffer for Blob compatibility.
-    // Slice alone can return SharedArrayBuffer, so we copy into a fresh ArrayBuffer.
-    const toArrayBuffer = (u: Uint8Array): ArrayBuffer => {
-      const out = new ArrayBuffer(u.length);
-      new Uint8Array(out).set(u);
-      return out;
-    };
-    const parts: BlobPart[] = [
-      toArrayBuffer(header),
-      toArrayBuffer(manifestBytes),
-      toArrayBuffer(blobSizeTable),
-      ...allBlobs.map(toArrayBuffer),
-    ];
-
-    const blob = new Blob(parts, { type: 'application/octet-stream' });
+    const bytes = await serializeProject();
+    const doc = useEditorStore.getState().document;
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
