@@ -21,7 +21,15 @@ import {
 import { isStorageError } from '../storage/errors';
 import { EMPTY_BOOKKEEPING, type LocalStore, type SyncBookkeeping } from './local-store';
 import { MergeStore, type RecipeWrite } from './merge-store';
-import { DEFAULT_RECIPE, recipeHash, recipeToPaths, type Recipe } from './recipe';
+import {
+  DEFAULT_RECIPE,
+  recipeHash,
+  recipeToPaths,
+  type CropRect,
+  type CurvePoint,
+  type Recipe,
+  type RecipeLeaf,
+} from './recipe';
 import { loadNewestSnapshot } from './snapshot';
 import { SyncEngine, type SyncTimers } from './sync';
 import type {
@@ -76,14 +84,18 @@ export class LibraryReadOnlyError extends Error {
   }
 }
 
+function leafJson(value: RecipeLeaf): Json {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return (value as readonly CurvePoint[]).map((p) => ({ x: p.x, y: p.y }));
+  const crop = value as CropRect;
+  return { x: crop.x, y: crop.y, width: crop.width, height: crop.height };
+}
+
 /** The recipe as `recipe.*` field values. */
 export function recipeFields(recipe: Recipe): Record<string, Json> {
   const out: Record<string, Json> = {};
   for (const [path, value] of Object.entries(recipeToPaths(recipe))) {
-    out[`recipe.${path}`] =
-      typeof value === 'object' && value !== null
-        ? { x: value.x, y: value.y, width: value.width, height: value.height }
-        : value;
+    out[`recipe.${path}`] = leafJson(value);
   }
   return out;
 }
