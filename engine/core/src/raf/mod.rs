@@ -19,6 +19,7 @@
 pub mod base_curves;
 pub mod compression;
 pub mod dcp;
+pub mod develop;
 mod markesteijn;
 pub mod wb_presets;
 pub mod xtrans;
@@ -173,6 +174,16 @@ pub struct RafBandPixels {
 /// same rows of a whole-frame render.
 pub fn render_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
     let w = params.width as usize;
+    let src_h = check_band(src, params, band)?;
+    let rgb = render_rgb(src, w, src_h, params);
+    Ok(orient_band(&rgb, params, band, true))
+}
+
+/// Check that `src` holds exactly mosaic rows `[band.src_y0, band.src_y1)`
+/// of a frame described by `params`, with the band inside it at CFA phase 0.
+/// Returns the number of source rows.
+fn check_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Result<usize, String> {
+    let w = params.width as usize;
     let valid = band.src_y0.is_multiple_of(6)
         && band.src_y0 <= band.y0
         && band.y0 < band.y1
@@ -185,12 +196,18 @@ pub fn render_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Resu
     if src.len() != w * src_h {
         return Err(format!("RAF band source has {} values, expected {}", src.len(), w * src_h));
     }
+    Ok(src_h)
+}
 
-    let rgb = render_rgb(src, w, src_h, params);
+/// Cut the band's own rows out of `rgb` (rendered from the band's source
+/// rows), convert to RGBA (clamped to 0..1 when `clamp`) and apply the EXIF
+/// orientation, placing the result in the oriented image.
+fn orient_band(rgb: &[f32], params: &RafRenderParams, band: RafBand, clamp: bool) -> RafBandPixels {
+    let w = params.width as usize;
     let skip = (band.y0 - band.src_y0) as usize * w * 3;
     let take = (band.y1 - band.y0) as usize * w * 3;
-    let rgba = rgb_to_rgba(&rgb[skip..skip + take]);
-    drop(rgb);
+    let rows = &rgb[skip..skip + take];
+    let rgba = if clamp { rgb_to_rgba(rows) } else { rgb_to_rgba_unclamped(rows) };
 
     let band_h = band.y1 - band.y0;
     let (ow, oh, pixels) =
@@ -201,7 +218,7 @@ pub fn render_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Resu
         6 | 7 => (params.height - band.y1, 0),
         _ => (0, band.y0),
     };
-    Ok(RafBandPixels { x, y, width: ow, height: oh, pixels })
+    RafBandPixels { x, y, width: ow, height: oh, pixels }
 }
 
 /// Decode a Fujifilm RAF file with production defaults (Markesteijn demosaic,
@@ -527,16 +544,38 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
 /// Each output pixel depends only on mosaic pixels within
 /// `RENDER_REACH_ROWS` of it, which is what makes banded rendering exact.
 pub fn render_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) -> Vec<f32> {
-    let cfa: [u8; 36] = params.cfa.as_slice().try_into().unwrap_or(DEFAULT_XTRANS_CFA);
+    let mut rgb_f32 = render_rgb_unsharpened(mosaic, w, h, params);
 
-    let mut rgb_f32 = if params.is_xtrans {
+    // ── Capture sharpening ──────────────────────────────────────
+    // A mild luma unsharp mask in display (gamma-encoded) space, to match
+    // the crispness of the camera-rendered JPEG / Preview. Kept modest
+    // (small radius, low amount) so it sharpens real edges without ringing
+    // and is off the demosaic critical path.
+    unsharp_mask_luma(&mut rgb_f32, w, h, CAPTURE_SHARPEN_AMOUNT);
+
+    rgb_f32
+}
+
+/// Demosaic a white-balanced mosaic (first row at CFA phase 0) to
+/// interleaved camera RGB, unclamped.
+fn demosaic_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) -> Vec<f32> {
+    let cfa: [u8; 36] = params.cfa.as_slice().try_into().unwrap_or(DEFAULT_XTRANS_CFA);
+    if params.is_xtrans {
         match params.demosaic {
             DemosaicMode::Markesteijn => xtrans::demosaic_xtrans(mosaic, w as u32, h as u32, &cfa),
             DemosaicMode::Nearest => xtrans::demosaic_nearest(mosaic, w as u32, h as u32, &cfa),
         }
     } else {
         demosaic::bilinear(mosaic, w as u32, h as u32, &cfa[..4])
-    };
+    }
+}
+
+/// `render_rgb` without its last step, capture sharpening: gamma-encoded
+/// sRGB, not yet clamped. Public so the develop tests can compare the GPU
+/// develop maths against today's look; not part of the import path.
+#[doc(hidden)]
+pub fn render_rgb_unsharpened(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) -> Vec<f32> {
+    let mut rgb_f32 = demosaic_rgb(mosaic, w, h, params);
 
     color::apply_matrix(&mut rgb_f32, &params.cam_to_srgb);
 
@@ -593,14 +632,15 @@ pub fn render_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderParams) 
 
     color::apply_srgb_gamma(&mut rgb_f32);
 
-    // ── Capture sharpening ──────────────────────────────────────
-    // A mild luma unsharp mask in display (gamma-encoded) space, to match
-    // the crispness of the camera-rendered JPEG / Preview. Kept modest
-    // (small radius, low amount) so it sharpens real edges without ringing
-    // and is off the demosaic critical path.
-    unsharp_mask_luma(&mut rgb_f32, w, h, CAPTURE_SHARPEN_AMOUNT);
-
     rgb_f32
+}
+
+fn rgb_to_rgba_unclamped(rgb: &[f32]) -> Vec<f32> {
+    let mut rgba = Vec::with_capacity(rgb.len() / 3 * 4);
+    for px in rgb.chunks_exact(3) {
+        rgba.extend_from_slice(&[px[0], px[1], px[2], 1.0]);
+    }
+    rgba
 }
 
 fn rgb_to_rgba(rgb: &[f32]) -> Vec<f32> {

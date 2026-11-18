@@ -464,7 +464,9 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     engine.effect_cache.end_frame(&mut unused);
     fx_cache::delete_textures(engine, unused);
 
-    // 4. Apply image adjustments (exposure, contrast, etc.) if any are active
+    // 4. Develop a RAW composite (linear camera RGB to sRGB), then apply
+    // image adjustments (exposure, contrast, etc.) if any are active
+    apply_raw_develop(engine);
     apply_image_adjustments(engine);
 
     // 4b. Quick mask overlay: translucent blue tint over unselected areas
@@ -1556,6 +1558,9 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
         }
     }
 
+    // Exports develop a RAW composite as the live frame does.
+    apply_raw_develop(engine);
+
     Ok(())
 }
 
@@ -1828,6 +1833,23 @@ fn has_any_adjustment(adj: &crate::engine::ImageAdjustmentState) -> bool {
         || adj.invert
         || adj.has_gradient_map
         || adj.cg_enabled
+}
+
+/// Develop the composite in place when a RAW develop stage is set: composite
+/// -> scratch A through `raw_develop.wgsl`, then copied back texel for texel.
+/// A no-op when `engine.raw_develop` is `None`.
+fn apply_raw_develop(engine: &EngineInner) {
+    let Some(state) = engine.raw_develop.as_ref() else {
+        return;
+    };
+    let (pass, units) = crate::develop::pass(engine, engine.composite_texture, state);
+    if !over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a)) {
+        return;
+    }
+    engine.gpu().unbind_textures(units);
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
 }
 
 /// Apply image adjustments (exposure, contrast, highlights, shadows, whites, blacks)

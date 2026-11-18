@@ -109,7 +109,16 @@ gpu/shaders/
     invert.wgsl, hue_sat.wgsl, sharpen.wgsl, noise.wgsl, posterize.wgsl, threshold.wgsl
   gradient/
     gradient_linear.wgsl, gradient_radial.wgsl
+  develop/
+    raw_develop.wgsl      # POC RAW develop: linear camera RGB → sRGB (src/develop/)
 ```
+
+The RAW develop stage (`src/develop/`, `commands/develop.rs`) is opt-in per
+document: `EngineInner::raw_develop` is `None` unless a host calls
+`setRawDevelop`, and the compositor then develops the composite before the
+image adjustments. Its CPU twin is `lopsy_core::raf::develop::develop_reference`;
+change the two together (`core/tests/raf_develop.rs`, and the render test
+in `tests/render.rs`).
 
 ### Adding an engine function JS can call
 

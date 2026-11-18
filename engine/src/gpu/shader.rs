@@ -153,6 +153,9 @@ pub const BUCKET_FILL_COLOR_MATCH_FRAG: &str = translated!("shape/bucket_fill_co
 // Color
 pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
 
+// Develop
+pub const RAW_DEVELOP_FRAG: &str = translated!("develop/raw_develop");
+
 /// Declares the typed shaders: each source tagged with the uniform struct
 /// its passes are created with. A test checks every struct against its
 /// source's `Params` block.
@@ -237,6 +240,7 @@ typed_shaders! {
     GAUSSIAN_BLUR: params::filters::GaussianBlurParams = GAUSSIAN_BLUR_FRAG;
     BOX_BLUR: params::filters::BoxBlurParams = BOX_BLUR_FRAG;
     COLOR_CONVERT: params::color::ColorConvertParams = COLOR_CONVERT_FRAG;
+    RAW_DEVELOP: params::develop::RawDevelopParams = RAW_DEVELOP_FRAG;
     GRADIENT_LINEAR: params::gradient::GradientLinearParams = GRADIENT_LINEAR_FRAG;
     GRADIENT_RADIAL: params::gradient::GradientRadialParams = GRADIENT_RADIAL_FRAG;
     SHAPE_FILL: params::shape::ShapeFillParams = SHAPE_FILL_FRAG;
@@ -399,6 +403,8 @@ pub struct ShaderPrograms {
     // Selection
     // Color
     pub color_convert: ShaderProgram<params::color::ColorConvertParams>,
+    // Develop
+    pub raw_develop: ShaderProgram<params::develop::RawDevelopParams>,
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
@@ -534,6 +540,7 @@ impl ShaderPrograms {
             // Selection
             // Color
             color_convert: compile(linker, &COLOR_CONVERT)?,
+            raw_develop: compile(linker, &RAW_DEVELOP)?,
             mask_luminance: compile(linker, &MASK_LUMINANCE)?,
             liquify_dab: compile(linker, &LIQUIFY_DAB)?,
             // Text

@@ -135,3 +135,34 @@ pub fn raf_render_band(
     let out = raf::render_band(src, &params, band).map_err(|e| JsError::new(&e))?;
     Ok(RafRenderedBand { x: out.x, y: out.y, width: out.width, height: out.height, pixels: out.pixels })
 }
+
+/// Render mosaic rows `[srcY0, srcY1)` (passed as `src`) into rows
+/// `[y0, y1)` of linear camera RGB for the develop stage: oriented RGBA f32
+/// at the as-shot white balance, unclamped, no tone or gamma. The same band
+/// shape as `rafRenderBand`.
+#[wasm_bindgen(js_name = "rafRenderLinearBand")]
+pub fn raf_render_linear_band(
+    src: &[f32],
+    params_json: &str,
+    y0: u32,
+    y1: u32,
+    src_y0: u32,
+    src_y1: u32,
+) -> Result<RafRenderedBand, JsError> {
+    let params: RafRenderParams = serde_json::from_str(params_json)
+        .map_err(|e| JsError::new(&format!("RAF params: {e}")))?;
+    let band = RafBand { y0, y1, src_y0, src_y1 };
+    let out = raf::develop::render_linear_band(src, &params, band).map_err(|e| JsError::new(&e))?;
+    Ok(RafRenderedBand { x: out.x, y: out.y, width: out.width, height: out.height, pixels: out.pixels })
+}
+
+/// The develop settings that reproduce `rafRenderBand`'s look (without its
+/// capture sharpening) from `rafRenderLinearBand`'s pixels, as the JSON
+/// `setRawDevelop` takes.
+#[wasm_bindgen(js_name = "rafDevelopDefaults")]
+pub fn raf_develop_defaults(params_json: &str) -> Result<String, JsError> {
+    let params: RafRenderParams = serde_json::from_str(params_json)
+        .map_err(|e| JsError::new(&format!("RAF params: {e}")))?;
+    serde_json::to_string(&raf::develop::develop_defaults(&params))
+        .map_err(|e| JsError::new(&format!("JSON serialize: {e}")))
+}
