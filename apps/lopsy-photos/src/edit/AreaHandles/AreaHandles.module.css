@@ -1,0 +1,53 @@
+.handles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.edge,
+.edgeFaint,
+.axis {
+  fill: none;
+  stroke: var(--color-text-primary);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 80%));
+}
+
+.edgeFaint {
+  stroke-dasharray: 6 5;
+  opacity: 0.8;
+}
+
+.axis {
+  stroke-dasharray: 2 4;
+}
+
+.handle,
+.move,
+.rotate,
+.feather {
+  fill: var(--color-bg-secondary);
+  stroke: var(--color-text-primary);
+  stroke-width: 2;
+  pointer-events: all;
+  cursor: grab;
+}
+
+.move {
+  fill: var(--color-accent);
+  cursor: move;
+}
+
+.rotate {
+  fill: var(--color-text-primary);
+  cursor: alias;
+}
+
+.feather {
+  fill: var(--color-bg-primary);
+  stroke-dasharray: 2 2;
+}

@@ -53,6 +53,11 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
   as one photo, the RAW in front, and counted once everywhere: All
   photos, Dates, Imports), a burst count, and a Lopsy-document count.
   Each badge opens or folds its stack.
+- **Previews follow edits.** A preset or pasted edits from the grid, a
+  new version, or a change from another device gets new previews in the
+  background, one photo at a time, while the Edit view is closed; the
+  **Saving and storage** panel shows "Updating N previews". A new
+  version with the same edit as another shows that one's preview at once.
 - **Stacks.** With **Group bursts** on, shots taken in quick succession
   show as one tile; its badge shows or folds the rest. Lopsy documents
   made from a photo are stacked behind it the same way, behind a

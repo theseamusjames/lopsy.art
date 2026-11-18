@@ -5,6 +5,7 @@ import type { Asset, AssetId, LibrarySession, LibraryView, PreviewRef, SyncStatu
 import type { ImportItemState, ImportJob, ImportProgress } from '@lopsy/photos-core/import/types';
 import type { ExportJob, ExportProgress } from './backend';
 import type { DownloadProgress, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
+import type { PreviewRefresher, PreviewRefreshProgress } from './preview-refresh';
 import { useUi } from './store';
 import { listExportPresets, listPresets } from '../library/presets-list';
 import type { ExportPreset, Preset } from '@lopsy/photos-core/library/types';
@@ -181,6 +182,14 @@ export function useImportProgress(job: ImportJob | null): ImportProgress | null 
   return useSyncExternalStore(
     job ? (l) => job.subscribe(l) : noSubscribe,
     () => (job ? job.getProgress() : null),
+  );
+}
+
+/** Background preview rendering's progress, or null when this backend has none. */
+export function usePreviewRefresh(refresher: PreviewRefresher | null): PreviewRefreshProgress | null {
+  return useSyncExternalStore(
+    refresher ? (l) => refresher.subscribe(l) : noSubscribe,
+    () => (refresher ? refresher.getProgress() : null),
   );
 }
 

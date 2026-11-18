@@ -13,16 +13,33 @@ interface FakeEngine {
   readonly recipes: Recipe[];
   readonly exports: ExportOptions[];
   isDisposed: boolean;
+  /** The resolution the photo is loaded at; ensureFullResolution raises it in place. */
+  resolution: 'working' | 'full';
+  upgrades: number;
 }
 
 function fakeEngine(): FakeEngine {
-  const fake: FakeEngine = { loads: [], recipes: [], exports: [], isDisposed: false, engine: undefined as unknown as DevelopEngine };
+  const fake: FakeEngine = {
+    loads: [],
+    recipes: [],
+    exports: [],
+    isDisposed: false,
+    resolution: 'working',
+    upgrades: 0,
+    engine: undefined as unknown as DevelopEngine,
+  };
   const engine: Partial<DevelopEngine> = {
-    load: async (source) => {
+    load: async (source, _format, _onProgress, options) => {
       fake.loads.push(await source.text());
+      fake.resolution = options?.resolution === 'full' ? 'full' : 'working';
       return { width: 10, height: 10 };
     },
     imageSize: () => ({ width: 4000, height: 3000 }),
+    isFullResolution: () => fake.resolution === 'full',
+    ensureFullResolution: async () => {
+      fake.upgrades++;
+      fake.resolution = 'full';
+    },
     setRecipe: (recipe) => {
       fake.recipes.push(recipe);
     },
@@ -112,6 +129,20 @@ describe('createEngineExportRenderer', () => {
     expect(fakes).toHaveLength(1);
     expect(fakes[0]?.loads).toEqual(['a', 'b']);
     expect(fakes[0]?.exports.map((e) => e.maxSize)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('loads small exports at the working size and brings the same decode up to full size when needed', async () => {
+    const r = renderer();
+    const signal = new AbortController().signal;
+    await r.render(assetA, harnessVersion(assetA), { ...DEFAULT_EXPORT_SETTINGS, maxLongEdge: 2048 }, signal);
+    expect(fakes[0]?.resolution).toBe('working');
+    await r.render(assetA, harnessVersion(assetA, warm), { ...DEFAULT_EXPORT_SETTINGS, maxLongEdge: null }, signal);
+    expect(fakes[0]?.resolution).toBe('full');
+    expect(fakes[0]?.loads).toEqual(['a']);
+    expect(fakes[0]?.upgrades).toBe(1);
+    await r.render(assetB, harnessVersion(assetB), { ...DEFAULT_EXPORT_SETTINGS, format: 'tiff', maxLongEdge: 1024 }, signal);
+    expect(fakes[0]?.resolution).toBe('full');
+    expect(fakes[0]?.upgrades).toBe(1);
   });
 
   it('stops at an aborted signal before loading', async () => {

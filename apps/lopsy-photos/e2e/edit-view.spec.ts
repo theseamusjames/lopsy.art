@@ -298,3 +298,57 @@ test.describe('Colour controls', () => {
     expect(after.blue - after.red).toBeGreaterThan(before.blue - before.red + 10);
   });
 });
+
+test.describe('Working image and keys', () => {
+  test('a large photo is edited at working size and exports at full size', async ({ page }) => {
+    await openHarness(page);
+    await openGeneratedImage(page, 4000, 3000);
+    await waitForReady(page);
+    // Fit is far below the full image's size; the readout says so against the full image.
+    const fit = Number((await page.getByTestId('zoom-readout').textContent())?.replace('%', ''));
+    expect(fit).toBeLessThan(40);
+    await waitForPreview(page, 0);
+    const preview = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
+    expect(Math.max(preview.width, preview.height)).toBe(2048);
+
+    await page.getByRole('button', { name: 'Export' }).click();
+    await page.waitForFunction(() => (window.__photosHarness?.exports.length ?? 0) > 0, null, { timeout: 120_000 });
+    const size = await page.evaluate(async () => {
+      const blob = window.__photosHarness?.exports[0]?.blob;
+      if (!blob) throw new Error('no export');
+      const bitmap = await createImageBitmap(blob);
+      return [bitmap.width, bitmap.height];
+    });
+    expect(size).toEqual([4000, 3000]);
+  });
+
+  test('100 % on a large photo loads its full resolution', async ({ page }) => {
+    await openHarness(page);
+    await openGeneratedImage(page, 4000, 3000);
+    await waitForReady(page);
+    await page.getByRole('button', { name: '100%' }).click();
+    await expect(page.getByTestId('zoom-readout')).toHaveText('100%');
+    await expect(page.getByTestId('loading-badge')).toHaveCount(0, { timeout: 60_000 });
+    await expect(page.getByTestId('zoom-readout')).toHaveText('100%');
+  });
+
+  test('? lists the shortcuts and Escape goes back, unless a tool is open', async ({ page }) => {
+    await openHarness(page);
+    await openGeneratedImage(page);
+    await waitForReady(page);
+    await page.locator('body').press('?');
+    const help = page.getByRole('dialog', { name: 'Edit shortcuts' });
+    await expect(help).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(help).toHaveCount(0);
+    await expect(page.getByTestId('edit-view')).toBeVisible();
+
+    await page.getByTitle('Crop', { exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('crop-tool')).toHaveCount(0);
+    await expect(page.getByTestId('edit-view')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('edit-view')).toHaveCount(0);
+  });
+});

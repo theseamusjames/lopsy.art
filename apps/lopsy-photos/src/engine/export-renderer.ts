@@ -36,7 +36,25 @@ function checkSignal(signal: AbortSignal): void {
   if (signal.aborted) throw new ExportAbortedError();
 }
 
-export function createEngineExportRenderer(options: EngineExportRendererOptions): ExportRenderer & { dispose(): void } {
+/** The version's previews at the grid's and Single view's sizes (photos-core PREVIEW_SIZES). */
+export interface RenderedPreviews {
+  readonly thumb: Blob;
+  readonly screen: Blob;
+}
+
+export interface EngineRenderer extends ExportRenderer {
+  /**
+   * Renders a version's thumb and screen previews on the same engine as
+   * exports, after any export queued before it (one render at a time).
+   */
+  renderPreviews(asset: Asset, version: Version, signal: AbortSignal): Promise<RenderedPreviews>;
+  dispose(): void;
+}
+
+const THUMB_LONG_EDGE = 512;
+const SCREEN_LONG_EDGE = 2048;
+
+export function createEngineExportRenderer(options: EngineExportRendererOptions): EngineRenderer {
   const idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
   const create = options.createEngine ?? createRealEngine;
   let engine: Promise<DevelopEngine> | null = null;
@@ -68,7 +86,12 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     return engine;
   };
 
-  const renderOne = async (asset: Asset, version: Version, settings: ExportSettings, signal: AbortSignal): Promise<Blob> => {
+  /**
+   * The engine with `asset` loaded at least at `resolution`: a photo loaded
+   * at the working size is brought up to full size in place when a larger
+   * output needs it.
+   */
+  const loaded = async (asset: Asset, signal: AbortSignal, resolution: 'working' | 'full'): Promise<DevelopEngine> => {
     checkSignal(signal);
     if (isDisposed) throw new Error('The export renderer was disposed');
     const e = await getEngine();
@@ -77,13 +100,25 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       loadedAssetId = null;
       const original = await options.loadOriginal(asset, signal);
       checkSignal(signal);
-      await e.load(original, asset.format);
+      await e.load(original, asset.format, undefined, { resolution });
       loadedAssetId = asset.id;
       checkSignal(signal);
+    } else if (resolution === 'full' && !e.isFullResolution()) {
+      await e.ensureFullResolution();
+      checkSignal(signal);
     }
+    return e;
+  };
+
+  const renderOne = async (asset: Asset, version: Version, settings: ExportSettings, signal: AbortSignal): Promise<Blob> => {
+    // A small export can come from the working image; anything larger, and every TIFF, needs the full size.
+    // Sizes by short edge or megapixels, and enlarging, are worked out from the full image.
+    const extras = extrasOf(settings);
+    const byLongEdge = (extras.size.mode === 'original' || extras.size.mode === 'long') && !extras.allowEnlarge;
+    const isSmall = byLongEdge && settings.format !== 'tiff' && settings.maxLongEdge !== null && settings.maxLongEdge <= 2048;
+    const e = await loaded(asset, signal, isSmall ? 'working' : 'full');
     e.setRecipe(version.recipe);
     const space = settings.colorSpace ?? 'srgb';
-    const extras = extrasOf(settings);
     const image = e.imageSize();
     const size = image && settings.format !== 'tiff' ? outputSize(image, extras) : null;
     if (space === 'rec2020') throw new Error('Rec. 2020 export needs an engine that encodes it; choose sRGB or Display P3.');
@@ -100,17 +135,35 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     return blob;
   };
 
+  const renderPreviewsOne = async (asset: Asset, version: Version, signal: AbortSignal): Promise<RenderedPreviews> => {
+    // Previews are at most the screen size, which the working image always covers.
+    const e = await loaded(asset, signal, 'working');
+    e.setRecipe(version.recipe);
+    const thumb = await e.renderPreview(THUMB_LONG_EDGE);
+    checkSignal(signal);
+    const screen = await e.renderPreview(SCREEN_LONG_EDGE);
+    checkSignal(signal);
+    return { thumb, screen };
+  };
+
+  const enqueue = <T>(work: () => Promise<T>): Promise<T> => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = null;
+    pending++;
+    const job = queue.then(work);
+    queue = job.catch(() => undefined).then(() => {
+      pending--;
+      if (!isDisposed && pending === 0) idleTimer = setTimeout(release, idleMs);
+    });
+    return job;
+  };
+
   return {
     render(asset, version, settings, signal) {
-      if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = null;
-      pending++;
-      const job = queue.then(() => renderOne(asset, version, settings, signal));
-      queue = job.catch(() => undefined).then(() => {
-        pending--;
-        if (!isDisposed && pending === 0) idleTimer = setTimeout(release, idleMs);
-      });
-      return job;
+      return enqueue(() => renderOne(asset, version, settings, signal));
+    },
+    renderPreviews(asset, version, signal) {
+      return enqueue(() => renderPreviewsOne(asset, version, signal));
     },
     dispose() {
       isDisposed = true;

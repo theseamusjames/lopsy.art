@@ -47,7 +47,9 @@ import {
   type StorageChoice,
 } from '../backend';
 import { getExportRenderer, setExportRendererFactory } from '../export-renderer-registry';
-import { createEngineExportRenderer } from '../../engine/export-renderer';
+import { createEngineExportRenderer, type EngineRenderer } from '../../engine/export-renderer';
+import { PreviewRefresher } from '../preview-refresh';
+import { useUi } from '../store';
 import {
   describeDevice,
   libraryStoreName,
@@ -143,18 +145,58 @@ export class RealBackend implements PhotosBackend {
   /** The open library; exports and Edit in Lopsy read originals through it. */
   private current: LibrarySession | null = null;
 
+  /** Exports and background previews render on the engine (its own hidden canvas), one renderer for the page. */
+  private engineRenderer: EngineRenderer | null = null;
+
+  private getEngineRenderer(): EngineRenderer {
+    this.engineRenderer ??= createEngineExportRenderer({
+      loadOriginal: (asset, signal) => {
+        const session = this.current;
+        if (!session) return Promise.reject(new Error('No library is open'));
+        return this.loadOriginal(session, asset, { signal });
+      },
+    });
+    return this.engineRenderer;
+  }
+
+  /** Background previews for edits made outside the Edit view, per open library. */
+  private readonly refreshers = new Map<LibrarySession, { refresher: PreviewRefresher; stop: () => void }>();
+
   constructor() {
-    // Exports render on the engine (its own hidden canvas), one renderer for the page.
-    let renderer: ReturnType<typeof createEngineExportRenderer> | null = null;
-    setExportRendererFactory(() => {
-      renderer ??= createEngineExportRenderer({
-        loadOriginal: (asset, signal) => {
-          const session = this.current;
-          if (!session) return Promise.reject(new Error('No library is open'));
-          return this.loadOriginal(session, asset, { signal });
-        },
-      });
-      return renderer;
+    setExportRendererFactory(() => this.getEngineRenderer());
+  }
+
+  getPreviewRefresh(session: LibrarySession): PreviewRefresher | null {
+    return this.refreshers.get(session)?.refresher ?? null;
+  }
+
+  private startPreviewRefresh(session: LibrarySession): void {
+    const refresher = new PreviewRefresher({
+      source: session,
+      render: (asset, version, signal) => this.getEngineRenderer().renderPreviews(asset, version, signal),
+      store: (versionId, previews) => this.storeEditPreviews(session, versionId, previews),
+      reuse: (versionId, thumb, screen) => {
+        session.setPreview(versionId, 'thumb', thumb);
+        session.setPreview(versionId, 'screen', screen);
+      },
+      // The Edit view owns the GPU while it is open.
+      isPaused: () => useUi.getState().editing !== null,
+    });
+    let editing = useUi.getState().editing !== null;
+    const unsubscribeUi = useUi.subscribe((state) => {
+      const now = state.editing !== null;
+      if (now !== editing) {
+        editing = now;
+        refresher.refresh();
+      }
+    });
+    refresher.start();
+    this.refreshers.set(session, {
+      refresher,
+      stop: () => {
+        unsubscribeUi();
+        refresher.stop();
+      },
     });
   }
   private readonly previewRenderer = createBrowserPreviewRenderer();
@@ -198,6 +240,7 @@ export class RealBackend implements PhotosBackend {
     setPreviewSource(caches ? { read: (s, ref) => caches.previews.readPreview(s.adapter, ref.fileId) } : null);
     saveLastConnection({ kind, label: opened.label, ...(kind === 'google-drive' ? { accountId: opened.owner } : {}) });
     this.current = session;
+    this.startPreviewRefresh(session);
     return { session, accountLabel: opened.label };
   }
 
@@ -525,6 +568,8 @@ export class RealBackend implements PhotosBackend {
   }
 
   async disconnect(session: LibrarySession): Promise<void> {
+    this.refreshers.get(session)?.stop();
+    this.refreshers.delete(session);
     const tokenSource = this.extras.get(session)?.tokenSource;
     this.keepState.get(session)?.download?.stop();
     this.keepState.delete(session);

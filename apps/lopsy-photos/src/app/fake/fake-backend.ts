@@ -6,6 +6,7 @@
 
 import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { KeepOriginals, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
+import type { PreviewRefresher } from '../preview-refresh';
 import type { ImportItem, ImportJob, ImportOptions, ImportProgress } from '@lopsy/photos-core/import/types';
 import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
@@ -294,6 +295,10 @@ export class FakeBackend implements PhotosBackend {
   }
 
   getOriginalsDownload(): OriginalsDownload | null {
+    return null;
+  }
+
+  getPreviewRefresh(): PreviewRefresher | null {
     return null;
   }
 

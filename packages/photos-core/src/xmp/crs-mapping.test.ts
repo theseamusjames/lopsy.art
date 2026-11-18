@@ -25,7 +25,8 @@ const FULL_LIGHTROOM_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe X
    crs:ColorGradeHighlightHue="45" crs:ColorGradeHighlightSat="22" crs:ColorGradeHighlightLum="+3"
    crs:ColorGradeGlobalHue="0" crs:ColorGradeGlobalSat="0" crs:ColorGradeGlobalLum="0"
    crs:ColorGradeBlending="60" crs:ColorGradeBalance="-20"
-   crs:PostCropVignetteAmount="-25" crs:GrainAmount="30"
+   crs:PostCropVignetteAmount="-25" crs:PostCropVignetteMidpoint="40" crs:PostCropVignetteRoundness="-10" crs:PostCropVignetteFeather="70"
+   crs:GrainAmount="30" crs:GrainSize="35" crs:GrainFrequency="60"
    crs:HasCrop="True" crs:CropTop="0.05" crs:CropLeft="0.04" crs:CropBottom="0.95" crs:CropRight="0.96" crs:CropAngle="-2.5"
    crs:HasSettings="True">
    <crs:ToneCurvePV2012><rdf:Seq><rdf:li>0, 0</rdf:li><rdf:li>64, 52</rdf:li><rdf:li>192, 205</rdf:li><rdf:li>255, 255</rdf:li></rdf:Seq></crs:ToneCurvePV2012>
@@ -62,7 +63,13 @@ describe('Lightroom edit mapping', () => {
       blending: 60,
       balance: -20,
     });
-    expect(r.finish.vignette).toBe(25);
+    expect(r.finish).toEqual({
+      vignette: 25,
+      vignetteSize: 40,
+      vignetteRoundness: -10,
+      vignetteFeather: 70,
+      grain: { amount: 30, size: 35, roughness: 60 },
+    });
     expect(r.curves.luminance).toEqual([
       { x: 0, y: 0 },
       { x: 64 / 255, y: 52 / 255 },
@@ -91,6 +98,16 @@ describe('Lightroom edit mapping', () => {
     expect(wild?.sharpness.amount).toBe(150);
     expect(wild?.colorGrading.shadows.hue).toBe(359);
     expect(wild?.whiteBalance.temperature).toBe(-100);
+  });
+
+  it('reads the vignette shape and grain only with a vignette or grain', () => {
+    const doc = (attrs: string) =>
+      `<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/" ${attrs}/></rdf:RDF></x:xmpmeta>`;
+    const off = recipeFromXmp(
+      readXmp(doc('crs:Exposure2012="+1" crs:PostCropVignetteAmount="0" crs:PostCropVignetteMidpoint="50" crs:GrainAmount="0" crs:GrainSize="25"'))!,
+      1,
+    );
+    expect(off?.finish).toEqual(DEFAULT_RECIPE.finish);
   });
 
   it('reads curves defensively', () => {

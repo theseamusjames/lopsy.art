@@ -1,0 +1,83 @@
+import { expect, test, type Page } from '@playwright/test';
+import { waitForReady } from './harness';
+import { generatedJpeg, importFiles, tiles } from './library';
+
+/**
+ * The Edit view inside the app, on the real library ("This browser"):
+ * History, Versions, Presets, Copy and Paste edits and the filmstrip,
+ * through EditSlot and the session.
+ */
+async function setValue(page: Page, label: string, value: string): Promise<void> {
+  const readout = page.getByTestId('edit-view').getByLabel(`${label} value`, { exact: true });
+  await readout.fill(value);
+  await readout.press('Enter');
+}
+
+test('Edit in the library: history, versions, presets, copy and paste, filmstrip', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [
+    { name: 'alpha.jpg', buffer: await generatedJpeg(page, 20) },
+    { name: 'beta.jpg', buffer: await generatedJpeg(page, 200) },
+  ]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await expect(tiles(page)).toHaveCount(2);
+
+  await tiles(page).first().click();
+  await page.keyboard.press('Enter');
+  await waitForReady(page, 60_000);
+  const edit = page.getByTestId('edit-view');
+  const firstName = (await edit.getByTitle(/\.jpg$/).first().textContent()) ?? '';
+
+  // History: three steps, then back to the first by clicking it.
+  await setValue(page, 'Exposure', '1');
+  await setValue(page, 'Contrast', '20');
+  await setValue(page, 'Vibrance', '30');
+  const history = edit.getByTestId('history-list');
+  await expect(history.getByRole('button', { name: 'Vibrance +30' })).toBeVisible();
+  await history.getByRole('button', { name: 'Exposure +1.00' }).click();
+  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('0');
+  await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('+1.00');
+  await expect(history.getByRole('button', { name: 'Vibrance +30' })).toBeVisible();
+
+  // Presets: one step.
+  await edit.getByRole('list', { name: 'Presets' }).getByRole('button', { name: 'Punchy', exact: true }).click();
+  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+25');
+  await expect(history.getByRole('button', { name: 'Preset: Punchy' })).toBeVisible();
+
+  // Versions: a new one carries the edit and becomes the one shown.
+  const versions = edit.getByRole('list', { name: 'Versions' });
+  await edit.getByRole('button', { name: 'New version' }).click();
+  await edit.getByLabel('New version name').fill('Bright');
+  await edit.getByLabel('New version name').press('Enter');
+  await expect(versions.getByRole('button', { name: 'Bright', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+25');
+  await setValue(page, 'Exposure', '2');
+  await versions.getByRole('button', { name: 'Original', exact: true }).click();
+  await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('+1.00');
+  // Deleting the version on show moves to another first.
+  await versions.getByRole('button', { name: 'Bright', exact: true }).click();
+  await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('+2.00');
+  await edit.getByRole('button', { name: 'Delete Bright' }).click();
+  await versions.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(versions.getByRole('button', { name: 'Bright', exact: true })).toHaveCount(0);
+  await expect(versions.getByRole('button', { name: 'Original', exact: true })).toHaveAttribute('aria-current', 'true');
+
+  // Copy edits, then the filmstrip's next photo, and paste.
+  await page.keyboard.press('ControlOrMeta+Shift+c');
+  await page.getByRole('dialog', { name: /^Copy edits from/ }).getByRole('button', { name: 'Copy', exact: true }).click();
+  const strip = edit.getByRole('navigation', { name: 'Filmstrip' });
+  await expect(strip.getByRole('button')).toHaveCount(2);
+  await page.locator('body').press('ArrowRight');
+  await waitForReady(page, 60_000);
+  await expect(edit.getByTitle(/\.jpg$/).first()).not.toHaveText(firstName);
+  await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('0.00');
+  await edit.getByRole('button', { name: 'Paste edits' }).click();
+  await expect(edit.getByLabel('Exposure value', { exact: true })).toHaveValue('+1.00');
+  await expect(edit.getByLabel('Contrast value', { exact: true })).toHaveValue('+25');
+
+  await page.getByTestId('edit-view').getByRole('button', { name: 'Library', exact: true }).click();
+  await expect(tiles(page)).toHaveCount(2);
+});

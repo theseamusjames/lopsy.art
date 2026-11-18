@@ -6,6 +6,7 @@
 import {
   DEFAULT_RECIPE,
   RECIPE_RANGES,
+  rangeForPath,
   recipeFromPaths,
   recipeToPaths,
   type QuarterTurns,
@@ -100,7 +101,7 @@ export const GROUPS: readonly GroupDef[] = [
 const FALLBACK_RANGE: RecipeRange = { min: -100, max: 100, step: 1 };
 
 export function rangeOf(path: string): RecipeRange {
-  return RECIPE_RANGES[path] ?? FALLBACK_RANGE;
+  return rangeForPath(path) ?? FALLBACK_RANGE;
 }
 
 export function numberAt(recipe: Recipe, path: string): number {
@@ -109,6 +110,8 @@ export function numberAt(recipe: Recipe, path: string): number {
 }
 
 export function defaultAt(path: string): number {
+  // A new area applies in full; its other numbers start at 0.
+  if (/^areas\.[^.]+\.amount$/.test(path)) return 100;
   return numberAt(DEFAULT_RECIPE, path);
 }
 
