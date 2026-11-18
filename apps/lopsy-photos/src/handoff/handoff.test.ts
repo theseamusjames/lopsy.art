@@ -68,7 +68,7 @@ async function addOriginal(): Promise<{ assetId: string; versionId: string }> {
     orientation: 1,
     camera: { make: 'FUJIFILM', model: 'X-T5' },
     lens: 'XF23mm',
-    exposure: null,
+    exposure: { iso: 400, shutter: '1/250', aperture: 2.8, focalLength: null },
     gps: null,
     pairedWith: null,
     source: null,
@@ -129,6 +129,15 @@ describe('Edit in Lopsy, an original', () => {
     expect(accepted.document.name).toBe('DSCF1234');
     expect(pngSize(accepted.document.bytes)).toEqual({ width: 6240, height: 4160 });
     const version = session.getView().versions.get(versionId)!;
+    expect(accepted.document.camera).toEqual({
+      make: 'FUJIFILM',
+      model: 'X-T5',
+      lens: 'XF23mm',
+      iso: 400,
+      shutter: '1/250',
+      aperture: 2.8,
+      capturedAt: '2026-11-14T16:02:11',
+    });
     expect(accepted.connection.source).toEqual({
       libraryId: session.libraryId,
       assetId,
@@ -241,6 +250,8 @@ describe('Edit in Lopsy, a document', () => {
     expect(accepted.document.kind).toBe('lopsy');
     expect(accepted.document.baseRevision).toBe(r1.revision);
     expect(accepted.connection.source).toMatchObject({ assetId, documentId: r1.documentId });
+    // The document carries its photo's camera summary too.
+    expect(accepted.document.camera).toMatchObject({ make: 'FUJIFILM', model: 'X-T5', iso: 400 });
     expect(new Uint8Array(accepted.document.bytes)[8]).toBe(1);
   });
 

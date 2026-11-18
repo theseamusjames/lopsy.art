@@ -49,6 +49,17 @@ export interface PhotosSourceBlock {
   readonly recipeHash: string;
   /** The library's document asset, once the file has been saved to Photos. */
   readonly documentId?: string;
+  /** The photo's camera metadata summary, as Photos sent it. */
+  readonly camera?: {
+    readonly make?: string;
+    readonly model?: string;
+    readonly lens?: string;
+    readonly iso?: number;
+    readonly shutter?: string;
+    readonly aperture?: number;
+    readonly focalLength?: number;
+    readonly capturedAt?: string;
+  };
 }
 
 export interface LopsyManifest {

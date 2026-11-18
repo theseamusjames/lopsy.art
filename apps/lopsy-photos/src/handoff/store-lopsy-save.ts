@@ -152,7 +152,8 @@ async function createDocument(
     mimeType: LOPSY_MIME_TYPE,
     capturedAt: photo?.capturedAt ?? null,
     importedAt: now().toISOString(),
-    importId: `lopsy-${save.id}`,
+    // Grouped with the photo it came from, so a "recent imports" view still shows the photo beside it.
+    importId: photo?.importId ?? `lopsy-${save.id}`,
     width: size?.width ?? null,
     height: size?.height ?? null,
     orientation: 1,
