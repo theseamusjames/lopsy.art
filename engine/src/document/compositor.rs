@@ -522,6 +522,20 @@ pub fn export_png_16(engine: &mut EngineInner, color_space: u8) -> Read<Vec<u8>>
         .and_then(move |pixels| lopsy_core::export::encode_png_16(&pixels, doc_w, doc_h, cs))
 }
 
+/// The document composited at 16 bits, as `export_png_16` composites it,
+/// and encoded as a Deflate-compressed 16-bit RGBA TIFF with the same
+/// colour space's ICC profile (`lopsy_core::tiff`). `color_space` 1 is
+/// Display P3; anything else sRGB.
+pub fn export_tiff_16(engine: &mut EngineInner, color_space: u8) -> Read<Vec<u8>> {
+    let (doc_w, doc_h) = (engine.doc_width, engine.doc_height);
+    let cs = match color_space {
+        1 => lopsy_core::color::ColorSpace::DisplayP3,
+        _ => lopsy_core::color::ColorSpace::Srgb,
+    };
+    composite_for_export_u16(engine)
+        .and_then(move |pixels| lopsy_core::tiff::encode_tiff_16(&pixels, doc_w, doc_h, cs))
+}
+
 /// Draw the composite texture to the screen canvas through the viewport
 /// transform. On its own this is the whole frame when only screen-space
 /// state changed (pan, zoom, channel visibility): the composite texture
