@@ -126,7 +126,9 @@ describe('writeXmp', () => {
     whiteBalance: { mode: 'custom', temperature: 12, tint: -3 },
     tone: { ...DEFAULT_RECIPE.tone, exposure: -1.25, shadows: 40 },
     color: { vibrance: 10, saturation: 0 },
-    framing: { rotate: 0, flipH: false, crop: { x: 0.125, y: 0.25, width: 0.5, height: 0.5 } },
+    framing: { ...DEFAULT_RECIPE.framing, crop: { x: 0.125, y: 0.25, width: 0.5, height: 0.5 } },
+    sharpness: { amount: 40, radius: 1.2, edges: 10 },
+    noise: { ...DEFAULT_RECIPE.noise, luminance: 20 },
   };
   const version: Version = {
     id: 'v1',
