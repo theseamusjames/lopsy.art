@@ -42,6 +42,13 @@ const port = Number(process.env.VITE_PORT ?? 5174);
  */
 const drivePort = port + 1;
 const DRIVE_SPECS = /\.drive\.spec\.ts$/;
+/**
+ * Specs with their own configs: site.spec.ts (playwright.site.config.ts,
+ * the assembled site) and roundtrip.spec.ts (e2e/roundtrip.config.ts, Lopsy
+ * and Photos together). A project's testIgnore replaces the top-level one,
+ * so each project lists these again.
+ */
+const OWN_CONFIG_SPECS = [/site\.spec\.ts$/, /roundtrip\.spec\.ts$/];
 
 const gpuArgs = [
   '--use-gl=angle',
@@ -53,8 +60,7 @@ const gpuArgs = [
 
 export default defineConfig({
   testDir: './e2e',
-  // site.spec.ts runs against the assembled site: playwright.site.config.ts.
-  testIgnore: ['**/site.spec.ts'],
+  testIgnore: OWN_CONFIG_SPECS,
   timeout: 300_000,
   expect: { timeout: 30_000 },
   workers: 1,
@@ -67,7 +73,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: DRIVE_SPECS,
+      testIgnore: [DRIVE_SPECS, ...OWN_CONFIG_SPECS],
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 800 },
