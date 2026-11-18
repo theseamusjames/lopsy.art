@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LibrarySession, PreviewRef } from '@lopsy/photos-core/library/types';
 import { MemoryAdapter } from '@lopsy/photos-core/storage/memory-adapter';
-import { MemoryLocalStore } from '@lopsy/photos-core/library/local-store';
+import { MemoryLocalStore, type LocalStore, type LocalStorePatch } from '@lopsy/photos-core/library/local-store';
 import { openLibrary } from '@lopsy/photos-core/library/session';
 import { NoopLibraryLock } from '@lopsy/photos-core/library/lock';
 import { recipeHash, DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
@@ -78,6 +78,46 @@ describe('trashAssets', () => {
       expect(session.getView().assets.get(assetId)?.deleted).toBe(false);
     });
   }
+
+  it('trashes nothing until the deletion is saved on this device', async () => {
+    const inner = new MemoryLocalStore();
+    let hold = false;
+    const held: (() => void)[] = [];
+    const store: LocalStore = {
+      load: (id) => inner.load(id),
+      lastLayout: () => inner.lastLayout(),
+      getMarker: (key) => inner.getMarker(key),
+      setMarker: (key, value) => inner.setMarker(key, value),
+      write: async (id, patch: LocalStorePatch) => {
+        if (hold) await new Promise<void>((r) => held.push(r));
+        return inner.write(id, patch);
+      },
+    };
+    const adapter = new MemoryAdapter();
+    const session = await openLibrary({ adapter, store, autoSync: false, lock: new NoopLibraryLock() });
+    const original = await adapter.createFile(
+      { parentId: session.layout.originalsId, name: 'b.jpg', mimeType: 'image/jpeg' },
+      new Blob([new Uint8Array([1])]),
+    );
+    const { assetId } = session.addAsset({
+      kind: 'original', fileId: original.id, sha256: 'y', fileName: 'b.jpg', byteSize: 1, format: 'jpeg',
+      mimeType: 'image/jpeg', capturedAt: null, importedAt: '2026-01-01T00:00:00Z', importId: 'i', width: 1,
+      height: 1, orientation: 1, camera: null, lens: null, exposure: null, gps: null, pairedWith: null,
+      source: null, renderFileId: null,
+    });
+    await session.whenDurable();
+    hold = true;
+    const trashing = trashAssets(session, [assetId]);
+    await new Promise((r) => setTimeout(r, 20));
+    // The tab could die here: the original must still be out of the trash.
+    expect((await adapter.getFile(original.id))?.trashed).toBe(false);
+    hold = false;
+    for (const release of held) release();
+    await trashing;
+    expect((await adapter.getFile(original.id))?.trashed).toBe(true);
+    const saved = await inner.load(session.libraryId);
+    expect(saved?.outbox.some((op) => op.op.t === 'set' && op.op.fields.deleted === true)).toBe(true);
+  });
 
   it('keeps the deletion when a file cannot be trashed, and says so', async () => {
     const { adapter, session, assetId } = await libraryWithPhoto();

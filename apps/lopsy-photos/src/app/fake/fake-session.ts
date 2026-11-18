@@ -400,6 +400,9 @@ export class FakeSession implements LibrarySession {
     this.changed();
   }
 
+  /** Nothing is stored, so everything is as durable as it gets at once. */
+  async whenDurable(): Promise<void> {}
+
   async syncNow(): Promise<void> {
     this.setStatus({ ...this.status, state: 'syncing' });
     await new Promise((r) => setTimeout(r, 600));
