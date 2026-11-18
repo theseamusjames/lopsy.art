@@ -245,6 +245,8 @@ pub struct EngineInner {
     pub areas: Option<Vec<f32>>,
     /// The area whose mask the live frame shows in red, or −1. Never in exports.
     pub area_overlay: i32,
+    /// (shadows, highlights) clipping warnings on the live frame only.
+    pub clipping_warning: (bool, bool),
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -347,6 +349,7 @@ impl EngineInner {
             local_contrast: None,
             areas: None,
             area_overlay: -1,
+            clipping_warning: (false, false),
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,

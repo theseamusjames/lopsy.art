@@ -106,3 +106,20 @@ pub fn clear_image_areas(engine: &mut Engine) {
 pub fn set_image_area_overlay(engine: &mut Engine, index: i32) {
     lopsy_engine::commands::develop::set_image_area_overlay(&mut engine.inner, index)
 }
+
+/// Mark clipped pixels on screen only: shadows (any channel ≤ 0) in blue,
+/// highlights (any channel ≥ 1) in red, after the whole develop chain.
+#[wasm_bindgen(js_name = "setClippingWarning")]
+pub fn set_clipping_warning(engine: &mut Engine, shadows: bool, highlights: bool) {
+    lopsy_engine::commands::develop::set_clipping_warning(&mut engine.inner, shadows, highlights)
+}
+
+readback_export! {
+    /// `[temperature, tint]` (recipe units) that make the patch of
+    /// `radius` document pixels around (x, y) neutral. Read before the RAW
+    /// stage and every adjustment. Wrap with `'any-time'`.
+    #[wasm_bindgen(js_name = "sampleNeutralWhiteBalance")]
+    pub fn sample_neutral_white_balance(engine, x: f32, y: f32, radius: f32) -> Result<Vec<f32>> {
+        read(lopsy_engine::commands::develop::sample_neutral_white_balance(engine, x, y, radius))
+    }
+}

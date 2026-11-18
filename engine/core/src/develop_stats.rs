@@ -244,6 +244,48 @@ pub fn auto_white_balance(linear_rgba: &[f32]) -> [f32; 3] {
     [ratio(sum[0]), 1.0, ratio(sum[2])]
 }
 
+/// The Photos app's white balance for RAW photos (`raw-develop.ts`): red
+/// and blue gain 2^(±0.6·T/100), green 2^(−0.4·tint/100), in camera space.
+pub const RAW_TEMPERATURE_STOPS: f32 = 0.6;
+pub const RAW_TINT_STOPS: f32 = 0.4;
+/// Its white balance for other photos (`recipe-to-adjustments.ts`): the same
+/// shape on encoded values, through the Photo Filter, with these stops.
+pub const ENCODED_TEMPERATURE_STOPS: f32 = 0.5;
+pub const ENCODED_TINT_STOPS: f32 = 0.35;
+
+/// The `[temperature, tint]` (−100..100) whose gains make the mean of
+/// `rgba16` (straight RGBA u16, transparent pixels skipped) neutral, with
+/// the RAW stops when `is_raw` and the encoded ones otherwise. `[0, 0]`
+/// when the patch is empty or has a channel at 0. Mirrors the app's
+/// `temperatureTintFor`.
+pub fn neutral_temperature_tint(rgba16: &[u16], is_raw: bool) -> [f32; 2] {
+    let mut sum = [0.0f64; 3];
+    let mut n = 0u32;
+    for p in rgba16.chunks_exact(4) {
+        if p[3] == 0 {
+            continue;
+        }
+        for c in 0..3 {
+            sum[c] += p[c] as f64;
+        }
+        n += 1;
+    }
+    if n == 0 || sum.iter().any(|&v| v <= 0.0) {
+        return [0.0, 0.0];
+    }
+    // Gains that neutralize the patch, up to scale.
+    let (r, g, b) = (1.0 / sum[0], 1.0 / sum[1], 1.0 / sum[2]);
+    let (ts, ms) = if is_raw {
+        (RAW_TEMPERATURE_STOPS, RAW_TINT_STOPS)
+    } else {
+        (ENCODED_TEMPERATURE_STOPS, ENCODED_TINT_STOPS)
+    };
+    let t = (r / b).log2() / (2.0 * ts as f64);
+    let m = -(g / (r * b).sqrt()).log2() / ms as f64;
+    let slider = |v: f64| ((v * 100.0).clamp(-100.0, 100.0).round() as f32) + 0.0;
+    [slider(t), slider(m)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,6 +395,26 @@ mod tests {
         }
         assert!(auto_tone_json(&ramp(5, 70), "").is_ok());
         assert!(auto_tone_json(&ramp(5, 70), "{").is_err());
+    }
+
+    #[test]
+    fn the_picker_inverts_the_apps_white_balance() {
+        // A patch the app's RAW white balance at T = 40, tint = −20 would
+        // make neutral: its inverse gains.
+        let (t, m) = (0.4f64, -0.2f64);
+        let gains = [(0.6 * t).exp2(), (-0.4 * m).exp2(), (-0.6 * t).exp2()];
+        let px: Vec<u16> = (0..9).flat_map(|_| [(30000.0 / gains[0]) as u16, (30000.0 / gains[1]) as u16, (30000.0 / gains[2]) as u16, 65535]).collect();
+        assert_eq!(neutral_temperature_tint(&px, true), [40.0, -20.0]);
+        let grey = [20000u16, 20000, 20000, 65535];
+        assert_eq!(neutral_temperature_tint(&grey, true), [0.0, 0.0]);
+        assert_eq!(neutral_temperature_tint(&grey, false), [0.0, 0.0]);
+        // A blue cast asks for warmth; a green cast for magenta.
+        let blue = [10000u16, 15000, 30000, 65535];
+        assert!(neutral_temperature_tint(&blue, false)[0] > 0.0);
+        let green = [15000u16, 30000, 15000, 65535];
+        assert!(neutral_temperature_tint(&green, true)[1] > 0.0);
+        assert_eq!(neutral_temperature_tint(&[0, 5, 5, 65535], true), [0.0, 0.0]);
+        assert_eq!(neutral_temperature_tint(&[5, 5, 5, 0], true), [0.0, 0.0]);
     }
 
     #[test]

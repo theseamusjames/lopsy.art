@@ -65,3 +65,11 @@ uniforms! {
         pub overlay: i32,
     }
 }
+
+uniforms! {
+    /// `develop/clip_warning.wgsl`
+    pub struct ClipWarningParams {
+        pub shadows: i32,
+        pub highlights: i32,
+    }
+}

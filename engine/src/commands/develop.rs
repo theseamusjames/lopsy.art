@@ -152,6 +152,42 @@ pub fn set_image_area_overlay(engine: &mut EngineInner, index: i32) {
     engine.needs_recomposite = true;
 }
 
+/// Mark clipped pixels on the live frame (never in exports): shadows in
+/// blue where any channel is at or below 0, highlights in red where any is
+/// at or above 1, after the whole develop chain.
+pub fn set_clipping_warning(engine: &mut EngineInner, shadows: bool, highlights: bool) {
+    engine.clipping_warning = (shadows, highlights);
+    engine.needs_recomposite = true;
+}
+
+/// The white balance that makes the patch of `radius` document pixels
+/// around (`x`, `y`) neutral, as `[temperature, tint]` in the Photos
+/// recipe's units (`lopsy_core::develop_stats::neutral_temperature_tint`).
+/// The patch is read from the document's layers composited without the
+/// RAW develop stage or any adjustment: for a RAW document, camera RGB at
+/// the as-shot balance, so the answer is absolute; otherwise the encoded
+/// pixels, so it is the shift that neutralizes them. Changes nothing in
+/// the document; the next frame rebuilds the live composite.
+pub fn sample_neutral_white_balance(engine: &mut EngineInner, x: f32, y: f32, radius: f32) -> Read<Vec<f32>> {
+    let (w, h) = (engine.doc_width as i32, engine.doc_height as i32);
+    if !(x.is_finite() && y.is_finite() && radius.is_finite()) || w == 0 || h == 0 {
+        return Read::failed("Sample position must be finite numbers inside a document".to_string());
+    }
+    let r = radius.clamp(0.0, 64.0).round() as i32;
+    let (cx, cy) = (x.floor() as i32, y.floor() as i32);
+    let (x0, y0) = ((cx - r).clamp(0, w - 1), (cy - r).clamp(0, h - 1));
+    let (x1, y1) = ((cx + r).clamp(0, w - 1), (cy + r).clamp(0, h - 1));
+    if let Err(e) = compositor::composite_layers_only(engine) {
+        return Read::failed(e);
+    }
+    let is_raw = engine.raw_develop.is_some();
+    let (pw, ph) = ((x1 - x0 + 1) as u32, (y1 - y0 + 1) as u32);
+    engine
+        .gpu()
+        .read_rgba_u16(engine.composite_texture, x0, y0, pw, ph)
+        .map(move |px| develop_stats::neutral_temperature_tint(&px, is_raw).to_vec())
+}
+
 /// Long edge of the downscaled copy the histogram is counted from.
 pub const HISTOGRAM_MAX_EDGE: u32 = 512;
 
