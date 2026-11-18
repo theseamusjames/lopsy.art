@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Cloud, CloudOff, Download, Keyboard, LoaderCircle, LogOut, TriangleAlert, CloudCheck } from 'lucide-react';
+import { Cloud, CloudOff, Download, Keyboard, LoaderCircle, LogOut, Settings, TriangleAlert, CloudCheck } from 'lucide-react';
 import { getBackend } from '../../app/backend-registry';
 import { LOCK_LOST_MESSAGE } from '@lopsy/photos-core/library/lock';
 import { useSyncStatus } from '../../app/hooks';
@@ -128,6 +128,12 @@ export function Header() {
             </Popover>
           )}
         </div>
+        <IconButton
+          label="Settings"
+          icon={<Settings size={16} />}
+          active={dialog === 'settings'}
+          onClick={() => openDialog('settings')}
+        />
         <IconButton
           label="Close this library"
           icon={<LogOut size={16} />}

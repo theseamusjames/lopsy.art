@@ -17,6 +17,7 @@ import { ImportStrip } from '../ImportStrip/ImportStrip';
 import { InfoPanel } from '../InfoPanel/InfoPanel';
 import { PhotoGrid } from '../PhotoGrid/PhotoGrid';
 import { Sidebar } from '../Sidebar/Sidebar';
+import { SettingsDialog } from '../SettingsDialog/SettingsDialog';
 import { SingleView } from '../SingleView/SingleView';
 import styles from './LibraryScreen.module.css';
 
@@ -125,6 +126,7 @@ export function LibraryScreen() {
       {dialog === 'import' && <ImportSheet />}
       {dialog === 'export' && <ExportDialog />}
       {dialog === 'delete' && <DeleteDialog />}
+      {dialog === 'settings' && <SettingsDialog />}
       <DropZone />
     </div>
   );

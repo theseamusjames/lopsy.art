@@ -124,3 +124,8 @@
 .burst[aria-expanded='true'] {
   background: var(--color-accent);
 }
+
+.problem {
+  background: var(--color-error);
+  color: #fff;
+}

@@ -5,7 +5,7 @@
 
 import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
-import type { StorageAdapter, StorageQuota } from '@lopsy/photos-core/storage/types';
+import type { FileId, StorageAdapter, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { ExportProgress as CoreProgress, ExportResult } from '@lopsy/photos-core/export/types';
 import { openLibrary } from '@lopsy/photos-core/library/session';
 import { IndexedDbLocalStore } from '@lopsy/photos-core/library/local-store';
@@ -19,6 +19,15 @@ import { OpfsStagingStore, type StagingStore } from '@lopsy/photos-core/import/s
 import { IndexedDbImportQueueStore, type ImportQueueStore } from '@lopsy/photos-core/import/queue-store';
 import { openAccountCaches, type AccountCaches } from '@lopsy/photos-core/cache/account-caches';
 import { LibraryBusyError } from '@lopsy/photos-core/library/lock';
+import type { PhotosLibrarySession } from '@lopsy/photos-core/library/session';
+import { repairLibrary, type RepairReport } from '@lopsy/photos-core/library/repair';
+import { startImportFromStorage } from '@lopsy/photos-core/import/from-storage';
+import { pickDriveFiles } from '@lopsy/photos-core/storage/google-drive/picker';
+import { defaultOriginalsBudget } from '@lopsy/photos-core/cache/originals-cache';
+import { PREVIEWS_DEFAULT_BUDGET } from '@lopsy/photos-core/cache/preview-cache';
+
+/** What the Picker offers: photos the importer reads. */
+const DRIVE_PICK_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/x-fujifilm-raf', 'image/x-adobe-dng', 'application/octet-stream'];
 import { createBrowserPreviewRenderer } from '@lopsy/photos-core/import/browser-preview-renderer';
 import { startExport } from '@lopsy/photos-core/export/exporter';
 import {
@@ -26,6 +35,7 @@ import {
   ConnectCancelled,
   type Connection,
   type ConnectOptions,
+  type DeviceInfo,
   type EditPreviews,
   type LoadOriginalOptions,
   type ExportJob,
@@ -56,6 +66,8 @@ import { downloadBlob } from '../download';
 /** What a session needs beyond the LibrarySession itself. */
 interface SessionExtras {
   readonly kind: StorageChoice;
+  /** The unguarded session, for repair (setOriginalStatus). */
+  readonly raw: PhotosLibrarySession;
   readonly tokenSource: GoogleTokenSource | null;
   /** Device caches; null for the browser's own storage, whose files are already on the device. */
   readonly caches: AccountCaches | null;
@@ -139,7 +151,7 @@ export class RealBackend implements PhotosBackend {
     const reuse = options.takeOver === true && this.busy?.kind === kind ? this.busy.opened : null;
     this.busy = null;
     const opened = reuse ?? (await this.openStorage(kind, options.reconnect === true));
-    let rawSession: LibrarySession;
+    let rawSession: PhotosLibrarySession;
     try {
       rawSession = await openLibrary({
         adapter: opened.adapter,
@@ -158,7 +170,7 @@ export class RealBackend implements PhotosBackend {
       optional(() => OpfsStagingStore.open(session.libraryId)),
       optional(() => IndexedDbImportQueueStore.open()),
     ]);
-    this.extras.set(session, { kind, tokenSource: opened.tokenSource, caches, staging, queue });
+    this.extras.set(session, { kind, raw: rawSession, tokenSource: opened.tokenSource, caches, staging, queue });
     setPreviewSource(caches ? { read: (s, ref) => caches.previews.readPreview(s.adapter, ref.fileId) } : null);
     saveLastConnection({ kind, label: opened.label });
     this.current = session;
@@ -236,6 +248,77 @@ export class RealBackend implements PhotosBackend {
       queueStore: extras.queue,
       ...(extras.staging ? { staging: extras.staging } : {}),
     });
+  }
+
+  canAddFromDrive(session: LibrarySession): boolean {
+    return (
+      session.adapter.kind === 'google-drive' &&
+      Boolean(import.meta.env.VITE_GOOGLE_API_KEY) &&
+      Boolean(import.meta.env.VITE_GOOGLE_APP_ID)
+    );
+  }
+
+  async addFromDrive(session: LibrarySession, options: { readonly move: boolean }): Promise<ImportJob | null> {
+    const extras = this.extras.get(session);
+    const developerKey = import.meta.env.VITE_GOOGLE_API_KEY;
+    const appId = import.meta.env.VITE_GOOGLE_APP_ID;
+    if (!extras?.tokenSource || !developerKey || !appId) throw new Error('Adding from Google Drive is not available here.');
+    const ids = await pickDriveFiles({
+      developerKey,
+      appId,
+      oauthToken: await extras.tokenSource.getToken(),
+      mimeTypes: DRIVE_PICK_TYPES,
+      title: 'Choose photos to add to your library',
+    });
+    if (ids.length === 0) return null;
+    return startImportFromStorage(ids, {
+      session,
+      previewRenderer: this.previewRenderer,
+      ...(extras.caches ? { originalsCache: extras.caches.originals } : {}),
+      options: { move: options.move },
+    });
+  }
+
+  checkLibrary(session: LibrarySession): Promise<RepairReport> {
+    const raw = this.extras.get(session)?.raw;
+    if (!raw) return Promise.reject(new Error('No library is open'));
+    return repairLibrary(raw);
+  }
+
+  addOrphans(session: LibrarySession, fileIds: readonly FileId[]): ImportJob {
+    const caches = this.extras.get(session)?.caches;
+    return startImportFromStorage(fileIds, {
+      session,
+      previewRenderer: this.previewRenderer,
+      ...(caches ? { originalsCache: caches.originals } : {}),
+      // They are already in Originals/.
+      options: { move: false },
+    });
+  }
+
+  async restoreOriginals(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
+    const view = session.getView();
+    for (const id of assetIds) {
+      const asset = view.assets.get(id);
+      if (asset) await session.adapter.untrash(asset.fileId);
+    }
+  }
+
+  async getDeviceInfo(session: LibrarySession): Promise<DeviceInfo> {
+    const caches = this.extras.get(session)?.caches;
+    const cacheBytes = caches ? (await caches.originals.cache.usage()) + (await caches.previews.cache.usage()) : null;
+    return { deviceName: describeDevice(navigator.userAgent), cacheBytes };
+  }
+
+  async clearDeviceCache(session: LibrarySession): Promise<void> {
+    const caches = this.extras.get(session)?.caches;
+    if (!caches) return;
+    // Only the caches: the library's own state and its unsaved changes live elsewhere (IndexedDB).
+    for (const cache of [caches.originals.cache, caches.previews.cache]) {
+      const used = await cache.usage();
+      await cache.setBudget(0);
+      await cache.setBudget(Math.max(used, cache === caches.originals.cache ? await defaultOriginalsBudget() : PREVIEWS_DEFAULT_BUDGET));
+    }
   }
 
   readPreview(session: LibrarySession, ref: PreviewRef): Promise<Blob> {

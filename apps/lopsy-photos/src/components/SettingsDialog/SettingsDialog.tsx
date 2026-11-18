@@ -1,0 +1,169 @@
+import { useEffect, useState } from 'react';
+import type { RepairReport } from '@lopsy/photos-core/library/repair';
+import { getBackend } from '../../app/backend-registry';
+import type { DeviceInfo } from '../../app/backend';
+import { useSession } from '../../app/hooks';
+import { useUi } from '../../app/store';
+import { clearPreviewCache } from '../../app/preview-cache';
+import { describeHealth, loadDriveAddMode, saveDriveAddMode, type DriveAddMode } from '../../app/device-settings';
+import { formatBytes, plural } from '../../import/import-summary';
+import { Button } from '../Button/Button';
+import { Modal } from '../Modal/Modal';
+import styles from './SettingsDialog.module.css';
+
+/** This device, adding from Drive, the library's health, and closing the library. */
+export function SettingsDialog() {
+  const session = useSession();
+  const openDialog = useUi((s) => s.openDialog);
+  const connection = useUi((s) => s.connection);
+  const [device, setDevice] = useState<DeviceInfo | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [driveMode, setDriveMode] = useState<DriveAddMode>(loadDriveAddMode);
+  const [checking, setChecking] = useState(false);
+  const [report, setReport] = useState<RepairReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const isDrive = session.adapter.kind === 'google-drive';
+
+  const refreshDevice = () => {
+    getBackend()
+      .getDeviceInfo(session)
+      .then(setDevice)
+      .catch(() => setDevice(null));
+  };
+  useEffect(refreshDevice, [session]);
+
+  const check = async () => {
+    setChecking(true);
+    setError(null);
+    try {
+      setReport(await getBackend().checkLibrary(session));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const restore = async () => {
+    if (!report) return;
+    setChecking(true);
+    try {
+      await getBackend().restoreOriginals(session, report.trashed);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+    await check();
+  };
+
+  const addOrphans = () => {
+    if (!report) return;
+    useUi.getState().setImportJob(getBackend().addOrphans(session, report.orphans));
+    openDialog(null);
+  };
+
+  return (
+    <Modal title="Settings" width="md" onClose={() => openDialog(null)}>
+      <div className={styles.sections}>
+        <section className={styles.section}>
+          <h3 className={styles.heading}>This device</h3>
+          <dl className={styles.facts}>
+            <dt>Name</dt>
+            <dd>{device?.deviceName ?? '…'}</dd>
+            <dt>Library</dt>
+            <dd>{connection?.accountLabel}</dd>
+            {device?.cacheBytes !== null && (
+              <>
+                <dt>Kept on this device</dt>
+                <dd>{device ? formatBytes(device.cacheBytes ?? 0) : '…'} of originals and previews</dd>
+              </>
+            )}
+          </dl>
+          {device?.cacheBytes !== null && (
+            <Button
+              size="sm"
+              disabled={clearing}
+              onClick={async () => {
+                setClearing(true);
+                await getBackend()
+                  .clearDeviceCache(session)
+                  .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+                clearPreviewCache();
+                setClearing(false);
+                refreshDevice();
+              }}
+            >
+              Clear this device’s copies
+            </Button>
+          )}
+          <p className={styles.muted}>
+            {device?.cacheBytes === null
+              ? 'This library is stored in this browser, so there is nothing extra to clear.'
+              : 'Photos are fetched again when you open them. Changes not yet saved are kept.'}
+          </p>
+        </section>
+
+        {isDrive && (
+          <section className={styles.section}>
+            <h3 className={styles.heading}>Adding from Google Drive</h3>
+            <label className={styles.option}>
+              <input
+                type="radio"
+                name="drive-add"
+                checked={driveMode === 'move'}
+                onChange={() => {
+                  setDriveMode('move');
+                  saveDriveAddMode('move');
+                }}
+              />
+              Move them into the library’s Originals folder
+            </label>
+            <label className={styles.option}>
+              <input
+                type="radio"
+                name="drive-add"
+                checked={driveMode === 'leave'}
+                onChange={() => {
+                  setDriveMode('leave');
+                  saveDriveAddMode('leave');
+                }}
+              />
+              Leave them where they are in Drive
+            </label>
+          </section>
+        )}
+
+        <section className={styles.section}>
+          <h3 className={styles.heading}>Library health</h3>
+          <p className={styles.muted}>Checks that every photo’s original is still in storage and unchanged.</p>
+          <Button size="sm" disabled={checking} onClick={() => void check()}>
+            {checking ? 'Checking…' : 'Check library'}
+          </Button>
+          {report && (
+            <div className={styles.report} role="status">
+              {describeHealth(report).map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+              <div className={styles.actions}>
+                {report.trashed.length > 0 && (
+                  <Button size="sm" variant="primary" disabled={checking} onClick={() => void restore()}>
+                    Restore {plural(report.trashed.length, 'original')} from the trash
+                  </Button>
+                )}
+                {report.orphans.length > 0 && (
+                  <Button size="sm" variant="primary" onClick={addOrphans}>
+                    Add {plural(report.orphans.length, 'photo')} back to the library
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          {error && (
+            <p className={styles.error} role="alert">
+              {error}
+            </p>
+          )}
+        </section>
+      </div>
+    </Modal>
+  );
+}

@@ -1,5 +1,5 @@
 import { memo, type MouseEvent } from 'react';
-import { Images, Layers, SlidersHorizontal } from 'lucide-react';
+import { Images, Layers, SlidersHorizontal, TriangleAlert } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useFindResult, useLibraryView, usePreviewUrl, useVersionCounts } from '../../app/hooks';
 import { useUi } from '../../app/store';
@@ -7,6 +7,12 @@ import { writeDraggedIds } from '../../app/drag';
 import { isEdited } from '../../library/asset-query';
 import { Stars } from '../Stars/Stars';
 import styles from './PhotoTile.module.css';
+
+const ORIGINAL_STATUS_WORDS = {
+  missing: 'Missing original',
+  trashed: 'In the trash',
+  changed: 'Changed',
+} as const;
 
 interface PhotoTileProps {
   assetId: AssetId;
@@ -67,6 +73,12 @@ export const PhotoTile = memo(function PhotoTile({ assetId, selected, focused, o
           {asset.rating > 0 && <Stars rating={asset.rating} size={11} />}
         </span>
         <span className={styles.badges}>
+          {asset.originalStatus !== undefined && asset.originalStatus !== 'ok' && (
+            <span className={`${styles.badge} ${styles.problem}`} title="Check library in Settings for what to do">
+              <TriangleAlert size={11} />
+              {ORIGINAL_STATUS_WORDS[asset.originalStatus]}
+            </span>
+          )}
           {burst > 1 && (
             <button
               type="button"

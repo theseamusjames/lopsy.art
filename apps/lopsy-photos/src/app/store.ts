@@ -13,7 +13,7 @@ import type { Collection, SortOrder } from '../library/asset-query';
 import { NO_FACETS, type FacetFilter } from '../library/finding';
 
 export type ViewMode = 'grid' | 'single' | 'compare' | 'cull';
-export type DialogName = 'import' | 'export' | 'delete' | 'help' | 'sync' | null;
+export type DialogName = 'import' | 'export' | 'delete' | 'help' | 'sync' | 'settings' | null;
 
 export interface EditTarget {
   readonly assetId: AssetId;
