@@ -3,7 +3,7 @@ import { Album as AlbumIcon, CalendarDays, Clock, EyeOff, Images, Pencil, Plus, 
 import { useLibraryView, useSavedSearches, useSession } from '../../app/hooks';
 import { buildDateTree } from '@lopsy/photos-core/search/dates';
 import { writeSavedSearches } from '@lopsy/photos-core/search/rules';
-import { datePrefixLabel, importBatches } from '../../library/finding';
+import { datePrefixLabel, importBatches, importLabel } from '../../library/finding';
 import { Disclosure } from '../Disclosure/Disclosure';
 import { useUi } from '../../app/store';
 import { ASSET_DRAG_TYPE, readDraggedIds } from '../../app/drag';
@@ -255,7 +255,7 @@ export function Sidebar() {
             {item(
               { kind: 'import', importId: batch.importId },
               <Upload size={14} />,
-              new Date(batch.importedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
+              importLabel(batch.importedAt),
               batch.count,
             )}
           </div>

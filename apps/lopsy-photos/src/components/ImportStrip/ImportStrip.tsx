@@ -43,8 +43,11 @@ export function ImportStrip() {
 
   const left = progress.finished ? null : estimateLeft(stats, now - started.current);
   const paused = progress.finished && stats.paused > 0;
+  const waiting = stats.waiting.length;
   const headline = paused
     ? `Import paused · ${plural(stats.paused, 'photo')} still to go`
+    : progress.finished && waiting > 0
+    ? `Imported ${plural(stats.done, 'photo')} · ${plural(waiting, 'photo')} waiting to try again`
     : progress.finished
     ? `Imported ${plural(stats.done, 'photo')}${stats.duplicates > 0 ? `, skipped ${stats.duplicates} already in the library` : ''}`
     : `Importing ${stats.settled.toLocaleString()} of ${plural(stats.total, 'photo')} · ${formatBytes(stats.totalBytes - stats.sentBytes)} left`;
@@ -52,9 +55,14 @@ export function ImportStrip() {
   return (
     <section className={styles.strip} aria-label="Import" aria-live="polite">
       <div className={styles.row}>
-        {progress.finished && !paused && <Check size={16} className={styles.ok} />}
+        {progress.finished && !paused && waiting === 0 && <Check size={16} className={styles.ok} />}
         <span className={styles.headline}>{headline}</span>
         {left && <span className={styles.muted}>{left}</span>}
+        {waiting > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => setShowFailures((s) => !s)}>
+            <span className={styles.warn}>{plural(waiting, 'photo')} waiting to retry</span>
+          </Button>
+        )}
         {stats.failed.length > 0 && (
           <Button size="sm" variant="ghost" onClick={() => setShowFailures((s) => !s)}>
             <span className={styles.bad}>{plural(stats.failed.length, 'photo')} could not be imported</span>
@@ -64,6 +72,10 @@ export function ImportStrip() {
         {paused ? (
           <Button size="sm" variant="primary" onClick={resume}>
             Resume
+          </Button>
+        ) : progress.finished && waiting > 0 ? (
+          <Button size="sm" variant="primary" onClick={resume}>
+            Retry
           </Button>
         ) : progress.finished ? (
           <IconButton size="sm" label="Dismiss" icon={<X size={14} />} onClick={() => setImportJob(null)} />
@@ -85,7 +97,7 @@ export function ImportStrip() {
       )}
       {showFailures && (
         <ul className={styles.failures}>
-          {stats.failed.map((f) => (
+          {[...stats.waiting, ...stats.failed].map((f) => (
             <li key={f.id}>
               <span className={styles.file}>{f.fileName}</span>
               <span className={styles.muted}>{f.error ?? 'Failed'}</span>

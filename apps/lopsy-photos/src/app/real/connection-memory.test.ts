@@ -13,6 +13,8 @@ describe('last connection', () => {
     const last = { kind: 'local-folder' as const, label: 'Pictures' };
     expect(parseLastConnection(serializeLastConnection(last))).toEqual(last);
     expect(parseLastConnection(null)).toBeNull();
+    const drive = { kind: 'google-drive' as const, label: 'a@b.c', accountId: '123' };
+    expect(parseLastConnection(serializeLastConnection(drive))).toEqual(drive);
     expect(parseLastConnection('{')).toBeNull();
     expect(parseLastConnection('{"kind":"ftp","label":"x"}')).toBeNull();
     expect(parseLastConnection('{"kind":"browser"}')).toBeNull();

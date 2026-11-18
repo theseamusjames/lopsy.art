@@ -44,3 +44,12 @@ describe('estimateLeft', () => {
     expect(estimateLeft(half, 180_000)).toBe('About 3 minutes left');
   });
 });
+
+describe('waiting to retry', () => {
+  it('lists items the importer parked', () => {
+    const parked = { ...item('queued', 100), error: 'Waiting to retry: network down' };
+    const s = importStats({ finished: true, items: [item('done', 100), parked] });
+    expect(s.waiting.map((i) => i.error)).toEqual(['Waiting to retry: network down']);
+    expect(s.paused).toBe(0);
+  });
+});

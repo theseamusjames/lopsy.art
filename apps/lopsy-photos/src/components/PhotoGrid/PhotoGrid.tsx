@@ -4,6 +4,7 @@ import { useUi } from '../../app/store';
 import { anchorScroll, gridGeometry, scrollToReveal, visibleRange, type GridGeometry } from '../../library/grid-window';
 import { selectOne, selectRange, toggleOne } from '../../library/selection';
 import { PhotoTile } from '../PhotoTile/PhotoTile';
+import { TileMenu } from '../TileMenu/TileMenu';
 import styles from './PhotoGrid.module.css';
 
 const GAP = 6;
@@ -83,6 +84,9 @@ export function PhotoGrid({ orderedIds }: PhotoGridProps) {
     [orderedIds, setSelection],
   );
 
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+
   const onOpen = useCallback(
     (id: AssetId) => {
       setSelection(selectOne(id));
@@ -104,6 +108,17 @@ export function PhotoGrid({ orderedIds }: PhotoGridProps) {
       onScroll={onScroll}
       onClick={(e) => {
         if (e.target === e.currentTarget) setSelection({ ...selection, ids: new Set() });
+      }}
+      onContextMenu={(e) => {
+        const tile = e.target instanceof Element ? e.target.closest<HTMLElement>('[data-item-id]') : null;
+        const id = tile?.dataset.itemId;
+        if (!id) return;
+        e.preventDefault();
+        const current = useUi.getState().selection;
+        // Right-clicking outside the selection acts on that photo alone.
+        if (!current.ids.has(id)) setSelection(selectOne(id));
+        else setSelection({ ...current, focus: id });
+        setMenu({ x: e.clientX, y: e.clientY });
       }}
       role="grid"
       aria-label="Photos"
@@ -146,6 +161,7 @@ export function PhotoGrid({ orderedIds }: PhotoGridProps) {
           );
         })}
       </div>
+      {menu && <TileMenu x={menu.x} y={menu.y} orderedIds={orderedIds} onClose={closeMenu} />}
     </div>
   );
 }

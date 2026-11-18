@@ -34,6 +34,8 @@ export type CommandId =
   | 'select-none'
   | 'delete'
   | 'toggle-info'
+  | 'copy-edits'
+  | 'paste-edits'
   | 'help';
 
 export interface KeyChord {
@@ -102,6 +104,20 @@ export const SHORTCUTS: readonly Shortcut[] = [
     description: 'Move to the trash',
     group: 'Selection',
     contexts: ['grid', 'single'],
+  },
+  {
+    id: 'copy-edits',
+    chords: [{ key: 'c', mod: true, shift: true }],
+    description: 'Copy edits (choose which)',
+    group: 'Marks',
+    contexts: ['grid', 'single', 'compare'],
+  },
+  {
+    id: 'paste-edits',
+    chords: [{ key: 'v', mod: true, shift: true }],
+    description: 'Paste edits onto the selection',
+    group: 'Marks',
+    contexts: ['grid', 'single', 'compare'],
   },
   { id: 'help', chords: [{ key: '?', shift: true }, { key: '?' }], description: 'Show these shortcuts', group: 'Views', contexts: ALL },
 ];

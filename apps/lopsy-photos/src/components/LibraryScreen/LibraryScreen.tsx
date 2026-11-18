@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useLibraryView, useOrderedIds } from '../../app/hooks';
 import { useUi } from '../../app/store';
-import { runCommand } from '../../app/commands';
+import { copyEdits, copySource, runCommand } from '../../app/commands';
+import { COPY_GROUPS, DEFAULT_COPY_GROUP_IDS } from '../../library/recipe-copy';
+import { CopyEditsDialog } from '../CopyEditsDialog/CopyEditsDialog';
 import { isTypingTarget, matchShortcut, type ShortcutContext } from '../../shortcuts/registry';
 import { pruneSelection } from '../../library/selection';
 import { CompareView } from '../CompareView/CompareView';
@@ -127,6 +129,15 @@ export function LibraryScreen() {
       {dialog === 'export' && <ExportDialog />}
       {dialog === 'delete' && <DeleteDialog />}
       {dialog === 'settings' && <SettingsDialog />}
+      {dialog === 'copy-edits' && (
+        <CopyEditsDialog
+          sourceName={copySource()?.name ?? 'this photo'}
+          groups={COPY_GROUPS}
+          initial={DEFAULT_COPY_GROUP_IDS}
+          onCopy={copyEdits}
+          onClose={() => useUi.getState().openDialog(null)}
+        />
+      )}
       <DropZone />
     </div>
   );

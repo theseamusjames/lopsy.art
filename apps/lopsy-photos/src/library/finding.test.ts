@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { datePrefixLabel, facetRule, findAssets, hasFacets, importBatches, NO_FACETS, ruleForSaving, toggleValue, type FindQuery } from './finding';
+import { importLabel, datePrefixLabel, facetRule, findAssets, hasFacets, importBatches, NO_FACETS, ruleForSaving, toggleValue, type FindQuery } from './finding';
 import { makeAsset, makeView } from './test-fixtures';
 
 const x100 = { make: 'FUJIFILM', model: 'X100VI' };
@@ -87,5 +87,13 @@ describe('facets and saving', () => {
       ['imp-2', 1],
       ['imp-1', 2],
     ]);
+  });
+});
+
+describe('importLabel', () => {
+  it('is short, with the year only when it differs', () => {
+    const now = new Date(2026, 10, 18, 12, 0);
+    expect(importLabel(new Date(2026, 2, 14, 9, 30).toISOString(), now)).toBe('14 Mar, 09:30');
+    expect(importLabel(new Date(2025, 11, 1, 18, 5).toISOString(), now)).toBe('1 Dec 2025, 18:05');
   });
 });

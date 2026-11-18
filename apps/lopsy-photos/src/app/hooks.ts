@@ -6,6 +6,8 @@ import type { ImportItemState, ImportJob, ImportProgress } from '@lopsy/photos-c
 import type { ExportJob, ExportProgress } from './backend';
 import type { DownloadProgress, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
 import { useUi } from './store';
+import { listExportPresets, listPresets } from '../library/presets-list';
+import type { ExportPreset, Preset } from '@lopsy/photos-core/library/types';
 import { findAssets, type FacetFilter, type FindResult } from '../library/finding';
 import { parseTextQuery, TextIndex } from '@lopsy/photos-core/search/text';
 import { readSavedSearches, type SavedSearch } from '@lopsy/photos-core/search/rules';
@@ -178,6 +180,26 @@ export function useExportProgress(job: ExportJob | null): ExportProgress | null 
     job ? (l) => job.subscribe(l) : noSubscribe,
     () => (job ? job.getProgress() : null),
   );
+}
+
+let presetMemo: { presets: LibraryView['presets']; list: readonly Preset[] } | null = null;
+
+/** Lopsy's edit presets and the user's own. */
+export function usePresets(): readonly Preset[] {
+  const view = useLibraryView();
+  if (presetMemo && presetMemo.presets === view.presets) return presetMemo.list;
+  presetMemo = { presets: view.presets, list: listPresets(view) };
+  return presetMemo.list;
+}
+
+let exportPresetMemo: { presets: LibraryView['exportPresets']; list: readonly ExportPreset[] } | null = null;
+
+/** Lopsy's export presets and the user's own. */
+export function useExportPresets(): readonly ExportPreset[] {
+  const view = useLibraryView();
+  if (exportPresetMemo && exportPresetMemo.presets === view.exportPresets) return exportPresetMemo.list;
+  exportPresetMemo = { presets: view.exportPresets, list: listExportPresets(view) };
+  return exportPresetMemo.list;
 }
 
 export const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
