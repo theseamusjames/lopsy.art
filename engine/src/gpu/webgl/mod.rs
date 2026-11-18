@@ -5,6 +5,7 @@ pub mod context;
 pub mod framebuffer;
 pub mod pass;
 pub(in crate::gpu) mod program;
+pub mod read;
 pub mod texture_pool;
 
 /// An image the host owns that a texture can be filled from: a canvas.

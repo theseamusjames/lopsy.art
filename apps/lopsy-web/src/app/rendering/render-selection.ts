@@ -2,7 +2,7 @@ import { traceSelectionContours } from '../../selection/selection';
 import { getHandlePositions, isShapeChangingTransform } from '../../tools/transform/transform';
 import type { TransformHandle, TransformState } from '../../tools/transform/transform';
 import { transformPolylines } from '../../tools/transform/transform-point';
-import { SCALE_HANDLE_DRAWN_PX } from '../../tools/transform/transform-handles';
+import { SCALE_HANDLE_DRAWN_PX, hasRotateHandles } from '../../tools/transform/transform-handles';
 import type { Rect } from '../../types';
 
 export interface SelectionData {
@@ -216,7 +216,7 @@ export function drawTransformHandles(
     'rotate-bottom-right': 'bottom-right',
     'rotate-bottom-left': 'bottom-left',
   };
-  for (const key of rotHandleKeys) {
+  for (const key of hasRotateHandles(transform) ? rotHandleKeys : []) {
     const pos = handles[key];
     const cornerKey = cornerForRot[key] as TransformHandle;
     const cornerPos = handles[cornerKey];

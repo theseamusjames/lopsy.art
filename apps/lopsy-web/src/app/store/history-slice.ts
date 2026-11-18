@@ -20,6 +20,7 @@ import { useUIStore } from '../ui-store';
 import { transformSelectionOfLayer } from '../interactions/transform-lift-mask';
 import { applyTransformToMask, createTransformState, isShapeChangingTransform } from '../../tools/transform/transform';
 import { addSnapshotHandles, createSnapshotHandleLedger } from './snapshot-ledger';
+import { takeDeferredHistoryEntry } from './deferred-history';
 
 export interface HistorySlice {
   undoStack: HistorySnapshot[];
@@ -46,6 +47,12 @@ export interface HistorySlice {
   pushHistory: (label?: string, before?: LayerHistoryBefore) => void;
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => void;
   pushHistoryMetadata: (label: string) => void;
+  /**
+   * Build the entry `pushHistoryMetadata(label)` would push now, without
+   * pushing it — for an edit whose history row waits until it is known to
+   * be real (see `deferred-history.ts`).
+   */
+  captureHistoryMetadata: (label: string) => HistorySnapshot;
   markClean: () => void;
 }
 
@@ -516,8 +523,25 @@ function withMeshWarpPreviewSuspended(jump: () => void): void {
 type HistorySet = (partial: Partial<EditorState>) => void;
 type HistoryGet = () => EditorState;
 
+/**
+ * Record a deferred entry (an uncommitted text layer's "Add Text Layer") on
+ * the undo stack, so whatever changes history next sees it in order.
+ */
+function recordDeferredEntry(set: HistorySet, get: HistoryGet): void {
+  const state = get();
+  const entry = takeDeferredHistoryEntry(state.document.layers);
+  if (!entry) return;
+  lastRestoredSnapshot = null;
+  set({
+    undoStack: [...state.undoStack.slice(-49), entry],
+    redoStack: [],
+    isDirty: true,
+  });
+}
+
 function undoSteps(set: HistorySet, get: HistoryGet, steps: number): void {
   finalizePendingStrokeGlobal();
+  recordDeferredEntry(set, get);
   // Drop any active float (and cancel a scheduled prefloat) before
   // restoring. A leftover float leaves `float_layer_id` set on the engine,
   // which makes `update_layer` preserve the float's expanded x/y/w/h in the
@@ -557,6 +581,7 @@ function undoSteps(set: HistorySet, get: HistoryGet, steps: number): void {
 }
 
 function redoSteps(set: HistorySet, get: HistoryGet, steps: number): void {
+  recordDeferredEntry(set, get);
   // Same reasoning as undo: a stale float would preserve expanded dims in
   // the engine's layer descriptor and misplace the restored texture.
   cancelPrefloat();
@@ -620,6 +645,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     // still queued from the previous stroke does not have to be drained
     // first — that synchronous drain stalled every mask stroke start (#780).
     flushPendingSnapshots();
+    recordDeferredEntry(set, get);
     const state = get();
     lastRestoredSnapshot = null;
 
@@ -667,6 +693,7 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
   },
 
   pushPrebuiltSnapshot: (snapshot: HistorySnapshot) => {
+    recordDeferredEntry(set, get);
     const state = get();
     lastRestoredSnapshot = null;
     // A prebuilt snapshot was captured at some earlier moment, so masks
@@ -687,10 +714,20 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
     // `mask.data`, but undoing it keeps the live GPU mask and only
     // refreshes the JS copy (`restoreMasksAfterUndo`), so the lagging
     // bytes are never uploaded over the stroke (#780).
+    recordDeferredEntry(set, get);
     const state = get();
     lastRestoredSnapshot = null;
+    set({
+      undoStack: [...state.undoStack.slice(-49), get().captureHistoryMetadata(label)],
+      redoStack: [],
+      isDirty: true,
+      renderVersion: state.renderVersion + 1,
+    });
+  },
 
-    const snapshot: HistorySnapshot = {
+  captureHistoryMetadata: (label: string): HistorySnapshot => {
+    const state = get();
+    return {
       kind: 'metadata',
       document: state.document,
       selection: historySelection(state.selection, state.document.activeLayerId),
@@ -699,12 +736,6 @@ export const createHistorySlice: SliceCreator<HistorySlice> = (set, get) => ({
       selectedPathId: state.selectedPathId,
       guides: useUIStore.getState().guides,
     };
-    set({
-      undoStack: [...state.undoStack.slice(-49), snapshot],
-      redoStack: [],
-      isDirty: true,
-      renderVersion: state.renderVersion + 1,
-    });
   },
 
   markClean: () => {

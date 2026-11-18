@@ -274,9 +274,10 @@ export interface DocumentSlice {
   createDocument: (width: number, height: number, transparentBg: boolean, colorMode?: DocumentColorMode, dpi?: number) => void;
   openImageAsDocument: (imageData: ImageData, name: string) => void;
   addLayer: () => void;
-  addTextLayer: (layer: import('../../types').TextLayer) => void;
+  addTextLayer: (layer: import('../../types').TextLayer, options?: { recordHistory?: boolean }) => void;
   updateTextLayerProperties: (id: string, props: Partial<Omit<import('../../types').TextLayer, 'id' | 'type'>>) => void;
-  removeLayer: (id: string) => void;
+  /** `recordHistory: false` removes the layer without a Delete Layer row. */
+  removeLayer: (id: string, options?: { recordHistory?: boolean }) => void;
   setActiveLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
   toggleLayerLock: (id: string) => void;
@@ -392,11 +393,11 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     set(result);
   },
 
-  addTextLayer: (layer) => {
+  addTextLayer: (layer, options) => {
     const s = get();
     const result = computeAddTextLayer(s.document, layer);
     if (!result) return;
-    s.pushHistoryMetadata('Add Text Layer');
+    if (options?.recordHistory !== false) s.pushHistoryMetadata('Add Text Layer');
     set(result);
   },
 
@@ -414,7 +415,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     });
   },
 
-  removeLayer: (id) => {
+  removeLayer: (id, options) => {
     const s = get();
     const result = computeRemoveLayer(
       s.document,
@@ -438,7 +439,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
       pixelDataManager.dropLayer(descId);
     }
 
-    s.pushHistory('Delete Layer');
+    if (options?.recordHistory !== false) s.pushHistory('Delete Layer');
     applyActionResult(set, result);
   },
 

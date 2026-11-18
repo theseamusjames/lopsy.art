@@ -23,7 +23,7 @@ import { getEngine } from '../../engine-wasm/engine-state';
 import { snapshotMaskGpu, restoreMaskFromGpuSnapshot } from '../../engine-wasm/wasm-bridge';
 import { isMaskGpuDirty } from '../../engine-wasm/mask-gpu-dirty';
 import { seedMaskDataRef, forgetMaskDataRef } from '../../engine-wasm/sync-state';
-import { isMaskDataStale, markMaskDataFresh, scheduleMaskDataRefresh } from '../mask-data-sync';
+import { isMaskDataStale, markMaskDataFresh, scheduleMaskDataRefreshAfterHistory } from '../mask-data-sync';
 
 export const EMPTY_MASK_HANDLE = 0xFFFFFFFF;
 
@@ -99,7 +99,7 @@ function adoptGpuMask(engine: Engine, layer: Layer, isDataStale: boolean): void 
   if (!layer.mask) return;
   seedMaskDataRef(engine, layer.id, layer.mask.data);
   if (isDataStale) {
-    scheduleMaskDataRefresh(layer.id);
+    scheduleMaskDataRefreshAfterHistory(layer.id);
   } else {
     markMaskDataFresh(layer.id);
   }

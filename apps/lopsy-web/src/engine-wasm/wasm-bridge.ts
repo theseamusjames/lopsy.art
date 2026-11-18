@@ -689,7 +689,8 @@ let parkedReadbacks = 0;
 /**
  * How many readbacks are out: commands the engine has parked until their
  * pixels arrive, plus one while in-turn reads are waiting their turn or a
- * caller has yet to act on one that just answered. Always 0 on WebGL. A
+ * caller has yet to act on one that just answered. On WebGL only the
+ * thumbnail and mask reads park, until their fence signals (#1767). A
  * test that records the document's state waits for this to reach 0, since
  * work that follows a readback (a deferred crop, a thumbnail) has not
  * happened yet.
@@ -737,6 +738,17 @@ function noop(): void {}
  * by, which need not wait and are not waited for: thumbnails, the
  * eyedropper.
  */
+/**
+ * An export declared with `deferred_readback_export!` is typed `any`: it
+ * answers its value, or a pending task on either backend. This restores
+ * the value's type for `asyncReadback`.
+ */
+function answersLater<Args extends [Engine, ...unknown[]], Result>(
+  read: (...args: Args) => unknown,
+): (...args: Args) => Result {
+  return read as (...args: Args) => Result;
+}
+
 function asyncReadback<Args extends [Engine, ...unknown[]], Result>(
   read: (...args: Args) => Result,
   order: 'in-turn' | 'any-time' = 'in-turn',
@@ -775,7 +787,7 @@ export const readSelectionMask = asyncReadback(rawReadSelectionMask);
 /** A layer's opaque bounds, texture-local `[x, y, width, height]`; empty when the read failed. */
 export const getLayerContentBounds = asyncReadback(rawGetLayerContentBounds);
 /** A layer mask's coverage, one byte per pixel, sized like the mask texture. */
-export const readMaskTexture = asyncReadback(rawReadMaskTexture);
+export const readMaskTexture = asyncReadback(answersLater<[Engine, string], Uint8Array | undefined>(rawReadMaskTexture));
 /** A layer's content-cropped pixels as an LZ4 16-bit blob, for the context-loss backup. */
 export const readLayerPixelsLz4U16 = asyncReadback(rawReadLayerPixelsLz4U16);
 
@@ -801,9 +813,12 @@ export const clipboardCopyMerged = asyncReadback(rawClipboardCopyMerged);
  * it resolves there is no field: the caller passes its points through.
  */
 export const magneticLassoBegin = asyncReadback(rawMagneticLassoBegin);
-export const readLayerThumbnail = asyncReadback(rawReadLayerThumbnail, 'any-time');
-export const readCompositeThumbnail = asyncReadback(rawReadCompositeThumbnail, 'any-time');
-export const readChannelThumbnail = asyncReadback(rawReadChannelThumbnail, 'any-time');
+export const readLayerThumbnail = asyncReadback(
+  answersLater<[Engine, string, number], Uint8Array>(rawReadLayerThumbnail), 'any-time');
+export const readCompositeThumbnail = asyncReadback(
+  answersLater<[Engine, number], Uint8Array>(rawReadCompositeThumbnail), 'any-time');
+export const readChannelThumbnail = asyncReadback(
+  answersLater<[Engine, string, number, number], Uint8Array>(rawReadChannelThumbnail), 'any-time');
 export const readClipboardPixels = asyncReadback(rawReadClipboardPixels);
 /** The quick mask's coverage: `[width, height]` as i32 LE, then one byte per pixel. */
 export const readQuickMaskPixels = asyncReadback(rawReadQuickMaskPixels);

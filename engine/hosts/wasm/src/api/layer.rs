@@ -4,7 +4,7 @@
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
-use crate::readback::{read, readback_export, task};
+use crate::readback::{read, readback_export, task, deferred_readback_export};
 use crate::Engine;
 
 #[wasm_bindgen(js_name = "addLayer")]
@@ -476,14 +476,14 @@ pub fn upload_layer_pixels_compressed_u16(
     lopsy_engine::commands::layer::upload_layer_pixels_compressed_u16(&mut engine.inner, layer_id, compressed).map_err(|e| JsError::new(&e))
 }
 
-readback_export! {
+deferred_readback_export! {
     #[wasm_bindgen(js_name = "readLayerThumbnail")]
     pub fn read_layer_thumbnail(engine, layer_id: &str, max_size: u32) -> Vec<u8> {
         read(lopsy_engine::commands::layer::read_layer_thumbnail(engine, layer_id, max_size))
     }
 }
 
-readback_export! {
+deferred_readback_export! {
     #[wasm_bindgen(js_name = "readCompositeThumbnail")]
     pub fn read_composite_thumbnail(engine, max_size: u32) -> Vec<u8> {
         read(lopsy_engine::commands::layer::read_composite_thumbnail(engine, max_size))
