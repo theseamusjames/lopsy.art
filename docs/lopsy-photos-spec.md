@@ -1703,11 +1703,14 @@ feature: `apps/lopsy-photos/FEATURES.md`. How the library database works:
   loaded 4-core machine. There a 40 MP RAF became editable in 4–18 s and
   reached full resolution in 20–60 s, and the engine's own RAF work took
   about 1.5 s of that. Real-GPU timings are unknown.
-- **Edit view speed is unmeasured on real hardware.** Under SwiftShader a
-  slider step on a 3600×2400 photo with sharpening and local contrast
-  took 30–100 s, because each step renders the screen, the histogram and
-  two previews; on a GPU each of those should take milliseconds. Profile
-  it on real hardware first.
+- **Edit view speed is unmeasured on real hardware.** A committed change
+  costs four renders (the screen, two preview draws once the edit
+  settles, and a restore; the histogram reuses the screen's frame), and
+  `e2e/edit-render-budget.spec.ts` pins those counts. Under SwiftShader
+  such a change on a 3600×2400 photo with sharpening and local contrast
+  still took 5–8 s, and an exposure change on a 40 MP RAF about 13 s; on a
+  GPU each render should take milliseconds. Profile it on real hardware
+  first.
 - **Chromium only.**
 
 ### Decisions for the owner
