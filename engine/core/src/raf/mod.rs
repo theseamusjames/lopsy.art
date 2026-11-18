@@ -223,6 +223,22 @@ fn orient_band(rgb: Vec<f32>, params: &RafRenderParams, band: RafBand, clamp: bo
     RafBandPixels { x, y, width: ow, height: oh, pixels }
 }
 
+/// The camera model and the as-shot white balance multipliers (`[R, 1, B]`,
+/// tag 0xF00D) of a RAF, read from its headers without decoding pixels.
+/// `None` for the multipliers when the file has no as-shot tag (the decode
+/// then uses grey world).
+pub fn read_wb_info(data: &[u8]) -> Result<(String, Option<[f32; 3]>), String> {
+    if data.len() < 120 || &data[0..16] != b"FUJIFILMCCD-RAW " {
+        return Err("Not a Fujifilm RAF file".to_string());
+    }
+    let model = parse_camera_model(&data[28..60]);
+    let offset = read_be_u32(data, 100) as usize;
+    let length = read_be_u32(data, 104) as usize;
+    let end = offset.checked_add(length).filter(|&e| e <= data.len()).ok_or("CFA data extends past end of file")?;
+    let meta = parse_cfa_tiff(&data[offset..end])?;
+    Ok((model, meta.as_shot_wb))
+}
+
 /// Decode a Fujifilm RAF file with production defaults (Markesteijn demosaic,
 /// denoise on). This is the stable public interface called by the WASM bridge;
 /// its behaviour is identical to the pre-opts code.
@@ -327,6 +343,9 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
 
     let cfa_section = &data[cfa_data_offset..cfa_data_offset + cfa_data_length];
     let cfa_meta = parse_cfa_tiff(cfa_section)?;
+    // The CFA dimensions are untrusted: check them before planes are
+    // allocated from them (u16 raw plane plus f32 mosaic).
+    crate::decode::check_image_size(cfa_meta.width, cfa_meta.height, 6)?;
 
     let raw_w = cfa_meta.width as usize;
     let raw_h = cfa_meta.height as usize;

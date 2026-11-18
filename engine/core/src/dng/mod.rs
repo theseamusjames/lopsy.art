@@ -150,6 +150,7 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
     let strip_counts = get_tag_u32_vec(&main_ifd, TagId::StripByteCounts)
         .or_else(|_| get_tag_u32_vec(&main_ifd, TagId::TileByteCounts))?;
 
+    crate::decode::check_image_size(width, height, 8)?;
     let tile_width = get_tag_u32(&main_ifd, TagId::TileWidth).ok();
     let tile_height = get_tag_u32(&main_ifd, TagId::TileLength).ok();
 
@@ -176,11 +177,7 @@ pub fn read_dng(data: &[u8]) -> Result<DngImage, String> {
         _ => return Err(format!("Unsupported DNG compression: {compression}")),
     };
 
-    let expected_pixels = if is_linear {
-        (width * height * samples) as usize
-    } else {
-        (width * height) as usize
-    };
+    let expected_pixels = width as usize * height as usize * if is_linear { samples as usize } else { 1 };
 
     if pixel_data.len() < expected_pixels {
         return Err(format!(

@@ -44,6 +44,7 @@ uniforms! {
     pub struct DetailSharpenParams {
         pub amount: f32,
         pub edges: f32,
+        pub mask_view: i32,
     }
 }
 
@@ -63,5 +64,23 @@ uniforms! {
         pub count: i32,
         pub mode: i32,
         pub overlay: i32,
+    }
+}
+
+uniforms! {
+    /// `develop/clip_warning.wgsl`
+    pub struct ClipWarningParams {
+        pub shadows: i32,
+        pub highlights: i32,
+    }
+}
+
+uniforms! {
+    /// `develop/finish.wgsl`
+    pub struct FinishParams {
+        pub vignette: [f32; 4],
+        pub grain: [f32; 4],
+        pub doc_size: [f32; 2],
+        pub seed: u32,
     }
 }
