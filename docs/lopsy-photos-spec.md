@@ -1662,6 +1662,15 @@ feature: `apps/lopsy-photos/FEATURES.md`. How the library database works:
   EXIF. There is no output sharpening.
 - **Lopsy's own Save Project** stays at `.lopsy` v2 (8-bit); v3 is written
   only for Photos.
+- **White balance in Lightroom sidecars** maps for JPEG, PNG and TIFF.
+  For RAW files it needs the photo's own Kelvin scale, which the import
+  doesn't pass yet, so RAW sidecars keep the as-shot white balance.
+- **⌘Z reaches a delete only right after it** (or through the message's
+  Undo), because undoing a delete must also take the files out of the
+  trash; library history covers marks, keywords, albums and versions.
+- **DNG files load at full size** in the Edit view; RAF, JPEG, PNG and
+  WebP edit on the working image. Grain previewed on the working image
+  looks a little stronger than in a full-size export.
 
 ### Not built
 
@@ -1694,6 +1703,11 @@ feature: `apps/lopsy-photos/FEATURES.md`. How the library database works:
   loaded 4-core machine. There a 40 MP RAF became editable in 4–18 s and
   reached full resolution in 20–60 s, and the engine's own RAF work took
   about 1.5 s of that. Real-GPU timings are unknown.
+- **Edit view speed is unmeasured on real hardware.** Under SwiftShader a
+  slider step on a 3600×2400 photo with sharpening and local contrast
+  took 30–100 s, because each step renders the screen, the histogram and
+  two previews; on a GPU each of those should take milliseconds. Profile
+  it on real hardware first.
 - **Chromium only.**
 
 ### Decisions for the owner
