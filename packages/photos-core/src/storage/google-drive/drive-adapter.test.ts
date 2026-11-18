@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { StaticTokenSource } from '../../auth/static-token-source';
 import { runAdapterContract } from '../adapter-contract';
 import { sha256Hex } from '../content-hash';
-import type { NewFile } from '../types';
+import type { NewFile, StorageAdapter } from '../types';
 import { escapeQueryString, GoogleDriveAdapter, type GoogleDriveAdapterOptions } from './drive-adapter';
 import { createFakeDrive, type FakeDrive, type FakeDriveOptions } from './fake-drive';
 import { MemoryUploadSessionStore } from './upload-sessions';
@@ -318,6 +318,47 @@ describe('GoogleDriveAdapter', () => {
     expect(await store.get('asset-1:original')).toBeNull();
     expect(await second.listChildren(root.id)).toHaveLength(1);
   }, 20_000);
+
+  describe('sharing', () => {
+    it('links to files and folders in Drive', async () => {
+      const { adapter } = setup();
+      const root = await adapter.getRoot();
+      const folder = await adapter.createFolder(root.id, 'Exports');
+      const file = await adapter.createFile({ parentId: folder.id, name: 'a.jpg', mimeType: 'image/jpeg' }, new Blob(['a']));
+      expect(await adapter.webLink(folder.id)).toBe(`https://drive.google.com/drive/folders/${folder.id}`);
+      expect(await adapter.webLink(file.id)).toBe(`https://drive.google.com/file/d/${file.id}/view`);
+    });
+
+    it('shares a folder with anyone who has the link, and stops', async () => {
+      const { adapter, drive } = setup();
+      const root = await adapter.getRoot();
+      const folder = await adapter.createFolder(root.id, '2026-11-18 Web');
+      const file = await adapter.createFile({ parentId: folder.id, name: 'a.jpg', mimeType: 'image/jpeg' }, new Blob(['a']));
+      const other = await adapter.createFile({ parentId: root.id, name: 'private.jpg', mimeType: 'image/jpeg' }, new Blob(['p']));
+      expect(drive.isSharedWithAnyone(file.id)).toBe(false);
+
+      expect(await adapter.shareLink(folder.id)).toBe(`https://drive.google.com/drive/folders/${folder.id}`);
+      expect(drive.isSharedWithAnyone(folder.id)).toBe(true);
+      expect(drive.isSharedWithAnyone(file.id)).toBe(true);
+      expect(drive.isSharedWithAnyone(other.id)).toBe(false);
+      const create = drive.requests.find((request) => request.method === 'POST' && request.url.pathname.endsWith('/permissions'));
+      expect(create).toBeDefined();
+      await adapter.shareLink(folder.id);
+
+      await adapter.unshare(folder.id);
+      expect(drive.isSharedWithAnyone(folder.id)).toBe(false);
+      expect(drive.isSharedWithAnyone(file.id)).toBe(false);
+      await adapter.unshare(folder.id);
+    });
+
+    it('is offered by the Drive adapter only', async () => {
+      const { MemoryAdapter } = await import('../memory-adapter');
+      const memory: StorageAdapter = new MemoryAdapter();
+      expect(memory.shareLink).toBeUndefined();
+      expect(memory.unshare).toBeUndefined();
+      expect(memory.webLink).toBeUndefined();
+    });
+  });
 
   describe('untrusted upload sessions', () => {
     function resumable(drive: FakeDrive, store: MemoryUploadSessionStore, fetchFn = drive.fetch): GoogleDriveAdapter {
