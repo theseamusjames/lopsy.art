@@ -94,7 +94,9 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       loadedAssetId = null;
       const original = await options.loadOriginal(asset, signal);
       checkSignal(signal);
-      await e.load(original, asset.format);
+      // A small export can come from the working image; anything larger needs the full size.
+      const isSmall = settings.maxLongEdge !== null && settings.maxLongEdge <= 2048;
+      await e.load(original, asset.format, undefined, { resolution: isSmall ? 'working' : 'full' });
       loadedAssetId = asset.id;
       checkSignal(signal);
     }

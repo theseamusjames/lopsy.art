@@ -1,8 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
-import { DEFAULT_COPY_GROUPS, RECIPE_GROUPS, pickGroups, type RecipeGroupId } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_COPY_GROUPS, RECIPE_GROUPS, addArea, liveAreas, pickGroups, removeArea, type AreaKind, type RecipeGroupId } from '@lopsy/photos-core/library/recipe';
 import type { CopiedEdits } from '../../library/recipe-copy';
 import { CopyEditsDialog } from '../../components/CopyEditsDialog/CopyEditsDialog';
 import { PresetsPanel } from '../PresetsPanel/PresetsPanel';
@@ -31,12 +31,17 @@ import {
   type ControlDef,
   type GroupDef,
 } from '../edit-controls';
-import { isPreviewStale, isTypingTarget, neighbourId, shortcutFor } from '../edit-keys';
+import { EDIT_SHORTCUTS, isPreviewStale, isTypingTarget, neighbourId, shortcutFor } from '../edit-keys';
+import { Modal } from '../../components/Modal/Modal';
 import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
 import { CropTool } from '../CropTool/CropTool';
 import { WhiteBalanceMenu } from '../WhiteBalanceMenu/WhiteBalanceMenu';
+import { AreasPanel } from '../AreasPanel/AreasPanel';
+import { AreaHandles } from '../AreaHandles/AreaHandles';
+import { areaLabel } from '../area-edit';
+import { newId } from '@lopsy/photos-core/library/ids';
 import { LevelTool } from '../LevelTool/LevelTool';
 import { SplitView } from '../SplitView/SplitView';
 import { FULL_RECT, levelAngle, recipeCrop, toFramed, type Rect } from '../../engine/crop';
@@ -87,6 +92,8 @@ export interface EditViewProps {
   /** Paste edits (⌘⇧V) onto this version; the app applies them as one step. Disabled when `canPasteEdits` is false. */
   readonly onPasteEdits?: () => void;
   readonly canPasteEdits?: boolean;
+  /** The version's stored screen preview, shown at once while the engine loads the photo. */
+  readonly storedPreviewUrl?: string | null;
   /** The current view's photos along the bottom; ← and → move along it. */
   readonly filmstrip?: { readonly items: readonly FilmstripItem[]; readonly currentId: string; readonly onOpen: (assetId: string) => void } | undefined;
   /**
@@ -147,6 +154,7 @@ export function EditView({
   onRenameVersion,
   onDeleteVersion,
   filmstrip,
+  storedPreviewUrl = null,
   onCopyEdits,
   onPasteEdits,
   canPasteEdits = true,
@@ -165,6 +173,8 @@ export function EditView({
   const [isBeforeHeld, setIsBeforeHeld] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isLevelling, setIsLevelling] = useState(false);
   const [cropDraft, setCropDraft] = useState<Rect | null>(null);
   const isCropping = cropDraft !== null;
   const isReady = status.kind === 'ready';
@@ -343,8 +353,9 @@ export function EditView({
       if (onCopyEdits) setIsCopyDialogOpen(true);
     } else onPasteEdits?.();
   };
-  const handlers = useRef({ onUndo, onRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste });
-  handlers.current = { onUndo, onRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste };
+  const isToolOpen = isCropping || isLevelling || isCopyDialogOpen || isHelpOpen;
+  const handlers = useRef({ onUndo, onRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => {} });
+  handlers.current = { onUndo, onRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => void handleClose() };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -361,6 +372,18 @@ export function EditView({
         strip.onOpen(next);
         return;
       }
+      if (shortcut === 'leave') {
+        // A tool or dialog takes Escape for itself.
+        if (h.isToolOpen) return;
+        e.preventDefault();
+        h.leave();
+        return;
+      }
+      if (shortcut === 'help') {
+        e.preventDefault();
+        setIsHelpOpen(true);
+        return;
+      }
       if (shortcut === 'copyEdits' || shortcut === 'pasteEdits') {
         e.preventDefault();
         h.onCopyPaste(shortcut);
@@ -370,7 +393,7 @@ export function EditView({
       if (shortcut === 'undo') h.onUndo();
       else if (shortcut === 'redo') h.onRedo();
       else if (shortcut === 'fit') h.engine?.fit();
-      else if (shortcut === 'actualSize') h.engine?.setZoom(1);
+      else if (shortcut === 'actualSize') h.engine?.setZoom(1 / (h.engine.workingScale() || 1));
       else setIsBeforeHeld(true);
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -441,7 +464,6 @@ export function EditView({
 
   // ---- straighten -----------------------------------------------------
 
-  const [isLevelling, setIsLevelling] = useState(false);
   const hasFlipV = 'flipV' in DEFAULT_RECIPE.framing;
   const handleLevelLine = (a: { x: number; y: number }, b: { x: number; y: number }) => {
     setIsLevelling(false);
@@ -450,6 +472,45 @@ export function EditView({
     const angle = Math.round(Math.max(-45, Math.min(45, framingAngle(savedRecipe.framing) + delta)) * 100) / 100;
     commit({ 'framing.angle': angle }, changeLabel('Straighten', 'framing.angle', angle));
   };
+
+  // ---- areas ----------------------------------------------------------
+
+  const [isAreasOpen, setIsAreasOpen] = useState(false);
+  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
+  const shownAreas = liveAreas(shownRecipe);
+  const selectedArea = isAreasOpen ? shownAreas.find((a) => a.id === selectedAreaId) ?? null : null;
+  const labelOfArea = (id: string) => {
+    const index = shownAreas.findIndex((a) => a.id === id);
+    const area = shownAreas[index];
+    return area ? areaLabel(area, index) : 'Area';
+  };
+
+  useEffect(() => {
+    engine?.setAreaOverlay(isAreasOpen && selectedAreaId ? selectedAreaId : null);
+  }, [engine, isAreasOpen, selectedAreaId]);
+
+  const handleAddArea = (kind: AreaKind) => {
+    const id = newId();
+    const added = addArea(savedRecipe, kind, id);
+    if (!added) return;
+    commit(added.values, kind === 'linear' ? 'Add linear area' : 'Add radial area');
+    setSelectedAreaId(id);
+  };
+
+  const areaFrame = selectedArea && canEdit && !isCropping ? engine?.areaFrame() ?? null : null;
+  const docSize = areaFrame ? engine?.imageSize() ?? null : null;
+  const areaBox = boxOf(docSize);
+  const areaHandles =
+    selectedArea && areaFrame && docSize && areaBox ? (
+      <AreaHandles
+        area={selectedArea}
+        frame={areaFrame}
+        box={areaBox}
+        docWidth={docSize.width}
+        onDraft={(geometry) => setDraft({ [`areas.${selectedArea.id}.geometry`]: { ...geometry } })}
+        onCommit={(geometry, label) => commit({ [`areas.${selectedArea.id}.geometry`]: { ...geometry } }, label)}
+      />
+    ) : null;
 
   // ---- split before and after ---------------------------------------
 
@@ -608,7 +669,10 @@ export function EditView({
   };
 
   const isAllDefault = recipeHash(beforeRecipe(savedRecipe)) === recipeHash(savedRecipe);
-  const zoomPercent = view ? Math.round(view.zoom * 100) : 100;
+  // The zoom against the full image, whatever size the working image is.
+  const workingScale = engine?.workingScale() ?? 1;
+  const zoomPercent = view ? Math.round(view.zoom * workingScale * 100) : 100;
+  const isLoadingFull = engine?.isLoadingFullResolution() ?? false;
 
   return (
     <div className={styles.editView} data-testid="edit-view" data-status={status.kind}>
@@ -682,6 +746,17 @@ export function EditView({
           >
             <Crop size={16} aria-hidden />
           </button>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Areas"
+            title="Areas"
+            aria-pressed={isAreasOpen}
+            disabled={!canEdit || isBefore || isCropping}
+            onClick={() => setIsAreasOpen((v) => !v)}
+          >
+            <Spline size={16} aria-hidden />
+          </button>
         </div>
         <div className={styles.toolGroup}>
           <button
@@ -721,12 +796,20 @@ export function EditView({
             type="button"
             className={styles.toolButton}
             aria-pressed={!view?.isFit && zoomPercent === 100}
-            onClick={() => engine?.setZoom(1)}
+            onClick={() => engine?.setZoom(1 / workingScale)}
             disabled={!canEdit}
           >
             100%
           </button>
-          <span className={styles.zoomReadout} data-testid="zoom-readout">
+          <span
+            className={styles.zoomReadout}
+            data-testid="zoom-readout"
+            title={
+              view?.isFit
+                ? `Fit: the whole photo, shown at ${zoomPercent}% of its full size`
+                : `${zoomPercent}% of the photo's full size`
+            }
+          >
             {zoomPercent}%
           </span>
         </div>
@@ -781,7 +864,16 @@ export function EditView({
           onPointerCancel={handleStagePointerUp}
         >
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
+          {storedPreviewUrl && !canEdit && status.kind !== 'error' && (
+            <img className={styles.storedPreview} src={storedPreviewUrl} alt="" data-testid="stored-preview" draggable={false} />
+          )}
+          {(isLoadingFull || (storedPreviewUrl && !canEdit && status.kind !== 'error')) && (
+            <span className={styles.loadingBadge} role="status" data-testid="loading-badge">
+              {isLoadingFull ? 'Loading full resolution…' : 'Loading…'}
+            </span>
+          )}
           {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
+          {areaHandles}
           {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
           {cropDraft && cropBox && (
             <CropTool
@@ -794,10 +886,27 @@ export function EditView({
             />
           )}
           {isBefore && canEdit && <span className={styles.beforeBadge}>Before</span>}
-          <LoadStatus status={status} onClose={onClose} />
+          {!(storedPreviewUrl && status.kind !== 'error' && !canEdit) && <LoadStatus status={status} onClose={onClose} />}
         </div>
         <aside className={styles.panel} aria-label="Edits">
           <Histogram bins={histogram} />
+          {isAreasOpen && (
+            <AreasPanel
+              recipe={shownRecipe}
+              selectedId={selectedAreaId}
+              isDisabled={!canEdit || isBefore || isCropping}
+              onAdd={handleAddArea}
+              onSelect={setSelectedAreaId}
+              onRename={(id, name) => commit({ [`areas.${id}.name`]: name }, 'Rename area')}
+              onInvert={(id, isInverted) => commit({ [`areas.${id}.invert`]: isInverted }, `${labelOfArea(id)} ${isInverted ? 'inverted' : 'not inverted'}`)}
+              onDelete={(id) => {
+                commit(removeArea(id), `Delete ${labelOfArea(id)}`);
+                if (selectedAreaId === id) setSelectedAreaId(null);
+              }}
+              onChange={handleSliderChange}
+              onCommit={handleSliderCommit}
+            />
+          )}
           {photoInfo && (
             <ProfileMenu
               profiles={photoInfo.profiles}
@@ -838,9 +947,12 @@ export function EditView({
               onCommit={handleSliderCommit}
               onReset={handleGroupReset}
               {...(group.id === 'tone'
-                ? { onAuto: () => void handleAutoTone(), autoTitle: 'Set the tone controls from the histogram' }
+                ? {
+                    onAuto: () => void handleAutoTone(),
+                    autoTitle: canEdit ? 'Set the tone controls from the histogram' : 'Auto is ready once the photo has loaded',
+                  }
                 : group.id === 'whiteBalance' && autoWhiteBalance
-                  ? { onAuto: handleAutoWhiteBalance, autoTitle: 'Neutralise the colour cast' }
+                  ? { onAuto: handleAutoWhiteBalance, autoTitle: canEdit ? 'Neutralise the colour cast' : 'Auto is ready once the photo has loaded' }
                   : {})}
             />
             {group.id === 'tone' && (
@@ -883,6 +995,20 @@ export function EditView({
           </div>
         </aside>
       </div>
+      {isHelpOpen && (
+        <Modal title="Edit shortcuts" width="sm" onClose={() => setIsHelpOpen(false)}>
+          <dl className={styles.shortcuts}>
+            {EDIT_SHORTCUTS.map((s) => (
+              <div key={s.keys} className={styles.shortcut}>
+                <dt>
+                  <kbd className={styles.kbd}>{s.keys}</kbd>
+                </dt>
+                <dd>{s.action}</dd>
+              </div>
+            ))}
+          </dl>
+        </Modal>
+      )}
       {isCopyDialogOpen && onCopyEdits && (
         <CopyEditsDialog
           sourceName={asset.fileName}
