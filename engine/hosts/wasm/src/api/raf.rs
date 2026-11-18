@@ -171,6 +171,20 @@ pub fn raf_render_binned_linear(src: &[f32], params_json: &str, min_long_edge: u
     Ok(RafRenderedBand { x: 0, y: 0, width, height, pixels })
 }
 
+/// The Profile control's entries as JSON:
+/// `[{ "id", "name", "settings": { "camToRgb", "exposureEv", "saturation",
+/// "highlightDesaturation", "baseCurve" } }, …]`. `exposureEv` is the
+/// baseline; add the user's EV and a `wbRatio` to get `setRawDevelop`'s JSON.
+/// Ids: camera, provia, velvia, astia, classic-chrome, pro-neg, neutral,
+/// monochrome; `camera` equals `rafDevelopDefaults` without `wbRatio`.
+#[wasm_bindgen(js_name = "rafDevelopProfiles")]
+pub fn raf_develop_profiles(params_json: &str) -> Result<String, JsError> {
+    let params: RafRenderParams = serde_json::from_str(params_json)
+        .map_err(|e| JsError::new(&format!("RAF params: {e}")))?;
+    serde_json::to_string(&raf::develop::develop_profiles(&params))
+        .map_err(|e| JsError::new(&format!("JSON serialize: {e}")))
+}
+
 /// The develop settings that reproduce `rafRenderBand`'s look (without its
 /// capture sharpening) from `rafRenderLinearBand`'s pixels, as the JSON
 /// `setRawDevelop` takes.
