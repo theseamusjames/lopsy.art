@@ -48,6 +48,38 @@ describe('profilesFor', () => {
   });
 });
 
+describe('profilesFor on a Fujifilm RAW', () => {
+  const engine = [
+    { id: 'standard', name: 'Camera (Velvia look)' },
+    { id: 'provia', name: 'Provia look' },
+    { id: 'velvia', name: 'Velvia look' },
+    { id: 'astia', name: 'Astia look' },
+    { id: 'neutral', name: 'Neutral' },
+    { id: 'monochrome', name: 'Monochrome' },
+  ];
+
+  it('does not list the camera look twice, and calls Provia Standard', () => {
+    expect(profilesFor(true, engine).map((p) => p.name)).toEqual([
+      'Camera (Velvia look)',
+      'Standard (Provia look)',
+      'Astia look',
+      'Neutral',
+      'Monochrome',
+    ]);
+  });
+
+  it('says Standard on the camera entry when the camera shot Provia', () => {
+    const provia = engine.map((p) => (p.id === 'standard' ? { ...p, name: 'Camera (Provia look)' } : p));
+    expect(profilesFor(true, provia).map((p) => p.name)).toEqual([
+      'Camera (Provia look, Standard)',
+      'Velvia look',
+      'Astia look',
+      'Neutral',
+      'Monochrome',
+    ]);
+  });
+});
+
 describe('selectedProfile', () => {
   it('finds the recipe profile or shows the first', () => {
     expect(selectedProfile(RAW_FALLBACK_PROFILES, 'neutral')?.name).toBe('Neutral');

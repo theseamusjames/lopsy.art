@@ -94,19 +94,35 @@ export function parseDevelopProfiles(json: string): DevelopProfile[] {
   return out;
 }
 
+/** The engine's id of the look Fujifilm calls Standard. */
+const STANDARD_LOOK_ID = 'provia';
+
 /**
  * The menu for a photo. A RAW file with engine profiles gets those, with
  * the camera's look first, and Neutral and Monochrome added when the
  * engine left them out.
+ *
+ * The camera's look is one of the film looks ("Camera (Velvia look)"), so
+ * that look is not listed a second time. Provia is Fujifilm's Standard and
+ * is called so; when it is the camera's own look, the camera entry says it.
  */
 export function profilesFor(isRaw: boolean, engineProfiles: readonly DevelopProfile[]): DevelopProfile[] {
   if (!isRaw) return [...IMAGE_PROFILES];
   if (engineProfiles.length === 0) return [...RAW_FALLBACK_PROFILES];
   const byId = new Map(engineProfiles.map((p) => [p.id, p]));
-  const out: DevelopProfile[] = [byId.get(CAMERA_LOOK.id) ?? CAMERA_LOOK];
-  for (const p of engineProfiles) if (p.id !== CAMERA_LOOK.id) out.push(p);
+  let camera = byId.get(CAMERA_LOOK.id) ?? CAMERA_LOOK;
+  const recorded = /^Camera \((.+)\)$/.exec(camera.name)?.[1] ?? null;
+  const out: DevelopProfile[] = [];
+  for (const p of engineProfiles) {
+    if (p.id === CAMERA_LOOK.id) continue;
+    if (recorded !== null && p.name === recorded) {
+      if (p.id === STANDARD_LOOK_ID) camera = { ...camera, name: `Camera (${recorded}, Standard)` };
+      continue;
+    }
+    out.push(p.id === STANDARD_LOOK_ID ? { ...p, name: `Standard (${p.name})` } : p);
+  }
   for (const p of RAW_FALLBACK_PROFILES) if (!byId.has(p.id) && p.id !== CAMERA_LOOK.id) out.push(p);
-  return out;
+  return [camera, ...out];
 }
 
 /** The menu entry the recipe's profile id selects; an unknown id shows as the first entry. */

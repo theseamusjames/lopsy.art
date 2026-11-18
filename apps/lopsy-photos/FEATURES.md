@@ -155,11 +155,21 @@ leaving.
   in exports or previews); **J** toggles both. Holding Alt (Option)
   while dragging Blacks or Whites shows that side's clipping, and while
   dragging a Sharpen slider shows what is being sharpened.
-- **Profile**: for RAW, the camera look and the engine's profiles
-  (including Neutral and Monochrome); for other photos, Standard and
-  Monochrome.
-- **White balance**: Temperature and Tint, with Auto on RAW files; on
-  other photos the sliders are relative and there is no Auto.
+- **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
+  not listed a second time), then the engine's film looks with Provia
+  shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
+  when the camera shot Provia), Neutral and Monochrome; for other photos,
+  Standard and Monochrome.
+- **White balance**: a **Mode** menu (As shot; Auto, on RAW files; the
+  RAW file's presets — Daylight, Cloudy, Shade, Tungsten, the
+  fluorescents, Flash, Underwater, as the body has them; and Custom,
+  which the sliders set), Temperature and Tint, and a **picker** (the
+  pipette): click something that should be neutral grey and the
+  engine sets Temperature and Tint to neutralise it (Esc cancels). On
+  RAW files the Temperature readout shows Kelvin and takes typed Kelvin;
+  on other photos the sliders are relative. Each choice, pick or slider
+  release is one history step ("White balance: Daylight", "White
+  balance: picked").
 - **Tone**: Exposure, Contrast, Highlights, Shadows, Whites, Blacks, with
   **Auto**.
 - **Color**: Vibrance, Saturation.
