@@ -11,6 +11,7 @@ import { exportSettingsFromJson } from '../export/types';
 import { isRecipeGroupId, recipeFromPaths, sanitizeRecipeValues } from './recipe';
 import type {
   Album,
+  AlbumMember,
   Asset,
   CameraInfo,
   ColorLabel,
@@ -170,7 +171,19 @@ export function versionFromRecord(id: string, record: EntityRecord): Version | n
 export function albumFromRecord(id: string, record: EntityRecord): Album | null {
   const name = field(record, 'name');
   if (typeof name !== 'string') return null;
-  return { id, name, assetIds: members(record, 'assets'), deleted: field(record, 'deleted') === true };
+  const assetIds = members(record, 'assets');
+  const versionMembers: AlbumMember[] = [];
+  for (const member of members(record, 'versions')) {
+    const [assetId, versionId, extra] = member.split('/');
+    if (assetId && versionId && extra === undefined) versionMembers.push({ assetId, versionId });
+  }
+  return {
+    id,
+    name,
+    assetIds,
+    members: [...assetIds.map((assetId) => ({ assetId, versionId: null })), ...versionMembers],
+    deleted: field(record, 'deleted') === true,
+  };
 }
 
 /** A setting's value; undefined when it has none. */
