@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { StorageError } from '../storage/errors';
 import { sha256Hex } from './hash';
-import { resumeImports, startImport, uploadResumeKey } from './importer';
+import { InProcessImportLocks } from './claim-locks';
+import { DEFAULT_LEASE_MS, resumeImports, startImport, uploadResumeKey } from './importer';
 import type { ImportContext } from './importer';
 import { MemoryImportQueueStore } from './queue-store';
 import { MemoryStagingStore } from './staging';
@@ -126,9 +127,11 @@ describe('resumable imports', () => {
     );
 
     // The old tab's lease is still fresh by the clock; a reload takes over once it has lapsed.
-    expect(await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: () => DAY })).toBeNull();
-    const later = () => new Date(DAY.getTime() + 60_000);
-    const job = await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: later });
+    // The reloaded page has its own locks: the old page's are gone with it.
+    const reloaded = new InProcessImportLocks();
+    expect(await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: () => DAY, locks: reloaded })).toBeNull();
+    const later = () => new Date(DAY.getTime() + DEFAULT_LEASE_MS + 1_000);
+    const job = await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: later, locks: reloaded });
     const result = await job?.finished;
     expect(result?.items.map((i) => i.state)).toEqual(['done', 'done', 'done']);
     expect(session.getView().assets.size).toBe(4);
@@ -174,7 +177,10 @@ describe('resumable imports', () => {
     const seen = new Set<string>();
     job.subscribe(() => job.getProgress().items.forEach((i) => seen.add(i.state)));
     const result = await job.finished;
-    expect(result.items.map((i) => i.state)).toEqual(['done', 'done', 'duplicate', 'unsupported', 'queued']);
+    const states = result.items.map((i) => i.state);
+    expect([states[0], states[3], states[4]]).toEqual(['done', 'unsupported', 'queued']);
+    // The two identical files hash concurrently: whichever claims the hash first is kept.
+    expect([states[1], states[2]].sort()).toEqual(['done', 'duplicate']);
     expect(result.items[4]?.error).toBe('Waiting to retry: Refused');
     expect(seen.has('staged')).toBe(true);
     expect(put).toHaveBeenCalledTimes(3);

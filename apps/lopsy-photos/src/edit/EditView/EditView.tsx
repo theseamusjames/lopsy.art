@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, Check, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { ArrowLeft, Check, Crop, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, Json, Version } from '@lopsy/photos-core/library/types';
 import { ControlGroup } from '../ControlGroup/ControlGroup';
+import { CurvesGroup } from '../CurvesGroup/CurvesGroup';
+import { TabbedGroup } from '../TabbedGroup/TabbedGroup';
 import {
+  COLOR_BY_HUE_TABS,
+  COLOR_GRADING_SHARED,
+  COLOR_GRADING_TABS,
   GROUPS,
   applyChanges,
   beforeRecipe,
@@ -20,6 +25,8 @@ import { isPreviewStale, isTypingTarget, shortcutFor } from '../edit-keys';
 import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
+import { CropTool } from '../CropTool/CropTool';
+import { FULL_RECT, recipeCrop, toFramed, type Rect } from '../../engine/crop';
 import { ProfileMenu } from '../ProfileMenu/ProfileMenu';
 import { LoadStatus } from '../LoadStatus/LoadStatus';
 import { usePhotoEngine } from './use-photo-engine';
@@ -188,7 +195,7 @@ export function EditView({
   }, []);
 
   const handleSliderCommit = useCallback(
-    (control: ControlDef, value: number) => commit(sliderChanges(control.path, value), changeLabel(control.label, control.path, value)),
+    (control: ControlDef, value: number) => commit(sliderChanges(control.path, value), changeLabel(control.historyLabel ?? control.label, control.path, value)),
     [commit],
   );
 
@@ -305,6 +312,42 @@ export function EditView({
     return () => stage.removeEventListener('wheel', handleWheel);
   }, [engine]);
 
+  // ---- crop ----------------------------------------------------------
+
+  const [cropDraft, setCropDraft] = useState<Rect | null>(null);
+  const isCropping = cropDraft !== null;
+
+  const startCrop = () => {
+    if (!engine) return;
+    engine.setCropEditing(true);
+    const crop = savedRecipe.framing.crop;
+    setCropDraft(crop ? toFramed(crop, savedRecipe.framing) : FULL_RECT);
+  };
+
+  const finishCrop = (isCommit: boolean) => {
+    engine?.setCropEditing(false);
+    const draftRect = cropDraft;
+    setCropDraft(null);
+    if (!isCommit || !draftRect) return;
+    const next = recipeCrop(draftRect, savedRecipe.framing);
+    if (JSON.stringify(next) !== JSON.stringify(savedRecipe.framing.crop)) commit({ 'framing.crop': next as Json }, 'Crop');
+  };
+
+  const fullSize = isCropping ? engine?.fullImageSize() ?? null : null;
+  const stageSize = stageRef.current ? { width: stageRef.current.clientWidth, height: stageRef.current.clientHeight } : null;
+  const cropBox =
+    fullSize && stageSize && view
+      ? {
+          aspect: fullSize.width / fullSize.height,
+          box: {
+            left: stageSize.width / 2 + view.panX - (fullSize.width * view.zoom) / 2,
+            top: stageSize.height / 2 + view.panY - (fullSize.height * view.zoom) / 2,
+            width: fullSize.width * view.zoom,
+            height: fullSize.height * view.zoom,
+          },
+        }
+      : null;
+
   const panPointer = useRef<{ id: number; x: number; y: number } | null>(null);
 
   const handleStagePointerDown = (e: PointerEvent<HTMLDivElement>) => {
@@ -396,7 +439,7 @@ export function EditView({
             className={styles.iconButton}
             aria-label="Rotate left"
             title="Rotate left"
-            disabled={!canEdit || isBefore}
+            disabled={!canEdit || isBefore || isCropping}
             onClick={() => onSetRecipe(rotateRecipe(savedRecipe, false), 'Rotate left')}
           >
             <RotateCcw size={16} aria-hidden />
@@ -406,7 +449,7 @@ export function EditView({
             className={styles.iconButton}
             aria-label="Rotate right"
             title="Rotate right"
-            disabled={!canEdit || isBefore}
+            disabled={!canEdit || isBefore || isCropping}
             onClick={() => onSetRecipe(rotateRecipe(savedRecipe, true), 'Rotate right')}
           >
             <RotateCw size={16} aria-hidden />
@@ -416,10 +459,21 @@ export function EditView({
             className={styles.iconButton}
             aria-label="Flip"
             title="Flip left to right"
-            disabled={!canEdit || isBefore}
+            disabled={!canEdit || isBefore || isCropping}
             onClick={() => onSetRecipe(flipRecipe(savedRecipe), 'Flip')}
           >
             <FlipHorizontal2 size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Crop"
+            title="Crop"
+            aria-pressed={isCropping}
+            disabled={!canEdit || isBefore}
+            onClick={() => (isCropping ? finishCrop(true) : startCrop())}
+          >
+            <Crop size={16} aria-hidden />
           </button>
         </div>
         <div className={styles.toolGroup}>
@@ -487,6 +541,16 @@ export function EditView({
           onPointerCancel={handleStagePointerUp}
         >
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
+          {cropDraft && cropBox && (
+            <CropTool
+              imageBox={cropBox.box}
+              imageAspect={cropBox.aspect}
+              rect={cropDraft}
+              onChange={setCropDraft}
+              onDone={() => finishCrop(true)}
+              onCancel={() => finishCrop(false)}
+            />
+          )}
           {isBefore && canEdit && <span className={styles.beforeBadge}>Before</span>}
           <LoadStatus status={status} onClose={onClose} />
         </div>
@@ -501,8 +565,8 @@ export function EditView({
             />
           )}
           {GROUPS.map((group) => (
+            <Fragment key={group.id}>
             <ControlGroup
-              key={group.id}
               group={group}
               recipe={shownRecipe}
               isDisabled={!canEdit || isBefore}
@@ -515,6 +579,33 @@ export function EditView({
                   ? { onAuto: handleAutoWhiteBalance, autoTitle: 'Neutralise the colour cast' }
                   : {})}
             />
+            {group.id === 'tone' && (
+              <CurvesGroup recipe={shownRecipe} isDisabled={!canEdit || isBefore} onDraft={setDraft} onCommit={commit} />
+            )}
+            {group.id === 'color' && (
+              <>
+                <TabbedGroup
+                  title="Color by hue"
+                  tabs={COLOR_BY_HUE_TABS}
+                  recipe={shownRecipe}
+                  isDisabled={!canEdit || isBefore}
+                  onChange={handleSliderChange}
+                  onCommit={handleSliderCommit}
+                  onReset={commit}
+                />
+                <TabbedGroup
+                  title="Color Grading"
+                  tabs={COLOR_GRADING_TABS}
+                  sharedControls={COLOR_GRADING_SHARED}
+                  recipe={shownRecipe}
+                  isDisabled={!canEdit || isBefore}
+                  onChange={handleSliderChange}
+                  onCommit={handleSliderCommit}
+                  onReset={commit}
+                />
+              </>
+            )}
+            </Fragment>
           ))}
           <div className={styles.panelFooter}>
             <button

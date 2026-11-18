@@ -10,6 +10,8 @@ import type {
   Asset,
   AssetId,
   AssetMarks,
+  ExportPreset,
+  ExportPresetId,
   HistoryStep,
   Json,
   LibraryLayout,
@@ -17,12 +19,26 @@ import type {
   LibraryView,
   NewAsset,
   OriginalStatus,
+  Preset,
+  PresetId,
   PreviewRef,
   SyncStatus,
   Version,
   VersionId,
 } from '@lopsy/photos-core/library/types';
-import { DEFAULT_RECIPE, recipeFromPaths, recipeHash, recipeToPaths, type Recipe } from '@lopsy/photos-core/library/recipe';
+import {
+  DEFAULT_RECIPE,
+  isRecipeGroupId,
+  pickGroups,
+  recipeFromPaths,
+  recipeHash,
+  recipeToPaths,
+  sanitizeRecipeValues,
+  type Recipe,
+  type RecipeGroupId,
+} from '@lopsy/photos-core/library/recipe';
+import { exportSettingsFromJson, exportSettingsProblem, type ExportSettings } from '@lopsy/photos-core/export/types';
+import { BUILT_IN_PREFIX } from '@lopsy/photos-core/library/presets';
 import type { StorageAdapter, StorageKind } from '@lopsy/photos-core/storage/types';
 
 let counter = 0;
@@ -86,6 +102,8 @@ export class FakeSession implements LibrarySession {
   private versions = new Map<VersionId, Version>();
   private albums = new Map<AlbumId, Album>();
   private settings = new Map<string, Json>();
+  private presets = new Map<PresetId, Preset>();
+  private exportPresets = new Map<ExportPresetId, ExportPreset>();
   private steps = new Map<VersionId, RecipeStep[]>();
   private view: LibraryView | null = null;
   private listeners = new Set<() => void>();
@@ -113,6 +131,8 @@ export class FakeSession implements LibrarySession {
         versions: new Map(this.versions),
         albums: new Map(this.albums),
         settings: new Map(this.settings),
+        presets: new Map(this.presets),
+        exportPresets: new Map(this.exportPresets),
       };
     }
     return this.view;
@@ -313,6 +333,70 @@ export class FakeSession implements LibrarySession {
 
   setSetting(key: string, value: Json): void {
     this.settings.set(key, value);
+    this.changed();
+  }
+
+  applyRecipeValues(versionIds: readonly VersionId[], values: Readonly<Record<string, Json>>, label: string): void {
+    const clean = sanitizeRecipeValues(values);
+    if (Object.keys(clean).length === 0) return;
+    for (const id of new Set(versionIds)) this.editRecipe(id, clean, label);
+  }
+
+  savePreset(name: string, recipe: Recipe, groups: readonly RecipeGroupId[]): PresetId {
+    const id = fakeId('preset');
+    const kept = [...new Set(groups)].filter(isRecipeGroupId);
+    this.presets.set(id, {
+      id,
+      name,
+      groups: kept,
+      values: pickGroups(recipe, kept),
+      createdAt: new Date().toISOString(),
+      deleted: false,
+    });
+    this.changed();
+    return id;
+  }
+
+  renamePreset(presetId: PresetId, name: string): void {
+    const p = this.presets.get(presetId);
+    if (!p || presetId.startsWith(BUILT_IN_PREFIX)) return;
+    this.presets.set(presetId, { ...p, name });
+    this.changed();
+  }
+
+  deletePreset(presetId: PresetId): void {
+    const p = this.presets.get(presetId);
+    if (!p) return;
+    this.presets.set(presetId, { ...p, deleted: true });
+    this.changed();
+  }
+
+  saveExportPreset(name: string, settings: ExportSettings): ExportPresetId {
+    const problem = exportSettingsProblem(settings);
+    if (problem !== null) throw new Error(problem);
+    const id = fakeId('export-preset');
+    this.exportPresets.set(id, {
+      id,
+      name,
+      settings: exportSettingsFromJson(settings),
+      createdAt: new Date().toISOString(),
+      deleted: false,
+    });
+    this.changed();
+    return id;
+  }
+
+  renameExportPreset(presetId: ExportPresetId, name: string): void {
+    const p = this.exportPresets.get(presetId);
+    if (!p) return;
+    this.exportPresets.set(presetId, { ...p, name });
+    this.changed();
+  }
+
+  deleteExportPreset(presetId: ExportPresetId): void {
+    const p = this.exportPresets.get(presetId);
+    if (!p) return;
+    this.exportPresets.set(presetId, { ...p, deleted: true });
     this.changed();
   }
 

@@ -15,6 +15,7 @@ import type {
   NewAsset,
   PreviewRef,
   SyncStatus,
+  Preset,
   Version,
   VersionId,
 } from '../../library/types';
@@ -30,7 +31,19 @@ export class FakeLibrarySession implements LibrarySession {
   readonly layout: LibraryLayout;
   readonly adapter: StorageAdapter;
   readonly albumMembers: { albumId: AlbumId; assetId: AssetId }[] = [];
-  private view: LibraryView = { assets: new Map(), versions: new Map(), albums: new Map(), settings: new Map() };
+  private view: LibraryView = {
+    assets: new Map(),
+    versions: new Map(),
+    albums: new Map(),
+    settings: new Map(),
+    presets: new Map(),
+    exportPresets: new Map(),
+  };
+
+  /** Adds a saved preset to the view, for imports that apply one. */
+  addPresetForTest(preset: Preset): void {
+    this.view = { ...this.view, presets: new Map([...this.view.presets, [preset.id, preset]]) };
+  }
   private readonly listeners = new Set<() => void>();
   private nextVersion = 1;
 
@@ -175,6 +188,27 @@ export class FakeLibrarySession implements LibrarySession {
   }
   setSetting(): void {
     unused('setSetting');
+  }
+  applyRecipeValues(): void {
+    unused('applyRecipeValues');
+  }
+  savePreset(): string {
+    return unused('savePreset');
+  }
+  renamePreset(): void {
+    unused('renamePreset');
+  }
+  deletePreset(): void {
+    unused('deletePreset');
+  }
+  saveExportPreset(): string {
+    return unused('saveExportPreset');
+  }
+  renameExportPreset(): void {
+    unused('renameExportPreset');
+  }
+  deleteExportPreset(): void {
+    unused('deleteExportPreset');
   }
   async syncNow(): Promise<void> {}
   getSyncStatus(): SyncStatus {

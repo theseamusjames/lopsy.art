@@ -235,6 +235,11 @@ pub struct EngineInner {
     /// Color by hue (`develop/color_mixer.wgsl`): 24 values, applied after
     /// `adjustments`. `None` (the default) leaves the composite untouched.
     pub color_mixer: Option<[f32; lopsy_core::color_mixer::VALUES_LEN]>,
+    /// Sharpening and noise reduction (`develop::detail`). `None` (the
+    /// default) runs neither.
+    pub detail: Option<lopsy_core::detail::DetailSettings>,
+    /// Haze and local contrast (`develop::detail`). `None` by default.
+    pub local_contrast: Option<lopsy_core::detail::LocalContrastSettings>,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -333,6 +338,8 @@ impl EngineInner {
             adjustments: ImageAdjustmentState::default(),
             raw_develop: None,
             color_mixer: None,
+            detail: None,
+            local_contrast: None,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
@@ -772,6 +779,8 @@ impl EngineInner {
             self.texture_pool.release(curve);
         }
         self.color_mixer = None;
+        self.detail = None;
+        self.local_contrast = None;
         crate::commands::adjustment::reset_image_color_grading(&mut self.adjustments);
         self.needs_recomposite = true;
         // Clear text renderer layer state so stale text layouts don't persist

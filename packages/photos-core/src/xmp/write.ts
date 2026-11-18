@@ -63,7 +63,7 @@ function crsAttributes(recipe: Recipe): string[] {
     if (typeof value === 'number' && value !== defaults[path]) out.push(`crs:${crs}="${value > 0 ? '+' : ''}${value}"`);
   }
   const crop = recipe.framing.crop;
-  if (crop && recipe.framing.rotate === 0 && !recipe.framing.flipH) {
+  if (crop && recipe.framing.rotate === 0 && !recipe.framing.flipH && !recipe.framing.flipV && recipe.framing.angle === 0) {
     out.push(
       `crs:HasCrop="True"`,
       `crs:CropLeft="${crop.x}"`,

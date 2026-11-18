@@ -15,6 +15,9 @@
 import initWasm, {
   addLayer,
   autoTone as engineAutoTone,
+  clearImageColorGrading,
+  clearImageColorMixer,
+  clearImageCurves,
   clearRawDevelop,
   createEngine,
   decodeAndUploadDng,
@@ -28,7 +31,10 @@ import initWasm, {
   setBackgroundColor,
   setDocumentSize,
   setImageBlacks,
+  setImageColorGrading,
+  setImageColorMixer,
   setImageContrast,
+  setImageCurvesLut,
   setImageExposure,
   setImageHighlights,
   setImagePhotoFilter,
@@ -56,6 +62,8 @@ import {
   type EngineAdjustments,
   type Framing,
 } from './recipe-to-adjustments';
+import { cropPixels, isFullCrop, toFramed } from './crop';
+import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
 import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
@@ -100,8 +108,15 @@ export interface DevelopEngine {
   load(source: Blob, format: ImageFormat, onProgress?: (progress: LoadProgress) => void): Promise<Size>;
   /** Renders `recipe` from the next frame on. Cheap when nothing changed. */
   setRecipe(recipe: Recipe): void;
-  /** The image's size after framing; null before a load. */
+  /** The size the image is shown and exported at: framed, then cropped. Null before a load. */
   imageSize(): Size | null;
+  /** The framed image before the crop. */
+  fullImageSize(): Size | null;
+  /**
+   * While the crop is being edited the whole framed image shows (the Edit
+   * view draws the crop over it); otherwise the document is the crop.
+   */
+  setCropEditing(isEditing: boolean): void;
   getView(): View;
   /** Called after every view change (zoom, pan, fit, resize). */
   onViewChange(listener: (view: View) => void): () => void;
@@ -142,7 +157,7 @@ function ensureWasm(): Promise<unknown> {
   return wasmReady;
 }
 
-function layerDesc(id: string, width: number, height: number, isVisible: boolean): string {
+function layerDesc(id: string, width: number, height: number, isVisible: boolean, x = 0, y = 0): string {
   return JSON.stringify({
     id,
     name: 'Photo',
@@ -151,8 +166,8 @@ function layerDesc(id: string, width: number, height: number, isVisible: boolean
     locked: false,
     opacity: 1,
     blend_mode: 'Normal',
-    x: 0,
-    y: 0,
+    x,
+    y,
     width,
     height,
     clip_to_below: false,
@@ -214,6 +229,13 @@ class PhotoEngine implements DevelopEngine {
   /** The RAW develop stage's defaults for this photo; null for an image that is not RAW. */
   private rawDefaults: RawDevelopSettings | null = null;
   private appliedRawJson: string | null = null;
+  private isCropEditing = false;
+  /** What Curves, Color by hue and Color Grading last sent. */
+  private colorKey: string | null = null;
+  /** The document and layer placement last pushed, to skip unchanged layouts. */
+  private layoutKey: string | null = null;
+  /** The displayed (cropped) size. */
+  private displaySize: Size | null = null;
   private autoWb: { temperature: number; tint: number } | null = null;
   private engineProfiles: DevelopProfile[] = [];
   /** Oriented size, before framing. */
@@ -416,6 +438,8 @@ class PhotoEngine implements DevelopEngine {
   /** Shows a freshly loaded image, unframed, fitted, with the recipe applied. */
   private showImage(size: Size): Size {
     this.sourceSize = size;
+    this.layoutKey = null;
+    this.displaySize = null;
     this.framing = { rotate: 0, flipH: false };
     this.applied = null;
     this.appliedRawJson = null;
@@ -440,7 +464,9 @@ class PhotoEngine implements DevelopEngine {
     const zoom = this.view.zoom * (previous.width / size.width);
     this.sourceSize = size;
     this.framing = { rotate: 0, flipH: false };
+    this.layoutKey = null;
     this.applyFraming(target);
+    this.layout();
     if (wasFit) this.fit();
     else this.setView({ ...this.view, zoom, isFit: false });
     this.invalidate();
@@ -473,7 +499,38 @@ class PhotoEngine implements DevelopEngine {
   private sizeDocument(width: number, height: number): void {
     setDocumentSize(this.engine, width, height);
     updateLayer(this.engine, layerDesc(this.layerId, width, height, true));
+    this.layoutKey = null;
     this.invalidate();
+  }
+
+  /**
+   * The crop is the document: a document the size of the crop with the
+   * framed layer offset so the crop's corner sits at its origin. Export,
+   * previews, the histogram and Edit in Lopsy all read the document, so
+   * they all honour the crop, and the vignette lands on the cropped frame.
+   */
+  private layout(): void {
+    if (!this.sourceSize) return;
+    const full = framedSize(this.sourceSize.width, this.sourceSize.height, this.framing.rotate);
+    const crop = this.isCropEditing ? null : this.recipe.framing.crop;
+    const px = crop && !isFullCrop(crop) ? cropPixels(toFramed(crop, this.framing), full.width, full.height) : { x: 0, y: 0, ...full };
+    const key = `${this.layerId}:${full.width}x${full.height}:${px.x},${px.y},${px.width},${px.height}`;
+    if (key === this.layoutKey) return;
+    const previous = this.displaySize;
+    setDocumentSize(this.engine, px.width, px.height);
+    updateLayer(this.engine, layerDesc(this.layerId, full.width, full.height, true, -px.x, -px.y));
+    this.layoutKey = key;
+    this.displaySize = { width: px.width, height: px.height };
+    this.invalidate();
+    const isResized = !previous || previous.width !== px.width || previous.height !== px.height;
+    if (isResized || this.view.isFit) this.fit();
+  }
+
+  setCropEditing(isEditing: boolean): void {
+    if (this.isCropEditing === isEditing) return;
+    this.isCropEditing = isEditing;
+    this.layout();
+    this.fit();
   }
 
   // ---- the recipe ----------------------------------------------------
@@ -500,6 +557,7 @@ class PhotoEngine implements DevelopEngine {
       this.applied = adj;
       this.invalidate();
     }
+    this.applyColorControls();
     if (this.rawDefaults) {
       const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe, this.engineProfiles));
       if (json !== this.appliedRawJson) {
@@ -509,6 +567,23 @@ class PhotoEngine implements DevelopEngine {
       }
     }
     this.applyFraming({ rotate: this.recipe.framing.rotate, flipH: this.recipe.framing.flipH });
+    this.layout();
+  }
+
+  private applyColorControls(): void {
+    const key = colorControlsKey(this.recipe);
+    if (key === this.colorKey) return;
+    this.colorKey = key;
+    const lut = curvesLut(this.recipe);
+    if (lut) setImageCurvesLut(this.engine, lut);
+    else clearImageCurves(this.engine);
+    const mixer = colorMixerValues(this.recipe);
+    if (mixer) setImageColorMixer(this.engine, mixer);
+    else clearImageColorMixer(this.engine);
+    const grade = colorGradeValues(this.recipe);
+    if (grade) setImageColorGrading(this.engine, grade);
+    else clearImageColorGrading(this.engine);
+    this.invalidate();
   }
 
   private applyFraming(target: Framing): void {
@@ -519,9 +594,7 @@ class PhotoEngine implements DevelopEngine {
       else rotateLayer90(this.engine, this.layerId, op.clockwise);
     }
     this.framing = target;
-    const size = framedSize(this.sourceSize.width, this.sourceSize.height, target.rotate);
-    this.sizeDocument(size.width, size.height);
-    if (this.view.isFit) this.fit();
+    this.layoutKey = null;
   }
 
   photoInfo(): PhotoInfo {
@@ -556,6 +629,11 @@ class PhotoEngine implements DevelopEngine {
   }
 
   imageSize(): Size | null {
+    if (!this.sourceSize) return null;
+    return this.displaySize ?? this.fullImageSize();
+  }
+
+  fullImageSize(): Size | null {
     if (!this.sourceSize) return null;
     return framedSize(this.sourceSize.width, this.sourceSize.height, this.framing.rotate);
   }

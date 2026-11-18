@@ -541,6 +541,23 @@ fn the_color_mixer_matches_its_cpu_reference_and_clears() {
 }
 
 #[test]
+fn the_detail_stages_change_the_composite_and_clear_back() {
+    let Some(mut engine) = engine(64, 32) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 64, 32, 1.0)).expect("layer");
+    let texels: Vec<[u8; 4]> = (0..64 * 32).map(|i| if i % 64 < 32 { [60, 70, 90, 255] } else { [190, 170, 150, 255] }).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", texels.as_flattened(), 64, 32, 0, 0).expect("pixels");
+    let before = now(compositor::composite_for_export(&mut engine));
+    commands::develop::set_image_detail(&mut engine, &[100.0, 1.0, 0.0, 50.0, 50.0, 0.0, 1.0]).expect("detail");
+    commands::develop::set_image_local_contrast(&mut engine, &[50.0, 50.0, 40.0, 1.0]).expect("local contrast");
+    let after = now(compositor::composite_for_export(&mut engine));
+    assert_ne!(before, after);
+    commands::develop::clear_image_detail(&mut engine);
+    commands::develop::clear_image_local_contrast(&mut engine);
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), before);
+    assert_no_gpu_errors();
+}
+
+#[test]
 fn the_develop_histogram_counts_the_displayed_pixels() {
     let Some(mut engine) = engine(8, 4) else { return };
     commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");

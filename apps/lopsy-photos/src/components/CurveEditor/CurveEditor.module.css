@@ -1,0 +1,41 @@
+.curveEditor {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.curveEditor[data-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.grid line,
+.diagonal {
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.diagonal {
+  stroke-dasharray: 3 3;
+}
+
+.curve {
+  fill: none;
+  stroke: var(--curve-color);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.point {
+  fill: var(--color-bg-secondary);
+  stroke: var(--curve-color);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}

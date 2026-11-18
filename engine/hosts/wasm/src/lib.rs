@@ -284,6 +284,15 @@ readback_export! {
     }
 }
 
+readback_export! {
+    /// A 16-bit RGBA TIFF (Deflate, predictor 2, embedded ICC) of the same
+    /// composite `exportPng16` encodes. `color_space` 1 is Display P3.
+    #[wasm_bindgen(js_name = "exportTiff16")]
+    pub fn export_tiff_16(engine, color_space: u8) -> Result<Vec<u8>> {
+        read(compositor::export_tiff_16(engine, color_space))
+    }
+}
+
 /// Continue a command that was waiting for a readback (see `readback`).
 /// WebGL never leaves one waiting.
 #[cfg(not(feature = "wgpu"))]

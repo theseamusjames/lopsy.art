@@ -9,11 +9,14 @@
  * file from its staged copy. Without them it runs from the `File`s alone.
  */
 
-import { DEFAULT_RECIPE, recipeHash } from '../library/recipe';
+import { findPreset } from '../library/presets';
+import { DEFAULT_RECIPE, recipeFromPaths, recipeHash, recipeToPaths } from '../library/recipe';
 import type { Recipe } from '../library/recipe';
 import type { AlbumId, AssetId, LibrarySession, LibraryView, NewAsset, VersionId } from '../library/types';
 import { isStorageError } from '../storage/errors';
 import type { FileId, StoredFile } from '../storage/types';
+import { defaultImportLocks, importLockName } from './claim-locks';
+import type { ImportLocks } from './claim-locks';
 import { ensureFolderPath, originalsFolderSegments, uniqueName } from './folders';
 import type { FolderCache } from './folders';
 import { sha256Hex } from './hash';
@@ -63,6 +66,8 @@ export interface ImportContext {
   readonly retryDelaysMs?: readonly number[];
   /** Identifies this tab in the queue's leases; one per page load by default. */
   readonly ownerId?: string;
+  /** Who runs which job; this page's Web Locks (or in-process locks) by default. */
+  readonly locks?: ImportLocks;
 }
 
 export interface ResumeContext {
@@ -73,13 +78,21 @@ export interface ResumeContext {
   readonly now?: () => Date;
   readonly retryDelaysMs?: readonly number[];
   readonly ownerId?: string;
-  /** How long a job's heartbeat holds it for its owner. Default 30 s. */
+  /** Where the locks do not span tabs: how long a job's heartbeat holds it for its owner. Default 3 min. */
   readonly leaseMs?: number;
+  /** Who runs which job; this page's Web Locks (or in-process locks) by default. */
+  readonly locks?: ImportLocks;
 }
 
 export const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000, 60_000];
-export const DEFAULT_LEASE_MS = 30_000;
+/**
+ * Long enough to outlast hidden-tab throttling, which runs a background
+ * tab's timers about once a minute; work in progress renews it as well.
+ */
+export const DEFAULT_LEASE_MS = 180_000;
 const HEARTBEAT_MS = 10_000;
+/** Overlapping resumes that lose a claim look again this many times. */
+const CLAIM_ATTEMPTS = 3;
 
 /** This page load's identity in the queue's leases. */
 const THIS_TAB = crypto.randomUUID();
@@ -207,13 +220,22 @@ interface JobSetup {
   readonly specs: readonly WorkSpec[];
   /** Persisting the job record; work waits for it. */
   readonly saved: Promise<void>;
+  /** The job's lock, released when it ends. */
+  readonly claim: Promise<(() => void) | null>;
+}
+
+/** The recipe a preset gives a new version, or null when there is no such preset. */
+function presetRecipe(session: LibrarySession, presetId: string | undefined): Recipe | null {
+  if (presetId === undefined) return null;
+  const preset = findPreset(session.getView().presets, presetId);
+  return preset ? recipeFromPaths({ ...recipeToPaths(DEFAULT_RECIPE), ...preset.values }) : null;
 }
 
 function warn(what: string) {
   return (error: unknown) => console.warn(`Import: ${what}:`, error);
 }
 
-function jobRecord(setup: Omit<JobSetup, 'saved'>, items: readonly ImportItemRecord[]): ImportJobRecord {
+function jobRecord(setup: Omit<JobSetup, 'saved' | 'claim'>, items: readonly ImportItemRecord[]): ImportJobRecord {
   return {
     id: setup.jobId,
     libraryId: setup.session.libraryId,
@@ -279,7 +301,7 @@ export function startImport(files: readonly File[], ctx: ImportContext): ImportJ
     previewRenderer: ctx.previewRenderer,
     options,
     now,
-    recipe: ctx.recipe ?? null,
+    recipe: ctx.recipe ?? presetRecipe(ctx.session, options.presetId),
     keywords: ctx.keywords ?? null,
     albumId: ctx.albumId ?? null,
     queueStore: ctx.queueStore ?? null,
@@ -288,32 +310,74 @@ export function startImport(files: readonly File[], ctx: ImportContext): ImportJ
     ownerId: ctx.ownerId ?? THIS_TAB,
     specs,
   };
-  const saved =
-    base.queueStore && specs.length > 0
-      ? base.queueStore.saveJob(jobRecord(base, specs.map(newItemRecord))).catch(warn('saving the queue'))
-      : Promise.resolve();
-  return runJob({ ...base, saved });
+  const store = base.queueStore && specs.length > 0 ? base.queueStore : null;
+  // The lock is taken before the record is saved, so no resume can claim a job that is starting.
+  const claim = store
+    ? (ctx.locks ?? defaultImportLocks()).tryAcquire(importLockName(base.jobId)).catch((error: unknown) => {
+        warn('taking the job lock')(error);
+        return null;
+      })
+    : Promise.resolve(null);
+  const saved = store
+    ? claim.then(() => store.saveJob(jobRecord(base, specs.map(newItemRecord)))).catch(warn('saving the queue'))
+    : Promise.resolve();
+  return runJob({ ...base, saved, claim });
 }
 
 /**
  * Continues the library's unfinished imports after a reload, as one new
- * job, from their staged copies. Jobs another tab (or this one) is still
- * running, by a heartbeat younger than the lease, are left alone. Items
- * that never reached staging, or whose staged copy is gone, fail with the
- * reason. Null when nothing is unfinished.
+ * job, from their staged copies. A job is claimed under its lock, so jobs
+ * another tab (or this one) is running, or that an overlapping resume is
+ * claiming, are left alone; where the locks do not span tabs, so is a job
+ * whose heartbeat is younger than the lease. The claim itself is one
+ * atomic swap in the queue. Items that never reached staging, or whose
+ * staged copy is gone, fail with the reason. Null when nothing is
+ * unfinished.
  */
 export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | null> {
+  const locks = ctx.locks ?? defaultImportLocks();
+  for (let attempt = 1; ; attempt++) {
+    const job = await tryResume(ctx, locks);
+    if (job !== 'conflict') return job;
+    if (attempt >= CLAIM_ATTEMPTS) return null;
+  }
+}
+
+async function tryResume(ctx: ResumeContext, locks: ImportLocks): Promise<ImportJob | null | 'conflict'> {
   const { session, queueStore } = ctx;
   const now = ctx.now ?? (() => new Date());
   const leaseMs = ctx.leaseMs ?? DEFAULT_LEASE_MS;
   const held = (record: ImportJobRecord) => {
-    if (!record.owner || !record.heartbeatAt) return false;
+    if (locks.acrossTabs || !record.owner || !record.heartbeatAt) return false;
     const age = now().getTime() - Date.parse(record.heartbeatAt);
     return Number.isFinite(age) && age < leaseMs;
   };
-  const records = (await queueStore.listJobs(session.libraryId))
+  const candidates = (await queueStore.listJobs(session.libraryId))
     .filter((record) => !held(record))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const releases: (() => void)[] = [];
+  try {
+    const records: ImportJobRecord[] = [];
+    for (const record of candidates) {
+      const release = await locks.tryAcquire(importLockName(record.id));
+      if (!release) continue;
+      releases.push(release);
+      records.push(record);
+    }
+    return await claimRecords(ctx, locks, records, now);
+  } finally {
+    for (const release of releases) release();
+  }
+}
+
+/** Builds the resumed job from `records`, whose locks are held, and swaps it in for them. */
+async function claimRecords(
+  ctx: ResumeContext,
+  locks: ImportLocks,
+  records: readonly ImportJobRecord[],
+  now: () => Date,
+): Promise<ImportJob | null | 'conflict'> {
+  const { session, queueStore } = ctx;
   const specs: WorkSpec[] = [];
   let options: ImportOptions | null = null;
   let recipe: Recipe | null = null;
@@ -380,9 +444,17 @@ export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | nul
     ownerId: ctx.ownerId ?? THIS_TAB,
     specs,
   };
-  await queueStore.saveJob(jobRecord(base, specs.map(newItemRecord)));
-  for (const record of records) await queueStore.deleteJob(record.id);
-  return runJob({ ...base, saved: Promise.resolve() });
+  const release = await locks.tryAcquire(importLockName(base.jobId));
+  const claimed = await queueStore.claimJobs(jobRecord(base, specs.map(newItemRecord)), records).catch((error: unknown) => {
+    release?.();
+    throw error;
+  });
+  if (!claimed) {
+    // Another resume claimed one of them between the listing and the lock, or its owner renewed it.
+    release?.();
+    return 'conflict';
+  }
+  return runJob({ ...base, saved: Promise.resolve(), claim: Promise.resolve(release) });
 }
 
 function runJob(setup: JobSetup): ImportJob {
@@ -420,6 +492,17 @@ function runJob(setup: JobSetup): ImportJob {
     const store = queueStore;
     if (!store) return;
     persisted = persisted.then(() => store.updateItem(jobId, index, patch)).catch(warn('updating the queue'));
+    // Progress renews the lease too, so it holds while timers are throttled in a hidden tab.
+    if (now().getTime() - renewedAt >= HEARTBEAT_MS) renew();
+  };
+  // The lease: other tabs leave this job alone while its heartbeat is fresh.
+  let renewedAt = now().getTime();
+  const renew = () => {
+    const store = queueStore;
+    if (!store) return;
+    renewedAt = now().getTime();
+    const at = now().toISOString();
+    persisted = persisted.then(() => store.heartbeat(jobId, setup.ownerId, at)).catch(warn('renewing the lease'));
   };
 
   // Listeners and the progress snapshot.
@@ -922,12 +1005,7 @@ function runJob(setup: JobSetup): ImportJob {
     return snapshot;
   };
 
-  // The lease: other tabs leave this job alone while its heartbeat is fresh.
-  const heartbeat = queueStore
-    ? setInterval(() => {
-        void queueStore.heartbeat(jobId, setup.ownerId, now().toISOString()).catch(warn('renewing the lease'));
-      }, HEARTBEAT_MS)
-    : null;
+  const heartbeat = queueStore ? setInterval(renew, HEARTBEAT_MS) : null;
 
   const workerCount = Math.min(concurrency, works.length);
   const preparers = Promise.all(Array.from({ length: workerCount }, preparer)).then(() => {
@@ -942,6 +1020,7 @@ function runJob(setup: JobSetup): ImportJob {
       if (works.every((w) => isTerminal(w.index))) await queueStore.deleteJob(jobId).catch(warn('clearing the queue'));
       else await queueStore.heartbeat(jobId, null, now().toISOString()).catch(warn('releasing the lease'));
     }
+    (await setup.claim)?.();
     finished = true;
     snapshot = null;
     notify();

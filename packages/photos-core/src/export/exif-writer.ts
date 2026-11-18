@@ -259,6 +259,8 @@ export function insertPngExif(png: Uint8Array, tiff: Uint8Array | null): Uint8Ar
 
 /** The rendered blob with the metadata the settings ask for. */
 export async function applyExportMetadata(blob: Blob, asset: Asset, settings: ExportSettings): Promise<Blob> {
+  // A TIFF's tags are written by the engine as it encodes it; splicing EXIF into it is not this module's job.
+  if (settings.format === 'tiff') return blob;
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const tiff = buildExportExif(asset, settings);
   const out = settings.format === 'png' ? insertPngExif(bytes, tiff) : insertJpegExif(bytes, tiff);

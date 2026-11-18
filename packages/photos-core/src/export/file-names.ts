@@ -59,7 +59,7 @@ export function sanitizeFileName(name: string): string {
 }
 
 export function extensionFor(format: ExportSettings['format']): string {
-  return format === 'png' ? '.png' : '.jpg';
+  return format === 'png' ? '.png' : format === 'tiff' ? '.tif' : '.jpg';
 }
 
 /**
