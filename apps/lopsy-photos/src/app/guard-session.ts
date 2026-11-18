@@ -29,6 +29,7 @@ export const COMMANDS: ReadonlySet<string> = new Set([
   'deleteAlbum',
   'setAlbumMember',
   'setSetting',
+  'applyRecipeValues',
 ]);
 
 export const READ_ONLY_MESSAGE = 'This library was made by a newer version of Lopsy Photos, so it can only be looked at here.';

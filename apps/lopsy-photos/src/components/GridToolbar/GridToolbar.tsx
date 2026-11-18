@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, CopyPlus, Info, Layers, Maximize, Paintbrush, ScanEye, Search, Trash2 } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, ClipboardCopy, ClipboardPaste, CopyPlus, Info, Layers, Maximize, Paintbrush, ScanEye, Search, Trash2 } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useLibraryView, useSavedSearches } from '../../app/hooks';
 import { datePrefixLabel } from '../../library/finding';
@@ -30,6 +30,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
   const selected = useUi((s) => s.selection.ids.size);
   const focus = useUi((s) => s.selection.focus);
   const single = selected === 1 || (selected === 0 && focus !== null);
+  const copied = useUi((s) => s.copiedEdits);
   const infoOpen = useUi((s) => s.infoOpen);
   const toggleInfo = useUi((s) => s.toggleInfo);
   const askDelete = useUi((s) => s.askDelete);
@@ -133,6 +134,18 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           icon={<CopyPlus size={16} />}
           disabled={!single}
           onClick={newVersion}
+        />
+        <IconButton
+          label="Copy edits (⇧⌘C)"
+          icon={<ClipboardCopy size={16} />}
+          disabled={!single}
+          onClick={() => runCommand('copy-edits', orderedIds)}
+        />
+        <IconButton
+          label={copied ? `Paste edits from ${copied.sourceName} (⇧⌘V)` : 'Paste edits: copy them from a photo first'}
+          icon={<ClipboardPaste size={16} />}
+          disabled={!copied || (selected === 0 && !single)}
+          onClick={() => runCommand('paste-edits', orderedIds)}
         />
         <IconButton
           label={groupBursts ? 'Show every photo of a burst' : 'Group bursts: shots taken in quick succession show as one'}

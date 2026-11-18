@@ -7,6 +7,8 @@ import type { AssetId, ColorLabel, Rating, VersionId } from '@lopsy/photos-core/
 import { itemAssets, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
+import { showToast } from './toasts';
+import { pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
 import { EMPTY_SELECTION, moveFocus, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
 
 /** The tiles a command acts on: in Single, Cull and Compare the one in focus, in the grid the selection. */
@@ -30,6 +32,49 @@ export function currentVersions(): { assetId: AssetId; versionId: VersionId }[] 
     if (versionId !== null) out.push({ assetId: parseItem(id).assetId, versionId });
   }
   return out;
+}
+
+/** Opens the Copy edits dialog for the focused photo. */
+export function askCopyEdits(): void {
+  const ui = useUi.getState();
+  if (ui.selection.focus === null && ui.selection.ids.size === 0) return;
+  ui.openDialog('copy-edits');
+}
+
+/** The version Copy edits copies from: the focused tile's. */
+export function copySource(): { assetId: AssetId; versionId: VersionId; name: string } | null {
+  const ui = useUi.getState();
+  const id = ui.selection.focus ?? [...ui.selection.ids][0];
+  if (id === undefined) return null;
+  const view = session().getView();
+  const { assetId } = parseItem(id);
+  const versionId = itemVersionId(id, view);
+  const asset = view.assets.get(assetId);
+  if (!asset || versionId === null) return null;
+  return { assetId, versionId, name: asset.fileName };
+}
+
+export function copyEdits(groupIds: readonly string[]): void {
+  const source = copySource();
+  const version = source ? session().getView().versions.get(source.versionId) : undefined;
+  if (!source || !version) return;
+  const ui = useUi.getState();
+  ui.setCopiedEdits({ values: pickRecipeValues(version.recipe, groupIds), groupIds, sourceName: source.name });
+  ui.openDialog(null);
+  showToast(`Copied edits from ${source.name}. Select photos and paste.`);
+}
+
+/** Pastes the copied edits onto every selected tile's version. */
+export function pasteEdits(): void {
+  const copied = useUi.getState().copiedEdits;
+  if (!copied) {
+    showToast('Copy edits from a photo first.');
+    return;
+  }
+  const versionIds = currentVersions().map((v) => v.versionId);
+  if (versionIds.length === 0) return;
+  pasteRecipeValues(session(), versionIds, copied);
+  showToast(`Pasted edits onto ${versionIds.length.toLocaleString()} photo${versionIds.length === 1 ? '' : 's'}.`);
 }
 
 /** Makes a new version of the focused tile's version (same edits), opens its stack and selects it. */
@@ -206,6 +251,10 @@ export function runCommand(id: CommandId, orderedIds: readonly AssetId[]): void 
       return ui.setSelection(EMPTY_SELECTION);
     case 'delete':
       return askDeleteTargets();
+    case 'copy-edits':
+      return askCopyEdits();
+    case 'paste-edits':
+      return pasteEdits();
     case 'help':
       return ui.openDialog(ui.dialog === 'help' ? null : 'help');
     default:
