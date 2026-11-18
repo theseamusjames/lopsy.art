@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseHandoffDocument,
+  parseLopsyPing,
   parseLopsyReady,
+  parsePhotosPong,
   parseLopsySave,
   parsePhotosDocument,
   parsePhotosSaved,
@@ -80,5 +82,16 @@ describe('message validators', () => {
     expect(parsePhotosSaved({ ...base, ok: false, error: 'Drive is full' })).toEqual({ ...base, ok: false, error: 'Drive is full' });
     expect(parsePhotosSaved({ ...base, ok: false })).toBeNull();
     expect(parsePhotosSaved({ ...base, ok: 'yes' })).toBeNull();
+  });
+
+  it('check ping, pong and document ids', () => {
+    expect(parseLopsyPing({ protocol: 1, type: 'lopsy:ping', id: 'i' })).not.toBeNull();
+    expect(parsePhotosPong({ protocol: 1, type: 'photos:pong', id: 'i' })).not.toBeNull();
+    expect(parsePhotosPong({ protocol: 1, type: 'lopsy:ping', id: 'i' })).toBeNull();
+    expect(parseSource({ ...source, documentId: 'doc-1' })).toEqual({ ...source, documentId: 'doc-1' });
+    expect(parseSource({ ...source, documentId: 'not an id' })).toBeNull();
+    const base = { protocol: 1, type: 'photos:saved', id: 'i', saveId: 's', ok: true };
+    expect(parsePhotosSaved({ ...base, documentId: 'doc-1' })).toEqual({ ...base, documentId: 'doc-1' });
+    expect(parsePhotosSaved({ ...base, documentId: 7 })).toBeNull();
   });
 });

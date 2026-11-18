@@ -155,6 +155,10 @@ if (receiveId && window.opener) {
     if (e.origin !== lopsyOrigin || e.source !== window.opener) return;
     const m = e.data;
     window.__log.push(m.type);
+    if (m.type === 'lopsy:ping' && m.id === receiveId) {
+      window.opener.postMessage({ protocol: 1, type: 'photos:pong', id: receiveId }, lopsyOrigin);
+      return;
+    }
     if (m.type !== 'lopsy:save' || m.id !== receiveId) return;
     recordSave(m);
     window.opener.postMessage({ protocol: 1, type: 'photos:saved', id: receiveId, saveId: m.saveId, ok: true }, lopsyOrigin);
@@ -184,6 +188,9 @@ window.startHandoff = (lopsyUrl, pngBase64, mode) => {
     if (e.origin !== lopsyOrigin || e.source !== win) return;
     const m = e.data;
     window.__log.push(m.type);
+    if (m.type === 'lopsy:ping' && m.id === id) {
+      win.postMessage({ protocol: 1, type: 'photos:pong', id }, lopsyOrigin);
+    }
     if (m.type === 'lopsy:ready' && !isSent) {
       isSent = true;
       const { message, bytes } = makeDocument();
@@ -306,6 +313,32 @@ test.describe('Lopsy Photos handoff', () => {
     expect(second.lopsyMagic).toEqual([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]);
   });
 
+  test('a save after the Photos tab reloaded reopens Photos to receive it', async ({ page, context, baseURL }) => {
+    await servePhotosPages(context, new URL(baseURL!).origin);
+    await page.goto(`${PHOTOS_ORIGIN}/library`);
+    const lopsy = await openLopsyFrom(context, page, `${baseURL}/`);
+    await waitForStore(lopsy);
+    const bar = lopsy.getByRole('region', { name: 'Lopsy Photos' });
+    await expect(bar).toBeVisible({ timeout: 30_000 });
+
+    // The tab Lopsy came from is still open, but the page in it no longer listens for this handoff.
+    await page.reload();
+    const [receiver] = await Promise.all([
+      context.waitForEvent('page', { timeout: 10_000 }),
+      bar.getByRole('button', { name: 'Save to Lopsy Photos' }).click(),
+    ]);
+    await receiver.waitForURL(/receive=/);
+    expect(new URL(receiver.url()).origin).toBe(PHOTOS_ORIGIN);
+    expect(new URL(receiver.url()).searchParams.get('receive')).toMatch(/^[A-Za-z0-9_-]+$/);
+    await expect(bar.getByRole('status')).toHaveText('Saved to Lopsy Photos', { timeout: 30_000 });
+    const [save] = await savesOf(receiver);
+    expect(save!.source).toEqual({ libraryId: 'lib-1', assetId: 'asset-1', versionId: 'v-1', recipeHash: 'hash-1' });
+    expect(save!.baseRevision).toBe('rev-1');
+    expect(save!.renderBitDepth).toBe(16);
+    // The reloaded page heard only the ping, which it could not answer.
+    expect(await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).toEqual([]);
+  });
+
   test('a saved .lopsy keeps 16 bits per channel when reopened', async ({ page, context, baseURL }) => {
     await servePhotosPages(context, new URL(baseURL!).origin);
     await page.goto(`${PHOTOS_ORIGIN}/library`);
@@ -384,6 +417,7 @@ test.describe('Lopsy Photos handoff', () => {
       context.waitForEvent('page'),
       page.getByRole('menuitem', { name: 'Add to Lopsy Photos' }).click(),
     ]);
+    await photos.waitForURL(/receive=/);
     expect(new URL(photos.url()).origin).toBe(PHOTOS_ORIGIN);
     expect(new URL(photos.url()).searchParams.get('receive')).toMatch(/^[A-Za-z0-9_-]+$/);
 
