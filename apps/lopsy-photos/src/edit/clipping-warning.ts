@@ -16,6 +16,9 @@ export interface ClippingWarning {
 }
 
 interface ClippingWarningState extends ClippingWarning {
+  /** Shown only while Alt is held during a drag of Blacks (shadows) or Whites (highlights). */
+  readonly during: ClippingWarning;
+  setDuring(during: ClippingWarning): void;
   toggle(which: 'shadows' | 'highlights'): void;
   /** J: both on, unless both are on already. */
   toggleBoth(): void;
@@ -25,12 +28,17 @@ interface ClippingWarningState extends ClippingWarning {
 export const useClippingWarning = create<ClippingWarningState>()((set, get) => ({
   shadows: false,
   highlights: false,
+  during: { shadows: false, highlights: false },
+  setDuring: (during) => {
+    const now = get().during;
+    if (now.shadows !== during.shadows || now.highlights !== during.highlights) set({ during });
+  },
   toggle: (which) => set((s) => (which === 'shadows' ? { shadows: !s.shadows } : { highlights: !s.highlights })),
   toggleBoth: () => {
     const on = !(get().shadows && get().highlights);
     set({ shadows: on, highlights: on });
   },
-  reset: () => set({ shadows: false, highlights: false }),
+  reset: () => set({ shadows: false, highlights: false, during: { shadows: false, highlights: false } }),
 }));
 
 /** Whether a key press is J for the clipping warning, and not typing. */
@@ -44,8 +52,8 @@ export function isClippingKey(event: { key: string; metaKey: boolean; ctrlKey: b
 
 /** Keeps the engine's overlay in step with the toggles while the Edit view is open, and turns it off when it closes. */
 export function useClippingWarningOnEngine(engine: DevelopEngine | null): void {
-  const shadows = useClippingWarning((s) => s.shadows);
-  const highlights = useClippingWarning((s) => s.highlights);
+  const shadows = useClippingWarning((s) => s.shadows || s.during.shadows);
+  const highlights = useClippingWarning((s) => s.highlights || s.during.highlights);
 
   useEffect(() => {
     engine?.setClippingWarning(shadows, highlights);

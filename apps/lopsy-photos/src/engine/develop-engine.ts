@@ -15,6 +15,7 @@
 import initWasm, {
   addLayer,
   setClippingWarning as engineSetClippingWarning,
+  setImageDetailMaskView,
   setImageFinish,
   clearImageFinish,
   autoTone as engineAutoTone,
@@ -182,6 +183,8 @@ export interface DevelopEngine {
   setClippingWarning(shadows: boolean, highlights: boolean): void;
   /** The photo's grain seed (finish-controls.ts grainSeed), so grain is the same on every render and export. */
   setGrainSeed(seed: number): void;
+  /** Shows what Sharpen affects instead of the photo, on the live frame (Alt while dragging a Sharpen slider). */
+  setDetailMaskView(on: boolean): void;
   dispose(): void;
 }
 
@@ -854,6 +857,12 @@ class PhotoEngine implements DevelopEngine {
   private grainSeedValue = 0;
   private finishKeyApplied: string | null = null;
 
+  setDetailMaskView(on: boolean): void {
+    if (this.isDisposed) return;
+    setImageDetailMaskView(this.engine, on);
+    this.invalidate();
+  }
+
   setGrainSeed(seed: number): void {
     if (seed === this.grainSeedValue) return;
     this.grainSeedValue = seed;
@@ -873,6 +882,7 @@ class PhotoEngine implements DevelopEngine {
 
   setClippingWarning(shadows: boolean, highlights: boolean): void {
     this.clippingWarning = { shadows, highlights };
+    if (this.isDisposed) return;
     engineSetClippingWarning(this.engine, shadows, highlights);
     this.invalidate();
   }

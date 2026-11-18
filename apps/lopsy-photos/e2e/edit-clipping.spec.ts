@@ -61,3 +61,21 @@ test('the highlight warning paints blown pixels red on screen, never in the expo
   await expect(page.getByTestId('clip-highlights')).toHaveAttribute('aria-pressed', 'false');
   await expect.poll(() => liveRed(page), { timeout: 15_000 }).toBe(0);
 });
+
+test('Alt while dragging Whites shows the highlight clipping for the drag only', async ({ page }) => {
+  await openHarness(page);
+  await openGeneratedImage(page, 640, 480, 'image/jpeg', ['#404040', '#ffffff', '#ffffff']);
+  await waitForReady(page);
+  const slider = page.getByRole('slider', { name: 'Whites' });
+  const box = await slider.boundingBox();
+  if (!box) throw new Error('no Whites slider');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.down('Alt');
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 6, box.y + box.height / 2, { steps: 3 });
+  await expect.poll(() => liveRed(page), { timeout: 15_000 }).toBeGreaterThan(1000);
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  await expect.poll(() => liveRed(page), { timeout: 15_000 }).toBe(0);
+  await expect(page.getByTestId('clip-highlights')).toHaveAttribute('aria-pressed', 'false');
+});

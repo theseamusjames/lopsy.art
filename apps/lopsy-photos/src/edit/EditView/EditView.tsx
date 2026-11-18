@@ -50,6 +50,7 @@ import { LoadStatus } from '../LoadStatus/LoadStatus';
 import { usePhotoEngine } from './use-photo-engine';
 import { useClippingWarningOnEngine } from '../clipping-warning';
 import { useGrainSeed } from '../grain-seed';
+import { useAltDragViews } from '../alt-drag-views';
 import styles from './EditView.module.css';
 
 export interface EditViewProps {
@@ -204,6 +205,7 @@ export function EditView({
   // Dragging a slider outside Local contrast and Sharpness & noise leaves
   // their costly passes out until it is let go.
   const isDraggingCheapControl = draft !== null && !Object.keys(draft).some((path) => DETAIL_PREFIXES.some((p) => path.startsWith(p)));
+  useAltDragViews(engine, draft);
   useEffect(() => {
     engine?.setInteractive(isDraggingCheapControl);
   }, [engine, isDraggingCheapControl]);
