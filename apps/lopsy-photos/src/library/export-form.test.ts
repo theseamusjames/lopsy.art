@@ -15,9 +15,14 @@ describe('export form', () => {
     expect(back.metadata).toBe(web.settings.metadata);
   });
 
-  it('keeps Rec. 2020 for 16-bit formats only', () => {
+  it('offers what the engine encodes, TIFF at full size', () => {
     expect(fitColorSpace({ ...DEFAULT_EXPORT_FORM, format: 'jpeg', colorSpace: 'rec2020' }).colorSpace).toBe('srgb');
-    expect(fitColorSpace({ ...DEFAULT_EXPORT_FORM, format: 'tiff', colorSpace: 'rec2020' }).colorSpace).toBe('rec2020');
+    // The engine has no Rec. 2020 yet, so it is not offered even for TIFF.
+    expect(fitColorSpace({ ...DEFAULT_EXPORT_FORM, format: 'tiff', colorSpace: 'rec2020' }).colorSpace).toBe('srgb');
+    expect(fitColorSpace({ ...DEFAULT_EXPORT_FORM, format: 'tiff', colorSpace: 'display-p3', longEdge: 2048 })).toMatchObject({
+      colorSpace: 'display-p3',
+      longEdge: null,
+    });
     expect(settingsFromForm({ ...DEFAULT_EXPORT_FORM, format: 'png', colorSpace: 'rec2020' }).colorSpace).toBe('srgb');
   });
 });

@@ -21,9 +21,19 @@ export function formFromSettings(settings: ExportSettings): ExportForm {
   };
 }
 
-/** The colour space, made valid for the format (Rec. 2020 needs 16 bits). */
+/**
+ * The colour spaces the dialog offers for a format. Rec. 2020 is left out:
+ * photos-core allows it with 16 bits, but the engine encodes sRGB and
+ * Display P3 only (`exportPng16`, `exportTiff16`).
+ */
+export function offeredColorSpaces(format: ExportFormat): ExportColorSpace[] {
+  return colorSpacesFor(format).filter((space) => space !== 'rec2020');
+}
+
+/** The colour space made one the format and the engine can do; TIFF is always full size. */
 export function fitColorSpace(form: ExportForm): ExportForm {
-  return colorSpacesFor(form.format).includes(form.colorSpace) ? form : { ...form, colorSpace: 'srgb' };
+  const fitted = offeredColorSpaces(form.format).includes(form.colorSpace) ? form : { ...form, colorSpace: 'srgb' as const };
+  return fitted.format === 'tiff' && fitted.longEdge !== null ? { ...fitted, longEdge: null } : fitted;
 }
 
 /** Settings to save as a preset; what the form does not show keeps the defaults. */

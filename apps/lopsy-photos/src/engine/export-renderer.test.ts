@@ -72,7 +72,16 @@ describe('createEngineExportRenderer', () => {
     const [f] = fakes;
     expect(f?.loads).toEqual(['a']);
     expect(f?.recipes).toEqual([warm]);
-    expect(f?.exports).toEqual([{ format: 'jpeg', quality: 0.9, maxSize: 2048 }]);
+    expect(f?.exports).toEqual([{ format: 'jpeg', quality: 0.9, maxSize: 2048, colorSpace: 'srgb' }]);
+  });
+
+  it('exports TIFF full size in the chosen colour space, and refuses Rec. 2020', async () => {
+    const r = renderer();
+    const signal = new AbortController().signal;
+    const version = harnessVersion(assetA, warm);
+    await r.render(assetA, version, { ...DEFAULT_EXPORT_SETTINGS, format: 'tiff', colorSpace: 'display-p3', maxLongEdge: 2048 }, signal);
+    expect(fakes[0]?.exports.at(-1)).toEqual({ format: 'tiff', quality: 0.9, maxSize: undefined, colorSpace: 'display-p3' });
+    await expect(r.render(assetA, version, { ...DEFAULT_EXPORT_SETTINGS, format: 'tiff', colorSpace: 'rec2020' }, signal)).rejects.toThrow(/Rec\. 2020/);
   });
 
   it('reuses one engine and one decode for versions of the same photo', async () => {
