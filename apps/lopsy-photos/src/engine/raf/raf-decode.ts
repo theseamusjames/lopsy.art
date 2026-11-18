@@ -93,6 +93,7 @@ async function renderBands(
   mosaic: Float32Array,
   meta: RafPrepareMeta,
   paramsJson: string,
+  linear: boolean,
   onBand: (band: RafBandPixels, done: number, count: number) => void,
   signal: AbortSignal | undefined,
 ): Promise<void> {
@@ -107,7 +108,7 @@ async function renderBands(
       const index = next++;
       const [y0 = 0, y1 = 0, srcY0 = 0, srcY1 = 0] = plan.subarray(index * 4, index * 4 + 4);
       const src = mosaic.slice(srcY0 * w, srcY1 * w);
-      const res = await call(worker, { kind: 'band', index, src, paramsJson, y0, y1, srcY0, srcY1 }, [src.buffer], signal);
+      const res = await call(worker, { kind: 'band', index, src, paramsJson, y0, y1, srcY0, srcY1, linear }, [src.buffer], signal);
       if (res.kind !== 'band') throw new Error(`RAF worker sent ${res.kind} for band ${index}`);
       done++;
       onBand(res, done, bandCount);
@@ -115,6 +116,17 @@ async function renderBands(
   };
 
   await Promise.all(workers.map(drain));
+}
+
+export interface RafDecodeOptions {
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (progress: RafDecodeProgress) => void;
+  /** Linear camera RGB for the develop stage rather than the finished look. */
+  readonly linear?: boolean;
+  /** With `linear`: also bin the whole frame to at least this long edge for a first view. */
+  readonly binnedLongEdge?: number;
+  /** Once the frame is prepared, before any band: the binned first view (if asked for) and the develop defaults. */
+  readonly onPrepared?: (meta: RafPrepareMeta, prepared: { binned: RafBandPixels | null; developDefaultsJson: string }) => void;
 }
 
 /**
@@ -126,9 +138,10 @@ async function renderBands(
 export async function decodeRafInWorkers(
   data: Uint8Array,
   onBand: (meta: RafPrepareMeta, band: RafBandPixels) => void,
-  options: { signal?: AbortSignal; onProgress?: (progress: RafDecodeProgress) => void } = {},
+  options: RafDecodeOptions = {},
 ): Promise<RafPrepareMeta> {
-  const { signal, onProgress } = options;
+  const { signal, onProgress, onPrepared } = options;
+  const linear = options.linear === true;
   const module = await compileWasmModule();
   if (signal?.aborted) throw new DecodeAbortedError();
   const workers = Array.from({ length: rafWorkerCount(navigator.hardwareConcurrency) }, () => spawnWorker(module));
@@ -136,14 +149,17 @@ export async function decodeRafInWorkers(
     const [first] = workers;
     if (!first) throw new Error('No RAF decode workers');
     onProgress?.({ stage: 'preparing', bandsDone: 0, bandCount: 0 });
-    const prepared = await call(first, { kind: 'prepare', data }, [], signal);
+    const binnedLongEdge = linear && options.binnedLongEdge ? options.binnedLongEdge : null;
+    const prepared = await call(first, { kind: 'prepare', data, binnedLongEdge }, [], signal);
     if (prepared.kind !== 'prepared') throw new Error(`RAF worker sent ${prepared.kind} instead of the prepared frame`);
     const meta = JSON.parse(prepared.metaJson) as RafPrepareMeta;
+    onPrepared?.(meta, { binned: prepared.binned, developDefaultsJson: prepared.developDefaultsJson });
     await renderBands(
       workers,
       prepared.mosaic,
       meta,
       prepared.paramsJson,
+      linear,
       (band, done, count) => {
         onBand(meta, band);
         onProgress?.({ stage: 'rendering', bandsDone: done, bandCount: count });

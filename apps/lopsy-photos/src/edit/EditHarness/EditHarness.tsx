@@ -12,6 +12,8 @@ export interface HarnessRecord {
   readonly previews: { readonly recipeHash: string; readonly thumb: Blob; readonly screen: Blob }[];
   readonly exports: { readonly blob: Blob; readonly fileName: string }[];
   readonly steps: string[];
+  /** What Edit in Lopsy would hand over: the 16-bit PNGs, in order. */
+  readonly lopsyPngs: ArrayBuffer[];
   recipe: Recipe | null;
 }
 
@@ -41,7 +43,7 @@ export function EditHarness() {
   const [message, setMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const counter = useRef(0);
-  const record = useMemo<HarnessRecord>(() => ({ previews: [], exports: [], steps: [], recipe: null }), []);
+  const record = useMemo<HarnessRecord>(() => ({ previews: [], exports: [], steps: [], lopsyPngs: [], recipe: null }), []);
 
   useEffect(() => {
     window.__photosHarness = record;
@@ -138,6 +140,11 @@ export function EditHarness() {
           onPreviewRendered={(p) => {
             record.previews.push(p);
             setPreviews({ thumb: previewRef(p.recipeHash, p.thumb), screen: previewRef(p.recipeHash, p.screen) });
+          }}
+          onEditInLopsy={(renderPng16) => {
+            renderPng16()
+              .then((png) => record.lopsyPngs.push(png))
+              .catch((err: unknown) => console.error('Lopsy Photos: Edit in Lopsy render failed', err));
           }}
           onExport={(blob, fileName) => {
             record.exports.push({ blob, fileName });

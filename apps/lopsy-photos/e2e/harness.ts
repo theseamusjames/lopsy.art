@@ -7,6 +7,7 @@ declare global {
       readonly previews: { readonly recipeHash: string; readonly thumb: Blob; readonly screen: Blob }[];
       readonly exports: { readonly blob: Blob; readonly fileName: string }[];
       readonly steps: string[];
+      readonly lopsyPngs: ArrayBuffer[];
     };
   }
 }

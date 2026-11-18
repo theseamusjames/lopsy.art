@@ -14,6 +14,7 @@
 
 import initWasm, {
   addLayer,
+  clearRawDevelop,
   createEngine,
   decodeAndUploadDng,
   decodeAndUploadImage,
@@ -35,6 +36,7 @@ import initWasm, {
   setImageVignette,
   setImageWhites,
   setLayerOrder,
+  setRawDevelop,
   setViewport,
   updateLayer,
   uploadLayerPixelsF32Rect,
@@ -53,11 +55,13 @@ import {
 } from './recipe-to-adjustments';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
+import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, type RawDevelopSettings } from './raw-develop';
 
 export { DecodeAbortedError };
 
 export interface LoadProgress {
-  readonly stage: 'reading' | 'decoding' | 'uploading';
+  /** 'refining': a first view is on screen while the full-size image is decoded. */
+  readonly stage: 'reading' | 'decoding' | 'uploading' | 'refining';
   /** 0..1 when known. */
   readonly fraction: number | null;
 }
@@ -91,7 +95,8 @@ export interface DevelopEngine {
   dispose(): void;
 }
 
-const LAYER_ID = 'photo';
+/** Long edge of the binned first view of a RAF (`rafRenderBinnedLinear`). */
+const QUICK_VIEW_LONG_EDGE = 2048;
 const JPEG_MIME = 'image/jpeg';
 const PNG_MIME = 'image/png';
 const SRGB = 0;
@@ -108,12 +113,12 @@ function ensureWasm(): Promise<unknown> {
   return wasmReady;
 }
 
-function layerDesc(width: number, height: number): string {
+function layerDesc(id: string, width: number, height: number, isVisible: boolean): string {
   return JSON.stringify({
-    id: LAYER_ID,
+    id,
     name: 'Photo',
     layer_type: 'Raster',
-    visible: true,
+    visible: isVisible,
     locked: false,
     opacity: 1,
     blend_mode: 'Normal',
@@ -175,6 +180,11 @@ class PhotoEngine implements DevelopEngine {
   private isDisposed = false;
   private frameRequest: number | null = null;
   private hasLayer = false;
+  private layerId = 'photo-0';
+  private layerCount = 0;
+  /** The RAW develop stage's defaults for this photo; null for an image that is not RAW. */
+  private rawDefaults: RawDevelopSettings | null = null;
+  private appliedRawJson: string | null = null;
   /** Oriented size, before framing. */
   private sourceSize: Size | null = null;
   private framing: Framing = { rotate: 0, flipH: false };
@@ -209,13 +219,9 @@ class PhotoEngine implements DevelopEngine {
     };
     try {
       report('reading', null);
+      this.setRawDefaults(null);
       const size = await this.decode(source, format, abort.signal, report);
       if (abort.signal.aborted || this.isDisposed) throw new DecodeAbortedError();
-      this.sourceSize = size;
-      this.framing = { rotate: 0, flipH: false };
-      this.applied = null;
-      this.applyRecipe();
-      this.fit();
       return size;
     } finally {
       if (this.loadAbort === abort) this.loadAbort = null;
@@ -232,7 +238,7 @@ class PhotoEngine implements DevelopEngine {
     if (format === 'dng') return this.decodeDng(source, signal, report);
     if (format === 'png') {
       const sized = await this.decodePng16(source, signal, report);
-      if (sized) return sized;
+      if (sized) return this.showImage(sized);
     }
     if (format === 'lopsy') throw new Error('Lopsy documents open in Lopsy, not in the Edit view');
     report('decoding', null);
@@ -240,10 +246,17 @@ class PhotoEngine implements DevelopEngine {
     this.checkLive(signal);
     report('uploading', null);
     this.resetLayer(decoded.width, decoded.height);
-    uploadLayerPixelsFromCanvas(this.engine, LAYER_ID, decoded, decoded.width, decoded.height);
-    return { width: decoded.width, height: decoded.height };
+    uploadLayerPixelsFromCanvas(this.engine, this.layerId, decoded, decoded.width, decoded.height);
+    return this.showImage({ width: decoded.width, height: decoded.height });
   }
 
+  /**
+   * RAF through the worker pool. Where the GPU renders to float targets,
+   * the bands are linear camera RGB for the RAW develop stage, and a binned
+   * first view of the whole frame is shown while the full-size bands are
+   * rendered into a hidden layer that replaces it at the end. Elsewhere the
+   * bands carry the decoder's finished look.
+   */
   private async decodeRaf(
     source: Blob,
     signal: AbortSignal,
@@ -252,28 +265,49 @@ class PhotoEngine implements DevelopEngine {
     const data = new Uint8Array(await source.arrayBuffer());
     this.checkLive(signal);
     report('decoding', null);
-    let initialised = false;
+    const isLinear = this.hasFloatTargets();
+    let quick: Size | null = null;
+    let fullLayer: string | null = null;
     const meta = await decodeRafInWorkers(
       data,
       (full, band) => {
         if (signal.aborted || this.isDisposed) return;
-        if (!initialised) {
-          this.resetLayer(full.width, full.height);
-          initialised = true;
+        if (fullLayer === null) {
+          fullLayer = quick ? this.addHiddenLayer(full.width, full.height) : this.resetLayer(full.width, full.height);
         }
         uploadLayerPixelsF32Rect(
-          this.engine, LAYER_ID, full.width, full.height,
+          this.engine, fullLayer, full.width, full.height,
           band.x, band.y, band.width, band.height, band.pixels,
         );
       },
       {
         signal,
-        onProgress: (p) => report('decoding', p.bandCount > 0 ? p.bandsDone / p.bandCount : 0),
+        linear: isLinear,
+        binnedLongEdge: QUICK_VIEW_LONG_EDGE,
+        onPrepared: (_meta, prepared) => {
+          if (signal.aborted || this.isDisposed || !isLinear) return;
+          this.setRawDefaults(parseRawDevelopSettings(prepared.developDefaultsJson));
+          const binned = prepared.binned;
+          if (!binned) return;
+          const layer = this.resetLayer(binned.width, binned.height);
+          uploadLayerPixelsF32Rect(this.engine, layer, binned.width, binned.height, 0, 0, binned.width, binned.height, binned.pixels);
+          quick = this.showImage({ width: binned.width, height: binned.height });
+          report('refining', 0);
+        },
+        onProgress: (p) => {
+          const fraction = p.bandCount > 0 ? p.bandsDone / p.bandCount : 0;
+          report(quick ? 'refining' : 'decoding', fraction);
+        },
       },
     );
     this.checkLive(signal);
-    if (meta.width === 0 || meta.height === 0) throw new Error('The RAW file decoded to an empty image');
-    return { width: meta.width, height: meta.height };
+    if (meta.width === 0 || meta.height === 0 || fullLayer === null) throw new Error('The RAW file decoded to an empty image');
+    const size = { width: meta.width, height: meta.height };
+    if (quick) {
+      this.swapInLayer(fullLayer, size, quick);
+      return size;
+    }
+    return this.showImage(size);
   }
 
   private async decodeDng(
@@ -289,10 +323,10 @@ class PhotoEngine implements DevelopEngine {
     await nextFrame();
     this.checkLive(signal);
     this.resetLayer(1, 1);
-    const meta = JSON.parse(decodeAndUploadDng(this.engine, LAYER_ID, data)) as { width: number; height: number };
+    const meta = JSON.parse(decodeAndUploadDng(this.engine, this.layerId, data)) as { width: number; height: number };
     if (!meta.width || !meta.height) throw new Error('The DNG file decoded to an empty image');
     this.sizeDocument(meta.width, meta.height);
-    return { width: meta.width, height: meta.height };
+    return this.showImage({ width: meta.width, height: meta.height });
   }
 
   /** The engine's PNG decoder keeps 16-bit files at full depth; null when it cannot read the file. */
@@ -305,7 +339,7 @@ class PhotoEngine implements DevelopEngine {
     this.checkLive(signal);
     report('decoding', null);
     this.resetLayer(1, 1);
-    const result = decodeAndUploadImage(this.engine, LAYER_ID, data);
+    const result = decodeAndUploadImage(this.engine, this.layerId, data);
     const [width = 0, height = 0] = result;
     if (result.length < 2 || !width || !height) return null;
     this.sizeDocument(width, height);
@@ -316,18 +350,74 @@ class PhotoEngine implements DevelopEngine {
     if (signal.aborted || this.isDisposed) throw new DecodeAbortedError();
   }
 
-  private resetLayer(width: number, height: number): void {
-    if (this.hasLayer) removeLayer(this.engine, LAYER_ID);
+  /** Whether the composite is float, which the RAW develop stage needs (engine/src/develop). */
+  private hasFloatTargets(): boolean {
+    const gl = this.canvas.getContext('webgl2');
+    // No WebGL context means the wgpu build, whose targets are always float.
+    if (!gl) return true;
+    return gl.getExtension('EXT_color_buffer_float') !== null;
+  }
+
+  /** Shows a freshly loaded image, unframed, fitted, with the recipe applied. */
+  private showImage(size: Size): Size {
+    this.sourceSize = size;
+    this.framing = { rotate: 0, flipH: false };
+    this.applied = null;
+    this.appliedRawJson = null;
+    this.applyRecipe();
+    this.fit();
+    return size;
+  }
+
+  /**
+   * Replaces the first view with the full-size layer, keeping the zoom and
+   * pan the user chose in the meantime (scaled to the larger image) and
+   * re-applying the framing to the new layer.
+   */
+  private swapInLayer(layer: string, size: Size, previous: Size): void {
+    removeLayer(this.engine, this.layerId);
+    this.layerId = layer;
+    setDocumentSize(this.engine, size.width, size.height);
+    updateLayer(this.engine, layerDesc(layer, size.width, size.height, true));
+    setLayerOrder(this.engine, JSON.stringify([layer]));
+    const target = this.framing;
+    const wasFit = this.view.isFit;
+    const zoom = this.view.zoom * (previous.width / size.width);
+    this.sourceSize = size;
+    this.framing = { rotate: 0, flipH: false };
+    this.applyFraming(target);
+    if (wasFit) this.fit();
+    else this.setView({ ...this.view, zoom, isFit: false });
+    this.invalidate();
+  }
+
+  private nextLayerId(): string {
+    this.layerCount += 1;
+    return `photo-${this.layerCount}`;
+  }
+
+  /** Replaces the document with one visible layer of this size; returns its id. */
+  private resetLayer(width: number, height: number): string {
+    if (this.hasLayer) removeLayer(this.engine, this.layerId);
+    this.layerId = this.nextLayerId();
     setDocumentSize(this.engine, width, height);
-    addLayer(this.engine, layerDesc(width, height));
-    setLayerOrder(this.engine, JSON.stringify([LAYER_ID]));
+    addLayer(this.engine, layerDesc(this.layerId, width, height, true));
+    setLayerOrder(this.engine, JSON.stringify([this.layerId]));
     this.hasLayer = true;
     this.invalidate();
+    return this.layerId;
+  }
+
+  /** A layer outside the layer order, filled while the first view shows. */
+  private addHiddenLayer(width: number, height: number): string {
+    const id = this.nextLayerId();
+    addLayer(this.engine, layerDesc(id, width, height, false));
+    return id;
   }
 
   private sizeDocument(width: number, height: number): void {
     setDocumentSize(this.engine, width, height);
-    updateLayer(this.engine, layerDesc(width, height));
+    updateLayer(this.engine, layerDesc(this.layerId, width, height, true));
     this.invalidate();
   }
 
@@ -338,12 +428,26 @@ class PhotoEngine implements DevelopEngine {
     if (this.sourceSize) this.applyRecipe();
   }
 
+  private setRawDefaults(defaults: RawDevelopSettings | null): void {
+    this.rawDefaults = defaults;
+    this.appliedRawJson = null;
+    if (!defaults) clearRawDevelop(this.engine);
+  }
+
   private applyRecipe(): void {
-    const adj = recipeToAdjustments(this.recipe);
+    const adj = recipeToAdjustments(this.recipe, { isRaw: this.rawDefaults !== null });
     if (!this.applied || !sameAdjustments(adj, this.applied)) {
       pushAdjustments(this.engine, adj);
       this.applied = adj;
       this.invalidate();
+    }
+    if (this.rawDefaults) {
+      const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe));
+      if (json !== this.appliedRawJson) {
+        setRawDevelop(this.engine, json);
+        this.appliedRawJson = json;
+        this.invalidate();
+      }
     }
     this.applyFraming({ rotate: this.recipe.framing.rotate, flipH: this.recipe.framing.flipH });
   }
@@ -352,8 +456,8 @@ class PhotoEngine implements DevelopEngine {
     const ops = framingOps(this.framing, target);
     if (ops.length === 0 || !this.sourceSize) return;
     for (const op of ops) {
-      if (op.kind === 'flipH') flipLayer(this.engine, LAYER_ID, true);
-      else rotateLayer90(this.engine, LAYER_ID, op.clockwise);
+      if (op.kind === 'flipH') flipLayer(this.engine, this.layerId, true);
+      else rotateLayer90(this.engine, this.layerId, op.clockwise);
     }
     this.framing = target;
     const size = framedSize(this.sourceSize.width, this.sourceSize.height, target.rotate);
