@@ -206,3 +206,13 @@ export function importBatches(view: LibraryView): ImportBatch[] {
     .map(([importId, b]) => ({ importId, importedAt: b.importedAt, count: b.count }))
     .sort((x, y) => (x.importedAt < y.importedAt ? 1 : x.importedAt > y.importedAt ? -1 : 0));
 }
+
+/** An import batch's name in the sidebar: "14 Mar, 09:30"; the year only when it is not this year's. */
+export function importLabel(iso: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const year = d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`;
+  return `${d.getDate()} ${months[d.getMonth()]}${year}, ${time}`;
+}

@@ -12,7 +12,7 @@ import { IndexedDbLocalStore } from '@lopsy/photos-core/library/local-store';
 import { openBrowserStorage, openPickedFolder } from '@lopsy/photos-core/storage/local-folder-adapter';
 import { GoogleDriveAdapter } from '@lopsy/photos-core/storage/google-drive/drive-adapter';
 import { IndexedDbUploadSessionStore } from '@lopsy/photos-core/storage/google-drive/upload-sessions';
-import { fetchGoogleAccount, GoogleTokenSource } from '@lopsy/photos-core/auth/google-token-source';
+import { AccountMismatchError, fetchGoogleAccount, GoogleTokenSource } from '@lopsy/photos-core/auth/google-token-source';
 import { isStorageError } from '@lopsy/photos-core/storage/errors';
 import { resumeImports, startImport } from '@lopsy/photos-core/import/importer';
 import { OpfsStagingStore, type StagingStore } from '@lopsy/photos-core/import/staging';
@@ -194,7 +194,7 @@ export class RealBackend implements PhotosBackend {
     ]);
     this.extras.set(session, { kind, raw: rawSession, owner: opened.owner, label: opened.label, tokenSource: opened.tokenSource, caches, staging, queue });
     setPreviewSource(caches ? { read: (s, ref) => caches.previews.readPreview(s.adapter, ref.fileId) } : null);
-    saveLastConnection({ kind, label: opened.label });
+    saveLastConnection({ kind, label: opened.label, ...(kind === 'google-drive' ? { accountId: opened.owner } : {}) });
     this.current = session;
     return { session, accountLabel: opened.label };
   }
@@ -222,11 +222,17 @@ export class RealBackend implements PhotosBackend {
       case 'google-drive': {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('This build has no Google sign-in.');
-        const tokenSource = new GoogleTokenSource({ clientId });
+        // Owned here so the account can be pinned once known: from then on
+        // every grant (refreshes, Reconnect) must be for this library's account.
+        const last = reconnect ? loadLastConnection() : null;
+        const tokenOptions: { clientId: string; expectedAccountId?: string } = { clientId };
+        if (last?.kind === 'google-drive' && last.accountId) tokenOptions.expectedAccountId = last.accountId;
+        const tokenSource = new GoogleTokenSource(tokenOptions);
         let token: string;
         try {
           token = await tokenSource.requestInteractive();
         } catch (error) {
+          if (error instanceof AccountMismatchError) throw error;
           if (isStorageError(error) && error.code === 'auth') {
             throw new Error('Google sign-in did not finish. Lopsy Photos needs access to the files it creates in your Drive.');
           }
@@ -234,6 +240,7 @@ export class RealBackend implements PhotosBackend {
         }
         const account = await fetchGoogleAccount(token);
         tokenSource.rememberAccount(account);
+        tokenOptions.expectedAccountId = account.id;
         const adapter = new GoogleDriveAdapter({
           tokenSource,
           label: account.email,
