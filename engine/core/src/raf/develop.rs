@@ -229,7 +229,7 @@ pub fn render_linear_rgb(mosaic: &[f32], w: usize, h: usize, params: &RafRenderP
 pub fn render_linear_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Result<RafBandPixels, String> {
     let src_h = check_band(src, params, band)?;
     let rgb = render_linear_rgb(src, params.width as usize, src_h, params);
-    Ok(orient_band(&rgb, params, band, false))
+    Ok(orient_band(rgb, params, band, false))
 }
 
 /// The GPU develop stage on the CPU: straight-alpha RGBA in linear camera
