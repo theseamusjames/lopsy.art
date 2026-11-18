@@ -3,10 +3,10 @@ import type { VersionId } from '@lopsy/photos-core/library/types';
 import { getBackend } from '../../app/backend-registry';
 import type { ExportFormat } from '../../app/backend';
 import type { ExportPreset } from '@lopsy/photos-core/library/types';
-import { colorSpacesFor, exportSettingsProblem, type ExportColorSpace, type ExportSettings } from '@lopsy/photos-core/export/types';
+import { exportSettingsProblem, type ExportColorSpace, type ExportSettings } from '@lopsy/photos-core/export/types';
 import { useExportPresets, useExportProgress, useSession } from '../../app/hooks';
 import { tiffExportAvailable } from '../../app/export-capabilities';
-import { COLOR_SPACE_WORDS, DEFAULT_EXPORT_FORM, fitColorSpace, formFromSettings, settingsFromForm, type ExportForm } from '../../library/export-form';
+import { COLOR_SPACE_WORDS, DEFAULT_EXPORT_FORM, locationKept, fitColorSpace, offeredColorSpaces, formFromSettings, settingsFromForm, type ExportForm } from '../../library/export-form';
 import { ExportPresetBar } from '../ExportPresetBar/ExportPresetBar';
 import { useUi } from '../../app/store';
 import { currentVersions } from '../../app/commands';
@@ -56,7 +56,9 @@ export function ExportDialog() {
     setPresetId(preset.id);
   };
   const sizes = longEdge !== null && !SIZES.some((s) => s.value === longEdge) ? [...SIZES, { value: longEdge, label: `${longEdge} px on the long side` }] : SIZES;
-  const problem = exportSettingsProblem(settingsFromForm(form, base));
+  const chosen = settingsFromForm(form, base);
+  const problem = exportSettingsProblem(chosen);
+  const keepsLocation = locationKept(chosen);
   const tiffBlocked = format === 'tiff' && !tiff;
 
   useEffect(() => {
@@ -151,6 +153,12 @@ export function ExportDialog() {
             </label>
           )}
           {tiffBlocked && <p className={styles.warn}>This build cannot write TIFF yet. Choose JPEG or PNG.</p>}
+          {keepsLocation && (
+            <p className={styles.warn} role="note">
+              Location will be kept: these settings leave where each photo was taken in the exported files.
+            </p>
+          )}
+          {problem && <p className={styles.warn}>{problem}</p>}
           {format === 'jpeg' && (
             <label className={styles.range}>
               <span>Quality</span>
@@ -165,10 +173,11 @@ export function ExportDialog() {
           <select
             className={styles.select}
             disabled={running}
+            aria-label="Colours"
             value={colorSpace}
             onChange={(e) => change({ colorSpace: e.target.value as ExportColorSpace })}
           >
-            {colorSpacesFor(format).map((space) => (
+            {offeredColorSpaces(format).map((space) => (
               <option key={space} value={space}>
                 {COLOR_SPACE_WORDS[space]}
               </option>
@@ -180,7 +189,7 @@ export function ExportDialog() {
           <span className={styles.legend}>Size</span>
           <select
             className={styles.select}
-            disabled={running}
+            disabled={running || format === 'tiff'}
             value={longEdge ?? ''}
             onChange={(e) => setLongEdge(e.target.value === '' ? null : Number(e.target.value))}
           >
@@ -190,7 +199,11 @@ export function ExportDialog() {
               </option>
             ))}
           </select>
-          <span className={styles.muted}>Photos are never made larger than they are.</span>
+          <span className={styles.muted}>
+            {format === 'tiff'
+              ? 'TIFF is always the full size. It keeps no camera details (EXIF).'
+              : 'Photos are never made larger than they are.'}
+          </span>
         </label>
 
         <fieldset className={styles.group} disabled={running}>

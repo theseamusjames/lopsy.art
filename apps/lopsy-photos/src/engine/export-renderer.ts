@@ -81,11 +81,14 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       checkSignal(signal);
     }
     e.setRecipe(version.recipe);
-    if (settings.format === 'tiff') throw new Error('16-bit TIFF export needs the engine’s exportTiff16, not wired yet.');
+    const space = settings.colorSpace ?? 'srgb';
+    if (space === 'rec2020') throw new Error('Rec. 2020 export needs an engine that encodes it; choose sRGB or Display P3.');
     const blob = await e.exportImage({
       format: settings.format,
       quality: settings.quality,
-      maxSize: settings.maxLongEdge ?? undefined,
+      // The engine's TIFF is the full image; the dialog says so.
+      maxSize: settings.format === 'tiff' ? undefined : (settings.maxLongEdge ?? undefined),
+      colorSpace: space,
     });
     checkSignal(signal);
     return blob;

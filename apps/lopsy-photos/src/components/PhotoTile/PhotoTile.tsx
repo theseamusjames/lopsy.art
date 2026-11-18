@@ -5,7 +5,7 @@ import { useFindResult, useLibraryView, usePreviewUrl, useVersionCounts } from '
 import { useUi } from '../../app/store';
 import { writeDraggedIds } from '../../app/drag';
 import { isEdited } from '../../library/asset-query';
-import { itemAssets, parseItem } from '../../library/items';
+import { parseItem } from '../../library/items';
 import { isDefaultRecipe } from '@lopsy/photos-core/library/recipe';
 import { Stars } from '../Stars/Stars';
 import styles from './PhotoTile.module.css';
@@ -60,7 +60,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
       draggable
       onDragStart={(e) => {
         const sel = useUi.getState().selection.ids;
-        writeDraggedIds(e.dataTransfer, sel.has(itemId) ? itemAssets(sel) : [asset.id]);
+        writeDraggedIds(e.dataTransfer, sel.has(itemId) ? [...sel] : [itemId]);
       }}
       onMouseDown={(e) => {
         if (e.shiftKey) e.preventDefault();
@@ -92,6 +92,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
               type="button"
               className={`${styles.badge} ${styles.burst}`}
               title={burstOpen ? 'Fold this burst back into one photo' : `A burst of ${burst} photos: show them all`}
+              aria-label={`Burst of ${burst} photos`}
               aria-expanded={burstOpen}
               onClick={(e) => {
                 e.stopPropagation();
@@ -111,6 +112,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
                   ? 'Fold the Lopsy documents back behind this photo'
                   : `${documents} Lopsy document${documents === 1 ? '' : 's'} made from this photo: show ${documents === 1 ? 'it' : 'them'}`
               }
+              aria-label={`${documents} Lopsy document${documents === 1 ? '' : 's'}`}
               aria-expanded={burstOpen}
               onClick={(e) => {
                 e.stopPropagation();

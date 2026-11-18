@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { CopyPlus, Pencil, Trash2 } from 'lucide-react';
+import { CopyPlus, Pencil, Star, Trash2 } from 'lucide-react';
 import { useLibraryView, useSession } from '../../app/hooks';
 import { useUi } from '../../app/store';
-import { newVersion } from '../../app/commands';
+import { deleteVersionOf, makeShownVersion, newVersion } from '../../app/commands';
 import { parseItem, versionItemId, versionsByAsset, type ItemId } from '../../library/items';
 import { selectOne } from '../../library/selection';
 import { Button } from '../Button/Button';
@@ -14,7 +14,7 @@ interface VersionStripProps {
   itemId: ItemId;
 }
 
-/** A photo's versions: switch between them, add, rename and delete (never the shown one or the last). */
+/** A photo's versions: switch between them, choose the shown one, add, rename and delete (never the last). */
 export function VersionStrip({ itemId }: VersionStripProps) {
   const session = useSession();
   const view = useLibraryView();
@@ -62,15 +62,24 @@ export function VersionStrip({ itemId }: VersionStripProps) {
               {v.name}
             </button>
             <IconButton size="sm" label={`Rename ${v.name}`} icon={<Pencil size={11} />} onClick={() => setRenaming(v.id)} />
-            {v.id !== asset.primaryVersionId && versions.length > 1 && (
+            {v.id === asset.primaryVersionId ? (
+              <span className={styles.shown} title="The photo shows this version in the grid and in albums">
+                Shown
+              </span>
+            ) : (
+              <IconButton
+                size="sm"
+                label={`Show ${v.name} for this photo`}
+                icon={<Star size={11} />}
+                onClick={() => makeShownVersion(asset.id, v.id)}
+              />
+            )}
+            {versions.length > 1 && (
               <IconButton
                 size="sm"
                 label={`Delete ${v.name}`}
                 icon={<Trash2 size={11} />}
-                onClick={() => {
-                  session.deleteVersion(v.id);
-                  if (v.id === current) useUi.getState().setSelection(selectOne(asset.id));
-                }}
+                onClick={() => deleteVersionOf(asset.id, v.id)}
               />
             )}
           </span>

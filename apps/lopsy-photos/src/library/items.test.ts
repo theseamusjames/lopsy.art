@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
-import { itemAssets, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset } from './items';
-import { openVersions } from './finding';
+import type { LibrarySession } from '@lopsy/photos-core/library/types';
+import { albumHasItem, itemAssets, itemVersionId, nextVersionName, parseItem, setAlbumItem, versionItemId, versionsByAsset } from './items';
+import { albumItemCount } from './asset-query';
+import { albumItems, openVersions } from './finding';
 import { makeAsset, makeView } from './test-fixtures';
 
 const second = { id: 'v2', assetId: 'a', name: 'Version 2', recipe: DEFAULT_RECIPE, createdAt: '2026-03-01T00:00:00Z', thumb: null, screen: null, deleted: false };
@@ -27,5 +29,44 @@ describe('grid items', () => {
   it('opens a photo’s other versions after it', () => {
     expect(openVersions(['a', 'b'], view, new Set())).toEqual(['a', 'b']);
     expect(openVersions(['a', 'b'], view, new Set(['a']))).toEqual(['a', versionItemId('a', 'v2'), 'b']);
+  });
+});
+
+describe('albums of photos and versions', () => {
+  const album = {
+    id: 'al',
+    name: 'Picks',
+    assetIds: ['b'],
+    members: [
+      { assetId: 'b', versionId: null },
+      { assetId: 'a', versionId: 'v2' },
+      { assetId: 'a', versionId: 'v3' }, // deleted: not shown
+    ],
+    deleted: false,
+  };
+  const albumView = makeView([makeAsset('a'), makeAsset('b')], [album], [second, gone]);
+
+  it('shows whole photos and single versions as their own tiles', () => {
+    expect(albumItems(['a', 'b'], album, albumView)).toEqual([versionItemId('a', 'v2'), 'b']);
+    expect(albumItemCount(album, albumView)).toBe(2);
+  });
+
+  it('shows a member version that is the shown one as the photo', () => {
+    const shown = { ...album, members: [{ assetId: 'a', versionId: 'v-a' }] };
+    expect(albumItems(['a', 'b'], shown, albumView)).toEqual(['a']);
+  });
+
+  it('knows which tiles it holds and adds them the right way', () => {
+    expect(albumHasItem(album, 'b')).toBe(true);
+    expect(albumHasItem(album, 'a')).toBe(false);
+    expect(albumHasItem(album, versionItemId('a', 'v2'))).toBe(true);
+    const calls: unknown[][] = [];
+    const session = { setAlbumMember: (...args: unknown[]) => calls.push(args) } as unknown as LibrarySession;
+    setAlbumItem(session, 'al', 'b', true);
+    setAlbumItem(session, 'al', versionItemId('a', 'v2'), false);
+    expect(calls).toEqual([
+      ['al', 'b', true, null],
+      ['al', 'a', false, 'v2'],
+    ]);
   });
 });

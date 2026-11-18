@@ -8,6 +8,7 @@
 
 import type { AssetId, LibrarySession } from '@lopsy/photos-core/library/types';
 import { isStorageError } from '@lopsy/photos-core/storage/errors';
+import type { FileId } from '@lopsy/photos-core/storage/types';
 import { unguarded, writeRefusal } from '../guard-session';
 
 export class TrashRefusedError extends Error {
@@ -64,4 +65,36 @@ export async function trashAssets(session: LibrarySession, assetIds: readonly As
       `The photos left the library, but ${failed.length} original${failed.length === 1 ? '' : 's'} could not be moved to the trash. Check library in Settings lists ${failed.length === 1 ? 'it' : 'them'}.`,
     );
   }
+}
+
+/**
+ * Trashes originals of deleted photos that a failed delete left outside
+ * the trash. Only files whose every asset is deleted are touched: a live
+ * photo's original is never trashed this way. Already-gone files count as
+ * done. Resolves with how many were moved; throws when some could not be.
+ */
+export async function trashLeftoverOriginals(session: LibrarySession, fileIds: readonly FileId[]): Promise<number> {
+  const view = session.getView();
+  const live = new Set<FileId>();
+  const deleted = new Set<FileId>();
+  for (const asset of view.assets.values()) {
+    if (asset.kind !== 'original') continue;
+    (asset.deleted ? deleted : live).add(asset.fileId);
+  }
+  let moved = 0;
+  const failed: FileId[] = [];
+  for (const fileId of new Set(fileIds)) {
+    if (live.has(fileId) || !deleted.has(fileId)) continue;
+    try {
+      await session.adapter.trash(fileId);
+      moved += 1;
+    } catch (error) {
+      if (isStorageError(error) && error.code === 'not-found') moved += 1;
+      else failed.push(fileId);
+    }
+  }
+  if (failed.length > 0) {
+    throw new Error(`${failed.length} original${failed.length === 1 ? '' : 's'} could not be moved to the trash. Try again later.`);
+  }
+  return moved;
 }

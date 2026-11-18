@@ -4,7 +4,7 @@
  * library view's identity.
  */
 
-import type { AlbumId, Asset, AssetId, LibraryView } from '@lopsy/photos-core/library/types';
+import type { Album, AlbumId, Asset, AssetId, LibraryView } from '@lopsy/photos-core/library/types';
 import { isDefaultRecipe } from '@lopsy/photos-core/library/recipe';
 
 export type Collection =
@@ -75,7 +75,7 @@ function inCollection(asset: Asset, collection: Collection, view: LibraryView, r
       return asset.setAside;
     case 'album': {
       const album = view.albums.get(collection.albumId);
-      return album !== undefined && !album.deleted && album.assetIds.includes(asset.id);
+      return album !== undefined && !album.deleted && album.members.some((m) => m.assetId === asset.id);
     }
     case 'keyword':
       return asset.keywords.includes(collection.keyword);
@@ -195,7 +195,7 @@ export function sidebarCounts(view: LibraryView): SidebarCounts {
   const albums = new Map<AlbumId, number>();
   for (const album of view.albums.values()) {
     if (album.deleted) continue;
-    albums.set(album.id, album.assetIds.filter((id) => view.assets.get(id)?.deleted === false).length);
+    albums.set(album.id, albumItemCount(album, view));
   }
   const sortedKeywords = [...keywords.entries()].sort((x, y) => x[0].localeCompare(y[0]));
   return { all, recent, setAside, albums, keywords: sortedKeywords };
@@ -209,4 +209,16 @@ export function sameCollection(a: Collection, b: Collection): boolean {
   if (a.kind === 'import' && b.kind === 'import') return a.importId === b.importId;
   if (a.kind === 'saved' && b.kind === 'saved') return a.searchId === b.searchId;
   return true;
+}
+
+/** How many tiles the album shows: its live photos and live single versions, each once. */
+export function albumItemCount(album: Album, view: LibraryView): number {
+  const items = new Set<string>();
+  for (const m of album.members) {
+    const asset = view.assets.get(m.assetId);
+    if (!asset || asset.deleted) continue;
+    if (m.versionId === null || m.versionId === asset.primaryVersionId) items.add(asset.id);
+    else if (view.versions.get(m.versionId)?.deleted === false) items.add(`${asset.id}#${m.versionId}`);
+  }
+  return items.size;
 }

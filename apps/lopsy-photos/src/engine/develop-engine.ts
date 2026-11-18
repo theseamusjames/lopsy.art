@@ -33,6 +33,8 @@ import initWasm, {
   decodeAndUploadDng,
   decodeAndUploadImage,
   exportPng16,
+  exportTiff16,
+  resumeTask,
   flipLayer,
   readDevelopHistogram,
   removeLayer,
@@ -92,11 +94,14 @@ export interface LoadProgress {
 }
 
 export interface ExportOptions {
-  readonly format: 'jpeg' | 'png';
+  /** 'tiff' is the engine's 16-bit TIFF, always full size. */
+  readonly format: 'jpeg' | 'png' | 'tiff';
   /** JPEG quality, 0..1. */
   readonly quality?: number;
-  /** Limit on the long edge, in pixels. Full size when omitted. */
+  /** Limit on the long edge, in pixels. Full size when omitted. Ignored for TIFF. */
   readonly maxSize?: number;
+  /** sRGB when omitted. The engine knows sRGB and Display P3 only. */
+  readonly colorSpace?: 'srgb' | 'display-p3';
 }
 
 /** What the loaded photo offers the Edit view. */
@@ -166,6 +171,31 @@ const QUICK_VIEW_LONG_EDGE = 2048;
 const JPEG_MIME = 'image/jpeg';
 const PNG_MIME = 'image/png';
 const SRGB = 0;
+const DISPLAY_P3 = 1;
+const TIFF_MIME = 'image/tiff';
+
+interface PendingReadback {
+  readonly lopsyTask: number;
+  readonly ready: Promise<void>;
+}
+
+function isPendingReadback(value: unknown): value is PendingReadback {
+  return typeof value === 'object' && value !== null && 'lopsyTask' in value;
+}
+
+/**
+ * A GPU readback as a Promise, like lopsy-web's `asyncReadback`: WebGL
+ * answers at once; a wgpu build parks the read, which this waits out.
+ */
+async function readback<T>(engine: Engine, read: () => unknown, isDisposed: () => boolean): Promise<T> {
+  let step: unknown = read();
+  while (isPendingReadback(step)) {
+    await step.ready;
+    if (isDisposed()) throw new Error('The engine was released while it was exporting');
+    step = resumeTask(engine, step.lopsyTask);
+  }
+  return step as T;
+}
 
 let wasmReady: Promise<unknown> | null = null;
 
@@ -840,13 +870,22 @@ class PhotoEngine implements DevelopEngine {
   async exportImage(options: ExportOptions): Promise<Blob> {
     const image = this.imageSize();
     if (!image || this.isDisposed) throw new Error('No photo is loaded');
+    const space = options.colorSpace === 'display-p3' ? DISPLAY_P3 : SRGB;
+    if (options.format === 'tiff') return this.encodeTiff16(space);
     const out = limitSize(image, options.maxSize);
     const mime = options.format === 'png' ? PNG_MIME : JPEG_MIME;
     const isFullSize = out.width === image.width && out.height === image.height;
-    if (options.format === 'png' && isFullSize) return this.encodePng16();
-    const drawn = this.drawAtSize(out);
+    if (options.format === 'png' && isFullSize) return this.encodePng16(space);
+    // The drawing buffer is sRGB; Display P3 goes through the engine's P3 PNG instead.
+    const drawn = space === SRGB ? this.drawAtSize(out) : null;
     if (drawn) return drawn.convertToBlob({ type: mime, quality: options.quality });
-    return this.encodeFromPng16(out, mime, options.quality);
+    return this.encodeFromPng16(out, mime, options.quality, space);
+  }
+
+  private async encodeTiff16(space: number): Promise<Blob> {
+    render(this.engine);
+    const bytes = await readback<Uint8Array>(this.engine, () => exportTiff16(this.engine, space), () => this.isDisposed);
+    return new Blob([bytes as BlobPart], { type: TIFF_MIME });
   }
 
   /**
@@ -879,19 +918,20 @@ class PhotoEngine implements DevelopEngine {
     }
   }
 
-  private async encodePng16(): Promise<Blob> {
+  private async encodePng16(space = SRGB): Promise<Blob> {
     render(this.engine);
-    const bytes = exportPng16(this.engine, SRGB);
+    const bytes = await readback<Uint8Array>(this.engine, () => exportPng16(this.engine, space), () => this.isDisposed);
     return new Blob([bytes as BlobPart], { type: PNG_MIME });
   }
 
   /** For outputs larger than a drawing buffer: the engine's PNG, resized and re-encoded by the browser. */
-  private async encodeFromPng16(size: Size, mime: string, quality: number | undefined): Promise<Blob> {
-    const png = await this.encodePng16();
+  private async encodeFromPng16(size: Size, mime: string, quality: number | undefined, space = SRGB): Promise<Blob> {
+    const png = await this.encodePng16(space);
     const bitmap = await createImageBitmap(png, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: 'high' });
     try {
       const out = new OffscreenCanvas(size.width, size.height);
-      const ctx = out.getContext('2d');
+      // A P3 canvas keeps the P3 PNG's colours and tags the encoded file as Display P3.
+      const ctx = out.getContext('2d', { colorSpace: space === DISPLAY_P3 ? 'display-p3' : 'srgb' });
       if (!ctx) throw new Error('The browser could not make a canvas to encode with');
       ctx.drawImage(bitmap, 0, 0);
       return out.convertToBlob({ type: mime, quality });

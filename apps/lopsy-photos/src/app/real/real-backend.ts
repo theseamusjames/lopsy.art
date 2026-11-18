@@ -21,6 +21,7 @@ import { openAccountCaches, type AccountCaches } from '@lopsy/photos-core/cache/
 import { LibraryBusyError } from '@lopsy/photos-core/library/lock';
 import type { PhotosLibrarySession } from '@lopsy/photos-core/library/session';
 import { repairLibrary, type RepairReport } from '@lopsy/photos-core/library/repair';
+import { trashLeftoverOriginals } from './trash-assets';
 import { startImportFromStorage } from '@lopsy/photos-core/import/from-storage';
 import { pickDriveFiles } from '@lopsy/photos-core/storage/google-drive/picker';
 import { budgetFor, OriginalsDownload, type KeepOriginals } from '@lopsy/photos-core/cache/keep-originals';
@@ -336,6 +337,10 @@ export class RealBackend implements PhotosBackend {
       // They are already in Originals/.
       options: { move: false },
     });
+  }
+
+  async trashLeftovers(session: LibrarySession, fileIds: readonly FileId[]): Promise<number> {
+    return trashLeftoverOriginals(session, fileIds);
   }
 
   async restoreOriginals(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {

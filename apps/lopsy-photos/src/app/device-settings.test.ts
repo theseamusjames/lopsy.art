@@ -17,5 +17,6 @@ describe('device settings', () => {
       '2 originals are in the trash.',
       '1 photo is in Originals but not in the library.',
     ]);
+    expect(describeHealth({ ...clean, leftovers: ['x', 'y'] })).toEqual(['2 originals of deleted photos are still outside the trash.']);
   });
 });

@@ -63,3 +63,55 @@ test('new version, edit it, copy its edits onto another photo', async ({ page })
   await first.getByRole('button', { name: '2 versions' }).click();
   await expect(page.locator('[role="gridcell"][title="first.jpg (Version 2)"]')).toHaveAttribute('data-edited', 'true');
 });
+
+/**
+ * One version in an album, then that version made the one the photo shows,
+ * then the shown version deleted: the photo falls back to the other one.
+ */
+test('a version in an album, made the shown one, then deleted', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [{ name: 'only.jpg', buffer: await generatedJpeg(page, 60, 480, 320) }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  const photo = page.locator('[role="gridcell"][title="only.jpg"]');
+  const version = page.locator('[role="gridcell"][title="only.jpg (Version 2)"]');
+  const original = page.locator('[role="gridcell"][title="only.jpg (Original)"]');
+
+  await photo.click({ button: 'right' });
+  await page.getByRole('menu', { name: 'Photo actions' }).getByRole('menuitem', { name: 'New version' }).click();
+  await expect(version).toHaveAttribute('aria-selected', 'true');
+
+  // Only the version goes in the album.
+  const sidebar = page.getByRole('navigation', { name: 'Library' });
+  await sidebar.getByRole('button', { name: 'New album' }).click();
+  await page.getByRole('textbox', { name: 'Album name' }).fill('Picks');
+  await page.keyboard.press('Enter');
+  await sidebar.getByRole('button', { name: /^All photos/ }).click();
+  await version.click();
+  await expect(page.getByText('This version in albums')).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Picks' }).check();
+  await sidebar.getByRole('button', { name: /^Picks/ }).click();
+  await expect(page.getByRole('gridcell')).toHaveCount(1);
+  await expect(version).toBeVisible();
+
+  // Made the shown version, the album's tile is the photo itself.
+  await version.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Show this version for the photo' }).click();
+  await expect(page.getByRole('gridcell')).toHaveCount(1);
+  await expect(photo).toBeVisible();
+
+  // In All photos the old Original is the stack's other tile. Delete the shown version from Single view.
+  await sidebar.getByRole('button', { name: /^All photos/ }).click();
+  await expect(original).toBeVisible();
+  await photo.click();
+  await page.keyboard.press(' ');
+  const strip = page.getByRole('group', { name: 'Versions' });
+  await expect(strip.getByText('Shown')).toBeVisible();
+  await strip.getByRole('button', { name: 'Delete Version 2' }).click();
+  await expect(strip.getByRole('button', { name: 'Original', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(strip.getByRole('button', { name: 'Delete Original' })).toHaveCount(0);
+  await page.keyboard.press(' ');
+  await expect(photo).toBeVisible();
+  await expect(page.getByRole('gridcell')).toHaveCount(1);
+});

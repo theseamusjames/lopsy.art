@@ -7,6 +7,7 @@ import { datePrefixLabel, importBatches, importLabel } from '../../library/findi
 import { Disclosure } from '../Disclosure/Disclosure';
 import { useUi } from '../../app/store';
 import { ASSET_DRAG_TYPE, readDraggedIds } from '../../app/drag';
+import { setAlbumItem } from '../../library/items';
 import { sameCollection, sidebarCounts, type Collection } from '../../library/asset-query';
 import { IconButton } from '../IconButton/IconButton';
 import styles from './Sidebar.module.css';
@@ -134,7 +135,7 @@ export function Sidebar() {
               onDrop={(e) => {
                 e.preventDefault();
                 setDropTarget(null);
-                for (const id of readDraggedIds(e.dataTransfer)) session.setAlbumMember(album.id, id, true);
+                for (const id of readDraggedIds(e.dataTransfer)) setAlbumItem(session, album.id, id, true);
               }}
             >
               {item(

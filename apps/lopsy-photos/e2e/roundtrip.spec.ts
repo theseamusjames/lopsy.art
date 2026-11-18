@@ -131,8 +131,7 @@ test('a photo goes to Lopsy and comes back as a document, then updates in place'
   await page.getByRole('button', { name: /All photos/ }).click();
   await expect(photoTile).toBeVisible();
   // It is stacked behind the photo it was made from: the photo's badge opens the stack.
-  // (Its accessible name is only the count; its title says what it is.)
-  const stackBadge = photoTile.locator('button[title^="1 Lopsy document made from this photo"]');
+  const stackBadge = photoTile.getByRole('button', { name: '1 Lopsy document', exact: true });
   await expect(stackBadge).toBeVisible({ timeout: 60_000 });
   await stackBadge.click();
   await expect(docTile).toHaveCount(1, { timeout: 60_000 });

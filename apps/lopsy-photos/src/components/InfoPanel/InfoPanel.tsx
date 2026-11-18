@@ -3,9 +3,10 @@ import { EyeOff, X } from 'lucide-react';
 import type { Asset, Rating } from '@lopsy/photos-core/library/types';
 import { useLibraryView, useOrderedIds, useSession } from '../../app/hooks';
 import { useUi } from '../../app/store';
-import { currentTargets, setLabel, setRating, toggleSetAside } from '../../app/commands';
+import { currentItems, currentTargets, setLabel, setRating, toggleSetAside } from '../../app/commands';
 import { formatBytes } from '../../import/import-summary';
 import { formatCamera, formatCaptureTime, formatDimensions, formatExposure } from '../../library/format';
+import { albumHasItem, parseItem, setAlbumItem } from '../../library/items';
 import { Button } from '../Button/Button';
 import { LabelPicker } from '../LabelPicker/LabelPicker';
 import { Stars } from '../Stars/Stars';
@@ -29,6 +30,7 @@ export function InfoPanel() {
   const [keyword, setKeyword] = useState('');
 
   const ids = useMemo(() => currentTargets(), [selection, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const items = useMemo(() => currentItems(), [selection, mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const assets = useMemo(
     () => ids.map((id) => view.assets.get(id)).filter((a): a is Asset => a !== undefined && !a.deleted),
     [ids, view],
@@ -161,20 +163,25 @@ export function InfoPanel() {
 
       {albums.length > 0 && (
         <section className={styles.section}>
-          <span className={styles.fieldLabel}>In albums</span>
+          <span className={styles.fieldLabel}>
+            {items.length > 0 && items.every((id) => parseItem(id).versionId !== null)
+              ? items.length === 1
+                ? 'This version in albums'
+                : 'These versions in albums'
+              : 'In albums'}
+          </span>
           {albums.map((album) => {
-            const members = new Set(album.assetIds);
-            const inCount = targetIds.filter((id) => members.has(id)).length;
+            const inCount = items.filter((id) => albumHasItem(album, id)).length;
             return (
               <label key={album.id} className={styles.check}>
                 <input
                   type="checkbox"
-                  checked={inCount === targetIds.length}
+                  checked={items.length > 0 && inCount === items.length}
                   ref={(el) => {
-                    if (el) el.indeterminate = inCount > 0 && inCount < targetIds.length;
+                    if (el) el.indeterminate = inCount > 0 && inCount < items.length;
                   }}
                   onChange={(e) => {
-                    for (const id of targetIds) session.setAlbumMember(album.id, id, e.target.checked);
+                    for (const id of items) setAlbumItem(session, album.id, id, e.target.checked);
                   }}
                 />
                 {album.name}

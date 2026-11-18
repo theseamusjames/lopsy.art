@@ -52,6 +52,7 @@ export function describeHealth(report: {
   readonly trashed: readonly string[];
   readonly changed: readonly string[];
   readonly orphans: readonly string[];
+  readonly leftovers?: readonly string[];
 }): string[] {
   const lines: string[] = [];
   const n = (count: number, one: string, many: string) => `${count.toLocaleString('en-US')} ${count === 1 ? one : many}`;
@@ -59,6 +60,8 @@ export function describeHealth(report: {
   if (report.trashed.length > 0) lines.push(`${n(report.trashed.length, 'original is', 'originals are')} in the trash.`);
   if (report.changed.length > 0) lines.push(`${n(report.changed.length, 'original has', 'originals have')} been changed outside Lopsy Photos.`);
   if (report.orphans.length > 0) lines.push(`${n(report.orphans.length, 'photo is', 'photos are')} in Originals but not in the library.`);
+  const leftovers = report.leftovers?.length ?? 0;
+  if (leftovers > 0) lines.push(`${n(leftovers, 'original of a deleted photo is', 'originals of deleted photos are')} still outside the trash.`);
   if (lines.length === 0) lines.push(`All ${n(report.assetsChecked, 'original is', 'originals are')} where they should be.`);
   return lines;
 }
