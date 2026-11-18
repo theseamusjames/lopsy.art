@@ -87,6 +87,8 @@ test('a version in an album, made the shown one, then deleted', async ({ page })
   await page.getByRole('menu', { name: 'Photo actions' }).getByRole('menuitem', { name: 'New version' }).click();
   await page.getByRole('button', { name: 'Create' }).click();
   await expect(version).toHaveAttribute('aria-selected', 'true');
+  // The open stack shows two tiles, but they are one photo.
+  await expect(page.getByText(/^1 photo · 1 selected$/)).toBeVisible();
   // The stack's badge folds and opens it, every time.
   for (let i = 0; i < 3; i++) {
     await photo.getByRole('button', { name: '2 versions' }).click();

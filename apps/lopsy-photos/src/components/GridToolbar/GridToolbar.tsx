@@ -6,6 +6,8 @@ import { datePrefixLabel } from '../../library/finding';
 import { THUMB_SIZE, useUi } from '../../app/store';
 import { newVersion, openCompare, openCull, openFocusedInLopsy, runCommand } from '../../app/commands';
 import { PresetMenu } from '../PresetMenu/PresetMenu';
+import { itemAssets } from '../../library/items';
+import { plural } from '../../import/import-summary';
 import { MoreMenu } from '../MoreMenu/MoreMenu';
 import { formatChord, SHORTCUTS, type CommandId } from '../../shortcuts/registry';
 import { isMac } from '../../app/hooks';
@@ -38,6 +40,9 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
   const toggleInfo = useUi((s) => s.toggleInfo);
   const askDelete = useUi((s) => s.askDelete);
 
+  // Photos, not tiles: an open stack's version tiles are versions of photos already counted.
+  const photoCount = useMemo(() => itemAssets(orderedIds).length, [orderedIds]);
+
   const title = useMemo(() => {
     switch (collection.kind) {
       case 'all':
@@ -64,7 +69,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
       <div className={styles.heading}>
         <h1 className={styles.title}>{title}</h1>
         <span className={styles.count}>
-          {orderedIds.length.toLocaleString()} photo{orderedIds.length === 1 ? '' : 's'}
+          {plural(photoCount, 'photo')}
           {selected > 0 && ` · ${selected.toLocaleString()} selected`}
         </span>
         {collection.kind === 'set-aside' && orderedIds.length > 0 && (

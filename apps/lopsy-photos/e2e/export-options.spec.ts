@@ -64,6 +64,8 @@ test('export two photos as one zip, named by a template and sized by short edge'
   expect(names.every((n) => /^trip-00[12]-(alpha|beta)\.jpg$/.test(n))).toBe(true);
   expect(new Set(names.map((n) => n.slice(0, 8))).size).toBe(2);
   await expect(page.getByText('Exported 2 photos.')).toBeVisible();
+  // Done means a full bar.
+  await expect(page.getByRole('progressbar', { name: 'Export progress' })).toHaveAttribute('aria-valuenow', '2');
 
   // One photo on its own, sized by short edge: 160 px short, 240 long.
   await page.getByRole('button', { name: 'Done' }).click();

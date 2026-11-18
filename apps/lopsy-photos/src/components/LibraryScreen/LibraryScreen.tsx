@@ -27,6 +27,8 @@ import styles from './LibraryScreen.module.css';
 /** The library: header, sidebar, the grid or a viewer, the details panel, and the dialogs. */
 export function LibraryScreen() {
   const view = useLibraryView();
+  // False for the one render a closing library may still get (see useSession).
+  const connected = useUi((s) => s.connection !== null);
   const orderedIds = useOrderedIds();
   const mode = useUi((s) => s.mode);
   const infoOpen = useUi((s) => s.infoOpen);
@@ -132,14 +134,14 @@ export function LibraryScreen() {
       {dialog === 'settings' && <SettingsDialog />}
       {dialog === 'new-version' && (
         <NewVersionDialog
-          suggested={suggestedVersionName()}
+          suggested={connected ? suggestedVersionName() : 'Version 2'}
           onCreate={createNamedVersion}
           onClose={() => useUi.getState().openDialog(null)}
         />
       )}
       {dialog === 'copy-edits' && (
         <CopyEditsDialog
-          sourceName={copySource()?.name ?? 'this photo'}
+          sourceName={(connected ? copySource()?.name : undefined) ?? 'this photo'}
           groups={COPY_GROUPS}
           initial={DEFAULT_COPY_GROUP_IDS}
           onCopy={copyEdits}

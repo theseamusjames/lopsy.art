@@ -88,6 +88,8 @@
 }
 
 .bar {
+  position: relative;
+  display: flex;
   height: 4px;
   border-radius: var(--radius-round);
   background: var(--color-bg-active);
@@ -96,10 +98,52 @@
 
 .fill {
   display: block;
+  flex: none;
   height: 100%;
   width: var(--fraction);
   background: var(--color-accent);
   transition: width var(--transition-normal);
+}
+
+/* Finished means full, at once. */
+.fill[data-finished='true'] {
+  transition: none;
+}
+
+/* The photo being rendered: a stripe sliding through what is left of the bar. */
+.working {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+
+.working::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30%;
+  background: var(--color-accent);
+  opacity: 0.55;
+  animation: slide 1.2s ease-in-out infinite;
+}
+
+@keyframes slide {
+  from {
+    left: -30%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .working::after {
+    animation: none;
+    left: 0;
+    width: 100%;
+    opacity: 0.25;
+  }
 }
 
 .warn {

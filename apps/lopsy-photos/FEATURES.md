@@ -171,7 +171,10 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
   against its hash, and added with its metadata (capture time,
   orientation, camera, lens, exposure, GPS). Previews (512 and 2048 px)
   come from the camera's embedded JPEG or the browser's decode.
-- Progress shows in a strip at the bottom of the window. An import that
+- Progress shows in a strip at the bottom of the window; the outcome
+  counts photos as the grid does ("Imported 5 photos (6 files: RAW+JPEG
+  pairs count once)"). Imports in the same minute are told apart in the
+  sidebar by their seconds. An import that
   is interrupted (the tab closes, the network drops) resumes; uploads
   resume where Drive allows.
 
@@ -285,6 +288,8 @@ and on leaving.
   with anyone who has the link, only after a confirmation that says
   exactly that.
 - Not yet: WebP output and output sharpening.
+- Progress: a bar filled by the photos done, with a moving stripe while
+  one renders (a full-size RAW can take a while), full when finished.
 - An export can **keep going in the background** while the user goes on.
 
 ## Lopsy round trips
@@ -315,6 +320,11 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   and the recipe back, and the tab closes; **Cancel** sends nothing. A
   render Lopsy would refuse (the wrong size, over 1 GB) is reported to
   Lopsy as a failure and the tab stays open to say so.
+
+## Errors
+
+- If the app stops rendering, it shows **Something went wrong** with
+  **Reload** instead of a blank page; the library is saved as it changes.
 
 ## Devices, offline, sync and settings
 

@@ -293,7 +293,9 @@ export function ExportDialog() {
           </div>
           <div className={styles.column}>
         <fieldset className={styles.group} disabled={running || format === 'tiff'}>
-          <legend className={styles.legend}>Details in the file</legend>
+          <legend className={styles.legend}>
+            Details in the file{format === 'tiff' && <span className={styles.muted}> — TIFF keeps none</span>}
+          </legend>
           <label className={styles.option}>
             <input type="radio" name="metadata" checked={settings.metadata === 'all'} onChange={() => change({ metadata: 'all' })} />
             All <span className={styles.muted}>— camera, exposure, date, copyright</span>
@@ -393,16 +395,26 @@ export function ExportDialog() {
 
         {progress && (
           <div className={styles.progress} aria-live="polite">
-            <div className={styles.bar}>
+            <div
+              className={styles.bar}
+              role="progressbar"
+              aria-label="Export progress"
+              aria-valuemin={0}
+              aria-valuemax={progress.total}
+              aria-valuenow={progress.finished ? progress.total : progress.done}
+            >
+              {/* Done photos fill the bar; while one renders (a full-size RAW can take a while) a stripe moves in the rest. */}
               <span
                 className={styles.fill}
-                style={{ '--fraction': `${progress.total === 0 ? 100 : (progress.done / progress.total) * 100}%` } as React.CSSProperties}
+                data-finished={progress.finished}
+                style={{ '--fraction': `${progress.finished || progress.total === 0 ? 100 : (progress.done / progress.total) * 100}%` } as React.CSSProperties}
               />
+              {!progress.finished && <span className={styles.working} />}
             </div>
             <p className={styles.muted}>
               {progress.finished
                 ? `Exported ${plural(progress.done - progress.failures.length, 'photo')}.`
-                : `Exporting ${progress.done} of ${progress.total}…`}
+                : `Exporting ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`}
               {progress.failures.length > 0 && ` ${progress.failures.length} failed.`}
             </p>
             {progress.failures.length > 0 && (

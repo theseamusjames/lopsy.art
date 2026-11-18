@@ -37,6 +37,8 @@ test('export the 16-bit TIFF, Display P3 preset to a download', async ({ page })
   await page.getByRole('combobox', { name: 'Export preset' }).selectOption({ label: '16-bit TIFF, Display P3' });
   await expect(page.getByRole('radio', { name: /^TIFF, 16-bit/ })).toBeChecked();
   await expect(page.getByRole('combobox', { name: 'Colours' })).toHaveValue('display-p3');
+  // TIFF keeps no EXIF, so the metadata choices are off.
+  await expect(page.getByRole('radio', { name: 'Copyright and contact only' })).toBeDisabled();
   await page.getByRole('radio', { name: 'Download to this computer' }).check();
   const download = page.waitForEvent('download', { timeout: 120_000 });
   await page.getByRole('button', { name: 'Export', exact: true }).click();
