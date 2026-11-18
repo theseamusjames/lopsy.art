@@ -19,7 +19,7 @@ export type Collection =
   /** A saved search; its rule is compiled by the caller (finding.ts). */
   | { readonly kind: 'saved'; readonly searchId: string };
 
-export type SortKey = 'captured' | 'imported' | 'name' | 'rating';
+export type SortKey = 'captured' | 'imported' | 'edited' | 'name' | 'rating';
 
 export interface SortOrder {
   readonly key: SortKey;
@@ -35,9 +35,32 @@ export interface AssetQuery {
 export const SORT_LABELS: Readonly<Record<SortKey, string>> = {
   captured: 'Date taken',
   imported: 'Date added',
+  edited: 'Last edited',
   name: 'File name',
   rating: 'Rating',
 };
+
+/** Each order's natural direction: newest, best and most recently edited first; names A to Z. */
+export const SORT_DESCENDING: Readonly<Record<SortKey, boolean>> = {
+  captured: true,
+  imported: true,
+  edited: true,
+  name: false,
+  rating: true,
+};
+
+/** The direction button's words for an order. */
+export function sortDirectionLabel(sort: SortOrder): string {
+  const [down, up] =
+    sort.key === 'name'
+      ? ['Z to A', 'A to Z']
+      : sort.key === 'rating'
+        ? ['Highest first', 'Lowest first']
+        : sort.key === 'edited'
+          ? ['Most recently edited first', 'Longest ago first']
+          : ['Newest first', 'Oldest first'];
+  return `${sort.descending ? down : up} (click to reverse)`;
+}
 
 const RAW_FORMATS = new Set(['raf', 'dng']);
 
@@ -121,9 +144,24 @@ function compareStrings(a: string, b: string): number {
 }
 
 /** Sort comparator; ties fall back to file name, then id, so the order is stable. */
-export function compareAssets(a: Asset, b: Asset, sort: SortOrder): number {
+/**
+ * `editedAt` gives an asset's last edit as a sortable string (an HLC), or
+ * null when it was never edited; unedited photos come after edited ones
+ * either way.
+ */
+export function compareAssets(a: Asset, b: Asset, sort: SortOrder, editedAt?: (asset: Asset) => string | null): number {
   let c = 0;
   switch (sort.key) {
+    case 'edited': {
+      const x = editedAt?.(a) ?? null;
+      const y = editedAt?.(b) ?? null;
+      if (x === null || y === null) {
+        if (x !== y) return x === null ? 1 : -1;
+        break;
+      }
+      c = compareStrings(x, y);
+      break;
+    }
     case 'captured':
       c = compareStrings(a.capturedAt ?? a.importedAt, b.capturedAt ?? b.importedAt);
       break;

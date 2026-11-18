@@ -7,7 +7,7 @@ import { THUMB_SIZE, useUi } from '../../app/store';
 import { currentVersions, newVersion, openCompare, openCull, runCommand } from '../../app/commands';
 import { openInLopsy } from '../../app/lopsy-handoff';
 import { PresetMenu } from '../PresetMenu/PresetMenu';
-import { SORT_LABELS, type SortKey } from '../../library/asset-query';
+import { SORT_DESCENDING, SORT_LABELS, sortDirectionLabel, type SortKey } from '../../library/asset-query';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import styles from './GridToolbar.module.css';
@@ -94,7 +94,10 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
 
         <label className={styles.sort}>
           <span className={styles.controlLabel}>Order</span>
-          <select value={sort.key} onChange={(e) => setSort({ ...sort, key: e.target.value as SortKey })} aria-label="Order by">
+          <select value={sort.key} onChange={(e) => {
+              const key = e.target.value as SortKey;
+              setSort({ key, descending: SORT_DESCENDING[key] });
+            }} aria-label="Order by">
             {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
               <option key={k} value={k}>
                 {SORT_LABELS[k]}
@@ -104,7 +107,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
         </label>
         <IconButton
           size="sm"
-          label={sort.descending ? 'Newest or highest first (click to reverse)' : 'Oldest or lowest first (click to reverse)'}
+          label={sortDirectionLabel(sort)}
           icon={sort.descending ? <ArrowDownWideNarrow size={14} /> : <ArrowUpNarrowWide size={14} />}
           onClick={() => setSort({ ...sort, descending: !sort.descending })}
         />

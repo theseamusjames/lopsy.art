@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
-import { isEdited, pairPartners, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
+import { compareAssets, isEdited, pairPartners, SORT_DESCENDING, sortDirectionLabel, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
 import { importBatches } from './finding';
 import { makeAsset, makeView } from './test-fixtures';
 
@@ -121,5 +121,23 @@ describe('RAW+JPEG pairs', () => {
     expect(sidebarCounts(view).all).toBe(2);
     expect(importBatches(view).reduce((n, b) => n + b.count, 0)).toBe(2);
     expect(pairPartners(makeView([raw, { ...jpeg, deleted: true }]).assets).size).toBe(0);
+  });
+});
+
+describe('sorting', () => {
+  it('gives each order its natural direction and words', () => {
+    expect(SORT_DESCENDING.name).toBe(false);
+    expect(SORT_DESCENDING.captured).toBe(true);
+    expect(sortDirectionLabel({ key: 'name', descending: false })).toMatch(/^A to Z/);
+  });
+
+  it('sorts by last edit, unedited photos last either way', () => {
+    const [a, b, c] = [makeAsset('a'), makeAsset('b'), makeAsset('c')];
+    const edits: Record<string, string | null> = { a: '0002', b: null, c: '0005' };
+    const at = (x: { id: string }) => edits[x.id] ?? null;
+    const order = (descending: boolean) =>
+      [a, b, c].sort((x, y) => compareAssets(x, y, { key: 'edited', descending }, at)).map((x) => x.id);
+    expect(order(true)).toEqual(['c', 'a', 'b']);
+    expect(order(false)).toEqual(['a', 'c', 'b']);
   });
 });

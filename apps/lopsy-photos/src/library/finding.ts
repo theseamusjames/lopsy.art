@@ -93,6 +93,8 @@ export interface FindQuery extends AssetQuery {
   /** Burst covers whose burst is shown open. */
   readonly expanded: ReadonlySet<AssetId>;
   readonly savedSearches: readonly SavedSearch[];
+  /** For the Last edited order: when the photo's shown version was last edited (sortable), or null. */
+  readonly lastEdited?: (asset: Asset) => string | null;
 }
 
 export interface FindResult {
@@ -154,7 +156,16 @@ export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((ass
   const rule = facetRule(query.facets);
   const predicate = rule ? compileSearch(rule) : null;
   const shown = predicate ? base.filter((a) => predicate(a, view)) : base;
-  shown.sort((a, b) => compareAssets(a, b, query.sort));
+  let editedAt: ((asset: Asset) => string | null) | undefined;
+  if (query.sort.key === 'edited' && query.lastEdited) {
+    const lastEdited = query.lastEdited;
+    const memo = new Map<AssetId, string | null>();
+    editedAt = (asset) => {
+      if (!memo.has(asset.id)) memo.set(asset.id, lastEdited(asset));
+      return memo.get(asset.id) ?? null;
+    };
+  }
+  shown.sort((a, b) => compareAssets(a, b, query.sort, editedAt));
 
   const bursts = new Map<AssetId, number>();
   const album = query.collection.kind === 'album' ? view.albums.get(query.collection.albumId) : undefined;

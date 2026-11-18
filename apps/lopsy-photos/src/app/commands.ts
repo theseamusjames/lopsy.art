@@ -35,20 +35,12 @@ export function currentVersions(): { assetId: AssetId; versionId: VersionId }[] 
   return out;
 }
 
-/**
- * Library undo and redo (marks, albums, versions, deletes in the record).
- * Uses photos-core's `undoLibrary`/`redoLibrary`; until a build has them
- * the keys say so instead.
- */
+/** Library undo and redo (marks, albums, versions, the delete record), with what it did said in a toast. */
 export function undoLibrary(redo: boolean): void {
   const s = session();
-  const method: unknown = Reflect.get(s, redo ? 'redoLibrary' : 'undoLibrary');
-  if (typeof method !== 'function') {
-    showToast('Undo in the library is not available in this build yet. Use the Undo on the last message.');
-    return;
-  }
-  const answer: unknown = (method as () => unknown).call(s);
-  if (answer === false) showToast(redo ? 'Nothing to redo.' : 'Nothing to undo.');
+  const label = redo ? s.redoLibrary() : s.undoLibrary();
+  if (label === null) showToast(redo ? 'Nothing to redo.' : 'Nothing to undo.', 3000);
+  else showToast(`${redo ? 'Redid' : 'Undid'}: ${label}`, 3000);
 }
 
 /** Opens the Copy edits dialog for the focused photo. */
@@ -129,13 +121,14 @@ export function deleteVersionOf(assetId: AssetId, versionId: VersionId): void {
   const asset = view.assets.get(assetId);
   const versions = versionsByAsset(view).get(assetId) ?? [];
   if (!asset || versions.length < 2 || !versions.some((v) => v.id === versionId)) return;
-  if (asset.primaryVersionId === versionId) {
-    const i = versions.findIndex((v) => v.id === versionId);
-    const next = versions[i + 1] ?? versions[i - 1];
-    if (!next) return;
-    s.setPrimaryVersion(assetId, next.id);
-  }
-  s.deleteVersion(versionId);
+  const i = versions.findIndex((v) => v.id === versionId);
+  const next = versions[i + 1] ?? versions[i - 1];
+  if (!next) return;
+  // One undo step: the switch and the delete come back together.
+  s.libraryStep(`Delete ${versions[i]?.name ?? 'version'}`, () => {
+    if (asset.primaryVersionId === versionId) s.setPrimaryVersion(assetId, next.id);
+    s.deleteVersion(versionId);
+  });
   const ui = useUi.getState();
   const focus = ui.selection.focus;
   if (focus !== null && parseItem(focus).assetId === assetId) {
