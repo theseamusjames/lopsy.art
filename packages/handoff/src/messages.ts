@@ -63,6 +63,24 @@ export interface HandoffSource {
   readonly documentId?: string;
 }
 
+/**
+ * A summary of the photo's camera metadata (spec 6.12), for Lopsy to keep
+ * in the `.lopsy` with the source block. Every field may be absent.
+ */
+export interface CameraSummary {
+  readonly make?: string;
+  readonly model?: string;
+  readonly lens?: string;
+  readonly iso?: number;
+  /** As written for people: '1/250', '2.5'. */
+  readonly shutter?: string;
+  readonly aperture?: number;
+  /** Millimetres. */
+  readonly focalLength?: number;
+  /** As the camera wrote it, e.g. '2026-11-14T16:02:11'. */
+  readonly capturedAt?: string;
+}
+
 export interface HandoffDocument {
   readonly name: string;
   /** `png16`: a developed photo as a 16-bit PNG. `lopsy`: a `.lopsy` project. */
@@ -71,6 +89,7 @@ export interface HandoffDocument {
   readonly source?: HandoffSource;
   /** The Drive revision a `.lopsy` came from; returned with each save. */
   readonly baseRevision?: string;
+  readonly camera?: CameraSummary;
 }
 
 export interface LopsyReadyMessage {
@@ -245,7 +264,34 @@ export function parseHandoffDocument(value: unknown): HandoffDocument | null {
   if (!isFile(bytes, kind === 'png16' ? isPngBytes : isLopsyBytes)) return null;
   const optionals = parseOptionals(value);
   if (!optionals) return null;
+  if (value.camera !== undefined) {
+    const camera = parseCameraSummary(value.camera);
+    if (!camera) return null;
+    return { name, kind, bytes, ...optionals, camera };
+  }
   return { name, kind, bytes, ...optionals };
+}
+
+const CAMERA_STRINGS = ['make', 'model', 'lens', 'shutter', 'capturedAt'] as const;
+const CAMERA_NUMBERS = ['iso', 'aperture', 'focalLength'] as const;
+
+/** A well-formed camera summary, or null. Unknown fields are dropped. */
+export function parseCameraSummary(value: unknown): CameraSummary | null {
+  if (!isRecord(value)) return null;
+  const out: Record<string, string | number> = {};
+  for (const key of CAMERA_STRINGS) {
+    const v = value[key];
+    if (v === undefined) continue;
+    if (!isBoundedString(v, 128)) return null;
+    out[key] = v;
+  }
+  for (const key of CAMERA_NUMBERS) {
+    const v = value[key];
+    if (v === undefined) continue;
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1e6) return null;
+    out[key] = v;
+  }
+  return out as CameraSummary;
 }
 
 export function parseLopsyReady(value: unknown): LopsyReadyMessage | null {

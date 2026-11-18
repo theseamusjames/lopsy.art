@@ -9,7 +9,7 @@
  */
 
 import { sendToLopsy, type LopsyHandoff, type ReceivedSave } from '@lopsy/handoff/photos';
-import type { HandoffDocument, HandoffSource } from '@lopsy/handoff/messages';
+import type { CameraSummary, HandoffDocument, HandoffSource } from '@lopsy/handoff/messages';
 import type { HandoffWindow } from '@lopsy/handoff/channel';
 import type { PreviewRenderer } from '@lopsy/photos-core/import/types';
 import type { Asset, AssetId, LibrarySession, VersionId } from '@lopsy/photos-core/library/types';
@@ -39,9 +39,25 @@ export function displayName(asset: Asset): string {
   return asset.fileName.replace(/\.[^.]+$/, '') || 'Untitled';
 }
 
+/** The asset's camera metadata summary for Lopsy (spec 6.12), or undefined when it has none. */
+export function cameraSummary(asset: Asset): CameraSummary | undefined {
+  const summary: { -readonly [K in keyof CameraSummary]: CameraSummary[K] } = {};
+  if (asset.camera?.make) summary.make = asset.camera.make;
+  if (asset.camera?.model) summary.model = asset.camera.model;
+  if (asset.lens) summary.lens = asset.lens;
+  if (asset.exposure?.iso != null) summary.iso = asset.exposure.iso;
+  if (asset.exposure?.shutter) summary.shutter = asset.exposure.shutter;
+  if (asset.exposure?.aperture != null) summary.aperture = asset.exposure.aperture;
+  if (asset.exposure?.focalLength != null) summary.focalLength = asset.exposure.focalLength;
+  if (asset.capturedAt) summary.capturedAt = asset.capturedAt;
+  return Object.keys(summary).length > 0 ? summary : undefined;
+}
+
 async function documentFor(options: EditInLopsyOptions, asset: Asset): Promise<HandoffDocument> {
   const { session } = options;
   const name = displayName(asset);
+  const camera = cameraSummary(asset);
+  const withCamera = camera ? { camera } : {};
   if (asset.kind === 'document') {
     const [file, content] = await Promise.all([
       session.adapter.getFile(asset.fileId),
@@ -51,7 +67,7 @@ async function documentFor(options: EditInLopsyOptions, asset: Asset): Promise<H
     const source: HandoffSource = asset.source
       ? { libraryId: session.libraryId, ...asset.source, documentId: asset.id }
       : { libraryId: session.libraryId, assetId: '', versionId: '', recipeHash: '', documentId: asset.id };
-    return { name, kind: 'lopsy', bytes: await content.arrayBuffer(), source, baseRevision: file.revision };
+    return { name, kind: 'lopsy', bytes: await content.arrayBuffer(), source, baseRevision: file.revision, ...withCamera };
   }
   const versionId = options.versionId ?? asset.primaryVersionId;
   const version = session.getView().versions.get(versionId);
@@ -63,7 +79,7 @@ async function documentFor(options: EditInLopsyOptions, asset: Asset): Promise<H
     versionId,
     recipeHash: recipeHash(version.recipe),
   };
-  return { name, kind: 'png16', bytes, source };
+  return { name, kind: 'png16', bytes, source, ...withCamera };
 }
 
 /**

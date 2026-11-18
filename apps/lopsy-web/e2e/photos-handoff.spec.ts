@@ -144,6 +144,7 @@ const recordSave = (m) => {
     renderHeight: render.getUint32(20),
     renderBitDepth: render.getUint8(24),
     lopsyVersion: new DataView(m.lopsy).getUint16(6, true),
+    lopsyPhotos: JSON.parse(new TextDecoder().decode(new Uint8Array(m.lopsy, 12, new DataView(m.lopsy).getUint32(8, true)))).photos,
     lopsyBase64: toBase64(m.lopsy),
     renderBase64: toBase64(m.render),
   });
@@ -177,6 +178,7 @@ window.startHandoff = (lopsyUrl, pngBase64, mode) => {
           name: 'DSCF1234', kind: 'png16', bytes,
           source: { libraryId: 'lib-1', assetId: 'asset-1', versionId: 'v-1', recipeHash: 'hash-1' },
           baseRevision: 'rev-1',
+          camera: { make: 'FUJIFILM', model: 'X-T5', lens: 'XF23mmF1.4 R LM WR', iso: 400, shutter: '1/250', aperture: 2.8, focalLength: 23, capturedAt: '2026-11-14T16:02:11' },
         },
       },
       bytes,
@@ -251,6 +253,7 @@ interface RecordedSave {
   renderHeight: number;
   renderBitDepth: number;
   lopsyVersion: number;
+  lopsyPhotos: Record<string, unknown> | undefined;
   lopsyBase64: string;
   renderBase64: string;
 }
@@ -279,6 +282,11 @@ test.describe('Lopsy Photos handoff', () => {
     expect(state.document.width).toBe(PNG_W);
     expect(state.document.height).toBe(PNG_H);
     expect(state.document.name).toBe('DSCF1234');
+    // One layer, named after the photo, at the photo's size.
+    const rasters = state.document.layers.filter((l) => (l as { type: string }).type === 'raster');
+    expect(rasters).toHaveLength(1);
+    expect(rasters[0]).toMatchObject({ name: 'DSCF1234', width: PNG_W, height: PNG_H });
+    await expect(lopsy.getByText('DSCF1234', { exact: true }).first()).toBeVisible();
     // Red 32*1024/65535 ≈ 0.5, green 24*1365/65535 ≈ 0.5, blue 0.5.
     const px = await getPixelAt(lopsy, 32, 24);
     expect(Math.abs(px.r - 128)).toBeLessThanOrEqual(2);
@@ -303,6 +311,14 @@ test.describe('Lopsy Photos handoff', () => {
     expect(first!.renderHeight).toBe(PNG_H);
     expect(first!.renderBitDepth).toBe(16);
     expect(first!.lopsyVersion).toBe(3);
+    // The .lopsy keeps the source block and the camera summary.
+    expect(first!.lopsyPhotos).toEqual({
+      libraryId: 'lib-1',
+      assetId: 'asset-1',
+      versionId: 'v-1',
+      recipeHash: 'hash-1',
+      camera: { make: 'FUJIFILM', model: 'X-T5', lens: 'XF23mmF1.4 R LM WR', iso: 400, shutter: '1/250', aperture: 2.8, focalLength: 23, capturedAt: '2026-11-14T16:02:11' },
+    });
 
     // While the bar is shown, Ctrl+S saves to Photos, carrying the revision the last save returned.
     await lopsy.locator('[data-testid="canvas-container"]').click({ position: { x: 5, y: 5 } });

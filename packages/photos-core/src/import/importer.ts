@@ -22,6 +22,7 @@ import { isRawJpegPair, pairCandidatesByName } from './pairs';
 import type { PairableFile } from './pairs';
 import type { ImportItemRecord, ImportJobRecord, ImportQueueStore } from './queue-store';
 import type { StagingStore } from './staging';
+import { applySidecarFile, isSidecarName, matchSidecars } from '../xmp/sidecars';
 import type {
   EmbeddedPreview,
   ImageMetadata,
@@ -104,6 +105,10 @@ interface WorkSpec {
   readonly settled: Settled | null;
   /** Set when a resumed item cannot continue. */
   readonly resumeError: string | null;
+  /** The `.xmp` sidecar to apply once the asset is added. */
+  readonly sidecar: Blob | null;
+  /** Set for a sidecar file: it is skipped with this reason, never imported. */
+  readonly skipReason: string | null;
 }
 
 interface Work extends WorkSpec {
@@ -188,9 +193,9 @@ function newItemRecord(spec: WorkSpec, index: number): ImportItemRecord {
     lastModified: spec.lastModified,
     plannedAssetId: spec.assetId,
     sha256: spec.settled?.sha256 ?? null,
-    state: 'queued',
+    state: spec.skipReason === null ? 'queued' : 'skipped',
     assetId: null,
-    error: null,
+    error: spec.skipReason,
     staged: spec.settled !== null,
     pairedWith: spec.settled?.pairedWith ?? null,
     folderSegments: spec.settled?.folderSegments ?? null,
@@ -201,15 +206,29 @@ function newItemRecord(spec: WorkSpec, index: number): ImportItemRecord {
 export function startImport(files: readonly File[], ctx: ImportContext): ImportJob {
   const options: ImportOptions = { ...DEFAULT_IMPORT_OPTIONS, ...ctx.options };
   const now = ctx.now ?? (() => new Date());
-  const specs: WorkSpec[] = files.map((file) => ({
-    content: file,
-    fileName: file.name,
-    byteSize: file.size,
-    lastModified: file.lastModified,
-    assetId: crypto.randomUUID(),
-    settled: null,
-    resumeError: null,
-  }));
+  const applySidecars = options.applySidecars ?? true;
+  const match = matchSidecars(files.map((f) => f.name));
+  const specs: WorkSpec[] = files.map((file, index) => {
+    let skipReason: string | null = null;
+    if (isSidecarName(file.name)) {
+      const image = match.imageFor.get(index);
+      const imageName = image === null || image === undefined ? null : (files[image]?.name ?? null);
+      if (imageName === null) skipReason = 'XMP sidecar with no matching photo';
+      else skipReason = applySidecars ? `XMP sidecar, applied to ${imageName}` : `XMP sidecar for ${imageName}, not applied`;
+    }
+    const sidecarIndex = match.sidecarFor.get(index);
+    return {
+      content: file,
+      fileName: file.name,
+      byteSize: file.size,
+      lastModified: file.lastModified,
+      assetId: crypto.randomUUID(),
+      settled: null,
+      resumeError: null,
+      sidecar: applySidecars && sidecarIndex !== undefined ? (files[sidecarIndex] ?? null) : null,
+      skipReason,
+    };
+  });
   const base = {
     jobId: crypto.randomUUID(),
     session: ctx.session,
@@ -276,6 +295,8 @@ export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | nul
                 destinationName: item.destinationName,
               },
         resumeError,
+        sidecar: null,
+        skipReason: null,
       });
     }
   }
@@ -510,6 +531,10 @@ function runJob(setup: JobSetup): ImportJob {
     await setup.saved;
     if (isTerminal(index)) return null;
     checkStopped();
+    if (work.skipReason !== null) {
+      await endEarly(work, 'skipped', { error: work.skipReason }, null);
+      return null;
+    }
     if (work.resumeError !== null || work.content === null) {
       await endEarly(work, 'failed', { error: work.resumeError ?? 'No content to import' }, null);
       return null;
@@ -671,6 +696,10 @@ function runJob(setup: JobSetup): ImportJob {
     const { assetId, versionId } = addToLibrary(work, metadata, sha, stored.id, pairedWith);
     await unstage(work);
     let note = previews.error;
+    if (work.sidecar) {
+      const applied = await applySidecarFile(session, assetId, versionId, work.sidecar, metadata.orientation).catch(() => null);
+      if (!applied) note = 'Its XMP sidecar could not be read';
+    }
     if (!stopping) {
       for (const size of ['thumb', 'screen'] as const) {
         const preview = previews[size];
