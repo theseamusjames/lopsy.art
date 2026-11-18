@@ -176,7 +176,7 @@ pub fn render_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Resu
     let w = params.width as usize;
     let src_h = check_band(src, params, band)?;
     let rgb = render_rgb(src, w, src_h, params);
-    Ok(orient_band(&rgb, params, band, true))
+    Ok(orient_band(rgb, params, band, true))
 }
 
 /// Check that `src` holds exactly mosaic rows `[band.src_y0, band.src_y1)`
@@ -201,13 +201,15 @@ fn check_band(src: &[f32], params: &RafRenderParams, band: RafBand) -> Result<us
 
 /// Cut the band's own rows out of `rgb` (rendered from the band's source
 /// rows), convert to RGBA (clamped to 0..1 when `clamp`) and apply the EXIF
-/// orientation, placing the result in the oriented image.
-fn orient_band(rgb: &[f32], params: &RafRenderParams, band: RafBand, clamp: bool) -> RafBandPixels {
+/// orientation, placing the result in the oriented image. Takes `rgb` by
+/// value and frees it before orienting, to keep peak memory at one band.
+fn orient_band(rgb: Vec<f32>, params: &RafRenderParams, band: RafBand, clamp: bool) -> RafBandPixels {
     let w = params.width as usize;
     let skip = (band.y0 - band.src_y0) as usize * w * 3;
     let take = (band.y1 - band.y0) as usize * w * 3;
     let rows = &rgb[skip..skip + take];
     let rgba = if clamp { rgb_to_rgba(rows) } else { rgb_to_rgba_unclamped(rows) };
+    drop(rgb);
 
     let band_h = band.y1 - band.y0;
     let (ow, oh, pixels) =

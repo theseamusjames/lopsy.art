@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { StaticTokenSource } from '../../auth/static-token-source';
 import { runAdapterContract } from '../adapter-contract';
 import { sha256Hex } from '../content-hash';
+import type { NewFile } from '../types';
 import { escapeQueryString, GoogleDriveAdapter, type GoogleDriveAdapterOptions } from './drive-adapter';
 import { createFakeDrive, type FakeDrive, type FakeDriveOptions } from './fake-drive';
 import { MemoryUploadSessionStore } from './upload-sessions';
@@ -317,6 +318,108 @@ describe('GoogleDriveAdapter', () => {
     expect(await store.get('asset-1:original')).toBeNull();
     expect(await second.listChildren(root.id)).toHaveLength(1);
   }, 20_000);
+
+  describe('untrusted upload sessions', () => {
+    function resumable(drive: FakeDrive, store: MemoryUploadSessionStore, fetchFn = drive.fetch): GoogleDriveAdapter {
+      return new GoogleDriveAdapter({
+        tokenSource: new StaticTokenSource(),
+        label: 'x',
+        fetch: fetchFn,
+        sleep: async () => undefined,
+        uploadSessions: store,
+        resumableThreshold: 256 * KIB,
+        chunkSize: 256 * KIB,
+      });
+    }
+
+    /** Starts an upload under `key` and abandons it after the first chunk, leaving its session in the store. */
+    async function abandon(adapter: GoogleDriveAdapter, file: NewFile, bytes: Uint8Array, key: string): Promise<void> {
+      const controller = new AbortController();
+      await adapter
+        .createFile(file, new Blob([bytes.slice()]), {
+          resumeKey: key,
+          signal: controller.signal,
+          onProgress: (sent) => {
+            if (sent > 0) controller.abort();
+          },
+        })
+        .catch(() => undefined);
+    }
+
+    it('never sends anything to a stored session that is not on Drive', async () => {
+      const drive = createFakeDrive();
+      const store = new MemoryUploadSessionStore();
+      const bytes = randomBytes(600 * KIB);
+      await store.set('k', {
+        sessionUri: 'https://evil.example/upload/drive/v3/files?uploadType=resumable&upload_id=x',
+        totalBytes: bytes.length,
+        offset: 0,
+        target: 'create',
+        updatedAt: 0,
+      });
+      const seen: string[] = [];
+      const adapter = resumable(drive, store, (input, init) => {
+        seen.push(new Request(input, init).url);
+        return drive.fetch(input, init);
+      });
+      const root = await adapter.getRoot();
+      const file = await adapter.createFile({ parentId: root.id, name: 'a.raf', mimeType: 'image/x-fuji-raf' }, new Blob([bytes.slice()]), { resumeKey: 'k' });
+      expect(sameBytes(drive.contentOf(file.id), bytes)).toBe(true);
+      expect(seen.every((url) => url.startsWith('https://www.googleapis.com/'))).toBe(true);
+      expect(store.size).toBe(0);
+    });
+
+    it('refuses a Location header that is not on Drive', async () => {
+      const drive = createFakeDrive();
+      const store = new MemoryUploadSessionStore();
+      const seen: string[] = [];
+      const adapter = resumable(drive, store, async (input, init) => {
+        seen.push(new Request(input, init).url);
+        const response = await drive.fetch(input, init);
+        if (!response.headers.has('Location')) return response;
+        return new Response(null, { status: response.status, headers: { Location: 'https://evil.example/upload/drive/v3/files?upload_id=x' } });
+      });
+      const root = await adapter.getRoot();
+      await expect(
+        adapter.createFile({ parentId: root.id, name: 'a.raf', mimeType: 'image/x-fuji-raf' }, new Blob([randomBytes(300 * KIB).slice()])),
+      ).rejects.toMatchObject({ code: 'unknown' });
+      expect(seen.some((url) => url.startsWith('https://evil.example'))).toBe(false);
+    });
+
+    it('uploads afresh when a resumed upload lands somewhere other than asked', async () => {
+      const drive = createFakeDrive();
+      const store = new MemoryUploadSessionStore();
+      const adapter = resumable(drive, store);
+      const root = await adapter.getRoot();
+      const a = await adapter.createFolder(root.id, 'A');
+      const b = await adapter.createFolder(root.id, 'B');
+      const bytes = randomBytes(600 * KIB);
+      await abandon(adapter, { parentId: a.id, name: 'x.raf', mimeType: 'image/x-fuji-raf', properties: { 'lp.asset': '1' } }, bytes, 'k');
+      expect(store.size).toBe(1);
+      const file = await adapter.createFile(
+        { parentId: b.id, name: 'x.raf', mimeType: 'image/x-fuji-raf', properties: { 'lp.asset': '1' } },
+        new Blob([bytes.slice()]),
+        { resumeKey: 'k' },
+      );
+      expect(file.parentId).toBe(b.id);
+      expect(file.properties['lp.asset']).toBe('1');
+      expect(sameBytes(drive.contentOf(file.id), bytes)).toBe(true);
+      expect(store.size).toBe(0);
+    });
+
+    it('uploads afresh, trashing the mix, when the key is reused for other bytes of the same size', async () => {
+      const drive = createFakeDrive();
+      const store = new MemoryUploadSessionStore();
+      const adapter = resumable(drive, store);
+      const root = await adapter.getRoot();
+      const newFile = { parentId: root.id, name: 'x.raf', mimeType: 'image/x-fuji-raf' };
+      await abandon(adapter, newFile, randomBytes(600 * KIB), 'k');
+      const other = randomBytes(600 * KIB).map((byte) => byte ^ 0xff);
+      const file = await adapter.createFile(newFile, new Blob([other.slice()]), { resumeKey: 'k' });
+      expect(sameBytes(drive.contentOf(file.id), other)).toBe(true);
+      expect((await adapter.listChildren(root.id)).map((child) => child.id)).toEqual([file.id]);
+    });
+  });
 
   it('starts over when the saved session does not match the content', async () => {
     const drive = createFakeDrive();

@@ -12,7 +12,12 @@ export type Collection =
   | { readonly kind: 'recent' }
   | { readonly kind: 'set-aside' }
   | { readonly kind: 'album'; readonly albumId: AlbumId }
-  | { readonly kind: 'keyword'; readonly keyword: string };
+  | { readonly kind: 'keyword'; readonly keyword: string }
+  /** 'YYYY', 'YYYY-MM' or 'YYYY-MM-DD' of the capture (else import) date. */
+  | { readonly kind: 'date'; readonly prefix: string }
+  | { readonly kind: 'import'; readonly importId: string }
+  /** A saved search; its rule is compiled by the caller (finding.ts). */
+  | { readonly kind: 'saved'; readonly searchId: string };
 
 export type SortKey = 'captured' | 'imported' | 'name' | 'rating';
 
@@ -74,6 +79,12 @@ function inCollection(asset: Asset, collection: Collection, view: LibraryView, r
     }
     case 'keyword':
       return asset.keywords.includes(collection.keyword);
+    case 'date':
+      return !asset.setAside && (asset.capturedAt ?? asset.importedAt).startsWith(collection.prefix);
+    case 'import':
+      return asset.importId === collection.importId;
+    case 'saved':
+      return true;
   }
 }
 
@@ -115,16 +126,33 @@ export function compareAssets(a: Asset, b: Asset, sort: SortOrder): number {
 }
 
 /** The ids the grid shows, in order. */
-export function queryAssets(view: LibraryView, query: AssetQuery): AssetId[] {
+/**
+ * The assets the collection and the text leave, unsorted. `textMatch`
+ * replaces the plain text scan (an index); `extra` narrows further (a
+ * saved search's rule).
+ */
+export function baseAssets(
+  view: LibraryView,
+  query: AssetQuery,
+  textMatch: ((asset: Asset) => boolean) | null = null,
+  extra: ((asset: Asset) => boolean) | null = null,
+): Asset[] {
   const recent = query.collection.kind === 'recent' ? latestImportId(view.assets.values()) : null;
+  const text = query.text.trim();
   const out: Asset[] = [];
   for (const asset of view.assets.values()) {
     if (asset.deleted) continue;
     if (isHiddenPairHalf(asset, view.assets)) continue;
     if (!inCollection(asset, query.collection, view, recent)) continue;
-    if (!matchesText(asset, query.text)) continue;
+    if (text !== '' && !(textMatch ? textMatch(asset) : matchesText(asset, text))) continue;
+    if (extra && !extra(asset)) continue;
     out.push(asset);
   }
+  return out;
+}
+
+export function queryAssets(view: LibraryView, query: AssetQuery): AssetId[] {
+  const out = baseAssets(view, query);
   out.sort((a, b) => compareAssets(a, b, query.sort));
   return out.map((a) => a.id);
 }
@@ -177,5 +205,8 @@ export function sameCollection(a: Collection, b: Collection): boolean {
   if (a.kind !== b.kind) return false;
   if (a.kind === 'album' && b.kind === 'album') return a.albumId === b.albumId;
   if (a.kind === 'keyword' && b.kind === 'keyword') return a.keyword === b.keyword;
+  if (a.kind === 'date' && b.kind === 'date') return a.prefix === b.prefix;
+  if (a.kind === 'import' && b.kind === 'import') return a.importId === b.importId;
+  if (a.kind === 'saved' && b.kind === 'saved') return a.searchId === b.searchId;
   return true;
 }

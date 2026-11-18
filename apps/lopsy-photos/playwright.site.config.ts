@@ -15,7 +15,7 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   workers: 1,
   retries: 0,
-  use: { baseURL: `http://localhost:${port}`, headless: true },
+  use: { baseURL: `http://127.0.0.1:${port}`, headless: true },
   projects: [
     {
       name: 'chromium',

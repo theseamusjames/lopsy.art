@@ -8,7 +8,8 @@
 
 import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
-import type { StorageQuota } from '@lopsy/photos-core/storage/types';
+import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
+import type { RepairReport } from '@lopsy/photos-core/library/repair';
 
 /** Where a library can live, as offered on the start screen. */
 export type StorageChoice = 'google-drive' | 'browser' | 'local-folder';
@@ -29,6 +30,12 @@ export interface EditPreviews {
   readonly thumb: Blob;
   readonly screen: Blob;
   readonly recipeHash: string;
+}
+
+export interface DeviceInfo {
+  readonly deviceName: string;
+  /** Bytes in the caches of originals and previews; null when this storage keeps none (it is on the device already). */
+  readonly cacheBytes: number | null;
 }
 
 export type ExportFormat = 'jpeg' | 'png';
@@ -105,6 +112,27 @@ export interface PhotosBackend {
 
   /** Starts importing files into the library. Each photo appears in the view as soon as it is read. */
   startImport(files: readonly File[], session: LibrarySession, options?: Partial<ImportOptions>): ImportJob;
+
+  /** Whether "Add from Google Drive" can be offered (Drive storage and a Picker key in this build). */
+  canAddFromDrive(session: LibrarySession): boolean;
+
+  /** Opens the Google Picker (call from a click) and imports the picked files; null when nothing was picked. */
+  addFromDrive(session: LibrarySession, options: { readonly move: boolean }): Promise<ImportJob | null>;
+
+  /** Checks every original against storage and marks the ones that are missing, trashed or changed. */
+  checkLibrary(session: LibrarySession): Promise<RepairReport>;
+
+  /** Adds originals found in storage that the library has no entry for (they stay where they are). */
+  addOrphans(session: LibrarySession, fileIds: readonly FileId[]): ImportJob;
+
+  /** Takes trashed originals back out of the storage's trash. */
+  restoreOriginals(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void>;
+
+  /** This device: its name and what its caches hold (null when it keeps no cache). */
+  getDeviceInfo(session: LibrarySession): Promise<DeviceInfo>;
+
+  /** Empties this device's caches of originals and previews; changes waiting to be saved are kept. */
+  clearDeviceCache(session: LibrarySession): Promise<void>;
 
   /** Continues imports a reload interrupted, as one job; null when there are none. */
   resumeImports(session: LibrarySession): Promise<ImportJob | null>;

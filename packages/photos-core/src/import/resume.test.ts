@@ -92,7 +92,7 @@ describe('resumable imports', () => {
     for (const a of assets) expect(session.getView().versions.get(a.primaryVersionId)?.thumb).not.toBeNull();
     expect(await staging.list()).toEqual([]);
     expect(queueStore.jobs.size).toBe(0);
-    expect(await resumeImports({ session, previewRenderer: renderer, queueStore, staging })).toBeNull();
+    expect(await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: () => DAY })).toBeNull();
   });
 
   it('continues after a reload mid-upload, reusing an original that reached storage', async () => {
@@ -112,7 +112,7 @@ describe('resumable imports', () => {
     const reached = record?.items.find((i) => i.state === 'uploading');
     if (!reached || !reached.sha256) throw new Error('no uploading item');
     adapter.hooks = {};
-    const content = await staging.get(reached.sha256);
+    const content = await staging.get(reached.stagingKey ?? '');
     if (!content) throw new Error('not staged');
     const folderId = originalsOf()[0]?.parentId ?? '';
     await adapter.createFile(
@@ -125,13 +125,18 @@ describe('resumable imports', () => {
       content,
     );
 
-    const job = await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: () => DAY });
+    // The old tab's lease is still fresh by the clock; a reload takes over once it has lapsed.
+    expect(await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: () => DAY })).toBeNull();
+    const later = () => new Date(DAY.getTime() + 60_000);
+    const job = await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: later });
     const result = await job?.finished;
     expect(result?.items.map((i) => i.state)).toEqual(['done', 'done', 'done']);
     expect(session.getView().assets.size).toBe(4);
     expect(originalsOf()).toHaveLength(4);
     expect(session.getView().assets.get(reached.plannedAssetId)).toBeDefined();
-    expect(adapter.resumeKeys).toContain(uploadResumeKey(session.libraryId, reached.sha256));
+    expect(adapter.resumeKeys.filter((k) => k !== undefined).every((k) => k?.startsWith(`${session.libraryId}:`))).toBe(true);
+    // Only the old tab's attempt: the resumed job reused the stored original instead of uploading it again.
+    expect(adapter.resumeKeys.filter((k) => k === uploadResumeKey(session.libraryId, reached.plannedAssetId))).toHaveLength(1);
     expect(await staging.list()).toEqual([]);
   });
 
@@ -169,13 +174,14 @@ describe('resumable imports', () => {
     const seen = new Set<string>();
     job.subscribe(() => job.getProgress().items.forEach((i) => seen.add(i.state)));
     const result = await job.finished;
-    expect(result.items.map((i) => i.state)).toEqual(['done', 'done', 'duplicate', 'unsupported', 'failed']);
+    expect(result.items.map((i) => i.state)).toEqual(['done', 'done', 'duplicate', 'unsupported', 'queued']);
+    expect(result.items[4]?.error).toBe('Waiting to retry: Refused');
     expect(seen.has('staged')).toBe(true);
     expect(put).toHaveBeenCalledTimes(3);
-    expect(await staging.list()).toEqual([]);
-    expect(queueStore.jobs.size).toBe(0);
-    const sha = await sha256Hex(dup);
-    expect(adapter.resumeKeys).toContain(`${session.libraryId}:${sha}`);
+    // Only the copy still waiting to upload stays staged, and its job stays queued.
+    expect(await staging.list()).toHaveLength(1);
+    expect(queueStore.jobs.size).toBe(1);
+    expect(adapter.resumeKeys).toContain(uploadResumeKey(session.libraryId, result.items[1]?.assetId ?? ''));
   });
 
   it('runs unstaged, with a note, when staging has no room', async () => {
@@ -215,7 +221,7 @@ describe('resumable imports', () => {
       previewRenderer: renderer,
       options: { concurrency: 1 },
     }).finished;
-    expect(result.items.map((i) => i.state)).toEqual(['failed', 'done', 'duplicate']);
+    expect(result.items.map((i) => i.state)).toEqual(['queued', 'done', 'duplicate']);
     expect(result.items[2]?.assetId).toBe(result.items[1]?.assetId);
     expect(session.getView().assets.size).toBe(1);
   });

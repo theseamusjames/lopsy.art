@@ -27,14 +27,28 @@ export interface XmlLimits {
   readonly maxChars: number;
   readonly maxDepth: number;
   readonly maxElements: number;
+  /** Attributes on one element; XMP packets use a few dozen. */
+  readonly maxAttributes: number;
 }
 
-export const DEFAULT_XML_LIMITS: XmlLimits = { maxChars: 4 * 1024 * 1024, maxDepth: 64, maxElements: 100_000 };
+export const DEFAULT_XML_LIMITS: XmlLimits = {
+  maxChars: 4 * 1024 * 1024,
+  maxDepth: 64,
+  maxElements: 100_000,
+  maxAttributes: 512,
+};
 
 const XML_NS = 'http://www.w3.org/XML/1998/namespace';
 const XMLNS_NS = 'http://www.w3.org/2000/xmlns/';
 const NAME = /^[A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?$/;
-const NAMED_ENTITIES: Readonly<Record<string, string>> = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
+// A Map, not an object literal: `&constructor;` must not find Object.prototype's members.
+const NAMED_ENTITIES: ReadonlyMap<string, string> = new Map([
+  ['lt', '<'],
+  ['gt', '>'],
+  ['amp', '&'],
+  ['quot', '"'],
+  ['apos', "'"],
+]);
 
 /** Decodes the five predefined entities and character references; null on anything else. */
 export function decodeEntities(text: string): string | null {
@@ -59,7 +73,7 @@ export function decodeEntities(text: string): string | null {
       const code = /^\d{1,7}$/.test(ref.slice(1)) ? parseInt(ref.slice(1), 10) : NaN;
       decoded = code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : undefined;
     } else {
-      decoded = NAMED_ENTITIES[ref];
+      decoded = NAMED_ENTITIES.get(ref);
     }
     if (decoded === undefined) return null;
     out += decoded;
@@ -73,11 +87,12 @@ interface RawTag {
   readonly attributes: readonly { qname: string; value: string }[];
 }
 
-function parseTagBody(body: string): RawTag | null {
+function parseTagBody(body: string, maxAttributes: number): RawTag | null {
   const m = /^([^\s/>]+)/.exec(body);
   if (!m?.[1] || !NAME.test(m[1])) return null;
   const qname = m[1];
   const attributes: { qname: string; value: string }[] = [];
+  const seen = new Set<string>();
   const attr = /\s+([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/y;
   let at = qname.length;
   for (;;) {
@@ -89,7 +104,8 @@ function parseTagBody(body: string): RawTag | null {
     const raw = a[2] ?? a[3] ?? '';
     const value = raw.includes('<') ? null : decodeEntities(raw);
     if (value === null) return null;
-    if (attributes.some((x) => x.qname === name)) return null;
+    if (seen.has(name) || seen.size >= maxAttributes) return null;
+    seen.add(name);
     attributes.push({ qname: name, value });
     at = attr.lastIndex;
   }
@@ -176,7 +192,7 @@ export function parseXml(source: string, limits: XmlLimits = DEFAULT_XML_LIMITS)
       let body = source.slice(lt + 1, end);
       const selfClosing = body.endsWith('/');
       if (selfClosing) body = body.slice(0, -1);
-      const tag = parseTagBody(body);
+      const tag = parseTagBody(body, limits.maxAttributes);
       if (!tag) return null;
       if (++elements > limits.maxElements || stack.length >= limits.maxDepth) return null;
       if (root && stack.length === 0) return null;

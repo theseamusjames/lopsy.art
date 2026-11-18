@@ -16,6 +16,7 @@ import type {
   LibrarySession,
   LibraryView,
   NewAsset,
+  OriginalStatus,
   PreviewRef,
   SyncStatus,
   Version,
@@ -180,6 +181,11 @@ export class FakeSession implements LibrarySession {
 
   setMarks(assetIds: readonly AssetId[], marks: Partial<AssetMarks>): void {
     this.patchAssets(assetIds, (a) => ({ ...a, ...marks }));
+  }
+
+  /** Fake-only: what a repair would record. */
+  setOriginalStatus(assetIds: readonly AssetId[], status: OriginalStatus): void {
+    this.patchAssets(assetIds, (a) => ({ ...a, originalStatus: status }));
   }
 
   setKeyword(assetIds: readonly AssetId[], keyword: string, present: boolean): void {

@@ -20,7 +20,7 @@ import { DEFAULT_IMPORT_OPTIONS, MAX_ORIGINAL_BYTES, PREVIEW_SIZES } from './imp
 import { inspectImage } from './inspect';
 import { isRawJpegPair, pairCandidatesByName } from './pairs';
 import type { PairableFile } from './pairs';
-import { applySidecarFile, isSidecarName, matchSidecars } from '../xmp/sidecars';
+import { applySidecarFile, applySidecarToExisting, isSidecarName, matchSidecars } from '../xmp/sidecars';
 import type { EmbeddedPreview, ImportItem, ImportItemState, ImportJob, ImportOptions, ImportProgress, PreviewRenderer } from './types';
 
 export interface StorageImportOptions extends ImportOptions {
@@ -173,6 +173,14 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
     return claim(work, `sha:${sha.toLowerCase()}`);
   };
 
+  /** Applies a duplicate's sidecar to the asset already in the library, when that one is untouched. */
+  const duplicateNote = async (work: Work, assetId: AssetId, sha: string): Promise<{ error?: string }> => {
+    if (!work.sidecar || existingAsset(sha) !== assetId) return {};
+    const blob = await session.adapter.readContent(work.sidecar.id, { signal: abort.signal }).catch(() => null);
+    if (!blob) return { error: 'Photo already in the library; its XMP sidecar could not be read' };
+    return { error: await applySidecarToExisting(session, assetId, blob) };
+  };
+
   const folderCache: FolderCache = new Map();
   const previewRecipeHash = recipeHash(DEFAULT_RECIPE);
 
@@ -242,7 +250,7 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       if (file.sha256) {
         const dup = await duplicateOf(work, file.sha256);
         if (dup !== null) {
-          finish(work, 'duplicate', { assetId: dup }, dup);
+          finish(work, 'duplicate', { assetId: dup, ...(await duplicateNote(work, dup, file.sha256)) }, dup);
           return;
         }
       }
@@ -261,7 +269,7 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
         originalsCache?.cache.put(sha, content).catch(() => undefined);
         const dup = await duplicateOf(work, sha);
         if (dup !== null) {
-          finish(work, 'duplicate', { assetId: dup }, dup);
+          finish(work, 'duplicate', { assetId: dup, ...(await duplicateNote(work, dup, sha)) }, dup);
           return;
         }
       }

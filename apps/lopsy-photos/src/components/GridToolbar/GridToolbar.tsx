@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, Info, Maximize, Paintbrush, ScanEye, Search, Trash2 } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, Info, Layers, Maximize, Paintbrush, ScanEye, Search, Trash2 } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
-import { useLibraryView } from '../../app/hooks';
+import { useLibraryView, useSavedSearches } from '../../app/hooks';
+import { datePrefixLabel } from '../../library/finding';
 import { THUMB_SIZE, useUi } from '../../app/store';
 import { currentTargets, openCompare, openCull, runCommand } from '../../app/commands';
 import { openInLopsy } from '../../app/lopsy-handoff';
@@ -16,6 +17,9 @@ interface GridToolbarProps {
 
 export function GridToolbar({ orderedIds }: GridToolbarProps) {
   const view = useLibraryView();
+  const saved = useSavedSearches();
+  const groupBursts = useUi((s) => s.groupBursts);
+  const setGroupBursts = useUi((s) => s.setGroupBursts);
   const collection = useUi((s) => s.collection);
   const sort = useUi((s) => s.sort);
   const setSort = useUi((s) => s.setSort);
@@ -42,8 +46,14 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
         return view.albums.get(collection.albumId)?.name ?? 'Album';
       case 'keyword':
         return collection.keyword;
+      case 'date':
+        return datePrefixLabel(collection.prefix);
+      case 'import':
+        return 'Imported together';
+      case 'saved':
+        return saved.find((x) => x.id === collection.searchId)?.name ?? 'Saved search';
     }
-  }, [collection, view]);
+  }, [collection, view, saved]);
 
   return (
     <div className={styles.toolbar}>
@@ -117,6 +127,12 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           icon={<Columns2 size={16} />}
           disabled={selected < 2}
           onClick={() => openCompare(orderedIds)}
+        />
+        <IconButton
+          label={groupBursts ? 'Show every photo of a burst' : 'Group bursts: shots taken in quick succession show as one'}
+          icon={<Layers size={16} />}
+          active={groupBursts}
+          onClick={() => setGroupBursts(!groupBursts)}
         />
         <IconButton label="Sort through full screen (F)" icon={<ScanEye size={16} />} onClick={() => openCull(orderedIds)} />
         <IconButton

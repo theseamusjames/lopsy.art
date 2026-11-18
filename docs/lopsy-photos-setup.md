@@ -146,7 +146,7 @@ To see the deployed site before pushing:
 
 ```bash
 npm run build:site          # or build:site:noopt where wasm-opt cannot be downloaded
-npm run serve:site          # http://localhost:4180, served the way Pages serves it
+npm run serve:site          # http://127.0.0.1:4180 (SITE_HOST=0.0.0.0 to share it), served the way Pages serves it
 ```
 
 ## 5. Tests

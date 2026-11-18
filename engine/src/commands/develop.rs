@@ -2,7 +2,7 @@
 //! set or clear a document's develop settings. The settings are data read
 //! by the compositor every frame; no layer pixels change.
 
-use lopsy_core::develop_stats;
+use lopsy_core::{color_mixer, develop_stats};
 use lopsy_core::raf::develop::RawDevelopSettings;
 
 use crate::document::{compositor, thumbnail_gpu};
@@ -42,7 +42,14 @@ pub fn set_raw_develop(engine: &mut EngineInner, settings: RawDevelopSettings) -
                 old_texture = None;
                 t
             }
-            None => engine.texture_pool.acquire(CURVE_WIDTH, rows)?,
+            None => match engine.texture_pool.acquire(CURVE_WIDTH, rows) {
+                Ok(t) => t,
+                Err(e) => {
+                    // Keep the previous stage (and its texture) as it was.
+                    engine.raw_develop = previous;
+                    return Err(e);
+                }
+            },
         };
         if let Err(e) = engine.texture_pool.upload_rgba_f32(texture, 0, 0, CURVE_WIDTH, rows, &texels) {
             engine.texture_pool.release(texture);
@@ -69,6 +76,28 @@ pub fn clear_raw_develop(engine: &mut EngineInner) {
     if let Some(texture) = engine.raw_develop.take().and_then(|d| d.curve_texture) {
         engine.texture_pool.release(texture);
     }
+    engine.needs_recomposite = true;
+}
+
+/// Color by hue on the composite, after the image adjustments: 24 values,
+/// (hue, saturation, luminance) per band in −100..100, bands in the order
+/// red, orange, yellow, green, aqua, blue, purple, magenta
+/// (`lopsy_core::color_mixer`).
+pub fn set_image_color_mixer(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    let values: [f32; color_mixer::VALUES_LEN] = values
+        .try_into()
+        .map_err(|_| format!("Color mixer values must be exactly {} floats", color_mixer::VALUES_LEN))?;
+    if !values.iter().all(|v| v.is_finite()) {
+        return Err("Color mixer values must be finite".to_string());
+    }
+    engine.color_mixer = Some(values.map(|v| v.clamp(-100.0, 100.0)));
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+/// Stop the color mixer: the composite is shown without it.
+pub fn clear_image_color_mixer(engine: &mut EngineInner) {
+    engine.color_mixer = None;
     engine.needs_recomposite = true;
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runAdapterContract } from './adapter-contract';
 import { INDEX_FILE_NAME, LocalFolderAdapter, TRASH_FOLDER_NAME } from './local-folder-adapter';
-import { FakeDirectoryHandle, listPaths, readPath } from './test-support/fake-fs-handle';
+import { FakeDirectoryHandle, failNextWrites, listPaths, readPath } from './test-support/fake-fs-handle';
 
 function open(handle: FakeDirectoryHandle, changePageSize?: number): Promise<LocalFolderAdapter> {
   return LocalFolderAdapter.open(handle, {
@@ -149,5 +149,133 @@ describe('LocalFolderAdapter', () => {
     await writable.write(new Blob(['{"version": 7}']));
     await writable.close();
     await expect(open(disk)).rejects.toMatchObject({ code: 'unknown' });
+  });
+});
+
+describe('LocalFolderAdapter on a folder with files it does not know', () => {
+  async function writeText(dir: FakeDirectoryHandle, name: string, text: string): Promise<void> {
+    const writable = await (await dir.getFileHandle(name, { create: true })).createWritable();
+    await writable.write(new Blob([text]));
+    await writable.close();
+  }
+
+  it('never overwrites files or folders already on disk', async () => {
+    const disk = new FakeDirectoryHandle('Pictures');
+    const existing = await disk.getDirectoryHandle('Lopsy Photos', { create: true });
+    await writeText(existing, 'library.json', 'the real one');
+    await writeText(disk, 'DSCF1234.JPG', 'real photo');
+    const adapter = await open(disk);
+    const root = await adapter.getRoot();
+    const library = await adapter.createFolder(root.id, 'Lopsy Photos');
+    const photo = await adapter.createFile({ parentId: root.id, name: 'DSCF1234.JPG', mimeType: 'image/jpeg' }, new Blob(['imported']));
+    expect(photo.name).toBe('DSCF1234.JPG');
+    expect(await readPath(disk, 'DSCF1234.JPG')).toBe('real photo');
+    expect(await readPath(disk, 'DSCF1234 (2).JPG')).toBe('imported');
+    await adapter.createFile({ parentId: library.id, name: 'library.json', mimeType: 'application/json' }, new Blob(['ours']));
+    expect(await readPath(disk, 'Lopsy Photos/library.json')).toBe('the real one');
+    expect(await readPath(disk, 'Lopsy Photos (2)/library.json')).toBe('ours');
+
+    const other = await adapter.createFolder(root.id, 'Other');
+    await writeText(await disk.getDirectoryHandle('Other'), 'DSCF1234 (2).JPG', 'someone else');
+    await adapter.move(photo.id, other.id);
+    expect(await readPath(disk, 'Other/DSCF1234 (2).JPG')).toBe('someone else');
+    expect(await (await adapter.readContent(photo.id)).text()).toBe('imported');
+  });
+
+  it('keeps the index and the bytes in step when a trash or move runs out of space', async () => {
+    const disk = new FakeDirectoryHandle('Pictures');
+    const adapter = await open(disk);
+    const root = await adapter.getRoot();
+    const folder = await adapter.createFolder(root.id, 'Elsewhere');
+    const file = await adapter.createFile({ parentId: root.id, name: 'keep.raf', mimeType: 'image/x-fuji-raf' }, new Blob(['raw']));
+
+    failNextWrites(1);
+    await expect(adapter.trash(file.id)).rejects.toMatchObject({ code: 'quota-exceeded' });
+    expect((await adapter.getFile(file.id))?.trashed).toBe(false);
+    expect(await (await adapter.readContent(file.id)).text()).toBe('raw');
+
+    failNextWrites(1);
+    await expect(adapter.move(file.id, folder.id)).rejects.toMatchObject({ code: 'quota-exceeded' });
+    expect((await adapter.getFile(file.id))?.parentId).toBe(root.id);
+    expect(await (await adapter.readContent(file.id)).text()).toBe('raw');
+    expect(await listPaths(disk)).not.toContain('Elsewhere/keep.raf');
+
+    const reopened = await open(disk);
+    expect(await (await reopened.readContent(file.id)).text()).toBe('raw');
+    await reopened.trash(file.id);
+    expect((await reopened.getFile(file.id))?.trashed).toBe(true);
+  });
+});
+
+describe('LocalFolderAdapter with a hand-edited index', () => {
+  function entry(id: string, parentId: string | null, extra: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id,
+      name: id,
+      parentId,
+      isFolder: true,
+      size: 0,
+      mimeType: 'application/vnd.google-apps.folder',
+      modifiedTime: '2026-11-18T00:00:00.000Z',
+      sha256: null,
+      revision: 1,
+      properties: {},
+      explicitlyTrashed: false,
+      seq: 1,
+      diskName: id,
+      ...extra,
+    };
+  }
+
+  async function diskWithIndex(entries: Record<string, unknown>[], rootId = 'root'): Promise<FakeDirectoryHandle> {
+    const disk = new FakeDirectoryHandle('Pictures');
+    const writable = await (await disk.getFileHandle(INDEX_FILE_NAME, { create: true })).createWritable();
+    await writable.write(new Blob([JSON.stringify({ version: 1, rootId, seq: 5, entries, tombstones: [] })]));
+    await writable.close();
+    return disk;
+  }
+
+  const root = entry('root', null, { diskName: undefined });
+
+  it('drops a parent cycle instead of hanging', async () => {
+    const disk = await diskWithIndex([root, entry('a', 'b'), entry('b', 'a'), entry('ok', 'root')]);
+    const adapter = await open(disk);
+    expect(await adapter.getFile('a')).toBeNull();
+    expect(await adapter.getFile('b')).toBeNull();
+    expect((await adapter.listChildren('root')).map((child) => child.id)).toEqual(['ok']);
+    expect(await adapter.findByProperty('x', 'y')).toEqual([]);
+    const reopened = await open(disk);
+    expect(await reopened.getFile('a')).toBeNull();
+  });
+
+  it('drops entries whose names on disk are unsafe or reserved', async () => {
+    const disk = await diskWithIndex([
+      root,
+      entry('up', 'root', { diskName: '../escape' }),
+      entry('index', 'root', { isFolder: false, mimeType: 'application/json', diskName: INDEX_FILE_NAME }),
+      entry('trash', 'root', { diskName: TRASH_FOLDER_NAME.toUpperCase() }),
+      entry('implicit', 'root', { isFolder: false, mimeType: 'text/plain', diskName: undefined, name: INDEX_FILE_NAME }),
+      entry('evil/id', 'root', { explicitlyTrashed: true, diskName: 'fine' }),
+      entry('first', 'root', { diskName: 'Same' }),
+      entry('second', 'root', { diskName: 'same' }),
+      entry('nested', 'up'),
+    ]);
+    const adapter = await open(disk);
+    for (const id of ['up', 'index', 'trash', 'implicit', 'evil/id', 'second', 'nested']) {
+      expect(await adapter.getFile(id), id).toBeNull();
+    }
+    expect(await adapter.getFile('first')).not.toBeNull();
+    await expect(adapter.updateContent('index', new Blob(['{}']))).rejects.toMatchObject({ code: 'not-found' });
+    const reopened = await open(disk);
+    expect((await reopened.getRoot()).id).toBe('root');
+  });
+
+  it('refuses an index with no root or a repeated ID', async () => {
+    await expect(open(await diskWithIndex([entry('a', 'root')]))).rejects.toMatchObject({ code: 'unknown' });
+    await expect(open(await diskWithIndex([entry('root', 'x')]))).rejects.toMatchObject({ code: 'unknown' });
+    await expect(open(await diskWithIndex([root, entry('a', 'root'), entry('a', 'root')]))).rejects.toMatchObject({
+      code: 'unknown',
+      message: expect.stringContaining('twice'),
+    });
   });
 });

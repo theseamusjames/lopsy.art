@@ -57,6 +57,10 @@ export interface LocalStore {
   write(libraryId: string, patch: LocalStorePatch): Promise<void>;
   /** The layout most recently saved, for opening without storage; null when none. */
   lastLayout(): Promise<LibraryLayout | null>;
+  /** Small device-only markers (crash guards); null when unset. */
+  getMarker(key: string): Promise<string | null>;
+  /** Sets a marker, or clears it with null. Resolves once it is durable. */
+  setMarker(key: string, value: string | null): Promise<void>;
 }
 
 export const EMPTY_BOOKKEEPING: SyncBookkeeping = {
@@ -92,6 +96,16 @@ function applyPatch(current: StoredLibrary | null, patch: LocalStorePatch): Stor
 export class MemoryLocalStore implements LocalStore {
   private readonly libraries = new Map<string, StoredLibrary>();
   private last: string | null = null;
+  private readonly markers = new Map<string, string>();
+
+  async getMarker(key: string): Promise<string | null> {
+    return this.markers.get(key) ?? null;
+  }
+
+  async setMarker(key: string, value: string | null): Promise<void> {
+    if (value === null) this.markers.delete(key);
+    else this.markers.set(key, value);
+  }
 
   async load(libraryId: string): Promise<StoredLibrary | null> {
     const saved = this.libraries.get(libraryId);
@@ -123,6 +137,14 @@ interface MetaRecord {
   readonly layout?: LibraryLayout | null;
   /** When `layout` was last saved (ms), to find the last library opened. */
   readonly layoutSavedAt?: number;
+}
+
+/** Markers share the meta store under keys no library ID can take (library IDs are UUIDs). */
+const MARKER_PREFIX = 'marker:';
+
+interface MarkerRecord {
+  readonly libraryId: string;
+  readonly marker: string;
 }
 
 interface OutboxRecord {
@@ -186,6 +208,25 @@ export class IndexedDbLocalStore implements LocalStore {
       sync: meta.sync,
       layout: meta.layout ?? null,
     };
+  }
+
+  async getMarker(key: string): Promise<string | null> {
+    const db = await this.open();
+    const tx = db.transaction([META], 'readonly');
+    const done = completed(tx);
+    const record = (await promised(tx.objectStore(META).get(`${MARKER_PREFIX}${key}`))) as MarkerRecord | undefined;
+    await done;
+    return record?.marker ?? null;
+  }
+
+  async setMarker(key: string, value: string | null): Promise<void> {
+    const db = await this.open();
+    const tx = db.transaction([META], 'readwrite');
+    const done = completed(tx);
+    const id = `${MARKER_PREFIX}${key}`;
+    if (value === null) tx.objectStore(META).delete(id);
+    else tx.objectStore(META).put({ libraryId: id, marker: value } satisfies MarkerRecord);
+    await done;
   }
 
   async lastLayout(): Promise<LibraryLayout | null> {

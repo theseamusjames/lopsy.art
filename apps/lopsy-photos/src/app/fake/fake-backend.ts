@@ -7,9 +7,11 @@
 import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { ImportItem, ImportJob, ImportOptions, ImportProgress } from '@lopsy/photos-core/import/types';
 import type { StorageQuota } from '@lopsy/photos-core/storage/types';
+import type { RepairReport } from '@lopsy/photos-core/library/repair';
 import {
   browserStorageChoices,
   type Connection,
+  type DeviceInfo,
   type EditPreviews,
   type ExportJob,
   type ExportProgress,
@@ -239,6 +241,42 @@ export class FakeBackend implements PhotosBackend {
     return readFakePreview(ref, name);
   }
 
+  canAddFromDrive(): boolean {
+    return false;
+  }
+
+  async addFromDrive(): Promise<ImportJob | null> {
+    return null;
+  }
+
+  async checkLibrary(session: LibrarySession): Promise<RepairReport> {
+    const assets = [...session.getView().assets.values()].filter((a) => !a.deleted);
+    const by = (status: string) => assets.filter((a) => (a.originalStatus ?? 'ok') === status).map((a) => a.id);
+    return {
+      originalsFound: assets.length,
+      assetsChecked: assets.length,
+      orphans: [],
+      missing: by('missing'),
+      trashed: by('trashed'),
+      changed: by('changed'),
+      restored: [],
+    };
+  }
+
+  addOrphans(session: LibrarySession): ImportJob {
+    return fakeImport([], asFake(session), {});
+  }
+
+  async restoreOriginals(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
+    asFake(session).setOriginalStatus(assetIds, 'ok');
+  }
+
+  async getDeviceInfo(): Promise<DeviceInfo> {
+    return { deviceName: 'This browser (development backend)', cacheBytes: 0 };
+  }
+
+  async clearDeviceCache(): Promise<void> {}
+
   async resumeImports(): Promise<ImportJob | null> {
     return null;
   }
@@ -271,11 +309,12 @@ export class FakeBackend implements PhotosBackend {
 
   async trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
     const view = session.getView();
+    // The record first, then the files (as the real backend does).
+    session.deleteAssets(assetIds);
     for (const id of assetIds) {
       const asset = view.assets.get(id);
       if (asset) await session.adapter.trash(asset.fileId);
     }
-    session.deleteAssets(assetIds);
   }
 
   exportVersions(_session: LibrarySession, request: ExportRequest): ExportJob {

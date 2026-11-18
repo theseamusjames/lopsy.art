@@ -10,6 +10,7 @@
  * dropped connection by asking Drive how many bytes it holds.
  */
 
+import { sha256Hex } from '../content-hash';
 import { isStorageError, StorageError, type StorageErrorCode } from '../errors';
 import { abortableDelay, abortedError, raceAbort, realSleep, throwIfAborted } from '../signals';
 import type {
@@ -143,7 +144,10 @@ export class GoogleDriveAdapter implements StorageAdapter {
 
   async createFile(file: NewFile, content: Blob, options: WriteOptions = {}): Promise<StoredFile> {
     throwIfAborted(options.signal);
-    const resumed = await this.resumeSaved('create', content, options);
+    const resumed = await this.resumeSaved('create', content, options, (stored) => {
+      if (stored.parentId !== file.parentId || stored.name !== file.name) return false;
+      return Object.entries(file.properties ?? {}).every(([key, value]) => stored.properties[key] === value);
+    });
     if (resumed) return resumed;
     const id = await this.takeId(options.signal);
     const metadata = { id, name: file.name, mimeType: file.mimeType, parents: [file.parentId], appProperties: file.properties ?? {} };
@@ -175,7 +179,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
 
   async updateContent(id: FileId, content: Blob, options: WriteOptions = {}): Promise<StoredFile> {
     throwIfAborted(options.signal);
-    const resumed = await this.resumeSaved(id, content, options);
+    const resumed = await this.resumeSaved(id, content, options, (stored) => stored.id === id);
     if (resumed) return resumed;
     // Drive takes an upload's Content-Type as the file's new mimeType, so send the current one.
     const current = await this.json({
@@ -375,6 +379,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
         });
         const location = response.headers.get('Location');
         if (!location) throw new StorageError('unknown', 'Drive did not return an upload session');
+        if (!this.isUploadSession(location)) throw new StorageError('unknown', 'Drive returned an upload session at an unexpected address');
         return location;
       });
       await this.saveSession(options.resumeKey, { sessionUri: session, totalBytes: content.size, offset: 0, target });
@@ -392,12 +397,25 @@ export class GoogleDriveAdapter implements StorageAdapter {
    * Continues an upload saved under options.resumeKey, if one matches this
    * target and size and Drive still has it. Null means start a new upload.
    */
-  private async resumeSaved(target: string, content: Blob, options: WriteOptions): Promise<StoredFile | null> {
+  /**
+   * Continues an upload saved under options.resumeKey, if one matches this
+   * target and size, points at Drive's upload address, and Drive still has
+   * it. The stored record is untrusted (anything on this origin can write
+   * IndexedDB), so a finished upload is also checked: `matches` (the parent,
+   * name and properties the caller asked for, or the file being updated)
+   * and the content's checksum. Null means start a new upload.
+   */
+  private async resumeSaved(
+    target: string,
+    content: Blob,
+    options: WriteOptions,
+    matches: (file: StoredFile) => boolean,
+  ): Promise<StoredFile | null> {
     const key = options.resumeKey;
     if (!this.sessions || key === undefined || content.size < this.resumableThreshold) return null;
     const saved = await this.sessions.get(key);
     if (!saved) return null;
-    if (saved.target !== target || saved.totalBytes !== content.size) {
+    if (saved.target !== target || saved.totalBytes !== content.size || !this.isUploadSession(saved.sessionUri)) {
       await this.sessions.delete(key);
       return null;
     }
@@ -411,13 +429,34 @@ export class GoogleDriveAdapter implements StorageAdapter {
       }
       throw error;
     }
+    let file: StoredFile;
     if (status.status !== 308) {
       await this.sessions.delete(key);
-      const file = toStoredFile(await this.readBody(status, options.signal, (r) => r.json()));
+      file = toStoredFile(await this.readBody(status, options.signal, (r) => r.json()));
+    } else {
+      file = await this.sendChunks(saved.sessionUri, target, content, options, receivedBytes(status.headers.get('Range')));
+    }
+    const sameContent = file.sha256 === null || file.sha256 === (await sha256Hex(content));
+    if (matches(file) && sameContent) {
       options.onProgress?.(content.size, content.size);
       return file;
     }
-    return this.sendChunks(saved.sessionUri, target, content, options, receivedBytes(status.headers.get('Range')));
+    await this.sessions.delete(key);
+    // A file this session created with other bytes (the key was reused for new content) is ours and wrong.
+    if (target === 'create' && !sameContent && matches(file)) await this.trash(file.id).catch(() => undefined);
+    return null;
+  }
+
+  /** Whether a session URI is on Drive's upload endpoint; a session elsewhere would receive the token and the bytes. */
+  private isUploadSession(uri: string): boolean {
+    let url: URL;
+    try {
+      url = new URL(uri);
+    } catch {
+      return false;
+    }
+    const upload = new URL(this.upload);
+    return url.origin === upload.origin && url.pathname.startsWith(upload.pathname) && url.searchParams.has('upload_id');
   }
 
   private querySession(session: string, total: number, signal: AbortSignal | undefined): Promise<Response> {

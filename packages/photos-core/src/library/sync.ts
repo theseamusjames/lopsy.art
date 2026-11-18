@@ -59,6 +59,8 @@ export interface SyncEngineOptions {
    * and is retried until it succeeds.
    */
   readonly ensure?: () => Promise<LibraryLayout>;
+  /** Journal folders of duplicate library roots, read but never written (layout.ts `otherJournals`). */
+  readonly otherJournals?: readonly FileId[];
   /** Why storage could not be reached at open, shown in the first status. */
   readonly initialError?: unknown;
   readonly deviceId: string;
@@ -95,6 +97,52 @@ interface PendingPatch {
   state?: SerializedStore;
   sync?: SyncBookkeeping;
   layout?: LibraryLayout;
+  /** The vector the state in this patch holds. */
+  stateVector?: VectorPair;
+}
+
+interface VectorPair {
+  readonly vector: Readonly<Record<string, number>>;
+  readonly ahead: Readonly<Record<string, readonly string[]>>;
+}
+
+function copyAhead(ahead: Readonly<Record<string, readonly string[]>>): Record<string, string[]> {
+  return Object.fromEntries(Object.entries(ahead).map(([d, names]) => [d, [...names]]));
+}
+
+function copyVector(pair: VectorPair): VectorPair {
+  return { vector: { ...pair.vector }, ahead: copyAhead(pair.ahead) };
+}
+
+function addToPending(pending: PendingPatch, patch: LocalStorePatch, stateVector: VectorPair | undefined): void {
+  if (patch.removeOutboxThrough !== undefined) {
+    const through = patch.removeOutboxThrough;
+    pending.removeThrough = Math.max(pending.removeThrough ?? 0, through);
+    if (pending.append.some((op) => op.seq <= through)) {
+      pending.append = pending.append.filter((op) => op.seq > through);
+    }
+  }
+  if (patch.appendOutbox) for (const op of patch.appendOutbox) pending.append.push(op);
+  if (patch.deviceId !== undefined) pending.deviceId = patch.deviceId;
+  if (patch.nextSeq !== undefined) pending.nextSeq = patch.nextSeq;
+  if (patch.state !== undefined) {
+    pending.state = patch.state;
+    if (stateVector) pending.stateVector = stateVector;
+  }
+  if (patch.sync !== undefined) pending.sync = patch.sync;
+  if (patch.layout !== undefined) pending.layout = patch.layout;
+}
+
+function pendingAsPatch(p: PendingPatch): LocalStorePatch {
+  return {
+    ...(p.deviceId !== undefined ? { deviceId: p.deviceId } : {}),
+    ...(p.nextSeq !== undefined ? { nextSeq: p.nextSeq } : {}),
+    ...(p.append.length > 0 ? { appendOutbox: p.append } : {}),
+    ...(p.removeThrough !== undefined ? { removeOutboxThrough: p.removeThrough } : {}),
+    ...(p.state !== undefined ? { state: p.state } : {}),
+    ...(p.sync !== undefined ? { sync: p.sync } : {}),
+    ...(p.layout !== undefined ? { layout: p.layout } : {}),
+  };
 }
 
 type Bookkeeping = {
@@ -133,6 +181,7 @@ export class SyncEngine {
   private layout: LibraryLayout;
   private ready: boolean;
   private lost = false;
+  private otherJournals: readonly FileId[];
   private readOnly: boolean;
   private firstPendingAt: number | null = null;
   private flushTimer: unknown = null;
@@ -148,6 +197,10 @@ export class SyncEngine {
   /** Journal folder ID -> device, learned from listings and the feed. */
   private readonly deviceFolders = new Map<FileId, string>();
   private segmentsSinceRollUp = 0;
+  /** The highest seq of this device whose outbox write has committed; only those ops are uploaded. */
+  private committedSeq: number;
+  /** The vector that the state saved on the device holds; the saved bookkeeping never claims more. */
+  private savedVector: VectorPair;
   private settingsDirty = false;
   private settingsFileId: FileId | null = null;
   /** The latest segments or lines that could not be read, for diagnostics. */
@@ -156,11 +209,14 @@ export class SyncEngine {
   constructor(options: SyncEngineOptions) {
     this.o = options;
     this.layout = options.layout;
+    this.otherJournals = options.otherJournals ?? [];
     this.ready = options.ensure === undefined;
     this.readOnly = options.readOnly === true;
     this.timers = options.timers ?? DEFAULT_TIMERS;
     const b = options.bookkeeping;
     this.outbox = options.outbox.filter((op) => op.seq > b.flushedSeq).sort((x, y) => x.seq - y.seq);
+    this.committedSeq = options.outbox.reduce((m, op) => Math.max(m, op.seq), b.flushedSeq);
+    this.savedVector = copyVector({ vector: b.vector, ahead: b.appliedAhead });
     this.lastStateSave = options.now();
     this.bk = {
       vector: { ...b.vector },
@@ -179,6 +235,11 @@ export class SyncEngine {
       error: this.newerSeen ? NEWER_APP_MESSAGE : null,
     };
     if (options.initialError !== undefined) this.status = { ...this.status, ...classify(options.initialError) };
+  }
+
+  /** Duplicate library roots found once storage was reached (offline open). */
+  setOtherJournals(journals: readonly FileId[]): void {
+    this.otherJournals = journals;
   }
 
   /** The library turned out to have a newer schema: keep reading, stop writing. */
@@ -218,11 +279,11 @@ export class SyncEngine {
   /** Writes the outbox and reads other devices' segments now. */
   async syncNow(): Promise<void> {
     await this.exclusive(async () => {
-      await this.flush();
-      await this.pull();
-      await this.maybeSnapshot();
-      await this.maybeRollUp();
-      await this.writeSettings();
+      // Each step stops if another tab took the library over during the one before.
+      for (const step of [this.flush, this.pull, this.maybeSnapshot, this.maybeRollUp, this.writeSettings]) {
+        if (this.lost) return;
+        await step.call(this);
+      }
     }, true);
   }
 
@@ -295,13 +356,23 @@ export class SyncEngine {
     else this.scheduleRetry();
   }
 
+  /**
+   * Uploads the outbox. Only ops whose outbox write has committed on the
+   * device go: an op uploaded before that could, after a crash, see its seq
+   * issued again to a different op, which other devices would never read.
+   */
   private async flush(): Promise<void> {
-    while (this.outbox.length > 0) {
-      const batch = this.outbox.slice(0, MAX_OPS_PER_SEGMENT);
+    await this.persistQueue;
+    for (;;) {
+      if (this.lost) return;
+      const batch = this.outbox.filter((op) => op.seq <= this.committedSeq).slice(0, MAX_OPS_PER_SEGMENT);
+      if (batch.length === 0) break;
       const first = (batch[0] as OpEnvelope).seq;
       const last = (batch[batch.length - 1] as OpEnvelope).seq;
       const folderId = await this.deviceFolder();
       const content = await encodeSegment(batch);
+      // A tab that lost the library while this was being prepared must not upload it.
+      if (this.lost) return;
       await this.o.adapter.createFile(
         {
           parentId: folderId,
@@ -313,17 +384,18 @@ export class SyncEngine {
       );
       this.outbox = this.outbox.filter((op) => op.seq > last);
       this.bk.flushedSeq = Math.max(this.bk.flushedSeq, last);
-      this.bk.vector[this.o.deviceId] = this.bk.flushedSeq;
+      // Joins the vector only if every earlier op of this device is in the state (see ownLag).
+      this.markApplied(this.o.deviceId, segmentName(first, last), { firstSeq: first, lastSeq: last });
       this.segmentsSinceRollUp += 1;
       // The saved outbox keeps these ops until a saved state holds them (saveState): pulls skip this device's folder.
       this.stateDirty = true;
       this.persist({ sync: this.bookkeeping() });
       this.setStatus({ pendingOps: this.outbox.length });
     }
-    this.firstPendingAt = null;
+    if (this.outbox.length === 0) this.firstPendingAt = null;
     const due =
       this.deviceFileWrittenAt === null || this.o.now() - this.deviceFileWrittenAt >= SYNC_INTERVALS.deviceFileMs;
-    if (due && this.deviceFolderId !== null) await this.writeDeviceFile();
+    if (due && this.deviceFolderId !== null && !this.lost) await this.writeDeviceFile();
   }
 
   private async deviceFolder(): Promise<FileId> {
@@ -387,17 +459,20 @@ export class SyncEngine {
    * with no saved cursor, or when the feed fails, every device folder is.
    */
   private async pull(): Promise<void> {
+    await this.pullOwnLag();
     const cursor = this.bk.changeCursor;
     const every = this.o.fullPullEvery ?? DEFAULT_FULL_PULL_EVERY;
     if (cursor !== null && this.pullsSinceFull < every) {
-      const devices = await this.devicesFromFeed(cursor);
-      if (devices) {
+      const feed = await this.devicesFromFeed(cursor);
+      if (feed) {
         this.pullsSinceFull += 1;
         let appliedAny = false;
-        for (const [device, folderId] of devices) {
+        for (const [device, folderId] of feed.devices) {
           if (await this.pullDevice(device, folderId)) appliedAny = true;
         }
         if (appliedAny) this.stateDirty = true;
+        // Saved only once the pulls it covers have succeeded.
+        this.bk.changeCursor = feed.cursor;
         return;
       }
     }
@@ -414,7 +489,10 @@ export class SyncEngine {
       if (!isStorageError(error) || error.code === 'auth' || error.retryable) throw error;
       this.report(`Change feed unavailable: ${error.message}`);
     }
-    const folders = (await adapter.listChildren(this.layout.journalId)).filter((f) => f.isFolder);
+    const folders: StoredFile[] = [];
+    for (const journalId of [this.layout.journalId, ...(this.otherJournals)]) {
+      for (const f of await adapter.listChildren(journalId)) if (f.isFolder) folders.push(f);
+    }
     let appliedAny = false;
     for (const folder of folders) {
       const device = folder.properties['lp.device'] ?? folder.name;
@@ -431,7 +509,7 @@ export class SyncEngine {
    * The devices with new journal files since `cursor`, by device folder,
    * and the feed's new cursor saved; null when the feed cannot be used.
    */
-  private async devicesFromFeed(cursor: string): Promise<Map<string, FileId> | null> {
+  private async devicesFromFeed(cursor: string): Promise<{ devices: Map<string, FileId>; cursor: string } | null> {
     const devices = new Map<string, FileId>();
     let next = cursor;
     try {
@@ -440,7 +518,7 @@ export class SyncEngine {
         for (const change of page.changes) {
           const file = change.file;
           if (!file || file.trashed || file.parentId === null) continue;
-          if (file.isFolder && file.parentId === this.layout.journalId) {
+          if (file.isFolder && (file.parentId === this.layout.journalId || this.otherJournals.includes(file.parentId))) {
             const device = file.properties['lp.device'] ?? file.name;
             if (isDeviceId(device) && device !== this.o.deviceId) {
               this.deviceFolders.set(file.id, device);
@@ -463,8 +541,23 @@ export class SyncEngine {
       this.report(`Change feed failed, listing folders instead: ${error.message}`);
       return null;
     }
-    this.bk.changeCursor = next;
-    return devices;
+    return { devices, cursor: next };
+  }
+
+  /**
+   * This device's own segments that its state does not hold: after the
+   * state was rebuilt from a snapshot, or after a state write was lost.
+   * Pulls otherwise skip this device's folder.
+   */
+  private async pullOwnLag(): Promise<void> {
+    const self = this.o.deviceId;
+    if ((this.bk.vector[self] ?? 0) >= this.bk.flushedSeq) return;
+    const folder = (await this.o.adapter.listChildren(this.layout.journalId)).find(
+      (f) => f.isFolder && f.properties['lp.device'] === self,
+    );
+    if (!folder) return;
+    this.deviceFolderId ??= folder.id;
+    if (await this.pullDevice(self, folder.id)) this.stateDirty = true;
   }
 
   /**
@@ -482,11 +575,10 @@ export class SyncEngine {
     }
     this.stateDirty = false;
     this.lastStateSave = this.o.now();
-    this.persist({
-      state: this.o.store.serialize(),
-      removeOutboxThrough: this.bk.flushedSeq,
-      sync: this.bookkeeping(),
-    });
+    this.persist(
+      { state: this.o.store.serialize(), removeOutboxThrough: this.bk.flushedSeq, sync: this.bookkeeping() },
+      copyVector({ vector: this.bk.vector, ahead: this.bk.appliedAhead }),
+    );
   }
 
   private async pullDevice(device: string, folderId: FileId): Promise<boolean> {
@@ -644,48 +736,58 @@ export class SyncEngine {
   /**
    * Queues a write to the device. Patches queued while a write is in
    * flight are merged into one, so a burst of commands (an import of
-   * thousands of photos) costs a few transactions, not one each.
+   * thousands of photos) costs a few transactions, not one each. The
+   * saved bookkeeping's vector is always the one the saved state holds
+   * (`stateVector` comes with a state), and a failed write is kept and
+   * retried with the next one rather than dropped.
    */
-  private persist(patch: LocalStorePatch): void {
+  private persist(patch: LocalStorePatch, stateVector?: VectorPair): void {
     // The tab that took over owns the device's saved data now.
     if (this.lost) return;
     const pending = (this.pending ??= { append: [] });
-    if (patch.removeOutboxThrough !== undefined) {
-      const through = patch.removeOutboxThrough;
-      pending.removeThrough = Math.max(pending.removeThrough ?? 0, through);
-      if (pending.append.some((op) => op.seq <= through)) {
-        pending.append = pending.append.filter((op) => op.seq > through);
-      }
-    }
-    if (patch.appendOutbox) for (const op of patch.appendOutbox) pending.append.push(op);
-    if (patch.deviceId !== undefined) pending.deviceId = patch.deviceId;
-    if (patch.nextSeq !== undefined) pending.nextSeq = patch.nextSeq;
-    if (patch.state !== undefined) pending.state = patch.state;
-    if (patch.sync !== undefined) pending.sync = patch.sync;
-    if (patch.layout !== undefined) pending.layout = patch.layout;
+    addToPending(pending, patch, stateVector);
+    this.drain();
+  }
+
+  private drain(): void {
     if (this.pendingQueued) return;
     this.pendingQueued = true;
-    this.persistQueue = this.persistQueue
-      .then(() => {
-        const next = this.pending;
-        this.pending = null;
-        this.pendingQueued = false;
-        if (!next) return;
-        const merged: LocalStorePatch = {
-          ...(next.deviceId !== undefined ? { deviceId: next.deviceId } : {}),
-          ...(next.nextSeq !== undefined ? { nextSeq: next.nextSeq } : {}),
-          ...(next.append.length > 0 ? { appendOutbox: next.append } : {}),
-          ...(next.removeThrough !== undefined ? { removeOutboxThrough: next.removeThrough } : {}),
-          ...(next.state !== undefined ? { state: next.state } : {}),
-          ...(next.sync !== undefined ? { sync: next.sync } : {}),
-          ...(next.layout !== undefined ? { layout: next.layout } : {}),
-        };
-        return this.o.local.write(this.layout.libraryId, merged);
-      })
-      .catch((error: unknown) => {
+    this.persistQueue = this.persistQueue.then(async () => {
+      const next = this.pending;
+      this.pending = null;
+      this.pendingQueued = false;
+      if (!next || this.lost) return;
+      const vector = next.stateVector ?? this.savedVector;
+      const merged: LocalStorePatch = {
+        ...(next.deviceId !== undefined ? { deviceId: next.deviceId } : {}),
+        ...(next.nextSeq !== undefined ? { nextSeq: next.nextSeq } : {}),
+        ...(next.append.length > 0 ? { appendOutbox: next.append } : {}),
+        ...(next.removeThrough !== undefined ? { removeOutboxThrough: next.removeThrough } : {}),
+        ...(next.state !== undefined ? { state: next.state } : {}),
+        ...(next.sync !== undefined
+          ? { sync: { ...next.sync, vector: { ...vector.vector }, appliedAhead: copyAhead(vector.ahead) } }
+          : {}),
+        ...(next.layout !== undefined ? { layout: next.layout } : {}),
+      };
+      try {
+        await this.o.local.write(this.layout.libraryId, merged);
+      } catch (error) {
         console.error('Could not save library state on this device', error);
         this.setStatus({ state: 'error', error: 'Could not save changes on this device' });
-      });
+        // Kept, ahead of anything queued since, and retried with the next write.
+        const newer = this.pending as PendingPatch | null;
+        const retry: PendingPatch = { append: [] };
+        addToPending(retry, merged, next.stateVector);
+        if (newer) addToPending(retry, pendingAsPatch(newer), newer.stateVector);
+        this.pending = retry;
+        if (next.state !== undefined) this.stateDirty = true;
+        return;
+      }
+      if (next.append.length > 0) {
+        this.committedSeq = Math.max(this.committedSeq, ...next.append.map((op) => op.seq));
+      }
+      if (next.stateVector) this.savedVector = next.stateVector;
+    });
   }
 
   private setStatus(patch: Partial<SyncStatus>): void {

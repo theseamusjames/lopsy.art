@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState, type ChangeEvent } from 'react';
-import { ChevronDown, FolderOpen, Images, Upload } from 'lucide-react';
+import { ChevronDown, Cloud, FolderOpen, Images, Upload } from 'lucide-react';
+import { getBackend } from '../../app/backend-registry';
+import { loadDriveAddMode } from '../../app/device-settings';
+import { showToast } from '../../app/toasts';
 import { useUi } from '../../app/store';
 import { canPickFolder } from '../../import/collect-files';
 import { Button } from '../Button/Button';
@@ -14,6 +17,7 @@ export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 's
   const filesRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
   const setPendingImport = useUi((s) => s.setPendingImport);
+  const session = useUi((s) => s.connection?.session ?? null);
   const close = useCallback(() => setOpen(false), []);
 
   const onPicked = (e: ChangeEvent<HTMLInputElement>) => {
@@ -61,6 +65,28 @@ export function ImportButton({ variant = 'primary' }: { variant?: 'primary' | 's
                 <span>
                   <span className={styles.itemTitle}>Choose a folder…</span>
                   <span className={styles.itemDetail}>Everything in it, including folders inside</span>
+                </span>
+              </button>
+            )}
+            {session && getBackend().canAddFromDrive(session) && (
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.item}
+                onClick={() => {
+                  close();
+                  getBackend()
+                    .addFromDrive(session, { move: loadDriveAddMode() === 'move' })
+                    .then((job) => {
+                      if (job) useUi.getState().setImportJob(job);
+                    })
+                    .catch((error: unknown) => showToast(`Adding from Google Drive failed: ${error instanceof Error ? error.message : String(error)}`));
+                }}
+              >
+                <Cloud size={16} />
+                <span>
+                  <span className={styles.itemTitle}>Add from Google Drive…</span>
+                  <span className={styles.itemDetail}>Photos already in your Drive</span>
                 </span>
               </button>
             )}

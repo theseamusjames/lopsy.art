@@ -4,7 +4,7 @@
  * and are written to storage by the sync engine.
  */
 
-import type { StorageAdapter } from '../storage/types';
+import type { FileId, StorageAdapter } from '../storage/types';
 import { HybridClock } from './hlc';
 import { newId } from './ids';
 import { ensureLibrary, LIBRARY_SCHEMA_VERSION } from './layout';
@@ -21,12 +21,21 @@ import {
 import { isStorageError } from '../storage/errors';
 import { EMPTY_BOOKKEEPING, type LocalStore, type SyncBookkeeping } from './local-store';
 import { MergeStore, type RecipeWrite } from './merge-store';
-import { DEFAULT_RECIPE, recipeHash, recipeToPaths, type Recipe } from './recipe';
+import {
+  DEFAULT_RECIPE,
+  recipeHash,
+  recipeToPaths,
+  type CropRect,
+  type CurvePoint,
+  type Recipe,
+  type RecipeLeaf,
+} from './recipe';
 import { loadNewestSnapshot } from './snapshot';
 import { SyncEngine, type SyncTimers } from './sync';
 import type {
   AlbumId,
   AssetId,
+  AssetFacts,
   AssetMarks,
   HistoryStep,
   Json,
@@ -76,17 +85,33 @@ export class LibraryReadOnlyError extends Error {
   }
 }
 
+function leafJson(value: RecipeLeaf): Json {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return (value as readonly CurvePoint[]).map((p) => ({ x: p.x, y: p.y }));
+  const crop = value as CropRect;
+  return { x: crop.x, y: crop.y, width: crop.width, height: crop.height };
+}
+
 /** The recipe as `recipe.*` field values. */
 export function recipeFields(recipe: Recipe): Record<string, Json> {
   const out: Record<string, Json> = {};
   for (const [path, value] of Object.entries(recipeToPaths(recipe))) {
-    out[`recipe.${path}`] =
-      typeof value === 'object' && value !== null
-        ? { x: value.x, y: value.y, width: value.width, height: value.height }
-        : value;
+    out[`recipe.${path}`] = leafJson(value);
   }
   return out;
 }
+
+function nonDefaultRecipeFields(recipe: Recipe): Record<string, Json> {
+  const out: Record<string, Json> = {};
+  for (const [path, value] of Object.entries(recipeFields(recipe))) {
+    if (JSON.stringify(value) !== DEFAULT_FIELD_TEXT.get(path)) out[path] = value;
+  }
+  return out;
+}
+
+const DEFAULT_FIELD_TEXT: ReadonlyMap<string, string> = new Map(
+  Object.entries(recipeFields(DEFAULT_RECIPE)).map(([path, value]) => [path, JSON.stringify(value)]),
+);
 
 const DEFAULT_PATHS: Readonly<Record<string, Json>> = Object.fromEntries(
   Object.entries(recipeFields(DEFAULT_RECIPE)).map(([k, v]) => [k.slice('recipe.'.length), v]),
@@ -220,6 +245,22 @@ function analyseHistory(writes: readonly RecipeWrite[]): StepInfo[] {
 export interface PhotosLibrarySession extends LibrarySession {
   /** Records what a repair found for the assets' originals (shown as a badge). */
   setOriginalStatus(assetIds: readonly AssetId[], status: OriginalStatus): void;
+  /**
+   * Updates a document's file facts after it was saved again in place
+   * (spec 6.12). Documents only: an original's facts never change, and the
+   * originals cache keys on its sha256. Throws for anything else.
+   */
+  setAssetFacts(assetId: AssetId, facts: DocumentFacts): void;
+}
+
+/** The file facts a re-saved document can change. */
+export type DocumentFacts = Partial<Pick<AssetFacts, 'sha256' | 'byteSize' | 'width' | 'height' | 'renderFileId'>>;
+
+export class NotADocumentError extends Error {
+  constructor(assetId: AssetId) {
+    super(`Asset ${assetId} is not a document; an original's facts never change.`);
+    this.name = 'NotADocumentError';
+  }
 }
 
 class Session implements PhotosLibrarySession {
@@ -384,7 +425,7 @@ class Session implements PhotosLibrarySession {
     // A render of an older edit, finishing after a newer one (here or on another device), is not kept.
     const version = this.getView().versions.get(versionId);
     if (version && recipeHash(version.recipe) !== preview.recipeHash) return;
-    this.emit([{ t: 'set', kind: 'version', id: versionId, fields: { [size]: value } }]);
+    this.emit([{ t: 'set', kind: 'version', id: versionId, fields: { [size]: value } }], undefined, true);
   }
 
   /**
@@ -499,7 +540,24 @@ class Session implements PhotosLibrarySession {
   }
 
   setOriginalStatus(assetIds: readonly AssetId[], status: OriginalStatus): void {
-    this.emit(assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields: { originalStatus: status } })));
+    this.emit(
+      assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields: { originalStatus: status } })),
+      undefined,
+      true,
+    );
+  }
+
+  setAssetFacts(assetId: AssetId, facts: DocumentFacts): void {
+    const kind = this.merge.get('asset', assetId)?.fields.get('kind')?.value;
+    if (kind !== 'document') throw new NotADocumentError(assetId);
+    const fields: Record<string, Json> = {};
+    if (facts.sha256 !== undefined) fields.sha256 = facts.sha256;
+    if (facts.byteSize !== undefined) fields.byteSize = facts.byteSize;
+    if (facts.width !== undefined) fields.width = facts.width;
+    if (facts.height !== undefined) fields.height = facts.height;
+    if (facts.renderFileId !== undefined) fields.renderFileId = facts.renderFileId;
+    if (Object.keys(fields).length === 0) return;
+    this.emit([{ t: 'set', kind: 'asset', id: assetId, fields }]);
   }
 
   setSetting(key: string, value: Json): void {
@@ -534,7 +592,9 @@ class Session implements PhotosLibrarySession {
       thumb: null,
       screen: null,
       deleted: false,
-      ...recipeFields(recipe ?? DEFAULT_RECIPE),
+      // Leaves at their default are left out: a missing leaf reads as the default, and a new version's
+      // 70-odd recipe fields would otherwise dominate the size of a large library's state.
+      ...nonDefaultRecipeFields(recipe ?? DEFAULT_RECIPE),
     };
   }
 
@@ -546,18 +606,32 @@ class Session implements PhotosLibrarySession {
     return this.merge.foldedRecipeValue(versionId, path) ?? DEFAULT_PATHS[path] ?? null;
   }
 
-  private emit(given: readonly Op[], step?: OpStep): void {
+  /**
+   * Applies and queues ops. `internal` writes (previews, repair marks) drop
+   * values that are already there. A user's command is always written in
+   * full, so it beats any older change from another device that has not
+   * arrived yet; a recipe step that changes nothing here is written
+   * without a history step, so it does not show in history.
+   */
+  private emit(given: readonly Op[], step?: OpStep, internal = false): void {
     if (this.lockLost) throw new LibraryLockLostError();
     if (this.readonlyFlag) throw new LibraryReadOnlyError();
     // An undo or redo is always recorded, even when it changes nothing, so the history moves on.
-    const keepAll = step !== undefined && (step.undoes !== undefined || step.redoes !== undefined);
+    const undoRedo = step !== undefined && (step.undoes !== undefined || step.redoes !== undefined);
     const ops: Op[] = [];
+    let changesSomething = false;
     for (const op of given) {
       const cleaned = op.t === 'set' ? withoutUndefined(op) : op;
-      const effective = keepAll ? cleaned : this.withoutNoOps(cleaned);
-      if (effective) ops.push(effective);
+      const effective = this.withoutNoOps(cleaned);
+      if (effective) changesSomething = true;
+      if (internal) {
+        if (effective) ops.push(effective);
+      } else {
+        ops.push(cleaned);
+      }
     }
     if (ops.length === 0) return;
+    if (step && !undoRedo && !changesSomething) step = undefined;
     const envelopes: OpEnvelope[] = [];
     for (const op of ops) {
       const seq = this.nextSeq;
@@ -581,11 +655,7 @@ class Session implements PhotosLibrarySession {
     if (this.cache.defer(changed)) this.notify();
   }
 
-  /**
-   * Drops what would not change the local state. A write stamps its fields
-   * with a new HLC, so writing a value that is already there could only
-   * override a newer change from another device that has not arrived yet.
-   */
+  /** The op without what would not change the local state; null when nothing is left. */
   private withoutNoOps(op: Op): Op | null {
     const record = this.merge.get(op.kind, op.id);
     if (!record) return op;
@@ -597,7 +667,12 @@ class Session implements PhotosLibrarySession {
     let fields: Record<string, Json> | null = null;
     for (const [path, value] of Object.entries(op.fields)) {
       const current = record.fields.get(path);
-      if (current !== undefined && sameJson(current.value, value)) {
+      // A recipe leaf never written holds its default.
+      const unchanged =
+        current !== undefined
+          ? sameJson(current.value, value)
+          : op.kind === 'version' && DEFAULT_FIELD_TEXT.get(path) === JSON.stringify(value);
+      if (unchanged) {
         fields ??= { ...op.fields };
         delete fields[path];
       }
@@ -629,11 +704,46 @@ function normalizedKeywords(keywords: readonly string[]): string[] {
   return [...new Set(keywords.map((k) => k.trim()).filter((k) => k !== ''))];
 }
 
+function loadingKey(libraryId: string): string {
+  return `loading-snapshot:${libraryId}`;
+}
+
+function badKey(libraryId: string): string {
+  return `bad-snapshots:${libraryId}`;
+}
+
+/**
+ * The snapshots that must not be loaded again: one whose loading marker
+ * is still set crashed this device (too large, or hostile) last time.
+ */
+async function badSnapshots(store: LocalStore, libraryId: string): Promise<Set<string>> {
+  const bad = new Set<string>();
+  try {
+    const parsed: unknown = JSON.parse((await store.getMarker(badKey(libraryId))) ?? '[]');
+    if (Array.isArray(parsed)) for (const n of parsed) if (typeof n === 'string') bad.add(n);
+  } catch {
+    // A damaged list only loses the memory of old crashes.
+  }
+  const crashed = await store.getMarker(loadingKey(libraryId));
+  if (crashed !== null) {
+    bad.add(crashed);
+    await store.setMarker(badKey(libraryId), JSON.stringify([...bad].slice(-20)));
+    await store.setMarker(loadingKey(libraryId), null);
+  }
+  return bad;
+}
+
 async function bootstrap(
   adapter: StorageAdapter,
   layout: LibraryLayout,
+  store: LocalStore,
 ): Promise<{ merge: MergeStore; bookkeeping: SyncBookkeeping }> {
-  const newest = await loadNewestSnapshot(adapter, layout.snapshotsId, layout.libraryId);
+  const skip = await badSnapshots(store, layout.libraryId);
+  const newest = await loadNewestSnapshot(adapter, layout.snapshotsId, layout.libraryId, {
+    skip,
+    // Set before decoding and cleared once the session is built: if decoding kills the tab, the next open skips it.
+    before: (name) => store.setMarker(loadingKey(layout.libraryId), name),
+  });
   for (const problem of newest.errors) console.warn('Skipped snapshot', problem);
   if (!newest.snapshot || !newest.file) return { merge: new MergeStore(), bookkeeping: EMPTY_BOOKKEEPING };
   return {
@@ -663,9 +773,13 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
   let layout: LibraryLayout;
   let readOnly = false;
   let offlineError: unknown;
+  let otherJournals: readonly FileId[] = [];
+  const preferLibraryId = (await store.lastLayout())?.libraryId;
+  const ensureOptions = { now, ...(preferLibraryId !== undefined ? { preferLibraryId } : {}) };
   try {
-    const ensured = await ensureLibrary(adapter, { now });
+    const ensured = await ensureLibrary(adapter, ensureOptions);
     layout = ensured.layout;
+    otherJournals = ensured.otherJournals.map((j) => j.journalId);
     readOnly = ensured.manifest.schemaVersion > LIBRARY_SCHEMA_VERSION;
   } catch (error) {
     const savedLayout = canOpenOffline(error) ? await store.lastLayout() : null;
@@ -687,7 +801,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
     let bookkeeping: SyncBookkeeping;
     let outbox: readonly OpEnvelope[] = [];
     const fromStorage = async () =>
-      online ? bootstrap(adapter, layout) : { merge: new MergeStore(), bookkeeping: EMPTY_BOOKKEEPING };
+      online ? bootstrap(adapter, layout, store) : { merge: new MergeStore(), bookkeeping: EMPTY_BOOKKEEPING };
     if (saved) {
       deviceId = saved.deviceId;
       outbox = saved.outbox;
@@ -722,13 +836,14 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
     const mergeStore = merge;
     const libraryId = layout.libraryId;
     const ensure = async (): Promise<LibraryLayout> => {
-      const ensured = await ensureLibrary(adapter, { now });
+      const ensured = await ensureLibrary(adapter, { now, preferLibraryId: libraryId });
       if (ensured.layout.libraryId !== libraryId) {
         throw new Error('The library in storage is not the one this device opened before.');
       }
       if (ensured.manifest.schemaVersion > LIBRARY_SCHEMA_VERSION) session.markReadOnly();
       await store.write(libraryId, { layout: ensured.layout });
       session.updateLayout(ensured.layout);
+      session.syncEngine.setOtherJournals(ensured.otherJournals.map((j) => j.journalId));
       return ensured.layout;
     };
     const session: Session = new Session({
@@ -759,12 +874,14 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
           readOnly,
           settings: () => Object.fromEntries(session.getView().settings),
           ...(online ? {} : { ensure, initialError: offlineError }),
+          otherJournals,
           ...(options.fullPullEvery !== undefined ? { fullPullEvery: options.fullPullEvery } : {}),
           ...(options.rollUpAt !== undefined ? { rollUpAt: options.rollUpAt } : {}),
           ...(options.timers ? { timers: options.timers } : {}),
           onApplied,
         }),
     });
+    await store.setMarker(loadingKey(layout.libraryId), null);
     session.syncEngine.start();
     return session;
   } catch (error) {
