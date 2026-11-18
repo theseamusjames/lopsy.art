@@ -27,6 +27,7 @@ import { importDngFile } from '../../../io/dng';
 import { importRafFile } from '../../../io/raf';
 import { saveProject } from '../../../io/project-save';
 import { loadProject } from '../../../io/project-load';
+import { addDocumentToPhotos } from '../../../io/photos-handoff/photos-handoff';
 
 // Re-export ExportFormat and ExportOptions from export-logic so the rest of
 // the codebase imports from one place.
@@ -279,6 +280,17 @@ export async function buildExportPreview(options: ExportOptions): Promise<string
   return session.encode(options);
 }
 
+/**
+ * The flattened composite as a 16-bit PNG, encoded in Rust at full
+ * precision and tagged like every PNG export.
+ */
+export async function renderPng16(engine: NonNullable<ReturnType<typeof getEngine>>): Promise<Blob> {
+  const colorSpace: number = isWideGamut() ? COLOR_SPACE_DISPLAY_P3 : 0;
+  const pngBytes = await exportPng16(engine, colorSpace);
+  const blob = new Blob([pngBytes as BlobPart], { type: 'image/png' });
+  return addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE }, exportIccProfile());
+}
+
 function reportExportError(err: unknown): void {
   notifyError(`Failed to export: ${describeError(err)}`);
 }
@@ -297,12 +309,7 @@ async function exportViaEngine(
   // precision and encodes directly in Rust, bypassing the 8-bit canvas.toBlob.
   if (format === 'png' && highQuality) {
     try {
-      const colorSpace: number = isWideGamut() ? COLOR_SPACE_DISPLAY_P3 : 0;
-      const pngBytes = await exportPng16(engine, colorSpace);
-      const blob = new Blob([pngBytes as BlobPart], { type: 'image/png' });
-      addPngMetadata(blob, { Software: 'Lopsy', Comment: METADATA_NOTE }, exportIccProfile())
-        .then((b) => downloadBlob(b, 'png', filename))
-        .catch((err) => notifyError(`Failed to export: ${describeError(err)}`));
+      downloadBlob(await renderPng16(engine), 'png', filename);
     } catch (err) {
       notifyError(`Failed to export PNG: ${describeError(err)}`);
     }
@@ -405,6 +412,7 @@ export const fileMenu: MenuDef = {
     { separator: true, label: '' },
     { label: 'Save Project', shortcut: '⌘S', action: () => { saveProject().catch((err) => notifyError(`Save failed: ${describeError(err)}`)); } },
     { label: 'Open Project...', action: () => openProjectFromDisk() },
+    { label: 'Add to Lopsy Photos', action: () => { void addDocumentToPhotos(); } },
     { separator: true, label: '' },
     { label: 'Export…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
     { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },

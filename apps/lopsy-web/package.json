@@ -29,6 +29,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@lopsy/handoff": "*",
     "lucide-react": "0.577.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
