@@ -947,12 +947,17 @@ class Session implements PhotosLibrarySession {
     const undoRedo = step !== undefined && (step.undoes !== undefined || step.redoes !== undefined);
     const ops: Op[] = [];
     let changesSomething = false;
+    let editedAt: string | null = null;
     for (const op of given) {
       const cleaned = op.t === 'set' ? withoutUndefined(op) : op;
       const effective = this.withoutNoOps(cleaned);
       if (effective) changesSomething = true;
       if (internal) {
         if (effective) ops.push(effective);
+      } else if (effective && changesRecipe(effective) && this.merge.get('version', effective.id)?.fields.has('assetId')) {
+        // An existing version's recipe changed (not a new version's first write): stamp when, for "Last edited".
+        editedAt ??= new Date(this.now()).toISOString();
+        ops.push({ ...(cleaned as Extract<Op, { t: 'set' }>), fields: { ...(cleaned as Extract<Op, { t: 'set' }>).fields, editedAt } });
       } else {
         ops.push(cleaned);
       }
@@ -1013,6 +1018,12 @@ class Session implements PhotosLibrarySession {
     for (const listener of this.listeners) listener();
   }
 }
+
+function changesRecipe(op: Op): op is Extract<Op, { t: 'set' }> {
+  return op.t === 'set' && op.kind === 'version' && Object.keys(op.fields).some((path) => path.startsWith(RECIPE_FIELD_PREFIX));
+}
+
+const RECIPE_FIELD_PREFIX = 'recipe.';
 
 /** Callers may leave optional values undefined; JSON would drop them, so they are dropped here too. */
 function withoutUndefined(op: Extract<Op, { t: 'set' }>): Op {
