@@ -38,11 +38,14 @@ const MARGIN = 0.03;
 // rafDevelopDefaults, rafDevelopProfiles, readDevelopHistogram, autoTone,
 // rafAutoWhiteBalance) by what they measurably added to the wasm-bindgen
 // glue of a local release build: 7,596 B raw, 1,351 B gzip (+3.8 % and
-// +6.4 %, past the margin on their own). The same builds without wasm-opt
-// grew the wasm by 61,958 B (+1.2 %; +1.1 % gzip), inside the margin, so
-// its budget is unchanged.
+// +6.4 %, past the margin on their own).
+//
+// The wasm was raised to what CI measured with those exports in (run
+// 44283534311, commit 4c81d17: 4,366,533 B raw, 1,857,436 B gzip; +2.31 %
+// and +0.89 % over the old budget): still inside the margin, but the
+// colour controls that follow would otherwise eat the rest of it.
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 4_268_054, gzip: 1_841_000 },
+  'lopsy_wasm_bg.wasm': { raw: 4_366_533, gzip: 1_857_436 },
   'lopsy_wasm.js': { raw: 207_012, gzip: 22_365 },
 };
 
