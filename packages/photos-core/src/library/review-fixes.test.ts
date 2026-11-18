@@ -129,6 +129,19 @@ describe('second integrity review', () => {
     expect(report.orphans).toEqual([]);
   });
 
+  it('L8: a leftover never names a file a live photo still uses', async () => {
+    const adapter = new TestAdapter();
+    const s = await openLibrary({ adapter, store: new MemoryLocalStore(), autoSync: false });
+    const file = await adapter.createFile(
+      { parentId: s.layout.originalsId, name: 'A.JPG', mimeType: 'image/jpeg', properties: { 'lp.lib': s.libraryId, 'lp.role': 'original' } },
+      new Blob(['a']),
+    );
+    const dead = s.addAsset({ ...photo(1), fileId: file.id });
+    s.addAsset({ ...photo(2), fileId: file.id });
+    s.deleteAssets([dead.assetId]);
+    expect((await repairLibrary(s)).leftovers).toEqual([]);
+  });
+
   it('D: no snapshot holds ops whose outbox write has not committed', async () => {
     const adapter = new TestAdapter();
     const store = new BrokenStore();

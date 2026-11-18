@@ -8,6 +8,7 @@
 import { RECIPE_PREFIX, type EntityRecord, type MergeStore, type ChangedEntity } from './merge-store';
 import { OverlayMap } from './overlay-map';
 import { exportSettingsFromJson } from '../export/types';
+import { BUILT_IN_PREFIX } from './presets';
 import { isRecipeGroupId, recipeFromPaths, sanitizeRecipeValues } from './recipe';
 import type {
   Album,
@@ -212,6 +213,8 @@ function emptyView(): MapsView {
 }
 
 export function presetFromRecord(id: string, record: EntityRecord): Preset | null {
+  // Built-in IDs belong to the presets in code: a stored record claiming one is ignored.
+  if (id.startsWith(BUILT_IN_PREFIX)) return null;
   const name = field(record, 'name');
   if (typeof name !== 'string') return null;
   const groups = field(record, 'groups');
@@ -228,6 +231,7 @@ export function presetFromRecord(id: string, record: EntityRecord): Preset | nul
 }
 
 export function exportPresetFromRecord(id: string, record: EntityRecord): ExportPreset | null {
+  if (id.startsWith(BUILT_IN_PREFIX)) return null;
   const name = field(record, 'name');
   if (typeof name !== 'string') return null;
   return {
