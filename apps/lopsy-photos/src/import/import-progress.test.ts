@@ -26,6 +26,14 @@ describe('importStats', () => {
   });
 });
 
+describe('paused imports', () => {
+  it('counts items a pause left waiting', () => {
+    const waiting = { ...item('queued', 100), error: 'Paused' };
+    expect(importStats({ finished: true, items: [item('done', 100), waiting] }).paused).toBe(1);
+    expect(importStats({ finished: false, items: [waiting] }).paused).toBe(0);
+  });
+});
+
 describe('estimateLeft', () => {
   const half = importStats({ finished: false, items: [item('done', 1000), item('queued', 1000)] });
   it('waits for a few seconds of data', () => {

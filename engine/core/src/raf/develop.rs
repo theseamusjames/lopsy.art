@@ -102,6 +102,108 @@ pub fn develop_defaults(params: &RafRenderParams) -> RawDevelopDefaults {
     }
 }
 
+/// What a profile sets: every `setRawDevelop` field except `wbRatio`.
+/// `exposureEv` is the baseline; the app adds the user's exposure to it and
+/// supplies `wbRatio` before passing the result to `setRawDevelop`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileSettings {
+    pub cam_to_rgb: [f32; 9],
+    pub exposure_ev: f32,
+    pub saturation: f32,
+    pub highlight_desaturation: bool,
+    pub base_curve: Option<Vec<f32>>,
+}
+
+/// One entry of the Profile control.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DevelopProfile {
+    /// Stable id: `camera`, `provia`, `velvia`, `astia`, `classic-chrome`,
+    /// `pro-neg`, `neutral`, `monochrome`.
+    pub id: String,
+    pub name: String,
+    pub settings: ProfileSettings,
+}
+
+/// The Fujifilm looks, by the FilmMode makernote value that selects their
+/// curve and saturation in `base_curves`. They are approximations of the
+/// camera's film simulations (a tone curve and a saturation factor), not
+/// Fujifilm's own processing, and the names say so.
+const FILM_LOOKS: [(&str, &str, u16); 5] = [
+    ("provia", "Provia look", 0x000),
+    ("velvia", "Velvia look", 0x200),
+    ("astia", "Astia look", 0x100),
+    ("classic-chrome", "Classic Chrome look", 0x600),
+    ("pro-neg", "Pro Neg look", 0x500),
+];
+
+fn profile_settings(params: &RafRenderParams, curve: &base_curves::BaseCurve, saturation: f32) -> ProfileSettings {
+    ProfileSettings {
+        cam_to_rgb: params.cam_to_srgb,
+        exposure_ev: baseline_exposure_ev(),
+        saturation,
+        highlight_desaturation: true,
+        base_curve: Some(base_curves::curve_lut(curve).to_vec()),
+    }
+}
+
+/// The profiles of the Edit view's Profile control for an image prepared
+/// with `params`, in display order:
+/// - `camera`: the film simulation the camera recorded, which is today's
+///   import look and exactly `develop_defaults` without `wbRatio`;
+/// - each Fujifilm look `base_curves` defines (Provia, Velvia, Astia,
+///   Classic Chrome, Pro Neg);
+/// - `neutral`: no film-sim saturation and the gentle `NEUTRAL` curve, a
+///   starting point for grading;
+/// - `monochrome`: saturation 0 with the neutral curve.
+pub fn develop_profiles(params: &RafRenderParams) -> Vec<DevelopProfile> {
+    // The recorded mode's look is the one with the same curve and saturation
+    // (Velvia's two codes, Astia's family and both Pro Negs each share one).
+    let same_look = |a: Option<u16>, b: Option<u16>| {
+        base_curves::curve_for_film_mode(a).name == base_curves::curve_for_film_mode(b).name
+            && base_curves::saturation_for_film_mode(a) == base_curves::saturation_for_film_mode(b)
+    };
+    let recorded = params.film_mode.and_then(|m| FILM_LOOKS.iter().find(|look| same_look(Some(m), Some(look.2))));
+    let camera_name = match recorded {
+        Some(look) => format!("Camera ({})", look.1),
+        None => "Camera".to_string(),
+    };
+    let defaults = develop_defaults(params);
+    let mut out = vec![DevelopProfile {
+        id: "camera".to_string(),
+        name: camera_name,
+        settings: ProfileSettings {
+            cam_to_rgb: defaults.cam_to_rgb,
+            exposure_ev: defaults.exposure_ev,
+            saturation: defaults.saturation,
+            highlight_desaturation: defaults.highlight_desaturation,
+            base_curve: defaults.base_curve,
+        },
+    }];
+    for (id, name, mode) in FILM_LOOKS {
+        out.push(DevelopProfile {
+            id: id.to_string(),
+            name: name.to_string(),
+            settings: profile_settings(
+                params,
+                base_curves::curve_for_film_mode(Some(mode)),
+                base_curves::saturation_for_film_mode(Some(mode)),
+            ),
+        });
+    }
+    out.push(DevelopProfile {
+        id: "neutral".to_string(),
+        name: "Neutral".to_string(),
+        settings: profile_settings(params, &base_curves::NEUTRAL, 1.0),
+    });
+    out.push(DevelopProfile {
+        id: "monochrome".to_string(),
+        name: "Monochrome".to_string(),
+        settings: profile_settings(params, &base_curves::NEUTRAL, 0.0),
+    });
+    out
+}
+
 /// Demosaic a white-balanced mosaic of `w`×`h` (first row at CFA phase 0)
 /// to interleaved linear camera RGB, chroma-denoised (see the module notes)
 /// and unclamped. Each output pixel depends only on mosaic pixels within
@@ -341,6 +443,79 @@ fn invert_3x3(m: &[f32; 9]) -> Option<[f32; 9]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn params_with_film_mode(film_mode: Option<u16>) -> RafRenderParams {
+        RafRenderParams {
+            width: 12,
+            height: 12,
+            cfa: vec![1; 36],
+            is_xtrans: true,
+            demosaic: super::super::DemosaicMode::Markesteijn,
+            denoise: true,
+            cam_to_srgb: [1.71, -0.62, -0.09, -0.21, 1.48, -0.27, 0.04, -0.47, 1.43],
+            film_mode,
+            orientation: 1,
+        }
+    }
+
+    fn with_wb(p: &ProfileSettings) -> RawDevelopSettings {
+        RawDevelopSettings {
+            wb_ratio: [1.0, 1.0, 1.0],
+            cam_to_rgb: p.cam_to_rgb,
+            exposure_ev: p.exposure_ev,
+            saturation: p.saturation,
+            highlight_desaturation: p.highlight_desaturation,
+            base_curve: p.base_curve.clone(),
+        }
+    }
+
+    #[test]
+    fn the_camera_profile_is_the_import_default() {
+        for mode in [None, Some(0x000), Some(0x200), Some(0x400), Some(0x600), Some(0x501), Some(0x777)] {
+            let params = params_with_film_mode(mode);
+            let profiles = develop_profiles(&params);
+            assert_eq!(profiles[0].id, "camera");
+            assert_eq!(with_wb(&profiles[0].settings), develop_defaults(&params), "{mode:?}");
+        }
+        assert_eq!(develop_profiles(&params_with_film_mode(Some(0x400)))[0].name, "Camera (Velvia look)");
+        assert_eq!(develop_profiles(&params_with_film_mode(Some(0x501)))[0].name, "Camera (Pro Neg look)");
+        assert_eq!(develop_profiles(&params_with_film_mode(None))[0].name, "Camera");
+    }
+
+    #[test]
+    fn every_profile_is_valid_develop_settings() {
+        let profiles = develop_profiles(&params_with_film_mode(Some(0x600)));
+        let ids: Vec<&str> = profiles.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["camera", "provia", "velvia", "astia", "classic-chrome", "pro-neg", "neutral", "monochrome"]);
+        for p in &profiles {
+            let s = with_wb(&p.settings);
+            assert!(s.cam_to_rgb.iter().all(|v| v.is_finite()) && s.exposure_ev.is_finite(), "{}", p.id);
+            assert!((0.0..=2.0).contains(&s.saturation), "{}", p.id);
+            let curve = s.base_curve.as_deref().expect("every profile has a curve");
+            assert_eq!(curve.len(), base_curves::LUT_SIZE);
+            assert!(curve[0].abs() < 1e-3 && curve.iter().all(|v| v.is_finite() && (0.0..=1.0001).contains(v)), "{}", p.id);
+            assert!(curve.windows(2).all(|w| w[1] >= w[0] - 1e-5), "{}: curve not monotone", p.id);
+            // The JSON a profile carries, plus wbRatio, is what setRawDevelop takes.
+            let mut json: serde_json::Value = serde_json::to_value(&p.settings).unwrap();
+            json["wbRatio"] = serde_json::json!([1.0, 1.0, 1.0]);
+            let parsed: RawDevelopSettings = serde_json::from_value(json).unwrap();
+            assert_eq!(parsed, s);
+            assert!(!p.name.is_empty());
+        }
+        let looks: Vec<&str> = profiles[1..6].iter().map(|p| p.name.as_str()).collect();
+        assert!(looks.iter().all(|n| n.ends_with(" look")), "{looks:?}");
+    }
+
+    #[test]
+    fn monochrome_is_grey_and_neutral_is_unsaturated() {
+        let profiles = develop_profiles(&params_with_film_mode(None));
+        let by_id = |id: &str| with_wb(&profiles.iter().find(|p| p.id == id).unwrap().settings);
+        let colour = [0.3f32, 0.1, 0.05, 1.0];
+        let mono = develop_reference(&colour, &by_id("monochrome"));
+        assert!((mono[0] - mono[1]).abs() < 1e-5 && (mono[1] - mono[2]).abs() < 1e-5, "{mono:?}");
+        assert_eq!(by_id("neutral").saturation, 1.0);
+        assert!(by_id("velvia").saturation > by_id("neutral").saturation);
+    }
 
     #[test]
     fn inverse_round_trips() {

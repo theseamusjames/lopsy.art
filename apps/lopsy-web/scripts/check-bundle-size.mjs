@@ -32,9 +32,18 @@ const MARGIN = 0.03;
 // (39.5 KB of wasm, 0.9%; 1.5 KB of glue): a readback became a future the
 // backend completes, and each of the 26 read exports a task that can wait
 // for one. The wgpu build needs both, and the two builds share the engine.
+//
+// The glue was raised for Lopsy Photos' RAW develop exports (setRawDevelop,
+// clearRawDevelop, rafRenderLinearBand, rafRenderBinnedLinear,
+// rafDevelopDefaults, rafDevelopProfiles, readDevelopHistogram, autoTone,
+// rafAutoWhiteBalance) by what they measurably added to the wasm-bindgen
+// glue of a local release build: 7,596 B raw, 1,351 B gzip (+3.8 % and
+// +6.4 %, past the margin on their own). The same builds without wasm-opt
+// grew the wasm by 61,958 B (+1.2 %; +1.1 % gzip), inside the margin, so
+// its budget is unchanged.
 const BUDGET = {
   'lopsy_wasm_bg.wasm': { raw: 4_268_054, gzip: 1_841_000 },
-  'lopsy_wasm.js': { raw: 199_416, gzip: 21_014 },
+  'lopsy_wasm.js': { raw: 207_012, gzip: 22_365 },
 };
 
 function format(bytes) {

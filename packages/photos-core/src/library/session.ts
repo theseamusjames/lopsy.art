@@ -37,6 +37,7 @@ import type {
   Op,
   OpEnvelope,
   OpStep,
+  OriginalStatus,
   PreviewRef,
   SyncStatus,
   VersionId,
@@ -111,13 +112,13 @@ function assetFields(asset: NewAsset, versionId: VersionId): Record<string, Json
     lens: asset.lens,
     exposure: asset.exposure
       ? {
-          iso: asset.exposure.iso,
-          shutter: asset.exposure.shutter,
-          aperture: asset.exposure.aperture,
-          focalLength: asset.exposure.focalLength,
+          iso: asset.exposure.iso ?? null,
+          shutter: asset.exposure.shutter ?? null,
+          aperture: asset.exposure.aperture ?? null,
+          focalLength: asset.exposure.focalLength ?? null,
         }
       : null,
-    gps: asset.gps ? { lat: asset.gps.lat, lon: asset.gps.lon, alt: asset.gps.alt } : null,
+    gps: asset.gps ? { lat: asset.gps.lat, lon: asset.gps.lon, alt: asset.gps.alt ?? null } : null,
     pairedWith: asset.pairedWith,
     source: asset.source
       ? { assetId: asset.source.assetId, versionId: asset.source.versionId, recipeHash: asset.source.recipeHash }
@@ -196,7 +197,13 @@ function analyseHistory(writes: readonly RecipeWrite[]): StepInfo[] {
   return [...steps.values()].sort((a, b) => (before(a.first, b.first) ? -1 : 1));
 }
 
-class Session implements LibrarySession {
+/** What `openLibrary` returns: the `LibrarySession` contract plus maintenance commands. */
+export interface PhotosLibrarySession extends LibrarySession {
+  /** Records what a repair found for the assets' originals (shown as a badge). */
+  setOriginalStatus(assetIds: readonly AssetId[], status: OriginalStatus): void;
+}
+
+class Session implements PhotosLibrarySession {
   readonly libraryId: string;
   readonly deviceId: string;
   readonly adapter: StorageAdapter;
@@ -237,7 +244,7 @@ class Session implements LibrarySession {
     this.cache = new ViewCache(this.merge);
     this.engine = init.makeEngine((changed) => {
       if (this.merge.maxHlc) this.clock.receive(this.merge.maxHlc);
-      if (this.cache.update(changed)) this.notify();
+      if (this.cache.defer(changed)) this.notify();
     });
     this.lockHandle.onLost(() => {
       this.lockLost = true;
@@ -284,8 +291,10 @@ class Session implements LibrarySession {
 
   addAsset(asset: NewAsset): { readonly assetId: AssetId; readonly versionId: VersionId } {
     const assetId = asset.id ?? newId(this.now());
-    const existing = this.cache.view.assets.get(assetId);
-    if (existing) return { assetId, versionId: existing.primaryVersionId };
+    // Read from the store, not the view, so an import does not rebuild the view after every photo.
+    const existing = asset.id === undefined ? undefined : this.merge.get('asset', assetId);
+    const primary = existing?.fields.get('primaryVersionId')?.value;
+    if (existing?.fields.has('fileId') && typeof primary === 'string') return { assetId, versionId: primary };
     const versionId = newId(this.now());
     const ops: Op[] = [
       { t: 'set', kind: 'asset', id: assetId, fields: assetFields(asset, versionId) },
@@ -421,6 +430,10 @@ class Session implements LibrarySession {
     this.emit([{ t: 'member', kind: 'album', id: albumId, set: 'assets', member: assetId, present }]);
   }
 
+  setOriginalStatus(assetIds: readonly AssetId[], status: OriginalStatus): void {
+    this.emit(assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields: { originalStatus: status } })));
+  }
+
   setSetting(key: string, value: Json): void {
     this.emit([{ t: 'set', kind: 'setting', id: key, fields: { value } }]);
   }
@@ -470,7 +483,8 @@ class Session implements LibrarySession {
     if (this.readonlyFlag) throw new LibraryReadOnlyError();
     if (ops.length === 0) return;
     const envelopes: OpEnvelope[] = [];
-    for (const op of ops) {
+    for (const given of ops) {
+      const op = given.t === 'set' ? withoutUndefined(given) : given;
       const seq = this.nextSeq;
       const env: OpEnvelope = {
         id: `${this.deviceId}:${seq}`,
@@ -482,19 +496,27 @@ class Session implements LibrarySession {
         op,
       };
       // Every device validates what it reads, so anything that would be rejected there is refused here.
-      const checked = validateEnvelope(JSON.parse(JSON.stringify(env)));
+      const checked = validateEnvelope(env);
       if (typeof checked === 'string') throw new Error(`Invalid change: ${checked}`);
       envelopes.push(env);
       this.nextSeq += 1;
     }
     const changed = this.merge.applyOps(envelopes);
     this.engine.enqueue(envelopes, this.nextSeq);
-    if (this.cache.update(changed)) this.notify();
+    if (this.cache.defer(changed)) this.notify();
   }
 
   private notify(): void {
     for (const listener of this.listeners) listener();
   }
+}
+
+/** Callers may leave optional values undefined; JSON would drop them, so they are dropped here too. */
+function withoutUndefined(op: Extract<Op, { t: 'set' }>): Op {
+  if (!Object.values(op.fields).some((v) => v === undefined)) return op;
+  const fields: Record<string, Json> = {};
+  for (const [k, v] of Object.entries(op.fields)) if (v !== undefined) fields[k] = v;
+  return { ...op, fields };
 }
 
 function normalizedKeywords(keywords: readonly string[]): string[] {
@@ -529,7 +551,7 @@ function canOpenOffline(error: unknown): boolean {
  * is unreachable but this device has opened the library before, it opens
  * from the device and finds the library in storage in the background.
  */
-export async function openLibrary(options: OpenLibraryOptions): Promise<LibrarySession> {
+export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLibrarySession> {
   const now = options.now ?? Date.now;
   const { adapter, store } = options;
   let layout: LibraryLayout;

@@ -137,12 +137,19 @@ function runScenario(seed: number): { views: unknown[]; serialized: unknown[] } 
   return {
     views: devices.map((d) => canonicalView(d.cache.view)),
     serialized: devices.map((d) => {
-      const s = d.store.serialize();
-      return [...s.entities].sort((a, b) => (`${a.kind}/${a.id}` < `${b.kind}/${b.id}` ? -1 : 1)).map((e) => ({
-        ...e,
-        fields: [...e.fields].sort(),
-        sets: [...e.sets].map(([n, m]) => [n, [...m].sort()]).sort(),
-      }));
+      const out: unknown[] = [];
+      for (const kind of ['asset', 'version', 'album', 'setting'] as const) {
+        for (const id of [...d.store.ids(kind)].sort()) {
+          const r = d.store.get(kind, id)!;
+          out.push([
+            kind,
+            id,
+            [...r.fields].sort(([a], [b]) => (a < b ? -1 : 1)),
+            [...r.sets].sort(([a], [b]) => (a < b ? -1 : 1)).map(([n, m]) => [n, [...m].sort(([a], [b]) => (a < b ? -1 : 1))]),
+          ]);
+        }
+      }
+      return out;
     }),
   };
 }
@@ -190,15 +197,16 @@ describe('MergeStore', () => {
 
   it('rejects malformed serialized data', () => {
     expect(() => MergeStore.deserialize(null)).toThrow();
-    expect(() => MergeStore.deserialize({ format: 2 })).toThrow();
+    expect(() => MergeStore.deserialize({ format: 3 })).toThrow();
     expect(() =>
-      MergeStore.deserialize({ format: 1, maxHlc: null, entities: [{ kind: 'nope', id: 'x', fields: [], sets: [] }], history: [] }),
+      MergeStore.deserialize({ format: 2, maxHlc: null, stamps: [], entities: [{ kind: 'nope', id: 'x', writes: [], sets: [] }], history: [] }),
     ).toThrow();
     expect(() =>
       MergeStore.deserialize({
-        format: 1,
+        format: 2,
         maxHlc: null,
-        entities: [{ kind: 'asset', id: 'x', fields: [['rating', 1, 'bad-hlc', 'op']], sets: [] }],
+        stamps: ['bad-hlc op'],
+        entities: [{ kind: 'asset', id: 'x', writes: [[0, { rating: 1 }]], sets: [] }],
         history: [],
       }),
     ).toThrow();

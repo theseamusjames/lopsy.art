@@ -9,8 +9,9 @@
  */
 
 import { isHlc } from './hlc';
+import { DEFAULT_RECIPE, recipeToPaths } from './recipe';
 import type { EntityKind, Json, OpEnvelope, OpStep } from './types';
-import { isBoundedJson, isEntityKind, isRecord, LIMITS } from './validate';
+import { isBoundedJson, isEntityKind, isRecord, isSafePath, LIMITS } from './validate';
 
 export interface Register {
   readonly value: Json;
@@ -58,6 +59,8 @@ export interface ChangedEntity {
 
 export const RECIPE_PREFIX = 'recipe.';
 
+const DEFAULT_LEAVES: ReadonlyMap<string, unknown> = new Map(Object.entries(recipeToPaths(DEFAULT_RECIPE)));
+
 /** The log keeps at least this many writes per version (spec: the last 200 steps). */
 const HISTORY_KEEP = 200;
 const HISTORY_FOLD_AT = 250;
@@ -73,28 +76,65 @@ function writeOrder(a: RecipeWrite, b: RecipeWrite): number {
   return a.opId < b.opId ? -1 : a.opId > b.opId ? 1 : 0;
 }
 
-export type SerializedField = [path: string, value: Json, hlc: string, opId: string];
-export type SerializedMember = [member: string, present: boolean, hlc: string, opId: string];
+/** Index into `SerializedStore.stamps`. */
+export type StampRef = number;
+/** The fields one op set on an entity, sharing that op's stamp. */
+export type SerializedWrite = [stamp: StampRef, fields: Readonly<Record<string, Json>>];
+export type SerializedMember = [member: string, present: boolean, stamp: StampRef];
 
 export interface SerializedEntity {
   readonly kind: EntityKind;
   readonly id: string;
-  readonly fields: readonly SerializedField[];
+  readonly writes: readonly SerializedWrite[];
   readonly sets: readonly [set: string, members: readonly SerializedMember[]][];
 }
 
 export interface SerializedHistory {
   readonly versionId: string;
-  readonly base: readonly SerializedField[];
-  readonly entries: readonly RecipeWrite[];
+  readonly base: readonly SerializedWrite[];
+  readonly entries: readonly [stamp: StampRef, step: OpStep | null, fields: Readonly<Record<string, Json>>][];
 }
 
-/** The whole store as plain data: snapshots and the device's saved state. */
+/**
+ * The whole store as plain data: snapshots and the device's saved state.
+ * Each op's stamp (`<hlc> <opId>`) is stored once and referenced by index,
+ * and the fields one op wrote are grouped, which keeps a 50,000-photo
+ * library to a size that can be written and parsed (spec 11).
+ */
 export interface SerializedStore {
-  readonly format: 1;
+  readonly format: 2;
   readonly maxHlc: string | null;
+  readonly stamps: readonly string[];
   readonly entities: readonly SerializedEntity[];
   readonly history: readonly SerializedHistory[];
+}
+
+class StampTable {
+  readonly stamps: string[] = [];
+  private readonly index = new Map<string, number>();
+  ref(hlc: string, opId: string): StampRef {
+    let i = this.index.get(opId);
+    if (i === undefined) {
+      i = this.stamps.length;
+      this.stamps.push(`${hlc} ${opId}`);
+      this.index.set(opId, i);
+    }
+    return i;
+  }
+}
+
+function groupByStamp(table: StampTable, registers: Iterable<[string, Register]>): SerializedWrite[] {
+  const groups = new Map<StampRef, Record<string, Json>>();
+  for (const [path, r] of registers) {
+    const ref = table.ref(r.hlc, r.opId);
+    let fields = groups.get(ref);
+    if (!fields) {
+      fields = {};
+      groups.set(ref, fields);
+    }
+    fields[path] = r.value;
+  }
+  return [...groups];
 }
 
 export class MergeStore {
@@ -160,16 +200,17 @@ export class MergeStore {
   }
 
   serialize(): SerializedStore {
+    const table = new StampTable();
     const entities: SerializedEntity[] = [];
     for (const [kind, byId] of this.records) {
       for (const [id, record] of byId) {
         entities.push({
           kind,
           id,
-          fields: [...record.fields].map(([path, r]) => [path, r.value, r.hlc, r.opId]),
+          writes: groupByStamp(table, record.fields),
           sets: [...record.sets].map(([set, members]) => [
             set,
-            [...members].map(([member, r]) => [member, r.present, r.hlc, r.opId]),
+            [...members].map(([member, r]): SerializedMember => [member, r.present, table.ref(r.hlc, r.opId)]),
           ]),
         });
       }
@@ -178,55 +219,79 @@ export class MergeStore {
     for (const [versionId, h] of this.histories) {
       history.push({
         versionId,
-        base: [...h.base].map(([path, r]) => [path, r.value, r.hlc, r.opId]),
-        entries: h.entries,
+        base: groupByStamp(table, h.base),
+        entries: h.entries.map((w) => [table.ref(w.hlc, w.opId), w.step, w.fields]),
       });
     }
-    return { format: 1, maxHlc: this.latest, entities, history };
+    return { format: 2, maxHlc: this.latest, stamps: table.stamps, entities, history };
   }
 
   /** Rebuilds a store from `serialize()` output; throws on anything malformed. */
   static deserialize(data: unknown): MergeStore {
-    if (!isRecord(data) || data.format !== 1) throw new Error('Store data has an unknown format');
+    if (!isRecord(data) || data.format !== 2) throw new Error('Store data has an unknown format');
     const store = new MergeStore();
     if (data.maxHlc !== null && !isHlc(data.maxHlc)) throw new Error('Store data has an invalid maxHlc');
     store.latest = data.maxHlc;
-    if (!Array.isArray(data.entities) || !Array.isArray(data.history)) throw new Error('Store data is incomplete');
-    for (const raw of data.entities) {
-      if (!isRecord(raw) || !isEntityKind(raw.kind) || !isId(raw.id)) throw new Error('Store data has an invalid entity');
-      if (!Array.isArray(raw.fields) || !Array.isArray(raw.sets)) throw new Error('Store data has an invalid entity');
-      const record = store.record(raw.kind, raw.id);
-      for (const f of raw.fields) {
-        const [path, register] = parseField(f);
-        record.fields.set(path, register);
+    if (!Array.isArray(data.stamps) || !Array.isArray(data.entities) || !Array.isArray(data.history)) {
+      throw new Error('Store data is incomplete');
+    }
+    const stamps: { hlc: string; opId: string }[] = [];
+    for (const text of data.stamps as unknown[]) {
+      const space = typeof text === 'string' ? text.indexOf(' ') : -1;
+      const hlc = space > 0 ? (text as string).slice(0, space) : '';
+      const opId = space > 0 ? (text as string).slice(space + 1) : '';
+      if (!isHlc(hlc) || !isId(opId)) throw new Error('Store data has an invalid stamp');
+      stamps.push({ hlc, opId });
+    }
+    const stamp = (ref: unknown) => {
+      const s = typeof ref === 'number' ? stamps[ref] : undefined;
+      if (!s) throw new Error('Store data has an invalid stamp reference');
+      return s;
+    };
+    const writes = (raw: unknown, into: Map<string, Register>) => {
+      if (!Array.isArray(raw)) throw new Error('Store data has invalid fields');
+      for (const w of raw as unknown[]) {
+        if (!Array.isArray(w) || w.length !== 2 || !isRecord(w[1])) throw new Error('Store data has invalid fields');
+        const { hlc, opId } = stamp(w[0]);
+        for (const [path, value] of Object.entries(w[1])) {
+          if (!isFieldPath(path) || !isBoundedJson(value)) throw new Error('Store data has an invalid field');
+          into.set(path, { value, hlc, opId });
+        }
       }
-      for (const s of raw.sets) {
-        if (!Array.isArray(s) || s.length !== 2 || !isId(s[0]) || !Array.isArray(s[1])) {
+    };
+    for (const raw of data.entities as unknown[]) {
+      if (!isRecord(raw) || !isEntityKind(raw.kind) || !isId(raw.id) || !Array.isArray(raw.sets)) {
+        throw new Error('Store data has an invalid entity');
+      }
+      const record = store.record(raw.kind, raw.id);
+      writes(raw.writes, record.fields);
+      for (const s of raw.sets as unknown[]) {
+        if (!Array.isArray(s) || s.length !== 2 || !isId(s[0], LIMITS.setNameLength) || !Array.isArray(s[1])) {
           throw new Error('Store data has an invalid set');
         }
         const members = new Map<string, MemberRegister>();
         for (const m of s[1] as unknown[]) {
-          if (!Array.isArray(m) || m.length !== 4) throw new Error('Store data has an invalid member');
-          const [member, present, hlc, opId] = m as unknown[];
-          if (!isId(member, LIMITS.memberLength) || typeof present !== 'boolean' || !isHlc(hlc) || !isId(opId)) {
+          if (!Array.isArray(m) || m.length !== 3) throw new Error('Store data has an invalid member');
+          const [member, present, ref] = m as unknown[];
+          if (!isId(member, LIMITS.memberLength) || typeof present !== 'boolean') {
             throw new Error('Store data has an invalid member');
           }
+          const { hlc, opId } = stamp(ref);
           members.set(member, { present, hlc, opId });
         }
         record.sets.set(s[0], members);
       }
     }
-    for (const raw of data.history) {
-      if (!isRecord(raw) || !isId(raw.versionId) || !Array.isArray(raw.base) || !Array.isArray(raw.entries)) {
+    for (const raw of data.history as unknown[]) {
+      if (!isRecord(raw) || !isId(raw.versionId) || !Array.isArray(raw.entries)) {
         throw new Error('Store data has an invalid history');
       }
       const h = store.history(raw.versionId);
-      for (const f of raw.base) {
-        const [path, register] = parseField(f);
-        h.base.set(path, register);
-      }
-      for (const e of raw.entries) {
-        const write = parseWrite(e);
+      writes(raw.base, h.base);
+      for (const e of raw.entries as unknown[]) {
+        if (!Array.isArray(e) || e.length !== 3) throw new Error('Store data has an invalid history entry');
+        const { hlc, opId } = stamp(e[0]);
+        const write = parseWrite(hlc, opId, e[1], e[2]);
         h.entries.push(write);
         h.opIds.add(write.opId);
       }
@@ -262,10 +327,13 @@ export class MergeStore {
     const recipe: Record<string, Json> = {};
     let any = false;
     for (const [path, value] of Object.entries(fields)) {
-      if (path.startsWith(RECIPE_PREFIX)) {
-        recipe[path.slice(RECIPE_PREFIX.length)] = value;
-        any = true;
-      }
+      if (!path.startsWith(RECIPE_PREFIX)) continue;
+      const leaf = path.slice(RECIPE_PREFIX.length);
+      // A write outside any step (creating a version) only matters to undo where it differs from the
+      // default, which undo falls back to; skipping the rest keeps 50,000 fresh versions' logs empty.
+      if (!env.step && DEFAULT_LEAVES.get(leaf) === value) continue;
+      recipe[leaf] = value;
+      any = true;
     }
     if (!any) return;
     const h = this.history(versionId);
@@ -296,32 +364,32 @@ function isId(value: unknown, max: number = LIMITS.idLength): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= max;
 }
 
-function parseField(value: unknown): [string, Register] {
-  if (!Array.isArray(value) || value.length !== 4) throw new Error('Store data has an invalid field');
-  const [path, v, hlc, opId] = value as unknown[];
-  if (!isId(path, LIMITS.fieldPathLength) || !isBoundedJson(v) || !isHlc(hlc) || !isId(opId)) {
-    throw new Error('Store data has an invalid field');
-  }
-  return [path, { value: v, hlc, opId }];
+const checkedPaths = new Set<string>();
+
+/** Paths repeat across every entity, so each distinct one is checked once. */
+function isFieldPath(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (checkedPaths.has(value)) return true;
+  if (!isId(value, LIMITS.fieldPathLength) || !isSafePath(value)) return false;
+  if (checkedPaths.size < 10_000) checkedPaths.add(value);
+  return true;
 }
 
-function parseWrite(value: unknown): RecipeWrite {
-  if (!isRecord(value) || !isId(value.opId) || !isHlc(value.hlc) || !isRecord(value.fields)) {
-    throw new Error('Store data has an invalid history entry');
-  }
+function parseWrite(hlc: string, opId: string, rawStep: unknown, rawFields: unknown): RecipeWrite {
+  if (!isRecord(rawFields)) throw new Error('Store data has an invalid history entry');
   const fields: Record<string, Json> = {};
-  for (const [path, v] of Object.entries(value.fields)) {
-    if (!isId(path, LIMITS.fieldPathLength) || !isBoundedJson(v)) throw new Error('Store data has an invalid history entry');
+  for (const [path, v] of Object.entries(rawFields)) {
+    if (!isFieldPath(path) || !isBoundedJson(v)) throw new Error('Store data has an invalid history entry');
     fields[path] = v;
   }
   let step: OpStep | null = null;
-  if (value.step !== null) {
-    const s = value.step;
+  if (rawStep !== null) {
+    const s = rawStep;
     if (!isRecord(s) || !isId(s.id) || typeof s.label !== 'string') throw new Error('Store data has an invalid step');
     const parsed: { id: string; label: string; undoes?: string; redoes?: string } = { id: s.id, label: s.label };
     if (isId(s.undoes)) parsed.undoes = s.undoes;
     if (isId(s.redoes)) parsed.redoes = s.redoes;
     step = parsed;
   }
-  return { opId: value.opId, hlc: value.hlc, step, fields };
+  return { opId, hlc, step, fields };
 }

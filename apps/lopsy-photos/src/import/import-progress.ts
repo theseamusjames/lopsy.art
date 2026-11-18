@@ -9,6 +9,8 @@ export interface ImportStats {
   readonly failed: readonly ImportItem[];
   /** Items that have stopped moving, whatever the outcome. */
   readonly settled: number;
+  /** Items a pause left waiting for `resumeImports`. */
+  readonly paused: number;
   readonly totalBytes: number;
   readonly sentBytes: number;
   /** 0..1 by bytes. */
@@ -20,6 +22,7 @@ export function importStats(progress: ImportProgress): ImportStats {
   let duplicates = 0;
   let totalBytes = 0;
   let sentBytes = 0;
+  let paused = 0;
   const failed: ImportItem[] = [];
   for (const item of progress.items) {
     totalBytes += item.byteSize;
@@ -42,6 +45,7 @@ export function importStats(progress: ImportProgress): ImportStats {
         sentBytes += item.byteSize;
         break;
       default:
+        if (progress.finished && item.error === 'Paused') paused++;
         sentBytes += Math.min(item.byteSize, item.sentBytes);
     }
   }
@@ -52,6 +56,7 @@ export function importStats(progress: ImportProgress): ImportStats {
     duplicates,
     failed,
     settled: done + duplicates + failed.length,
+    paused,
     totalBytes,
     sentBytes,
     fraction: totalBytes === 0 ? (progress.finished ? 1 : 0) : sentBytes / totalBytes,

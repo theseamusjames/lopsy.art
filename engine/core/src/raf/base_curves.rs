@@ -79,6 +79,24 @@ pub const FUJI_CLASSIC_CHROME: BaseCurve = BaseCurve {
     ],
 };
 
+/// Neutral — not a Fujifilm look: a starting point for grading in Lopsy
+/// Photos' Neutral and Monochrome profiles. Close to the identity (so the
+/// rendering is nearly colorimetric after sRGB encoding) with a slight
+/// lift through the midtones (18 % grey → 19.5 %) and a soft shoulder
+/// into white, so it adds almost no contrast of its own and leaves the
+/// tone sliders room to work.
+pub const NEUTRAL: BaseCurve = BaseCurve {
+    name: "Neutral",
+    points: &[
+        (0.000, 0.000),
+        (0.050, 0.052),
+        (0.180, 0.195),
+        (0.500, 0.530),
+        (0.800, 0.840),
+        (1.000, 1.000),
+    ],
+};
+
 /// DR400 — dynamic-range expansion. A gentler curve that pulls
 /// highlights down to preserve more of the highlight roll-off region,
 /// at the cost of a flatter midtone.
@@ -289,7 +307,7 @@ mod tests {
 
     #[test]
     fn endpoints_map_to_endpoints() {
-        for curve in [&FUJI_PROVIA, &FUJI_VELVIA, &FUJI_ASTIA, &FUJI_CLASSIC_CHROME, &FUJI_DR400] {
+        for curve in [&FUJI_PROVIA, &FUJI_VELVIA, &FUJI_ASTIA, &FUJI_CLASSIC_CHROME, &FUJI_DR400, &NEUTRAL] {
             let lut = build_lut(curve);
             assert!(approx(lut[0], curve.points[0].1, 1e-4), "curve {} bad start", curve.name);
             assert!(
@@ -301,7 +319,7 @@ mod tests {
 
     #[test]
     fn lut_is_monotone_nondecreasing() {
-        for curve in [&FUJI_PROVIA, &FUJI_VELVIA, &FUJI_ASTIA, &FUJI_CLASSIC_CHROME, &FUJI_DR400] {
+        for curve in [&FUJI_PROVIA, &FUJI_VELVIA, &FUJI_ASTIA, &FUJI_CLASSIC_CHROME, &FUJI_DR400, &NEUTRAL] {
             let lut = build_lut(curve);
             for i in 1..LUT_SIZE {
                 assert!(

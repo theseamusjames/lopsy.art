@@ -13,7 +13,7 @@ import { isDeviceId } from './ids';
 import { decodeSegment, encodeSegment, parseSegmentName, SEGMENT_MIME_TYPE, segmentName } from './journal';
 import { ROLES } from './layout';
 import type { LocalStore, LocalStorePatch, SyncBookkeeping } from './local-store';
-import type { ChangedEntity, MergeStore } from './merge-store';
+import type { ChangedEntity, MergeStore, SerializedStore } from './merge-store';
 import { rollUpSegments } from './rollup';
 import { snapshotName, writeSnapshot } from './snapshot';
 import type { Json, LibraryLayout, OpEnvelope, SyncStatus } from './types';
@@ -87,6 +87,16 @@ export interface SyncEngineOptions {
   readonly onApplied: (changed: readonly ChangedEntity[]) => void;
 }
 
+interface PendingPatch {
+  append: OpEnvelope[];
+  removeThrough?: number;
+  deviceId?: string;
+  nextSeq?: number;
+  state?: SerializedStore;
+  sync?: SyncBookkeeping;
+  layout?: LibraryLayout;
+}
+
 type Bookkeeping = {
   vector: Record<string, number>;
   appliedAhead: Record<string, string[]>;
@@ -116,6 +126,8 @@ export class SyncEngine {
   private readonly listeners = new Set<() => void>();
   private running: Promise<void> | null = null;
   private persistQueue: Promise<void> = Promise.resolve();
+  private pending: PendingPatch | null = null;
+  private pendingQueued = false;
   private deviceFolderId: FileId | null = null;
   private deviceFileWrittenAt: number | null = null;
   private layout: LibraryLayout;
@@ -629,11 +641,47 @@ export class SyncEngine {
     };
   }
 
+  /**
+   * Queues a write to the device. Patches queued while a write is in
+   * flight are merged into one, so a burst of commands (an import of
+   * thousands of photos) costs a few transactions, not one each.
+   */
   private persist(patch: LocalStorePatch): void {
     // The tab that took over owns the device's saved data now.
     if (this.lost) return;
+    const pending = (this.pending ??= { append: [] });
+    if (patch.removeOutboxThrough !== undefined) {
+      const through = patch.removeOutboxThrough;
+      pending.removeThrough = Math.max(pending.removeThrough ?? 0, through);
+      if (pending.append.some((op) => op.seq <= through)) {
+        pending.append = pending.append.filter((op) => op.seq > through);
+      }
+    }
+    if (patch.appendOutbox) for (const op of patch.appendOutbox) pending.append.push(op);
+    if (patch.deviceId !== undefined) pending.deviceId = patch.deviceId;
+    if (patch.nextSeq !== undefined) pending.nextSeq = patch.nextSeq;
+    if (patch.state !== undefined) pending.state = patch.state;
+    if (patch.sync !== undefined) pending.sync = patch.sync;
+    if (patch.layout !== undefined) pending.layout = patch.layout;
+    if (this.pendingQueued) return;
+    this.pendingQueued = true;
     this.persistQueue = this.persistQueue
-      .then(() => this.o.local.write(this.layout.libraryId, patch))
+      .then(() => {
+        const next = this.pending;
+        this.pending = null;
+        this.pendingQueued = false;
+        if (!next) return;
+        const merged: LocalStorePatch = {
+          ...(next.deviceId !== undefined ? { deviceId: next.deviceId } : {}),
+          ...(next.nextSeq !== undefined ? { nextSeq: next.nextSeq } : {}),
+          ...(next.append.length > 0 ? { appendOutbox: next.append } : {}),
+          ...(next.removeThrough !== undefined ? { removeOutboxThrough: next.removeThrough } : {}),
+          ...(next.state !== undefined ? { state: next.state } : {}),
+          ...(next.sync !== undefined ? { sync: next.sync } : {}),
+          ...(next.layout !== undefined ? { layout: next.layout } : {}),
+        };
+        return this.o.local.write(this.layout.libraryId, merged);
+      })
       .catch((error: unknown) => {
         console.error('Could not save library state on this device', error);
         this.setStatus({ state: 'error', error: 'Could not save changes on this device' });

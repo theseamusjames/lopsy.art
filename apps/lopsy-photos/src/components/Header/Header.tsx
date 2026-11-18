@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Cloud, CloudOff, Download, Keyboard, LoaderCircle, LogOut, TriangleAlert, CloudCheck } from 'lucide-react';
 import { getBackend } from '../../app/backend-registry';
+import { LOCK_LOST_MESSAGE } from '@lopsy/photos-core/library/lock';
 import { useSyncStatus } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { clearPreviewCache } from '../../app/preview-cache';
@@ -81,6 +82,14 @@ export function Header() {
           )}
         </div>
 
+        {status.state === 'error' && status.error === LOCK_LOST_MESSAGE && (
+          <span className={styles.lost} role="alert">
+            Opened in another tab
+            <Button size="sm" variant="primary" onClick={() => location.reload()}>
+              Reload to work here
+            </Button>
+          </span>
+        )}
         {status.state === 'paused' && (
           <Button
             variant="primary"

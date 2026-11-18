@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, Info, Maximize, ScanEye, Search, Trash2 } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, Info, Maximize, Paintbrush, ScanEye, Search, Trash2 } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useLibraryView } from '../../app/hooks';
 import { THUMB_SIZE, useUi } from '../../app/store';
-import { openCompare, openCull, runCommand } from '../../app/commands';
+import { currentTargets, openCompare, openCull, runCommand } from '../../app/commands';
+import { openInLopsy } from '../../app/lopsy-handoff';
 import { SORT_LABELS, type SortKey } from '../../library/asset-query';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
@@ -23,6 +24,8 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
   const thumbSize = useUi((s) => s.thumbSize);
   const setThumbSize = useUi((s) => s.setThumbSize);
   const selected = useUi((s) => s.selection.ids.size);
+  const focus = useUi((s) => s.selection.focus);
+  const single = selected === 1 || (selected === 0 && focus !== null);
   const infoOpen = useUi((s) => s.infoOpen);
   const toggleInfo = useUi((s) => s.toggleInfo);
   const askDelete = useUi((s) => s.askDelete);
@@ -116,6 +119,16 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           onClick={() => openCompare(orderedIds)}
         />
         <IconButton label="Sort through full screen (F)" icon={<ScanEye size={16} />} onClick={() => openCull(orderedIds)} />
+        <IconButton
+          label={single ? 'Edit in Lopsy, with layers, painting and text' : 'Edit in Lopsy: select one photo first'}
+          icon={<Paintbrush size={16} />}
+          disabled={!single}
+          onClick={() => {
+            const session = useUi.getState().connection?.session;
+            const id = currentTargets()[0];
+            if (session && id !== undefined) openInLopsy(session, id);
+          }}
+        />
         <IconButton label="Details (I)" icon={<Info size={16} />} active={infoOpen} onClick={toggleInfo} />
         </span>
       </div>
