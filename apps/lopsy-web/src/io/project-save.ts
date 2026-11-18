@@ -38,6 +38,20 @@ const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LO
  */
 export const FORMAT_VERSION = 3;
 
+/**
+ * What Save Project writes: v2, 8-bit gzipped RGBA, so its files stay as
+ * small as before and open in every Lopsy that reads v2. v3 (16-bit) is
+ * written only for Lopsy Photos, which keeps full precision.
+ */
+export const DEFAULT_SAVE_VERSION = 2;
+
+export interface SerializeOptions {
+  /** A Lopsy Photos source block for the manifest. */
+  readonly photos?: PhotosSourceBlock;
+  /** 16 writes v3 with 16-bit layer pixels; 8 (the default) writes v2. */
+  readonly precision?: 8 | 16;
+}
+
 /** The engine's u16 compressed-blob format; `uploadLayerPixelsCompressedU16` reads it back. */
 export const PIXEL_FORMAT_RGBA16_LZ4 = 'rgba16-lz4';
 
@@ -267,7 +281,9 @@ async function compressBytes(bytes: Uint8Array): Promise<Uint8Array> {
  * transforms are committed first so the file holds what the user sees.
  * Throws when the engine is not ready or a readback fails.
  */
-export async function serializeProject(options: { readonly photos?: PhotosSourceBlock } = {}): Promise<ArrayBuffer> {
+export async function serializeProject(options: SerializeOptions = {}): Promise<ArrayBuffer> {
+  const isPrecise = options.precision === 16;
+  const version = isPrecise ? FORMAT_VERSION : DEFAULT_SAVE_VERSION;
   if (!getEngine()) throw new Error('engine not ready.');
 
   finalizePendingStrokeGlobal();
@@ -297,7 +313,7 @@ export async function serializeProject(options: { readonly photos?: PhotosSource
     // Read pixel data for raster layers (not groups — they have no texture).
     // 16 bits per channel where the engine has content; a layer with none
     // reads back empty, and falls back to the 8-bit path so it keeps its size.
-    const blob16 = layer.type !== 'group' ? await readLayerBackupBlob(layer.id) : null;
+    const blob16 = isPrecise && layer.type !== 'group' ? await readLayerBackupBlob(layer.id) : null;
     if (blob16 && blob16.length >= 24) {
       const header = new DataView(blob16.buffer, blob16.byteOffset, 24);
       pixelDataIndex = pixelBlobs.length;
@@ -333,7 +349,7 @@ export async function serializeProject(options: { readonly photos?: PhotosSource
   }
 
   const manifest: LopsyManifest = {
-    version: FORMAT_VERSION,
+    version,
     documentName: doc.name,
     documentWidth: doc.width,
     documentHeight: doc.height,
@@ -369,7 +385,7 @@ export async function serializeProject(options: { readonly photos?: PhotosSource
   const header = new Uint8Array(12);
   header.set(LOPSY_MAGIC, 0);
   const headerView = new DataView(header.buffer);
-  headerView.setUint16(6, FORMAT_VERSION, true);
+  headerView.setUint16(6, version, true);
   headerView.setUint32(8, manifestBytes.length, true);
 
   const parts = [header, manifestBytes, blobSizeTable, ...allBlobs];

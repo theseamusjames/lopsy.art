@@ -237,7 +237,13 @@ export async function loadProject(file: File): Promise<void> {
         if (s.pixelFormat === PIXEL_FORMAT_RGBA16_LZ4) {
           // The blob carries its own geometry; the layer's position comes
           // from the descriptor flushLayerSync pushed above.
-          uploadLayerPixelsCompressedU16(engine, s.id, blob);
+          try {
+            uploadLayerPixelsCompressedU16(engine, s.id, blob);
+          } catch (err) {
+            // A corrupt blob that passed the header checks fails in the
+            // engine's decoder; report it as this layer's, not as a crash.
+            throw new Error(`the pixels of layer "${s.name}" could not be decoded (${describeError(err)}).`);
+          }
           continue;
         }
 
