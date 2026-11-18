@@ -195,3 +195,27 @@ pub fn raf_develop_defaults(params_json: &str) -> Result<String, JsError> {
     serde_json::to_string(&raf::develop::develop_defaults(&params))
         .map_err(|e| JsError::new(&format!("JSON serialize: {e}")))
 }
+
+/// White-balance presets for the body that shot `data` (the RAF file), as
+/// JSON `[{ "name", "temperature", "tint" }]` in the recipe's units
+/// (relative to as shot, −100..100), in menu order: Daylight, Cloudy,
+/// Shade, Tungsten, the fluorescents, Flash, Underwater, as the body has
+/// them; a body missing from the table uses its sensor family's. `[]` for a
+/// file without an as-shot balance.
+#[wasm_bindgen(js_name = "rafWhiteBalancePresets")]
+pub fn raf_white_balance_presets(data: &[u8]) -> Result<String, JsError> {
+    let (model, as_shot) = raf::read_wb_info(data).map_err(|e| JsError::new(&e))?;
+    let presets = as_shot.map(|a| raf::wb_presets::recipe_presets(&model, a)).unwrap_or_default();
+    serde_json::to_string(&presets).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// The Kelvin scale for the recipe's temperature on this body, as JSON
+/// `{ "miredAtZero", "miredPerUnit", "asShotKelvin" }` or `null`:
+/// `kelvin = 1e6 / (miredAtZero + miredPerUnit · temperature)` and
+/// `temperature = (1e6 / kelvin − miredAtZero) / miredPerUnit`.
+#[wasm_bindgen(js_name = "rafWhiteBalanceKelvin")]
+pub fn raf_white_balance_kelvin(data: &[u8]) -> Result<String, JsError> {
+    let (model, as_shot) = raf::read_wb_info(data).map_err(|e| JsError::new(&e))?;
+    let scale = as_shot.and_then(|a| raf::wb_presets::kelvin_scale(&model, a));
+    serde_json::to_string(&scale).map_err(|e| JsError::new(&e.to_string()))
+}
