@@ -180,7 +180,8 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 
 ## Edit view
 
-Opened with Enter, **Edit** in Single view, or double-click. One photo, a
+Opened with Enter (in the grid, Single view or Cull) or **Edit** in Single
+view; double-clicking a tile opens Single view, not Edit. One photo, a
 left column, the image and a panel of groups; edits are saved to the
 version as they are made, and previews are rendered when the edit settles
 (never during a slider drag), on leaving, and before the filmstrip opens
