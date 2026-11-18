@@ -32,7 +32,7 @@ export interface ControlDef {
 }
 
 export interface GroupDef {
-  readonly id: 'whiteBalance' | 'tone' | 'color' | 'finish' | 'framing';
+  readonly id: 'whiteBalance' | 'tone' | 'color' | 'localContrast' | 'detail' | 'finish' | 'framing';
   readonly title: string;
   readonly controls: readonly ControlDef[];
 }
@@ -64,6 +64,27 @@ export const GROUPS: readonly GroupDef[] = [
     controls: [
       { path: 'color.vibrance', label: 'Vibrance' },
       { path: 'color.saturation', label: 'Saturation' },
+    ],
+  },
+  {
+    id: 'localContrast',
+    title: 'Local contrast',
+    controls: [
+      { path: 'localContrast.large', label: 'Large details' },
+      { path: 'localContrast.small', label: 'Small details' },
+      { path: 'localContrast.haze', label: 'Haze' },
+    ],
+  },
+  {
+    id: 'detail',
+    title: 'Sharpness & noise',
+    controls: [
+      { path: 'sharpness.amount', label: 'Sharpen', historyLabel: 'Sharpen' },
+      { path: 'sharpness.radius', label: 'Radius', historyLabel: 'Sharpen radius' },
+      { path: 'sharpness.edges', label: 'Edges only', historyLabel: 'Sharpen edges only' },
+      { path: 'noise.luminance', label: 'Noise', historyLabel: 'Noise reduction' },
+      { path: 'noise.color', label: 'Color noise', historyLabel: 'Color noise reduction' },
+      { path: 'noise.detail', label: 'Keep detail', historyLabel: 'Noise keep detail' },
     ],
   },
   {

@@ -15,6 +15,10 @@
 import initWasm, {
   addLayer,
   autoTone as engineAutoTone,
+  clearImageDetail,
+  clearImageLocalContrast,
+  setImageDetail,
+  setImageLocalContrast,
   beginLayerTransform,
   compositeLayerTransformAffine,
   dropFloat,
@@ -70,6 +74,7 @@ import {
   type Framing,
 } from './recipe-to-adjustments';
 import { cropPixels, inverseRotation, isFullCrop, rotatedBounds, straightenedCrop, toFramed } from './crop';
+import { detailKey, detailValues, localContrastValues } from './detail-controls';
 import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
@@ -236,6 +241,9 @@ class PhotoEngine implements DevelopEngine {
   private turnedRect: { x: number; y: number; width: number; height: number } | null = null;
   /** What Curves, Color by hue and Color Grading last sent. */
   private colorKey: string | null = null;
+  private detailKeyApplied: string | null = null;
+  /** The working image's width over the full image's: below 1 while a RAW file's first view shows. */
+  private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
   private layoutKey: string | null = null;
   /** The displayed (cropped) size. */
@@ -277,6 +285,7 @@ class PhotoEngine implements DevelopEngine {
     try {
       report('reading', null);
       this.setRawDefaults(null);
+      this.pixelScale = 1;
       const size = await this.decode(source, format, abort.signal, report);
       if (abort.signal.aborted || this.isDisposed) throw new DecodeAbortedError();
       return size;
@@ -341,7 +350,7 @@ class PhotoEngine implements DevelopEngine {
         signal,
         linear: isLinear,
         binnedLongEdge: QUICK_VIEW_LONG_EDGE,
-        onPrepared: (_meta, prepared) => {
+        onPrepared: (prepMeta, prepared) => {
           if (signal.aborted || this.isDisposed || !isLinear) return;
           this.setRawDefaults(parseRawDevelopSettings(prepared.developDefaultsJson));
           this.autoWb = prepared.autoWbRatio ? temperatureTintFor(prepared.autoWbRatio) : null;
@@ -349,6 +358,7 @@ class PhotoEngine implements DevelopEngine {
           const binned = prepared.binned;
           if (!binned) return;
           const layer = this.resetLayer(binned.width, binned.height);
+          this.pixelScale = prepMeta.width > 0 ? binned.width / prepMeta.width : 1;
           uploadLayerPixelsF32Rect(this.engine, layer, binned.width, binned.height, 0, 0, binned.width, binned.height, binned.pixels);
           quick = this.showImage({ width: binned.width, height: binned.height });
           report('refining', 0);
@@ -437,6 +447,7 @@ class PhotoEngine implements DevelopEngine {
    */
   private swapInLayer(layer: string, size: Size, previous: Size): void {
     this.unturn();
+    this.pixelScale = 1;
     removeLayer(this.engine, this.layerId);
     this.layerId = layer;
     setDocumentSize(this.engine, size.width, size.height);
@@ -544,6 +555,7 @@ class PhotoEngine implements DevelopEngine {
       this.invalidate();
     }
     this.applyColorControls();
+    this.applyDetail();
     if (this.rawDefaults) {
       const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe, this.engineProfiles));
       if (json !== this.appliedRawJson) {
@@ -600,6 +612,19 @@ class PhotoEngine implements DevelopEngine {
     const [x = 0, y = 0, w = width, h = height] = getLayerEngineBounds(this.engine, this.layerId);
     this.turnedRect = { x, y, width: w, height: h };
     this.appliedAngle = angle;
+    this.invalidate();
+  }
+
+  private applyDetail(): void {
+    const key = detailKey(this.recipe, this.pixelScale);
+    if (key === this.detailKeyApplied) return;
+    this.detailKeyApplied = key;
+    const detail = detailValues(this.recipe, this.pixelScale);
+    if (detail) setImageDetail(this.engine, detail);
+    else clearImageDetail(this.engine);
+    const local = localContrastValues(this.recipe, this.pixelScale);
+    if (local) setImageLocalContrast(this.engine, local);
+    else clearImageLocalContrast(this.engine);
     this.invalidate();
   }
 
