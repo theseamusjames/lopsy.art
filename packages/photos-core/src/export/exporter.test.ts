@@ -92,6 +92,23 @@ describe('startExport', () => {
     expect(m).toMatchObject({ camera: { model: 'X-E5' }, exposure: { shutter: '1/100' }, gps: null });
   });
 
+  it('tags library exports with the media type of every format', async () => {
+    for (const [format, mimeType, ext] of [
+      ['jpeg', 'image/jpeg', '.jpg'],
+      ['png', 'image/png', '.png'],
+      ['tiff', 'image/tiff', '.tif'],
+    ] as const) {
+      const { adapter, selection, ctx } = await setup(['A.RAF']);
+      const result = await startExport(
+        selection,
+        ctx({ settings: { format }, destination: { kind: 'library', folderName: format } }),
+      ).finished;
+      const file = await adapter.getFile(result.items[0]?.fileId ?? '');
+      expect(file, format).toMatchObject({ mimeType });
+      expect(file?.name.endsWith(ext)).toBe(true);
+    }
+  });
+
   it('creates the export folder when missing', async () => {
     const { adapter, selection, exportsId, ctx } = await setup(['A.RAF']);
     const result = await startExport(selection, ctx({ destination: { kind: 'library', folderName: 'My/Export' } })).finished;

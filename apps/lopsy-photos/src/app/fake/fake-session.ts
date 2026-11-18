@@ -13,6 +13,7 @@ import type {
   ExportPreset,
   ExportPresetId,
   HistoryStep,
+  LibraryHistory,
   Json,
   LibraryLayout,
   LibrarySession,
@@ -92,6 +93,18 @@ export function fakePreviewRef(assetId: AssetId, size: 'thumb' | 'screen', recip
   return { fileId: `fake-preview:${assetId}:${size}`, recipeHash: recipeHash(recipe), width, height };
 }
 
+interface FakeLibState {
+  readonly assets: ReadonlyMap<AssetId, Asset>;
+  readonly versions: ReadonlyMap<VersionId, Version>;
+  readonly albums: ReadonlyMap<AlbumId, Album>;
+}
+
+interface FakeLibStep {
+  readonly label: string;
+  readonly before: FakeLibState;
+  readonly after: FakeLibState;
+}
+
 export class FakeSession implements LibrarySession {
   readonly libraryId = fakeId('library');
   readonly deviceId = fakeId('device');
@@ -161,6 +174,86 @@ export class FakeSession implements LibrarySession {
     if (n > 0) this.changed(n);
   }
 
+  private libUndo: FakeLibStep[] = [];
+  private libRedo: FakeLibStep[] = [];
+  private libDepth = 0;
+  private libQuiet = 0;
+  private libHistoryValue: LibraryHistory = { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null };
+
+  private snapshot(): FakeLibState {
+    return { assets: new Map(this.assets), versions: new Map(this.versions), albums: new Map(this.albums) };
+  }
+
+  /** Records `fn` as one library step (fake: whole-library snapshots, no per-field rule). */
+  private track<T>(label: string, fn: () => T): T {
+    if (this.libQuiet > 0 || this.libDepth > 0) return fn();
+    const before = this.snapshot();
+    this.libDepth++;
+    let result: T;
+    try {
+      result = fn();
+    } finally {
+      this.libDepth--;
+    }
+    const after = this.snapshot();
+    const same = (a: ReadonlyMap<string, unknown>, b: ReadonlyMap<string, unknown>) =>
+      a.size === b.size && [...a].every(([k, v]) => b.get(k) === v);
+    if (!same(before.assets, after.assets) || !same(before.versions, after.versions) || !same(before.albums, after.albums)) {
+      this.libUndo.push({ label, before, after });
+      this.libRedo = [];
+      this.libHistoryChanged();
+    }
+    return result;
+  }
+
+  private libHistoryChanged(): void {
+    const u = this.libUndo[this.libUndo.length - 1];
+    const r = this.libRedo[this.libRedo.length - 1];
+    this.libHistoryValue = { canUndo: !!u, canRedo: !!r, undoLabel: u?.label ?? null, redoLabel: r?.label ?? null };
+    this.changed(0);
+  }
+
+  private restore(state: FakeLibState): void {
+    this.assets = new Map(state.assets);
+    this.versions = new Map(state.versions);
+    this.albums = new Map(state.albums);
+  }
+
+  undoLibrary(): string | null {
+    const step = this.libUndo.pop();
+    if (!step) return null;
+    this.restore(step.before);
+    this.libRedo.push(step);
+    this.libHistoryChanged();
+    return step.label;
+  }
+
+  redoLibrary(): string | null {
+    const step = this.libRedo.pop();
+    if (!step) return null;
+    this.restore(step.after);
+    this.libUndo.push(step);
+    this.libHistoryChanged();
+    return step.label;
+  }
+
+  libraryHistory(): LibraryHistory {
+    return this.libHistoryValue;
+  }
+
+  libraryStep<T>(label: string, fn: () => T): T {
+    return this.track(label, fn);
+  }
+
+  withoutLibraryHistory<T>(fn: () => T): T {
+    this.libQuiet++;
+    try {
+      return fn();
+    } finally {
+      this.libQuiet--;
+    }
+  }
+
   addAsset(asset: NewAsset): { assetId: AssetId; versionId: VersionId } {
     const assetId = asset.id ?? fakeId('asset');
     const versionId = fakeId('version');
@@ -200,7 +293,9 @@ export class FakeSession implements LibrarySession {
   }
 
   setMarks(assetIds: readonly AssetId[], marks: Partial<AssetMarks>): void {
-    this.patchAssets(assetIds, (a) => ({ ...a, ...marks }));
+    this.track('Edit info', () => {
+      this.patchAssets(assetIds, (a) => ({ ...a, ...marks }));
+    });
   }
 
   /** Fake-only: what a repair would record. */
@@ -209,38 +304,46 @@ export class FakeSession implements LibrarySession {
   }
 
   setKeyword(assetIds: readonly AssetId[], keyword: string, present: boolean): void {
-    const k = keyword.trim();
-    if (k === '') return;
-    this.patchAssets(assetIds, (a) => ({
-      ...a,
-      keywords: present ? (a.keywords.includes(k) ? a.keywords : [...a.keywords, k]) : a.keywords.filter((x) => x !== k),
-    }));
+    this.track(present ? 'Add keyword' : 'Remove keyword', () => {
+      const k = keyword.trim();
+      if (k === '') return;
+      this.patchAssets(assetIds, (a) => ({
+        ...a,
+        keywords: present ? (a.keywords.includes(k) ? a.keywords : [...a.keywords, k]) : a.keywords.filter((x) => x !== k),
+      }));
+    });
   }
 
   deleteAssets(assetIds: readonly AssetId[]): void {
-    this.patchAssets(assetIds, (a) => ({ ...a, deleted: true }));
+    this.track('Delete', () => {
+      this.patchAssets(assetIds, (a) => ({ ...a, deleted: true }));
+    });
   }
 
   restoreAssets(assetIds: readonly AssetId[]): void {
-    this.patchAssets(assetIds, (a) => ({ ...a, deleted: false }));
+    this.track('Restore', () => {
+      this.patchAssets(assetIds, (a) => ({ ...a, deleted: false }));
+    });
   }
 
   createVersion(assetId: AssetId, name: string, recipe: Recipe = DEFAULT_RECIPE): VersionId {
-    const asset = this.assets.get(assetId);
-    const id = fakeId('version');
-    const aspect = asset?.width && asset.height ? asset.width / asset.height : 1.5;
-    this.versions.set(id, {
-      id,
-      assetId,
-      name,
-      recipe,
-      createdAt: new Date().toISOString(),
-      thumb: fakePreviewRef(assetId, 'thumb', recipe, aspect),
-      screen: fakePreviewRef(assetId, 'screen', recipe, aspect),
-      deleted: false,
+    return this.track('New version', () => {
+      const asset = this.assets.get(assetId);
+      const id = fakeId('version');
+      const aspect = asset?.width && asset.height ? asset.width / asset.height : 1.5;
+      this.versions.set(id, {
+        id,
+        assetId,
+        name,
+        recipe,
+        createdAt: new Date().toISOString(),
+        thumb: fakePreviewRef(assetId, 'thumb', recipe, aspect),
+        screen: fakePreviewRef(assetId, 'screen', recipe, aspect),
+        deleted: false,
+      });
+      this.changed();
+      return id;
     });
-    this.changed();
-    return id;
   }
 
   private patchVersion(id: VersionId, patch: (v: Version) => Version): void {
@@ -251,20 +354,26 @@ export class FakeSession implements LibrarySession {
   }
 
   renameVersion(versionId: VersionId, name: string): void {
-    this.patchVersion(versionId, (v) => ({ ...v, name }));
+    this.track('Rename version', () => {
+      this.patchVersion(versionId, (v) => ({ ...v, name }));
+    });
   }
 
   deleteVersion(versionId: VersionId): void {
-    this.patchVersion(versionId, (v) => ({ ...v, deleted: true }));
+    this.track('Delete version', () => {
+      this.patchVersion(versionId, (v) => ({ ...v, deleted: true }));
+    });
   }
 
   setPrimaryVersion(assetId: AssetId, versionId: VersionId): void {
-    const v = this.versions.get(versionId);
-    if (!v || v.deleted || v.assetId !== assetId) throw new Error(`${versionId} is not a live version of ${assetId}`);
-    const a = this.assets.get(assetId);
-    if (!a) return;
-    this.assets.set(assetId, { ...a, primaryVersionId: versionId });
-    this.changed();
+    this.track('Show version', () => {
+      const v = this.versions.get(versionId);
+      if (!v || v.deleted || v.assetId !== assetId) throw new Error(`${versionId} is not a live version of ${assetId}`);
+      const a = this.assets.get(assetId);
+      if (!a) return;
+      this.assets.set(assetId, { ...a, primaryVersionId: versionId });
+      this.changed();
+    });
   }
 
   editRecipe(versionId: VersionId, changes: Readonly<Record<string, Json>>, label: string): void {
@@ -333,19 +442,21 @@ export class FakeSession implements LibrarySession {
   }
 
   setAlbumMember(albumId: AlbumId, assetId: AssetId, present: boolean, versionId: VersionId | null = null): void {
-    this.patchAlbum(albumId, (a) => {
-      const members = a.members;
-      const has = members.some((m) => m.assetId === assetId && m.versionId === versionId);
-      if (has === present) return a;
-      const next = present
-        ? [...members, { assetId, versionId }]
-        : members.filter((m) => !(m.assetId === assetId && m.versionId === versionId));
-      const whole = next.filter((m) => m.versionId === null);
-      return {
-        ...a,
-        assetIds: whole.map((m) => m.assetId),
-        members: [...whole, ...next.filter((m) => m.versionId !== null)],
-      };
+    this.track(present ? 'Add to album' : 'Remove from album', () => {
+      this.patchAlbum(albumId, (a) => {
+        const members = a.members;
+        const has = members.some((m) => m.assetId === assetId && m.versionId === versionId);
+        if (has === present) return a;
+        const next = present
+          ? [...members, { assetId, versionId }]
+          : members.filter((m) => !(m.assetId === assetId && m.versionId === versionId));
+        const whole = next.filter((m) => m.versionId === null);
+        return {
+          ...a,
+          assetIds: whole.map((m) => m.assetId),
+          members: [...whole, ...next.filter((m) => m.versionId !== null)],
+        };
+      });
     });
   }
 

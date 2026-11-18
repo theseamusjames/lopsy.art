@@ -578,6 +578,24 @@ fn areas_change_exports_but_their_overlay_never_does() {
 }
 
 #[test]
+fn screen_only_views_never_reach_exports() {
+    let Some(mut engine) = engine(8, 4) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");
+    let texels: Vec<[u8; 4]> = (0..32).map(|i| if i % 8 < 4 { [0, 0, 0, 255] } else { WHITE }).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", texels.as_flattened(), 8, 4, 0, 0).expect("pixels");
+    commands::develop::set_image_detail(&mut engine, &[100.0, 1.0, 20.0, 0.0, 0.0, 0.0, 1.0]).expect("detail");
+    let before = now(compositor::composite_for_export(&mut engine));
+    let before_png = now(compositor::export_png_16(&mut engine, 0));
+    let shown = now(commands::develop::read_develop_histogram(&mut engine));
+    commands::develop::set_clipping_warning(&mut engine, true, true);
+    commands::develop::set_image_detail_mask_view(&mut engine, true);
+    assert_ne!(now(commands::develop::read_develop_histogram(&mut engine)), shown, "the live frame shows them");
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), before);
+    assert_eq!(now(compositor::export_png_16(&mut engine, 0)), before_png);
+    assert_no_gpu_errors();
+}
+
+#[test]
 fn the_develop_histogram_counts_the_displayed_pixels() {
     let Some(mut engine) = engine(8, 4) else { return };
     commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");

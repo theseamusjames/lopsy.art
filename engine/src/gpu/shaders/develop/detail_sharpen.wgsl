@@ -6,6 +6,8 @@ struct Params {
     u_amount: f32,
     // 0..100.
     u_edges: f32,
+    // 1 = output the edge mask as grey instead (live frame only).
+    u_maskView: i32,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var u_tex: texture_2d<f32>;
@@ -33,6 +35,9 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
         let t = 0.05 * params.u_edges / 100.0;
         let s = clamp((mag - 0.5 * t) / (0.5 * t), 0.0, 1.0);
         mask = s * s * (3.0 - 2.0 * s);
+    }
+    if (params.u_maskView == 1) {
+        return vec4<f32>(vec3<f32>(mask), src.a);
     }
     let d = params.u_amount * mask * (luma(src.rgb) - blurredLuma(p, size));
     return vec4<f32>(max(src.rgb + vec3<f32>(d), vec3<f32>(0.0)), src.a);

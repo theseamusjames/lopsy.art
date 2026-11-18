@@ -29,6 +29,7 @@ pub mod color_mixer;
 pub mod tiff;
 pub mod detail;
 pub mod areas;
+pub mod finish;
 pub mod psd;
 pub mod text_types;
 pub mod vertical_orientation;

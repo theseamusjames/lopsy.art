@@ -74,7 +74,7 @@ export interface SidecarApplied {
 
 /** Applies a read sidecar to a newly added asset and its primary version. */
 export function applyXmp(
-  session: Pick<LibrarySession, 'setMarks' | 'setKeyword' | 'setRecipe'>,
+  session: Pick<LibrarySession, 'setMarks' | 'setKeyword' | 'setRecipe' | 'withoutLibraryHistory'>,
   assetId: AssetId,
   versionId: VersionId,
   data: XmpData,
@@ -87,8 +87,11 @@ export function applyXmp(
   if (data.title !== null) marks.title = data.title;
   if (data.caption !== null) marks.caption = data.caption;
   const hasMarks = Object.keys(marks).length > 0;
-  if (hasMarks) session.setMarks([assetId], marks);
-  for (const keyword of data.keywords) session.setKeyword([assetId], keyword, true);
+  // What a sidecar brings in is not the user's command: it stays out of library undo.
+  session.withoutLibraryHistory(() => {
+    if (hasMarks) session.setMarks([assetId], marks);
+    for (const keyword of data.keywords) session.setKeyword([assetId], keyword, true);
+  });
   const recipe = recipeFromXmp(data, fileOrientation);
   if (recipe) session.setRecipe(versionId, recipe, 'XMP sidecar');
   return { marks: hasMarks, keywords: data.keywords.length, recipe: recipe !== null };
@@ -117,7 +120,7 @@ export function isUntouched(asset: Asset, view: LibraryView): boolean {
  * the import item.
  */
 export async function applySidecarToExisting(
-  session: Pick<LibrarySession, 'getView' | 'setMarks' | 'setKeyword' | 'setRecipe'>,
+  session: Pick<LibrarySession, 'getView' | 'setMarks' | 'setKeyword' | 'setRecipe' | 'withoutLibraryHistory'>,
   assetId: AssetId,
   sidecar: Blob,
 ): Promise<string> {
@@ -129,7 +132,7 @@ export async function applySidecarToExisting(
 
 /** Reads and applies a sidecar file; null when it is not readable XMP. */
 export async function applySidecarFile(
-  session: Pick<LibrarySession, 'setMarks' | 'setKeyword' | 'setRecipe'>,
+  session: Pick<LibrarySession, 'setMarks' | 'setKeyword' | 'setRecipe' | 'withoutLibraryHistory'>,
   assetId: AssetId,
   versionId: VersionId,
   sidecar: Blob,

@@ -106,3 +106,42 @@ pub fn clear_image_areas(engine: &mut Engine) {
 pub fn set_image_area_overlay(engine: &mut Engine, index: i32) {
     lopsy_engine::commands::develop::set_image_area_overlay(&mut engine.inner, index)
 }
+
+/// Mark clipped pixels on screen only: shadows (any channel ≤ 0) in blue,
+/// highlights (any channel ≥ 1) in red, after the whole develop chain.
+#[wasm_bindgen(js_name = "setClippingWarning")]
+pub fn set_clipping_warning(engine: &mut Engine, shadows: bool, highlights: bool) {
+    lopsy_engine::commands::develop::set_clipping_warning(&mut engine.inner, shadows, highlights)
+}
+
+readback_export! {
+    /// `[temperature, tint]` (recipe units) that make the patch of
+    /// `radius` document pixels around (x, y) neutral. Read before the RAW
+    /// stage and every adjustment. Wrap with `'any-time'`.
+    #[wasm_bindgen(js_name = "sampleNeutralWhiteBalance")]
+    pub fn sample_neutral_white_balance(engine, x: f32, y: f32, radius: f32) -> Result<Vec<f32>> {
+        read(lopsy_engine::commands::develop::sample_neutral_white_balance(engine, x, y, radius))
+    }
+}
+
+/// Show the sharpening edge mask as grey on screen while `on` (needs
+/// `setImageDetail`); never in exports.
+#[wasm_bindgen(js_name = "setImageDetailMaskView")]
+pub fn set_image_detail_mask_view(engine: &mut Engine, on: bool) {
+    lopsy_engine::commands::develop::set_image_detail_mask_view(&mut engine.inner, on)
+}
+
+/// Shaped vignette and grain, last in the develop chain: 9 floats
+/// `[vignetteAmount −100..100, size 0..100, roundness −100..100,
+///   feather 0..100, grainAmount 0..100, grainSize 0..100,
+///   grainRoughness 0..100, seed (an integer per photo), pixelScale]`.
+/// Replaces the adjustments' vignette: set that one to 0 when using this.
+#[wasm_bindgen(js_name = "setImageFinish")]
+pub fn set_image_finish(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_finish(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clearImageFinish")]
+pub fn clear_image_finish(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_image_finish(&mut engine.inner)
+}

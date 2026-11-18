@@ -6,7 +6,7 @@
 
 import type { Asset } from '../library/types';
 import { crc32 } from './crc32';
-import type { ExportSettings } from './types';
+import { mimeTypeFor, type ExportSettings } from './types';
 
 const ASCII = 2;
 const SHORT = 3;
@@ -265,5 +265,5 @@ export async function applyExportMetadata(blob: Blob, asset: Asset, settings: Ex
   const tiff = buildExportExif(asset, settings);
   const out = settings.format === 'png' ? insertPngExif(bytes, tiff) : insertJpegExif(bytes, tiff);
   if (out === bytes) return blob;
-  return new Blob([out.slice()], { type: settings.format === 'png' ? 'image/png' : 'image/jpeg' });
+  return new Blob([out.slice()], { type: mimeTypeFor(settings.format) });
 }
