@@ -89,15 +89,17 @@ async function openPngDocument(bytes: ArrayBuffer, name: string): Promise<void> 
  * ask for the document again.
  */
 export async function openPhotosHandoffFromQuery(): Promise<void> {
+  const url = photosUrl();
   const id = readHandoffId(window.location.search);
-  if (!id) return;
+  // A build without Photos ignores the parameter entirely.
+  if (!id || !url) return;
 
   const { pathname, search, hash } = window.location;
   window.history.replaceState(window.history.state, '', `${pathname}${searchWithoutHandoffParam(search)}${hash}`);
 
   useUIStore.getState().openModal({ kind: 'loading', message: 'Receiving from Lopsy Photos…' });
   try {
-    const { document, connection } = await acceptHandoff({ photosUrl: photosUrl(), id });
+    const { document, connection } = await acceptHandoff({ photosUrl: url, id });
     const previousDocumentId = useEditorStore.getState().documentReady ? useEditorStore.getState().document.id : null;
     if (document.kind === 'lopsy') {
       await loadProject(new File([document.bytes], `${document.name}.lopsy`));
@@ -127,7 +129,8 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
 async function buildSavePayload(source?: HandoffSource, camera?: CameraSummary): Promise<SavePayload> {
   const engine = getEngine();
   if (!engine) throw new Error('engine not ready.');
-  const lopsy = await serializeProject(source ? { photos: camera ? { ...source, camera } : source } : {});
+  // Photos keeps the 16-bit pixels (v3); Save Project's downloads stay v2.
+  const lopsy = await serializeProject({ precision: 16, ...(source ? { photos: camera ? { ...source, camera } : source } : {}) });
   const render = await (await renderPng16(engine)).arrayBuffer();
   const name = useEditorStore.getState().document.name || 'Untitled';
   return { name, lopsy, render };
@@ -141,11 +144,12 @@ async function buildSavePayload(source?: HandoffSource, camera?: CameraSummary):
 export async function saveDocumentToPhotos(): Promise<void> {
   const handoff = usePhotosHandoffStore.getState();
   const session = activePhotosSession(handoff.session, useEditorStore.getState().document.id);
-  if (!session || handoff.status.kind === 'saving') return;
+  const url = photosUrl();
+  if (!session || !url || handoff.status.kind === 'saving') return;
   handoff.setStatus({ kind: 'saving' });
   try {
     const outcome = await saveToPhotos({
-      photosUrl: photosUrl(),
+      photosUrl: url,
       connection: session.connection,
       payload: buildSavePayload(session.connection.source, session.camera),
     });
@@ -163,7 +167,9 @@ export async function saveDocumentToPhotos(): Promise<void> {
 /** Back to Photos: focuses the Photos tab, or opens Photos when it was closed. */
 export function backToPhotos(): void {
   const session = usePhotosHandoffStore.getState().session;
-  focusPhotos({ photosUrl: photosUrl(), connection: session?.connection ?? null });
+  const url = photosUrl();
+  if (!url) return;
+  focusPhotos({ photosUrl: url, connection: session?.connection ?? null });
 }
 
 /** File > Add to Lopsy Photos: hands the document to Photos as a new document. */
@@ -173,7 +179,9 @@ export async function addDocumentToPhotos(): Promise<void> {
     return;
   }
   try {
-    const outcome = await saveToPhotos({ photosUrl: photosUrl(), connection: null, payload: buildSavePayload() });
+    const url = photosUrl();
+    if (!url) return;
+    const outcome = await saveToPhotos({ photosUrl: url, connection: null, payload: buildSavePayload() });
     if (outcome.ok) {
       notifyInfo('Added to Lopsy Photos');
     } else {

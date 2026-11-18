@@ -7,7 +7,8 @@
  * - A save whose source names a document of this library updates that
  *   document's two files, provided the `.lopsy` is still at the revision
  *   Lopsy started from. If it moved on (another device saved meanwhile),
- *   the save becomes a copy, "<name> 2", so neither edit is lost.
+ *   the save becomes a copy, "<name> 2", so neither edit is lost. A save
+ *   naming a document without a base revision is a copy too.
  * - Any other save becomes a new document, in the source photo's stack
  *   when it has one.
  */
@@ -170,6 +171,29 @@ async function createDocument(
   return { assetId, lopsyFile };
 }
 
+/** The facts an in-place save changes. */
+export interface DocumentFacts {
+  readonly sha256: string;
+  readonly byteSize: number;
+  readonly width: number | null;
+  readonly height: number | null;
+}
+
+/**
+ * The session command that rewrites an asset's facts (`setAssetFacts`), being
+ * added to photos-core's LibrarySession. Until it is there this is a no-op:
+ * the asset keeps the sha256 and size it was created with.
+ */
+type SessionWithFacts = LibrarySession & {
+  setAssetFacts?: (assetId: AssetId, facts: Partial<DocumentFacts & { renderFileId: FileId }>) => void;
+};
+
+function recordFacts(session: LibrarySession, assetId: AssetId, facts: DocumentFacts): void {
+  // CALL SITE: LibrarySession.setAssetFacts (photos-core). The originals cache
+  // keys on sha256, so a document updated in place must record its new hash.
+  (session as SessionWithFacts).setAssetFacts?.(assetId, facts);
+}
+
 async function updateDocument(
   session: LibrarySession,
   document: Asset,
@@ -177,10 +201,18 @@ async function updateDocument(
   options: StoreLopsySaveOptions,
 ): Promise<StoredFile> {
   const renderBlob = new Blob([save.render], { type: 'image/png' });
+  const sha256 = await sha256Hex(save.lopsy);
   const lopsyFile = await session.adapter.updateContent(document.fileId, new Blob([save.lopsy], { type: LOPSY_MIME_TYPE }));
   if (document.renderFileId) {
     await session.adapter.updateContent(document.renderFileId, renderBlob);
   }
+  const size = pngSize(save.render);
+  recordFacts(session, document.id, {
+    sha256,
+    byteSize: save.lopsy.byteLength,
+    width: size?.width ?? null,
+    height: size?.height ?? null,
+  });
   await renderPreviews(session, options, document.id, document.primaryVersionId, renderBlob);
   return lopsyFile;
 }
@@ -197,7 +229,9 @@ export async function storeLopsySave(
   const document = targetDocument(session, save.source);
   if (document) {
     const current = await session.adapter.getFile(document.fileId);
-    const isCurrent = current && !current.trashed && (save.baseRevision === undefined || save.baseRevision === current.revision);
+    // A save that names a document must say which revision it started from;
+    // without one there is no way to tell it is not stale, so it becomes a copy.
+    const isCurrent = current !== null && !current.trashed && save.baseRevision !== undefined && save.baseRevision === current.revision;
     if (isCurrent) {
       const updated = await updateDocument(session, document, save, options);
       return { revision: updated.revision, documentId: document.id, outcome: 'updated', fileName: updated.name };

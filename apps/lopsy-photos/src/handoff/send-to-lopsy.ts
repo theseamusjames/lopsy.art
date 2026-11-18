@@ -53,21 +53,40 @@ export function cameraSummary(asset: Asset): CameraSummary | undefined {
   return Object.keys(summary).length > 0 ? summary : undefined;
 }
 
+/** How many times to re-read a document that changes while it is read. */
+export const STABLE_READ_ATTEMPTS = 4;
+
+/**
+ * A document's bytes and the revision they are. The revision is read before
+ * and after the content, and the read is repeated until they agree, so the
+ * `baseRevision` sent with the bytes is never newer than the bytes: a later
+ * save from Lopsy then fails the revision check instead of overwriting
+ * another device's save.
+ */
+export async function readStableDocument(session: LibrarySession, asset: Asset): Promise<{ bytes: ArrayBuffer; revision: string }> {
+  for (let attempt = 0; attempt < STABLE_READ_ATTEMPTS; attempt++) {
+    const before = await session.adapter.getFile(asset.fileId);
+    if (!before || before.trashed) throw new Error(`${asset.fileName} is missing from storage.`);
+    const content = await session.adapter.readContent(asset.fileId);
+    const after = await session.adapter.getFile(asset.fileId);
+    if (after && after.revision === before.revision) {
+      return { bytes: await content.arrayBuffer(), revision: before.revision };
+    }
+  }
+  throw new Error(`${asset.fileName} kept changing while it was read. Try again in a moment.`);
+}
+
 async function documentFor(options: EditInLopsyOptions, asset: Asset): Promise<HandoffDocument> {
   const { session } = options;
   const name = displayName(asset);
   const camera = cameraSummary(asset);
   const withCamera = camera ? { camera } : {};
   if (asset.kind === 'document') {
-    const [file, content] = await Promise.all([
-      session.adapter.getFile(asset.fileId),
-      session.adapter.readContent(asset.fileId),
-    ]);
-    if (!file) throw new Error(`${asset.fileName} is missing from storage.`);
+    const { bytes, revision } = await readStableDocument(session, asset);
     const source: HandoffSource = asset.source
       ? { libraryId: session.libraryId, ...asset.source, documentId: asset.id }
       : { libraryId: session.libraryId, assetId: '', versionId: '', recipeHash: '', documentId: asset.id };
-    return { name, kind: 'lopsy', bytes: await content.arrayBuffer(), source, baseRevision: file.revision, ...withCamera };
+    return { name, kind: 'lopsy', bytes, source, baseRevision: revision, ...withCamera };
   }
   const versionId = options.versionId ?? asset.primaryVersionId;
   const version = session.getView().versions.get(versionId);

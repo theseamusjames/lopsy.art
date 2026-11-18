@@ -42,6 +42,9 @@ jobs:
         if: vars.DEPLOY_PHOTOS == 'true'
         run: npm run build:site
         env:
+          # Lopsy offers the handoff (File > Add to Lopsy Photos, ?photos-handoff=)
+          # only when its build names Photos' URL.
+          VITE_PHOTOS_URL: /photos/
           VITE_GOOGLE_CLIENT_ID: ${{ vars.PHOTOS_GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_API_KEY: ${{ vars.PHOTOS_GOOGLE_API_KEY }}
           VITE_GOOGLE_APP_ID: ${{ vars.PHOTOS_GOOGLE_APP_ID }}

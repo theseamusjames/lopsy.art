@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { DEV_PHOTOS_URL, PRODUCTION_PHOTOS_URL, photosUrlFor } from './photos-url';
+import { photosUrlFor } from './photos-url';
 import { activePhotosSession, type PhotosHandoffSession } from './photos-handoff-store';
 
 describe('photosUrlFor', () => {
-  it('uses the Photos dev server in development and /photos/ in production', () => {
-    expect(photosUrlFor(undefined, true)).toBe(DEV_PHOTOS_URL);
-    expect(photosUrlFor(undefined, false)).toBe(PRODUCTION_PHOTOS_URL);
-    expect(photosUrlFor('  ', false)).toBe(PRODUCTION_PHOTOS_URL);
+  it('is null unless the build sets VITE_PHOTOS_URL', () => {
+    expect(photosUrlFor(undefined)).toBeNull();
+    expect(photosUrlFor('  ')).toBeNull();
   });
 
-  it('prefers VITE_PHOTOS_URL', () => {
-    expect(photosUrlFor('https://photos.lopsy.art/', true)).toBe('https://photos.lopsy.art/');
+  it('uses VITE_PHOTOS_URL', () => {
+    expect(photosUrlFor('/photos/')).toBe('/photos/');
+    expect(photosUrlFor(' https://photos.lopsy.art/ ')).toBe('https://photos.lopsy.art/');
   });
 });
 

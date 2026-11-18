@@ -8,7 +8,7 @@ import type { PreviewRenderer } from '@lopsy/photos-core/import/types';
 import { acceptHandoff, saveToPhotos, type AcceptedHandoff } from '@lopsy/handoff/lopsy';
 import type { ReceivedSave } from '@lopsy/handoff/photos';
 import { FakeWindow } from '@lopsy/handoff/fake-window.test-helper';
-import { editInLopsy, lopsyUrlFor } from './send-to-lopsy';
+import { STABLE_READ_ATTEMPTS, editInLopsy, lopsyUrlFor, readStableDocument } from './send-to-lopsy';
 import { documentStem, freeStem, pngSize, storeLopsySave } from './store-lopsy-save';
 import { hrefWithoutReceive, startHandoffReceiver } from './receiver';
 
@@ -261,6 +261,108 @@ describe('Edit in Lopsy, a document', () => {
       editInLopsy({ session, assetId: 'nope', renderPng16: async () => png16(1, 1), lopsyUrl: LOPSY, previewRenderer, window: photos }),
     ).toThrow();
     expect(photos.opened).toHaveLength(0);
+  });
+});
+
+describe('storeLopsySave for a named document', () => {
+  it('saves a copy when the save names a document but no base revision', async () => {
+    const first = await storeLopsySave(session, { id: 'h1', name: 'Poster', lopsy: lopsyFile(1), render: png16(80, 60) }, { previewRenderer });
+    const doc = session.getView().assets.get(first.documentId)!;
+    const second = await storeLopsySave(
+      session,
+      {
+        id: 'h1',
+        name: 'Poster',
+        lopsy: lopsyFile(2),
+        render: png16(80, 60),
+        source: { libraryId: session.libraryId, assetId: '', versionId: '', recipeHash: '', documentId: doc.id },
+      },
+      { previewRenderer },
+    );
+    expect(second.outcome).toBe('copied');
+    expect(second.documentId).not.toBe(doc.id);
+    expect(second.fileName).toBe('Poster 2.lopsy');
+    expect((await readBytes(doc.fileId))[8]).toBe(1);
+  });
+
+  it('updates in place when the base revision matches', async () => {
+    const first = await storeLopsySave(session, { id: 'h1', name: 'Poster', lopsy: lopsyFile(1), render: png16(80, 60) }, { previewRenderer });
+    const doc = session.getView().assets.get(first.documentId)!;
+    const second = await storeLopsySave(
+      session,
+      {
+        id: 'h1',
+        name: 'Poster',
+        lopsy: lopsyFile(2),
+        render: png16(80, 60),
+        source: { libraryId: session.libraryId, assetId: '', versionId: '', recipeHash: '', documentId: doc.id },
+        baseRevision: first.revision,
+      },
+      { previewRenderer },
+    );
+    expect(second).toMatchObject({ outcome: 'updated', documentId: doc.id });
+    expect((await readBytes(doc.fileId))[8]).toBe(2);
+  });
+});
+
+describe('data integrity', () => {
+  it('reads a document again when it changes during the read, so bytes and revision agree', async () => {
+    const stored = await storeLopsySave(session, { id: 'h1', name: 'Poster', lopsy: lopsyFile(1), render: png16(8, 6) }, { previewRenderer });
+    const doc = session.getView().assets.get(stored.documentId)!;
+    const realRead = adapter.readContent.bind(adapter);
+    let reads = 0;
+    vi.spyOn(adapter, 'readContent').mockImplementation(async (id, options) => {
+      const content = await realRead(id, options);
+      reads += 1;
+      // Another device saves while the first read is in flight.
+      if (reads === 1) await adapter.updateContent(doc.fileId, new Blob([lopsyFile(7)]));
+      return content;
+    });
+    const { bytes, revision } = await readStableDocument(session, doc);
+    expect(reads).toBe(2);
+    expect(new Uint8Array(bytes)[8]).toBe(7);
+    expect(revision).toBe((await adapter.getFile(doc.fileId))!.revision);
+  });
+
+  it('gives up on a document that never stops changing', async () => {
+    const stored = await storeLopsySave(session, { id: 'h1', name: 'Poster', lopsy: lopsyFile(1), render: png16(8, 6) }, { previewRenderer });
+    const doc = session.getView().assets.get(stored.documentId)!;
+    const realRead = adapter.readContent.bind(adapter);
+    let n = 0;
+    vi.spyOn(adapter, 'readContent').mockImplementation(async (id, options) => {
+      const content = await realRead(id, options);
+      await adapter.updateContent(doc.fileId, new Blob([lopsyFile(++n)]));
+      return content;
+    });
+    await expect(readStableDocument(session, doc)).rejects.toThrow(/kept changing/);
+    expect(n).toBe(STABLE_READ_ATTEMPTS);
+  });
+
+  it('records the new sha256, size and dimensions after an in-place update', async () => {
+    const setAssetFacts = vi.fn();
+    Object.assign(session, { setAssetFacts });
+    const first = await storeLopsySave(session, { id: 'h1', name: 'Poster', lopsy: lopsyFile(1), render: png16(8, 6) }, { previewRenderer });
+    expect(setAssetFacts).not.toHaveBeenCalled();
+    const lopsy = lopsyFile(2);
+    await storeLopsySave(
+      session,
+      {
+        id: 'h1',
+        name: 'Poster',
+        lopsy,
+        render: png16(16, 12),
+        source: { libraryId: session.libraryId, assetId: '', versionId: '', recipeHash: '', documentId: first.documentId },
+        baseRevision: first.revision,
+      },
+      { previewRenderer },
+    );
+    const { sha256Hex } = await import('@lopsy/photos-core/import/hash');
+    expect(setAssetFacts).toHaveBeenCalledWith(first.documentId, {
+      sha256: await sha256Hex(lopsyFile(2)),
+      byteSize: lopsy.byteLength,
+      width: 16,
+      height: 12,
+    });
   });
 });
 
