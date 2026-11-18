@@ -275,6 +275,23 @@ describe('sync between devices', () => {
     expect(changes).toBeGreaterThan(0);
   });
 
+  it('writes a readable settings.json when settings change', async () => {
+    const adapter = new TestAdapter();
+    const a = await open(adapter);
+    const b = await open(adapter);
+    a.setSetting('export.quality', 90);
+    await a.syncNow();
+    b.setSetting('grid.size', 'large');
+    await syncAll(b, a);
+    const files = (await adapter.listChildren(a.layout.dataId)).filter((f) => f.name === 'settings.json');
+    expect(files).toHaveLength(1);
+    expect(files[0]!.properties).toEqual({ 'lp.lib': a.libraryId, 'lp.role': 'settings' });
+    expect(JSON.parse(await (await adapter.readContent(files[0]!.id)).text())).toEqual({
+      'export.quality': 90,
+      'grid.size': 'large',
+    });
+  });
+
   it('skips damaged segments from other devices and keeps going', async () => {
     const adapter = new TestAdapter();
     const a = await open(adapter);

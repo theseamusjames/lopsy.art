@@ -16,7 +16,7 @@ import type { LocalStore, LocalStorePatch, SyncBookkeeping } from './local-store
 import type { ChangedEntity, MergeStore } from './merge-store';
 import { rollUpSegments } from './rollup';
 import { snapshotName, writeSnapshot } from './snapshot';
-import type { LibraryLayout, OpEnvelope, SyncStatus } from './types';
+import type { Json, LibraryLayout, OpEnvelope, SyncStatus } from './types';
 
 export interface SyncTimers {
   setTimeout(callback: () => void, ms: number): unknown;
@@ -68,6 +68,8 @@ export interface SyncEngineOptions {
   /** Roll up this device's segments once this many small ones have been written (default 20). */
   readonly rollUpAt?: number;
   readonly timers?: SyncTimers;
+  /** The synced settings, for the readable `settings.json` copy (spec 6.6). */
+  readonly settings?: () => Readonly<Record<string, Json>>;
   /** Called after remote ops changed the store. */
   readonly onApplied: (changed: readonly ChangedEntity[]) => void;
 }
@@ -102,6 +104,8 @@ export class SyncEngine {
   private lastStateSave: number;
   private newerSeen = false;
   private segmentsSinceRollUp = 0;
+  private settingsDirty = false;
+  private settingsFileId: FileId | null = null;
   /** The latest segments or lines that could not be read, for diagnostics. */
   readonly problems: string[] = [];
 
@@ -149,6 +153,7 @@ export class SyncEngine {
     this.outbox.push(...ops);
     this.bk.opsSinceSnapshot += ops.length;
     this.stateDirty = true;
+    if (ops.some((e) => e.op.kind === 'setting')) this.settingsDirty = true;
     this.persist({ appendOutbox: ops, nextSeq });
     this.setStatus({ pendingOps: this.outbox.length });
     if (this.firstPendingAt === null) this.firstPendingAt = this.o.now();
@@ -162,6 +167,7 @@ export class SyncEngine {
       await this.pull();
       await this.maybeSnapshot();
       await this.maybeRollUp();
+      await this.writeSettings();
     }, true);
   }
 
@@ -376,6 +382,7 @@ export class SyncEngine {
         continue;
       }
       const changed = this.o.store.applyOps(ops);
+      if (changed.some((c) => c.kind === 'setting')) this.settingsDirty = true;
       this.bk.opsSinceSnapshot += ops.length;
       applied = true;
       if (changed.length > 0) this.o.onApplied(changed);
@@ -422,6 +429,30 @@ export class SyncEngine {
     this.bk.snapshot = snapshotName(hlc, this.o.deviceId);
     this.bk.opsSinceSnapshot = 0;
     this.persist({ sync: this.bookkeeping() });
+  }
+
+  private async writeSettings(): Promise<void> {
+    if (!this.settingsDirty || this.o.readOnly || !this.o.settings) return;
+    const { adapter, layout } = this.o;
+    const content = new Blob([JSON.stringify(this.o.settings(), null, 2) + '\n'], { type: 'application/json' });
+    this.settingsFileId ??=
+      (await adapter.listChildren(layout.dataId)).find((f) => !f.isFolder && f.properties['lp.role'] === ROLES.settings)
+        ?.id ?? null;
+    if (this.settingsFileId) {
+      await adapter.updateContent(this.settingsFileId, content);
+    } else {
+      const file = await adapter.createFile(
+        {
+          parentId: layout.dataId,
+          name: 'settings.json',
+          mimeType: 'application/json',
+          properties: { 'lp.lib': layout.libraryId, 'lp.role': ROLES.settings },
+        },
+        content,
+      );
+      this.settingsFileId = file.id;
+    }
+    this.settingsDirty = false;
   }
 
   private async maybeRollUp(): Promise<void> {

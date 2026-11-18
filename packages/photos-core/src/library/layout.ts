@@ -24,6 +24,7 @@ export const ROLES = {
   previews: 'previews',
   devices: 'devices',
   manifest: 'library-json',
+  settings: 'settings',
   readme: 'readme',
   deviceJournal: 'device-journal',
   segment: 'segment',

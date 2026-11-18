@@ -505,7 +505,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<LibraryS
   const clock = new HybridClock(deviceId, now);
   if (merge.maxHlc) clock.receive(merge.maxHlc);
   const mergeStore = merge;
-  const session = new Session({
+  const session: Session = new Session({
     layout,
     adapter,
     deviceId,
@@ -530,6 +530,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<LibraryS
         snapshotEvery: options.snapshotEvery ?? DEFAULT_SNAPSHOT_EVERY,
         autoSync: options.autoSync ?? true,
         readOnly,
+        settings: () => Object.fromEntries(session.getView().settings),
         ...(options.rollUpAt !== undefined ? { rollUpAt: options.rollUpAt } : {}),
         ...(options.timers ? { timers: options.timers } : {}),
         onApplied,

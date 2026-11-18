@@ -171,32 +171,39 @@ export class IndexedDbLocalStore implements LocalStore {
     const db = await this.open();
     const tx = db.transaction([META, OUTBOX, STATE], 'readwrite');
     const done = completed(tx);
-    const metaStore = tx.objectStore(META);
-    const current = (await promised(metaStore.get(libraryId))) as MetaRecord | undefined;
-    const deviceId = patch.deviceId ?? current?.deviceId;
-    if (deviceId === undefined) {
-      tx.abort();
+    try {
+      const metaStore = tx.objectStore(META);
+      const current = (await promised(metaStore.get(libraryId))) as MetaRecord | undefined;
+      const deviceId = patch.deviceId ?? current?.deviceId;
+      if (deviceId === undefined) throw new Error('The first write for a library must set its device ID');
+      const meta: MetaRecord = {
+        libraryId,
+        deviceId,
+        nextSeq: patch.nextSeq ?? current?.nextSeq ?? 1,
+        sync: patch.sync ?? current?.sync ?? null,
+      };
+      metaStore.put(meta);
+      const outbox = tx.objectStore(OUTBOX);
+      if (patch.removeOutboxThrough !== undefined && patch.removeOutboxThrough >= 0) {
+        outbox.delete(IDBKeyRange.bound([libraryId, 0], [libraryId, patch.removeOutboxThrough]));
+      }
+      for (const op of patch.appendOutbox ?? []) {
+        const record: OutboxRecord = { libraryId, seq: op.seq, op };
+        outbox.put(record);
+      }
+      if (patch.state) {
+        const record: StateRecord = { libraryId, state: patch.state };
+        tx.objectStore(STATE).put(record);
+      }
+    } catch (error) {
+      // All or nothing: a patch that fails part way must not leave half its writes.
+      try {
+        tx.abort();
+      } catch {
+        // Already finished or aborted.
+      }
       await done.catch(() => undefined);
-      throw new Error('The first write for a library must set its device ID');
-    }
-    const meta: MetaRecord = {
-      libraryId,
-      deviceId,
-      nextSeq: patch.nextSeq ?? current?.nextSeq ?? 1,
-      sync: patch.sync ?? current?.sync ?? null,
-    };
-    metaStore.put(meta);
-    const outbox = tx.objectStore(OUTBOX);
-    if (patch.removeOutboxThrough !== undefined && patch.removeOutboxThrough >= 0) {
-      outbox.delete(IDBKeyRange.bound([libraryId, 0], [libraryId, patch.removeOutboxThrough]));
-    }
-    for (const op of patch.appendOutbox ?? []) {
-      const record: OutboxRecord = { libraryId, seq: op.seq, op };
-      outbox.put(record);
-    }
-    if (patch.state) {
-      const record: StateRecord = { libraryId, state: patch.state };
-      tx.objectStore(STATE).put(record);
+      throw error;
     }
     await done;
   }
