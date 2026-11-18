@@ -471,7 +471,10 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     crate::develop::detail::apply_local_contrast(engine);
     apply_image_adjustments(engine);
     apply_color_mixer(engine);
+    apply_areas(engine, AreasMode::Apply);
     crate::develop::detail::apply_sharpening(engine);
+    // The selected area's mask, on screen only: exports composite again.
+    apply_areas(engine, AreasMode::Overlay);
 
     // 4b. Quick mask overlay: translucent blue tint over unselected areas
     if engine.quick_mask_texture.is_some() {
@@ -1589,6 +1592,7 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, with_mixer: bool) 
     crate::develop::detail::apply_local_contrast(engine);
     if with_mixer {
         apply_color_mixer(engine);
+        apply_areas(engine, AreasMode::Apply);
         crate::develop::detail::apply_sharpening(engine);
     }
 
@@ -1708,6 +1712,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
 
     apply_image_adjustments(engine);
     apply_color_mixer(engine);
+    apply_areas(engine, AreasMode::Apply);
     crate::develop::detail::apply_sharpening(engine);
 
     let is_lab = engine.doc_color_mode == 1;
@@ -1885,6 +1890,47 @@ fn apply_raw_develop(engine: &EngineInner) {
     let (pass, units) = crate::develop::pass(engine, &program, engine.composite_texture, state);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(units);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AreasMode {
+    Apply,
+    Overlay,
+}
+
+/// The document's areas over the composite in place (`Apply`), or the red
+/// mask overlay of `engine.area_overlay` (`Overlay`, live frame only). A
+/// no-op without areas, or for `Overlay` without a valid index.
+fn apply_areas(engine: &EngineInner, mode: AreasMode) {
+    let Some(values) = engine.areas.as_ref() else {
+        return;
+    };
+    let count = (values.len() / lopsy_core::areas::STRIDE) as i32;
+    if count == 0 || (mode == AreasMode::Overlay && !(0..count).contains(&engine.area_overlay)) {
+        return;
+    }
+    let program = match engine.shaders.areas() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Areas shader: {e}"));
+            return;
+        }
+    };
+    let params = crate::gpu::params::develop::AreasParams {
+        areas: crate::gpu::uniforms::Vec4Array::from_floats(values),
+        count,
+        mode: if mode == AreasMode::Overlay { 1 } else { 0 },
+        overlay: engine.area_overlay.max(0),
+    };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
     if !is_drawn {
         return;
     }

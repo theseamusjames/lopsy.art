@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE, type QuarterTurns, type Recipe } from '@lopsy/photos-core/library/recipe';
 import {
   NO_PHOTO_FILTER,
+  effectiveFraming,
+  framingAngle,
   framedSize,
   framingOps,
   recipeToAdjustments,
@@ -164,5 +166,29 @@ describe('framedSize', () => {
   it('swaps the sides on a quarter turn', () => {
     expect(framedSize(300, 200, 90)).toEqual({ width: 200, height: 300 });
     expect(framedSize(300, 200, 180)).toEqual({ width: 300, height: 200 });
+  });
+});
+
+describe('effectiveFraming', () => {
+  const base = DEFAULT_RECIPE.framing;
+
+  it('folds a vertical flip into a half turn and a horizontal flip', () => {
+    expect(effectiveFraming({ ...base, rotate: 90, flipV: true } as Recipe['framing'])).toEqual({ rotate: 270, flipH: true });
+    expect(effectiveFraming({ ...base, flipH: true, flipV: true } as Recipe['framing'])).toEqual({ rotate: 180, flipH: false });
+    expect(effectiveFraming(base)).toEqual({ rotate: 0, flipH: false });
+  });
+
+  it('a vertical flip mirrors top to bottom', () => {
+    const f = effectiveFraming({ ...base, flipV: true } as Recipe['framing']);
+    const ops: FramingOp[] = [];
+    for (let i = 0; i < f.rotate / 90; i++) ops.push({ kind: 'rotate', clockwise: true });
+    if (f.flipH) ops.push({ kind: 'flipH' });
+    expect(ops.reduce(apply, START)).toEqual(['c', 'd', 'a', 'b']);
+  });
+
+  it('reads the straighten angle, clamped, and 0 without one', () => {
+    expect(framingAngle(base)).toBe(0);
+    expect(framingAngle({ ...base, angle: 12.5 } as Recipe['framing'])).toBe(12.5);
+    expect(framingAngle({ ...base, angle: 80 } as Recipe['framing'])).toBe(45);
   });
 });

@@ -136,3 +136,24 @@ export function framingOps(from: Framing, to: Framing): FramingOp[] {
 export function framedSize(width: number, height: number, rotate: QuarterTurns): { width: number; height: number } {
   return rotate === 90 || rotate === 270 ? { width: height, height: width } : { width, height };
 }
+
+/** The recipe's straighten angle in degrees (framing.angle, −45..45); 0 when the recipe has none. */
+export function framingAngle(framing: Recipe['framing']): number {
+  const v = (framing as { readonly angle?: unknown }).angle;
+  return typeof v === 'number' && Number.isFinite(v) ? Math.max(-45, Math.min(45, v)) : 0;
+}
+
+export function framingFlipV(framing: Recipe['framing']): boolean {
+  return (framing as { readonly flipV?: unknown }).flipV === true;
+}
+
+/**
+ * Rotate, Flip and Flip vertical as the texture operations see them. A
+ * vertical flip is a horizontal one turned half a turn, so it folds into
+ * the other two.
+ */
+export function effectiveFraming(framing: Recipe['framing']): Framing {
+  const isFlipV = framingFlipV(framing);
+  const rotate = (((framing.rotate + (isFlipV ? 180 : 0)) % 360) as QuarterTurns);
+  return { rotate, flipH: framing.flipH !== isFlipV };
+}

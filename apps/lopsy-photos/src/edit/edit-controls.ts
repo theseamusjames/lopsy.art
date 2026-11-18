@@ -14,6 +14,9 @@ import {
 } from '@lopsy/photos-core/library/recipe';
 import type { Json } from '@lopsy/photos-core/library/types';
 import {
+  RECIPE_GROUPS,
+  isGroupDefault as isRecipeGroupDefault,
+  type RecipeGroupId,
   CURVE_CHANNELS,
   GRADE_RANGES,
   HUE_BANDS,
@@ -32,7 +35,7 @@ export interface ControlDef {
 }
 
 export interface GroupDef {
-  readonly id: 'whiteBalance' | 'tone' | 'color' | 'finish';
+  readonly id: 'whiteBalance' | 'tone' | 'color' | 'localContrast' | 'detail' | 'finish' | 'framing';
   readonly title: string;
   readonly controls: readonly ControlDef[];
 }
@@ -64,6 +67,27 @@ export const GROUPS: readonly GroupDef[] = [
     controls: [
       { path: 'color.vibrance', label: 'Vibrance' },
       { path: 'color.saturation', label: 'Saturation' },
+    ],
+  },
+  {
+    id: 'localContrast',
+    title: 'Local contrast',
+    controls: [
+      { path: 'localContrast.large', label: 'Large details' },
+      { path: 'localContrast.small', label: 'Small details' },
+      { path: 'localContrast.haze', label: 'Haze' },
+    ],
+  },
+  {
+    id: 'detail',
+    title: 'Sharpness & noise',
+    controls: [
+      { path: 'sharpness.amount', label: 'Sharpen', historyLabel: 'Sharpen' },
+      { path: 'sharpness.radius', label: 'Radius', historyLabel: 'Sharpen radius' },
+      { path: 'sharpness.edges', label: 'Edges only', historyLabel: 'Sharpen edges only' },
+      { path: 'noise.luminance', label: 'Noise', historyLabel: 'Noise reduction' },
+      { path: 'noise.color', label: 'Color noise', historyLabel: 'Color noise reduction' },
+      { path: 'noise.detail', label: 'Keep detail', historyLabel: 'Noise keep detail' },
     ],
   },
   {
@@ -249,4 +273,13 @@ export function resetChangesFor(recipe: Recipe, controls: readonly ControlDef[])
     if (numberAt(recipe, control.path) !== def) changes[control.path] = def;
   }
   return changes;
+}
+
+/** The Framing group's Straighten angle, once the recipe has one (framing.angle). */
+export const FRAMING_GROUP: GroupDef | null =
+  'framing.angle' in RECIPE_RANGES ? { id: 'framing', title: 'Straighten', controls: [{ path: 'framing.angle', label: 'Angle', historyLabel: 'Straighten' }] } : null;
+
+/** The groups a new preset starts with: the ones this edit changed, framing left out (spec 5.4). */
+export function changedGroups(recipe: Recipe): RecipeGroupId[] {
+  return RECIPE_GROUPS.map((g) => g.id).filter((id) => id !== 'framing' && !isRecipeGroupDefault(recipe, id));
 }

@@ -16,9 +16,11 @@ export interface ControlGroupProps {
   readonly onAuto?: () => void;
   /** What Auto does, for its tooltip. */
   readonly autoTitle?: string;
+  /** The Auto button's text, when it does something else ('Level'). */
+  readonly autoLabel?: string;
 }
 
-export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, onReset, onAuto, autoTitle }: ControlGroupProps) {
+export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, onReset, onAuto, autoTitle, autoLabel = 'Auto' }: ControlGroupProps) {
   const isDefault = isGroupDefault(recipe, group);
   return (
     <section className={styles.group} aria-label={group.title}>
@@ -29,12 +31,12 @@ export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, on
             <button
               type="button"
               className={styles.actionButton}
-              aria-label={`Auto ${group.title}`}
+              aria-label={`${autoLabel} ${group.title}`}
               title={autoTitle}
               disabled={isDisabled}
               onClick={onAuto}
             >
-              Auto
+              {autoLabel}
             </button>
           </div>
         )}

@@ -8,9 +8,11 @@
 import { RECIPE_PREFIX, type EntityRecord, type MergeStore, type ChangedEntity } from './merge-store';
 import { OverlayMap } from './overlay-map';
 import { exportSettingsFromJson } from '../export/types';
+import { BUILT_IN_PREFIX } from './presets';
 import { isRecipeGroupId, recipeFromPaths, sanitizeRecipeValues } from './recipe';
 import type {
   Album,
+  AlbumMember,
   Asset,
   CameraInfo,
   ColorLabel,
@@ -170,7 +172,19 @@ export function versionFromRecord(id: string, record: EntityRecord): Version | n
 export function albumFromRecord(id: string, record: EntityRecord): Album | null {
   const name = field(record, 'name');
   if (typeof name !== 'string') return null;
-  return { id, name, assetIds: members(record, 'assets'), deleted: field(record, 'deleted') === true };
+  const assetIds = members(record, 'assets');
+  const versionMembers: AlbumMember[] = [];
+  for (const member of members(record, 'versions')) {
+    const [assetId, versionId, extra] = member.split('/');
+    if (assetId && versionId && extra === undefined) versionMembers.push({ assetId, versionId });
+  }
+  return {
+    id,
+    name,
+    assetIds,
+    members: [...assetIds.map((assetId) => ({ assetId, versionId: null })), ...versionMembers],
+    deleted: field(record, 'deleted') === true,
+  };
 }
 
 /** A setting's value; undefined when it has none. */
@@ -199,6 +213,8 @@ function emptyView(): MapsView {
 }
 
 export function presetFromRecord(id: string, record: EntityRecord): Preset | null {
+  // Built-in IDs belong to the presets in code: a stored record claiming one is ignored.
+  if (id.startsWith(BUILT_IN_PREFIX)) return null;
   const name = field(record, 'name');
   if (typeof name !== 'string') return null;
   const groups = field(record, 'groups');
@@ -215,6 +231,7 @@ export function presetFromRecord(id: string, record: EntityRecord): Preset | nul
 }
 
 export function exportPresetFromRecord(id: string, record: EntityRecord): ExportPreset | null {
+  if (id.startsWith(BUILT_IN_PREFIX)) return null;
   const name = field(record, 'name');
   if (typeof name !== 'string') return null;
   return {

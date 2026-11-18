@@ -240,6 +240,11 @@ pub struct EngineInner {
     pub detail: Option<lopsy_core::detail::DetailSettings>,
     /// Haze and local contrast (`develop::detail`). `None` by default.
     pub local_contrast: Option<lopsy_core::detail::LocalContrastSettings>,
+    /// Areas (`lopsy_core::areas`): the clamped floats, `STRIDE` per area.
+    /// `None` (the default) runs no pass.
+    pub areas: Option<Vec<f32>>,
+    /// The area whose mask the live frame shows in red, or −1. Never in exports.
+    pub area_overlay: i32,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -340,6 +345,8 @@ impl EngineInner {
             color_mixer: None,
             detail: None,
             local_contrast: None,
+            areas: None,
+            area_overlay: -1,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
@@ -781,6 +788,8 @@ impl EngineInner {
         self.color_mixer = None;
         self.detail = None;
         self.local_contrast = None;
+        self.areas = None;
+        self.area_overlay = -1;
         crate::commands::adjustment::reset_image_color_grading(&mut self.adjustments);
         self.needs_recomposite = true;
         // Clear text renderer layer state so stale text layouts don't persist

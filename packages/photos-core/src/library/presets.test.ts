@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_EXPORT_SETTINGS } from '../export/types';
+import { DEFAULT_EXPORT_SETTINGS, exportKeepsLocation, exportSettingsFromJson } from '../export/types';
+import type { EntityRecord } from './merge-store';
 import { MemoryLocalStore } from './local-store';
 import { BUILT_IN_EXPORT_PRESETS, BUILT_IN_PRESETS, findPreset } from './presets';
 import { DEFAULT_RECIPE, recipeFromPaths, recipeHash } from './recipe';
@@ -7,7 +8,8 @@ import { openLibrary, type PhotosLibrarySession } from './session';
 import { canonicalView } from './test-support/canonical';
 import { pickOne, seededRandom, shuffled } from './test-support/random';
 import { TestAdapter } from './test-support/test-adapter';
-import type { NewAsset } from './types';
+import type { Json, NewAsset } from './types';
+import { exportPresetFromRecord, presetFromRecord } from './view';
 
 const PHOTO: NewAsset = {
   kind: 'original',
@@ -148,5 +150,26 @@ describe('applyRecipeValues', () => {
     expect(recipe(one.versionId).tone.exposure).toBe(0);
     expect(recipe(two.versionId).tone.exposure).toBe(5);
     expect(s.history(two.versionId)[0]?.active).toBe(true);
+  });
+});
+
+describe('stored records claiming a built-in ID (L5)', () => {
+  const record = (fields: Record<string, Json>) =>
+    ({ fields: new Map(Object.entries(fields).map(([k, value]) => [k, { value }])), sets: new Map() }) as unknown as EntityRecord;
+
+  it('are ignored, so built-ins are listed once and cannot be replaced', () => {
+    expect(presetFromRecord('builtin:punchy', record({ name: 'Evil', values: { 'tone.exposure': 5 } }))).toBeNull();
+    expect(exportPresetFromRecord('builtin:web-2048', record({ name: 'Leak', settings: {} }))).toBeNull();
+    expect(presetFromRecord('p-1', record({ name: 'Mine' }))?.name).toBe('Mine');
+    expect(findPreset(new Map(), 'builtin:punchy')?.name).toBe('Punchy');
+    const evil = { ...BUILT_IN_PRESETS[0]!, id: 'builtin:x', name: 'Evil' };
+    expect(findPreset(new Map([['builtin:x', evil]]), 'builtin:x')).toBeNull();
+  });
+
+  it('exportKeepsLocation says when GPS would leave with an export (L6)', () => {
+    expect(exportKeepsLocation(DEFAULT_EXPORT_SETTINGS)).toBe(false);
+    expect(exportKeepsLocation({ metadata: 'all', removeLocation: false })).toBe(true);
+    expect(exportKeepsLocation({ metadata: 'copyright', removeLocation: false })).toBe(false);
+    expect(exportKeepsLocation(exportSettingsFromJson({ metadata: 'all', removeLocation: false }))).toBe(true);
   });
 });
