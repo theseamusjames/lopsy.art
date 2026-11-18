@@ -1,0 +1,26 @@
+.scroller {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  outline: none;
+}
+
+.spacer {
+  position: relative;
+  height: var(--grid-height);
+  pointer-events: none;
+}
+
+.row {
+  position: absolute;
+  top: var(--row-top);
+  left: var(--grid-padding);
+  right: var(--grid-padding);
+  height: var(--tile-size);
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns), var(--tile-size));
+  gap: var(--grid-gap);
+  pointer-events: auto;
+}

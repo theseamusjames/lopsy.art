@@ -1,0 +1,26 @@
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  text-align: center;
+}
+
+.icon {
+  color: var(--color-text-disabled);
+}
+
+.title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-ui);
+}
+
+.hint {
+  max-width: 380px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+}

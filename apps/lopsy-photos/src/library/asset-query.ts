@@ -133,11 +133,11 @@ export function isEdited(asset: Asset, view: LibraryView): boolean {
   return version !== undefined && !isDefaultRecipe(version.recipe);
 }
 
-/** Live versions per asset. */
-export function versionCount(assetId: AssetId, view: LibraryView): number {
-  let n = 0;
-  for (const v of view.versions.values()) if (v.assetId === assetId && !v.deleted) n++;
-  return n;
+/** Live versions per asset, in one pass. */
+export function versionCounts(view: LibraryView): Map<AssetId, number> {
+  const counts = new Map<AssetId, number>();
+  for (const v of view.versions.values()) if (!v.deleted) counts.set(v.assetId, (counts.get(v.assetId) ?? 0) + 1);
+  return counts;
 }
 
 export interface SidebarCounts {

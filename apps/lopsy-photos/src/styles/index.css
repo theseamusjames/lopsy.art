@@ -13,6 +13,18 @@ body,
   height: 100%;
 }
 
+/* Lopsy Photos' own tokens: the five colour labels, stars and tile backing. */
+:root {
+  --label-red: #e5534b;
+  --label-yellow: #e3b341;
+  --label-green: #57ab5a;
+  --label-blue: #539bf5;
+  --label-purple: #b083f0;
+  --star-on: #f0c24a;
+  --tile-bg: #161616;
+  --viewer-bg: #111111;
+}
+
 body {
   background: var(--color-bg-primary);
   color: var(--color-text-primary);

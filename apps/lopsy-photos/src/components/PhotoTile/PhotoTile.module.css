@@ -1,0 +1,114 @@
+.tile {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-md);
+  background: var(--tile-bg);
+  overflow: hidden;
+  cursor: default;
+  user-select: none;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
+.tile:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.tile[aria-selected='true'] {
+  outline-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.tile[data-focused='true'] {
+  box-shadow: inset 0 0 0 4px var(--color-bg-primary), inset 0 0 0 5px var(--color-text-secondary);
+}
+
+.tile[aria-selected='true'][data-focused='true'] {
+  box-shadow: inset 0 0 0 4px var(--color-accent);
+}
+
+.frame {
+  position: absolute;
+  inset: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 2px;
+  box-shadow: var(--shadow-sm);
+}
+
+.placeholder {
+  width: 80%;
+  height: 60%;
+  border-radius: 2px;
+  background: var(--color-bg-tertiary);
+}
+
+.tile[data-aside='true'] .frame {
+  opacity: 0.3;
+}
+
+.overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  pointer-events: none;
+}
+
+.marks,
+.badges {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.label {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-round);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.label[data-label='red'] {
+  background: var(--label-red);
+}
+.label[data-label='yellow'] {
+  background: var(--label-yellow);
+}
+.label[data-label='green'] {
+  background: var(--label-green);
+}
+.label[data-label='blue'] {
+  background: var(--label-blue);
+}
+.label[data-label='purple'] {
+  background: var(--label-purple);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--color-text-primary);
+  font-size: 9px;
+  font-weight: var(--font-weight-ui);
+  letter-spacing: 0.3px;
+}
