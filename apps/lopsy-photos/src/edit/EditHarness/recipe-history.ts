@@ -1,6 +1,7 @@
 /** The edit harness's in-memory history: a recipe with undo and redo. */
 
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
+import type { HistoryStep } from '@lopsy/photos-core/library/types';
 
 export interface RecipeHistory {
   readonly past: readonly { readonly recipe: Recipe; readonly label: string }[];
@@ -42,4 +43,16 @@ export function redoStep(history: RecipeHistory): RecipeHistory {
     presentLabel: next.label,
     future: rest,
   };
+}
+
+/** The steps as `LibrarySession.history` lists them: oldest first, undone ones inactive. */
+export function historySteps(history: RecipeHistory): HistoryStep[] {
+  const states = [...history.past.map((p) => p.label), history.presentLabel, ...history.future.map((f) => f.label)];
+  return states.slice(1).map((label, i) => ({
+    id: `step-${i + 1}`,
+    label,
+    hlc: String(i + 1).padStart(6, '0'),
+    active: i + 1 <= history.past.length,
+    own: true,
+  }));
 }

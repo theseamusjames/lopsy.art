@@ -7,6 +7,11 @@ import {
   cropPixels,
   dragCrop,
   fitAspect,
+  inscribedScale,
+  inverseRotation,
+  levelAngle,
+  rotatedBounds,
+  straightenedCrop,
   fromFramed,
   isFullCrop,
   recipeCrop,
@@ -125,5 +130,58 @@ describe('dragCrop', () => {
     expect(r.width).toBeCloseTo(0.6);
     expect(r.height).toBeCloseTo(0.6);
     expect(r.y + r.height / 2).toBeCloseTo(0.4);
+  });
+});
+
+describe('straighten', () => {
+  it('keeps the whole frame at 0 and shrinks as the angle grows', () => {
+    expect(inscribedScale(640, 480, 0)).toBe(1);
+    const k5 = inscribedScale(640, 480, 5);
+    const k10 = inscribedScale(640, 480, -10);
+    expect(k5).toBeLessThan(1);
+    expect(k10).toBeLessThan(k5);
+  });
+
+  it('fits the inscribed rectangle inside the turned image', () => {
+    const w = 640;
+    const h = 480;
+    for (const deg of [3, 12, 30, -20]) {
+      const k = inscribedScale(w, h, deg);
+      const t = (deg * Math.PI) / 180;
+      for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+        const x = (sx * k * w) / 2;
+        const y = (sy * k * h) / 2;
+        const xr = x * Math.cos(t) + y * Math.sin(t);
+        const yr = -x * Math.sin(t) + y * Math.cos(t);
+        expect(Math.abs(xr)).toBeLessThanOrEqual(w / 2 + 1e-6);
+        expect(Math.abs(yr)).toBeLessThanOrEqual(h / 2 + 1e-6);
+      }
+    }
+  });
+
+  it('keeps a user crop inside the inscribed rectangle', () => {
+    expect(straightenedCrop(null, 0, 640, 480)).toBeNull();
+    const k = inscribedScale(640, 480, 10);
+    const r = straightenedCrop(null, 10, 640, 480);
+    expect(r?.width).toBeCloseTo(k);
+    expect(r?.x).toBeCloseTo((1 - k) / 2);
+    const user = straightenedCrop({ x: 0, y: 0.4, width: 0.5, height: 0.2 }, 10, 640, 480);
+    expect(user?.x).toBeCloseTo((1 - k) / 2);
+    expect(user?.y).toBeCloseTo(0.4);
+  });
+
+  it('builds the inverse turn and the turned bounds', () => {
+    expect(Array.from(inverseRotation(0)).map((v) => v + 0)).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+    const r = rotatedBounds(100, 50, 90);
+    expect(r.width).toBe(50);
+    expect(r.height).toBe(100);
+    expect(r.x).toBe(25);
+  });
+
+  it('levels a drawn line', () => {
+    expect(levelAngle({ x: 0, y: 0 }, { x: 100, y: 10 })).toBeCloseTo(-5.71, 1);
+    expect(levelAngle({ x: 0, y: 0 }, { x: 100, y: -10 })).toBeCloseTo(5.71, 1);
+    expect(levelAngle({ x: 0, y: 0 }, { x: 5, y: 100 })).toBeCloseTo(2.86, 1);
+    expect(levelAngle({ x: 0, y: 0 }, { x: 0, y: 0 })).toBe(0);
   });
 });
