@@ -224,6 +224,17 @@ export function EditView({
     }
   }, [isBusy, isReady, refreshPreviews, savedRecipe, onClose]);
 
+  /** Another photo from the filmstrip, once this one's previews show its edit. */
+  const openFromStrip = useCallback(
+    (assetId: string) => {
+      if (!filmstrip) return;
+      const open = () => filmstrip.onOpen(assetId);
+      if (isReady) void refreshPreviews(savedRecipe).finally(open);
+      else open();
+    },
+    [filmstrip, isReady, refreshPreviews, savedRecipe],
+  );
+
   // ---- editing -------------------------------------------------------
 
   const commit = useCallback(
@@ -341,8 +352,8 @@ export function EditView({
   // Set once the tools below are defined; the key handler reads it.
   const toolShortcuts = useRef<(shortcut: 'crop' | 'linearArea' | 'radialArea') => void>(() => undefined);
   const isToolOpen = isCropping || isLevelling || isCopyDialogOpen || isHelpOpen;
-  const handlers = useRef({ onUndo, onRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => {} });
-  handlers.current = { onUndo, onRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => void handleClose() };
+  const handlers = useRef({ onUndo, onRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => {}, openFromStrip });
+  handlers.current = { onUndo, onRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => void handleClose(), openFromStrip };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -356,7 +367,7 @@ export function EditView({
         const next = neighbourId(strip.items.map((i) => i.id), strip.currentId, shortcut === 'next' ? 1 : -1);
         if (!next) return;
         e.preventDefault();
-        strip.onOpen(next);
+        h.openFromStrip(next);
         return;
       }
       if (shortcut === 'crop' || shortcut === 'linearArea' || shortcut === 'radialArea') {
@@ -1018,7 +1029,7 @@ export function EditView({
           onClose={() => setIsCopyDialogOpen(false)}
         />
       )}
-      {filmstrip && <Filmstrip items={filmstrip.items} currentId={filmstrip.currentId} onOpen={filmstrip.onOpen} />}
+      {filmstrip && <Filmstrip items={filmstrip.items} currentId={filmstrip.currentId} onOpen={openFromStrip} />}
     </div>
   );
 }
