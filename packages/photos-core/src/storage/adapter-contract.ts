@@ -100,6 +100,17 @@ export function runAdapterContract(name: string, makeAdapter: () => Promise<Stor
       expect(ids(await adapter.listChildren(folder.id))).toEqual([file.id]);
     });
 
+    it('reports read progress ending at the content size', async () => {
+      const file = await adapter.createFile({ parentId: root.id, name: 'r.bin', mimeType: 'application/octet-stream' }, new Blob([new Uint8Array(3000)]));
+      const whole: [number, number | null][] = [];
+      expect((await adapter.readContent(file.id, { onProgress: (received, total) => whole.push([received, total]) })).size).toBe(3000);
+      expect(whole[whole.length - 1]).toEqual([3000, 3000]);
+      const ranged: [number, number | null][] = [];
+      await adapter.readContent(file.id, { range: { start: 100, end: 600 }, onProgress: (received, total) => ranged.push([received, total]) });
+      expect(ranged[ranged.length - 1]).toEqual([500, 500]);
+      for (let i = 1; i < whole.length; i++) expect(whole[i]?.[0]).toBeGreaterThanOrEqual(whole[i - 1]?.[0] ?? 0);
+    });
+
     it('creates empty files', async () => {
       const file = await adapter.createFile({ parentId: root.id, name: 'empty.txt', mimeType: 'text/plain' }, new Blob([]));
       expect(file.size).toBe(0);

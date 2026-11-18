@@ -214,8 +214,11 @@ export class LocalFolderAdapter implements StorageAdapter {
       const dir = await this.dirAt(path.slice(0, -1), false);
       const file = await (await dir.getFileHandle(diskNameOf(entry))).getFile();
       const blob = file.slice(0, file.size, entry.mimeType);
-      if (!options.range) return blob;
-      return blob.slice(options.range.start, Math.max(options.range.start, options.range.end), entry.mimeType);
+      const result = options.range
+        ? blob.slice(options.range.start, Math.max(options.range.start, options.range.end), entry.mimeType)
+        : blob;
+      options.onProgress?.(result.size, result.size);
+      return result;
     });
   }
 

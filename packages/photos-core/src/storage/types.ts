@@ -72,6 +72,12 @@ export interface ReadOptions {
   readonly signal?: AbortSignal;
   /** Byte range, `end` exclusive. Reads the whole file when absent. */
   readonly range?: { readonly start: number; readonly end: number };
+  /**
+   * Called as content arrives. Totals are in bytes and cover the requested
+   * range; `totalBytes` is null when the backend does not say. Ends with
+   * `receivedBytes` equal to the content's size.
+   */
+  readonly onProgress?: (receivedBytes: number, totalBytes: number | null) => void;
 }
 
 export interface StorageChange {

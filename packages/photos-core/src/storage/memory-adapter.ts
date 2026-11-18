@@ -162,8 +162,11 @@ export class MemoryAdapter implements StorageAdapter {
     await this.enter('readContent', options.signal);
     const entry = this.index.requireFile(id);
     const content = this.contents.get(id) ?? new Blob([]);
-    if (!options.range) return content;
-    return content.slice(options.range.start, Math.max(options.range.start, options.range.end), entry.mimeType);
+    const result = options.range
+      ? content.slice(options.range.start, Math.max(options.range.start, options.range.end), entry.mimeType)
+      : content;
+    options.onProgress?.(result.size, result.size);
+    return result;
   }
 
   async listChildren(parentId: FileId): Promise<StoredFile[]> {
