@@ -794,8 +794,9 @@ function runJob(setup: JobSetup): ImportJob {
       throw new Stopped();
     }
     const { assetId, versionId } = added;
-    // Only now, with the checksum verified and the asset in the library, is the staged copy let go.
-    await unstage(work);
+    // Only now, with the checksum verified and the asset saved in the library on this device, is the staged copy let go.
+    // If that save fails the copy stays staged, so a reload can still finish the import.
+    if (await session.whenDurable().then(() => true, warn('saving the new photo on this device'))) await unstage(work);
     let note = previews.error;
     if (work.sidecar) {
       const applied = await applySidecarFile(session, assetId, versionId, work.sidecar, metadata.orientation).catch(() => null);

@@ -211,6 +211,7 @@ export class FakeLibrarySession implements LibrarySession {
     unused('deleteExportPreset');
   }
   async syncNow(): Promise<void> {}
+  async whenDurable(): Promise<void> {}
   getSyncStatus(): SyncStatus {
     return { state: 'idle', pendingOps: 0, lastSyncedAt: null, error: null };
   }
