@@ -10,6 +10,7 @@ import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import { LabelPicker } from '../LabelPicker/LabelPicker';
 import { VersionStrip } from '../VersionStrip/VersionStrip';
+import { DocumentList } from '../DocumentList/DocumentList';
 import { Preview, type ZoomPoint } from '../Preview/Preview';
 import { Stars } from '../Stars/Stars';
 import styles from './SingleView.module.css';
@@ -72,6 +73,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
       </div>
 
       {asset && focus !== null && <VersionStrip itemId={focus} />}
+      {asset && <DocumentList assetId={asset.id} />}
       {asset && (
         <div className={styles.bar}>
           <Stars rating={asset.rating} size={18} onChange={(r) => setRating(r, orderedIds, [asset.id])} />
