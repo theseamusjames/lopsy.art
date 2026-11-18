@@ -92,6 +92,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
               type="button"
               className={`${styles.badge} ${styles.burst}`}
               title={burstOpen ? 'Fold this burst back into one photo' : `A burst of ${burst} photos: show them all`}
+              aria-label={`Burst of ${burst} photos`}
               aria-expanded={burstOpen}
               onClick={(e) => {
                 e.stopPropagation();
@@ -111,6 +112,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
                   ? 'Fold the Lopsy documents back behind this photo'
                   : `${documents} Lopsy document${documents === 1 ? '' : 's'} made from this photo: show ${documents === 1 ? 'it' : 'them'}`
               }
+              aria-label={`${documents} Lopsy document${documents === 1 ? '' : 's'}`}
               aria-expanded={burstOpen}
               onClick={(e) => {
                 e.stopPropagation();
