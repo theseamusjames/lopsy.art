@@ -19,6 +19,8 @@ interface PhotoTileProps {
 export const PhotoTile = memo(function PhotoTile({ assetId, selected, focused, onPick, onOpen }: PhotoTileProps) {
   const view = useLibraryView();
   const counts = useVersionCounts();
+  // Everything in the Set aside list is set aside; dimming it all would hide nothing.
+  const inSetAsideList = useUi((s) => s.collection.kind === 'set-aside');
   const asset = view.assets.get(assetId);
   const version = asset ? view.versions.get(asset.primaryVersionId) : undefined;
   const url = usePreviewUrl(version?.thumb ?? null, 'thumb');
@@ -33,7 +35,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId, selected, focused, o
       role="gridcell"
       aria-selected={selected}
       data-focused={focused}
-      data-aside={asset.setAside}
+      data-aside={asset.setAside && !inSetAsideList}
       data-asset-id={asset.id}
       title={asset.fileName}
       draggable

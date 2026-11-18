@@ -32,7 +32,15 @@
 .controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  min-width: 0;
+}
+
+.views {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .controlLabel {
@@ -57,7 +65,7 @@
 }
 
 .search input {
-  width: 180px;
+  width: clamp(110px, 14vw, 180px);
   border: none;
   background: transparent;
   color: var(--color-text-primary);
@@ -90,7 +98,7 @@
 }
 
 .size input {
-  width: 96px;
+  width: 80px;
   -webkit-appearance: none;
   appearance: none;
   height: 4px;

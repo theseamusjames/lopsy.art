@@ -106,6 +106,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           />
         </label>
 
+        <span className={styles.views}>
         <span className={styles.divider} />
         <IconButton label="Look at one photo (Space)" icon={<Maximize size={16} />} onClick={() => runCommand('open-single', orderedIds)} />
         <IconButton
@@ -116,6 +117,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
         />
         <IconButton label="Sort through full screen (F)" icon={<ScanEye size={16} />} onClick={() => openCull(orderedIds)} />
         <IconButton label="Details (I)" icon={<Info size={16} />} active={infoOpen} onClick={toggleInfo} />
+        </span>
       </div>
     </div>
   );
