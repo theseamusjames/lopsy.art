@@ -59,7 +59,10 @@ export interface ChangedEntity {
 
 export const RECIPE_PREFIX = 'recipe.';
 
-const DEFAULT_LEAVES: ReadonlyMap<string, unknown> = new Map(Object.entries(recipeToPaths(DEFAULT_RECIPE)));
+/** Default recipe leaves as JSON text, so array and object leaves compare by value. */
+const DEFAULT_LEAVES: ReadonlyMap<string, string> = new Map(
+  Object.entries(recipeToPaths(DEFAULT_RECIPE)).map(([path, value]) => [path, JSON.stringify(value)]),
+);
 
 /** The log keeps at least this many writes per version (spec: the last 200 steps). */
 const HISTORY_KEEP = 200;
@@ -331,7 +334,7 @@ export class MergeStore {
       const leaf = path.slice(RECIPE_PREFIX.length);
       // A write outside any step (creating a version) only matters to undo where it differs from the
       // default, which undo falls back to; skipping the rest keeps 50,000 fresh versions' logs empty.
-      if (!env.step && DEFAULT_LEAVES.get(leaf) === value) continue;
+      if (!env.step && DEFAULT_LEAVES.get(leaf) === JSON.stringify(value)) continue;
       recipe[leaf] = value;
       any = true;
     }

@@ -15,11 +15,13 @@ export class DecodeError extends Error {
 
 /**
  * Inflates and decodes UTF-8, refusing output past `maxBytes` so a small
- * hostile file cannot expand without bound.
+ * hostile file cannot expand without bound. Bytes are decoded as they
+ * arrive, so the inflated bytes and the text are never both held whole.
  */
 export async function gunzipText(blob: Blob, maxBytes: number): Promise<string> {
-  const chunks: Uint8Array[] = [];
+  const parts: string[] = [];
   let total = 0;
+  const decoder = new TextDecoder('utf-8', { fatal: true });
   try {
     const reader = blob.stream().pipeThrough(new DecompressionStream('gzip')).getReader();
     for (;;) {
@@ -30,21 +32,15 @@ export async function gunzipText(blob: Blob, maxBytes: number): Promise<string> 
         await reader.cancel();
         throw new DecodeError(`Decompressed data exceeds ${maxBytes} bytes`);
       }
-      chunks.push(value);
+      parts.push(decoder.decode(value, { stream: true }));
     }
+    parts.push(decoder.decode());
   } catch (error) {
     if (error instanceof DecodeError) throw error;
+    if (error instanceof TypeError && /encod|decod/i.test(error.message)) {
+      throw new DecodeError('Data is not valid UTF-8', { cause: error });
+    }
     throw new DecodeError('Data is not valid gzip', { cause: error });
   }
-  const joined = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    joined.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(joined);
-  } catch (error) {
-    throw new DecodeError('Data is not valid UTF-8', { cause: error });
-  }
+  return parts.join('');
 }

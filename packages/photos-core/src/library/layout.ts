@@ -78,6 +78,12 @@ export interface LibraryManifest {
 
 export interface EnsureLibraryOptions {
   readonly now?: () => number;
+  /**
+   * Use this library when its root exists, even if it is not the lowest
+   * ID: a device keeps writing where its saved state is, and reads the
+   * other roots' journals, so duplicate roots lose nothing.
+   */
+  readonly preferLibraryId?: string;
 }
 
 export interface EnsuredLibrary {
@@ -86,6 +92,34 @@ export interface EnsuredLibrary {
   readonly manifest: LibraryManifest;
   /** True when this call created the library's top folder. */
   readonly created: boolean;
+  /**
+   * Journal folders of other library roots of this account: two devices
+   * that set up at the same moment each make one. Everyone writes to the
+   * chosen root (lowest ID) and reads these too, so nothing written to the
+   * other is lost; ops merge in any order, so merging the journals is valid.
+   */
+  readonly otherJournals: readonly { readonly libraryId: string; readonly journalId: FileId }[];
+}
+
+async function childByRole(adapter: StorageAdapter, parentId: FileId, role: string): Promise<StoredFile | undefined> {
+  return pick((await adapter.listChildren(parentId)).filter((c) => c.isFolder && c.properties['lp.role'] === role));
+}
+
+/** Finds, without creating anything, the journal folders of the roots that were not chosen. */
+async function otherJournalsOf(
+  adapter: StorageAdapter,
+  roots: readonly StoredFile[],
+  chosen: FileId,
+): Promise<{ libraryId: string; journalId: FileId }[]> {
+  const out: { libraryId: string; journalId: FileId }[] = [];
+  for (const root of roots) {
+    const libraryId = root.properties['lp.lib'];
+    if (root.id === chosen || !libraryId) continue;
+    const data = await childByRole(adapter, root.id, ROLES.data);
+    const journal = data ? await childByRole(adapter, data.id, ROLES.journal) : undefined;
+    if (journal) out.push({ libraryId, journalId: journal.id });
+  }
+  return out;
 }
 
 function tags(libraryId: string, role: string): Record<string, string> {
@@ -150,7 +184,8 @@ function jsonBlob(value: unknown): Blob {
 export async function ensureLibrary(adapter: StorageAdapter, options: EnsureLibraryOptions = {}): Promise<EnsuredLibrary> {
   const now = options.now ?? Date.now;
   let created = false;
-  let root = pick((await adapter.findByProperty('lp.role', ROLES.library)).filter((f) => f.isFolder));
+  const roots = (await adapter.findByProperty('lp.role', ROLES.library)).filter((f) => f.isFolder);
+  let root = roots.find((r) => options.preferLibraryId !== undefined && r.properties['lp.lib'] === options.preferLibraryId) ?? pick(roots);
   if (!root) {
     const top = await adapter.getRoot();
     root = await adapter.createFolder(top.id, FOLDER_NAMES.library, tags(newId(now()), ROLES.library));
@@ -215,6 +250,7 @@ export async function ensureLibrary(adapter: StorageAdapter, options: EnsureLibr
   return {
     created,
     manifest,
+    otherJournals: await otherJournalsOf(adapter, roots, root.id),
     layout: {
       libraryId,
       rootId: root.id,

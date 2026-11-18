@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryLocalStore } from './local-store';
 import { DEFAULT_RECIPE, recipeHash } from './recipe';
-import { openLibrary } from './session';
+import { NotADocumentError, openLibrary } from './session';
 import { TestAdapter } from './test-support/test-adapter';
 import type { LibrarySession, NewAsset } from './types';
 
@@ -127,35 +127,33 @@ describe('undo across devices', () => {
 });
 
 describe('stale local writes', () => {
-  it('does not write values that are already there', async () => {
+  it('writes an explicit command in full, so it beats an older unseen change', async () => {
     const { a, b, versionId, tick } = await twoDevices();
     const assetId = [...a.getView().assets.keys()][0]!;
     b.setMarks([assetId], { rating: 4 });
     tick(1000);
     await sync(b);
-    // A has not seen B's rating; re-applying a mark A already shows must not override it.
+    // A has not seen B's rating; the user's later "rating 0" here is the newest intent.
     const before = a.getSyncStatus().pendingOps;
     a.setMarks([assetId], { rating: 0, title: '' });
-    a.setKeyword([assetId], 'x', false);
     a.editRecipe(versionId, { 'tone.exposure': 0 }, 'Nothing');
-    a.setRecipe(versionId, DEFAULT_RECIPE, 'Reset all');
-    expect(a.getSyncStatus().pendingOps).toBe(before);
+    expect(a.getSyncStatus().pendingOps).toBe(before + 2);
+    // A recipe command that changes nothing here leaves no history step.
     expect(a.history(versionId)).toEqual([]);
     await sync(a, b);
-    expect(a.getView().assets.get(assetId)?.rating).toBe(4);
+    expect(a.getView().assets.get(assetId)?.rating).toBe(0);
+    expect(b.getView().assets.get(assetId)?.rating).toBe(0);
   });
 
-  it('Reset all writes only the fields that differ', async () => {
+  it('Reset all beats an older offline edit to a field it leaves at the default', async () => {
     const { a, b, versionId, tick } = await twoDevices();
-    a.editRecipe(versionId, { 'tone.exposure': 1 }, 'Exposure');
-    await sync(a, b);
+    // B, offline, raises exposure; later A (which never saw it) resets everything.
+    b.editRecipe(versionId, { 'tone.exposure': 1 }, 'Exposure');
     tick(1000);
-    b.editRecipe(versionId, { 'tone.contrast': 40 }, 'Contrast');
-    tick(1000);
-    // A has not seen B's contrast yet: its reset only touches exposure, so B's edit survives.
     a.setRecipe(versionId, DEFAULT_RECIPE, 'Reset all');
     await sync(a, b);
-    expect(tone(a, versionId)).toMatchObject({ exposure: 0, contrast: 40 });
+    expect(tone(a, versionId).exposure).toBe(0);
+    expect(tone(b, versionId).exposure).toBe(0);
   });
 
   it('drops a preview rendered from an older edit', async () => {
@@ -167,5 +165,23 @@ describe('stale local writes', () => {
     const hash = recipeHash(a.getView().versions.get(versionId)!.recipe);
     a.setPreview(versionId, 'thumb', { fileId: 'new', recipeHash: hash, width: 512, height: 512 });
     expect(a.getView().versions.get(versionId)?.thumb?.fileId).toBe('new');
+  });
+});
+
+describe('setAssetFacts', () => {
+  it('updates a document after an in-place re-save, and refuses originals', async () => {
+    const { a, b } = await twoDevices();
+    const original = [...a.getView().assets.keys()][0]!;
+    const { assetId } = a.addAsset({ ...PHOTO, kind: 'document', format: 'lopsy', fileId: 'doc-1', renderFileId: 'r-1' });
+    a.setAssetFacts(assetId, { sha256: 'b'.repeat(64), byteSize: 99, width: 640, height: 480, renderFileId: 'r-2' });
+    await sync(a, b);
+    expect(b.getView().assets.get(assetId)).toMatchObject({
+      sha256: 'b'.repeat(64),
+      byteSize: 99,
+      width: 640,
+      height: 480,
+      renderFileId: 'r-2',
+    });
+    expect(() => a.setAssetFacts(original, { sha256: 'c'.repeat(64) })).toThrow(NotADocumentError);
   });
 });
