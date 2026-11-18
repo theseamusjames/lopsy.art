@@ -186,28 +186,28 @@ describe('startImport', () => {
     expect(session.getView().assets.size).toBe(1);
   });
 
-  it('fails one item when its upload fails, without stopping the others', async () => {
+  it('leaves an item waiting to retry when its upload fails, without stopping the others', async () => {
     const { adapter, session, ctx } = await setup();
     adapter.hooks.failCreate = (file) =>
       file.name === 'BAD.JPG' ? new StorageError('quota-exceeded', 'The storage is full') : null;
     const result = await startImport([jpegFile('BAD.JPG'), jpegFile('GOOD.JPG', undefined, 1)], ctx()).finished;
     expect(result.items.map((i) => [i.state, i.error])).toEqual([
-      ['failed', 'The storage is full'],
+      ['queued', 'Waiting to retry: The storage is full'],
       ['done', null],
     ]);
     expect([...session.getView().assets.values()].map((a) => a.fileName)).toEqual(['GOOD.JPG']);
   });
 
-  it('fails and trashes an upload whose checksum does not match', async () => {
+  it('trashes an upload whose checksum does not match, retries, then waits', async () => {
     const { adapter, session, ctx } = await setup();
     adapter.hooks.reportSha = (file) => (file.properties?.['lp.role'] === 'original' ? 'deadbeef' : null);
-    const result = await startImport([jpegFile('X.JPG')], ctx()).finished;
-    expect(result.items[0]?.state).toBe('failed');
-    expect(result.items[0]?.error).toMatch(/checksum/i);
+    const result = await startImport([jpegFile('X.JPG')], ctx({ retryDelaysMs: [0, 0] })).finished;
+    expect(result.items[0]?.state).toBe('queued');
+    expect(result.items[0]?.error).toMatch(/^Waiting to retry: checksum/i);
     expect(session.getView().assets.size).toBe(0);
     const uploaded = [...adapter.files.values()].map((e) => e.file).filter((f) => f.name === 'X.JPG');
-    expect(uploaded).toHaveLength(1);
-    expect(uploaded[0]?.trashed).toBe(true);
+    expect(uploaded).toHaveLength(3);
+    expect(uploaded.every((f) => f.trashed)).toBe(true);
   });
 
   it('keeps to the concurrency limit and reports upload progress', async () => {

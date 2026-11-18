@@ -59,6 +59,10 @@ export interface ImportContext {
   readonly queueStore?: ImportQueueStore;
   /** Holds each file's copy until its upload is verified. */
   readonly staging?: StagingStore;
+  /** Waits between upload attempts; after the last, the item waits for a resume. */
+  readonly retryDelaysMs?: readonly number[];
+  /** Identifies this tab in the queue's leases; one per page load by default. */
+  readonly ownerId?: string;
 }
 
 export interface ResumeContext {
@@ -67,16 +71,36 @@ export interface ResumeContext {
   readonly queueStore: ImportQueueStore;
   readonly staging?: StagingStore;
   readonly now?: () => Date;
+  readonly retryDelaysMs?: readonly number[];
+  readonly ownerId?: string;
+  /** How long a job's heartbeat holds it for its owner. Default 30 s. */
+  readonly leaseMs?: number;
+}
+
+export const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000, 60_000];
+export const DEFAULT_LEASE_MS = 30_000;
+const HEARTBEAT_MS = 10_000;
+
+/** This page load's identity in the queue's leases. */
+const THIS_TAB = crypto.randomUUID();
+
+/** Where an item's copy is staged: per job and item, so two jobs or two equal files never share one. */
+export function itemStagingKey(jobId: string, index: number): string {
+  return `${jobId}.${index}`;
 }
 
 /** Where a photo's `.xmp` sidecar is staged, next to the photo's own copy. */
-export function sidecarStagingKey(sha256: string): string {
-  return `${sha256}.xmp`;
+export function sidecarStagingKey(stagingKey: string): string {
+  return `${stagingKey}.xmp`;
 }
 
-/** The key that lets a resumable adapter continue this file's upload after a reload. */
-export function uploadResumeKey(libraryId: string, sha256: string): string {
-  return `${libraryId}:${sha256}`;
+/**
+ * The key that lets a resumable adapter continue this file's upload after
+ * a reload. Per planned asset, not per content, so a stale upload session
+ * for the same bytes can never stand in for this one.
+ */
+export function uploadResumeKey(libraryId: string, assetId: AssetId): string {
+  return `${libraryId}:${assetId}`;
 }
 
 interface Deferred<T> {
@@ -95,6 +119,7 @@ function deferred<T>(): Deferred<T> {
 /** What a resumed item already settled before the reload. */
 interface Settled {
   readonly sha256: string;
+  readonly stagingKey: string;
   readonly pairedWith: AssetId | null;
   readonly folderSegments: readonly string[] | null;
   readonly destinationName: string | null;
@@ -128,6 +153,10 @@ interface Work extends WorkSpec {
   stagedKey: string | null;
   /** The staging key of this item's sidecar, deleted with the photo's copy. */
   sidecarKey: string | null;
+  /** Chosen once, so a retried upload keeps its name. */
+  destinationName: string | null;
+  /** Upload attempts that failed and were retried. */
+  attempts: number;
 }
 
 /** What the prepare stage settled for the upload stage. */
@@ -154,6 +183,9 @@ class Stopped extends Error {
   }
 }
 
+/** An upload failure worth trying again, that is not a StorageError. */
+class RetryableUpload extends Error {}
+
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return String(error);
@@ -170,6 +202,8 @@ interface JobSetup {
   readonly albumId: AlbumId | null;
   readonly queueStore: ImportQueueStore | null;
   readonly staging: StagingStore | null;
+  readonly retryDelaysMs: readonly number[];
+  readonly ownerId: string;
   readonly specs: readonly WorkSpec[];
   /** Persisting the job record; work waits for it. */
   readonly saved: Promise<void>;
@@ -189,11 +223,14 @@ function jobRecord(setup: Omit<JobSetup, 'saved'>, items: readonly ImportItemRec
     keywords: setup.keywords,
     albumId: setup.albumId,
     items,
+    owner: setup.ownerId,
+    heartbeatAt: setup.now().toISOString(),
   };
 }
 
 function newItemRecord(spec: WorkSpec, index: number): ImportItemRecord {
   return {
+    ...(spec.settled ? { stagingKey: spec.settled.stagingKey, sidecarStaged: spec.sidecar !== null } : {}),
     index,
     fileName: spec.fileName,
     byteSize: spec.byteSize,
@@ -247,6 +284,8 @@ export function startImport(files: readonly File[], ctx: ImportContext): ImportJ
     albumId: ctx.albumId ?? null,
     queueStore: ctx.queueStore ?? null,
     staging: ctx.staging ?? null,
+    retryDelaysMs: ctx.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS,
+    ownerId: ctx.ownerId ?? THIS_TAB,
     specs,
   };
   const saved =
@@ -258,14 +297,23 @@ export function startImport(files: readonly File[], ctx: ImportContext): ImportJ
 
 /**
  * Continues the library's unfinished imports after a reload, as one new
- * job, from their staged copies. Items that never reached staging, or
- * whose staged copy is gone, fail with the reason. Null when nothing is
- * unfinished.
+ * job, from their staged copies. Jobs another tab (or this one) is still
+ * running, by a heartbeat younger than the lease, are left alone. Items
+ * that never reached staging, or whose staged copy is gone, fail with the
+ * reason. Null when nothing is unfinished.
  */
 export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | null> {
   const { session, queueStore } = ctx;
   const now = ctx.now ?? (() => new Date());
-  const records = (await queueStore.listJobs(session.libraryId)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const leaseMs = ctx.leaseMs ?? DEFAULT_LEASE_MS;
+  const held = (record: ImportJobRecord) => {
+    if (!record.owner || !record.heartbeatAt) return false;
+    const age = now().getTime() - Date.parse(record.heartbeatAt);
+    return Number.isFinite(age) && age < leaseMs;
+  };
+  const records = (await queueStore.listJobs(session.libraryId))
+    .filter((record) => !held(record))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const specs: WorkSpec[] = [];
   let options: ImportOptions | null = null;
   let recipe: Recipe | null = null;
@@ -281,13 +329,14 @@ export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | nul
       let content: Blob | null = null;
       let sidecar: Blob | null = null;
       let resumeError: string | null = null;
-      if (item.sha256 === null || !item.staged) {
+      const stagingKey = item.stagingKey ?? item.sha256;
+      if (item.sha256 === null || stagingKey === null || !item.staged) {
         resumeError = 'Interrupted before it was staged on this device; import the file again';
       } else {
-        content = ctx.staging ? await ctx.staging.get(item.sha256).catch(() => null) : null;
+        content = ctx.staging ? await ctx.staging.get(stagingKey).catch(() => null) : null;
         if (!content) resumeError = 'Its staged copy on this device is gone; import the file again';
         else if (item.sidecarStaged && ctx.staging) {
-          sidecar = await ctx.staging.get(sidecarStagingKey(item.sha256)).catch(() => null);
+          sidecar = await ctx.staging.get(sidecarStagingKey(stagingKey)).catch(() => null);
         }
       }
       specs.push({
@@ -297,10 +346,11 @@ export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | nul
         lastModified: item.lastModified,
         assetId: item.plannedAssetId,
         settled:
-          item.sha256 === null
+          item.sha256 === null || stagingKey === null
             ? null
             : {
                 sha256: item.sha256,
+                stagingKey,
                 pairedWith: item.pairedWith,
                 folderSegments: item.folderSegments,
                 destinationName: item.destinationName,
@@ -326,6 +376,8 @@ export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | nul
     albumId,
     queueStore,
     staging: ctx.staging ?? null,
+    retryDelaysMs: ctx.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS,
+    ownerId: ctx.ownerId ?? THIS_TAB,
     specs,
   };
   await queueStore.saveJob(jobRecord(base, specs.map(newItemRecord)));
@@ -338,6 +390,7 @@ function runJob(setup: JobSetup): ImportJob {
   const concurrency = Math.max(1, Math.floor(options.concurrency) || 1);
   const abort = new AbortController();
   let stopping: 'cancel' | 'pause' | null = null;
+  let pauseReason = 'Paused';
 
   const items: ImportItem[] = setup.specs.map((spec, index) => ({
     id: `${jobId}:${index}`,
@@ -354,8 +407,10 @@ function runJob(setup: JobSetup): ImportJob {
     read: deferred<PairableFile | null>(),
     outcome: deferred<AssetId | null>(),
     preparedSignal: deferred<void>(),
-    stagedKey: spec.settled && spec.content ? spec.settled.sha256 : null,
-    sidecarKey: spec.settled && spec.content && spec.sidecar ? sidecarStagingKey(spec.settled.sha256) : null,
+    stagedKey: spec.settled && spec.content ? spec.settled.stagingKey : null,
+    sidecarKey: spec.settled && spec.content && spec.sidecar ? sidecarStagingKey(spec.settled.stagingKey) : null,
+    destinationName: spec.settled?.destinationName ?? null,
+    attempts: 0,
   }));
   const worksByAssetId = new Map(works.map((w) => [w.assetId, w]));
 
@@ -627,11 +682,12 @@ function runJob(setup: JobSetup): ImportJob {
       const room = await staging.hasRoomFor(work.byteSize).catch(() => false);
       if (room) {
         try {
-          await staging.put(sha, work.content);
-          work.stagedKey = sha;
+          const key = itemStagingKey(jobId, index);
+          await staging.put(key, work.content);
+          work.stagedKey = key;
           if (work.sidecar) {
-            await staging.put(sidecarStagingKey(sha), work.sidecar);
-            work.sidecarKey = sidecarStagingKey(sha);
+            await staging.put(sidecarStagingKey(key), work.sidecar);
+            work.sidecarKey = sidecarStagingKey(key);
           }
         } catch (error) {
           warn('staging a file')(error);
@@ -640,6 +696,7 @@ function runJob(setup: JobSetup): ImportJob {
       if (work.stagedKey === null) unstagedNote = 'Not staged on this device: closing the tab stops this upload';
     }
     persist(index, {
+      ...(work.stagedKey !== null ? { stagingKey: work.stagedKey } : {}),
       staged: work.stagedKey !== null,
       sidecarStaged: work.sidecarKey !== null,
       pairedWith: pairCandidate,
@@ -686,38 +743,50 @@ function runJob(setup: JobSetup): ImportJob {
       'lp.lib': session.libraryId,
     });
     checkStopped();
-    let stored = work.settled ? await findStoredOriginal(work, sha) : null;
+    let stored = work.settled || work.attempts > 0 ? await findStoredOriginal(work, sha) : null;
     if (!stored) {
-      let name = work.settled?.destinationName ?? null;
+      let name = work.destinationName;
       if (name === null) name = await reserveName(folderId, work.fileName);
       else (await folderNames(folderId)).add(name);
+      work.destinationName = name;
       persist(index, { destinationName: name });
       checkStopped();
-      stored = await session.adapter.createFile(
-        {
-          parentId: folderId,
-          name,
-          mimeType: metadata.mimeType,
-          properties: { 'lp.lib': session.libraryId, 'lp.role': 'original', 'lp.asset': work.assetId, 'lp.sha': sha },
-        },
-        content,
-        {
-          signal: abort.signal,
-          resumeKey: uploadResumeKey(session.libraryId, sha),
-          onProgress: (sentBytes) => patch(index, { sentBytes }, false),
-        },
-      );
+      const newFile = {
+        parentId: folderId,
+        name,
+        mimeType: metadata.mimeType,
+        properties: { 'lp.lib': session.libraryId, 'lp.role': 'original', 'lp.asset': work.assetId, 'lp.sha': sha },
+      };
+      const onProgress = (sentBytes: number) => patch(index, { sentBytes }, false);
+      stored = await session.adapter.createFile(newFile, content, {
+        signal: abort.signal,
+        resumeKey: uploadResumeKey(session.libraryId, work.assetId),
+        onProgress,
+      });
+      if (stored.trashed || stored.properties['lp.asset'] !== work.assetId) {
+        // A resumed session handed back some other upload: start this one afresh.
+        stored = await session.adapter.createFile(newFile, content, { signal: abort.signal, onProgress });
+      }
     }
 
     setState(work, 'verifying', { sentBytes: work.byteSize });
     if (stored.sha256 !== null && stored.sha256.toLowerCase() !== sha) {
       await session.adapter.trash(stored.id).catch(() => undefined);
-      await finish(work, 'failed', { error: 'Checksum mismatch: the stored copy differs from the file' });
-      return null;
+      throw new RetryableUpload('Checksum mismatch: the stored copy differs from the file');
     }
 
     // The original is safely stored: from here the item completes even if stopped, so no stored file is left without its asset.
-    const { assetId, versionId } = addToLibrary(work, metadata, sha, stored.id, pairedWith);
+    let added: { assetId: AssetId; versionId: VersionId };
+    try {
+      added = addToLibrary(work, metadata, sha, stored.id, pairedWith);
+    } catch (error) {
+      // The library cannot be written (read-only, or taken over by another tab): keep everything staged and stop.
+      pauseReason = `Paused: the library could not be updated (${errorMessage(error)})`;
+      stop(queueStore ? 'pause' : 'cancel');
+      throw new Stopped();
+    }
+    const { assetId, versionId } = added;
+    // Only now, with the checksum verified and the asset in the library, is the staged copy let go.
     await unstage(work);
     let note = previews.error;
     if (work.sidecar) {
@@ -739,14 +808,40 @@ function runJob(setup: JobSetup): ImportJob {
     return assetId;
   };
 
+  const isStopped = (error: unknown) =>
+    error instanceof Stopped || (isStorageError(error) && error.code === 'aborted') || stopping !== null;
+
   const failed = async (work: Work, error: unknown) => {
-    const stopped = error instanceof Stopped || (isStorageError(error) && error.code === 'aborted') || stopping !== null;
+    const stopped = isStopped(error);
     if (stopped && stopping === 'pause') {
-      patch(work.index, { state: 'queued', sentBytes: 0, error: 'Paused' });
+      patch(work.index, { state: 'queued', sentBytes: 0, error: pauseReason });
     } else {
       await finish(work, 'failed', { error: stopped ? 'Cancelled' : errorMessage(error) });
     }
   };
+
+  /**
+   * An upload that failed for a reason other than stopping: the staged copy
+   * is kept and the item stays unfinished, waiting for a resume.
+   */
+  const park = (work: Work, error: unknown) => {
+    const note = `Waiting to retry: ${errorMessage(error)}`;
+    patch(work.index, { state: 'queued', sentBytes: 0, error: note });
+    persist(work.index, { state: 'queued', error: note });
+  };
+
+  /** Worth retrying soon: dropped connections, rate limits, server errors, expired sign-in, a bad checksum. */
+  const retryable = (error: unknown) =>
+    error instanceof RetryableUpload || (isStorageError(error) && (error.retryable || error.code === 'auth'));
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, ms);
+      abort.signal.addEventListener('abort', () => {
+        clearTimeout(timer);
+        resolve();
+      }, { once: true });
+    });
 
   // The upload stage takes prepared items in the order they were prepared.
   const ready: { work: Work; prep: Prepared }[] = [];
@@ -797,8 +892,23 @@ function runJob(setup: JobSetup): ImportJob {
       let outcome: AssetId | null = null;
       try {
         if (isTerminal(work.index)) continue;
-        if (stopping) throw new Stopped();
-        outcome = await upload(work, prep);
+        for (;;) {
+          if (stopping) throw new Stopped();
+          try {
+            outcome = await upload(work, prep);
+            break;
+          } catch (error) {
+            if (isStopped(error)) throw error;
+            const delay = setup.retryDelaysMs[work.attempts];
+            if (!retryable(error) || delay === undefined) {
+              park(work, error);
+              break;
+            }
+            work.attempts++;
+            patch(work.index, { state: 'uploading', error: `Retrying in ${Math.round(delay / 1000)} s: ${errorMessage(error)}` });
+            await sleep(delay);
+          }
+        }
       } catch (error) {
         await failed(work, error);
       } finally {
@@ -812,6 +922,13 @@ function runJob(setup: JobSetup): ImportJob {
     return snapshot;
   };
 
+  // The lease: other tabs leave this job alone while its heartbeat is fresh.
+  const heartbeat = queueStore
+    ? setInterval(() => {
+        void queueStore.heartbeat(jobId, setup.ownerId, now().toISOString()).catch(warn('renewing the lease'));
+      }, HEARTBEAT_MS)
+    : null;
+
   const workerCount = Math.min(concurrency, works.length);
   const preparers = Promise.all(Array.from({ length: workerCount }, preparer)).then(() => {
     preparing = false;
@@ -819,9 +936,11 @@ function runJob(setup: JobSetup): ImportJob {
   });
   const uploaders = Promise.all(Array.from({ length: workerCount }, uploader));
   const done = Promise.all([preparers, uploaders]).then(async () => {
+    if (heartbeat !== null) clearInterval(heartbeat);
     await persisted;
-    if (queueStore && works.length > 0 && works.every((w) => isTerminal(w.index))) {
-      await queueStore.deleteJob(jobId).catch(warn('clearing the queue'));
+    if (queueStore && works.length > 0) {
+      if (works.every((w) => isTerminal(w.index))) await queueStore.deleteJob(jobId).catch(warn('clearing the queue'));
+      else await queueStore.heartbeat(jobId, null, now().toISOString()).catch(warn('releasing the lease'));
     }
     finished = true;
     snapshot = null;

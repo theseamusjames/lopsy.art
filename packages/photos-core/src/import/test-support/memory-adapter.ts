@@ -21,6 +21,8 @@ export interface TestAdapterHooks {
   reportSha?: (file: NewFile, real: string) => string | null;
   /** Wait for this before finishing createFile (aborts reject at once). */
   createDelay?: (file: NewFile) => Promise<void> | null;
+  /** Stands in for a resumed upload session: return this (stale) file for a call with a resumeKey. */
+  resumedFile?: (file: NewFile, resumeKey: string) => StoredFile | null;
 }
 
 export class TestMemoryAdapter implements StorageAdapter {
@@ -88,6 +90,8 @@ export class TestMemoryAdapter implements StorageAdapter {
 
   async createFile(file: NewFile, content: Blob, options?: WriteOptions): Promise<StoredFile> {
     this.resumeKeys.push(options?.resumeKey);
+    const resumed = options?.resumeKey ? this.hooks.resumedFile?.(file, options.resumeKey) : null;
+    if (resumed) return resumed;
     this.entry(file.parentId);
     const signal = options?.signal;
     const aborted = () => new StorageError('aborted', 'Upload cancelled');

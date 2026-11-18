@@ -20,8 +20,10 @@ export interface ImportItemRecord {
   readonly error: string | null;
   /** True once the file's copy is in staging, keyed by `sha256`. */
   readonly staged: boolean;
-  /** True once the photo's `.xmp` sidecar is staged too, under `sidecarStagingKey(sha256)`. */
+  /** True once the photo's `.xmp` sidecar is staged too, under `sidecarStagingKey(stagingKey)`. */
   readonly sidecarStaged?: boolean;
+  /** The item's own staging key; older records used `sha256`. */
+  readonly stagingKey?: string;
   /** The pair partner, settled before the file is staged. */
   readonly pairedWith: AssetId | null;
   /** Where the original goes under `Originals/`, once chosen. */
@@ -39,6 +41,10 @@ export interface ImportJobRecord {
   readonly keywords: readonly string[] | null;
   readonly albumId: AlbumId | null;
   readonly items: readonly ImportItemRecord[];
+  /** The tab running the job; null once it stopped. Another tab resumes it only when the lease expired. */
+  readonly owner?: string | null;
+  /** ISO 8601; the owner renews it while the job runs. */
+  readonly heartbeatAt?: string | null;
 }
 
 export interface ImportQueueStore {
@@ -47,6 +53,8 @@ export interface ImportQueueStore {
   updateItem(jobId: string, index: number, patch: Partial<ImportItemRecord>): Promise<void>;
   listJobs(libraryId: string): Promise<ImportJobRecord[]>;
   deleteJob(jobId: string): Promise<void>;
+  /** Sets the job's owner and heartbeat (null owner releases it); no-op when the job is gone. */
+  heartbeat(jobId: string, owner: string | null, at: string): Promise<void>;
 }
 
 function patched(job: ImportJobRecord, index: number, patch: Partial<ImportItemRecord>): ImportJobRecord {
@@ -71,6 +79,11 @@ export class MemoryImportQueueStore implements ImportQueueStore {
 
   async deleteJob(jobId: string): Promise<void> {
     this.jobs.delete(jobId);
+  }
+
+  async heartbeat(jobId: string, owner: string | null, at: string): Promise<void> {
+    const job = this.jobs.get(jobId);
+    if (job) this.jobs.set(jobId, { ...job, owner, heartbeatAt: at });
   }
 }
 
@@ -127,6 +140,14 @@ export class IndexedDbImportQueueStore implements ImportQueueStore {
   async deleteJob(jobId: string): Promise<void> {
     const tx = this.db.transaction(STORE, 'readwrite');
     tx.objectStore(STORE).delete(jobId);
+    await done(tx);
+  }
+
+  async heartbeat(jobId: string, owner: string | null, at: string): Promise<void> {
+    const tx = this.db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const job = (await request(store.get(jobId))) as ImportJobRecord | undefined;
+    if (job) store.put({ ...job, owner, heartbeatAt: at });
     await done(tx);
   }
 
