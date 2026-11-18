@@ -158,6 +158,9 @@ export interface DevelopEngine {
  */
 export const LOPSY_LAYER_MIME = 'application/x-lopsy-layer16';
 
+/** Largest Lopsy layer the engine loads, at 8 bytes a pixel (the handoff's own limit too). */
+const MAX_LOPSY_LAYER_BYTES = 1024 * 1024 * 1024;
+
 /** Long edge of the binned first view of a RAF (`rafRenderBinnedLinear`). */
 const QUICK_VIEW_LONG_EDGE = 2048;
 const JPEG_MIME = 'image/jpeg';
@@ -317,6 +320,8 @@ class PhotoEngine implements DevelopEngine {
     report: (stage: LoadProgress['stage'], fraction: number | null) => void,
   ): Promise<Size> {
     if (source.type === LOPSY_LAYER_MIME) return this.showImage(await this.decodeLopsyLayer(source, signal, report));
+    // Photos sit on opaque black; only a Lopsy layer keeps its transparency.
+    setBackgroundColor(this.engine, 0, 0, 0, 1);
     if (format === 'raf') return this.decodeRaf(source, signal, report);
     if (format === 'dng') return this.decodeDng(source, signal, report);
     if (format === 'png') {
@@ -428,6 +433,8 @@ class PhotoEngine implements DevelopEngine {
     const width = header.getInt32(16, true);
     const height = header.getInt32(20, true);
     if (width <= 0 || height <= 0) throw new Error('The layer from Lopsy has no size');
+    // The engine allocates the full size the header states.
+    if (width * height * 8 > MAX_LOPSY_LAYER_BYTES) throw new Error('The layer from Lopsy is too large to grade');
     report('uploading', null);
     setBackgroundColor(this.engine, 0, 0, 0, 0);
     this.resetLayer(1, 1);

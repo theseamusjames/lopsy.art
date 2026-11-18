@@ -426,6 +426,24 @@ export function parsePhotosSaved(value: unknown): PhotosSavedMessage | null {
   return null;
 }
 
+/** Width and height from a PNG's IHDR (bytes 16-24, big-endian), or null. */
+export function pngDimensions(bytes: ArrayBuffer): { width: number; height: number } | null {
+  if (!isPngBytes(bytes) || bytes.byteLength < 24) return null;
+  const view = new DataView(bytes);
+  if (view.getUint32(12) !== 0x49484452) return null; // 'IHDR'
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+/** The full texture size a 16-bit layer blob's geometry header states (`full_w`, `full_h`), or null. */
+export function layerBlobSize(bytes: ArrayBuffer): { width: number; height: number } | null {
+  if (bytes.byteLength < 24) return null;
+  const view = new DataView(bytes);
+  return { width: view.getInt32(16, true), height: view.getInt32(20, true) };
+}
+
+/** Largest layer, in bytes at 16 bits per channel (width x height x 8), either side accepts to grade. */
+export const MAX_GRADE_BYTES = MAX_FILE_BYTES;
+
 function isSide(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_GRADE_SIDE;
 }
@@ -437,6 +455,11 @@ export function parseLopsyGrade(value: unknown): LopsyGradeMessage | null {
   const { name, width, height, pixels } = layer;
   if (!isName(name) || !isSide(width) || !isSide(height)) return null;
   if (!isArrayBuffer(pixels) || pixels.byteLength < 32 || pixels.byteLength > MAX_FILE_BYTES) return null;
+  // The blob must describe the size the message states, and that size must
+  // fit the budget: the engine allocates what the header says.
+  const blobSize = layerBlobSize(pixels);
+  if (!blobSize || blobSize.width !== width || blobSize.height !== height) return null;
+  if (width * height * 8 > MAX_GRADE_BYTES) return null;
   return { protocol: 1, type: 'lopsy:grade', id: value.id, layer: { name, width, height, pixels } };
 }
 
@@ -457,6 +480,8 @@ export function parsePhotosGraded(value: unknown): PhotosGradedMessage | null {
   if (!envelope(value, 'photos:graded')) return null;
   if (value.ok === true) {
     if (!isFile(value.png, isPngBytes)) return null;
+    const size = pngDimensions(value.png);
+    if (!size || !isSide(size.width) || !isSide(size.height)) return null;
     const recipe = parseGradeRecipe(value.recipe);
     if (!recipe) return null;
     return { protocol: 1, type: 'photos:graded', id: value.id, ok: true, png: value.png, recipe };

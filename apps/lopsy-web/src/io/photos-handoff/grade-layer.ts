@@ -18,7 +18,8 @@ import { clearJsPixelData } from '../../app/store/clear-js-pixel-data';
 import { flushLayerSync } from '../../engine-wasm/engine-sync';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { readLayerBackupBlob } from '../../engine-wasm/gpu-pixel-access';
-import { decodeAndUploadImage } from '../../engine-wasm/wasm-bridge';
+import { decodeAndUploadImage, getLayerTextureDimensions } from '../../engine-wasm/wasm-bridge';
+import { pngDimensions } from '@lopsy/handoff/messages';
 import { photosUrl } from './photos-url';
 import { blobSize, canGradeLayer } from './grade-checks';
 
@@ -40,14 +41,21 @@ export function applyGrade(layerId: string, result: Extract<GradeResult, { kind:
   const engine = getEngine();
   const layer = useEditorStore.getState().document.layers.find((l) => l.id === layerId);
   if (!engine || !layer || layer.type !== 'raster') throw new Error('the layer is no longer in the document.');
+  // The user may have locked or resized the layer while it was being graded.
+  if (!canGradeLayer(layer)) throw new Error(`“${layer.name}” was locked while it was being graded; it is unchanged.`);
+  const current = getLayerTextureDimensions(engine, layerId);
+  if (current[0] !== expected.width || current[1] !== expected.height) {
+    throw new Error(`“${layer.name}” changed size while it was being graded; it is unchanged.`);
+  }
+  // Checked before the engine decodes anything: its decoder allocates what
+  // the PNG header says, so a header claiming a huge image must never reach it.
+  const size = pngDimensions(result.png);
+  if (!size || size.width !== expected.width || size.height !== expected.height) {
+    throw new Error(`the graded layer is ${size?.width ?? 0} × ${size?.height ?? 0}, not ${expected.width} × ${expected.height}.`);
+  }
 
   useEditorStore.getState().pushHistory(GRADE_HISTORY_LABEL);
-  const size = decodeAndUploadImage(engine, layerId, new Uint8Array(result.png));
-  if (size[0] !== expected.width || size[1] !== expected.height) {
-    // Put the original back: a grade of another size is not this layer.
-    useEditorStore.getState().undo();
-    throw new Error(`the graded layer is ${size[0] ?? 0} × ${size[1] ?? 0}, not ${expected.width} × ${expected.height}.`);
-  }
+  decodeAndUploadImage(engine, layerId, new Uint8Array(result.png));
   clearJsPixelData(layerId);
   useEditorStore.setState((s) => ({
     document: {

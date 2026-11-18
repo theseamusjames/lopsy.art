@@ -5,7 +5,9 @@ Drive (or a local folder) and renders edits with the Lopsy engine. This is
 a proof of concept of `docs/lopsy-photos-spec.md`; read the spec before
 changing the design. The repository's map and the rules that apply
 everywhere are in the root `CLAUDE.md`. Running, Google setup, deploying
-and testing: `docs/lopsy-photos-setup.md`.
+and testing: `docs/lopsy-photos-setup.md`. What the app does today, feature
+by feature: `FEATURES.md` (current behaviour only; keep it up to date when
+you change what users see).
 
 ## Where things are
 
