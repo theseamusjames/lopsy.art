@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { StorageError } from '../storage/errors';
-import { resumeImports, startImport } from './importer';
+import { InProcessImportLocks } from './claim-locks';
+import { DEFAULT_LEASE_MS, resumeImports, startImport } from './importer';
 import type { ImportContext } from './importer';
 import { MemoryImportQueueStore } from './queue-store';
 import { MemoryStagingStore } from './staging';
@@ -10,7 +11,7 @@ import { TestMemoryAdapter } from './test-support/memory-adapter';
 import type { PreviewRenderer } from './types';
 
 const DAY = new Date(2026, 10, 18, 12);
-const LATER = () => new Date(DAY.getTime() + 120_000);
+const LATER = () => new Date(DAY.getTime() + DEFAULT_LEASE_MS + 1_000);
 
 function jpegFile(name: string, seed: number): File {
   const exif = buildTiff({
@@ -118,14 +119,87 @@ describe('import integrity', () => {
     expect(await staging.list()).toHaveLength(2);
     expect([...queueStore.jobs.values()][0]?.owner).toBeTruthy();
 
-    // Another tab, while this one runs: nothing to take over.
-    expect(await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: () => DAY, ownerId: 'tab-2' })).toBeNull();
+    // Another tab without Web Locks, while this one runs: nothing to take over.
+    const tab2 = { session, previewRenderer: renderer, queueStore, staging, ownerId: 'tab-2', locks: new InProcessImportLocks() };
+    expect(await resumeImports({ ...tab2, now: () => DAY })).toBeNull();
     // Once the heartbeat is older than the lease, it is taken over.
     adapter.hooks = {};
-    const takeover = await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: LATER, ownerId: 'tab-2' });
+    const takeover = await resumeImports({ ...tab2, now: LATER });
     const result = await takeover?.finished;
     expect(result?.items.map((i) => i.state)).toEqual(['done', 'done']);
     expect(session.getView().assets.size).toBe(2);
+  });
+
+  it('lets only one of two overlapping resumes claim the parked items', async () => {
+    const { adapter, session, queueStore, staging, ctx, originals } = await setup();
+    adapter.hooks.failCreate = (f) => (f.properties?.['lp.role'] === 'original' ? network() : null);
+    await startImport([jpegFile('B.JPG', 2)], ctx()).finished;
+    adapter.hooks = {};
+    const r = { session, previewRenderer: renderer, queueStore, staging };
+    const [a, b] = await Promise.all([resumeImports({ ...r, ownerId: 'tab-1' }), resumeImports({ ...r, ownerId: 'tab-2' })]);
+    await Promise.all([a?.finished, b?.finished]);
+    expect([a, b].filter(Boolean)).toHaveLength(1);
+    expect(originals()).toHaveLength(1);
+    expect(session.getView().assets.size).toBe(1);
+    expect(queueStore.jobs.size).toBe(0);
+  });
+
+  it('lets only one tab claim when two claim the same job at once', async () => {
+    const { adapter, session, queueStore, staging, ctx, originals } = await setup();
+    adapter.hooks.failCreate = (f) => (f.properties?.['lp.role'] === 'original' ? network() : null);
+    await startImport([jpegFile('B.JPG', 2)], ctx()).finished;
+    adapter.hooks = {};
+    // Two tabs without Web Locks: both list the job and take their own lock; the queue's swap decides.
+    const r = { session, previewRenderer: renderer, queueStore, staging };
+    const [a, b] = await Promise.all([
+      resumeImports({ ...r, ownerId: 'tab-1', locks: new InProcessImportLocks() }),
+      resumeImports({ ...r, ownerId: 'tab-2', locks: new InProcessImportLocks() }),
+    ]);
+    await Promise.all([a?.finished, b?.finished]);
+    expect([a, b].filter(Boolean)).toHaveLength(1);
+    expect(originals()).toHaveLength(1);
+  });
+
+  it('never takes over a job whose tab holds its lock, however old its heartbeat', async () => {
+    const { adapter, session, queueStore, staging, ctx } = await setup();
+    let releaseUpload: () => void = () => {};
+    const held = new Promise<void>((r) => (releaseUpload = r));
+    adapter.hooks.createDelay = (file) => (file.properties?.['lp.role'] === 'original' ? held : null);
+    // Stands in for Web Locks: one lock space shared by both tabs.
+    const webLocks = new InProcessImportLocks({ acrossTabs: true });
+    const running = startImport([jpegFile('G.JPG', 7)], ctx({ locks: webLocks }));
+    await vi.waitFor(() => expect(running.getProgress().items[0]?.state).toBe('uploading'));
+    const tab2 = { session, previewRenderer: renderer, queueStore, staging, ownerId: 'tab-2', locks: webLocks };
+    expect(await resumeImports({ ...tab2, now: LATER })).toBeNull();
+    releaseUpload();
+    expect((await running.finished).items[0]?.state).toBe('done');
+    expect(await resumeImports({ ...tab2, now: LATER })).toBeNull();
+    expect(session.getView().assets.size).toBe(1);
+  });
+
+  it('keeps the lease of a hidden tab whose timers run once a minute', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    try {
+      vi.setSystemTime(DAY);
+      const { adapter, session, queueStore, staging, ctx } = await setup();
+      adapter.hooks.createDelay = (file) => (file.properties?.['lp.role'] === 'original' ? new Promise<void>(() => {}) : null);
+      const running = startImport([jpegFile('H.JPG', 8)], ctx({ now: undefined }));
+      await vi.waitFor(() => expect(running.getProgress().items[0]?.state).toBe('uploading'));
+      const tab2 = { session, previewRenderer: renderer, queueStore, staging, ownerId: 'tab-2', locks: new InProcessImportLocks() };
+      // Hidden: a minute passes between heartbeats, and the lease outlasts it.
+      for (let minute = 0; minute < 3; minute++) {
+        vi.setSystemTime(Date.now() + 60_000);
+        expect(await resumeImports(tab2)).toBeNull();
+        await vi.advanceTimersByTimeAsync(10_000);
+      }
+      // The tab is gone: no heartbeat (no timer runs) for longer than the lease, and another tab takes over.
+      vi.setSystemTime(Date.now() + DEFAULT_LEASE_MS + 1_000);
+      adapter.hooks = {};
+      const takeover = await resumeImports(tab2);
+      expect((await takeover?.finished)?.items[0]?.state).toBe('done');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not accept a stale resumed upload belonging to another asset', async () => {

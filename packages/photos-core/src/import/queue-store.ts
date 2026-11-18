@@ -55,6 +55,16 @@ export interface ImportQueueStore {
   deleteJob(jobId: string): Promise<void>;
   /** Sets the job's owner and heartbeat (null owner releases it); no-op when the job is gone. */
   heartbeat(jobId: string, owner: string | null, at: string): Promise<void>;
+  /**
+   * Atomically saves `job` in place of `replaces`, but only if each of them
+   * is still stored exactly as it was read: false, changing nothing, when
+   * one is gone (claimed by someone else) or changed (its owner renewed it).
+   */
+  claimJobs(job: ImportJobRecord, replaces: readonly ImportJobRecord[]): Promise<boolean>;
+}
+
+function unchanged(stored: ImportJobRecord | undefined, read: ImportJobRecord): boolean {
+  return stored !== undefined && JSON.stringify(stored) === JSON.stringify(read);
 }
 
 function patched(job: ImportJobRecord, index: number, patch: Partial<ImportItemRecord>): ImportJobRecord {
@@ -84,6 +94,13 @@ export class MemoryImportQueueStore implements ImportQueueStore {
   async heartbeat(jobId: string, owner: string | null, at: string): Promise<void> {
     const job = this.jobs.get(jobId);
     if (job) this.jobs.set(jobId, { ...job, owner, heartbeatAt: at });
+  }
+
+  async claimJobs(job: ImportJobRecord, replaces: readonly ImportJobRecord[]): Promise<boolean> {
+    if (!replaces.every((read) => unchanged(this.jobs.get(read.id), read))) return false;
+    for (const read of replaces) this.jobs.delete(read.id);
+    this.jobs.set(job.id, structuredClone(job));
+    return true;
   }
 }
 
@@ -149,6 +166,26 @@ export class IndexedDbImportQueueStore implements ImportQueueStore {
     const job = (await request(store.get(jobId))) as ImportJobRecord | undefined;
     if (job) store.put({ ...job, owner, heartbeatAt: at });
     await done(tx);
+  }
+
+  /** One read-write transaction, so overlapping claims from any tab are serialized. */
+  async claimJobs(job: ImportJobRecord, replaces: readonly ImportJobRecord[]): Promise<boolean> {
+    const tx = this.db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    let claimed = true;
+    for (const read of replaces) {
+      const stored = (await request(store.get(read.id))) as ImportJobRecord | undefined;
+      if (!unchanged(stored, read)) {
+        claimed = false;
+        break;
+      }
+    }
+    if (claimed) {
+      for (const read of replaces) store.delete(read.id);
+      store.put(job);
+    }
+    await done(tx);
+    return claimed;
   }
 
   close(): void {
