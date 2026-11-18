@@ -10,6 +10,7 @@ import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lop
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
 import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
+import type { ExportColorSpace, ExportFormat as CoreExportFormat, ExportSettings } from '@lopsy/photos-core/export/types';
 
 /** Where a library can live, as offered on the start screen. */
 export type StorageChoice = 'google-drive' | 'browser' | 'local-folder';
@@ -38,11 +39,15 @@ export interface DeviceInfo {
   readonly cacheBytes: number | null;
 }
 
-export type ExportFormat = 'jpeg' | 'png';
+export type ExportFormat = CoreExportFormat;
 
 export interface ExportRequest {
   readonly versionIds: readonly VersionId[];
   readonly format: ExportFormat;
+  /** Absent means sRGB. */
+  readonly colorSpace?: ExportColorSpace;
+  /** The preset the dialog started from: its metadata and naming choices carry over. */
+  readonly base?: ExportSettings;
   /** 1 to 100; JPEG only. */
   readonly quality: number;
   /** Longest edge in px, never enlarging; null for full size. */

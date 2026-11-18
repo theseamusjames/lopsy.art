@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import type { VersionId } from '@lopsy/photos-core/library/types';
 import { getBackend } from '../../app/backend-registry';
 import type { ExportFormat } from '../../app/backend';
-import { useExportProgress, useSession } from '../../app/hooks';
+import type { ExportPreset } from '@lopsy/photos-core/library/types';
+import { colorSpacesFor, exportSettingsProblem, type ExportColorSpace, type ExportSettings } from '@lopsy/photos-core/export/types';
+import { useExportPresets, useExportProgress, useSession } from '../../app/hooks';
+import { tiffExportAvailable } from '../../app/export-capabilities';
+import { COLOR_SPACE_WORDS, DEFAULT_EXPORT_FORM, fitColorSpace, formFromSettings, settingsFromForm, type ExportForm } from '../../library/export-form';
+import { ExportPresetBar } from '../ExportPresetBar/ExportPresetBar';
 import { useUi } from '../../app/store';
 import { currentVersions } from '../../app/commands';
 import { plural } from '../../import/import-summary';
@@ -22,7 +27,7 @@ function defaultName(): string {
   return `Export ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Saves edited copies of the selected photos as JPEG or PNG. */
+/** Saves edited copies of the selected photos as JPEG, PNG or 16-bit TIFF, from a preset or by hand. */
 export function ExportDialog() {
   const session = useSession();
   const openDialog = useUi((s) => s.openDialog);
@@ -32,9 +37,37 @@ export function ExportDialog() {
   const [versionIds] = useState<VersionId[]>(() =>
     currentVersions().map((v) => v.versionId),
   );
-  const [format, setFormat] = useState<ExportFormat>('jpeg');
-  const [quality, setQuality] = useState(90);
-  const [longEdge, setLongEdge] = useState<number | null>(null);
+  const presets = useExportPresets();
+  const [presetId, setPresetId] = useState<string | null>(null);
+  const [base, setBase] = useState<ExportSettings | undefined>(undefined);
+  const [form, setForm] = useState<ExportForm>(DEFAULT_EXPORT_FORM);
+  const [tiff, setTiff] = useState(false);
+  const { format, quality, longEdge, colorSpace } = form;
+  const change = (patch: Partial<ExportForm>) => {
+    setForm((f) => fitColorSpace({ ...f, ...patch }));
+    setPresetId(null);
+  };
+  const setFormat = (value: ExportFormat) => change({ format: value });
+  const setQuality = (value: number) => change({ quality: value });
+  const setLongEdge = (value: number | null) => change({ longEdge: value });
+  const pickPreset = (preset: ExportPreset) => {
+    setForm(fitColorSpace(formFromSettings(preset.settings)));
+    setBase(preset.settings);
+    setPresetId(preset.id);
+  };
+  const sizes = longEdge !== null && !SIZES.some((s) => s.value === longEdge) ? [...SIZES, { value: longEdge, label: `${longEdge} px on the long side` }] : SIZES;
+  const problem = exportSettingsProblem(settingsFromForm(form, base));
+  const tiffBlocked = format === 'tiff' && !tiff;
+
+  useEffect(() => {
+    let live = true;
+    void tiffExportAvailable().then((ok) => {
+      if (live) setTiff(ok);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   const [destination, setDestination] = useState<'library' | 'download'>('library');
   const [name, setName] = useState(defaultName);
   const running = progress !== null && !progress.finished;
@@ -52,6 +85,8 @@ export function ExportDialog() {
       getBackend().exportVersions(session, {
         versionIds,
         format,
+        colorSpace,
+        ...(base ? { base } : {}),
         quality,
         longEdge,
         destination,
@@ -72,7 +107,7 @@ export function ExportDialog() {
         ) : (
           <>
             <Button onClick={close}>{running ? 'Keep going in the background' : 'Cancel'}</Button>
-            <Button variant="primary" disabled={running || versionIds.length === 0} onClick={start}>
+            <Button variant="primary" disabled={running || versionIds.length === 0 || problem !== null || tiffBlocked} onClick={start}>
               Export
             </Button>
           </>
@@ -80,6 +115,25 @@ export function ExportDialog() {
       }
     >
       <div className={styles.form}>
+        <div className={styles.field}>
+          <span className={styles.legend}>Preset</span>
+          <ExportPresetBar
+            presets={presets}
+            selectedId={presetId}
+            disabled={running}
+            onPick={pickPreset}
+            onSave={(presetName) => {
+              const id = session.saveExportPreset(presetName, settingsFromForm(form, base));
+              if (id) setPresetId(id);
+            }}
+            onRename={(id, presetName) => session.renameExportPreset(id, presetName)}
+            onDelete={(id) => {
+              session.deleteExportPreset(id);
+              setPresetId(null);
+            }}
+          />
+        </div>
+
         <fieldset className={styles.group} disabled={running}>
           <legend className={styles.legend}>File type</legend>
           <label className={styles.option}>
@@ -90,6 +144,13 @@ export function ExportDialog() {
             <input type="radio" name="format" checked={format === 'png'} onChange={() => setFormat('png')} />
             PNG <span className={styles.muted}>— no compression loss, larger files</span>
           </label>
+          {(tiff || format === 'tiff') && (
+            <label className={styles.option}>
+              <input type="radio" name="format" checked={format === 'tiff'} onChange={() => setFormat('tiff')} />
+              TIFF, 16-bit <span className={styles.muted}>— for printing and further editing</span>
+            </label>
+          )}
+          {tiffBlocked && <p className={styles.warn}>This build cannot write TIFF yet. Choose JPEG or PNG.</p>}
           {format === 'jpeg' && (
             <label className={styles.range}>
               <span>Quality</span>
@@ -100,6 +161,22 @@ export function ExportDialog() {
         </fieldset>
 
         <label className={styles.field}>
+          <span className={styles.legend}>Colours</span>
+          <select
+            className={styles.select}
+            disabled={running}
+            value={colorSpace}
+            onChange={(e) => change({ colorSpace: e.target.value as ExportColorSpace })}
+          >
+            {colorSpacesFor(format).map((space) => (
+              <option key={space} value={space}>
+                {COLOR_SPACE_WORDS[space]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className={styles.field}>
           <span className={styles.legend}>Size</span>
           <select
             className={styles.select}
@@ -107,7 +184,7 @@ export function ExportDialog() {
             value={longEdge ?? ''}
             onChange={(e) => setLongEdge(e.target.value === '' ? null : Number(e.target.value))}
           >
-            {SIZES.map((s) => (
+            {sizes.map((s) => (
               <option key={s.label} value={s.value ?? ''}>
                 {s.label}
               </option>

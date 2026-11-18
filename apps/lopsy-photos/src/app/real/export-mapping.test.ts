@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ExportRequest } from '../backend';
+import { DEFAULT_EXPORT_SETTINGS } from '@lopsy/photos-core/export/types';
 import { makeAsset, makeView } from '../../library/test-fixtures';
 import { exportFolderName, fromCoreProgress, toExportDestination, toExportSelection, toExportSettings } from './export-mapping';
 
@@ -14,12 +15,15 @@ const request: ExportRequest = {
 
 describe('export mapping', () => {
   it('maps settings', () => {
-    expect(toExportSettings(request)).toEqual({ format: 'jpeg', quality: 0.85, maxLongEdge: 2048 });
-    expect(toExportSettings({ ...request, format: 'png', longEdge: null, quality: 0 })).toEqual({
-      format: 'png',
+    expect(toExportSettings(request)).toEqual({ format: 'jpeg', colorSpace: 'srgb', quality: 0.85, maxLongEdge: 2048 });
+    expect(toExportSettings({ ...request, format: 'tiff', colorSpace: 'rec2020', longEdge: null, quality: 0 })).toEqual({
+      format: 'tiff',
+      colorSpace: 'rec2020',
       quality: 0.01,
       maxLongEdge: null,
     });
+    // A preset's other choices (metadata, names) carry over.
+    expect(toExportSettings({ ...request, base: { ...DEFAULT_EXPORT_SETTINGS, metadata: 'none' } }).metadata).toBe('none');
   });
 
   it('maps the destination with a safe name', () => {
