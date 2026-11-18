@@ -309,11 +309,12 @@ export class FakeBackend implements PhotosBackend {
 
   async trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
     const view = session.getView();
+    // The record first, then the files (as the real backend does).
+    session.deleteAssets(assetIds);
     for (const id of assetIds) {
       const asset = view.assets.get(id);
       if (asset) await session.adapter.trash(asset.fileId);
     }
-    session.deleteAssets(assetIds);
   }
 
   exportVersions(_session: LibrarySession, request: ExportRequest): ExportJob {

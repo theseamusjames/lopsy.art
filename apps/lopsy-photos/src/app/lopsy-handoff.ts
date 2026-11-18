@@ -13,6 +13,7 @@ import { editInLopsy, lopsyUrl } from '../handoff/send-to-lopsy';
 import { startHandoffReceiver, type HandoffReceiver, type ReceiverState } from '../handoff/receiver';
 import type { StoredLopsySave } from '../handoff/store-lopsy-save';
 import { getExportRenderer } from './export-renderer-registry';
+import { unguarded } from './guard-session';
 import { dismissToast, showToast } from './toasts';
 
 const previewRenderer = createBrowserPreviewRenderer();
@@ -79,7 +80,8 @@ export function openInLopsy(session: LibrarySession, assetId: AssetId): void {
   let handoff;
   try {
     handoff = editInLopsy({
-      session,
+      // Saves coming back are stored by backend code: refusals must throw, not toast and vanish.
+      session: unguarded(session),
       assetId,
       versionId,
       renderPng16: () => renderPng16(session, assetId, versionId),
@@ -111,7 +113,7 @@ let receiver: HandoffReceiver | null = null;
 export function startReceiving(session: LibrarySession): void {
   if (receiver !== null) return;
   receiver = startHandoffReceiver({
-    session,
+    session: unguarded(session),
     lopsyUrl: lopsyUrl(),
     previewRenderer,
     location: window.location,

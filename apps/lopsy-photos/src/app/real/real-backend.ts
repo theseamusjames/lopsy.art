@@ -59,7 +59,8 @@ import { ensureReadWrite, loadFolderHandle, pickFolder, saveFolderHandle } from 
 import { fromCoreProgress, toExportDestination, toExportSelection, toExportSettings } from './export-mapping';
 import { getPreviewSource, setPreviewSource } from './preview-source';
 import { storeEditPreviews } from './edit-previews';
-import { guardSession } from '../guard-session';
+import { guardSession, unguarded } from '../guard-session';
+import { trashAssets } from './trash-assets';
 import { showToast } from '../toasts';
 import { downloadBlob } from '../download';
 
@@ -263,7 +264,7 @@ export class RealBackend implements PhotosBackend {
   startImport(files: readonly File[], session: LibrarySession, options: Partial<ImportOptions> = {}): ImportJob {
     const extras = this.extras.get(session);
     return startImport(files, {
-      session,
+      session: unguarded(session),
       previewRenderer: this.previewRenderer,
       options,
       ...(extras?.queue ? { queueStore: extras.queue } : {}),
@@ -275,7 +276,7 @@ export class RealBackend implements PhotosBackend {
     const extras = this.extras.get(session);
     if (!extras?.queue) return null;
     return resumeImports({
-      session,
+      session: unguarded(session),
       previewRenderer: this.previewRenderer,
       queueStore: extras.queue,
       ...(extras.staging ? { staging: extras.staging } : {}),
@@ -304,7 +305,7 @@ export class RealBackend implements PhotosBackend {
     });
     if (ids.length === 0) return null;
     return startImportFromStorage(ids, {
-      session,
+      session: unguarded(session),
       previewRenderer: this.previewRenderer,
       ...(extras.caches ? { originalsCache: extras.caches.originals } : {}),
       options: { move: options.move },
@@ -320,7 +321,7 @@ export class RealBackend implements PhotosBackend {
   addOrphans(session: LibrarySession, fileIds: readonly FileId[]): ImportJob {
     const caches = this.extras.get(session)?.caches;
     return startImportFromStorage(fileIds, {
-      session,
+      session: unguarded(session),
       previewRenderer: this.previewRenderer,
       ...(caches ? { originalsCache: caches.originals } : {}),
       // They are already in Originals/.
@@ -371,35 +372,11 @@ export class RealBackend implements PhotosBackend {
   }
 
   storeEditPreviews(session: LibrarySession, versionId: VersionId, previews: EditPreviews): Promise<void> {
-    return storeEditPreviews(session, versionId, previews, this.extras.get(session)?.caches?.previews ?? null);
+    return storeEditPreviews(unguarded(session), versionId, previews, this.extras.get(session)?.caches?.previews ?? null);
   }
 
-  async trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
-    const view = session.getView();
-    const ids = new Set(assetIds);
-    const originals: string[] = [];
-    const previews: string[] = [];
-    for (const id of ids) {
-      const asset = view.assets.get(id);
-      if (!asset) continue;
-      originals.push(asset.fileId);
-      if (asset.renderFileId) previews.push(asset.renderFileId);
-    }
-    for (const version of view.versions.values()) {
-      if (!ids.has(version.assetId)) continue;
-      if (version.thumb) previews.push(version.thumb.fileId);
-      if (version.screen) previews.push(version.screen.fileId);
-    }
-    for (const fileId of originals) {
-      try {
-        await session.adapter.trash(fileId);
-      } catch (error) {
-        // Already gone is fine: the photo leaves the library either way.
-        if (!(isStorageError(error) && error.code === 'not-found')) throw error;
-      }
-    }
-    await Promise.allSettled(previews.map((fileId) => session.adapter.trash(fileId)));
-    session.deleteAssets([...ids]);
+  trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
+    return trashAssets(session, assetIds);
   }
 
   exportVersions(session: LibrarySession, request: ExportRequest): ExportJob {
@@ -436,7 +413,7 @@ export class RealBackend implements PhotosBackend {
       async (renderer) => {
         if (cancelled) return fail('Cancelled');
         const job = startExport(selection, {
-          session,
+          session: unguarded(session),
           renderer,
           settings: toExportSettings(request),
           destination: toExportDestination(request, today()),

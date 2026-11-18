@@ -23,20 +23,24 @@ async function sizeOf(blob: Blob): Promise<{ width: number; height: number }> {
   }
 }
 
+export type MeasureImage = (blob: Blob) => Promise<{ width: number; height: number }>;
+
 export async function storeEditPreviews(
   session: LibrarySession,
   versionId: VersionId,
   previews: EditPreviews,
   cache: PreviewCache | null,
+  measure: MeasureImage = sizeOf,
 ): Promise<void> {
   const version = session.getView().versions.get(versionId);
   if (!version) return;
   if (version.thumb?.recipeHash === previews.recipeHash && version.screen?.recipeHash === previews.recipeHash) return;
-  const old = [version.thumb?.fileId, version.screen?.fileId].filter((id): id is string => typeof id === 'string');
+  const oldThumb = version.thumb?.fileId ?? null;
+  const oldScreen = version.screen?.fileId ?? null;
   const refs: Partial<Record<'thumb' | 'screen', PreviewRef>> = {};
   for (const size of ['thumb', 'screen'] as const) {
     const blob = previews[size];
-    const { width, height } = await sizeOf(blob);
+    const { width, height } = await measure(blob);
     const stored = await session.adapter.createFile(
       {
         parentId: session.layout.previewsId,
@@ -49,8 +53,28 @@ export async function storeEditPreviews(
     await cache?.put(stored.id, blob).catch(() => undefined);
     refs[size] = { fileId: stored.id, recipeHash: previews.recipeHash, width, height };
   }
-  if (refs.thumb) session.setPreview(versionId, 'thumb', refs.thumb);
-  if (refs.screen) session.setPreview(versionId, 'screen', refs.screen);
-  // The replaced files belong to the app; another device may still show them until it syncs, which then reads the new ones.
-  await Promise.allSettled(old.map((id) => session.adapter.deletePermanently(id)));
+  let recordError: unknown = null;
+  try {
+    if (refs.thumb) session.setPreview(versionId, 'thumb', refs.thumb);
+    if (refs.screen) session.setPreview(versionId, 'screen', refs.screen);
+  } catch (error) {
+    recordError = error;
+  }
+  // Delete per size only what nothing points at any more: the old file when
+  // the version now shows the new one; else the new file (the session kept
+  // the old preview, e.g. for an edit that moved on meanwhile).
+  const after = session.getView().versions.get(versionId);
+  const unused: string[] = [];
+  for (const size of ['thumb', 'screen'] as const) {
+    const ref = refs[size];
+    if (!ref) continue;
+    const before = size === 'thumb' ? oldThumb : oldScreen;
+    if (after?.[size]?.fileId === ref.fileId) {
+      if (before && before !== ref.fileId) unused.push(before);
+    } else {
+      unused.push(ref.fileId);
+    }
+  }
+  await Promise.allSettled(unused.map((id) => session.adapter.deletePermanently(id)));
+  if (recordError !== null) throw recordError;
 }
