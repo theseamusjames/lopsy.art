@@ -7,7 +7,15 @@
 
 export type RafWorkerRequest =
   | { kind: 'init'; module: WebAssembly.Module }
-  | { kind: 'prepare'; data: Uint8Array }
+  | {
+      kind: 'prepare';
+      data: Uint8Array;
+      /**
+       * Also bin the whole frame to linear camera RGB with at least this long
+       * edge (`rafRenderBinnedLinear`), for a first view; null for none.
+       */
+      binnedLongEdge: number | null;
+    }
   | {
       kind: 'band';
       index: number;
@@ -18,10 +26,20 @@ export type RafWorkerRequest =
       y1: number;
       srcY0: number;
       srcY1: number;
+      /** Linear camera RGB for the develop stage (`rafRenderLinearBand`) rather than the finished look. */
+      linear: boolean;
     };
 
 export type RafWorkerResponse =
-  | { kind: 'prepared'; metaJson: string; paramsJson: string; mosaic: Float32Array }
+  | {
+      kind: 'prepared';
+      metaJson: string;
+      paramsJson: string;
+      /** `rafDevelopDefaults(paramsJson)`. */
+      developDefaultsJson: string;
+      mosaic: Float32Array;
+      binned: RafBandPixels | null;
+    }
   | {
       kind: 'band';
       index: number;

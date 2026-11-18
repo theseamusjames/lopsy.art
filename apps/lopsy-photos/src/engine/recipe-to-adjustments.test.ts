@@ -60,6 +60,19 @@ describe('recipeToAdjustments', () => {
   });
 });
 
+describe('recipeToAdjustments for RAW', () => {
+  it('leaves exposure and white balance to the develop stage', () => {
+    const recipe: Recipe = {
+      ...withTone({ exposure: 1, contrast: 30 }),
+      whiteBalance: { mode: 'custom', temperature: 50, tint: 10 },
+    };
+    const adj = recipeToAdjustments(recipe, { isRaw: true });
+    expect(adj.exposure).toBe(0);
+    expect(adj.photoFilter).toBe(NO_PHOTO_FILTER);
+    expect(adj.contrast).toBe(30);
+  });
+});
+
 describe('whiteBalanceFilter', () => {
   it('is off at zero', () => {
     expect(whiteBalanceFilter(0, 0)).toBe(NO_PHOTO_FILTER);

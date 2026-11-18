@@ -60,10 +60,16 @@ export function whiteBalanceFilter(temperature: number, tint: number): PhotoFilt
   return { r: r / max, g: g / max, b: b / max, density: 1 };
 }
 
-export function recipeToAdjustments(recipe: Recipe): EngineAdjustments {
+/**
+ * `isRaw`: the photo goes through the engine's RAW develop stage
+ * (raw-develop.ts), which applies exposure and white balance in linear
+ * light, so they are left out here rather than applied twice.
+ */
+export function recipeToAdjustments(recipe: Recipe, options: { readonly isRaw?: boolean } = {}): EngineAdjustments {
   const { tone, color, finish, whiteBalance } = recipe;
+  const isRaw = options.isRaw === true;
   return {
-    exposure: tone.exposure,
+    exposure: isRaw ? 0 : tone.exposure,
     contrast: tone.contrast,
     highlights: tone.highlights,
     shadows: tone.shadows,
@@ -72,7 +78,7 @@ export function recipeToAdjustments(recipe: Recipe): EngineAdjustments {
     saturation: color.saturation,
     vibrance: color.vibrance,
     vignette: finish.vignette,
-    photoFilter: whiteBalanceFilter(whiteBalance.temperature, whiteBalance.tint),
+    photoFilter: isRaw ? NO_PHOTO_FILTER : whiteBalanceFilter(whiteBalance.temperature, whiteBalance.tint),
   };
 }
 
