@@ -25,11 +25,17 @@ export interface ImageMetadata {
 export interface EmbeddedPreview {
   /** A JPEG the camera stored in the file (or the file itself for a JPEG). */
   readonly blob: Blob;
+  /** Size as decoded with the blob's own orientation applied, before `orientation`. */
   readonly width: number | null;
   readonly height: number | null;
   /**
    * EXIF orientation still to apply when showing the preview. Camera
    * previews are usually stored unrotated.
+   *
+   * Relative to a decode that applies the blob's own EXIF orientation, as
+   * browsers do (`<img>`, `createImageBitmap`'s default 'from-image'): a
+   * RAF's JPEG carries the camera's tag, so this is 1 for it; a DNG
+   * preview usually has no EXIF, so this is IFD0's orientation.
    */
   readonly orientation: number;
 }

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readRafHeader, scanJpeg } from './containers';
 import { detectFormat } from './detect-format';
+import { startImport } from './importer';
 import { inspectImage } from './inspect';
+import { FakeLibrarySession } from './test-support/fake-session';
+import { TestMemoryAdapter } from './test-support/memory-adapter';
 
 // photos-core has no Node type definitions (its code targets the browser), so the few fs calls are typed here.
 interface NodeFs {
@@ -35,6 +38,35 @@ describe.skipIf(!dir)('real RAF samples (LOPSY_RAF_SAMPLES)', () => {
 
   it('has samples', () => {
     expect(files.length).toBeGreaterThan(0);
+  });
+
+  it('imports a RAF end to end (its first megabytes, on the test doubles)', async () => {
+    const name = files[0] ?? '';
+    const bytes = readRafHead(`${dir ?? ''}/${name}`);
+    const adapter = new TestMemoryAdapter();
+    const root = await adapter.getRoot();
+    const originals = await adapter.createFolder(root.id, 'Originals');
+    const previews = await adapter.createFolder(root.id, 'previews');
+    const session = new FakeLibrarySession(adapter, { rootId: root.id, originalsId: originals.id, previewsId: previews.id });
+    const calls: { size: number; orientation: number; type: string }[] = [];
+    const result = await startImport([new File([bytes.slice()], name)], {
+      session,
+      previewRenderer: {
+        async render(source, maxSize, orientation) {
+          calls.push({ size: maxSize, orientation, type: source.type });
+          return { blob: new Blob(['x'], { type: 'image/jpeg' }), width: maxSize, height: maxSize };
+        },
+      },
+    }).finished;
+    expect(result.items[0]?.state).toBe('done');
+    const asset = session.getView().assets.get(result.items[0]?.assetId ?? '');
+    expect(asset?.format).toBe('raf');
+    expect(asset?.mimeType).toBe('image/x-fuji-raf');
+    expect(calls.map((c) => c.type)).toEqual(['image/jpeg', 'image/jpeg']);
+    expect(calls.every((c) => c.orientation === 1)).toBe(true);
+    const day = asset?.capturedAt?.slice(0, 10) ?? '';
+    const folder = await adapter.getFile((await adapter.getFile(asset?.fileId ?? ''))?.parentId ?? '');
+    expect(folder?.name).toBe(day);
   });
 
   it.each(files)('%s: metadata and embedded preview', async (name: string) => {
