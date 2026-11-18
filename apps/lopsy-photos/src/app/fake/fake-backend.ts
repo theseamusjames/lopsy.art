@@ -335,7 +335,7 @@ export class FakeBackend implements PhotosBackend {
   async trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
     const view = session.getView();
     // The record first, then the files (as the real backend does).
-    session.deleteAssets(assetIds);
+    session.withoutLibraryHistory(() => session.deleteAssets(assetIds));
     await session.whenDurable();
     for (const id of assetIds) {
       const asset = view.assets.get(id);
@@ -344,7 +344,12 @@ export class FakeBackend implements PhotosBackend {
   }
 
   async untrashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
-    session.restoreAssets(assetIds);
+    session.withoutLibraryHistory(() => session.restoreAssets(assetIds));
+    const view = session.getView();
+    for (const id of assetIds) {
+      const asset = view.assets.get(id);
+      if (asset) await session.adapter.untrash(asset.fileId).catch(() => undefined);
+    }
   }
 
   exportVersions(_session: LibrarySession, request: ExportRequest): ExportJob {

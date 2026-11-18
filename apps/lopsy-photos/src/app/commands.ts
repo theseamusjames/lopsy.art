@@ -3,7 +3,8 @@
  * the same functions, so a key and a click always behave alike.
  */
 
-import type { AssetId, ColorLabel, LibraryView, Rating, VersionId } from '@lopsy/photos-core/library/types';
+import type { AssetId, ColorLabel, LibraryHistory, LibrarySession, LibraryView, Rating, VersionId } from '@lopsy/photos-core/library/types';
+import { getBackend } from './backend-registry';
 import { itemAssets, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
@@ -36,8 +37,43 @@ export function currentVersions(): { assetId: AssetId; versionId: VersionId }[] 
 }
 
 /** Library undo and redo (marks, albums, versions, the delete record), with what it did said in a toast. */
+/**
+ * The last delete, while nothing has been done in the library since: ⌘Z
+ * undoes it the way the toast's Undo does, bringing back the record and
+ * its files together. Deleting is kept out of library history (a library
+ * undo would bring back only the record), so this is how ⌘Z reaches it.
+ */
+let lastDelete: { session: LibrarySession; assetIds: readonly AssetId[]; history: LibraryHistory } | null = null;
+
+/** Called after photos were moved to the trash. */
+export function rememberDelete(assetIds: readonly AssetId[]): void {
+  const s = session();
+  lastDelete = { session: s, assetIds, history: s.libraryHistory() };
+}
+
+/** Brings deleted photos back with their files (the delete's Undo). */
+export async function undoDelete(assetIds: readonly AssetId[]): Promise<void> {
+  const s = session();
+  if (lastDelete && lastDelete.assetIds === assetIds) lastDelete = null;
+  try {
+    await getBackend().untrashAssets(s, assetIds);
+    const first = assetIds[0];
+    if (first !== undefined) useUi.getState().setSelection(selectOne(first));
+    showToast(`Brought back ${assetIds.length === 1 ? 'the photo' : `${assetIds.length.toLocaleString()} photos`} from the trash.`, 3000);
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : String(e));
+  }
+}
+
 export function undoLibrary(redo: boolean): void {
   const s = session();
+  // Right after a delete, with nothing done since (the history is the same object), ⌘Z undoes the delete.
+  const pending = lastDelete;
+  if (!redo && pending && pending.session === s && s.libraryHistory() === pending.history) {
+    void undoDelete(pending.assetIds);
+    return;
+  }
+  lastDelete = null;
   const label = redo ? s.redoLibrary() : s.undoLibrary();
   if (label === null) showToast(redo ? 'Nothing to redo.' : 'Nothing to undo.', 3000);
   else showToast(`${redo ? 'Redid' : 'Undid'}: ${label}`, 3000);

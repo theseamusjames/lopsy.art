@@ -6,7 +6,7 @@ import { openLibrary } from '@lopsy/photos-core/library/session';
 import { NoopLibraryLock } from '@lopsy/photos-core/library/lock';
 import { recipeHash, DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
 import { guardSession } from '../guard-session';
-import { trashAssets, trashLeftoverOriginals, TrashRefusedError } from './trash-assets';
+import { trashAssets, trashLeftoverOriginals, TrashRefusedError, untrashAssets } from './trash-assets';
 import { storeEditPreviews } from './edit-previews';
 
 async function libraryWithPhoto() {
@@ -177,5 +177,28 @@ describe('leftover originals', () => {
     session.deleteAssets([assetId]);
     expect(await trashLeftoverOriginals(session, [originalId, originalId])).toBe(1);
     expect((await adapter.getFile(originalId))?.trashed).toBe(true);
+  });
+});
+
+describe('delete and library undo', () => {
+  it('keeps delete out of library history, so undo never brings back a record without its files', async () => {
+    const { adapter, session, assetId, originalId, previewId } = await libraryWithPhoto();
+    session.setMarks([assetId], { rating: 3 });
+    await trashAssets(session, [assetId]);
+    expect(session.getView().assets.get(assetId)?.deleted).toBe(true);
+    expect((await adapter.getFile(originalId))?.trashed).toBe(true);
+    // Library undo skips the delete: it undoes the rating, and the photo stays deleted with its files in the trash.
+    expect(session.libraryHistory().undoLabel).not.toBe('Delete');
+    session.undoLibrary();
+    expect(session.getView().assets.get(assetId)?.deleted).toBe(true);
+
+    // The delete's own Undo moves the record and the files together.
+    await untrashAssets(session, [assetId]);
+    expect(session.getView().assets.get(assetId)?.deleted).toBe(false);
+    expect((await adapter.getFile(originalId))?.trashed).toBe(false);
+    expect((await adapter.getFile(previewId))?.trashed).toBe(false);
+    // And undoing in the library afterwards does not delete the record behind the files' back.
+    session.undoLibrary();
+    expect(session.getView().assets.get(assetId)?.deleted).toBe(false);
   });
 });

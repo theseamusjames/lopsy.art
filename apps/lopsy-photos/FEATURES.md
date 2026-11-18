@@ -93,9 +93,11 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
   **Set aside** (X), which hides a photo from the other collections
   without deleting it. When the photo leaves the grid, the next one is
   selected; the message that follows has **Undo**.
-- **Undo / Redo in the library** (⌘Z, ⇧⌘Z): marks, keywords, albums,
-  versions and the delete record, one step at a time, with what was
-  undone said in a message.
+- **Undo / Redo in the library** (⌘Z, ⇧⌘Z): marks, keywords, albums and
+  versions, one step at a time, with what was undone said in a message.
+  A delete is undone by ⌘Z right after it (or the message's Undo), which
+  brings back the photo and takes its files out of the trash together;
+  once something else has changed, the delete is no longer in ⌘Z's reach.
 - **Details panel** (I): rating, label, title, caption, keywords and the
   albums the photo is in, plus file and camera facts (camera, lens,
   exposure, capture time, size). With several photos selected, changes
@@ -136,7 +138,7 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
   original, its previews and any Lopsy document files to the storage's
   trash (Google Drive's trash on Drive) and hides the photo. Nothing is
   deleted permanently. The next photo is selected, and **Undo** in the
-  message brings the photos and their files back.
+  message (or ⌘Z right after) brings the photos and their files back.
 - **Check library** (Settings) finds originals of deleted photos still
   outside the trash and moves them there.
 
