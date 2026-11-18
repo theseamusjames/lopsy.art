@@ -319,6 +319,27 @@ describe('GoogleDriveAdapter', () => {
     expect(await second.listChildren(root.id)).toHaveLength(1);
   }, 20_000);
 
+  it('gives up instead of looping when Drive reports no upload progress', async () => {
+    const drive = createFakeDrive();
+    const adapter = new GoogleDriveAdapter({
+      tokenSource: new StaticTokenSource(),
+      label: 'x',
+      // As if the browser could not read the Range header of Drive's 308 replies.
+      fetch: async (input, init) => {
+        const response = await drive.fetch(input, init);
+        if (response.status !== 308) return response;
+        return new Response(null, { status: 308 });
+      },
+      sleep: async () => undefined,
+      resumableThreshold: 256 * KIB,
+      chunkSize: 256 * KIB,
+    });
+    const root = await adapter.getRoot();
+    await expect(
+      adapter.createFile({ parentId: root.id, name: 'a.raf', mimeType: 'image/x-fuji-raf' }, new Blob([randomBytes(600 * KIB).slice()])),
+    ).rejects.toMatchObject({ code: 'unknown' });
+  }, 20_000);
+
   describe('sharing', () => {
     it('links to files and folders in Drive', async () => {
       const { adapter } = setup();

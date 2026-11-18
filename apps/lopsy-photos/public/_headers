@@ -6,7 +6,12 @@
 #   (accounts.google.com/gsi) and the Picker's loader (apis.google.com).
 # - connect-src: the Drive API and uploads, token revocation, the Picker's
 #   API host, and Google sign-in.
-# - frame-src: the sign-in popup's iframe and the Picker dialog.
+# - frame-src: Google sign-in's iframes (accounts.google.com) and the
+#   Picker dialog (docs.google.com, drive.google.com).
+# - font-src: fonts the Picker's loader may add to the page.
+# Checked on 2026-11-18 against the hosts gsi/client references and the
+# CSP example in Google Workspace's drive-picker-element README
+# (docs/lopsy-photos-setup.md, section 3).
 # - style-src 'unsafe-inline': the Google Picker and sign-in insert inline
 #   styles into the page; the app itself uses only its stylesheet.
 # - worker-src 'self': the offline shell's service worker (sw.js at the app's
@@ -14,7 +19,7 @@
 # - No Cross-Origin-Opener-Policy: it would cut the sign-in popup and the
 #   Lopsy handoff off from their openers (6.4, 6.12).
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/ https://apis.google.com; connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://content.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com https://docs.google.com; img-src 'self' blob: data: https://*.googleusercontent.com; worker-src 'self' blob:; manifest-src 'self'; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://accounts.google.com/gsi/ https://apis.google.com; connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://content.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com https://docs.google.com https://drive.google.com; img-src 'self' blob: data: https://*.googleusercontent.com; worker-src 'self' blob:; manifest-src 'self'; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 
