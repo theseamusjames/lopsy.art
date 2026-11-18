@@ -4,9 +4,14 @@
  * size 0..100, roundness −100..100, feather 0..100, grainAmount 0..100,
  * grainSize 0..100, grainRoughness 0..100, seed, pixelScale]`.
  *
+ * The recipe's `finish.vignette` darkens when positive; the engine's
+ * amount darkens when negative, so it is sent negated.
+ *
  * Grain is seeded per photo, from its asset ID, so every render and export
  * of a photo has the same grain.
  */
+
+import { DEFAULT_VIGNETTE_FEATHER, DEFAULT_VIGNETTE_SIZE } from '@lopsy/photos-core/library/recipe';
 
 /** The recipe's finish fields; the shape ones are optional for recipes saved before they existed. */
 export interface FinishFields {
@@ -17,11 +22,11 @@ export interface FinishFields {
   readonly grain?: { readonly amount: number; readonly size: number; readonly roughness: number };
 }
 
-/** Lightroom's defaults for the shape and grain controls. */
+/** The recipe's defaults (they reproduce the earlier vignette's shape). */
 export const FINISH_DEFAULTS = {
-  vignetteSize: 50,
+  vignetteSize: DEFAULT_VIGNETTE_SIZE,
   vignetteRoundness: 0,
-  vignetteFeather: 50,
+  vignetteFeather: DEFAULT_VIGNETTE_FEATHER,
   grainSize: 25,
   grainRoughness: 50,
 } as const;
@@ -45,7 +50,7 @@ export function finishValues(finish: FinishFields, seed: number, pixelScale: num
   const grainAmount = grain?.amount ?? 0;
   if (finish.vignette === 0 && grainAmount === 0) return null;
   return Float32Array.from([
-    finish.vignette,
+    -finish.vignette,
     finish.vignetteSize ?? FINISH_DEFAULTS.vignetteSize,
     finish.vignetteRoundness ?? FINISH_DEFAULTS.vignetteRoundness,
     finish.vignetteFeather ?? FINISH_DEFAULTS.vignetteFeather,

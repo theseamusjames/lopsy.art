@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_VIGNETTE_FEATHER, DEFAULT_VIGNETTE_SIZE } from '@lopsy/photos-core/library/recipe';
 import { finishKey, finishValues, grainSeed } from './finish-controls';
 
 describe('finish controls', () => {
@@ -17,7 +18,17 @@ describe('finish controls', () => {
   });
 
   it('packs the nine floats, with defaults for recipes saved before the shape controls', () => {
-    expect(Array.from(finishValues({ vignette: -30 }, 7, 0.5) ?? [])).toEqual([-30, 50, 0, 50, 0, 25, 50, 7, 0.5]);
+    expect(Array.from(finishValues({ vignette: -30 }, 7, 0.5) ?? [])).toEqual([
+      30,
+      Math.fround(DEFAULT_VIGNETTE_SIZE),
+      0,
+      Math.fround(DEFAULT_VIGNETTE_FEATHER),
+      0,
+      25,
+      50,
+      7,
+      0.5,
+    ]);
     expect(
       Array.from(
         finishValues(
@@ -26,7 +37,7 @@ describe('finish controls', () => {
           1,
         ) ?? [],
       ),
-    ).toEqual([20, 70, -40, 10, 35, 60, 80, 123, 1]);
+    ).toEqual([-20, 70, -40, 10, 35, 60, 80, 123, 1]);
   });
 
   it('changes key with the working size', () => {
