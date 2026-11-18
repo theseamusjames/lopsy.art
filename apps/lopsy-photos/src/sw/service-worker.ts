@@ -1,15 +1,20 @@
 /**
  * Lopsy Photos' service worker (spec 5.7, 6.3): the app shell offline.
  * The build emits this file as `<base>sw.js` (scripts/vite-plugin-service-worker.ts)
- * and writes the precache manifest into `__PRECACHE_MANIFEST__`. It has no
- * imports left after bundling and no exports, so it runs as a classic
- * worker script in every browser.
+ * and writes the precache manifest, with each file's SHA-256, into
+ * `__PRECACHE_MANIFEST__`. It has no imports left after bundling and no
+ * exports, so it runs as a classic worker script in every browser.
+ *
+ * CacheStorage belongs to the whole origin, which Photos shares with Lopsy
+ * on lopsy.art, so cached bytes are checked against the build's checksums
+ * before they are served (once per file per worker lifetime) and dropped
+ * when they do not match (spec 6.13).
  *
  * A new version installs and then waits; the page shows "New version
  * ready" and posts SKIP_WAITING_MESSAGE when the user chooses to reload.
  */
 
-import { cacheName, planFetch, SKIP_WAITING_MESSAGE, staleCaches, type PrecacheManifest } from './sw-logic';
+import { cacheName, matchesBuild, mayRequestUpdate, planFetch, SKIP_WAITING_MESSAGE, staleCaches, type PrecacheManifest } from './sw-logic';
 
 declare const __PRECACHE_MANIFEST__: PrecacheManifest;
 
@@ -25,6 +30,7 @@ interface FetchEvent extends ExtendableEvent {
 
 interface MessageEventLike extends Event {
   readonly data: unknown;
+  readonly source: { readonly type?: string; readonly url?: string } | null;
 }
 
 interface WorkerScope {
@@ -39,12 +45,43 @@ interface WorkerScope {
 const scope = self as unknown as WorkerScope;
 const manifest = __PRECACHE_MANIFEST__;
 const current = cacheName(manifest);
+/** Paths whose cached bytes this worker has checked. */
+const verified = new Set<string>();
+
+/**
+ * Fetches every file past the HTTP cache, checks it against the build, and
+ * stores it as a plain 200 response: a redirected response (Pages answers
+ * some paths with a 308) cannot be served to a page load.
+ */
+async function precache(): Promise<void> {
+  const cache = await caches.open(current);
+  for (const path of manifest.files) {
+    const response = await fetch(new Request(path, { cache: 'reload' }));
+    if (!response.ok) throw new Error(`Could not precache ${path}: ${response.status}`);
+    const bytes = await response.arrayBuffer();
+    if (!(await matchesBuild(manifest, path, bytes))) throw new Error(`${path} is not the file this build wrote`);
+    await cache.put(path, new Response(bytes, { status: 200, headers: response.headers }));
+    verified.add(path);
+  }
+}
+
+/** The cached file once its bytes match the build; a cached file that does not match is deleted. */
+async function fromCache(path: string): Promise<Response | null> {
+  const cache = await caches.open(current);
+  const hit = await cache.match(path);
+  if (!hit) return null;
+  if (verified.has(path)) return hit;
+  const bytes = await hit.clone().arrayBuffer();
+  if (await matchesBuild(manifest, path, bytes)) {
+    verified.add(path);
+    return hit;
+  }
+  await cache.delete(path);
+  return null;
+}
 
 scope.addEventListener('install', (event) => {
-  // `cache: 'reload'` skips the HTTP cache, so a new build never precaches an old file.
-  event.waitUntil(
-    caches.open(current).then((cache) => cache.addAll(manifest.files.map((path) => new Request(path, { cache: 'reload' })))),
-  );
+  event.waitUntil(precache());
 });
 
 scope.addEventListener('activate', (event) => {
@@ -57,22 +94,30 @@ scope.addEventListener('activate', (event) => {
 });
 
 scope.addEventListener('message', (event) => {
-  if (event.data === SKIP_WAITING_MESSAGE) void scope.skipWaiting();
+  if (event.data !== SKIP_WAITING_MESSAGE) return;
+  if (!mayRequestUpdate(event.source, scope.location.origin, manifest)) return;
+  void scope.skipWaiting();
 });
 
 scope.addEventListener('fetch', (event) => {
   const plan = planFetch(event.request, scope.location.origin, manifest);
   if (plan.kind === 'pass') return;
   if (plan.kind === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(async () => {
-        const shell = await caches.match(plan.fallback, { cacheName: current });
-        return shell ?? Response.error();
-      }),
-    );
+    event.respondWith(fetch(event.request).catch(async () => (await fromCache(plan.fallback)) ?? Response.error()));
     return;
   }
-  event.respondWith(
-    caches.match(plan.path, { cacheName: current }).then((hit) => hit ?? fetch(event.request)),
-  );
+  event.respondWith(fromCache(plan.path).then((hit) => hit ?? fetchAndRepair(plan.path, event.request)));
 });
+
+/** A precached file missing from the cache (or dropped for not matching): from the network, cached again if it matches. */
+async function fetchAndRepair(path: string, request: Request): Promise<Response> {
+  const response = await fetch(request);
+  if (!response.ok) return response;
+  const bytes = await response.clone().arrayBuffer();
+  if (await matchesBuild(manifest, path, bytes)) {
+    const cache = await caches.open(current);
+    await cache.put(path, new Response(bytes, { status: 200, headers: response.headers }));
+    verified.add(path);
+  }
+  return response;
+}
