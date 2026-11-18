@@ -95,7 +95,7 @@ export function LibraryScreen() {
           <SingleView orderedIds={orderedIds} />
         ) : (
           <>
-            <GridToolbar orderedIds={orderedIds} />
+            {!libraryEmpty && <GridToolbar orderedIds={orderedIds} />}
             {orderedIds.length === 0 ? (
               <EmptyState libraryEmpty={libraryEmpty} collection={collection} searching={text.trim() !== ''} />
             ) : (
