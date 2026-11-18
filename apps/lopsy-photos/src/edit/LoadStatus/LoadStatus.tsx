@@ -14,10 +14,7 @@ function progressText(progress: LoadProgress | null): string {
   return 'Developing the photo';
 }
 
-/**
- * Covers the image while the engine starts and the photo loads, or when
- * either failed; shrinks to a badge once a first view of a RAW file shows.
- */
+/** Covers the image while the engine starts and the photo loads, or when either failed. */
 export function LoadStatus({ status, onClose }: LoadStatusProps) {
   if (status.kind === 'ready') return null;
   if (status.kind === 'error') {
@@ -33,13 +30,6 @@ export function LoadStatus({ status, onClose }: LoadStatusProps) {
   }
   const progress = status.kind === 'loading' ? status.progress : null;
   const fraction = progress?.fraction ?? null;
-  if (progress?.stage === 'refining') {
-    return (
-      <div className={styles.badge} role="status" aria-live="polite" data-testid="refining-badge">
-        Loading full resolution…{fraction === null ? '' : ` ${Math.round(fraction * 100)}%`}
-      </div>
-    );
-  }
   return (
     <div className={styles.overlay} role="status" aria-live="polite">
       <p className={styles.title}>{status.kind === 'starting' ? 'Starting the editor' : progressText(progress)}</p>

@@ -1,8 +1,12 @@
 /**
  * The engine bridge for one photo: the Edit view's canvas, one image
- * layer, and the recipe mapped onto the engine's document adjustments
- * (recipe-to-adjustments.ts). It calls the wasm exports directly, without
- * Lopsy's stores or engine-sync.
+ * layer, and the recipe mapped onto the engine (the RAW develop stage,
+ * the document adjustments, curves, colour, detail, areas, and the
+ * framing as layer operations and document size). It calls the wasm
+ * exports directly, without Lopsy's stores or engine-sync.
+ *
+ * The Edit view edits a working image sized to the view (spec 6.10) and
+ * loads the full size on demand; exports load the full size.
  *
  * Pixels never come into TypeScript. Decoded images go straight to the
  * layer texture (RAF bands from the worker pool, DNG and 16-bit PNG through
@@ -44,6 +48,7 @@ import initWasm, {
   resumeTask,
   flipLayer,
   readDevelopHistogram,
+  sampleColor,
   removeLayer,
   render,
   rotateLayer90,
@@ -123,6 +128,12 @@ export interface ExportOptions {
   readonly maxSize?: number;
   /** sRGB when omitted. The engine knows sRGB and Display P3 only. */
   readonly colorSpace?: 'srgb' | 'display-p3';
+  /**
+   * The edit to render, when it is not the one on screen. It is applied
+   * once the full size has loaded, right before the draw, and the screen's
+   * edit is put back afterwards.
+   */
+  readonly recipe?: Recipe;
   /** The exact output size (may enlarge); overrides `maxSize`. Ignored for TIFF. */
   readonly size?: Size;
   /** PNG only: 16 bits (the engine's PNG, full size only) by default, or 8. */
@@ -149,6 +160,8 @@ export interface DevelopEngine {
   photoInfo(): PhotoInfo;
   /** 4 × 256 bins (R, G, B, luminance) of the displayed render; null when the engine cannot read one now. */
   readHistogram(): Promise<Uint32Array | null>;
+  /** The rendered colour at a document pixel, 0..255; null outside the image or when the engine cannot read it now. */
+  sampleAt(x: number, y: number): readonly [number, number, number] | null;
   /** Auto tone for `recipe`: renders it, reads its histogram and returns the tone values the engine suggests. */
   autoTone(recipe: Recipe): Promise<ToneValues>;
   /** Decodes `source` into the engine, replacing any image already loaded. Resolves with its oriented size. */
@@ -189,7 +202,7 @@ export interface DevelopEngine {
   /** CSS pixels. */
   panBy(dx: number, dy: number): void;
   /** A JPEG of the current edit, long edge at most `maxSize`. */
-  renderPreview(maxSize: number, quality?: number): Promise<Blob>;
+  renderPreview(maxSize: number, quality?: number, recipe?: Recipe): Promise<Blob>;
   exportImage(options: ExportOptions): Promise<Blob>;
   /** Paints clipped pixels on the live frame only (any channel at or past white red, at or below black blue); exports are unaffected. */
   setClippingWarning(shadows: boolean, highlights: boolean): void;
@@ -354,7 +367,7 @@ class PhotoEngine implements DevelopEngine {
   private cropOrigin = { x: 0, y: 0 };
   private areasKey: string | null = null;
   private overlayAreaId: string | null = null;
-  /** The working image's width over the full image's: below 1 while a RAW file's first view shows. */
+  /** The working image's width over the full image's: 1 at full resolution. */
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
   private layoutKey: string | null = null;
@@ -441,7 +454,7 @@ class PhotoEngine implements DevelopEngine {
     const run = async () => {
       try {
         if (format === 'raf') await this.decodeRaf(source, abort.signal, () => undefined, 'upgrade');
-        else await this.upgradeImage(source, abort.signal);
+        else await this.upgradeImage(source, abort.signal, format);
       } finally {
         if (this.upgradeAbort === abort) this.upgradeAbort = null;
         this.upgrade = null;
@@ -487,7 +500,8 @@ class PhotoEngine implements DevelopEngine {
   }
 
   /** The full-size image into a hidden layer that then replaces the working one. */
-  private async upgradeImage(source: Blob, signal: AbortSignal): Promise<void> {
+  private async upgradeImage(source: Blob, signal: AbortSignal, format: ImageFormat): Promise<void> {
+    if (format === 'png' && (await this.upgradePng16(source, signal))) return;
     const decoded = await decodeToCanvas(source, undefined);
     this.checkLive(signal);
     const previous = this.sourceSize;
@@ -525,56 +539,63 @@ class PhotoEngine implements DevelopEngine {
     const isWorkingOnly = mode === 'working' && isLinear;
     let quick: Size | null = isUpgrade ? this.sourceSize : null;
     let fullLayer: string | null = null;
-    const meta = await decodeRafInWorkers(
-      data,
-      (full, band) => {
-        if (signal.aborted || this.isDisposed) return;
-        if (fullLayer === null) {
-          fullLayer = quick ? this.addHiddenLayer(full.width, full.height) : this.resetLayer(full.width, full.height);
-        }
-        uploadLayerPixelsF32Rect(
-          this.engine, fullLayer, full.width, full.height,
-          band.x, band.y, band.width, band.height, band.pixels,
-        );
-      },
-      {
-        signal,
-        linear: isLinear,
-        renderBands: !isWorkingOnly,
-        ...(isUpgrade ? {} : { binnedLongEdge: isWorkingOnly ? this.workingLongEdge() : QUICK_VIEW_LONG_EDGE }),
-        onPrepared: (prepMeta, prepared) => {
-          if (signal.aborted || this.isDisposed || !isLinear || isUpgrade) return;
-          this.setRawDefaults(parseRawDevelopSettings(prepared.developDefaultsJson));
-          this.autoWb = prepared.autoWbRatio ? temperatureTintFor(prepared.autoWbRatio) : null;
-          this.engineProfiles = prepared.profilesJson ? parseDevelopProfiles(prepared.profilesJson) : [];
-          this.fullSize = { width: prepMeta.width, height: prepMeta.height };
-          const binned = prepared.binned;
-          if (!binned) return;
-          const layer = this.resetLayer(binned.width, binned.height);
-          this.pixelScale = prepMeta.width > 0 ? binned.width / prepMeta.width : 1;
-          uploadLayerPixelsF32Rect(this.engine, layer, binned.width, binned.height, 0, 0, binned.width, binned.height, binned.pixels);
-          quick = this.showImage({ width: binned.width, height: binned.height });
-          if (!isWorkingOnly) report('refining', 0);
+    try {
+      const meta = await decodeRafInWorkers(
+        data,
+        (full, band) => {
+          if (signal.aborted || this.isDisposed) return;
+          if (fullLayer === null) {
+            fullLayer = quick ? this.addHiddenLayer(full.width, full.height) : this.resetLayer(full.width, full.height);
+          }
+          uploadLayerPixelsF32Rect(
+            this.engine, fullLayer, full.width, full.height,
+            band.x, band.y, band.width, band.height, band.pixels,
+          );
         },
-        onProgress: (p) => {
-          const fraction = p.bandCount > 0 ? p.bandsDone / p.bandCount : 0;
-          report(quick ? 'refining' : 'decoding', fraction);
+        {
+          signal,
+          linear: isLinear,
+          renderBands: !isWorkingOnly,
+          ...(isUpgrade ? {} : { binnedLongEdge: isWorkingOnly ? this.workingLongEdge() : QUICK_VIEW_LONG_EDGE }),
+          onPrepared: (prepMeta, prepared) => {
+            if (signal.aborted || this.isDisposed || !isLinear || isUpgrade) return;
+            this.setRawDefaults(parseRawDevelopSettings(prepared.developDefaultsJson));
+            this.autoWb = prepared.autoWbRatio ? temperatureTintFor(prepared.autoWbRatio) : null;
+            this.engineProfiles = prepared.profilesJson ? parseDevelopProfiles(prepared.profilesJson) : [];
+            this.fullSize = { width: prepMeta.width, height: prepMeta.height };
+            const binned = prepared.binned;
+            if (!binned) return;
+            const layer = this.resetLayer(binned.width, binned.height);
+            this.pixelScale = prepMeta.width > 0 ? binned.width / prepMeta.width : 1;
+            uploadLayerPixelsF32Rect(this.engine, layer, binned.width, binned.height, 0, 0, binned.width, binned.height, binned.pixels);
+            quick = this.showImage({ width: binned.width, height: binned.height });
+            if (!isWorkingOnly) report('refining', 0);
+          },
+          onProgress: (p) => {
+            const fraction = p.bandCount > 0 ? p.bandsDone / p.bandCount : 0;
+            report(quick ? 'refining' : 'decoding', fraction);
+          },
         },
-      },
-    );
-    this.checkLive(signal);
-    if (meta.width === 0 || meta.height === 0) throw new Error('The RAW file decoded to an empty image');
-    const size = { width: meta.width, height: meta.height };
-    if (isWorkingOnly) {
-      if (!quick) throw new Error('The RAW file decoded to an empty image');
-      return quick;
+      );
+      this.checkLive(signal);
+      if (meta.width === 0 || meta.height === 0) throw new Error('The RAW file decoded to an empty image');
+      const size = { width: meta.width, height: meta.height };
+      if (isWorkingOnly) {
+        if (!quick) throw new Error('The RAW file decoded to an empty image');
+        return quick;
+      }
+      if (fullLayer === null) throw new Error('The RAW file decoded to an empty image');
+      if (quick) {
+        this.swapInLayer(fullLayer, size, quick);
+        return size;
+      }
+      return this.showImage(size);
+    } catch (err) {
+      // A full-size layer filled beside the working image and never swapped in.
+      const hidden: string | null = fullLayer;
+      if (hidden !== null && hidden !== this.layerId && !this.isDisposed) removeLayer(this.engine, hidden);
+      throw err;
     }
-    if (fullLayer === null) throw new Error('The RAW file decoded to an empty image');
-    if (quick) {
-      this.swapInLayer(fullLayer, size, quick);
-      return size;
-    }
-    return this.showImage(size);
   }
 
   private async decodeDng(
@@ -636,6 +657,22 @@ class PhotoEngine implements DevelopEngine {
     return { width, height };
   }
 
+  /** A PNG's full size at its own depth (16-bit stays 16-bit), into a layer that replaces the working one; false when the engine cannot decode it. */
+  private async upgradePng16(source: Blob, signal: AbortSignal): Promise<boolean> {
+    const data = new Uint8Array(await source.arrayBuffer());
+    this.checkLive(signal);
+    const previous = this.sourceSize;
+    if (!previous) return true;
+    const layer = this.addHiddenLayer(1, 1);
+    const [width = 0, height = 0] = decodeAndUploadImage(this.engine, layer, data);
+    if (!width || !height) {
+      removeLayer(this.engine, layer);
+      return false;
+    }
+    this.swapInLayer(layer, { width, height }, previous);
+    return true;
+  }
+
   private checkLive(signal: AbortSignal): void {
     if (signal.aborted || this.isDisposed) throw new DecodeAbortedError();
   }
@@ -662,9 +699,11 @@ class PhotoEngine implements DevelopEngine {
   }
 
   /**
-   * Replaces the first view with the full-size layer, keeping the zoom and
-   * pan the user chose in the meantime (scaled to the larger image) and
-   * re-applying the framing to the new layer.
+   * Replaces the working image with the full-size layer, keeping the zoom and
+   * pan the user chose in the meantime (scaled to the larger image).
+   * Everything sized in document pixels or by `pixelScale` is applied
+   * again for the new size: framing, straighten, the crop's layout, areas
+   * (and the mask overlay), detail, local contrast and Finish.
    */
   private swapInLayer(layer: string, size: Size, previous: Size): void {
     this.unturn();
@@ -674,19 +713,24 @@ class PhotoEngine implements DevelopEngine {
     setDocumentSize(this.engine, size.width, size.height);
     updateLayer(this.engine, layerDesc(layer, size.width, size.height, true));
     setLayerOrder(this.engine, JSON.stringify([layer]));
-    const target = this.framing;
     const wasFit = this.view.isFit;
     const zoom = this.view.zoom * (previous.width / size.width);
     this.sourceSize = size;
+    // The new layer is unframed; applyRecipe frames and turns it to the recipe.
     this.framing = { rotate: 0, flipH: false };
-    this.layoutKey = null;
-    this.applyFraming(target);
-    this.layout();
+    this.forgetSizedState();
+    this.applyRecipe();
     if (wasFit) this.fit();
     else this.setView({ ...this.view, zoom, isFit: false });
-    // Grain is sized in source pixels: the full-size layer needs it again.
-    this.applyFinish();
     this.invalidate();
+  }
+
+  /** Forgets what was sent for the old image size, so applyRecipe sends it all again. */
+  private forgetSizedState(): void {
+    this.layoutKey = null;
+    this.areasKey = null;
+    this.detailKeyApplied = null;
+    this.finishKeyApplied = null;
   }
 
   private nextLayerId(): string {
@@ -707,7 +751,7 @@ class PhotoEngine implements DevelopEngine {
     return this.layerId;
   }
 
-  /** A layer outside the layer order, filled while the first view shows. */
+  /** A layer outside the layer order, filled while the working image shows. */
   private addHiddenLayer(width: number, height: number): string {
     const id = this.nextLayerId();
     addLayer(this.engine, layerDesc(id, width, height, false));
@@ -893,22 +937,26 @@ class PhotoEngine implements DevelopEngine {
 
   /**
    * Runs `work` with the screen-only views (clipping warning, sharpening
-   * mask) off, for anything that reads the rendered frame: exports and
-   * previews draw it, and the histogram counts it. Costs nothing while
-   * neither view is on.
+   * mask, the selected area's red overlay) off, for anything that reads the
+   * rendered frame: exports and previews draw it, and the histogram and
+   * Auto tone count it. Costs nothing while none is on.
    */
   private async withScreenViewsOff<T>(work: () => Promise<T>): Promise<T> {
     const { shadows, highlights } = this.clippingWarning;
     const isMask = this.isDetailMaskView;
-    if (!shadows && !highlights && !isMask) return work();
+    const overlay = this.overlayAreaId;
+    if (!shadows && !highlights && !isMask && !overlay) return work();
     if (shadows || highlights) engineSetClippingWarning(this.engine, false, false);
     if (isMask) setImageDetailMaskView(this.engine, false);
+    if (overlay) this.setAreaOverlay(null);
     try {
       return await work();
     } finally {
       if (!this.isDisposed) {
         engineSetClippingWarning(this.engine, this.clippingWarning.shadows, this.clippingWarning.highlights);
         setImageDetailMaskView(this.engine, this.isDetailMaskView);
+        // Unless another area was selected meanwhile.
+        if (overlay && this.overlayAreaId === null) this.setAreaOverlay(overlay);
         this.invalidate();
       }
     }
@@ -996,6 +1044,16 @@ class PhotoEngine implements DevelopEngine {
     };
   }
 
+  sampleAt(x: number, y: number): readonly [number, number, number] | null {
+    const size = this.imageSize();
+    if (!size || this.isDisposed || x < 0 || y < 0 || x >= size.width || y >= size.height) return null;
+    // One pixel of the composite, which holds the developed, adjusted image.
+    // WebGL answers at once; a wgpu build parks the read, which this does not wait for.
+    const rgba: unknown = sampleColor(this.engine, Math.floor(x), Math.floor(y), 1);
+    if (!(rgba instanceof Uint8Array) || rgba.length < 3) return null;
+    return [rgba[0] ?? 0, rgba[1] ?? 0, rgba[2] ?? 0];
+  }
+
   async sampleWhiteBalance(x: number, y: number, radius: number): Promise<{ temperature: number; tint: number } | null> {
     if (!this.sourceSize || this.isDisposed) return null;
     const out = await readback<Float32Array>(
@@ -1008,14 +1066,12 @@ class PhotoEngine implements DevelopEngine {
     if (temperature === undefined || tint === undefined || !Number.isFinite(temperature) || !Number.isFinite(tint)) return null;
     return { temperature, tint };
   }
-
-
   async readHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed) return null;
     // The histogram counts the photo, not the clipping colours or the sharpening mask.
     return this.withScreenViewsOff(async () => {
       render(this.engine);
-      // WebGL answers at once; a wgpu build parks the read, which this POC does not wait for.
+      // WebGL answers at once; a wgpu build parks the read, which this does not wait for yet.
       const bins: unknown = readDevelopHistogram(this.engine);
       return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
     });
@@ -1139,8 +1195,8 @@ class PhotoEngine implements DevelopEngine {
     });
   }
 
-  async renderPreview(maxSize: number, quality = 0.85): Promise<Blob> {
-    return this.exportImage({ format: 'jpeg', quality, maxSize });
+  async renderPreview(maxSize: number, quality = 0.85, recipe?: Recipe): Promise<Blob> {
+    return this.exportImage({ format: 'jpeg', quality, maxSize, ...(recipe ? { recipe } : {}) });
   }
 
   async exportImage(options: ExportOptions): Promise<Blob> {
@@ -1153,6 +1209,19 @@ class PhotoEngine implements DevelopEngine {
     if (working && !this.isFullResolution() && (!options.maxSize || options.maxSize > Math.max(working.width, working.height))) {
       await this.ensureFullResolution();
     }
+    const { recipe } = options;
+    if (!recipe) return this.encode(options);
+    const shown = this.recipe;
+    this.setRecipe(recipe);
+    try {
+      return await this.encode(options);
+    } finally {
+      // Unless the screen's edit changed meanwhile, which then stays.
+      if (this.recipe === recipe && !this.isDisposed) this.setRecipe(shown);
+    }
+  }
+
+  private async encode(options: ExportOptions): Promise<Blob> {
     const image = this.imageSize();
     if (!image || this.isDisposed) throw new Error('No photo is loaded');
     const space = options.colorSpace === 'display-p3' ? DISPLAY_P3 : SRGB;
@@ -1183,9 +1252,6 @@ class PhotoEngine implements DevelopEngine {
     const image = this.imageSize();
     if (!image) return null;
     const { width: savedW, height: savedH } = this.canvas;
-    // The mask overlay is for the screen only.
-    const overlay = this.overlayAreaId;
-    if (overlay) this.setAreaOverlay(null);
     try {
       this.canvas.width = size.width;
       this.canvas.height = size.height;
@@ -1201,7 +1267,6 @@ class PhotoEngine implements DevelopEngine {
     } finally {
       this.canvas.width = savedW;
       this.canvas.height = savedH;
-      if (overlay) this.setAreaOverlay(overlay);
       this.pushViewport();
       render(this.engine);
     }

@@ -113,8 +113,11 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
       if (!next) return;
       // Leave the version before it goes, and keep the photo's own version a live one.
       if (id === versionId) setEditing({ assetId, versionId: next.id });
-      if (asset && asset.primaryVersionId === id) session.setPrimaryVersion(assetId, next.id);
-      session.deleteVersion(id);
+      // One undo step for both.
+      session.libraryStep('Delete version', () => {
+        if (asset && asset.primaryVersionId === id) session.setPrimaryVersion(assetId, next.id);
+        session.deleteVersion(id);
+      });
     },
     [versions, versionId, asset, session, assetId, setEditing],
   );

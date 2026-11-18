@@ -81,3 +81,23 @@ test('Edit in the library: history, versions, presets, copy and paste, filmstrip
   await page.getByTestId('edit-view').getByRole('button', { name: 'Library', exact: true }).click();
   await expect(tiles(page)).toHaveCount(2);
 });
+
+test('opening a photo shows its stored preview with "Loading…" before the engine render', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto('/');
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [{ name: 'large.jpg', buffer: await generatedJpeg(page, 120, 6000, 4000) }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await expect(tiles(page)).toHaveCount(1);
+  // The import's previews are in place before Edit opens.
+  await expect(tiles(page).first()).toHaveAttribute('data-preview-hash', /.+/, { timeout: 60_000 });
+
+  await tiles(page).first().click();
+  await page.keyboard.press('Enter');
+  const edit = page.getByTestId('edit-view');
+  await expect(edit.getByTestId('stored-preview')).toBeVisible({ timeout: 10_000 });
+  await expect(edit.getByTestId('loading-badge')).toHaveText('Loading…');
+  await waitForReady(page, 120_000);
+  await expect(edit.getByTestId('stored-preview')).toHaveCount(0);
+});

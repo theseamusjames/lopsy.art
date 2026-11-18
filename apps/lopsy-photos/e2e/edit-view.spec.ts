@@ -202,7 +202,7 @@ test.describe('Crop', () => {
     await waitForReady(page);
     await waitForPreview(page, 0);
 
-    await page.getByTitle('Crop', { exact: true }).click();
+    await page.getByTitle('Crop (R)', { exact: true }).click();
     await expect(page.getByTestId('crop-tool')).toBeVisible();
     await page.getByRole('combobox', { name: 'Aspect' }).selectOption('1:1');
     await page.getByRole('button', { name: 'Done' }).click();
@@ -224,7 +224,7 @@ test.describe('Crop', () => {
     await openGeneratedImage(page);
     await waitForReady(page);
     await waitForPreview(page, 0);
-    await page.getByTitle('Crop', { exact: true }).click();
+    await page.getByTitle('Crop (R)', { exact: true }).click();
     await page.getByRole('combobox', { name: 'Aspect' }).selectOption('3:2');
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('crop-tool')).toHaveCount(0);
@@ -235,7 +235,7 @@ test.describe('Crop', () => {
     expect(turned.height).toBe(640);
     expect(Math.abs(turned.width - 427)).toBeLessThanOrEqual(1);
 
-    await page.getByTitle('Crop', { exact: true }).click();
+    await page.getByTitle('Crop (R)', { exact: true }).click();
     await expect(page.getByTestId('crop-tool')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('crop-tool')).toHaveCount(0);
@@ -343,7 +343,7 @@ test.describe('Working image and keys', () => {
     await expect(help).toHaveCount(0);
     await expect(page.getByTestId('edit-view')).toBeVisible();
 
-    await page.getByTitle('Crop', { exact: true }).click();
+    await page.getByTitle('Crop (R)', { exact: true }).click();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('crop-tool')).toHaveCount(0);
     await expect(page.getByTestId('edit-view')).toBeVisible();

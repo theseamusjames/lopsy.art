@@ -24,6 +24,10 @@ describe('shortcutFor', () => {
     expect(shortcutFor(key('v', { ctrlKey: true, shiftKey: true }))).toBe('pasteEdits');
     expect(shortcutFor(key('c', { metaKey: true }))).toBeNull();
     expect(shortcutFor(key('Escape'))).toBe('leave');
+    expect(shortcutFor(key('r'))).toBe('crop');
+    expect(shortcutFor(key('m'))).toBe('linearArea');
+    expect(shortcutFor(key('M', { shiftKey: true }))).toBe('radialArea');
+    expect(shortcutFor(key('r', { altKey: true }))).toBeNull();
     expect(shortcutFor(key('?', { shiftKey: true }))).toBe('help');
   });
 

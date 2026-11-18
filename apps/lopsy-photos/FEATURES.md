@@ -186,9 +186,11 @@ and on leaving.
   engine's RAW develop stage; DNG through the engine's decoder; 16-bit PNG
   at full depth; JPEG and WebP through the browser. Editing starts on a
   *working image* sized to the view (at most 4096 px on its long edge),
-  so a large photo is editable quickly; zooming to 50 % or closer loads
-  the full resolution ("Loading full resolution…"), and full-size
-  exports always render from it.
+  so a large photo is editable quickly (DNG loads at full size); zooming
+  to 50 % or closer loads the full resolution ("Loading full
+  resolution…"), and full-size exports, Edit in Lopsy and Done always
+  render from it. While it loads, the version's stored preview shows
+  with "Loading…".
 - **Left column**: **Presets** (apply one, or **Save preset…** from this
   edit, choosing its groups), **Versions** (switch, rename, **New
   version**) and **History** (every step; clicking one goes back to it).
@@ -200,6 +202,8 @@ and on leaving.
   drag), Fit (⌘0), 100% (⌘1) with a zoom readout, Copy edits / Paste edits
   (⇧⌘C, ⇧⌘V), **Edit in Lopsy** and **Export**. The image pans by
   dragging and zooms with the wheel.
+- **Pixel readout**: the rendered colour under the pointer (R G B,
+  0–255).
 - **Histogram** of the rendered edit, updated as it changes. Its shadow
   and highlight markers light when the photo clips, and clicking them
   shows clipped pixels on the photo (blue at black, red at white; never
@@ -213,6 +217,8 @@ and on leaving.
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
   when the camera shot Provia), Neutral and Monochrome; for other photos,
   Standard and Monochrome.
+- **Straighten**: Angle, and **Level** (draw along something that should
+  be level). The crop shrinks to the largest rectangle inside.
 - **White balance**: a **Mode** menu (As shot; Auto, on RAW files; the
   RAW file's presets — Daylight, Cloudy, Shade, Tungsten, the
   fluorescents, Flash, Underwater, as the body has them; and Custom,
@@ -239,12 +245,14 @@ and on leaving.
 - **Finish**: Vignette, with its Midpoint, Roundness and Feather; and
   Grain, Grain size and Roughness. Grain is the same on every render and
   export of a photo.
+- **Local contrast** (Large details, Small details, Haze) and **Sharpness
+  & noise**.
 - Every group has a **Reset**; each slider has a typed value field, and
   double-clicking a slider resets it. Each change is one history step
   named after it ("Exposure +0.50").
 - **Crop** tool: drag the frame; **Aspect** Free, Original, 1 : 1,
   4 : 5, 3 : 2 or 16 : 9, made landscape or portrait; Reset, Done (Enter)
-  or Cancel (Escape). The crop follows rotation.
+  or Cancel (Escape). The crop follows rotation and flips.
 - **Areas** (toolbar): add **Linear** (a gradient across the photo) or
   **Radial** (an ellipse) areas, up to eight, each with Amount, Invert, a
   name, Delete, and its own Exposure, Contrast, Highlights, Shadows,
@@ -358,4 +366,7 @@ Shown in the app with `?`.
 | ? | Show the shortcuts |
 
 In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 100%, ⇧⌘C and
-⇧⌘V copy and paste edits, hold `\` for before, J for clipping.
+⇧⌘V copy and paste edits, hold `\` for before, J for clipping, R crop,
+M a linear area, ⇧M a radial area, ← → the previous or next photo,
+Escape back to the library (or out of the tool in use), ? the Edit
+view's shortcuts.

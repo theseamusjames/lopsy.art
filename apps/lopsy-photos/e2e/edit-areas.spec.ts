@@ -84,4 +84,37 @@ test.describe('Areas', () => {
     const area = Object.values((recipe as { areas: Record<string, { geometry: { cx: number } }> }).areas)[0];
     expect(area?.geometry.cx).toBeGreaterThan(0.55);
   });
+
+  test('M adds a linear area, Shift+M a radial one, and R toggles Crop', async ({ page }) => {
+    await openHarness(page);
+    await openFlatImage(page);
+    await waitForReady(page);
+    await page.locator('body').press('m');
+    await page.locator('body').press('Shift+M');
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Add linear area', 'Add radial area']);
+    await expect(page.getByRole('list', { name: 'Area list' }).getByRole('button', { name: /^(Linear|Radial)/ })).toHaveCount(2);
+    await page.locator('body').press('r');
+    await expect(page.getByTestId('crop-tool')).toBeVisible();
+    await page.locator('body').press('r');
+    await expect(page.getByTestId('crop-tool')).toHaveCount(0);
+  });
+
+  test('the pixel readout shows the colour under the pointer', async ({ page }) => {
+    await openHarness(page);
+    await openFlatImage(page, '#3c78b4');
+    await waitForReady(page);
+    const canvas = page.getByTestId('edit-canvas');
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('no canvas');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.move(box.x + box.width / 2 + 3, box.y + box.height / 2 + 2);
+    const readout = page.getByTestId('pixel-readout');
+    await expect(readout).toBeVisible();
+    const [r, g, b] = ((await readout.textContent()) ?? '').match(/\d+/g)?.map(Number) ?? [];
+    expect(Math.abs((r ?? 0) - 0x3c)).toBeLessThan(8);
+    expect(Math.abs((g ?? 0) - 0x78)).toBeLessThan(8);
+    expect(Math.abs((b ?? 0) - 0xb4)).toBeLessThan(8);
+    await page.mouse.move(box.x + 2, box.y + 2);
+    await expect(readout).toHaveCount(0);
+  });
 });

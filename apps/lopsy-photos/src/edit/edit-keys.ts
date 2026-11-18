@@ -11,7 +11,10 @@ export type EditShortcut =
   | 'copyEdits'
   | 'pasteEdits'
   | 'leave'
-  | 'help';
+  | 'help'
+  | 'crop'
+  | 'linearArea'
+  | 'radialArea';
 
 export interface KeyInfo {
   readonly key: string;
@@ -36,7 +39,10 @@ export function shortcutFor(e: KeyInfo): EditShortcut | null {
   }
   if (e.key === '?' && !e.altKey) return 'help';
   if (e.key === 'Escape' && !e.altKey && !e.shiftKey) return 'leave';
-  if (e.altKey || e.shiftKey) return null;
+  if (e.altKey) return null;
+  if (key === 'm') return e.shiftKey ? 'radialArea' : 'linearArea';
+  if (e.shiftKey) return null;
+  if (key === 'r') return 'crop';
   if (e.key === '\\') return 'before';
   if (e.key === 'ArrowLeft') return 'previous';
   if (e.key === 'ArrowRight') return 'next';
@@ -77,6 +83,9 @@ export const EDIT_SHORTCUTS: readonly { readonly keys: string; readonly action: 
   { keys: '⌘0', action: 'Fit' },
   { keys: '⌘1', action: '100 %' },
   { keys: '\\ (hold)', action: 'Before' },
+  { keys: 'R', action: 'Crop, and Done' },
+  { keys: 'M', action: 'Add a linear area' },
+  { keys: '⇧M', action: 'Add a radial area' },
   { keys: '← →', action: 'Previous or next photo in the filmstrip' },
   { keys: 'Esc', action: 'Back to the library, or cancel the tool in use' },
   { keys: '?', action: 'These shortcuts' },
