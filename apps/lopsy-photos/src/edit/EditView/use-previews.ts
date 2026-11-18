@@ -16,9 +16,8 @@ export interface RenderedPreviews {
 }
 
 async function renderPreviews(engine: DevelopEngine, recipe: Recipe): Promise<RenderedPreviews> {
-  engine.setRecipe(recipe);
-  const thumb = await engine.renderPreview(THUMB_SIZE);
-  const screen = await engine.renderPreview(SCREEN_SIZE);
+  const thumb = await engine.renderPreview(THUMB_SIZE, undefined, recipe);
+  const screen = await engine.renderPreview(SCREEN_SIZE, undefined, recipe);
   return { thumb, screen, recipeHash: recipeHash(recipe) };
 }
 

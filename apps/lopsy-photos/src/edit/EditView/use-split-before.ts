@@ -17,13 +17,12 @@ const MAX_LONG_EDGE = 2048;
 export function useSplitBefore(
   engine: DevelopEngine | null,
   savedRecipe: Recipe,
-  shownRecipe: Recipe,
   longEdge: number,
   renderKey: string,
 ): string | null {
   const [src, setSrc] = useState<string | null>(null);
-  const inputs = useRef({ savedRecipe, shownRecipe, longEdge });
-  inputs.current = { savedRecipe, shownRecipe, longEdge };
+  const inputs = useRef({ savedRecipe, longEdge });
+  inputs.current = { savedRecipe, longEdge };
   const maxSize = Math.min(MAX_LONG_EDGE, Math.max(64, Math.round(longEdge)));
   const key = longEdge > 0 ? `${JSON.stringify(savedRecipe.framing)}@${Math.round(maxSize / 64)}:${renderKey}` : null;
 
@@ -33,12 +32,13 @@ export function useSplitBefore(
     let url: string | null = null;
     const timer = setTimeout(() => {
       const now = inputs.current;
-      engine.setRecipe(beforeRecipe(now.savedRecipe));
-      // exportImage draws synchronously before it first awaits, so the edit
-      // is back on the canvas before the browser paints.
-      const rendering = engine.exportImage({ format: 'jpeg', quality: 0.9, maxSize: Math.min(MAX_LONG_EDGE, Math.max(64, Math.round(now.longEdge))) });
-      engine.setRecipe(now.shownRecipe);
-      rendering
+      engine
+        .exportImage({
+          format: 'jpeg',
+          quality: 0.9,
+          maxSize: Math.min(MAX_LONG_EDGE, Math.max(64, Math.round(now.longEdge))),
+          recipe: beforeRecipe(now.savedRecipe),
+        })
         .then((blob) => {
           if (isCancelled) return;
           url = URL.createObjectURL(blob);

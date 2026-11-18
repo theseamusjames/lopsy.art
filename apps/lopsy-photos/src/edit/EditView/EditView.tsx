@@ -527,7 +527,6 @@ export function EditView({
   const beforeSrc = useSplitBefore(
     engine,
     savedRecipe,
-    engineRecipe,
     splitBox ? Math.max(splitBox.width, splitBox.height) * pixelRatio : 0,
     status.kind,
   );
@@ -572,13 +571,11 @@ export function EditView({
     if (!engine || !onExport || isBusy) return;
     setIsBusy(true);
     try {
-      engine.setRecipe(savedRecipe);
-      const blob = await engine.exportImage({ format: 'jpeg', quality: 0.92 });
+      const blob = await engine.exportImage({ format: 'jpeg', quality: 0.92, recipe: savedRecipe });
       onExport(blob, `${baseName(asset.fileName)}.jpg`);
     } catch (err) {
       console.error('Lopsy Photos: export failed', err);
     } finally {
-      engine.setRecipe(engineRecipe);
       setIsBusy(false);
     }
   };
@@ -586,13 +583,8 @@ export function EditView({
   /** A renderer of `recipe` as a full-size 16-bit PNG, for Edit in Lopsy and Done. */
   const fullPng16 = (recipe: Recipe) => async (): Promise<ArrayBuffer> => {
     if (!engine) throw new Error('The editing engine is not running');
-    engine.setRecipe(recipe);
-    try {
-      const png = await engine.exportImage({ format: 'png' });
-      return await png.arrayBuffer();
-    } finally {
-      engine.setRecipe(engineRecipe);
-    }
+    const png = await engine.exportImage({ format: 'png', recipe });
+    return png.arrayBuffer();
   };
 
   const handleEditInLopsy = () => {
