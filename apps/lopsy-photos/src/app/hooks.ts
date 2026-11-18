@@ -100,7 +100,7 @@ export function usePreviewUrl(ref: PreviewRef | null, size: 'thumb' | 'screen'):
 
 /** Whether an import item has stopped moving (done, skipped or failed). */
 export function isSettled(state: ImportItemState): boolean {
-  return state === 'done' || state === 'duplicate' || state === 'unsupported' || state === 'failed';
+  return state === 'done' || state === 'duplicate' || state === 'unsupported' || state === 'failed' || state === 'skipped';
 }
 
 const noSubscribe = () => () => {};

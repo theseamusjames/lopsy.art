@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Cloud, Folder, LoaderCircle, Monitor } from 'lucide-react';
-import type { StorageChoice } from '../../app/backend';
+import type { ReconnectOffer, StorageChoice } from '../../app/backend';
+import { Button } from '../Button/Button';
 import styles from './StartScreen.module.css';
 
 interface Choice {
@@ -29,12 +30,26 @@ const CHOICES: Record<StorageChoice, Choice> = {
 
 interface StartScreenProps {
   choices: readonly StorageChoice[];
+  /** The library from the last visit, offered first. */
+  offer: ReconnectOffer | null;
   connecting: StorageChoice | null;
   error: string | null;
   onChoose: (choice: StorageChoice) => void;
+  onReconnect: (offer: ReconnectOffer) => void;
 }
 
-export function StartScreen({ choices, connecting, error, onChoose }: StartScreenProps) {
+function reopenWords(offer: ReconnectOffer): string {
+  switch (offer.kind) {
+    case 'browser':
+      return 'Open your library in this browser';
+    case 'local-folder':
+      return `Reopen the folder “${offer.label}”`;
+    case 'google-drive':
+      return `Continue as ${offer.label}`;
+  }
+}
+
+export function StartScreen({ choices, offer, connecting, error, onChoose, onReconnect }: StartScreenProps) {
   return (
     <main className={styles.screen}>
       <div className={styles.column}>
@@ -45,7 +60,16 @@ export function StartScreen({ choices, connecting, error, onChoose }: StartScree
         </p>
         <p className={styles.lead}>Your photos are stored where you choose, never on Lopsy’s servers.</p>
 
-        <h2 className={styles.question}>Where should your library live?</h2>
+        {offer && (
+          <div className={styles.reopen}>
+            <Button variant="primary" size="lg" disabled={connecting !== null} onClick={() => onReconnect(offer)}>
+              {connecting === offer.kind ? <LoaderCircle size={16} className={styles.spin} /> : CHOICES[offer.kind].icon}
+              {reopenWords(offer)}
+            </Button>
+          </div>
+        )}
+
+        <h2 className={styles.question}>{offer ? 'Or choose where your library lives' : 'Where should your library live?'}</h2>
         <ul className={styles.choices}>
           {choices.map((kind) => {
             const c = CHOICES[kind];

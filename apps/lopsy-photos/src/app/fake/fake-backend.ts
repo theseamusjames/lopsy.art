@@ -14,6 +14,7 @@ import {
   type ExportProgress,
   type ExportRequest,
   type PhotosBackend,
+  type ReconnectOffer,
   type StorageChoice,
 } from '../backend';
 import { baseNameOf, extensionOf, isPhotoFile, isRawFile } from '../../import/import-summary';
@@ -206,6 +207,14 @@ export class FakeBackend implements PhotosBackend {
   listStorageOptions(): readonly StorageChoice[] {
     const choices = browserStorageChoices({ googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID });
     return choices.includes('browser') ? choices : ['browser', ...choices];
+  }
+
+  async getReconnectOffer(): Promise<ReconnectOffer | null> {
+    return null;
+  }
+
+  async reauthorize(session: LibrarySession): Promise<void> {
+    await session.syncNow();
   }
 
   async connect(kind: StorageChoice): Promise<Connection> {
