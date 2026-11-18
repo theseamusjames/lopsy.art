@@ -75,6 +75,12 @@ export async function storeEditPreviews(
       unused.push(ref.fileId);
     }
   }
-  await Promise.allSettled(unused.map((id) => session.adapter.deletePermanently(id)));
+  // A preview file can be shared: versions with the same recipe reuse one render (preview-refresh.ts).
+  const stillShown = new Set<string>();
+  for (const other of session.getView().versions.values()) {
+    if (other.thumb) stillShown.add(other.thumb.fileId);
+    if (other.screen) stillShown.add(other.screen.fileId);
+  }
+  await Promise.allSettled(unused.filter((id) => !stillShown.has(id)).map((id) => session.adapter.deletePermanently(id)));
   if (recordError !== null) throw recordError;
 }

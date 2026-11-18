@@ -8,6 +8,7 @@
 
 import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { KeepOriginals, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
+import type { PreviewRefresher } from './preview-refresh';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
 import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
@@ -177,6 +178,9 @@ export interface PhotosBackend {
 
   /** Keeps the original in the device cache while it is open in Edit. Returns the release. */
   pinOriginal(session: LibrarySession, asset: Asset): () => void;
+
+  /** Background previews for versions changed outside the Edit view; null when this backend has none. */
+  getPreviewRefresh(session: LibrarySession): PreviewRefresher | null;
 
   /** Stores the Edit view's rendered previews as the version's thumb and screen, replacing the old ones. */
   storeEditPreviews(session: LibrarySession, versionId: VersionId, previews: EditPreviews): Promise<void>;
