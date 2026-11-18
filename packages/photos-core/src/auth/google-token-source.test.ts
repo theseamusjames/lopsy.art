@@ -100,6 +100,26 @@ describe('GoogleTokenSource with an expected account', () => {
     await expect(source.getToken()).rejects.toMatchObject({ code: 'auth' });
   });
 
+  it('hints the expected account to Google by its sub', async () => {
+    const hints: unknown[] = [];
+    const oauth2 = {
+      initTokenClient(config: { callback: (response: Record<string, unknown>) => void; login_hint?: string }) {
+        hints.push(config.login_hint);
+        return {
+          requestAccessToken(overrides?: { login_hint?: string }) {
+            hints.push(overrides?.login_hint);
+            setTimeout(() => config.callback({ access_token: 'token-for-alice', expires_in: 3600 }), 0);
+          },
+        };
+      },
+      hasGrantedAllScopes: () => true,
+    };
+    Reflect.set(globalThis, 'google', { accounts: { oauth2 } });
+    const source = new GoogleTokenSource({ clientId: 'c', expectedAccountId: 'alice', fetch: userinfo });
+    await source.requestInteractive();
+    expect(hints).toEqual(['alice', 'alice']);
+  });
+
   it('does not call userinfo without an expected account', async () => {
     installGis(['token-for-anyone']);
     let calls = 0;

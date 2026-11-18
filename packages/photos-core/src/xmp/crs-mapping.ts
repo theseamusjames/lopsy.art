@@ -240,6 +240,24 @@ export function crsToRecipePaths(src: CrsSource): Record<string, RecipeLeaf> {
   return out;
 }
 
+/** Detail controls Lightroom gives a default of its own (sharpening 40, colour noise 25 on RAW) when they are missing. */
+const LIGHTROOM_DETAIL_DEFAULTS: readonly (readonly [crs: string, path: string])[] = [
+  ['Sharpness', 'sharpness.amount'],
+  ['ColorNoiseReduction', 'noise.color'],
+  ['LuminanceSmoothing', 'noise.luminance'],
+];
+
+/**
+ * Attributes for the detail controls `written` leaves out, at our values:
+ * without them Lightroom would add its own sharpening and noise reduction.
+ */
+export function explicitDetailDefaults(recipe: Recipe, written: readonly string[]): string[] {
+  const paths = recipeToPaths(recipe);
+  return LIGHTROOM_DETAIL_DEFAULTS.filter(([crs]) => !written.some((a) => a.startsWith(`crs:${crs}=`))).map(
+    ([crs, path]) => `crs:${crs}="${String(paths[path])}"`,
+  );
+}
+
 function signed(value: number): string {
   return `${value > 0 ? '+' : ''}${value}`;
 }

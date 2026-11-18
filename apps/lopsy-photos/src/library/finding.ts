@@ -10,7 +10,7 @@ import { compileSearch, type LabelChoice, type SavedSearch, type SearchRule } fr
 import { computeFacets, type Facets } from '@lopsy/photos-core/search/facets';
 import { groupBursts } from '@lopsy/photos-core/search/bursts';
 import { versionItemId, versionsByAsset, type ItemId } from './items';
-import { baseAssets, compareAssets, type AssetQuery, type Collection } from './asset-query';
+import { baseAssets, compareAssets, isHiddenPairHalf, type AssetQuery, type Collection } from './asset-query';
 
 export interface FacetFilter {
   readonly cameras: readonly string[];
@@ -93,6 +93,8 @@ export interface FindQuery extends AssetQuery {
   /** Burst covers whose burst is shown open. */
   readonly expanded: ReadonlySet<AssetId>;
   readonly savedSearches: readonly SavedSearch[];
+  /** For the Last edited order: when the photo's shown version was last edited (sortable), or null. */
+  readonly lastEdited?: (asset: Asset) => string | null;
 }
 
 export interface FindResult {
@@ -154,7 +156,16 @@ export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((ass
   const rule = facetRule(query.facets);
   const predicate = rule ? compileSearch(rule) : null;
   const shown = predicate ? base.filter((a) => predicate(a, view)) : base;
-  shown.sort((a, b) => compareAssets(a, b, query.sort));
+  let editedAt: ((asset: Asset) => string | null) | undefined;
+  if (query.sort.key === 'edited' && query.lastEdited) {
+    const lastEdited = query.lastEdited;
+    const memo = new Map<AssetId, string | null>();
+    editedAt = (asset) => {
+      if (!memo.has(asset.id)) memo.set(asset.id, lastEdited(asset));
+      return memo.get(asset.id) ?? null;
+    };
+  }
+  shown.sort((a, b) => compareAssets(a, b, query.sort, editedAt));
 
   const bursts = new Map<AssetId, number>();
   const album = query.collection.kind === 'album' ? view.albums.get(query.collection.albumId) : undefined;
@@ -200,7 +211,7 @@ export interface ImportBatch {
 export function importBatches(view: LibraryView): ImportBatch[] {
   const batches = new Map<string, { importedAt: string; count: number }>();
   for (const a of view.assets.values()) {
-    if (a.deleted) continue;
+    if (a.deleted || isHiddenPairHalf(a, view.assets)) continue;
     const b = batches.get(a.importId);
     if (!b) batches.set(a.importId, { importedAt: a.importedAt, count: 1 });
     else {

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { clipping, formatShare, histogramPath, isClipped, parseHistogram, sharedMax } from '../histogram';
+import { useClippingWarning } from '../clipping-warning';
 import styles from './Histogram.module.css';
 
 export interface HistogramProps {
@@ -13,8 +14,8 @@ const HEIGHT = 72;
 /**
  * The histogram of the displayed render, with shadow and highlight
  * clipping indicators. The indicators light when more than a trace of any
- * channel sits at black or white; the engine has no clipping overlay yet,
- * so they do not toggle one.
+ * channel sits at black or white, and each toggles the clipping warning
+ * on the photo (J toggles both).
  */
 export function Histogram({ bins }: HistogramProps) {
   const drawn = useMemo(() => {
@@ -32,6 +33,7 @@ export function Histogram({ bins }: HistogramProps) {
 
   const shadows = drawn?.clip.shadows ?? 0;
   const highlights = drawn?.clip.highlights ?? 0;
+  const warning = useClippingWarning();
 
   return (
     <figure className={styles.histogram} data-testid="histogram" data-ready={drawn ? 'true' : undefined}>
@@ -45,17 +47,25 @@ export function Histogram({ bins }: HistogramProps) {
           </>
         )}
       </svg>
-      <span
+      <button
+        type="button"
         className={styles.clipShadows}
         data-clipped={isClipped(shadows) || undefined}
         data-testid="clip-shadows"
-        title={`Shadows at black: ${formatShare(shadows)}`}
+        aria-pressed={warning.shadows}
+        aria-label="Show shadow clipping (J)"
+        title={`Shadows at black: ${formatShare(shadows)}. Click to show them in blue (J).`}
+        onClick={() => warning.toggle('shadows')}
       />
-      <span
+      <button
+        type="button"
         className={styles.clipHighlights}
         data-clipped={isClipped(highlights) || undefined}
         data-testid="clip-highlights"
-        title={`Highlights at white: ${formatShare(highlights)}`}
+        aria-pressed={warning.highlights}
+        aria-label="Show highlight clipping (J)"
+        title={`Highlights at white: ${formatShare(highlights)}. Click to show them in red (J).`}
+        onClick={() => warning.toggle('highlights')}
       />
     </figure>
   );

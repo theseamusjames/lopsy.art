@@ -14,6 +14,10 @@
 
 import initWasm, {
   addLayer,
+  setClippingWarning as engineSetClippingWarning,
+  setImageDetailMaskView,
+  setImageFinish,
+  clearImageFinish,
   autoTone as engineAutoTone,
   clearImageAreas,
   setImageAreaOverlay,
@@ -59,7 +63,6 @@ import initWasm, {
   setImageSaturation,
   setImageShadows,
   setImageVibrance,
-  setImageVignette,
   setImageWhites,
   setLayerOrder,
   setRawDevelop,
@@ -85,6 +88,7 @@ import {
 } from './recipe-to-adjustments';
 import { cropPixels, inverseRotation, isFullCrop, rotatedBounds, straightenedCrop, toFramed } from './crop';
 import { detailKey, detailValues, localContrastValues } from './detail-controls';
+import { finishKey, finishValues } from './finish-controls';
 import { areaValues, type AreaFrame } from './areas';
 import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
@@ -119,6 +123,10 @@ export interface ExportOptions {
   readonly maxSize?: number;
   /** sRGB when omitted. The engine knows sRGB and Display P3 only. */
   readonly colorSpace?: 'srgb' | 'display-p3';
+  /** The exact output size (may enlarge); overrides `maxSize`. Ignored for TIFF. */
+  readonly size?: Size;
+  /** PNG only: 16 bits (the engine's PNG, full size only) by default, or 8. */
+  readonly pngDepth?: 8 | 16;
 }
 
 /** What the loaded photo offers the Edit view. */
@@ -183,6 +191,12 @@ export interface DevelopEngine {
   /** A JPEG of the current edit, long edge at most `maxSize`. */
   renderPreview(maxSize: number, quality?: number): Promise<Blob>;
   exportImage(options: ExportOptions): Promise<Blob>;
+  /** Paints clipped pixels on the live frame only (any channel at or past white red, at or below black blue); exports are unaffected. */
+  setClippingWarning(shadows: boolean, highlights: boolean): void;
+  /** The photo's grain seed (finish-controls.ts grainSeed), so grain is the same on every render and export. */
+  setGrainSeed(seed: number): void;
+  /** Shows what Sharpen affects instead of the photo, on the live frame (Alt while dragging a Sharpen slider). */
+  setDetailMaskView(on: boolean): void;
   /**
    * The white balance (recipe units: absolute for RAW, relative for other
    * photos) that makes the patch of `radius` document pixels around (x, y)
@@ -284,7 +298,6 @@ function pushAdjustments(engine: Engine, adj: EngineAdjustments): void {
   setImageBlacks(engine, adj.blacks);
   setImageSaturation(engine, adj.saturation);
   setImageVibrance(engine, adj.vibrance);
-  setImageVignette(engine, adj.vignette);
   const pf = adj.photoFilter;
   setImagePhotoFilter(engine, pf.r, pf.g, pf.b, pf.density, true);
 }
@@ -671,6 +684,8 @@ class PhotoEngine implements DevelopEngine {
     this.layout();
     if (wasFit) this.fit();
     else this.setView({ ...this.view, zoom, isFit: false });
+    // Grain is sized in source pixels: the full-size layer needs it again.
+    this.applyFinish();
     this.invalidate();
   }
 
@@ -768,6 +783,7 @@ class PhotoEngine implements DevelopEngine {
     }
     this.applyColorControls();
     this.applyDetail();
+    this.applyFinish();
     if (this.rawDefaults) {
       const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe, this.engineProfiles));
       if (json !== this.appliedRawJson) {
@@ -862,6 +878,66 @@ class PhotoEngine implements DevelopEngine {
     this.invalidate();
   }
 
+  private clippingWarning = { shadows: false, highlights: false };
+  private grainSeedValue = 0;
+  private finishKeyApplied: string | null = null;
+
+  private isDetailMaskView = false;
+
+  setDetailMaskView(on: boolean): void {
+    this.isDetailMaskView = on;
+    if (this.isDisposed) return;
+    setImageDetailMaskView(this.engine, on);
+    this.invalidate();
+  }
+
+  /**
+   * Runs `work` with the screen-only views (clipping warning, sharpening
+   * mask) off, for anything that reads the rendered frame: exports and
+   * previews draw it, and the histogram counts it. Costs nothing while
+   * neither view is on.
+   */
+  private async withScreenViewsOff<T>(work: () => Promise<T>): Promise<T> {
+    const { shadows, highlights } = this.clippingWarning;
+    const isMask = this.isDetailMaskView;
+    if (!shadows && !highlights && !isMask) return work();
+    if (shadows || highlights) engineSetClippingWarning(this.engine, false, false);
+    if (isMask) setImageDetailMaskView(this.engine, false);
+    try {
+      return await work();
+    } finally {
+      if (!this.isDisposed) {
+        engineSetClippingWarning(this.engine, this.clippingWarning.shadows, this.clippingWarning.highlights);
+        setImageDetailMaskView(this.engine, this.isDetailMaskView);
+        this.invalidate();
+      }
+    }
+  }
+
+  setGrainSeed(seed: number): void {
+    if (seed === this.grainSeedValue) return;
+    this.grainSeedValue = seed;
+    this.applyFinish();
+  }
+
+  /** Vignette shape and grain in one engine pass (it replaces setImageVignette); grain scales with the working size. */
+  private applyFinish(): void {
+    const key = finishKey(this.recipe.finish, this.grainSeedValue, this.pixelScale);
+    if (key === this.finishKeyApplied) return;
+    this.finishKeyApplied = key;
+    const values = finishValues(this.recipe.finish, this.grainSeedValue, this.pixelScale);
+    if (values) setImageFinish(this.engine, values);
+    else clearImageFinish(this.engine);
+    this.invalidate();
+  }
+
+  setClippingWarning(shadows: boolean, highlights: boolean): void {
+    this.clippingWarning = { shadows, highlights };
+    if (this.isDisposed) return;
+    engineSetClippingWarning(this.engine, shadows, highlights);
+    this.invalidate();
+  }
+
   setInteractive(isInteractive: boolean): void {
     if (this.isInteractive === isInteractive) return;
     this.isInteractive = isInteractive;
@@ -936,10 +1012,13 @@ class PhotoEngine implements DevelopEngine {
 
   async readHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed) return null;
-    render(this.engine);
-    // WebGL answers at once; a wgpu build parks the read, which this POC does not wait for.
-    const bins: unknown = readDevelopHistogram(this.engine);
-    return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
+    // The histogram counts the photo, not the clipping colours or the sharpening mask.
+    return this.withScreenViewsOff(async () => {
+      render(this.engine);
+      // WebGL answers at once; a wgpu build parks the read, which this POC does not wait for.
+      const bins: unknown = readDevelopHistogram(this.engine);
+      return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
+    });
   }
 
   async autoTone(recipe: Recipe): Promise<ToneValues> {
@@ -1065,6 +1144,11 @@ class PhotoEngine implements DevelopEngine {
   }
 
   async exportImage(options: ExportOptions): Promise<Blob> {
+    // Exports and previews draw through the live path too: never with a screen-only view on.
+    return this.withScreenViewsOff(() => this.exportClean(options));
+  }
+
+  private async exportClean(options: ExportOptions): Promise<Blob> {
     const working = this.imageSize();
     if (working && !this.isFullResolution() && (!options.maxSize || options.maxSize > Math.max(working.width, working.height))) {
       await this.ensureFullResolution();
@@ -1073,10 +1157,10 @@ class PhotoEngine implements DevelopEngine {
     if (!image || this.isDisposed) throw new Error('No photo is loaded');
     const space = options.colorSpace === 'display-p3' ? DISPLAY_P3 : SRGB;
     if (options.format === 'tiff') return this.encodeTiff16(space);
-    const out = limitSize(image, options.maxSize);
+    const out = options.size ?? limitSize(image, options.maxSize);
     const mime = options.format === 'png' ? PNG_MIME : JPEG_MIME;
     const isFullSize = out.width === image.width && out.height === image.height;
-    if (options.format === 'png' && isFullSize) return this.encodePng16(space);
+    if (options.format === 'png' && isFullSize && options.pngDepth !== 8) return this.encodePng16(space);
     // The drawing buffer is sRGB; Display P3 goes through the engine's P3 PNG instead.
     const drawn = space === SRGB ? this.drawAtSize(out) : null;
     if (drawn) return drawn.convertToBlob({ type: mime, quality: options.quality });

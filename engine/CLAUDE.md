@@ -109,16 +109,32 @@ gpu/shaders/
     invert.wgsl, hue_sat.wgsl, sharpen.wgsl, noise.wgsl, posterize.wgsl, threshold.wgsl
   gradient/
     gradient_linear.wgsl, gradient_radial.wgsl
-  develop/
-    raw_develop.wgsl      # POC RAW develop: linear camera RGB → sRGB (src/develop/)
+  develop/                # Lopsy Photos' develop chain (src/develop/mod.rs lists them)
+    raw_develop.wgsl      # RAW stage: linear camera RGB → sRGB
+    noise_reduce.wgsl, local_contrast.wgsl, detail_sharpen.wgsl, blur_axis.wgsl
+    color_mixer.wgsl, areas.wgsl, finish.wgsl, clip_warning.wgsl
 ```
 
-The RAW develop stage (`src/develop/`, `commands/develop.rs`) is opt-in per
-document: `EngineInner::raw_develop` is `None` unless a host calls
-`setRawDevelop`, and the compositor then develops the composite before the
-image adjustments. Its CPU twin is `lopsy_core::raf::develop::develop_reference`;
-change the two together (`core/tests/raf_develop.rs`, and the render test
-in `tests/render.rs`).
+### The Photos develop chain
+
+`src/develop/mod.rs` is the map: the stage order (RAW develop, noise
+reduction, local contrast and haze, image adjustments, colour mixer, areas,
+sharpening, finish, then the screen-only views), where each pass lives, the
+JS API, and the deviations from `docs/lopsy-photos-spec.md` 6.10. Rules:
+
+- Every stage is off (`None`) by default, and then the composite is
+  byte-identical to Lopsy's. Keep it that way.
+- Every stage has a CPU reference in `lopsy-core` (`raf::develop`,
+  `detail`, `color_mixer`, `areas`, `finish`). Change a shader and its
+  reference together; the tests compare them.
+- Develop shaders compile lazily through `ShaderPrograms::<name>()`, never
+  in `compile_all`.
+- Screen-only views (overlays, clipping warning, mask view) run only in the
+  live `compositor::composite`, never on an export path, and a test checks
+  that exports are byte-identical with them on.
+- A decoder checks header sizes before allocating from them
+  (`lopsy_core::decode::DecodeLimits`: `PNG_LIMITS`, `RAW_LIMITS`), and
+  allocates large buffers with `try_reserve`.
 
 ### Adding an engine function JS can call
 

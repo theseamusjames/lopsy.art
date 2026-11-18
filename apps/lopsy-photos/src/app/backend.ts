@@ -12,6 +12,7 @@ import type { PreviewRefresher } from './preview-refresh';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
 import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
+import type { ExportExtras } from '../library/export-size';
 import type { ExportColorSpace, ExportFormat as CoreExportFormat, ExportSettings } from '@lopsy/photos-core/export/types';
 
 /** Where a library can live, as offered on the start screen. */
@@ -56,6 +57,8 @@ export interface ExportRequest {
   readonly longEdge: number | null;
   /** 'library': the library's Exports folder; 'download': the browser's downloads. */
   readonly destination: 'library' | 'download';
+  /** Size by short edge or megapixels, enlarging, PNG depth, zip or not (library/export-size.ts). */
+  readonly extras?: ExportExtras;
   /** The export's name; its folder under Exports. */
   readonly name: string;
 }
@@ -187,6 +190,9 @@ export interface PhotosBackend {
 
   /** Tombstones the assets and moves their original files to the storage's trash. */
   trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void>;
+
+  /** Undoes trashAssets: the photos and their files come back. */
+  untrashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void>;
 
   /** Renders and writes the versions. */
   exportVersions(session: LibrarySession, request: ExportRequest): ExportJob;

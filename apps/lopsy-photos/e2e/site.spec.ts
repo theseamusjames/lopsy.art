@@ -88,13 +88,15 @@ test("Lopsy's handoff default points at the served Photos", async ({ page }) => 
 });
 
 test("a first Photos visit under Lopsy's root worker neither reloads nor offers an update", async ({ page }) => {
-  const problems = watch(page);
   await page.goto('/');
   // Lopsy registers its own worker at /sw.js, scope /, and it claims the origin's pages.
   await expect
     .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration('/'))?.active?.state ?? null))
     .toBe('activated');
 
+  // Lopsy's own loads are not under test here; leaving the page mid-load would abort them.
+  await page.waitForLoadState('networkidle');
+  const problems = watch(page);
   let loads = 0;
   page.on('load', () => {
     loads += 1;

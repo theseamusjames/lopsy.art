@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Wand2 } from 'lucide-react';
 import { usePresets } from '../../app/hooks';
 import { applyPreset } from '../../app/commands';
-import { IconButton } from '../IconButton/IconButton';
+import { Button } from '../Button/Button';
 import { Popover } from '../Popover/Popover';
 import styles from './PresetMenu.module.css';
 
@@ -35,13 +35,18 @@ export function PresetMenu({ disabled }: PresetMenuProps) {
 
   return (
     <div className={styles.anchor}>
-      <IconButton
-        label={disabled ? 'Apply a preset: select photos first' : 'Apply a preset to the selected photos'}
-        icon={<Wand2 size={16} />}
+      <Button
+        size="sm"
+        variant={open ? 'secondary' : 'ghost'}
+        title={disabled ? 'Apply a preset: select photos first' : 'Apply a preset to the selected photos'}
+        aria-haspopup="menu"
+        aria-expanded={open}
         disabled={disabled}
-        active={open}
         onClick={() => setOpen((o) => !o)}
-      />
+      >
+        <Wand2 size={14} />
+        Presets
+      </Button>
       {open && (
         <Popover onClose={close} label="Presets">
           <div className={styles.menu} role="menu" aria-label="Presets">

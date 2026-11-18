@@ -1,29 +1,113 @@
-//! The proof-of-concept RAW develop stage: the first step of spec E2/E3.
+//! The Lopsy Photos develop chain: the GPU stages that turn a document's
+//! composite into the developed picture, and the RAW stage that starts it.
+//! Start here; each stage's maths lives in its CPU reference in `lopsy-core`.
+//!
+//! # Stage order
+//!
+//! Every stage is `None` (or off) by default; then nothing runs and the
+//! composite is byte-identical to Lopsy's. Each pass reads the composite,
+//! draws into scratch A and is copied back texel for texel.
+//!
+//! | # | Stage | Pass | Shader (`gpu/shaders/`) | CPU reference (`lopsy_core::`) |
+//! |---|---|---|---|---|
+//! | 1 | Layers composited | `document::compositor` | `blend.wgsl` | — |
+//! | 2 | RAW develop: white balance, camera matrix, exposure, saturation, highlight desaturation, base curve, sRGB | this module | `develop/raw_develop.wgsl` | `raf::develop::develop_reference` |
+//! | 3 | Noise reduction | [`detail::apply_noise_reduction`] | `develop/noise_reduce.wgsl` | `detail::noise_reduce_reference` |
+//! | 4 | Haze, large and small details | [`detail::apply_local_contrast`] | `develop/local_contrast.wgsl` | `detail::local_contrast_reference` |
+//! | 5 | Image adjustments: tone, colour, curves, levels, colour grading | `imaging::adjustments` | `filters/adjustments.wgsl` | — (Lopsy's) |
+//! | 6 | Colour by hue | `compositor::apply_color_mixer` | `develop/color_mixer.wgsl` | `color_mixer::color_mixer_reference` |
+//! | 7 | Areas (linear and radial masks) | `compositor::apply_areas` | `develop/areas.wgsl` | `areas::areas_reference` |
+//! | 8 | Sharpening | [`detail::apply_sharpening`] | `develop/detail_sharpen.wgsl` | `detail::sharpen_reference` |
+//! | 9 | Finish: shaped vignette, grain | `compositor::apply_finish` | `develop/finish.wgsl` | `finish::finish_reference` |
+//! | 10 | Screen only: sharpening mask view (in place of 8), area mask overlay, clipping warning | `compositor` (live frame) | `develop/detail_sharpen.wgsl`, `develop/areas.wgsl`, `develop/clip_warning.wgsl` | `areas::overlay_reference` |
+//!
+//! Blurs for stages 3, 4 and 8 are `develop/blur_axis.wgsl`, separable up
+//! to σ = 4 working pixels and box-downscaled first above that
+//! ([`detail`]). Radii are in full-resolution pixels times a `pixelScale`
+//! (working width / full width), so the reduced working image and the
+//! full-size export blur over the same part of the picture.
+//!
+//! **Exports.** The 16-bit exports (`exportPng16`, `exportTiff16`) run stages
+//! 1–9. The 8-bit `compositeForExport` and Flatten run 1–9 except 5:
+//! they never applied the document's image adjustments in Lopsy, and that
+//! is unchanged. Stage 10 never reaches an export.
+//!
+//! **Lazily compiled.** Every shader under `gpu/shaders/develop/` (raw
+//! develop, colour mixer, areas, blur, noise reduction, sharpening, local
+//! contrast, finish, clipping warning) is compiled the first time a stage
+//! asks for it through `ShaderPrograms::<name>()`, never in `compile_all`,
+//! so a Lopsy session never links them and a driver that rejects one cannot
+//! stop the engine from starting.
+//!
+//! # The JS API (wasm exports)
+//!
+//! RAW develop (`hosts/wasm/src/api/raf.rs`, `develop.rs`):
+//! - `rafRenderLinearBand(src, paramsJson, y0, y1, srcY0, srcY1)`: a band in linear camera RGB, unclamped.
+//! - `rafRenderBinnedLinear(src, paramsJson, minLongEdge)` and `RafPrepared.binnedLinear(minLongEdge)`: the binned first view, no demosaic.
+//! - `rafDevelopDefaults(paramsJson)`: the settings that reproduce Lopsy's import look.
+//! - `rafDevelopProfiles(paramsJson)`: the Profile menu (camera, the film-simulation looks, neutral, monochrome).
+//! - `setRawDevelop(engine, json)`, `clearRawDevelop(engine)`.
+//!
+//! White balance and statistics:
+//! - `rafAutoWhiteBalance(linearRgba)`: near-neutral-pixel white balance, as `wbRatio`.
+//! - `rafWhiteBalancePresets(rafBytes)`, `rafWhiteBalanceKelvin(rafBytes)`: the body's presets in recipe units, and the Kelvin scale.
+//! - `sampleNeutralWhiteBalance(engine, x, y, radius)` (readback): the picker.
+//! - `readDevelopHistogram(engine)` (readback): 4 × 256 bins of the displayed result.
+//! - `autoTone(histogram, currentJson)`.
+//!
+//! Colour: `setImageColorMixer` / `clearImageColorMixer` (24 floats),
+//! `setImageColorGrading` / `clearImageColorGrading` (Lopsy's 18 floats, on
+//! the document's image adjustments).
+//!
+//! Detail: `setImageDetail` / `clearImageDetail` (7 floats: sharpening and
+//! noise reduction), `setImageLocalContrast` / `clearImageLocalContrast`
+//! (4 floats).
+//!
+//! Areas: `setImageAreas` / `clearImageAreas` (16 floats an area, at most 8).
+//!
+//! Finish: `setImageFinish` / `clearImageFinish` (9 floats).
+//!
+//! Views, screen only: `setImageAreaOverlay(engine, index)`,
+//! `setClippingWarning(engine, shadows, highlights)`,
+//! `setImageDetailMaskView(engine, on)`.
+//!
+//! Export: `exportTiff16(engine, colorSpace)` (readback), the same composite
+//! as `exportPng16` (`lopsy_core::tiff`).
+//!
+//! Each export's layout and units are in its doc comment and in the
+//! command in `commands/develop.rs` (or `commands/adjustment.rs`).
+//!
+//! # Deviations from spec 6.10
+//!
+//! This is a proof of concept on Lopsy's compositor, not the scene-referred
+//! pipeline the spec describes:
+//! - After the RAW stage everything is display-referred (sRGB-encoded) in
+//!   sRGB primaries, not linear Rec. 2020: the stages that follow are
+//!   Lopsy's image adjustments, which work that way.
+//! - The camera matrix does not follow the white balance (no dual-
+//!   illuminant interpolation, so no true Kelvin; the Kelvin readout is a
+//!   fit to the body's presets), and highlights are desaturated, not
+//!   reconstructed.
+//! - Noise reduction and local contrast run on encoded values, and local
+//!   contrast runs before the tone controls instead of after them, because
+//!   tone, colour and curves are one pass (stage 5).
+//! - Areas apply their own adjustments after the global colour stages
+//!   rather than re-running stages 3–12 per area, and the large-details
+//!   control is not offered per area.
+//! - There is no stage caching: a frame runs every active stage.
+//! - The RAW stage develops the whole composite, so anything else in the
+//!   document (other layers, the background colour) is developed too. On a
+//!   WebGL context without float render targets the composite is 8-bit,
+//!   which clips and bands linear values: develop only on RGBA16F.
+//! - Lab documents are not handled by these stages.
+//!
+//! # This module: the RAW stage
 //!
 //! A RAW document's layer holds linear camera RGB at the as-shot white
-//! balance (`lopsy_core::raf::develop::render_linear_band`). When the
-//! document has a [`RawDevelopState`], the compositor runs
-//! `gpu/shaders/develop/raw_develop.wgsl` over the composite after the layers
-//! are blended and before the document's image adjustments: white balance
-//! (`wb_ratio`, camera space) → camera matrix → exposure (baseline + user
-//! EV) → saturation → highlight desaturation → base curve (a LUT texture) →
-//! sRGB transfer. White balance and exposure are therefore applied in linear
-//! light and can change without decoding again. With the settings from
-//! `develop_defaults` the result matches today's baked decode without its
-//! capture sharpening; `lopsy_core::raf::develop::develop_reference` is the
-//! CPU twin the tests compare against.
-//!
-//! With no state (the default) nothing runs and Lopsy renders as before.
-//!
-//! Limits of the proof of concept, which the full scene-referred pipeline
-//! (spec 6.10) replaces: it develops the whole composite, so anything else in
-//! the document (other layers, the background colour) is developed too; it
-//! works in sRGB primaries rather than linear Rec. 2020; the camera matrix
-//! does not follow the white balance (no dual-illuminant interpolation); it
-//! desaturates highlights instead of reconstructing them; there is no stage
-//! caching, sharpening, noise reduction or Lab support. On a WebGL context
-//! without float render targets the composite is 8-bit, which clips and
-//! bands linear values: develop there only on RGBA16F.
+//! balance (`lopsy_core::raf::develop::render_linear_band`). With a
+//! [`RawDevelopState`], stage 2 develops it; with the settings from
+//! `develop_defaults` the result matches Lopsy's baked RAF decode without
+//! its capture sharpening.
 
 pub mod detail;
 

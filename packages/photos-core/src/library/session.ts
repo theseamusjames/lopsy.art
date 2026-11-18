@@ -274,18 +274,15 @@ export class NotADocumentError extends Error {
   }
 }
 
-/** One field or set member a library step changed. */
+/** A field or a set member that library history tracks. */
+type LibTarget =
+  | { readonly t: 'field'; readonly kind: EntityKind; readonly id: string; readonly path: string }
+  | { readonly t: 'member'; readonly kind: EntityKind; readonly id: string; readonly set: string; readonly member: string };
+
+/** One field or set member a library step changed, with its values before and after. */
 type LibEntry =
-  | { readonly t: 'field'; readonly kind: EntityKind; readonly id: string; readonly path: string; readonly before: Json; readonly after: Json }
-  | {
-      readonly t: 'member';
-      readonly kind: EntityKind;
-      readonly id: string;
-      readonly set: string;
-      readonly member: string;
-      readonly before: boolean;
-      readonly after: boolean;
-    };
+  | (Extract<LibTarget, { t: 'field' }> & { readonly before: Json; readonly after: Json })
+  | (Extract<LibTarget, { t: 'member' }> & { readonly before: boolean; readonly after: boolean });
 
 interface LibStep {
   readonly label: string;
@@ -514,7 +511,7 @@ class Session implements PhotosLibrarySession {
   }
 
   /** The value an entry's field or member holds now, and whether this session's library history wrote it last. */
-  private libCurrent(entry: LibEntry): { value: Json; ours: boolean } {
+  private libCurrent(entry: LibTarget): { value: Json; ours: boolean } {
     const record = this.merge.get(entry.kind, entry.id);
     if (entry.t === 'member') {
       const reg = record?.sets.get(entry.set)?.get(entry.member);
@@ -537,14 +534,16 @@ class Session implements PhotosLibrarySession {
     if (!entries) {
       for (const op of ops) {
         if (op.t === 'member') {
-          const before = this.libCurrent({ ...op, t: 'member', before: false, after: false }).value === true;
-          if (before !== op.present) computed.push({ t: 'member', kind: op.kind, id: op.id, set: op.set, member: op.member, before, after: op.present });
+          const target = { t: 'member', kind: op.kind, id: op.id, set: op.set, member: op.member } as const;
+          const before = this.libCurrent(target).value === true;
+          if (before !== op.present) computed.push({ ...target, before, after: op.present });
           continue;
         }
         for (const [path, after] of Object.entries(op.fields)) {
           if (after === undefined) continue;
-          const before = this.libCurrent({ t: 'field', kind: op.kind, id: op.id, path, before: null, after: null }).value;
-          if (!sameJson(before, after)) computed.push({ t: 'field', kind: op.kind, id: op.id, path, before, after });
+          const target = { t: 'field', kind: op.kind, id: op.id, path } as const;
+          const before = this.libCurrent(target).value;
+          if (!sameJson(before, after)) computed.push({ ...target, before, after });
         }
       }
     }

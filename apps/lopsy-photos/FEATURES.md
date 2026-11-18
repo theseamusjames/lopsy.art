@@ -40,12 +40,19 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 ### Grid
 
 - Photos in a virtualised grid, newest first by default. **Order by**
-  Date taken, Date added, File name or Rating; the arrow beside it
-  reverses the order. **Size** sets the thumbnail size.
+  Date taken, Date added, Last edited, File name or Rating, each in its
+  natural direction (newest, most recently edited and best first; names A
+  to Z); the arrow beside it reverses the order. **Size** sets the
+  thumbnail size.
+- **Toolbar** groups: *Look at* (one photo large, **Compare**, **Cull**),
+  *Edits* (**Copy edits**, **Paste**, **Presets**), and **More** (New
+  version, Edit in Lopsy, Group bursts), then Details. Button titles give
+  each shortcut, read from the shortcut list.
 - Tiles show the photo's 512 px preview, its colour label and stars, and
   badges: a version count, **RAW+JPEG** for a pair shot together (shown
-  as one photo, the RAW in front), a burst count, and a Lopsy-document
-  count.
+  as one photo, the RAW in front, and counted once everywhere: All
+  photos, Dates, Imports), a burst count, and a Lopsy-document count.
+  Each badge opens or folds its stack.
 - **Previews follow edits.** A preset or pasted edits from the grid, a
   new version, or a change from another device gets new previews in the
   background, one photo at a time, while the Edit view is closed; the
@@ -63,9 +70,9 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
   each with its own preview, and folds them back. **Show this version for
   the photo** (a version tile's menu) makes that version the one the
   photo shows in the grid and in albums.
-- **Photo actions** (a tile's menu): Look at it large, Edit, New version,
-  Show this version for the photo, Copy edits…, Paste edits, Edit in
-  Lopsy, Export…, Move to the trash….
+- **Photo actions** (a tile's right-click menu): Look at it large, Edit,
+  New version, Show this version for the photo (on a version's tile),
+  Edit in Lopsy, Copy edits…, Paste edits, Export…, Move to the trash….
 - **Drag** photos onto an album in the sidebar to add them; dragging a
   version's own tile adds just that version, which the album then shows
   as its own tile.
@@ -84,7 +91,11 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 - **Rating** 0–5 stars (keys 0–5), **colour label** red, yellow, green,
   blue, purple (R Y G B P; pressing the same key again removes it), and
   **Set aside** (X), which hides a photo from the other collections
-  without deleting it.
+  without deleting it. When the photo leaves the grid, the next one is
+  selected; the message that follows has **Undo**.
+- **Undo / Redo in the library** (⌘Z, ⇧⌘Z): marks, keywords, albums,
+  versions and the delete record, one step at a time, with what was
+  undone said in a message.
 - **Details panel** (I): rating, label, title, caption, keywords and the
   albums the photo is in, plus file and camera facts (camera, lens,
   exposure, capture time, size). With several photos selected, changes
@@ -104,11 +115,14 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 
 ### Versions, copying edits and presets
 
-- **New version**: another edit of the same photo, starting from the
-  current one; the original file is untouched. Versions are listed under
-  the photo and in the Edit view (named, renamed, deleted); the grid
-  shows the photo's shown version, and deleting it makes the next one
-  shown.
+- **New version**: asks for a name ("Version 2" offered, selected), then
+  makes another edit of the same photo starting from the current one; the
+  original file is untouched. The photo's stack opens to show its
+  versions as their own tiles. Single view lists them: switch, rename,
+  **Show** (the one the photo shows everywhere), delete (the shown one
+  too, when another is left).
+- **Albums** hold whole photos or single versions: with a version's tile
+  selected, the details panel adds that version.
 - **Copy edits…** (⇧⌘C) asks which groups to copy; **Paste edits**
   (⇧⌘V) puts them on the selected photos, as one step, changing nothing
   else.
@@ -121,7 +135,10 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 - **Move to the trash** (Delete or Backspace) asks first, then moves the
   original, its previews and any Lopsy document files to the storage's
   trash (Google Drive's trash on Drive) and hides the photo. Nothing is
-  deleted permanently.
+  deleted permanently. The next photo is selected, and **Undo** in the
+  message brings the photos and their files back.
+- **Check library** (Settings) finds originals of deleted photos still
+  outside the trash and moves them there.
 
 ## Import
 
@@ -133,7 +150,11 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
   says what it cannot read, and shows RAW+JPEG pairs as one photo (or
   imports the RAW only).
 - **Photos already in the library are skipped** (by SHA-256), and the
-  picked files are never changed.
+  picked files are never changed. Before importing, the sheet names the
+  ones that look like photos already there (same name and size) and
+  leaves them out of the count.
+- **Add to album** (an existing one or a new one) and **Keywords** for
+  everything the import brings in.
 - **Edits to start from**: none ("as the camera took them") or a preset.
 - **XMP sidecars.** A `.xmp` picked or dropped with its photo
   (`<name>.xmp` or `<name>.<ext>.xmp`) is not imported as a file: its
@@ -174,9 +195,12 @@ and on leaving.
   drag), Fit (⌘0), 100% (⌘1) with a zoom readout, Copy edits / Paste edits
   (⇧⌘C, ⇧⌘V), **Edit in Lopsy** and **Export**. The image pans by
   dragging and zooms with the wheel.
-- **Histogram** of the rendered edit, updated as it changes, with shadow
-  and highlight clipping indicators that light when any channel has more
-  than a trace at black or white.
+- **Histogram** of the rendered edit, updated as it changes. Its shadow
+  and highlight markers light when the photo clips, and clicking them
+  shows clipped pixels on the photo (blue at black, red at white; never
+  in exports or previews); **J** toggles both. Holding Alt (Option)
+  while dragging Blacks or Whites shows that side's clipping, and while
+  dragging a Sharpen slider shows what is being sharpened.
 - **Straighten**: Angle (−45..45°), and **Level**: draw along something
   that should be level (or upright) to set it.
 - **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
@@ -207,7 +231,9 @@ and on leaving.
 - **Sharpness & noise**: Sharpen, Radius, Edges only, Noise, Color noise,
   Keep detail. While a slider drags these passes are left out, and they
   come back when it settles.
-- **Finish**: Vignette.
+- **Finish**: Vignette, with its Midpoint, Roundness and Feather; and
+  Grain, Grain size and Roughness. Grain is the same on every render and
+  export of a photo.
 - Every group has a **Reset**; each slider has a typed value field, and
   double-clicking a slider resets it. Each change is one history step
   named after it ("Exposure +0.50").
@@ -227,21 +253,25 @@ and on leaving.
 
 - **Export…** (header, tile menu, Edit view): the selected photos'
   versions, rendered by the engine at full quality.
-- **File type**: JPEG (small files, for sharing), PNG (no compression
-  loss, 16-bit) or 16-bit TIFF (for printing and further editing; always
-  the full image).
-  **Quality** for JPEG. **Size**: Full size, Large 3840 px, For the web
-  2048 px, Small 1080 px (never larger than the photo). **Colours**: the
-  output colour space.
-- **Save to**: a download (one file, or a ZIP for several) or a folder in
-  the library's `Exports/` on Google Drive.
-- **Metadata**: all of it, copyright only, or none.
+- **File type**: JPEG with **Quality**, PNG 16-bit or 8-bit, or TIFF
+  16-bit (full size, no EXIF). **Colours**: sRGB or Display P3 (Rec. 2020
+  waits for the engine).
+- **Size**: original, or by long edge, short edge or megapixels, with
+  **Don't enlarge** on by default.
+- **Details in the file**: all (with **Remove location**, on by default;
+  "Location will be kept" shows when it is off), copyright and contact
+  only, or none; Creator and Copyright fields.
+- **File names**: a template with `{name}` `{date}` `{seq}` `{seq:3}`
+  `{title}` `{version}` `{camera}`, and the first name shown.
+- **Save to**: the library's `Exports/` folder, or a download: one file,
+  or for several either **one ZIP** or each file on its own.
 - **Export presets**: *Made by Lopsy* ones and *Yours*, saved, renamed
-  and deleted from the dialog.
+  and deleted from the dialog; a saved preset keeps every choice above.
 - **After an export into the library** (Google Drive): **Show in Drive**
   opens the export's folder, and **Copy share link** shares that folder
   with anyone who has the link, only after a confirmation that says
   exactly that.
+- Not yet: WebP output and output sharpening.
 - An export can **keep going in the background** while the user goes on.
 
 ## Lopsy round trips
@@ -308,6 +338,7 @@ Shown in the app with `?`.
 | 0–5 | Rating (0 clears) |
 | R Y G B P | Red, yellow, green, blue, purple label (again removes it) |
 | X | Set aside, or bring back |
+| ⌘Z / ⇧⌘Z | Undo / redo in the library |
 | ← → ↑ ↓ | Move between photos (↑ ↓ in the grid) |
 | Shift+← → | Grow the selection |
 | ⌘A / ⌘D | Select all shown / none |
@@ -321,5 +352,5 @@ Shown in the app with `?`.
 | Escape | Go back |
 | ? | Show the shortcuts |
 
-In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 100%, hold `\`
-for before.
+In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 100%, ⇧⌘C and
+⇧⌘V copy and paste edits, hold `\` for before, J for clipping.

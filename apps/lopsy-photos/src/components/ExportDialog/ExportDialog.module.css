@@ -106,3 +106,49 @@
   color: var(--color-warning);
   font-size: var(--font-size-sm);
 }
+
+.inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.number,
+.text {
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-md);
+}
+
+.number {
+  width: 96px;
+}
+
+.text {
+  flex: 1;
+  min-width: 140px;
+}
+
+.indent {
+  padding-left: var(--space-6);
+}
+
+/* Two columns, so the dialog fits a laptop screen without scrolling. */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4) var(--space-6);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}

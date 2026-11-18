@@ -86,28 +86,65 @@ describe('import integrity', () => {
     expect(queueStore.jobs.size).toBe(0);
   });
 
-  it('pauses, keeping everything staged, when the library cannot be written', async () => {
-    const { session, queueStore, staging, ctx, originals } = await setup();
+  /** A file whose bytes are read only once `gate` resolves. */
+  function gatedFile(file: File, gate: Promise<void>): File {
+    return new (class extends File {
+      override async arrayBuffer(): Promise<ArrayBuffer> {
+        await gate;
+        return super.arrayBuffer();
+      }
+    })([file], file.name, { lastModified: file.lastModified });
+  }
+
+  /** The import of C and D, where C cannot be added to the library, then a resume once it can. */
+  async function pauseThenResume(order: 'D staged before the pause' | 'D read after the pause') {
+    const { adapter, session, queueStore, staging, ctx, originals } = await setup();
     const addAsset = session.addAsset.bind(session);
     let readOnly = true;
     session.addAsset = (asset) => {
       if (readOnly) throw new Error('Another tab took over this library');
       return addAsset(asset);
     };
-    const result = await startImport([jpegFile('C.JPG', 3), jpegFile('D.JPG', 4)], ctx({ options: { concurrency: 1 } })).finished;
+    let releaseD = () => {};
+    const dGate = new Promise<void>((resolve) => (releaseD = resolve));
+    let d = jpegFile('D.JPG', 4);
+    if (order === 'D staged before the pause') {
+      // C's original is stored only once D is staged.
+      adapter.hooks.createDelay = (file) =>
+        file.properties?.['lp.role'] === 'original' ? vi.waitFor(async () => expect(await staging.list()).toHaveLength(2)) : null;
+    } else {
+      // D's bytes are read only once C has paused the job.
+      d = gatedFile(d, dGate);
+    }
+    const job = startImport([jpegFile('C.JPG', 3), d], ctx({ options: { concurrency: 1 } }));
+    const unsubscribe = job.subscribe(() => {
+      if (job.getProgress().items[0]?.error?.startsWith('Paused:')) releaseD();
+    });
+    const result = await job.finished;
+    unsubscribe();
+    adapter.hooks = {};
     expect(result.items.map((i) => [i.state, i.error])).toEqual([
       ['queued', 'Paused: the library could not be updated (Another tab took over this library)'],
       ['queued', 'Paused: the library could not be updated (Another tab took over this library)'],
     ]);
+    // Both are staged, D too when it was read after the pause; only C's original reached storage.
     expect(await staging.list()).toHaveLength(2);
     expect(originals()).toHaveLength(1);
 
     readOnly = false;
-    const resumed = await resumeImports({ session, previewRenderer: renderer, queueStore, staging });
+    const resumed = await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: () => DAY });
     expect((await resumed?.finished)?.items.map((i) => i.state)).toEqual(['done', 'done']);
     expect(session.getView().assets.size).toBe(2);
     expect(originals()).toHaveLength(2);
     expect(await staging.list()).toEqual([]);
+  }
+
+  it('pauses, keeping everything staged, when the library cannot be written', async () => {
+    await pauseThenResume('D staged before the pause');
+  });
+
+  it('stages an item it reads after such a pause, so the resume finishes it', async () => {
+    await pauseThenResume('D read after the pause');
   });
 
   it('leaves a job with a fresh lease alone, and stages equal files separately', async () => {

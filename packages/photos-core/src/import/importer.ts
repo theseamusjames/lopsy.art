@@ -595,6 +595,14 @@ function runJob(setup: JobSetup): ImportJob {
   const checkStopped = () => {
     if (stopping) throw new Stopped();
   };
+  /**
+   * Preparation stops only on cancel. A paused job still stages what it
+   * has read, so a resume (after a reload too) can finish every item;
+   * nothing is written to storage while paused.
+   */
+  const checkCancelled = () => {
+    if (stopping === 'cancel') throw new Stopped();
+  };
 
   const renderPreviews = async (preview: EmbeddedPreview | null) => {
     if (!preview) return { thumb: null, screen: null, error: 'No preview the browser can show' };
@@ -679,13 +687,14 @@ function runJob(setup: JobSetup): ImportJob {
 
   /**
    * Prepare: read, hash, inspect, check duplicates, settle pairing and stage
-   * the copy. Runs ahead of the uploads so a reload finds every file staged.
+   * the copy. Runs ahead of the uploads so a reload finds every file staged,
+   * and goes on through a pause (`checkCancelled`) up to the staging.
    */
   const prepare = async (work: Work): Promise<Prepared | null> => {
     const { index } = work;
     await setup.saved;
     if (isTerminal(index)) return null;
-    checkStopped();
+    checkCancelled();
     if (work.skipReason !== null) {
       await endEarly(work, 'skipped', { error: work.skipReason }, null);
       return null;
@@ -708,7 +717,7 @@ function runJob(setup: JobSetup): ImportJob {
     }
     const bytes = new Uint8Array(await work.content.arrayBuffer());
     const sha = await sha256Hex(bytes);
-    checkStopped();
+    checkCancelled();
     if (work.settled && work.settled.sha256 !== sha) {
       await endEarly(work, 'failed', { error: 'Its staged copy on this device is damaged; import the file again' }, null);
       return null;
@@ -758,7 +767,7 @@ function runJob(setup: JobSetup): ImportJob {
     }
     const partner = pairCandidate === null ? undefined : worksByAssetId.get(pairCandidate);
     if (partner && partner !== work) await partner.preparedSignal.promise;
-    checkStopped();
+    checkCancelled();
 
     const fallback = work.lastModified > 0 ? new Date(work.lastModified) : now();
     const segments = work.settled?.folderSegments ?? originalsFolderSegments(metadata.capturedAt, fallback);
