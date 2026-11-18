@@ -1,0 +1,81 @@
+/**
+ * The Edit view's zoom and pan, in CSS pixels. The engine's viewport puts
+ * the image's centre at the view's centre plus `pan` (final_blit.wgsl), so
+ * pan 0 is a centred image.
+ */
+
+export interface View {
+  /** Screen pixels per image pixel. */
+  readonly zoom: number;
+  readonly panX: number;
+  readonly panY: number;
+  /** Whether the view follows the window: refit on resize. */
+  readonly isFit: boolean;
+}
+
+export interface Size {
+  readonly width: number;
+  readonly height: number;
+}
+
+export const MIN_ZOOM = 0.01;
+export const MAX_ZOOM = 32;
+/** Space kept around a fitted image, in CSS pixels. */
+export const FIT_PADDING = 24;
+
+export function clampZoom(zoom: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+}
+
+/** The zoom that shows the whole image, never enlarging it. */
+export function fitZoom(image: Size, view: Size, padding = FIT_PADDING): number {
+  if (image.width <= 0 || image.height <= 0 || view.width <= 0 || view.height <= 0) return 1;
+  const pad = Math.min(padding, view.width / 4, view.height / 4);
+  const zoom = Math.min((view.width - pad * 2) / image.width, (view.height - pad * 2) / image.height, 1);
+  return clampZoom(zoom);
+}
+
+export function fitView(image: Size, view: Size): View {
+  return { zoom: fitZoom(image, view), panX: 0, panY: 0, isFit: true };
+}
+
+/**
+ * Zoom to `zoom`, keeping the image point under `anchor` (CSS pixels from
+ * the view's top-left; the view's centre when omitted) where it is.
+ */
+export function zoomAround(current: View, zoom: number, view: Size, anchor?: { x: number; y: number }): View {
+  const next = clampZoom(zoom);
+  const ax = (anchor?.x ?? view.width / 2) - view.width / 2;
+  const ay = (anchor?.y ?? view.height / 2) - view.height / 2;
+  const scale = next / current.zoom;
+  return {
+    zoom: next,
+    panX: ax - (ax - current.panX) * scale,
+    panY: ay - (ay - current.panY) * scale,
+    isFit: false,
+  };
+}
+
+/** Keeps at least part of the image on screen. */
+export function clampPan(current: View, image: Size, view: Size): View {
+  const limitX = (image.width * current.zoom + view.width) / 2 - 32;
+  const limitY = (image.height * current.zoom + view.height) / 2 - 32;
+  const clamp = (v: number, limit: number) => Math.min(Math.max(v, -Math.max(0, limit)), Math.max(0, limit));
+  return { ...current, panX: clamp(current.panX, limitX), panY: clamp(current.panY, limitY) };
+}
+
+export function panBy(current: View, dx: number, dy: number, image: Size, view: Size): View {
+  return clampPan({ ...current, panX: current.panX + dx, panY: current.panY + dy, isFit: false }, image, view);
+}
+
+/** Size of an image scaled so its long edge is at most `maxSize`, never enlarged. */
+export function limitSize(image: Size, maxSize: number | undefined): Size {
+  if (!maxSize || maxSize <= 0) return image;
+  const long = Math.max(image.width, image.height);
+  if (long <= maxSize) return image;
+  const scale = maxSize / long;
+  return {
+    width: Math.max(1, Math.round(image.width * scale)),
+    height: Math.max(1, Math.round(image.height * scale)),
+  };
+}
