@@ -9,7 +9,7 @@ import { recipeToPaths } from '../library/recipe';
 import type { Recipe } from '../library/recipe';
 import type { Asset, ColorLabel, Version } from '../library/types';
 import { RAW_FORMATS } from '../import/pairs';
-import { explicitDetailDefaults, recipeToCrs } from './crs-mapping';
+import { explicitDetailDefaults, recipeToCrs, type KelvinScale } from './crs-mapping';
 import { NS } from './read';
 
 const LABEL_NAMES: Readonly<Record<ColorLabel, string>> = {
@@ -56,8 +56,12 @@ export function escapeXml(value: string): string {
   return out;
 }
 
-function crsSettings(recipe: Recipe, isRaw: boolean): { attributes: string[]; elements: string[] } {
-  const { attributes: out, elements } = recipeToCrs(recipe, isRaw);
+function crsSettings(
+  recipe: Recipe,
+  isRaw: boolean,
+  kelvinScale: KelvinScale | null | undefined,
+): { attributes: string[]; elements: string[] } {
+  const { attributes: out, elements } = recipeToCrs(recipe, isRaw, kelvinScale);
   const crop = recipe.framing.crop;
   if (crop && recipe.framing.rotate === 0 && !recipe.framing.flipH && !recipe.framing.flipV && recipe.framing.angle === 0) {
     out.push(
@@ -80,14 +84,22 @@ function altElement(qname: string, value: string): string {
   return `   <${qname}><rdf:Alt><rdf:li xml:lang="x-default">${escapeXml(value)}</rdf:li></rdf:Alt></${qname}>`;
 }
 
-/** The sidecar text for `asset`, with `version`'s recipe (the primary version, usually). */
-export function writeXmp(asset: Asset, version: Version | null): string {
+/**
+ * The sidecar text for `asset`, with `version`'s recipe (the primary version, usually).
+ * `kelvinScale` is the photo's, to write a RAW file's custom white balance in Kelvin;
+ * without it a RAW file's white balance is written As Shot.
+ */
+export function writeXmp(
+  asset: Asset,
+  version: Version | null,
+  options: { readonly kelvinScale?: KelvinScale | null } = {},
+): string {
   const attributes: string[] = ['rdf:about=""'];
   const children: string[] = [];
   attributes.push(`xmp:Rating="${asset.setAside ? -1 : asset.rating}"`);
   if (asset.label) attributes.push(`xmp:Label="${LABEL_NAMES[asset.label]}"`);
   if (version) {
-    const crs = crsSettings(version.recipe, RAW_FORMATS.has(asset.format));
+    const crs = crsSettings(version.recipe, RAW_FORMATS.has(asset.format), options.kelvinScale);
     attributes.push(...crs.attributes);
     children.push(...crs.elements);
     const paths = recipeToPaths(version.recipe);

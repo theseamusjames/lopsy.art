@@ -309,6 +309,31 @@ function marksLabel(marks: Partial<AssetMarks>): string {
   }
 }
 
+function isShownVersionEntry(e: LibEntry): e is Extract<LibEntry, { t: 'field' }> {
+  return e.t === 'field' && e.kind === 'asset' && e.path === 'primaryVersionId';
+}
+
+/** The ops that write `write` ('before' to undo, 'after' to redo) for each entry, one set op per entity. */
+function libraryOps(entries: readonly LibEntry[], write: 'before' | 'after'): Op[] {
+  const ops: Op[] = [];
+  const sets = new Map<string, Extract<Op, { t: 'set' }>>();
+  for (const e of entries) {
+    if (e.t === 'member') {
+      ops.push({ t: 'member', kind: e.kind, id: e.id, set: e.set, member: e.member, present: e[write] });
+      continue;
+    }
+    const key = `${e.kind}\u0000${e.id}`;
+    let op = sets.get(key);
+    if (!op) {
+      op = { t: 'set', kind: e.kind, id: e.id, fields: {} };
+      sets.set(key, op);
+      ops.push(op);
+    }
+    (op.fields as Record<string, Json>)[e.path] = e[write];
+  }
+  return ops;
+}
+
 class Session implements PhotosLibrarySession {
   private readonly libUndo: LibStep[] = [];
   private readonly libRedo: LibStep[] = [];
@@ -576,29 +601,32 @@ class Session implements PhotosLibrarySession {
         const now = this.libCurrent(e);
         return now.ours && sameJson(now.value, e[expect]);
       });
+      // The shown version is written last and only when it is still a live version of that photo
+      // (another device may have deleted it since); the rest of the step may be what brings it back.
+      const shown = held.filter(isShownVersionEntry);
+      const rest = held.filter((e) => !isShownVersionEntry(e));
+      this.emitLibraryOps(libraryOps(rest, write));
+      const live = shown.filter((e) => this.isLiveVersionOf(e.id, e[write]));
+      this.emitLibraryOps(libraryOps(live, write));
+      const done = [...rest, ...live];
       // Everything in it was changed since: dropped, and the step before is tried.
-      if (held.length === 0) continue;
-      const ops: Op[] = [];
-      const sets = new Map<string, Extract<Op, { t: 'set' }>>();
-      for (const e of held) {
-        if (e.t === 'member') {
-          ops.push({ t: 'member', kind: e.kind, id: e.id, set: e.set, member: e.member, present: e[write] });
-          continue;
-        }
-        const key = `${e.kind}\u0000${e.id}`;
-        let op = sets.get(key);
-        if (!op) {
-          op = { t: 'set', kind: e.kind, id: e.id, fields: {} };
-          sets.set(key, op);
-          ops.push(op);
-        }
-        (op.fields as Record<string, Json>)[e.path] = e[write];
-      }
-      for (const env of this.emit(ops)) this.libOps.add(env.id);
-      to.push({ label: step.label, entries: held });
+      if (done.length === 0) continue;
+      to.push({ label: step.label, entries: done });
       this.notify();
       return step.label;
     }
+  }
+
+  private emitLibraryOps(ops: readonly Op[]): void {
+    if (ops.length === 0) return;
+    for (const env of this.emit(ops)) this.libOps.add(env.id);
+  }
+
+  /** Whether `versionId` is a version of `assetId` that is not deleted, in the merged state. */
+  private isLiveVersionOf(assetId: AssetId, versionId: Json): boolean {
+    if (typeof versionId !== 'string') return false;
+    const fields = this.merge.get('version', versionId)?.fields;
+    return fields?.get('assetId')?.value === assetId && fields.get('deleted')?.value !== true;
   }
 
   setPrimaryVersion(assetId: AssetId, versionId: VersionId): void {
