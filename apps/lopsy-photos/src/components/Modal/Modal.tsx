@@ -26,6 +26,17 @@ export function Modal({ title, onClose, children, footer, width = 'md' }: ModalP
     return () => previous?.focus();
   }, []);
 
+  // Escape closes the dialog wherever focus is (it may have left with a disabled button).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   return (
     <div
       className={styles.backdrop}
@@ -39,12 +50,6 @@ export function Modal({ title, onClose, children, footer, width = 'md' }: ModalP
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation();
-            onClose();
-          }
-        }}
       >
         <header className={styles.header}>
           <h2 className={styles.title}>{title}</h2>
