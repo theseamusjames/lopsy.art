@@ -6,6 +6,7 @@
 import {
   DEFAULT_RECIPE,
   RECIPE_RANGES,
+  rangeForPath,
   recipeFromPaths,
   recipeToPaths,
   type QuarterTurns,
@@ -100,7 +101,8 @@ export const GROUPS: readonly GroupDef[] = [
 const FALLBACK_RANGE: RecipeRange = { min: -100, max: 100, step: 1 };
 
 export function rangeOf(path: string): RecipeRange {
-  return RECIPE_RANGES[path] ?? FALLBACK_RANGE;
+  // Area paths ('areas.<id>.adjustments.exposure') share one range per field.
+  return RECIPE_RANGES[path] ?? rangeForPath(path) ?? FALLBACK_RANGE;
 }
 
 export function numberAt(recipe: Recipe, path: string): number {

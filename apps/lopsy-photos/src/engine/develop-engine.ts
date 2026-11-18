@@ -306,6 +306,7 @@ class PhotoEngine implements DevelopEngine {
   /** The crop's top-left in framed pixels: where the document starts. */
   private cropOrigin = { x: 0, y: 0 };
   private areasKey: string | null = null;
+  private areaOverlay = -1;
   /** The displayed (cropped) size. */
   private displaySize: Size | null = null;
   private autoWb: { temperature: number; tint: number } | null = null;
@@ -684,6 +685,7 @@ class PhotoEngine implements DevelopEngine {
   }
 
   setAreaOverlay(index: number): void {
+    this.areaOverlay = index;
     setImageAreaOverlay(this.engine, index);
     this.invalidate();
   }
@@ -912,6 +914,18 @@ class PhotoEngine implements DevelopEngine {
   }
 
   async exportImage(options: ExportOptions): Promise<Blob> {
+    // The area mask overlay is for the screen: exports and previews render without it.
+    if (this.areaOverlay < 0) return this.exportImageNow(options);
+    setImageAreaOverlay(this.engine, -1);
+    try {
+      return await this.exportImageNow(options);
+    } finally {
+      setImageAreaOverlay(this.engine, this.areaOverlay);
+      this.invalidate();
+    }
+  }
+
+  private async exportImageNow(options: ExportOptions): Promise<Blob> {
     const image = this.imageSize();
     if (!image || this.isDisposed) throw new Error('No photo is loaded');
     const space = options.colorSpace === 'display-p3' ? DISPLAY_P3 : SRGB;

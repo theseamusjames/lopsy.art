@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
-import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { DEFAULT_RECIPE, recipeHash, removeArea, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
 import { DEFAULT_COPY_GROUPS, RECIPE_GROUPS, pickGroups, type RecipeGroupId } from '@lopsy/photos-core/library/recipe';
 import type { CopiedEdits } from '../../library/recipe-copy';
@@ -36,6 +36,9 @@ import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
 import { CropTool } from '../CropTool/CropTool';
+import { AreasPanel, areaTitle } from '../AreasPanel/AreasPanel';
+import { AreasOverlay } from '../AreasOverlay/AreasOverlay';
+import { useAreas } from './use-areas';
 import { LevelTool } from '../LevelTool/LevelTool';
 import { SplitView } from '../SplitView/SplitView';
 import { FULL_RECT, levelAngle, recipeCrop, toFramed, type Rect } from '../../engine/crop';
@@ -436,6 +439,16 @@ export function EditView({
         }
       : null;
   const cropImageBox = boxOf(fullSize);
+  const areas = useAreas({
+    engine,
+    recipe: shownRecipe,
+    savedRecipe,
+    isActive: canEdit && !isBefore && !isCropping,
+    box: boxOf(engine?.imageSize() ?? null),
+    documentSize: engine?.imageSize() ?? null,
+    commit,
+    title: areaTitle,
+  });
   const cropBox = fullSize && cropImageBox ? { aspect: fullSize.width / fullSize.height, box: cropImageBox } : null;
 
   // ---- straighten -----------------------------------------------------
@@ -681,6 +694,17 @@ export function EditView({
           >
             <Crop size={16} aria-hidden />
           </button>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Areas"
+            title="Areas: adjust part of the photo"
+            aria-pressed={areas.isOpen}
+            disabled={!canEdit || isBefore || isCropping}
+            onClick={areas.toggle}
+          >
+            <Spline size={16} aria-hidden />
+          </button>
         </div>
         <div className={styles.toolGroup}>
           <button
@@ -782,6 +806,16 @@ export function EditView({
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
           {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
           {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
+          {areas.overlay && (
+            <AreasOverlay
+              imageBox={areas.overlay.box}
+              documentSize={areas.overlay.documentSize}
+              frame={areas.overlay.frame}
+              area={areas.overlay.area}
+              onDraft={setDraft}
+              onCommit={commit}
+            />
+          )}
           {cropDraft && cropBox && (
             <CropTool
               imageBox={cropBox.box}
@@ -796,6 +830,21 @@ export function EditView({
           <LoadStatus status={status} onClose={onClose} />
         </div>
         <aside className={styles.panel} aria-label="Edits">
+          {areas.isOpen && (
+            <AreasPanel
+              recipe={shownRecipe}
+              selectedId={areas.selectedId}
+              isDisabled={!canEdit || isBefore}
+              onSelect={areas.select}
+              onAdd={areas.add}
+              onDelete={(area, title) => {
+                areas.select(null);
+                commit(removeArea(area.id), `Delete ${title}`);
+              }}
+              onDraft={setDraft}
+              onCommit={commit}
+            />
+          )}
           <Histogram bins={histogram} />
           {photoInfo && (
             <ProfileMenu
