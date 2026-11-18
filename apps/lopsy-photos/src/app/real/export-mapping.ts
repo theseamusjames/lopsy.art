@@ -4,15 +4,28 @@ import type { LibraryView, VersionId } from '@lopsy/photos-core/library/types';
 import type { ExportSelection } from '@lopsy/photos-core/export/exporter';
 import type { ExportDestination, ExportProgress as CoreProgress, ExportSettings } from '@lopsy/photos-core/export/types';
 import type { ExportProgress, ExportRequest } from '../backend';
+import { maxLongEdgeOf, withExtras } from '../../library/export-size';
 
 export function toExportSettings(request: ExportRequest): Partial<ExportSettings> {
-  return {
+  const settings: Partial<ExportSettings> = {
     ...(request.base ?? {}),
     format: request.format,
     colorSpace: request.colorSpace ?? 'srgb',
     quality: Math.min(1, Math.max(0.01, request.quality / 100)),
     maxLongEdge: request.longEdge !== null && request.longEdge > 0 ? Math.round(request.longEdge) : null,
   };
+  if (!request.extras) return settings;
+  // The size rides in the extras; photos-core's long edge is only for what it can say itself.
+  return withExtras({ ...settings, maxLongEdge: maxLongEdgeOf(request.extras) }, request.extras);
+}
+
+/** What to hand the browser after a download export: the zip, or each file when asked for separate files. */
+export function filesToDownload(
+  result: { readonly zip: { name: string; blob: Blob } | null; readonly files: readonly { name: string; blob: Blob }[] },
+  zip: boolean,
+): { name: string; blob: Blob }[] {
+  if (zip && result.zip) return [result.zip];
+  return [...result.files];
 }
 
 /** A name safe as a folder or zip name. */

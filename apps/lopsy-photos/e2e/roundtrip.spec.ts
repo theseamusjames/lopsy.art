@@ -77,8 +77,9 @@ async function importPhoto(page: Page, jpeg: Buffer): Promise<Locator> {
 /** Selects a tile and clicks Edit in Lopsy; returns Lopsy's tab once its handoff bar shows `name`. */
 async function editInLopsy(page: Page, context: BrowserContext, tile: Locator, name: string, lopsy?: Page): Promise<Page> {
   await tile.click();
-  // The grid toolbar's button ("Edit in Lopsy, with layers, painting and text").
-  const button = page.getByRole('button', { name: /^Edit in Lopsy, with layers/ });
+  // The grid toolbar's More menu: "Edit in Lopsy, with layers, painting and text".
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  const button = page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: /^Edit in Lopsy/ });
   let editor: Page;
   if (lopsy) {
     // The named target reuses Lopsy's tab: it navigates rather than opening a new one.

@@ -44,7 +44,10 @@ export async function trashAssets(session: LibrarySession, assetIds: readonly As
   if (ids.size === 0) return;
 
   // The record first: throws (read-only, lock lost) before any file moves.
-  raw.deleteAssets([...ids]);
+  // Kept out of library history: undoing it there would bring the record
+  // back with its files still in a trash that empties itself. The UI's
+  // Undo (toast or ⌘Z right after) runs `untrashAssets`, which moves both.
+  raw.withoutLibraryHistory(() => raw.deleteAssets([...ids]));
   // And saved on this device before anything is trashed: a tab that dies in
   // between must not bring the photos back with their originals in a trash
   // that empties itself.
@@ -97,4 +100,34 @@ export async function trashLeftoverOriginals(session: LibrarySession, fileIds: r
     throw new Error(`${failed.length} original${failed.length === 1 ? '' : 's'} could not be moved to the trash. Try again later.`);
   }
   return moved;
+}
+
+/**
+ * Undoes `trashAssets`: the photos come back to the library and their
+ * originals and previews out of the storage's trash. Files already gone
+ * for good are skipped; the photo comes back and Check library reports it.
+ */
+export async function untrashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
+  const raw = unguarded(session);
+  const refusal = writeRefusal(raw);
+  if (refusal !== null) throw new TrashRefusedError(refusal);
+  const view = raw.getView();
+  const ids = new Set(assetIds.filter((id) => view.assets.get(id)?.deleted === true));
+  if (ids.size === 0) return;
+  // Out of library history too, for the same reason: undoing a restore there would
+  // delete the record and leave the files out of the trash.
+  raw.withoutLibraryHistory(() => raw.restoreAssets([...ids]));
+  const files: FileId[] = [];
+  for (const id of ids) {
+    const asset = view.assets.get(id);
+    if (!asset) continue;
+    files.push(asset.fileId);
+    if (asset.renderFileId) files.push(asset.renderFileId);
+  }
+  for (const version of view.versions.values()) {
+    if (!ids.has(version.assetId)) continue;
+    if (version.thumb) files.push(version.thumb.fileId);
+    if (version.screen) files.push(version.screen.fileId);
+  }
+  await Promise.allSettled(files.map((fileId) => raw.adapter.untrash(fileId)));
 }

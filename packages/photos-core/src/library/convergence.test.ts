@@ -85,6 +85,7 @@ async function scenario(seed: number): Promise<{ sessions: LibrarySession[]; ada
 }
 
 describe('sessions on one storage', () => {
+  // Twelve seeded scenarios take about 1.5 s alone and several times that on a loaded machine.
   it('converge after random edits, undo, failed syncs, snapshots and roll-ups (seeded)', async () => {
     let snapshots = 0;
     let deletes = 0;
@@ -99,5 +100,5 @@ describe('sessions on one storage', () => {
     // The scenario really exercised snapshots and roll-ups.
     expect(snapshots).toBeGreaterThan(0);
     expect(deletes).toBeGreaterThan(0);
-  });
+  }, 60_000);
 });

@@ -8,7 +8,7 @@ import { Disclosure } from '../Disclosure/Disclosure';
 import { useUi } from '../../app/store';
 import { ASSET_DRAG_TYPE, readDraggedIds } from '../../app/drag';
 import { setAlbumItem } from '../../library/items';
-import { sameCollection, sidebarCounts, type Collection } from '../../library/asset-query';
+import { isHiddenPairHalf, sameCollection, sidebarCounts, type Collection } from '../../library/asset-query';
 import { IconButton } from '../IconButton/IconButton';
 import styles from './Sidebar.module.css';
 
@@ -19,7 +19,11 @@ export function Sidebar() {
   const setCollection = useUi((s) => s.setCollection);
   const counts = useMemo(() => sidebarCounts(view), [view]);
   const saved = useSavedSearches();
-  const dates = useMemo(() => buildDateTree([...view.assets.values()].filter((a) => !a.deleted && !a.setAside)), [view.assets]);
+  // The hidden JPEG of a RAW+JPEG pair is not counted, as in All photos.
+  const dates = useMemo(
+    () => buildDateTree([...view.assets.values()].filter((a) => !a.deleted && !a.setAside && !isHiddenPairHalf(a, view.assets))),
+    [view.assets],
+  );
   const imports = useMemo(() => importBatches(view), [view]);
   const [openDates, setOpenDates] = useState<ReadonlySet<string>>(new Set());
   const [renamingSearch, setRenamingSearch] = useState<string | null>(null);

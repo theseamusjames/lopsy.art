@@ -4,9 +4,8 @@
 //! of `engine/src/gpu/shaders/develop/areas.wgsl`; change them together.
 //!
 //! **Where it runs.** After the image adjustments and the colour mixer,
-//! before sharpening (the engine's order is RAW develop → noise reduction →
-//! local contrast → image adjustments → colour mixer → **areas** →
-//! sharpening), which is spec stage 13 placed after the global colour and
+//! before sharpening (the full order is in `engine/src/develop/mod.rs`),
+//! which is spec stage 13 placed after the global colour and
 //! curves stages rather than repeating them per area. Areas apply in order,
 //! each to the result of the one before.
 //!

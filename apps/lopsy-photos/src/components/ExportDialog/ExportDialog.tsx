@@ -1,12 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { VersionId } from '@lopsy/photos-core/library/types';
+import type { ExportPreset, VersionId } from '@lopsy/photos-core/library/types';
+import {
+  DEFAULT_EXPORT_SETTINGS,
+  exportSettingsProblem,
+  type ExportColorSpace,
+  type ExportFormat,
+  type ExportSettings,
+} from '@lopsy/photos-core/export/types';
+import { expandTemplate, extensionFor, sanitizeFileName } from '@lopsy/photos-core/export/file-names';
 import { getBackend } from '../../app/backend-registry';
-import type { ExportFormat } from '../../app/backend';
-import type { ExportPreset } from '@lopsy/photos-core/library/types';
-import { exportSettingsProblem, type ExportColorSpace, type ExportSettings } from '@lopsy/photos-core/export/types';
-import { useExportPresets, useExportProgress, useSession } from '../../app/hooks';
+import { useExportPresets, useExportProgress, useLibraryView, useSession } from '../../app/hooks';
 import { tiffExportAvailable } from '../../app/export-capabilities';
-import { COLOR_SPACE_WORDS, DEFAULT_EXPORT_FORM, locationKept, fitColorSpace, offeredColorSpaces, formFromSettings, settingsFromForm, type ExportForm } from '../../library/export-form';
+import { COLOR_SPACE_WORDS, locationKept, offeredColorSpaces } from '../../library/export-form';
+import {
+  DEFAULT_EXTRAS,
+  extrasFromSettings,
+  extrasSettingKey,
+  extrasToJson,
+  maxLongEdgeOf,
+  parseExtras,
+  type ExportExtras,
+  type SizeSpec,
+} from '../../library/export-size';
 import { ExportPresetBar } from '../ExportPresetBar/ExportPresetBar';
 import { useUi } from '../../app/store';
 import { currentVersions } from '../../app/commands';
@@ -15,11 +30,12 @@ import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
 import styles from './ExportDialog.module.css';
 
-const SIZES: ReadonlyArray<{ readonly value: number | null; readonly label: string }> = [
-  { value: null, label: 'Full size' },
-  { value: 3840, label: 'Large — 3840 px on the long side' },
-  { value: 2048, label: 'For the web — 2048 px' },
-  { value: 1080, label: 'Small — 1080 px' },
+const TOKENS = ['{name}', '{date}', '{seq}', '{seq:3}', '{title}', '{version}', '{camera}'];
+const SIZE_MODES: ReadonlyArray<{ readonly value: SizeSpec['mode']; readonly label: string }> = [
+  { value: 'original', label: 'Original size' },
+  { value: 'long', label: 'Long edge' },
+  { value: 'short', label: 'Short edge' },
+  { value: 'megapixels', label: 'Megapixels' },
 ];
 
 function defaultName(): string {
@@ -27,39 +43,61 @@ function defaultName(): string {
   return `Export ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Saves edited copies of the selected photos as JPEG, PNG or 16-bit TIFF, from a preset or by hand. */
+/** Settings and extras made consistent: a colour space the format can carry, TIFF at full size. */
+function fit(settings: ExportSettings, extras: ExportExtras): { settings: ExportSettings; extras: ExportExtras } {
+  const space = settings.colorSpace ?? 'srgb';
+  const fitted = offeredColorSpaces(settings.format).includes(space) ? settings : { ...settings, colorSpace: 'srgb' as const };
+  const ex = settings.format === 'tiff' ? { ...extras, size: { mode: 'original' as const } } : extras;
+  return { settings: { ...fitted, maxLongEdge: maxLongEdgeOf(ex) }, extras: ex };
+}
+
+function sizeValue(size: SizeSpec): number {
+  return size.mode === 'megapixels' ? size.mp : size.mode === 'original' ? 0 : size.px;
+}
+
+/** Spec 5.5: format, size, metadata, file names and where it goes, from a preset or by hand. */
 export function ExportDialog() {
   const session = useSession();
+  const view = useLibraryView();
   const openDialog = useUi((s) => s.openDialog);
   const job = useUi((s) => s.exportJob);
   const setExportJob = useUi((s) => s.setExportJob);
   const progress = useExportProgress(job);
-  const [versionIds] = useState<VersionId[]>(() =>
-    currentVersions().map((v) => v.versionId),
-  );
+  const [versionIds] = useState<VersionId[]>(() => currentVersions().map((v) => v.versionId));
   const presets = useExportPresets();
   const [presetId, setPresetId] = useState<string | null>(null);
-  const [base, setBase] = useState<ExportSettings | undefined>(undefined);
-  const [form, setForm] = useState<ExportForm>(DEFAULT_EXPORT_FORM);
+  const [state, setState] = useState(() => fit({ ...DEFAULT_EXPORT_SETTINGS, colorSpace: 'srgb' }, DEFAULT_EXTRAS));
+  const { settings, extras } = state;
   const [tiff, setTiff] = useState(false);
-  const { format, quality, longEdge, colorSpace } = form;
-  const change = (patch: Partial<ExportForm>) => {
-    setForm((f) => fitColorSpace({ ...f, ...patch }));
+  const [destination, setDestination] = useState<'library' | 'download'>('library');
+  const [name, setName] = useState(defaultName);
+  const running = progress !== null && !progress.finished;
+  const format = settings.format;
+
+  const change = (patch: Partial<ExportSettings>, extrasPatch: Partial<ExportExtras> = {}) => {
+    setState((s) => fit({ ...s.settings, ...patch }, { ...s.extras, ...extrasPatch }));
     setPresetId(null);
   };
-  const setFormat = (value: ExportFormat) => change({ format: value });
-  const setQuality = (value: number) => change({ quality: value });
-  const setLongEdge = (value: number | null) => change({ longEdge: value });
+  const setSize = (size: SizeSpec) => change({}, { size });
+
   const pickPreset = (preset: ExportPreset) => {
-    setForm(fitColorSpace(formFromSettings(preset.settings)));
-    setBase(preset.settings);
+    const stored = view.settings.get(extrasSettingKey(preset.id));
+    const ex = stored !== undefined ? parseExtras(stored) : extrasFromSettings(preset.settings);
+    setState(fit(preset.settings, ex));
     setPresetId(preset.id);
   };
-  const sizes = longEdge !== null && !SIZES.some((s) => s.value === longEdge) ? [...SIZES, { value: longEdge, label: `${longEdge} px on the long side` }] : SIZES;
-  const chosen = settingsFromForm(form, base);
-  const problem = exportSettingsProblem(chosen);
-  const keepsLocation = locationKept(chosen);
+
+  const problem = exportSettingsProblem(settings);
+  const keepsLocation = locationKept(settings);
   const tiffBlocked = format === 'tiff' && !tiff;
+
+  // What the first file will be called.
+  const sampleName = useMemo(() => {
+    const version = versionIds[0] !== undefined ? view.versions.get(versionIds[0]) : undefined;
+    const asset = version ? view.assets.get(version.assetId) : undefined;
+    if (!version || !asset) return null;
+    return sanitizeFileName(expandTemplate(settings.fileNameTemplate || '{name}', { asset, version, seq: 1 })) + extensionFor(format);
+  }, [versionIds, view, settings.fileNameTemplate, format]);
 
   useEffect(() => {
     let live = true;
@@ -70,9 +108,6 @@ export function ExportDialog() {
       live = false;
     };
   }, []);
-  const [destination, setDestination] = useState<'library' | 'download'>('library');
-  const [name, setName] = useState(defaultName);
-  const running = progress !== null && !progress.finished;
 
   // A finished export from before is not this one; start clean. A running one stays shown.
   useEffect(() => {
@@ -87,10 +122,11 @@ export function ExportDialog() {
       getBackend().exportVersions(session, {
         versionIds,
         format,
-        colorSpace,
-        ...(base ? { base } : {}),
-        quality,
-        longEdge,
+        colorSpace: settings.colorSpace ?? 'srgb',
+        base: { ...settings, fileNameTemplate: settings.fileNameTemplate.trim() || '{name}' },
+        quality: Math.round(settings.quality * 100),
+        longEdge: settings.maxLongEdge,
+        extras,
         destination,
         name: name.trim() || defaultName(),
       }),
@@ -100,6 +136,7 @@ export function ExportDialog() {
   return (
     <Modal
       title={`Export ${plural(versionIds.length, 'photo')}`}
+      width="lg"
       onClose={close}
       footer={
         progress?.finished ? (
@@ -117,16 +154,20 @@ export function ExportDialog() {
       }
     >
       <div className={styles.form}>
-        <div className={styles.field}>
-          <span className={styles.legend}>Preset</span>
+        <div className={styles.columns}>
+          <div className={styles.column}>
+            <div className={styles.field}>
+              <span className={styles.legend}>Preset</span>
           <ExportPresetBar
             presets={presets}
             selectedId={presetId}
             disabled={running}
             onPick={pickPreset}
             onSave={(presetName) => {
-              const id = session.saveExportPreset(presetName, settingsFromForm(form, base));
-              if (id) setPresetId(id);
+              const id = session.saveExportPreset(presetName, settings);
+              if (!id) return;
+              session.setSetting(extrasSettingKey(id), extrasToJson(extras));
+              setPresetId(id);
             }}
             onRename={(id, presetName) => session.renameExportPreset(id, presetName)}
             onDelete={(id) => {
@@ -139,33 +180,47 @@ export function ExportDialog() {
         <fieldset className={styles.group} disabled={running}>
           <legend className={styles.legend}>File type</legend>
           <label className={styles.option}>
-            <input type="radio" name="format" checked={format === 'jpeg'} onChange={() => setFormat('jpeg')} />
+            <input type="radio" name="format" checked={format === 'jpeg'} onChange={() => change({ format: 'jpeg' as ExportFormat })} />
             JPEG <span className={styles.muted}>— small files, for sharing</span>
           </label>
+          {format === 'jpeg' && (
+            <label className={styles.range}>
+              <span>Quality</span>
+              <input
+                type="range"
+                min={40}
+                max={100}
+                aria-label="Quality"
+                value={Math.round(settings.quality * 100)}
+                onChange={(e) => change({ quality: Number(e.target.value) / 100 })}
+              />
+              <span className={styles.value}>{Math.round(settings.quality * 100)}</span>
+            </label>
+          )}
           <label className={styles.option}>
-            <input type="radio" name="format" checked={format === 'png'} onChange={() => setFormat('png')} />
+            <input type="radio" name="format" checked={format === 'png'} onChange={() => change({ format: 'png' })} />
             PNG <span className={styles.muted}>— no compression loss, larger files</span>
           </label>
+          {format === 'png' && (
+            <div className={styles.inline} role="radiogroup" aria-label="PNG bit depth">
+              <label className={styles.option}>
+                <input type="radio" name="depth" checked={extras.pngDepth === 16} onChange={() => change({}, { pngDepth: 16 })} />
+                16-bit
+              </label>
+              <label className={styles.option}>
+                <input type="radio" name="depth" checked={extras.pngDepth === 8} onChange={() => change({}, { pngDepth: 8 })} />
+                8-bit <span className={styles.muted}>— smaller</span>
+              </label>
+            </div>
+          )}
           {(tiff || format === 'tiff') && (
             <label className={styles.option}>
-              <input type="radio" name="format" checked={format === 'tiff'} onChange={() => setFormat('tiff')} />
+              <input type="radio" name="format" checked={format === 'tiff'} onChange={() => change({ format: 'tiff' })} />
               TIFF, 16-bit <span className={styles.muted}>— for printing and further editing</span>
             </label>
           )}
           {tiffBlocked && <p className={styles.warn}>This build cannot write TIFF yet. Choose JPEG or PNG.</p>}
-          {keepsLocation && (
-            <p className={styles.warn} role="note">
-              Location will be kept: these settings leave where each photo was taken in the exported files.
-            </p>
-          )}
           {problem && <p className={styles.warn}>{problem}</p>}
-          {format === 'jpeg' && (
-            <label className={styles.range}>
-              <span>Quality</span>
-              <input type="range" min={40} max={100} value={quality} onChange={(e) => setQuality(Number(e.target.value))} />
-              <span className={styles.value}>{quality}</span>
-            </label>
-          )}
         </fieldset>
 
         <label className={styles.field}>
@@ -174,7 +229,7 @@ export function ExportDialog() {
             className={styles.select}
             disabled={running}
             aria-label="Colours"
-            value={colorSpace}
+            value={settings.colorSpace ?? 'srgb'}
             onChange={(e) => change({ colorSpace: e.target.value as ExportColorSpace })}
           >
             {offeredColorSpaces(format).map((space) => (
@@ -185,24 +240,117 @@ export function ExportDialog() {
           </select>
         </label>
 
-        <label className={styles.field}>
+        <div className={styles.field}>
           <span className={styles.legend}>Size</span>
-          <select
-            className={styles.select}
-            disabled={running || format === 'tiff'}
-            value={longEdge ?? ''}
-            onChange={(e) => setLongEdge(e.target.value === '' ? null : Number(e.target.value))}
-          >
-            {sizes.map((s) => (
-              <option key={s.label} value={s.value ?? ''}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+          <div className={styles.inline}>
+            <select
+              className={styles.select}
+              aria-label="Size"
+              disabled={running || format === 'tiff'}
+              value={extras.size.mode}
+              onChange={(e) => {
+                const mode = e.target.value as SizeSpec['mode'];
+                if (mode === 'original') setSize({ mode });
+                else if (mode === 'megapixels') setSize({ mode, mp: 12 });
+                else setSize({ mode, px: mode === 'long' ? 2048 : 1080 });
+              }}
+            >
+              {SIZE_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            {extras.size.mode !== 'original' && (
+              <>
+                <input
+                  className={styles.number}
+                  type="number"
+                  min={extras.size.mode === 'megapixels' ? 0.1 : 16}
+                  step={extras.size.mode === 'megapixels' ? 0.1 : 1}
+                  aria-label={extras.size.mode === 'megapixels' ? 'Megapixels' : 'Pixels'}
+                  disabled={running}
+                  value={sizeValue(extras.size)}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (!(n > 0)) return;
+                    const size = extras.size;
+                    if (size.mode === 'megapixels') setSize({ mode: 'megapixels', mp: n });
+                    else if (size.mode !== 'original') setSize({ mode: size.mode, px: Math.round(n) });
+                  }}
+                />
+                <span className={styles.muted}>{extras.size.mode === 'megapixels' ? 'MP' : 'px'}</span>
+              </>
+            )}
+          </div>
+          {format !== 'tiff' && extras.size.mode !== 'original' && (
+            <label className={styles.option}>
+              <input type="checkbox" checked={!extras.allowEnlarge} disabled={running} onChange={(e) => change({}, { allowEnlarge: !e.target.checked })} />
+              Don’t enlarge <span className={styles.muted}>— smaller photos stay as they are</span>
+            </label>
+          )}
+          {format === 'tiff' && <span className={styles.muted}>TIFF is always the full size. It keeps no camera details (EXIF).</span>}
+        </div>
+
+          </div>
+          <div className={styles.column}>
+        <fieldset className={styles.group} disabled={running || format === 'tiff'}>
+          <legend className={styles.legend}>Details in the file</legend>
+          <label className={styles.option}>
+            <input type="radio" name="metadata" checked={settings.metadata === 'all'} onChange={() => change({ metadata: 'all' })} />
+            All <span className={styles.muted}>— camera, exposure, date, copyright</span>
+          </label>
+          <label className={styles.option}>
+            <input type="radio" name="metadata" checked={settings.metadata === 'copyright'} onChange={() => change({ metadata: 'copyright' })} />
+            Copyright and contact only
+          </label>
+          <label className={styles.option}>
+            <input type="radio" name="metadata" checked={settings.metadata === 'none'} onChange={() => change({ metadata: 'none' })} />
+            None
+          </label>
+          {settings.metadata === 'all' && (
+            <label className={styles.option}>
+              <input type="checkbox" checked={settings.removeLocation} onChange={(e) => change({ removeLocation: e.target.checked })} />
+              Remove location
+            </label>
+          )}
+          {keepsLocation && (
+            <p className={styles.warn} role="note">
+              Location will be kept: these settings leave where each photo was taken in the exported files.
+            </p>
+          )}
+          {settings.metadata !== 'none' && (
+            <div className={styles.inline}>
+              <input
+                className={styles.text}
+                aria-label="Creator"
+                placeholder="Creator"
+                value={settings.creator ?? ''}
+                onChange={(e) => change({ creator: e.target.value })}
+              />
+              <input
+                className={styles.text}
+                aria-label="Copyright"
+                placeholder="© 2026 Your name"
+                value={settings.copyright ?? ''}
+                onChange={(e) => change({ copyright: e.target.value })}
+              />
+            </div>
+          )}
+        </fieldset>
+
+        <label className={styles.field}>
+          <span className={styles.legend}>File names</span>
+          <input
+            className={styles.text}
+            aria-label="File name template"
+            disabled={running}
+            value={settings.fileNameTemplate}
+            onChange={(e) => change({ fileNameTemplate: e.target.value })}
+          />
           <span className={styles.muted}>
-            {format === 'tiff'
-              ? 'TIFF is always the full size. It keeps no camera details (EXIF).'
-              : 'Photos are never made larger than they are.'}
+            {TOKENS.join(' ')}
+            {sampleName && ` · ${sampleName}`}
           </span>
         </label>
 
@@ -225,7 +373,25 @@ export function ExportDialog() {
             <input type="radio" name="dest" checked={destination === 'download'} onChange={() => setDestination('download')} />
             Download to this computer
           </label>
+          {destination === 'download' && versionIds.length > 1 && (
+            <label className={`${styles.option} ${styles.indent}`}>
+              <input type="checkbox" checked={extras.zip} onChange={(e) => change({}, { zip: e.target.checked })} />
+              As one zip
+            </label>
+          )}
+          {destination === 'download' && versionIds.length > 1 && extras.zip && (
+            <input
+              className={styles.input}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              aria-label="Zip name"
+              placeholder="Zip name"
+            />
+          )}
         </fieldset>
+        <p className={styles.muted}>Output sharpening for screen or print is not available yet.</p>
+          </div>
+        </div>
 
         {progress && (
           <div className={styles.progress} aria-live="polite">

@@ -1,7 +1,17 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { imageStats, openHarness, raiseExposure, waitForPreview, waitForReady } from './harness';
+import { imageStats, openHarness, previewCount, raiseExposure, settledPreview, waitForPreview, waitForReady, type ImageStats } from './harness';
+import type { Page } from '@playwright/test';
+
+/** Makes an edit and measures the screen preview rendered for it, once the edit has settled. */
+async function previewAfter(page: Page, edit: () => Promise<void>): Promise<ImageStats> {
+  const from = await previewCount(page);
+  await edit();
+  await waitForPreview(page, from, 5 * 60_000);
+  const index = await settledPreview(page, from);
+  return imageStats(page, { kind: 'preview', index, which: 'screen' });
+}
 
 /**
  * A real Fujifilm RAF (40 MP X-Trans, about 85 MB) through the worker-pool
@@ -42,49 +52,52 @@ test.describe('Edit view on a RAF', () => {
     const fitPercent = Number((await page.getByTestId('zoom-readout').textContent())?.replace('%', ''));
     expect(fitPercent).toBeLessThan(50);
 
-    // On RAW files Temperature reads and takes Kelvin.
+    // On a RAW file the Temperature field reads and takes Kelvin.
     const temperature = page.getByLabel('Temperature value');
-    await temperature.fill('9000');
-    await temperature.press('Enter');
-    await waitForPreview(page, 0, 5 * 60_000);
-    const warm = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
+    await expect(temperature).toHaveValue(/ K$/);
+    const warm = await previewAfter(page, async () => {
+      await temperature.fill('7500');
+      await temperature.press('Enter');
+    });
     expect(Math.max(warm.width, warm.height)).toBe(2048);
     expect(warm.mean).toBeGreaterThan(5);
     expect(warm.mean).toBeLessThan(250);
     expect(warm.spread).toBeGreaterThan(5);
 
-    await temperature.fill('3000');
-    await temperature.press('Enter');
-    await waitForPreview(page, 1, 5 * 60_000);
-    const cool = await imageStats(page, { kind: 'preview', index: 1, which: 'screen' });
+    const cool = await previewAfter(page, async () => {
+      await temperature.fill('3500');
+      await temperature.press('Enter');
+    });
     expect(warm.red - warm.blue).toBeGreaterThan(cool.red - cool.blue + 10);
     // White balance in camera space moves colour, not brightness.
     expect(Math.abs(warm.mean - cool.mean)).toBeLessThan(25);
 
     // RAW gets the camera's profiles and Auto white balance.
     const profiles = page.getByRole('combobox', { name: 'Profile' }).locator('option');
-    await expect(profiles).toContainText(['Camera', 'Standard', 'Neutral', 'Monochrome']);
-    await page.getByRole('button', { name: 'Auto White balance' }).click();
-    await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('Auto white balance');
+    // The camera's own look first (not listed twice), Provia as Standard, then Neutral and Monochrome.
+    await expect(profiles).toContainText(['Camera', 'Standard (Provia look)', 'Neutral', 'Monochrome']);
+    const balanced = await previewAfter(page, async () => {
+      await page.getByRole('button', { name: 'Auto White balance' }).click();
+      await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('Auto white balance');
+    });
     await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
-    await waitForPreview(page, 2, 5 * 60_000);
-    const balanced = await imageStats(page, { kind: 'preview', index: 2, which: 'screen' });
 
     const exposureStart = Date.now();
+    const from = await previewCount(page);
     await raiseExposure(page, 10);
     await expect(page.getByLabel('Exposure value')).toHaveValue('+1.00');
-    await waitForPreview(page, 3, 5 * 60_000);
+    await waitForPreview(page, from, 5 * 60_000);
     const exposureMs = Date.now() - exposureStart;
     console.log(`RAF exposure change to its settled preview: ${exposureMs} ms`);
     test.info().annotations.push({ type: 'timing', description: `exposure change settled in ${exposureMs} ms` });
-    const bright = await imageStats(page, { kind: 'preview', index: 3, which: 'screen' });
+    const bright = await imageStats(page, { kind: 'preview', index: await settledPreview(page, from), which: 'screen' });
     expect(bright.mean).toBeGreaterThan(balanced.mean + 10);
 
     // An engine profile changes the develop settings: Monochrome drops the colour.
-    await page.getByRole('combobox', { name: 'Profile' }).selectOption('monochrome');
-    await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('Profile: Monochrome');
-    await waitForPreview(page, 4, 5 * 60_000);
-    const mono = await imageStats(page, { kind: 'preview', index: 4, which: 'screen' });
+    const mono = await previewAfter(page, async () => {
+      await page.getByRole('combobox', { name: 'Profile' }).selectOption('monochrome');
+      await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('Profile: Monochrome');
+    });
     expect(Math.abs(mono.red - mono.blue)).toBeLessThan(4);
     expect(Math.abs(mono.red - mono.green)).toBeLessThan(4);
   });

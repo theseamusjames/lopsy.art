@@ -53,9 +53,16 @@ const MARGIN = 0.03;
 // and rafWhiteBalanceKelvin), to what a local build measured with them in:
 // 216,567 B raw, 24,208 B gzip. The glue is wasm-bindgen output, so CI
 // measures the same bytes (it did for the previous raise).
+//
+// Both were then set to what CI measured with the whole Photos develop
+// chain in (run 44313084566, commit d8018ba: wasm 4,459,984 B raw and
+// 1,893,525 B gzip, +2.14 % and +1.94 %; glue 217,124 B and 24,392 B):
+// the detail, local contrast, areas, finish and screen-only view passes,
+// the white-balance picker and presets, TIFF, and the decode limits. Every
+// develop pass compiles lazily, so Lopsy pays only the download.
 const BUDGET = {
-  'lopsy_wasm_bg.wasm': { raw: 4_366_533, gzip: 1_857_436 },
-  'lopsy_wasm.js': { raw: 216_567, gzip: 24_208 },
+  'lopsy_wasm_bg.wasm': { raw: 4_459_984, gzip: 1_893_525 },
+  'lopsy_wasm.js': { raw: 217_124, gzip: 24_392 },
 };
 
 function format(bytes) {

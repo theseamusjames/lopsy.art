@@ -112,6 +112,26 @@ describe('library undo', () => {
     expect(s.getView().assets.get(a.assetId)?.keywords).toEqual(['sidecar']);
   });
 
+  it('never points a photo at a version another device deleted since', async () => {
+    const adapter = new TestAdapter();
+    let wall = 1_000_000;
+    const a = await openLibrary({ adapter, store: new MemoryLocalStore(), autoSync: false, now: () => (wall += 10) });
+    const b = await openLibrary({ adapter, store: new MemoryLocalStore(), autoSync: false, now: () => (wall += 10) });
+    const photo1 = a.withoutLibraryHistory(() => a.addAsset(photo(1)));
+    const v2 = a.withoutLibraryHistory(() => a.createVersion(photo1.assetId, 'Mono'));
+    a.setMarks([photo1.assetId], { rating: 3 });
+    a.setPrimaryVersion(photo1.assetId, v2);
+    await a.syncNow();
+    await b.syncNow();
+    b.deleteVersion(photo1.versionId);
+    await b.syncNow();
+    await a.syncNow();
+    // 'Show version' would bring back the deleted V1: it is skipped, and the step before is undone.
+    expect(a.undoLibrary()).toBe('Rating');
+    expect(a.getView().assets.get(photo1.assetId)).toMatchObject({ primaryVersionId: v2, rating: 0 });
+    expect(a.libraryHistory().canUndo).toBe(false);
+  });
+
   it('leaves what another device changed since, and undoes the rest', async () => {
     const adapter = new TestAdapter();
     let wall = 1_000_000;

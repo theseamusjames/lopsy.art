@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE, IDENTITY_CURVE, recipeFromPaths, recipeToPaths } from '../library/recipe';
 import type { Asset, Version } from '../library/types';
-import { curveFromCrs, kelvinToTemperature, temperatureToKelvin } from './crs-mapping';
+import { curveFromCrs, kelvinForTemperature, temperatureForKelvin, type KelvinScale } from './crs-mapping';
 import { readXmp, recipeFromXmp } from './read';
 import { writeXmp } from './write';
 
@@ -36,16 +36,19 @@ const FULL_LIGHTROOM_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe X
  </rdf:RDF>
 </x:xmpmeta>`;
 
+/** A body shot at 5000 K whose temperature +100 is 20000 K and -100 is about 2857 K (made up, the engine's shape). */
+const SCALE: KelvinScale = { asShotKelvin: 5000, miredAtZero: 200, miredPerUnit: -1.5 };
+
 describe('Lightroom edit mapping', () => {
   it('maps a full Lightroom sidecar onto the recipe', () => {
-    const x = readXmp(FULL_LIGHTROOM_XMP);
+    const x = readXmp(FULL_LIGHTROOM_XMP, { kelvinScale: SCALE });
     const r = x ? recipeFromXmp(x, 1) : null;
     expect(r).not.toBeNull();
     if (!r) return;
     expect(r.tone).toEqual({ exposure: -0.35, contrast: 20, highlights: -60, shadows: 45, whites: 10, blacks: -15 });
     expect(r.color).toEqual({ vibrance: 25, saturation: -10 });
-    expect(r.whiteBalance).toEqual({ mode: 'custom', temperature: kelvinToTemperature(6500), tint: -10 });
-    expect(r.whiteBalance.temperature).toBe(28);
+    // 6500 K on this body: (1e6/6500 - 200) / -1.5.
+    expect(r.whiteBalance).toEqual({ mode: 'custom', temperature: 30.77, tint: -10 });
     expect(r.localContrast).toEqual({ large: 18, small: 12, haze: 8 });
     expect(r.sharpness).toEqual({ amount: 40, radius: 1, edges: 20 });
     expect(r.noise).toEqual({ luminance: 15, color: 25, detail: 50 });
@@ -97,7 +100,8 @@ describe('Lightroom edit mapping', () => {
     const wild = recipeFromXmp(readXmp(doc('crs:Sharpness="400" crs:ColorGradeShadowHue="359" crs:Temperature="2000" crs:WhiteBalance="Tungsten"'))!, 1);
     expect(wild?.sharpness.amount).toBe(150);
     expect(wild?.colorGrading.shadows.hue).toBe(359);
-    expect(wild?.whiteBalance.temperature).toBe(-100);
+    // RAW Kelvin without the photo's scale: left as shot.
+    expect(wild?.whiteBalance).toEqual(DEFAULT_RECIPE.whiteBalance);
   });
 
   it('reads the vignette shape and grain only with a vignette or grain', () => {
@@ -125,23 +129,51 @@ describe('Lightroom edit mapping', () => {
     expect(curveFromCrs(undefined)).toBeNull();
   });
 
-  it('converts Kelvin both ways', () => {
-    expect(kelvinToTemperature(5500)).toBe(0);
-    expect(kelvinToTemperature(10000)).toBe(82);
-    expect(kelvinToTemperature(4000)).toBe(-68);
-    for (const t of [-90, -30, 0, 25, 80]) expect(kelvinToTemperature(temperatureToKelvin(t))).toBe(t);
+  it("converts Kelvin both ways on the photo's own scale", () => {
+    expect(temperatureForKelvin(SCALE, 5000)).toBe(0);
+    expect(kelvinForTemperature(SCALE, 0)).toBe(5000);
+    for (const t of [-90, -30, 0, 25, 80]) expect(temperatureForKelvin(SCALE, kelvinForTemperature(SCALE, t)!)).toBeCloseTo(t, 6);
+    expect(temperatureForKelvin(SCALE, 1_000_000)).toBe(100);
+  });
+
+  it("maps RAW Kelvin only against the photo's as-shot balance", () => {
+    const doc = (attrs: string) =>
+      `<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/" ${attrs}/></rdf:RDF></x:xmpmeta>`;
+    const tungsten = doc('crs:WhiteBalance="Custom" crs:Temperature="3200" crs:Tint="+6" crs:Exposure2012="+0.5"');
+    // A frame shot under tungsten, kept at 3200 K in Lightroom: no change from as shot.
+    const tungstenScale: KelvinScale = { asShotKelvin: 3200, miredAtZero: 1e6 / 3200, miredPerUnit: -1.5 };
+    expect(recipeFromXmp(readXmp(tungsten, { kelvinScale: tungstenScale })!, 1)?.whiteBalance).toEqual({ mode: 'custom', temperature: 0, tint: 4 });
+    // Without the scale the white balance is left as shot; the other edits still map.
+    const unknown = recipeFromXmp(readXmp(tungsten)!, 1);
+    expect(unknown?.whiteBalance).toEqual(DEFAULT_RECIPE.whiteBalance);
+    expect(unknown?.tone.exposure).toBe(0.5);
+
+    // Writing: Kelvin on the photo's scale, or As Shot when it is not known; JPEG stays relative.
+    const recipe = recipeFromPaths({ 'whiteBalance.mode': 'custom', 'whiteBalance.temperature': 0, 'whiteBalance.tint': 4 });
+    const asset = { id: 'a', format: 'raf', rating: 0, setAside: false, label: null, keywords: [], title: null, caption: null } as unknown as Asset;
+    const version = { id: 'v', assetId: 'a', name: 'Original', recipe } as unknown as Version;
+    const known = writeXmp(asset, version, { kelvinScale: tungstenScale });
+    expect(known).toContain('crs:WhiteBalance="Custom"');
+    expect(known).toContain('crs:Temperature="3200"');
+    expect(known).toContain('crs:Tint="+6"');
+    const blind = writeXmp(asset, version);
+    expect(blind).toContain('crs:WhiteBalance="As Shot"');
+    expect(blind).not.toContain('crs:Temperature=');
+    const jpeg = writeXmp({ ...asset, format: 'jpeg' } as Asset, version);
+    expect(jpeg).toContain('crs:Temperature="0"');
+    expect(jpeg).toContain('crs:Tint="+4"');
   });
 
   it('writes Camera Raw settings Lightroom reads back to the same recipe', () => {
-    const x = readXmp(FULL_LIGHTROOM_XMP)!;
+    const x = readXmp(FULL_LIGHTROOM_XMP, { kelvinScale: SCALE })!;
     const recipe = recipeFromXmp(x, 1)!;
     const asset = { id: 'a', format: 'raf', rating: 0, setAside: false, label: null, keywords: [], title: null, caption: null } as unknown as Asset;
     const version = { id: 'v', assetId: 'a', name: 'Original', recipe } as unknown as Version;
     for (const format of ['raf', 'jpeg'] as const) {
-      const text = writeXmp({ ...asset, format }, version);
+      const text = writeXmp({ ...asset, format }, version, { kelvinScale: SCALE });
       // Drop our own namespace, so only the crs: mapping is read back.
       const crsOnly = text.replace(/\s+lpp:[^=\s]+="[^"]*"/g, '');
-      const back = readXmp(crsOnly)!;
+      const back = readXmp(crsOnly, { kelvinScale: SCALE })!;
       expect(back.recipe).toBeNull();
       const read = recipeFromXmp(back, 1)!;
       const expected = recipeToPaths(recipe);

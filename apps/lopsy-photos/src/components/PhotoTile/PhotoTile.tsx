@@ -1,7 +1,7 @@
 import { memo, type MouseEvent } from 'react';
 import { Copy, Images, Layers, Paintbrush, SlidersHorizontal, TriangleAlert } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
-import { useFindResult, useLibraryView, usePreviewUrl, useVersionCounts } from '../../app/hooks';
+import { useFindResult, useLibraryView, usePreviewUrl, usePairPartners, useVersionCounts } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { writeDraggedIds } from '../../app/drag';
 import { isEdited } from '../../library/asset-query';
@@ -28,6 +28,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
   const { assetId, versionId: ownVersionId } = parseItem(itemId);
   const view = useLibraryView();
   const counts = useVersionCounts();
+  const partners = usePairPartners();
   const found = useFindResult();
   const burst = found.bursts.get(assetId) ?? 0;
   const documents = found.documents.get(assetId) ?? 0;
@@ -41,7 +42,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
   const isVersionTile = ownVersionId !== null;
   const edited = isVersionTile ? !isDefaultRecipe(version.recipe) : isEdited(asset, view);
   const versions = counts.get(asset.id) ?? 1;
-  const paired = asset.pairedWith !== null && view.assets.get(asset.pairedWith)?.deleted === false;
+  const paired = partners.has(asset.id);
 
   return (
     <div
@@ -94,10 +95,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
               title={burstOpen ? 'Fold this burst back into one photo' : `A burst of ${burst} photos: show them all`}
               aria-label={`Burst of ${burst} photos`}
               aria-expanded={burstOpen}
-              onClick={(e) => {
-                e.stopPropagation();
-                useUi.getState().toggleBurst(assetId);
-              }}
+              {...stackToggle(assetId)}
             >
               <Images size={11} />
               {burst}
@@ -114,10 +112,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
               }
               aria-label={`${documents} Lopsy document${documents === 1 ? '' : 's'}`}
               aria-expanded={burstOpen}
-              onClick={(e) => {
-                e.stopPropagation();
-                useUi.getState().toggleBurst(assetId);
-              }}
+              {...stackToggle(assetId)}
             >
               <Paintbrush size={11} />
               {documents}
@@ -141,10 +136,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
                 title={burstOpen ? 'Fold the versions back into one tile' : `${versions} versions: show them all`}
                 aria-label={`${versions} versions`}
                 aria-expanded={burstOpen}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  useUi.getState().toggleBurst(assetId);
-                }}
+                {...stackToggle(assetId)}
               >
                 <Copy size={11} />
                 {versions}
@@ -161,3 +153,27 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
     </div>
   );
 });
+
+/**
+ * A stack badge's handlers. The press is kept from the tile, which is
+ * draggable and selects on click, so the badge opens and folds its stack
+ * every time instead of now and then starting a drag or a selection.
+ */
+function stackToggle(assetId: string) {
+  return {
+    draggable: false,
+    onMouseDown: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    onDragStart: (e: React.DragEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    onDoubleClick: (e: React.MouseEvent) => e.stopPropagation(),
+    onClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      useUi.getState().toggleBurst(assetId);
+    },
+  };
+}

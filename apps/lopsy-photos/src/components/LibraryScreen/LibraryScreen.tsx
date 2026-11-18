@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useLibraryView, useOrderedIds } from '../../app/hooks';
 import { useUi } from '../../app/store';
-import { copyEdits, copySource, runCommand } from '../../app/commands';
+import { copyEdits, copySource, createNamedVersion, runCommand, suggestedVersionName } from '../../app/commands';
+import { NewVersionDialog } from '../NewVersionDialog/NewVersionDialog';
 import { COPY_GROUPS, DEFAULT_COPY_GROUP_IDS } from '../../library/recipe-copy';
 import { CopyEditsDialog } from '../CopyEditsDialog/CopyEditsDialog';
 import { isTypingTarget, matchShortcut, type ShortcutContext } from '../../shortcuts/registry';
@@ -129,6 +130,13 @@ export function LibraryScreen() {
       {dialog === 'export' && <ExportDialog />}
       {dialog === 'delete' && <DeleteDialog />}
       {dialog === 'settings' && <SettingsDialog />}
+      {dialog === 'new-version' && (
+        <NewVersionDialog
+          suggested={suggestedVersionName()}
+          onCreate={createNamedVersion}
+          onClose={() => useUi.getState().openDialog(null)}
+        />
+      )}
       {dialog === 'copy-edits' && (
         <CopyEditsDialog
           sourceName={copySource()?.name ?? 'this photo'}

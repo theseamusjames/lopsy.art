@@ -5,6 +5,7 @@ import { DEFAULT_EXPORT_SETTINGS } from '@lopsy/photos-core/export/types';
 import { harnessAsset, harnessVersion } from '../edit/EditHarness/harness-asset';
 import type { DevelopEngine, ExportOptions } from './develop-engine';
 import { createEngineExportRenderer } from './export-renderer';
+import { DEFAULT_EXTRAS, withExtras } from '../library/export-size';
 
 interface FakeEngine {
   readonly engine: DevelopEngine;
@@ -34,6 +35,7 @@ function fakeEngine(): FakeEngine {
       fake.resolution = options?.resolution === 'full' ? 'full' : 'working';
       return { width: 10, height: 10 };
     },
+    imageSize: () => ({ width: 4000, height: 3000 }),
     isFullResolution: () => fake.resolution === 'full',
     ensureFullResolution: async () => {
       fake.upgrades++;
@@ -91,6 +93,21 @@ describe('createEngineExportRenderer', () => {
     expect(f?.loads).toEqual(['a']);
     expect(f?.recipes).toEqual([warm]);
     expect(f?.exports).toEqual([{ format: 'jpeg', quality: 0.9, maxSize: 2048, colorSpace: 'srgb' }]);
+  });
+
+  it('sizes by short edge or megapixels, never enlarging unless asked, and passes PNG depth', async () => {
+    const r = renderer();
+    const signal = new AbortController().signal;
+    const version = harnessVersion(assetA, warm);
+    const extras = { ...DEFAULT_EXTRAS, size: { mode: 'short' as const, px: 1500 } };
+    await r.render(assetA, version, withExtras(DEFAULT_EXPORT_SETTINGS, extras) as typeof DEFAULT_EXPORT_SETTINGS, signal);
+    expect(fakes[0]?.exports.at(-1)?.size).toEqual({ width: 2000, height: 1500 });
+    const big = { ...DEFAULT_EXTRAS, size: { mode: 'megapixels' as const, mp: 48 }, pngDepth: 8 as const };
+    await r.render(assetA, version, withExtras({ ...DEFAULT_EXPORT_SETTINGS, format: 'png' }, big) as typeof DEFAULT_EXPORT_SETTINGS, signal);
+    expect(fakes[0]?.exports.at(-1)).toMatchObject({ format: 'png', pngDepth: 8 });
+    expect(fakes[0]?.exports.at(-1)?.size).toBeUndefined();
+    await r.render(assetA, version, withExtras(DEFAULT_EXPORT_SETTINGS, { ...big, allowEnlarge: true }) as typeof DEFAULT_EXPORT_SETTINGS, signal);
+    expect(fakes[0]?.exports.at(-1)?.size).toEqual({ width: 8000, height: 6000 });
   });
 
   it('exports TIFF full size in the chosen colour space, and refuses Rec. 2020', async () => {

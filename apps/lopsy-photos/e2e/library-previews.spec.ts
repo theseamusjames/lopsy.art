@@ -9,7 +9,7 @@ import { generatedJpeg, importFiles } from './library';
 
 async function applyPreset(page: Page, tile: Locator, name: string): Promise<void> {
   await tile.click();
-  await page.getByRole('button', { name: 'Apply a preset to the selected photos' }).click();
+  await page.getByRole('button', { name: 'Presets', exact: true }).click();
   await page.getByRole('menu', { name: 'Presets' }).getByRole('menuitem', { name }).click();
   await expect(tile).toHaveAttribute('data-edited', 'true');
 }
@@ -32,6 +32,7 @@ test('a preset from the grid and a new version get their own thumbnails', async 
   // A new version shows a thumbnail at once (the same recipe reuses the photo's previews)...
   await first.click({ button: 'right' });
   await page.getByRole('menu', { name: 'Photo actions' }).getByRole('menuitem', { name: 'New version' }).click();
+  await page.getByRole('dialog', { name: 'New version' }).getByRole('button', { name: 'Create' }).click();
   const version = page.locator('[role="gridcell"][title="first.jpg (Version 2)"]');
   await expect(version).toBeVisible();
   await expect(version).toHaveAttribute('data-preview-hash', imported, { timeout: 60_000 });

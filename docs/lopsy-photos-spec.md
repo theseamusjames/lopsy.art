@@ -1,8 +1,9 @@
 # Lopsy Photos: spec
 
-Status: proposal, written 2026-11-18. Nothing here is built. "Lopsy
-Photos" and its URL are placeholders: the app may get its own name and
-domain, and nothing in the design depends on either.
+Status: proposal, written 2026-11-18. A proof of concept was built the
+same day; Appendix B says what exists and where it departs from this
+design. "Lopsy Photos" and its URL are placeholders: the app may get its
+own name and domain, and nothing in the design depends on either.
 
 Lopsy Photos is a photo library and RAW editor that runs in the browser.
 It keeps every original in the user's own Google Drive and renders every
@@ -36,6 +37,7 @@ Appendix A. Re-check them before building on them.
 14. [Open questions](#14-open-questions)
 15. [Setup checklist](#15-setup-checklist)
 - [Appendix A. Facts to re-check](#appendix-a-facts-to-re-check)
+- [Appendix B. Proof-of-concept status](#appendix-b-proof-of-concept-status)
 
 ---
 
@@ -1600,8 +1602,110 @@ each against the primary source before the phase that depends on it.
 | Drive file resources expose `md5Checksum`, `sha1Checksum` and `sha256Checksum` for binary content | 6.8 | [Drive v3 files resource](https://developers.google.com/drive/v3/reference/files) |
 | `appProperties`: 30 per app per file; 124 bytes per key plus value | 6.5 | [Add custom file properties](https://developers.google.com/drive/properties) |
 | 12,000 queries per minute per user for existing projects. A quota-unit model reportedly rolled out in May 2026, with older projects keeping request counts. Check the project's quotas in the Cloud console. | 6.5 | [Drive API usage limits](https://developers.google.com/workspace/drive/api/guides/limits); [third-party summary of the 2026 change](https://fast.io/resources/google-drive-connector-rate-limit/) |
-| Resumable uploads work from the browser under CORS; the session URI is in the `Location` header | 6.5, S1 | [googledrive/cors-upload-sample](https://github.com/googledrive/cors-upload-sample) |
+| Resumable uploads work from the browser under CORS; the session URI is in the `Location` header | 6.5, S1 | [googledrive/cors-upload-sample](https://github.com/googledrive/cors-upload-sample). 2026-11-18: a live preflight from `https://lopsy.art` allows `authorization, content-type, x-upload-content-type, x-upload-content-length`; that a successful initiation exposes `Location` (and a 308 `Range`) still needs a signed-in check |
+| Drive v3 parameters and fields the adapter uses (`fields`, `q`, `generateIds`, `changes.list` up to 1000 per page, `permissions`, `sha256Checksum`, `headRevisionId`, `webViewLink`, `trashed` from a trashed parent) | 6.5 | Checked 2026-11-18 against the live [Drive v3 discovery document](https://www.googleapis.com/discovery/v1/apis/drive/v3/rest) |
+| The Picker runs in an iframe on docs.google.com, so its API key's referrers must include `https://docs.google.com/*`; with `drive.file`, `setAppId` (the project number) is required | 5.3, 6.5 | Google's [web Picker guide](https://developers.google.com/workspace/drive/picker/guides/web-picker), seen through search results 2026-11-18; `@types/google.picker` 0.0.52 |
+| CSP for sign-in and the Picker: `accounts.google.com/gsi/` (script, frame, connect), `accounts.google.com/gsi/style`, `apis.google.com`, frames on `docs.google.com` and `drive.google.com`, `fonts.gstatic.com`, `*.googleusercontent.com` images, `'unsafe-inline'` styles for the Picker | 6.3, 6.13, S1 | GIS setup guide (search results 2026-11-18); the live `gsi/client` script; the CSP example in Google Workspace's [drive-picker-element](https://www.npmjs.com/package/@googleworkspace/drive-picker-element) README |
 | In Testing status, authorizations (and refresh tokens) expire after seven days, and there is a cap of 100 test users | 6.4, 15 | [Manage app audience](https://support.google.com/cloud/answer/15549945); [Nango's Google OAuth notes](https://nango.dev/docs/api-integrations/google/how-to-register-your-own-google-oauth-app) |
 | WebGPU ships in Chrome and Edge, Safari 26 and Firefox (Windows from 141, Apple-silicon macOS later). Linux Firefox and Firefox for Android are pending, so the WebGL fallback stays. | 6.10 | [web.dev: WebGPU supported in major browsers](https://web.dev/blog/webgpu-supported-major-browsers) |
 | `showDirectoryPicker` is Chromium-only; Firefox and Safari oppose it | 5.3 | [caniuse](https://caniuse.com/mdn-api_window_showdirectorypicker); [web-features explorer](https://web-platform-dx.github.io/web-features-explorer/features/file-system-access) |
 | Storage: Chrome gives an origin a large share of disk; Firefox prompts for persistence; Safari may clear script-written storage after seven days without a visit unless the app is installed | 6.7 | [MDN: storage quotas and eviction](https://developer.mozilla.org/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria); [web.dev: storage for the web](https://web.dev/articles/storage-for-the-web); [web.dev: persistent storage](https://web.dev/persistent-storage) |
+
+## Appendix B. Proof-of-concept status
+
+A proof of concept of this spec was built on 2026-11-18, on the branch
+`claude/great-ride-gmwms6`, by a team of agents working in parallel and
+reviewed by independent agents (data integrity, security, UX, and a final
+correctness pass). This appendix says what exists, where it departs from
+the design above, and what was and wasn't verified. How to run, test and
+deploy it: `docs/lopsy-photos-setup.md`. What the app does, feature by
+feature: `apps/lopsy-photos/FEATURES.md`. How the library database works:
+`packages/photos-core/README.md`. The develop chain in the engine:
+`engine/src/develop/mod.rs`.
+
+### What exists
+
+| Spec | Built |
+|---|---|
+| 5.1 First run | Three kinds of storage: Google Drive (GIS token model, `drive.file`), a folder on this computer (Chromium) and this browser (OPFS). Reconnecting checks it is the same Google account. |
+| 5.2 Library | Grid (sizes, sorting, windowed for large libraries), Single, Compare and Cull. Ratings, labels, set aside, titles, captions, keywords, albums (whole photos or single versions), the Info panel. Filters with counts, text search, saved searches, dates, imports, bursts. Stacks of RAW+JPEG pairs, versions and Lopsy documents. Library undo (⌘Z) for marks, keywords, albums, deletes and versions. Delete to trash and restore. Check library: orphans, missing, trashed, changed and left-over files, with repair. |
+| 5.3, 6.8 Import | Files, folders, and Add from Google Drive (Picker). Duplicates by SHA-256 (named before importing), RAW+JPEG pairs, embedded previews, EXIF, XMP sidecars with Lightroom's develop settings mapped (`xmp/crs-mapping.ts`), a preset, album and keywords to apply. Staged in OPFS, resumable uploads with checksum verification, retry with backoff, Retry for parked items. Survives a reload; one tab at a time claims an import. |
+| 5.4, 6.10 Edit | Profile (Standard and the Fujifilm looks from the base curves, Neutral, Monochrome), White balance (As shot, Auto, the camera's presets, picker, Kelvin for RAW), Tone with Auto, Curves (luminance, red, green, blue), Color with Color by hue, Color Grading, Local contrast (large details, small details, haze), Sharpness & noise, Framing (crop with aspect presets, straighten with a Level tool, rotate, flip both ways), Finish (vignette amount, midpoint, roundness, feather; grain), Areas (up to 8 linear or radial gradients with their own tone, white balance and saturation). Histogram with clipping warnings (J, and Alt while dragging Blacks, Whites or sharpening). History with click-back, Versions, Presets (built-in and the user's, previewed on hover), Copy and Paste edits, Before and after (toggle and split), filmstrip. Edits run on a working image of at most 4096 px; full resolution loads at 50 % zoom and for output. |
+| 5.5, 6.11 Export | JPEG, PNG (8 or 16-bit) and TIFF (16-bit, Deflate, ICC), in sRGB or Display P3. Size by long edge, short edge or megapixels, with "Don't enlarge". Metadata all, copyright only or none, with location removed by default. File-name templates. To `Exports/` in the library, a download, or a ZIP. Export presets (built-in and the user's). Show in Drive and share links, only after the user confirms. |
+| 5.6, 6.12 Round trips | Edit in Lopsy (16-bit), Save to Lopsy Photos (`.lopsy` v3 with a 16-bit render, stacked with the photo, updated in place only at a matching revision, otherwise a copy), Add to Lopsy Photos from Lopsy's File menu, and Grade in Lopsy Photos for a layer (L5). Lopsy offers none of this unless its build sets `VITE_PHOTOS_URL`; without it Lopsy is unchanged, and Save Project still writes v2. |
+| 5.7, 6.7 Devices and offline | The library opens offline from IndexedDB, and a service worker loads the app shell offline. Keep originals: Recent, All or None. Previews re-render in the background after presets, pastes, synced edits and new versions. Sync panel, storage meter, device cache. |
+| 6.6 Library database | Per-device journals of last-writer-wins fields stamped with hybrid logical clocks, snapshots, roll-up, the Drive change feed, a Web Locks single writer per device, durable-before-destructive ordering, and merging of duplicate library roots. A 50,000-photo library opens cold in about 2 s. |
+| 6.3 Hosting | Lopsy at `/`, Photos at `/photos/` with its own CSP. Deployed only when the repository variable `DEPLOY_PHOTOS` is `true`. CI runs Photos' typecheck, lint and unit tests. |
+
+### Where it departs from the design
+
+- **Phase 0's package moves were not done.** Photos imports Lopsy's engine
+  package and design tokens from `apps/lopsy-web`.
+- **The develop chain is display-referred.** The RAW stage outputs
+  sRGB-encoded values and the later stages (Lopsy's adjustments, the
+  colour mixer, areas, detail, finish) work on them, not on linear
+  Rec. 2020 floats. The order also differs from 6.10: noise reduction,
+  haze and local contrast run before tone; areas after colour and curves;
+  sharpening and finish last. `engine/src/develop/mod.rs` gives the
+  reasons.
+- **The engine runs on the main thread** (spike S4 was not done). RAF
+  decoding runs in workers.
+- **Curves' luminance channel is Lopsy's RGB master curve**, which shifts
+  saturation as Photoshop's RGB curve does.
+- **Color Grading has sliders, not drawn wheels.** There is no Black &
+  White per-hue mix.
+- **Presets are ordinary fields on new IDs**, not a `preset.add` op.
+- **No default sharpening or noise reduction**, even for RAW files.
+- **Areas have no local contrast of their own**: the recipe has the field;
+  the engine doesn't render it.
+- **Rec. 2020 export and WebP export** are not offered, and TIFF carries no
+  EXIF. There is no output sharpening.
+- **Lopsy's own Save Project** stays at `.lopsy` v2 (8-bit); v3 is written
+  only for Photos.
+
+### Not built
+
+- Areas from a brush, a brightness range or a colour range; Spot fixes;
+  Lens corrections; Perspective (Phase 4).
+- Proxies, "Open with Lopsy Photos" from Drive's UI, the sign-in helper, a
+  watermark on export, keyword paths (Phase 5).
+- RAW formats other than Fujifilm RAF, and Fujifilm's lossy compressed RAF
+  (about 2–3 days with a sample file); HDR editing and export (Phase 6).
+- Tiled rendering for images larger than the GPU's texture limit.
+
+### Verified, and not
+
+- **Tests on the final branch:** `docs/lopsy-photos-setup.md` §5 says how
+  to run each suite.
+  Unit tests cover photos-core, the app and the handoff package; e2e
+  suites cover the app (including real RAFs from
+  `LOPSY_RAF_SAMPLES`), photos-core in a browser, the Lopsy round trip,
+  Lopsy's handoff and grade, the assembled site and offline start. All
+  eight sample RAFs decode, and the engine's Rust tests run on them.
+- **Not verified against Google.** Sign-in, the Picker, uploads, the
+  change feed and share links ran against the fake Drive and stubbed
+  Google scripts only. Drive's parameters and fields were checked against
+  its live discovery document and its CORS answers against live
+  preflights; whether `Location` and `Range` are readable on real upload
+  responses (spike S1), silent token refresh (S2), what a picked folder
+  grants (S3) and `anyone` sharing under `drive.file` need a signed-in
+  account (setup guide §6).
+- **No real GPU.** Everything ran on SwiftShader on a shared, heavily
+  loaded 4-core machine. There a 40 MP RAF became editable in 4–18 s and
+  reached full resolution in 20–60 s, and the engine's own RAF work took
+  about 1.5 s of that. Real-GPU timings are unknown.
+- **Chromium only.**
+
+### Decisions for the owner
+
+1. **Shared origin or its own domain.** At `/photos/` Photos shares an
+   origin with Lopsy, so a script injection in either reaches the other's
+   storage and tokens (6.13). The service worker checks every file it
+   serves against the build's hashes, but its own domain is the real fix;
+   until then, give Lopsy a CSP too.
+2. **Default sharpening and noise reduction for RAW**, as Lightroom does.
+3. **A SIMD engine build**, measured 15 % faster at RAF decoding.
+4. **Deploying:** after the Google Cloud setup (section 15, setup guide
+   §3), set `DEPLOY_PHOTOS` and the `PHOTOS_GOOGLE_*` variables (setup
+   guide §4).
+5. **The name and domain.**
