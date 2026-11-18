@@ -69,7 +69,14 @@ export function temperatureForKelvin(scale: KelvinScale, kelvin: number): number
   return (1e6 / kelvin - scale.miredAtZero) / scale.miredPerUnit;
 }
 
-/** The Temperature readout in Kelvin, rounded to 50 K; typed Kelvin back to recipe units. */
+/** Typed Kelvin outside this range is clamped to it (then to the slider's own range). */
+export const KELVIN_RANGE = { min: 2000, max: 50000 } as const;
+
+/**
+ * The Temperature readout in Kelvin, rounded to 50 K; typed Kelvin back to
+ * recipe units. Text that is not a positive number gives null, and the
+ * field shows the current value again.
+ */
 export function kelvinDisplay(scale: KelvinScale): { format: (value: number) => string; parse: (text: string) => number | null } {
   return {
     format: (value) => {
@@ -79,8 +86,9 @@ export function kelvinDisplay(scale: KelvinScale): { format: (value: number) => 
     parse: (text) => {
       const cleaned = text.trim().replace(/\s*k$/i, '').replace(',', '.');
       if (!/^\d+(\.\d+)?$/.test(cleaned)) return null;
-      const kelvin = Number(cleaned);
-      if (kelvin < 1000 || kelvin > 50000) return null;
+      const typed = Number(cleaned);
+      if (!(typed > 0)) return null;
+      const kelvin = Math.min(KELVIN_RANGE.max, Math.max(KELVIN_RANGE.min, typed));
       return Math.round(temperatureForKelvin(scale, kelvin));
     },
   };

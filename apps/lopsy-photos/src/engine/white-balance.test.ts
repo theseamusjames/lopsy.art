@@ -41,6 +41,11 @@ describe('Kelvin', () => {
     expect(kelvinFor(scale, value!)!).toBeCloseTo(6500, -2);
     expect(display.parse('6500')).toBe(value);
     expect(display.parse('warm')).toBeNull();
-    expect(display.parse('100')).toBeNull();
+    expect(display.parse('')).toBeNull();
+    expect(display.parse('-60')).toBeNull();
+    expect(display.parse('0')).toBeNull();
+    // Out of range clamps: 60 K reads as the lowest Kelvin there is.
+    expect(display.parse('60')).toBe(display.parse('2000'));
+    expect(display.parse('900000')).toBe(display.parse('50000'));
   });
 });

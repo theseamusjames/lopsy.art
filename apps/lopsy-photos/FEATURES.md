@@ -65,10 +65,17 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 - **Selection.** Click selects one; ⌘/Ctrl-click adds or removes; Shift
   extends; ⌘A selects every photo shown and ⌘D selects none. Arrow keys
   move the focus; Shift+←/→ grows the selection.
+- **Versions as tiles.** A photo's tile shows its *shown* version; its
+  version badge opens the others as tiles of their own right after it,
+  each with its own preview, and folds them back. **Show this version for
+  the photo** (a version tile's menu) makes that version the one the
+  photo shows in the grid and in albums.
 - **Photo actions** (a tile's right-click menu): Look at it large, Edit,
   New version, Show this version for the photo (on a version's tile),
   Edit in Lopsy, Copy edits…, Paste edits, Export…, Move to the trash….
-- **Drag** photos onto an album in the sidebar to add them.
+- **Drag** photos onto an album in the sidebar to add them; dragging a
+  version's own tile adds just that version, which the album then shows
+  as its own tile.
 
 ### Single, Compare and Cull
 
@@ -149,6 +156,12 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 - **Add to album** (an existing one or a new one) and **Keywords** for
   everything the import brings in.
 - **Edits to start from**: none ("as the camera took them") or a preset.
+- **XMP sidecars.** A `.xmp` picked or dropped with its photo
+  (`<name>.xmp` or `<name>.<ext>.xmp`) is not imported as a file: its
+  rating, label, title, caption, keywords and Lightroom / Camera Raw edits
+  (`crs:`, mapped approximately onto the recipe: tone, presence, detail,
+  colour by hue, crop and straighten) are applied to the photo it belongs
+  to, also when that photo is already in the library.
 - Each file is hashed, uploaded into `Originals/<year>/<month>/`, checked
   against its hash, and added with its metadata (capture time,
   orientation, camera, lens, exposure, GPS). Previews (512 and 2048 px)
@@ -159,25 +172,37 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 
 ## Edit view
 
-Opened with Enter, **Edit** in Single view, or double-click. One photo, an
-in-memory history and a panel of groups; edits are saved to the version as
-they are made, and previews are rendered when the edit settles and on
-leaving.
+Opened with Enter, **Edit** in Single view, or double-click. One photo, a
+left column, the image and a panel of groups; edits are saved to the
+version as they are made, and previews are rendered when the edit settles
+and on leaving.
 
-- **Loading.** RAF decodes on a pool of workers into the engine's RAW
-  develop stage, with a quick binned first view while the full size
-  develops; DNG through the engine's decoder; 16-bit PNG at full depth;
-  JPEG and WebP through the browser.
+- **Loading and working size.** RAF decodes on a pool of workers into the
+  engine's RAW develop stage; DNG through the engine's decoder; 16-bit PNG
+  at full depth; JPEG and WebP through the browser. Editing starts on a
+  *working image* sized to the view (at most 4096 px on its long edge),
+  so a large photo is editable quickly; zooming to 50 % or closer loads
+  the full resolution ("Loading full resolution…"), and full-size
+  exports always render from it.
+- **Left column**: **Presets** (apply one, or **Save preset…** from this
+  edit, choosing its groups), **Versions** (switch, rename, **New
+  version**) and **History** (every step; clicking one goes back to it).
+  The column folds away. A **filmstrip** of the photos around this one
+  moves between them.
 - **Toolbar.** Library (back), Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y), Rotate left,
-  Rotate right, Flip, **Crop**, **Before** (or hold `\`), Fit (⌘0), 100%
-  (⌘1) with a zoom readout, **Edit in Lopsy** and **Export**. The image
-  pans by dragging and zooms with the wheel.
+  Rotate right, Flip, Flip vertical, **Crop**, **Areas**, **Before** (or
+  hold `\`), **Split** (before and after side by side, with a divider to
+  drag), Fit (⌘0), 100% (⌘1) with a zoom readout, Copy edits / Paste edits
+  (⇧⌘C, ⇧⌘V), **Edit in Lopsy** and **Export**. The image pans by
+  dragging and zooms with the wheel.
 - **Histogram** of the rendered edit, updated as it changes. Its shadow
   and highlight markers light when the photo clips, and clicking them
   shows clipped pixels on the photo (blue at black, red at white; never
   in exports or previews); **J** toggles both. Holding Alt (Option)
   while dragging Blacks or Whites shows that side's clipping, and while
   dragging a Sharpen slider shows what is being sharpened.
+- **Straighten**: Angle (−45..45°), and **Level**: draw along something
+  that should be level (or upright) to set it.
 - **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
   not listed a second time), then the engine's film looks with Provia
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
@@ -194,7 +219,7 @@ leaving.
   release is one history step ("White balance: Daylight", "White
   balance: picked").
 - **Tone**: Exposure, Contrast, Highlights, Shadows, Whites, Blacks, with
-  **Auto**.
+  **Auto**, which the engine sets conservatively from the histogram.
 - **Color**: Vibrance, Saturation.
 - **Curves**: a luminance curve and red, green and blue curves, edited by
   dragging points.
@@ -202,6 +227,10 @@ leaving.
   orange, yellow, green, aqua, blue, purple, magenta).
 - **Color Grading**: shadows, midtones, highlights and global wheels
   (hue, saturation, luminance), Blending and Balance.
+- **Local contrast**: Large details, Small details, Haze.
+- **Sharpness & noise**: Sharpen, Radius, Edges only, Noise, Color noise,
+  Keep detail. While a slider drags these passes are left out, and they
+  come back when it settles.
 - **Finish**: Vignette, with its Midpoint, Roundness and Feather; and
   Grain, Grain size and Roughness. Grain is the same on every render and
   export of a photo.
@@ -211,8 +240,14 @@ leaving.
 - **Crop** tool: drag the frame; **Aspect** Free, Original, 1 : 1,
   4 : 5, 3 : 2 or 16 : 9, made landscape or portrait; Reset, Done (Enter)
   or Cancel (Escape). The crop follows rotation.
-- Recipes also carry local contrast, sharpening and noise reduction,
-  which the engine renders; the panel has no controls for them yet.
+- **Areas** (toolbar): add **Linear** (a gradient across the photo) or
+  **Radial** (an ellipse) areas, up to eight, each with Amount, Invert, a
+  name, Delete, and its own Exposure, Contrast, Highlights, Shadows,
+  Temperature, Tint and Saturation. The selected area's mask shows in red
+  on screen, and handles on the image move it, resize it, turn it and set
+  its feather; each drag or slider release is one history step ("Area:
+  move"). Areas are stored on the unrotated photo, so they follow
+  rotation, flips, straightening and the crop.
 
 ## Export
 
@@ -232,6 +267,10 @@ leaving.
   or for several either **one ZIP** or each file on its own.
 - **Export presets**: *Made by Lopsy* ones and *Yours*, saved, renamed
   and deleted from the dialog; a saved preset keeps every choice above.
+- **After an export into the library** (Google Drive): **Show in Drive**
+  opens the export's folder, and **Copy share link** shares that folder
+  with anyone who has the link, only after a confirmation that says
+  exactly that.
 - Not yet: WebP output and output sharpening.
 - An export can **keep going in the background** while the user goes on.
 
@@ -287,7 +326,8 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   - *Adding from Google Drive* (Drive libraries).
   - *Library health*: **Check library** verifies that every photo's
     original is still in storage and unchanged, and marks the ones that
-    are not.
+    are not. When a delete left originals of deleted photos outside the
+    trash, it offers to move them there.
 
 ## Keyboard shortcuts
 
@@ -312,5 +352,5 @@ Shown in the app with `?`.
 | Escape | Go back |
 | ? | Show the shortcuts |
 
-In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 100%, hold `\`
-for before.
+In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 100%, ⇧⌘C and
+⇧⌘V copy and paste edits, hold `\` for before, J for clipping.
