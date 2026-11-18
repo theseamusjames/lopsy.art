@@ -106,3 +106,18 @@ fn white_balance_presets_place_daylight_near_a_sunny_as_shot() {
         }
     }
 }
+
+#[test]
+fn every_sample_decodes() {
+    let Some(files) = samples() else {
+        eprintln!("LOPSY_RAF_SAMPLES not set; skipping");
+        return;
+    };
+    // DSCF8169 is an uncompressed X-E5 night shot whose median sits at
+    // black; the decoder used to reject it as a failed decode.
+    for path in &files {
+        let data = std::fs::read(path).unwrap();
+        let prep = prepare_raf(&data, RafDecodeOpts::default());
+        assert!(prep.is_ok(), "{}: {:?}", path.display(), prep.err());
+    }
+}

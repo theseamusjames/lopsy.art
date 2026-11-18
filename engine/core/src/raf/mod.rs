@@ -392,71 +392,63 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
 
     let base_pat_for_decompress = cfa_pattern.as_ref().copied().unwrap_or(DEFAULT_XTRANS_CFA);
 
-    let raw_plane: Vec<u16> = if is_compressed {
+    // An uncompressed strip is read in place (little-endian u16 samples),
+    // never copied into a full-frame plane first: that copy and the crop
+    // copy after it were 160 MB of the first view on a 40 MP frame.
+    let decompressed: Option<Vec<u16>> = if is_compressed {
         raf_log!("[RAF] decompressing Fujifilm compressed strip");
-        compression::decompress_fuji_strip(pixel_data, raw_w as u32, raw_h as u32, &base_pat_for_decompress)
-            .map_err(|e| format!("Compressed RAF decode failed: {e}. \
-                Try setting your camera to \"Uncompressed\" RAW, or convert to DNG \
-                with Adobe DNG Converter."))?
+        Some(compression::decompress_fuji_strip(pixel_data, raw_w as u32, raw_h as u32, &base_pat_for_decompress)
+            .map_err(|e| format!("This camera's compressed RAW format isn't supported yet ({e}). \
+                Set the camera to \"Uncompressed\" RAW, or convert to DNG \
+                with Adobe DNG Converter."))?)
     } else {
         let expected_bytes = raw_w * raw_h * 2;
         if pixel_bytes < expected_bytes {
             return Err(format!("Pixel data too small: expected {expected_bytes}, got {pixel_bytes}"));
         }
-        let mut buf = Vec::with_capacity(raw_w * raw_h);
-        for i in 0..(raw_w * raw_h) {
-            let off = i * 2;
-            if off + 1 < pixel_data.len() {
-                buf.push(u16::from_le_bytes([pixel_data[off], pixel_data[off + 1]]));
-            } else {
-                buf.push(0);
+        None
+    };
+    let plane_len = decompressed.as_ref().map_or(raw_w * raw_h, Vec::len);
+    let raw_at = |i: usize| -> u16 {
+        match &decompressed {
+            Some(plane) => plane[i],
+            None => {
+                let off = i * 2;
+                if off + 1 < pixel_data.len() { u16::from_le_bytes([pixel_data[off], pixel_data[off + 1]]) } else { 0 }
             }
         }
-        buf
     };
 
     // Sample-based sanity check: if the decoded plane still looks like
     // garbage (median near black), bail with a clear error. This catches
     // both undetected compressed variants and decompression failures
-    // that produced bogus output.
+    // that produced bogus output. An uncompressed strip of exactly
+    // width × height × 2 bytes is read as it is: a night shot's median can
+    // sit at black (DSCF8169, an X-E5 frame under tungsten, has its median
+    // 0.1 % above black), and that is a real picture, not a failed decode.
     let sample_stride = (raw_w * raw_h).max(1) / 1000;
     let mut sample_vals: Vec<u16> = Vec::with_capacity(1000);
     for i in (raw_w * 100..raw_w * raw_h).step_by(sample_stride.max(1)) {
-        if i < raw_plane.len() {
-            sample_vals.push(raw_plane[i]);
+        if i < plane_len {
+            sample_vals.push(raw_at(i));
         }
     }
     sample_vals.sort();
     let sample_median = sample_vals.get(sample_vals.len() / 2).copied().unwrap_or(0);
     let black_u16 = cfa_meta.black_level.unwrap_or(1024.0) as u16;
 
-    if !sample_vals.is_empty() && sample_median < black_u16 + 50 {
+    let is_plain_strip = !is_compressed && pixel_bytes == raw_w * raw_h * 2;
+    if !is_plain_strip && !sample_vals.is_empty() && sample_median < black_u16 + 50 {
         return Err(
-            "RAF pixel data has no signal after decode (median near black). \
-             This may be an unsupported compression variant. Try setting your camera \
-             to \"Uncompressed\" RAW, or convert to DNG with Adobe DNG Converter.".into()
+            "This camera's compressed RAW format isn't supported yet (the decoded \
+             data has no signal). Set the camera to \"Uncompressed\" RAW, or convert \
+             to DNG with Adobe DNG Converter.".into()
         );
     }
 
     // ── Crop to output area ─────────────────────────────────────
 
-    let pixel_count = w * h;
-    let mut raw_u16 = Vec::with_capacity(pixel_count);
-
-    for row in 0..h {
-        let src_row = row + crop_top as usize;
-        for col in 0..w {
-            let src_col = col + crop_left as usize;
-            let idx = src_row * raw_w + src_col;
-            if idx < raw_plane.len() {
-                raw_u16.push(raw_plane[idx].min(white_level));
-            } else {
-                raw_u16.push(0);
-            }
-        }
-    }
-
-    // ── Normalize ───────────────────────────────────────────────
+    // ── Crop to output area and normalize, in one pass ──────────
 
     let black = cfa_meta.black_level.unwrap_or(0.0);
     let max_val = white_level as f64;
@@ -464,9 +456,22 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
 
     raf_log!("[RAF] white_level={}, black={:.1}", white_level, black);
 
-    let mut normalized: Vec<f32> = raw_u16.iter()
-        .map(|&v| ((v as f64 - black) / range).clamp(0.0, 1.0) as f32)
+    // Every sample value maps the same way, so the f64 maths runs once
+    // per value (at most 65536) instead of once per sample (40 million).
+    let to_unit: Vec<f32> = (0..=white_level as u32)
+        .map(|v| ((v as f64 - black) / range).clamp(0.0, 1.0) as f32)
         .collect();
+    let pixel_count = w * h;
+    let mut normalized: Vec<f32> = Vec::with_capacity(pixel_count);
+    for row in 0..h {
+        let src_row = row + crop_top as usize;
+        for col in 0..w {
+            let idx = src_row * raw_w + col + crop_left as usize;
+            let v = if idx < plane_len { raw_at(idx).min(white_level) } else { 0 };
+            normalized.push(to_unit[v as usize]);
+        }
+    }
+    drop(decompressed);
 
     // ── Per-pixel white balance (raw CFA-aware) ─────────────────
     // These sensors' raw R≈G≈B for provably-neutral subjects (measured
@@ -505,11 +510,14 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
             gw[0], gw[1], gw[2]);
         gw
     };
-    for row in 0..h {
-        for col in 0..w {
-            let cfa_idx = (row % cfa_period) * cfa_period + (col % cfa_period);
-            let color = cfa[cfa_idx] as usize;
-            normalized[row * w + col] *= wb[color];
+    // Each row's multipliers repeat with the CFA period: look them up per
+    // column instead of computing two remainders per sample.
+    let row_gains: Vec<Vec<f32>> = (0..cfa_period)
+        .map(|py| (0..w).map(|col| wb[cfa[py * cfa_period + col % cfa_period] as usize]).collect())
+        .collect();
+    for (row, line) in normalized.chunks_exact_mut(w).enumerate() {
+        for (v, g) in line.iter_mut().zip(&row_gains[row % cfa_period]) {
+            *v *= g;
         }
     }
 
