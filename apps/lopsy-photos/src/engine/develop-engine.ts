@@ -40,6 +40,7 @@ import initWasm, {
   resumeTask,
   flipLayer,
   readDevelopHistogram,
+  sampleColor,
   removeLayer,
   render,
   rotateLayer90,
@@ -133,6 +134,8 @@ export interface DevelopEngine {
   photoInfo(): PhotoInfo;
   /** 4 × 256 bins (R, G, B, luminance) of the displayed render; null when the engine cannot read one now. */
   readHistogram(): Promise<Uint32Array | null>;
+  /** The rendered colour at a document pixel, 0..255; null outside the image or when the engine cannot read it now. */
+  sampleAt(x: number, y: number): readonly [number, number, number] | null;
   /** Auto tone for `recipe`: renders it, reads its histogram and returns the tone values the engine suggests. */
   autoTone(recipe: Recipe): Promise<ToneValues>;
   /** Decodes `source` into the engine, replacing any image already loaded. Resolves with its oriented size. */
@@ -891,6 +894,16 @@ class PhotoEngine implements DevelopEngine {
   photoInfo(): PhotoInfo {
     const isRaw = this.rawDefaults !== null;
     return { isRaw, autoWhiteBalance: this.autoWb, profiles: profilesFor(isRaw, this.engineProfiles) };
+  }
+
+  sampleAt(x: number, y: number): readonly [number, number, number] | null {
+    const size = this.imageSize();
+    if (!size || this.isDisposed || x < 0 || y < 0 || x >= size.width || y >= size.height) return null;
+    // One pixel of the composite, which holds the developed, adjusted image.
+    // WebGL answers at once; a wgpu build parks the read, which this does not wait for.
+    const rgba: unknown = sampleColor(this.engine, Math.floor(x), Math.floor(y), 1);
+    if (!(rgba instanceof Uint8Array) || rgba.length < 3) return null;
+    return [rgba[0] ?? 0, rgba[1] ?? 0, rgba[2] ?? 0];
   }
 
   async readHistogram(): Promise<Uint32Array | null> {

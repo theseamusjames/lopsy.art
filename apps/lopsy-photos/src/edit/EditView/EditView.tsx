@@ -108,6 +108,9 @@ export interface EditViewProps {
 /** Recipe paths of the controls whose engine passes are costly. */
 const DETAIL_PREFIXES = ['sharpness.', 'noise.', 'localContrast.'];
 
+/** The pixel readout reads the image under the pointer at most this often. */
+const READOUT_MS = 100;
+
 /** How long the edit must stay unchanged before previews are rendered. */
 const SETTLE_MS = 1200;
 const THUMB_SIZE = 512;
@@ -352,6 +355,8 @@ export function EditView({
       if (onCopyEdits) setIsCopyDialogOpen(true);
     } else onPasteEdits?.();
   };
+  // Set once the tools below are defined; the key handler reads it.
+  const toolShortcuts = useRef<(shortcut: 'crop' | 'linearArea' | 'radialArea') => void>(() => undefined);
   const isToolOpen = isCropping || isLevelling || isCopyDialogOpen || isHelpOpen;
   const handlers = useRef({ onUndo, onRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => {} });
   handlers.current = { onUndo, onRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => void handleClose() };
@@ -369,6 +374,11 @@ export function EditView({
         if (!next) return;
         e.preventDefault();
         strip.onOpen(next);
+        return;
+      }
+      if (shortcut === 'crop' || shortcut === 'linearArea' || shortcut === 'radialArea') {
+        e.preventDefault();
+        toolShortcuts.current(shortcut);
         return;
       }
       if (shortcut === 'leave') {
@@ -496,6 +506,18 @@ export function EditView({
     setSelectedAreaId(id);
   };
 
+  toolShortcuts.current = (shortcut) => {
+    if (!canEdit || isBefore) return;
+    if (shortcut === 'crop') {
+      if (isCropping) finishCrop(true);
+      else startCrop();
+      return;
+    }
+    if (isCropping) return;
+    setIsAreasOpen(true);
+    handleAddArea(shortcut === 'linearArea' ? 'linear' : 'radial');
+  };
+
   const areaFrame = selectedArea && canEdit && !isCropping ? engine?.areaFrame() ?? null : null;
   const docSize = areaFrame ? engine?.imageSize() ?? null : null;
   const areaBox = boxOf(docSize);
@@ -561,10 +583,50 @@ export function EditView({
 
   const handleStagePointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const p = panPointer.current;
-    if (!p || p.id !== e.pointerId || !engine) return;
+    if (!p || p.id !== e.pointerId || !engine) {
+      requestReadout(e.clientX, e.clientY);
+      return;
+    }
     engine.panBy(e.clientX - p.x, e.clientY - p.y);
     panPointer.current = { id: p.id, x: e.clientX, y: e.clientY };
   };
+
+  // ---- pixel readout ---------------------------------------------------
+
+  const [readout, setReadout] = useState<readonly [number, number, number] | null>(null);
+  const readoutPointer = useRef<{ x: number; y: number } | null>(null);
+  const readoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sampleUnderPointer = useRef<() => void>(() => undefined);
+  sampleUnderPointer.current = () => {
+    const at = readoutPointer.current;
+    const stage = stageRef.current;
+    const size = engine?.imageSize() ?? null;
+    const box = boxOf(size);
+    if (!at || !stage || !engine || !size || !box || !canEdit) {
+      setReadout(null);
+      return;
+    }
+    const rect = stage.getBoundingClientRect();
+    const scale = box.width / size.width;
+    setReadout(engine.sampleAt((at.x - rect.left - box.left) / scale, (at.y - rect.top - box.top) / scale));
+  };
+
+  /** At most one 1×1 read every READOUT_MS, of wherever the pointer is by then. */
+  const requestReadout = (clientX: number, clientY: number) => {
+    readoutPointer.current = { x: clientX, y: clientY };
+    if (readoutTimer.current) return;
+    readoutTimer.current = setTimeout(() => {
+      readoutTimer.current = null;
+      sampleUnderPointer.current();
+    }, READOUT_MS);
+  };
+
+  useEffect(
+    () => () => {
+      if (readoutTimer.current) clearTimeout(readoutTimer.current);
+    },
+    [],
+  );
 
   const handleStagePointerUp = (e: PointerEvent<HTMLDivElement>) => {
     if (panPointer.current?.id === e.pointerId) panPointer.current = null;
@@ -738,7 +800,7 @@ export function EditView({
             type="button"
             className={styles.iconButton}
             aria-label="Crop"
-            title="Crop"
+            title="Crop (R)"
             aria-pressed={isCropping}
             disabled={!canEdit || isBefore}
             onClick={() => (isCropping ? finishCrop(true) : startCrop())}
@@ -749,7 +811,7 @@ export function EditView({
             type="button"
             className={styles.iconButton}
             aria-label="Areas"
-            title="Areas"
+            title="Areas (M linear, ⇧M radial)"
             aria-pressed={isAreasOpen}
             disabled={!canEdit || isBefore || isCropping}
             onClick={() => setIsAreasOpen((v) => !v)}
@@ -861,6 +923,10 @@ export function EditView({
           onPointerMove={handleStagePointerMove}
           onPointerUp={handleStagePointerUp}
           onPointerCancel={handleStagePointerUp}
+          onPointerLeave={() => {
+            readoutPointer.current = null;
+            setReadout(null);
+          }}
         >
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
           {storedPreviewUrl && !canEdit && status.kind !== 'error' && (
@@ -873,6 +939,11 @@ export function EditView({
           )}
           {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
           {areaHandles}
+          {readout && (
+            <span className={styles.pixelReadout} data-testid="pixel-readout" aria-label="Colour under the pointer">
+              R {readout[0]} G {readout[1]} B {readout[2]}
+            </span>
+          )}
           {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
           {cropDraft && cropBox && (
             <CropTool
