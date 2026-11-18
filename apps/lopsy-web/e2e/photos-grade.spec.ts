@@ -9,7 +9,7 @@
  */
 import type { BrowserContext, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
-import { createDocument, getPixelAt, waitForStore } from './helpers';
+import { createDocument, getPixelAt, moveLayerTo, waitForStore } from './helpers';
 
 const PHOTOS_ORIGIN = 'http://localhost:5174';
 
@@ -138,5 +138,91 @@ test.describe('Grade in Lopsy Photos', () => {
     await page.waitForTimeout(1000);
     expect(await getPixelAt(page, 10, 10, bgId)).toMatchObject({ r: 255, g: 255, b: 255 });
     expect(await layerState(page, bgId)).toEqual(before);
+  });
+});
+
+async function layerGeometry(page: Page, id: string): Promise<{ x: number; y: number; width: number; height: number }> {
+  return page.evaluate((layerId) => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { layers: Array<{ id: string; x: number; y: number; width: number; height: number }> } };
+    };
+    const l = store.getState().document.layers.find((layer) => layer.id === layerId)!;
+    return { x: l.x, y: l.y, width: l.width, height: l.height };
+  }, id);
+}
+
+/** Paints a half-transparent green block on a new layer; the layer crops to it, so it is offset. */
+async function offsetLayer(page: Page): Promise<string> {
+  await page.locator('[aria-label="Add Layer"]').click();
+  return page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => {
+        document: { width: number; height: number; activeLayerId: string };
+        updateLayerPixelData: (id: string, data: ImageData) => void;
+        pushHistory: (label?: string) => void;
+      };
+    };
+    const s = store.getState();
+    const id = s.document.activeLayerId;
+    const data = new ImageData(s.document.width, s.document.height);
+    for (let y = 30; y < 60; y++) {
+      for (let x = 50; x < 90; x++) {
+        const i = (y * data.width + x) * 4;
+        data.data.set([0, 200, 0, 128], i);
+      }
+    }
+    s.pushHistory('Paint');
+    s.updateLayerPixelData(id, data);
+    return id;
+  });
+}
+
+async function gradeFromContextMenu(
+  page: Page,
+  context: BrowserContext,
+  id: string,
+): Promise<{ received: Record<string, number | string>; photos: Page }> {
+  await page.locator(`[data-layer-id="${id}"]`).click({ button: 'right' });
+  const [photos] = await Promise.all([
+    context.waitForEvent('page'),
+    page.getByRole('menuitem', { name: 'Grade in Lopsy Photos…' }).click(),
+  ]);
+  await expect.poll(() => photos.evaluate(() => (window as unknown as { __received: unknown }).__received)).not.toBeNull();
+  const received = await photos.evaluate(() => (window as unknown as { __received: Record<string, number | string> }).__received);
+  return { received, photos };
+}
+
+test.describe('Grade in Lopsy Photos, offset layers', () => {
+  test('an offset layer, and one past the canvas, go over whole and come back at the same size and place', async ({ page, context, baseURL }) => {
+    await serveGradePage(context, new URL(baseURL!).origin, 'done');
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 120, 80, true);
+    const id = await offsetLayer(page);
+    const before = await layerGeometry(page, id);
+    // The paint cropped the layer to its block: it sits away from the origin.
+    expect(before.x).toBeGreaterThan(0);
+    expect(before.y).toBeGreaterThan(0);
+
+    const first = await gradeFromContextMenu(page, context, id);
+    expect(first.received).toMatchObject({ width: before.width, height: before.height, fullW: before.width, fullH: before.height });
+    await expect.poll(() => layerState(page, id).then((s) => s.label)).toBe('Grade in Lopsy Photos');
+    expect(await layerGeometry(page, id)).toEqual(before);
+    // The graded (red) pixels sit where the block was.
+    await expect.poll(() => getPixelAt(page, before.x + 2, before.y + 2, id)).toMatchObject({ r: 255, g: 0, b: 0 });
+    // Photos closes its grade tab when it is done; the stand-in leaves that to the test.
+    await first.photos.close();
+
+    // Drag the layer so it hangs off the canvas's left and top edges, then grade again.
+    await moveLayerTo(page, id, -15, -10);
+    const moved = await layerGeometry(page, id);
+    expect(moved.x).toBeLessThan(0);
+    expect(moved.y).toBeLessThan(0);
+    const undoBefore = (await layerState(page, id)).undo;
+    const second = await gradeFromContextMenu(page, context, id);
+    expect(second.received).toMatchObject({ width: moved.width, height: moved.height, fullW: moved.width, fullH: moved.height });
+    await expect.poll(() => layerState(page, id).then((s) => s.undo)).toBe(undoBefore + 1);
+    expect(await layerGeometry(page, id)).toEqual(moved);
+    await page.screenshot({ path: 'e2e/screenshots/photos-grade-offset.png' });
   });
 });
