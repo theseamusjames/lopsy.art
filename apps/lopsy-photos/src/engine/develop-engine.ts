@@ -15,6 +15,9 @@
 import initWasm, {
   addLayer,
   autoTone as engineAutoTone,
+  clearImageAreas,
+  setImageAreaOverlay,
+  setImageAreas,
   clearImageDetail,
   clearImageLocalContrast,
   setImageDetail,
@@ -76,6 +79,7 @@ import {
 } from './recipe-to-adjustments';
 import { cropPixels, inverseRotation, isFullCrop, rotatedBounds, straightenedCrop, toFramed } from './crop';
 import { detailKey, detailValues, localContrastValues } from './detail-controls';
+import { areaValues, type AreaFrame } from './areas';
 import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
@@ -136,6 +140,10 @@ export interface DevelopEngine {
    * back when it settles.
    */
   setInteractive(isInteractive: boolean): void;
+  /** How the document sits on the source image, for Areas' handles; null before a load. */
+  areaFrame(): AreaFrame | null;
+  /** Shows an area's mask in red on screen (not in exports); null for none. */
+  setAreaOverlay(areaId: string | null): void;
   getView(): View;
   /** Called after every view change (zoom, pan, fit, resize). */
   onViewChange(listener: (view: View) => void): () => void;
@@ -258,6 +266,10 @@ class PhotoEngine implements DevelopEngine {
   private colorKey: string | null = null;
   private detailKeyApplied: string | null = null;
   private isInteractive = false;
+  /** The crop's corner in framed pixels: where the document starts. */
+  private cropOrigin = { x: 0, y: 0 };
+  private areasKey: string | null = null;
+  private overlayAreaId: string | null = null;
   /** The working image's width over the full image's: below 1 while a RAW file's first view shows. */
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
@@ -556,6 +568,8 @@ class PhotoEngine implements DevelopEngine {
     updateLayer(this.engine, layerDesc(this.layerId, layer.width, layer.height, true, layer.x - px.x, layer.y - px.y));
     this.layoutKey = key;
     this.displaySize = { width: px.width, height: px.height };
+    this.cropOrigin = { x: px.x, y: px.y };
+    this.applyAreas();
     this.invalidate();
     const isResized = !previous || previous.width !== px.width || previous.height !== px.height;
     if (isResized || this.view.isFit) this.fit();
@@ -605,6 +619,41 @@ class PhotoEngine implements DevelopEngine {
     this.applyFraming(effectiveFraming(this.recipe.framing));
     this.applyAngle(framingAngle(this.recipe.framing));
     this.layout();
+    this.applyAreas();
+  }
+
+  areaFrame(): AreaFrame | null {
+    if (!this.sourceSize) return null;
+    return {
+      framing: this.framing,
+      angle: this.appliedAngle,
+      sourceWidth: this.sourceSize.width,
+      sourceHeight: this.sourceSize.height,
+      cropX: this.cropOrigin.x,
+      cropY: this.cropOrigin.y,
+    };
+  }
+
+  setAreaOverlay(areaId: string | null): void {
+    if (this.overlayAreaId === areaId) return;
+    this.overlayAreaId = areaId;
+    this.areasKey = null;
+    this.applyAreas();
+  }
+
+  /** The recipe's areas in document pixels: re-sent whenever they or the framing change. */
+  private applyAreas(): void {
+    const frame = this.areaFrame();
+    if (!frame) return;
+    const out = areaValues(this.recipe, frame);
+    const key = out ? `${Array.from(out.values).join(',')}|${this.overlayAreaId ?? ''}` : 'none';
+    if (key === this.areasKey) return;
+    this.areasKey = key;
+    if (out) setImageAreas(this.engine, out.values);
+    else clearImageAreas(this.engine);
+    const index = out && this.overlayAreaId ? out.ids.indexOf(this.overlayAreaId) : -1;
+    setImageAreaOverlay(this.engine, index);
+    this.invalidate();
   }
 
   /** Puts the unturned framed image back in the layer and forgets the copy kept for turning it. */
@@ -852,6 +901,9 @@ class PhotoEngine implements DevelopEngine {
     const image = this.imageSize();
     if (!image) return null;
     const { width: savedW, height: savedH } = this.canvas;
+    // The mask overlay is for the screen only.
+    const overlay = this.overlayAreaId;
+    if (overlay) this.setAreaOverlay(null);
     try {
       this.canvas.width = size.width;
       this.canvas.height = size.height;
@@ -867,6 +919,7 @@ class PhotoEngine implements DevelopEngine {
     } finally {
       this.canvas.width = savedW;
       this.canvas.height = savedH;
+      if (overlay) this.setAreaOverlay(overlay);
       this.pushViewport();
       render(this.engine);
     }
