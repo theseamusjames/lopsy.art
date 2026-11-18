@@ -10,7 +10,7 @@ import { useUi, type ViewMode } from './store';
 import { showToast } from './toasts';
 import { findPreset } from '@lopsy/photos-core/library/presets';
 import { asGroupIds, pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
-import { EMPTY_SELECTION, moveFocus, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
+import { EMPTY_SELECTION, moveFocus, nextAfterRemoval, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
 
 /** The tiles a command acts on: in Single, Cull and Compare the one in focus, in the grid the selection. */
 export function currentItems(): ItemId[] {
@@ -33,6 +33,14 @@ export function currentVersions(): { assetId: AssetId; versionId: VersionId }[] 
     if (versionId !== null) out.push({ assetId: parseItem(id).assetId, versionId });
   }
   return out;
+}
+
+/** Library undo and redo (marks, albums, versions, the delete record), with what it did said in a toast. */
+export function undoLibrary(redo: boolean): void {
+  const s = session();
+  const label = redo ? s.redoLibrary() : s.undoLibrary();
+  if (label === null) showToast(redo ? 'Nothing to redo.' : 'Nothing to undo.', 3000);
+  else showToast(`${redo ? 'Redid' : 'Undid'}: ${label}`, 3000);
 }
 
 /** Opens the Copy edits dialog for the focused photo. */
@@ -113,13 +121,14 @@ export function deleteVersionOf(assetId: AssetId, versionId: VersionId): void {
   const asset = view.assets.get(assetId);
   const versions = versionsByAsset(view).get(assetId) ?? [];
   if (!asset || versions.length < 2 || !versions.some((v) => v.id === versionId)) return;
-  if (asset.primaryVersionId === versionId) {
-    const i = versions.findIndex((v) => v.id === versionId);
-    const next = versions[i + 1] ?? versions[i - 1];
-    if (!next) return;
-    s.setPrimaryVersion(assetId, next.id);
-  }
-  s.deleteVersion(versionId);
+  const i = versions.findIndex((v) => v.id === versionId);
+  const next = versions[i + 1] ?? versions[i - 1];
+  if (!next) return;
+  // One undo step: the switch and the delete come back together.
+  s.libraryStep(`Delete ${versions[i]?.name ?? 'version'}`, () => {
+    if (asset.primaryVersionId === versionId) s.setPrimaryVersion(assetId, next.id);
+    s.deleteVersion(versionId);
+  });
   const ui = useUi.getState();
   const focus = ui.selection.focus;
   if (focus !== null && parseItem(focus).assetId === assetId) {
@@ -132,14 +141,30 @@ export function deleteVersionOf(assetId: AssetId, versionId: VersionId): void {
 /** Makes a new version of the focused tile's version (same edits), opens its stack and selects it. */
 export function newVersion(): void {
   const ui = useUi.getState();
+  if (ui.selection.focus === null && ui.selection.ids.size === 0) return;
+  ui.openDialog('new-version');
+}
+
+/** The name New version offers: the first "Version N" the photo does not use. */
+export function suggestedVersionName(): string {
+  const ui = useUi.getState();
+  const id = ui.selection.focus ?? [...ui.selection.ids][0];
+  if (id === undefined) return 'Version 2';
+  const names = (versionsByAsset(session().getView()).get(parseItem(id).assetId) ?? []).map((v) => v.name);
+  return nextVersionName(names);
+}
+
+/** Creates the version New version asked for, named `name`. */
+export function createNamedVersion(name: string): void {
+  const ui = useUi.getState();
+  ui.openDialog(null);
   const id = ui.selection.focus ?? [...ui.selection.ids][0];
   if (id === undefined) return;
   const view = session().getView();
   const { assetId } = parseItem(id);
   const from = itemVersionId(id, view);
   const source = from === null ? undefined : view.versions.get(from);
-  const names = (versionsByAsset(view).get(assetId) ?? []).map((v) => v.name);
-  const versionId = session().createVersion(assetId, nextVersionName(names), source?.recipe);
+  const versionId = session().createVersion(assetId, name.trim() || suggestedVersionName(), source?.recipe);
   if (!versionId) return;
   if (!ui.expandedBursts.has(assetId)) ui.toggleBurst(assetId);
   ui.setSelection(selectOne(versionItemId(assetId, versionId)));
@@ -171,15 +196,43 @@ export function setRating(rating: Rating, orderedIds: readonly AssetId[], ids = 
   if (mode === 'cull' && selection.focus !== null) advance(orderedIds, selection.focus);
 }
 
+/** Whether photos marked this way leave the list on screen (All photos hides set-aside ones; Set aside shows only them). */
+function leavesCollection(setAside: boolean): boolean {
+  const kind = useUi.getState().collection.kind;
+  return setAside ? kind === 'all' || kind === 'date' : kind === 'set-aside';
+}
+
+/** After photos leave the grid, the next one is selected (or nothing, when none is left). */
+export function selectAfterRemoval(orderedIds: readonly string[], removed: readonly AssetId[]): void {
+  const next = nextAfterRemoval(orderedIds, new Set(removed), (id) => parseItem(id).assetId);
+  useUi.getState().setSelection(next === null ? EMPTY_SELECTION : selectOne(next));
+}
+
 export function toggleSetAside(orderedIds: readonly AssetId[], ids = currentTargets()): void {
   if (ids.length === 0) return;
-  const view = session().getView();
-  const allAside = ids.every((id) => view.assets.get(id)?.setAside === true);
+  const s = session();
+  const view = s.getView();
+  const before = new Map(ids.map((id) => [id, view.assets.get(id)?.setAside === true]));
+  const allAside = [...before.values()].every(Boolean);
+  const setAside = !allAside;
   const { mode, selection } = useUi.getState();
-  // The photo may leave the list it is in, so pick the next one first.
+  // In Single and Cull view marking moves on, as rating does.
   const next = selection.focus !== null && (mode === 'single' || mode === 'cull') ? neighbour(orderedIds, selection.focus) : null;
-  session().setMarks(ids, { setAside: !allAside });
-  if (next !== null) useUi.getState().setSelection(selectOne(next));
+  s.setMarks(ids, { setAside });
+  if (leavesCollection(setAside)) selectAfterRemoval(orderedIds, ids);
+  else if (next !== null) useUi.getState().setSelection(selectOne(next));
+  const words = `${ids.length === 1 ? 'Photo' : `${ids.length.toLocaleString()} photos`} ${setAside ? 'set aside' : 'back from Set aside'}.`;
+  showToast(words, 6000, {
+    label: 'Undo',
+    run: () => {
+      const back = [...before.entries()];
+      const was = back.filter(([, aside]) => aside).map(([id]) => id);
+      const wasNot = back.filter(([, aside]) => !aside).map(([id]) => id);
+      if (was.length > 0) s.setMarks(was, { setAside: true });
+      if (wasNot.length > 0) s.setMarks(wasNot, { setAside: false });
+      useUi.getState().setSelection(selectOne(ids[0] as AssetId));
+    },
+  });
 }
 
 export function setLabel(label: ColorLabel | null, orderedIds: readonly AssetId[], ids = currentTargets()): void {
@@ -303,6 +356,10 @@ export function runCommand(id: CommandId, orderedIds: readonly AssetId[]): void 
       return ui.setSelection(EMPTY_SELECTION);
     case 'delete':
       return askDeleteTargets();
+    case 'undo-library':
+      return undoLibrary(false);
+    case 'redo-library':
+      return undoLibrary(true);
     case 'copy-edits':
       return askCopyEdits();
     case 'paste-edits':

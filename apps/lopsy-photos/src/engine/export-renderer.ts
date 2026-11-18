@@ -8,6 +8,7 @@
 import type { ExportRenderer, ExportSettings } from '@lopsy/photos-core/export/types';
 import type { Asset, Version } from '@lopsy/photos-core/library/types';
 import type { DevelopEngine } from './develop-engine';
+import { extrasOf, outputSize } from '../library/export-size';
 import { grainSeed } from './finish-controls';
 
 export interface EngineExportRendererOptions {
@@ -113,10 +114,15 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
 
   const renderOne = async (asset: Asset, version: Version, settings: ExportSettings, signal: AbortSignal): Promise<Blob> => {
     // A small export can come from the working image; anything larger, and every TIFF, needs the full size.
-    const isSmall = settings.format !== 'tiff' && settings.maxLongEdge !== null && settings.maxLongEdge <= 2048;
+    // Sizes by short edge or megapixels, and enlarging, are worked out from the full image.
+    const extras = extrasOf(settings);
+    const byLongEdge = (extras.size.mode === 'original' || extras.size.mode === 'long') && !extras.allowEnlarge;
+    const isSmall = byLongEdge && settings.format !== 'tiff' && settings.maxLongEdge !== null && settings.maxLongEdge <= 2048;
     const e = await loaded(asset, signal, isSmall ? 'working' : 'full');
     e.setRecipe(version.recipe);
     const space = settings.colorSpace ?? 'srgb';
+    const image = e.imageSize();
+    const size = image && settings.format !== 'tiff' ? outputSize(image, extras) : null;
     if (space === 'rec2020') throw new Error('Rec. 2020 export needs an engine that encodes it; choose sRGB or Display P3.');
     const blob = await e.exportImage({
       format: settings.format,
@@ -124,6 +130,8 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       // The engine's TIFF is the full image; the dialog says so.
       maxSize: settings.format === 'tiff' ? undefined : (settings.maxLongEdge ?? undefined),
       colorSpace: space,
+      ...(size && image && (size.width !== image.width || size.height !== image.height) ? { size } : {}),
+      ...(settings.format === 'png' ? { pngDepth: extras.pngDepth } : {}),
     });
     checkSignal(signal);
     return blob;

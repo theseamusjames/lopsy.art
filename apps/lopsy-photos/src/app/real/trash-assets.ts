@@ -98,3 +98,31 @@ export async function trashLeftoverOriginals(session: LibrarySession, fileIds: r
   }
   return moved;
 }
+
+/**
+ * Undoes `trashAssets`: the photos come back to the library and their
+ * originals and previews out of the storage's trash. Files already gone
+ * for good are skipped; the photo comes back and Check library reports it.
+ */
+export async function untrashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
+  const raw = unguarded(session);
+  const refusal = writeRefusal(raw);
+  if (refusal !== null) throw new TrashRefusedError(refusal);
+  const view = raw.getView();
+  const ids = new Set(assetIds.filter((id) => view.assets.get(id)?.deleted === true));
+  if (ids.size === 0) return;
+  raw.restoreAssets([...ids]);
+  const files: FileId[] = [];
+  for (const id of ids) {
+    const asset = view.assets.get(id);
+    if (!asset) continue;
+    files.push(asset.fileId);
+    if (asset.renderFileId) files.push(asset.renderFileId);
+  }
+  for (const version of view.versions.values()) {
+    if (!ids.has(version.assetId)) continue;
+    if (version.thumb) files.push(version.thumb.fileId);
+    if (version.screen) files.push(version.screen.fileId);
+  }
+  await Promise.allSettled(files.map((fileId) => raw.adapter.untrash(fileId)));
+}

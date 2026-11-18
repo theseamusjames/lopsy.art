@@ -97,3 +97,30 @@ export function targetIds(selection: Selection): string[] {
   if (selection.ids.size > 0) return [...selection.ids];
   return selection.focus === null ? [] : [selection.focus];
 }
+
+/**
+ * Where the selection goes when photos leave the grid (set aside,
+ * deleted): the first tile after the last one leaving that stays, else the
+ * last one before them that stays; null when nothing is left. Like
+ * Lightroom, so the next photo is up.
+ */
+export function nextAfterRemoval(orderedIds: readonly string[], leaving: ReadonlySet<string>, assetOf: (id: string) => string): string | null {
+  const gone = (id: string) => leaving.has(assetOf(id));
+  let last = -1;
+  let first = -1;
+  orderedIds.forEach((id, i) => {
+    if (!gone(id)) return;
+    if (first < 0) first = i;
+    last = i;
+  });
+  if (last < 0) return null;
+  for (let i = last + 1; i < orderedIds.length; i++) {
+    const id = orderedIds[i];
+    if (id !== undefined && !gone(id)) return id;
+  }
+  for (let i = first - 1; i >= 0; i--) {
+    const id = orderedIds[i];
+    if (id !== undefined && !gone(id)) return id;
+  }
+  return null;
+}

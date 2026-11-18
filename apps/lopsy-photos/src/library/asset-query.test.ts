@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
-import { isEdited, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
+import { compareAssets, isEdited, pairPartners, SORT_DESCENDING, sortDirectionLabel, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
+import { importBatches } from './finding';
 import { makeAsset, makeView } from './test-fixtures';
 
 const byCapture: AssetQuery = { collection: { kind: 'all' }, sort: { key: 'captured', descending: false }, text: '' };
@@ -105,5 +106,38 @@ describe('sidebarCounts and badges', () => {
       },
     ]);
     expect(isEdited(a, edited)).toBe(true);
+  });
+});
+
+describe('RAW+JPEG pairs', () => {
+  it('knows the partner from either half, and counts the pair once', () => {
+    const raw = makeAsset('r', { format: 'raf' });
+    const jpeg = makeAsset('j', { format: 'jpeg', pairedWith: 'r' });
+    const view = makeView([raw, jpeg, makeAsset('x')]);
+    const partners = pairPartners(view.assets);
+    expect(partners.get('r')).toBe('j');
+    expect(partners.get('j')).toBe('r');
+    expect(partners.has('x')).toBe(false);
+    expect(sidebarCounts(view).all).toBe(2);
+    expect(importBatches(view).reduce((n, b) => n + b.count, 0)).toBe(2);
+    expect(pairPartners(makeView([raw, { ...jpeg, deleted: true }]).assets).size).toBe(0);
+  });
+});
+
+describe('sorting', () => {
+  it('gives each order its natural direction and words', () => {
+    expect(SORT_DESCENDING.name).toBe(false);
+    expect(SORT_DESCENDING.captured).toBe(true);
+    expect(sortDirectionLabel({ key: 'name', descending: false })).toMatch(/^A to Z/);
+  });
+
+  it('sorts by last edit, unedited photos last either way', () => {
+    const [a, b, c] = [makeAsset('a'), makeAsset('b'), makeAsset('c')];
+    const edits: Record<string, string | null> = { a: '0002', b: null, c: '0005' };
+    const at = (x: { id: string }) => edits[x.id] ?? null;
+    const order = (descending: boolean) =>
+      [a, b, c].sort((x, y) => compareAssets(x, y, { key: 'edited', descending }, at)).map((x) => x.id);
+    expect(order(true)).toEqual(['c', 'a', 'b']);
+    expect(order(false)).toEqual(['a', 'c', 'b']);
   });
 });

@@ -64,5 +64,8 @@ describe('shortcut registry', () => {
     expect(formatChord({ key: 'a', mod: true }, true)).toBe('⌘A');
     expect(formatChord({ key: 'a', mod: true }, false)).toBe('Ctrl+A');
     expect(formatChord({ key: 'ArrowLeft', shift: true }, false)).toBe('Shift+←');
+    expect(formatChord({ key: 'c', mod: true, shift: true }, false)).toBe('Ctrl+Shift+C');
+    expect(formatChord({ key: 'v', mod: true, shift: true }, true)).toBe('⌘⇧V');
+    expect(formatChord({ key: '?', shift: true }, false)).toBe('?');
   });
 });

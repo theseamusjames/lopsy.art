@@ -34,6 +34,8 @@ export type CommandId =
   | 'select-none'
   | 'delete'
   | 'toggle-info'
+  | 'undo-library'
+  | 'redo-library'
   | 'copy-edits'
   | 'paste-edits'
   | 'help';
@@ -106,6 +108,20 @@ export const SHORTCUTS: readonly Shortcut[] = [
     contexts: ['grid', 'single'],
   },
   {
+    id: 'undo-library',
+    chords: [{ key: 'z', mod: true }],
+    description: 'Undo the last change to the library',
+    group: 'Marks',
+    contexts: ['grid', 'single', 'compare', 'cull'],
+  },
+  {
+    id: 'redo-library',
+    chords: [{ key: 'z', mod: true, shift: true }],
+    description: 'Redo',
+    group: 'Marks',
+    contexts: ['grid', 'single', 'compare', 'cull'],
+  },
+  {
     id: 'copy-edits',
     chords: [{ key: 'c', mod: true, shift: true }],
     description: 'Copy edits (choose which)',
@@ -164,7 +180,8 @@ export function formatChord(chord: KeyChord, isMac: boolean): string {
   const key = names[chord.key] ?? (chord.key.length === 1 ? chord.key.toUpperCase() : chord.key);
   const parts: string[] = [];
   if (chord.mod) parts.push(isMac ? '⌘' : 'Ctrl');
-  if (chord.shift && chord.key.length > 1) parts.push('Shift');
+  // Shift is part of a letter or named key; for '?' and the like it is implied by the character.
+  if (chord.shift && (chord.key.length > 1 || /^[a-z]$/i.test(chord.key))) parts.push(isMac ? '⇧' : 'Shift');
   parts.push(key);
   return parts.join(isMac ? '' : '+');
 }

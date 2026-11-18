@@ -343,6 +343,10 @@ export class FakeBackend implements PhotosBackend {
     }
   }
 
+  async untrashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
+    session.restoreAssets(assetIds);
+  }
+
   exportVersions(_session: LibrarySession, request: ExportRequest): ExportJob {
     return fakeExport(request);
   }
