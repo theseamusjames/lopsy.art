@@ -1,0 +1,71 @@
+.before {
+  position: absolute;
+  left: var(--split-left);
+  top: var(--split-top);
+  width: var(--split-width);
+  height: var(--split-height);
+  clip-path: inset(0 calc(100% - var(--split-at)) 0 0);
+  pointer-events: none;
+  user-select: none;
+}
+
+.divider {
+  position: absolute;
+  left: var(--split-x);
+  top: var(--split-top);
+  width: 16px;
+  height: var(--split-height);
+  margin-left: -8px;
+  cursor: ew-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-text-primary);
+  box-shadow: 0 0 2px rgb(0 0 0 / 60%);
+}
+
+.divider::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  background: var(--color-text-primary);
+  border-radius: var(--radius-round);
+  box-shadow: var(--shadow-sm);
+}
+
+.divider:focus-visible::after {
+  outline: 2px solid var(--color-accent);
+}
+
+.labelBefore,
+.labelAfter {
+  position: absolute;
+  top: calc(var(--split-top) + var(--space-2));
+  padding: 2px var(--space-2);
+  background: rgb(0 0 0 / 55%);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  pointer-events: none;
+}
+
+.labelBefore {
+  left: calc(var(--split-left) + var(--space-2));
+}
+
+.labelAfter {
+  left: calc(var(--split-left) + var(--split-width) - var(--space-2));
+  transform: translateX(-100%);
+}

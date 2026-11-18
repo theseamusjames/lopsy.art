@@ -99,3 +99,35 @@ test.describe('History, versions and the filmstrip', () => {
     expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Exposure +1.50', 'Copy edits', 'Paste edits']);
   });
 });
+
+test.describe('Split before and after', () => {
+  test('shows the uncorrected photo left of a draggable divider, cropped like the edit', async ({ page }) => {
+    await openHarness(page);
+    await openGeneratedImage(page);
+    await waitForReady(page);
+    await setValue(page, 'Exposure', '2');
+    await page.getByRole('button', { name: 'Crop', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Aspect' }).selectOption('1:1');
+    await page.getByRole('button', { name: 'Done' }).click();
+
+    await page.getByRole('button', { name: 'Split' }).click();
+    const before = page.getByTestId('split-before');
+    await expect(before).toBeAttached();
+    await expect.poll(() => before.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+    const size = await before.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight]);
+    expect(size[0]).toBe(size[1]);
+
+    const divider = page.getByTestId('split-divider');
+    await expect(divider).toHaveAttribute('aria-valuenow', '50');
+    const box = await divider.boundingBox();
+    if (!box) throw new Error('no divider');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 - 80, box.y + box.height / 2, { steps: 4 });
+    await page.mouse.up();
+    expect(Number(await divider.getAttribute('aria-valuenow'))).toBeLessThan(45);
+
+    await page.getByRole('button', { name: 'Split' }).click();
+    await expect(divider).toHaveCount(0);
+  });
+});

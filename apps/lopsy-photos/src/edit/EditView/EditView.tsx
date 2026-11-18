@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, ClipboardPaste, Copy, Crop, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { ArrowLeft, ClipboardPaste, Copy, Crop, Eye, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Version, VersionId } from '@lopsy/photos-core/library/types';
 import { LeftColumn, type LeftColumnSection } from '../LeftColumn/LeftColumn';
@@ -31,6 +31,7 @@ import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
 import { CropTool } from '../CropTool/CropTool';
+import { SplitView } from '../SplitView/SplitView';
 import { FULL_RECT, recipeCrop, toFramed, type Rect } from '../../engine/crop';
 import { ProfileMenu } from '../ProfileMenu/ProfileMenu';
 import { LoadStatus } from '../LoadStatus/LoadStatus';
@@ -380,18 +381,57 @@ export function EditView({
 
   const fullSize = isCropping ? engine?.fullImageSize() ?? null : null;
   const stageSize = stageRef.current ? { width: stageRef.current.clientWidth, height: stageRef.current.clientHeight } : null;
-  const cropBox =
-    fullSize && stageSize && view
+  const boxOf = (size: { width: number; height: number } | null) =>
+    size && stageSize && view
       ? {
-          aspect: fullSize.width / fullSize.height,
-          box: {
-            left: stageSize.width / 2 + view.panX - (fullSize.width * view.zoom) / 2,
-            top: stageSize.height / 2 + view.panY - (fullSize.height * view.zoom) / 2,
-            width: fullSize.width * view.zoom,
-            height: fullSize.height * view.zoom,
-          },
+          left: stageSize.width / 2 + view.panX - (size.width * view.zoom) / 2,
+          top: stageSize.height / 2 + view.panY - (size.height * view.zoom) / 2,
+          width: size.width * view.zoom,
+          height: size.height * view.zoom,
         }
       : null;
+  const cropImageBox = boxOf(fullSize);
+  const cropBox = fullSize && cropImageBox ? { aspect: fullSize.width / fullSize.height, box: cropImageBox } : null;
+
+  // ---- split before and after ---------------------------------------
+
+  const [isSplit, setIsSplit] = useState(false);
+  const [splitAt, setSplitAt] = useState(0.5);
+  const [beforeSrc, setBeforeSrc] = useState<string | null>(null);
+  const isSplitShown = isSplit && canEdit && !isCropping;
+  const splitBox = isSplitShown ? boxOf(engine?.imageSize() ?? null) : null;
+  const pixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
+  const beforeLongEdge = splitBox ? Math.min(2048, Math.max(64, Math.round(Math.max(splitBox.width, splitBox.height) * pixelRatio))) : 0;
+  // The before render depends only on the framing and the size it is shown at.
+  const beforeKey = splitBox ? `${JSON.stringify(savedRecipe.framing)}@${Math.round(beforeLongEdge / 64)}:${status.kind}` : null;
+  const beforeInputs = useRef({ savedRecipe, shownRecipe, isBefore, beforeLongEdge });
+  beforeInputs.current = { savedRecipe, shownRecipe, isBefore, beforeLongEdge };
+
+  useEffect(() => {
+    if (!engine || !beforeKey) return;
+    let isCancelled = false;
+    let url: string | null = null;
+    const timer = setTimeout(() => {
+      const inputs = beforeInputs.current;
+      engine.setRecipe(beforeRecipe(inputs.savedRecipe));
+      // exportImage draws synchronously before it first awaits, so the
+      // edit is back on the canvas before the browser paints.
+      const rendering = engine.exportImage({ format: 'jpeg', quality: 0.9, maxSize: inputs.beforeLongEdge });
+      engine.setRecipe(inputs.isBefore ? beforeRecipe(inputs.shownRecipe) : inputs.shownRecipe);
+      rendering
+        .then((blob) => {
+          if (isCancelled) return;
+          url = URL.createObjectURL(blob);
+          setBeforeSrc(url);
+        })
+        .catch((err: unknown) => console.warn('Lopsy Photos: the before view could not be rendered', err));
+    }, 200);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [engine, beforeKey]);
 
   const panPointer = useRef<{ id: number; x: number; y: number } | null>(null);
 
@@ -551,8 +591,19 @@ export function EditView({
             onClick={() => setIsBeforeToggled((v) => !v)}
             disabled={!canEdit}
           >
-            <SplitSquareHorizontal size={16} aria-hidden />
+            <Eye size={16} aria-hidden />
             <span>Before</span>
+          </button>
+          <button
+            type="button"
+            className={styles.toolButton}
+            aria-pressed={isSplit}
+            title="Before and after side by side"
+            onClick={() => setIsSplit((v) => !v)}
+            disabled={!canEdit || isCropping}
+          >
+            <SplitSquareHorizontal size={16} aria-hidden />
+            <span>Split</span>
           </button>
         </div>
         <div className={styles.toolGroup}>
@@ -623,6 +674,7 @@ export function EditView({
           onPointerCancel={handleStagePointerUp}
         >
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
+          {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
           {cropDraft && cropBox && (
             <CropTool
               imageBox={cropBox.box}
