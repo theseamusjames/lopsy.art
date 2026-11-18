@@ -48,6 +48,7 @@ export const NEWER_APP_MESSAGE = 'Another device uses a newer version of Lopsy P
 const MAX_OPS_PER_SEGMENT = 10_000;
 const MAX_PROBLEMS = 100;
 const DEFAULT_ROLLUP_AT = 20;
+const DEFAULT_FULL_PULL_EVERY = 60;
 
 export interface SyncEngineOptions {
   readonly adapter: StorageAdapter;
@@ -77,6 +78,8 @@ export interface SyncEngineOptions {
   readonly readOnly?: boolean;
   /** Roll up this device's segments once this many small ones have been written (default 20). */
   readonly rollUpAt?: number;
+  /** List every device folder after this many pulls through the change feed (default 60, 30 minutes). */
+  readonly fullPullEvery?: number;
   readonly timers?: SyncTimers;
   /** The synced settings, for the readable `settings.json` copy (spec 6.6). */
   readonly settings?: () => Readonly<Record<string, Json>>;
@@ -91,6 +94,7 @@ type Bookkeeping = {
   opsSinceSnapshot: number;
   flushedSeq: number;
   lastSyncedAt: string | null;
+  changeCursor: string | null;
 };
 
 /** auth: needs the user; network and rate limits: offline, retried; anything else: an error. */
@@ -127,6 +131,10 @@ export class SyncEngine {
   private stateDirty = false;
   private lastStateSave: number;
   private newerSeen = false;
+  /** Starts high so a session's first pull lists every folder (and retries segments it skipped before). */
+  private pullsSinceFull = Number.POSITIVE_INFINITY;
+  /** Journal folder ID -> device, learned from listings and the feed. */
+  private readonly deviceFolders = new Map<FileId, string>();
   private segmentsSinceRollUp = 0;
   private settingsDirty = false;
   private settingsFileId: FileId | null = null;
@@ -149,6 +157,7 @@ export class SyncEngine {
       opsSinceSnapshot: b.opsSinceSnapshot,
       flushedSeq: b.flushedSeq,
       lastSyncedAt: b.lastSyncedAt,
+      changeCursor: b.changeCursor ?? null,
     };
     this.newerSeen = options.readOnly === true;
     this.status = {
@@ -360,17 +369,90 @@ export class SyncEngine {
     this.deviceFileWrittenAt = this.o.now();
   }
 
+  /**
+   * Reads other devices' new segments. Normally only the devices the
+   * storage change feed mentions are listed; every `fullPullEvery` pulls,
+   * with no saved cursor, or when the feed fails, every device folder is.
+   */
   private async pull(): Promise<void> {
+    const cursor = this.bk.changeCursor;
+    const every = this.o.fullPullEvery ?? DEFAULT_FULL_PULL_EVERY;
+    if (cursor !== null && this.pullsSinceFull < every) {
+      const devices = await this.devicesFromFeed(cursor);
+      if (devices) {
+        this.pullsSinceFull += 1;
+        let appliedAny = false;
+        for (const [device, folderId] of devices) {
+          if (await this.pullDevice(device, folderId)) appliedAny = true;
+        }
+        if (appliedAny) this.stateDirty = true;
+        return;
+      }
+    }
+    await this.fullPull();
+  }
+
+  private async fullPull(): Promise<void> {
     const { adapter, deviceId } = this.o;
-    const layout = this.layout;
-    const folders = (await adapter.listChildren(layout.journalId)).filter((f) => f.isFolder);
+    let cursor: string | null = null;
+    try {
+      // Taken before listing, so a change made while listing shows in the next feed read.
+      cursor = await adapter.getChangeCursor();
+    } catch (error) {
+      if (!isStorageError(error) || error.code === 'auth' || error.retryable) throw error;
+      this.report(`Change feed unavailable: ${error.message}`);
+    }
+    const folders = (await adapter.listChildren(this.layout.journalId)).filter((f) => f.isFolder);
     let appliedAny = false;
     for (const folder of folders) {
       const device = folder.properties['lp.device'] ?? folder.name;
       if (!isDeviceId(device) || device === deviceId) continue;
-      if (await this.pullDevice(device, folder)) appliedAny = true;
+      this.deviceFolders.set(folder.id, device);
+      if (await this.pullDevice(device, folder.id)) appliedAny = true;
     }
     if (appliedAny) this.stateDirty = true;
+    this.bk.changeCursor = cursor;
+    this.pullsSinceFull = 0;
+  }
+
+  /**
+   * The devices with new journal files since `cursor`, by device folder,
+   * and the feed's new cursor saved; null when the feed cannot be used.
+   */
+  private async devicesFromFeed(cursor: string): Promise<Map<string, FileId> | null> {
+    const devices = new Map<string, FileId>();
+    let next = cursor;
+    try {
+      for (;;) {
+        const page = await this.o.adapter.listChanges(next);
+        for (const change of page.changes) {
+          const file = change.file;
+          if (!file || file.trashed || file.parentId === null) continue;
+          if (file.isFolder && file.parentId === this.layout.journalId) {
+            const device = file.properties['lp.device'] ?? file.name;
+            if (isDeviceId(device) && device !== this.o.deviceId) {
+              this.deviceFolders.set(file.id, device);
+              devices.set(device, file.id);
+            }
+            continue;
+          }
+          const device = this.deviceFolders.get(file.parentId) ?? file.properties['lp.device'];
+          if (file.isFolder || device === undefined || device === this.o.deviceId) continue;
+          if (file.properties['lp.role'] !== ROLES.segment && !this.deviceFolders.has(file.parentId)) continue;
+          if (!isDeviceId(device)) continue;
+          devices.set(device, file.parentId);
+        }
+        next = page.cursor;
+        if (!page.hasMore) break;
+      }
+    } catch (error) {
+      if (!isStorageError(error) || error.code === 'auth' || error.retryable) throw error;
+      // An expired or refused cursor: list everything instead.
+      this.report(`Change feed failed, listing folders instead: ${error.message}`);
+      return null;
+    }
+    this.bk.changeCursor = next;
+    return devices;
   }
 
   /**
@@ -395,10 +477,10 @@ export class SyncEngine {
     });
   }
 
-  private async pullDevice(device: string, folder: StoredFile): Promise<boolean> {
+  private async pullDevice(device: string, folderId: FileId): Promise<boolean> {
     const seen = this.bk.vector[device] ?? 0;
     const ahead = new Set(this.bk.appliedAhead[device] ?? []);
-    const segments = (await this.o.adapter.listChildren(folder.id))
+    const segments = (await this.o.adapter.listChildren(folderId))
       .map((file) => ({ file, range: parseSegmentName(file.name) }))
       .filter(
         (s): s is { file: StoredFile; range: { firstSeq: number; lastSeq: number } } =>
@@ -542,6 +624,7 @@ export class SyncEngine {
       snapshot: this.bk.snapshot,
       opsSinceSnapshot: this.bk.opsSinceSnapshot,
       flushedSeq: this.bk.flushedSeq,
+      changeCursor: this.bk.changeCursor,
       lastSyncedAt: this.bk.lastSyncedAt,
     };
   }

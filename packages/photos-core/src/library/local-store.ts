@@ -22,6 +22,8 @@ export interface SyncBookkeeping {
   /** The last seq of this device that is in storage. */
   readonly flushedSeq: number;
   readonly lastSyncedAt: string | null;
+  /** The storage change feed's cursor after the last pull; absent in data saved before it existed. */
+  readonly changeCursor?: string | null;
 }
 
 export interface StoredLibrary {
@@ -64,6 +66,7 @@ export const EMPTY_BOOKKEEPING: SyncBookkeeping = {
   opsSinceSnapshot: 0,
   flushedSeq: 0,
   lastSyncedAt: null,
+  changeCursor: null,
 };
 
 function applyPatch(current: StoredLibrary | null, patch: LocalStorePatch): StoredLibrary {

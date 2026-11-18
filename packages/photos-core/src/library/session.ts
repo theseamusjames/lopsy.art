@@ -55,6 +55,8 @@ export interface OpenLibraryOptions {
   /** Write a snapshot after this many ops applied since the last one (spec: 5,000). */
   readonly snapshotEvery?: number;
   readonly timers?: SyncTimers;
+  /** List every journal folder after this many pulls through the storage change feed (default 60). */
+  readonly fullPullEvery?: number;
   /** One writer per device (lock.ts). Default: Web Locks in browsers, none elsewhere. */
   readonly lock?: LibraryLock;
   /** Take the library over from another tab instead of failing with `LibraryBusyError`. */
@@ -629,6 +631,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<LibraryS
           readOnly,
           settings: () => Object.fromEntries(session.getView().settings),
           ...(online ? {} : { ensure, initialError: offlineError }),
+          ...(options.fullPullEvery !== undefined ? { fullPullEvery: options.fullPullEvery } : {}),
           ...(options.rollUpAt !== undefined ? { rollUpAt: options.rollUpAt } : {}),
           ...(options.timers ? { timers: options.timers } : {}),
           onApplied,
