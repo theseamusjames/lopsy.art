@@ -81,3 +81,28 @@ pub fn set_image_local_contrast(engine: &mut Engine, values: &[f32]) -> Result<(
 pub fn clear_image_local_contrast(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_image_local_contrast(&mut engine.inner)
 }
+
+/// Areas: 16 floats per area, at most 8 (throws otherwise, or on a kind
+/// other than 0/1 or a non-finite value). Per area:
+/// `[kind (0 linear, 1 radial), invert (0/1), amount 0..1,
+///   x0, y0, x1, y1, rotation (rad), feather 0..1,
+///   exposure (EV −4..4), contrast, highlights, shadows,
+///   temperature, tint, saturation (−100..100)]`.
+/// Linear: (x0, y0) = p0 (full effect), (x1, y1) = p1 (no effect).
+/// Radial: (x0, y0) = centre, (x1, y1) = radii; rotation and feather apply.
+/// Coordinates are document pixels.
+#[wasm_bindgen(js_name = "setImageAreas")]
+pub fn set_image_areas(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_areas(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clearImageAreas")]
+pub fn clear_image_areas(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_image_areas(&mut engine.inner)
+}
+
+/// Show area `index`'s mask as a red overlay on screen only; −1 for none.
+#[wasm_bindgen(js_name = "setImageAreaOverlay")]
+pub fn set_image_area_overlay(engine: &mut Engine, index: i32) {
+    lopsy_engine::commands::develop::set_image_area_overlay(&mut engine.inner, index)
+}
