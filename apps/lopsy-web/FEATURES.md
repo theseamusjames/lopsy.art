@@ -688,8 +688,8 @@ gets baked first.
   the opposite edge stays fixed, giving the trapezoid / vanishing-point
   effect. Edge handles behave as they do in Distort.
 - In Distort and Perspective the corner geometry is built from the corner
-  offsets alone, so the **rotation handles have no visible effect** in those
-  two modes.
+  offsets alone, so those two modes **show no rotation handles**. Switch to
+  another mode to rotate.
 - **Both corner modes are projective.** Pixels (and the selection
   mask) are mapped through the homography that takes the original rectangle
   onto the four corners (`transform_perspective.wgsl`,

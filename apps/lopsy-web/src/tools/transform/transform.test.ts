@@ -12,6 +12,7 @@ import {
   getHandlePositions,
   hitTestHandle,
   hitTestBoxHandle,
+  hasRotateHandles,
   isScaleHandle,
   isRotateHandle,
   computeScale,
@@ -221,6 +222,26 @@ describe('hitTestHandle', () => {
     expect(hitTestHandle(offCentre, state, 6.4)).toBeNull();
     expect(hitTestHandle(offCentre, state, 6.4, 10)).toBe('rotate-top-right');
     expect(hitTestHandle({ x: 208, y: 0 }, state, 6.4, 10)).toBeNull();
+  });
+});
+
+describe('rotate handles in the corner modes (#1778)', () => {
+  const base = createTransformState({ x: 0, y: 0, width: 100, height: 100 });
+  const rotPos = getHandlePositions(base)['rotate-top-left'];
+
+  it('keeps them in free transform and skew', () => {
+    expect(hasRotateHandles(base)).toBe(true);
+    expect(hasRotateHandles({ ...base, mode: 'skew' })).toBe(true);
+    expect(hitTestBoxHandle(rotPos, base, 1)).toBe('rotate-top-left');
+  });
+
+  it.each(['distort', 'perspective'] as const)('has none to grab in %s', (mode) => {
+    const state: TransformState = { ...base, mode };
+    expect(hasRotateHandles(state)).toBe(false);
+    const pos = getHandlePositions(state)['rotate-top-left'];
+    expect(hitTestBoxHandle(pos, state, 1)).toBeNull();
+    expect(hitTestHandle(pos, state, 6)).toBeNull();
+    expect(hitTestBoxHandle({ x: 0, y: 0 }, state, 1)).toBe('top-left');
   });
 });
 

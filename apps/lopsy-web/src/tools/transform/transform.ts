@@ -268,6 +268,7 @@ export {
   getHandlePositions,
   hitTestHandle,
   hitTestBoxHandle,
+  hasRotateHandles,
   isScaleHandle,
   isRotateHandle,
   getCursorForHandle,

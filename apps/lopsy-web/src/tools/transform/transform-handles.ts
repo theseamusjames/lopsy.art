@@ -50,6 +50,15 @@ function isCornerMode(state: TransformState): boolean {
   return state.mode === 'distort' || state.mode === 'perspective';
 }
 
+/**
+ * Distort and Perspective build the box from corner offsets alone, so a
+ * rotation would do nothing: those modes have no rotate handles to draw or
+ * grab. A grab on one used to push an empty Transform row and clear redo (#1778).
+ */
+export function hasRotateHandles(state: TransformState): boolean {
+  return !isCornerMode(state);
+}
+
 export function getHandlePositions(
   state: TransformState,
 ): Record<TransformHandle, Point> {
@@ -186,8 +195,10 @@ export function hitTestHandle(
   rotateHandleRadius: number = handleRadius,
 ): TransformHandle | null {
   const positions = getHandlePositions(state);
-  return nearestWithin(point, positions, ROTATE_HANDLES, rotateHandleRadius)
-    ?? nearestWithin(point, positions, SCALE_HANDLES, handleRadius);
+  const rotateHit = hasRotateHandles(state)
+    ? nearestWithin(point, positions, ROTATE_HANDLES, rotateHandleRadius)
+    : null;
+  return rotateHit ?? nearestWithin(point, positions, SCALE_HANDLES, handleRadius);
 }
 
 /** Screen px side of the white square drawn for a scale handle. */
@@ -285,7 +296,9 @@ export function hitTestBoxHandle(point: Point, state: TransformState, zoom: numb
   // reach the corner at low zoom.
   const rotateCornerClearance = ROTATE_HANDLE_OFFSET * Math.SQRT2 * 0.8;
   const rotateRadius = Math.max(1, Math.min(radius, rotateCornerClearance));
-  const rotateHit = nearestWithin(point, positions, ROTATE_HANDLES, rotateRadius);
+  const rotateHit = hasRotateHandles(state)
+    ? nearestWithin(point, positions, ROTATE_HANDLES, rotateRadius)
+    : null;
   if (rotateHit) return rotateHit;
 
   if (!isInScaleReach) return null;
