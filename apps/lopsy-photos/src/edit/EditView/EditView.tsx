@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, Download, Redo2, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { ArrowLeft, Download, FlipHorizontal2, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, Json, Version } from '@lopsy/photos-core/library/types';
 import { ControlGroup } from '../ControlGroup/ControlGroup';
@@ -8,6 +8,8 @@ import {
   applyChanges,
   beforeRecipe,
   changeLabel,
+  flipRecipe,
+  rotateRecipe,
   groupResetChanges,
   sliderChanges,
   type ControlDef,
@@ -275,6 +277,38 @@ export function EditView({
           </button>
           <button type="button" className={styles.iconButton} aria-label="Redo" title="Redo (⇧⌘Z)" onClick={onRedo}>
             <Redo2 size={16} aria-hidden />
+          </button>
+        </div>
+        <div className={styles.toolGroup}>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Rotate left"
+            title="Rotate left"
+            disabled={!isReady || isBefore}
+            onClick={() => onSetRecipe(rotateRecipe(savedRecipe, false), 'Rotate left')}
+          >
+            <RotateCcw size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Rotate right"
+            title="Rotate right"
+            disabled={!isReady || isBefore}
+            onClick={() => onSetRecipe(rotateRecipe(savedRecipe, true), 'Rotate right')}
+          >
+            <RotateCw size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Flip"
+            title="Flip left to right"
+            disabled={!isReady || isBefore}
+            onClick={() => onSetRecipe(flipRecipe(savedRecipe), 'Flip')}
+          >
+            <FlipHorizontal2 size={16} aria-hidden />
           </button>
         </div>
         <div className={styles.toolGroup}>

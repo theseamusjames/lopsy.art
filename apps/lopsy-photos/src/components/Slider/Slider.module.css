@@ -73,8 +73,9 @@
   border-radius: var(--radius-round);
 }
 
-.track:focus-visible {
-  box-shadow: 0 0 0 1px var(--color-accent);
+.track:focus-visible .thumb {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .fill {

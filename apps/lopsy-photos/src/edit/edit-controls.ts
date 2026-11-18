@@ -8,6 +8,7 @@ import {
   RECIPE_RANGES,
   recipeFromPaths,
   recipeToPaths,
+  type QuarterTurns,
   type Recipe,
   type RecipeRange,
 } from '@lopsy/photos-core/library/recipe';
@@ -119,6 +120,16 @@ export function groupResetChanges(recipe: Recipe, group: GroupDef): Record<strin
 
 export function isGroupDefault(recipe: Recipe, group: GroupDef): boolean {
   return Object.keys(groupResetChanges(recipe, group)).length === 0;
+}
+
+/** The recipe turned a quarter turn; the crop is dropped, as it was drawn on the old orientation. */
+export function rotateRecipe(recipe: Recipe, isClockwise: boolean): Recipe {
+  const turns = (recipe.framing.rotate / 90 + (isClockwise ? 1 : 3)) % 4;
+  return { ...recipe, framing: { ...recipe.framing, rotate: (turns * 90) as QuarterTurns, crop: null } };
+}
+
+export function flipRecipe(recipe: Recipe): Recipe {
+  return { ...recipe, framing: { ...recipe.framing, flipH: !recipe.framing.flipH, crop: null } };
 }
 
 /** What the "before" view shows: the default edit, in the photo's current framing. */

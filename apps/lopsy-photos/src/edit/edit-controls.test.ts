@@ -5,6 +5,8 @@ import {
   applyChanges,
   beforeRecipe,
   changeLabel,
+  flipRecipe,
+  rotateRecipe,
   groupResetChanges,
   isGroupDefault,
   numberAt,
@@ -73,5 +75,18 @@ describe('beforeRecipe', () => {
     const b = beforeRecipe(r);
     expect(b.tone.exposure).toBe(0);
     expect(b.framing).toEqual(r.framing);
+  });
+});
+
+describe('framing', () => {
+  it('rotates both ways and wraps', () => {
+    expect(rotateRecipe(DEFAULT_RECIPE, true).framing.rotate).toBe(90);
+    expect(rotateRecipe(DEFAULT_RECIPE, false).framing.rotate).toBe(270);
+    expect(rotateRecipe(rotateRecipe(DEFAULT_RECIPE, false), true).framing.rotate).toBe(0);
+  });
+
+  it('flips and drops the crop', () => {
+    const cropped: Recipe = { ...DEFAULT_RECIPE, framing: { rotate: 0, flipH: false, crop: { x: 0, y: 0, width: 0.5, height: 0.5 } } };
+    expect(flipRecipe(cropped).framing).toEqual({ rotate: 0, flipH: true, crop: null });
   });
 });
