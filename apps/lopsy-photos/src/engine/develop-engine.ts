@@ -288,6 +288,8 @@ class PhotoEngine implements DevelopEngine {
     report: (stage: LoadProgress['stage'], fraction: number | null) => void,
   ): Promise<Size> {
     if (source.type === LOPSY_LAYER_MIME) return this.showImage(await this.decodeLopsyLayer(source, signal, report));
+    // Photos sit on opaque black; only a Lopsy layer keeps its transparency.
+    setBackgroundColor(this.engine, 0, 0, 0, 1);
     if (format === 'raf') return this.decodeRaf(source, signal, report);
     if (format === 'dng') return this.decodeDng(source, signal, report);
     if (format === 'png') {
