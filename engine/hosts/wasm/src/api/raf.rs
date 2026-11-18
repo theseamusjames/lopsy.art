@@ -156,6 +156,21 @@ pub fn raf_render_linear_band(
     Ok(RafRenderedBand { x: out.x, y: out.y, width: out.width, height: out.height, pixels: out.pixels })
 }
 
+/// A quick first view without demosaicing: the whole mosaic (from
+/// `takeMosaic`) binned by the coarsest whole-CFA-unit factor that keeps the
+/// long edge at least `minLongEdge` (3 for a 40 MP X-Trans frame and 2048).
+/// Linear camera RGB like `rafRenderLinearBand`, so the same `setRawDevelop`
+/// settings develop it. x = y = 0; width and height are the reduced,
+/// oriented size.
+#[wasm_bindgen(js_name = "rafRenderBinnedLinear")]
+pub fn raf_render_binned_linear(src: &[f32], params_json: &str, min_long_edge: u32) -> Result<RafRenderedBand, JsError> {
+    let params: RafRenderParams = serde_json::from_str(params_json)
+        .map_err(|e| JsError::new(&format!("RAF params: {e}")))?;
+    let (width, height, pixels) =
+        raf::develop::render_binned_linear_for(src, &params, min_long_edge).map_err(|e| JsError::new(&e))?;
+    Ok(RafRenderedBand { x: 0, y: 0, width, height, pixels })
+}
+
 /// The develop settings that reproduce `rafRenderBand`'s look (without its
 /// capture sharpening) from `rafRenderLinearBand`'s pixels, as the JSON
 /// `setRawDevelop` takes.
