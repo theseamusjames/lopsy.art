@@ -31,7 +31,8 @@ import {
   type ControlDef,
   type GroupDef,
 } from '../edit-controls';
-import { isPreviewStale, isTypingTarget, neighbourId, shortcutFor } from '../edit-keys';
+import { EDIT_SHORTCUTS, isPreviewStale, isTypingTarget, neighbourId, shortcutFor } from '../edit-keys';
+import { Modal } from '../../components/Modal/Modal';
 import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
@@ -90,6 +91,8 @@ export interface EditViewProps {
   /** Paste edits (⌘⇧V) onto this version; the app applies them as one step. Disabled when `canPasteEdits` is false. */
   readonly onPasteEdits?: () => void;
   readonly canPasteEdits?: boolean;
+  /** The version's stored screen preview, shown at once while the engine loads the photo. */
+  readonly storedPreviewUrl?: string | null;
   /** The current view's photos along the bottom; ← and → move along it. */
   readonly filmstrip?: { readonly items: readonly FilmstripItem[]; readonly currentId: string; readonly onOpen: (assetId: string) => void } | undefined;
   /**
@@ -150,6 +153,7 @@ export function EditView({
   onRenameVersion,
   onDeleteVersion,
   filmstrip,
+  storedPreviewUrl = null,
   onCopyEdits,
   onPasteEdits,
   canPasteEdits = true,
@@ -168,6 +172,8 @@ export function EditView({
   const [isBeforeHeld, setIsBeforeHeld] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isLevelling, setIsLevelling] = useState(false);
   const [cropDraft, setCropDraft] = useState<Rect | null>(null);
   const isCropping = cropDraft !== null;
   const isReady = status.kind === 'ready';
@@ -346,8 +352,9 @@ export function EditView({
       if (onCopyEdits) setIsCopyDialogOpen(true);
     } else onPasteEdits?.();
   };
-  const handlers = useRef({ onUndo, onRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste });
-  handlers.current = { onUndo, onRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste };
+  const isToolOpen = isCropping || isLevelling || isCopyDialogOpen || isHelpOpen;
+  const handlers = useRef({ onUndo, onRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => {} });
+  handlers.current = { onUndo, onRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => void handleClose() };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -364,6 +371,18 @@ export function EditView({
         strip.onOpen(next);
         return;
       }
+      if (shortcut === 'leave') {
+        // A tool or dialog takes Escape for itself.
+        if (h.isToolOpen) return;
+        e.preventDefault();
+        h.leave();
+        return;
+      }
+      if (shortcut === 'help') {
+        e.preventDefault();
+        setIsHelpOpen(true);
+        return;
+      }
       if (shortcut === 'copyEdits' || shortcut === 'pasteEdits') {
         e.preventDefault();
         h.onCopyPaste(shortcut);
@@ -373,7 +392,7 @@ export function EditView({
       if (shortcut === 'undo') h.onUndo();
       else if (shortcut === 'redo') h.onRedo();
       else if (shortcut === 'fit') h.engine?.fit();
-      else if (shortcut === 'actualSize') h.engine?.setZoom(1);
+      else if (shortcut === 'actualSize') h.engine?.setZoom(1 / (h.engine.workingScale() || 1));
       else setIsBeforeHeld(true);
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -444,7 +463,6 @@ export function EditView({
 
   // ---- straighten -----------------------------------------------------
 
-  const [isLevelling, setIsLevelling] = useState(false);
   const hasFlipV = 'flipV' in DEFAULT_RECIPE.framing;
   const handleLevelLine = (a: { x: number; y: number }, b: { x: number; y: number }) => {
     setIsLevelling(false);
@@ -650,7 +668,10 @@ export function EditView({
   };
 
   const isAllDefault = recipeHash(beforeRecipe(savedRecipe)) === recipeHash(savedRecipe);
-  const zoomPercent = view ? Math.round(view.zoom * 100) : 100;
+  // The zoom against the full image, whatever size the working image is.
+  const workingScale = engine?.workingScale() ?? 1;
+  const zoomPercent = view ? Math.round(view.zoom * workingScale * 100) : 100;
+  const isLoadingFull = engine?.isLoadingFullResolution() ?? false;
 
   return (
     <div className={styles.editView} data-testid="edit-view" data-status={status.kind}>
@@ -774,12 +795,20 @@ export function EditView({
             type="button"
             className={styles.toolButton}
             aria-pressed={!view?.isFit && zoomPercent === 100}
-            onClick={() => engine?.setZoom(1)}
+            onClick={() => engine?.setZoom(1 / workingScale)}
             disabled={!canEdit}
           >
             100%
           </button>
-          <span className={styles.zoomReadout} data-testid="zoom-readout">
+          <span
+            className={styles.zoomReadout}
+            data-testid="zoom-readout"
+            title={
+              view?.isFit
+                ? `Fit: the whole photo, shown at ${zoomPercent}% of its full size`
+                : `${zoomPercent}% of the photo's full size`
+            }
+          >
             {zoomPercent}%
           </span>
         </div>
@@ -834,6 +863,14 @@ export function EditView({
           onPointerCancel={handleStagePointerUp}
         >
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
+          {storedPreviewUrl && !canEdit && status.kind !== 'error' && (
+            <img className={styles.storedPreview} src={storedPreviewUrl} alt="" data-testid="stored-preview" draggable={false} />
+          )}
+          {(isLoadingFull || (storedPreviewUrl && !canEdit && status.kind !== 'error')) && (
+            <span className={styles.loadingBadge} role="status" data-testid="loading-badge">
+              {isLoadingFull ? 'Loading full resolution…' : 'Loading…'}
+            </span>
+          )}
           {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
           {areaHandles}
           {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
@@ -848,7 +885,7 @@ export function EditView({
             />
           )}
           {isBefore && canEdit && <span className={styles.beforeBadge}>Before</span>}
-          <LoadStatus status={status} onClose={onClose} />
+          {!(storedPreviewUrl && status.kind !== 'error' && !canEdit) && <LoadStatus status={status} onClose={onClose} />}
         </div>
         <aside className={styles.panel} aria-label="Edits">
           <Histogram bins={histogram} />
@@ -900,9 +937,12 @@ export function EditView({
               onCommit={handleSliderCommit}
               onReset={handleGroupReset}
               {...(group.id === 'tone'
-                ? { onAuto: () => void handleAutoTone(), autoTitle: 'Set the tone controls from the histogram' }
+                ? {
+                    onAuto: () => void handleAutoTone(),
+                    autoTitle: canEdit ? 'Set the tone controls from the histogram' : 'Auto is ready once the photo has loaded',
+                  }
                 : group.id === 'whiteBalance' && autoWhiteBalance
-                  ? { onAuto: handleAutoWhiteBalance, autoTitle: 'Neutralise the colour cast' }
+                  ? { onAuto: handleAutoWhiteBalance, autoTitle: canEdit ? 'Neutralise the colour cast' : 'Auto is ready once the photo has loaded' }
                   : {})}
             />
             {group.id === 'tone' && (
@@ -945,6 +985,20 @@ export function EditView({
           </div>
         </aside>
       </div>
+      {isHelpOpen && (
+        <Modal title="Edit shortcuts" width="sm" onClose={() => setIsHelpOpen(false)}>
+          <dl className={styles.shortcuts}>
+            {EDIT_SHORTCUTS.map((s) => (
+              <div key={s.keys} className={styles.shortcut}>
+                <dt>
+                  <kbd className={styles.kbd}>{s.keys}</kbd>
+                </dt>
+                <dd>{s.action}</dd>
+              </div>
+            ))}
+          </dl>
+        </Modal>
+      )}
       {isCopyDialogOpen && onCopyEdits && (
         <CopyEditsDialog
           sourceName={asset.fileName}

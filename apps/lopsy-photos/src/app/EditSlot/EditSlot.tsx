@@ -6,7 +6,7 @@ import { pasteRecipeValues, type CopiedEdits } from '../../library/recipe-copy';
 import { versionsByAsset } from '../../library/items';
 import { loadPreviewUrl, peekPreviewUrl } from '../preview-cache';
 import { useUi } from '../store';
-import { useOrderedIds, usePresets } from '../hooks';
+import { useOrderedIds, usePresets, usePreviewUrl } from '../hooks';
 import { EditView } from '../../edit/EditView/EditView';
 import { getBackend } from '../backend-registry';
 import { useLibraryView, useSession } from '../hooks';
@@ -45,6 +45,8 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
   const history = useMemo(() => session.history(versionId), [session, versionId, view]);
   const versions = useMemo(() => versionsByAsset(view).get(assetId) ?? [], [view, assetId]);
   const filmstrip = useFilmstrip(orderedIds, assetId);
+  // The stored screen preview shows at once while the engine loads the original.
+  const storedPreviewUrl = usePreviewUrl(version?.screen ?? null, 'screen');
   const abort = useRef<AbortController | null>(null);
 
   // Keep the original in the device cache while it is open here.
@@ -159,6 +161,7 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
         onClose={onClose}
         onPreviewRendered={onPreviewRendered}
         onExport={downloadBlob}
+        storedPreviewUrl={storedPreviewUrl}
         history={history}
         versions={versions}
         onSelectVersion={onSelectVersion}
