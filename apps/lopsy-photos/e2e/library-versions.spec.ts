@@ -57,7 +57,7 @@ test('new version, edit it, copy its edits onto another photo', async ({ page })
 
   // A preset from the grid edits the photo it is applied to.
   await first.click();
-  await page.getByRole('button', { name: 'Apply a preset to the selected photos' }).click();
+  await page.getByRole('button', { name: 'Presets', exact: true }).click();
   await page.getByRole('menu', { name: 'Presets' }).getByRole('menuitem', { name: 'Punchy' }).click();
   await expect(first).toHaveAttribute('data-edited', 'true');
 

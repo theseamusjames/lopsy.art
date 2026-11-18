@@ -7,6 +7,9 @@ import { THUMB_SIZE, useUi } from '../../app/store';
 import { currentVersions, newVersion, openCompare, openCull, runCommand } from '../../app/commands';
 import { openInLopsy } from '../../app/lopsy-handoff';
 import { PresetMenu } from '../PresetMenu/PresetMenu';
+import { MoreMenu } from '../MoreMenu/MoreMenu';
+import { formatChord, SHORTCUTS, type CommandId } from '../../shortcuts/registry';
+import { isMac } from '../../app/hooks';
 import { SORT_DESCENDING, SORT_LABELS, sortDirectionLabel, type SortKey } from '../../library/asset-query';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
@@ -124,54 +127,88 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           />
         </label>
 
-        <span className={styles.views}>
         <span className={styles.divider} />
-        <IconButton label="Look at one photo (Space)" icon={<Maximize size={16} />} onClick={() => runCommand('open-single', orderedIds)} />
-        <IconButton
-          label={selected >= 2 ? 'Compare the selected photos (C)' : 'Compare: select two to four photos first'}
-          icon={<Columns2 size={16} />}
-          disabled={selected < 2}
-          onClick={() => openCompare(orderedIds)}
-        />
-        <IconButton
-          label={single ? 'New version: another edit of this photo, the original untouched' : 'New version: select one photo first'}
-          icon={<CopyPlus size={16} />}
-          disabled={!single}
-          onClick={newVersion}
-        />
-        <IconButton
-          label="Copy edits (⇧⌘C)"
-          icon={<ClipboardCopy size={16} />}
-          disabled={!single}
-          onClick={() => runCommand('copy-edits', orderedIds)}
-        />
-        <IconButton
-          label={copied ? `Paste edits from ${copied.sourceName} (⇧⌘V)` : 'Paste edits: copy them from a photo first'}
-          icon={<ClipboardPaste size={16} />}
-          disabled={!copied || (selected === 0 && !single)}
-          onClick={() => runCommand('paste-edits', orderedIds)}
-        />
-        <PresetMenu disabled={selected === 0 && !single} />
-        <IconButton
-          label={groupBursts ? 'Show every photo of a burst' : 'Group bursts: shots taken in quick succession show as one'}
-          icon={<Layers size={16} />}
-          active={groupBursts}
-          onClick={() => setGroupBursts(!groupBursts)}
-        />
-        <IconButton label="Sort through full screen (F)" icon={<ScanEye size={16} />} onClick={() => openCull(orderedIds)} />
-        <IconButton
-          label={single ? 'Edit in Lopsy, with layers, painting and text' : 'Edit in Lopsy: select one photo first'}
-          icon={<Paintbrush size={16} />}
-          disabled={!single}
-          onClick={() => {
-            const session = useUi.getState().connection?.session;
-            const target = currentVersions()[0];
-            if (session && target !== undefined) openInLopsy(session, target.assetId, target.versionId);
-          }}
-        />
-        <IconButton label="Details (I)" icon={<Info size={16} />} active={infoOpen} onClick={toggleInfo} />
+        <span className={styles.views} role="group" aria-label="Look at">
+          <IconButton label={`Look at one photo (${keyOf('open-single')})`} icon={<Maximize size={16} />} onClick={() => runCommand('open-single', orderedIds)} />
+          <Button
+            size="sm"
+            variant="ghost"
+            title={selected >= 2 ? `Compare the selected photos (${keyOf('open-compare')})` : 'Compare: select two to four photos first'}
+            disabled={selected < 2}
+            onClick={() => openCompare(orderedIds)}
+          >
+            <Columns2 size={14} />
+            Compare
+          </Button>
+          <Button size="sm" variant="ghost" title={`Sort through full screen (${keyOf('open-cull')})`} onClick={() => openCull(orderedIds)}>
+            <ScanEye size={14} />
+            Cull
+          </Button>
+        </span>
+        <span className={styles.divider} />
+        <span className={styles.views} role="group" aria-label="Edits">
+          <Button
+            size="sm"
+            variant="ghost"
+            title={`Copy edits from this photo (${keyOf('copy-edits')})`}
+            disabled={!single}
+            onClick={() => runCommand('copy-edits', orderedIds)}
+          >
+            <ClipboardCopy size={14} />
+            Copy edits
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            title={copied ? `Paste edits from ${copied.sourceName} (${keyOf('paste-edits')})` : 'Paste edits: copy them from a photo first'}
+            disabled={!copied || (selected === 0 && !single)}
+            onClick={() => runCommand('paste-edits', orderedIds)}
+          >
+            <ClipboardPaste size={14} />
+            Paste
+          </Button>
+          <PresetMenu disabled={selected === 0 && !single} />
+        </span>
+        <span className={styles.divider} />
+        <span className={styles.views}>
+          <MoreMenu
+            items={[
+              {
+                label: 'New version',
+                hint: single ? 'Another edit of this photo, the original untouched' : 'Select one photo first',
+                icon: <CopyPlus size={14} />,
+                disabled: !single,
+                run: newVersion,
+              },
+              {
+                label: 'Edit in Lopsy',
+                hint: single ? 'With layers, painting and text' : 'Select one photo first',
+                icon: <Paintbrush size={14} />,
+                disabled: !single,
+                run: () => {
+                  const session = useUi.getState().connection?.session;
+                  const target = currentVersions()[0];
+                  if (session && target !== undefined) openInLopsy(session, target.assetId, target.versionId);
+                },
+              },
+              {
+                label: 'Group bursts',
+                hint: 'Shots taken in quick succession show as one',
+                icon: <Layers size={14} />,
+                checked: groupBursts,
+                run: () => setGroupBursts(!groupBursts),
+              },
+            ]}
+          />
+          <IconButton label={`Details (${keyOf('toggle-info')})`} icon={<Info size={16} />} active={infoOpen} onClick={toggleInfo} />
         </span>
       </div>
     </div>
   );
+}
+
+/** A command's first key, as the shortcut help writes it. */
+function keyOf(id: CommandId): string {
+  const chord = SHORTCUTS.find((s) => s.id === id)?.chords[0];
+  return chord ? formatChord(chord, isMac) : '';
 }

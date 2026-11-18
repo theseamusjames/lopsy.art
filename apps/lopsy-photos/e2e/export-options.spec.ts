@@ -79,4 +79,27 @@ test('export two photos as one zip, named by a template and sized by short edge'
   const jpeg = await readFile(await one.path());
   await one.delete();
   expect(jpegSize(jpeg)).toEqual({ width: 240, height: 160 });
+
+  // Saved as a preset, every choice comes back: PNG 8-bit, short edge 160, no metadata, the template.
+  await page.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('button', { name: /^Export 1/ }).click();
+  await page.getByRole('radio', { name: /^PNG/ }).check();
+  await page.getByRole('radio', { name: /^8-bit/ }).check();
+  await page.getByRole('combobox', { name: 'Size' }).selectOption('short');
+  await page.getByRole('spinbutton', { name: 'Pixels' }).fill('160');
+  await page.getByRole('radio', { name: 'None', exact: true }).check();
+  await page.getByRole('textbox', { name: 'File name template' }).fill('{date}-{name}');
+  await page.getByRole('button', { name: 'Save these settings as a preset' }).click();
+  await page.getByRole('textbox', { name: 'Preset name' }).fill('Small PNG');
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: /^Export 1/ }).click();
+  await expect(page.getByRole('radio', { name: /^JPEG/ })).toBeChecked();
+  await page.getByRole('combobox', { name: 'Export preset' }).selectOption({ label: 'Small PNG' });
+  await expect(page.getByRole('radio', { name: /^PNG/ })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /^8-bit/ })).toBeChecked();
+  await expect(page.getByRole('combobox', { name: 'Size' })).toHaveValue('short');
+  await expect(page.getByRole('spinbutton', { name: 'Pixels' })).toHaveValue('160');
+  await expect(page.getByRole('radio', { name: 'None', exact: true })).toBeChecked();
+  await expect(page.getByRole('textbox', { name: 'File name template' })).toHaveValue('{date}-{name}');
 });
