@@ -41,6 +41,9 @@ import initWasm, {
   render,
   rotateLayer90,
   setBackgroundColor,
+  setImageAreaOverlay,
+  setImageAreas,
+  clearImageAreas,
   setDocumentSize,
   setImageBlacks,
   setImageColorGrading,
@@ -65,7 +68,8 @@ import initWasm, {
   type Engine,
 } from '@lopsy/engine-pkg/lopsy_wasm';
 import type { ImageFormat } from '@lopsy/photos-core/library/types';
-import { DEFAULT_RECIPE, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_RECIPE, liveAreas, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { areaFloats, type AreaFrame } from './areas';
 import {
   framedSize,
   effectiveFraming,
@@ -152,6 +156,10 @@ export interface DevelopEngine {
   /** A JPEG of the current edit, long edge at most `maxSize`. */
   renderPreview(maxSize: number, quality?: number): Promise<Blob>;
   exportImage(options: ExportOptions): Promise<Blob>;
+  /** How the source maps to the document now, for Areas (areas.ts); null before a load. */
+  areaFrame(): AreaFrame | null;
+  /** Shows area `index`'s mask in red on screen (never in exports); −1 for none. */
+  setAreaOverlay(index: number): void;
   dispose(): void;
 }
 
@@ -295,6 +303,9 @@ class PhotoEngine implements DevelopEngine {
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
   private layoutKey: string | null = null;
+  /** The crop's top-left in framed pixels: where the document starts. */
+  private cropOrigin = { x: 0, y: 0 };
+  private areasKey: string | null = null;
   /** The displayed (cropped) size. */
   private displaySize: Size | null = null;
   private autoWb: { temperature: number; tint: number } | null = null;
@@ -592,7 +603,9 @@ class PhotoEngine implements DevelopEngine {
     setDocumentSize(this.engine, px.width, px.height);
     updateLayer(this.engine, layerDesc(this.layerId, layer.width, layer.height, true, layer.x - px.x, layer.y - px.y));
     this.layoutKey = key;
+    this.cropOrigin = { x: px.x, y: px.y };
     this.displaySize = { width: px.width, height: px.height };
+    this.applyAreas();
     this.invalidate();
     const isResized = !previous || previous.width !== px.width || previous.height !== px.height;
     if (isResized || this.view.isFit) this.fit();
@@ -642,6 +655,37 @@ class PhotoEngine implements DevelopEngine {
     this.applyFraming(effectiveFraming(this.recipe.framing));
     this.applyAngle(framingAngle(this.recipe.framing));
     this.layout();
+    this.applyAreas();
+  }
+
+  areaFrame(): AreaFrame | null {
+    if (!this.sourceSize) return null;
+    return {
+      sourceWidth: this.sourceSize.width,
+      sourceHeight: this.sourceSize.height,
+      framing: this.framing,
+      angle: this.appliedAngle,
+      cropX: this.cropOrigin.x,
+      cropY: this.cropOrigin.y,
+    };
+  }
+
+  /** The recipe's areas in document pixels; sent again when they or the framing change. */
+  private applyAreas(): void {
+    const frame = this.areaFrame();
+    const areas = liveAreas(this.recipe);
+    const floats = frame && areas.length > 0 ? areaFloats(areas, frame) : null;
+    const key = floats ? Array.from(floats).join(',') : '';
+    if (key === this.areasKey) return;
+    this.areasKey = key;
+    if (floats) setImageAreas(this.engine, floats);
+    else clearImageAreas(this.engine);
+    this.invalidate();
+  }
+
+  setAreaOverlay(index: number): void {
+    setImageAreaOverlay(this.engine, index);
+    this.invalidate();
   }
 
   /** Puts the unturned framed image back in the layer and forgets the copy kept for turning it. */
