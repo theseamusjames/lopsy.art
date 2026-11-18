@@ -162,8 +162,11 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
   (`<name>.xmp` or `<name>.<ext>.xmp`) is not imported as a file: its
   rating, label, title, caption, keywords and Lightroom / Camera Raw edits
   (`crs:`, mapped approximately onto the recipe: tone, presence, detail,
-  colour by hue, crop and straighten) are applied to the photo it belongs
-  to, also when that photo is already in the library.
+  curves, colour by hue, colour grading, crop and straighten, vignette and
+  grain) are applied to the photo it belongs to, also when that photo is
+  already in the library. White balance comes across for JPEG, PNG and
+  TIFF photos; a RAW file keeps its as-shot white balance, because
+  Lightroom's Kelvin values only map through the photo's own scale.
 - Each file is hashed, uploaded into `Originals/<year>/<month>/`, checked
   against its hash, and added with its metadata (capture time,
   orientation, camera, lens, exposure, GPS). Previews (512 and 2048 px)
