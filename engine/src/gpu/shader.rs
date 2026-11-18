@@ -156,6 +156,10 @@ pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
 // Develop
 pub const RAW_DEVELOP_FRAG: &str = translated!("develop/raw_develop");
 pub const COLOR_MIXER_FRAG: &str = translated!("develop/color_mixer");
+pub const BLUR_AXIS_FRAG: &str = translated!("develop/blur_axis");
+pub const NOISE_REDUCE_FRAG: &str = translated!("develop/noise_reduce");
+pub const DETAIL_SHARPEN_FRAG: &str = translated!("develop/detail_sharpen");
+pub const LOCAL_CONTRAST_FRAG: &str = translated!("develop/local_contrast");
 
 /// Declares the typed shaders: each source tagged with the uniform struct
 /// its passes are created with. A test checks every struct against its
@@ -243,6 +247,10 @@ typed_shaders! {
     COLOR_CONVERT: params::color::ColorConvertParams = COLOR_CONVERT_FRAG;
     RAW_DEVELOP: params::develop::RawDevelopParams = RAW_DEVELOP_FRAG;
     COLOR_MIXER: params::develop::ColorMixerParams = COLOR_MIXER_FRAG;
+    BLUR_AXIS: params::develop::BlurAxisParams = BLUR_AXIS_FRAG;
+    NOISE_REDUCE: params::develop::NoiseReduceParams = NOISE_REDUCE_FRAG;
+    DETAIL_SHARPEN: params::develop::DetailSharpenParams = DETAIL_SHARPEN_FRAG;
+    LOCAL_CONTRAST: params::develop::LocalContrastParams = LOCAL_CONTRAST_FRAG;
     GRADIENT_LINEAR: params::gradient::GradientLinearParams = GRADIENT_LINEAR_FRAG;
     GRADIENT_RADIAL: params::gradient::GradientRadialParams = GRADIENT_RADIAL_FRAG;
     SHAPE_FILL: params::shape::ShapeFillParams = SHAPE_FILL_FRAG;
@@ -424,6 +432,10 @@ pub struct ShaderPrograms {
     /// `color_mixer()`) so a Lopsy session never links them.
     raw_develop: RefCell<Option<Rc<ShaderProgram<params::develop::RawDevelopParams>>>>,
     color_mixer: RefCell<Option<Rc<ShaderProgram<params::develop::ColorMixerParams>>>>,
+    blur_axis: RefCell<Option<Rc<ShaderProgram<params::develop::BlurAxisParams>>>>,
+    noise_reduce: RefCell<Option<Rc<ShaderProgram<params::develop::NoiseReduceParams>>>>,
+    detail_sharpen: RefCell<Option<Rc<ShaderProgram<params::develop::DetailSharpenParams>>>>,
+    local_contrast: RefCell<Option<Rc<ShaderProgram<params::develop::LocalContrastParams>>>>,
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
@@ -463,6 +475,26 @@ impl ShaderPrograms {
     /// `develop/color_mixer.wgsl`, compiled the first time it is asked for.
     pub fn color_mixer(&self) -> Result<Rc<ShaderProgram<params::develop::ColorMixerParams>>, String> {
         lazily(&self.color_mixer, || compile(&self.linker, &COLOR_MIXER))
+    }
+
+    /// `develop/blur_axis.wgsl`, compiled the first time it is asked for.
+    pub fn blur_axis(&self) -> Result<Rc<ShaderProgram<params::develop::BlurAxisParams>>, String> {
+        lazily(&self.blur_axis, || compile(&self.linker, &BLUR_AXIS))
+    }
+
+    /// `develop/noise_reduce.wgsl`, compiled the first time it is asked for.
+    pub fn noise_reduce(&self) -> Result<Rc<ShaderProgram<params::develop::NoiseReduceParams>>, String> {
+        lazily(&self.noise_reduce, || compile(&self.linker, &NOISE_REDUCE))
+    }
+
+    /// `develop/detail_sharpen.wgsl`, compiled the first time it is asked for.
+    pub fn detail_sharpen(&self) -> Result<Rc<ShaderProgram<params::develop::DetailSharpenParams>>, String> {
+        lazily(&self.detail_sharpen, || compile(&self.linker, &DETAIL_SHARPEN))
+    }
+
+    /// `develop/local_contrast.wgsl`, compiled the first time it is asked for.
+    pub fn local_contrast(&self) -> Result<Rc<ShaderProgram<params::develop::LocalContrastParams>>, String> {
+        lazily(&self.local_contrast, || compile(&self.linker, &LOCAL_CONTRAST))
     }
 
     pub fn compile_all(ctx: &crate::gpu::context::GpuContext) -> Result<Self, String> {
@@ -571,6 +603,10 @@ impl ShaderPrograms {
             color_convert: compile(linker, &COLOR_CONVERT)?,
             raw_develop: RefCell::new(None),
             color_mixer: RefCell::new(None),
+            blur_axis: RefCell::new(None),
+            noise_reduce: RefCell::new(None),
+            detail_sharpen: RefCell::new(None),
+            local_contrast: RefCell::new(None),
             mask_luminance: compile(linker, &MASK_LUMINANCE)?,
             liquify_dab: compile(linker, &LIQUIFY_DAB)?,
             // Text

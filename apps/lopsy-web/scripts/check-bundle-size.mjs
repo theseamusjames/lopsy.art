@@ -44,9 +44,15 @@ const MARGIN = 0.03;
 // 44283534311, commit 4c81d17: 4,366,533 B raw, 1,857,436 B gzip; +2.31 %
 // and +0.89 % over the old budget): still inside the margin, but the
 // colour controls that follow would otherwise eat the rest of it.
+//
+// The glue was raised again for Lopsy Photos' colour and detail exports
+// (setImageColorGrading, setImageColorMixer, setImageDetail,
+// setImageLocalContrast, their clears, and exportTiff16), to what a local
+// build measured with them in: 210,820 B raw, 22,971 B gzip (+1.8 % and
+// +2.7 %, inside the margin but leaving none for the next export).
 const BUDGET = {
   'lopsy_wasm_bg.wasm': { raw: 4_366_533, gzip: 1_857_436 },
-  'lopsy_wasm.js': { raw: 207_012, gzip: 22_365 },
+  'lopsy_wasm.js': { raw: 210_820, gzip: 22_971 },
 };
 
 function format(bytes) {
