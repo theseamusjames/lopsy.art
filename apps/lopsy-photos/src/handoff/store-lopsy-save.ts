@@ -171,6 +171,29 @@ async function createDocument(
   return { assetId, lopsyFile };
 }
 
+/** The facts an in-place save changes. */
+export interface DocumentFacts {
+  readonly sha256: string;
+  readonly byteSize: number;
+  readonly width: number | null;
+  readonly height: number | null;
+}
+
+/**
+ * The session command that rewrites an asset's facts (`setAssetFacts`), being
+ * added to photos-core's LibrarySession. Until it is there this is a no-op:
+ * the asset keeps the sha256 and size it was created with.
+ */
+type SessionWithFacts = LibrarySession & {
+  setAssetFacts?: (assetId: AssetId, facts: Partial<DocumentFacts & { renderFileId: FileId }>) => void;
+};
+
+function recordFacts(session: LibrarySession, assetId: AssetId, facts: DocumentFacts): void {
+  // CALL SITE: LibrarySession.setAssetFacts (photos-core). The originals cache
+  // keys on sha256, so a document updated in place must record its new hash.
+  (session as SessionWithFacts).setAssetFacts?.(assetId, facts);
+}
+
 async function updateDocument(
   session: LibrarySession,
   document: Asset,
@@ -178,10 +201,18 @@ async function updateDocument(
   options: StoreLopsySaveOptions,
 ): Promise<StoredFile> {
   const renderBlob = new Blob([save.render], { type: 'image/png' });
+  const sha256 = await sha256Hex(save.lopsy);
   const lopsyFile = await session.adapter.updateContent(document.fileId, new Blob([save.lopsy], { type: LOPSY_MIME_TYPE }));
   if (document.renderFileId) {
     await session.adapter.updateContent(document.renderFileId, renderBlob);
   }
+  const size = pngSize(save.render);
+  recordFacts(session, document.id, {
+    sha256,
+    byteSize: save.lopsy.byteLength,
+    width: size?.width ?? null,
+    height: size?.height ?? null,
+  });
   await renderPreviews(session, options, document.id, document.primaryVersionId, renderBlob);
   return lopsyFile;
 }
