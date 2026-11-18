@@ -38,7 +38,7 @@ describe('recipeToAdjustments', () => {
     const recipe: Recipe = {
       ...withTone({ exposure: 0.3, contrast: 20, highlights: -40, shadows: 35, whites: 10, blacks: -5 }),
       color: { vibrance: 15, saturation: -25 },
-      finish: { vignette: 30 },
+      finish: { ...DEFAULT_RECIPE.finish, vignette: 30 },
     };
     const adj = recipeToAdjustments(recipe);
     expect(adj.exposure).toBe(0.3);

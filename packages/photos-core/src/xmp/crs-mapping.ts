@@ -30,6 +30,12 @@
  * | ColorGradeBlending                   | 0..100          | colorGrading.blending          | x1 |
  * | ColorGradeBalance                    | -100..100       | colorGrading.balance           | x1 |
  * | PostCropVignetteAmount               | -100..100       | finish.vignette                | negated: theirs darkens below 0, ours above |
+ * | PostCropVignetteMidpoint             | 0..100 (50)     | finish.vignetteSize            | x1, approximate; read and written only with a vignette |
+ * | PostCropVignetteRoundness            | -100..100       | finish.vignetteRoundness       | x1, approximate; the same |
+ * | PostCropVignetteFeather              | 0..100 (50)     | finish.vignetteFeather         | x1, approximate; the same |
+ * | GrainAmount                          | 0..100          | finish.grain.amount            | x1 |
+ * | GrainSize                            | 0..100 (25)     | finish.grain.size              | x1; read and written only with grain |
+ * | GrainFrequency                       | 0..100 (50)     | finish.grain.roughness         | x1, approximate (theirs is how fine the pattern is); the same |
  * | ToneCurvePV2012[Red,Green,Blue]      | "x, y" 0..255   | curves.luminance, .red, …      | /255; endpoints added when missing; more than 16 points, or x not increasing, is skipped |
  * | WhiteBalance                         | As Shot, Custom…| whiteBalance.mode              | As Shot -> asShot (Temperature and Tint ignored); anything else -> custom |
  * | Temperature (RAW)                    | 2000..50000 K   | whiteBalance.temperature       | see `kelvinToTemperature`: a mired shift from 5500 K, clamped |
@@ -38,7 +44,7 @@
  * | Tint (JPEG, TIFF)                    | -100..100       | whiteBalance.tint              | x1 |
  * | CropAngle                            | -45..45 deg     | framing.angle                  | x1; see read.ts for the crop itself |
  *
- * Unmapped: grain, the effects panel's other vignette and grain controls,
+ * Unmapped: PostCropVignetteStyle and PostCropVignetteHighlightContrast,
  * lens and transform corrections, calibration, the older split toning
  * and PV2010 controls, masks and local adjustments, spot removal, and
  * camera profiles (crs:CameraProfile, crs:Look).
@@ -105,6 +111,30 @@ export const CRS_SCALARS: readonly CrsScalar[] = [
   { crs: 'ColorGradeBlending', path: 'colorGrading.blending' },
   { crs: 'ColorGradeBalance', path: 'colorGrading.balance' },
   { crs: 'PostCropVignetteAmount', path: 'finish.vignette', scale: -1 },
+  { crs: 'GrainAmount', path: 'finish.grain.amount' },
+];
+
+/**
+ * Shape controls that mean something only while their effect is on, so
+ * they are read and written only then: Lightroom writes its defaults
+ * (midpoint 50, grain size 25) even with no vignette, and ours differ.
+ */
+const CRS_DEPENDENT: readonly { readonly when: string; readonly scalars: readonly CrsScalar[] }[] = [
+  {
+    when: 'finish.vignette',
+    scalars: [
+      { crs: 'PostCropVignetteMidpoint', path: 'finish.vignetteSize' },
+      { crs: 'PostCropVignetteRoundness', path: 'finish.vignetteRoundness' },
+      { crs: 'PostCropVignetteFeather', path: 'finish.vignetteFeather' },
+    ],
+  },
+  {
+    when: 'finish.grain.amount',
+    scalars: [
+      { crs: 'GrainSize', path: 'finish.grain.size' },
+      { crs: 'GrainFrequency', path: 'finish.grain.roughness' },
+    ],
+  },
 ];
 
 /** The tone-curve properties by channel. */
@@ -181,6 +211,14 @@ export function crsToRecipePaths(src: CrsSource): Record<string, RecipeLeaf> {
     const v = src.number(crs);
     if (v !== null) out[path] = v * (scale ?? 1) + 0; // + 0 turns -0 into 0
   }
+  for (const { when, scalars } of CRS_DEPENDENT) {
+    const on = out[when];
+    if (typeof on !== 'number' || on === 0) continue;
+    for (const { crs, path } of scalars) {
+      const v = src.number(crs);
+      if (v !== null) out[path] = v;
+    }
+  }
   for (const channel of CURVE_CHANNELS) {
     const curve = curveFromCrs(src.value(CRS_CURVES[channel]));
     if (curve) out[`curves.${channel}`] = curve;
@@ -221,6 +259,14 @@ export function recipeToCrs(recipe: Recipe, isRaw: boolean): { attributes: strin
     const value = paths[path];
     if (typeof value !== 'number' || value === defaults[path]) continue;
     attributes.push(`crs:${crs}="${signed(value / (scale ?? 1) + 0)}"`);
+  }
+  for (const { when, scalars } of CRS_DEPENDENT) {
+    if (paths[when] === 0) continue;
+    // All of them, defaults included: Lightroom's defaults are not ours.
+    for (const { crs, path } of scalars) {
+      const value = paths[path];
+      if (typeof value === 'number') attributes.push(`crs:${crs}="${signed(Math.round(value))}"`);
+    }
   }
   const wb = recipe.whiteBalance;
   if (wb.mode === 'custom') {
