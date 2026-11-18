@@ -17,6 +17,7 @@ import type { ReceivedSave } from '@lopsy/handoff/photos';
 import type { HandoffSource } from '@lopsy/handoff/messages';
 import type { PreviewRenderer } from '@lopsy/photos-core/import/types';
 import type { Asset, AssetId, LibrarySession, VersionId } from '@lopsy/photos-core/library/types';
+import type { PhotosLibrarySession } from '@lopsy/photos-core/library/session';
 import type { FileId, StoredFile } from '@lopsy/photos-core/storage/types';
 import { sha256Hex } from '@lopsy/photos-core/import/hash';
 import { newId } from '@lopsy/photos-core/library/ids';
@@ -180,17 +181,13 @@ export interface DocumentFacts {
 }
 
 /**
- * The session command that rewrites an asset's facts (`setAssetFacts`), being
- * added to photos-core's LibrarySession. Until it is there this is a no-op:
- * the asset keeps the sha256 and size it was created with.
+ * photos-core's session has `setAssetFacts`; the development backend's
+ * session does not, and there the document keeps its first facts.
  */
-type SessionWithFacts = LibrarySession & {
-  setAssetFacts?: (assetId: AssetId, facts: Partial<DocumentFacts & { renderFileId: FileId }>) => void;
-};
+type SessionWithFacts = LibrarySession & Partial<Pick<PhotosLibrarySession, 'setAssetFacts'>>;
 
 function recordFacts(session: LibrarySession, assetId: AssetId, facts: DocumentFacts): void {
-  // CALL SITE: LibrarySession.setAssetFacts (photos-core). The originals cache
-  // keys on sha256, so a document updated in place must record its new hash.
+  // The originals cache keys on sha256, so a document updated in place must record its new hash.
   (session as SessionWithFacts).setAssetFacts?.(assetId, facts);
 }
 
