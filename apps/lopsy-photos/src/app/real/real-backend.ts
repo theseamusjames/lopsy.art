@@ -35,7 +35,8 @@ import {
   type ReconnectOffer,
   type StorageChoice,
 } from '../backend';
-import { getExportRenderer } from '../export-renderer-registry';
+import { getExportRenderer, setExportRendererFactory } from '../export-renderer-registry';
+import { createEngineExportRenderer } from '../../engine/export-renderer';
 import {
   describeDevice,
   libraryStoreName,
@@ -105,6 +106,23 @@ export class RealBackend implements PhotosBackend {
   private readonly extras = new WeakMap<LibrarySession, SessionExtras>();
   /** Storage opened for a library another tab holds, kept so "Use it here" needs no second sign-in. */
   private busy: { readonly kind: StorageChoice; readonly opened: Opened } | null = null;
+  /** The open library; exports and Edit in Lopsy read originals through it. */
+  private current: LibrarySession | null = null;
+
+  constructor() {
+    // Exports render on the engine (its own hidden canvas), one renderer for the page.
+    let renderer: ReturnType<typeof createEngineExportRenderer> | null = null;
+    setExportRendererFactory(() => {
+      renderer ??= createEngineExportRenderer({
+        loadOriginal: (asset, signal) => {
+          const session = this.current;
+          if (!session) return Promise.reject(new Error('No library is open'));
+          return this.loadOriginal(session, asset, { signal });
+        },
+      });
+      return renderer;
+    });
+  }
   private readonly previewRenderer = createBrowserPreviewRenderer();
 
   listStorageOptions(): readonly StorageChoice[] {
@@ -143,6 +161,7 @@ export class RealBackend implements PhotosBackend {
     this.extras.set(session, { kind, tokenSource: opened.tokenSource, caches, staging, queue });
     setPreviewSource(caches ? { read: (s, ref) => caches.previews.readPreview(s.adapter, ref.fileId) } : null);
     saveLastConnection({ kind, label: opened.label });
+    this.current = session;
     return { session, accountLabel: opened.label };
   }
 
@@ -343,6 +362,7 @@ export class RealBackend implements PhotosBackend {
   async disconnect(session: LibrarySession): Promise<void> {
     const tokenSource = this.extras.get(session)?.tokenSource;
     setPreviewSource(null);
+    if (this.current === session) this.current = null;
     try {
       await session.close();
     } finally {
