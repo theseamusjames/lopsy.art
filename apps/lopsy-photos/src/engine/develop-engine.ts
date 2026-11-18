@@ -15,6 +15,9 @@
 import initWasm, {
   addLayer,
   autoTone as engineAutoTone,
+  clearImageColorGrading,
+  clearImageColorMixer,
+  clearImageCurves,
   clearRawDevelop,
   createEngine,
   decodeAndUploadDng,
@@ -28,7 +31,10 @@ import initWasm, {
   setBackgroundColor,
   setDocumentSize,
   setImageBlacks,
+  setImageColorGrading,
+  setImageColorMixer,
   setImageContrast,
+  setImageCurvesLut,
   setImageExposure,
   setImageHighlights,
   setImagePhotoFilter,
@@ -56,6 +62,7 @@ import {
   type Framing,
 } from './recipe-to-adjustments';
 import { cropPixels, isFullCrop, toFramed } from './crop';
+import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
 import { parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, type RawDevelopSettings } from './raw-develop';
@@ -214,6 +221,8 @@ class PhotoEngine implements DevelopEngine {
   private rawDefaults: RawDevelopSettings | null = null;
   private appliedRawJson: string | null = null;
   private isCropEditing = false;
+  /** What Curves, Color by hue and Color Grading last sent. */
+  private colorKey: string | null = null;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
   private layoutKey: string | null = null;
   /** The displayed (cropped) size. */
@@ -517,6 +526,7 @@ class PhotoEngine implements DevelopEngine {
       this.applied = adj;
       this.invalidate();
     }
+    this.applyColorControls();
     if (this.rawDefaults) {
       const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe, this.engineProfiles));
       if (json !== this.appliedRawJson) {
@@ -527,6 +537,22 @@ class PhotoEngine implements DevelopEngine {
     }
     this.applyFraming({ rotate: this.recipe.framing.rotate, flipH: this.recipe.framing.flipH });
     this.layout();
+  }
+
+  private applyColorControls(): void {
+    const key = colorControlsKey(this.recipe);
+    if (key === this.colorKey) return;
+    this.colorKey = key;
+    const lut = curvesLut(this.recipe);
+    if (lut) setImageCurvesLut(this.engine, lut);
+    else clearImageCurves(this.engine);
+    const mixer = colorMixerValues(this.recipe);
+    if (mixer) setImageColorMixer(this.engine, mixer);
+    else clearImageColorMixer(this.engine);
+    const grade = colorGradeValues(this.recipe);
+    if (grade) setImageColorGrading(this.engine, grade);
+    else clearImageColorGrading(this.engine);
+    this.invalidate();
   }
 
   private applyFraming(target: Framing): void {
