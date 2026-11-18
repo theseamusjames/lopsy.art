@@ -15,7 +15,7 @@ const port = Number(process.env.VITE_PHOTOS_HANDOFF_PORT ?? basePort + 1);
 export default defineConfig({
   ...base,
   testIgnore: undefined,
-  testMatch: /photos-handoff\.spec\.ts$/,
+  testMatch: /photos-(handoff|grade)\.spec\.ts$/,
   use: { ...base.use, baseURL: `http://localhost:${port}` },
   projects: (base.projects ?? []).filter((p) => p.name === 'chromium'),
   webServer: {
