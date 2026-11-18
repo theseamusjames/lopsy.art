@@ -52,7 +52,30 @@ export class OriginalsCache {
     return this.downloads.run(
       key,
       async (signal, onProgress) => {
-        const blob = await adapter.readContent(asset.fileId, { signal, onProgress });
+        // The recorded size is synced data: stop as soon as more bytes arrive than it allows.
+        const limit = new AbortController();
+        const forward = (): void => limit.abort();
+        signal.addEventListener('abort', forward, { once: true });
+        let tooLarge = false;
+        let blob: Blob;
+        try {
+          blob = await adapter.readContent(asset.fileId, {
+            signal: limit.signal,
+            onProgress: (received, total) => {
+              if (received > asset.byteSize || (total !== null && total > asset.byteSize)) {
+                tooLarge = true;
+                limit.abort();
+                return;
+              }
+              onProgress(received, total);
+            },
+          });
+        } catch (error) {
+          if (tooLarge) throw new StorageError('invalid', `The original ${asset.fileId} is larger than its recorded size`);
+          throw error;
+        } finally {
+          signal.removeEventListener('abort', forward);
+        }
         const actual = blob.size === asset.byteSize ? await sha256Hex(blob) : null;
         if (actual !== key) {
           throw new StorageError('invalid', `The original ${asset.fileId} does not match its recorded checksum`);

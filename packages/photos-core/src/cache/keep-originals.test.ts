@@ -72,6 +72,33 @@ describe('Keep originals', () => {
     expect(download.getProgress()).toMatchObject({ state: 'full', done: 2 });
   });
 
+  it('trusts the storage size over a synced record, and gives up on an original after repeated failures', async () => {
+    const { adapter, refs } = await library(2, 100);
+    const root = await adapter.getRoot();
+    const huge = await adapter.createFile({ parentId: root.id, name: 'huge.raf', mimeType: 'image/x-fuji-raf' }, new Blob([new Uint8Array(5000)]));
+    const lying = { fileId: huge.id, sha256: 'cd'.repeat(32), byteSize: 1 };
+    const cache = new MemoryBlobCache();
+    const originals = new OriginalsCache(cache);
+    const download = new OriginalsDownload({ originals, adapter, list: () => [...refs, lying], estimate: async () => ({ usage: await cache.usage(), quota: 1000 }) });
+    await download.resume();
+    expect(download.getProgress()).toMatchObject({ state: 'done', done: 2, failed: 1 });
+    const reads = adapter.callCount('readContent');
+    expect(reads).toBe(2);
+    await download.resume();
+    await download.resume();
+    expect(adapter.callCount('getFile')).toBeLessThanOrEqual(4);
+    expect(adapter.callCount('readContent')).toBe(reads);
+    expect(download.getProgress()).toMatchObject({ state: 'done', failed: 1 });
+  });
+
+  it('refuses an original larger than its record', async () => {
+    const { adapter, refs } = await library(1, 100);
+    const originals = new OriginalsCache(new MemoryBlobCache());
+    const ref = refs[0] as OriginalRef;
+    await expect(originals.readOriginal(adapter, { ...ref, byteSize: 10 })).rejects.toMatchObject({ code: 'invalid' });
+    expect(await originals.cache.usage()).toBe(0);
+  });
+
   it('counts failures and carries on', async () => {
     const { adapter, refs } = await library(3);
     const originals = new OriginalsCache(new MemoryBlobCache());
