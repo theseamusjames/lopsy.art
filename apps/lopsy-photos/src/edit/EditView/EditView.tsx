@@ -37,6 +37,9 @@ import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
 import { CropTool } from '../CropTool/CropTool';
+import { WhiteBalanceMenu } from '../WhiteBalanceMenu/WhiteBalanceMenu';
+import { WhiteBalancePicker } from '../WhiteBalancePicker/WhiteBalancePicker';
+import { kelvinDisplay } from '../../engine/white-balance';
 import { AreasPanel } from '../AreasPanel/AreasPanel';
 import { AreaHandles } from '../AreaHandles/AreaHandles';
 import { areaLabel } from '../area-edit';
@@ -48,6 +51,9 @@ import { effectiveFraming, framingAngle, framingFlipV } from '../../engine/recip
 import { ProfileMenu } from '../ProfileMenu/ProfileMenu';
 import { LoadStatus } from '../LoadStatus/LoadStatus';
 import { usePhotoEngine } from './use-photo-engine';
+import { useClippingWarningOnEngine } from '../clipping-warning';
+import { useGrainSeed } from '../grain-seed';
+import { useAltDragViews } from '../alt-drag-views';
 import styles from './EditView.module.css';
 
 export interface EditViewProps {
@@ -166,6 +172,8 @@ export function EditView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const { engine, status, view } = usePhotoEngine(canvasRef, asset, loadOriginal);
+  useClippingWarningOnEngine(engine);
+  useGrainSeed(engine, asset.id);
   const [draft, setDraft] = useState<Readonly<Record<string, Json>> | null>(null);
   const [committed, setCommitted] = useState<Committed | null>(null);
   const [isBeforeToggled, setIsBeforeToggled] = useState(false);
@@ -200,6 +208,7 @@ export function EditView({
   // Dragging a slider outside Local contrast and Sharpness & noise leaves
   // their costly passes out until it is let go.
   const isDraggingCheapControl = draft !== null && !Object.keys(draft).some((path) => DETAIL_PREFIXES.some((p) => path.startsWith(p)));
+  useAltDragViews(engine, draft);
   useEffect(() => {
     engine?.setInteractive(isDraggingCheapControl);
   }, [engine, isDraggingCheapControl]);
@@ -325,6 +334,29 @@ export function EditView({
   }, [engine, savedRecipe, shownRecipe, isBefore, commit]);
 
   const autoWhiteBalance = photoInfo?.autoWhiteBalance ?? null;
+  const whiteBalancePresets = useMemo(() => photoInfo?.whiteBalancePresets ?? [], [photoInfo]);
+  const kelvinScale = photoInfo?.kelvin ?? null;
+  const temperatureDisplays = useMemo(
+    () => (kelvinScale ? { 'whiteBalance.temperature': kelvinDisplay(kelvinScale) } : null),
+    [kelvinScale],
+  );
+  const [isPickingWb, setIsPickingWb] = useState(false);
+  const handleWhiteBalancePick = useCallback(
+    async (x: number, y: number) => {
+      setIsPickingWb(false);
+      const picked = await engine?.sampleWhiteBalance(x, y, 8);
+      if (!picked) return;
+      commit(
+        {
+          'whiteBalance.mode': 'custom',
+          'whiteBalance.temperature': Math.round(picked.temperature),
+          'whiteBalance.tint': Math.round(picked.tint),
+        },
+        'White balance: picked',
+      );
+    },
+    [engine, commit],
+  );
   const handleAutoWhiteBalance = useCallback(() => {
     if (!autoWhiteBalance) return;
     commit(
@@ -517,6 +549,8 @@ export function EditView({
   const [splitAt, setSplitAt] = useState(0.5);
   const [beforeSrc, setBeforeSrc] = useState<string | null>(null);
   const isSplitShown = isSplit && canEdit && !isCropping;
+  const wbDocSize = isPickingWb ? engine?.imageSize() ?? null : null;
+  const wbPickBox = boxOf(wbDocSize);
   const splitBox = isSplitShown ? boxOf(engine?.imageSize() ?? null) : null;
   const pixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
   const beforeLongEdge = splitBox ? Math.min(2048, Math.max(64, Math.round(Math.max(splitBox.width, splitBox.height) * pixelRatio))) : 0;
@@ -871,6 +905,14 @@ export function EditView({
               {isLoadingFull ? 'Loading full resolution…' : 'Loading…'}
             </span>
           )}
+          {isPickingWb && wbPickBox && wbDocSize && (
+            <WhiteBalancePicker
+              imageBox={wbPickBox}
+              documentSize={wbDocSize}
+              onPick={(x, y) => void handleWhiteBalancePick(x, y)}
+              onCancel={() => setIsPickingWb(false)}
+            />
+          )}
           {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
           {areaHandles}
           {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
@@ -929,6 +971,17 @@ export function EditView({
           )}
           {GROUPS.map((group) => (
             <Fragment key={group.id}>
+            {group.id === 'whiteBalance' && (
+              <WhiteBalanceMenu
+                recipe={shownRecipe}
+                auto={autoWhiteBalance}
+                presets={whiteBalancePresets}
+                isDisabled={!canEdit || isBefore}
+                onCommit={commit}
+                isPicking={isPickingWb}
+                onTogglePicker={() => setIsPickingWb((v) => !v)}
+              />
+            )}
             <ControlGroup
               group={group}
               recipe={shownRecipe}
@@ -944,6 +997,7 @@ export function EditView({
                 : group.id === 'whiteBalance' && autoWhiteBalance
                   ? { onAuto: handleAutoWhiteBalance, autoTitle: canEdit ? 'Neutralise the colour cast' : 'Auto is ready once the photo has loaded' }
                   : {})}
+              {...(group.id === 'whiteBalance' && temperatureDisplays ? { displays: temperatureDisplays } : {})}
             />
             {group.id === 'tone' && (
               <CurvesGroup recipe={shownRecipe} isDisabled={!canEdit || isBefore} onDraft={setDraft} onCommit={commit} />

@@ -243,8 +243,6 @@ export function exportPresetFromRecord(id: string, record: EntityRecord): Export
   };
 }
 
-export const EMPTY_VIEW: LibraryView = emptyView();
-
 class Changes<V> {
   readonly set = new Map<string, V>();
   readonly remove: string[] = [];

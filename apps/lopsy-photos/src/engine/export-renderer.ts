@@ -9,6 +9,7 @@ import type { ExportRenderer, ExportSettings } from '@lopsy/photos-core/export/t
 import type { Asset, Version } from '@lopsy/photos-core/library/types';
 import type { DevelopEngine } from './develop-engine';
 import { extrasOf, outputSize } from '../library/export-size';
+import { grainSeed } from './finish-controls';
 
 export interface EngineExportRendererOptions {
   readonly loadOriginal: (asset: Asset, signal: AbortSignal) => Promise<Blob>;
@@ -107,6 +108,7 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       await e.ensureFullResolution();
       checkSignal(signal);
     }
+    e.setGrainSeed(grainSeed(asset.id));
     return e;
   };
 

@@ -14,6 +14,7 @@ use lopsy_core::raf::{self, RafBand, RafRenderParams};
 pub struct RafPrepared {
     meta_json: String,
     params_json: String,
+    params: RafRenderParams,
     mosaic: Vec<f32>,
 }
 
@@ -31,6 +32,19 @@ impl RafPrepared {
     #[wasm_bindgen(getter, js_name = "paramsJson")]
     pub fn params_json(&self) -> String {
         self.params_json.clone()
+    }
+
+    /// `rafRenderBinnedLinear` of the mosaic this still holds, without
+    /// copying it out and back in: call it before `takeMosaic`. On a 40 MP
+    /// frame that saves two 160 MB copies on the way to the first view.
+    #[wasm_bindgen(js_name = "binnedLinear")]
+    pub fn binned_linear(&self, min_long_edge: u32) -> Result<RafRenderedBand, JsError> {
+        if self.mosaic.is_empty() {
+            return Err(JsError::new("The mosaic was already taken; call binnedLinear before takeMosaic"));
+        }
+        let (width, height, pixels) = raf::develop::render_binned_linear_for(&self.mosaic, &self.params, min_long_edge)
+            .map_err(|e| JsError::new(&e))?;
+        Ok(RafRenderedBand { x: 0, y: 0, width, height, pixels })
     }
 
     /// Moves the mosaic out (`mosaicWidth`×`mosaicHeight` f32, row-major).
@@ -66,7 +80,7 @@ pub fn raf_prepare(data: &[u8]) -> Result<RafPrepared, JsError> {
     let to_json = |e: serde_json::Error| JsError::new(&format!("JSON serialize: {e}"));
     let meta_json = serde_json::to_string(&meta).map_err(to_json)?;
     let params_json = serde_json::to_string(&prep.params).map_err(to_json)?;
-    Ok(RafPrepared { meta_json, params_json, mosaic: prep.mosaic })
+    Ok(RafPrepared { meta_json, params_json, params: prep.params, mosaic: prep.mosaic })
 }
 
 /// Bands for a `height`-row mosaic, flattened as
