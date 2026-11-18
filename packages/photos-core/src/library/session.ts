@@ -21,7 +21,13 @@ import {
 import { isStorageError } from '../storage/errors';
 import { EMPTY_BOOKKEEPING, type LocalStore, type SyncBookkeeping } from './local-store';
 import { MergeStore, type RecipeWrite } from './merge-store';
+import { exportSettingsFromJson, exportSettingsProblem, type ExportSettings } from '../export/types';
+import { BUILT_IN_PREFIX } from './presets';
 import {
+  isRecipeGroupId,
+  pickGroups,
+  sanitizeRecipeValues,
+  type RecipeGroupId,
   DEFAULT_RECIPE,
   recipeHash,
   recipeToPaths,
@@ -47,6 +53,8 @@ import type {
   OpEnvelope,
   OpStep,
   OriginalStatus,
+  PresetId,
+  ExportPresetId,
   PreviewRef,
   SyncStatus,
   VersionId,
@@ -558,6 +566,73 @@ class Session implements PhotosLibrarySession {
     if (facts.renderFileId !== undefined) fields.renderFileId = facts.renderFileId;
     if (Object.keys(fields).length === 0) return;
     this.emit([{ t: 'set', kind: 'asset', id: assetId, fields }]);
+  }
+
+  applyRecipeValues(versionIds: readonly VersionId[], values: Readonly<Record<string, Json>>, label: string): void {
+    const clean = sanitizeRecipeValues(values);
+    const fields: Record<string, Json> = {};
+    for (const [path, value] of Object.entries(clean)) fields[`recipe.${path}`] = value;
+    if (Object.keys(fields).length === 0) return;
+    // History is per version, so each version gets its own step and undoes on its own.
+    for (const id of new Set(versionIds)) {
+      this.emit([{ t: 'set', kind: 'version', id, fields }], { id: newId(this.now()), label });
+    }
+  }
+
+  savePreset(name: string, recipe: Recipe, groups: readonly RecipeGroupId[]): PresetId {
+    const id = newId(this.now());
+    const kept = [...new Set(groups)].filter(isRecipeGroupId);
+    this.emit([
+      {
+        t: 'set',
+        kind: 'preset',
+        id,
+        fields: {
+          name,
+          groups: kept,
+          values: pickGroups(recipe, kept),
+          createdAt: new Date(this.now()).toISOString(),
+          deleted: false,
+        },
+      },
+    ]);
+    return id;
+  }
+
+  renamePreset(presetId: PresetId, name: string): void {
+    if (presetId.startsWith(BUILT_IN_PREFIX)) return;
+    this.emit([{ t: 'set', kind: 'preset', id: presetId, fields: { name } }]);
+  }
+
+  deletePreset(presetId: PresetId): void {
+    if (presetId.startsWith(BUILT_IN_PREFIX)) return;
+    this.emit([{ t: 'set', kind: 'preset', id: presetId, fields: { deleted: true } }]);
+  }
+
+  saveExportPreset(name: string, settings: ExportSettings): ExportPresetId {
+    const problem = exportSettingsProblem(settings);
+    if (problem !== null) throw new Error(problem);
+    const id = newId(this.now());
+    const stored = JSON.parse(JSON.stringify(exportSettingsFromJson(settings))) as Json;
+    this.emit([
+      {
+        t: 'set',
+        kind: 'exportPreset',
+        id,
+        fields: { name, settings: stored, createdAt: new Date(this.now()).toISOString(), deleted: false },
+      },
+    ]);
+    return id;
+  }
+
+  renameExportPreset(presetId: ExportPresetId, name: string): void {
+    if (presetId.startsWith(BUILT_IN_PREFIX)) return;
+    this.emit([{ t: 'set', kind: 'exportPreset', id: presetId, fields: { name } }]);
+  }
+
+  deleteExportPreset(presetId: ExportPresetId): void {
+    if (presetId.startsWith(BUILT_IN_PREFIX)) return;
+    this.emit([{ t: 'set', kind: 'exportPreset', id: presetId, fields: { deleted: true } }]);
   }
 
   setSetting(key: string, value: Json): void {

@@ -41,8 +41,8 @@ test('new version, edit it, copy its edits onto another photo', async ({ page })
   await version.click();
   await page.keyboard.press('Control+Shift+C');
   const dialog = page.getByRole('dialog', { name: /Copy edits from first\.jpg/ });
-  await expect(dialog.getByRole('checkbox', { name: 'Crop and rotation' })).not.toBeChecked();
-  await expect(dialog.getByRole('checkbox', { name: 'Light' })).toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: 'Framing' })).not.toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: 'Tone' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
   await expect(second).toHaveAttribute('data-edited', 'false');
   await second.click();

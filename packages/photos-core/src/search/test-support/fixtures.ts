@@ -62,5 +62,7 @@ export function view(
     versions,
     albums: new Map((extra.albums ?? []).map((al) => [al.id, al])),
     settings: new Map(extra.settings ?? []),
+    presets: new Map(),
+    exportPresets: new Map(),
   };
 }

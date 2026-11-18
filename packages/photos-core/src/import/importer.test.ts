@@ -274,6 +274,26 @@ describe('startImport', () => {
     expect(session.albumMembers).toEqual([{ albumId: 'album-1', assetId: asset?.id }]);
   });
 
+  it('starts new versions from a preset chosen by ID', async () => {
+    const { session, ctx } = await setup();
+    session.addPresetForTest({
+      id: 'p-1',
+      name: 'Bright',
+      groups: ['tone'],
+      values: { 'tone.exposure': 0.5 },
+      createdAt: '',
+      deleted: false,
+    });
+    const saved = await startImport([jpegFile('P.JPG')], ctx({ options: { presetId: 'p-1' } })).finished;
+    const builtIn = await startImport([jpegFile('M.JPG', '2026:01:02 03:04:05')], ctx({ options: { presetId: 'builtin:monochrome' } })).finished;
+    const recipeOf = (r: typeof saved) => {
+      const asset = session.getView().assets.get(r.items[0]?.assetId ?? '');
+      return session.getView().versions.get(asset?.primaryVersionId ?? '')?.recipe;
+    };
+    expect(recipeOf(saved)?.tone.exposure).toBe(0.5);
+    expect(recipeOf(builtIn)?.profile.id).toBe('monochrome');
+  });
+
   describe('RAW+JPEG pairs', () => {
     it("keeps both and pairs the JPEG with the RAW ('both')", async () => {
       const { session, ctx } = await setup();

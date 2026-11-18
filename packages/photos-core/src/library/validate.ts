@@ -23,7 +23,7 @@ export const LIMITS = {
   stringLength: 10_000,
 } as const;
 
-const KINDS: ReadonlySet<string> = new Set<EntityKind>(['asset', 'version', 'album', 'setting']);
+const KINDS: ReadonlySet<string> = new Set<EntityKind>(['asset', 'version', 'album', 'setting', 'preset', 'exportPreset']);
 
 const UNSAFE_SEGMENTS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
 

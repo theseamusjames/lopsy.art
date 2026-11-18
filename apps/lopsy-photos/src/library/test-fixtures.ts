@@ -58,5 +58,7 @@ export function makeView(assets: Asset[], albums: Album[] = [], versions: Versio
     versions: versionMap,
     albums: new Map(albums.map((a) => [a.id, a])),
     settings: new Map(),
+    presets: new Map(),
+    exportPresets: new Map(),
   };
 }

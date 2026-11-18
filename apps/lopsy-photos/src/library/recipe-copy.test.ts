@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
 import type { Json, LibrarySession } from '@lopsy/photos-core/library/types';
-import { DEFAULT_COPY_GROUP_IDS, pasteLabel, pasteRecipeValues, pickRecipeValues } from './recipe-copy';
+import { asGroupIds, DEFAULT_COPY_GROUP_IDS, pasteLabel, pasteRecipeValues, pickRecipeValues } from './recipe-copy';
 
 const recipe = {
   ...DEFAULT_RECIPE,
   tone: { ...DEFAULT_RECIPE.tone, exposure: 0.7 },
-  framing: { rotate: 90 as const, flipH: false, crop: { x: 0.1, y: 0.1, width: 0.5, height: 0.5 } },
+  framing: { ...DEFAULT_RECIPE.framing, rotate: 90 as const, crop: { x: 0.1, y: 0.1, width: 0.5, height: 0.5 } },
 };
 
 describe('copying edits', () => {
@@ -26,21 +26,18 @@ describe('copying edits', () => {
 
   it('names the paste', () => {
     expect(pasteLabel({ values: {}, groupIds: DEFAULT_COPY_GROUP_IDS, sourceName: 'a' })).toBe('Paste edits');
-    expect(pasteLabel({ values: {}, groupIds: ['tone', 'framing'], sourceName: 'a' })).toBe('Paste light, crop and rotation');
+    expect(pasteLabel({ values: {}, groupIds: ['tone', 'framing'], sourceName: 'a' })).toBe('Paste tone, framing');
+    expect(asGroupIds(['tone', 'nonsense', 'framing'])).toEqual(['tone', 'framing']);
   });
 
-  it('pastes through applyRecipeValues when the session has it, else per version', () => {
+  it('pastes as one applyRecipeValues call', () => {
     const calls: string[] = [];
     const values: Record<string, Json> = { 'tone.exposure': 0.7 };
-    const copied = { values, groupIds: ['tone'], sourceName: 'a' };
-    const plain = { editRecipe: (id: string) => calls.push(`edit ${id}`) } as unknown as LibrarySession;
-    pasteRecipeValues(plain, ['v1', 'v2'], copied);
-    expect(calls).toEqual(['edit v1', 'edit v2']);
-    const batched = {
-      editRecipe: () => calls.push('wrong'),
-      applyRecipeValues: (ids: string[]) => calls.push(`batch ${ids.join(',')}`),
+    const session = {
+      applyRecipeValues: (ids: string[], _v: unknown, label: string) => calls.push(`${ids.join(',')} ${label}`),
     } as unknown as LibrarySession;
-    pasteRecipeValues(batched, ['v1', 'v2'], copied);
-    expect(calls.at(-1)).toBe('batch v1,v2');
+    pasteRecipeValues(session, ['v1', 'v2'], { values, groupIds: ['tone'], sourceName: 'a' });
+    pasteRecipeValues(session, [], { values, groupIds: ['tone'], sourceName: 'a' });
+    expect(calls).toEqual(['v1,v2 Paste tone']);
   });
 });

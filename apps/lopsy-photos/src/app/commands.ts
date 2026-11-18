@@ -8,7 +8,7 @@ import { itemAssets, itemVersionId, nextVersionName, parseItem, versionItemId, v
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
 import { showToast } from './toasts';
-import { pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
+import { asGroupIds, pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
 import { EMPTY_SELECTION, moveFocus, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
 
 /** The tiles a command acts on: in Single, Cull and Compare the one in focus, in the grid the selection. */
@@ -54,7 +54,8 @@ export function copySource(): { assetId: AssetId; versionId: VersionId; name: st
   return { assetId, versionId, name: asset.fileName };
 }
 
-export function copyEdits(groupIds: readonly string[]): void {
+export function copyEdits(chosen: readonly string[]): void {
+  const groupIds = asGroupIds(chosen);
   const source = copySource();
   const version = source ? session().getView().versions.get(source.versionId) : undefined;
   if (!source || !version) return;
