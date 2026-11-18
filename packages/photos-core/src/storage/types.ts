@@ -58,6 +58,14 @@ export interface WriteOptions {
   /** Called as content is sent. Totals are in bytes. */
   readonly onProgress?: (sentBytes: number, totalBytes: number) => void;
   readonly signal?: AbortSignal;
+  /**
+   * Names this upload so an adapter that can resume uploads (Drive, with an
+   * upload session store) continues it after a reload: a later call with
+   * the same key and the same content size picks up where this one stopped.
+   * Use a key that is unique to the content, e.g. `${assetId}:original`.
+   * Adapters that cannot resume ignore it.
+   */
+  readonly resumeKey?: string;
 }
 
 export interface ReadOptions {

@@ -134,10 +134,13 @@ export class GoogleTokenSource implements TokenSource {
 
   private async ensureClient(): Promise<TokenClient> {
     if (this.client) return this.client;
-    try {
-      await loadScript(GIS_SCRIPT_URL);
-    } catch (error) {
-      throw new StorageError('network', 'Could not load Google sign-in', { cause: error });
+    // Already present when the page loaded GIS itself, or when an e2e test installed a stub.
+    if (!isOauth2(readGlobal('google.accounts.oauth2'))) {
+      try {
+        await loadScript(GIS_SCRIPT_URL);
+      } catch (error) {
+        throw new StorageError('network', 'Could not load Google sign-in', { cause: error });
+      }
     }
     const oauth2 = readGlobal('google.accounts.oauth2');
     if (!isOauth2(oauth2)) throw new StorageError('unknown', 'Google sign-in did not load');

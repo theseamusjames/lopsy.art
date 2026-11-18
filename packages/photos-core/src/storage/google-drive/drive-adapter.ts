@@ -11,7 +11,7 @@
  */
 
 import { isStorageError, StorageError, type StorageErrorCode } from '../errors';
-import { abortableDelay, abortedError, realSleep, throwIfAborted } from '../signals';
+import { abortableDelay, abortedError, raceAbort, realSleep, throwIfAborted } from '../signals';
 import type {
   ChangePage,
   FileId,
@@ -24,6 +24,7 @@ import type {
   WriteOptions,
 } from '../types';
 import type { TokenSource } from '../../auth/types';
+import type { UploadSessionRecord, UploadSessionStore } from './upload-sessions';
 
 export const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 const FILE_FIELDS = 'id,name,parents,mimeType,size,modifiedTime,sha256Checksum,headRevisionId,version,appProperties,trashed';
@@ -31,6 +32,8 @@ const KIB = 1024;
 const MIB = 1024 * KIB;
 /** Drive requires resumable chunks in multiples of 256 KiB (except the last). */
 const CHUNK_GRANULARITY = 256 * KIB;
+/** IDs fetched per files.generateIds call. */
+const ID_BATCH = 100;
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
 
 export type FetchFunction = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -54,6 +57,8 @@ export interface GoogleDriveAdapterOptions {
   /** Content this size or larger is uploaded resumably. Default 5 MiB. */
   readonly resumableThreshold?: number;
   readonly origin?: string;
+  /** Keeps resumable sessions across reloads for writes that pass WriteOptions.resumeKey. */
+  readonly uploadSessions?: UploadSessionStore;
 }
 
 /** A StorageError that also carries the server's Retry-After, when it sent one. */
@@ -93,6 +98,9 @@ export class GoogleDriveAdapter implements StorageAdapter {
   private readonly api: string;
   private readonly upload: string;
   private readonly bucket: TokenBucket;
+  private readonly sessions: UploadSessionStore | null;
+  private readonly idPool: string[] = [];
+  private idRefill: Promise<void> | null = null;
 
   constructor(options: GoogleDriveAdapterOptions) {
     this.label = options.label;
@@ -110,6 +118,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
     const origin = options.origin ?? 'https://www.googleapis.com';
     this.api = `${origin}/drive/v3`;
     this.upload = `${origin}/upload/drive/v3`;
+    this.sessions = options.uploadSessions ?? null;
     this.bucket = new TokenBucket(options.requestsPerSecond ?? 10, this.now, this.sleep);
   }
 
@@ -118,22 +127,28 @@ export class GoogleDriveAdapter implements StorageAdapter {
   }
 
   async createFolder(parentId: FileId, name: string, properties: Readonly<Record<string, string>> = {}): Promise<StoredFile> {
-    const metadata = { name, mimeType: DRIVE_FOLDER_MIME_TYPE, parents: [parentId], appProperties: properties };
-    return toStoredFile(
-      await this.json({
-        method: 'POST',
-        url: this.url('/files', { fields: FILE_FIELDS }),
-        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-        body: JSON.stringify(metadata),
-      }),
+    const id = await this.takeId(undefined);
+    const metadata = { id, name, mimeType: DRIVE_FOLDER_MIME_TYPE, parents: [parentId], appProperties: properties };
+    return this.idempotentCreate(id, undefined, async () =>
+      toStoredFile(
+        await this.json({
+          method: 'POST',
+          url: this.url('/files', { fields: FILE_FIELDS }),
+          headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+          body: JSON.stringify(metadata),
+        }),
+      ),
     );
   }
 
   async createFile(file: NewFile, content: Blob, options: WriteOptions = {}): Promise<StoredFile> {
-    const metadata = { name: file.name, mimeType: file.mimeType, parents: [file.parentId], appProperties: file.properties ?? {} };
     throwIfAborted(options.signal);
+    const resumed = await this.resumeSaved('create', content, options);
+    if (resumed) return resumed;
+    const id = await this.takeId(options.signal);
+    const metadata = { id, name: file.name, mimeType: file.mimeType, parents: [file.parentId], appProperties: file.properties ?? {} };
     if (content.size >= this.resumableThreshold) {
-      return this.resumable('POST', `${this.upload}/files`, metadata, file.mimeType, content, options);
+      return this.resumable('POST', `${this.upload}/files`, 'create', metadata, file.mimeType, content, options);
     }
     const boundary = `lopsy-${Math.floor(this.random() * 1e12).toString(36)}-${this.now().toString(36)}`;
     const body = new Blob([
@@ -143,14 +158,16 @@ export class GoogleDriveAdapter implements StorageAdapter {
       `\r\n--${boundary}--`,
     ]);
     options.onProgress?.(0, content.size);
-    const result = toStoredFile(
-      await this.json({
-        method: 'POST',
-        url: `${this.upload}/files?${query({ uploadType: 'multipart', fields: FILE_FIELDS })}`,
-        headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-        body,
-        ...(options.signal ? { signal: options.signal } : {}),
-      }),
+    const result = await this.idempotentCreate(id, options.signal, async () =>
+      toStoredFile(
+        await this.json({
+          method: 'POST',
+          url: `${this.upload}/files?${query({ uploadType: 'multipart', fields: FILE_FIELDS })}`,
+          headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+          body,
+          ...(options.signal ? { signal: options.signal } : {}),
+        }),
+      ),
     );
     options.onProgress?.(content.size, content.size);
     return result;
@@ -158,10 +175,18 @@ export class GoogleDriveAdapter implements StorageAdapter {
 
   async updateContent(id: FileId, content: Blob, options: WriteOptions = {}): Promise<StoredFile> {
     throwIfAborted(options.signal);
-    const mimeType = content.type === '' ? 'application/octet-stream' : content.type;
+    const resumed = await this.resumeSaved(id, content, options);
+    if (resumed) return resumed;
+    // Drive takes an upload's Content-Type as the file's new mimeType, so send the current one.
+    const current = await this.json({
+      method: 'GET',
+      url: this.url(`/files/${encodeURIComponent(id)}`, { fields: 'mimeType' }),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    const mimeType = isRecord(current) && isString(current.mimeType) ? current.mimeType : 'application/octet-stream';
     const path = `${this.upload}/files/${encodeURIComponent(id)}`;
     if (content.size >= this.resumableThreshold) {
-      return this.resumable('PATCH', path, {}, mimeType, content, options);
+      return this.resumable('PATCH', path, id, {}, mimeType, content, options);
     }
     options.onProgress?.(0, content.size);
     const result = toStoredFile(
@@ -169,7 +194,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
         method: 'PATCH',
         url: `${path}?${query({ uploadType: 'media', fields: FILE_FIELDS })}`,
         headers: { 'Content-Type': mimeType },
-        body: content,
+        body: content.slice(0, content.size, mimeType),
         ...(options.signal ? { signal: options.signal } : {}),
       }),
     );
@@ -321,6 +346,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
   private async resumable(
     method: 'POST' | 'PATCH',
     path: string,
+    target: string,
     metadata: Record<string, unknown>,
     mimeType: string,
     content: Blob,
@@ -345,8 +371,9 @@ export class GoogleDriveAdapter implements StorageAdapter {
         if (!location) throw new StorageError('unknown', 'Drive did not return an upload session');
         return location;
       });
+      await this.saveSession(options.resumeKey, { sessionUri: session, totalBytes: content.size, offset: 0, target });
       try {
-        return await this.sendChunks(session, content, options);
+        return await this.sendChunks(session, target, content, options, 0);
       } catch (error) {
         // A 404 from the session URI means it expired; Drive's guidance is to start over.
         if (restart === 0 && isStorageError(error) && error.code === 'not-found') continue;
@@ -355,12 +382,67 @@ export class GoogleDriveAdapter implements StorageAdapter {
     }
   }
 
-  private async sendChunks(session: string, content: Blob, options: WriteOptions): Promise<StoredFile> {
+  /**
+   * Continues an upload saved under options.resumeKey, if one matches this
+   * target and size and Drive still has it. Null means start a new upload.
+   */
+  private async resumeSaved(target: string, content: Blob, options: WriteOptions): Promise<StoredFile | null> {
+    const key = options.resumeKey;
+    if (!this.sessions || key === undefined || content.size < this.resumableThreshold) return null;
+    const saved = await this.sessions.get(key);
+    if (!saved) return null;
+    if (saved.target !== target || saved.totalBytes !== content.size) {
+      await this.sessions.delete(key);
+      return null;
+    }
+    let status: Response;
+    try {
+      status = await this.querySession(saved.sessionUri, content.size, options.signal);
+    } catch (error) {
+      if (isStorageError(error) && (error.code === 'not-found' || error.code === 'invalid')) {
+        await this.sessions.delete(key);
+        return null;
+      }
+      throw error;
+    }
+    if (status.status !== 308) {
+      await this.sessions.delete(key);
+      const file = toStoredFile(await this.readBody(status, options.signal, (r) => r.json()));
+      options.onProgress?.(content.size, content.size);
+      return file;
+    }
+    return this.sendChunks(saved.sessionUri, target, content, options, receivedBytes(status.headers.get('Range')));
+  }
+
+  private querySession(session: string, total: number, signal: AbortSignal | undefined): Promise<Response> {
+    return this.withRetry(signal, () =>
+      this.attempt({
+        method: 'PUT',
+        url: session,
+        headers: { 'Content-Range': `bytes */${total}` },
+        accept: [308],
+        ...(signal ? { signal } : {}),
+      }),
+    );
+  }
+
+  private async saveSession(key: string | undefined, record: Omit<UploadSessionRecord, 'updatedAt'>): Promise<void> {
+    if (!this.sessions || key === undefined) return;
+    await this.sessions.set(key, { ...record, updatedAt: this.now() });
+  }
+
+  private async sendChunks(
+    session: string,
+    target: string,
+    content: Blob,
+    options: WriteOptions,
+    startOffset: number,
+  ): Promise<StoredFile> {
     const total = content.size;
     const signal = options.signal;
-    let offset = 0;
+    let offset = startOffset;
     let failures = 0;
-    options.onProgress?.(0, total);
+    options.onProgress?.(offset, total);
     for (;;) {
       throwIfAborted(signal);
       const end = Math.min(offset + this.chunkSize, total);
@@ -379,26 +461,63 @@ export class GoogleDriveAdapter implements StorageAdapter {
         failures += 1;
         if (failures >= this.maxAttempts) throw error;
         await abortableDelay(this.sleep, this.backoff(failures - 1, error), signal);
-        response = await this.withRetry(signal, () =>
-          this.attempt({
-            method: 'PUT',
-            url: session,
-            headers: { 'Content-Range': `bytes */${total}` },
-            accept: [308],
-            ...(signal ? { signal } : {}),
-          }),
-        );
+        response = await this.querySession(session, total, signal);
       }
       if (response.status === 308) {
         const received = receivedBytes(response.headers.get('Range'));
-        if (received > offset) failures = 0;
+        if (received > offset) {
+          failures = 0;
+          await this.saveSession(options.resumeKey, { sessionUri: session, totalBytes: total, offset: received, target });
+        }
         offset = received;
         options.onProgress?.(offset, total);
         continue;
       }
       const file = toStoredFile(await this.readBody(response, signal, (r) => r.json()));
+      if (this.sessions && options.resumeKey !== undefined) await this.sessions.delete(options.resumeKey);
       options.onProgress?.(total, total);
       return file;
+    }
+  }
+
+  /** The next pre-generated file ID; Drive hands them out in batches. */
+  private async takeId(signal: AbortSignal | undefined): Promise<string> {
+    for (;;) {
+      const id = this.idPool.pop();
+      if (id !== undefined) return id;
+      if (!this.idRefill) {
+        const refill = this.json({
+          method: 'GET',
+          url: this.url('/files/generateIds', { count: String(ID_BATCH), space: 'drive', type: 'files', fields: 'ids' }),
+        })
+          .then((body) => {
+            if (!isRecord(body) || !Array.isArray(body.ids)) throw unexpected('files.generateIds');
+            this.idPool.push(...body.ids.filter(isString));
+          })
+          .finally(() => {
+            this.idRefill = null;
+          });
+        // Callers that gave up (aborted) no longer await it; keep its failure from going unhandled.
+        refill.catch(() => undefined);
+        this.idRefill = refill;
+      }
+      await raceAbort(this.idRefill, signal);
+    }
+  }
+
+  /**
+   * Runs a create that carries a pre-generated ID. If a retry is told the ID
+   * exists (409), the earlier attempt landed after all: return that file.
+   */
+  private async idempotentCreate(id: string, signal: AbortSignal | undefined, create: () => Promise<StoredFile>): Promise<StoredFile> {
+    try {
+      return await create();
+    } catch (error) {
+      if (!isStorageError(error) || error.status !== 409) throw error;
+      throwIfAborted(signal);
+      const existing = await this.getFile(id);
+      if (!existing) throw error;
+      return existing;
     }
   }
 
