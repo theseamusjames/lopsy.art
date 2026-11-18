@@ -24,6 +24,7 @@ const MAX_TEXT_LENGTH = 1_000_000;
 /** Layer positions may sit off the canvas, but not absurdly far. */
 const MAX_OFFSET = 1_000_000;
 const MAX_LIST_LENGTH = 100_000;
+const MAX_GRADE_RECIPE_JSON = 64 * 1024;
 
 export class ProjectFormatError extends Error {
   constructor(message: string) {
@@ -107,6 +108,9 @@ function checkLayer(value: unknown, i: number, maxSide: number, pixelCount: numb
   }
   checkIndex(value.pixelDataIndex, `${where} pixel data`, pixelCount);
   checkIndex(value.maskDataIndex, `${where} mask data`, maskCount);
+  if (value.gradeRecipe !== undefined && (!isRecord(value.gradeRecipe) || JSON.stringify(value.gradeRecipe).length > MAX_GRADE_RECIPE_JSON)) {
+    fail(`${where} has an invalid grade recipe.`);
+  }
   if (value.pixelFormat !== undefined && value.pixelFormat !== PIXEL_FORMAT_RGBA16_LZ4) {
     fail(`${where} has an unknown pixel format.`);
   }

@@ -30,6 +30,12 @@ export interface RasterLayer extends LayerBase {
   readonly type: 'raster';
   readonly width: number;
   readonly height: number;
+  /**
+   * The Lopsy Photos develop recipe of the last Grade in Lopsy Photos, kept
+   * for provenance only: the grade is baked into the pixels, and a later
+   * grade starts from them with the default recipe.
+   */
+  readonly gradeRecipe?: Readonly<Record<string, unknown>>;
 }
 
 export interface TextLayer extends LayerBase {
