@@ -39,6 +39,7 @@ apps/lopsy-web/e2e/screenshots/raf-import-error.png
 apps/lopsy-web/e2e/screenshots/raf-import.png
 apps/lopsy-web/e2e/screenshots/photos-handoff-*.png
 apps/lopsy-web/e2e/screenshots/photos-grade-*.png
+apps/lopsy-web/e2e/screenshots/*-legacy-v1.png
 # Composition-run outputs (the run log, compositions/LAST_RUN.md, stays tracked)
 apps/lopsy-web/compositions/*.lopsy
 apps/lopsy-web/compositions/*.png
