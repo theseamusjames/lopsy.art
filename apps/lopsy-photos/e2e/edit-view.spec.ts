@@ -56,7 +56,7 @@ test.describe('Edit view on a JPEG', () => {
     await readout.fill('40');
     await readout.press('Enter');
     await expect(readout).toHaveValue('+40');
-    await page.getByRole('button', { name: 'Reset Color' }).click();
+    await page.getByRole('button', { name: 'Reset Color', exact: true }).click();
     await expect(readout).toHaveValue('0');
     expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Vibrance +40', 'Reset Color']);
   });
