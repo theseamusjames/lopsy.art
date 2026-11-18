@@ -34,14 +34,17 @@ export class FakeLibrarySession implements LibrarySession {
   private readonly listeners = new Set<() => void>();
   private nextVersion = 1;
 
-  constructor(adapter: StorageAdapter, folders: { rootId: FileId; originalsId: FileId; previewsId: FileId }) {
+  constructor(
+    adapter: StorageAdapter,
+    folders: { rootId: FileId; originalsId: FileId; previewsId: FileId; exportsId?: FileId },
+  ) {
     this.adapter = adapter;
     this.layout = {
       libraryId: this.libraryId,
       rootId: folders.rootId,
       originalsId: folders.originalsId,
       documentsId: 'unused-documents',
-      exportsId: 'unused-exports',
+      exportsId: folders.exportsId ?? 'unused-exports',
       dataId: 'unused-data',
       journalId: 'unused-journal',
       snapshotsId: 'unused-snapshots',
