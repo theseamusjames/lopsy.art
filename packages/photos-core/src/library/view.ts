@@ -7,18 +7,21 @@
 
 import { RECIPE_PREFIX, type EntityRecord, type MergeStore, type ChangedEntity } from './merge-store';
 import { OverlayMap } from './overlay-map';
-import { recipeFromPaths } from './recipe';
+import { exportSettingsFromJson } from '../export/types';
+import { isRecipeGroupId, recipeFromPaths, sanitizeRecipeValues } from './recipe';
 import type {
   Album,
   Asset,
   CameraInfo,
   ColorLabel,
+  ExportPreset,
   ExposureInfo,
   GpsInfo,
   ImageFormat,
   Json,
   LibraryView,
   OriginalStatus,
+  Preset,
   PreviewRef,
   Rating,
   Version,
@@ -180,10 +183,47 @@ interface MapsView {
   readonly versions: OverlayMap<string, Version>;
   readonly albums: OverlayMap<string, Album>;
   readonly settings: OverlayMap<string, Json>;
+  readonly presets: OverlayMap<string, Preset>;
+  readonly exportPresets: OverlayMap<string, ExportPreset>;
 }
 
 function emptyView(): MapsView {
-  return { assets: OverlayMap.empty(), versions: OverlayMap.empty(), albums: OverlayMap.empty(), settings: OverlayMap.empty() };
+  return {
+    assets: OverlayMap.empty(),
+    versions: OverlayMap.empty(),
+    albums: OverlayMap.empty(),
+    settings: OverlayMap.empty(),
+    presets: OverlayMap.empty(),
+    exportPresets: OverlayMap.empty(),
+  };
+}
+
+export function presetFromRecord(id: string, record: EntityRecord): Preset | null {
+  const name = field(record, 'name');
+  if (typeof name !== 'string') return null;
+  const groups = field(record, 'groups');
+  const values = field(record, 'values');
+  return {
+    id,
+    name,
+    groups: Array.isArray(groups) ? groups.filter(isRecipeGroupId) : [],
+    // Stored values are re-read through the recipe's own validation, as any recipe field is.
+    values: isRecord(values) ? sanitizeRecipeValues(values) : {},
+    createdAt: str(field(record, 'createdAt'), ''),
+    deleted: field(record, 'deleted') === true,
+  };
+}
+
+export function exportPresetFromRecord(id: string, record: EntityRecord): ExportPreset | null {
+  const name = field(record, 'name');
+  if (typeof name !== 'string') return null;
+  return {
+    id,
+    name,
+    settings: exportSettingsFromJson(field(record, 'settings')),
+    createdAt: str(field(record, 'createdAt'), ''),
+    deleted: field(record, 'deleted') === true,
+  };
 }
 
 export const EMPTY_VIEW: LibraryView = emptyView();
@@ -233,7 +273,7 @@ export class ViewCache {
 
   rebuildAll(): void {
     const all: ChangedEntity[] = [];
-    for (const kind of ['asset', 'version', 'album', 'setting'] as const) {
+    for (const kind of ['asset', 'version', 'album', 'setting', 'preset', 'exportPreset'] as const) {
       for (const id of this.store.ids(kind)) all.push({ kind, id });
     }
     this.current = emptyView();
@@ -246,6 +286,8 @@ export class ViewCache {
     const assets = new Changes<Asset>();
     const versions = new Changes<Version>();
     const albums = new Changes<Album>();
+    const presets = new Changes<Preset>();
+    const exportPresets = new Changes<ExportPreset>();
     const settings = new Map<string, Json>();
     const removedSettings: string[] = [];
     for (const { kind, id } of changed) {
@@ -254,6 +296,8 @@ export class ViewCache {
       if (kind === 'asset') assets.put(id, assetFromRecord(id, record));
       else if (kind === 'version') versions.put(id, versionFromRecord(id, record));
       else if (kind === 'album') albums.put(id, albumFromRecord(id, record));
+      else if (kind === 'preset') presets.put(id, presetFromRecord(id, record));
+      else if (kind === 'exportPreset') exportPresets.put(id, exportPresetFromRecord(id, record));
       else {
         const value = settingFromRecord(record);
         if (value === undefined) removedSettings.push(id);
@@ -265,6 +309,8 @@ export class ViewCache {
       versions: this.current.versions.with(versions.set, versions.remove),
       albums: this.current.albums.with(albums.set, albums.remove),
       settings: this.current.settings.with(settings, removedSettings),
+      presets: this.current.presets.with(presets.set, presets.remove),
+      exportPresets: this.current.exportPresets.with(exportPresets.set, exportPresets.remove),
     };
     return true;
   }

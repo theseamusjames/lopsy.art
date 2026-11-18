@@ -101,6 +101,34 @@ pub fn clear_image_color_mixer(engine: &mut EngineInner) {
     engine.needs_recomposite = true;
 }
 
+/// Sharpening and noise reduction: `[amount 0..150, radius 0.5..3 (full-
+/// resolution px), edges 0..100, nrLuminance 0..100, nrColor 0..100,
+/// nrDetail 0..100, pixelScale (working width / full width)]`, clamped.
+/// See `lopsy_core::detail` for where and how they run.
+pub fn set_image_detail(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    engine.detail = Some(lopsy_core::detail::DetailSettings::from_values(values)?);
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+pub fn clear_image_detail(engine: &mut EngineInner) {
+    engine.detail = None;
+    engine.needs_recomposite = true;
+}
+
+/// Large details, small details and haze: `[large, small, haze (each
+/// −100..100), pixelScale]`, clamped.
+pub fn set_image_local_contrast(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    engine.local_contrast = Some(lopsy_core::detail::LocalContrastSettings::from_values(values)?);
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+pub fn clear_image_local_contrast(engine: &mut EngineInner) {
+    engine.local_contrast = None;
+    engine.needs_recomposite = true;
+}
+
 /// Long edge of the downscaled copy the histogram is counted from.
 pub const HISTOGRAM_MAX_EDGE: u32 = 512;
 
