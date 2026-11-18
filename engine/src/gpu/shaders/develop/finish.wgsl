@@ -78,12 +78,27 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     if (grain != 0.0) {
         let y = dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
         let mid = 0.3 + 0.7 * clamp(4.0 * y * (1.0 - y), 0.0, 1.0);
-        let p = position.xy / params.u_grain.w;
+        let scale = params.u_grain.w;
         let cell = 1.0 + 3.0 * params.u_grain.y / 100.0;
-        let coarse = valueNoise(p, cell, params.u_seed);
-        let fine = valueNoise(p, 0.5 * cell, params.u_seed ^ 0x9E3779B9u);
         let r = params.u_grain.z / 100.0;
-        let n = coarse + r * (fine - coarse) - 0.5;
+        var n = 0.0;
+        if (scale >= 1.0) {
+            let p = position.xy / scale;
+            let coarse = valueNoise(p, cell, params.u_seed);
+            let fine = valueNoise(p, 0.5 * cell, params.u_seed ^ 0x9E3779B9u);
+            n = coarse + r * (fine - coarse) - 0.5;
+        } else {
+            // A working image: the full-size grain as a downscale shows it
+            // (lopsy_core::finish::working_octave).
+            let coarseCell = cell * scale;
+            let fineCell = 0.5 * cell * scale;
+            let coarse = valueNoise(position.xy, max(coarseCell, 1.0), params.u_seed) - 0.5;
+            let fine = valueNoise(position.xy, max(fineCell, 1.0), params.u_seed ^ 0x9E3779B9u) - 0.5;
+            // GRAIN_PREVIEW_GAIN in lopsy_core::finish.
+            let coarseAmp = min(1.6 * max(cell, 1.0) * scale, 1.0);
+            let fineAmp = min(1.6 * max(0.5 * cell, 1.0) * scale, 1.0);
+            n = (1.0 - r) * coarseAmp * coarse + r * fineAmp * fine;
+        }
         c = c + vec3<f32>(0.24 * grain / 100.0 * mid * n);
     }
     return vec4<f32>(max(c, vec3<f32>(0.0)), src.a);
