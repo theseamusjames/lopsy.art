@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { VersionId } from '@lopsy/photos-core/library/types';
 import { getBackend } from '../../app/backend-registry';
 import type { ExportFormat } from '../../app/backend';
@@ -41,6 +41,12 @@ export function ExportDialog() {
   const [destination, setDestination] = useState<'library' | 'download'>('library');
   const [name, setName] = useState(defaultName);
   const running = progress !== null && !progress.finished;
+
+  // A finished export from before is not this one; start clean. A running one stays shown.
+  useEffect(() => {
+    const previous = useUi.getState().exportJob;
+    if (previous && previous.getProgress().finished) setExportJob(null);
+  }, [setExportJob]);
   const where = useMemo(() => (session.adapter.kind === 'google-drive' ? 'Google Drive' : 'your library'), [session]);
 
   const close = () => openDialog(null);
@@ -148,6 +154,13 @@ export function ExportDialog() {
                 : `Exporting ${progress.done} of ${progress.total}…`}
               {progress.failures.length > 0 && ` ${progress.failures.length} failed.`}
             </p>
+            {progress.failures.length > 0 && (
+              <ul className={styles.failures} role="alert">
+                {[...new Set(progress.failures.map((f) => f.error))].slice(0, 3).map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>

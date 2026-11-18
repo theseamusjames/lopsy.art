@@ -54,15 +54,40 @@ export interface ExportJob {
   readonly finished: Promise<ExportProgress>;
 }
 
+/** The last storage used, offered again on the start screen. */
+export interface ReconnectOffer {
+  readonly kind: StorageChoice;
+  /** The account email or folder name. */
+  readonly label: string;
+  /** Open it at once without a click (nothing needs the user's permission). */
+  readonly automatic: boolean;
+}
+
+export interface ConnectOptions {
+  /** Reopen the last storage of this kind (the saved folder, the last Google account) instead of asking afresh. */
+  readonly reconnect?: boolean;
+}
+
 export interface PhotosBackend {
   /** The storage choices this browser and build can offer, in display order. */
   listStorageOptions(): readonly StorageChoice[];
 
+  /** What to offer to reopen, from the last visit. */
+  getReconnectOffer(): Promise<ReconnectOffer | null>;
+
   /**
    * Opens (or creates) the library in that storage. May show a sign-in
-   * popup or a folder picker, so call it from a user gesture.
+   * popup, a folder picker or a permission prompt, so call it from a user
+   * gesture. Rejects with an Error whose message the start screen shows;
+   * a cancelled picker rejects with `ConnectCancelled`.
    */
-  connect(kind: StorageChoice): Promise<Connection>;
+  connect(kind: StorageChoice, options?: ConnectOptions): Promise<Connection>;
+
+  /**
+   * Asks the user to sign in again when sync is paused for it (Drive), then
+   * syncs. Call from a click.
+   */
+  reauthorize(session: LibrarySession): Promise<void>;
 
   /** Starts importing files into the library. Each photo appears in the view as soon as it is read. */
   startImport(files: readonly File[], session: LibrarySession, options?: Partial<ImportOptions>): ImportJob;
@@ -81,6 +106,14 @@ export interface PhotosBackend {
 
   /** Closes the session and forgets the sign-in on this device. */
   disconnect(session: LibrarySession): Promise<void>;
+}
+
+/** The user closed the picker or popup; the start screen just stays. */
+export class ConnectCancelled extends Error {
+  constructor() {
+    super('Cancelled');
+    this.name = 'ConnectCancelled';
+  }
 }
 
 /** Choices the browser itself can support, before any backend is asked. */

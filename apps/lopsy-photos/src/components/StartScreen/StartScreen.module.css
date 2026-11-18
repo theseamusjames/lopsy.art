@@ -27,6 +27,15 @@
   margin-bottom: var(--space-2);
 }
 
+.reopen {
+  margin-top: var(--space-8);
+}
+
+.reopen svg {
+  width: 16px;
+  height: 16px;
+}
+
 .question {
   margin: var(--space-8) 0 var(--space-3);
   font-size: var(--font-size-md);

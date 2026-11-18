@@ -21,6 +21,7 @@ export function Header() {
   const focus = useUi((s) => s.selection.focus);
   const status = useSyncStatus();
   const [leaving, setLeaving] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const closePopover = useCallback(() => openDialog(null), [openDialog]);
 
   if (!connection) return null;
@@ -80,6 +81,21 @@ export function Header() {
           )}
         </div>
 
+        {status.state === 'paused' && (
+          <Button
+            variant="primary"
+            disabled={reconnecting}
+            onClick={() => {
+              setReconnecting(true);
+              getBackend()
+                .reauthorize(connection.session)
+                .catch((error: unknown) => console.warn('Reconnecting failed', error))
+                .finally(() => setReconnecting(false));
+            }}
+          >
+            {connection.session.adapter.kind === 'google-drive' ? 'Reconnect Google Drive' : 'Reconnect'}
+          </Button>
+        )}
         <ImportButton />
         <Button
           disabled={exportCount === 0}

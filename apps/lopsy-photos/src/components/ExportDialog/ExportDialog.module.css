@@ -81,6 +81,12 @@
   gap: var(--space-2);
 }
 
+.failures {
+  list-style: none;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+}
+
 .bar {
   height: 4px;
   border-radius: var(--radius-round);

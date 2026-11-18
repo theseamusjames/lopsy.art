@@ -29,6 +29,7 @@ export function importStats(progress: ImportProgress): ImportStats {
         sentBytes += item.byteSize;
         break;
       case 'duplicate':
+      case 'skipped':
         duplicates++;
         sentBytes += item.byteSize;
         break;
