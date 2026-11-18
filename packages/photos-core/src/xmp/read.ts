@@ -18,7 +18,7 @@
 import { DEFAULT_RECIPE, recipeFromPaths, recipeToPaths } from '../library/recipe';
 import type { CropRect, Recipe, RecipeLeaf } from '../library/recipe';
 import type { ColorLabel } from '../library/types';
-import { crsToRecipePaths } from './crs-mapping';
+import { crsToRecipePaths, type KelvinScale } from './crs-mapping';
 import { XML_NAMESPACE, attribute, parseXml, walk } from './xml';
 import type { XmlElement } from './xml';
 
@@ -146,8 +146,11 @@ function readCrop(props: Map<string, Value>): CropRect | null {
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
-/** Reads a sidecar; null when it is not well-formed XMP. */
-export function readXmp(source: string): XmpData | null {
+/**
+ * Reads a sidecar; null when it is not well-formed XMP. `kelvinScale` is
+ * the photo's (crs-mapping.ts), needed to read a RAW sidecar's white balance.
+ */
+export function readXmp(source: string, options: { readonly kelvinScale?: KelvinScale | null } = {}): XmpData | null {
   if (source.length > MAX_XMP_CHARS) return null;
   const root = parseXml(source);
   if (!root) return null;
@@ -183,7 +186,7 @@ export function readXmp(source: string): XmpData | null {
     number: (local) => number(props, NS.crs, local),
     text: (local) => text(props, NS.crs, local),
     value: (local) => props.get(`${NS.crs}|${local}`),
-  });
+  }, options.kelvinScale);
   const orientation = number(props, NS.tiff, 'Orientation');
 
   return {
