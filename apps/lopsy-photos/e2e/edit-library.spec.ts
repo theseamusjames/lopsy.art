@@ -91,6 +91,11 @@ test.describe('History, versions and the filmstrip', () => {
     await waitForReady(page);
     await setValue(page, 'Exposure', '1.5');
     await page.keyboard.press('ControlOrMeta+Shift+c');
+    const dialog = page.getByRole('dialog', { name: 'Copy edits from photo-1.jpg' });
+    await expect(dialog.getByRole('checkbox', { name: 'Framing' })).not.toBeChecked();
+    await expect(dialog.getByRole('checkbox', { name: 'Tone' })).toBeChecked();
+    await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
     await page.getByRole('navigation', { name: 'Filmstrip' }).getByRole('button', { name: 'photo-2.jpg' }).click();
     await waitForReady(page);
     await expect(page.getByLabel('Exposure value', { exact: true })).toHaveValue('0.00');

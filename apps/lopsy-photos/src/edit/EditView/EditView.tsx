@@ -2,7 +2,9 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Point
 import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
-import type { RecipeGroupId } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_COPY_GROUPS, RECIPE_GROUPS, pickGroups, type RecipeGroupId } from '@lopsy/photos-core/library/recipe';
+import type { CopiedEdits } from '../../library/recipe-copy';
+import { CopyEditsDialog } from '../../components/CopyEditsDialog/CopyEditsDialog';
 import { PresetsPanel } from '../PresetsPanel/PresetsPanel';
 import { LeftColumn, type LeftColumnSection } from '../LeftColumn/LeftColumn';
 import { HistoryPanel } from '../HistoryPanel/HistoryPanel';
@@ -76,8 +78,11 @@ export interface EditViewProps {
   /** Save preset…: the current edit's chosen groups (`LibrarySession.savePreset`). */
   readonly onSavePreset?: (name: string, recipe: Recipe, groups: readonly RecipeGroupId[]) => void;
   readonly onDeletePreset?: (presetId: PresetId) => void;
-  /** Copy edits (⌘⇧C): the app asks which groups and keeps them. */
-  readonly onCopyEdits?: (recipe: Recipe) => void;
+  /**
+   * Copy edits (⌘⇧C): the Edit view asks which groups (CopyEditsDialog)
+   * and hands over what to keep, as the library's `CopiedEdits`.
+   */
+  readonly onCopyEdits?: (copied: CopiedEdits) => void;
   /** Paste edits (⌘⇧V) onto this version; the app applies them as one step. Disabled when `canPasteEdits` is false. */
   readonly onPasteEdits?: () => void;
   readonly canPasteEdits?: boolean;
@@ -155,6 +160,7 @@ export function EditView({
   const [isBeforeToggled, setIsBeforeToggled] = useState(false);
   const [isBeforeHeld, setIsBeforeHeld] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [isCopyDialogOpen, setIsCopyDialogOpen] = useState(false);
   const [cropDraft, setCropDraft] = useState<Rect | null>(null);
   const isCropping = cropDraft !== null;
   const isReady = status.kind === 'ready';
@@ -322,8 +328,9 @@ export function EditView({
 
   const handleCopyPaste = (which: 'copyEdits' | 'pasteEdits') => {
     if (!canEdit || isCropping) return;
-    if (which === 'copyEdits') onCopyEdits?.(savedRecipe);
-    else onPasteEdits?.();
+    if (which === 'copyEdits') {
+      if (onCopyEdits) setIsCopyDialogOpen(true);
+    } else onPasteEdits?.();
   };
   const handlers = useRef({ onUndo, onRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste });
   handlers.current = { onUndo, onRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste };
@@ -856,6 +863,19 @@ export function EditView({
           </div>
         </aside>
       </div>
+      {isCopyDialogOpen && onCopyEdits && (
+        <CopyEditsDialog
+          sourceName={asset.fileName}
+          groups={RECIPE_GROUPS.map((g) => ({ id: g.id, label: g.label }))}
+          initial={DEFAULT_COPY_GROUPS}
+          onCopy={(ids) => {
+            setIsCopyDialogOpen(false);
+            const groupIds = RECIPE_GROUPS.map((g) => g.id).filter((id) => ids.includes(id));
+            onCopyEdits({ values: pickGroups(savedRecipe, groupIds), groupIds, sourceName: asset.fileName });
+          }}
+          onClose={() => setIsCopyDialogOpen(false)}
+        />
+      )}
       {filmstrip && <Filmstrip items={filmstrip.items} currentId={filmstrip.currentId} onOpen={filmstrip.onOpen} />}
     </div>
   );

@@ -4,7 +4,7 @@ import type { Asset, Json, Preset, PreviewRef, Version } from '@lopsy/photos-cor
 import { EditView } from '../EditView/EditView';
 import type { FilmstripItem } from '../Filmstrip/Filmstrip';
 import { applyChanges } from '../edit-controls';
-import { pickGroups, recipeToPaths } from '@lopsy/photos-core/library/recipe';
+import { pickGroups } from '@lopsy/photos-core/library/recipe';
 import { BUILT_IN_PRESETS } from '@lopsy/photos-core/library/presets';
 import { formatOf, harnessAsset, harnessVersion } from './harness-asset';
 import { historySteps } from './recipe-history';
@@ -31,15 +31,6 @@ function previewRef(hash: string, blob: Blob): PreviewRef {
   return { fileId: `preview-${hash}-${blob.size}`, recipeHash: hash, width: 0, height: 0 };
 }
 
-/** What Paste edits copies in the harness: everything but the framing, which rarely fits another photo (spec 5.4). */
-function pastedValues(recipe: Recipe): Record<string, Json> {
-  const out: Record<string, Json> = {};
-  for (const [path, value] of Object.entries(recipeToPaths(recipe))) {
-    if (!path.startsWith('framing.') && path !== 'pipeline') out[path] = value as Json;
-  }
-  return out;
-}
-
 const OPENABLE = /\.(raf|dng|jpe?g|png|webp)$/i;
 
 /**
@@ -53,7 +44,7 @@ export function EditHarness() {
   const [thumbnails, setThumbnails] = useState<ReadonlyMap<string, string>>(new Map());
   const [message, setMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [copied, setCopied] = useState<Recipe | null>(null);
+  const [copied, setCopied] = useState<Readonly<Record<string, Json>> | null>(null);
   const [userPresets, setUserPresets] = useState<readonly Preset[]>([]);
   const presets = useMemo(() => [...BUILT_IN_PRESETS, ...userPresets], [userPresets]);
   const counter = useRef(0);
@@ -212,12 +203,12 @@ export function EditHarness() {
           }}
           onRenameVersion={(versionId, name) => dispatch({ kind: 'renameVersion', versionId, name })}
           onDeleteVersion={(versionId) => dispatch({ kind: 'deleteVersion', versionId })}
-          onCopyEdits={(recipe) => {
+          onCopyEdits={(edits) => {
             record.steps.push('Copy edits');
-            setCopied(recipe);
+            setCopied(edits.values);
           }}
           onPasteEdits={() => {
-            if (copied) handleEdit(pastedValues(copied), 'Paste edits');
+            if (copied) handleEdit(copied, 'Paste edits');
           }}
           canPasteEdits={copied !== null}
           presets={presets}
