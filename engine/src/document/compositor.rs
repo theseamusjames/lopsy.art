@@ -473,6 +473,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     apply_color_mixer(engine);
     apply_areas(engine, AreasMode::Apply);
     crate::develop::detail::apply_sharpening_live(engine);
+    apply_finish(engine);
     // The selected area's mask, on screen only: exports composite again.
     apply_areas(engine, AreasMode::Overlay);
     apply_clipping_warning(engine);
@@ -1620,6 +1621,7 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, finish: ExportFini
         apply_color_mixer(engine);
         apply_areas(engine, AreasMode::Apply);
         crate::develop::detail::apply_sharpening(engine);
+        apply_finish(engine);
     }
 
     Ok(())
@@ -1740,6 +1742,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
     apply_color_mixer(engine);
     apply_areas(engine, AreasMode::Apply);
     crate::develop::detail::apply_sharpening(engine);
+    apply_finish(engine);
 
     let is_lab = engine.doc_color_mode == 1;
     engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
@@ -1916,6 +1919,36 @@ fn apply_raw_develop(engine: &EngineInner) {
     let (pass, units) = crate::develop::pass(engine, &program, engine.composite_texture, state);
     let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(units);
+    if !is_drawn {
+        return;
+    }
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+/// The shaped vignette and grain over the composite, last in the develop
+/// chain, when set and active.
+fn apply_finish(engine: &EngineInner) {
+    let Some(s) = engine.finish.filter(lopsy_core::finish::FinishSettings::is_active) else {
+        return;
+    };
+    let program = match engine.shaders.finish() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Finish shader: {e}"));
+            return;
+        }
+    };
+    let params = crate::gpu::params::develop::FinishParams {
+        vignette: [s.vignette, s.size, s.roundness, s.feather],
+        grain: [s.grain, s.grain_size, s.roughness, s.pixel_scale],
+        doc_size: [engine.doc_width as f32, engine.doc_height as f32],
+        seed: s.seed,
+    };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
     if !is_drawn {
         return;
     }

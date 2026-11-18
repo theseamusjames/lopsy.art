@@ -130,3 +130,18 @@ readback_export! {
 pub fn set_image_detail_mask_view(engine: &mut Engine, on: bool) {
     lopsy_engine::commands::develop::set_image_detail_mask_view(&mut engine.inner, on)
 }
+
+/// Shaped vignette and grain, last in the develop chain: 9 floats
+/// `[vignetteAmount −100..100, size 0..100, roundness −100..100,
+///   feather 0..100, grainAmount 0..100, grainSize 0..100,
+///   grainRoughness 0..100, seed (an integer per photo), pixelScale]`.
+/// Replaces the adjustments' vignette: set that one to 0 when using this.
+#[wasm_bindgen(js_name = "setImageFinish")]
+pub fn set_image_finish(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_finish(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clearImageFinish")]
+pub fn clear_image_finish(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_image_finish(&mut engine.inner)
+}

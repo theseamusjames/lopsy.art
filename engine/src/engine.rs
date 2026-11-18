@@ -249,6 +249,9 @@ pub struct EngineInner {
     pub clipping_warning: (bool, bool),
     /// Show the sharpening edge mask in place of the live frame.
     pub detail_mask_view: bool,
+    /// Shaped vignette and grain (`lopsy_core::finish`), last in the develop
+    /// chain. `None` by default.
+    pub finish: Option<lopsy_core::finish::FinishSettings>,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -353,6 +356,7 @@ impl EngineInner {
             area_overlay: -1,
             clipping_warning: (false, false),
             detail_mask_view: false,
+            finish: None,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
@@ -796,6 +800,9 @@ impl EngineInner {
         self.local_contrast = None;
         self.areas = None;
         self.area_overlay = -1;
+        self.finish = None;
+        self.detail_mask_view = false;
+        self.clipping_warning = (false, false);
         crate::commands::adjustment::reset_image_color_grading(&mut self.adjustments);
         self.needs_recomposite = true;
         // Clear text renderer layer state so stale text layouts don't persist

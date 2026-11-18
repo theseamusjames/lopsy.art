@@ -152,6 +152,21 @@ pub fn set_image_area_overlay(engine: &mut EngineInner, index: i32) {
     engine.needs_recomposite = true;
 }
 
+/// The shaped vignette and grain (`lopsy_core::finish`): 9 floats
+/// `[vignetteAmount −100..100, size 0..100, roundness −100..100,
+/// feather 0..100, grainAmount 0..100, grainSize 0..100,
+/// grainRoughness 0..100, seed, pixelScale]`, clamped.
+pub fn set_image_finish(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    engine.finish = Some(lopsy_core::finish::FinishSettings::from_values(values)?);
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+pub fn clear_image_finish(engine: &mut EngineInner) {
+    engine.finish = None;
+    engine.needs_recomposite = true;
+}
+
 /// Show the sharpening edge mask as grey on the live frame (white where it
 /// sharpens fully) while `on`, for Alt-drag on the sharpening sliders. Needs
 /// detail settings; never in exports.

@@ -74,3 +74,13 @@ uniforms! {
         pub highlights: i32,
     }
 }
+
+uniforms! {
+    /// `develop/finish.wgsl`
+    pub struct FinishParams {
+        pub vignette: [f32; 4],
+        pub grain: [f32; 4],
+        pub doc_size: [f32; 2],
+        pub seed: u32,
+    }
+}

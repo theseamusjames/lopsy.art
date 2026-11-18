@@ -158,6 +158,7 @@ pub const RAW_DEVELOP_FRAG: &str = translated!("develop/raw_develop");
 pub const COLOR_MIXER_FRAG: &str = translated!("develop/color_mixer");
 pub const AREAS_FRAG: &str = translated!("develop/areas");
 pub const CLIP_WARNING_FRAG: &str = translated!("develop/clip_warning");
+pub const FINISH_FRAG: &str = translated!("develop/finish");
 pub const BLUR_AXIS_FRAG: &str = translated!("develop/blur_axis");
 pub const NOISE_REDUCE_FRAG: &str = translated!("develop/noise_reduce");
 pub const DETAIL_SHARPEN_FRAG: &str = translated!("develop/detail_sharpen");
@@ -251,6 +252,7 @@ typed_shaders! {
     COLOR_MIXER: params::develop::ColorMixerParams = COLOR_MIXER_FRAG;
     AREAS: params::develop::AreasParams = AREAS_FRAG;
     CLIP_WARNING: params::develop::ClipWarningParams = CLIP_WARNING_FRAG;
+    FINISH: params::develop::FinishParams = FINISH_FRAG;
     BLUR_AXIS: params::develop::BlurAxisParams = BLUR_AXIS_FRAG;
     NOISE_REDUCE: params::develop::NoiseReduceParams = NOISE_REDUCE_FRAG;
     DETAIL_SHARPEN: params::develop::DetailSharpenParams = DETAIL_SHARPEN_FRAG;
@@ -438,6 +440,7 @@ pub struct ShaderPrograms {
     color_mixer: RefCell<Option<Rc<ShaderProgram<params::develop::ColorMixerParams>>>>,
     areas: RefCell<Option<Rc<ShaderProgram<params::develop::AreasParams>>>>,
     clip_warning: RefCell<Option<Rc<ShaderProgram<params::develop::ClipWarningParams>>>>,
+    finish: RefCell<Option<Rc<ShaderProgram<params::develop::FinishParams>>>>,
     blur_axis: RefCell<Option<Rc<ShaderProgram<params::develop::BlurAxisParams>>>>,
     noise_reduce: RefCell<Option<Rc<ShaderProgram<params::develop::NoiseReduceParams>>>>,
     detail_sharpen: RefCell<Option<Rc<ShaderProgram<params::develop::DetailSharpenParams>>>>,
@@ -491,6 +494,11 @@ impl ShaderPrograms {
     /// `develop/clip_warning.wgsl`, compiled the first time it is asked for.
     pub fn clip_warning(&self) -> Result<Rc<ShaderProgram<params::develop::ClipWarningParams>>, String> {
         lazily(&self.clip_warning, || compile(&self.linker, &CLIP_WARNING))
+    }
+
+    /// `develop/finish.wgsl`, compiled the first time it is asked for.
+    pub fn finish(&self) -> Result<Rc<ShaderProgram<params::develop::FinishParams>>, String> {
+        lazily(&self.finish, || compile(&self.linker, &FINISH))
     }
 
     /// `develop/blur_axis.wgsl`, compiled the first time it is asked for.
@@ -621,6 +629,7 @@ impl ShaderPrograms {
             color_mixer: RefCell::new(None),
             areas: RefCell::new(None),
             clip_warning: RefCell::new(None),
+            finish: RefCell::new(None),
             blur_axis: RefCell::new(None),
             noise_reduce: RefCell::new(None),
             detail_sharpen: RefCell::new(None),
