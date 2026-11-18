@@ -83,6 +83,6 @@ export const BUILT_IN_EXPORT_PRESETS: readonly ExportPreset[] = [
 
 /** A built-in or saved preset by ID; null when there is none or it was deleted. */
 export function findPreset(presets: ReadonlyMap<string, Preset>, id: string): Preset | null {
-  const found = BUILT_IN_PRESETS.find((p) => p.id === id) ?? presets.get(id) ?? null;
+  const found = id.startsWith(BUILT_IN_PREFIX) ? (BUILT_IN_PRESETS.find((p) => p.id === id) ?? null) : (presets.get(id) ?? null);
   return found && !found.deleted ? found : null;
 }

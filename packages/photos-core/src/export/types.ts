@@ -38,6 +38,15 @@ export function colorSpacesFor(format: ExportFormat): readonly ExportColorSpace[
   return isSixteenBit(format) ? ['srgb', 'display-p3', 'rec2020'] : ['srgb', 'display-p3'];
 }
 
+/**
+ * Whether an export with these settings carries the photo's GPS location
+ * (spec 6.13 removes it by default). A synced export preset may turn this
+ * on; the UI should say "Location will be kept" whenever it is true.
+ */
+export function exportKeepsLocation(settings: Pick<ExportSettings, 'metadata' | 'removeLocation'>): boolean {
+  return settings.metadata === 'all' && !settings.removeLocation;
+}
+
 /** Why the settings cannot be used, or null when they can. */
 export function exportSettingsProblem(settings: ExportSettings): string | null {
   const space = settings.colorSpace ?? 'srgb';
