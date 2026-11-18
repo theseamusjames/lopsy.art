@@ -25,6 +25,13 @@ export const LIMITS = {
 
 const KINDS: ReadonlySet<string> = new Set<EntityKind>(['asset', 'version', 'album', 'setting']);
 
+const UNSAFE_SEGMENTS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** Field paths become object keys when records are built, so prototype-touching names are refused. */
+export function isSafePath(path: string): boolean {
+  return path.split('.').every((segment) => !UNSAFE_SEGMENTS.has(segment));
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -80,7 +87,7 @@ function validateOp(value: unknown): Op | string {
     if (entries.length === 0 || entries.length > LIMITS.fieldsPerOp) return 'op.fields has a bad size';
     const out: Record<string, Json> = {};
     for (const [path, v] of entries) {
-      if (!isBoundedString(path, LIMITS.fieldPathLength)) return 'op.fields has an invalid path';
+      if (!isBoundedString(path, LIMITS.fieldPathLength) || !isSafePath(path)) return 'op.fields has an invalid path';
       if (!isBoundedJson(v)) return `op.fields.${path} is not bounded JSON`;
       out[path] = v;
     }

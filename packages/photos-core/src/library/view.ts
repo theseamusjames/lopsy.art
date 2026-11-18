@@ -6,6 +6,7 @@
  */
 
 import { RECIPE_PREFIX, type EntityRecord, type MergeStore, type ChangedEntity } from './merge-store';
+import { OverlayMap } from './overlay-map';
 import { recipeFromPaths } from './recipe';
 import type {
   Album,
@@ -168,20 +169,36 @@ export function settingFromRecord(record: EntityRecord): Json | undefined {
   return field(record, 'value');
 }
 
-export const EMPTY_VIEW: LibraryView = {
-  assets: new Map(),
-  versions: new Map(),
-  albums: new Map(),
-  settings: new Map(),
-};
+interface MapsView {
+  readonly assets: OverlayMap<string, Asset>;
+  readonly versions: OverlayMap<string, Version>;
+  readonly albums: OverlayMap<string, Album>;
+  readonly settings: OverlayMap<string, Json>;
+}
+
+function emptyView(): MapsView {
+  return { assets: OverlayMap.empty(), versions: OverlayMap.empty(), albums: OverlayMap.empty(), settings: OverlayMap.empty() };
+}
+
+export const EMPTY_VIEW: LibraryView = emptyView();
+
+class Changes<V> {
+  readonly set = new Map<string, V>();
+  readonly remove: string[] = [];
+  put(id: string, value: V | null): void {
+    if (value === null) this.remove.push(id);
+    else this.set.set(id, value);
+  }
+}
 
 /**
  * Keeps a `LibraryView` in step with a store. Unchanged entities keep their
  * object, unchanged collections keep their map, and the view object itself
- * is replaced only when something in it changed.
+ * is replaced only when something in it changed. Collections are overlay
+ * maps, so one change does not copy the whole library (spec 11).
  */
 export class ViewCache {
-  private current: LibraryView = EMPTY_VIEW;
+  private current: MapsView = emptyView();
   private readonly store: MergeStore;
 
   constructor(store: MergeStore) {
@@ -198,47 +215,36 @@ export class ViewCache {
     for (const kind of ['asset', 'version', 'album', 'setting'] as const) {
       for (const id of this.store.ids(kind)) all.push({ kind, id });
     }
-    this.current = EMPTY_VIEW;
+    this.current = emptyView();
     this.update(all);
   }
 
   /** Returns whether the view changed. */
   update(changed: readonly ChangedEntity[]): boolean {
     if (changed.length === 0) return false;
-    let assets: Map<string, Asset> | null = null;
-    let versions: Map<string, Version> | null = null;
-    let albums: Map<string, Album> | null = null;
-    let settings: Map<string, Json> | null = null;
+    const assets = new Changes<Asset>();
+    const versions = new Changes<Version>();
+    const albums = new Changes<Album>();
+    const settings = new Map<string, Json>();
+    const removedSettings: string[] = [];
     for (const { kind, id } of changed) {
       const record = this.store.get(kind, id);
       if (!record) continue;
-      if (kind === 'asset') {
-        assets ??= new Map(this.current.assets);
-        setOrDelete(assets, id, assetFromRecord(id, record));
-      } else if (kind === 'version') {
-        versions ??= new Map(this.current.versions);
-        setOrDelete(versions, id, versionFromRecord(id, record));
-      } else if (kind === 'album') {
-        albums ??= new Map(this.current.albums);
-        setOrDelete(albums, id, albumFromRecord(id, record));
-      } else {
-        settings ??= new Map(this.current.settings);
+      if (kind === 'asset') assets.put(id, assetFromRecord(id, record));
+      else if (kind === 'version') versions.put(id, versionFromRecord(id, record));
+      else if (kind === 'album') albums.put(id, albumFromRecord(id, record));
+      else {
         const value = settingFromRecord(record);
-        if (value === undefined) settings.delete(id);
+        if (value === undefined) removedSettings.push(id);
         else settings.set(id, value);
       }
     }
     this.current = {
-      assets: assets ?? this.current.assets,
-      versions: versions ?? this.current.versions,
-      albums: albums ?? this.current.albums,
-      settings: settings ?? this.current.settings,
+      assets: this.current.assets.with(assets.set, assets.remove),
+      versions: this.current.versions.with(versions.set, versions.remove),
+      albums: this.current.albums.with(albums.set, albums.remove),
+      settings: this.current.settings.with(settings, removedSettings),
     };
     return true;
   }
-}
-
-function setOrDelete<T>(map: Map<string, T>, id: string, value: T | null): void {
-  if (value === null) map.delete(id);
-  else map.set(id, value);
 }
