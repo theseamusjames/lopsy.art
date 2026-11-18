@@ -5,10 +5,12 @@
  * the full recipe in our namespace, which reads back exactly.
  */
 
-import { DEFAULT_RECIPE, recipeToPaths } from '../library/recipe';
+import { recipeToPaths } from '../library/recipe';
 import type { Recipe } from '../library/recipe';
 import type { Asset, ColorLabel, Version } from '../library/types';
-import { CRS_MAPPING, NS } from './read';
+import { RAW_FORMATS } from '../import/pairs';
+import { recipeToCrs } from './crs-mapping';
+import { NS } from './read';
 
 const LABEL_NAMES: Readonly<Record<ColorLabel, string>> = {
   red: 'Red',
@@ -54,14 +56,8 @@ export function escapeXml(value: string): string {
   return out;
 }
 
-function crsAttributes(recipe: Recipe): string[] {
-  const paths = recipeToPaths(recipe);
-  const defaults = recipeToPaths(DEFAULT_RECIPE);
-  const out: string[] = [];
-  for (const { crs, path } of CRS_MAPPING) {
-    const value = paths[path];
-    if (typeof value === 'number' && value !== defaults[path]) out.push(`crs:${crs}="${value > 0 ? '+' : ''}${value}"`);
-  }
+function crsSettings(recipe: Recipe, isRaw: boolean): { attributes: string[]; elements: string[] } {
+  const { attributes: out, elements } = recipeToCrs(recipe, isRaw);
   const crop = recipe.framing.crop;
   if (crop && recipe.framing.rotate === 0 && !recipe.framing.flipH && !recipe.framing.flipV && recipe.framing.angle === 0) {
     out.push(
@@ -73,9 +69,22 @@ function crsAttributes(recipe: Recipe): string[] {
       `crs:CropAngle="0"`,
     );
   }
-  if (out.length > 0) out.unshift('crs:HasSettings="True"', 'crs:ProcessVersion="11.0"');
-  return out;
+  if (out.length > 0 || elements.length > 0) {
+    out.unshift('crs:HasSettings="True"', 'crs:ProcessVersion="11.0"');
+    // Lightroom fills in its own defaults (sharpening 40, colour noise 25 on RAW) for what is missing: ours are none.
+    const paths = recipeToPaths(recipe);
+    for (const [crs, path] of DETAIL_DEFAULTS) {
+      if (!out.some((a) => a.startsWith(`crs:${crs}=`))) out.push(`crs:${crs}="${String(paths[path])}"`);
+    }
+  }
+  return { attributes: out, elements };
 }
+
+const DETAIL_DEFAULTS: readonly (readonly [string, string])[] = [
+  ['Sharpness', 'sharpness.amount'],
+  ['ColorNoiseReduction', 'noise.color'],
+  ['LuminanceSmoothing', 'noise.luminance'],
+];
 
 function altElement(qname: string, value: string): string {
   return `   <${qname}><rdf:Alt><rdf:li xml:lang="x-default">${escapeXml(value)}</rdf:li></rdf:Alt></${qname}>`;
@@ -84,10 +93,13 @@ function altElement(qname: string, value: string): string {
 /** The sidecar text for `asset`, with `version`'s recipe (the primary version, usually). */
 export function writeXmp(asset: Asset, version: Version | null): string {
   const attributes: string[] = ['rdf:about=""'];
+  const children: string[] = [];
   attributes.push(`xmp:Rating="${asset.setAside ? -1 : asset.rating}"`);
   if (asset.label) attributes.push(`xmp:Label="${LABEL_NAMES[asset.label]}"`);
   if (version) {
-    attributes.push(...crsAttributes(version.recipe));
+    const crs = crsSettings(version.recipe, RAW_FORMATS.has(asset.format));
+    attributes.push(...crs.attributes);
+    children.push(...crs.elements);
     const paths = recipeToPaths(version.recipe);
     // Areas stay in the library: their geometry has no faithful XMP form here.
     for (const key of Object.keys(paths).sort()) {
@@ -95,7 +107,6 @@ export function writeXmp(asset: Asset, version: Version | null): string {
       attributes.push(`lpp:${key}="${escapeXml(JSON.stringify(paths[key]))}"`);
     }
   }
-  const children: string[] = [];
   if (asset.keywords.length > 0) {
     children.push(
       '   <dc:subject><rdf:Bag>',
