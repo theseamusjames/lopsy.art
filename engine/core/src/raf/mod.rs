@@ -327,6 +327,9 @@ pub fn prepare_raf(data: &[u8], opts: RafDecodeOpts) -> Result<RafMosaic, String
 
     let cfa_section = &data[cfa_data_offset..cfa_data_offset + cfa_data_length];
     let cfa_meta = parse_cfa_tiff(cfa_section)?;
+    // The CFA dimensions are untrusted: check them before planes are
+    // allocated from them (u16 raw plane plus f32 mosaic).
+    crate::decode::check_image_size(cfa_meta.width, cfa_meta.height, 6)?;
 
     let raw_w = cfa_meta.width as usize;
     let raw_h = cfa_meta.height as usize;
