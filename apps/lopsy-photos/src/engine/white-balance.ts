@@ -93,3 +93,12 @@ export function kelvinDisplay(scale: KelvinScale): { format: (value: number) => 
     },
   };
 }
+
+/**
+ * Whether White balance must wait before taking input: a RAF's Temperature
+ * is typed in Kelvin, which means nothing until the photo is read and its
+ * Kelvin scale known. Other photos' sliders are relative and never wait.
+ */
+export function isWhiteBalanceWaiting(format: string, isPhotoRead: boolean): boolean {
+  return format === 'raf' && !isPhotoRead;
+}

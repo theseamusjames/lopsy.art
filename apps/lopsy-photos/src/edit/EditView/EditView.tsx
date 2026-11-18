@@ -39,7 +39,7 @@ import { Histogram } from '../Histogram/Histogram';
 import { CropTool } from '../CropTool/CropTool';
 import { WhiteBalanceMenu } from '../WhiteBalanceMenu/WhiteBalanceMenu';
 import { WhiteBalancePicker } from '../WhiteBalancePicker/WhiteBalancePicker';
-import { kelvinDisplay } from '../../engine/white-balance';
+import { isWhiteBalanceWaiting, kelvinDisplay } from '../../engine/white-balance';
 import { AreasPanel } from '../AreasPanel/AreasPanel';
 import { AreaHandles } from '../AreaHandles/AreaHandles';
 import { areaLabel } from '../area-edit';
@@ -252,10 +252,13 @@ export function EditView({
 
   // ---- photo info, histogram, Auto and Profile -----------------------
 
-  const [photoInfo, setPhotoInfo] = useState<PhotoInfo | null>(null);
+  // Read once this photo is ready, and forgotten while another loads, so a
+  // RAW's Kelvin scale is never stood in for by the last photo's answer.
+  const [photoInfoFor, setPhotoInfoFor] = useState<{ readonly assetId: string; readonly info: PhotoInfo } | null>(null);
   useEffect(() => {
-    if (engine && canEdit) setPhotoInfo(engine.photoInfo());
-  }, [engine, canEdit, status.kind]);
+    setPhotoInfoFor(engine && canEdit ? { assetId: asset.id, info: engine.photoInfo() } : null);
+  }, [engine, canEdit, status.kind, asset.id]);
+  const photoInfo = photoInfoFor?.assetId === asset.id ? photoInfoFor.info : null;
 
   const [histogram, setHistogram] = useState<Uint32Array | null>(null);
   useEffect(() => {
@@ -290,9 +293,22 @@ export function EditView({
   const autoWhiteBalance = photoInfo?.autoWhiteBalance ?? null;
   const whiteBalancePresets = useMemo(() => photoInfo?.whiteBalancePresets ?? [], [photoInfo]);
   const kelvinScale = photoInfo?.kelvin ?? null;
+  const temperatureDisplay = useMemo(() => (kelvinScale ? kelvinDisplay(kelvinScale) : null), [kelvinScale]);
   const temperatureDisplays = useMemo(
-    () => (kelvinScale ? { 'whiteBalance.temperature': kelvinDisplay(kelvinScale) } : null),
-    [kelvinScale],
+    () => (temperatureDisplay ? { 'whiteBalance.temperature': temperatureDisplay } : null),
+    [temperatureDisplay],
+  );
+  const isWhiteBalancePending = isWhiteBalanceWaiting(asset.format, photoInfo !== null);
+  // On RAW, Temperature's history step reads in Kelvin, as its readout does.
+  const handleWhiteBalanceCommit = useCallback(
+    (control: ControlDef, value: number) => {
+      if (control.path === 'whiteBalance.temperature' && temperatureDisplay) {
+        commit(sliderChanges(control.path, value), `Temperature ${temperatureDisplay.format(value)}`);
+      } else {
+        handleSliderCommit(control, value);
+      }
+    },
+    [commit, handleSliderCommit, temperatureDisplay],
   );
   const [isPickingWb, setIsPickingWb] = useState(false);
   const handleWhiteBalancePick = useCallback(
@@ -311,17 +327,6 @@ export function EditView({
     },
     [engine, commit],
   );
-  const handleAutoWhiteBalance = useCallback(() => {
-    if (!autoWhiteBalance) return;
-    commit(
-      {
-        'whiteBalance.temperature': autoWhiteBalance.temperature,
-        'whiteBalance.tint': autoWhiteBalance.tint,
-        'whiteBalance.mode': 'custom',
-      },
-      'Auto white balance',
-    );
-  }, [autoWhiteBalance, commit]);
 
   const handleProfile = useCallback(
     (profile: DevelopProfile) => {
@@ -923,34 +928,34 @@ export function EditView({
           )}
           {GROUPS.map((group) => (
             <Fragment key={group.id}>
-            {group.id === 'whiteBalance' && (
-              <WhiteBalanceMenu
-                recipe={shownRecipe}
-                auto={autoWhiteBalance}
-                presets={whiteBalancePresets}
-                isDisabled={!canEdit || isBefore}
-                onCommit={commit}
-                isPicking={isPickingWb}
-                onTogglePicker={() => setIsPickingWb((v) => !v)}
-              />
-            )}
             <ControlGroup
               group={group}
               recipe={shownRecipe}
-              isDisabled={!canEdit || isBefore}
+              isDisabled={!canEdit || isBefore || (group.id === 'whiteBalance' && isWhiteBalancePending)}
+              {...(group.id === 'whiteBalance' && canEdit && isWhiteBalancePending ? { note: 'Reading the camera’s white balance…' } : {})}
               onChange={handleSliderChange}
-              onCommit={handleSliderCommit}
+              onCommit={group.id === 'whiteBalance' ? handleWhiteBalanceCommit : handleSliderCommit}
               onReset={handleGroupReset}
               {...(group.id === 'tone'
                 ? {
                     onAuto: () => void handleAutoTone(),
                     autoTitle: canEdit ? 'Set the tone controls from the histogram' : 'Auto is ready once the photo has loaded',
                   }
-                : group.id === 'whiteBalance' && autoWhiteBalance
-                  ? { onAuto: handleAutoWhiteBalance, autoTitle: canEdit ? 'Neutralise the colour cast' : 'Auto is ready once the photo has loaded' }
-                  : {})}
+                : {})}
               {...(group.id === 'whiteBalance' && temperatureDisplays ? { displays: temperatureDisplays } : {})}
-            />
+            >
+              {group.id === 'whiteBalance' && (
+                <WhiteBalanceMenu
+                  recipe={shownRecipe}
+                  auto={autoWhiteBalance}
+                  presets={whiteBalancePresets}
+                  isDisabled={!canEdit || isBefore || isWhiteBalancePending}
+                  onCommit={commit}
+                  isPicking={isPickingWb}
+                  onTogglePicker={() => setIsPickingWb((v) => !v)}
+                />
+              )}
+            </ControlGroup>
             {group.id === 'tone' && (
               <CurvesGroup recipe={shownRecipe} isDisabled={!canEdit || isBefore} onDraft={setDraft} onCommit={commit} />
             )}

@@ -36,6 +36,7 @@ test.describe('White balance', () => {
     await page.getByRole('button', { name: 'Pick a neutral grey' }).click();
     const picker = page.getByTestId('white-balance-picker');
     await expect(picker).toBeVisible();
+    await expect(page.getByTestId('white-balance-hint')).toHaveText('Click something neutral · Esc to cancel');
     const canvas = await page.getByTestId('edit-canvas').boundingBox();
     if (!canvas) throw new Error('no canvas');
     // The grey block fills the middle of the photo, which sits in the middle of the stage.
@@ -43,6 +44,13 @@ test.describe('White balance', () => {
     await expect(picker).toHaveCount(0);
     await expect.poll(async () => Math.abs(Number((await temperature.inputValue()).replace('−', '-'))), { timeout: 10_000 }).toBeLessThanOrEqual(3);
     expect(await steps(page)).toEqual(['Temperature +40', 'White balance: picked']);
+  });
+
+  test('the mode row and picker sit inside the White balance group, with one Auto', async ({ page }) => {
+    const group = page.getByRole('region', { name: 'White balance' });
+    await expect(group.getByLabel('White balance mode')).toBeVisible();
+    await expect(group.getByRole('button', { name: 'Pick a neutral grey' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Auto White balance' })).toHaveCount(0);
   });
 
   test('Esc leaves the picker without a change', async ({ page }) => {

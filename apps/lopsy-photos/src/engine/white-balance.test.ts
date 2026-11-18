@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { kelvinDisplay, kelvinFor, parseKelvinScale, parsePresets, temperatureForKelvin } from './white-balance';
+import { isWhiteBalanceWaiting, kelvinDisplay, kelvinFor, parseKelvinScale, parsePresets, temperatureForKelvin } from './white-balance';
+
+describe('isWhiteBalanceWaiting', () => {
+  it('holds a RAF until the photo is read, so Kelvin is never taken as units', () => {
+    expect(isWhiteBalanceWaiting('raf', false)).toBe(true);
+    expect(isWhiteBalanceWaiting('raf', true)).toBe(false);
+  });
+
+  it('never holds photos whose sliders are relative', () => {
+    expect(isWhiteBalanceWaiting('jpeg', false)).toBe(false);
+    expect(isWhiteBalanceWaiting('dng', false)).toBe(false);
+  });
+});
 
 describe('white balance presets', () => {
   it('reads the engine list in order, with ids', () => {

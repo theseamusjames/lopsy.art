@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { RotateCcw } from 'lucide-react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import { Slider, type SliderDisplay } from '../../components/Slider/Slider';
@@ -20,9 +21,13 @@ export interface ControlGroupProps {
   readonly autoLabel?: string;
   /** Readouts in other units, by control path (Temperature in Kelvin for RAW). */
   readonly displays?: Readonly<Record<string, SliderDisplay>>;
+  /** Why the controls are disabled, shown under the heading. */
+  readonly note?: string;
+  /** Rows shown under the heading, above the sliders (White balance's mode and picker). */
+  readonly children?: ReactNode;
 }
 
-export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, onReset, onAuto, autoTitle, autoLabel = 'Auto', displays }: ControlGroupProps) {
+export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, onReset, onAuto, autoTitle, autoLabel = 'Auto', displays, note, children }: ControlGroupProps) {
   const isDefault = isGroupDefault(recipe, group);
   return (
     <section className={styles.group} aria-label={group.title}>
@@ -53,6 +58,12 @@ export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, on
           <RotateCcw size={14} aria-hidden />
         </button>
       </header>
+      {note && (
+        <p className={styles.note} role="status">
+          {note}
+        </p>
+      )}
+      {children}
       <div className={styles.controls}>
         {group.controls.map((control) => {
           const range = rangeOf(control.path);
