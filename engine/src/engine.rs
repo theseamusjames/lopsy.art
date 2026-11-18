@@ -232,6 +232,9 @@ pub struct EngineInner {
     /// The RAW develop stage (`develop/`), applied to the composite before
     /// `adjustments`. `None` (the default) leaves the composite untouched.
     pub raw_develop: Option<crate::develop::RawDevelopState>,
+    /// Color by hue (`develop/color_mixer.wgsl`): 24 values, applied after
+    /// `adjustments`. `None` (the default) leaves the composite untouched.
+    pub color_mixer: Option<[f32; lopsy_core::color_mixer::VALUES_LEN]>,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -329,6 +332,7 @@ impl EngineInner {
             layer_transform: Vec::new(),
             adjustments: ImageAdjustmentState::default(),
             raw_develop: None,
+            color_mixer: None,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
@@ -767,6 +771,8 @@ impl EngineInner {
         if let Some(curve) = self.raw_develop.take().and_then(|d| d.curve_texture) {
             self.texture_pool.release(curve);
         }
+        self.color_mixer = None;
+        crate::commands::adjustment::reset_image_color_grading(&mut self.adjustments);
         self.needs_recomposite = true;
         // Clear text renderer layer state so stale text layouts don't persist
         // across document switches.

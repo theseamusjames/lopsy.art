@@ -155,6 +155,7 @@ pub const COLOR_CONVERT_FRAG: &str = translated!("color/color_convert");
 
 // Develop
 pub const RAW_DEVELOP_FRAG: &str = translated!("develop/raw_develop");
+pub const COLOR_MIXER_FRAG: &str = translated!("develop/color_mixer");
 
 /// Declares the typed shaders: each source tagged with the uniform struct
 /// its passes are created with. A test checks every struct against its
@@ -241,6 +242,7 @@ typed_shaders! {
     BOX_BLUR: params::filters::BoxBlurParams = BOX_BLUR_FRAG;
     COLOR_CONVERT: params::color::ColorConvertParams = COLOR_CONVERT_FRAG;
     RAW_DEVELOP: params::develop::RawDevelopParams = RAW_DEVELOP_FRAG;
+    COLOR_MIXER: params::develop::ColorMixerParams = COLOR_MIXER_FRAG;
     GRADIENT_LINEAR: params::gradient::GradientLinearParams = GRADIENT_LINEAR_FRAG;
     GRADIENT_RADIAL: params::gradient::GradientRadialParams = GRADIENT_RADIAL_FRAG;
     SHAPE_FILL: params::shape::ShapeFillParams = SHAPE_FILL_FRAG;
@@ -405,6 +407,7 @@ pub struct ShaderPrograms {
     pub color_convert: ShaderProgram<params::color::ColorConvertParams>,
     // Develop
     pub raw_develop: ShaderProgram<params::develop::RawDevelopParams>,
+    pub color_mixer: ShaderProgram<params::develop::ColorMixerParams>,
     pub mask_luminance: ShaderProgram<()>,
     pub liquify_dab: ShaderProgram<params::filters::LiquifyDabParams>,
     // Text
@@ -541,6 +544,7 @@ impl ShaderPrograms {
             // Color
             color_convert: compile(linker, &COLOR_CONVERT)?,
             raw_develop: compile(linker, &RAW_DEVELOP)?,
+            color_mixer: compile(linker, &COLOR_MIXER)?,
             mask_luminance: compile(linker, &MASK_LUMINANCE)?,
             liquify_dab: compile(linker, &LIQUIFY_DAB)?,
             // Text
