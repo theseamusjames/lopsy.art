@@ -46,6 +46,22 @@ test('This browser: import, rate, edit, reload, delete', async ({ page }) => {
   await expect(tile).toHaveAttribute('data-edited', 'true');
   await expect(tile).toHaveAttribute('data-preview-hash', editedHash);
 
+  // Export the edited one into the library's Exports folder, rendered by the engine.
+  await tile.click();
+  await page.getByRole('button', { name: /^Export 1/ }).click();
+  await page.getByRole('textbox', { name: 'Folder name' }).fill('E2E');
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await expect(page.getByText('Exported 1 photo.')).toBeVisible({ timeout: 120_000 });
+  await page.getByRole('button', { name: 'Done' }).click();
+  const exported = await page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    const dir = await (await (await (await root.getDirectoryHandle('lopsy-photos')).getDirectoryHandle('Lopsy Photos')).getDirectoryHandle('Exports')).getDirectoryHandle('E2E');
+    const names: string[] = [];
+    for await (const name of (dir as unknown as { keys(): AsyncIterable<string> }).keys()) names.push(name);
+    return names;
+  });
+  expect(exported).toEqual([await tile.getAttribute('title')]);
+
   // Delete the other one; it stays gone after a reload.
   const ids = await tiles(page).evaluateAll((els) => els.map((e) => e.getAttribute('data-asset-id') ?? ''));
   const otherId = ids.find((x) => x !== id) ?? '';
