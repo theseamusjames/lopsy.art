@@ -6,6 +6,7 @@ import { datePrefixLabel } from '../../library/finding';
 import { THUMB_SIZE, useUi } from '../../app/store';
 import { currentVersions, newVersion, openCompare, openCull, runCommand } from '../../app/commands';
 import { openInLopsy } from '../../app/lopsy-handoff';
+import { PresetMenu } from '../PresetMenu/PresetMenu';
 import { SORT_LABELS, type SortKey } from '../../library/asset-query';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
@@ -147,6 +148,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           disabled={!copied || (selected === 0 && !single)}
           onClick={() => runCommand('paste-edits', orderedIds)}
         />
+        <PresetMenu disabled={selected === 0 && !single} />
         <IconButton
           label={groupBursts ? 'Show every photo of a burst' : 'Group bursts: shots taken in quick succession show as one'}
           icon={<Layers size={16} />}

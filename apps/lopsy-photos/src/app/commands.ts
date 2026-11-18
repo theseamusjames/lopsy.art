@@ -8,6 +8,7 @@ import { itemAssets, itemVersionId, nextVersionName, parseItem, versionItemId, v
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
 import { showToast } from './toasts';
+import { findPreset } from '@lopsy/photos-core/library/presets';
 import { asGroupIds, pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
 import { EMPTY_SELECTION, moveFocus, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
 
@@ -63,6 +64,16 @@ export function copyEdits(chosen: readonly string[]): void {
   ui.setCopiedEdits({ values: pickRecipeValues(version.recipe, groupIds), groupIds, sourceName: source.name });
   ui.openDialog(null);
   showToast(`Copied edits from ${source.name}. Select photos and paste.`);
+}
+
+/** Applies an edit preset to every selected tile's version, one history step each. */
+export function applyPreset(presetId: string): void {
+  const s = session();
+  const preset = findPreset(s.getView().presets, presetId);
+  const versionIds = currentVersions().map((v) => v.versionId);
+  if (!preset || versionIds.length === 0) return;
+  s.applyRecipeValues(versionIds, preset.values, `Preset: ${preset.name}`);
+  showToast(`Applied “${preset.name}” to ${versionIds.length.toLocaleString()} photo${versionIds.length === 1 ? '' : 's'}.`);
 }
 
 /** Pastes the copied edits onto every selected tile's version. */

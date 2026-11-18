@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { StorageQuota } from '@lopsy/photos-core/storage/types';
 import { getBackend } from '../../app/backend-registry';
-import { useSession } from '../../app/hooks';
+import { usePresets, useSession } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { formatBytes, isPhotoFile, plural, summarizeImport } from '../../import/import-summary';
 import { Button } from '../Button/Button';
@@ -15,6 +15,8 @@ export function ImportSheet() {
   const setPendingImport = useUi((s) => s.setPendingImport);
   const busy = useUi((s) => s.importJob !== null && !s.importJob.getProgress().finished);
   const [pairs, setPairs] = useState<'both' | 'raw-only'>('both');
+  const [presetId, setPresetId] = useState('');
+  const presets = usePresets();
   const [quota, setQuota] = useState<StorageQuota | null>(null);
 
   const summary = useMemo(
@@ -43,7 +45,11 @@ export function ImportSheet() {
 
   const start = () => {
     const photos = files.filter((f) => isPhotoFile(f.name));
-    const job = getBackend().startImport(photos, session, { rawPlusJpeg: pairs, skipDuplicates: true });
+    const job = getBackend().startImport(photos, session, {
+      rawPlusJpeg: pairs,
+      skipDuplicates: true,
+      ...(presetId !== '' ? { presetId } : {}),
+    });
     const ui = useUi.getState();
     ui.setImportJob(job);
     ui.setPendingImport(null);
@@ -98,6 +104,18 @@ export function ImportSheet() {
               </label>
             </fieldset>
           )}
+
+          <label className={styles.preset}>
+            <span className={styles.legend}>Edits to start from</span>
+            <select value={presetId} onChange={(e) => setPresetId(e.target.value)} aria-label="Preset to apply">
+              <option value="">None — as the camera took them</option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {summary.skippedNames.length > 0 && (
             <details className={styles.skipped}>
