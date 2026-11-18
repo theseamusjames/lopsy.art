@@ -10,7 +10,7 @@
 const DELETED: unique symbol = Symbol('deleted');
 type Slot<V> = V | typeof DELETED;
 
-const MIN_FOLD = 256;
+const MIN_FOLD = 64;
 
 export class OverlayMap<K, V> implements ReadonlyMap<K, V> {
   private readonly base: ReadonlyMap<K, V>;
@@ -46,16 +46,22 @@ export class OverlayMap<K, V> implements ReadonlyMap<K, V> {
     if (set.size === 0 && removals.length === 0) return this;
     const overlay = new Map(this.overlay);
     let size = this.size;
+    const present = (key: K) => {
+      const slot = overlay.get(key);
+      if (slot === DELETED) return false;
+      return overlay.has(key) || this.base.has(key);
+    };
     for (const key of removals) {
-      if (!this.has(key) || set.has(key)) continue;
+      if (set.has(key) || !present(key)) continue;
       overlay.set(key, DELETED);
       size -= 1;
     }
     for (const [key, value] of set) {
-      if (!this.has(key)) size += 1;
+      if (!present(key)) size += 1;
       overlay.set(key, value);
     }
-    if (overlay.size > Math.max(MIN_FOLD, this.base.size / 8)) {
+    // Each change copies the overlay and a fold copies the base, so an overlay near sqrt(base) balances the two.
+    if (overlay.size > Math.max(MIN_FOLD, Math.sqrt(this.base.size))) {
       const folded = new Map(this.base);
       for (const [key, slot] of overlay) {
         if (slot === DELETED) folded.delete(key);

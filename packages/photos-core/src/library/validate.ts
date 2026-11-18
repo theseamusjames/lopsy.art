@@ -46,6 +46,10 @@ export function isEntityKind(value: unknown): value is EntityKind {
 
 /** Whether `value` is JSON within the depth, size and string-length caps. */
 export function isBoundedJson(value: unknown): value is Json {
+  // Most values are scalars; they skip the walk.
+  if (value === null || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') return value.length <= LIMITS.stringLength;
   let nodes = 0;
   const walk = (v: unknown, depth: number): boolean => {
     nodes += 1;

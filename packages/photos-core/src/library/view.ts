@@ -18,6 +18,7 @@ import type {
   ImageFormat,
   Json,
   LibraryView,
+  OriginalStatus,
   PreviewRef,
   Rating,
   Version,
@@ -132,7 +133,12 @@ export function assetFromRecord(id: string, record: EntityRecord): Asset | null 
     keywords: members(record, 'keywords'),
     primaryVersionId: str(field(record, 'primaryVersionId'), ''),
     deleted: field(record, 'deleted') === true,
+    originalStatus: originalStatus(field(record, 'originalStatus')),
   };
+}
+
+function originalStatus(value: Json | undefined): OriginalStatus {
+  return value === 'missing' || value === 'trashed' || value === 'changed' ? value : 'ok';
 }
 
 export function recipePathsOf(record: EntityRecord): Record<string, Json> {
@@ -199,6 +205,7 @@ class Changes<V> {
  */
 export class ViewCache {
   private current: MapsView = emptyView();
+  private readonly deferred = new Map<string, ChangedEntity>();
   private readonly store: MergeStore;
 
   constructor(store: MergeStore) {
@@ -207,7 +214,21 @@ export class ViewCache {
   }
 
   get view(): LibraryView {
+    if (this.deferred.size > 0) {
+      const changed = [...this.deferred.values()];
+      this.deferred.clear();
+      this.update(changed);
+    }
     return this.current;
+  }
+
+  /**
+   * Records changes to apply when the view is next read, so a burst of
+   * commands nobody reads in between (an import) rebuilds each entity once.
+   */
+  defer(changed: readonly ChangedEntity[]): boolean {
+    for (const c of changed) this.deferred.set(`${c.kind}/${c.id}`, c);
+    return changed.length > 0;
   }
 
   rebuildAll(): void {

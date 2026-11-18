@@ -364,8 +364,15 @@ function isId(value: unknown, max: number = LIMITS.idLength): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= max;
 }
 
+const checkedPaths = new Set<string>();
+
+/** Paths repeat across every entity, so each distinct one is checked once. */
 function isFieldPath(value: unknown): value is string {
-  return isId(value, LIMITS.fieldPathLength) && isSafePath(value);
+  if (typeof value !== 'string') return false;
+  if (checkedPaths.has(value)) return true;
+  if (!isId(value, LIMITS.fieldPathLength) || !isSafePath(value)) return false;
+  if (checkedPaths.size < 10_000) checkedPaths.add(value);
+  return true;
 }
 
 function parseWrite(hlc: string, opId: string, rawStep: unknown, rawFields: unknown): RecipeWrite {
