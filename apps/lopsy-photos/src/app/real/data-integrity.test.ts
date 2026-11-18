@@ -93,9 +93,11 @@ describe('storeEditPreviews', () => {
 
   it('deletes the old previews once the version points at the new ones', async () => {
     const { adapter, session, versionId, previewId } = await libraryWithPhoto();
-    await storeEditPreviews(session, versionId, previews, null, measure);
+    session.editRecipe(versionId, { 'tone.exposure': 0.5 }, 'Exposure');
+    const recipe = session.getView().versions.get(versionId)?.recipe ?? DEFAULT_RECIPE;
+    await storeEditPreviews(session, versionId, { ...previews, recipeHash: recipeHash(recipe) }, null, measure);
     const version = session.getView().versions.get(versionId);
-    expect(version?.thumb?.recipeHash).toBe('edited-hash');
+    expect(version?.thumb?.recipeHash).toBe(recipeHash(recipe));
     expect(version?.thumb?.fileId).not.toBe(previewId);
     expect(await adapter.getFile(previewId)).toBeNull();
   });
