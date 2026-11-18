@@ -21,3 +21,37 @@ uniforms! {
         pub values: Vec4Array<6>,
     }
 }
+
+uniforms! {
+    /// `develop/blur_axis.wgsl`
+    pub struct BlurAxisParams {
+        pub dir: [f32; 2],
+        pub sigma: f32,
+    }
+}
+
+uniforms! {
+    /// `develop/noise_reduce.wgsl`
+    pub struct NoiseReduceParams {
+        pub luminance: f32,
+        pub color: f32,
+        pub range_sigma: f32,
+    }
+}
+
+uniforms! {
+    /// `develop/detail_sharpen.wgsl`
+    pub struct DetailSharpenParams {
+        pub amount: f32,
+        pub edges: f32,
+    }
+}
+
+uniforms! {
+    /// `develop/local_contrast.wgsl`
+    pub struct LocalContrastParams {
+        pub large_amount: f32,
+        pub small_amount: f32,
+        pub haze_amount: f32,
+    }
+}
