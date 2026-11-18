@@ -1,0 +1,109 @@
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  user-select: none;
+}
+
+.slider[data-disabled] {
+  opacity: 0.5;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.label:hover {
+  color: var(--color-text-primary);
+}
+
+.readout {
+  width: 56px;
+  height: 20px;
+  padding: 0 var(--space-1);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  text-align: right;
+  outline: none;
+}
+
+.readout:hover {
+  border-color: var(--color-border-subtle);
+}
+
+.readout:focus {
+  border-color: var(--color-accent);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+}
+
+.track {
+  position: relative;
+  height: 16px;
+  cursor: ew-resize;
+  touch-action: none;
+  outline: none;
+  border-radius: var(--radius-sm);
+}
+
+.track::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-round);
+}
+
+.track:focus-visible .thumb {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.fill {
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  left: var(--slider-fill-start);
+  right: calc(100% - var(--slider-fill-end));
+  transform: translateY(-50%);
+  background: var(--color-accent);
+  border-radius: var(--radius-round);
+}
+
+.thumb {
+  position: absolute;
+  top: 50%;
+  left: var(--slider-position);
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  background: var(--color-text-primary);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-round);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast);
+}
+
+.track[data-dragging] .thumb,
+.track:focus-visible .thumb {
+  transform: translate(-50%, -50%) scale(1.15);
+}
