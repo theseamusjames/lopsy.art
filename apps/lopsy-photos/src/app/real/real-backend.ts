@@ -57,7 +57,7 @@ import {
   uploadSessionStoreName,
 } from './connection-memory';
 import { ensureReadWrite, loadFolderHandle, pickFolder, saveFolderHandle } from './folder-handle-store';
-import { fromCoreProgress, toExportDestination, toExportSelection, toExportSettings } from './export-mapping';
+import { filesToDownload, fromCoreProgress, toExportDestination, toExportSelection, toExportSettings } from './export-mapping';
 import { getPreviewSource, setPreviewSource } from './preview-source';
 import { storeEditPreviews } from './edit-previews';
 import { guardSession, unguarded } from '../guard-session';
@@ -128,9 +128,8 @@ function today(): string {
 }
 
 /** Hands a finished download export to the browser. */
-function downloadResult(result: ExportResult): void {
-  const file = result.zip ?? result.files[0];
-  if (file) downloadBlob(file.blob, file.name);
+function downloadResult(result: ExportResult, zip: boolean): void {
+  for (const file of filesToDownload(result, zip)) downloadBlob(file.blob, file.name);
 }
 
 function messageOf(error: unknown): string {
@@ -483,7 +482,7 @@ export class RealBackend implements PhotosBackend {
         lastCore = null;
         core = { getProgress: () => result, cancel: () => {} };
         refresh();
-        if (request.destination === 'download') downloadResult(result);
+        if (request.destination === 'download') downloadResult(result, request.extras?.zip ?? true);
         if (request.destination === 'library' && result.folderId !== null) {
           const folderId = result.folderId;
           const webLink = session.adapter.webLink ? await session.adapter.webLink(folderId).catch(() => null) : null;

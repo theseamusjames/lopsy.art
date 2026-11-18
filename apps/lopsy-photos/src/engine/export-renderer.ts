@@ -8,6 +8,7 @@
 import type { ExportRenderer, ExportSettings } from '@lopsy/photos-core/export/types';
 import type { Asset, Version } from '@lopsy/photos-core/library/types';
 import type { DevelopEngine } from './develop-engine';
+import { extrasOf, outputSize } from '../library/export-size';
 
 export interface EngineExportRendererOptions {
   readonly loadOriginal: (asset: Asset, signal: AbortSignal) => Promise<Blob>;
@@ -82,6 +83,9 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     }
     e.setRecipe(version.recipe);
     const space = settings.colorSpace ?? 'srgb';
+    const extras = extrasOf(settings);
+    const image = e.imageSize();
+    const size = image && settings.format !== 'tiff' ? outputSize(image, extras) : null;
     if (space === 'rec2020') throw new Error('Rec. 2020 export needs an engine that encodes it; choose sRGB or Display P3.');
     const blob = await e.exportImage({
       format: settings.format,
@@ -89,6 +93,8 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       // The engine's TIFF is the full image; the dialog says so.
       maxSize: settings.format === 'tiff' ? undefined : (settings.maxLongEdge ?? undefined),
       colorSpace: space,
+      ...(size && image && (size.width !== image.width || size.height !== image.height) ? { size } : {}),
+      ...(settings.format === 'png' ? { pngDepth: extras.pngDepth } : {}),
     });
     checkSignal(signal);
     return blob;

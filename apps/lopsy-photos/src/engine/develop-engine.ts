@@ -102,6 +102,10 @@ export interface ExportOptions {
   readonly maxSize?: number;
   /** sRGB when omitted. The engine knows sRGB and Display P3 only. */
   readonly colorSpace?: 'srgb' | 'display-p3';
+  /** The exact output size (may enlarge); overrides `maxSize`. Ignored for TIFF. */
+  readonly size?: Size;
+  /** PNG only: 16 bits (the engine's PNG, full size only) by default, or 8. */
+  readonly pngDepth?: 8 | 16;
 }
 
 /** What the loaded photo offers the Edit view. */
@@ -872,10 +876,10 @@ class PhotoEngine implements DevelopEngine {
     if (!image || this.isDisposed) throw new Error('No photo is loaded');
     const space = options.colorSpace === 'display-p3' ? DISPLAY_P3 : SRGB;
     if (options.format === 'tiff') return this.encodeTiff16(space);
-    const out = limitSize(image, options.maxSize);
+    const out = options.size ?? limitSize(image, options.maxSize);
     const mime = options.format === 'png' ? PNG_MIME : JPEG_MIME;
     const isFullSize = out.width === image.width && out.height === image.height;
-    if (options.format === 'png' && isFullSize) return this.encodePng16(space);
+    if (options.format === 'png' && isFullSize && options.pngDepth !== 8) return this.encodePng16(space);
     // The drawing buffer is sRGB; Display P3 goes through the engine's P3 PNG instead.
     const drawn = space === SRGB ? this.drawAtSize(out) : null;
     if (drawn) return drawn.convertToBlob({ type: mime, quality: options.quality });
