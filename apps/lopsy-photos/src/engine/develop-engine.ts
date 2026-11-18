@@ -1,8 +1,12 @@
 /**
  * The engine bridge for one photo: the Edit view's canvas, one image
- * layer, and the recipe mapped onto the engine's document adjustments
- * (recipe-to-adjustments.ts). It calls the wasm exports directly, without
- * Lopsy's stores or engine-sync.
+ * layer, and the recipe mapped onto the engine (the RAW develop stage,
+ * the document adjustments, curves, colour, detail, areas, and the
+ * framing as layer operations and document size). It calls the wasm
+ * exports directly, without Lopsy's stores or engine-sync.
+ *
+ * The Edit view edits a working image sized to the view (spec 6.10) and
+ * loads the full size on demand; exports load the full size.
  *
  * Pixels never come into TypeScript. Decoded images go straight to the
  * layer texture (RAF bands from the worker pool, DNG and 16-bit PNG through
@@ -329,7 +333,7 @@ class PhotoEngine implements DevelopEngine {
   private cropOrigin = { x: 0, y: 0 };
   private areasKey: string | null = null;
   private overlayAreaId: string | null = null;
-  /** The working image's width over the full image's: below 1 while a RAW file's first view shows. */
+  /** The working image's width over the full image's: 1 at full resolution. */
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
   private layoutKey: string | null = null;
@@ -633,7 +637,7 @@ class PhotoEngine implements DevelopEngine {
   }
 
   /**
-   * Replaces the first view with the full-size layer, keeping the zoom and
+   * Replaces the working image with the full-size layer, keeping the zoom and
    * pan the user chose in the meantime (scaled to the larger image) and
    * re-applying the framing to the new layer.
    */
@@ -676,7 +680,7 @@ class PhotoEngine implements DevelopEngine {
     return this.layerId;
   }
 
-  /** A layer outside the layer order, filled while the first view shows. */
+  /** A layer outside the layer order, filled while the working image shows. */
   private addHiddenLayer(width: number, height: number): string {
     const id = this.nextLayerId();
     addLayer(this.engine, layerDesc(id, width, height, false));
@@ -909,7 +913,7 @@ class PhotoEngine implements DevelopEngine {
   async readHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed) return null;
     render(this.engine);
-    // WebGL answers at once; a wgpu build parks the read, which this POC does not wait for.
+    // WebGL answers at once; a wgpu build parks the read, which this does not wait for yet.
     const bins: unknown = readDevelopHistogram(this.engine);
     return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
   }

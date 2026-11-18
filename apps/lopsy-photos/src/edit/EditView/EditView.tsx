@@ -31,9 +31,9 @@ import {
   type ControlDef,
   type GroupDef,
 } from '../edit-controls';
-import { EDIT_SHORTCUTS, isPreviewStale, isTypingTarget, neighbourId, shortcutFor } from '../edit-keys';
+import { EDIT_SHORTCUTS, isTypingTarget, neighbourId, shortcutFor } from '../edit-keys';
 import { Modal } from '../../components/Modal/Modal';
-import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
+import type { PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
 import { CropTool } from '../CropTool/CropTool';
@@ -48,6 +48,9 @@ import { effectiveFraming, framingAngle, framingFlipV } from '../../engine/recip
 import { ProfileMenu } from '../ProfileMenu/ProfileMenu';
 import { LoadStatus } from '../LoadStatus/LoadStatus';
 import { usePhotoEngine } from './use-photo-engine';
+import { usePreviews } from './use-previews';
+import { useSplitBefore } from './use-split-before';
+import { usePixelReadout } from './use-pixel-readout';
 import styles from './EditView.module.css';
 
 export interface EditViewProps {
@@ -108,15 +111,8 @@ export interface EditViewProps {
 /** Recipe paths of the controls whose engine passes are costly. */
 const DETAIL_PREFIXES = ['sharpness.', 'noise.', 'localContrast.'];
 
-/** The pixel readout reads the image under the pointer at most this often. */
-const READOUT_MS = 100;
-
-/** How long the edit must stay unchanged before previews are rendered. */
-const SETTLE_MS = 1200;
-const THUMB_SIZE = 512;
 /** How long the edit must rest before the histogram is read again. */
 const HISTOGRAM_DELAY_MS = 200;
-const SCREEN_SIZE = 2048;
 const WHEEL_ZOOM_SPEED = 0.0015;
 
 interface Committed {
@@ -128,13 +124,6 @@ interface Committed {
 function baseName(fileName: string): string {
   const dot = fileName.lastIndexOf('.');
   return dot > 0 ? fileName.slice(0, dot) : fileName;
-}
-
-async function renderPreviews(engine: DevelopEngine, recipe: Recipe) {
-  engine.setRecipe(recipe);
-  const thumb = await engine.renderPreview(THUMB_SIZE);
-  const screen = await engine.renderPreview(SCREEN_SIZE);
-  return { thumb, screen, recipeHash: recipeHash(recipe) };
 }
 
 export function EditView({
@@ -180,9 +169,7 @@ export function EditView({
   const [cropDraft, setCropDraft] = useState<Rect | null>(null);
   const isCropping = cropDraft !== null;
   const isReady = status.kind === 'ready';
-  /** A first view is on screen while the full-size image decodes: edits apply to both. */
-  const isRefining = status.kind === 'loading' && status.progress?.stage === 'refining';
-  const canEdit = isReady || isRefining;
+  const canEdit = isReady;
   const isBefore = isBeforeToggled || isBeforeHeld;
 
   const savedRecipe = committed?.base === version.recipe ? applyChanges(version.recipe, committed.changes) : version.recipe;
@@ -207,51 +194,15 @@ export function EditView({
     engine?.setInteractive(isDraggingCheapControl);
   }, [engine, isDraggingCheapControl]);
 
+  /** What the canvas shows: the edit (with a hovered preset), or Before. */
+  const engineRecipe = useMemo(() => (isBefore ? beforeRecipe(displayedRecipe) : displayedRecipe), [isBefore, displayedRecipe]);
   useEffect(() => {
-    engine?.setRecipe(isBefore ? beforeRecipe(displayedRecipe) : displayedRecipe);
-  }, [engine, displayedRecipe, isBefore]);
+    engine?.setRecipe(engineRecipe);
+  }, [engine, engineRecipe]);
 
   // ---- previews ------------------------------------------------------
 
-  const previewed = useRef<{ thumbHash: string | null; screenHash: string | null }>({
-    thumbHash: version.thumb?.recipeHash ?? null,
-    screenHash: version.screen?.recipeHash ?? null,
-  });
-  useEffect(() => {
-    previewed.current = { thumbHash: version.thumb?.recipeHash ?? null, screenHash: version.screen?.recipeHash ?? null };
-    // Only a switch to another version restarts what the previews are compared with.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version.id]);
-  const onPreviewRenderedRef = useRef(onPreviewRendered);
-  onPreviewRenderedRef.current = onPreviewRendered;
-  const previewJob = useRef<Promise<void> | null>(null);
-
-  const refreshPreviews = useCallback(
-    (recipe: Recipe): Promise<void> => {
-      const callback = onPreviewRenderedRef.current;
-      const hash = recipeHash(recipe);
-      if (!engine || !callback || !isPreviewStale(previewed.current, hash)) return Promise.resolve();
-      const run = async () => {
-        try {
-          const previews = await renderPreviews(engine, recipe);
-          previewed.current = { thumbHash: previews.recipeHash, screenHash: previews.recipeHash };
-          callback(previews);
-        } catch (err) {
-          console.warn('Lopsy Photos: previews could not be rendered', err);
-        }
-      };
-      const job = (previewJob.current ?? Promise.resolve()).then(run);
-      previewJob.current = job;
-      return job;
-    },
-    [engine],
-  );
-
-  useEffect(() => {
-    if (!isReady || draft || isBefore) return;
-    const timer = setTimeout(() => void refreshPreviews(savedRecipe), SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [isReady, draft, isBefore, savedRecipe, refreshPreviews]);
+  const { refreshPreviews } = usePreviews(engine, version, savedRecipe, isReady && !draft && !isBefore, onPreviewRendered);
 
   const handleClose = useCallback(async () => {
     if (isBusy) return;
@@ -323,9 +274,9 @@ export function EditView({
     } catch (err) {
       console.error('Lopsy Photos: Auto tone failed', err);
     } finally {
-      engine.setRecipe(isBefore ? beforeRecipe(shownRecipe) : shownRecipe);
+      engine.setRecipe(engineRecipe);
     }
-  }, [engine, savedRecipe, shownRecipe, isBefore, commit]);
+  }, [engine, savedRecipe, engineRecipe, commit]);
 
   const autoWhiteBalance = photoInfo?.autoWhiteBalance ?? null;
   const handleAutoWhiteBalance = useCallback(() => {
@@ -440,7 +391,6 @@ export function EditView({
 
   // ---- crop ----------------------------------------------------------
 
-
   const startCrop = () => {
     if (!engine) return;
     engine.setCropEditing(true);
@@ -537,41 +487,16 @@ export function EditView({
 
   const [isSplit, setIsSplit] = useState(false);
   const [splitAt, setSplitAt] = useState(0.5);
-  const [beforeSrc, setBeforeSrc] = useState<string | null>(null);
   const isSplitShown = isSplit && canEdit && !isCropping;
   const splitBox = isSplitShown ? boxOf(engine?.imageSize() ?? null) : null;
   const pixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
-  const beforeLongEdge = splitBox ? Math.min(2048, Math.max(64, Math.round(Math.max(splitBox.width, splitBox.height) * pixelRatio))) : 0;
-  // The before render depends only on the framing and the size it is shown at.
-  const beforeKey = splitBox ? `${JSON.stringify(savedRecipe.framing)}@${Math.round(beforeLongEdge / 64)}:${status.kind}` : null;
-  const beforeInputs = useRef({ savedRecipe, shownRecipe, isBefore, beforeLongEdge });
-  beforeInputs.current = { savedRecipe, shownRecipe, isBefore, beforeLongEdge };
-
-  useEffect(() => {
-    if (!engine || !beforeKey) return;
-    let isCancelled = false;
-    let url: string | null = null;
-    const timer = setTimeout(() => {
-      const inputs = beforeInputs.current;
-      engine.setRecipe(beforeRecipe(inputs.savedRecipe));
-      // exportImage draws synchronously before it first awaits, so the
-      // edit is back on the canvas before the browser paints.
-      const rendering = engine.exportImage({ format: 'jpeg', quality: 0.9, maxSize: inputs.beforeLongEdge });
-      engine.setRecipe(inputs.isBefore ? beforeRecipe(inputs.shownRecipe) : inputs.shownRecipe);
-      rendering
-        .then((blob) => {
-          if (isCancelled) return;
-          url = URL.createObjectURL(blob);
-          setBeforeSrc(url);
-        })
-        .catch((err: unknown) => console.warn('Lopsy Photos: the before view could not be rendered', err));
-    }, 200);
-    return () => {
-      isCancelled = true;
-      clearTimeout(timer);
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [engine, beforeKey]);
+  const beforeSrc = useSplitBefore(
+    engine,
+    savedRecipe,
+    engineRecipe,
+    splitBox ? Math.max(splitBox.width, splitBox.height) * pixelRatio : 0,
+    status.kind,
+  );
 
   const panPointer = useRef<{ id: number; x: number; y: number } | null>(null);
 
@@ -584,7 +509,7 @@ export function EditView({
   const handleStagePointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const p = panPointer.current;
     if (!p || p.id !== e.pointerId || !engine) {
-      requestReadout(e.clientX, e.clientY);
+      pixel.onPointerMove(e.clientX, e.clientY);
       return;
     }
     engine.panBy(e.clientX - p.x, e.clientY - p.y);
@@ -593,40 +518,15 @@ export function EditView({
 
   // ---- pixel readout ---------------------------------------------------
 
-  const [readout, setReadout] = useState<readonly [number, number, number] | null>(null);
-  const readoutPointer = useRef<{ x: number; y: number } | null>(null);
-  const readoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sampleUnderPointer = useRef<() => void>(() => undefined);
-  sampleUnderPointer.current = () => {
-    const at = readoutPointer.current;
+  const pixel = usePixelReadout((clientX, clientY) => {
     const stage = stageRef.current;
     const size = engine?.imageSize() ?? null;
     const box = boxOf(size);
-    if (!at || !stage || !engine || !size || !box || !canEdit) {
-      setReadout(null);
-      return;
-    }
+    if (!stage || !engine || !size || !box || !canEdit) return null;
     const rect = stage.getBoundingClientRect();
     const scale = box.width / size.width;
-    setReadout(engine.sampleAt((at.x - rect.left - box.left) / scale, (at.y - rect.top - box.top) / scale));
-  };
-
-  /** At most one 1×1 read every READOUT_MS, of wherever the pointer is by then. */
-  const requestReadout = (clientX: number, clientY: number) => {
-    readoutPointer.current = { x: clientX, y: clientY };
-    if (readoutTimer.current) return;
-    readoutTimer.current = setTimeout(() => {
-      readoutTimer.current = null;
-      sampleUnderPointer.current();
-    }, READOUT_MS);
-  };
-
-  useEffect(
-    () => () => {
-      if (readoutTimer.current) clearTimeout(readoutTimer.current);
-    },
-    [],
-  );
+    return engine.sampleAt((clientX - rect.left - box.left) / scale, (clientY - rect.top - box.top) / scale);
+  });
 
   const handleStagePointerUp = (e: PointerEvent<HTMLDivElement>) => {
     if (panPointer.current?.id === e.pointerId) panPointer.current = null;
@@ -644,23 +544,25 @@ export function EditView({
     } catch (err) {
       console.error('Lopsy Photos: export failed', err);
     } finally {
-      engine.setRecipe(isBefore ? beforeRecipe(shownRecipe) : shownRecipe);
+      engine.setRecipe(engineRecipe);
       setIsBusy(false);
     }
   };
 
+  /** A renderer of `recipe` as a full-size 16-bit PNG, for Edit in Lopsy and Done. */
+  const fullPng16 = (recipe: Recipe) => async (): Promise<ArrayBuffer> => {
+    if (!engine) throw new Error('The editing engine is not running');
+    engine.setRecipe(recipe);
+    try {
+      const png = await engine.exportImage({ format: 'png' });
+      return await png.arrayBuffer();
+    } finally {
+      engine.setRecipe(engineRecipe);
+    }
+  };
+
   const handleEditInLopsy = () => {
-    if (!engine || !onEditInLopsy) return;
-    const recipe = savedRecipe;
-    onEditInLopsy(async () => {
-      engine.setRecipe(recipe);
-      try {
-        const png = await engine.exportImage({ format: 'png' });
-        return await png.arrayBuffer();
-      } finally {
-        engine.setRecipe(isBefore ? beforeRecipe(shownRecipe) : shownRecipe);
-      }
-    });
+    if (engine && onEditInLopsy) onEditInLopsy(fullPng16(savedRecipe));
   };
 
   // ---- left column ---------------------------------------------------
@@ -716,17 +618,7 @@ export function EditView({
   }
 
   const handleDone = () => {
-    if (!engine || !onDone) return;
-    const recipe = savedRecipe;
-    onDone(async () => {
-      engine.setRecipe(recipe);
-      try {
-        const png = await engine.exportImage({ format: 'png' });
-        return await png.arrayBuffer();
-      } finally {
-        engine.setRecipe(isBefore ? beforeRecipe(shownRecipe) : shownRecipe);
-      }
-    }, recipe);
+    if (engine && onDone) onDone(fullPng16(savedRecipe), savedRecipe);
   };
 
   const isAllDefault = recipeHash(beforeRecipe(savedRecipe)) === recipeHash(savedRecipe);
@@ -923,10 +815,7 @@ export function EditView({
           onPointerMove={handleStagePointerMove}
           onPointerUp={handleStagePointerUp}
           onPointerCancel={handleStagePointerUp}
-          onPointerLeave={() => {
-            readoutPointer.current = null;
-            setReadout(null);
-          }}
+          onPointerLeave={pixel.onPointerLeave}
         >
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
           {storedPreviewUrl && !canEdit && status.kind !== 'error' && (
@@ -939,9 +828,9 @@ export function EditView({
           )}
           {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
           {areaHandles}
-          {readout && (
+          {pixel.readout && (
             <span className={styles.pixelReadout} data-testid="pixel-readout" aria-label="Colour under the pointer">
-              R {readout[0]} G {readout[1]} B {readout[2]}
+              R {pixel.readout[0]} G {pixel.readout[1]} B {pixel.readout[2]}
             </span>
           )}
           {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
