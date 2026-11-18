@@ -163,3 +163,34 @@ for (const type of ['image/png', 'image/webp'] as const) {
     expect(screen.spread).toBeGreaterThan(10);
   });
 }
+
+test.describe('Histogram, Auto and Profile on a JPEG', () => {
+  test('the histogram appears and Auto brightens a dark photo as one step', async ({ page }) => {
+    await openHarness(page);
+    await openGeneratedImage(page, 640, 480, 'image/jpeg', ['#0a0c10', '#302418', '#1a1a1a']);
+    await waitForReady(page);
+    await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
+    await expect(page.getByTestId('clip-shadows')).toBeAttached();
+
+    await page.getByRole('button', { name: 'Auto Tone' }).click();
+    await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Auto tone']);
+    const exposure = Number((await page.getByLabel('Exposure value').inputValue()).replace('\u2212', '-'));
+    expect(exposure).toBeGreaterThan(0.5);
+  });
+
+  test('offers Standard and Monochrome, and no Auto white balance', async ({ page }) => {
+    await openHarness(page);
+    await openGeneratedImage(page);
+    await waitForReady(page);
+    const profile = page.getByRole('combobox', { name: 'Profile' });
+    await expect(profile.locator('option')).toHaveText(['Standard', 'Monochrome']);
+    await expect(page.getByRole('button', { name: 'Auto White balance' })).toHaveCount(0);
+
+    await waitForPreview(page, 0);
+    await profile.selectOption('monochrome');
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Profile: Monochrome']);
+    await waitForPreview(page, 1);
+    const mono = await imageStats(page, { kind: 'preview', index: 1, which: 'screen' });
+    expect(Math.abs(mono.red - mono.blue)).toBeLessThan(4);
+  });
+});

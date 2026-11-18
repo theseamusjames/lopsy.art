@@ -12,11 +12,15 @@ import {
   rotateRecipe,
   groupResetChanges,
   sliderChanges,
+  toneChanges,
   type ControlDef,
   type GroupDef,
 } from '../edit-controls';
 import { isPreviewStale, isTypingTarget, shortcutFor } from '../edit-keys';
-import type { DevelopEngine } from '../../engine/develop-engine';
+import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
+import type { DevelopProfile } from '../../engine/profiles';
+import { Histogram } from '../Histogram/Histogram';
+import { ProfileMenu } from '../ProfileMenu/ProfileMenu';
 import { LoadStatus } from '../LoadStatus/LoadStatus';
 import { usePhotoEngine } from './use-photo-engine';
 import styles from './EditView.module.css';
@@ -45,6 +49,8 @@ export interface EditViewProps {
 /** How long the edit must stay unchanged before previews are rendered. */
 const SETTLE_MS = 1200;
 const THUMB_SIZE = 512;
+/** How long the edit must rest before the histogram is read again. */
+const HISTOGRAM_DELAY_MS = 200;
 const SCREEN_SIZE = 2048;
 const WHEEL_ZOOM_SPEED = 0.0015;
 
@@ -179,6 +185,63 @@ export function EditView({
   const handleGroupReset = useCallback(
     (group: GroupDef) => commit(groupResetChanges(savedRecipe, group), `Reset ${group.title}`),
     [commit, savedRecipe],
+  );
+
+  // ---- photo info, histogram, Auto and Profile -----------------------
+
+  const [photoInfo, setPhotoInfo] = useState<PhotoInfo | null>(null);
+  useEffect(() => {
+    if (engine && canEdit) setPhotoInfo(engine.photoInfo());
+  }, [engine, canEdit, status.kind]);
+
+  const [histogram, setHistogram] = useState<Uint32Array | null>(null);
+  useEffect(() => {
+    if (!engine || !canEdit || draft) return;
+    let isCancelled = false;
+    const timer = setTimeout(() => {
+      engine
+        .readHistogram()
+        .then((bins) => {
+          if (!isCancelled && bins) setHistogram(bins);
+        })
+        .catch((err: unknown) => console.warn('Lopsy Photos: the histogram could not be read', err));
+    }, HISTOGRAM_DELAY_MS);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [engine, canEdit, status.kind, shownRecipe, isBefore, draft]);
+
+  const handleAutoTone = useCallback(async () => {
+    if (!engine) return;
+    try {
+      const tone = await engine.autoTone(savedRecipe);
+      commit(toneChanges(savedRecipe, tone), 'Auto tone');
+    } catch (err) {
+      console.error('Lopsy Photos: Auto tone failed', err);
+    } finally {
+      engine.setRecipe(isBefore ? beforeRecipe(shownRecipe) : shownRecipe);
+    }
+  }, [engine, savedRecipe, shownRecipe, isBefore, commit]);
+
+  const autoWhiteBalance = photoInfo?.autoWhiteBalance ?? null;
+  const handleAutoWhiteBalance = useCallback(() => {
+    if (!autoWhiteBalance) return;
+    commit(
+      {
+        'whiteBalance.temperature': autoWhiteBalance.temperature,
+        'whiteBalance.tint': autoWhiteBalance.tint,
+        'whiteBalance.mode': 'custom',
+      },
+      'Auto white balance',
+    );
+  }, [autoWhiteBalance, commit]);
+
+  const handleProfile = useCallback(
+    (profile: DevelopProfile) => {
+      if (profile.id !== savedRecipe.profile.id) commit({ 'profile.id': profile.id }, `Profile: ${profile.name}`);
+    },
+    [commit, savedRecipe.profile.id],
   );
 
   // ---- keyboard ------------------------------------------------------
@@ -398,6 +461,15 @@ export function EditView({
           <LoadStatus status={status} onClose={onClose} />
         </div>
         <aside className={styles.panel} aria-label="Edits">
+          <Histogram bins={histogram} />
+          {photoInfo && (
+            <ProfileMenu
+              profiles={photoInfo.profiles}
+              profileId={shownRecipe.profile.id}
+              isDisabled={!canEdit || isBefore}
+              onSelect={handleProfile}
+            />
+          )}
           {GROUPS.map((group) => (
             <ControlGroup
               key={group.id}
@@ -407,6 +479,11 @@ export function EditView({
               onChange={handleSliderChange}
               onCommit={handleSliderCommit}
               onReset={handleGroupReset}
+              {...(group.id === 'tone'
+                ? { onAuto: () => void handleAutoTone(), autoTitle: 'Set the tone controls from the histogram' }
+                : group.id === 'whiteBalance' && autoWhiteBalance
+                  ? { onAuto: handleAutoWhiteBalance, autoTitle: 'Neutralise the colour cast' }
+                  : {})}
             />
           ))}
           <div className={styles.panelFooter}>

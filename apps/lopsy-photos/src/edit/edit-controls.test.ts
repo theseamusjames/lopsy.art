@@ -11,6 +11,7 @@ import {
   isGroupDefault,
   numberAt,
   sliderChanges,
+  toneChanges,
 } from './edit-controls';
 
 function group(id: string) {
@@ -88,5 +89,13 @@ describe('framing', () => {
   it('flips and drops the crop', () => {
     const cropped: Recipe = { ...DEFAULT_RECIPE, framing: { rotate: 0, flipH: false, crop: { x: 0, y: 0, width: 0.5, height: 0.5 } } };
     expect(flipRecipe(cropped).framing).toEqual({ rotate: 0, flipH: true, crop: null });
+  });
+});
+
+describe('toneChanges', () => {
+  it('lists only the tone values that change', () => {
+    const tone = { ...DEFAULT_RECIPE.tone, exposure: 0.85, contrast: 12 };
+    expect(toneChanges(DEFAULT_RECIPE, tone)).toEqual({ 'tone.exposure': 0.85, 'tone.contrast': 12 });
+    expect(toneChanges(DEFAULT_RECIPE, DEFAULT_RECIPE.tone)).toEqual({});
   });
 });

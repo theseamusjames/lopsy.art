@@ -6,6 +6,7 @@
 
 import { create } from 'zustand';
 import type { PhotosConnection } from '@lopsy/handoff/lopsy';
+import type { CameraSummary } from '@lopsy/handoff/messages';
 
 export type PhotosSaveStatus =
   | { readonly kind: 'idle' }
@@ -19,6 +20,8 @@ export interface PhotosHandoffSession {
   /** The editor document it opened as. Opening or creating another document ends the bar. */
   readonly documentId: string;
   readonly connection: PhotosConnection;
+  /** The photo's camera metadata summary, kept in the `.lopsy` with the source block. */
+  readonly camera?: CameraSummary;
 }
 
 interface PhotosHandoffState {

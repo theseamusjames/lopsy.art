@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseHandoffDocument,
+  parseCameraSummary,
   parseLopsyPing,
   parseLopsyReady,
   parsePhotosPong,
@@ -93,5 +94,15 @@ describe('message validators', () => {
     const base = { protocol: 1, type: 'photos:saved', id: 'i', saveId: 's', ok: true };
     expect(parsePhotosSaved({ ...base, documentId: 'doc-1' })).toEqual({ ...base, documentId: 'doc-1' });
     expect(parsePhotosSaved({ ...base, documentId: 7 })).toBeNull();
+  });
+
+  it('check the camera summary', () => {
+    const camera = { make: 'FUJIFILM', model: 'X-T5', iso: 400, aperture: 2.8, shutter: '1/250', capturedAt: '2026-11-14T16:02:11' };
+    expect(parseCameraSummary({ ...camera, extra: 1 })).toEqual(camera);
+    expect(parseCameraSummary({ iso: 'high' })).toBeNull();
+    expect(parseCameraSummary({ iso: Number.NaN })).toBeNull();
+    const png = { name: 'p', kind: 'png16', bytes: bytes(PNG_BYTES) };
+    expect(parseHandoffDocument({ ...png, camera })?.camera).toEqual(camera);
+    expect(parseHandoffDocument({ ...png, camera: { make: 7 } })).toBeNull();
   });
 });

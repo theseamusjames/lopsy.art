@@ -136,3 +136,13 @@ export function flipRecipe(recipe: Recipe): Recipe {
 export function beforeRecipe(recipe: Recipe): Recipe {
   return { ...DEFAULT_RECIPE, framing: recipe.framing };
 }
+
+/** The tone changes that take `recipe` to `tone`, only for values that differ. */
+export function toneChanges(recipe: Recipe, tone: Recipe['tone']): Record<string, Json> {
+  const changes: Record<string, Json> = {};
+  for (const key of Object.keys(recipe.tone) as (keyof Recipe['tone'])[]) {
+    const value = tone[key];
+    if (Number.isFinite(value) && value !== recipe.tone[key]) changes[`tone.${key}`] = value;
+  }
+  return changes;
+}

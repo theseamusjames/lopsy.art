@@ -17,11 +17,13 @@ import {
   searchWithoutHandoffParam,
   type SavePayload,
 } from '@lopsy/handoff/lopsy';
-import type { HandoffSource } from '@lopsy/handoff/messages';
+import type { CameraSummary, HandoffSource } from '@lopsy/handoff/messages';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { describeError, notifyError, notifyInfo } from '../../app/notifications-store';
-import { pasteOrOpenBlob } from '../../app/paste-or-open';
+import { initWasm, decodeAndUploadImage } from '../../engine-wasm/wasm-bridge';
+import { resetTrackedState } from '../../engine-wasm/engine-sync';
+import { pixelDataManager } from '../../engine/pixel-data-manager';
 import { getEngine } from '../../engine-wasm/engine-state';
 import { renderPng16 } from '../../app/MenuBar/menus/file-menu';
 import { loadProject } from '../project-load';
@@ -39,15 +41,46 @@ async function waitForEngine(maxFrames = 300): Promise<ReturnType<typeof getEngi
 }
 
 /**
- * Opens a 16-bit PNG as a new document through the same path the Open
- * dialog uses, which decodes it in the engine at full precision. That path
- * needs a running engine, and the engine starts with the first document.
+ * Opens a 16-bit PNG as a new document named after the photo, with one
+ * layer of the same name, decoded by the engine at full precision.
+ *
+ * It follows the RAW imports (io/raf.ts, io/dng.ts): a 1x1 document starts
+ * the engine without allocating a full-size placeholder in JS, and the
+ * engine's PNG decoder then uploads straight into that layer's texture.
  */
 async function openPngDocument(bytes: ArrayBuffer, name: string): Promise<void> {
-  const store = useEditorStore.getState();
-  if (!store.documentReady) store.createDocument(1, 1, true);
-  if (!(await waitForEngine())) throw new Error('the engine did not start.');
-  await pasteOrOpenBlob(new Blob([bytes], { type: 'image/png' }), name, true);
+  await initWasm();
+  useEditorStore.getState().createDocument(1, 1, true);
+  const engine = await waitForEngine();
+  if (!engine) throw new Error('the engine did not start.');
+  const layerId = useEditorStore.getState().document.activeLayerId;
+  if (!layerId) throw new Error('the new document has no layer.');
+
+  // Let the render loop register the 1x1 layer before its texture is replaced,
+  // and drop the placeholder pixels so they are never re-uploaded over it.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  pixelDataManager.remove(layerId);
+
+  const size = decodeAndUploadImage(engine, layerId, new Uint8Array(bytes));
+  const width = size[0] ?? 0;
+  const height = size[1] ?? 0;
+  if (width === 0 || height === 0) throw new Error('the photo could not be decoded.');
+
+  useEditorStore.setState((s) => ({
+    document: {
+      ...s.document,
+      name,
+      width,
+      height,
+      layers: s.document.layers.map((l) => (l.id === layerId && l.type === 'raster' ? { ...l, name, width, height } : l)),
+    },
+    undoStack: [],
+    redoStack: [],
+    isDirty: false,
+  }));
+  pixelDataManager.bumpVersion(layerId);
+  resetTrackedState(engine);
+  useEditorStore.getState().fitToView();
 }
 
 /**
@@ -65,17 +98,20 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
   useUIStore.getState().openModal({ kind: 'loading', message: 'Receiving from Lopsy Photos…' });
   try {
     const { document, connection } = await acceptHandoff({ photosUrl: photosUrl(), id });
+    const previousDocumentId = useEditorStore.getState().documentReady ? useEditorStore.getState().document.id : null;
     if (document.kind === 'lopsy') {
       await loadProject(new File([document.bytes], `${document.name}.lopsy`));
     } else {
       await openPngDocument(document.bytes, document.name);
     }
     // loadProject reports its own failures; only a document that opened gets the bar.
-    if (!useEditorStore.getState().documentReady) return;
+    const editor = useEditorStore.getState();
+    if (!editor.documentReady || editor.document.id === previousDocumentId) return;
     usePhotosHandoffStore.getState().start({
       name: document.name,
-      documentId: useEditorStore.getState().document.id,
+      documentId: editor.document.id,
       connection,
+      ...(document.camera ? { camera: document.camera } : {}),
     });
   } catch (err) {
     notifyError(`Couldn't receive the photo from Lopsy Photos: ${describeError(err)}`);
@@ -88,10 +124,10 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
  * The document as Photos stores it: the `.lopsy` (carrying the source block
  * when there is one) and a flattened 16-bit PNG.
  */
-async function buildSavePayload(source?: HandoffSource): Promise<SavePayload> {
+async function buildSavePayload(source?: HandoffSource, camera?: CameraSummary): Promise<SavePayload> {
   const engine = getEngine();
   if (!engine) throw new Error('engine not ready.');
-  const lopsy = await serializeProject(source ? { photos: source } : {});
+  const lopsy = await serializeProject(source ? { photos: camera ? { ...source, camera } : source } : {});
   const render = await (await renderPng16(engine)).arrayBuffer();
   const name = useEditorStore.getState().document.name || 'Untitled';
   return { name, lopsy, render };
@@ -111,7 +147,7 @@ export async function saveDocumentToPhotos(): Promise<void> {
     const outcome = await saveToPhotos({
       photosUrl: photosUrl(),
       connection: session.connection,
-      payload: buildSavePayload(session.connection.source),
+      payload: buildSavePayload(session.connection.source, session.camera),
     });
     if (outcome.ok) {
       useEditorStore.getState().markClean();
