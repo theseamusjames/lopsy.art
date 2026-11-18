@@ -187,6 +187,9 @@ export interface PhotosBackend {
   /** Tombstones the assets and moves their original files to the storage's trash. */
   trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void>;
 
+  /** Undoes trashAssets: the photos and their files come back. */
+  untrashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void>;
+
   /** Renders and writes the versions. */
   exportVersions(session: LibrarySession, request: ExportRequest): ExportJob;
 

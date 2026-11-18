@@ -61,7 +61,7 @@ import { filesToDownload, fromCoreProgress, toExportDestination, toExportSelecti
 import { getPreviewSource, setPreviewSource } from './preview-source';
 import { storeEditPreviews } from './edit-previews';
 import { guardSession, unguarded } from '../guard-session';
-import { trashAssets } from './trash-assets';
+import { trashAssets, untrashAssets } from './trash-assets';
 import { showToast } from '../toasts';
 import { downloadBlob } from '../download';
 import { loadKeepOriginals, saveKeepOriginals } from '../device-settings';
@@ -433,6 +433,10 @@ export class RealBackend implements PhotosBackend {
 
   trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
     return trashAssets(session, assetIds);
+  }
+
+  untrashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {
+    return untrashAssets(session, assetIds);
   }
 
   exportVersions(session: LibrarySession, request: ExportRequest): ExportJob {

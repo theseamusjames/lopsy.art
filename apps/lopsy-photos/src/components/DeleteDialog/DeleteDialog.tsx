@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { getBackend } from '../../app/backend-registry';
-import { useLibraryView, useSession } from '../../app/hooks';
+import { useLibraryView, useOrderedIds, useSession } from '../../app/hooks';
+import { selectAfterRemoval } from '../../app/commands';
+import { showToast } from '../../app/toasts';
+import { selectOne } from '../../library/selection';
 import { useUi } from '../../app/store';
 import { formatBytes, plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
@@ -11,6 +14,7 @@ import styles from './DeleteDialog.module.css';
 export function DeleteDialog() {
   const session = useSession();
   const view = useLibraryView();
+  const orderedIds = useOrderedIds();
   const ids = useUi((s) => s.deleteIds);
   const askDelete = useUi((s) => s.askDelete);
   const [busy, setBusy] = useState(false);
@@ -36,9 +40,21 @@ export function DeleteDialog() {
       const pair = view.assets.get(id)?.pairedWith;
       if (pair) withPairs.add(pair);
     }
+    const removed = [...withPairs];
+    const ordered = orderedIds;
     try {
-      await getBackend().trashAssets(session, [...withPairs]);
+      await getBackend().trashAssets(session, removed);
       askDelete([]);
+      selectAfterRemoval(ordered, removed);
+      showToast(`Moved ${plural(ids.length, 'photo')} to ${where}.`, 10_000, {
+        label: 'Undo',
+        run: () => {
+          void getBackend()
+            .untrashAssets(session, removed)
+            .then(() => useUi.getState().setSelection(selectOne(ids[0] ?? '')))
+            .catch((e: unknown) => showToast(e instanceof Error ? e.message : String(e)));
+        },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);

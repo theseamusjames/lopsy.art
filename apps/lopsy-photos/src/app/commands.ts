@@ -10,7 +10,7 @@ import { useUi, type ViewMode } from './store';
 import { showToast } from './toasts';
 import { findPreset } from '@lopsy/photos-core/library/presets';
 import { asGroupIds, pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
-import { EMPTY_SELECTION, moveFocus, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
+import { EMPTY_SELECTION, moveFocus, nextAfterRemoval, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
 
 /** The tiles a command acts on: in Single, Cull and Compare the one in focus, in the grid the selection. */
 export function currentItems(): ItemId[] {
@@ -33,6 +33,22 @@ export function currentVersions(): { assetId: AssetId; versionId: VersionId }[] 
     if (versionId !== null) out.push({ assetId: parseItem(id).assetId, versionId });
   }
   return out;
+}
+
+/**
+ * Library undo and redo (marks, albums, versions, deletes in the record).
+ * Uses photos-core's `undoLibrary`/`redoLibrary`; until a build has them
+ * the keys say so instead.
+ */
+export function undoLibrary(redo: boolean): void {
+  const s = session();
+  const method: unknown = Reflect.get(s, redo ? 'redoLibrary' : 'undoLibrary');
+  if (typeof method !== 'function') {
+    showToast('Undo in the library is not available in this build yet. Use the Undo on the last message.');
+    return;
+  }
+  const answer: unknown = (method as () => unknown).call(s);
+  if (answer === false) showToast(redo ? 'Nothing to redo.' : 'Nothing to undo.');
 }
 
 /** Opens the Copy edits dialog for the focused photo. */
@@ -171,15 +187,43 @@ export function setRating(rating: Rating, orderedIds: readonly AssetId[], ids = 
   if (mode === 'cull' && selection.focus !== null) advance(orderedIds, selection.focus);
 }
 
+/** Whether photos marked this way leave the list on screen (All photos hides set-aside ones; Set aside shows only them). */
+function leavesCollection(setAside: boolean): boolean {
+  const kind = useUi.getState().collection.kind;
+  return setAside ? kind === 'all' || kind === 'date' : kind === 'set-aside';
+}
+
+/** After photos leave the grid, the next one is selected (or nothing, when none is left). */
+export function selectAfterRemoval(orderedIds: readonly string[], removed: readonly AssetId[]): void {
+  const next = nextAfterRemoval(orderedIds, new Set(removed), (id) => parseItem(id).assetId);
+  useUi.getState().setSelection(next === null ? EMPTY_SELECTION : selectOne(next));
+}
+
 export function toggleSetAside(orderedIds: readonly AssetId[], ids = currentTargets()): void {
   if (ids.length === 0) return;
-  const view = session().getView();
-  const allAside = ids.every((id) => view.assets.get(id)?.setAside === true);
+  const s = session();
+  const view = s.getView();
+  const before = new Map(ids.map((id) => [id, view.assets.get(id)?.setAside === true]));
+  const allAside = [...before.values()].every(Boolean);
+  const setAside = !allAside;
   const { mode, selection } = useUi.getState();
-  // The photo may leave the list it is in, so pick the next one first.
+  // In Single and Cull view marking moves on, as rating does.
   const next = selection.focus !== null && (mode === 'single' || mode === 'cull') ? neighbour(orderedIds, selection.focus) : null;
-  session().setMarks(ids, { setAside: !allAside });
-  if (next !== null) useUi.getState().setSelection(selectOne(next));
+  s.setMarks(ids, { setAside });
+  if (leavesCollection(setAside)) selectAfterRemoval(orderedIds, ids);
+  else if (next !== null) useUi.getState().setSelection(selectOne(next));
+  const words = `${ids.length === 1 ? 'Photo' : `${ids.length.toLocaleString()} photos`} ${setAside ? 'set aside' : 'back from Set aside'}.`;
+  showToast(words, 6000, {
+    label: 'Undo',
+    run: () => {
+      const back = [...before.entries()];
+      const was = back.filter(([, aside]) => aside).map(([id]) => id);
+      const wasNot = back.filter(([, aside]) => !aside).map(([id]) => id);
+      if (was.length > 0) s.setMarks(was, { setAside: true });
+      if (wasNot.length > 0) s.setMarks(wasNot, { setAside: false });
+      useUi.getState().setSelection(selectOne(ids[0] as AssetId));
+    },
+  });
 }
 
 export function setLabel(label: ColorLabel | null, orderedIds: readonly AssetId[], ids = currentTargets()): void {
@@ -303,6 +347,10 @@ export function runCommand(id: CommandId, orderedIds: readonly AssetId[]): void 
       return ui.setSelection(EMPTY_SELECTION);
     case 'delete':
       return askDeleteTargets();
+    case 'undo-library':
+      return undoLibrary(false);
+    case 'redo-library':
+      return undoLibrary(true);
     case 'copy-edits':
       return askCopyEdits();
     case 'paste-edits':
