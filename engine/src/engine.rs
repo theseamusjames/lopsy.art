@@ -229,6 +229,9 @@ pub struct EngineInner {
     /// levels LUTs. Applied on the compositor's final pass, not baked into
     /// pixels.
     pub adjustments: ImageAdjustmentState,
+    /// The RAW develop stage (`develop/`), applied to the composite before
+    /// `adjustments`. `None` (the default) leaves the composite untouched.
+    pub raw_develop: Option<crate::develop::RawDevelopState>,
     /// Mask editing — skip mask clipping, show blue overlay instead.
     pub mask_edit_layer_id: Option<String>,
     /// Magnetic lasso session (doc-sized Sobel edge field; present only
@@ -325,6 +328,7 @@ impl EngineInner {
             liquify_disp_texture: None,
             layer_transform: Vec::new(),
             adjustments: ImageAdjustmentState::default(),
+            raw_develop: None,
             mask_edit_layer_id: None,
             mlasso: MagneticLassoState::default(),
             text_renderer: None,
@@ -760,6 +764,9 @@ impl EngineInner {
             self.texture_pool.release(tex);
         }
         self.adjustments.has_gradient_map = false;
+        if let Some(curve) = self.raw_develop.take().and_then(|d| d.curve_texture) {
+            self.texture_pool.release(curve);
+        }
         self.needs_recomposite = true;
         // Clear text renderer layer state so stale text layouts don't persist
         // across document switches.
