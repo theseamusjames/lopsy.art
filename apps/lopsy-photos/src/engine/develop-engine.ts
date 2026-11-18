@@ -130,6 +130,12 @@ export interface DevelopEngine {
    * view draws the crop over it); otherwise the document is the crop.
    */
   setCropEditing(isEditing: boolean): void;
+  /**
+   * While a slider drags, the costly sharpening, noise reduction and local
+   * contrast passes are left out (spec 6.10, "while dragging"), and come
+   * back when it settles.
+   */
+  setInteractive(isInteractive: boolean): void;
   getView(): View;
   /** Called after every view change (zoom, pan, fit, resize). */
   onViewChange(listener: (view: View) => void): () => void;
@@ -251,6 +257,7 @@ class PhotoEngine implements DevelopEngine {
   /** What Curves, Color by hue and Color Grading last sent. */
   private colorKey: string | null = null;
   private detailKeyApplied: string | null = null;
+  private isInteractive = false;
   /** The working image's width over the full image's: below 1 while a RAW file's first view shows. */
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
@@ -646,14 +653,20 @@ class PhotoEngine implements DevelopEngine {
     this.invalidate();
   }
 
+  setInteractive(isInteractive: boolean): void {
+    if (this.isInteractive === isInteractive) return;
+    this.isInteractive = isInteractive;
+    this.applyDetail();
+  }
+
   private applyDetail(): void {
-    const key = detailKey(this.recipe, this.pixelScale);
+    const key = this.isInteractive ? 'interactive' : detailKey(this.recipe, this.pixelScale);
     if (key === this.detailKeyApplied) return;
     this.detailKeyApplied = key;
-    const detail = detailValues(this.recipe, this.pixelScale);
+    const detail = this.isInteractive ? null : detailValues(this.recipe, this.pixelScale);
     if (detail) setImageDetail(this.engine, detail);
     else clearImageDetail(this.engine);
-    const local = localContrastValues(this.recipe, this.pixelScale);
+    const local = this.isInteractive ? null : localContrastValues(this.recipe, this.pixelScale);
     if (local) setImageLocalContrast(this.engine, local);
     else clearImageLocalContrast(this.engine);
     this.invalidate();

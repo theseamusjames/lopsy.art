@@ -98,6 +98,9 @@ export interface EditViewProps {
   readonly closeLabel?: string;
 }
 
+/** Recipe paths of the controls whose engine passes are costly. */
+const DETAIL_PREFIXES = ['sharpness.', 'noise.', 'localContrast.'];
+
 /** How long the edit must stay unchanged before previews are rendered. */
 const SETTLE_MS = 1200;
 const THUMB_SIZE = 512;
@@ -183,6 +186,13 @@ export function EditView({
   useEffect(() => {
     setCommitted(null);
   }, [version.recipe]);
+
+  // Dragging a slider outside Local contrast and Sharpness & noise leaves
+  // their costly passes out until it is let go.
+  const isDraggingCheapControl = draft !== null && !Object.keys(draft).some((path) => DETAIL_PREFIXES.some((p) => path.startsWith(p)));
+  useEffect(() => {
+    engine?.setInteractive(isDraggingCheapControl);
+  }, [engine, isDraggingCheapControl]);
 
   useEffect(() => {
     engine?.setRecipe(isBefore ? beforeRecipe(displayedRecipe) : displayedRecipe);
