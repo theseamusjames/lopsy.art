@@ -20,6 +20,7 @@ import {
   getCursorForHandle,
   applyTransformToMask,
   translateTransform,
+  mapRectThroughAffine,
 } from './transform';
 
 describe('createTransformState', () => {
@@ -652,5 +653,17 @@ describe('documentAffineOf', () => {
     };
     expect(documentAffineOf(dragged)).toBeNull();
     expect(documentAffineOf(createTransformState({ x: 0, y: 0, width: 0, height: 10 }, 'perspective'))).toBeNull();
+  });
+});
+
+describe('mapRectThroughAffine (#1785)', () => {
+  it('maps a rect past the box through the box\'s own scale', () => {
+    // Box 600..800 scaled 0.75 about its bottom-right corner (800, 450).
+    const base = createTransformState({ x: 600, y: 150, width: 200, height: 300 });
+    const t: TransformState = { ...base, scaleX: 0.75, scaleY: 0.75, translateX: 25, translateY: 37.5 };
+    const r = mapRectThroughAffine(t, { x: 600, y: 150, width: 300, height: 300 });
+    expect(r.x).toBeCloseTo(650);
+    expect(r.width).toBeCloseTo(225);
+    expect(r.x + r.width).toBeCloseTo(875);
   });
 });

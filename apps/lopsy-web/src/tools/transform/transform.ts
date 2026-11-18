@@ -1,4 +1,5 @@
 import type { Point, Rect } from '../../types';
+import { transformPoint } from './transform-handles';
 
 export type TransformHandle =
   | 'top-left'
@@ -235,6 +236,21 @@ export function mapRectThroughInverse(rect: Rect, inv: Float32Array): Rect {
   const extentX = Math.abs(a) * hw + Math.abs(b) * hh;
   const extentY = Math.abs(c) * hw + Math.abs(d) * hh;
   return { x: cx - extentX, y: cy - extentY, width: 2 * extentX, height: 2 * extentY };
+}
+
+/** Bounds of `rect` carried through the Free/Skew affine map of `t`. */
+export function mapRectThroughAffine(t: TransformState, rect: Rect): Rect {
+  const corners = [
+    transformPoint(rect.x, rect.y, t),
+    transformPoint(rect.x + rect.width, rect.y, t),
+    transformPoint(rect.x + rect.width, rect.y + rect.height, t),
+    transformPoint(rect.x, rect.y + rect.height, t),
+  ];
+  const xs = corners.map((p) => p.x);
+  const ys = corners.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
 }
 
 export function computeInverseAffineMatrix(t: TransformState): Float32Array {
