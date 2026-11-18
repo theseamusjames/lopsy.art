@@ -97,6 +97,27 @@ test.describe('Edit view on a JPEG', () => {
     expect(stats.spread).toBeGreaterThan(10);
   });
 
+  test('Edit in Lopsy hands over a full-size 16-bit PNG', async ({ page }) => {
+    await page.getByRole('button', { name: 'Edit in Lopsy' }).click();
+    await page.waitForFunction(() => (window.__photosHarness?.lopsyPngs.length ?? 0) > 0);
+    const header = await page.evaluate(() => {
+      const png = window.__photosHarness?.lopsyPngs[0];
+      if (!png) throw new Error('no PNG');
+      const view = new DataView(png);
+      return {
+        signature: Array.from(new Uint8Array(png, 0, 8)),
+        chunk: String.fromCharCode(...new Uint8Array(png, 12, 4)),
+        width: view.getUint32(16),
+        height: view.getUint32(20),
+        bitDepth: view.getUint8(24),
+      };
+    });
+    expect(header.signature).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(header.chunk).toBe('IHDR');
+    expect([header.width, header.height]).toEqual([640, 480]);
+    expect(header.bitDepth).toBe(16);
+  });
+
   test('previews are not rendered again for an unchanged edit', async ({ page }) => {
     await waitForPreview(page, 0);
     await page.waitForTimeout(2500);
