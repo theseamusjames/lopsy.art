@@ -7,6 +7,7 @@
  */
 
 import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
+import type { KeepOriginals, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
 import type { ImportJob, ImportOptions } from '@lopsy/photos-core/import/types';
 import type { FileId, StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
@@ -133,6 +134,15 @@ export interface PhotosBackend {
 
   /** Empties this device's caches of originals and previews; changes waiting to be saved are kept. */
   clearDeviceCache(session: LibrarySession): Promise<void>;
+
+  /** Keep originals (spec 5.7); null when this storage's originals are on the device anyway. */
+  getKeepOriginals(session: LibrarySession): KeepOriginals | null;
+
+  /** Saves the choice for this device and applies it (All starts downloading). */
+  setKeepOriginals(session: LibrarySession, mode: KeepOriginals): Promise<void>;
+
+  /** The background download of every original while Keep originals is All; null otherwise. */
+  getOriginalsDownload(session: LibrarySession): OriginalsDownload | null;
 
   /** Continues imports a reload interrupted, as one job; null when there are none. */
   resumeImports(session: LibrarySession): Promise<ImportJob | null>;

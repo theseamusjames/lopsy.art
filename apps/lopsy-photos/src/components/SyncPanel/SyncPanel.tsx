@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { StorageQuota } from '@lopsy/photos-core/storage/types';
 import { getBackend } from '../../app/backend-registry';
-import { isSettled, useExportProgress, useImportProgress, useSession, useSyncStatus } from '../../app/hooks';
+import { isSettled, useExportProgress, useImportProgress, useOriginalsDownload, useSession, useSyncStatus } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { formatBytes, plural } from '../../import/import-summary';
-import { describeSync, formatWhen } from './sync-words';
+import { describeDownload, describeSync, formatWhen } from './sync-words';
 import { Button } from '../Button/Button';
 import styles from './SyncPanel.module.css';
 
@@ -14,6 +14,8 @@ export function SyncPanel() {
   const status = useSyncStatus();
   const importProgress = useImportProgress(useUi((s) => s.importJob));
   const exportProgress = useExportProgress(useUi((s) => s.exportJob));
+  const download = getBackend().getOriginalsDownload(session);
+  const downloadProgress = useOriginalsDownload(download);
   const [quota, setQuota] = useState<StorageQuota | null>(null);
   const [quotaError, setQuotaError] = useState<string | null>(null);
 
@@ -74,8 +76,27 @@ export function SyncPanel() {
         </section>
       )}
 
+      {download && downloadProgress && (
+        <section className={styles.section}>
+          <h3 className={styles.heading}>Originals on this device</h3>
+          <p className={styles.muted} role="status">
+            {describeDownload(downloadProgress)}
+          </p>
+          {downloadProgress.state === 'running' && (
+            <Button size="sm" onClick={() => download.pause()}>
+              Pause
+            </Button>
+          )}
+          {(downloadProgress.state === 'paused' || (downloadProgress.state === 'done' && downloadProgress.failed > 0)) && (
+            <Button size="sm" onClick={() => void download.resume()}>
+              {downloadProgress.state === 'paused' ? 'Resume' : 'Try again'}
+            </Button>
+          )}
+        </section>
+      )}
+
       <section className={styles.section}>
-        <h3 className={styles.heading}>Storage</h3>
+        <h3 className={styles.heading}>{session.adapter.kind === 'google-drive' ? 'Google Drive storage' : 'Storage'}</h3>
         {quota ? (
           <>
             <div className={styles.meter} data-warn={share !== null && share >= 0.9}>

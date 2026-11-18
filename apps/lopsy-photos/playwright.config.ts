@@ -48,7 +48,7 @@ const DRIVE_SPECS = /\.drive\.spec\.ts$/;
  * and Photos together). A project's testIgnore replaces the top-level one,
  * so each project lists these again.
  */
-const OWN_CONFIG_SPECS = [/site\.spec\.ts$/, /roundtrip\.spec\.ts$/];
+const OWN_CONFIG_SPECS = [/site\.spec\.ts$/, /roundtrip\.spec\.ts$/, /offline\.spec\.ts$/];
 
 const gpuArgs = [
   '--use-gl=angle',

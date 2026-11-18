@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
+import type { KeepOriginals } from '@lopsy/photos-core/cache/keep-originals';
 import { getBackend } from '../../app/backend-registry';
 import type { DeviceInfo } from '../../app/backend';
 import { useSession } from '../../app/hooks';
@@ -10,6 +11,12 @@ import { formatBytes, plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
 import styles from './SettingsDialog.module.css';
+
+const KEEP_CHOICES: readonly { readonly mode: KeepOriginals; readonly label: string; readonly hint: string }[] = [
+  { mode: 'recent', label: 'Recent', hint: 'Up to 20 GB; the ones you opened longest ago go first.' },
+  { mode: 'all', label: 'All', hint: 'Downloads every original, for working without a connection. Shown in the sync panel.' },
+  { mode: 'none', label: 'None', hint: 'Only the photo you are editing.' },
+];
 
 /** This device, adding from Drive, the library's health, and closing the library. */
 export function SettingsDialog() {
@@ -23,6 +30,14 @@ export function SettingsDialog() {
   const [report, setReport] = useState<RepairReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isDrive = session.adapter.kind === 'google-drive';
+  const [keep, setKeep] = useState<KeepOriginals | null>(() => getBackend().getKeepOriginals(session));
+  const chooseKeep = (mode: KeepOriginals) => {
+    setKeep(mode);
+    getBackend()
+      .setKeepOriginals(session, mode)
+      .then(refreshDevice)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  };
 
   const refreshDevice = () => {
     getBackend()
@@ -94,6 +109,20 @@ export function SettingsDialog() {
             >
               Clear this device’s copies
             </Button>
+          )}
+          {keep !== null && (
+            <fieldset className={styles.choices}>
+              <legend className={styles.legend}>Keep originals on this device</legend>
+              {KEEP_CHOICES.map((choice) => (
+                <label key={choice.mode} className={styles.option}>
+                  <input type="radio" name="keep-originals" checked={keep === choice.mode} onChange={() => chooseKeep(choice.mode)} />
+                  <span>
+                    {choice.label}
+                    <span className={styles.hint}>{choice.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
           )}
           <p className={styles.muted}>
             {device?.cacheBytes === null

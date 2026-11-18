@@ -207,6 +207,89 @@ describe('LocalFolderAdapter on a folder with files it does not know', () => {
   });
 });
 
+describe('LocalFolderAdapter when the index cannot be saved', () => {
+  /** Makes the next write of the index fail as if the disk were full. */
+  function failIndexWritesOn(disk: FakeDirectoryHandle): { arm(): void } {
+    let armed = false;
+    const original = disk.getFileHandle.bind(disk);
+    disk.getFileHandle = async (name: string, options?: { create?: boolean }) => {
+      if (armed && name === INDEX_FILE_NAME && options?.create) {
+        armed = false;
+        throw new DOMException('full', 'QuotaExceededError');
+      }
+      return original(name, options);
+    };
+    return {
+      arm: () => {
+        armed = true;
+      },
+    };
+  }
+
+  async function setup(): Promise<{ disk: FakeDirectoryHandle; adapter: LocalFolderAdapter; rootId: string; fileId: string; folderId: string; fail: { arm(): void } }> {
+    const disk = new FakeDirectoryHandle('Pictures');
+    const adapter = await open(disk);
+    const root = await adapter.getRoot();
+    const folder = await adapter.createFolder(root.id, 'Elsewhere');
+    const file = await adapter.createFile({ parentId: root.id, name: 'keep.raf', mimeType: 'image/x-fuji-raf' }, new Blob(['raw']));
+    return { disk, adapter, rootId: root.id, fileId: file.id, folderId: folder.id, fail: failIndexWritesOn(disk) };
+  }
+
+  it('a trash keeps the original where the saved index says', async () => {
+    const { disk, adapter, fileId, fail } = await setup();
+    fail.arm();
+    await expect(adapter.trash(fileId)).rejects.toMatchObject({ code: 'quota-exceeded' });
+    expect((await adapter.getFile(fileId))?.trashed).toBe(false);
+    expect(await (await adapter.readContent(fileId)).text()).toBe('raw');
+    const reopened = await open(disk);
+    expect((await reopened.getFile(fileId))?.trashed).toBe(false);
+    expect(await (await reopened.readContent(fileId)).text()).toBe('raw');
+    expect(await listPaths(disk)).not.toContain(`${TRASH_FOLDER_NAME}/${fileId}`);
+  });
+
+  it('a move keeps the original where the saved index says', async () => {
+    const { disk, adapter, rootId, fileId, folderId, fail } = await setup();
+    fail.arm();
+    await expect(adapter.move(fileId, folderId)).rejects.toMatchObject({ code: 'quota-exceeded' });
+    expect((await adapter.getFile(fileId))?.parentId).toBe(rootId);
+    const reopened = await open(disk);
+    expect((await reopened.getFile(fileId))?.parentId).toBe(rootId);
+    expect(await (await reopened.readContent(fileId)).text()).toBe('raw');
+    expect(await readPath(disk, 'Elsewhere/keep.raf')).toBeNull();
+  });
+
+  it('an untrash keeps the original where the saved index says', async () => {
+    const { disk, adapter, fileId, fail } = await setup();
+    await adapter.trash(fileId);
+    fail.arm();
+    await expect(adapter.untrash(fileId)).rejects.toMatchObject({ code: 'quota-exceeded' });
+    const reopened = await open(disk);
+    expect((await reopened.getFile(fileId))?.trashed).toBe(true);
+    expect(await (await reopened.readContent(fileId)).text()).toBe('raw');
+  });
+
+  it('a create leaves no entry and no stray file', async () => {
+    const { disk, adapter, rootId, fail } = await setup();
+    fail.arm();
+    await expect(
+      adapter.createFile({ parentId: rootId, name: 'new.jpg', mimeType: 'image/jpeg' }, new Blob(['new'])),
+    ).rejects.toMatchObject({ code: 'quota-exceeded' });
+    expect((await adapter.listChildren(rootId)).map((child) => child.name).sort()).toEqual(['Elsewhere', 'keep.raf']);
+    expect(await readPath(disk, 'new.jpg')).toBeNull();
+  });
+
+  it('a permanent delete that cannot be saved keeps the file', async () => {
+    const { disk, adapter, fileId, fail } = await setup();
+    fail.arm();
+    await expect(adapter.deletePermanently(fileId)).rejects.toMatchObject({ code: 'quota-exceeded' });
+    const reopened = await open(disk);
+    expect(await (await reopened.readContent(fileId)).text()).toBe('raw');
+    await reopened.deletePermanently(fileId);
+    expect(await reopened.getFile(fileId)).toBeNull();
+    expect(await readPath(disk, 'keep.raf')).toBeNull();
+  });
+});
+
 describe('LocalFolderAdapter with a hand-edited index', () => {
   function entry(id: string, parentId: string | null, extra: Record<string, unknown> = {}): Record<string, unknown> {
     return {

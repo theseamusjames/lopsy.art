@@ -23,7 +23,7 @@ import type { PhotosLibrarySession } from '@lopsy/photos-core/library/session';
 import { repairLibrary, type RepairReport } from '@lopsy/photos-core/library/repair';
 import { startImportFromStorage } from '@lopsy/photos-core/import/from-storage';
 import { pickDriveFiles } from '@lopsy/photos-core/storage/google-drive/picker';
-import { defaultOriginalsBudget } from '@lopsy/photos-core/cache/originals-cache';
+import { budgetFor, OriginalsDownload, type KeepOriginals } from '@lopsy/photos-core/cache/keep-originals';
 import { PREVIEWS_DEFAULT_BUDGET } from '@lopsy/photos-core/cache/preview-cache';
 
 /** What the Picker offers: photos the importer reads. */
@@ -63,6 +63,7 @@ import { guardSession, unguarded } from '../guard-session';
 import { trashAssets } from './trash-assets';
 import { showToast } from '../toasts';
 import { downloadBlob } from '../download';
+import { loadKeepOriginals, saveKeepOriginals } from '../device-settings';
 
 /** What a session needs beyond the LibrarySession itself. */
 interface SessionExtras {
@@ -193,6 +194,7 @@ export class RealBackend implements PhotosBackend {
       optional(() => IndexedDbImportQueueStore.open()),
     ]);
     this.extras.set(session, { kind, raw: rawSession, owner: opened.owner, label: opened.label, tokenSource: opened.tokenSource, caches, staging, queue });
+    if (kind === 'google-drive' && caches) void this.applyKeepOriginals(session, loadKeepOriginals()).catch(() => undefined);
     setPreviewSource(caches ? { read: (s, ref) => caches.previews.readPreview(s.adapter, ref.fileId) } : null);
     saveLastConnection({ kind, label: opened.label });
     this.current = session;
@@ -350,8 +352,51 @@ export class RealBackend implements PhotosBackend {
     for (const cache of [caches.originals.cache, caches.previews.cache]) {
       const used = await cache.usage();
       await cache.setBudget(0);
-      await cache.setBudget(Math.max(used, cache === caches.originals.cache ? await defaultOriginalsBudget() : PREVIEWS_DEFAULT_BUDGET));
+      const budget = cache === caches.originals.cache ? await budgetFor(this.getKeepOriginals(session) ?? 'recent') : PREVIEWS_DEFAULT_BUDGET;
+      await cache.setBudget(Number.isFinite(budget) ? Math.max(used, budget) : budget);
     }
+    // All keeps every original: start fetching them again.
+    void this.keepState.get(session)?.download?.resume();
+  }
+
+  /** Keep originals per open Drive library, and its All download. */
+  private readonly keepState = new Map<LibrarySession, { mode: KeepOriginals; download: OriginalsDownload | null }>();
+
+  getKeepOriginals(session: LibrarySession): KeepOriginals | null {
+    const extras = this.extras.get(session);
+    if (!extras?.caches || extras.kind !== 'google-drive') return null;
+    return this.keepState.get(session)?.mode ?? loadKeepOriginals();
+  }
+
+  async setKeepOriginals(session: LibrarySession, mode: KeepOriginals): Promise<void> {
+    saveKeepOriginals(mode);
+    await this.applyKeepOriginals(session, mode);
+  }
+
+  getOriginalsDownload(session: LibrarySession): OriginalsDownload | null {
+    return this.keepState.get(session)?.download ?? null;
+  }
+
+  private async applyKeepOriginals(session: LibrarySession, mode: KeepOriginals): Promise<void> {
+    const caches = this.extras.get(session)?.caches;
+    if (!caches) return;
+    const previous = this.keepState.get(session);
+    if (previous?.mode === mode) return;
+    previous?.download?.stop();
+    const download =
+      mode === 'all'
+        ? new OriginalsDownload({
+            originals: caches.originals,
+            adapter: session.adapter,
+            list: () =>
+              [...session.getView().assets.values()]
+                .filter((asset) => !asset.deleted && asset.kind === 'original' && asset.originalStatus !== 'missing')
+                .map((asset) => ({ fileId: asset.fileId, sha256: asset.sha256, byteSize: asset.byteSize })),
+          })
+        : null;
+    this.keepState.set(session, { mode, download });
+    await caches.originals.cache.setBudget(await budgetFor(mode));
+    void download?.resume();
   }
 
   readPreview(session: LibrarySession, ref: PreviewRef): Promise<Blob> {
@@ -453,6 +498,8 @@ export class RealBackend implements PhotosBackend {
 
   async disconnect(session: LibrarySession): Promise<void> {
     const tokenSource = this.extras.get(session)?.tokenSource;
+    this.keepState.get(session)?.download?.stop();
+    this.keepState.delete(session);
     setPreviewSource(null);
     if (this.current === session) this.current = null;
     try {

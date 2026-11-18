@@ -303,6 +303,11 @@ export class FileIndex {
     entry.seq = ++this.seq;
   }
 
+  /** Drops an entry that was never saved or announced: no tombstone. */
+  forget(id: FileId): void {
+    this.entries.delete(id);
+  }
+
   /** Removes the entry and everything below it, leaving tombstones for the change feed. */
   remove(id: FileId): IndexEntry[] {
     const removed = this.subtree(id);

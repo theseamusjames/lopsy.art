@@ -12,7 +12,10 @@
  * Never writes a root 404.html: Pages treats the site as an SPA only while
  * there is none (MEMORY.md).
  *
- *   node scripts/assemble-site.mjs [--out dist]
+ *   node scripts/assemble-site.mjs [--out dist] [--photos-only]
+ *
+ * --photos-only leaves Lopsy out (Photos at /photos/ and nothing at /), for
+ * Photos' own e2e tests without building Lopsy's 900 MB of tutorials.
  */
 
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync, readdirSync } from 'node:fs';
@@ -22,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outArg = process.argv.indexOf('--out');
 const out = resolve(root, outArg >= 0 ? process.argv[outArg + 1] : 'dist');
+const photosOnly = process.argv.includes('--photos-only');
 const lopsyDist = join(root, 'apps/lopsy-web/dist');
 const photosDist = join(root, 'apps/lopsy-photos/dist');
 const PHOTOS_PATH = '/photos';
@@ -35,13 +39,13 @@ function requireDist(dir, how) {
   if (!existsSync(join(dir, 'index.html'))) fail(`${dir}/index.html is missing. Build it first: ${how}`);
 }
 
-requireDist(lopsyDist, 'npm run build');
+if (!photosOnly) requireDist(lopsyDist, 'npm run build');
 requireDist(photosDist, 'PHOTOS_BASE=/photos/ npm run build -w lopsy-photos');
 const photosIndex = readFileSync(join(photosDist, 'index.html'), 'utf8');
 if (!photosIndex.includes(`${PHOTOS_PATH}/assets/`)) {
   fail(`apps/lopsy-photos/dist was not built for ${PHOTOS_PATH}/ (its index.html does not load ${PHOTOS_PATH}/assets/). Rebuild with PHOTOS_BASE=/photos/.`);
 }
-if (existsSync(join(lopsyDist, PHOTOS_PATH.slice(1)))) fail(`apps/lopsy-web/dist already has a ${PHOTOS_PATH}/ folder`);
+if (!photosOnly && existsSync(join(lopsyDist, PHOTOS_PATH.slice(1)))) fail(`apps/lopsy-web/dist already has a ${PHOTOS_PATH}/ folder`);
 
 const readText = (file) => (existsSync(file) ? readFileSync(file, 'utf8') : '');
 
@@ -73,7 +77,7 @@ function photosHeaders(text) {
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
-cpSync(lopsyDist, out, { recursive: true });
+if (!photosOnly) cpSync(lopsyDist, out, { recursive: true });
 const photosOut = join(out, PHOTOS_PATH.slice(1));
 cpSync(photosDist, photosOut, {
   recursive: true,
@@ -85,13 +89,13 @@ const redirects = [
   ...photosRedirects(readText(join(photosDist, '_redirects'))),
   '',
   '# Lopsy',
-  readText(join(lopsyDist, '_redirects')).trim(),
+  photosOnly ? '' : readText(join(lopsyDist, '_redirects')).trim(),
   '',
 ].join('\n');
 if (!/^\/photos\/\*\s+\/photos\/index\.html\s+200$/m.test(redirects)) fail('Photos _redirects did not give /photos/* /photos/index.html 200');
 writeFileSync(join(out, '_redirects'), redirects);
 
-const headers = [readText(join(lopsyDist, '_headers')).trimEnd(), '', '# Lopsy Photos', ...photosHeaders(readText(join(photosDist, '_headers')).trim()), ''].join('\n');
+const headers = [photosOnly ? '' : readText(join(lopsyDist, '_headers')).trimEnd(), '', '# Lopsy Photos', ...photosHeaders(readText(join(photosDist, '_headers')).trim()), ''].join('\n');
 if (!headers.includes(`${PHOTOS_PATH}/*`)) fail('Photos _headers has no /* block');
 writeFileSync(join(out, '_headers'), headers);
 

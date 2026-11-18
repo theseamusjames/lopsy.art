@@ -8,6 +8,8 @@
 export interface BlobCache {
   /** The cached blob, or null. Counts as a use for eviction. */
   get(key: string): Promise<Blob | null>;
+  /** Whether the key is cached, without counting as a use. */
+  has(key: string): Promise<boolean>;
   /** Stores (or replaces) the blob, then evicts past the budget. */
   put(key: string, blob: Blob): Promise<void>;
   delete(key: string): Promise<void>;
@@ -120,6 +122,10 @@ export class MemoryBlobCache implements BlobCache {
     if (!entry || !blob) return null;
     entry.lastUsed = this.book.stamp();
     return blob;
+  }
+
+  async has(key: string): Promise<boolean> {
+    return this.blobs.has(key);
   }
 
   async put(key: string, blob: Blob): Promise<void> {

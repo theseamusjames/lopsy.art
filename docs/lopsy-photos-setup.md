@@ -166,6 +166,7 @@ npm run test -w @lopsy/handoff               # the handoff protocol
 npm run test:e2e -w @lopsy/photos-core       # photos-core's browser-only classes in Chromium (Vite harness)
 npm run test:e2e:photos                      # the app in Chromium; *.drive.spec.ts run against the fake Drive
 npm run test:e2e:site                        # smoke test of the assembled dist/ (build it first)
+npm run test:e2e:offline                     # Photos' production build started offline (builds, runs, cleans up)
 cd apps/lopsy-web && npx playwright test e2e/photos-handoff.spec.ts --project=chromium   # Lopsy's side of the handoff
 ```
 
