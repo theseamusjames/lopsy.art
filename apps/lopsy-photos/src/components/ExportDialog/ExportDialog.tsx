@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { VersionId } from '@lopsy/photos-core/library/types';
 import { getBackend } from '../../app/backend-registry';
 import type { ExportFormat } from '../../app/backend';
-import { useExportProgress, useLibraryView, useSession } from '../../app/hooks';
+import { useExportProgress, useSession } from '../../app/hooks';
 import { useUi } from '../../app/store';
-import { currentTargets } from '../../app/commands';
+import { currentVersions } from '../../app/commands';
 import { plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
@@ -25,15 +25,12 @@ function defaultName(): string {
 /** Saves edited copies of the selected photos as JPEG or PNG. */
 export function ExportDialog() {
   const session = useSession();
-  const view = useLibraryView();
   const openDialog = useUi((s) => s.openDialog);
   const job = useUi((s) => s.exportJob);
   const setExportJob = useUi((s) => s.setExportJob);
   const progress = useExportProgress(job);
   const [versionIds] = useState<VersionId[]>(() =>
-    currentTargets()
-      .map((id) => view.assets.get(id)?.primaryVersionId)
-      .filter((v): v is VersionId => v !== undefined),
+    currentVersions().map((v) => v.versionId),
   );
   const [format, setFormat] = useState<ExportFormat>('jpeg');
   const [quality, setQuality] = useState(90);

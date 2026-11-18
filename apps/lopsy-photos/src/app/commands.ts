@@ -3,16 +3,49 @@
  * the same functions, so a key and a click always behave alike.
  */
 
-import type { AssetId, ColorLabel, Rating } from '@lopsy/photos-core/library/types';
+import type { AssetId, ColorLabel, Rating, VersionId } from '@lopsy/photos-core/library/types';
+import { itemAssets, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
 import { EMPTY_SELECTION, moveFocus, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
 
-/** The photos a command acts on: in Single, Cull and Compare the one in focus, in the grid the selection. */
-export function currentTargets(): AssetId[] {
+/** The tiles a command acts on: in Single, Cull and Compare the one in focus, in the grid the selection. */
+export function currentItems(): ItemId[] {
   const { selection, mode } = useUi.getState();
   if (mode !== 'grid' && selection.focus !== null) return [selection.focus];
   return targetIds(selection);
+}
+
+/** The photos a command acts on (marks, delete, albums belong to the photo, whichever version is shown). */
+export function currentTargets(): AssetId[] {
+  return itemAssets(currentItems());
+}
+
+/** The versions a command acts on (edit, export, Lopsy, paste): each tile's own version. */
+export function currentVersions(): { assetId: AssetId; versionId: VersionId }[] {
+  const view = session().getView();
+  const out: { assetId: AssetId; versionId: VersionId }[] = [];
+  for (const id of currentItems()) {
+    const versionId = itemVersionId(id, view);
+    if (versionId !== null) out.push({ assetId: parseItem(id).assetId, versionId });
+  }
+  return out;
+}
+
+/** Makes a new version of the focused tile's version (same edits), opens its stack and selects it. */
+export function newVersion(): void {
+  const ui = useUi.getState();
+  const id = ui.selection.focus ?? [...ui.selection.ids][0];
+  if (id === undefined) return;
+  const view = session().getView();
+  const { assetId } = parseItem(id);
+  const from = itemVersionId(id, view);
+  const source = from === null ? undefined : view.versions.get(from);
+  const names = (versionsByAsset(view).get(assetId) ?? []).map((v) => v.name);
+  const versionId = session().createVersion(assetId, nextVersionName(names), source?.recipe);
+  if (!versionId) return;
+  if (!ui.expandedBursts.has(assetId)) ui.toggleBurst(assetId);
+  ui.setSelection(selectOne(versionItemId(assetId, versionId)));
 }
 
 function session() {
@@ -71,9 +104,11 @@ export function openEdit(): void {
   const { selection } = useUi.getState();
   const id = selection.focus ?? [...selection.ids][0];
   if (id === undefined) return;
-  const asset = session().getView().assets.get(id);
-  if (!asset) return;
-  useUi.getState().setEditing({ assetId: asset.id, versionId: asset.primaryVersionId });
+  const view = session().getView();
+  const { assetId } = parseItem(id);
+  const versionId = itemVersionId(id, view);
+  if (!view.assets.get(assetId) || versionId === null) return;
+  useUi.getState().setEditing({ assetId, versionId });
 }
 
 function enterMode(mode: ViewMode, orderedIds: readonly AssetId[]): void {

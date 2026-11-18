@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, Info, Layers, Maximize, Paintbrush, ScanEye, Search, Trash2 } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, Columns2, CopyPlus, Info, Layers, Maximize, Paintbrush, ScanEye, Search, Trash2 } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useLibraryView, useSavedSearches } from '../../app/hooks';
 import { datePrefixLabel } from '../../library/finding';
 import { THUMB_SIZE, useUi } from '../../app/store';
-import { currentTargets, openCompare, openCull, runCommand } from '../../app/commands';
+import { currentVersions, newVersion, openCompare, openCull, runCommand } from '../../app/commands';
 import { openInLopsy } from '../../app/lopsy-handoff';
 import { SORT_LABELS, type SortKey } from '../../library/asset-query';
 import { Button } from '../Button/Button';
@@ -129,6 +129,12 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           onClick={() => openCompare(orderedIds)}
         />
         <IconButton
+          label={single ? 'New version: another edit of this photo, the original untouched' : 'New version: select one photo first'}
+          icon={<CopyPlus size={16} />}
+          disabled={!single}
+          onClick={newVersion}
+        />
+        <IconButton
           label={groupBursts ? 'Show every photo of a burst' : 'Group bursts: shots taken in quick succession show as one'}
           icon={<Layers size={16} />}
           active={groupBursts}
@@ -141,8 +147,8 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           disabled={!single}
           onClick={() => {
             const session = useUi.getState().connection?.session;
-            const id = currentTargets()[0];
-            if (session && id !== undefined) openInLopsy(session, id);
+            const target = currentVersions()[0];
+            if (session && target !== undefined) openInLopsy(session, target.assetId, target.versionId);
           }}
         />
         <IconButton label="Details (I)" icon={<Info size={16} />} active={infoOpen} onClick={toggleInfo} />
