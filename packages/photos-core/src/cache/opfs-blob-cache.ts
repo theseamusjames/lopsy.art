@@ -68,6 +68,10 @@ export class OpfsBlobCache implements BlobCache {
     });
   }
 
+  has(key: string): Promise<boolean> {
+    return this.mutex.run(async () => this.book.get(key) !== undefined && this.files.has(key));
+  }
+
   put(key: string, blob: Blob): Promise<void> {
     return this.mutex.run(async () => {
       const name = await fileNameFor(key);
