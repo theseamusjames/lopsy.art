@@ -129,6 +129,29 @@ pub fn clear_image_local_contrast(engine: &mut EngineInner) {
     engine.needs_recomposite = true;
 }
 
+/// Areas: `lopsy_core::areas::STRIDE` (16) floats per area, at most 8;
+/// the layout is in `lopsy_core::areas`. An empty slice is the same as
+/// `clear_image_areas`.
+pub fn set_image_areas(engine: &mut EngineInner, values: &[f32]) -> Result<(), String> {
+    let (areas, clamped) = lopsy_core::areas::parse_areas(values)?;
+    engine.areas = if areas.is_empty() { None } else { Some(clamped) };
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+pub fn clear_image_areas(engine: &mut EngineInner) {
+    engine.areas = None;
+    engine.area_overlay = -1;
+    engine.needs_recomposite = true;
+}
+
+/// Show area `index`'s mask in red on screen (never in exports); −1, or an
+/// index with no area, shows none.
+pub fn set_image_area_overlay(engine: &mut EngineInner, index: i32) {
+    engine.area_overlay = index.max(-1);
+    engine.needs_recomposite = true;
+}
+
 /// Long edge of the downscaled copy the histogram is counted from.
 pub const HISTOGRAM_MAX_EDGE: u32 = 512;
 
