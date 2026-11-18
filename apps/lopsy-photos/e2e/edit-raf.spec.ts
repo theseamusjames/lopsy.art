@@ -62,7 +62,8 @@ test.describe('Edit view on a RAF', () => {
     expect(Math.abs(warm.mean - cool.mean)).toBeLessThan(25);
 
     // RAW gets the camera's profiles and Auto white balance.
-    await expect(page.getByRole('combobox', { name: 'Profile' }).locator('option')).toContainText(['Camera look', 'Neutral', 'Monochrome']);
+    const profiles = page.getByRole('combobox', { name: 'Profile' }).locator('option');
+    await expect(profiles).toContainText(['Camera', 'Velvia', 'Neutral', 'Monochrome']);
     await page.getByRole('button', { name: 'Auto White balance' }).click();
     await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('Auto white balance');
     await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
@@ -74,5 +75,13 @@ test.describe('Edit view on a RAF', () => {
     await waitForPreview(page, 3, 5 * 60_000);
     const bright = await imageStats(page, { kind: 'preview', index: 3, which: 'screen' });
     expect(bright.mean).toBeGreaterThan(balanced.mean + 10);
+
+    // An engine profile changes the develop settings: Monochrome drops the colour.
+    await page.getByRole('combobox', { name: 'Profile' }).selectOption('monochrome');
+    await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('Profile: Monochrome');
+    await waitForPreview(page, 4, 5 * 60_000);
+    const mono = await imageStats(page, { kind: 'preview', index: 4, which: 'screen' });
+    expect(Math.abs(mono.red - mono.blue)).toBeLessThan(4);
+    expect(Math.abs(mono.red - mono.green)).toBeLessThan(4);
   });
 });

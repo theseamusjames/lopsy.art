@@ -15,7 +15,7 @@
  */
 
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
-import type { DevelopProfile } from './profiles';
+import type { DevelopProfile, ProfileSettings } from './profiles';
 
 /** The JSON `setRawDevelop` takes and `rafDevelopDefaults` returns. */
 export interface RawDevelopSettings {
@@ -107,37 +107,25 @@ export function rawSettingsFor(
   recipe: Recipe,
   profiles: readonly DevelopProfile[] = [],
 ): RawDevelopSettings {
-  const look = profileLook(defaults, recipe.profile.id, profiles);
+  const look = { ...defaults, ...profileLook(defaults, recipe.profile.id, profiles) };
   return {
-    ...defaults,
+    ...look,
     wbRatio: wbRatioFor(recipe.whiteBalance.temperature, recipe.whiteBalance.tint),
-    exposureEv: defaults.exposureEv + recipe.tone.exposure,
-    saturation: look.saturation,
-    baseCurve: look.baseCurve,
+    exposureEv: look.exposureEv + recipe.tone.exposure,
   };
 }
 
 /**
- * The saturation and curve of a profile. The engine's own profiles
- * (`rafDevelopProfiles`) win when they carry their settings; otherwise
- * 'neutral' is flat, 'monochrome' is the camera's curve with no colour,
- * and anything else is the camera's own film mode.
+ * A profile's settings. The engine's own profiles (`rafDevelopProfiles`)
+ * win; without them 'neutral' is flat, 'monochrome' is the camera's curve
+ * with no colour, and anything else is the camera's own film mode.
  */
-function profileLook(
-  defaults: RawDevelopSettings,
-  id: string,
-  profiles: readonly DevelopProfile[],
-): { saturation: number; baseCurve: readonly number[] | null } {
+function profileLook(defaults: RawDevelopSettings, id: string, profiles: readonly DevelopProfile[]): ProfileSettings {
   const engineProfile = profiles.find((p) => p.id === id);
-  if (engineProfile && (engineProfile.saturation !== undefined || engineProfile.baseCurve !== undefined)) {
-    return {
-      saturation: engineProfile.saturation ?? defaults.saturation,
-      baseCurve: engineProfile.baseCurve === undefined ? defaults.baseCurve : engineProfile.baseCurve,
-    };
-  }
+  if (engineProfile?.settings) return engineProfile.settings;
   if (id === 'neutral') return { saturation: 1, baseCurve: null };
   if (id === 'monochrome') return { saturation: 0, baseCurve: defaults.baseCurve };
-  return { saturation: defaults.saturation, baseCurve: defaults.baseCurve };
+  return {};
 }
 
 export function rawSettingsJson(settings: RawDevelopSettings): string {

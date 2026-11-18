@@ -125,8 +125,12 @@ describe('profiles in the develop settings', () => {
   });
 
   it('uses an engine profile with settings', () => {
-    const s = rawSettingsFor(defaults, recipe({ profile: 'astia' }), [{ id: 'astia', name: 'Astia', saturation: 1.1, baseCurve: [0, 1] }]);
+    const s = rawSettingsFor(defaults, recipe({ profile: 'astia', exposure: 0.5 }), [
+      { id: 'astia', name: 'Astia', settings: { saturation: 1.1, baseCurve: [0, 1], exposureEv: 0.2 } },
+    ]);
     expect(s.saturation).toBe(1.1);
     expect(s.baseCurve).toEqual([0, 1]);
+    expect(s.exposureEv).toBeCloseTo(0.7, 10);
+    expect(s.camToRgb).toEqual(defaults.camToRgb);
   });
 });

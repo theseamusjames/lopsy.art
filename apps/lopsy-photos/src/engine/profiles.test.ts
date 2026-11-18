@@ -2,23 +2,27 @@ import { describe, expect, it } from 'vitest';
 import { IMAGE_PROFILES, RAW_FALLBACK_PROFILES, parseDevelopProfiles, profilesFor, selectedProfile } from './profiles';
 
 describe('parseDevelopProfiles', () => {
-  it('reads an array or a { profiles } object', () => {
+  it('reads the engine list, with the camera look under the recipe id', () => {
     const list = [
-      { id: 'provia', name: 'Provia / Standard', saturation: 1.2, baseCurve: [0, 0.5, 1] },
-      { id: 'velvia', label: 'Velvia / Vivid' },
+      { id: 'camera', name: 'Camera (Provia)', settings: { camToRgb: [1, 0, 0, 0, 1, 0, 0, 0, 1], exposureEv: 0.38, saturation: 1.2, highlightDesaturation: true, baseCurve: [0, 0.5, 1] } },
+      { id: 'velvia', label: 'Velvia / Vivid', settings: { saturation: 1.4, baseCurve: null } },
     ];
     expect(parseDevelopProfiles(JSON.stringify(list))).toEqual([
-      { id: 'provia', name: 'Provia / Standard', saturation: 1.2, baseCurve: [0, 0.5, 1] },
-      { id: 'velvia', name: 'Velvia / Vivid' },
+      {
+        id: 'standard',
+        name: 'Camera (Provia)',
+        settings: { camToRgb: [1, 0, 0, 0, 1, 0, 0, 0, 1], exposureEv: 0.38, saturation: 1.2, highlightDesaturation: true, baseCurve: [0, 0.5, 1] },
+      },
+      { id: 'velvia', name: 'Velvia / Vivid', settings: { saturation: 1.4, baseCurve: null } },
     ]);
     expect(parseDevelopProfiles(JSON.stringify({ profiles: list }))).toHaveLength(2);
   });
 
   it('drops broken and repeated entries', () => {
-    const json = JSON.stringify([{ id: 'a', name: 'A' }, { id: 'a', name: 'Again' }, { name: 'No id' }, 3, { id: 'n', name: 'N', baseCurve: null }]);
+    const json = JSON.stringify([{ id: 'a', name: 'A' }, { id: 'a', name: 'Again' }, { name: 'No id' }, 3, { id: 'n', name: 'N', settings: { saturation: 'x' } }]);
     expect(parseDevelopProfiles(json)).toEqual([
       { id: 'a', name: 'A' },
-      { id: 'n', name: 'N', baseCurve: null },
+      { id: 'n', name: 'N' },
     ]);
     expect(parseDevelopProfiles('not json')).toEqual([]);
     expect(parseDevelopProfiles('{"x":1}')).toEqual([]);

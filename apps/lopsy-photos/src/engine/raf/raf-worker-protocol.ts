@@ -41,7 +41,7 @@ export type RafWorkerResponse =
       binned: RafBandPixels | null;
       /** `rafAutoWhiteBalance` of the binned frame: camera-space multipliers, green 1. */
       autoWbRatio: [number, number, number] | null;
-      /** `rafDevelopProfiles(paramsJson)`, when the engine has it. */
+      /** `rafDevelopProfiles(paramsJson)`. */
       profilesJson: string | null;
     }
   | {
