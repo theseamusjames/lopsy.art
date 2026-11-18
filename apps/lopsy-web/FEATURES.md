@@ -1998,9 +1998,9 @@ for Crop / Canvas Size / Image Size, `invalidateLayers()` for Rotate Image, and
     under Placement reads *New size: W × H px* for Expand, *Canvas stays W × H
     px* for Overlay, *Enter a border width.* while every width is 0, and the
     maximum side length when the expanded canvas would be too large.
-  - **Rounded corners.** A **Rounded corners** checkbox under **Corners**
-    (off by default) shows **Inner radius (px)** and **Outer radius (px)**
-    fields, both starting at **20** and read like the widths (whole pixels;
+  - **Rounded corners.** The **Rounded corners** section always shows
+    **Inner radius (px)** and **Outer radius (px)** fields, both starting at
+    **0** (square corners) and read like the widths (whole pixels;
     blank, negative or junk is 0, which keeps that corner square). The outer
     radius rounds the four corners of the canvas: the Border layer is
     transparent outside them. The inner radius rounds the corners of the
