@@ -202,6 +202,8 @@ describe('exportSidecars', () => {
       versions: new Map(),
       albums: new Map(),
       settings: new Map(),
+      presets: new Map(),
+      exportPresets: new Map(),
     };
     const session = { getView: () => view, adapter, libraryId: 'lib' };
     const toFolder = await exportSidecars(session, ['x1', 'x2', 'x3', 'missing'], { kind: 'folder', folderId: folder.id });
