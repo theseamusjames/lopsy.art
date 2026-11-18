@@ -433,7 +433,9 @@ function diskNameOf(entry: IndexEntry): string {
 
 /** File systems refuse separators and a few names; Drive allows anything. */
 function safeFileName(name: string): string {
-  const cleaned = name.replace(/[/\\:*?"<>|\u0000-\u001f]/g, '_').replace(/[. ]+$/, '');
+  const cleaned = Array.from(name, (char) => (char.charCodeAt(0) < 0x20 || '/\\:*?"<>|'.includes(char) ? '_' : char))
+    .join('')
+    .replace(/[. ]+$/, '');
   return cleaned === '' || cleaned === '.' || cleaned === '..' ? '_' : cleaned;
 }
 
