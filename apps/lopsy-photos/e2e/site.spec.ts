@@ -86,3 +86,31 @@ test("Lopsy's handoff default points at the served Photos", async ({ page }) => 
   expect(photos.status()).toBe(200);
   expect(await photos.text()).toContain('<title>Lopsy Photos</title>');
 });
+
+test("a first Photos visit under Lopsy's root worker neither reloads nor offers an update", async ({ page }) => {
+  const problems = watch(page);
+  await page.goto('/');
+  // Lopsy registers its own worker at /sw.js, scope /, and it claims the origin's pages.
+  await expect
+    .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration('/'))?.active?.state ?? null))
+    .toBe('activated');
+
+  let loads = 0;
+  page.on('load', () => {
+    loads += 1;
+  });
+  await page.goto('/photos/');
+  await expect(page.getByRole('heading', { name: 'Lopsy Photos' })).toBeVisible();
+  await page.evaluate(() => Reflect.set(window, '__firstVisit', true));
+  await expect
+    .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration('/photos/'))?.active?.state ?? null))
+    .toBe('activated');
+  // Photos' worker takes over the page (clients.claim); that must not reload it.
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? '')).toContain('/photos/sw.js');
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => Reflect.get(window, '__firstVisit'))).toBe(true);
+  expect(loads).toBe(1);
+  await expect(page.getByText('New version ready')).toHaveCount(0);
+  expect(await cspViolations(page)).toEqual([]);
+  expect(problems.list).toEqual([]);
+});

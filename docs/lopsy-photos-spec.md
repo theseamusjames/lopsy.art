@@ -1103,6 +1103,17 @@ buffer between processes; the handoff budget (11) includes that.
 - While Photos is served from lopsy.art, Lopsy's code runs on the same
   origin, so a script-injection bug in Lopsy could reach Photos' storage
   and token. Moving Photos to its own domain removes that.
+  - The offline shell's CacheStorage is per origin too: a script in Lopsy
+    could write a cached Photos file. The service worker checks every
+    cached file against the SHA-256 the build wrote into `sw.js` before
+    serving it, and drops it on a mismatch. That stops a poisoned cache
+    from outliving the bug, but not a script on the origin from reading
+    or changing Photos' IndexedDB, OPFS or a page while it runs; only
+    its own domain does.
+  - Lopsy's own worker at `/` can control Photos' pages until Photos'
+    worker installs, so Photos decides updates from its own registration
+    and reloads only when the user chooses to. A waiting worker takes
+    an update request only from a Photos page.
 
 **Untrusted input.**
 - Everything read from Drive is schema-checked, with size limits, before

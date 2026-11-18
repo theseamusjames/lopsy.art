@@ -36,6 +36,9 @@ export async function budgetFor(mode: KeepOriginals, estimate: StorageEstimate |
   return Number.POSITIVE_INFINITY;
 }
 
+/** Tries per original before the download stops asking for it. */
+export const MAX_TRIES = 2;
+
 export type DownloadState = 'running' | 'paused' | 'full' | 'done' | 'stopped';
 
 export interface DownloadProgress {
@@ -68,6 +71,8 @@ export class OriginalsDownload {
   private controller: AbortController | null = null;
   private round: Promise<void> | null = null;
   private readonly estimate: StorageEstimate | null;
+  /** Failures per original across rounds; one that failed MAX_TRIES times is skipped from then on. */
+  private readonly failures = new Map<string, number>();
 
   constructor(private readonly options: OriginalsDownloadOptions) {
     this.estimate = options.estimate === undefined ? browserEstimate() : options.estimate;
@@ -122,15 +127,24 @@ export class OriginalsDownload {
     this.set({ state: 'running', total: assets.length, done: assets.length - missing.length, failed: 0, downloadedBytes: 0 });
     for (const asset of missing) {
       if (signal.aborted) return;
-      if (!(await this.fits(asset.byteSize))) {
-        this.set({ state: 'full' });
-        return;
+      const key = asset.sha256.toLowerCase();
+      if ((this.failures.get(key) ?? 0) >= MAX_TRIES) {
+        this.set({ failed: this.progress.failed + 1 });
+        continue;
       }
       try {
+        // The record's size is synced data and could lie; the quota check uses the storage's own size.
+        const stored = await this.options.adapter.getFile(asset.fileId);
+        if (!stored || stored.isFolder || stored.size !== asset.byteSize) throw new Error('The stored file does not match the record');
+        if (!(await this.fits(stored.size))) {
+          this.set({ state: 'full' });
+          return;
+        }
         await this.options.originals.readOriginal(this.options.adapter, asset, { signal });
         this.set({ done: this.progress.done + 1, downloadedBytes: this.progress.downloadedBytes + asset.byteSize });
       } catch {
         if (signal.aborted) return;
+        this.failures.set(key, (this.failures.get(key) ?? 0) + 1);
         this.set({ failed: this.progress.failed + 1 });
       }
     }

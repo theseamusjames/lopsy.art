@@ -48,3 +48,30 @@ test('the app starts offline and keeps working', async ({ page, context }) => {
   await expect(tile).toHaveAttribute('data-rating', '3', { timeout: 30_000 });
   expect(problems).toEqual([]);
 });
+
+test('a cached file that another script on the origin changed is not served', async ({ page, context }) => {
+  await page.goto('/photos/');
+  await expect(page.getByRole('heading', { name: 'Lopsy Photos' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+
+  // What a script injected anywhere on the origin could do: replace the app's code in the shell cache.
+  const script = await page.evaluate(async () => {
+    const src = new URL(document.querySelector<HTMLScriptElement>('script[type="module"]')?.src ?? '').pathname;
+    const name = (await caches.keys()).find((key) => key.startsWith('lopsy-photos-shell-')) ?? '';
+    const cache = await caches.open(name);
+    await cache.put(src, new Response('window.__evil = true;', { headers: { 'Content-Type': 'text/javascript' } }));
+    return { src, name };
+  });
+
+  // A fresh worker, as after the browser stopped the idle one.
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('ServiceWorker.enable');
+  await cdp.send('ServiceWorker.stopAllWorkers');
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Lopsy Photos' })).toBeVisible();
+  expect(await page.evaluate(() => Reflect.get(window, '__evil'))).toBeUndefined();
+  const cached = await page.evaluate(async ({ src, name }) => (await (await caches.open(name)).match(src))?.text() ?? '', script);
+  expect(cached).not.toContain('__evil');
+  expect(cached.length).toBeGreaterThan(1000);
+});

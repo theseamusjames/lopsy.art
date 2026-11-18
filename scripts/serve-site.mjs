@@ -113,7 +113,14 @@ createServer((request, response) => {
     response.writeHead(400).end();
     return;
   }
-  const file = staticFile(path);
+  // Pages' pretty URLs: an .html file is served without its extension, and
+  // asking for it by name redirects there (`/x/index.html` to `/x/`, `/x.html` to `/x`).
+  if (path.endsWith('.html') && staticFile(path)) {
+    const pretty = path.endsWith('/index.html') ? path.slice(0, -'index.html'.length) : path.slice(0, -'.html'.length);
+    response.writeHead(308, { Location: `${pretty}${url.search}` }).end();
+    return;
+  }
+  const file = staticFile(path) ?? (path.endsWith('/') ? null : staticFile(`${path}.html`));
   if (file) {
     // Pages serves a directory at its slash URL.
     if (file.endsWith(`${sep}index.html`) && !path.endsWith('/') && !path.endsWith('index.html')) {
