@@ -4,7 +4,8 @@ A photo library and RAW editor that keeps originals in the user's Google
 Drive (or a local folder) and renders edits with the Lopsy engine. This is
 a proof of concept of `docs/lopsy-photos-spec.md`; read the spec before
 changing the design. The repository's map and the rules that apply
-everywhere are in the root `CLAUDE.md`.
+everywhere are in the root `CLAUDE.md`. Running, Google setup, deploying
+and testing: `docs/lopsy-photos-setup.md`.
 
 ## Where things are
 
