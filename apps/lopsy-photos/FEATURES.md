@@ -209,8 +209,10 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
   menu): opens Photos at `?grade=<id>`, straight into the Edit view on
   that layer with no library or start screen. The layer arrives at
   16 bits with its transparency, and is edited with the non-RAW pipeline.
-  **Done** sends the full-size 16-bit PNG and the recipe back, and the
-  tab closes; **Cancel** sends nothing.
+  Each grade has a tab of its own. **Done** sends the full-size 16-bit PNG
+  and the recipe back, and the tab closes; **Cancel** sends nothing. A
+  render Lopsy would refuse (the wrong size, over 1 GB) is reported to
+  Lopsy as a failure and the tab stays open to say so.
 
 ## Devices, offline, sync and settings
 
