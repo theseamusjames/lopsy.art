@@ -86,9 +86,9 @@ describe('framing', () => {
     expect(rotateRecipe(rotateRecipe(DEFAULT_RECIPE, false), true).framing.rotate).toBe(0);
   });
 
-  it('flips and drops the crop', () => {
+  it('flips and keeps the crop, which is stored on the unflipped image', () => {
     const cropped: Recipe = { ...DEFAULT_RECIPE, framing: { rotate: 0, flipH: false, crop: { x: 0, y: 0, width: 0.5, height: 0.5 } } };
-    expect(flipRecipe(cropped).framing).toEqual({ rotate: 0, flipH: true, crop: null });
+    expect(flipRecipe(cropped).framing).toEqual({ rotate: 0, flipH: true, crop: cropped.framing.crop });
   });
 });
 

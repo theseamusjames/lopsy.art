@@ -194,3 +194,51 @@ test.describe('Histogram, Auto and Profile on a JPEG', () => {
     expect(Math.abs(mono.red - mono.blue)).toBeLessThan(4);
   });
 });
+
+test.describe('Crop', () => {
+  test('crops to 1:1, and the export and previews are square', async ({ page }) => {
+    await openHarness(page);
+    await openGeneratedImage(page);
+    await waitForReady(page);
+    await waitForPreview(page, 0);
+
+    await page.getByRole('button', { name: 'Crop' }).click();
+    await expect(page.getByTestId('crop-tool')).toBeVisible();
+    await page.getByRole('combobox', { name: 'Aspect' }).selectOption('1:1');
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByTestId('crop-tool')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Crop']);
+
+    await waitForPreview(page, 1);
+    const preview = await imageStats(page, { kind: 'preview', index: 1, which: 'screen' });
+    expect([preview.width, preview.height]).toEqual([480, 480]);
+
+    await page.getByRole('button', { name: 'Export' }).click();
+    await page.waitForFunction(() => (window.__photosHarness?.exports.length ?? 0) > 0);
+    const exported = await imageStats(page, { kind: 'export', index: 0 });
+    expect([exported.width, exported.height]).toEqual([480, 480]);
+  });
+
+  test('a crop turns with the photo and Esc cancels the tool', async ({ page }) => {
+    await openHarness(page);
+    await openGeneratedImage(page);
+    await waitForReady(page);
+    await waitForPreview(page, 0);
+    await page.getByRole('button', { name: 'Crop' }).click();
+    await page.getByRole('combobox', { name: 'Aspect' }).selectOption('3:2');
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('crop-tool')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Rotate right' }).click();
+    await waitForPreview(page, 1);
+    const turned = await imageStats(page, { kind: 'preview', index: 1, which: 'screen' });
+    // 640x480 cropped to 3:2 is 640x427; turned, 427x640.
+    expect(turned.height).toBe(640);
+    expect(Math.abs(turned.width - 427)).toBeLessThanOrEqual(1);
+
+    await page.getByRole('button', { name: 'Crop' }).click();
+    await expect(page.getByTestId('crop-tool')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('crop-tool')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Crop', 'Rotate right']);
+  });
+});

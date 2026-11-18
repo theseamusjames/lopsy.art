@@ -122,14 +122,14 @@ export function isGroupDefault(recipe: Recipe, group: GroupDef): boolean {
   return Object.keys(groupResetChanges(recipe, group)).length === 0;
 }
 
-/** The recipe turned a quarter turn; the crop is dropped, as it was drawn on the old orientation. */
+/** The recipe turned a quarter turn. The crop is stored on the unrotated image, so it turns with it. */
 export function rotateRecipe(recipe: Recipe, isClockwise: boolean): Recipe {
   const turns = (recipe.framing.rotate / 90 + (isClockwise ? 1 : 3)) % 4;
-  return { ...recipe, framing: { ...recipe.framing, rotate: (turns * 90) as QuarterTurns, crop: null } };
+  return { ...recipe, framing: { ...recipe.framing, rotate: (turns * 90) as QuarterTurns } };
 }
 
 export function flipRecipe(recipe: Recipe): Recipe {
-  return { ...recipe, framing: { ...recipe.framing, flipH: !recipe.framing.flipH, crop: null } };
+  return { ...recipe, framing: { ...recipe.framing, flipH: !recipe.framing.flipH } };
 }
 
 /** What the "before" view shows: the default edit, in the photo's current framing. */
