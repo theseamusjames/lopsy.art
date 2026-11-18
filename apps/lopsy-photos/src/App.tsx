@@ -23,6 +23,8 @@ export function App() {
   const [busyKind, setBusyKind] = useState<StorageChoice | null>(null);
 
   const choose = useCallback((kind: StorageChoice, options?: ConnectOptions) => {
+    // Once a library has been opened on this page, closing it must not reopen it by itself.
+    autoOpenTried = true;
     const ui = useUi.getState();
     ui.setConnecting(kind);
     setBusyKind(null);

@@ -68,6 +68,9 @@ interface SessionExtras {
   readonly kind: StorageChoice;
   /** The unguarded session, for repair (setOriginalStatus). */
   readonly raw: PhotosLibrarySession;
+  /** The Google `sub`, folder name or 'opfs'; and the email or folder name. */
+  readonly owner: string;
+  readonly label: string;
   readonly tokenSource: GoogleTokenSource | null;
   /** Device caches; null for the browser's own storage, whose files are already on the device. */
   readonly caches: AccountCaches | null;
@@ -76,10 +79,27 @@ interface SessionExtras {
 }
 
 /** The device-cache folder for an account: the Google `sub`, or 'local' for a picked folder. */
-export function cacheAccountId(kind: StorageChoice, owner: string): string | null {
+/**
+ * The device-cache folder for a storage: the Google `sub` for Drive; for a
+ * picked folder, the folder's own identity (its storage root id), so two
+ * folders (or a copy of one, whose file ids repeat) never share cached
+ * previews. Null for the browser's own storage, which needs no cache.
+ */
+export function cacheAccountId(kind: StorageChoice, owner: string, rootId: string | null = null): string | null {
   if (kind === 'browser') return null;
-  if (kind === 'local-folder') return 'local';
+  if (kind === 'local-folder') {
+    if (rootId === null) return null;
+    const id = `local-${rootId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+    return id.slice(0, 128);
+  }
   return /^[A-Za-z0-9_-]{1,128}$/.test(owner) ? owner : null;
+}
+
+/** Refuses a token for a different Google account than the library's. */
+export function checkSameAccount(expected: { readonly id: string; readonly email: string }, actual: { readonly id: string; readonly email: string }): void {
+  if (expected.id !== actual.id) {
+    throw new Error(`You signed in as ${actual.email}, but this library belongs to ${expected.email}. Sign in with ${expected.email} to keep saving.`);
+  }
 }
 
 async function optional<T>(open: () => Promise<T>): Promise<T | null> {
@@ -164,13 +184,14 @@ export class RealBackend implements PhotosBackend {
       throw error;
     }
     const session = guardSession(rawSession, (message) => showToast(message));
-    const accountId = cacheAccountId(kind, opened.owner);
+    const rootId = kind === 'local-folder' ? await opened.adapter.getRoot().then((r) => r.id, () => null) : null;
+    const accountId = cacheAccountId(kind, opened.owner, rootId);
     const [caches, staging, queue] = await Promise.all([
       accountId === null ? null : optional(() => openAccountCaches(accountId)),
       optional(() => OpfsStagingStore.open(session.libraryId)),
       optional(() => IndexedDbImportQueueStore.open()),
     ]);
-    this.extras.set(session, { kind, raw: rawSession, tokenSource: opened.tokenSource, caches, staging, queue });
+    this.extras.set(session, { kind, raw: rawSession, owner: opened.owner, label: opened.label, tokenSource: opened.tokenSource, caches, staging, queue });
     setPreviewSource(caches ? { read: (s, ref) => caches.previews.readPreview(s.adapter, ref.fileId) } : null);
     saveLastConnection({ kind, label: opened.label });
     this.current = session;
@@ -223,8 +244,19 @@ export class RealBackend implements PhotosBackend {
   }
 
   async reauthorize(session: LibrarySession): Promise<void> {
-    const tokenSource = this.extras.get(session)?.tokenSource;
-    if (tokenSource) await tokenSource.requestInteractive();
+    const extras = this.extras.get(session);
+    const tokenSource = extras?.tokenSource;
+    if (extras && tokenSource) {
+      const token = await tokenSource.requestInteractive();
+      // The popup lets the user pick any account; only the library's own may write to it.
+      const account = await fetchGoogleAccount(token);
+      try {
+        checkSameAccount({ id: extras.owner, email: extras.label }, account);
+      } catch (error) {
+        tokenSource.invalidate();
+        throw error;
+      }
+    }
     await session.syncNow();
   }
 

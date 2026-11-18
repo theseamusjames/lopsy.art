@@ -101,6 +101,43 @@ export interface FindResult {
   readonly facets: Facets;
   /** Burst covers to the size of their burst (bursts of two or more). */
   readonly bursts: ReadonlyMap<AssetId, number>;
+  /** Photos to how many Lopsy documents made from them are stacked behind them. */
+  readonly documents: ReadonlyMap<AssetId, number>;
+}
+
+/**
+ * Stacks Lopsy documents behind the photo they were made from (spec 5.6),
+ * when that photo is in the list: the documents leave the list and the
+ * photo carries their count; an open stack shows them right after it.
+ */
+export function stackDocuments(
+  ids: readonly AssetId[],
+  view: LibraryView,
+  expanded: ReadonlySet<AssetId>,
+): { ids: AssetId[]; documents: Map<AssetId, number> } {
+  const shown = new Set(ids);
+  const bySource = new Map<AssetId, AssetId[]>();
+  for (const id of ids) {
+    const asset = view.assets.get(id);
+    const source = asset?.kind === 'document' ? asset.source?.assetId : undefined;
+    if (source === undefined || source === id || !shown.has(source)) continue;
+    const list = bySource.get(source) ?? [];
+    list.push(id);
+    bySource.set(source, list);
+  }
+  if (bySource.size === 0) return { ids: [...ids], documents: new Map() };
+  const stacked = new Set([...bySource.values()].flat());
+  const out: AssetId[] = [];
+  const documents = new Map<AssetId, number>();
+  for (const id of ids) {
+    if (stacked.has(id)) continue;
+    out.push(id);
+    const docs = bySource.get(id);
+    if (!docs) continue;
+    documents.set(id, docs.length);
+    if (expanded.has(id)) out.push(...docs);
+  }
+  return { ids: out, documents };
 }
 
 export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((asset: Asset) => boolean) | null): FindResult {
@@ -119,7 +156,10 @@ export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((ass
   shown.sort((a, b) => compareAssets(a, b, query.sort));
 
   const bursts = new Map<AssetId, number>();
-  if (!query.groupBursts) return { ids: shown.map((a) => a.id), facets, bursts };
+  if (!query.groupBursts) {
+    const stacked = stackDocuments(shown.map((a) => a.id), view, query.expanded);
+    return { ids: stacked.ids, facets, bursts, documents: stacked.documents };
+  }
   const ids: AssetId[] = [];
   for (const burst of groupBursts(shown)) {
     const size = burst.assetIds.length;
@@ -129,7 +169,8 @@ export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((ass
       for (const id of burst.assetIds) if (id !== burst.coverId) ids.push(id);
     }
   }
-  return { ids, facets, bursts };
+  const stacked = stackDocuments(ids, view, query.expanded);
+  return { ids: stacked.ids, facets, bursts, documents: stacked.documents };
 }
 
 /** "March 2026", "14 March 2026", "2026". */

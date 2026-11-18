@@ -1,5 +1,5 @@
 import { memo, type MouseEvent } from 'react';
-import { Images, Layers, SlidersHorizontal, TriangleAlert } from 'lucide-react';
+import { Images, Layers, Paintbrush, SlidersHorizontal, TriangleAlert } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useFindResult, useLibraryView, usePreviewUrl, useVersionCounts } from '../../app/hooks';
 import { useUi } from '../../app/store';
@@ -25,7 +25,9 @@ interface PhotoTileProps {
 export const PhotoTile = memo(function PhotoTile({ assetId, selected, focused, onPick, onOpen }: PhotoTileProps) {
   const view = useLibraryView();
   const counts = useVersionCounts();
-  const burst = useFindResult().bursts.get(assetId) ?? 0;
+  const found = useFindResult();
+  const burst = found.bursts.get(assetId) ?? 0;
+  const documents = found.documents.get(assetId) ?? 0;
   const burstOpen = useUi((s) => s.expandedBursts.has(assetId));
   // Everything in the Set aside list is set aside; dimming it all would hide nothing.
   const inSetAsideList = useUi((s) => s.collection.kind === 'set-aside');
@@ -92,6 +94,25 @@ export const PhotoTile = memo(function PhotoTile({ assetId, selected, focused, o
             >
               <Images size={11} />
               {burst}
+            </button>
+          )}
+          {documents > 0 && (
+            <button
+              type="button"
+              className={`${styles.badge} ${styles.burst}`}
+              title={
+                burstOpen
+                  ? 'Fold the Lopsy documents back behind this photo'
+                  : `${documents} Lopsy document${documents === 1 ? '' : 's'} made from this photo: show ${documents === 1 ? 'it' : 'them'}`
+              }
+              aria-expanded={burstOpen}
+              onClick={(e) => {
+                e.stopPropagation();
+                useUi.getState().toggleBurst(assetId);
+              }}
+            >
+              <Paintbrush size={11} />
+              {documents}
             </button>
           )}
           {paired && (
