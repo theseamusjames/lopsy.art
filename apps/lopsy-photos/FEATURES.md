@@ -136,43 +136,54 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 
 ## Edit view
 
-Opened with Enter, **Edit** in Single view, or double-click. One photo, an
-in-memory history and a panel of groups; edits are saved to the version as
-they are made, and previews are rendered when the edit settles and on
-leaving.
+Opened with Enter, **Edit** in Single view, or double-click. Edits are
+saved to the version as they are made, and previews are rendered when the
+edit settles and on leaving.
 
-- **Loading.** RAF decodes on a pool of workers into the engine's RAW
-  develop stage, with a quick binned first view while the full size
-  develops; DNG through the engine's decoder; 16-bit PNG at full depth;
-  JPEG and WebP through the browser.
-- **Toolbar.** Library (back), Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y), Rotate left,
-  Rotate right, Flip, **Crop**, **Before** (or hold `\`), Fit (⌘0), 100%
-  (⌘1) with a zoom readout, **Edit in Lopsy** and **Export**. The image
-  pans by dragging and zooms with the wheel.
-- **Histogram** of the rendered edit, updated as it changes.
+- **Opening.** The version's stored preview shows at once with
+  "Loading…". The Edit view then edits a working image sized to the view
+  (at least 2048 and at most 4096 px on the long edge): for RAF the
+  binned frame from the worker-pool decode, in the engine's RAW develop
+  stage; for JPEG, PNG and WebP the browser's decode drawn at that size.
+  DNG loads at full size. The full size loads ("Loading full
+  resolution…") when the view reaches 50 % of it, and before a
+  full-size export or Edit in Lopsy.
+- **Toolbar.** Library (back), Undo / Redo, Rotate left, Rotate right,
+  Flip, Flip vertical, **Crop**, **Areas**, **Before** (or hold `\`),
+  **Split** (before and after side by side, with a draggable divider),
+  Fit, 100% and a zoom readout against the full image, **Copy edits**,
+  **Paste edits**, **Edit in Lopsy** and **Export**. The image pans by
+  dragging and zooms with the wheel.
+- **Pixel readout**: the rendered colour under the pointer (R G B,
+  0–255).
+- **Left column** (collapsible): **Presets** (hover previews, click
+  applies, **Save preset…** with a choice of groups), **Versions**
+  (switch, New version, rename, delete) and **History** (every step;
+  clicking one goes back or forward to it, deleting nothing).
+- **Filmstrip** of the library's current photos along the bottom.
+- **Histogram** of the rendered edit, with shadow and highlight clipping
+  indicators.
 - **Profile**: for RAW, the camera look and the engine's profiles
   (including Neutral and Monochrome); for other photos, Standard and
   Monochrome.
-- **White balance**: Temperature and Tint, with Auto on RAW files; on
-  other photos the sliders are relative and there is no Auto.
+- **Straighten**: Angle, and **Level** (draw along something that should
+  be level). The crop shrinks to the largest rectangle inside.
+- **White balance**: Temperature and Tint, with Auto on RAW files.
 - **Tone**: Exposure, Contrast, Highlights, Shadows, Whites, Blacks, with
   **Auto**.
-- **Color**: Vibrance, Saturation.
-- **Curves**: a luminance curve and red, green and blue curves, edited by
-  dragging points.
-- **Color by hue**: Hue, Saturation and Luminance for eight bands (red,
-  orange, yellow, green, aqua, blue, purple, magenta).
-- **Color Grading**: shadows, midtones, highlights and global wheels
-  (hue, saturation, luminance), Blending and Balance.
-- **Finish**: Vignette.
+- **Curves**, **Color**, **Color by hue**, **Color Grading**, **Local
+  contrast** (Large details, Small details, Haze), **Sharpness & noise**
+  and **Finish**.
+- **Areas**: up to eight linear or radial areas, each with Amount,
+  Exposure, Contrast, Highlights, Shadows, Temperature, Tint and
+  Saturation, Invert, a name, a red mask over the image while selected,
+  and handles to move, resize, turn and feather.
 - Every group has a **Reset**; each slider has a typed value field, and
   double-clicking a slider resets it. Each change is one history step
   named after it ("Exposure +0.50").
 - **Crop** tool: drag the frame; **Aspect** Free, Original, 1 : 1,
   4 : 5, 3 : 2 or 16 : 9, made landscape or portrait; Reset, Done (Enter)
-  or Cancel (Escape). The crop follows rotation.
-- Recipes also carry local contrast, sharpening and noise reduction,
-  which the engine renders; the panel has no controls for them yet.
+  or Cancel (Escape). The crop follows rotation and flips.
 
 ## Export
 
@@ -267,4 +278,6 @@ Shown in the app with `?`.
 | ? | Show the shortcuts |
 
 In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 100%, hold `\`
-for before.
+for before, R crop, M a linear area, ⇧M a radial area, ⇧⌘C / ⇧⌘V copy and
+paste edits, ← → the previous or next photo, Escape back to the library
+(or out of the tool in use), ? the Edit view's shortcuts.
