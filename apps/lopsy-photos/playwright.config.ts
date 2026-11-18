@@ -8,7 +8,7 @@ import { join } from 'node:path';
  * preinstalled browsers directory provides (sandboxes whose browsers are a
  * different revision from this Playwright's).
  */
-function chromiumExecutable(): string | undefined {
+export function chromiumExecutable(): string | undefined {
   const own = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
   if (own) return own;
   try {
@@ -45,6 +45,8 @@ const gpuArgs = [
 
 export default defineConfig({
   testDir: './e2e',
+  // site.spec.ts runs against the assembled site: playwright.site.config.ts.
+  testIgnore: ['**/site.spec.ts'],
   timeout: 300_000,
   expect: { timeout: 30_000 },
   workers: 1,

@@ -15,8 +15,14 @@ const repoRoot = resolve(__dirname, '../..');
  * Phase 0 work in docs/lopsy-photos-spec.md; until then this app reads it
  * from there.
  */
+/** `photos`, `/photos` and `/photos/` all mean `/photos/`: Vite needs both slashes for asset URLs. */
+function photosBase(value: string | undefined): string {
+  const trimmed = value?.trim().replace(/^\/+|\/+$/g, '') ?? '';
+  return trimmed === '' ? '/' : `/${trimmed}/`;
+}
+
 export default defineConfig({
-  base: process.env.PHOTOS_BASE ?? '/',
+  base: photosBase(process.env.PHOTOS_BASE),
   plugins: [react(), wasm(), topLevelAwait()],
   worker: {
     format: 'es',
