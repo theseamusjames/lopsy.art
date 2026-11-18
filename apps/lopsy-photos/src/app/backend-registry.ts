@@ -29,3 +29,8 @@ export function getBackend(): PhotosBackend {
   }
   return backend;
 }
+
+/** Storybook: stories use the fake backend whatever the page's URL says. */
+export function setBackend(next: PhotosBackend): void {
+  backend = next;
+}
