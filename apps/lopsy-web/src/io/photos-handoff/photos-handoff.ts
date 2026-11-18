@@ -17,6 +17,7 @@ import {
   searchWithoutHandoffParam,
   type SavePayload,
 } from '@lopsy/handoff/lopsy';
+import type { HandoffSource } from '@lopsy/handoff/messages';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { describeError, notifyError, notifyInfo } from '../../app/notifications-store';
@@ -83,11 +84,14 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
   }
 }
 
-/** The document as Photos stores it: the `.lopsy` and a flattened 16-bit PNG. */
-async function buildSavePayload(): Promise<SavePayload> {
+/**
+ * The document as Photos stores it: the `.lopsy` (carrying the source block
+ * when there is one) and a flattened 16-bit PNG.
+ */
+async function buildSavePayload(source?: HandoffSource): Promise<SavePayload> {
   const engine = getEngine();
   if (!engine) throw new Error('engine not ready.');
-  const lopsy = await serializeProject();
+  const lopsy = await serializeProject(source ? { photos: source } : {});
   const render = await (await renderPng16(engine)).arrayBuffer();
   const name = useEditorStore.getState().document.name || 'Untitled';
   return { name, lopsy, render };
@@ -107,7 +111,7 @@ export async function saveDocumentToPhotos(): Promise<void> {
     const outcome = await saveToPhotos({
       photosUrl: photosUrl(),
       connection: session.connection,
-      payload: buildSavePayload(),
+      payload: buildSavePayload(session.connection.source),
     });
     if (outcome.ok) {
       useEditorStore.getState().markClean();

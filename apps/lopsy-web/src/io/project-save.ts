@@ -5,7 +5,8 @@
  * File format (binary):
  *   [4 bytes: manifest JSON byte length (uint32 LE)]
  *   [N bytes: manifest JSON (UTF-8)]
- *   [for each layer with pixel data: gzip-compressed raw RGBA bytes]
+ *   [for each layer with pixel data: an LZ4 16-bit blob (v3, `pixelFormat:
+ *    'rgba16-lz4'`) or gzip-compressed raw RGBA8 bytes]
  *   [for each layer with mask data: raw mask bytes]
  *
  * The manifest contains enough metadata to reconstruct the full layer stack.
@@ -14,7 +15,7 @@
 
 import { useEditorStore } from '../app/editor-store';
 import { getEngine } from '../engine-wasm/engine-state';
-import { readLayerAsImageData } from '../engine-wasm/gpu-pixel-access';
+import { readLayerAsImageData, readLayerBackupBlob } from '../engine-wasm/gpu-pixel-access';
 import { finalizePendingStrokeGlobal } from '../app/interactions/pending-stroke';
 import { commitLayerTransform } from '../app/interactions/layer-transform';
 import { flushLayerSync } from '../engine-wasm/engine-sync';
@@ -30,7 +31,23 @@ const LOPSY_MAGIC = new Uint8Array([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]); // "LO
  * v2: drop shadows and outer glows are cast from the layer plus its Stroke
  * (`STROKED_SILHOUETTE_VERSION`); v1 effects are migrated on load.
  */
-export const FORMAT_VERSION = 2;
+/**
+ * v3: layer pixels are stored at 16 bits per channel as the engine's LZ4
+ * u16 blob (`pixelFormat: 'rgba16-lz4'`), and the manifest may carry a
+ * Lopsy Photos source block (`photos`). v2 files still open.
+ */
+export const FORMAT_VERSION = 3;
+
+/** The engine's u16 compressed-blob format; `uploadLayerPixelsCompressedU16` reads it back. */
+export const PIXEL_FORMAT_RGBA16_LZ4 = 'rgba16-lz4';
+
+/** Where a document belongs in a Lopsy Photos library (spec 6.12). */
+export interface PhotosSourceBlock {
+  readonly libraryId: string;
+  readonly assetId: string;
+  readonly versionId: string;
+  readonly recipeHash: string;
+}
 
 export interface LopsyManifest {
   readonly version: number;
@@ -52,6 +69,8 @@ export interface LopsyManifest {
   readonly paths?: readonly StoredPath[];
   /** Canvas guides. Absent in files saved before these were serialized. */
   readonly guides?: readonly Guide[];
+  /** Set when the document came from or was saved to Lopsy Photos. Absent before v3. */
+  readonly photos?: PhotosSourceBlock;
 }
 
 // Serialized layer — all layer fields except pixel data (which is stored as blobs)
@@ -116,6 +135,8 @@ export interface SerializedLayer {
    * the layer's logical width/height. Absent in pre-fix v1 files. */
   readonly pixelWidth?: number;
   readonly pixelHeight?: number;
+  /** `'rgba16-lz4'` for a 16-bit blob (v3). Absent: gzip-compressed RGBA8. */
+  readonly pixelFormat?: typeof PIXEL_FORMAT_RGBA16_LZ4;
 }
 
 export function serializeLayer(
@@ -233,7 +254,7 @@ async function compressBytes(bytes: Uint8Array): Promise<Uint8Array> {
  * transforms are committed first so the file holds what the user sees.
  * Throws when the engine is not ready or a readback fails.
  */
-export async function serializeProject(): Promise<ArrayBuffer> {
+export async function serializeProject(options: { readonly photos?: PhotosSourceBlock } = {}): Promise<ArrayBuffer> {
   if (!getEngine()) throw new Error('engine not ready.');
 
   finalizePendingStrokeGlobal();
@@ -258,8 +279,20 @@ export async function serializeProject(): Promise<ArrayBuffer> {
     let pixelWidth = 0;
     let pixelHeight = 0;
 
-    // Read pixel data for raster layers (not groups — they have no texture)
-    if (layer.type !== 'group') {
+    let pixelFormat: SerializedLayer['pixelFormat'];
+
+    // Read pixel data for raster layers (not groups — they have no texture).
+    // 16 bits per channel where the engine has content; a layer with none
+    // reads back empty, and falls back to the 8-bit path so it keeps its size.
+    const blob16 = layer.type !== 'group' ? await readLayerBackupBlob(layer.id) : null;
+    if (blob16 && blob16.length >= 24) {
+      const header = new DataView(blob16.buffer, blob16.byteOffset, 24);
+      pixelDataIndex = pixelBlobs.length;
+      pixelBlobs.push(blob16);
+      pixelWidth = header.getInt32(16, true);
+      pixelHeight = header.getInt32(20, true);
+      pixelFormat = PIXEL_FORMAT_RGBA16_LZ4;
+    } else if (layer.type !== 'group') {
       const imageData = await readLayerAsImageData(layer.id);
       if (imageData) {
         const raw = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
@@ -282,7 +315,8 @@ export async function serializeProject(): Promise<ArrayBuffer> {
       maskBlobs.push(maskBytes);
     }
 
-    serializedLayers.push(serializeLayer(layer, pixelDataIndex, maskDataIndex, pixelWidth, pixelHeight));
+    const serialized = serializeLayer(layer, pixelDataIndex, maskDataIndex, pixelWidth, pixelHeight);
+    serializedLayers.push(pixelFormat ? { ...serialized, pixelFormat } : serialized);
   }
 
   const manifest: LopsyManifest = {
@@ -300,6 +334,7 @@ export async function serializeProject(): Promise<ArrayBuffer> {
     dpi: doc.dpi,
     paths: state.paths,
     guides: useUIStore.getState().guides,
+    ...(options.photos ? { photos: options.photos } : {}),
   };
 
   const manifestJson = JSON.stringify(manifest);

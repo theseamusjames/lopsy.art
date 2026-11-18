@@ -9,7 +9,7 @@
  * rather than importing @lopsy/handoff, keeps the test honest about what
  * actually crosses between the tabs.
  */
-import { deflateSync } from 'node:zlib';
+import { deflateSync, inflateSync } from 'node:zlib';
 import type { BrowserContext, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { getEditorState, getPixelAt, waitForStore } from './helpers';
@@ -38,11 +38,19 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([head, data, crc]);
 }
 
+type Channels = (x: number, y: number) => [number, number, number, number];
+
 /**
- * A 16-bit RGBA PNG: red rises 1024 per column, green 1365 per row, blue is
- * mid-grey, alpha opaque. At (32, 24) that is about (128, 127, 128) in 8 bits.
+ * Red rises 1024 per column, green 1365 per row, blue is mid-grey, alpha
+ * opaque. At (32, 24) that is about (128, 127, 128) in 8 bits.
  */
-function makePng16(): Buffer {
+const GRADIENT: Channels = (x, y) => [Math.min(65535, x * 1024), Math.min(65535, y * 1365), 0x8000, 0xffff];
+
+/** Steps far finer than 8 bits can hold: 8-bit storage would collapse them. */
+const FINE_GRADIENT: Channels = (x, y) => [20000 + x * 9, 40000 + y * 11, 12345 + (x + y) * 5, 0xffff];
+
+/** A 16-bit RGBA PNG of `PNG_W` x `PNG_H`. */
+function makePng16(channels: Channels = GRADIENT): Buffer {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(PNG_W, 0);
   ihdr.writeUInt32BE(PNG_H, 4);
@@ -54,14 +62,57 @@ function makePng16(): Buffer {
     raw[y * stride] = 0;
     for (let x = 0; x < PNG_W; x++) {
       const o = y * stride + 1 + x * 8;
-      raw.writeUInt16BE(Math.min(65535, x * 1024), o);
-      raw.writeUInt16BE(Math.min(65535, y * 1365), o + 2);
-      raw.writeUInt16BE(0x8000, o + 4);
-      raw.writeUInt16BE(0xffff, o + 6);
+      const [r, g, b, a] = channels(x, y);
+      raw.writeUInt16BE(r, o);
+      raw.writeUInt16BE(g, o + 2);
+      raw.writeUInt16BE(b, o + 4);
+      raw.writeUInt16BE(a, o + 6);
     }
   }
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   return Buffer.concat([signature, chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
+/** Decodes a 16-bit RGBA PNG (color type 6) to its samples, undoing the row filters. */
+function decodePng16(png: Buffer): { width: number; height: number; samples: number[] } {
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  expect(png[24]).toBe(16);
+  expect(png[25]).toBe(6);
+  const idat: Buffer[] = [];
+  for (let at = 8; at < png.length; ) {
+    const len = png.readUInt32BE(at);
+    if (png.toString('ascii', at + 4, at + 8) === 'IDAT') idat.push(png.subarray(at + 8, at + 8 + len));
+    at += 12 + len;
+  }
+  const data = inflateSync(Buffer.concat(idat));
+  const bpp = 8;
+  const stride = width * bpp;
+  const out = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++) {
+    const filter = data[y * (stride + 1)]!;
+    for (let i = 0; i < stride; i++) {
+      const raw = data[y * (stride + 1) + 1 + i]!;
+      const left = i >= bpp ? out[y * stride + i - bpp]! : 0;
+      const up = y > 0 ? out[(y - 1) * stride + i]! : 0;
+      const upLeft = y > 0 && i >= bpp ? out[(y - 1) * stride + i - bpp]! : 0;
+      let value = raw;
+      if (filter === 1) value = raw + left;
+      else if (filter === 2) value = raw + up;
+      else if (filter === 3) value = raw + ((left + up) >> 1);
+      else if (filter === 4) {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left);
+        const pb = Math.abs(p - up);
+        const pc = Math.abs(p - upLeft);
+        value = raw + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft);
+      }
+      out[y * stride + i] = value & 0xff;
+    }
+  }
+  const samples: number[] = [];
+  for (let i = 0; i < out.length; i += 2) samples.push(out.readUInt16BE(i));
+  return { width, height, samples };
 }
 
 /**
@@ -73,6 +124,12 @@ const photosPage = (lopsyOrigin: string): string => `<!doctype html><meta charse
 <script>
 window.__log = [];
 window.__saves = [];
+const toBase64 = (buffer) => {
+  const bytes = new Uint8Array(buffer);
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+};
 const recordSave = (m) => {
   const lopsy = new Uint8Array(m.lopsy);
   const render = new DataView(m.render);
@@ -86,6 +143,9 @@ const recordSave = (m) => {
     renderWidth: render.getUint32(16),
     renderHeight: render.getUint32(20),
     renderBitDepth: render.getUint8(24),
+    lopsyVersion: new DataView(m.lopsy).getUint16(6, true),
+    lopsyBase64: toBase64(m.lopsy),
+    renderBase64: toBase64(m.render),
   });
 };
 const receiveId = new URLSearchParams(location.search).get('receive');
@@ -158,8 +218,9 @@ async function openLopsyFrom(
   photos: Page,
   lopsyUrl: string,
   mode: 'handshake' | 'unprompted' = 'handshake',
+  channels: Channels = GRADIENT,
 ): Promise<Page> {
-  const png = makePng16().toString('base64');
+  const png = makePng16(channels).toString('base64');
   const [lopsy] = await Promise.all([
     context.waitForEvent('page'),
     photos.evaluate(({ url, b64, m }) => (window as unknown as { startHandoff: (u: string, b: string, m: string) => string }).startHandoff(url, b64, m), {
@@ -182,6 +243,9 @@ interface RecordedSave {
   renderWidth: number;
   renderHeight: number;
   renderBitDepth: number;
+  lopsyVersion: number;
+  lopsyBase64: string;
+  renderBase64: string;
 }
 
 function savesOf(photos: Page): Promise<RecordedSave[]> {
@@ -231,6 +295,7 @@ test.describe('Lopsy Photos handoff', () => {
     expect(first!.renderWidth).toBe(PNG_W);
     expect(first!.renderHeight).toBe(PNG_H);
     expect(first!.renderBitDepth).toBe(16);
+    expect(first!.lopsyVersion).toBe(3);
 
     // While the bar is shown, Ctrl+S saves to Photos, carrying the revision the last save returned.
     await lopsy.locator('[data-testid="canvas-container"]').click({ position: { x: 5, y: 5 } });
@@ -239,6 +304,53 @@ test.describe('Lopsy Photos handoff', () => {
     const second = (await savesOf(page))[1]!;
     expect(second.baseRevision).toBe('rev-2');
     expect(second.lopsyMagic).toEqual([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]);
+  });
+
+  test('a saved .lopsy keeps 16 bits per channel when reopened', async ({ page, context, baseURL }) => {
+    await servePhotosPages(context, new URL(baseURL!).origin);
+    await page.goto(`${PHOTOS_ORIGIN}/library`);
+    const lopsy = await openLopsyFrom(context, page, `${baseURL}/`, 'handshake', FINE_GRADIENT);
+    await waitForStore(lopsy);
+    const bar = lopsy.getByRole('region', { name: 'Lopsy Photos' });
+    await expect(bar).toBeVisible({ timeout: 30_000 });
+
+    await bar.getByRole('button', { name: 'Save to Lopsy Photos' }).click();
+    await expect(bar.getByRole('status')).toHaveText('Saved to Lopsy Photos', { timeout: 30_000 });
+    const [saved] = await savesOf(page);
+    const before = decodePng16(Buffer.from(saved!.renderBase64, 'base64'));
+    // The render holds values between 8-bit steps (an 8-bit value v widens to v * 257).
+    expect(before.samples.filter((v) => v % 257 !== 0).length).toBeGreaterThan(before.samples.length / 2);
+
+    // Reopen the saved project with File > Open Project..., then hand it to Photos again.
+    await lopsy.getByRole('button', { name: 'File' }).click();
+    const [chooser] = await Promise.all([
+      lopsy.waitForEvent('filechooser'),
+      lopsy.getByRole('menuitem', { name: 'Open Project...' }).click(),
+    ]);
+    await chooser.setFiles({
+      name: 'DSCF1234.lopsy',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from(saved!.lopsyBase64, 'base64'),
+    });
+    // A different document: the bar goes.
+    await expect(bar).toHaveCount(0, { timeout: 30_000 });
+
+    await lopsy.getByRole('button', { name: 'File' }).click();
+    const [photos2] = await Promise.all([
+      context.waitForEvent('page'),
+      lopsy.getByRole('menuitem', { name: 'Add to Lopsy Photos' }).click(),
+    ]);
+    await expect.poll(async () => (await savesOf(photos2)).length, { timeout: 30_000 }).toBe(1);
+    const [resaved] = await savesOf(photos2);
+    const after = decodePng16(Buffer.from(resaved!.renderBase64, 'base64'));
+    expect(after.width).toBe(PNG_W);
+    expect(after.height).toBe(PNG_H);
+    let maxDiff = 0;
+    for (let i = 0; i < before.samples.length; i++) {
+      maxDiff = Math.max(maxDiff, Math.abs(before.samples[i]! - after.samples[i]!));
+    }
+    // An 8-bit round trip would move samples by up to 128; 16-bit storage moves none.
+    expect(maxDiff).toBe(0);
   });
 
   test('ignores a handoff from an origin that is not Photos', async ({ page, context, baseURL }) => {
