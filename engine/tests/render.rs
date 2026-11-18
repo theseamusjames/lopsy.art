@@ -521,6 +521,26 @@ fn without_a_raw_develop_stage_the_composite_is_unchanged() {
 }
 
 #[test]
+fn the_color_mixer_matches_its_cpu_reference_and_clears() {
+    let Some(mut engine) = engine(4, 1) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 4, 1, 1.0)).expect("layer");
+    let texels = [[200u8, 60, 40, 255], [60, 160, 70, 255], [50, 80, 200, 255], [128, 128, 128, 255]];
+    commands::layer::upload_layer_pixels(&mut engine, "art", texels.as_flattened(), 4, 1, 0, 0).expect("pixels");
+    let before = now(compositor::composite_for_export(&mut engine));
+    let values: [f32; 24] = std::array::from_fn(|k| [40.0, -60.0, 20.0, 80.0, -30.0, 50.0][k % 6]);
+    commands::develop::set_image_color_mixer(&mut engine, &values).expect("mixer");
+    let mixed = now(compositor::composite_for_export(&mut engine));
+    let input: Vec<f32> = texels.as_flattened().iter().map(|&v| v as f32 / 255.0).collect();
+    let expected = lopsy_core::color_mixer::color_mixer_reference(&input, &values);
+    for (g, e) in mixed.iter().zip(&expected) {
+        assert!((*g as f32 - e * 255.0).abs() <= 1.5, "{mixed:?} vs {expected:?}");
+    }
+    commands::develop::clear_image_color_mixer(&mut engine);
+    assert_eq!(now(compositor::composite_for_export(&mut engine)), before);
+    assert_no_gpu_errors();
+}
+
+#[test]
 fn the_develop_histogram_counts_the_displayed_pixels() {
     let Some(mut engine) = engine(8, 4) else { return };
     commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");
