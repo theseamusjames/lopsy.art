@@ -55,6 +55,23 @@ export function isHiddenPairHalf(asset: Asset, assets: ReadonlyMap<AssetId, Asse
   return other !== undefined && !other.deleted && isRaw(other);
 }
 
+/**
+ * RAW+JPEG partners, both ways. Import records the pair on one half only
+ * (the JPEG points at its RAW), so the RAW's tile learns of its JPEG here.
+ * Only pairs whose halves are both in the library.
+ */
+export function pairPartners(assets: ReadonlyMap<AssetId, Asset>): Map<AssetId, AssetId> {
+  const out = new Map<AssetId, AssetId>();
+  for (const a of assets.values()) {
+    if (a.deleted || a.pairedWith === null) continue;
+    const other = assets.get(a.pairedWith);
+    if (!other || other.deleted || other.id === a.id) continue;
+    out.set(a.id, other.id);
+    if (!out.has(other.id)) out.set(other.id, a.id);
+  }
+  return out;
+}
+
 /** The import id of the latest import, or null with no photos. */
 export function latestImportId(assets: Iterable<Asset>): string | null {
   let best: Asset | null = null;

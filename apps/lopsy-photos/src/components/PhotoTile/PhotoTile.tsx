@@ -1,7 +1,7 @@
 import { memo, type MouseEvent } from 'react';
 import { Copy, Images, Layers, Paintbrush, SlidersHorizontal, TriangleAlert } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
-import { useFindResult, useLibraryView, usePreviewUrl, useVersionCounts } from '../../app/hooks';
+import { useFindResult, useLibraryView, usePreviewUrl, usePairPartners, useVersionCounts } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { writeDraggedIds } from '../../app/drag';
 import { isEdited } from '../../library/asset-query';
@@ -28,6 +28,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
   const { assetId, versionId: ownVersionId } = parseItem(itemId);
   const view = useLibraryView();
   const counts = useVersionCounts();
+  const partners = usePairPartners();
   const found = useFindResult();
   const burst = found.bursts.get(assetId) ?? 0;
   const documents = found.documents.get(assetId) ?? 0;
@@ -41,7 +42,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
   const isVersionTile = ownVersionId !== null;
   const edited = isVersionTile ? !isDefaultRecipe(version.recipe) : isEdited(asset, view);
   const versions = counts.get(asset.id) ?? 1;
-  const paired = asset.pairedWith !== null && view.assets.get(asset.pairedWith)?.deleted === false;
+  const paired = partners.has(asset.id);
 
   return (
     <div

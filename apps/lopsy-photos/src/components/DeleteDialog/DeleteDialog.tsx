@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getBackend } from '../../app/backend-registry';
-import { useLibraryView, useOrderedIds, useSession } from '../../app/hooks';
+import { useLibraryView, useOrderedIds, usePairPartners, useSession } from '../../app/hooks';
 import { selectAfterRemoval } from '../../app/commands';
 import { showToast } from '../../app/toasts';
 import { selectOne } from '../../library/selection';
@@ -15,6 +15,7 @@ export function DeleteDialog() {
   const session = useSession();
   const view = useLibraryView();
   const orderedIds = useOrderedIds();
+  const partners = usePairPartners();
   const ids = useUi((s) => s.deleteIds);
   const askDelete = useUi((s) => s.askDelete);
   const [busy, setBusy] = useState(false);
@@ -27,7 +28,8 @@ export function DeleteDialog() {
     if (!a) continue;
     bytes += a.byteSize;
     // The JPEG half of a pair goes with its RAW.
-    const pair = a.pairedWith ? view.assets.get(a.pairedWith) : undefined;
+    const partner = partners.get(id);
+    const pair = partner ? view.assets.get(partner) : undefined;
     if (pair && !pair.deleted && !idSet.has(pair.id)) bytes += pair.byteSize;
   }
   const where = session.adapter.kind === 'google-drive' ? 'Google Drive’s trash' : 'the trash';
@@ -37,7 +39,7 @@ export function DeleteDialog() {
     setError(null);
     const withPairs = new Set(ids);
     for (const id of ids) {
-      const pair = view.assets.get(id)?.pairedWith;
+      const pair = partners.get(id);
       if (pair) withPairs.add(pair);
     }
     const removed = [...withPairs];

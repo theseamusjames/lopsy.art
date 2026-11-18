@@ -10,7 +10,7 @@ import { compileSearch, type LabelChoice, type SavedSearch, type SearchRule } fr
 import { computeFacets, type Facets } from '@lopsy/photos-core/search/facets';
 import { groupBursts } from '@lopsy/photos-core/search/bursts';
 import { versionItemId, versionsByAsset, type ItemId } from './items';
-import { baseAssets, compareAssets, type AssetQuery, type Collection } from './asset-query';
+import { baseAssets, compareAssets, isHiddenPairHalf, type AssetQuery, type Collection } from './asset-query';
 
 export interface FacetFilter {
   readonly cameras: readonly string[];
@@ -200,7 +200,7 @@ export interface ImportBatch {
 export function importBatches(view: LibraryView): ImportBatch[] {
   const batches = new Map<string, { importedAt: string; count: number }>();
   for (const a of view.assets.values()) {
-    if (a.deleted) continue;
+    if (a.deleted || isHiddenPairHalf(a, view.assets)) continue;
     const b = batches.get(a.importId);
     if (!b) batches.set(a.importId, { importedAt: a.importedAt, count: 1 });
     else {

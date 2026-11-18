@@ -11,7 +11,7 @@ import type { ExportPreset, Preset } from '@lopsy/photos-core/library/types';
 import { findAssets, type FacetFilter, type FindResult } from '../library/finding';
 import { parseTextQuery, TextIndex } from '@lopsy/photos-core/search/text';
 import { readSavedSearches, type SavedSearch } from '@lopsy/photos-core/search/rules';
-import { versionCounts, type Collection, type SortOrder } from '../library/asset-query';
+import { pairPartners, versionCounts, type Collection, type SortOrder } from '../library/asset-query';
 import { loadPreviewUrl, peekPreviewUrl } from './preview-cache';
 
 export function useSession(): LibrarySession {
@@ -125,6 +125,16 @@ export function useVersionCounts(): ReadonlyMap<AssetId, number> {
   if (versionMemo && versionMemo.view === view) return versionMemo.counts;
   versionMemo = { view, counts: versionCounts(view) };
   return versionMemo.counts;
+}
+
+let pairMemo: { assets: LibraryView['assets']; partners: ReadonlyMap<AssetId, AssetId> } | null = null;
+
+/** RAW+JPEG partners both ways, once per change of the assets. */
+export function usePairPartners(): ReadonlyMap<AssetId, AssetId> {
+  const view = useLibraryView();
+  if (pairMemo && pairMemo.assets === view.assets) return pairMemo.partners;
+  pairMemo = { assets: view.assets, partners: pairPartners(view.assets) };
+  return pairMemo.partners;
 }
 
 /** An object URL for the preview, or null while it loads (or when there is none). */

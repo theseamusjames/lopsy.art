@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
-import { isEdited, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
+import { isEdited, pairPartners, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
+import { importBatches } from './finding';
 import { makeAsset, makeView } from './test-fixtures';
 
 const byCapture: AssetQuery = { collection: { kind: 'all' }, sort: { key: 'captured', descending: false }, text: '' };
@@ -105,5 +106,20 @@ describe('sidebarCounts and badges', () => {
       },
     ]);
     expect(isEdited(a, edited)).toBe(true);
+  });
+});
+
+describe('RAW+JPEG pairs', () => {
+  it('knows the partner from either half, and counts the pair once', () => {
+    const raw = makeAsset('r', { format: 'raf' });
+    const jpeg = makeAsset('j', { format: 'jpeg', pairedWith: 'r' });
+    const view = makeView([raw, jpeg, makeAsset('x')]);
+    const partners = pairPartners(view.assets);
+    expect(partners.get('r')).toBe('j');
+    expect(partners.get('j')).toBe('r');
+    expect(partners.has('x')).toBe(false);
+    expect(sidebarCounts(view).all).toBe(2);
+    expect(importBatches(view).reduce((n, b) => n + b.count, 0)).toBe(2);
+    expect(pairPartners(makeView([raw, { ...jpeg, deleted: true }]).assets).size).toBe(0);
   });
 });
