@@ -658,7 +658,10 @@ function runJob(setup: JobSetup): ImportJob {
       ...(setup.keywords ? { keywords: setup.keywords } : {}),
     };
     const added = session.addAsset(asset);
-    if (setup.albumId !== null) session.setAlbumMember(setup.albumId, added.assetId, true);
+    if (setup.albumId !== null) {
+      const albumId = setup.albumId;
+      session.withoutLibraryHistory(() => session.setAlbumMember(albumId, added.assetId, true));
+    }
     return added;
   };
 

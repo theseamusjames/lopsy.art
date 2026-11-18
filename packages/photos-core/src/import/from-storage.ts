@@ -344,7 +344,10 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
         ...(ctx.keywords ? { keywords: ctx.keywords } : {}),
       };
       const { assetId, versionId } = session.addAsset(asset);
-      if (ctx.albumId !== undefined) session.setAlbumMember(ctx.albumId, assetId, true);
+      if (ctx.albumId !== undefined) {
+        const albumId = ctx.albumId;
+        session.withoutLibraryHistory(() => session.setAlbumMember(albumId, assetId, true));
+      }
 
       let note = previews.error;
       if (work.sidecar) {
