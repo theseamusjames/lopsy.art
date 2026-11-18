@@ -22,9 +22,13 @@
 //! (`v + a·k·(1 − v)`).
 //!
 //! **Grain.** Value noise on a grid of cells `1 + 3 · size/100`
-//! full-resolution pixels wide, in full-resolution coordinates (document
-//! pixels over `pixelScale`), so the preview and the export show the same
-//! grain. Each cell's value is an integer hash (PCG) of its index and the
+//! full-resolution pixels wide. At full resolution (`pixelScale` 1, every
+//! export) the grid is in document pixels. On a working image
+//! (`pixelScale` < 1) it is drawn as the full-size grain looks once
+//! downscaled: a cell spans `cell · pixelScale` working pixels, floored at
+//! one, and its contrast is scaled by the averaging a downscale does
+//! (`working_octave`). The pattern then differs from the export's; its
+//! apparent size and contrast match. Each cell's value is an integer hash (PCG) of its index and the
 //! seed, so grain is deterministic per photo; values are interpolated
 //! bilinearly with a smoothstep, and roughness mixes in a second octave at
 //! half the cell size. The grain is added to all channels, weighted toward
@@ -119,13 +123,39 @@ fn value_noise(px: f32, py: f32, cell: f32, seed: u32) -> f32 {
 
 /// Grain at document point (`x`, `y`), −0.5..0.5 before scaling.
 pub fn grain_noise(s: &FinishSettings, x: f32, y: f32) -> f32 {
-    let (px, py) = (x / s.pixel_scale, y / s.pixel_scale);
     let cell = 1.0 + 3.0 * s.grain_size / 100.0;
-    let coarse = value_noise(px, py, cell, s.seed);
-    let fine = value_noise(px, py, 0.5 * cell, s.seed ^ 0x9E37_79B9);
     let r = s.roughness / 100.0;
-    coarse + r * (fine - coarse) - 0.5
+    if s.pixel_scale >= 1.0 {
+        let (px, py) = (x / s.pixel_scale, y / s.pixel_scale);
+        let coarse = value_noise(px, py, cell, s.seed);
+        let fine = value_noise(px, py, 0.5 * cell, s.seed ^ 0x9E37_79B9);
+        return coarse + r * (fine - coarse) - 0.5;
+    }
+    let (coarse, coarse_amp) = working_octave(x, y, cell, s.pixel_scale, s.seed);
+    let (fine, fine_amp) = working_octave(x, y, 0.5 * cell, s.pixel_scale, s.seed ^ 0x9E37_79B9);
+    (1.0 - r) * coarse_amp * coarse + r * fine_amp * fine
 }
+
+/// One octave of grain on a working image at `scale` (< 1): what a
+/// full-resolution octave of `cell` full pixels looks like once the export
+/// is downscaled by `scale`. A cell spans `cell · scale` working pixels;
+/// when that is under one, the grain shows at one working pixel, and its
+/// contrast falls with the number of independent samples a working pixel
+/// averages, about `1 / (max(cell, 1) · scale)²` (no finer than one full
+/// pixel, since that is what the export samples). The amplitude is that
+/// standard-deviation ratio times `GRAIN_PREVIEW_GAIN`, capped at 1.
+/// Returns the centred value (−0.5..0.5) and the amplitude.
+fn working_octave(x: f32, y: f32, cell: f32, scale: f32, seed: u32) -> (f32, f32) {
+    let cell_w = cell * scale;
+    let amp = (GRAIN_PREVIEW_GAIN * cell.max(1.0) * scale).min(1.0);
+    (value_noise(x, y, cell_w.max(1.0), seed) - 0.5, amp)
+}
+
+/// Neighbouring grain samples share interpolation corners, so a downscale
+/// averages fewer independent values than it averages pixels: measured
+/// against box-downscaled exports (`working_scale_grain_matches_a_downscaled_export`),
+/// the plain `cell · scale` ratio comes out about this much too faint.
+pub const GRAIN_PREVIEW_GAIN: f32 = 1.6;
 
 /// One encoded pixel through the finish at document point (`x`, `y`).
 pub fn finish_pixel(rgb: [f32; 3], s: &FinishSettings, x: f32, y: f32, w: f32, h: f32) -> [f32; 3] {
@@ -199,12 +229,55 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert!(a.iter().all(|v| (-0.5..=0.5).contains(v)));
-        // At half scale, a working pixel samples the full-resolution field
-        // at twice the coordinate.
-        let half = FinishSettings { pixel_scale: 0.5, ..s };
-        assert_eq!(grain_noise(&half, 10.0, 6.0), grain_noise(&s, 20.0, 12.0));
         let mean = a.iter().sum::<f32>() / a.len() as f32;
         assert!(mean.abs() < 0.15);
+    }
+
+    /// Standard deviation of grain over a `w`×`h` area at `scale`, after a
+    /// box downscale by `factor` (1 for none).
+    fn grain_std(s: &FinishSettings, w: usize, h: usize, factor: usize) -> f32 {
+        let mut vals = Vec::new();
+        for by in 0..h / factor {
+            for bx in 0..w / factor {
+                let mut sum = 0.0;
+                for dy in 0..factor {
+                    for dx in 0..factor {
+                        sum += grain_noise(s, (bx * factor + dx) as f32 + 0.5, (by * factor + dy) as f32 + 0.5);
+                    }
+                }
+                vals.push(sum / (factor * factor) as f32);
+            }
+        }
+        let mean = vals.iter().sum::<f32>() / vals.len() as f32;
+        (vals.iter().map(|v| (v - mean) * (v - mean)).sum::<f32>() / vals.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn working_scale_grain_matches_a_downscaled_export() {
+        for (size, roughness) in [(0.0, 0.0), (0.0, 100.0), (50.0, 30.0), (100.0, 0.0), (100.0, 100.0)] {
+            let full = settings([0.0, 0.0, 0.0, 0.0, 60.0, size, roughness, 77.0, 1.0]);
+            let working = FinishSettings { pixel_scale: 1.0 / 3.0, ..full };
+            // The export at full size, box-downscaled by 3, against the
+            // working render of the same area.
+            let exported = grain_std(&full, 360, 240, 3);
+            let previewed = grain_std(&working, 120, 80, 1);
+            let ratio = previewed / exported;
+            assert!((0.75..1.33).contains(&ratio), "size {size}, roughness {roughness}: {previewed} vs {exported}");
+            // The old mapping (full-resolution cells sampled once per
+            // working pixel) was several times too strong.
+            assert!(previewed < grain_std(&full, 120, 80, 1));
+        }
+    }
+
+    #[test]
+    fn grain_at_full_resolution_is_unchanged() {
+        // Values from the mapping before working-scale grain, at scale 1.
+        let s = settings([0.0, 0.0, 0.0, 0.0, 60.0, 50.0, 30.0, 42.0, 1.0]);
+        let (px, py) = (17.5f32, 9.5f32);
+        let cell = 1.0 + 3.0 * 50.0 / 100.0;
+        let coarse = value_noise(px, py, cell, 42);
+        let fine = value_noise(px, py, 0.5 * cell, 42 ^ 0x9E37_79B9);
+        assert_eq!(grain_noise(&s, px, py), coarse + 0.3 * (fine - coarse) - 0.5);
     }
 
     #[test]
