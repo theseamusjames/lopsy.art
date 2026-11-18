@@ -31,6 +31,15 @@ async function redPixels(page: Page, image: { readonly png: string } | { readonl
   }, image);
 }
 
+async function exportDigest(page: Page, index: number): Promise<string> {
+  return page.evaluate(async (n) => {
+    const blob = window.__photosHarness?.exports[n]?.blob;
+    if (!blob) throw new Error('no export');
+    const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  }, index);
+}
+
 async function liveRed(page: Page): Promise<number> {
   const shot = await page.getByTestId('edit-view').locator('canvas').first().screenshot();
   return redPixels(page, { png: shot.toString('base64') });
@@ -45,13 +54,28 @@ test('the highlight warning paints blown pixels red on screen, never in the expo
   await expect(page.getByTestId('clip-highlights')).toHaveAttribute('data-clipped', 'true');
 
   await expect.poll(() => liveRed(page)).toBe(0);
+  // An export with the warning off, to compare with one made with it on.
+  await page.getByRole('button', { name: 'Export' }).click();
+  await page.waitForFunction(() => (window.__photosHarness?.exports.length ?? 0) > 0);
+  const histogramOff = await page.getByTestId('clip-highlights').getAttribute('title');
+
   await page.getByTestId('clip-highlights').click();
   await expect(page.getByTestId('clip-highlights')).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => liveRed(page), { timeout: 15_000 }).toBeGreaterThan(1000);
 
   await page.getByRole('button', { name: 'Export' }).click();
-  await page.waitForFunction(() => (window.__photosHarness?.exports.length ?? 0) > 0);
-  expect(await redPixels(page, { exportIndex: 0 })).toBe(0);
+  await page.waitForFunction(() => (window.__photosHarness?.exports.length ?? 0) > 1);
+  expect(await redPixels(page, { exportIndex: 1 })).toBe(await redPixels(page, { exportIndex: 0 }));
+  expect(await exportDigest(page, 1)).toBe(await exportDigest(page, 0));
+  // The histogram is read again (an edit and its undo) with the warning on, and still counts the photo, not the red.
+  const exposure = page.getByLabel('Exposure value');
+  await exposure.fill('0.3');
+  await exposure.press('Enter');
+  await expect(page.getByTestId('clip-highlights')).not.toHaveAttribute('title', histogramOff ?? '');
+  await exposure.fill('0');
+  await exposure.press('Enter');
+  await expect(page.getByTestId('clip-highlights')).toHaveAttribute('title', histogramOff ?? '');
+  await expect.poll(() => liveRed(page), { timeout: 15_000 }).toBeGreaterThan(1000);
 
   // J: both on (highlights already were), then both off.
   await page.getByTestId('edit-view').locator('canvas').first().click();

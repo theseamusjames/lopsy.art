@@ -878,10 +878,36 @@ class PhotoEngine implements DevelopEngine {
   private grainSeedValue = 0;
   private finishKeyApplied: string | null = null;
 
+  private isDetailMaskView = false;
+
   setDetailMaskView(on: boolean): void {
+    this.isDetailMaskView = on;
     if (this.isDisposed) return;
     setImageDetailMaskView(this.engine, on);
     this.invalidate();
+  }
+
+  /**
+   * Runs `work` with the screen-only views (clipping warning, sharpening
+   * mask) off, for anything that reads the rendered frame: exports and
+   * previews draw it, and the histogram counts it. Costs nothing while
+   * neither view is on.
+   */
+  private async withScreenViewsOff<T>(work: () => Promise<T>): Promise<T> {
+    const { shadows, highlights } = this.clippingWarning;
+    const isMask = this.isDetailMaskView;
+    if (!shadows && !highlights && !isMask) return work();
+    if (shadows || highlights) engineSetClippingWarning(this.engine, false, false);
+    if (isMask) setImageDetailMaskView(this.engine, false);
+    try {
+      return await work();
+    } finally {
+      if (!this.isDisposed) {
+        engineSetClippingWarning(this.engine, this.clippingWarning.shadows, this.clippingWarning.highlights);
+        setImageDetailMaskView(this.engine, this.isDetailMaskView);
+        this.invalidate();
+      }
+    }
   }
 
   setGrainSeed(seed: number): void {
@@ -982,10 +1008,13 @@ class PhotoEngine implements DevelopEngine {
 
   async readHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed) return null;
-    render(this.engine);
-    // WebGL answers at once; a wgpu build parks the read, which this POC does not wait for.
-    const bins: unknown = readDevelopHistogram(this.engine);
-    return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
+    // The histogram counts the photo, not the clipping colours or the sharpening mask.
+    return this.withScreenViewsOff(async () => {
+      render(this.engine);
+      // WebGL answers at once; a wgpu build parks the read, which this POC does not wait for.
+      const bins: unknown = readDevelopHistogram(this.engine);
+      return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
+    });
   }
 
   async autoTone(recipe: Recipe): Promise<ToneValues> {
@@ -1111,18 +1140,8 @@ class PhotoEngine implements DevelopEngine {
   }
 
   async exportImage(options: ExportOptions): Promise<Blob> {
-    const { shadows, highlights } = this.clippingWarning;
-    if (!shadows && !highlights) return this.exportClean(options);
-    // Exports and previews draw through the live path too: never with the warning on.
-    engineSetClippingWarning(this.engine, false, false);
-    try {
-      return await this.exportClean(options);
-    } finally {
-      if (!this.isDisposed) {
-        engineSetClippingWarning(this.engine, this.clippingWarning.shadows, this.clippingWarning.highlights);
-        this.invalidate();
-      }
-    }
+    // Exports and previews draw through the live path too: never with a screen-only view on.
+    return this.withScreenViewsOff(() => this.exportClean(options));
   }
 
   private async exportClean(options: ExportOptions): Promise<Blob> {
