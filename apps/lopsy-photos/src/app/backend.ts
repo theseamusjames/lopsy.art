@@ -69,6 +69,16 @@ export interface ExportProgress {
   readonly done: number;
   readonly failures: readonly ExportFailure[];
   readonly finished: boolean;
+  /** A finished export into the library: its folder under Exports, for Show in Drive and sharing. */
+  readonly folder?: ExportFolder;
+}
+
+export interface ExportFolder {
+  readonly id: FileId;
+  /** Its name under Exports. */
+  readonly name: string;
+  /** Its page in the storage's web UI; null when the storage has none. */
+  readonly webLink: string | null;
 }
 
 export interface ExportJob {
