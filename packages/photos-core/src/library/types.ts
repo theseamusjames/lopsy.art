@@ -40,6 +40,15 @@ export type Op =
       readonly present: boolean;
     };
 
+export interface OpStep {
+  readonly id: string;
+  readonly label: string;
+  /** Set on an undo: the ID of the step it reverts. */
+  readonly undoes?: string;
+  /** Set on a redo: the ID of the step it re-applies. */
+  readonly redoes?: string;
+}
+
 export interface OpEnvelope {
   /** `${device}:${seq}`, unique across the library. */
   readonly id: string;
@@ -51,7 +60,7 @@ export interface OpEnvelope {
   /** Schema version of the op. */
   readonly v: number;
   /** Groups ops into one history step (one slider release, one paste). */
-  readonly step?: { readonly id: string; readonly label: string };
+  readonly step?: OpStep;
   readonly op: Op;
 }
 
