@@ -103,8 +103,9 @@ async function renderPreviews(
 ): Promise<void> {
   const version = session.getView().versions.get(versionId);
   const hash = recipeHash(version ? version.recipe : DEFAULT_RECIPE);
-  const old: FileId[] = [version?.thumb?.fileId, version?.screen?.fileId].filter((id): id is FileId => !!id);
+  const unused: FileId[] = [];
   for (const size of ['screen', 'thumb'] as const) {
+    const before = session.getView().versions.get(versionId)?.[size]?.fileId ?? null;
     const rendered = await options.previewRenderer.render(png, PREVIEW_SIZES[size], 1);
     const stored = await session.adapter.createFile(
       {
@@ -116,9 +117,18 @@ async function renderPreviews(
       rendered.blob,
     );
     session.setPreview(versionId, size, { fileId: stored.id, recipeHash: hash, width: rendered.width, height: rendered.height });
+    // Trash only what nothing points at any more (the rule app/real/edit-previews.ts
+    // follows): the old file once the version shows the new one; else the new
+    // file, which the session did not take (the recipe moved on meanwhile).
+    const after = session.getView().versions.get(versionId)?.[size]?.fileId ?? null;
+    if (after === stored.id) {
+      if (before && before !== stored.id) unused.push(before);
+    } else {
+      unused.push(stored.id);
+    }
   }
-  // The replaced previews are only caches; a failure to trash them is harmless.
-  for (const id of old) await session.adapter.trash(id).catch(() => {});
+  // Previews are only caches; a failure to trash one is harmless.
+  for (const id of unused) await session.adapter.trash(id).catch(() => {});
 }
 
 async function createDocument(
@@ -199,17 +209,26 @@ async function updateDocument(
 ): Promise<StoredFile> {
   const renderBlob = new Blob([save.render], { type: 'image/png' });
   const sha256 = await sha256Hex(save.lopsy);
-  const lopsyFile = await session.adapter.updateContent(document.fileId, new Blob([save.lopsy], { type: LOPSY_MIME_TYPE }));
-  if (document.renderFileId) {
-    await session.adapter.updateContent(document.renderFileId, renderBlob);
-  }
   const size = pngSize(save.render);
+  // The facts are recorded before the bytes change, so a session that refuses
+  // writes (its lock was lost, it is read-only) fails the save while the file
+  // still matches the facts it has. If the write then fails, they are put back.
   recordFacts(session, document.id, {
     sha256,
     byteSize: save.lopsy.byteLength,
     width: size?.width ?? null,
     height: size?.height ?? null,
   });
+  let lopsyFile: StoredFile;
+  try {
+    lopsyFile = await session.adapter.updateContent(document.fileId, new Blob([save.lopsy], { type: LOPSY_MIME_TYPE }));
+  } catch (err) {
+    recordFacts(session, document.id, { sha256: document.sha256, byteSize: document.byteSize, width: document.width, height: document.height });
+    throw err;
+  }
+  if (document.renderFileId) {
+    await session.adapter.updateContent(document.renderFileId, renderBlob);
+  }
   await renderPreviews(session, options, document.id, document.primaryVersionId, renderBlob);
   return lopsyFile;
 }

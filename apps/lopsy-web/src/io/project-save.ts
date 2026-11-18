@@ -162,6 +162,8 @@ export interface SerializedLayer {
    * the layer's logical width/height. Absent in pre-fix v1 files. */
   readonly pixelWidth?: number;
   readonly pixelHeight?: number;
+  /** Raster layers: the recipe of the last Grade in Lopsy Photos (provenance only). */
+  readonly gradeRecipe?: Readonly<Record<string, unknown>>;
   /** `'rgba16-lz4'` for a 16-bit blob (v3). Absent: gzip-compressed RGBA8. */
   readonly pixelFormat?: typeof PIXEL_FORMAT_RGBA16_LZ4;
 }
@@ -195,7 +197,7 @@ export function serializeLayer(
   };
 
   if (layer.type === 'raster') {
-    return { ...base, width: layer.width, height: layer.height };
+    return { ...base, width: layer.width, height: layer.height, ...(layer.gradeRecipe ? { gradeRecipe: layer.gradeRecipe } : {}) };
   }
   if (layer.type === 'text') {
     return {

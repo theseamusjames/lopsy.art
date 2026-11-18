@@ -10,6 +10,9 @@ import { buildFlatDisplayList } from '../../layers/group-utils';
 import { useLayerDnd } from './useLayerDnd';
 import { LayerRow } from './LayerRow';
 import { LayerContextMenu } from './LayerContextMenu';
+import { isPhotosEnabled } from '../../io/photos-handoff/photos-url';
+import { gradeLayerInPhotos } from '../../io/photos-handoff/grade-layer';
+import { canGradeLayer } from '../../io/photos-handoff/grade-checks';
 import { useState } from 'react';
 import styles from './LayerPanel.module.css';
 
@@ -254,6 +257,15 @@ export function LayerPanel({ onSelectLayer }: LayerPanelProps) {
           setLayerColorTag(contextMenu.layerId, tag);
           closeContextMenu();
         }}
+        {...(isPhotosEnabled() && canGradeLayer(layers.find((l) => l.id === contextMenu.layerId))
+          ? {
+              onGradeInPhotos: () => {
+                const layerId = contextMenu.layerId;
+                closeContextMenu();
+                void gradeLayerInPhotos(layerId);
+              },
+            }
+          : {})}
         onClose={closeContextMenu}
       />
     )}

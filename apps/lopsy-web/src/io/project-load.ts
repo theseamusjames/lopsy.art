@@ -51,11 +51,13 @@ export function deserializeLayer(s: SerializedLayer, formatVersion: number = SUP
   };
 
   if (s.type === 'raster') {
+    const gradeRecipe = s.gradeRecipe;
     const layer: RasterLayer = {
       ...base,
       type: 'raster',
       width: s.width ?? 0,
       height: s.height ?? 0,
+      ...(gradeRecipe && typeof gradeRecipe === 'object' && !Array.isArray(gradeRecipe) ? { gradeRecipe } : {}),
     };
     return layer;
   }

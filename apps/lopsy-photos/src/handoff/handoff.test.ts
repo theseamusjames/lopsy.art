@@ -366,6 +366,67 @@ describe('data integrity', () => {
   });
 });
 
+describe('in-place updates that the session does not take', () => {
+  async function savedDocument() {
+    const first = await storeLopsySave(session, { id: 'h1', name: 'Poster', lopsy: lopsyFile(1), render: png16(8, 6) }, { previewRenderer });
+    return { first, doc: session.getView().assets.get(first.documentId)! };
+  }
+
+  function resave(documentId: string, baseRevision: string) {
+    return storeLopsySave(
+      session,
+      {
+        id: 'h1',
+        name: 'Poster',
+        lopsy: lopsyFile(2),
+        render: png16(8, 6),
+        source: { libraryId: session.libraryId, assetId: '', versionId: '', recipeHash: '', documentId },
+        baseRevision,
+      },
+      { previewRenderer },
+    );
+  }
+
+  it('keeps the old previews when the version did not take the new ones', async () => {
+    const { first, doc } = await savedDocument();
+    const version = session.getView().versions.get(doc.primaryVersionId)!;
+    const oldThumb = version.thumb!.fileId;
+    const oldScreen = version.screen!.fileId;
+    // The recipe moved on while the previews rendered, so the session keeps the old ones.
+    vi.spyOn(session, 'setPreview').mockImplementation(() => {});
+    await resave(doc.id, first.revision);
+    const after = session.getView().versions.get(doc.primaryVersionId)!;
+    expect(after.thumb!.fileId).toBe(oldThumb);
+    expect((await adapter.getFile(oldThumb))!.trashed).toBe(false);
+    expect((await adapter.getFile(oldScreen))!.trashed).toBe(false);
+    // The previews nobody points at went to the trash instead.
+    const live = (await adapter.listChildren(session.layout.previewsId)).filter((f) => !f.trashed).map((f) => f.id);
+    expect(live.sort()).toEqual([oldThumb, oldScreen].sort());
+  });
+
+  it('trashes the old previews once the version shows the new ones', async () => {
+    const { first, doc } = await savedDocument();
+    const oldThumb = session.getView().versions.get(doc.primaryVersionId)!.thumb!.fileId;
+    await resave(doc.id, first.revision);
+    const newThumb = session.getView().versions.get(doc.primaryVersionId)!.thumb!.fileId;
+    expect(newThumb).not.toBe(oldThumb);
+    expect((await adapter.getFile(oldThumb))!.trashed).toBe(true);
+    expect((await adapter.getFile(newThumb))!.trashed).toBe(false);
+  });
+
+  it('fails before changing the file when the session refuses to record the facts', async () => {
+    const { first, doc } = await savedDocument();
+    Object.assign(session, {
+      setAssetFacts: () => {
+        throw new Error('The library lock was lost');
+      },
+    });
+    await expect(resave(doc.id, first.revision)).rejects.toThrow('lock was lost');
+    expect((await readBytes(doc.fileId))[8]).toBe(1);
+    expect((await adapter.getFile(doc.fileId))!.revision).toBe(first.revision);
+  });
+});
+
 describe('storeLopsySave without a source', () => {
   it('files Add to Lopsy Photos as a new document with no source, next to existing names', async () => {
     await adapter.createFile({ parentId: session.layout.documentsId, name: 'Poster.lopsy', mimeType: 'application/x-lopsy' }, new Blob(['x']));

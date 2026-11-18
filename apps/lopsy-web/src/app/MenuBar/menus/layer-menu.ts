@@ -2,9 +2,14 @@ import { useEditorStore } from '../../editor-store';
 import { useUIStore } from '../../ui-store';
 import { canMergeDown } from '../../store/actions/merge-down';
 import type { MenuDef } from './types';
+import { isPhotosEnabled } from '../../../io/photos-handoff/photos-url';
+import { gradeLayerInPhotos } from '../../../io/photos-handoff/grade-layer';
+import { canGradeLayer } from '../../../io/photos-handoff/grade-checks';
 
 export function createLayerMenu(): MenuDef {
-  const disableMergeDown = !canMergeDown(useEditorStore.getState().document);
+  const doc = useEditorStore.getState().document;
+  const disableMergeDown = !canMergeDown(doc);
+  const activeLayer = doc.layers.find((l) => l.id === doc.activeLayerId);
   return {
     label: 'Layer',
     items: [
@@ -29,6 +34,17 @@ export function createLayerMenu(): MenuDef {
         disabled: disableMergeDown,
       },
       { label: 'Flatten Image', action: () => void useEditorStore.getState().flattenImage() },
+      // Only builds that ship Lopsy Photos (VITE_PHOTOS_URL) offer the grade.
+      ...(isPhotosEnabled()
+        ? [
+            { separator: true, label: '' },
+            {
+              label: 'Grade in Lopsy Photos\u2026',
+              action: () => void gradeLayerInPhotos(),
+              disabled: !canGradeLayer(activeLayer),
+            },
+          ]
+        : []),
     ],
   };
 }

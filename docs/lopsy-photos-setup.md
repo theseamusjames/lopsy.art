@@ -66,6 +66,10 @@ when `DEPLOY_PHOTOS` is `true`) sets it to `/photos/`. Put it in
 | `VITE_LOPSY_URL` | `apps/lopsy-photos/.env.local` | `http://localhost:5173/` in dev, `/` in a build | `/` |
 | `VITE_PHOTOS_URL` | `apps/lopsy-web/.env.local` | no handoff | `/photos/` |
 
+Both directions run over this channel: Edit in Lopsy and Save to Lopsy
+Photos, and Lopsy's Grade in Lopsy Photos, which opens Photos at
+`?grade=<id>` straight into the Edit view on one layer (no library needed).
+
 Only the configured URL's origin is trusted for handoff messages. The
 round-trip e2e (`apps/lopsy-photos/e2e/roundtrip.config.ts`) starts both
 dev servers with each other's URL set.
