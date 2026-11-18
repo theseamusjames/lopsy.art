@@ -14,7 +14,8 @@ you change what users see).
 | Path | What |
 |---|---|
 | `apps/lopsy-photos/` | The app: React, TypeScript, Vite |
-| `packages/photos-core/` | Storage adapters, the library database, import. Plain TypeScript, no React; its tests run in Node |
+| `packages/photos-core/` | Storage adapters, the library database, import, export, caches, search, XMP. Plain TypeScript, no React; its tests run in Node |
+| `packages/photos-core/README.md` | The maintainer's guide: module map, on-storage format, invariants, undo, untrusted input, testing |
 | `packages/photos-core/src/storage/types.ts` | The storage contract every backend implements |
 | `packages/photos-core/src/library/types.ts` | The data model and `LibrarySession`, the only way the UI changes the library |
 | `packages/photos-core/src/library/recipe.ts` | The edit recipe |
