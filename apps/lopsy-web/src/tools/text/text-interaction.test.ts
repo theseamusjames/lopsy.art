@@ -782,7 +782,14 @@ describe('textLayerNameFromContent', () => {
   });
 
   it('caps names at 16 characters', () => {
-    expect(textLayerNameFromContent('The quick brown fox jumps')).toBe('The quick brown ');
+    expect(textLayerNameFromContent('The quick brown fox jumps')).toBe('The quick brown');
+    expect(textLayerNameFromContent('abcdefghijklmnopqrstu')).toBe('abcdefghijklmnop');
+  });
+
+  it('trims a space left at the end of the cut (#1776)', () => {
+    expect(textLayerNameFromContent('The quick brown fox jumps')).toBe('The quick brown');
+    expect(textLayerNameFromContent('WALK SLOW. LOOK HARD.')).toBe('WALK SLOW. LOOK');
+    expect(textLayerNameFromContent('MEET ME AT NOON TODAY')).toBe('MEET ME AT NOON');
   });
 
   it('trims surrounding whitespace and collapses runs', () => {

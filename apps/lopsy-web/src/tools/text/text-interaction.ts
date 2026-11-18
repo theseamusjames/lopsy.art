@@ -241,7 +241,8 @@ function isInsideEditedText(editing: TextEditingState, layer: TextLayer, canvasP
 export function textLayerNameFromContent(text: string): string {
   const collapsed = text.replace(/\s+/g, ' ').trim();
   if (collapsed.length === 0) return 'Text';
-  return collapsed.length > 16 ? collapsed.slice(0, 16) : collapsed;
+  // Trim again after the cut: a cut that lands after a word ends in a space (#1776).
+  return collapsed.length > 16 ? collapsed.slice(0, 16).trimEnd() : collapsed;
 }
 
 /**
@@ -255,7 +256,8 @@ export function committedTextLayerName(
   previousText: string,
   nextText: string,
 ): string {
-  const isAutoNamed = isNew || currentName === textLayerNameFromContent(previousText);
+  // trimEnd: names auto-derived before #1776 kept a trailing space.
+  const isAutoNamed = isNew || currentName.trimEnd() === textLayerNameFromContent(previousText);
   return isAutoNamed ? textLayerNameFromContent(nextText) : currentName;
 }
 
