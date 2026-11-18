@@ -168,6 +168,10 @@ function fakeImport(files: readonly File[], session: FakeSession, options: Parti
     cancel: () => {
       cancelled = true;
     },
+    // The fake keeps no queue to resume from, so pausing stops it like cancel.
+    pause: () => {
+      cancelled = true;
+    },
     finished,
   };
 }
