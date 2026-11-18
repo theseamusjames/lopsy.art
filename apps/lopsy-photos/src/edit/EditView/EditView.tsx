@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, Download, FlipHorizontal2, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { ArrowLeft, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, Json, Version } from '@lopsy/photos-core/library/types';
 import { ControlGroup } from '../ControlGroup/ControlGroup';
@@ -34,6 +34,12 @@ export interface EditViewProps {
   /** 512 px and 2048 px JPEGs of the edit, after edits settle and on leaving. */
   readonly onPreviewRendered?: (previews: { thumb: Blob; screen: Blob; recipeHash: string }) => void;
   readonly onExport?: (blob: Blob, fileName: string) => void;
+  /**
+   * Edit in Lopsy. Called inside the button's click, so the app can open
+   * Lopsy's window there; `renderPng16` renders the current edit full-size
+   * as a 16-bit PNG. The button is hidden without it.
+   */
+  readonly onEditInLopsy?: (renderPng16: () => Promise<ArrayBuffer>) => void;
 }
 
 /** How long the edit must stay unchanged before previews are rendered. */
@@ -71,6 +77,7 @@ export function EditView({
   onClose,
   onPreviewRendered,
   onExport,
+  onEditInLopsy,
 }: EditViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -81,6 +88,9 @@ export function EditView({
   const [isBeforeHeld, setIsBeforeHeld] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const isReady = status.kind === 'ready';
+  /** A first view is on screen while the full-size image decodes: edits apply to both. */
+  const isRefining = status.kind === 'loading' && status.progress?.stage === 'refining';
+  const canEdit = isReady || isRefining;
   const isBefore = isBeforeToggled || isBeforeHeld;
 
   const savedRecipe = committed?.base === version.recipe ? applyChanges(version.recipe, committed.changes) : version.recipe;
@@ -258,6 +268,20 @@ export function EditView({
     }
   };
 
+  const handleEditInLopsy = () => {
+    if (!engine || !onEditInLopsy) return;
+    const recipe = savedRecipe;
+    onEditInLopsy(async () => {
+      engine.setRecipe(recipe);
+      try {
+        const png = await engine.exportImage({ format: 'png' });
+        return await png.arrayBuffer();
+      } finally {
+        engine.setRecipe(isBefore ? beforeRecipe(shownRecipe) : shownRecipe);
+      }
+    });
+  };
+
   const isAllDefault = recipeHash(beforeRecipe(savedRecipe)) === recipeHash(savedRecipe);
   const zoomPercent = view ? Math.round(view.zoom * 100) : 100;
 
@@ -285,7 +309,7 @@ export function EditView({
             className={styles.iconButton}
             aria-label="Rotate left"
             title="Rotate left"
-            disabled={!isReady || isBefore}
+            disabled={!canEdit || isBefore}
             onClick={() => onSetRecipe(rotateRecipe(savedRecipe, false), 'Rotate left')}
           >
             <RotateCcw size={16} aria-hidden />
@@ -295,7 +319,7 @@ export function EditView({
             className={styles.iconButton}
             aria-label="Rotate right"
             title="Rotate right"
-            disabled={!isReady || isBefore}
+            disabled={!canEdit || isBefore}
             onClick={() => onSetRecipe(rotateRecipe(savedRecipe, true), 'Rotate right')}
           >
             <RotateCw size={16} aria-hidden />
@@ -305,7 +329,7 @@ export function EditView({
             className={styles.iconButton}
             aria-label="Flip"
             title="Flip left to right"
-            disabled={!isReady || isBefore}
+            disabled={!canEdit || isBefore}
             onClick={() => onSetRecipe(flipRecipe(savedRecipe), 'Flip')}
           >
             <FlipHorizontal2 size={16} aria-hidden />
@@ -318,7 +342,7 @@ export function EditView({
             aria-pressed={isBeforeToggled}
             title="Before and after (hold \)"
             onClick={() => setIsBeforeToggled((v) => !v)}
-            disabled={!isReady}
+            disabled={!canEdit}
           >
             <SplitSquareHorizontal size={16} aria-hidden />
             <span>Before</span>
@@ -330,7 +354,7 @@ export function EditView({
             className={styles.toolButton}
             aria-pressed={view?.isFit ?? true}
             onClick={() => engine?.fit()}
-            disabled={!isReady}
+            disabled={!canEdit}
           >
             Fit
           </button>
@@ -339,7 +363,7 @@ export function EditView({
             className={styles.toolButton}
             aria-pressed={!view?.isFit && zoomPercent === 100}
             onClick={() => engine?.setZoom(1)}
-            disabled={!isReady}
+            disabled={!canEdit}
           >
             100%
           </button>
@@ -347,6 +371,12 @@ export function EditView({
             {zoomPercent}%
           </span>
         </div>
+        {onEditInLopsy && (
+          <button type="button" className={styles.toolButton} onClick={handleEditInLopsy} disabled={!isReady || isBusy}>
+            <SquarePen size={16} aria-hidden />
+            <span>Edit in Lopsy</span>
+          </button>
+        )}
         {onExport && (
           <button type="button" className={styles.primaryButton} onClick={() => void handleExport()} disabled={!isReady || isBusy}>
             <Download size={16} aria-hidden />
@@ -364,7 +394,7 @@ export function EditView({
           onPointerCancel={handleStagePointerUp}
         >
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
-          {isBefore && isReady && <span className={styles.beforeBadge}>Before</span>}
+          {isBefore && canEdit && <span className={styles.beforeBadge}>Before</span>}
           <LoadStatus status={status} onClose={onClose} />
         </div>
         <aside className={styles.panel} aria-label="Edits">
@@ -373,7 +403,7 @@ export function EditView({
               key={group.id}
               group={group}
               recipe={shownRecipe}
-              isDisabled={!isReady || isBefore}
+              isDisabled={!canEdit || isBefore}
               onChange={handleSliderChange}
               onCommit={handleSliderCommit}
               onReset={handleGroupReset}
@@ -383,7 +413,7 @@ export function EditView({
             <button
               type="button"
               className={styles.toolButton}
-              disabled={!isReady || isBefore || isAllDefault}
+              disabled={!canEdit || isBefore || isAllDefault}
               onClick={() => onSetRecipe(beforeRecipe(savedRecipe), 'Reset all edits')}
             >
               Reset all
