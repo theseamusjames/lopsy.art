@@ -4,7 +4,7 @@
  * and are written to storage by the sync engine.
  */
 
-import type { StorageAdapter } from '../storage/types';
+import type { FileId, StorageAdapter } from '../storage/types';
 import { HybridClock } from './hlc';
 import { newId } from './ids';
 import { ensureLibrary, LIBRARY_SCHEMA_VERSION } from './layout';
@@ -754,9 +754,13 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
   let layout: LibraryLayout;
   let readOnly = false;
   let offlineError: unknown;
+  let otherJournals: readonly FileId[] = [];
+  const preferLibraryId = (await store.lastLayout())?.libraryId;
+  const ensureOptions = { now, ...(preferLibraryId !== undefined ? { preferLibraryId } : {}) };
   try {
-    const ensured = await ensureLibrary(adapter, { now });
+    const ensured = await ensureLibrary(adapter, ensureOptions);
     layout = ensured.layout;
+    otherJournals = ensured.otherJournals.map((j) => j.journalId);
     readOnly = ensured.manifest.schemaVersion > LIBRARY_SCHEMA_VERSION;
   } catch (error) {
     const savedLayout = canOpenOffline(error) ? await store.lastLayout() : null;
@@ -813,13 +817,14 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
     const mergeStore = merge;
     const libraryId = layout.libraryId;
     const ensure = async (): Promise<LibraryLayout> => {
-      const ensured = await ensureLibrary(adapter, { now });
+      const ensured = await ensureLibrary(adapter, { now, preferLibraryId: libraryId });
       if (ensured.layout.libraryId !== libraryId) {
         throw new Error('The library in storage is not the one this device opened before.');
       }
       if (ensured.manifest.schemaVersion > LIBRARY_SCHEMA_VERSION) session.markReadOnly();
       await store.write(libraryId, { layout: ensured.layout });
       session.updateLayout(ensured.layout);
+      session.syncEngine.setOtherJournals(ensured.otherJournals.map((j) => j.journalId));
       return ensured.layout;
     };
     const session: Session = new Session({
@@ -850,6 +855,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
           readOnly,
           settings: () => Object.fromEntries(session.getView().settings),
           ...(online ? {} : { ensure, initialError: offlineError }),
+          otherJournals,
           ...(options.fullPullEvery !== undefined ? { fullPullEvery: options.fullPullEvery } : {}),
           ...(options.rollUpAt !== undefined ? { rollUpAt: options.rollUpAt } : {}),
           ...(options.timers ? { timers: options.timers } : {}),

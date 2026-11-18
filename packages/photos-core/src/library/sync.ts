@@ -59,6 +59,8 @@ export interface SyncEngineOptions {
    * and is retried until it succeeds.
    */
   readonly ensure?: () => Promise<LibraryLayout>;
+  /** Journal folders of duplicate library roots, read but never written (layout.ts `otherJournals`). */
+  readonly otherJournals?: readonly FileId[];
   /** Why storage could not be reached at open, shown in the first status. */
   readonly initialError?: unknown;
   readonly deviceId: string;
@@ -179,6 +181,7 @@ export class SyncEngine {
   private layout: LibraryLayout;
   private ready: boolean;
   private lost = false;
+  private otherJournals: readonly FileId[];
   private readOnly: boolean;
   private firstPendingAt: number | null = null;
   private flushTimer: unknown = null;
@@ -206,6 +209,7 @@ export class SyncEngine {
   constructor(options: SyncEngineOptions) {
     this.o = options;
     this.layout = options.layout;
+    this.otherJournals = options.otherJournals ?? [];
     this.ready = options.ensure === undefined;
     this.readOnly = options.readOnly === true;
     this.timers = options.timers ?? DEFAULT_TIMERS;
@@ -231,6 +235,11 @@ export class SyncEngine {
       error: this.newerSeen ? NEWER_APP_MESSAGE : null,
     };
     if (options.initialError !== undefined) this.status = { ...this.status, ...classify(options.initialError) };
+  }
+
+  /** Duplicate library roots found once storage was reached (offline open). */
+  setOtherJournals(journals: readonly FileId[]): void {
+    this.otherJournals = journals;
   }
 
   /** The library turned out to have a newer schema: keep reading, stop writing. */
@@ -480,7 +489,10 @@ export class SyncEngine {
       if (!isStorageError(error) || error.code === 'auth' || error.retryable) throw error;
       this.report(`Change feed unavailable: ${error.message}`);
     }
-    const folders = (await adapter.listChildren(this.layout.journalId)).filter((f) => f.isFolder);
+    const folders: StoredFile[] = [];
+    for (const journalId of [this.layout.journalId, ...(this.otherJournals)]) {
+      for (const f of await adapter.listChildren(journalId)) if (f.isFolder) folders.push(f);
+    }
     let appliedAny = false;
     for (const folder of folders) {
       const device = folder.properties['lp.device'] ?? folder.name;
@@ -506,7 +518,7 @@ export class SyncEngine {
         for (const change of page.changes) {
           const file = change.file;
           if (!file || file.trashed || file.parentId === null) continue;
-          if (file.isFolder && file.parentId === this.layout.journalId) {
+          if (file.isFolder && (file.parentId === this.layout.journalId || this.otherJournals.includes(file.parentId))) {
             const device = file.properties['lp.device'] ?? file.name;
             if (isDeviceId(device) && device !== this.o.deviceId) {
               this.deviceFolders.set(file.id, device);
