@@ -3,7 +3,8 @@
  * and applying one to the asset it describes.
  */
 
-import type { AssetId, AssetMarks, LibrarySession, VersionId } from '../library/types';
+import { isDefaultRecipe } from '../library/recipe';
+import type { Asset, AssetId, AssetMarks, LibrarySession, LibraryView, VersionId } from '../library/types';
 import { readXmp, recipeFromXmp } from './read';
 import type { XmpData } from './read';
 
@@ -91,6 +92,39 @@ export function applyXmp(
   const recipe = recipeFromXmp(data, fileOrientation);
   if (recipe) session.setRecipe(versionId, recipe, 'XMP sidecar');
   return { marks: hasMarks, keywords: data.keywords.length, recipe: recipe !== null };
+}
+
+export const SIDECAR_NOT_APPLIED_DUPLICATE = 'Sidecar not applied: photo already in the library';
+export const SIDECAR_APPLIED_DUPLICATE = 'Photo already in the library; its XMP sidecar was applied to it';
+
+/** Whether nobody has marked or edited the asset yet, so a sidecar cannot overwrite someone's work. */
+export function isUntouched(asset: Asset, view: LibraryView): boolean {
+  const version = view.versions.get(asset.primaryVersionId);
+  return (
+    asset.rating === 0 &&
+    asset.label === null &&
+    !asset.setAside &&
+    asset.keywords.length === 0 &&
+    asset.title === '' &&
+    asset.caption === '' &&
+    (!version || isDefaultRecipe(version.recipe))
+  );
+}
+
+/**
+ * Applies a sidecar that came with a duplicate photo to the asset already
+ * in the library, only when that asset is untouched. Returns the note for
+ * the import item.
+ */
+export async function applySidecarToExisting(
+  session: Pick<LibrarySession, 'getView' | 'setMarks' | 'setKeyword' | 'setRecipe'>,
+  assetId: AssetId,
+  sidecar: Blob,
+): Promise<string> {
+  const asset = session.getView().assets.get(assetId);
+  if (!asset || !isUntouched(asset, session.getView())) return SIDECAR_NOT_APPLIED_DUPLICATE;
+  const applied = await applySidecarFile(session, assetId, asset.primaryVersionId, sidecar, asset.orientation).catch(() => null);
+  return applied ? SIDECAR_APPLIED_DUPLICATE : 'Photo already in the library; its XMP sidecar could not be read';
 }
 
 /** Reads and applies a sidecar file; null when it is not readable XMP. */

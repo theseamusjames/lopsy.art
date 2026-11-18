@@ -36,7 +36,28 @@ describe('XML subset parser', () => {
     ];
     for (const b of bad) expect(parseXml(b)).toBeNull();
     expect(parseXml('<x>' + '<y>'.repeat(100) + '</y>'.repeat(100) + '</x>')).toBeNull();
-    expect(parseXml('<x/>', { maxChars: 3, maxDepth: 4, maxElements: 4 })).toBeNull();
+    expect(parseXml('<x/>', { maxChars: 3, maxDepth: 4, maxElements: 4, maxAttributes: 4 })).toBeNull();
+  });
+
+  it('does not resolve entities through the object prototype', () => {
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(parseXml(`<x>&${name};</x>`)).toBeNull();
+      expect(parseXml(`<x a="&${name};"/>`)).toBeNull();
+    }
+    expect(readXmp(`<x:xmpmeta xmlns:x="adobe:ns:meta/">&constructor;</x:xmpmeta>`)).toBeNull();
+  });
+
+  it('caps attributes per element and checks duplicates in linear time', () => {
+    const tag = (n: number) => `<x ${Array.from({ length: n }, (_, i) => `a${i}="1"`).join(' ')}/>`;
+    expect(parseXml(tag(512))?.attributes).toHaveLength(512);
+    expect(parseXml(tag(513))).toBeNull();
+    // Nearly 4 MB of attributes in one start tag: refused quickly, not after an O(n^2) scan.
+    const huge = tag(300_000);
+    expect(huge.length).toBeLessThan(4 * 1024 * 1024);
+    const start = performance.now();
+    expect(parseXml(huge)).toBeNull();
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(parseXml(tag(500), { ...{ maxChars: 1e7, maxDepth: 8, maxElements: 8 }, maxAttributes: 100_000 })).not.toBeNull();
     let seed = 3;
     for (let n = 0; n < 300; n++) {
       const chars = [...LIGHTROOM_XMP];
