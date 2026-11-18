@@ -174,7 +174,10 @@ describe('resumable imports', () => {
     const seen = new Set<string>();
     job.subscribe(() => job.getProgress().items.forEach((i) => seen.add(i.state)));
     const result = await job.finished;
-    expect(result.items.map((i) => i.state)).toEqual(['done', 'done', 'duplicate', 'unsupported', 'queued']);
+    const states = result.items.map((i) => i.state);
+    expect([states[0], states[3], states[4]]).toEqual(['done', 'unsupported', 'queued']);
+    // The two identical files hash concurrently: whichever claims the hash first is kept.
+    expect([states[1], states[2]].sort()).toEqual(['done', 'duplicate']);
     expect(result.items[4]?.error).toBe('Waiting to retry: Refused');
     expect(seen.has('staged')).toBe(true);
     expect(put).toHaveBeenCalledTimes(3);
