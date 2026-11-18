@@ -13,11 +13,22 @@ import {
   type RecipeRange,
 } from '@lopsy/photos-core/library/recipe';
 import type { Json } from '@lopsy/photos-core/library/types';
+import {
+  CURVE_CHANNELS,
+  GRADE_RANGES,
+  HUE_BANDS,
+  IDENTITY_CURVE,
+  type CurveChannel,
+  type GradeRange,
+  type HueBand,
+} from '@lopsy/photos-core/library/recipe';
 
 export interface ControlDef {
   /** Dotted recipe path, a key of RECIPE_RANGES. */
   readonly path: string;
   readonly label: string;
+  /** How the history names a change, when the slider label alone is ambiguous ('Red hue'). */
+  readonly historyLabel?: string;
 }
 
 export interface GroupDef {
@@ -143,6 +154,99 @@ export function toneChanges(recipe: Recipe, tone: Recipe['tone']): Record<string
   for (const key of Object.keys(recipe.tone) as (keyof Recipe['tone'])[]) {
     const value = tone[key];
     if (Number.isFinite(value) && value !== recipe.tone[key]) changes[`tone.${key}`] = value;
+  }
+  return changes;
+}
+
+// ---- Curves, Color by hue, Color Grading ----------------------------
+
+export interface CurveChannelDef {
+  readonly id: CurveChannel;
+  readonly label: string;
+  /** Line colour in the editor. */
+  readonly color: string;
+}
+
+export const CURVE_CHANNEL_DEFS: readonly CurveChannelDef[] = CURVE_CHANNELS.map((id) => ({
+  id,
+  label: id === 'luminance' ? 'Luminance' : id === 'red' ? 'Red' : id === 'green' ? 'Green' : 'Blue',
+  color: id === 'luminance' ? 'var(--color-text-primary)' : id === 'red' ? '#e05555' : id === 'green' ? '#55c055' : '#5580e0',
+}));
+
+/** The changes that straighten every bent curve; empty when all are straight. */
+export function curvesResetChanges(recipe: Recipe): Record<string, Json> {
+  const changes: Record<string, Json> = {};
+  for (const ch of CURVE_CHANNELS) {
+    const points = recipe.curves[ch];
+    const isStraight = points.length === 2 && points[0]?.x === 0 && points[0]?.y === 0 && points[1]?.x === 1 && points[1]?.y === 1;
+    if (!isStraight) changes[`curves.${ch}`] = IDENTITY_CURVE.map((p) => ({ x: p.x, y: p.y }));
+  }
+  return changes;
+}
+
+export interface TabDef {
+  readonly id: string;
+  readonly label: string;
+  readonly controls: readonly ControlDef[];
+}
+
+const HUE_BAND_LABELS: Readonly<Record<HueBand, string>> = {
+  red: 'Red',
+  orange: 'Orange',
+  yellow: 'Yellow',
+  green: 'Green',
+  aqua: 'Aqua',
+  blue: 'Blue',
+  purple: 'Purple',
+  magenta: 'Magenta',
+};
+
+const HUE_FIELDS = [
+  { id: 'hue', label: 'Hue' },
+  { id: 'saturation', label: 'Saturation' },
+  { id: 'luminance', label: 'Luminance' },
+] as const;
+
+/** Color by hue: a tab per property, a slider per hue band. */
+export const COLOR_BY_HUE_TABS: readonly TabDef[] = HUE_FIELDS.map((field) => ({
+  id: field.id,
+  label: field.label,
+  controls: HUE_BANDS.map((band) => ({
+    path: `colorByHue.${band}.${field.id}`,
+    label: HUE_BAND_LABELS[band],
+    historyLabel: `${HUE_BAND_LABELS[band]} ${field.label.toLowerCase()}`,
+  })),
+}));
+
+const GRADE_LABELS: Readonly<Record<GradeRange, string>> = {
+  shadows: 'Shadows',
+  midtones: 'Midtones',
+  highlights: 'Highlights',
+  global: 'Global',
+};
+
+/** Color Grading: a tab per range with its wheel as three sliders. */
+export const COLOR_GRADING_TABS: readonly TabDef[] = GRADE_RANGES.map((range) => ({
+  id: range,
+  label: GRADE_LABELS[range],
+  controls: HUE_FIELDS.map((field) => ({
+    path: `colorGrading.${range}.${field.id}`,
+    label: field.label,
+    historyLabel: `${GRADE_LABELS[range]} ${field.label.toLowerCase()}`,
+  })),
+}));
+
+export const COLOR_GRADING_SHARED: readonly ControlDef[] = [
+  { path: 'colorGrading.blending', label: 'Blending' },
+  { path: 'colorGrading.balance', label: 'Balance' },
+];
+
+/** The changes that put numeric controls back to their defaults; empty when they are. */
+export function resetChangesFor(recipe: Recipe, controls: readonly ControlDef[]): Record<string, Json> {
+  const changes: Record<string, Json> = {};
+  for (const control of controls) {
+    const def = defaultAt(control.path);
+    if (numberAt(recipe, control.path) !== def) changes[control.path] = def;
   }
   return changes;
 }

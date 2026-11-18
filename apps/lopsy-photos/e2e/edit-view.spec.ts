@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { imageStats, openGeneratedImage, openHarness, previewCount, raiseExposure, waitForPreview, waitForReady } from './harness';
+import { settledPreview, imageStats, openGeneratedImage, openHarness, previewCount, raiseExposure, waitForPreview, waitForReady } from './harness';
 
 test.describe('Edit view on a JPEG', () => {
   test.beforeEach(async ({ page }) => {
@@ -240,5 +240,61 @@ test.describe('Crop', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('crop-tool')).toHaveCount(0);
     expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Crop', 'Rotate right']);
+  });
+});
+
+test.describe('Colour controls', () => {
+  test.beforeEach(async ({ page }) => {
+    await openHarness(page);
+    await openGeneratedImage(page);
+    await waitForReady(page);
+    await waitForPreview(page, 0);
+  });
+
+  test('raising the luminance curve brightens the render, as one step', async ({ page }) => {
+    const before = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
+    const curve = page.getByRole('img', { name: 'Luminance curve' });
+    await curve.scrollIntoViewIfNeeded();
+    const box = await curve.boundingBox();
+    if (!box) throw new Error('no curve editor');
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.2, { steps: 5 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Curves: Luminance']);
+    const last = await settledPreview(page, 1);
+    const after = await imageStats(page, { kind: 'preview', index: last, which: 'screen' });
+    expect(after.mean).toBeGreaterThan(before.mean + 10);
+  });
+
+  test('desaturating the orange band takes the colour out of orange tones', async ({ page }) => {
+    const before = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
+    const group = page.getByRole('region', { name: 'Color by hue' });
+    await group.getByRole('tab', { name: 'Saturation' }).click();
+    for (const band of ['Red', 'Orange']) {
+      const readout = group.getByLabel(`${band} value`);
+      await readout.fill('-100');
+      await readout.press('Enter');
+    }
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Red saturation \u2212100', 'Orange saturation \u2212100']);
+    const last = await settledPreview(page, 1);
+    const after = await imageStats(page, { kind: 'preview', index: last, which: 'screen' });
+    expect(after.red - after.blue).toBeLessThan(before.red - before.blue - 10);
+  });
+
+  test('a global colour grade tints the image', async ({ page }) => {
+    const before = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
+    const group = page.getByRole('region', { name: 'Color Grading' });
+    await group.getByRole('tab', { name: 'Global' }).click();
+    const hue = group.getByLabel('Hue value');
+    await hue.fill('220');
+    await hue.press('Enter');
+    const saturation = group.getByLabel('Saturation value');
+    await saturation.fill('80');
+    await saturation.press('Enter');
+    await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.length)).toBe(2);
+    const last = await settledPreview(page, 1);
+    const after = await imageStats(page, { kind: 'preview', index: last, which: 'screen' });
+    expect(after.blue - after.red).toBeGreaterThan(before.blue - before.red + 10);
   });
 });

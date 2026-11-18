@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { ArrowLeft, Crop, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, Json, Version } from '@lopsy/photos-core/library/types';
 import { ControlGroup } from '../ControlGroup/ControlGroup';
+import { CurvesGroup } from '../CurvesGroup/CurvesGroup';
+import { TabbedGroup } from '../TabbedGroup/TabbedGroup';
 import {
+  COLOR_BY_HUE_TABS,
+  COLOR_GRADING_SHARED,
+  COLOR_GRADING_TABS,
   GROUPS,
   applyChanges,
   beforeRecipe,
@@ -180,7 +185,7 @@ export function EditView({
   }, []);
 
   const handleSliderCommit = useCallback(
-    (control: ControlDef, value: number) => commit(sliderChanges(control.path, value), changeLabel(control.label, control.path, value)),
+    (control: ControlDef, value: number) => commit(sliderChanges(control.path, value), changeLabel(control.historyLabel ?? control.label, control.path, value)),
     [commit],
   );
 
@@ -530,8 +535,8 @@ export function EditView({
             />
           )}
           {GROUPS.map((group) => (
+            <Fragment key={group.id}>
             <ControlGroup
-              key={group.id}
               group={group}
               recipe={shownRecipe}
               isDisabled={!canEdit || isBefore}
@@ -544,6 +549,33 @@ export function EditView({
                   ? { onAuto: handleAutoWhiteBalance, autoTitle: 'Neutralise the colour cast' }
                   : {})}
             />
+            {group.id === 'tone' && (
+              <CurvesGroup recipe={shownRecipe} isDisabled={!canEdit || isBefore} onDraft={setDraft} onCommit={commit} />
+            )}
+            {group.id === 'color' && (
+              <>
+                <TabbedGroup
+                  title="Color by hue"
+                  tabs={COLOR_BY_HUE_TABS}
+                  recipe={shownRecipe}
+                  isDisabled={!canEdit || isBefore}
+                  onChange={handleSliderChange}
+                  onCommit={handleSliderCommit}
+                  onReset={commit}
+                />
+                <TabbedGroup
+                  title="Color Grading"
+                  tabs={COLOR_GRADING_TABS}
+                  sharedControls={COLOR_GRADING_SHARED}
+                  recipe={shownRecipe}
+                  isDisabled={!canEdit || isBefore}
+                  onChange={handleSliderChange}
+                  onCommit={handleSliderCommit}
+                  onReset={commit}
+                />
+              </>
+            )}
+            </Fragment>
           ))}
           <div className={styles.panelFooter}>
             <button

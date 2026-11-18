@@ -81,6 +81,16 @@ export async function waitForPreview(page: Page, count: number, timeout = 60_000
   return page.evaluate((n) => window.__photosHarness?.previews[n]?.recipeHash ?? '', count);
 }
 
+/**
+ * After edits made in quick succession: waits for a preview past `count`,
+ * then for the edit to settle, and answers the index of the last preview.
+ */
+export async function settledPreview(page: Page, count: number): Promise<number> {
+  await waitForPreview(page, count);
+  await page.waitForTimeout(2500);
+  return (await previewCount(page)) - 1;
+}
+
 type BlobSource = { readonly kind: 'preview'; readonly index: number; readonly which: 'thumb' | 'screen' } | { readonly kind: 'export'; readonly index: number };
 
 /** Decodes a recorded preview or export in the page and measures it. */
