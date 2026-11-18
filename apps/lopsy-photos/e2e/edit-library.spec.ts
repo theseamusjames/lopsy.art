@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { imageStats, openGeneratedImage, openGeneratedImages, openHarness, waitForPreview, waitForReady } from './harness';
+import { imageStats, openGeneratedImage, openGeneratedImages, openHarness, settledPreview, waitForPreview, waitForReady } from './harness';
 
 /** Types a value into a slider's readout: one history step. */
 async function setValue(page: Page, label: string, value: string): Promise<void> {
@@ -76,8 +76,9 @@ test.describe('History, versions and the filmstrip', () => {
     await page.locator('body').press('ArrowRight');
     await expect(strip.getByRole('button', { name: 'photo-2.jpg' })).toHaveAttribute('aria-current', 'true');
     await waitForReady(page);
-    await waitForPreview(page, 0);
-    const blue = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
+    // Photo 1's previews are rendered before the switch; photo 2's come last.
+    const last = await settledPreview(page, 1);
+    const blue = await imageStats(page, { kind: 'preview', index: last, which: 'screen' });
     expect(blue.blue).toBeGreaterThan(blue.red + 30);
 
     await strip.getByRole('button', { name: 'photo-3.jpg' }).click();
