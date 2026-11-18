@@ -4,12 +4,13 @@
  * the progress UI can be seen working. Use `?backend=fake&seed=N`.
  */
 
-import type { AssetId, LibrarySession, PreviewRef } from '@lopsy/photos-core/library/types';
+import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
 import type { ImportItem, ImportJob, ImportOptions, ImportProgress } from '@lopsy/photos-core/import/types';
 import type { StorageQuota } from '@lopsy/photos-core/storage/types';
 import {
   browserStorageChoices,
   type Connection,
+  type EditPreviews,
   type ExportJob,
   type ExportProgress,
   type ExportRequest,
@@ -19,7 +20,7 @@ import {
 } from '../backend';
 import { baseNameOf, extensionOf, isPhotoFile, isRawFile } from '../../import/import-summary';
 import { FakeSession, fakeId } from './fake-session';
-import { readFakePreview, rememberImportedFile } from './fake-previews';
+import { importedFileOf, readFakePreview, rememberImportedFile, rememberPreview } from './fake-previews';
 import { seedLibrary } from './fake-seed';
 
 const LABELS: Record<StorageChoice, string> = {
@@ -236,6 +237,36 @@ export class FakeBackend implements PhotosBackend {
     const assetId = ref.fileId.split(':')[1] ?? '';
     const name = session.getView().assets.get(assetId)?.fileName ?? '';
     return readFakePreview(ref, name);
+  }
+
+  async resumeImports(): Promise<ImportJob | null> {
+    return null;
+  }
+
+  async loadOriginal(session: LibrarySession, asset: Asset): Promise<Blob> {
+    const file = importedFileOf(asset.id);
+    if (file) return file;
+    const screen = session.getView().versions.get(asset.primaryVersionId)?.screen;
+    if (!screen) throw new Error('This photo has no picture in the development backend.');
+    return readFakePreview({ ...screen, fileId: `fake-preview:${asset.id}:screen` }, asset.fileName);
+  }
+
+  pinOriginal(): () => void {
+    return () => {};
+  }
+
+  async storeEditPreviews(session: LibrarySession, versionId: VersionId, previews: EditPreviews): Promise<void> {
+    for (const size of ['thumb', 'screen'] as const) {
+      const fileId = `fake-edit:${versionId}:${size}:${previews.recipeHash}`;
+      rememberPreview(fileId, previews[size]);
+      const old = session.getView().versions.get(versionId)?.[size];
+      session.setPreview(versionId, size, {
+        fileId,
+        recipeHash: previews.recipeHash,
+        width: old?.width ?? (size === 'thumb' ? 512 : 2048),
+        height: old?.height ?? (size === 'thumb' ? 341 : 1365),
+      });
+    }
   }
 
   async trashAssets(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void> {

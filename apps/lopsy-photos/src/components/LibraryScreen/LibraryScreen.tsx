@@ -66,6 +66,19 @@ export function LibraryScreen() {
     return () => window.removeEventListener('beforeunload', onUnload);
   }, []);
 
+  // Save what is waiting when the tab goes to the background; it may not come back.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'hidden') return;
+      useUi
+        .getState()
+        .connection?.session.syncNow()
+        .catch(() => undefined);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
   // Cull mode ends when the user leaves full screen with the browser's own controls.
   useEffect(() => {
     const onChange = () => {

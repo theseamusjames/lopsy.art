@@ -8,7 +8,7 @@ import { join } from 'node:path';
  * preinstalled browsers directory provides (sandboxes whose browsers are a
  * different revision from this Playwright's).
  */
-function chromiumExecutable(): string | undefined {
+export function chromiumExecutable(): string | undefined {
   const own = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
   if (own) return own;
   try {
@@ -34,6 +34,21 @@ function chromiumExecutable(): string | undefined {
  * skipped when it is unset.
  */
 const port = Number(process.env.VITE_PORT ?? 5174);
+/**
+ * Specs named `*.drive.spec.ts` run against a second dev server built
+ * with a Google client ID, so the start screen offers Google Drive (served
+ * by photos-core's fake Drive through page routing). The other specs see
+ * a build without one, as before.
+ */
+const drivePort = port + 1;
+const DRIVE_SPECS = /\.drive\.spec\.ts$/;
+/**
+ * Specs with their own configs: site.spec.ts (playwright.site.config.ts,
+ * the assembled site) and roundtrip.spec.ts (e2e/roundtrip.config.ts, Lopsy
+ * and Photos together). A project's testIgnore replaces the top-level one,
+ * so each project lists these again.
+ */
+const OWN_CONFIG_SPECS = [/site\.spec\.ts$/, /roundtrip\.spec\.ts$/];
 
 const gpuArgs = [
   '--use-gl=angle',
@@ -45,6 +60,7 @@ const gpuArgs = [
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: OWN_CONFIG_SPECS,
   timeout: 300_000,
   expect: { timeout: 30_000 },
   workers: 1,
@@ -57,17 +73,37 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: [DRIVE_SPECS, ...OWN_CONFIG_SPECS],
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 800 },
         launchOptions: { args: gpuArgs, executablePath: chromiumExecutable() },
       },
     },
+    {
+      name: 'chromium-drive',
+      testMatch: DRIVE_SPECS,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${drivePort}`,
+        viewport: { width: 1280, height: 800 },
+        launchOptions: { args: gpuArgs, executablePath: chromiumExecutable() },
+      },
+    },
   ],
-  webServer: {
-    command: `npx vite --port ${port} --strictPort`,
-    port,
-    reuseExistingServer: false,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: `npx vite --port ${port} --strictPort`,
+      port,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: `npx vite --port ${drivePort} --strictPort`,
+      port: drivePort,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: { VITE_GOOGLE_CLIENT_ID: 'e2e-client.apps.googleusercontent.com' },
+    },
+  ],
 });

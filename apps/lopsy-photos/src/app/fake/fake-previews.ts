@@ -14,6 +14,17 @@ export function rememberImportedFile(assetId: string, file: Blob): void {
   importedFiles.set(assetId, file);
 }
 
+export function importedFileOf(assetId: string): Blob | null {
+  return importedFiles.get(assetId) ?? null;
+}
+
+/** Previews the Edit view rendered, by their fake file id. */
+const storedPreviews = new Map<string, Blob>();
+
+export function rememberPreview(fileId: string, blob: Blob): void {
+  storedPreviews.set(fileId, blob);
+}
+
 function hashHue(text: string): number {
   let h = 0;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
@@ -60,6 +71,8 @@ async function renderGenerated(assetId: string, label: string, ref: PreviewRef):
 /** `label` is the file name drawn on generated previews. */
 export async function readFakePreview(ref: PreviewRef, label: string): Promise<Blob> {
   await new Promise((r) => setTimeout(r, 30 + Math.random() * 120));
+  const stored = storedPreviews.get(ref.fileId);
+  if (stored) return stored;
   const [, assetId = ''] = ref.fileId.split(':');
   const file = importedFiles.get(assetId);
   if (file) {

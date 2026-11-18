@@ -53,4 +53,18 @@ npm run test:photos        # Vitest: photos-core, then the app
 npm run typecheck:photos
 npm run lint:photos
 npm run test:e2e:photos    # Playwright
+
+# The lopsy.art site: Lopsy at /, Photos at /photos/ (spec 6.3)
+npm run build:site         # engine + Lopsy, Photos with PHOTOS_BASE=/photos/, then scripts/assemble-site.mjs into dist/
+npm run build:site:noopt   # the same with wasm:build:noopt, where wasm-opt cannot be downloaded
+npm run assemble:site      # only the assembly, from both apps' existing dist/
+npm run serve:site         # dist/ the way Cloudflare Pages serves it (_redirects, _headers), port 4180
+npm run test:e2e:site      # Playwright smoke test of dist/ (playwright.site.config.ts)
 ```
+
+Photos' `public/_redirects` and `public/_headers` are written for serving
+it at `/` on its own domain; `assemble-site.mjs` moves them under
+`/photos/`. The Content-Security-Policy is there: a new Google host or
+script source goes in `public/_headers`, and `test:e2e:site` fails on
+any CSP violation. Production deploys Photos only when the repository
+variable `DEPLOY_PHOTOS` is `true` (`.github/workflows/deploy.yml`).

@@ -143,7 +143,15 @@ export interface Asset extends AssetFacts, AssetMarks {
   /** The version the grid shows. Created with the asset. */
   readonly primaryVersionId: VersionId;
   readonly deleted: boolean;
+  /**
+   * What the last repair found in storage for the original: absent or
+   * 'ok' when it is there and matches. Set by `repairLibrary` (repair.ts).
+   */
+  readonly originalStatus?: OriginalStatus;
 }
+
+/** 'missing': deleted from storage; 'trashed': in the storage's trash; 'changed': its checksum differs. */
+export type OriginalStatus = 'ok' | 'missing' | 'trashed' | 'changed';
 
 export interface Version {
   readonly id: VersionId;

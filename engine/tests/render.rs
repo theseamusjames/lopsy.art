@@ -521,6 +521,21 @@ fn without_a_raw_develop_stage_the_composite_is_unchanged() {
 }
 
 #[test]
+fn the_develop_histogram_counts_the_displayed_pixels() {
+    let Some(mut engine) = engine(8, 4) else { return };
+    commands::layer::add_layer(&mut engine, &layer_json("art", 0, 0, 8, 4, 1.0)).expect("layer");
+    // Left half red, right half mid grey.
+    let pixels: Vec<[u8; 4]> = (0..32).map(|i| if i % 8 < 4 { RED } else { [128, 128, 128, 255] }).collect();
+    commands::layer::upload_layer_pixels(&mut engine, "art", pixels.as_flattened(), 8, 4, 0, 0).expect("pixels");
+    let h = now(commands::develop::read_develop_histogram(&mut engine));
+    assert_eq!(h.len(), 1024);
+    assert_eq!((h[255], h[128]), (16, 16), "red channel");
+    assert_eq!((h[256], h[256 + 128]), (16, 16), "green channel");
+    assert_eq!((h[768 + 54], h[768 + 128]), (16, 16), "luminance");
+    assert_no_gpu_errors();
+}
+
+#[test]
 fn undo_snapshots_of_a_large_layer_restore_bit_for_bit() {
     // Big enough that an interpolated UV strays off the texel centre: a
     // filtered copy then mixed in a sliver of the neighbour, and antialiased

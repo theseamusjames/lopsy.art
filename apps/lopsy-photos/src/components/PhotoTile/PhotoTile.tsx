@@ -37,6 +37,9 @@ export const PhotoTile = memo(function PhotoTile({ assetId, selected, focused, o
       data-focused={focused}
       data-aside={asset.setAside && !inSetAsideList}
       data-asset-id={asset.id}
+      data-rating={asset.rating}
+      data-edited={edited}
+      data-preview-hash={version?.thumb?.recipeHash ?? ''}
       title={asset.fileName}
       draggable
       onDragStart={(e) => {
