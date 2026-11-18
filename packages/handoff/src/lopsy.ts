@@ -20,11 +20,14 @@ import {
   PROTOCOL_VERSION,
   RECEIVE_PARAM,
   isHandoffId,
+  PING_TIMEOUT_MS,
   parsePhotosDocument,
+  parsePhotosPong,
   parsePhotosReady,
   parsePhotosSaved,
   type HandoffDocument,
   type HandoffSource,
+  type LopsyPingMessage,
   type LopsyReadyMessage,
   type LopsyReceivedMessage,
   type LopsySaveMessage,
@@ -56,8 +59,8 @@ export interface PhotosConnection {
   readonly id: string;
   /** The Photos tab; replaced when a save had to reopen Photos. */
   peer: HandoffPeer | null;
-  /** The document's place in the library, sent back with each save. */
-  readonly source?: HandoffSource;
+  /** The document's place in the library, sent back with each save; gains `documentId` from the first save. */
+  source?: HandoffSource;
   /** Updated from each successful save's revision. */
   baseRevision?: string;
 }
@@ -70,7 +73,7 @@ export interface AcceptedHandoff {
 export interface AcceptHandoffOptions extends LopsyHandoffConfig {
   /** The id from `readHandoffId`. */
   readonly id: string;
-  /** How long to wait for the document after saying ready. Default 30 s. */
+  /** How long to wait for the document after saying ready; Photos may still be rendering it. Default 120 s. */
   readonly timeoutMs?: number;
 }
 
@@ -95,7 +98,7 @@ export async function acceptHandoff(options: AcceptHandoffOptions): Promise<Acce
       const m = parsePhotosDocument(data);
       return m && m.id === id ? m : null;
     },
-    timeoutMs: options.timeoutMs ?? 30_000,
+    timeoutMs: options.timeoutMs ?? 120_000,
     timeoutMessage: 'Lopsy Photos did not send the photo in time.',
     isClosed: () => opener.closed,
     repeat: { ms: 1000, run: () => opener.postMessage(ready, origin) },
@@ -123,7 +126,9 @@ export interface SavePayload {
   readonly render: ArrayBuffer;
 }
 
-export type SaveOutcome = { readonly ok: true; readonly revision?: string } | { readonly ok: false; readonly error: string };
+export type SaveOutcome =
+  | { readonly ok: true; readonly revision?: string; readonly documentId?: string }
+  | { readonly ok: false; readonly error: string };
 
 export interface SaveToPhotosOptions extends LopsyHandoffConfig {
   /**
@@ -143,6 +148,8 @@ export interface SaveToPhotosOptions extends LopsyHandoffConfig {
     readonly readyMs?: number;
     /** For Photos to finish storing the save. Default 10 min. */
     readonly savedMs?: number;
+    /** For a known Photos tab to answer a ping before Photos is reopened. Default `PING_TIMEOUT_MS`. */
+    readonly pingMs?: number;
   };
 }
 
@@ -158,13 +165,10 @@ export async function saveToPhotos(options: SaveToPhotosOptions): Promise<SaveOu
   const connection = options.connection;
   const id = connection?.id ?? createHandoffId();
 
-  let peer: HandoffPeer | null = connection?.peer && !connection.peer.closed ? connection.peer : null;
-  let reopened: Promise<unknown> | null = null;
-  if (!peer) {
+  const reopen = (): { peer: HandoffPeer; ready: Promise<unknown> } => {
     const opened = win.open(withParam(photosUrl, RECEIVE_PARAM, id), PHOTOS_WINDOW_NAME);
     if (!opened) throw new HandoffError('popup-blocked', 'The browser blocked opening Lopsy Photos.');
-    peer = opened;
-    reopened = waitForMessage(win, {
+    const ready = waitForMessage(win, {
       origin,
       source: () => opened,
       parse: (data) => {
@@ -175,14 +179,28 @@ export async function saveToPhotos(options: SaveToPhotosOptions): Promise<SaveOu
       timeoutMessage: 'Lopsy Photos did not open in time.',
       isClosed: () => opened.closed,
     });
-    reopened.catch(() => {});
+    ready.catch(() => {});
     if (connection) connection.peer = opened;
+    return { peer: opened, ready };
+  };
+
+  // The payload is built while Photos is checked and, if need be, reopened:
+  // both must start now, inside the click that allows the popup.
+  const payloadPromise = Promise.resolve(options.payload);
+  payloadPromise.catch(() => {});
+
+  const known = connection?.peer && !connection.peer.closed ? connection.peer : null;
+  let target: HandoffPeer;
+  let ready: Promise<unknown> | null = null;
+  if (known && (await isListening(win, known, origin, id, options.timeouts?.pingMs ?? PING_TIMEOUT_MS))) {
+    target = known;
+  } else {
+    ({ peer: target, ready } = reopen());
   }
 
-  const payload = await options.payload;
-  if (reopened) await reopened;
+  const payload = await payloadPromise;
+  if (ready) await ready;
 
-  const target = peer;
   const saveId = createHandoffId();
   const message: LopsySaveMessage = {
     protocol: PROTOCOL_VERSION,
@@ -209,8 +227,40 @@ export async function saveToPhotos(options: SaveToPhotosOptions): Promise<SaveOu
   target.postMessage(message, origin, [payload.lopsy, payload.render]);
   const { message: saved } = await answer;
   if (!saved.ok) return { ok: false, error: saved.error };
-  if (connection && saved.revision !== undefined) connection.baseRevision = saved.revision;
-  return saved.revision !== undefined ? { ok: true, revision: saved.revision } : { ok: true };
+  if (connection) {
+    if (saved.revision !== undefined) connection.baseRevision = saved.revision;
+    if (saved.documentId !== undefined && connection.source) {
+      connection.source = { ...connection.source, documentId: saved.documentId };
+    }
+  }
+  return {
+    ok: true,
+    ...(saved.revision !== undefined ? { revision: saved.revision } : {}),
+    ...(saved.documentId !== undefined ? { documentId: saved.documentId } : {}),
+  };
+}
+
+/** Pings a Photos tab and resolves true if it answers for this handoff within `timeoutMs`. */
+async function isListening(win: HandoffWindow, peer: HandoffPeer, origin: string, id: string, timeoutMs: number): Promise<boolean> {
+  const ping: LopsyPingMessage = { protocol: PROTOCOL_VERSION, type: 'lopsy:ping', id };
+  const pong = waitForMessage(win, {
+    origin,
+    source: () => peer,
+    parse: (data) => {
+      const m = parsePhotosPong(data);
+      return m && m.id === id ? m : null;
+    },
+    timeoutMs,
+    timeoutMessage: 'Lopsy Photos did not answer.',
+    isClosed: () => peer.closed,
+  });
+  peer.postMessage(ping, origin);
+  try {
+    await pong;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

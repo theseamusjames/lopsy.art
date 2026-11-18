@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { acceptHandoff, focusPhotos, readHandoffId, saveToPhotos, searchWithoutHandoffParam } from './lopsy.ts';
 import { readReceiveId, receiveFromLopsy, sendToLopsy, type ReceivedSave } from './photos.ts';
 import { HandoffError } from './channel.ts';
+import { PING_TIMEOUT_MS } from './messages.ts';
 import { FakeWindow, LOPSY_BYTES, PNG_BYTES, bytes } from './fake-window.test-helper.ts';
 
 const PHOTOS = 'https://photos.example/';
@@ -211,29 +212,112 @@ describe('untrusted messages', () => {
 
   it('a message aimed at the wrong origin never arrives', async () => {
     const { photos, accepted, lopsy } = await startHandoff();
-    // Lopsy configured with the wrong Photos URL posts to an origin the tab is not on.
+    // Lopsy configured with the wrong Photos URL posts to an origin the tab is not on:
+    // the ping goes unanswered, and the reopened tab (on the wrong origin) never says ready.
     const outcome = saveToPhotos({
       photosUrl: 'https://not-photos.example/',
       connection: accepted.connection,
       payload: savePayload(),
       window: lopsy,
-      timeouts: { savedMs: 2000 },
+      timeouts: { readyMs: 2000 },
     });
     const result = expect(outcome).rejects.toMatchObject({ code: 'timeout' });
-    await flush(2001);
+    await flush(PING_TIMEOUT_MS + 2001);
     await result;
     expect(photos.posts.some((p) => p.targetOrigin === 'https://not-photos.example')).toBe(true);
   });
 
-  it('close stops answering saves', async () => {
+  it('close stops answering saves and pings', async () => {
     const onSave = vi.fn(async () => {});
     const { handoff, accepted, lopsy } = await startHandoff(onSave);
     handoff.close();
-    const outcome = saveToPhotos({ photosUrl: PHOTOS, connection: accepted.connection, payload: savePayload(), window: lopsy, timeouts: { savedMs: 1000 } });
+    const outcome = saveToPhotos({ photosUrl: PHOTOS, connection: accepted.connection, payload: savePayload(), window: lopsy, timeouts: { readyMs: 1000 } });
     const result = expect(outcome).rejects.toMatchObject({ code: 'timeout' });
-    await flush(1001);
+    await flush(PING_TIMEOUT_MS + 1001);
     await result;
     expect(onSave).not.toHaveBeenCalled();
+    expect(lopsy.opened).toHaveLength(1);
+  });
+});
+
+describe('ping', () => {
+  it('a listening Photos tab answers the ping and gets the save without a reopen', async () => {
+    const { photos, accepted, lopsy } = await startHandoff();
+    const outcome = saveToPhotos({ photosUrl: PHOTOS, connection: accepted.connection, payload: savePayload(), window: lopsy });
+    await flush();
+    await expect(outcome).resolves.toEqual({ ok: true });
+    expect(lopsy.opened).toHaveLength(0);
+    const types = photos.posts.map((p) => (p.data as { type: string }).type);
+    expect(types).toContain('lopsy:ping');
+    expect(types).toContain('photos:pong');
+  });
+
+  it('a Photos tab that reloaded (no listener) is detected within the ping timeout and Photos is reopened', async () => {
+    const saves: ReceivedSave[] = [];
+    const { handoff, accepted, lopsy } = await startHandoff();
+    // The page reloaded: the tab is open, but nothing in it listens for this handoff.
+    handoff.close();
+    const outcome = saveToPhotos({ photosUrl: PHOTOS, connection: accepted.connection, payload: savePayload(), window: lopsy });
+    await flush(PING_TIMEOUT_MS - 100);
+    expect(lopsy.opened).toHaveLength(0);
+    await flush(200);
+    expect(lopsy.opened).toHaveLength(1);
+    const reopened = lopsy.opened[0]!;
+    receiveFromLopsy({
+      lopsyUrl: LOPSY,
+      id: readReceiveId(new URL(reopened.url).search)!,
+      onSave: async (save) => {
+        saves.push(save);
+      },
+      window: reopened.window,
+    });
+    await flush();
+    await expect(outcome).resolves.toEqual({ ok: true });
+    expect(saves).toHaveLength(1);
+  });
+});
+
+describe('document ids and deferred documents', () => {
+  it('the documentId Photos returns joins the source block of later saves', async () => {
+    const saves: ReceivedSave[] = [];
+    const { accepted, lopsy } = await startHandoff(async (save) => {
+      saves.push(save);
+      return { revision: `r${saves.length + 1}`, documentId: 'doc-123' };
+    });
+    const first = saveToPhotos({ photosUrl: PHOTOS, connection: accepted.connection, payload: savePayload(), window: lopsy });
+    await flush();
+    await expect(first).resolves.toEqual({ ok: true, revision: 'r2', documentId: 'doc-123' });
+    const second = saveToPhotos({ photosUrl: PHOTOS, connection: accepted.connection, payload: savePayload(), window: lopsy });
+    await flush();
+    await second;
+    expect(saves[0]!.source?.documentId).toBeUndefined();
+    expect(saves[1]!.source).toEqual({ ...source, documentId: 'doc-123' });
+    expect(saves[1]!.baseRevision).toBe('r2');
+  });
+
+  it('sendToLopsy opens Lopsy at once and sends a document that arrives later', async () => {
+    const photos = new FakeWindow(PHOTOS);
+    let resolveDocument: (d: { name: string; kind: 'png16'; bytes: ArrayBuffer }) => void = () => {};
+    const handoff = sendToLopsy({
+      lopsyUrl: LOPSY,
+      document: new Promise((resolve) => {
+        resolveDocument = resolve;
+      }),
+      onSave: async () => {},
+      window: photos,
+    });
+    expect(photos.opened).toHaveLength(1);
+    const lopsy = photos.opened[0]!.window;
+    let accepted: Awaited<ReturnType<typeof acceptHandoff>> | null = null;
+    void acceptHandoff({ photosUrl: PHOTOS, id: handoff.id, window: lopsy }).then((a) => {
+      accepted = a;
+    });
+    await flush(3000);
+    expect(accepted).toBeNull();
+    resolveDocument({ name: 'Late', kind: 'png16', bytes: bytes(PNG_BYTES) });
+    await flush(1000);
+    await expect(handoff.delivered).resolves.toBeUndefined();
+    expect(accepted!.document.name).toBe('Late');
   });
 });
 

@@ -47,6 +47,8 @@ export interface PhotosSourceBlock {
   readonly assetId: string;
   readonly versionId: string;
   readonly recipeHash: string;
+  /** The library's document asset, once the file has been saved to Photos. */
+  readonly documentId?: string;
 }
 
 export interface LopsyManifest {

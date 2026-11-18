@@ -14,6 +14,12 @@
  * Reopen flow (Lopsy opens Photos with `?receive=<id>`):
  *   Photos → Lopsy   photos:ready     { id }
  *   then lopsy:save / photos:saved as above.
+ *
+ * Before saving to a Photos tab it already knows, Lopsy checks that the tab
+ * still listens for this handoff (it may have reloaded or navigated):
+ *   Lopsy  → Photos  lopsy:ping       { id }
+ *   Photos → Lopsy   photos:pong      { id }
+ * No pong within `PING_TIMEOUT_MS` and Lopsy reopens Photos to receive.
  */
 
 export const PROTOCOL_VERSION = 1;
@@ -26,6 +32,9 @@ export const RECEIVE_PARAM = 'receive';
 export const LOPSY_WINDOW_NAME = 'lopsy-editor';
 /** Window name Lopsy opens Photos under. */
 export const PHOTOS_WINDOW_NAME = 'lopsy-photos';
+
+/** How long Lopsy waits for a pong before reopening Photos; short enough that the click still allows a popup. */
+export const PING_TIMEOUT_MS = 1500;
 
 /** Largest file either side accepts in one message (1 GiB). */
 export const MAX_FILE_BYTES = 1024 * 1024 * 1024;
@@ -46,6 +55,12 @@ export interface HandoffSource {
   readonly assetId: string;
   readonly versionId: string;
   readonly recipeHash: string;
+  /**
+   * The library's document asset this file is, once there is one. Photos
+   * sends it with a document it reopens and returns it with the first save
+   * of a new document, so later saves update that document in place.
+   */
+  readonly documentId?: string;
 }
 
 export interface HandoffDocument {
@@ -108,6 +123,8 @@ export type PhotosSavedMessage =
       readonly ok: true;
       /** The Drive revision the save created, for the next save's baseRevision. */
       readonly revision?: string;
+      /** The document asset the save was stored as; Lopsy adds it to its source block. */
+      readonly documentId?: string;
     }
   | {
       readonly protocol: 1;
@@ -118,13 +135,27 @@ export type PhotosSavedMessage =
       readonly error: string;
     };
 
+export interface LopsyPingMessage {
+  readonly protocol: 1;
+  readonly type: 'lopsy:ping';
+  readonly id: string;
+}
+
+export interface PhotosPongMessage {
+  readonly protocol: 1;
+  readonly type: 'photos:pong';
+  readonly id: string;
+}
+
 export type HandoffMessage =
   | LopsyReadyMessage
   | PhotosDocumentMessage
   | LopsyReceivedMessage
   | PhotosReadyMessage
   | LopsySaveMessage
-  | PhotosSavedMessage;
+  | PhotosSavedMessage
+  | LopsyPingMessage
+  | PhotosPongMessage;
 
 type Fields = Record<string, unknown>;
 
@@ -183,7 +214,9 @@ export function parseSource(value: unknown): HandoffSource | null {
   ) {
     return null;
   }
-  return { libraryId, assetId, versionId, recipeHash };
+  const { documentId } = value;
+  if (documentId !== undefined && !isHandoffId(documentId)) return null;
+  return { libraryId, assetId, versionId, recipeHash, ...(documentId !== undefined ? { documentId } : {}) };
 }
 
 /**
@@ -225,6 +258,16 @@ export function parsePhotosReady(value: unknown): PhotosReadyMessage | null {
   return { protocol: 1, type: 'photos:ready', id: value.id };
 }
 
+export function parseLopsyPing(value: unknown): LopsyPingMessage | null {
+  if (!envelope(value, 'lopsy:ping')) return null;
+  return { protocol: 1, type: 'lopsy:ping', id: value.id };
+}
+
+export function parsePhotosPong(value: unknown): PhotosPongMessage | null {
+  if (!envelope(value, 'photos:pong')) return null;
+  return { protocol: 1, type: 'photos:pong', id: value.id };
+}
+
 export function parseLopsyReceived(value: unknown): LopsyReceivedMessage | null {
   if (!envelope(value, 'lopsy:received')) return null;
   return { protocol: 1, type: 'lopsy:received', id: value.id };
@@ -253,6 +296,7 @@ export function parsePhotosSaved(value: unknown): PhotosSavedMessage | null {
   if (!isHandoffId(saveId)) return null;
   if (ok === true) {
     if (value.revision !== undefined && !isBoundedString(value.revision, MAX_FIELD_LENGTH)) return null;
+    if (value.documentId !== undefined && !isHandoffId(value.documentId)) return null;
     return {
       protocol: 1,
       type: 'photos:saved',
@@ -260,6 +304,7 @@ export function parsePhotosSaved(value: unknown): PhotosSavedMessage | null {
       saveId,
       ok: true,
       ...(typeof value.revision === 'string' ? { revision: value.revision } : {}),
+      ...(typeof value.documentId === 'string' ? { documentId: value.documentId } : {}),
     };
   }
   if (ok === false) {

@@ -19,6 +19,7 @@ import {
   LOPSY_WINDOW_NAME,
   PROTOCOL_VERSION,
   isHandoffId,
+  parseLopsyPing,
   parseLopsyReady,
   parseLopsyReceived,
   parseLopsySave,
@@ -26,6 +27,7 @@ import {
   type HandoffSource,
   type LopsySaveMessage,
   type PhotosDocumentMessage,
+  type PhotosPongMessage,
   type PhotosReadyMessage,
   type PhotosSavedMessage,
 } from './messages.ts';
@@ -44,8 +46,11 @@ export interface ReceivedSave {
   readonly baseRevision?: string;
 }
 
-/** What `onSave` may return: the Drive revision it wrote, if there is one. */
-export type SaveHandlerResult = void | { readonly revision?: string };
+/**
+ * What `onSave` may return: the revision it wrote, and the document asset
+ * the save was stored as (Lopsy sends it back with later saves).
+ */
+export type SaveHandlerResult = void | { readonly revision?: string; readonly documentId?: string };
 
 export type SaveHandler = (save: ReceivedSave) => Promise<SaveHandlerResult>;
 
@@ -59,8 +64,12 @@ export interface PhotosHandoffTimeouts {
 export interface SendToLopsyOptions {
   /** Lopsy's URL (`VITE_LOPSY_URL`): absolute, or a path on this origin. Its origin is the only one trusted. */
   readonly lopsyUrl: string;
-  /** The document. Its bytes are transferred: the buffer is detached once sent. */
-  readonly document: HandoffDocument;
+  /**
+   * The document, or a promise of it: Lopsy is opened at once, while the
+   * click still allows popups, and the document is sent when both it and
+   * Lopsy are ready. Its bytes are transferred: detached once sent.
+   */
+  readonly document: HandoffDocument | Promise<HandoffDocument>;
   /** Called for each save Lopsy sends back; Lopsy is told the outcome once it settles. */
   readonly onSave: SaveHandler;
   readonly timeouts?: PhotosHandoffTimeouts;
@@ -105,6 +114,13 @@ function answerSaves(
   onSave: SaveHandler,
 ): () => void {
   return listen(win, origin, () => peer() ?? undefined, (data, event) => {
+    const ping = parseLopsyPing(data);
+    if (ping) {
+      if (ping.id !== id) return;
+      const pong: PhotosPongMessage = { protocol: PROTOCOL_VERSION, type: 'photos:pong', id };
+      (event.source as HandoffPeer | null)?.postMessage(pong, origin);
+      return;
+    }
     const message = parseLopsySave(data);
     if (!message || message.id !== id) return;
     const reply = event.source as HandoffPeer | null;
@@ -114,6 +130,7 @@ function answerSaves(
     onSave(toReceivedSave(message)).then(
       (result) => {
         const revision = result && typeof result.revision === 'string' ? result.revision : undefined;
+        const documentId = result && typeof result.documentId === 'string' ? result.documentId : undefined;
         answer({
           protocol: PROTOCOL_VERSION,
           type: 'photos:saved',
@@ -121,6 +138,7 @@ function answerSaves(
           saveId: message.saveId,
           ok: true,
           ...(revision !== undefined ? { revision } : {}),
+          ...(documentId !== undefined ? { documentId } : {}),
         });
       },
       (err: unknown) => {
@@ -157,6 +175,8 @@ export function sendToLopsy(options: SendToLopsyOptions): LopsyHandoff {
 
   stopSaves = answerSaves(win, origin, () => lopsy, id, options.onSave);
 
+  const pending = Promise.resolve(options.document);
+  pending.catch(() => {});
   const delivered = (async () => {
     await waitForMessage(win, {
       origin,
@@ -169,11 +189,12 @@ export function sendToLopsy(options: SendToLopsyOptions): LopsyHandoff {
       timeoutMessage: 'Lopsy did not open in time.',
       isClosed: () => lopsy.closed,
     });
+    const handoffDocument = await pending;
     const document: PhotosDocumentMessage = {
       protocol: PROTOCOL_VERSION,
       type: 'photos:document',
       id,
-      document: options.document,
+      document: handoffDocument,
     };
     const received = waitForMessage(win, {
       origin,
@@ -186,7 +207,7 @@ export function sendToLopsy(options: SendToLopsyOptions): LopsyHandoff {
       timeoutMessage: 'Lopsy did not confirm it received the photo.',
       isClosed: () => lopsy.closed,
     });
-    lopsy.postMessage(document, origin, [options.document.bytes]);
+    lopsy.postMessage(document, origin, [handoffDocument.bytes]);
     await received;
   })();
   delivered.catch(() => {});
