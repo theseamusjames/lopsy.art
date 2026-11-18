@@ -1,6 +1,6 @@
 /** The Export dialog's choices and photos-core's ExportSettings, both ways. Pure. */
 
-import { colorSpacesFor, DEFAULT_EXPORT_SETTINGS, type ExportColorSpace, type ExportFormat, type ExportSettings } from '@lopsy/photos-core/export/types';
+import { colorSpacesFor, DEFAULT_EXPORT_SETTINGS, exportKeepsLocation, type ExportColorSpace, type ExportFormat, type ExportSettings } from '@lopsy/photos-core/export/types';
 
 export interface ExportForm {
   readonly format: ExportFormat;
@@ -53,3 +53,8 @@ export const COLOR_SPACE_WORDS: Readonly<Record<ExportColorSpace, string>> = {
   'display-p3': 'Display P3 — wider colour, for recent screens',
   rec2020: 'Rec. 2020 — widest, 16-bit only',
 };
+
+/** Whether the exported files will say where the photos were taken. The engine's TIFF carries no EXIF, so never for TIFF. */
+export function locationKept(settings: ExportSettings): boolean {
+  return settings.format !== 'tiff' && exportKeepsLocation(settings);
+}

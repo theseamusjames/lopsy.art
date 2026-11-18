@@ -89,6 +89,7 @@ test('a version in an album, made the shown one, then deleted', async ({ page })
   await page.keyboard.press('Enter');
   await sidebar.getByRole('button', { name: /^All photos/ }).click();
   await version.click();
+  await expect(page.getByText('This version in albums')).toBeVisible();
   await page.getByRole('checkbox', { name: 'Picks' }).check();
   await sidebar.getByRole('button', { name: /^Picks/ }).click();
   await expect(page.getByRole('gridcell')).toHaveCount(1);

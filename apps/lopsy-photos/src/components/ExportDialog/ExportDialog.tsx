@@ -6,7 +6,7 @@ import type { ExportPreset } from '@lopsy/photos-core/library/types';
 import { exportSettingsProblem, type ExportColorSpace, type ExportSettings } from '@lopsy/photos-core/export/types';
 import { useExportPresets, useExportProgress, useSession } from '../../app/hooks';
 import { tiffExportAvailable } from '../../app/export-capabilities';
-import { COLOR_SPACE_WORDS, DEFAULT_EXPORT_FORM, fitColorSpace, offeredColorSpaces, formFromSettings, settingsFromForm, type ExportForm } from '../../library/export-form';
+import { COLOR_SPACE_WORDS, DEFAULT_EXPORT_FORM, locationKept, fitColorSpace, offeredColorSpaces, formFromSettings, settingsFromForm, type ExportForm } from '../../library/export-form';
 import { ExportPresetBar } from '../ExportPresetBar/ExportPresetBar';
 import { useUi } from '../../app/store';
 import { currentVersions } from '../../app/commands';
@@ -56,7 +56,9 @@ export function ExportDialog() {
     setPresetId(preset.id);
   };
   const sizes = longEdge !== null && !SIZES.some((s) => s.value === longEdge) ? [...SIZES, { value: longEdge, label: `${longEdge} px on the long side` }] : SIZES;
-  const problem = exportSettingsProblem(settingsFromForm(form, base));
+  const chosen = settingsFromForm(form, base);
+  const problem = exportSettingsProblem(chosen);
+  const keepsLocation = locationKept(chosen);
   const tiffBlocked = format === 'tiff' && !tiff;
 
   useEffect(() => {
@@ -151,6 +153,12 @@ export function ExportDialog() {
             </label>
           )}
           {tiffBlocked && <p className={styles.warn}>This build cannot write TIFF yet. Choose JPEG or PNG.</p>}
+          {keepsLocation && (
+            <p className={styles.warn} role="note">
+              Location will be kept: these settings leave where each photo was taken in the exported files.
+            </p>
+          )}
+          {problem && <p className={styles.warn}>{problem}</p>}
           {format === 'jpeg' && (
             <label className={styles.range}>
               <span>Quality</span>

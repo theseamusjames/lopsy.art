@@ -6,7 +6,7 @@ import { useUi } from '../../app/store';
 import { currentItems, currentTargets, setLabel, setRating, toggleSetAside } from '../../app/commands';
 import { formatBytes } from '../../import/import-summary';
 import { formatCamera, formatCaptureTime, formatDimensions, formatExposure } from '../../library/format';
-import { albumHasItem, setAlbumItem } from '../../library/items';
+import { albumHasItem, parseItem, setAlbumItem } from '../../library/items';
 import { Button } from '../Button/Button';
 import { LabelPicker } from '../LabelPicker/LabelPicker';
 import { Stars } from '../Stars/Stars';
@@ -163,7 +163,13 @@ export function InfoPanel() {
 
       {albums.length > 0 && (
         <section className={styles.section}>
-          <span className={styles.fieldLabel}>In albums</span>
+          <span className={styles.fieldLabel}>
+            {items.length > 0 && items.every((id) => parseItem(id).versionId !== null)
+              ? items.length === 1
+                ? 'This version in albums'
+                : 'These versions in albums'
+              : 'In albums'}
+          </span>
           {albums.map((album) => {
             const inCount = items.filter((id) => albumHasItem(album, id)).length;
             return (
