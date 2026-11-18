@@ -35,6 +35,7 @@
     "test:e2e": "npm run test:e2e -w lopsy-web --",
     "test:e2e:photos": "npm run test:e2e -w lopsy-photos --",
     "test:e2e:site": "npm exec -w lopsy-photos -- playwright test -c playwright.site.config.ts",
+    "test:e2e:offline": "npm run build:photos:site && node scripts/assemble-site.mjs --photos-only --out dist/photos-site && (npm exec -w lopsy-photos -- playwright test -c playwright.offline.config.ts; status=$?; rm -rf dist/photos-site apps/lopsy-photos/dist; exit $status)",
     "parity:record": "npm run parity:record -w lopsy-web --",
     "parity:check": "npm run parity:check -w lopsy-web --",
     "tutorial:upload": "npm run tutorial:upload -w lopsy-web --",
