@@ -264,6 +264,47 @@ describe('Edit in Lopsy, a document', () => {
   });
 });
 
+describe('storeLopsySave for a named document', () => {
+  it('saves a copy when the save names a document but no base revision', async () => {
+    const first = await storeLopsySave(session, { id: 'h1', name: 'Poster', lopsy: lopsyFile(1), render: png16(80, 60) }, { previewRenderer });
+    const doc = session.getView().assets.get(first.documentId)!;
+    const second = await storeLopsySave(
+      session,
+      {
+        id: 'h1',
+        name: 'Poster',
+        lopsy: lopsyFile(2),
+        render: png16(80, 60),
+        source: { libraryId: session.libraryId, assetId: '', versionId: '', recipeHash: '', documentId: doc.id },
+      },
+      { previewRenderer },
+    );
+    expect(second.outcome).toBe('copied');
+    expect(second.documentId).not.toBe(doc.id);
+    expect(second.fileName).toBe('Poster 2.lopsy');
+    expect((await readBytes(doc.fileId))[8]).toBe(1);
+  });
+
+  it('updates in place when the base revision matches', async () => {
+    const first = await storeLopsySave(session, { id: 'h1', name: 'Poster', lopsy: lopsyFile(1), render: png16(80, 60) }, { previewRenderer });
+    const doc = session.getView().assets.get(first.documentId)!;
+    const second = await storeLopsySave(
+      session,
+      {
+        id: 'h1',
+        name: 'Poster',
+        lopsy: lopsyFile(2),
+        render: png16(80, 60),
+        source: { libraryId: session.libraryId, assetId: '', versionId: '', recipeHash: '', documentId: doc.id },
+        baseRevision: first.revision,
+      },
+      { previewRenderer },
+    );
+    expect(second).toMatchObject({ outcome: 'updated', documentId: doc.id });
+    expect((await readBytes(doc.fileId))[8]).toBe(2);
+  });
+});
+
 describe('storeLopsySave without a source', () => {
   it('files Add to Lopsy Photos as a new document with no source, next to existing names', async () => {
     await adapter.createFile({ parentId: session.layout.documentsId, name: 'Poster.lopsy', mimeType: 'application/x-lopsy' }, new Blob(['x']));

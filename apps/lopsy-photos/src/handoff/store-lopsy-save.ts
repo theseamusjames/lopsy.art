@@ -7,7 +7,8 @@
  * - A save whose source names a document of this library updates that
  *   document's two files, provided the `.lopsy` is still at the revision
  *   Lopsy started from. If it moved on (another device saved meanwhile),
- *   the save becomes a copy, "<name> 2", so neither edit is lost.
+ *   the save becomes a copy, "<name> 2", so neither edit is lost. A save
+ *   naming a document without a base revision is a copy too.
  * - Any other save becomes a new document, in the source photo's stack
  *   when it has one.
  */
@@ -197,7 +198,9 @@ export async function storeLopsySave(
   const document = targetDocument(session, save.source);
   if (document) {
     const current = await session.adapter.getFile(document.fileId);
-    const isCurrent = current && !current.trashed && (save.baseRevision === undefined || save.baseRevision === current.revision);
+    // A save that names a document must say which revision it started from;
+    // without one there is no way to tell it is not stale, so it becomes a copy.
+    const isCurrent = current !== null && !current.trashed && save.baseRevision !== undefined && save.baseRevision === current.revision;
     if (isCurrent) {
       const updated = await updateDocument(session, document, save, options);
       return { revision: updated.revision, documentId: document.id, outcome: 'updated', fileName: updated.name };
