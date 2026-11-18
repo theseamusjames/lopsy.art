@@ -61,7 +61,7 @@ pub fn encode_tiff_16(pixels: &[u16], width: u32, height: u32, color_space: Colo
 
     // Values too large for an IFD entry go before the IFD.
     let icc = build_icc_profile(color_space);
-    let mut put = |out: &mut Vec<u8>, bytes: &[u8]| -> u32 {
+    let put = |out: &mut Vec<u8>, bytes: &[u8]| -> u32 {
         pad_even(out);
         let at = out.len() as u32;
         out.extend_from_slice(bytes);

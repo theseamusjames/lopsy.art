@@ -467,8 +467,11 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     // 4. Develop a RAW composite (linear camera RGB to sRGB), then apply
     // image adjustments (exposure, contrast, etc.) if any are active
     apply_raw_develop(engine);
+    crate::develop::detail::apply_noise_reduction(engine);
+    crate::develop::detail::apply_local_contrast(engine);
     apply_image_adjustments(engine);
     apply_color_mixer(engine);
+    crate::develop::detail::apply_sharpening(engine);
 
     // 4b. Quick mask overlay: translucent blue tint over unselected areas
     if engine.quick_mask_texture.is_some() {
@@ -1582,8 +1585,11 @@ fn composite_layers_for_export_with(engine: &mut EngineInner, with_mixer: bool) 
 
     // Exports develop a RAW composite as the live frame does.
     apply_raw_develop(engine);
+    crate::develop::detail::apply_noise_reduction(engine);
+    crate::develop::detail::apply_local_contrast(engine);
     if with_mixer {
         apply_color_mixer(engine);
+        crate::develop::detail::apply_sharpening(engine);
     }
 
     Ok(())
@@ -1702,6 +1708,7 @@ pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
 
     apply_image_adjustments(engine);
     apply_color_mixer(engine);
+    crate::develop::detail::apply_sharpening(engine);
 
     let is_lab = engine.doc_color_mode == 1;
     engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {

@@ -56,3 +56,28 @@ pub fn set_image_color_mixer(engine: &mut Engine, values: &[f32]) -> Result<(), 
 pub fn clear_image_color_mixer(engine: &mut Engine) {
     lopsy_engine::commands::develop::clear_image_color_mixer(&mut engine.inner)
 }
+
+/// Sharpening and noise reduction: 7 floats `[amount 0..150, radius
+/// 0.5..3 (full-resolution px), edges 0..100, nrLuminance 0..100,
+/// nrColor 0..100, nrDetail 0..100, pixelScale]`.
+#[wasm_bindgen(js_name = "setImageDetail")]
+pub fn set_image_detail(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_detail(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clearImageDetail")]
+pub fn clear_image_detail(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_image_detail(&mut engine.inner)
+}
+
+/// Local contrast and haze: 4 floats `[large, small, haze (−100..100),
+/// pixelScale]`.
+#[wasm_bindgen(js_name = "setImageLocalContrast")]
+pub fn set_image_local_contrast(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_local_contrast(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clearImageLocalContrast")]
+pub fn clear_image_local_contrast(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_image_local_contrast(&mut engine.inner)
+}

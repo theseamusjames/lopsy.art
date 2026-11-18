@@ -25,6 +25,8 @@
 //! without float render targets the composite is 8-bit, which clips and
 //! bands linear values: develop there only on RGBA16F.
 
+pub mod detail;
+
 use lopsy_core::raf::develop::RawDevelopSettings;
 
 use crate::engine::EngineInner;

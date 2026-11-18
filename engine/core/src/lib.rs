@@ -27,6 +27,7 @@ pub mod raf;
 pub mod develop_stats;
 pub mod color_mixer;
 pub mod tiff;
+pub mod detail;
 pub mod psd;
 pub mod text_types;
 pub mod vertical_orientation;
