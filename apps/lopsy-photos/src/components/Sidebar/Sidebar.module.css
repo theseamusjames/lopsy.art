@@ -139,3 +139,18 @@
   color: var(--color-text-disabled);
   line-height: 1.45;
 }
+
+.nested {
+  padding-left: var(--space-3);
+}
+
+.more {
+  align-self: flex-start;
+  margin: 0 var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--color-accent);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}

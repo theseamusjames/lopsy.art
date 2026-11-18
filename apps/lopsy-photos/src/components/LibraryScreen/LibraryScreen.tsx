@@ -10,12 +10,14 @@ import { DropZone } from '../DropZone/DropZone';
 import { EmptyState } from '../EmptyState/EmptyState';
 import { ExportDialog } from '../ExportDialog/ExportDialog';
 import { GridToolbar } from '../GridToolbar/GridToolbar';
+import { FilterBar } from '../FilterBar/FilterBar';
 import { Header } from '../Header/Header';
 import { ImportSheet } from '../ImportSheet/ImportSheet';
 import { ImportStrip } from '../ImportStrip/ImportStrip';
 import { InfoPanel } from '../InfoPanel/InfoPanel';
 import { PhotoGrid } from '../PhotoGrid/PhotoGrid';
 import { Sidebar } from '../Sidebar/Sidebar';
+import { SettingsDialog } from '../SettingsDialog/SettingsDialog';
 import { SingleView } from '../SingleView/SingleView';
 import styles from './LibraryScreen.module.css';
 
@@ -109,6 +111,7 @@ export function LibraryScreen() {
         ) : (
           <>
             {!libraryEmpty && <GridToolbar orderedIds={orderedIds} />}
+            {!libraryEmpty && <FilterBar />}
             {orderedIds.length === 0 ? (
               <EmptyState libraryEmpty={libraryEmpty} collection={collection} searching={text.trim() !== ''} />
             ) : (
@@ -123,6 +126,7 @@ export function LibraryScreen() {
       {dialog === 'import' && <ImportSheet />}
       {dialog === 'export' && <ExportDialog />}
       {dialog === 'delete' && <DeleteDialog />}
+      {dialog === 'settings' && <SettingsDialog />}
       <DropZone />
     </div>
   );

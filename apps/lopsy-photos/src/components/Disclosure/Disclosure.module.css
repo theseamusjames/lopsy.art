@@ -1,0 +1,18 @@
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+.toggle:hover {
+  background: var(--color-bg-active);
+}
+
+.toggle[data-open='true'] {
+  transform: rotate(90deg);
+}
