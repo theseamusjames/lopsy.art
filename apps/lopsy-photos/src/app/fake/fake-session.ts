@@ -258,6 +258,15 @@ export class FakeSession implements LibrarySession {
     this.patchVersion(versionId, (v) => ({ ...v, deleted: true }));
   }
 
+  setPrimaryVersion(assetId: AssetId, versionId: VersionId): void {
+    const v = this.versions.get(versionId);
+    if (!v || v.deleted || v.assetId !== assetId) throw new Error(`${versionId} is not a live version of ${assetId}`);
+    const a = this.assets.get(assetId);
+    if (!a) return;
+    this.assets.set(assetId, { ...a, primaryVersionId: versionId });
+    this.changed();
+  }
+
   editRecipe(versionId: VersionId, changes: Readonly<Record<string, Json>>, label: string): void {
     const v = this.versions.get(versionId);
     if (!v) return;
@@ -303,7 +312,7 @@ export class FakeSession implements LibrarySession {
 
   createAlbum(name: string): AlbumId {
     const id = fakeId('album');
-    this.albums.set(id, { id, name, assetIds: [], deleted: false });
+    this.albums.set(id, { id, name, assetIds: [], members: [], deleted: false });
     this.changed();
     return id;
   }
@@ -323,11 +332,20 @@ export class FakeSession implements LibrarySession {
     this.patchAlbum(albumId, (a) => ({ ...a, deleted: true }));
   }
 
-  setAlbumMember(albumId: AlbumId, assetId: AssetId, present: boolean): void {
+  setAlbumMember(albumId: AlbumId, assetId: AssetId, present: boolean, versionId: VersionId | null = null): void {
     this.patchAlbum(albumId, (a) => {
-      const has = a.assetIds.includes(assetId);
+      const members = a.members;
+      const has = members.some((m) => m.assetId === assetId && m.versionId === versionId);
       if (has === present) return a;
-      return { ...a, assetIds: present ? [...a.assetIds, assetId] : a.assetIds.filter((x) => x !== assetId) };
+      const next = present
+        ? [...members, { assetId, versionId }]
+        : members.filter((m) => !(m.assetId === assetId && m.versionId === versionId));
+      const whole = next.filter((m) => m.versionId === null);
+      return {
+        ...a,
+        assetIds: whole.map((m) => m.assetId),
+        members: [...whole, ...next.filter((m) => m.versionId !== null)],
+      };
     });
   }
 

@@ -50,7 +50,7 @@ describe('queryAssets', () => {
         makeAsset('b', { title: 'Sunset at the pier', importId: 'new', importedAt: '2026-03-01T00:00:00Z' }),
         makeAsset('c', { importId: 'new', importedAt: '2026-03-01T00:00:01Z' }),
       ],
-      [{ id: 'al', name: 'Trip', assetIds: ['a', 'c'], deleted: false }],
+      [{ id: 'al', name: 'Trip', assetIds: ['a', 'c'], members: [], deleted: false }],
     );
     expect(queryAssets(view, { ...byCapture, collection: { kind: 'album', albumId: 'al' } })).toEqual(['a', 'c']);
     expect(queryAssets(view, { ...byCapture, collection: { kind: 'keyword', keyword: 'beach' } })).toEqual(['a']);
@@ -75,7 +75,7 @@ describe('sidebarCounts and badges', () => {
   it('counts collections and keywords', () => {
     const view = makeView(
       [makeAsset('a', { keywords: ['x', 'y'] }), makeAsset('b', { setAside: true, keywords: ['x'] })],
-      [{ id: 'al', name: 'A', assetIds: ['a'], deleted: false }],
+      [{ id: 'al', name: 'A', assetIds: ['a'], members: [], deleted: false }],
     );
     const counts = sidebarCounts(view);
     expect(counts.all).toBe(1);
