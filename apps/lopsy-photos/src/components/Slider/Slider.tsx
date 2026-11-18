@@ -15,6 +15,17 @@ export interface SliderProps {
   /** Once, when the user lets go (pointer up, key up, Enter, reset). */
   readonly onCommit: (value: number) => void;
   readonly isDisabled?: boolean;
+  /**
+   * How the readout shows and reads the value when it is not the value
+   * itself (Temperature in Kelvin): the slider keeps its own units.
+   */
+  readonly display?: SliderDisplay;
+}
+
+export interface SliderDisplay {
+  readonly format: (value: number) => string;
+  /** The value for typed text, or null when it is not one. */
+  readonly parse: (text: string) => number | null;
 }
 
 interface Drag {
@@ -33,7 +44,7 @@ const ADJUST_KEYS = new Set(['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 
  * plain click never changes it; double-click resets; arrows step (Shift
  * for ten steps); the readout takes a typed number.
  */
-export function Slider({ label, value, min, max, step, defaultValue, onChange, onCommit, isDisabled = false }: SliderProps) {
+export function Slider({ label, value, min, max, step, defaultValue, onChange, onCommit, isDisabled = false, display }: SliderProps) {
   const range: SliderRange = { min, max, step };
   const id = useId();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -96,7 +107,8 @@ export function Slider({ label, value, min, max, step, defaultValue, onChange, o
 
   const commitDraft = () => {
     if (draft === null) return;
-    const parsed = parseValue(draft, range);
+    const typed = display ? display.parse(draft) : parseValue(draft, range);
+    const parsed = typed === null ? null : Math.min(max, Math.max(min, typed));
     setDraft(null);
     if (parsed === null || parsed === value) return;
     onChange(parsed);
@@ -107,7 +119,7 @@ export function Slider({ label, value, min, max, step, defaultValue, onChange, o
   const origin = fraction(Math.min(max, Math.max(min, min < 0 && max > 0 ? 0 : min)), range);
   const fillStart = Math.min(position, origin);
   const fillEnd = Math.max(position, origin);
-  const readout = formatValue(value, range);
+  const readout = display ? display.format(value) : formatValue(value, range);
 
   return (
     <div className={styles.slider} data-disabled={isDisabled || undefined}>

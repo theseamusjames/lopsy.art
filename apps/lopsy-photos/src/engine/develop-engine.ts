@@ -49,6 +49,9 @@ import initWasm, {
   render,
   rotateLayer90,
   setBackgroundColor,
+  rafWhiteBalanceKelvin,
+  rafWhiteBalancePresets,
+  sampleNeutralWhiteBalance,
   setDocumentSize,
   setImageBlacks,
   setImageColorGrading,
@@ -74,6 +77,7 @@ import initWasm, {
 } from '@lopsy/engine-pkg/lopsy_wasm';
 import type { ImageFormat } from '@lopsy/photos-core/library/types';
 import { DEFAULT_RECIPE, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { parseKelvinScale, parsePresets, type KelvinScale, type WhiteBalancePresetValues } from './white-balance';
 import {
   framedSize,
   effectiveFraming,
@@ -130,6 +134,10 @@ export interface PhotoInfo {
   readonly autoWhiteBalance: { readonly temperature: number; readonly tint: number } | null;
   /** The Profile menu. */
   readonly profiles: readonly DevelopProfile[];
+  /** The camera's white balance presets (RAW), in menu order; empty otherwise. */
+  readonly whiteBalancePresets: readonly WhiteBalancePresetValues[];
+  /** How the relative Temperature reads in Kelvin (RAW); null otherwise. */
+  readonly kelvin: KelvinScale | null;
 }
 
 export type ToneValues = Recipe['tone'];
@@ -182,6 +190,13 @@ export interface DevelopEngine {
   /** A JPEG of the current edit, long edge at most `maxSize`. */
   renderPreview(maxSize: number, quality?: number): Promise<Blob>;
   exportImage(options: ExportOptions): Promise<Blob>;
+  /**
+   * The white balance (recipe units: absolute for RAW, relative for other
+   * photos) that makes the patch of `radius` document pixels around (x, y)
+   * neutral; null before a load. A patch with a channel at zero reads
+   * [0, 0].
+   */
+  sampleWhiteBalance(x: number, y: number, radius: number): Promise<{ temperature: number; tint: number } | null>;
   dispose(): void;
 }
 
@@ -337,6 +352,8 @@ class PhotoEngine implements DevelopEngine {
   private pixelScale = 1;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
   private layoutKey: string | null = null;
+  private wbPresets: WhiteBalancePresetValues[] = [];
+  private kelvinScale: KelvinScale | null = null;
   /** The displayed (cropped) size. */
   private displaySize: Size | null = null;
   private autoWb: { temperature: number; tint: number } | null = null;
@@ -495,6 +512,8 @@ class PhotoEngine implements DevelopEngine {
     const data = new Uint8Array(await source.arrayBuffer());
     this.checkLive(signal);
     report('decoding', null);
+    this.wbPresets = parsePresets(rafWhiteBalancePresets(data));
+    this.kelvinScale = parseKelvinScale(rafWhiteBalanceKelvin(data));
     const isLinear = this.hasFloatTargets();
     const isUpgrade = mode === 'upgrade';
     const isWorkingOnly = mode === 'working' && isLinear;
@@ -741,6 +760,8 @@ class PhotoEngine implements DevelopEngine {
     if (!defaults) {
       this.autoWb = null;
       this.engineProfiles = [];
+      this.wbPresets = [];
+      this.kelvinScale = null;
       clearRawDevelop(this.engine);
     }
   }
@@ -897,7 +918,13 @@ class PhotoEngine implements DevelopEngine {
 
   photoInfo(): PhotoInfo {
     const isRaw = this.rawDefaults !== null;
-    return { isRaw, autoWhiteBalance: this.autoWb, profiles: profilesFor(isRaw, this.engineProfiles) };
+    return {
+      isRaw,
+      autoWhiteBalance: this.autoWb,
+      profiles: profilesFor(isRaw, this.engineProfiles),
+      whiteBalancePresets: isRaw ? this.wbPresets : [],
+      kelvin: isRaw ? this.kelvinScale : null,
+    };
   }
 
   sampleAt(x: number, y: number): readonly [number, number, number] | null {
@@ -910,6 +937,18 @@ class PhotoEngine implements DevelopEngine {
     return [rgba[0] ?? 0, rgba[1] ?? 0, rgba[2] ?? 0];
   }
 
+  async sampleWhiteBalance(x: number, y: number, radius: number): Promise<{ temperature: number; tint: number } | null> {
+    if (!this.sourceSize || this.isDisposed) return null;
+    const out = await readback<Float32Array>(
+      this.engine,
+      () => sampleNeutralWhiteBalance(this.engine, x, y, Math.max(0, Math.min(64, radius))),
+      () => this.isDisposed,
+    );
+    const temperature = out[0];
+    const tint = out[1];
+    if (temperature === undefined || tint === undefined || !Number.isFinite(temperature) || !Number.isFinite(tint)) return null;
+    return { temperature, tint };
+  }
   async readHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed) return null;
     render(this.engine);
