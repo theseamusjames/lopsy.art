@@ -682,3 +682,14 @@ identity, per layer) and `floatLayerSelection` lifts through a mask with the
 resampling's coverage divided back out. While a transform is still pending
 the store's `selection` deliberately holds the *pre-transform* mask and
 bounds; the float and the ants re-derive from it through `uiStore.transform`.
+
+## Sandbox: Playwright wants a Chromium build that is not installed
+`npm run wgsl:check` (and any Playwright launch) can fail with "Executable
+doesn't exist at /opt/pw-browsers/chromium_headless_shell-1208/..." while
+`/opt/pw-browsers` holds a different build (1243). Downloading browsers is
+blocked, so run a copy of the script that imports `@playwright/test` by
+absolute path and passes `executablePath:
+'/opt/pw-browsers/chromium_headless_shell-<build>/chrome-headless-shell-linux64/chrome-headless-shell'`
+to `chromium.launch`. Headless WebGPU (SwiftShader) and WebGL both work
+that way. There is no Vulkan adapter either, so the native render tests
+(`--features native`) skip themselves.

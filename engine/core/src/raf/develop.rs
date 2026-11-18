@@ -163,6 +163,158 @@ pub fn develop_reference(linear_rgba: &[f32], settings: &RawDevelopSettings) -> 
     out
 }
 
+// ── Binned preview (spec E7) ─────────────────────────────────────────
+//
+// A demosaic of a 40 MP X-Trans frame takes seconds. For a first view the
+// mosaic is binned instead: the frame is cut into `factor`×`factor` blocks
+// and each output pixel is, per colour, the mean of that colour's own
+// samples in its block. No interpolation, no demosaic, no denoise. The
+// mosaic already carries the as-shot white balance, so the result is in the
+// same camera RGB and scale as `render_linear_band`, and the same develop
+// settings render it the same way, up to resolution.
+//
+// A factor is valid when it bins whole pattern units and every block holds
+// every colour. Bayer: any even factor (a 2×2 superpixel has 1 R, 2 G, 1 B). X-Trans: 3 works when the
+// blocks fall on the pattern's 3×3 halves, each of which holds 2 R, 5 G and
+// 2 B (true for the phase `prepare_raf` aligns to row and column 0, and
+// checked rather than assumed); 6 (a whole period: 8 R, 20 G, 8 B) always
+// works. The colour samples of a block sit at slightly different centroids
+// and each colour is sampled sparsely, so fine detail aliases into colour
+// fringes at edges: fine for a preview, not a decode. (Estimating red and
+// blue as green plus a colour difference cut that error by about a fifth
+// on a real 40 MP frame but took three times as long; not worth it here.)
+// Rows and columns past the last whole block are dropped (fewer than
+// `factor` of each).
+
+/// Largest factor `binned_factor_for` considers.
+const MAX_BIN_FACTOR: u32 = 24;
+
+fn cfa_period_and_pattern(params: &RafRenderParams) -> (usize, Vec<u8>) {
+    if params.is_xtrans && params.cfa.len() == 36 {
+        (6, params.cfa.clone())
+    } else {
+        (2, params.cfa.iter().take(4).copied().collect())
+    }
+}
+
+/// Whether every `factor`×`factor` block of the frame holds every colour.
+pub fn is_valid_bin_factor(params: &RafRenderParams, factor: u32) -> bool {
+    let (p, cfa) = cfa_period_and_pattern(params);
+    // Whole periods or, for X-Trans, whole 3×3 halves of one: a block of
+    // any other size would hold different colour counts from block to block.
+    let unit = if p == 6 { 3 } else { 2 };
+    if factor < 2 || factor % unit != 0 {
+        return false;
+    }
+    if cfa.len() != p * p {
+        return false;
+    }
+    let f = factor as usize;
+    // Block origins fall on phases k·f mod p; check each such block.
+    let phases: Vec<usize> = (0..p).map(|k| (k * f) % p).collect();
+    phases.iter().all(|&py| {
+        phases.iter().all(|&px| {
+            let mut seen = [false; 3];
+            for dy in 0..f {
+                for dx in 0..f {
+                    let c = cfa[((py + dy) % p) * p + (px + dx) % p] as usize;
+                    if c < 3 {
+                        seen[c] = true;
+                    }
+                }
+            }
+            seen.iter().all(|&s| s)
+        })
+    })
+}
+
+/// The coarsest valid factor whose binned image still has a long edge of
+/// at least `min_long_edge` (oriented or not, the long edge is the same).
+/// When even the finest valid factor falls short, that finest factor.
+pub fn binned_factor_for(params: &RafRenderParams, min_long_edge: u32) -> u32 {
+    let long = params.width.max(params.height);
+    let valid: Vec<u32> = (2..=MAX_BIN_FACTOR).filter(|&f| is_valid_bin_factor(params, f)).collect();
+    valid
+        .iter()
+        .copied()
+        .filter(|&f| long / f >= min_long_edge)
+        .max()
+        .or_else(|| valid.first().copied())
+        .unwrap_or(6)
+}
+
+/// Bin the whole white-balanced mosaic (`params.width`×`params.height`) by
+/// `factor`: oriented RGBA f32 in linear camera RGB (alpha 1, unclamped)
+/// at `floor(width / factor)`×`floor(height / factor)` before orientation.
+/// Returns (width, height, pixels) after orientation.
+pub fn render_binned_linear(mosaic: &[f32], params: &RafRenderParams, factor: u32) -> Result<(u32, u32, Vec<f32>), String> {
+    let (w, h) = (params.width as usize, params.height as usize);
+    if mosaic.len() != w * h {
+        return Err(format!("RAF mosaic has {} values, expected {}", mosaic.len(), w * h));
+    }
+    if !is_valid_bin_factor(params, factor) {
+        return Err(format!("Bin factor {factor} leaves a colour out of some blocks of this CFA"));
+    }
+    let (p, cfa) = cfa_period_and_pattern(params);
+    let f = factor as usize;
+    let (bw, bh) = (w / f, h / f);
+    if bw == 0 || bh == 0 {
+        return Err(format!("A {w}×{h} frame is smaller than one {f}×{f} block"));
+    }
+
+    // Each block's colour counts depend only on its origin's CFA phase.
+    let mut inv_counts = vec![[0.0f32; 3]; p * p];
+    for py in 0..p {
+        for px in 0..p {
+            let mut n = [0u32; 3];
+            for dy in 0..f {
+                for dx in 0..f {
+                    n[cfa[((py + dy) % p) * p + (px + dx) % p] as usize % 3] += 1;
+                }
+            }
+            inv_counts[py * p + px] = n.map(|c| if c > 0 { 1.0 / c as f32 } else { 0.0 });
+        }
+    }
+
+    let mut rgba = vec![0.0f32; bw * bh * 4];
+    let mut sums = vec![[0.0f32; 3]; bw];
+    for by in 0..bh {
+        sums.iter_mut().for_each(|s| *s = [0.0; 3]);
+        for dy in 0..f {
+            let row = by * f + dy;
+            let line = &mosaic[row * w..row * w + bw * f];
+            let cfa_row = &cfa[(row % p) * p..(row % p) * p + p];
+            for (bx, sum) in sums.iter_mut().enumerate() {
+                let x0 = bx * f;
+                for (x, &v) in line[x0..x0 + f].iter().enumerate() {
+                    sum[cfa_row[(x0 + x) % p] as usize % 3] += v;
+                }
+            }
+        }
+        let py = (by * f) % p;
+        for (bx, sum) in sums.iter().enumerate() {
+            let inv = inv_counts[py * p + (bx * f) % p];
+            let o = (by * bw + bx) * 4;
+            rgba[o] = sum[0] * inv[0];
+            rgba[o + 1] = sum[1] * inv[1];
+            rgba[o + 2] = sum[2] * inv[2];
+            rgba[o + 3] = 1.0;
+        }
+    }
+    Ok(crate::orientation::apply_exif_orientation_owned(bw as u32, bh as u32, rgba, params.orientation))
+}
+
+/// The binned preview of the whole frame with the factor
+/// `binned_factor_for(params, min_long_edge)` picks. Returns (width, height,
+/// pixels) after orientation.
+pub fn render_binned_linear_for(
+    mosaic: &[f32],
+    params: &RafRenderParams,
+    min_long_edge: u32,
+) -> Result<(u32, u32, Vec<f32>), String> {
+    render_binned_linear(mosaic, params, binned_factor_for(params, min_long_edge))
+}
+
 fn invert_3x3(m: &[f32; 9]) -> Option<[f32; 9]> {
     let m: [f64; 9] = m.map(f64::from);
     let c00 = m[4] * m[8] - m[5] * m[7];

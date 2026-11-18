@@ -7,7 +7,10 @@
 
 mod support;
 
-use lopsy_core::raf::develop::{develop_defaults, develop_reference, render_linear_band, render_linear_rgb};
+use lopsy_core::raf::develop::{
+    binned_factor_for, develop_defaults, develop_reference, is_valid_bin_factor, render_binned_linear, render_linear_band,
+    render_linear_rgb,
+};
 use lopsy_core::raf::{plan_bands, prepare_raf, render_rgb_unsharpened, RafBand, RafDecodeOpts, RafRenderParams, BAND_HALO_ROWS};
 use support::synthetic_raf::SyntheticRaf;
 
@@ -192,4 +195,158 @@ fn default_develop_reproduces_todays_decode_on_a_real_sample() {
     );
     assert!(d.max < 1e-3, "max difference {}", d.max);
     assert_eq!(d.over_half_step, 0);
+}
+
+/// The synthetic RAF writer only makes X-Trans data, so a Bayer frame is
+/// made from its full linear render, sampled through an RGGB pattern.
+fn bayer_from_xtrans(w: u16, h: u16) -> (Vec<f32>, RafRenderParams) {
+    let prep = prepare_raf(&SyntheticRaf::small(w, h).build(), RafDecodeOpts::default()).unwrap();
+    let (w, h) = (w as usize, h as usize);
+    let rgb = render_linear_rgb(&prep.mosaic, w, h, &prep.params);
+    let rggb = [0u8, 1, 1, 2];
+    let mosaic = (0..w * h).map(|i| rgb[i * 3 + rggb[(i / w % 2) * 2 + i % w % 2] as usize]).collect();
+    let mut params = prep.params.clone();
+    params.is_xtrans = false;
+    params.cfa = rggb.iter().cycle().take(36).copied().collect();
+    (mosaic, params)
+}
+
+/// Binned preview against the full linear render box-downscaled over the
+/// same blocks, both developed with the defaults and compared in 8-bit
+/// sRGB steps: (mean, 99th percentile, max). Tolerances: on the synthetic
+/// frames mean < 2 and p99 < 14 steps; on a real crop mean < 6 and p99 < 45
+/// at /3, mean < 3 and p99 < 25 at /6. Binning has no demosaic, so edges
+/// alias; the max is not bounded.
+fn binned_vs_box(mosaic: &[f32], params: &RafRenderParams, factor: u32) -> (f32, f32, f32) {
+    let mut p = params.clone();
+    p.orientation = 1;
+    let (w, h, f) = (p.width as usize, p.height as usize, factor as usize);
+    let (bw, bh, binned) = render_binned_linear(mosaic, &p, factor).unwrap();
+    assert_eq!((bw as usize, bh as usize), (w / f, h / f));
+    let full = render_linear_rgb(mosaic, w, h, &p);
+    let mut boxed = vec![0.0f32; binned.len()];
+    for by in 0..h / f {
+        for bx in 0..w / f {
+            let o = (by * (w / f) + bx) * 4;
+            for dy in 0..f {
+                for dx in 0..f {
+                    let i = ((by * f + dy) * w + bx * f + dx) * 3;
+                    for c in 0..3 {
+                        boxed[o + c] += full[i + c] / (f * f) as f32;
+                    }
+                }
+            }
+            boxed[o + 3] = 1.0;
+        }
+    }
+    let settings = develop_defaults(&p);
+    let a = develop_reference(&binned, &settings);
+    let b = develop_reference(&boxed, &settings);
+    let mut steps: Vec<f32> = a
+        .iter()
+        .zip(&b)
+        .enumerate()
+        .filter(|(i, _)| i % 4 != 3)
+        .map(|(_, (x, y))| (x.clamp(0.0, 1.0) - y.clamp(0.0, 1.0)).abs() * 255.0)
+        .collect();
+    let mean = steps.iter().sum::<f32>() / steps.len() as f32;
+    steps.sort_by(f32::total_cmp);
+    (mean, steps[steps.len() * 99 / 100], *steps.last().unwrap())
+}
+
+#[test]
+fn bin_factors_keep_every_colour_in_every_block() {
+    let xt = prepare_raf(&SyntheticRaf::small(240, 216).build(), RafDecodeOpts::default()).unwrap().params;
+    assert!(!is_valid_bin_factor(&xt, 2));
+    assert!(is_valid_bin_factor(&xt, 3), "the X-Trans 3x3 halves each hold R, G and B");
+    assert!(is_valid_bin_factor(&xt, 6) && is_valid_bin_factor(&xt, 12));
+    let bayer = bayer_from_xtrans(240, 216).1;
+    assert!(is_valid_bin_factor(&bayer, 2) && is_valid_bin_factor(&bayer, 4));
+    assert!(!is_valid_bin_factor(&bayer, 3), "only whole 2x2 periods");
+    assert!(!is_valid_bin_factor(&xt, 4), "only whole 3x3 halves");
+    // A 7752-wide frame: factor 3 keeps 2584 px ≥ 2048; 6 would fall short.
+    let mut big = xt.clone();
+    big.width = 7752;
+    big.height = 5178;
+    assert_eq!(binned_factor_for(&big, 2048), 3);
+    assert_eq!(binned_factor_for(&big, 1024), 6);
+    assert_eq!(binned_factor_for(&xt, 2048), 3, "a small frame takes the finest factor");
+}
+
+#[test]
+fn binned_preview_matches_a_box_downscaled_linear_render() {
+    let prep = prepare_raf(&SyntheticRaf::small(240, 216).build(), RafDecodeOpts::default()).unwrap();
+    let bayer = bayer_from_xtrans(240, 216);
+    let cases: [(&str, &[f32], &RafRenderParams, u32); 4] = [
+        ("x-trans", &prep.mosaic, &prep.params, 3),
+        ("x-trans", &prep.mosaic, &prep.params, 6),
+        ("bayer", &bayer.0, &bayer.1, 2),
+        ("bayer", &bayer.0, &bayer.1, 4),
+    ];
+    for (name, mosaic, params, f) in cases {
+        let (mean, p99, max) = binned_vs_box(mosaic, params, f);
+        println!("{name} /{f}: binned vs box-downscaled, 8-bit steps: mean {mean:.2}, p99 {p99:.2}, max {max:.2}");
+        assert!(mean < 2.0 && p99 < 14.0, "{name} /{f}: mean {mean}, p99 {p99}");
+    }
+}
+
+#[test]
+fn binned_preview_orients_like_the_bands() {
+    for orientation in 1..=8u16 {
+        let mut cfg = SyntheticRaf::small(240, 216);
+        cfg.orientation = orientation;
+        let prep = prepare_raf(&cfg.build(), RafDecodeOpts::default()).unwrap();
+        let (w, h, px) = render_binned_linear(&prep.mosaic, &prep.params, 3).unwrap();
+        assert_eq!((w, h), match orientation { 5..=8 => (72, 80), _ => (80, 72) }, "orientation {orientation}");
+        assert_eq!(px.len(), (w * h * 4) as usize);
+        assert!(px.iter().all(|v| v.is_finite()));
+    }
+}
+
+#[test]
+fn binned_preview_on_a_real_sample() {
+    let Ok(dir) = std::env::var("LOPSY_RAF_SAMPLES") else {
+        eprintln!("LOPSY_RAF_SAMPLES not set; skipping");
+        return;
+    };
+    let mut files: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("raf")))
+        .collect();
+    files.sort();
+    let Some(path) = files.first() else { return };
+    let data = std::fs::read(path).unwrap();
+    let t = std::time::Instant::now();
+    let prep = prepare_raf(&data, RafDecodeOpts::default()).unwrap();
+    let prepare_ms = t.elapsed().as_secs_f64() * 1000.0;
+    let t = std::time::Instant::now();
+    let factor = binned_factor_for(&prep.params, 2048);
+    let (w, h, px) = render_binned_linear(&prep.mosaic, &prep.params, factor).unwrap();
+    let bin_ms = t.elapsed().as_secs_f64() * 1000.0;
+    assert_eq!(px.len(), (w * h * 4) as usize);
+    println!(
+        "{}: {}x{} mosaic, prepare {prepare_ms:.0} ms, binned /{factor} to {w}x{h} in {bin_ms:.0} ms",
+        path.display(),
+        prep.params.width,
+        prep.params.height
+    );
+
+    let (fw, fh) = (prep.params.width as usize, prep.params.height as usize);
+    let side = 1200usize.min(fw).min(fh) / 6 * 6;
+    let (x0, y0) = ((fw / 2 - side / 2) / 6 * 6, (fh / 2 - side / 2) / 6 * 6);
+    let mut crop = Vec::with_capacity(side * side);
+    for row in y0..y0 + side {
+        crop.extend_from_slice(&prep.mosaic[row * fw + x0..row * fw + x0 + side]);
+    }
+    let mut params = prep.params.clone();
+    params.width = side as u32;
+    params.height = side as u32;
+    for f in [3u32, 6] {
+        let (mean, p99, max) = binned_vs_box(&crop, &params, f);
+        println!("real /{f}: binned vs box-downscaled, 8-bit steps: mean {mean:.2}, p99 {p99:.2}, max {max:.2}");
+        // Real detail aliases more than the synthetic frame (see the module notes).
+        let (mean_max, p99_max) = if f == 3 { (6.0, 45.0) } else { (3.0, 25.0) };
+        assert!(mean < mean_max && p99 < p99_max, "/{f}: mean {mean}, p99 {p99}");
+    }
 }
