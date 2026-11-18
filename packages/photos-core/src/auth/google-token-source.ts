@@ -143,7 +143,7 @@ export class GoogleTokenSource implements TokenSource {
         (client) =>
           new Promise<Grant>((resolve, reject) => {
             this.pending = { resolve, reject };
-            const hint = lastEmail();
+            const hint = this.loginHint();
             client.requestAccessToken({ prompt, ...(hint === null ? {} : { login_hint: hint }) });
           }),
       )
@@ -169,7 +169,7 @@ export class GoogleTokenSource implements TokenSource {
     const oauth2 = readGlobal('google.accounts.oauth2');
     if (!isOauth2(oauth2)) throw new StorageError('unknown', 'Google sign-in did not load');
     this.oauth2 = oauth2;
-    const hint = lastEmail();
+    const hint = this.loginHint();
     this.client = oauth2.initTokenClient({
       client_id: this.options.clientId,
       scope: GOOGLE_SCOPES,
@@ -178,6 +178,11 @@ export class GoogleTokenSource implements TokenSource {
       ...(hint === null ? {} : { login_hint: hint }),
     });
     return this.client;
+  }
+
+  /** GIS takes the account's email or its `sub`; the expected account's `sub` is the precise one. */
+  private loginHint(): string | null {
+    return this.options.expectedAccountId ?? lastEmail();
   }
 
   /** Keeps a grant once it is known to be for the expected account. */

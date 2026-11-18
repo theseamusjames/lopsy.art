@@ -8,6 +8,8 @@ import { loadScript, readGlobal } from '../../auth/load-script';
 import { StorageError } from '../errors';
 
 const GAPI_SCRIPT_URL = 'https://apis.google.com/js/api.js';
+/** google.picker.Action.ERROR ("error"), compared by value: older loaders may not define it on the enum. */
+const PICKER_ERROR = 'error';
 
 export interface PickDriveFilesOptions {
   /** API key restricted to the app's origin. */
@@ -90,7 +92,7 @@ export async function pickDriveFiles(options: PickDriveFilesOptions): Promise<st
   }
   const view = new api.DocsView(api.ViewId.DOCS).setIncludeFolders(true).setSelectFolderEnabled(false);
   if (options.mimeTypes && options.mimeTypes.length > 0) view.setMimeTypes(options.mimeTypes.join(','));
-  return new Promise<string[]>((resolve) => {
+  return new Promise<string[]>((resolve, reject) => {
     let builder = new api.PickerBuilder()
       .addView(view)
       .setAppId(options.appId)
@@ -106,6 +108,10 @@ export async function pickDriveFiles(options: PickDriveFilesOptions): Promise<st
         } else if (result.action === api.Action.CANCEL) {
           picker.dispose();
           resolve([]);
+        } else if (result.action === PICKER_ERROR) {
+          // Most often the API key's referrer list lacks https://docs.google.com/*, where the Picker's iframe runs.
+          picker.dispose();
+          reject(new StorageError('invalid', 'The Google Picker reported an error'));
         }
       })
       .build();

@@ -562,6 +562,13 @@ export class GoogleDriveAdapter implements StorageAdapter {
         if (received > offset) {
           failures = 0;
           await this.saveSession(options.resumeKey, { sessionUri: session, totalBytes: total, offset: received, target });
+        } else {
+          // No progress (or a Range header the browser may not read): never resend the same chunk for ever.
+          failures += 1;
+          if (failures >= this.maxAttempts) {
+            throw new StorageError('unknown', 'Google Drive is not accepting the upload (no progress reported)');
+          }
+          await abortableDelay(this.sleep, this.backoff(failures - 1, new StorageError('unknown', 'no progress')), signal);
         }
         offset = received;
         options.onProgress?.(offset, total);
