@@ -109,6 +109,24 @@ export async function openTopBottomImage(page: Page): Promise<void> {
   });
 }
 
+/** A flat grey JPEG, so any change in one part of it shows. */
+export async function openFlatImage(page: Page, color = '#808080'): Promise<void> {
+  await page.evaluate(async (fill) => {
+    const canvas = new OffscreenCanvas(480, 360);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no 2d context');
+    ctx.fillStyle = fill;
+    ctx.fillRect(0, 0, 480, 360);
+    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([blob], 'flat.jpg', { type: 'image/jpeg' }));
+    const input = document.querySelector<HTMLInputElement>('[data-testid="harness-file"]');
+    if (!input) throw new Error('no file input');
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, color);
+}
+
 export async function waitForReady(page: Page, timeout = 30_000): Promise<void> {
   await expect(page.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout });
 }
@@ -135,8 +153,8 @@ export async function settledPreview(page: Page, count: number): Promise<number>
 
 type BlobSource = (
  { readonly kind: 'preview'; readonly index: number; readonly which: 'thumb' | 'screen' } | { readonly kind: 'export'; readonly index: number }) & {
-  /** Measure only the top or bottom half. */
-  readonly half?: 'top' | 'bottom';
+  /** Measure only the top or bottom half, or the middle tenth of the image. */
+  readonly half?: 'top' | 'bottom' | 'centre';
 };
 
 /** Decodes a recorded preview or export in the page and measures it. */
@@ -153,9 +171,12 @@ export async function imageStats(page: Page, source: BlobSource): Promise<ImageS
     if (!ctx) throw new Error('no 2d context');
     ctx.drawImage(bitmap, 0, 0);
     const half = Math.floor(bitmap.height / 2);
-    const top = src.half === 'bottom' ? bitmap.height - half : 0;
-    const rows = src.half ? half : bitmap.height;
-    const data = ctx.getImageData(0, top, bitmap.width, rows).data;
+    const isCentre = src.half === 'centre';
+    const cw = Math.max(1, Math.floor(bitmap.width / 10));
+    const ch = Math.max(1, Math.floor(bitmap.height / 10));
+    const data = isCentre
+      ? ctx.getImageData(Math.floor((bitmap.width - cw) / 2), Math.floor((bitmap.height - ch) / 2), cw, ch).data
+      : ctx.getImageData(0, src.half === 'bottom' ? bitmap.height - half : 0, bitmap.width, src.half ? half : bitmap.height).data;
     let sum = 0;
     let red = 0;
     let green = 0;
