@@ -15,6 +15,8 @@
 import initWasm, {
   addLayer,
   setClippingWarning as engineSetClippingWarning,
+  setImageFinish,
+  clearImageFinish,
   autoTone as engineAutoTone,
   clearImageAreas,
   setImageAreaOverlay,
@@ -57,7 +59,6 @@ import initWasm, {
   setImageSaturation,
   setImageShadows,
   setImageVibrance,
-  setImageVignette,
   setImageWhites,
   setLayerOrder,
   setRawDevelop,
@@ -82,6 +83,7 @@ import {
 } from './recipe-to-adjustments';
 import { cropPixels, inverseRotation, isFullCrop, rotatedBounds, straightenedCrop, toFramed } from './crop';
 import { detailKey, detailValues, localContrastValues } from './detail-controls';
+import { finishKey, finishValues } from './finish-controls';
 import { areaValues, type AreaFrame } from './areas';
 import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
@@ -178,6 +180,8 @@ export interface DevelopEngine {
   exportImage(options: ExportOptions): Promise<Blob>;
   /** Paints clipped pixels on the live frame only (any channel at or past white red, at or below black blue); exports are unaffected. */
   setClippingWarning(shadows: boolean, highlights: boolean): void;
+  /** The photo's grain seed (finish-controls.ts grainSeed), so grain is the same on every render and export. */
+  setGrainSeed(seed: number): void;
   dispose(): void;
 }
 
@@ -272,7 +276,6 @@ function pushAdjustments(engine: Engine, adj: EngineAdjustments): void {
   setImageBlacks(engine, adj.blacks);
   setImageSaturation(engine, adj.saturation);
   setImageVibrance(engine, adj.vibrance);
-  setImageVignette(engine, adj.vignette);
   const pf = adj.photoFilter;
   setImagePhotoFilter(engine, pf.r, pf.g, pf.b, pf.density, true);
 }
@@ -655,6 +658,8 @@ class PhotoEngine implements DevelopEngine {
     this.layout();
     if (wasFit) this.fit();
     else this.setView({ ...this.view, zoom, isFit: false });
+    // Grain is sized in source pixels: the full-size layer needs it again.
+    this.applyFinish();
     this.invalidate();
   }
 
@@ -750,6 +755,7 @@ class PhotoEngine implements DevelopEngine {
     }
     this.applyColorControls();
     this.applyDetail();
+    this.applyFinish();
     if (this.rawDefaults) {
       const json = rawSettingsJson(rawSettingsFor(this.rawDefaults, this.recipe, this.engineProfiles));
       if (json !== this.appliedRawJson) {
@@ -845,6 +851,25 @@ class PhotoEngine implements DevelopEngine {
   }
 
   private clippingWarning = { shadows: false, highlights: false };
+  private grainSeedValue = 0;
+  private finishKeyApplied: string | null = null;
+
+  setGrainSeed(seed: number): void {
+    if (seed === this.grainSeedValue) return;
+    this.grainSeedValue = seed;
+    this.applyFinish();
+  }
+
+  /** Vignette shape and grain in one engine pass (it replaces setImageVignette); grain scales with the working size. */
+  private applyFinish(): void {
+    const key = finishKey(this.recipe.finish, this.grainSeedValue, this.pixelScale);
+    if (key === this.finishKeyApplied) return;
+    this.finishKeyApplied = key;
+    const values = finishValues(this.recipe.finish, this.grainSeedValue, this.pixelScale);
+    if (values) setImageFinish(this.engine, values);
+    else clearImageFinish(this.engine);
+    this.invalidate();
+  }
 
   setClippingWarning(shadows: boolean, highlights: boolean): void {
     this.clippingWarning = { shadows, highlights };

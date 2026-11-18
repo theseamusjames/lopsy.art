@@ -49,6 +49,7 @@ import { ProfileMenu } from '../ProfileMenu/ProfileMenu';
 import { LoadStatus } from '../LoadStatus/LoadStatus';
 import { usePhotoEngine } from './use-photo-engine';
 import { useClippingWarningOnEngine } from '../clipping-warning';
+import { useGrainSeed } from '../grain-seed';
 import styles from './EditView.module.css';
 
 export interface EditViewProps {
@@ -168,6 +169,7 @@ export function EditView({
   const stageRef = useRef<HTMLDivElement>(null);
   const { engine, status, view } = usePhotoEngine(canvasRef, asset, loadOriginal);
   useClippingWarningOnEngine(engine);
+  useGrainSeed(engine, asset.id);
   const [draft, setDraft] = useState<Readonly<Record<string, Json>> | null>(null);
   const [committed, setCommitted] = useState<Committed | null>(null);
   const [isBeforeToggled, setIsBeforeToggled] = useState(false);
