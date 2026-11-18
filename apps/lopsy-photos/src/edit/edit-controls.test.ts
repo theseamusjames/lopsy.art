@@ -12,6 +12,11 @@ import {
   numberAt,
   sliderChanges,
   toneChanges,
+  COLOR_BY_HUE_TABS,
+  COLOR_GRADING_SHARED,
+  COLOR_GRADING_TABS,
+  curvesResetChanges,
+  resetChangesFor,
 } from './edit-controls';
 
 function group(id: string) {
@@ -86,9 +91,9 @@ describe('framing', () => {
     expect(rotateRecipe(rotateRecipe(DEFAULT_RECIPE, false), true).framing.rotate).toBe(0);
   });
 
-  it('flips and drops the crop', () => {
+  it('flips and keeps the crop, which is stored on the unflipped image', () => {
     const cropped: Recipe = { ...DEFAULT_RECIPE, framing: { rotate: 0, flipH: false, crop: { x: 0, y: 0, width: 0.5, height: 0.5 } } };
-    expect(flipRecipe(cropped).framing).toEqual({ rotate: 0, flipH: true, crop: null });
+    expect(flipRecipe(cropped).framing).toEqual({ rotate: 0, flipH: true, crop: cropped.framing.crop });
   });
 });
 
@@ -97,5 +102,28 @@ describe('toneChanges', () => {
     const tone = { ...DEFAULT_RECIPE.tone, exposure: 0.85, contrast: 12 };
     expect(toneChanges(DEFAULT_RECIPE, tone)).toEqual({ 'tone.exposure': 0.85, 'tone.contrast': 12 });
     expect(toneChanges(DEFAULT_RECIPE, DEFAULT_RECIPE.tone)).toEqual({});
+  });
+});
+
+describe('colour controls', () => {
+  it('has a range for every tab slider', () => {
+    for (const tab of [...COLOR_BY_HUE_TABS, ...COLOR_GRADING_TABS]) {
+      expect(tab.controls.length).toBeGreaterThan(0);
+      for (const c of tab.controls) expect(RECIPE_RANGES[c.path]).toBeDefined();
+    }
+    for (const c of COLOR_GRADING_SHARED) expect(RECIPE_RANGES[c.path]).toBeDefined();
+    expect(COLOR_BY_HUE_TABS[1]?.controls[1]).toEqual({ path: 'colorByHue.orange.saturation', label: 'Orange', historyLabel: 'Orange saturation' });
+  });
+
+  it('resets numeric controls and bent curves', () => {
+    const r = applyChanges(DEFAULT_RECIPE, {
+      'colorByHue.aqua.hue': 20,
+      'colorGrading.blending': 70,
+      'curves.red': [{ x: 0, y: 0.1 }, { x: 1, y: 1 }],
+    });
+    const controls = [...COLOR_BY_HUE_TABS.flatMap((t) => t.controls), ...COLOR_GRADING_SHARED];
+    expect(resetChangesFor(r, controls)).toEqual({ 'colorByHue.aqua.hue': 0, 'colorGrading.blending': 50 });
+    expect(curvesResetChanges(r)).toEqual({ 'curves.red': [{ x: 0, y: 0 }, { x: 1, y: 1 }] });
+    expect(curvesResetChanges(DEFAULT_RECIPE)).toEqual({});
   });
 });
