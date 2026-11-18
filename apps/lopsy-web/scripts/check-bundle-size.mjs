@@ -45,14 +45,17 @@ const MARGIN = 0.03;
 // and +0.89 % over the old budget): still inside the margin, but the
 // colour controls that follow would otherwise eat the rest of it.
 //
-// The glue was raised again for Lopsy Photos' colour and detail exports
-// (setImageColorGrading, setImageColorMixer, setImageDetail,
-// setImageLocalContrast, their clears, and exportTiff16), to what a local
-// build measured with them in: 210,820 B raw, 22,971 B gzip (+1.8 % and
-// +2.7 %, inside the margin but leaving none for the next export).
+// The glue was raised again for Lopsy Photos' colour, detail, areas and
+// finish exports (setImageColorGrading, setImageColorMixer, setImageDetail,
+// setImageLocalContrast, setImageAreas, setImageAreaOverlay,
+// setImageFinish, setImageDetailMaskView, setClippingWarning, their
+// clears, exportTiff16, sampleNeutralWhiteBalance, rafWhiteBalancePresets
+// and rafWhiteBalanceKelvin), to what a local build measured with them in:
+// 216,567 B raw, 24,208 B gzip. The glue is wasm-bindgen output, so CI
+// measures the same bytes (it did for the previous raise).
 const BUDGET = {
   'lopsy_wasm_bg.wasm': { raw: 4_366_533, gzip: 1_857_436 },
-  'lopsy_wasm.js': { raw: 210_820, gzip: 22_971 },
+  'lopsy_wasm.js': { raw: 216_567, gzip: 24_208 },
 };
 
 function format(bytes) {
