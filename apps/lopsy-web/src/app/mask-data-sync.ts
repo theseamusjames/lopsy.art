@@ -74,9 +74,42 @@ export function scheduleMaskDataRefresh(layerId: string): void {
   requestMaskRead(layerId, () => readMask(layerId), (data) => applyReadback(layerId, data));
 }
 
+/**
+ * How long undo/redo must stay quiet before the masks it restored are read
+ * back. A held Cmd+Z repeats every ~30–50 ms, faster than the read queue's
+ * quiet-frame test can tell: the restore is queued on the GPU and rAF still
+ * paces, so each step's read fired into the previous step's backlog (#1768).
+ */
+export const HISTORY_QUIET_MS = 400;
+
+const historyRefreshIds = new Set<string>();
+let historyRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushHistoryRefresh(): void {
+  historyRefreshTimer = null;
+  const ids = [...historyRefreshIds];
+  historyRefreshIds.clear();
+  // A mask materialized meanwhile (save, export) is already current.
+  for (const id of ids) if (staleIds.has(id)) scheduleMaskDataRefresh(id);
+}
+
+/**
+ * Undo or redo restored this layer's GPU mask. The JS bytes are stale, but
+ * the read waits until the undo/redo burst is over: one read per mask per
+ * burst instead of one per step. Anything that needs the bytes sooner
+ * awaits `materializeMaskData`, as it does after a stroke.
+ */
+export function scheduleMaskDataRefreshAfterHistory(layerId: string): void {
+  markMaskDataStale(layerId);
+  historyRefreshIds.add(layerId);
+  if (historyRefreshTimer !== null) clearTimeout(historyRefreshTimer);
+  historyRefreshTimer = setTimeout(flushHistoryRefresh, HISTORY_QUIET_MS);
+}
+
 /** The JS bytes are known to match the GPU (e.g. they were just uploaded). */
 export function markMaskDataFresh(layerId: string): void {
   staleIds.delete(layerId);
+  historyRefreshIds.delete(layerId);
   cancelMaskRead(layerId);
 }
 
@@ -118,4 +151,7 @@ export function __resetMaskDataSyncForTest(): void {
   for (const id of staleIds) cancelMaskRead(id);
   staleIds.clear();
   writeCounts.clear();
+  historyRefreshIds.clear();
+  if (historyRefreshTimer !== null) clearTimeout(historyRefreshTimer);
+  historyRefreshTimer = null;
 }
