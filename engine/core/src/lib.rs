@@ -24,6 +24,7 @@ pub mod cmyk;
 pub mod decode;
 pub mod dng;
 pub mod raf;
+pub mod develop_stats;
 pub mod psd;
 pub mod text_types;
 pub mod vertical_orientation;

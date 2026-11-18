@@ -69,6 +69,12 @@ mod later {
         }
     }
 
+    impl IntoJs for Vec<u32> {
+        fn into_js(self) -> JsValue {
+            js_sys::Uint32Array::from(self.as_slice()).into()
+        }
+    }
+
     impl IntoJs for Vec<i32> {
         fn into_js(self) -> JsValue {
             js_sys::Int32Array::from(self.as_slice()).into()
