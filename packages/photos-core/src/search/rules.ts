@@ -58,7 +58,7 @@ function albumMembers(): (view: LibraryView, albumId: AlbumId) => ReadonlySet<st
     let set = sets.get(albumId);
     if (!set) {
       const album = view.albums.get(albumId);
-      set = new Set(album && !album.deleted ? album.assetIds : []);
+      set = new Set(album && !album.deleted ? album.members.map((m) => m.assetId) : []);
       sets.set(albumId, set);
     }
     return set;

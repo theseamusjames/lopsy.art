@@ -68,6 +68,72 @@ export interface ColorGrading {
   readonly balance: number;
 }
 
+export type AreaKind = 'linear' | 'radial';
+
+/**
+ * A linear area: full effect on the (x0, y0) side, none past (x1, y1),
+ * fading in between. Points are normalized to the unrotated source image
+ * (like `CropRect`) and may lie outside it (-1..2).
+ */
+export interface LinearGeometry {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
+/**
+ * A radial area: an ellipse centred on (cx, cy) with radii rx, ry (as
+ * fractions of the source image's width and height), turned by `angle`
+ * degrees, softened over `feather` percent of its radius. Normalized to
+ * the unrotated source image.
+ */
+export interface RadialGeometry {
+  readonly cx: number;
+  readonly cy: number;
+  readonly rx: number;
+  readonly ry: number;
+  readonly angle: number;
+  readonly feather: number;
+}
+
+export interface AreaAdjustments {
+  readonly exposure: number;
+  readonly contrast: number;
+  readonly highlights: number;
+  readonly shadows: number;
+  readonly temperature: number;
+  readonly tint: number;
+  readonly saturation: number;
+  /** Large-detail local contrast. */
+  readonly localContrast: number;
+}
+
+export const AREA_ADJUSTMENTS: readonly (keyof AreaAdjustments)[] = [
+  'exposure',
+  'contrast',
+  'highlights',
+  'shadows',
+  'temperature',
+  'tint',
+  'saturation',
+  'localContrast',
+];
+
+/** A local adjustment (spec 5.4 Areas, spec 7). */
+export type Area = {
+  readonly id: string;
+  /** Inverts where the area applies. */
+  readonly invert: boolean;
+  /** How much of the adjustments apply, 0..100. */
+  readonly amount: number;
+  readonly name: string;
+  readonly adjustments: AreaAdjustments;
+} & ({ readonly kind: 'linear'; readonly geometry: LinearGeometry } | { readonly kind: 'radial'; readonly geometry: RadialGeometry });
+
+/** The most live areas a recipe holds; past it, the newest are dropped. */
+export const MAX_AREAS = 8;
+
 export interface Recipe {
   readonly pipeline: number;
   readonly profile: { readonly id: string };
@@ -118,6 +184,12 @@ export interface Recipe {
   readonly curves: Readonly<Record<CurveChannel, readonly CurvePoint[]>>;
   readonly colorByHue: Readonly<Record<HueBand, HueAdjustment>>;
   readonly colorGrading: ColorGrading;
+  /**
+   * Live areas by ID; `liveAreas` lists them in creation order. Each field
+   * is its own leaf (`areas.<id>.adjustments.exposure`), so edits to one
+   * area on two devices merge; deletion is the leaf `areas.<id>.deleted`.
+   */
+  readonly areas: Readonly<Record<string, Area>>;
 }
 
 export interface RecipeRange {
@@ -166,7 +238,37 @@ export const RECIPE_RANGES: Readonly<Record<string, RecipeRange>> = {
   'noise.luminance': { min: 0, max: 100, step: 1 },
   'noise.color': { min: 0, max: 100, step: 1 },
   'noise.detail': { min: 0, max: 100, step: 1 },
+  // Areas: keyed with `*` for the area ID; `rangeForPath` maps a real path here.
+  'areas.*.amount': { min: 0, max: 100, step: 1 },
+  'areas.*.adjustments.exposure': { min: -4, max: 4, step: 0.01 },
+  'areas.*.adjustments.contrast': { min: -100, max: 100, step: 1 },
+  'areas.*.adjustments.highlights': { min: -100, max: 100, step: 1 },
+  'areas.*.adjustments.shadows': { min: -100, max: 100, step: 1 },
+  'areas.*.adjustments.temperature': { min: -100, max: 100, step: 1 },
+  'areas.*.adjustments.tint': { min: -100, max: 100, step: 1 },
+  'areas.*.adjustments.saturation': { min: -100, max: 100, step: 1 },
+  'areas.*.adjustments.localContrast': { min: -100, max: 100, step: 1 },
+  'areas.*.geometry.x0': { min: -1, max: 2, step: 0.001 },
+  'areas.*.geometry.y0': { min: -1, max: 2, step: 0.001 },
+  'areas.*.geometry.x1': { min: -1, max: 2, step: 0.001 },
+  'areas.*.geometry.y1': { min: -1, max: 2, step: 0.001 },
+  'areas.*.geometry.cx': { min: -1, max: 2, step: 0.001 },
+  'areas.*.geometry.cy': { min: -1, max: 2, step: 0.001 },
+  'areas.*.geometry.rx': { min: 0.005, max: 4, step: 0.001 },
+  'areas.*.geometry.ry': { min: 0.005, max: 4, step: 0.001 },
+  'areas.*.geometry.angle': { min: -180, max: 180, step: 0.1 },
+  'areas.*.geometry.feather': { min: 0, max: 100, step: 1 },
 };
+
+/** An area's ID: letters, digits, '-' and '_' (a UUIDv7 from `newId`). */
+const AREA_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const AREA_PATH = /^areas\.([A-Za-z0-9_-]{1,64})\.(.+)$/;
+
+/** The range for a recipe path, area paths included ('areas.<id>.amount' -> 'areas.*.amount'). */
+export function rangeForPath(path: string): RecipeRange | undefined {
+  const m = AREA_PATH.exec(path);
+  return RECIPE_RANGES[m ? `areas.*.${m[2]}` : path];
+}
 
 export const IDENTITY_CURVE: readonly CurvePoint[] = [
   { x: 0, y: 0 },
@@ -209,9 +311,18 @@ export const DEFAULT_RECIPE: Recipe = {
     blending: DEFAULT_BLENDING,
     balance: 0,
   },
+  areas: {},
 };
 
-export type RecipeLeaf = number | string | boolean | CropRect | readonly CurvePoint[] | null;
+export type RecipeLeaf =
+  | number
+  | string
+  | boolean
+  | CropRect
+  | readonly CurvePoint[]
+  | LinearGeometry
+  | RadialGeometry
+  | null;
 
 /** The recipe flattened to dotted paths ('tone.exposure' -> 0.3). */
 export function recipeToPaths(recipe: Recipe): Record<string, RecipeLeaf> {
@@ -247,12 +358,164 @@ export function recipeToPaths(recipe: Recipe): Record<string, RecipeLeaf> {
   }
   out['colorGrading.blending'] = recipe.colorGrading.blending;
   out['colorGrading.balance'] = recipe.colorGrading.balance;
+  for (const area of liveAreas(recipe)) Object.assign(out, areaPaths(area));
+  return out;
+}
+
+/** An area's leaves, by full recipe path. */
+function areaPaths(area: Area): Record<string, RecipeLeaf> {
+  const p = `areas.${area.id}.`;
+  const out: Record<string, RecipeLeaf> = {
+    [`${p}kind`]: area.kind,
+    [`${p}geometry`]: area.geometry,
+    [`${p}invert`]: area.invert,
+    [`${p}amount`]: area.amount,
+    [`${p}name`]: area.name,
+  };
+  for (const key of AREA_ADJUSTMENTS) out[`${p}adjustments.${key}`] = area.adjustments[key];
+  return out;
+}
+
+/** The live areas in creation order (their IDs are time-ordered). */
+export function liveAreas(recipe: Recipe): readonly Area[] {
+  return Object.values(recipe.areas ?? {}).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+const LINEAR_KEYS = ['x0', 'y0', 'x1', 'y1'] as const;
+const RADIAL_KEYS = ['cx', 'cy', 'rx', 'ry', 'angle', 'feather'] as const;
+
+/** Geometry of the kind, clamped to its ranges; null when malformed or degenerate. */
+function geometryFrom(kind: AreaKind, value: unknown): LinearGeometry | RadialGeometry | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const keys = kind === 'linear' ? LINEAR_KEYS : RADIAL_KEYS;
+  const out: Record<string, number> = {};
+  for (const key of keys) {
+    const n = v[key];
+    if (typeof n !== 'number' || !Number.isFinite(n)) return null;
+    out[key] = clamp(`areas.*.geometry.${key}`, n, n);
+  }
+  if (kind === 'linear') {
+    const g = out as unknown as LinearGeometry;
+    // Both ends at one point give no direction.
+    if (Math.hypot(g.x1 - g.x0, g.y1 - g.y0) < 1e-4) return null;
+    return { x0: g.x0, y0: g.y0, x1: g.x1, y1: g.y1 };
+  }
+  const g = out as unknown as RadialGeometry;
+  return { cx: g.cx, cy: g.cy, rx: g.rx, ry: g.ry, angle: g.angle, feather: g.feather };
+}
+
+/** The areas the paths hold: tombstoned and malformed ones dropped, then the oldest MAX_AREAS kept. */
+function areasFrom(paths: Readonly<Record<string, unknown>>): Record<string, Area> {
+  const ids = new Set<string>();
+  for (const path of Object.keys(paths)) {
+    const m = AREA_PATH.exec(path);
+    if (m?.[1] !== undefined) ids.add(m[1]);
+  }
+  const out: Record<string, Area> = {};
+  let kept = 0;
+  for (const id of [...ids].sort()) {
+    if (kept >= MAX_AREAS) break;
+    const area = areaFrom(id, paths);
+    if (!area) continue;
+    out[id] = area;
+    kept++;
+  }
+  return out;
+}
+
+function areaFrom(id: string, paths: Readonly<Record<string, unknown>>): Area | null {
+  const p = `areas.${id}.`;
+  if (paths[`${p}deleted`] === true) return null;
+  const kind = paths[`${p}kind`];
+  if (kind !== 'linear' && kind !== 'radial') return null;
+  const geometry = geometryFrom(kind, paths[`${p}geometry`]);
+  if (!geometry) return null;
+  const name = paths[`${p}name`];
+  const adjustments = Object.fromEntries(
+    AREA_ADJUSTMENTS.map((key) => [key, clamp(`${p}adjustments.${key}`, paths[`${p}adjustments.${key}`], 0)]),
+  ) as unknown as AreaAdjustments;
+  const common = {
+    id,
+    invert: paths[`${p}invert`] === true,
+    amount: clamp(`${p}amount`, paths[`${p}amount`], 100),
+    name: typeof name === 'string' ? name.slice(0, 100) : '',
+    adjustments,
+  };
+  return kind === 'linear'
+    ? { ...common, kind, geometry: geometry as LinearGeometry }
+    : { ...common, kind, geometry: geometry as RadialGeometry };
+}
+
+/** A leaf of an area, as `recipeFromPaths` would read it on its own; undefined to drop it. */
+function areaLeafJson(path: string, value: unknown): Json | undefined {
+  const m = AREA_PATH.exec(path);
+  const field = m?.[2];
+  if (field === undefined) return undefined;
+  if (field === 'deleted') return value === true;
+  if (field === 'kind') return value === 'linear' || value === 'radial' ? value : undefined;
+  if (field === 'invert') return value === true;
+  if (field === 'name') return typeof value === 'string' ? value.slice(0, 100) : '';
+  if (field === 'amount') return clamp(path, value, 100);
+  if (field.startsWith('adjustments.')) {
+    return (AREA_ADJUSTMENTS as readonly string[]).includes(field.slice('adjustments.'.length)) ? clamp(path, value, 0) : undefined;
+  }
+  if (field === 'geometry') {
+    // The kind is not known here: geometry that fits either is kept, and checked again when read.
+    const g = geometryFrom('radial', value) ?? geometryFrom('linear', value);
+    return g ? ({ ...g } as Json) : undefined;
+  }
+  return undefined;
+}
+
+export interface NewArea {
+  readonly id: string;
+  /** Recipe values that create it, for `editRecipe` or `applyRecipeValues`. */
+  readonly values: Record<string, Json>;
+}
+
+/**
+ * A new area with neutral adjustments over the middle of the image; null
+ * when the recipe already holds MAX_AREAS. `id` is normally `newId()`.
+ */
+export function addArea(recipe: Recipe, kind: AreaKind, id: string, name = ''): NewArea | null {
+  if (!AREA_ID.test(id)) throw new Error(`Invalid area ID: ${id}`);
+  if (liveAreas(recipe).length >= MAX_AREAS) return null;
+  const geometry: LinearGeometry | RadialGeometry =
+    kind === 'linear'
+      ? { x0: 0.5, y0: 0.25, x1: 0.5, y1: 0.75 }
+      : { cx: 0.5, cy: 0.5, rx: 0.25, ry: 0.25, angle: 0, feather: 50 };
+  const area = {
+    id,
+    invert: false,
+    amount: 100,
+    name,
+    adjustments: Object.fromEntries(AREA_ADJUSTMENTS.map((k) => [k, 0])) as unknown as AreaAdjustments,
+    ...(kind === 'linear' ? { kind, geometry: geometry as LinearGeometry } : { kind, geometry: geometry as RadialGeometry }),
+  } as Area;
+  const values: Record<string, Json> = { [`areas.${id}.deleted`]: false };
+  for (const [path, value] of Object.entries(areaPaths(area))) values[path] = recipeLeafJson(value);
+  return { id, values };
+}
+
+/** The values that delete an area (a tombstone, so a concurrent edit cannot bring it back). */
+export function removeArea(id: string): Record<string, Json> {
+  return { [`areas.${id}.deleted`]: true };
+}
+
+/**
+ * Values that delete every live area of `current` not in `next`: what a
+ * whole-recipe write needs, since a missing area is otherwise left as is.
+ */
+export function removedAreaValues(current: Recipe, next: Recipe): Record<string, Json> {
+  const out: Record<string, Json> = {};
+  for (const id of Object.keys(current.areas ?? {})) if (!(next.areas ?? {})[id]) Object.assign(out, removeArea(id));
   return out;
 }
 
 function clamp(path: string, value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
-  const range = RECIPE_RANGES[path];
+  const range = rangeForPath(path);
   if (!range) return value;
   return Math.min(range.max, Math.max(range.min, value));
 }
@@ -384,6 +647,7 @@ export function recipeFromPaths(paths: Readonly<Record<string, unknown>>): Recip
       blending: num('colorGrading.blending', DEFAULT_BLENDING),
       balance: num('colorGrading.balance', 0),
     },
+    areas: areasFrom(paths),
   };
 }
 
@@ -433,7 +697,8 @@ export type RecipeGroupId =
   | 'localContrast'
   | 'detail'
   | 'framing'
-  | 'finish';
+  | 'finish'
+  | 'areas';
 
 export interface RecipeGroup {
   readonly id: RecipeGroupId;
@@ -455,11 +720,12 @@ export const RECIPE_GROUPS: readonly RecipeGroup[] = [
   { id: 'detail', label: 'Detail', prefixes: ['sharpness.', 'noise.'] },
   { id: 'framing', label: 'Framing', prefixes: ['framing.'] },
   { id: 'finish', label: 'Finish', prefixes: ['finish.'] },
+  { id: 'areas', label: 'Areas', prefixes: ['areas.'] },
 ];
 
-/** Copy edits copies everything but framing by default (spec 5.4, Copy and paste). */
+/** Copy edits copies everything but framing and areas by default (spec 5.4, Copy and paste). */
 export const DEFAULT_COPY_GROUPS: readonly RecipeGroupId[] = RECIPE_GROUPS.map((g) => g.id).filter(
-  (id) => id !== 'framing',
+  (id) => id !== 'framing' && id !== 'areas',
 );
 
 export function isRecipeGroupId(value: unknown): value is RecipeGroupId {
@@ -475,8 +741,7 @@ export function groupOfPath(path: string): RecipeGroupId | null {
 export function recipeLeafJson(value: RecipeLeaf): Json {
   if (value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) return (value as readonly CurvePoint[]).map((p) => ({ x: p.x, y: p.y }));
-  const crop = value as CropRect;
-  return { x: crop.x, y: crop.y, width: crop.width, height: crop.height };
+  return { ...(value as unknown as Record<string, number>) };
 }
 
 /** The recipe's values for the given groups, by path, ready for `applyRecipeValues` or a preset. */
@@ -503,10 +768,16 @@ export function isGroupDefault(recipe: Recipe, group: RecipeGroupId): boolean {
  * `recipeFromPaths` reads them (clamped, or the default when invalid).
  */
 export function sanitizeRecipeValues(values: Readonly<Record<string, unknown>>): Record<string, Json> {
-  const known = Object.keys(DEFAULT_PATHS).filter((p) => Object.prototype.hasOwnProperty.call(values, p));
-  if (known.length === 0) return {};
-  const read = recipeToPaths(recipeFromPaths(values));
   const out: Record<string, Json> = {};
+  // Area leaves are checked one by one: an edit names only some of an area's leaves.
+  for (const [path, value] of Object.entries(values)) {
+    if (!path.startsWith('areas.')) continue;
+    const leaf = areaLeafJson(path, value);
+    if (leaf !== undefined) out[path] = leaf;
+  }
+  const known = Object.keys(DEFAULT_PATHS).filter((p) => Object.prototype.hasOwnProperty.call(values, p));
+  if (known.length === 0) return out;
+  const read = recipeToPaths(recipeFromPaths(values));
   for (const path of known) out[path] = recipeLeafJson(read[path] ?? null);
   return out;
 }

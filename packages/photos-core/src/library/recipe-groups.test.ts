@@ -53,8 +53,9 @@ describe('recipe groups', () => {
     expect(groupOfPath('colorByHue.red.hue')).toBe('color');
     expect(groupOfPath('colorGrading.blending')).toBe('colorGrading');
     expect(groupOfPath('noise.color')).toBe('detail');
-    expect(RECIPE_GROUPS.map((g) => g.id)).toHaveLength(10);
+    expect(RECIPE_GROUPS.map((g) => g.id)).toHaveLength(11);
     expect(DEFAULT_COPY_GROUPS).not.toContain('framing');
+    expect(DEFAULT_COPY_GROUPS).not.toContain('areas');
     expect(DEFAULT_COPY_GROUPS).toHaveLength(9);
   });
 

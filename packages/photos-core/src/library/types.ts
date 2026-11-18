@@ -193,10 +193,19 @@ export interface Version {
   readonly deleted: boolean;
 }
 
+/** One entry of an album (spec 7): a whole photo (`versionId` null, it shows its primary version) or one version of it. */
+export interface AlbumMember {
+  readonly assetId: AssetId;
+  readonly versionId: VersionId | null;
+}
+
 export interface Album {
   readonly id: AlbumId;
   readonly name: string;
+  /** Whole-photo members only, sorted. */
   readonly assetIds: readonly AssetId[];
+  /** Every member: whole photos first (as `assetIds`), then single versions, sorted. */
+  readonly members: readonly AlbumMember[];
   readonly deleted: boolean;
 }
 
@@ -292,6 +301,11 @@ export interface LibrarySession {
   createVersion(assetId: AssetId, name: string, recipe?: Recipe): VersionId;
   renameVersion(versionId: VersionId, name: string): void;
   deleteVersion(versionId: VersionId): void;
+  /**
+   * Makes the version the one the photo shows. Throws when the version is
+   * not a live version of that photo.
+   */
+  setPrimaryVersion(assetId: AssetId, versionId: VersionId): void;
   /** Sets recipe values by dotted path ('tone.exposure') as one history step. */
   editRecipe(versionId: VersionId, changes: Readonly<Record<string, Json>>, label: string): void;
   /** Replaces the whole recipe (paste, reset, preset) as one history step. */
@@ -306,7 +320,12 @@ export interface LibrarySession {
   createAlbum(name: string): AlbumId;
   renameAlbum(albumId: AlbumId, name: string): void;
   deleteAlbum(albumId: AlbumId): void;
-  setAlbumMember(albumId: AlbumId, assetId: AssetId, present: boolean): void;
+  /**
+   * Adds or removes a member. With `versionId`, the member is that one
+   * version of the photo; without it (or null), the whole photo. The two
+   * are separate memberships: removing one leaves the other.
+   */
+  setAlbumMember(albumId: AlbumId, assetId: AssetId, present: boolean, versionId?: VersionId | null): void;
 
   setSetting(key: string, value: Json): void;
 

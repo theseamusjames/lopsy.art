@@ -189,6 +189,9 @@ export class FakeLibrarySession implements LibrarySession {
   setSetting(): void {
     unused('setSetting');
   }
+  setPrimaryVersion(): void {
+    unused('setPrimaryVersion');
+  }
   applyRecipeValues(): void {
     unused('applyRecipeValues');
   }
