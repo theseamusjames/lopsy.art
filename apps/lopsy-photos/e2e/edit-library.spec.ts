@@ -106,7 +106,7 @@ test.describe('Split before and after', () => {
     await openGeneratedImage(page);
     await waitForReady(page);
     await setValue(page, 'Exposure', '2');
-    await page.getByRole('button', { name: 'Crop', exact: true }).click();
+    await page.getByTitle('Crop', { exact: true }).click();
     await page.getByRole('combobox', { name: 'Aspect' }).selectOption('1:1');
     await page.getByRole('button', { name: 'Done' }).click();
 
