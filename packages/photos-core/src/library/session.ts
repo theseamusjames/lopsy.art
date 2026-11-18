@@ -101,6 +101,18 @@ export function recipeFields(recipe: Recipe): Record<string, Json> {
   return out;
 }
 
+function nonDefaultRecipeFields(recipe: Recipe): Record<string, Json> {
+  const out: Record<string, Json> = {};
+  for (const [path, value] of Object.entries(recipeFields(recipe))) {
+    if (JSON.stringify(value) !== DEFAULT_FIELD_TEXT.get(path)) out[path] = value;
+  }
+  return out;
+}
+
+const DEFAULT_FIELD_TEXT: ReadonlyMap<string, string> = new Map(
+  Object.entries(recipeFields(DEFAULT_RECIPE)).map(([path, value]) => [path, JSON.stringify(value)]),
+);
+
 const DEFAULT_PATHS: Readonly<Record<string, Json>> = Object.fromEntries(
   Object.entries(recipeFields(DEFAULT_RECIPE)).map(([k, v]) => [k.slice('recipe.'.length), v]),
 );
@@ -580,7 +592,9 @@ class Session implements PhotosLibrarySession {
       thumb: null,
       screen: null,
       deleted: false,
-      ...recipeFields(recipe ?? DEFAULT_RECIPE),
+      // Leaves at their default are left out: a missing leaf reads as the default, and a new version's
+      // 70-odd recipe fields would otherwise dominate the size of a large library's state.
+      ...nonDefaultRecipeFields(recipe ?? DEFAULT_RECIPE),
     };
   }
 
@@ -653,7 +667,12 @@ class Session implements PhotosLibrarySession {
     let fields: Record<string, Json> | null = null;
     for (const [path, value] of Object.entries(op.fields)) {
       const current = record.fields.get(path);
-      if (current !== undefined && sameJson(current.value, value)) {
+      // A recipe leaf never written holds its default.
+      const unchanged =
+        current !== undefined
+          ? sameJson(current.value, value)
+          : op.kind === 'version' && DEFAULT_FIELD_TEXT.get(path) === JSON.stringify(value);
+      if (unchanged) {
         fields ??= { ...op.fields };
         delete fields[path];
       }
