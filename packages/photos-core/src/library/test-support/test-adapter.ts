@@ -41,6 +41,11 @@ export class TestAdapter implements StorageAdapter {
     this.failures.push({ code, method: options.method ?? null, remaining: options.count ?? 1 });
   }
 
+  /** Drops failures queued with `failNext` that have not fired yet. */
+  clearFailures(): void {
+    this.failures = [];
+  }
+
   /** Every file and folder, trashed or not. */
   allFiles(): StoredFile[] {
     return [...this.files.values()].map((e) => e.file);

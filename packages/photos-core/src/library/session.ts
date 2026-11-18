@@ -8,6 +8,17 @@ import type { StorageAdapter } from '../storage/types';
 import { HybridClock } from './hlc';
 import { newId } from './ids';
 import { ensureLibrary, LIBRARY_SCHEMA_VERSION } from './layout';
+import {
+  LibraryBusyError,
+  libraryLockName,
+  LibraryLockLostError,
+  LOCK_LOST_MESSAGE,
+  NoopLibraryLock,
+  WebLocksLibraryLock,
+  type LibraryLock,
+  type LibraryLockHandle,
+} from './lock';
+import { isStorageError } from '../storage/errors';
 import { EMPTY_BOOKKEEPING, type LocalStore, type SyncBookkeeping } from './local-store';
 import { MergeStore, type RecipeWrite } from './merge-store';
 import { DEFAULT_RECIPE, recipeToPaths, type Recipe } from './recipe';
@@ -44,6 +55,10 @@ export interface OpenLibraryOptions {
   /** Write a snapshot after this many ops applied since the last one (spec: 5,000). */
   readonly snapshotEvery?: number;
   readonly timers?: SyncTimers;
+  /** One writer per device (lock.ts). Default: Web Locks in browsers, none elsewhere. */
+  readonly lock?: LibraryLock;
+  /** Take the library over from another tab instead of failing with `LibraryBusyError`. */
+  readonly takeOver?: boolean;
   /** Roll up this device's journal segments after this many small ones (default 20). */
   readonly rollUpAt?: number;
 }
@@ -182,8 +197,11 @@ function analyseHistory(writes: readonly RecipeWrite[]): StepInfo[] {
 class Session implements LibrarySession {
   readonly libraryId: string;
   readonly deviceId: string;
-  readonly layout: LibraryLayout;
   readonly adapter: StorageAdapter;
+  private currentLayout: LibraryLayout;
+  private readonly lockHandle: LibraryLockHandle;
+  private lockLost = false;
+  private readonlyFlag: boolean;
   private readonly merge: MergeStore;
   private readonly clock: HybridClock;
   private readonly cache: ViewCache;
@@ -191,8 +209,6 @@ class Session implements LibrarySession {
   private readonly listeners = new Set<() => void>();
   private readonly now: () => number;
   private nextSeq: number;
-  /** True when the library was made by a newer app (sync status says so too). */
-  readonly readOnly: boolean;
 
   constructor(init: {
     layout: LibraryLayout;
@@ -203,10 +219,12 @@ class Session implements LibrarySession {
     clock: HybridClock;
     now: () => number;
     readOnly: boolean;
+    lock: LibraryLockHandle;
     makeEngine: (onApplied: (changed: Parameters<ViewCache['update']>[0]) => void) => SyncEngine;
   }) {
-    this.readOnly = init.readOnly;
-    this.layout = init.layout;
+    this.readonlyFlag = init.readOnly;
+    this.currentLayout = init.layout;
+    this.lockHandle = init.lock;
     this.libraryId = init.layout.libraryId;
     this.adapter = init.adapter;
     this.deviceId = init.deviceId;
@@ -219,6 +237,34 @@ class Session implements LibrarySession {
       if (this.merge.maxHlc) this.clock.receive(this.merge.maxHlc);
       if (this.cache.update(changed)) this.notify();
     });
+    this.lockHandle.onLost(() => {
+      this.lockLost = true;
+      this.engine.lose(LOCK_LOST_MESSAGE);
+      this.notify();
+    });
+  }
+
+  get layout(): LibraryLayout {
+    return this.currentLayout;
+  }
+
+  /** True when the library was made by a newer app (sync status says so too). */
+  get readOnly(): boolean {
+    return this.readonlyFlag;
+  }
+
+  /** True once another tab took the library over; commands then throw. */
+  get lostToAnotherTab(): boolean {
+    return this.lockLost;
+  }
+
+  updateLayout(layout: LibraryLayout): void {
+    this.currentLayout = layout;
+  }
+
+  markReadOnly(): void {
+    this.readonlyFlag = true;
+    this.engine.markReadOnly();
   }
 
   get syncEngine(): SyncEngine {
@@ -389,8 +435,12 @@ class Session implements LibrarySession {
     return this.engine.subscribe(listener);
   }
 
-  close(): Promise<void> {
-    return this.engine.close();
+  async close(): Promise<void> {
+    try {
+      await this.engine.close();
+    } finally {
+      this.lockHandle.release();
+    }
   }
 
   private versionFields(assetId: AssetId, name: string, recipe: Recipe | undefined): Record<string, Json> {
@@ -414,7 +464,8 @@ class Session implements LibrarySession {
   }
 
   private emit(ops: readonly Op[], step?: OpStep): void {
-    if (this.readOnly) throw new LibraryReadOnlyError();
+    if (this.lockLost) throw new LibraryLockLostError();
+    if (this.readonlyFlag) throw new LibraryReadOnlyError();
     if (ops.length === 0) return;
     const envelopes: OpEnvelope[] = [];
     for (const op of ops) {
@@ -461,81 +512,132 @@ async function bootstrap(
   };
 }
 
-/** Opens (creating if needed) the library in `adapter`'s storage. */
+function defaultLock(): LibraryLock {
+  const nav: unknown = typeof navigator === 'undefined' ? undefined : navigator;
+  const hasLocks = typeof nav === 'object' && nav !== null && 'locks' in nav && nav.locks !== undefined;
+  return hasLocks ? new WebLocksLibraryLock() : new NoopLibraryLock();
+}
+
+function canOpenOffline(error: unknown): boolean {
+  return isStorageError(error) && (error.code === 'network' || error.code === 'rate-limited' || error.code === 'auth');
+}
+
+/**
+ * Opens (creating if needed) the library in `adapter`'s storage. When storage
+ * is unreachable but this device has opened the library before, it opens
+ * from the device and finds the library in storage in the background.
+ */
 export async function openLibrary(options: OpenLibraryOptions): Promise<LibrarySession> {
   const now = options.now ?? Date.now;
   const { adapter, store } = options;
-  const { layout, manifest } = await ensureLibrary(adapter, { now });
-  const readOnly = manifest.schemaVersion > LIBRARY_SCHEMA_VERSION;
-  const saved = await store.load(layout.libraryId);
-
-  let deviceId: string;
-  let nextSeq: number;
-  let merge: MergeStore | null = null;
-  let bookkeeping: SyncBookkeeping;
-  let outbox: readonly OpEnvelope[] = [];
-  if (saved) {
-    deviceId = saved.deviceId;
-    outbox = saved.outbox;
-    bookkeeping = saved.sync ?? EMPTY_BOOKKEEPING;
-    const maxOutbox = outbox.reduce((m, op) => Math.max(m, op.seq), 0);
-    nextSeq = Math.max(saved.nextSeq, maxOutbox + 1, bookkeeping.flushedSeq + 1);
-    if (saved.state) {
-      try {
-        merge = MergeStore.deserialize(saved.state);
-      } catch (error) {
-        console.warn('Saved library state is unreadable; reloading from storage', error);
-      }
-    }
-    if (!merge) {
-      const fresh = await bootstrap(adapter, layout);
-      merge = fresh.merge;
-      bookkeeping = { ...fresh.bookkeeping, flushedSeq: bookkeeping.flushedSeq };
-    }
-    merge.applyOps(outbox);
-  } else {
-    deviceId = newId(now());
-    nextSeq = 1;
-    const fresh = await bootstrap(adapter, layout);
-    merge = fresh.merge;
-    bookkeeping = fresh.bookkeeping;
-    await store.write(layout.libraryId, { deviceId, nextSeq, state: merge.serialize(), sync: bookkeeping });
+  let layout: LibraryLayout;
+  let readOnly = false;
+  let offlineError: unknown;
+  try {
+    const ensured = await ensureLibrary(adapter, { now });
+    layout = ensured.layout;
+    readOnly = ensured.manifest.schemaVersion > LIBRARY_SCHEMA_VERSION;
+  } catch (error) {
+    const savedLayout = canOpenOffline(error) ? await store.lastLayout() : null;
+    if (!savedLayout) throw error;
+    layout = savedLayout;
+    offlineError = error;
   }
+  const online = offlineError === undefined;
 
-  const clock = new HybridClock(deviceId, now);
-  if (merge.maxHlc) clock.receive(merge.maxHlc);
-  const mergeStore = merge;
-  const session: Session = new Session({
-    layout,
-    adapter,
-    deviceId,
-    nextSeq,
-    merge: mergeStore,
-    clock,
-    now,
-    readOnly,
-    makeEngine: (onApplied) =>
-      new SyncEngine({
-        adapter,
-        layout,
-        deviceId,
-        deviceName: options.deviceName ?? 'This device',
-        appVersion: options.appVersion ?? '0.0.0',
-        store: mergeStore,
-        local: store,
-        bookkeeping,
-        outbox,
-        now,
-        stamp: () => clock.now(),
-        snapshotEvery: options.snapshotEvery ?? DEFAULT_SNAPSHOT_EVERY,
-        autoSync: options.autoSync ?? true,
-        readOnly,
-        settings: () => Object.fromEntries(session.getView().settings),
-        ...(options.rollUpAt !== undefined ? { rollUpAt: options.rollUpAt } : {}),
-        ...(options.timers ? { timers: options.timers } : {}),
-        onApplied,
-      }),
-  });
-  session.syncEngine.start();
-  return session;
+  const lock = options.lock ?? defaultLock();
+  const handle = await lock.acquire(libraryLockName(layout.libraryId), { steal: options.takeOver === true });
+  if (!handle) throw new LibraryBusyError();
+
+  try {
+    const saved = await store.load(layout.libraryId);
+    let deviceId: string;
+    let nextSeq: number;
+    let merge: MergeStore | null = null;
+    let bookkeeping: SyncBookkeeping;
+    let outbox: readonly OpEnvelope[] = [];
+    const fromStorage = async () =>
+      online ? bootstrap(adapter, layout) : { merge: new MergeStore(), bookkeeping: EMPTY_BOOKKEEPING };
+    if (saved) {
+      deviceId = saved.deviceId;
+      outbox = saved.outbox;
+      bookkeeping = saved.sync ?? EMPTY_BOOKKEEPING;
+      const maxOutbox = outbox.reduce((m, op) => Math.max(m, op.seq), 0);
+      nextSeq = Math.max(saved.nextSeq, maxOutbox + 1, bookkeeping.flushedSeq + 1);
+      if (saved.state) {
+        try {
+          merge = MergeStore.deserialize(saved.state);
+        } catch (error) {
+          console.warn('Saved library state is unreadable; reloading from storage', error);
+        }
+      }
+      if (!merge) {
+        const fresh = await fromStorage();
+        merge = fresh.merge;
+        bookkeeping = { ...fresh.bookkeeping, flushedSeq: bookkeeping.flushedSeq };
+      }
+      merge.applyOps(outbox);
+      if (online) await store.write(layout.libraryId, { layout });
+    } else {
+      deviceId = newId(now());
+      nextSeq = 1;
+      const fresh = await fromStorage();
+      merge = fresh.merge;
+      bookkeeping = fresh.bookkeeping;
+      await store.write(layout.libraryId, { deviceId, nextSeq, state: merge.serialize(), sync: bookkeeping, layout });
+    }
+
+    const clock = new HybridClock(deviceId, now);
+    if (merge.maxHlc) clock.receive(merge.maxHlc);
+    const mergeStore = merge;
+    const libraryId = layout.libraryId;
+    const ensure = async (): Promise<LibraryLayout> => {
+      const ensured = await ensureLibrary(adapter, { now });
+      if (ensured.layout.libraryId !== libraryId) {
+        throw new Error('The library in storage is not the one this device opened before.');
+      }
+      if (ensured.manifest.schemaVersion > LIBRARY_SCHEMA_VERSION) session.markReadOnly();
+      await store.write(libraryId, { layout: ensured.layout });
+      session.updateLayout(ensured.layout);
+      return ensured.layout;
+    };
+    const session: Session = new Session({
+      layout,
+      adapter,
+      deviceId,
+      nextSeq,
+      merge: mergeStore,
+      clock,
+      now,
+      readOnly,
+      lock: handle,
+      makeEngine: (onApplied) =>
+        new SyncEngine({
+          adapter,
+          layout,
+          deviceId,
+          deviceName: options.deviceName ?? 'This device',
+          appVersion: options.appVersion ?? '0.0.0',
+          store: mergeStore,
+          local: store,
+          bookkeeping,
+          outbox,
+          now,
+          stamp: () => clock.now(),
+          snapshotEvery: options.snapshotEvery ?? DEFAULT_SNAPSHOT_EVERY,
+          autoSync: options.autoSync ?? true,
+          readOnly,
+          settings: () => Object.fromEntries(session.getView().settings),
+          ...(online ? {} : { ensure, initialError: offlineError }),
+          ...(options.rollUpAt !== undefined ? { rollUpAt: options.rollUpAt } : {}),
+          ...(options.timers ? { timers: options.timers } : {}),
+          onApplied,
+        }),
+    });
+    session.syncEngine.start();
+    return session;
+  } catch (error) {
+    handle.release();
+    throw error;
+  }
 }
