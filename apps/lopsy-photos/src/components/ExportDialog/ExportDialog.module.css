@@ -138,3 +138,17 @@
 .indent {
   padding-left: var(--space-6);
 }
+
+/* Two columns, so the dialog fits a laptop screen without scrolling. */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-4) var(--space-6);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}

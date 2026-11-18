@@ -136,6 +136,7 @@ export function ExportDialog() {
   return (
     <Modal
       title={`Export ${plural(versionIds.length, 'photo')}`}
+      width="lg"
       onClose={close}
       footer={
         progress?.finished ? (
@@ -153,8 +154,10 @@ export function ExportDialog() {
       }
     >
       <div className={styles.form}>
-        <div className={styles.field}>
-          <span className={styles.legend}>Preset</span>
+        <div className={styles.columns}>
+          <div className={styles.column}>
+            <div className={styles.field}>
+              <span className={styles.legend}>Preset</span>
           <ExportPresetBar
             presets={presets}
             selectedId={presetId}
@@ -289,6 +292,8 @@ export function ExportDialog() {
           {format === 'tiff' && <span className={styles.muted}>TIFF is always the full size. It keeps no camera details (EXIF).</span>}
         </div>
 
+          </div>
+          <div className={styles.column}>
         <fieldset className={styles.group} disabled={running || format === 'tiff'}>
           <legend className={styles.legend}>Details in the file</legend>
           <label className={styles.option}>
@@ -385,6 +390,8 @@ export function ExportDialog() {
           )}
         </fieldset>
         <p className={styles.muted}>Output sharpening for screen or print is not available yet.</p>
+          </div>
+        </div>
 
         {progress && (
           <div className={styles.progress} aria-live="polite">
