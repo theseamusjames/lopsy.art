@@ -1,0 +1,35 @@
+import type { HistoryStep } from '@lopsy/photos-core/library/types';
+import { ORIGINAL_STEP_ID, currentStepId } from '../history-nav';
+import styles from './HistoryPanel.module.css';
+
+export interface HistoryPanelProps {
+  /** Oldest first. */
+  readonly history: readonly HistoryStep[];
+  readonly isDisabled: boolean;
+  /** Go to a step (or ORIGINAL_STEP_ID): undoing and redoing, never deleting. */
+  readonly onGoTo: (stepId: string) => void;
+}
+
+/** Every step of the version's history; clicking one goes back (or forward) to it. */
+export function HistoryPanel({ history, isDisabled, onGoTo }: HistoryPanelProps) {
+  const current = currentStepId(history);
+  const rows = [{ id: ORIGINAL_STEP_ID, label: 'Original', active: true }, ...history];
+  return (
+    <ol className={styles.list} aria-label="History" data-testid="history-list">
+      {[...rows].reverse().map((step) => (
+        <li key={step.id || 'original'}>
+          <button
+            type="button"
+            className={styles.step}
+            aria-current={step.id === current ? 'step' : undefined}
+            data-undone={!step.active || undefined}
+            disabled={isDisabled}
+            onClick={() => onGoTo(step.id)}
+          >
+            {step.label}
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+}

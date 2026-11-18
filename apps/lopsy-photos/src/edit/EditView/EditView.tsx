@@ -1,7 +1,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, Crop, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { ArrowLeft, ClipboardPaste, Copy, Crop, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
-import type { Asset, Json, Version } from '@lopsy/photos-core/library/types';
+import type { Asset, HistoryStep, Json, Version, VersionId } from '@lopsy/photos-core/library/types';
+import { LeftColumn, type LeftColumnSection } from '../LeftColumn/LeftColumn';
+import { HistoryPanel } from '../HistoryPanel/HistoryPanel';
+import { VersionsPanel } from '../VersionsPanel/VersionsPanel';
+import { movesTo } from '../history-nav';
+import { Filmstrip, type FilmstripItem } from '../Filmstrip/Filmstrip';
 import { ControlGroup } from '../ControlGroup/ControlGroup';
 import { CurvesGroup } from '../CurvesGroup/CurvesGroup';
 import { TabbedGroup } from '../TabbedGroup/TabbedGroup';
@@ -21,7 +26,7 @@ import {
   type ControlDef,
   type GroupDef,
 } from '../edit-controls';
-import { isPreviewStale, isTypingTarget, shortcutFor } from '../edit-keys';
+import { isPreviewStale, isTypingTarget, neighbourId, shortcutFor } from '../edit-keys';
 import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
@@ -51,6 +56,22 @@ export interface EditViewProps {
    * as a 16-bit PNG. The button is hidden without it.
    */
   readonly onEditInLopsy?: (renderPng16: () => Promise<ArrayBuffer>) => void;
+  /** The version's history, oldest first (`LibrarySession.history`). Shows the History list. */
+  readonly history?: readonly HistoryStep[];
+  /** The photo's versions. Shows the Versions list. */
+  readonly versions?: readonly Version[];
+  readonly onSelectVersion?: (versionId: VersionId) => void;
+  /** A new version holding the current edit (`createVersion(assetId, name, recipe)`); the app then shows it. */
+  readonly onCreateVersion?: (name: string, recipe: Recipe) => void;
+  readonly onRenameVersion?: (versionId: VersionId, name: string) => void;
+  readonly onDeleteVersion?: (versionId: VersionId) => void;
+  /** Copy edits (⌘⇧C): the app asks which groups and keeps them. */
+  readonly onCopyEdits?: (recipe: Recipe) => void;
+  /** Paste edits (⌘⇧V) onto this version; the app applies them as one step. Disabled when `canPasteEdits` is false. */
+  readonly onPasteEdits?: () => void;
+  readonly canPasteEdits?: boolean;
+  /** The current view's photos along the bottom; ← and → move along it. */
+  readonly filmstrip?: { readonly items: readonly FilmstripItem[]; readonly currentId: string; readonly onOpen: (assetId: string) => void } | undefined;
 }
 
 /** How long the edit must stay unchanged before previews are rendered. */
@@ -91,6 +112,16 @@ export function EditView({
   onPreviewRendered,
   onExport,
   onEditInLopsy,
+  history,
+  versions,
+  onSelectVersion,
+  onCreateVersion,
+  onRenameVersion,
+  onDeleteVersion,
+  filmstrip,
+  onCopyEdits,
+  onPasteEdits,
+  canPasteEdits = true,
 }: EditViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -100,6 +131,8 @@ export function EditView({
   const [isBeforeToggled, setIsBeforeToggled] = useState(false);
   const [isBeforeHeld, setIsBeforeHeld] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [cropDraft, setCropDraft] = useState<Rect | null>(null);
+  const isCropping = cropDraft !== null;
   const isReady = status.kind === 'ready';
   /** A first view is on screen while the full-size image decodes: edits apply to both. */
   const isRefining = status.kind === 'loading' && status.progress?.stage === 'refining';
@@ -126,6 +159,11 @@ export function EditView({
     thumbHash: version.thumb?.recipeHash ?? null,
     screenHash: version.screen?.recipeHash ?? null,
   });
+  useEffect(() => {
+    previewed.current = { thumbHash: version.thumb?.recipeHash ?? null, screenHash: version.screen?.recipeHash ?? null };
+    // Only a switch to another version restarts what the previews are compared with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version.id]);
   const onPreviewRenderedRef = useRef(onPreviewRendered);
   onPreviewRenderedRef.current = onPreviewRendered;
   const previewJob = useRef<Promise<void> | null>(null);
@@ -253,16 +291,35 @@ export function EditView({
 
   // ---- keyboard ------------------------------------------------------
 
-  const handlers = useRef({ onUndo, onRedo, engine });
-  handlers.current = { onUndo, onRedo, engine };
+  const handleCopyPaste = (which: 'copyEdits' | 'pasteEdits') => {
+    if (!canEdit || isCropping) return;
+    if (which === 'copyEdits') onCopyEdits?.(savedRecipe);
+    else onPasteEdits?.();
+  };
+  const handlers = useRef({ onUndo, onRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste });
+  handlers.current = { onUndo, onRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target)) return;
+      if (isTypingTarget(e.target) || e.defaultPrevented) return;
       const shortcut = shortcutFor(e);
       if (!shortcut) return;
-      e.preventDefault();
       const h = handlers.current;
+      if (shortcut === 'previous' || shortcut === 'next') {
+        const strip = h.filmstrip;
+        if (!strip || h.isCropping) return;
+        const next = neighbourId(strip.items.map((i) => i.id), strip.currentId, shortcut === 'next' ? 1 : -1);
+        if (!next) return;
+        e.preventDefault();
+        strip.onOpen(next);
+        return;
+      }
+      if (shortcut === 'copyEdits' || shortcut === 'pasteEdits') {
+        e.preventDefault();
+        h.onCopyPaste(shortcut);
+        return;
+      }
+      e.preventDefault();
       if (shortcut === 'undo') h.onUndo();
       else if (shortcut === 'redo') h.onRedo();
       else if (shortcut === 'fit') h.engine?.fit();
@@ -304,8 +361,6 @@ export function EditView({
 
   // ---- crop ----------------------------------------------------------
 
-  const [cropDraft, setCropDraft] = useState<Rect | null>(null);
-  const isCropping = cropDraft !== null;
 
   const startCrop = () => {
     if (!engine) return;
@@ -387,6 +442,41 @@ export function EditView({
       }
     });
   };
+
+  // ---- left column ---------------------------------------------------
+
+  const handleGoTo = (stepId: string) => {
+    if (!history) return;
+    const moves = movesTo(history, stepId);
+    for (let i = 0; i < moves.undo; i++) onUndo();
+    for (let i = 0; i < moves.redo; i++) onRedo();
+  };
+
+  const leftSections: LeftColumnSection[] = [];
+  if (versions && onSelectVersion) {
+    leftSections.push({
+      id: 'versions',
+      title: 'Versions',
+      content: (
+        <VersionsPanel
+          versions={versions}
+          currentId={version.id}
+          isDisabled={isBusy || isCropping}
+          onSelect={onSelectVersion}
+          {...(onCreateVersion ? { onCreate: (name: string) => onCreateVersion(name, savedRecipe) } : {})}
+          {...(onRenameVersion ? { onRename: onRenameVersion } : {})}
+          {...(onDeleteVersion ? { onDelete: onDeleteVersion } : {})}
+        />
+      ),
+    });
+  }
+  if (history) {
+    leftSections.push({
+      id: 'history',
+      title: 'History',
+      content: <HistoryPanel history={history} isDisabled={!canEdit || isCropping} onGoTo={handleGoTo} />,
+    });
+  }
 
   const isAllDefault = recipeHash(beforeRecipe(savedRecipe)) === recipeHash(savedRecipe);
   const zoomPercent = view ? Math.round(view.zoom * 100) : 100;
@@ -488,6 +578,27 @@ export function EditView({
             {zoomPercent}%
           </span>
         </div>
+        {(onCopyEdits || onPasteEdits) && (
+          <div className={styles.toolGroup}>
+            {onCopyEdits && (
+              <button type="button" className={styles.iconButton} aria-label="Copy edits" title="Copy edits (⇧⌘C)" disabled={!canEdit || isCropping} onClick={() => handleCopyPaste('copyEdits')}>
+                <Copy size={16} aria-hidden />
+              </button>
+            )}
+            {onPasteEdits && (
+              <button
+                type="button"
+                className={styles.iconButton}
+                aria-label="Paste edits"
+                title="Paste edits (⇧⌘V)"
+                disabled={!canEdit || isCropping || !canPasteEdits}
+                onClick={() => handleCopyPaste('pasteEdits')}
+              >
+                <ClipboardPaste size={16} aria-hidden />
+              </button>
+            )}
+          </div>
+        )}
         {onEditInLopsy && (
           <button type="button" className={styles.toolButton} onClick={handleEditInLopsy} disabled={!isReady || isBusy}>
             <SquarePen size={16} aria-hidden />
@@ -502,6 +613,7 @@ export function EditView({
         )}
       </header>
       <div className={styles.body}>
+        <LeftColumn sections={leftSections} />
         <div
           ref={stageRef}
           className={styles.stage}
@@ -589,6 +701,7 @@ export function EditView({
           </div>
         </aside>
       </div>
+      {filmstrip && <Filmstrip items={filmstrip.items} currentId={filmstrip.currentId} onOpen={filmstrip.onOpen} />}
     </div>
   );
 }

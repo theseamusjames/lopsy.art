@@ -142,7 +142,7 @@ test.describe('Edit view on a JPEG', () => {
     await waitForPreview(page, 1);
     const rotated = await imageStats(page, { kind: 'preview', index: 1, which: 'screen' });
     expect([rotated.width, rotated.height]).toEqual([480, 640]);
-    await page.getByRole('button', { name: 'Flip' }).click();
+    await page.getByRole('button', { name: 'Flip', exact: true }).click();
     await page.keyboard.press('ControlOrMeta+z');
     await page.keyboard.press('ControlOrMeta+z');
     expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Rotate right', 'Flip']);

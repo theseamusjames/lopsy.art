@@ -67,6 +67,28 @@ export async function openGeneratedImage(
   );
 }
 
+/** Several generated JPEGs at once, for the filmstrip: each a different colour. */
+export async function openGeneratedImages(page: Page, colors: readonly string[]): Promise<void> {
+  await page.evaluate(async (list) => {
+    const transfer = new DataTransfer();
+    for (const [i, color] of list.entries()) {
+      const canvas = new OffscreenCanvas(320, 240);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no 2d context');
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 320, 240);
+      ctx.fillStyle = '#808080';
+      ctx.fillRect(80, 60, 160, 120);
+      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+      transfer.items.add(new File([blob], `photo-${i + 1}.jpg`, { type: 'image/jpeg' }));
+    }
+    const input = document.querySelector<HTMLInputElement>('[data-testid="harness-file"]');
+    if (!input) throw new Error('no file input');
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, colors);
+}
+
 export async function waitForReady(page: Page, timeout = 30_000): Promise<void> {
   await expect(page.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout });
 }
