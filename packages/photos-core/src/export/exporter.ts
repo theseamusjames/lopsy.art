@@ -171,7 +171,7 @@ export function startExport(selection: readonly ExportSelection[], ctx: ExportCo
   const done = (async (): Promise<ExportResult> => {
     for (let index = 0; index < selection.length; index++) await run(index);
     let zip: ExportedFile | null = null;
-    if (destination.kind === 'download' && files.length > 1 && !cancelled) {
+    if (destination.kind === 'download' && files.length > 1 && settings.zip !== false && !cancelled) {
       const base = sanitizeFileName(destination.zipName ?? `Lopsy export ${localDay(now())}`).replace(/\.zip$/i, '');
       zip = { name: `${base}.zip`, blob: await createZip(files.map((f) => ({ name: f.name, blob: f.blob, modified: now() }))) };
     }

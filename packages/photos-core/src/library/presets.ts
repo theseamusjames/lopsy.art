@@ -71,6 +71,7 @@ export const BUILT_IN_EXPORT_PRESETS: readonly ExportPreset[] = [
     colorSpace: 'srgb',
     quality: 0.85,
     maxLongEdge: 2048,
+    size: { mode: 'long', px: 2048 },
     metadata: 'copyright',
   }),
   exportPreset('tiff16-p3', '16-bit TIFF, Display P3', {

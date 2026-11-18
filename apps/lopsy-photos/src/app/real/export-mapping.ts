@@ -4,7 +4,7 @@ import type { LibraryView, VersionId } from '@lopsy/photos-core/library/types';
 import type { ExportSelection } from '@lopsy/photos-core/export/exporter';
 import type { ExportDestination, ExportProgress as CoreProgress, ExportSettings } from '@lopsy/photos-core/export/types';
 import type { ExportProgress, ExportRequest } from '../backend';
-import { maxLongEdgeOf, withExtras } from '../../library/export-size';
+import { DEFAULT_EXTRAS, withExtras, type ExportExtras } from '../../library/export-size';
 
 export function toExportSettings(request: ExportRequest): Partial<ExportSettings> {
   const settings: Partial<ExportSettings> = {
@@ -14,9 +14,12 @@ export function toExportSettings(request: ExportRequest): Partial<ExportSettings
     quality: Math.min(1, Math.max(0.01, request.quality / 100)),
     maxLongEdge: request.longEdge !== null && request.longEdge > 0 ? Math.round(request.longEdge) : null,
   };
-  if (!request.extras) return settings;
-  // The size rides in the extras; photos-core's long edge is only for what it can say itself.
-  return withExtras({ ...settings, maxLongEdge: maxLongEdgeOf(request.extras) }, request.extras);
+  // Without extras the size is the long edge asked for, so a size from `base` cannot contradict it.
+  return withExtras(settings, request.extras ?? { ...DEFAULT_EXTRAS, size: sizeFromLongEdge(settings.maxLongEdge ?? null) });
+}
+
+function sizeFromLongEdge(edge: number | null): ExportExtras['size'] {
+  return edge !== null ? { mode: 'long', px: edge } : { mode: 'original' };
 }
 
 /** What to hand the browser after a download export: the zip, or each file when asked for separate files. */

@@ -15,13 +15,26 @@ const request: ExportRequest = {
 
 describe('export mapping', () => {
   it('maps settings', () => {
-    expect(toExportSettings(request)).toEqual({ format: 'jpeg', colorSpace: 'srgb', quality: 0.85, maxLongEdge: 2048 });
+    const defaults = { allowEnlarge: false, pngDepth: 16, zip: true };
+    expect(toExportSettings(request)).toEqual({
+      format: 'jpeg',
+      colorSpace: 'srgb',
+      quality: 0.85,
+      maxLongEdge: 2048,
+      size: { mode: 'long', px: 2048 },
+      ...defaults,
+    });
     expect(toExportSettings({ ...request, format: 'tiff', colorSpace: 'rec2020', longEdge: null, quality: 0 })).toEqual({
       format: 'tiff',
       colorSpace: 'rec2020',
       quality: 0.01,
       maxLongEdge: null,
+      size: { mode: 'original' },
+      ...defaults,
     });
+    // The dialog's size choices become the settings' own fields.
+    const extras = { size: { mode: 'short' as const, px: 1080 }, allowEnlarge: true, pngDepth: 8 as const, zip: false };
+    expect(toExportSettings({ ...request, extras })).toMatchObject({ ...extras, maxLongEdge: null });
     // A preset's other choices (metadata, names) carry over.
     expect(toExportSettings({ ...request, base: { ...DEFAULT_EXPORT_SETTINGS, metadata: 'none' } }).metadata).toBe('none');
   });
