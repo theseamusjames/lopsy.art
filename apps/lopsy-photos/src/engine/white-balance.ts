@@ -1,0 +1,70 @@
+/**
+ * White balance for RAW files (spec 5.4): the camera's presets and the
+ * Kelvin scale of the recipe's relative temperature, both from the engine
+ * (`rafWhiteBalancePresets`, `rafWhiteBalanceKelvin`), read once per file.
+ */
+
+export interface WhiteBalancePresetValues {
+  readonly id: string;
+  readonly name: string;
+  /** Recipe units, relative to as shot (−100..100). */
+  readonly temperature: number;
+  readonly tint: number;
+}
+
+/** `kelvin = 1e6 / (miredAtZero + miredPerUnit · temperature)`. */
+export interface KelvinScale {
+  readonly miredAtZero: number;
+  readonly miredPerUnit: number;
+  readonly asShotKelvin: number;
+}
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/** The engine's preset list; malformed entries are left out. */
+export function parsePresets(json: string): WhiteBalancePresetValues[] {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(raw)) return [];
+  const out: WhiteBalancePresetValues[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const { name, temperature, tint } = entry as Record<string, unknown>;
+    if (typeof name !== 'string' || name === '' || !isFiniteNumber(temperature) || !isFiniteNumber(tint)) continue;
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    if (out.some((p) => p.id === id)) continue;
+    out.push({ id, name, temperature, tint });
+  }
+  return out;
+}
+
+export function parseKelvinScale(json: string): KelvinScale | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { miredAtZero, miredPerUnit, asShotKelvin } = raw as Record<string, unknown>;
+  if (!isFiniteNumber(miredAtZero) || !isFiniteNumber(miredPerUnit) || !isFiniteNumber(asShotKelvin)) return null;
+  if (miredAtZero <= 0 || miredPerUnit === 0) return null;
+  return { miredAtZero, miredPerUnit, asShotKelvin };
+}
+
+/** The Kelvin a recipe temperature means on this body; null when the scale gives none. */
+export function kelvinFor(scale: KelvinScale, temperature: number): number | null {
+  const mired = scale.miredAtZero + scale.miredPerUnit * temperature;
+  return mired > 0 ? 1e6 / mired : null;
+}
+
+/** The recipe temperature for a Kelvin value on this body. */
+export function temperatureForKelvin(scale: KelvinScale, kelvin: number): number {
+  return (1e6 / kelvin - scale.miredAtZero) / scale.miredPerUnit;
+}
