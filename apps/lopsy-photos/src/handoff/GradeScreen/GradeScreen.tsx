@@ -92,7 +92,11 @@ export function GradeScreen({ session, onFinished }: GradeScreenProps) {
       setPhase({ kind: 'sending' });
       renderPng16().then(
         (png) => {
-          session.done(png, recipeJson(recipe));
+          if (!session.done(png, recipeJson(recipe))) {
+            // Lopsy has been told why; this tab stays open to say so too.
+            setPhase({ kind: 'failed', message: 'The graded layer could not be sent back to Lopsy (it is too large or the wrong size).' });
+            return;
+          }
           setPhase({ kind: 'finished', message: 'Sent to Lopsy. You can close this tab.' });
           onFinished();
         },

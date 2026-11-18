@@ -13,7 +13,7 @@ import { createDocument, getPixelAt, moveLayerTo, waitForStore } from './helpers
 
 const PHOTOS_ORIGIN = 'http://localhost:5174';
 
-type Mode = 'done' | 'cancel';
+type Mode = 'done' | 'cancel' | 'huge' | 'manual';
 
 const gradePage = (lopsyOrigin: string, mode: Mode): string => `<!doctype html><meta charset="utf-8"><title>Photos grade stand-in</title><body>
 <script>
@@ -33,6 +33,30 @@ window.addEventListener('message', async (e) => {
     fullW: head.getInt32(16, true),
     fullH: head.getInt32(20, true),
   };
+  if (${JSON.stringify(mode)} === 'huge') {
+    // A tiny PNG whose header claims 20000 x 20000: decoding it would need gigabytes.
+    const png = new Uint8Array(64);
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+    const view = new DataView(png.buffer);
+    view.setUint32(16, 20000);
+    view.setUint32(20, 20000);
+    png[24] = 16;
+    png[25] = 6;
+    window.opener.postMessage({ protocol: 1, type: 'photos:graded', id, ok: true, png: png.buffer, recipe: {} }, lopsyOrigin, [png.buffer]);
+    return;
+  }
+  if (${JSON.stringify(mode)} === 'manual') {
+    // The test answers later, as a user who takes their time would.
+    window.__answer = async () => {
+      const canvas = new OffscreenCanvas(m.layer.width, m.layer.height);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(0, 0, m.layer.width, m.layer.height);
+      const png = await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer();
+      window.opener.postMessage({ protocol: 1, type: 'photos:graded', id, ok: true, png, recipe: {} }, lopsyOrigin, [png]);
+    };
+    return;
+  }
   if (${JSON.stringify(mode)} === 'cancel') {
     window.opener.postMessage({ protocol: 1, type: 'photos:graded', id, ok: false, cancelled: true }, lopsyOrigin);
     return;
@@ -224,5 +248,36 @@ test.describe('Grade in Lopsy Photos, offset layers', () => {
     await expect.poll(() => layerState(page, id).then((s) => s.undo)).toBe(undoBefore + 1);
     expect(await layerGeometry(page, id)).toEqual(moved);
     await page.screenshot({ path: 'e2e/screenshots/photos-grade-offset.png' });
+  });
+});
+
+test.describe('Grade in Lopsy Photos, untrusted results', () => {
+  test('a PNG claiming a huge size is refused before the engine decodes it', async ({ page, context, baseURL }) => {
+    await serveGradePage(context, new URL(baseURL!).origin, 'huge');
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 64, 48, false);
+    const bgId = await backgroundId(page);
+    const before = await layerState(page, bgId);
+    await gradeFromContextMenu(page, context, bgId);
+    await expect(page.getByText(/Couldn't grade in Lopsy Photos: the graded layer is 20000 × 20000, not 64 × 48/)).toBeVisible();
+    // The engine is alive and the layer untouched.
+    expect(await getPixelAt(page, 10, 10, bgId)).toMatchObject({ r: 255, g: 255, b: 255, a: 255 });
+    expect(await layerState(page, bgId)).toEqual(before);
+  });
+
+  test('a layer locked while it is being graded is left alone', async ({ page, context, baseURL }) => {
+    await serveGradePage(context, new URL(baseURL!).origin, 'manual');
+    await page.goto('/');
+    await waitForStore(page);
+    await createDocument(page, 64, 48, false);
+    const bgId = await backgroundId(page);
+    const { photos } = await gradeFromContextMenu(page, context, bgId);
+    await page.locator(`[data-layer-id="${bgId}"]`).getByRole('button', { name: 'Lock layer' }).click();
+    const before = await layerState(page, bgId);
+    await photos.evaluate(() => (window as unknown as { __answer: () => Promise<void> }).__answer());
+    await expect(page.getByText(/was locked while it was being graded; it is unchanged/)).toBeVisible();
+    expect(await getPixelAt(page, 10, 10, bgId)).toMatchObject({ r: 255, g: 255, b: 255, a: 255 });
+    expect(await layerState(page, bgId)).toEqual(before);
   });
 });
