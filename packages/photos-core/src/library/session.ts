@@ -396,7 +396,7 @@ class Session implements PhotosLibrarySession {
     // A render of an older edit, finishing after a newer one (here or on another device), is not kept.
     const version = this.getView().versions.get(versionId);
     if (version && recipeHash(version.recipe) !== preview.recipeHash) return;
-    this.emit([{ t: 'set', kind: 'version', id: versionId, fields: { [size]: value } }]);
+    this.emit([{ t: 'set', kind: 'version', id: versionId, fields: { [size]: value } }], undefined, true);
   }
 
   /**
@@ -511,7 +511,11 @@ class Session implements PhotosLibrarySession {
   }
 
   setOriginalStatus(assetIds: readonly AssetId[], status: OriginalStatus): void {
-    this.emit(assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields: { originalStatus: status } })));
+    this.emit(
+      assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields: { originalStatus: status } })),
+      undefined,
+      true,
+    );
   }
 
   setSetting(key: string, value: Json): void {
@@ -558,18 +562,32 @@ class Session implements PhotosLibrarySession {
     return this.merge.foldedRecipeValue(versionId, path) ?? DEFAULT_PATHS[path] ?? null;
   }
 
-  private emit(given: readonly Op[], step?: OpStep): void {
+  /**
+   * Applies and queues ops. `internal` writes (previews, repair marks) drop
+   * values that are already there. A user's command is always written in
+   * full, so it beats any older change from another device that has not
+   * arrived yet; a recipe step that changes nothing here is written
+   * without a history step, so it does not show in history.
+   */
+  private emit(given: readonly Op[], step?: OpStep, internal = false): void {
     if (this.lockLost) throw new LibraryLockLostError();
     if (this.readonlyFlag) throw new LibraryReadOnlyError();
     // An undo or redo is always recorded, even when it changes nothing, so the history moves on.
-    const keepAll = step !== undefined && (step.undoes !== undefined || step.redoes !== undefined);
+    const undoRedo = step !== undefined && (step.undoes !== undefined || step.redoes !== undefined);
     const ops: Op[] = [];
+    let changesSomething = false;
     for (const op of given) {
       const cleaned = op.t === 'set' ? withoutUndefined(op) : op;
-      const effective = keepAll ? cleaned : this.withoutNoOps(cleaned);
-      if (effective) ops.push(effective);
+      const effective = this.withoutNoOps(cleaned);
+      if (effective) changesSomething = true;
+      if (internal) {
+        if (effective) ops.push(effective);
+      } else {
+        ops.push(cleaned);
+      }
     }
     if (ops.length === 0) return;
+    if (step && !undoRedo && !changesSomething) step = undefined;
     const envelopes: OpEnvelope[] = [];
     for (const op of ops) {
       const seq = this.nextSeq;
@@ -593,11 +611,7 @@ class Session implements PhotosLibrarySession {
     if (this.cache.defer(changed)) this.notify();
   }
 
-  /**
-   * Drops what would not change the local state. A write stamps its fields
-   * with a new HLC, so writing a value that is already there could only
-   * override a newer change from another device that has not arrived yet.
-   */
+  /** The op without what would not change the local state; null when nothing is left. */
   private withoutNoOps(op: Op): Op | null {
     const record = this.merge.get(op.kind, op.id);
     if (!record) return op;
