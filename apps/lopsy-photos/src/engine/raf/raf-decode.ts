@@ -134,6 +134,8 @@ export interface RafDecodeOptions {
   readonly binnedLongEdge?: number;
   /** Once the frame is prepared, before any band: the binned first view (if asked for) and the develop defaults. */
   readonly onPrepared?: (meta: RafPrepareMeta, prepared: RafPrepared) => void;
+  /** False stops after the prepared frame (and its binned view): no full-size bands. */
+  readonly renderBands?: boolean;
 }
 
 /**
@@ -166,6 +168,7 @@ export async function decodeRafInWorkers(
       autoWbRatio: prepared.autoWbRatio,
       profilesJson: prepared.profilesJson,
     });
+    if (options.renderBands === false) return meta;
     await renderBands(
       workers,
       prepared.mosaic,

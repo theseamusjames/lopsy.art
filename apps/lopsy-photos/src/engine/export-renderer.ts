@@ -85,7 +85,12 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     return engine;
   };
 
-  const loaded = async (asset: Asset, signal: AbortSignal): Promise<DevelopEngine> => {
+  /**
+   * The engine with `asset` loaded at least at `resolution`: a photo loaded
+   * at the working size is brought up to full size in place when a larger
+   * output needs it.
+   */
+  const loaded = async (asset: Asset, signal: AbortSignal, resolution: 'working' | 'full'): Promise<DevelopEngine> => {
     checkSignal(signal);
     if (isDisposed) throw new Error('The export renderer was disposed');
     const e = await getEngine();
@@ -94,15 +99,20 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       loadedAssetId = null;
       const original = await options.loadOriginal(asset, signal);
       checkSignal(signal);
-      await e.load(original, asset.format);
+      await e.load(original, asset.format, undefined, { resolution });
       loadedAssetId = asset.id;
+      checkSignal(signal);
+    } else if (resolution === 'full' && !e.isFullResolution()) {
+      await e.ensureFullResolution();
       checkSignal(signal);
     }
     return e;
   };
 
   const renderOne = async (asset: Asset, version: Version, settings: ExportSettings, signal: AbortSignal): Promise<Blob> => {
-    const e = await loaded(asset, signal);
+    // A small export can come from the working image; anything larger, and every TIFF, needs the full size.
+    const isSmall = settings.format !== 'tiff' && settings.maxLongEdge !== null && settings.maxLongEdge <= 2048;
+    const e = await loaded(asset, signal, isSmall ? 'working' : 'full');
     e.setRecipe(version.recipe);
     const space = settings.colorSpace ?? 'srgb';
     if (space === 'rec2020') throw new Error('Rec. 2020 export needs an engine that encodes it; choose sRGB or Display P3.');
@@ -118,7 +128,8 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
   };
 
   const renderPreviewsOne = async (asset: Asset, version: Version, signal: AbortSignal): Promise<RenderedPreviews> => {
-    const e = await loaded(asset, signal);
+    // Previews are at most the screen size, which the working image always covers.
+    const e = await loaded(asset, signal, 'working');
     e.setRecipe(version.recipe);
     const thumb = await e.renderPreview(THUMB_LONG_EDGE);
     checkSignal(signal);
