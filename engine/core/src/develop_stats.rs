@@ -74,8 +74,14 @@ fn percentile(lum: &[u32], total: u64, q: f32) -> f32 {
     1.0
 }
 
-/// Linear mid-grey the median is placed at (about 124 of 255 encoded).
+/// Linear mid-grey the median is moved toward (about 124 of 255 encoded).
 const MID_GREY: f32 = 0.2;
+/// The share of the way to mid-grey one Auto moves the median.
+const EXPOSURE_DAMPING: f32 = 0.5;
+/// Encoded level the 99th percentile may be brightened to, no further.
+const HIGHLIGHT_CEILING: f32 = 0.97;
+/// Most exposure one Auto changes, EV.
+const MAX_EXPOSURE_STEP: f32 = 1.0;
 /// The 10th–90th percentile spread contrast keeps the image inside.
 const SPREAD_MIN: f32 = 0.5;
 const SPREAD_MAX: f32 = 0.85;
@@ -90,25 +96,29 @@ const MIN_PIXELS: u64 = 16;
 /// pressing Auto again on the result converges instead of compounding.
 ///
 /// Heuristics, all on the luminance histogram unless noted:
-/// 1. **Exposure** puts the median at mid-grey: `log2(0.2 / median)` in
-///    linear light (0.2 is about 124/255 encoded), at most ±2 EV per call,
-///    ignored within ±0.1 EV.
+/// 1. **Exposure** moves the median half way to mid-grey:
+///    `0.5 · log2(0.2 / median)` in linear light (0.2 is about 124/255
+///    encoded). It never brightens past the point where the 99th
+///    percentile would reach 0.97, moves at most ±1 EV per call, and is
+///    ignored within ±0.1 EV. (Moving all the way, uncapped, set +2 EV on
+///    sunny, well-exposed photos whose shadows hold the median low.)
 /// 2. The rest are judged on the percentiles moved by that exposure change
 ///    (in linear light, then re-encoded).
 /// 3. **Contrast** brings the 10th–90th percentile spread into 0.5..0.85
 ///    of the range: the adjustment scales around 0.5 by `1 + contrast/100`,
 ///    so the correction is `(target / spread − 1) · 100`, clamped to
-///    −30..+40, ignored under 3.
+///    −25..+25, ignored under 3.
 /// 4. **Whites**: if more than 0.5 % of any channel sits in the top bin, pull
-///    down by 400 per unit fraction over that (to −60); else if the 99.5th
-///    percentile is below 0.92, push up toward it (to +50).
-/// 5. **Blacks**: if more than 0.5 % sits in the bottom bin, lift (to +40);
-///    else if the 0.5th percentile is above 0.03, deepen (to −50).
-/// 6. **Highlights**: if more than 6 % of the image is above 0.9 after the
-///    exposure change (or clipped in any channel now), recover by 300 per
-///    unit fraction over that (to −60).
+///    down by 150 per unit fraction over that (to −30); else if the 99.5th
+///    percentile is below 0.92, push up toward it (to +30).
+/// 5. **Blacks**: if more than 2 % of any channel sits in the bottom bin,
+///    lift by 200 per unit fraction over that (to +15); else if the 0.5th
+///    percentile is above 0.03, deepen (to −25).
+/// 6. **Highlights**: if more than 10 % of the image is above 0.9 after the
+///    exposure change (or clipped in any channel now), recover by 150 per
+///    unit fraction over that (to −30).
 /// 7. **Shadows**: likewise below 0.08 (or at 0 in any channel), more than
-///    12 %, open by 300 per unit fraction over that (to +50).
+///    15 %, open by 150 per unit fraction over that (to +25).
 ///
 /// Results are clamped to the recipe's ranges and rounded (exposure to
 /// 0.01 EV, the others to whole numbers).
@@ -124,7 +134,17 @@ pub fn auto_tone(histogram: &[u32], current: &ToneSettings) -> ToneSettings {
 
     // 1. Exposure.
     let median = percentile(lum, total, 0.5).max(1.0 / 255.0);
-    let mut delta_ev = (MID_GREY / to_linear(median)).log2().clamp(-2.0, 2.0);
+    // Half way to mid-grey: a well-exposed scene's median depends on what is
+    // in it (a sunny scene with deep shadows sits low), so the full distance
+    // overcorrects.
+    let mut delta_ev = EXPOSURE_DAMPING * (MID_GREY / to_linear(median)).log2();
+    // Never brighten past the point where the 99th percentile clips.
+    if delta_ev > 0.0 {
+        let p99 = percentile(lum, total, 0.99);
+        let room = (to_linear(HIGHLIGHT_CEILING) / to_linear(p99).max(1e-4)).log2().max(0.0);
+        delta_ev = delta_ev.min(room);
+    }
+    delta_ev = delta_ev.clamp(-MAX_EXPOSURE_STEP, MAX_EXPOSURE_STEP);
     if delta_ev.abs() < 0.1 {
         delta_ev = 0.0;
     }
@@ -147,7 +167,7 @@ pub fn auto_tone(histogram: &[u32], current: &ToneSettings) -> ToneSettings {
     let p90 = moved(percentile(lum, total, 0.90));
     let spread = (p90 - p10).max(0.05);
     let target = spread.clamp(SPREAD_MIN, SPREAD_MAX);
-    let mut contrast = ((target / spread - 1.0) * 100.0).clamp(-30.0, 40.0);
+    let mut contrast = ((target / spread - 1.0) * 100.0).clamp(-25.0, 25.0);
     if contrast.abs() < 3.0 {
         contrast = 0.0;
     }
@@ -156,9 +176,9 @@ pub fn auto_tone(histogram: &[u32], current: &ToneSettings) -> ToneSettings {
     let channel_top = (0..3).map(|c| histogram[c * BINS + 255] as f32 / total as f32).fold(0.0f32, f32::max);
     let p995 = moved(percentile(lum, total, 0.995));
     let whites = if channel_top > 0.005 {
-        -((channel_top - 0.005) * 400.0).min(60.0)
+        -((channel_top - 0.005) * 150.0).min(30.0)
     } else if p995 < 0.92 {
-        ((0.92 - p995) / 0.3 * 100.0).min(50.0)
+        ((0.92 - p995) / 0.3 * 100.0).min(30.0)
     } else {
         0.0
     };
@@ -166,10 +186,12 @@ pub fn auto_tone(histogram: &[u32], current: &ToneSettings) -> ToneSettings {
     // 5. Blacks.
     let channel_bottom = (0..3).map(|c| histogram[c * BINS] as f32 / total as f32).fold(0.0f32, f32::max);
     let p005 = moved(percentile(lum, total, 0.005));
-    let blacks = if channel_bottom > 0.005 {
-        ((channel_bottom - 0.005) * 400.0).min(40.0)
+    // Deep shadows at 0 in one channel are normal in a contrasty scene: only
+    // a lot of them lifts the blacks, and only a little.
+    let blacks = if channel_bottom > 0.02 {
+        ((channel_bottom - 0.02) * 200.0).min(15.0)
     } else if p005 > 0.03 {
-        -((p005 - 0.03) / 0.15 * 100.0).min(50.0)
+        -((p005 - 0.03) / 0.15 * 100.0).min(25.0)
     } else {
         0.0
     };
@@ -177,9 +199,9 @@ pub fn auto_tone(histogram: &[u32], current: &ToneSettings) -> ToneSettings {
     // 6. Highlights, 7. Shadows.
     // Clipped pixels stay bright whatever the exposure does.
     let bright = fraction(230, 256).max(channel_top);
-    let highlights = if bright > 0.06 { -((bright - 0.06) * 300.0).min(60.0) } else { 0.0 };
+    let highlights = if bright > 0.1 { -((bright - 0.1) * 150.0).min(30.0) } else { 0.0 };
     let dark = fraction(0, 21).max(channel_bottom);
-    let shadows = if dark > 0.12 { ((dark - 0.12) * 300.0).min(50.0) } else { 0.0 };
+    let shadows = if dark > 0.15 { ((dark - 0.15) * 150.0).min(25.0) } else { 0.0 };
 
     let slider = |base: f32, delta: f32| (base + delta).clamp(-100.0, 100.0).round();
     ToneSettings {
@@ -203,13 +225,20 @@ pub fn auto_tone_json(histogram: &[u32], current_json: &str) -> Result<String, S
     serde_json::to_string(&auto_tone(histogram, &current)).map_err(|e| e.to_string())
 }
 
-/// Grey-world white balance of a linear camera-RGB image at its as-shot
-/// balance (`rafRenderBinnedLinear` or `rafRenderLinearBand` pixels, RGBA
-/// f32): returns `wbRatio` multipliers relative to as shot, green = 1, that
-/// make the mean of the usable pixels neutral. Pixels with any channel at
-/// or above 95 % of the brightest value (clipped, or nearly) and pixels in
-/// the darkest 1 % of the range (noise) are left out. Each ratio is clamped
-/// to 0.25..4. With nothing usable it returns `[1, 1, 1]`.
+/// Auto white balance of a linear camera-RGB image at its as-shot balance
+/// (`rafRenderBinnedLinear` or `rafRenderLinearBand` pixels, RGBA f32):
+/// `wbRatio` multipliers relative to as shot, green = 1.
+///
+/// Grey-world over the whole frame is fooled by any scene that is not grey
+/// on average (a blue sky set Temperature +85 on a sunny photo), so this
+/// averages only the **near-neutral** pixels: those whose brightest channel
+/// is within `NEUTRAL_SPREAD` of their darkest once the current estimate is
+/// applied, iterated three times from the as-shot balance. Pixels within
+/// 5 % of the peak (clipped, or nearly) or below 1 % of it (noise) never
+/// count. When fewer than 1 % of the usable pixels are near-neutral (a
+/// strong cast everywhere), it falls back to grey world over all of them.
+/// Each ratio is clamped to 0.25..4; with nothing usable it returns
+/// `[1, 1, 1]`.
 ///
 /// Mapping these to the Photos temperature / tint sliders is the app's
 /// side of the white balance model.
@@ -223,26 +252,57 @@ pub fn auto_white_balance(linear_rgba: &[f32]) -> [f32; 3] {
         return [1.0, 1.0, 1.0];
     }
     let (hi, lo) = (0.95 * peak, 0.01 * peak);
-    let mut sum = [0.0f64; 3];
-    let mut n = 0u64;
-    for p in linear_rgba.chunks_exact(4) {
-        let (r, g, b) = (p[0], p[1], p[2]);
-        let max = r.max(g).max(b);
-        let min = r.min(g).min(b);
-        if !(max.is_finite()) || max >= hi || min <= lo || p[3] <= 0.0 {
-            continue;
-        }
-        sum[0] += r as f64;
-        sum[1] += g as f64;
-        sum[2] += b as f64;
-        n += 1;
-    }
-    if n == 0 || sum[0] <= 0.0 || sum[2] <= 0.0 {
+    let usable: Vec<[f32; 3]> = linear_rgba
+        .chunks_exact(4)
+        .filter(|p| p[3] > 0.0)
+        .map(|p| [p[0], p[1], p[2]])
+        .filter(|c| {
+            let max = c[0].max(c[1]).max(c[2]);
+            let min = c[0].min(c[1]).min(c[2]);
+            max.is_finite() && max < hi && min > lo
+        })
+        .collect();
+    if usable.is_empty() {
         return [1.0, 1.0, 1.0];
     }
-    let ratio = |c: f64| ((sum[1] / c) as f32).clamp(0.25, 4.0);
-    [ratio(sum[0]), 1.0, ratio(sum[2])]
+    let mean_ratio = |pixels: &mut dyn Iterator<Item = &[f32; 3]>| -> Option<[f32; 3]> {
+        let mut sum = [0.0f64; 3];
+        let mut n = 0usize;
+        for c in pixels {
+            for k in 0..3 {
+                sum[k] += c[k] as f64;
+            }
+            n += 1;
+        }
+        (n > 0 && sum[0] > 0.0 && sum[2] > 0.0).then(|| [(sum[1] / sum[0]) as f32, 1.0, (sum[1] / sum[2]) as f32])
+    };
+    let mut gains = [1.0f32, 1.0, 1.0];
+    let mut found = false;
+    for _ in 0..3 {
+        let is_neutral = |c: &&[f32; 3]| {
+            let g = [c[0] * gains[0], c[1], c[2] * gains[2]];
+            g[0].max(g[1]).max(g[2]) <= NEUTRAL_SPREAD * g[0].min(g[1]).min(g[2])
+        };
+        let count = usable.iter().filter(is_neutral).count();
+        if count * 100 < usable.len() {
+            break;
+        }
+        match mean_ratio(&mut usable.iter().filter(is_neutral)) {
+            Some(r) => {
+                gains = r;
+                found = true;
+            }
+            None => break,
+        }
+    }
+    if !found {
+        gains = mean_ratio(&mut usable.iter()).unwrap_or([1.0, 1.0, 1.0]);
+    }
+    gains.map(|g| g.clamp(0.25, 4.0))
 }
+
+/// How far apart a near-neutral pixel's channels may be (max / min).
+pub const NEUTRAL_SPREAD: f32 = 1.2;
 
 /// The Photos app's white balance for RAW photos (`raw-develop.ts`): red
 /// and blue gain 2^(±0.6·T/100), green 2^(−0.4·tint/100), in camera space.
@@ -338,7 +398,7 @@ mod tests {
     fn a_flat_image_gains_contrast_and_endpoints() {
         let t = auto_tone(&ramp(100, 150), &ToneSettings::default());
         assert!(t.exposure.abs() < 0.3, "{t:?}");
-        assert!(t.contrast >= 30.0, "{t:?}");
+        assert!(t.contrast >= 20.0, "{t:?}");
         assert!(t.whites > 0.0 && t.blacks < 0.0, "{t:?}");
     }
 
@@ -415,6 +475,22 @@ mod tests {
         assert!(neutral_temperature_tint(&green, true)[1] > 0.0);
         assert_eq!(neutral_temperature_tint(&[0, 5, 5, 65535], true), [0.0, 0.0]);
         assert_eq!(neutral_temperature_tint(&[5, 5, 5, 0], true), [0.0, 0.0]);
+    }
+
+    #[test]
+    fn a_blue_sky_does_not_pull_the_white_balance() {
+        // 70 % blue sky, 30 % neutral grey at the as-shot balance.
+        let mut px = Vec::new();
+        for i in 0..1000 {
+            let g = 0.1 + 0.3 * (i % 10) as f32 / 10.0;
+            if i % 10 < 7 {
+                px.extend_from_slice(&[0.4 * g, 0.7 * g, 1.2 * g, 1.0]);
+            } else {
+                px.extend_from_slice(&[g, g, g, 1.0]);
+            }
+        }
+        let wb = auto_white_balance(&px);
+        assert!(wb.iter().all(|v| (v - 1.0).abs() < 0.02), "{wb:?}");
     }
 
     #[test]
