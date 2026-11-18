@@ -44,7 +44,10 @@ export async function trashAssets(session: LibrarySession, assetIds: readonly As
   if (ids.size === 0) return;
 
   // The record first: throws (read-only, lock lost) before any file moves.
-  raw.deleteAssets([...ids]);
+  // Kept out of library history: undoing it there would bring the record
+  // back with its files still in a trash that empties itself. The UI's
+  // Undo (toast or ⌘Z right after) runs `untrashAssets`, which moves both.
+  raw.withoutLibraryHistory(() => raw.deleteAssets([...ids]));
   // And saved on this device before anything is trashed: a tab that dies in
   // between must not bring the photos back with their originals in a trash
   // that empties itself.
@@ -111,7 +114,9 @@ export async function untrashAssets(session: LibrarySession, assetIds: readonly 
   const view = raw.getView();
   const ids = new Set(assetIds.filter((id) => view.assets.get(id)?.deleted === true));
   if (ids.size === 0) return;
-  raw.restoreAssets([...ids]);
+  // Out of library history too, for the same reason: undoing a restore there would
+  // delete the record and leave the files out of the trash.
+  raw.withoutLibraryHistory(() => raw.restoreAssets([...ids]));
   const files: FileId[] = [];
   for (const id of ids) {
     const asset = view.assets.get(id);

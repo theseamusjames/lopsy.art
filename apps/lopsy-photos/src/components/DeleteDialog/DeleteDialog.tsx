@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { getBackend } from '../../app/backend-registry';
-import { useLibraryView, useOrderedIds, usePairPartners, useSession } from '../../app/hooks';
-import { selectAfterRemoval } from '../../app/commands';
+import { isMac, useLibraryView, useOrderedIds, usePairPartners, useSession } from '../../app/hooks';
+import { rememberDelete, selectAfterRemoval, undoDelete } from '../../app/commands';
 import { showToast } from '../../app/toasts';
-import { selectOne } from '../../library/selection';
 import { useUi } from '../../app/store';
 import { formatBytes, plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
@@ -48,14 +47,10 @@ export function DeleteDialog() {
       await getBackend().trashAssets(session, removed);
       askDelete([]);
       selectAfterRemoval(ordered, removed);
-      showToast(`Moved ${plural(ids.length, 'photo')} to ${where}.`, 10_000, {
+      rememberDelete(removed);
+      showToast(`Moved ${plural(ids.length, 'photo')} to ${where}. ${isMac ? '⌘' : 'Ctrl+'}Z brings ${ids.length === 1 ? 'it' : 'them'} back.`, 10_000, {
         label: 'Undo',
-        run: () => {
-          void getBackend()
-            .untrashAssets(session, removed)
-            .then(() => useUi.getState().setSelection(selectOne(ids[0] ?? '')))
-            .catch((e: unknown) => showToast(e instanceof Error ? e.message : String(e)));
-        },
+        run: () => void undoDelete(removed),
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
