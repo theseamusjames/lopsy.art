@@ -21,8 +21,8 @@ test('new version, edit it, copy its edits onto another photo', async ({ page })
   await expect(first).toBeVisible();
 
   // A second version, shown as its own tile in the photo's stack.
-  await first.click();
-  await page.getByRole('button', { name: /^New version/ }).click();
+  await first.click({ button: 'right' });
+  await page.getByRole('menu', { name: 'Photo actions' }).getByRole('menuitem', { name: 'New version' }).click();
   const version = page.locator('[role="gridcell"][title="first.jpg (Version 2)"]');
   await expect(version).toBeVisible();
   await expect(version).toHaveAttribute('aria-selected', 'true');
