@@ -15,6 +15,7 @@ import type {
   NewAsset,
   PreviewRef,
   SyncStatus,
+  LibraryHistory,
   Preset,
   Version,
   VersionId,
@@ -188,6 +189,21 @@ export class FakeLibrarySession implements LibrarySession {
   }
   setSetting(): void {
     unused('setSetting');
+  }
+  undoLibrary(): string | null {
+    return null;
+  }
+  redoLibrary(): string | null {
+    return null;
+  }
+  libraryHistory(): LibraryHistory {
+    return { canUndo: false, canRedo: false, undoLabel: null, redoLabel: null };
+  }
+  libraryStep<T>(_label: string, fn: () => T): T {
+    return fn();
+  }
+  withoutLibraryHistory<T>(fn: () => T): T {
+    return fn();
   }
   setPrimaryVersion(): void {
     unused('setPrimaryVersion');
