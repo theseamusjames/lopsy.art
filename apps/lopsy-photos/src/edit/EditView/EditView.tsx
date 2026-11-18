@@ -54,6 +54,9 @@ import { usePhotoEngine } from './use-photo-engine';
 import { usePreviews } from './use-previews';
 import { useSplitBefore } from './use-split-before';
 import { usePixelReadout } from './use-pixel-readout';
+import { useClippingWarningOnEngine } from '../clipping-warning';
+import { useGrainSeed } from '../grain-seed';
+import { useAltDragViews } from '../alt-drag-views';
 import styles from './EditView.module.css';
 
 export interface EditViewProps {
@@ -161,6 +164,8 @@ export function EditView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const { engine, status, view } = usePhotoEngine(canvasRef, asset, loadOriginal);
+  useClippingWarningOnEngine(engine);
+  useGrainSeed(engine, asset.id);
   const [draft, setDraft] = useState<Readonly<Record<string, Json>> | null>(null);
   const [committed, setCommitted] = useState<Committed | null>(null);
   const [isBeforeToggled, setIsBeforeToggled] = useState(false);
@@ -193,6 +198,7 @@ export function EditView({
   // Dragging a slider outside Local contrast and Sharpness & noise leaves
   // their costly passes out until it is let go.
   const isDraggingCheapControl = draft !== null && !Object.keys(draft).some((path) => DETAIL_PREFIXES.some((p) => path.startsWith(p)));
+  useAltDragViews(engine, draft);
   useEffect(() => {
     engine?.setInteractive(isDraggingCheapControl);
   }, [engine, isDraggingCheapControl]);

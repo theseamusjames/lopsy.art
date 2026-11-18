@@ -46,7 +46,17 @@
   top: calc(var(--space-3) + 4px);
   width: 0;
   height: 0;
+  padding: 0;
+  border: none;
   border-top: 7px solid var(--color-text-disabled);
+  background: none;
+  cursor: pointer;
+}
+
+.clipShadows[aria-pressed='true'],
+.clipHighlights[aria-pressed='true'] {
+  outline: 1px solid var(--color-text-primary);
+  outline-offset: 2px;
 }
 
 .clipShadows {

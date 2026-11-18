@@ -378,6 +378,10 @@ pub fn render_binned_linear(mosaic: &[f32], params: &RafRenderParams, factor: u3
         }
     }
 
+    // Each sample's colour by row phase and column, looked up rather than
+    // recomputed with two remainders per sample.
+    let colour_rows: Vec<Vec<u8>> =
+        (0..p).map(|py| (0..bw * f).map(|x| cfa[py * p + x % p] % 3).collect()).collect();
     let mut rgba = vec![0.0f32; bw * bh * 4];
     let mut sums = vec![[0.0f32; 3]; bw];
     for by in 0..bh {
@@ -385,11 +389,10 @@ pub fn render_binned_linear(mosaic: &[f32], params: &RafRenderParams, factor: u3
         for dy in 0..f {
             let row = by * f + dy;
             let line = &mosaic[row * w..row * w + bw * f];
-            let cfa_row = &cfa[(row % p) * p..(row % p) * p + p];
-            for (bx, sum) in sums.iter_mut().enumerate() {
-                let x0 = bx * f;
-                for (x, &v) in line[x0..x0 + f].iter().enumerate() {
-                    sum[cfa_row[(x0 + x) % p] as usize % 3] += v;
+            let colours = &colour_rows[row % p];
+            for ((sum, samples), cols) in sums.iter_mut().zip(line.chunks_exact(f)).zip(colours.chunks_exact(f)) {
+                for (&v, &c) in samples.iter().zip(cols) {
+                    sum[c as usize] += v;
                 }
             }
         }

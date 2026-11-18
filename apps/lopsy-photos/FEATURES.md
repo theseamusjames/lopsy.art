@@ -161,8 +161,12 @@ edit settles and on leaving.
   (switch, New version, rename, delete) and **History** (every step;
   clicking one goes back or forward to it, deleting nothing).
 - **Filmstrip** of the library's current photos along the bottom.
-- **Histogram** of the rendered edit, with shadow and highlight clipping
-  indicators.
+- **Histogram** of the rendered edit, updated as it changes. Its shadow
+  and highlight markers light when the photo clips, and clicking them
+  shows clipped pixels on the photo (blue at black, red at white; never
+  in exports or previews); **J** toggles both. Holding Alt (Option)
+  while dragging Blacks or Whites shows that side's clipping, and while
+  dragging a Sharpen slider shows what is being sharpened.
 - **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
   not listed a second time), then the engine's film looks with Provia
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
@@ -182,9 +186,18 @@ edit settles and on leaving.
   balance: picked").
 - **Tone**: Exposure, Contrast, Highlights, Shadows, Whites, Blacks, with
   **Auto**.
-- **Curves**, **Color**, **Color by hue**, **Color Grading**, **Local
-  contrast** (Large details, Small details, Haze), **Sharpness & noise**
-  and **Finish**.
+- **Color**: Vibrance, Saturation.
+- **Curves**: a luminance curve and red, green and blue curves, edited by
+  dragging points.
+- **Color by hue**: Hue, Saturation and Luminance for eight bands (red,
+  orange, yellow, green, aqua, blue, purple, magenta).
+- **Color Grading**: shadows, midtones, highlights and global wheels
+  (hue, saturation, luminance), Blending and Balance.
+- **Finish**: Vignette, with its Midpoint, Roundness and Feather; and
+  Grain, Grain size and Roughness. Grain is the same on every render and
+  export of a photo.
+- **Local contrast** (Large details, Small details, Haze) and **Sharpness
+  & noise**.
 - **Areas**: up to eight linear or radial areas, each with Amount,
   Exposure, Contrast, Highlights, Shadows, Temperature, Tint and
   Saturation, Invert, a name, a red mask over the image while selected,

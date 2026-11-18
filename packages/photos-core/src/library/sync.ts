@@ -782,38 +782,54 @@ export class SyncEngine {
       } catch (error) {
         console.error('Could not save library state on this device', error);
         this.setStatus({ state: 'error', error: 'Could not save changes on this device' });
-        // The large state is the likeliest to fail (a nearly full disk): it is
-        // dropped and saved afresh later, while the small, vital part (the
-        // outbox and the seq counter) is retried at once in its own write, so
-        // a state that keeps failing never stops ops from committing.
-        if (next.state !== undefined) this.stateDirty = true;
-        const vital: LocalStorePatch = {
-          ...(next.deviceId !== undefined ? { deviceId: next.deviceId } : {}),
-          ...(next.nextSeq !== undefined ? { nextSeq: next.nextSeq } : {}),
-          ...(next.append.length > 0 ? { appendOutbox: next.append } : {}),
-          ...(next.layout !== undefined ? { layout: next.layout } : {}),
-        };
-        if (next.state === undefined || Object.keys(vital).length === 0) {
-          this.requeue(vital);
-          return;
-        }
-        try {
-          await this.o.local.write(this.layout.libraryId, vital);
-        } catch (vitalError) {
-          console.error('Could not save changes on this device', vitalError);
-          this.requeue(vital);
-          return;
-        }
-        if (next.append.length > 0) {
-          this.committedSeq = Math.max(this.committedSeq, ...next.append.map((op) => op.seq));
-        }
+        await this.salvage(next, merged);
         return;
       }
-      if (next.append.length > 0) {
-        this.committedSeq = Math.max(this.committedSeq, ...next.append.map((op) => op.seq));
-      }
+      this.markCommitted(next.append);
       if (next.stateVector) this.savedVector = next.stateVector;
     });
+  }
+
+  /**
+   * After a failed device write. Without state in it, the whole write is
+   * retried with the next one. With state (the large part, the likeliest
+   * to fail on a nearly full disk) the state is dropped and saved afresh
+   * later, and the small, vital part (new outbox ops, seq counter, layout)
+   * is written at once on its own, so a state that keeps failing never
+   * stops ops from committing. Bookkeeping (`sync`) and outbox trimming
+   * are put back to go with the state: the stored vector must never get
+   * ahead of the stored state, and the stored outbox keeps every op the
+   * stored state lacks.
+   */
+  private async salvage(next: PendingPatch, merged: LocalStorePatch): Promise<void> {
+    if (next.state === undefined) {
+      this.requeue(merged);
+      return;
+    }
+    this.stateDirty = true;
+    const { state: _dropped, deviceId, nextSeq, appendOutbox, layout, ...rest } = merged;
+    const vital: LocalStorePatch = {
+      ...(deviceId !== undefined ? { deviceId } : {}),
+      ...(nextSeq !== undefined ? { nextSeq } : {}),
+      ...(appendOutbox !== undefined ? { appendOutbox } : {}),
+      ...(layout !== undefined ? { layout } : {}),
+    };
+    if (Object.keys(vital).length > 0) {
+      try {
+        await this.o.local.write(this.layout.libraryId, vital);
+      } catch (error) {
+        console.error('Could not save changes on this device', error);
+        this.requeue({ ...vital, ...rest });
+        return;
+      }
+      this.markCommitted(next.append);
+    }
+    // Waits for the state, which is saved afresh with the next write.
+    if (Object.keys(rest).length > 0) this.requeue(rest);
+  }
+
+  private markCommitted(appended: readonly OpEnvelope[]): void {
+    if (appended.length > 0) this.committedSeq = Math.max(this.committedSeq, ...appended.map((op) => op.seq));
   }
 
   /** Puts a failed write back, ahead of anything queued since, to go with the next one. */

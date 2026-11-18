@@ -252,8 +252,12 @@ pub fn auto_white_balance(linear_rgba: &[f32]) -> [f32; 3] {
         return [1.0, 1.0, 1.0];
     }
     let (hi, lo) = (0.95 * peak, 0.01 * peak);
+    // A statistic over a few hundred thousand pixels is as good as over all
+    // of them, and the binned preview of a 40 MP frame has 4.4 million.
+    let stride = (linear_rgba.len() / 4 / AWB_SAMPLE_PIXELS).max(1);
     let usable: Vec<[f32; 3]> = linear_rgba
         .chunks_exact(4)
+        .step_by(stride)
         .filter(|p| p[3] > 0.0)
         .map(|p| [p[0], p[1], p[2]])
         .filter(|c| {
@@ -300,6 +304,9 @@ pub fn auto_white_balance(linear_rgba: &[f32]) -> [f32; 3] {
     }
     gains.map(|g| g.clamp(0.25, 4.0))
 }
+
+/// Pixels auto white balance looks at, at most (an even stride over the image).
+pub const AWB_SAMPLE_PIXELS: usize = 500_000;
 
 /// How far apart a near-neutral pixel's channels may be (max / min).
 pub const NEUTRAL_SPREAD: f32 = 1.2;

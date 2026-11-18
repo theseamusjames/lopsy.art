@@ -153,7 +153,7 @@ describe('applyRecipeValues', () => {
   });
 });
 
-describe('stored records claiming a built-in ID (L5)', () => {
+describe('stored records claiming a built-in ID', () => {
   const record = (fields: Record<string, Json>) =>
     ({ fields: new Map(Object.entries(fields).map(([k, value]) => [k, { value }])), sets: new Map() }) as unknown as EntityRecord;
 
@@ -166,7 +166,7 @@ describe('stored records claiming a built-in ID (L5)', () => {
     expect(findPreset(new Map([['builtin:x', evil]]), 'builtin:x')).toBeNull();
   });
 
-  it('exportKeepsLocation says when GPS would leave with an export (L6)', () => {
+  it('exportKeepsLocation says when GPS would leave with an export', () => {
     expect(exportKeepsLocation(DEFAULT_EXPORT_SETTINGS)).toBe(false);
     expect(exportKeepsLocation({ metadata: 'all', removeLocation: false })).toBe(true);
     expect(exportKeepsLocation({ metadata: 'copyright', removeLocation: false })).toBe(false);
