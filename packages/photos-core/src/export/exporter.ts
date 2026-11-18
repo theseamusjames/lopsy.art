@@ -16,7 +16,7 @@ import { isStorageError } from '../storage/errors';
 import type { FileId } from '../storage/types';
 import { applyExportMetadata } from './exif-writer';
 import { exportFileName, sanitizeFileName } from './file-names';
-import { DEFAULT_EXPORT_SETTINGS } from './types';
+import { DEFAULT_EXPORT_SETTINGS, mimeTypeFor } from './types';
 import type {
   ExportDestination,
   ExportItem,
@@ -149,7 +149,7 @@ export function startExport(selection: readonly ExportSelection[], ctx: ExportCo
         {
           parentId,
           name,
-          mimeType: settings.format === 'png' ? 'image/png' : 'image/jpeg',
+          mimeType: mimeTypeFor(settings.format),
           properties: { 'lp.lib': session.libraryId, 'lp.role': 'export', 'lp.asset': asset.id },
         },
         blob,

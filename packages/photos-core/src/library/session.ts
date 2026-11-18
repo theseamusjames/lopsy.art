@@ -53,6 +53,8 @@ import type {
   Op,
   OpEnvelope,
   OpStep,
+  LibraryHistory,
+  EntityKind,
   OriginalStatus,
   PresetId,
   ExportPresetId,
@@ -272,7 +274,52 @@ export class NotADocumentError extends Error {
   }
 }
 
+/** One field or set member a library step changed. */
+type LibEntry =
+  | { readonly t: 'field'; readonly kind: EntityKind; readonly id: string; readonly path: string; readonly before: Json; readonly after: Json }
+  | {
+      readonly t: 'member';
+      readonly kind: EntityKind;
+      readonly id: string;
+      readonly set: string;
+      readonly member: string;
+      readonly before: boolean;
+      readonly after: boolean;
+    };
+
+interface LibStep {
+  readonly label: string;
+  readonly entries: LibEntry[];
+}
+
+/** Library undo keeps this many steps. */
+const MAX_LIBRARY_STEPS = 100;
+
+function marksLabel(marks: Partial<AssetMarks>): string {
+  const keys = Object.keys(marks).filter((k) => marks[k as keyof AssetMarks] !== undefined);
+  if (keys.length !== 1) return 'Edit info';
+  switch (keys[0]) {
+    case 'rating':
+      return 'Rating';
+    case 'label':
+      return 'Label';
+    case 'setAside':
+      return marks.setAside ? 'Set aside' : 'Bring back';
+    case 'title':
+      return 'Title';
+    default:
+      return 'Caption';
+  }
+}
+
 class Session implements PhotosLibrarySession {
+  private readonly libUndo: LibStep[] = [];
+  private readonly libRedo: LibStep[] = [];
+  /** Envelope IDs library history wrote: a field last written by any other op has been changed since. */
+  private readonly libOps = new Set<string>();
+  private libGroup: LibStep | null = null;
+  private libQuiet = 0;
+  private libHistoryView: { undo: LibStep | undefined; redo: LibStep | undefined; value: LibraryHistory } | null = null;
   readonly libraryId: string;
   readonly deviceId: string;
   readonly adapter: StorageAdapter;
@@ -379,35 +426,180 @@ class Session implements PhotosLibrarySession {
   setMarks(assetIds: readonly AssetId[], marks: Partial<AssetMarks>): void {
     const fields = marksFields(marks);
     if (Object.keys(fields).length === 0) return;
-    this.emit(assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields })));
+    this.recordLibrary(
+      marksLabel(marks),
+      assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields })),
+    );
   }
 
   setKeyword(assetIds: readonly AssetId[], keyword: string, present: boolean): void {
     const [member] = normalizedKeywords([keyword]);
     if (member === undefined) return;
-    this.emit(assetIds.map((id): Op => ({ t: 'member', kind: 'asset', id, set: 'keywords', member, present })));
+    this.recordLibrary(
+      present ? 'Add keyword' : 'Remove keyword',
+      assetIds.map((id): Op => ({ t: 'member', kind: 'asset', id, set: 'keywords', member, present })),
+    );
   }
 
   deleteAssets(assetIds: readonly AssetId[]): void {
-    this.emit(assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields: { deleted: true } })));
+    this.recordLibrary(
+      'Delete',
+      assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields: { deleted: true } })),
+    );
   }
 
   restoreAssets(assetIds: readonly AssetId[]): void {
-    this.emit(assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields: { deleted: false } })));
+    this.recordLibrary(
+      'Restore',
+      assetIds.map((id): Op => ({ t: 'set', kind: 'asset', id, fields: { deleted: false } })),
+    );
   }
 
   createVersion(assetId: AssetId, name: string, recipe?: Recipe): VersionId {
     const versionId = newId(this.now());
-    this.emit([{ t: 'set', kind: 'version', id: versionId, fields: this.versionFields(assetId, name, recipe) }]);
+    // Undo of a new version deletes it; redo brings it back.
+    this.recordLibrary(
+      'New version',
+      [{ t: 'set', kind: 'version', id: versionId, fields: this.versionFields(assetId, name, recipe) }],
+      [{ t: 'field', kind: 'version', id: versionId, path: 'deleted', before: true, after: false }],
+    );
     return versionId;
   }
 
   renameVersion(versionId: VersionId, name: string): void {
-    this.emit([{ t: 'set', kind: 'version', id: versionId, fields: { name } }]);
+    this.recordLibrary('Rename version', [{ t: 'set', kind: 'version', id: versionId, fields: { name } }]);
   }
 
   deleteVersion(versionId: VersionId): void {
-    this.emit([{ t: 'set', kind: 'version', id: versionId, fields: { deleted: true } }]);
+    this.recordLibrary('Delete version', [{ t: 'set', kind: 'version', id: versionId, fields: { deleted: true } }]);
+  }
+
+  undoLibrary(): string | null {
+    return this.moveLibraryStep(this.libUndo, this.libRedo, 'after', 'before');
+  }
+
+  redoLibrary(): string | null {
+    return this.moveLibraryStep(this.libRedo, this.libUndo, 'before', 'after');
+  }
+
+  libraryHistory(): LibraryHistory {
+    const undo = this.libUndo[this.libUndo.length - 1];
+    const redo = this.libRedo[this.libRedo.length - 1];
+    const cached = this.libHistoryView;
+    if (cached && cached.undo === undo && cached.redo === redo) return cached.value;
+    const value: LibraryHistory = { canUndo: !!undo, canRedo: !!redo, undoLabel: undo?.label ?? null, redoLabel: redo?.label ?? null };
+    this.libHistoryView = { undo, redo, value };
+    return value;
+  }
+
+  libraryStep<T>(label: string, fn: () => T): T {
+    if (this.libGroup) return fn();
+    const group: LibStep = { label, entries: [] };
+    this.libGroup = group;
+    try {
+      return fn();
+    } finally {
+      this.libGroup = null;
+      if (group.entries.length > 0) this.pushLibraryStep(group);
+    }
+  }
+
+  withoutLibraryHistory<T>(fn: () => T): T {
+    this.libQuiet += 1;
+    try {
+      return fn();
+    } finally {
+      this.libQuiet -= 1;
+    }
+  }
+
+  /** The value an entry's field or member holds now, and whether this session's library history wrote it last. */
+  private libCurrent(entry: LibEntry): { value: Json; ours: boolean } {
+    const record = this.merge.get(entry.kind, entry.id);
+    if (entry.t === 'member') {
+      const reg = record?.sets.get(entry.set)?.get(entry.member);
+      return reg ? { value: reg.present, ours: this.libOps.has(reg.opId) } : { value: false, ours: true };
+    }
+    const reg = record?.fields.get(entry.path);
+    return reg ? { value: reg.value, ours: this.libOps.has(reg.opId) } : { value: null, ours: true };
+  }
+
+  /**
+   * Emits `ops` as a library step: what each field and member held before
+   * is kept so the step can be undone. `entries` replaces the computed ones.
+   */
+  private recordLibrary(label: string, ops: readonly Op[], entries?: readonly LibEntry[]): void {
+    if (this.libQuiet > 0) {
+      this.emit(ops);
+      return;
+    }
+    const computed: LibEntry[] = [];
+    if (!entries) {
+      for (const op of ops) {
+        if (op.t === 'member') {
+          const before = this.libCurrent({ ...op, t: 'member', before: false, after: false }).value === true;
+          if (before !== op.present) computed.push({ t: 'member', kind: op.kind, id: op.id, set: op.set, member: op.member, before, after: op.present });
+          continue;
+        }
+        for (const [path, after] of Object.entries(op.fields)) {
+          if (after === undefined) continue;
+          const before = this.libCurrent({ t: 'field', kind: op.kind, id: op.id, path, before: null, after: null }).value;
+          if (!sameJson(before, after)) computed.push({ t: 'field', kind: op.kind, id: op.id, path, before, after });
+        }
+      }
+    }
+    for (const env of this.emit(ops)) this.libOps.add(env.id);
+    const step: LibStep = { label, entries: entries ? [...entries] : computed };
+    if (step.entries.length === 0) return;
+    if (this.libGroup) {
+      this.libGroup.entries.push(...step.entries);
+      return;
+    }
+    this.pushLibraryStep(step);
+  }
+
+  private pushLibraryStep(step: LibStep): void {
+    this.libUndo.push(step);
+    if (this.libUndo.length > MAX_LIBRARY_STEPS) this.libUndo.shift();
+    this.libRedo.length = 0;
+    this.notify();
+  }
+
+  /** Undo or redo: writes `to` for every entry still holding `expect`, written by this history. */
+  private moveLibraryStep(from: LibStep[], to: LibStep[], expect: 'before' | 'after', write: 'before' | 'after'): string | null {
+    for (;;) {
+      const step = from.pop();
+      if (!step) {
+        this.notify();
+        return null;
+      }
+      const held = step.entries.filter((e) => {
+        const now = this.libCurrent(e);
+        return now.ours && sameJson(now.value, e[expect]);
+      });
+      // Everything in it was changed since: dropped, and the step before is tried.
+      if (held.length === 0) continue;
+      const ops: Op[] = [];
+      const sets = new Map<string, Extract<Op, { t: 'set' }>>();
+      for (const e of held) {
+        if (e.t === 'member') {
+          ops.push({ t: 'member', kind: e.kind, id: e.id, set: e.set, member: e.member, present: e[write] });
+          continue;
+        }
+        const key = `${e.kind}\u0000${e.id}`;
+        let op = sets.get(key);
+        if (!op) {
+          op = { t: 'set', kind: e.kind, id: e.id, fields: {} };
+          sets.set(key, op);
+          ops.push(op);
+        }
+        (op.fields as Record<string, Json>)[e.path] = e[write];
+      }
+      for (const env of this.emit(ops)) this.libOps.add(env.id);
+      to.push({ label: step.label, entries: held });
+      this.notify();
+      return step.label;
+    }
   }
 
   setPrimaryVersion(assetId: AssetId, versionId: VersionId): void {
@@ -415,7 +607,7 @@ class Session implements PhotosLibrarySession {
     if (!version || version.deleted || version.assetId !== assetId) {
       throw new Error(`${versionId} is not a live version of ${assetId}`);
     }
-    this.emit([{ t: 'set', kind: 'asset', id: assetId, fields: { primaryVersionId: versionId } }]);
+    this.recordLibrary('Show version', [{ t: 'set', kind: 'asset', id: assetId, fields: { primaryVersionId: versionId } }]);
   }
 
   editRecipe(versionId: VersionId, changes: Readonly<Record<string, Json>>, label: string): void {
@@ -565,12 +757,15 @@ class Session implements PhotosLibrarySession {
   }
 
   setAlbumMember(albumId: AlbumId, assetId: AssetId, present: boolean, versionId: VersionId | null = null): void {
+    const label = present ? 'Add to album' : 'Remove from album';
     if (versionId === null) {
-      this.emit([{ t: 'member', kind: 'album', id: albumId, set: 'assets', member: assetId, present }]);
+      this.recordLibrary(label, [{ t: 'member', kind: 'album', id: albumId, set: 'assets', member: assetId, present }]);
       return;
     }
     if (assetId.includes('/') || versionId.includes('/')) throw new Error('Invalid album member');
-    this.emit([{ t: 'member', kind: 'album', id: albumId, set: 'versions', member: `${assetId}/${versionId}`, present }]);
+    this.recordLibrary(label, [
+      { t: 'member', kind: 'album', id: albumId, set: 'versions', member: `${assetId}/${versionId}`, present },
+    ]);
   }
 
   setOriginalStatus(assetIds: readonly AssetId[], status: OriginalStatus): void {
@@ -718,7 +913,7 @@ class Session implements PhotosLibrarySession {
    * arrived yet; a recipe step that changes nothing here is written
    * without a history step, so it does not show in history.
    */
-  private emit(given: readonly Op[], step?: OpStep, internal = false): void {
+  private emit(given: readonly Op[], step?: OpStep, internal = false): readonly OpEnvelope[] {
     if (this.lockLost) throw new LibraryLockLostError();
     if (this.readonlyFlag) throw new LibraryReadOnlyError();
     // An undo or redo is always recorded, even when it changes nothing, so the history moves on.
@@ -735,7 +930,7 @@ class Session implements PhotosLibrarySession {
         ops.push(cleaned);
       }
     }
-    if (ops.length === 0) return;
+    if (ops.length === 0) return [];
     if (step && !undoRedo && !changesSomething) step = undefined;
     const envelopes: OpEnvelope[] = [];
     for (const op of ops) {
@@ -758,6 +953,7 @@ class Session implements PhotosLibrarySession {
     const changed = this.merge.applyOps(envelopes);
     this.engine.enqueue(envelopes, this.nextSeq);
     if (this.cache.defer(changed)) this.notify();
+    return envelopes;
   }
 
   /** The op without what would not change the local state; null when nothing is left. */

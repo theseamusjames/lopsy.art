@@ -209,6 +209,15 @@ export interface Album {
   readonly deleted: boolean;
 }
 
+/** Library undo and redo, as the UI shows them. Per session: it starts empty on every load. */
+export interface LibraryHistory {
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  /** The label of the step Undo would undo ('Rating', 'Delete', …), or null. */
+  readonly undoLabel: string | null;
+  readonly redoLabel: string | null;
+}
+
 /** The merged state, as the UI reads it. A new object only when something changed. */
 export interface LibraryView {
   readonly assets: ReadonlyMap<AssetId, Asset>;
@@ -344,6 +353,25 @@ export interface LibrarySession {
   saveExportPreset(name: string, settings: ExportSettings): ExportPresetId;
   renameExportPreset(presetId: ExportPresetId, name: string): void;
   deleteExportPreset(presetId: ExportPresetId): void;
+
+  /**
+   * Undoes this session's latest library step (marks, keywords, album
+   * membership, delete and restore, version create/rename/delete, the
+   * shown version) by writing the earlier values as new ops; returns its
+   * label, or null when there is nothing to undo. A field changed since
+   * by another device, or by anything outside library history on this
+   * one, is left as it is; a step with nothing left to undo is dropped
+   * and the one before it is undone instead.
+   */
+  undoLibrary(): string | null;
+  /** Redoes the latest undone library step, with the same rule; null when there is none. */
+  redoLibrary(): string | null;
+  /** What Undo and Redo would do now. Changes notify `subscribe` listeners. */
+  libraryHistory(): LibraryHistory;
+  /** Runs `fn` with every library command in it recorded as one step named `label` (e.g. make shown, then delete). */
+  libraryStep<T>(label: string, fn: () => T): T;
+  /** Runs `fn` without recording its library commands (an import applying sidecar marks). */
+  withoutLibraryHistory<T>(fn: () => T): T;
 
   /**
    * Resolves once every command made so far is saved on this device, so it

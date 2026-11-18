@@ -28,6 +28,17 @@ export interface ExportSettings {
   readonly creator?: string;
 }
 
+const MIME_TYPES: Readonly<Record<ExportFormat, string>> = {
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  tiff: 'image/tiff',
+};
+
+/** The media type of an exported file. */
+export function mimeTypeFor(format: ExportFormat): string {
+  return MIME_TYPES[format];
+}
+
 /** Whether the format keeps 16 bits per channel. */
 export function isSixteenBit(format: ExportFormat): boolean {
   return format === 'tiff';
