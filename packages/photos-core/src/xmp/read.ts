@@ -1,32 +1,24 @@
 /**
  * Reads XMP sidecars written by other editors (and by us): marks,
- * keywords, title, caption, and basic edits.
+ * keywords, title, caption, and edits.
  *
- * Camera Raw edits are mapped to our recipe one to one in value, which is
- * only an approximation: our tone controls are not Adobe's maths, so the
- * same numbers give a similar direction and rough strength, not the same
- * picture. White balance is skipped (Camera Raw stores Kelvin; ours is a
- * relative shift that needs camera data, spec E9), as are anything but an
- * unrotated crop and quarter-turn rotations.
+ * Camera Raw edits are mapped by the table in crs-mapping.ts, which is an
+ * approximation throughout. On top of it, here:
  *
- * | Camera Raw (crs:)          | Range        | Recipe path       | Scale |
- * |----------------------------|--------------|-------------------|-------|
- * | Exposure2012               | -5..+5 EV    | tone.exposure     | x1    |
- * | Contrast2012               | -100..100    | tone.contrast     | x1    |
- * | Highlights2012             | -100..100    | tone.highlights   | x1    |
- * | Shadows2012                | -100..100    | tone.shadows      | x1    |
- * | Whites2012                 | -100..100    | tone.whites       | x1    |
- * | Blacks2012                 | -100..100    | tone.blacks       | x1    |
- * | Vibrance                   | -100..100    | color.vibrance    | x1    |
- * | Saturation                 | -100..100    | color.saturation  | x1    |
+ * | Camera Raw / tiff          | Range        | Recipe path       | Mapping |
+ * |----------------------------|--------------|-------------------|---------|
  * | CropLeft/Top/Right/Bottom  | 0..1         | framing.crop      | when HasCrop, CropAngle 0 and the photo is unrotated |
  * | tiff:Orientation vs file   | 1, 6, 3, 8   | framing.rotate    | the quarter turns between them |
- * | Temperature, Tint          | Kelvin       | (skipped)         |       |
+ *
+ * With a CropAngle the angle maps to framing.angle and the crop is left
+ * out: Lightroom's turned crop rectangle has no exact form in ours, which
+ * crops the straightened image to its largest upright rectangle.
  */
 
 import { DEFAULT_RECIPE, recipeFromPaths, recipeToPaths } from '../library/recipe';
 import type { CropRect, Recipe, RecipeLeaf } from '../library/recipe';
 import type { ColorLabel } from '../library/types';
+import { crsToRecipePaths } from './crs-mapping';
 import { XML_NAMESPACE, attribute, parseXml, walk } from './xml';
 import type { XmlElement } from './xml';
 
@@ -45,17 +37,6 @@ export const NS = {
 export const MAX_XMP_CHARS = 2 * 1024 * 1024;
 const MAX_KEYWORDS = 1000;
 const MAX_TEXT = 10_000;
-
-export const CRS_MAPPING: readonly { readonly crs: string; readonly path: string }[] = [
-  { crs: 'Exposure2012', path: 'tone.exposure' },
-  { crs: 'Contrast2012', path: 'tone.contrast' },
-  { crs: 'Highlights2012', path: 'tone.highlights' },
-  { crs: 'Shadows2012', path: 'tone.shadows' },
-  { crs: 'Whites2012', path: 'tone.whites' },
-  { crs: 'Blacks2012', path: 'tone.blacks' },
-  { crs: 'Vibrance', path: 'color.vibrance' },
-  { crs: 'Saturation', path: 'color.saturation' },
-];
 
 const LABELS: Readonly<Record<string, ColorLabel>> = {
   red: 'red',
@@ -76,8 +57,8 @@ export interface XmpData {
   readonly caption: string | null;
   /** Our own recipe, exactly as written by `writeXmp`; null when the sidecar has none. */
   readonly recipe: Recipe | null;
-  /** Approximate edits from Camera Raw settings, by recipe path. */
-  readonly edits: Readonly<Record<string, number>>;
+  /** Approximate edits from Camera Raw settings, by recipe path (crs-mapping.ts). */
+  readonly edits: Readonly<Record<string, RecipeLeaf>>;
   /** Camera Raw crop, normalized to the unrotated image; null without a plain crop. */
   readonly crop: CropRect | null;
   /** tiff:Orientation, when the sidecar has one. */
@@ -198,11 +179,11 @@ export function readXmp(source: string): XmpData | null {
   list(props, NS.dc, 'subject').forEach(add);
   for (const path of list(props, NS.lr, 'hierarchicalSubject')) add(path.split('|').pop() ?? '');
 
-  const edits: Record<string, number> = {};
-  for (const { crs, path } of CRS_MAPPING) {
-    const v = number(props, NS.crs, crs);
-    if (v !== null) edits[path] = v;
-  }
+  const edits = crsToRecipePaths({
+    number: (local) => number(props, NS.crs, local),
+    text: (local) => text(props, NS.crs, local),
+    value: (local) => props.get(`${NS.crs}|${local}`),
+  });
   const orientation = number(props, NS.tiff, 'Orientation');
 
   return {
