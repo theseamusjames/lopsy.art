@@ -231,6 +231,7 @@ test.describe('Color Grading adjustment', () => {
 
   test('dragging a wheel grades the canvas and undoes as one step', async ({ page }) => {
     await addAdjustment(page, await getRootGroupId(page), 'color-grading');
+    await wheel(page, 'Global').scrollIntoViewIfNeeded();
     const box = await wheel(page, 'Global').boundingBox();
     if (!box) throw new Error('wheel not visible');
     const cx = box.x + box.width / 2;

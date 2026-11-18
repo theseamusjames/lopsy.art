@@ -114,6 +114,13 @@ export interface ColorGradingNode extends BaseAdjustmentNode {
   readonly blending: number;
   /** Shifts the tonal ranges toward shadows or highlights, -100..100. */
   readonly balance: number;
+  /**
+   * Tone stops along a black-to-white bar: each tints the tones at its
+   * position with its colour's hue and saturation. When present they replace
+   * the wheels and Balance; Blending sets how sharply neighbouring stops hand
+   * over. Absent while the node uses the wheels (the default).
+   */
+  readonly toneStops?: readonly GradientStop[];
 }
 
 export type AdjustmentNode =

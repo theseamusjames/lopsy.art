@@ -62,6 +62,8 @@ struct Params {
     u_cgExponent: f32,
     // Blending: half-width of the mask crossovers.
     u_cgWidth: f32,
+    // 1 when the grade comes from u_cgLut (tone stops) instead of the wheels.
+    u_hasCgLut: f32,
     // Document color mode: 1 = Lab, whose textures hold encoded CIELAB. Every
     // node below assumes sRGB channels, so Lab pixels are decoded first and
     // re-encoded at the end.
@@ -86,6 +88,12 @@ struct Params {
 // Gradient Map: 256x1 RGBA LUT mapping luminosity -> colour.
 @group(0) @binding(7) var u_gradientLut: texture_2d<f32>;
 @group(0) @binding(8) var u_gradientLut_sampler: sampler;
+// Color Grading tone stops: 256x1 RGBA LUT of tint by tone. rgb is the
+// tint offset stored as 128 + 127 * tint / CG_LUT_RANGE, so 128 is no tint.
+@group(0) @binding(9) var u_cgLut: texture_2d<f32>;
+@group(0) @binding(10) var u_cgLut_sampler: sampler;
+
+const CG_LUT_RANGE: f32 = 0.5;
 
 //#include hsl
 //#include lab
@@ -296,7 +304,11 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
         let shadowW = 1.0 - smoothstep(1.0 / 3.0 - params.u_cgWidth, 1.0 / 3.0 + params.u_cgWidth, tone);
         let highlightW = smoothstep(2.0 / 3.0 - params.u_cgWidth, 2.0 / 3.0 + params.u_cgWidth, tone);
         let midtoneW = 1.0 - shadowW - highlightW;
-        let grade = params.u_cgGlobal + params.u_cgShadows * shadowW + params.u_cgMidtones * midtoneW + params.u_cgHighlights * highlightW;
+        var grade = params.u_cgGlobal + params.u_cgShadows * shadowW + params.u_cgMidtones * midtoneW + params.u_cgHighlights * highlightW;
+        if (params.u_hasCgLut > 0.5) {
+            let s = textureSampleLevel(u_cgLut, u_cgLut_sampler, vec2<f32>(tone + LUT_HALF_TEXEL, 0.5), 0.0).rgb;
+            grade = vec4<f32>((s * 255.0 - 128.0) / 127.0 * CG_LUT_RANGE, 0.0);
+        }
         rgb = softOffset(rgb, grade.rgb + grade.a);
     }
 

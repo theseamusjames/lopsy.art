@@ -6,6 +6,10 @@ import {
   compileColorGrade,
   compileGradeWheel,
   isIdentityColorGrade,
+  DEFAULT_TONE_STOPS,
+  compileToneStopsLut,
+  toneStopTint,
+  toneStopsTintAt,
 } from './color-grading';
 
 const luma = (t: readonly number[]): number =>
@@ -130,5 +134,53 @@ describe('compileColorGrade', () => {
     expect(block[15]).toBeCloseTo(0.4);
     expect(block[16]).toBeCloseTo(0.5);
     expect(block[17]).toBeCloseTo(1 / 3);
+  });
+});
+
+describe('tone stops (#1781)', () => {
+  const stop = (position: number, r: number, g: number, b: number) => ({ position, color: { r, g, b, a: 1 } });
+
+  it('the default black-to-white stops are the identity', () => {
+    expect(isIdentityColorGrade({ ...IDENTITY_COLOR_GRADE, toneStops: DEFAULT_TONE_STOPS })).toBe(true);
+    const lut = compileToneStopsLut(DEFAULT_TONE_STOPS, 50);
+    for (let i = 0; i < 256; i++) expect([lut[i * 4], lut[i * 4 + 1], lut[i * 4 + 2]]).toEqual([128, 128, 128]);
+  });
+
+  it('a coloured stop is not the identity, whatever its brightness', () => {
+    const stops = [stop(0, 0, 0, 60), stop(1, 255, 255, 255)];
+    expect(isIdentityColorGrade({ ...IDENTITY_COLOR_GRADE, toneStops: stops })).toBe(false);
+    // Dark blue tints as strongly as bright blue: hue and saturation only.
+    expect(toneStopTint(stops[0]!)).toEqual(toneStopTint(stop(0, 0, 0, 255)));
+  });
+
+  it('tints the shadows blue and leaves the highlights alone', () => {
+    const lut = compileToneStopsLut([stop(0, 0, 0, 255), stop(1, 255, 255, 255)], 100);
+    expect(lut[2]!).toBeGreaterThan(160);
+    expect(lut[0]!).toBeLessThan(128);
+    expect([lut[255 * 4], lut[255 * 4 + 1], lut[255 * 4 + 2]]).toEqual([128, 128, 128]);
+  });
+
+  it('holds the end stops past the first and last position', () => {
+    const stops = [stop(0.25, 255, 0, 0), stop(0.75, 0, 0, 255)];
+    const sorted = [...stops];
+    const tints = sorted.map(toneStopTint);
+    expect(toneStopsTintAt(sorted, tints, 0, 50)).toEqual(tints[0]);
+    expect(toneStopsTintAt(sorted, tints, 1, 50)).toEqual(tints[1]);
+  });
+
+  it('Blend 0 switches at the midpoint; higher Blend crosses over gradually', () => {
+    const sorted = [stop(0, 255, 0, 0), stop(1, 0, 0, 255)];
+    const tints = sorted.map(toneStopTint);
+    expect(toneStopsTintAt(sorted, tints, 0.45, 0)).toEqual(tints[0]);
+    expect(toneStopsTintAt(sorted, tints, 0.55, 0)).toEqual(tints[1]);
+    const soft = toneStopsTintAt(sorted, tints, 0.45, 100);
+    expect(soft[0]).toBeLessThan(tints[0]![0]);
+    expect(soft[0]).toBeGreaterThan(tints[1]![0]);
+  });
+
+  it('sends neutral wheels when the stops carry the grade', () => {
+    const block = compileColorGrade({ ...IDENTITY_COLOR_GRADE, balance: 80, toneStops: DEFAULT_TONE_STOPS });
+    expect([...block.slice(0, 16)].every((v) => v === 0)).toBe(true);
+    expect(block[16]).toBe(1);
   });
 });

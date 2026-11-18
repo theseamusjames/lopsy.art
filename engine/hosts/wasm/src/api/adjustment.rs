@@ -288,6 +288,11 @@ pub fn set_group_channel_mixer(
     lopsy_engine::commands::adjustment::set_group_channel_mixer(&mut engine.inner, group_id, rr, rg, rb, rc, gr, gg, gb, gc, br, bg, bb, bc).map_err(|e| JsError::new(&e))
 }
 
+#[wasm_bindgen(js_name = "setGroupColorGradingLut")]
+pub fn set_group_color_grading_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> Result<(), JsError> {
+    lopsy_engine::commands::adjustment::set_group_color_grading_lut(&mut engine.inner, group_id, lut).map_err(|e| JsError::new(&e))
+}
+
 #[wasm_bindgen(js_name = "setGroupGradientMapLut")]
 pub fn set_group_gradient_map_lut(engine: &mut Engine, group_id: &str, lut: &[u8]) -> Result<(), JsError> {
     lopsy_engine::commands::adjustment::set_group_gradient_map_lut(&mut engine.inner, group_id, lut).map_err(|e| JsError::new(&e))

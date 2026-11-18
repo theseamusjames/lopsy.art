@@ -9,6 +9,13 @@ interface GradientEditorProps {
   selectedIndex: number;
   onStopsChange: (stops: readonly GradientStop[]) => void;
   onSelectStop: (index: number) => void;
+  /**
+   * CSS background for the bar in place of the stops' own gradient: a fixed
+   * axis the stops are placed along (Color Grading's black-to-white tones).
+   */
+  barBackground?: string;
+  /** Accessible name of the bar; also names the stops ("<label> stop 2"). */
+  label?: string;
 }
 
 function stopToCss(stop: GradientStop): string {
@@ -21,7 +28,9 @@ export function buildGradientCss(stops: readonly GradientStop[]): string {
   return `linear-gradient(to right, ${sorted.map(stopToCss).join(', ')})`;
 }
 
-export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectStop }: GradientEditorProps) {
+export function GradientEditor({
+  stops, selectedIndex, onStopsChange, onSelectStop, barBackground, label = 'Gradient',
+}: GradientEditorProps) {
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -89,12 +98,12 @@ export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectSt
         className={styles.barContainer}
         onClick={handleBarClick}
         role="group"
-        aria-label="Gradient bar — click to add stops"
+        aria-label={`${label} bar — click to add stops`}
         data-testid="gradient-bar"
       >
         <div
           className={styles.gradientBar}
-          style={{ '--gradient-css': buildGradientCss(sorted) } as React.CSSProperties}
+          style={{ '--gradient-css': barBackground ?? buildGradientCss(sorted) } as React.CSSProperties}
         />
       </div>
       <div className={styles.handlesRow} onClick={handleBarClick} data-testid="gradient-handles">
@@ -104,7 +113,7 @@ export function GradientEditor({ stops, selectedIndex, onStopsChange, onSelectSt
             position={stop.position}
             swatch={`rgb(${stop.color.r},${stop.color.g},${stop.color.b})`}
             active={index === selectedIndex}
-            ariaLabel={`Gradient stop ${index + 1}`}
+            ariaLabel={`${label} stop ${index + 1}`}
             ariaValueMax={100}
             ariaValueNow={Math.round(stop.position * 100)}
             onMouseDown={(e) => handleHandleMouseDown(e, index)}

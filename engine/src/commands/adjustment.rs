@@ -294,6 +294,7 @@ pub fn set_group_adjustments(
         adj.curves_texture = prev.adjustments.curves_texture;
         adj.levels_texture = prev.adjustments.levels_texture;
         adj.gradient_map_texture = prev.adjustments.gradient_map_texture;
+        adj.cg_lut_texture = prev.adjustments.cg_lut_texture;
     }
     engine.groups.adjustments.insert(
         group_id.to_string(),
@@ -312,6 +313,9 @@ pub fn remove_group_adjustment(engine: &mut EngineInner, group_id: &str) {
             engine.texture_pool.release(t);
         }
         if let Some(t) = ga.adjustments.gradient_map_texture {
+            engine.texture_pool.release(t);
+        }
+        if let Some(t) = ga.adjustments.cg_lut_texture {
             engine.texture_pool.release(t);
         }
         if let Some(t) = engine.groups.pre_adj_cache.remove(group_id) {
@@ -376,6 +380,7 @@ pub fn clear_group_adjustments(engine: &mut EngineInner) {
             if let Some(t) = ga.adjustments.curves_texture { v.push(t); }
             if let Some(t) = ga.adjustments.levels_texture { v.push(t); }
             if let Some(t) = ga.adjustments.gradient_map_texture { v.push(t); }
+            if let Some(t) = ga.adjustments.cg_lut_texture { v.push(t); }
             v
         })
         .collect();
@@ -443,6 +448,30 @@ pub fn set_group_color_grading(engine: &mut EngineInner, group_id: &str, values:
     ga.adjustments.cg_exponent   = values[16];
     ga.adjustments.cg_width      = values[17];
     ga.adjustments.cg_enabled    = true;
+    engine.needs_recomposite = true;
+    Ok(())
+}
+
+/// Color Grading's tone stops as a 256x1 RGBA tint-by-tone LUT (built by
+/// `compileToneStopsLut`). Call after `set_group_color_grading`, which
+/// enables the stage; the LUT then replaces the wheels' grade.
+pub fn set_group_color_grading_lut(engine: &mut EngineInner, group_id: &str, lut: &[u8]) -> Result<(), String> {
+    if lut.len() != 256 * 4 {
+        return Err("Color grading LUT must be exactly 256 * 4 bytes".to_string());
+    }
+    let existing = engine.groups.adjustments.get(group_id)
+        .ok_or_else(|| "Group not found — call setGroupAdjustments first".to_string())?
+        .adjustments.cg_lut_texture;
+    let tex = match existing {
+        Some(t) => t,
+        None => {
+            let t = engine.texture_pool.acquire(256, 1)?;
+            if let Some(g) = engine.groups.adjustments.get_mut(group_id) { g.adjustments.cg_lut_texture = Some(t); }
+            t
+        }
+    };
+    engine.texture_pool.upload_rgba(tex, 0, 0, 256, 1, lut)?;
+    if let Some(g) = engine.groups.adjustments.get_mut(group_id) { g.adjustments.has_cg_lut = true; }
     engine.needs_recomposite = true;
     Ok(())
 }
