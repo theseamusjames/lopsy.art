@@ -14,6 +14,7 @@ import { decodeSegment, encodeSegment, parseSegmentName, SEGMENT_MIME_TYPE, segm
 import { ROLES } from './layout';
 import type { LocalStore, LocalStorePatch, SyncBookkeeping } from './local-store';
 import type { ChangedEntity, MergeStore } from './merge-store';
+import { rollUpSegments } from './rollup';
 import { snapshotName, writeSnapshot } from './snapshot';
 import type { LibraryLayout, OpEnvelope, SyncStatus } from './types';
 
@@ -44,6 +45,7 @@ export const NEWER_APP_MESSAGE = 'Another device uses a newer version of Lopsy P
 /** Segments hold at most this many ops, so one huge import does not make one huge file. */
 const MAX_OPS_PER_SEGMENT = 10_000;
 const MAX_PROBLEMS = 100;
+const DEFAULT_ROLLUP_AT = 20;
 
 export interface SyncEngineOptions {
   readonly adapter: StorageAdapter;
@@ -63,6 +65,8 @@ export interface SyncEngineOptions {
   readonly autoSync: boolean;
   /** The library's schema is newer than this app: read, never write (spec 6.6). */
   readonly readOnly?: boolean;
+  /** Roll up this device's segments once this many small ones have been written (default 20). */
+  readonly rollUpAt?: number;
   readonly timers?: SyncTimers;
   /** Called after remote ops changed the store. */
   readonly onApplied: (changed: readonly ChangedEntity[]) => void;
@@ -97,6 +101,7 @@ export class SyncEngine {
   private stateDirty = false;
   private lastStateSave: number;
   private newerSeen = false;
+  private segmentsSinceRollUp = 0;
   /** The latest segments or lines that could not be read, for diagnostics. */
   readonly problems: string[] = [];
 
@@ -156,6 +161,7 @@ export class SyncEngine {
       await this.flush();
       await this.pull();
       await this.maybeSnapshot();
+      await this.maybeRollUp();
     }, true);
   }
 
@@ -234,6 +240,7 @@ export class SyncEngine {
       this.outbox = this.outbox.filter((op) => op.seq > last);
       this.bk.flushedSeq = Math.max(this.bk.flushedSeq, last);
       this.bk.vector[this.o.deviceId] = this.bk.flushedSeq;
+      this.segmentsSinceRollUp += 1;
       // The saved outbox keeps these ops until a saved state holds them (saveState): pulls skip this device's folder.
       this.stateDirty = true;
       this.persist({ sync: this.bookkeeping() });
@@ -344,7 +351,15 @@ export class SyncEngine {
     for (const { file, range } of segments) {
       let ops: OpEnvelope[];
       try {
-        const decoded = await decodeSegment(await this.o.adapter.readContent(file.id), { device, range });
+        let content: Blob;
+        try {
+          content = await this.o.adapter.readContent(file.id);
+        } catch (error) {
+          // Rolled up and deleted since the listing; the roll-up is read next time.
+          if (isStorageError(error) && error.code === 'not-found') continue;
+          throw error;
+        }
+        const decoded = await decodeSegment(content, { device, range });
         for (const e of decoded.errors) this.report(`${device}/${file.name} line ${e.line}: ${e.reason}`);
         ops = decoded.ops;
         if (decoded.errors.some((e) => e.newer)) {
@@ -407,6 +422,27 @@ export class SyncEngine {
     this.bk.snapshot = snapshotName(hlc, this.o.deviceId);
     this.bk.opsSinceSnapshot = 0;
     this.persist({ sync: this.bookkeeping() });
+  }
+
+  private async maybeRollUp(): Promise<void> {
+    if (this.o.readOnly || this.deviceFolderId === null) return;
+    const minRun = this.o.rollUpAt ?? DEFAULT_ROLLUP_AT;
+    if (this.segmentsSinceRollUp < minRun) return;
+    try {
+      const result = await rollUpSegments({
+        adapter: this.o.adapter,
+        folderId: this.deviceFolderId,
+        deviceId: this.o.deviceId,
+        libraryId: this.o.layout.libraryId,
+        throughSeq: this.bk.flushedSeq,
+        minRun,
+      });
+      for (const problem of result.problems) this.report(problem);
+      this.segmentsSinceRollUp = 0;
+    } catch (error) {
+      // Housekeeping only: the journal is complete without it, so it waits for the next sync.
+      this.report(`Roll-up failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private report(problem: string): void {

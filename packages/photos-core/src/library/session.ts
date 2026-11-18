@@ -44,6 +44,8 @@ export interface OpenLibraryOptions {
   /** Write a snapshot after this many ops applied since the last one (spec: 5,000). */
   readonly snapshotEvery?: number;
   readonly timers?: SyncTimers;
+  /** Roll up this device's journal segments after this many small ones (default 20). */
+  readonly rollUpAt?: number;
 }
 
 export const DEFAULT_SNAPSHOT_EVERY = 5000;
@@ -528,6 +530,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<LibraryS
         snapshotEvery: options.snapshotEvery ?? DEFAULT_SNAPSHOT_EVERY,
         autoSync: options.autoSync ?? true,
         readOnly,
+        ...(options.rollUpAt !== undefined ? { rollUpAt: options.rollUpAt } : {}),
         ...(options.timers ? { timers: options.timers } : {}),
         onApplied,
       }),
