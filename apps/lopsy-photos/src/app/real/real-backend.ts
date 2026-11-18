@@ -479,6 +479,19 @@ export class RealBackend implements PhotosBackend {
         core = { getProgress: () => result, cancel: () => {} };
         refresh();
         if (request.destination === 'download') downloadResult(result);
+        if (request.destination === 'library' && result.folderId !== null) {
+          const folderId = result.folderId;
+          const webLink = session.adapter.webLink ? await session.adapter.webLink(folderId).catch(() => null) : null;
+          snapshot = { ...snapshot, folder: { id: folderId, name: request.name, webLink } };
+          notify();
+          if (webLink !== null) {
+            const where = session.adapter.kind === 'google-drive' ? 'Drive' : 'storage';
+            showToast(`Exported to “${request.name}”. Share it from the sync panel.`, 12_000, {
+              label: `Show in ${where}`,
+              run: () => window.open(webLink, '_blank', 'noopener'),
+            });
+          }
+        }
         return snapshot;
       },
       (error: unknown) => fail(messageOf(error)),
