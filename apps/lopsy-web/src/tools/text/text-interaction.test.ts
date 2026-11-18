@@ -58,6 +58,7 @@ const editorState = {
   updateTextLayerProperties: vi.fn(),
   setActiveLayer: vi.fn(),
   addTextLayer: vi.fn(),
+  captureHistoryMetadata: vi.fn((label: string) => ({ kind: 'metadata', label })),
 };
 vi.mock('../../app/editor-store', () => ({
   useEditorStore: { getState: () => editorState },
@@ -735,11 +736,17 @@ describe('pre-edit history snapshot (#813)', () => {
     expect(editorState.pushHistory).not.toHaveBeenCalled();
   });
 
-  it('cancel on a new layer removes it and frees the copy', () => {
+  it('a new layer defers its Add Text Layer row', () => {
+    handleTextUp(makeState({ startPoint: { x: 40, y: 40 } }), { x: 40, y: 40 });
+    expect(editorState.captureHistoryMetadata).toHaveBeenCalledWith('Add Text Layer');
+    expect(editorState.addTextLayer.mock.calls[0]![1]).toEqual({ recordHistory: false });
+  });
+
+  it('cancel on a new layer removes it without history (#1783) and frees the copy', () => {
     handleTextUp(makeState({ startPoint: { x: 40, y: 40 } }), { x: 40, y: 40 });
     const added = editorState.addTextLayer.mock.calls[0]![0] as TextLayer;
     cancelTextEditing();
-    expect(editorState.removeLayer).toHaveBeenCalledWith(added.id);
+    expect(editorState.removeLayer).toHaveBeenCalledWith(added.id, { recordHistory: false });
     expect(releaseGpuSnapshot).toHaveBeenCalledWith(engine, 7);
     expect(restoreFromGpuSnapshot).not.toHaveBeenCalled();
   });

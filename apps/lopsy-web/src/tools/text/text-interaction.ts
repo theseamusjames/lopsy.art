@@ -40,6 +40,7 @@ import {
 import { wordAt } from './text-input';
 import { colorSpansProp, normalizeColorSpans } from './text-color-spans';
 import { extractFamilyName } from '../../utils/font-loader';
+import { deferHistoryEntry, discardDeferredHistoryEntry } from '../../app/store/deferred-history';
 
 const TEXT_DRAG_THRESHOLD = 4;
 
@@ -123,14 +124,29 @@ export function cancelTextEditing(): void {
   const editing = uiState.textEditing;
   if (!editing) return;
   uiState.cancelTextEditing();
-  const editorState = useEditorStore.getState();
   if (editing.isNew) {
-    discardPreEdit();
-    editorState.removeLayer(editing.layerId);
+    discardNewTextLayer(editing.layerId);
   } else {
     restorePreEdit(editing.layerId);
   }
   useEditorStore.getState().notifyRender();
+}
+
+/**
+ * Remove a text layer whose session ended with no text. Its "Add Text Layer"
+ * row was deferred and is dropped with it, so the session leaves no history
+ * and the redo stack survives (#1783).
+ */
+function discardNewTextLayer(layerId: string): void {
+  discardPreEdit();
+  const editorState = useEditorStore.getState();
+  if (discardDeferredHistoryEntry(layerId)) {
+    editorState.removeLayer(layerId, { recordHistory: false });
+    return;
+  }
+  // The row was already recorded (an undo/redo or another history change
+  // happened mid-session), so the removal needs its own row.
+  editorState.removeLayer(layerId);
 }
 
 /** Reset transient click/drag state. For test isolation only. */
@@ -269,8 +285,7 @@ export function commitTextEditing(): void {
   // If no text was entered, just cancel.
   if (editing.text.trim() === '') {
     if (editing.isNew) {
-      discardPreEdit();
-      editorState.removeLayer(editing.layerId);
+      discardNewTextLayer(editing.layerId);
     } else {
       restorePreEdit(editing.layerId);
       useEditorStore.getState().updateTextLayerProperties(editing.layerId, { visible: editing.originalVisible });
@@ -625,7 +640,8 @@ export function handleTextUp(state: InteractionState, canvasPos: Point): void {
     vertical: text.vertical,
     visible: true, // GPU renders text preview in real-time
   };
-  editorState.addTextLayer(addedLayer);
+  deferHistoryEntry(editorState.captureHistoryMetadata('Add Text Layer'), newLayer.id);
+  editorState.addTextLayer(addedLayer, { recordHistory: false });
 
   const editingState: TextEditingState = {
     layerId: newLayer.id,
