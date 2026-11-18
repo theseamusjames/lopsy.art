@@ -25,6 +25,19 @@ export const LIMITS = {
 
 const KINDS: ReadonlySet<string> = new Set<EntityKind>(['asset', 'version', 'album', 'setting']);
 
+const UNSAFE_SEGMENTS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** Field paths become object keys when records are built, so prototype-touching names are refused. */
+export function isSafePath(path: string): boolean {
+  // The same few hundred paths recur in every op, so each is split once.
+  if (safePaths.has(path)) return true;
+  const safe = path.split('.').every((segment) => !UNSAFE_SEGMENTS.has(segment));
+  if (safe && safePaths.size < 10_000) safePaths.add(path);
+  return safe;
+}
+
+const safePaths = new Set<string>();
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -39,6 +52,10 @@ export function isEntityKind(value: unknown): value is EntityKind {
 
 /** Whether `value` is JSON within the depth, size and string-length caps. */
 export function isBoundedJson(value: unknown): value is Json {
+  // Most values are scalars; they skip the walk.
+  if (value === null || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') return value.length <= LIMITS.stringLength;
   let nodes = 0;
   const walk = (v: unknown, depth: number): boolean => {
     nodes += 1;
@@ -80,7 +97,7 @@ function validateOp(value: unknown): Op | string {
     if (entries.length === 0 || entries.length > LIMITS.fieldsPerOp) return 'op.fields has a bad size';
     const out: Record<string, Json> = {};
     for (const [path, v] of entries) {
-      if (!isBoundedString(path, LIMITS.fieldPathLength)) return 'op.fields has an invalid path';
+      if (!isBoundedString(path, LIMITS.fieldPathLength) || !isSafePath(path)) return 'op.fields has an invalid path';
       if (!isBoundedJson(v)) return `op.fields.${path} is not bounded JSON`;
       out[path] = v;
     }

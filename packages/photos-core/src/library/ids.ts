@@ -1,7 +1,22 @@
 /** UUIDv7 (spec 7): time-ordered, so IDs made on one device sort by creation. */
+const POOL_IDS = 256;
+let pool = new Uint8Array(0);
+let poolOffset = 0;
+
+/** Random bytes drawn from a pool refilled 4 KiB at a time: one getRandomValues per 256 IDs. */
+function randomBytes16(): Uint8Array {
+  if (poolOffset + 16 > pool.length) {
+    pool = new Uint8Array(16 * POOL_IDS);
+    crypto.getRandomValues(pool);
+    poolOffset = 0;
+  }
+  const bytes = pool.slice(poolOffset, poolOffset + 16);
+  poolOffset += 16;
+  return bytes;
+}
+
 export function newId(now: number = Date.now()): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
+  const bytes = randomBytes16();
   let ms = Math.max(0, Math.floor(now));
   for (let i = 5; i >= 0; i--) {
     bytes[i] = ms % 256;
