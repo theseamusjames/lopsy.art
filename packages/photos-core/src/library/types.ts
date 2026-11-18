@@ -326,6 +326,13 @@ export interface LibrarySession {
   renameExportPreset(presetId: ExportPresetId, name: string): void;
   deleteExportPreset(presetId: ExportPresetId): void;
 
+  /**
+   * Resolves once every command made so far is saved on this device, so it
+   * survives the tab closing; rejects if that save failed. Await it before
+   * an action that cannot be taken back, such as trashing files or
+   * deleting a staged import.
+   */
+  whenDurable(): Promise<void>;
   /** Writes queued ops and reads other devices' now. */
   syncNow(): Promise<void>;
   getSyncStatus(): SyncStatus;

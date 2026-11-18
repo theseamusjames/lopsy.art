@@ -84,6 +84,12 @@ export interface EnsureLibraryOptions {
    * other roots' journals, so duplicate roots lose nothing.
    */
   readonly preferLibraryId?: string;
+  /**
+   * That library's root folder ID, looked up directly when a property
+   * search misses it (Drive's search index can lag), so a device does not
+   * switch roots and strand what it has not uploaded yet.
+   */
+  readonly preferRootId?: string;
 }
 
 export interface EnsuredLibrary {
@@ -185,6 +191,10 @@ export async function ensureLibrary(adapter: StorageAdapter, options: EnsureLibr
   const now = options.now ?? Date.now;
   let created = false;
   const roots = (await adapter.findByProperty('lp.role', ROLES.library)).filter((f) => f.isFolder);
+  if (options.preferRootId !== undefined && !roots.some((r) => r.id === options.preferRootId)) {
+    const stored = await adapter.getFile(options.preferRootId).catch(() => null);
+    if (stored && stored.isFolder && !stored.trashed && stored.properties['lp.role'] === ROLES.library) roots.push(stored);
+  }
   let root = roots.find((r) => options.preferLibraryId !== undefined && r.properties['lp.lib'] === options.preferLibraryId) ?? pick(roots);
   if (!root) {
     const top = await adapter.getRoot();

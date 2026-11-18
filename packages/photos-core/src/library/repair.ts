@@ -18,6 +18,11 @@ export interface RepairReport {
   readonly assetsChecked: number;
   /** Tagged originals of this library with no asset: re-import these. */
   readonly orphans: readonly FileId[];
+  /**
+   * Originals of deleted photos still outside the storage's trash (a trash
+   * that failed part-way): offer Move to trash for these.
+   */
+  readonly leftovers: readonly FileId[];
   readonly missing: readonly AssetId[];
   readonly trashed: readonly AssetId[];
   /** The checksum in storage differs from the one recorded at import. */
@@ -46,11 +51,15 @@ export async function repairLibrary(session: PhotosLibrarySession): Promise<Repa
   const known = new Set<FileId>();
   const found: Record<OriginalStatus, AssetId[]> = { ok: [], missing: [], trashed: [], changed: [] };
   const restored: AssetId[] = [];
+  const leftovers: FileId[] = [];
   let assetsChecked = 0;
   for (const asset of view.assets.values()) {
     if (asset.kind !== 'original') continue;
     known.add(asset.fileId);
-    if (asset.deleted) continue;
+    if (asset.deleted) {
+      if (byId.has(asset.fileId)) leftovers.push(asset.fileId);
+      continue;
+    }
     assetsChecked += 1;
     // Trashed files are not listed by tag, so anything not found is looked up by ID.
     const file = byId.get(asset.fileId) ?? (await adapter.getFile(asset.fileId));
@@ -74,6 +83,7 @@ export async function repairLibrary(session: PhotosLibrarySession): Promise<Repa
     originalsFound: tagged.length,
     assetsChecked,
     orphans: tagged.filter((f) => !known.has(f.id)).map((f) => f.id),
+    leftovers,
     missing: found.missing,
     trashed: found.trashed,
     changed: found.changed,

@@ -256,6 +256,7 @@ export class FakeBackend implements PhotosBackend {
       originalsFound: assets.length,
       assetsChecked: assets.length,
       orphans: [],
+      leftovers: [],
       missing: by('missing'),
       trashed: by('trashed'),
       changed: by('changed'),
@@ -311,6 +312,7 @@ export class FakeBackend implements PhotosBackend {
     const view = session.getView();
     // The record first, then the files (as the real backend does).
     session.deleteAssets(assetIds);
+    await session.whenDurable();
     for (const id of assetIds) {
       const asset = view.assets.get(id);
       if (asset) await session.adapter.trash(asset.fileId);

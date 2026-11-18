@@ -44,6 +44,10 @@ export async function trashAssets(session: LibrarySession, assetIds: readonly As
 
   // The record first: throws (read-only, lock lost) before any file moves.
   raw.deleteAssets([...ids]);
+  // And saved on this device before anything is trashed: a tab that dies in
+  // between must not bring the photos back with their originals in a trash
+  // that empties itself.
+  await raw.whenDurable();
 
   const failed: string[] = [];
   for (const fileId of originals) {

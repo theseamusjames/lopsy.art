@@ -199,6 +199,8 @@ export class SyncEngine {
   private segmentsSinceRollUp = 0;
   /** The highest seq of this device whose outbox write has committed; only those ops are uploaded. */
   private committedSeq: number;
+  /** The highest seq queued on this device. */
+  private lastEnqueuedSeq = 0;
   /** The vector that the state saved on the device holds; the saved bookkeeping never claims more. */
   private savedVector: VectorPair;
   private settingsDirty = false;
@@ -216,6 +218,7 @@ export class SyncEngine {
     const b = options.bookkeeping;
     this.outbox = options.outbox.filter((op) => op.seq > b.flushedSeq).sort((x, y) => x.seq - y.seq);
     this.committedSeq = options.outbox.reduce((m, op) => Math.max(m, op.seq), b.flushedSeq);
+    this.lastEnqueuedSeq = this.committedSeq;
     this.savedVector = copyVector({ vector: b.vector, ahead: b.appliedAhead });
     this.lastStateSave = options.now();
     this.bk = {
@@ -266,6 +269,7 @@ export class SyncEngine {
   /** Queues ops made on this device. They are already applied to the store. */
   enqueue(ops: readonly OpEnvelope[], nextSeq: number): void {
     if (ops.length === 0) return;
+    this.lastEnqueuedSeq = Math.max(this.lastEnqueuedSeq, ...ops.map((op) => op.seq));
     this.outbox.push(...ops);
     this.bk.opsSinceSnapshot += ops.length;
     this.stateDirty = true;
@@ -362,7 +366,8 @@ export class SyncEngine {
    * issued again to a different op, which other devices would never read.
    */
   private async flush(): Promise<void> {
-    await this.persistQueue;
+    // Also retries a device write that failed before, so ops it held can commit.
+    await this.whenDurable().catch(() => undefined);
     for (;;) {
       if (this.lost) return;
       const batch = this.outbox.filter((op) => op.seq <= this.committedSeq).slice(0, MAX_OPS_PER_SEGMENT);
@@ -655,6 +660,9 @@ export class SyncEngine {
   private async maybeSnapshot(): Promise<void> {
     if (this.readOnly) return;
     if (this.bk.opsSinceSnapshot < this.o.snapshotEvery) return;
+    // A snapshot must not hold an op whose seq could be issued again after a crash.
+    await this.whenDurable().catch(() => undefined);
+    if (this.committedSeq < this.lastEnqueuedSeq) return;
     const hlc = this.o.stamp();
     await writeSnapshot(this.o.adapter, this.layout.snapshotsId, {
       format: 1,
@@ -774,13 +782,31 @@ export class SyncEngine {
       } catch (error) {
         console.error('Could not save library state on this device', error);
         this.setStatus({ state: 'error', error: 'Could not save changes on this device' });
-        // Kept, ahead of anything queued since, and retried with the next write.
-        const newer = this.pending as PendingPatch | null;
-        const retry: PendingPatch = { append: [] };
-        addToPending(retry, merged, next.stateVector);
-        if (newer) addToPending(retry, pendingAsPatch(newer), newer.stateVector);
-        this.pending = retry;
+        // The large state is the likeliest to fail (a nearly full disk): it is
+        // dropped and saved afresh later, while the small, vital part (the
+        // outbox and the seq counter) is retried at once in its own write, so
+        // a state that keeps failing never stops ops from committing.
         if (next.state !== undefined) this.stateDirty = true;
+        const vital: LocalStorePatch = {
+          ...(next.deviceId !== undefined ? { deviceId: next.deviceId } : {}),
+          ...(next.nextSeq !== undefined ? { nextSeq: next.nextSeq } : {}),
+          ...(next.append.length > 0 ? { appendOutbox: next.append } : {}),
+          ...(next.layout !== undefined ? { layout: next.layout } : {}),
+        };
+        if (next.state === undefined || Object.keys(vital).length === 0) {
+          this.requeue(vital);
+          return;
+        }
+        try {
+          await this.o.local.write(this.layout.libraryId, vital);
+        } catch (vitalError) {
+          console.error('Could not save changes on this device', vitalError);
+          this.requeue(vital);
+          return;
+        }
+        if (next.append.length > 0) {
+          this.committedSeq = Math.max(this.committedSeq, ...next.append.map((op) => op.seq));
+        }
         return;
       }
       if (next.append.length > 0) {
@@ -788,6 +814,32 @@ export class SyncEngine {
       }
       if (next.stateVector) this.savedVector = next.stateVector;
     });
+  }
+
+  /** Puts a failed write back, ahead of anything queued since, to go with the next one. */
+  private requeue(patch: LocalStorePatch): void {
+    const newer = this.pending as PendingPatch | null;
+    const retry: PendingPatch = { append: [] };
+    addToPending(retry, patch, undefined);
+    if (newer) addToPending(retry, pendingAsPatch(newer), newer.stateVector);
+    this.pending = retry;
+  }
+
+  /**
+   * Resolves once every command so far is saved on this device, so it
+   * survives the tab closing; rejects when that write failed. Callers do
+   * this before an action that cannot be undone, such as trashing files.
+   */
+  async whenDurable(): Promise<void> {
+    // A few rounds: writes queued meanwhile, and one more try of a write that was put back.
+    for (let round = 0; round < 4; round++) {
+      await this.persistQueue;
+      if (this.pending === null) break;
+      if (!this.pendingQueued) this.drain();
+    }
+    await this.persistQueue;
+    if (this.lost) throw new Error('Opened in another tab.');
+    if (this.committedSeq < this.lastEnqueuedSeq) throw new Error('Could not save changes on this device.');
   }
 
   private setStatus(patch: Partial<SyncStatus>): void {
