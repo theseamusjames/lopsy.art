@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { StorageError } from '../storage/errors';
 import { sha256Hex } from './hash';
-import { resumeImports, startImport, uploadResumeKey } from './importer';
+import { InProcessImportLocks } from './claim-locks';
+import { DEFAULT_LEASE_MS, resumeImports, startImport, uploadResumeKey } from './importer';
 import type { ImportContext } from './importer';
 import { MemoryImportQueueStore } from './queue-store';
 import { MemoryStagingStore } from './staging';
@@ -126,9 +127,11 @@ describe('resumable imports', () => {
     );
 
     // The old tab's lease is still fresh by the clock; a reload takes over once it has lapsed.
-    expect(await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: () => DAY })).toBeNull();
-    const later = () => new Date(DAY.getTime() + 60_000);
-    const job = await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: later });
+    // The reloaded page has its own locks: the old page's are gone with it.
+    const reloaded = new InProcessImportLocks();
+    expect(await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: () => DAY, locks: reloaded })).toBeNull();
+    const later = () => new Date(DAY.getTime() + DEFAULT_LEASE_MS + 1_000);
+    const job = await resumeImports({ session, previewRenderer: renderer, queueStore, staging, now: later, locks: reloaded });
     const result = await job?.finished;
     expect(result?.items.map((i) => i.state)).toEqual(['done', 'done', 'done']);
     expect(session.getView().assets.size).toBe(4);
