@@ -20,7 +20,7 @@ function watch(page: Page): Problems {
   page.on('pageerror', (error) => problems.list.push(`page error: ${error.message}`));
   page.on('requestfailed', (request) => problems.list.push(`failed: ${request.url()} ${request.failure()?.errorText ?? ''}`));
   page.on('response', (response) => {
-    if (response.status() >= 400 && new URL(response.url()).hostname === 'localhost') {
+    if (response.status() >= 400 && ['localhost', '127.0.0.1'].includes(new URL(response.url()).hostname)) {
       problems.list.push(`${response.status()}: ${response.url()}`);
     }
   });
