@@ -6,8 +6,11 @@
 //! [`Task`], and [`readback_export!`] turns one definition into the export
 //! for each backend:
 //!
-//! - WebGL answers every read before it returns, so the task finishes in
-//!   one poll and the export returns its value as any other export does.
+//! - WebGL answers a read before it returns, so the task finishes in one
+//!   poll and the export returns its value as any other export does. An
+//!   export declared with [`deferred_readback_export!`] is the exception:
+//!   its read waits for a fence (`gpu/webgl/read.rs`) and answers later,
+//!   as on WebGPU.
 //! - WebGPU answers later. The export returns the value if the task
 //!   finished at once, and otherwise an object `{ lopsyTask, ready }`: JS
 //!   awaits `ready` and calls `resumeTask(engine, lopsyTask)`, which
@@ -40,10 +43,8 @@ pub(crate) fn finish<T>(engine: &mut lopsy_engine::engine::EngineInner, mut task
     }
 }
 
-#[cfg(feature = "wgpu")]
 pub(crate) use later::{start, Tasks};
 
-#[cfg(feature = "wgpu")]
 mod later {
     use std::collections::HashMap;
     use std::task::Poll;
@@ -189,3 +190,27 @@ macro_rules! readback_export {
     };
 }
 pub(crate) use readback_export;
+
+/// Declares an export whose read may answer later on both backends: on
+/// WebGL the command runs inside `gpu::deferred`, so its read waits for the
+/// GPU to catch up instead of blocking on it (#1767). For reads that change
+/// nothing when they land (thumbnails) and for the lazy mask read; the
+/// command must do nothing with the pixels inside the engine. JS wraps it
+/// in `asyncReadback` like any other readback. A task that fails answers
+/// `T::default()`.
+macro_rules! deferred_readback_export {
+    (
+        $(#[$meta:meta])*
+        pub fn $name:ident($engine:ident $(, $arg:ident : $ty:ty)* $(,)?) -> $ok:ty $start:block
+    ) => {
+        $(#[$meta])*
+        pub fn $name($engine: &mut $crate::Engine $(, $arg: $ty)*) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue> {
+            let task: lopsy_engine::task::Task<Result<$ok, String>> = {
+                let $engine = &mut $engine.inner;
+                lopsy_engine::gpu::deferred(|| $start)
+            };
+            $crate::readback::start($engine, task.map(|result| Ok(result.unwrap_or_default())))
+        }
+    };
+}
+pub(crate) use deferred_readback_export;
