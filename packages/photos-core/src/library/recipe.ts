@@ -158,7 +158,16 @@ export interface Recipe {
     readonly saturation: number;
   };
   readonly finish: {
+    /** Vignette amount, -100..100; positive darkens the corners (the engine's Finish takes it negated). */
     readonly vignette: number;
+    /** Where the falloff is centred, 0..100 (engine/core/src/finish.rs). */
+    readonly vignetteSize: number;
+    /** -100 (rectangle) .. 0 (the frame's ellipse) .. 100 (circle). */
+    readonly vignetteRoundness: number;
+    /** Width of the falloff, 0..100. */
+    readonly vignetteFeather: number;
+    /** Film grain, each 0..100; the per-photo seed is the app's, not the recipe's. */
+    readonly grain: { readonly amount: number; readonly size: number; readonly roughness: number };
   };
   readonly framing: {
     readonly rotate: QuarterTurns;
@@ -211,6 +220,12 @@ export const RECIPE_RANGES: Readonly<Record<string, RecipeRange>> = {
   'color.vibrance': { min: -100, max: 100, step: 1 },
   'color.saturation': { min: -100, max: 100, step: 1 },
   'finish.vignette': { min: -100, max: 100, step: 1 },
+  'finish.vignetteSize': { min: 0, max: 100, step: 1 },
+  'finish.vignetteRoundness': { min: -100, max: 100, step: 1 },
+  'finish.vignetteFeather': { min: 0, max: 100, step: 1 },
+  'finish.grain.amount': { min: 0, max: 100, step: 1 },
+  'finish.grain.size': { min: 0, max: 100, step: 1 },
+  'finish.grain.roughness': { min: 0, max: 100, step: 1 },
   ...Object.fromEntries(
     HUE_BANDS.flatMap((band) =>
       (['hue', 'saturation', 'luminance'] as const).map((field) => [
@@ -280,13 +295,29 @@ const NEUTRAL_WHEEL: GradeWheel = { hue: 0, saturation: 0, luminance: 0 };
 /** Lopsy's DEFAULT_GRADE_BLENDING. */
 const DEFAULT_BLENDING = 50;
 
+/**
+ * The shaped vignette's defaults reproduce the amount-only one it replaces
+ * (`filters/vignette.wgsl`: the frame's ellipse, smoothstep 0.5..1.2 of
+ * the corner distance). In engine/core/src/finish.rs the falloff's
+ * midpoint is 0.25 + 0.95·size/100 and its width 0.05 + 0.95·feather/100,
+ * so midpoint 0.85 and width 0.7 give these; roundness 0 is the ellipse.
+ */
+export const DEFAULT_VIGNETTE_SIZE = 6000 / 95;
+export const DEFAULT_VIGNETTE_FEATHER = 6500 / 95;
+
 export const DEFAULT_RECIPE: Recipe = {
   pipeline: PIPELINE_VERSION,
   profile: { id: 'standard' },
   whiteBalance: { mode: 'asShot', temperature: 0, tint: 0 },
   tone: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0 },
   color: { vibrance: 0, saturation: 0 },
-  finish: { vignette: 0 },
+  finish: {
+    vignette: 0,
+    vignetteSize: DEFAULT_VIGNETTE_SIZE,
+    vignetteRoundness: 0,
+    vignetteFeather: DEFAULT_VIGNETTE_FEATHER,
+    grain: { amount: 0, size: 25, roughness: 50 },
+  },
   framing: { rotate: 0, flipH: false, flipV: false, angle: 0, crop: null },
   localContrast: { large: 0, small: 0, haze: 0 },
   // No sharpening by default, RAW included: the owner's choice (spec 5.4).
@@ -335,6 +366,12 @@ export function recipeToPaths(recipe: Recipe): Record<string, RecipeLeaf> {
   for (const [key, value] of Object.entries(recipe.tone)) out[`tone.${key}`] = value;
   for (const [key, value] of Object.entries(recipe.color)) out[`color.${key}`] = value;
   out['finish.vignette'] = recipe.finish.vignette;
+  out['finish.vignetteSize'] = recipe.finish.vignetteSize;
+  out['finish.vignetteRoundness'] = recipe.finish.vignetteRoundness;
+  out['finish.vignetteFeather'] = recipe.finish.vignetteFeather;
+  out['finish.grain.amount'] = recipe.finish.grain.amount;
+  out['finish.grain.size'] = recipe.finish.grain.size;
+  out['finish.grain.roughness'] = recipe.finish.grain.roughness;
   out['framing.rotate'] = recipe.framing.rotate;
   out['framing.flipH'] = recipe.framing.flipH;
   out['framing.flipV'] = recipe.framing.flipV;
@@ -600,7 +637,17 @@ export function recipeFromPaths(paths: Readonly<Record<string, unknown>>): Recip
       vibrance: num('color.vibrance', d.color.vibrance),
       saturation: num('color.saturation', d.color.saturation),
     },
-    finish: { vignette: num('finish.vignette', d.finish.vignette) },
+    finish: {
+      vignette: num('finish.vignette', d.finish.vignette),
+      vignetteSize: num('finish.vignetteSize', d.finish.vignetteSize),
+      vignetteRoundness: num('finish.vignetteRoundness', d.finish.vignetteRoundness),
+      vignetteFeather: num('finish.vignetteFeather', d.finish.vignetteFeather),
+      grain: {
+        amount: num('finish.grain.amount', d.finish.grain.amount),
+        size: num('finish.grain.size', d.finish.grain.size),
+        roughness: num('finish.grain.roughness', d.finish.grain.roughness),
+      },
+    },
     framing: {
       rotate: rotate === 90 || rotate === 180 || rotate === 270 ? rotate : 0,
       flipH: paths['framing.flipH'] === true,
@@ -652,7 +699,16 @@ export function recipeFromPaths(paths: Readonly<Record<string, unknown>>): Recip
 }
 
 const LATER_GROUPS = ['curves.', 'colorByHue.', 'colorGrading.', 'localContrast.', 'sharpness.', 'noise.'];
-const LATER_PATHS: ReadonlySet<string> = new Set(['framing.angle', 'framing.flipV']);
+const LATER_PATHS: ReadonlySet<string> = new Set([
+  'framing.angle',
+  'framing.flipV',
+  'finish.vignetteSize',
+  'finish.vignetteRoundness',
+  'finish.vignetteFeather',
+  'finish.grain.amount',
+  'finish.grain.size',
+  'finish.grain.roughness',
+]);
 
 function isLaterPath(path: string): boolean {
   return LATER_PATHS.has(path) || LATER_GROUPS.some((g) => path.startsWith(g));
