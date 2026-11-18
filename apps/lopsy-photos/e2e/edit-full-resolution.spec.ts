@@ -162,7 +162,7 @@ test('a full-size export from the working image matches the export renderer’s'
   await page.getByRole('button', { name: /^Export 1/ }).click();
   await page.getByRole('radio', { name: /^JPEG/ }).check();
   await page.getByRole('slider', { name: /Quality/ }).fill('92');
-  await page.getByRole('combobox', { name: 'Size' }).selectOption({ label: 'Full size' });
+  await page.getByRole('combobox', { name: 'Size' }).selectOption({ label: 'Original size' });
   await page.getByRole('radio', { name: 'Download to this computer' }).check();
   const fromRenderer = page.waitForEvent('download', { timeout: 300_000 });
   await page.getByRole('button', { name: 'Export', exact: true }).click();
