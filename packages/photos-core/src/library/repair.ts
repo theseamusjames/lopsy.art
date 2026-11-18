@@ -52,12 +52,27 @@ export async function repairLibrary(session: PhotosLibrarySession): Promise<Repa
   const found: Record<OriginalStatus, AssetId[]> = { ok: [], missing: [], trashed: [], changed: [] };
   const restored: AssetId[] = [];
   const leftovers: FileId[] = [];
+  // Every file a live photo still uses: a deleted photo's file is a leftover only when none does
+  // (two records can share a file ID, from a buggy or hostile device).
+  const inUse = new Set<FileId>();
+  for (const asset of view.assets.values()) {
+    if (asset.deleted) continue;
+    inUse.add(asset.fileId);
+    if (asset.renderFileId) inUse.add(asset.renderFileId);
+  }
+  for (const version of view.versions.values()) {
+    if (version.deleted || view.assets.get(version.assetId)?.deleted !== false) continue;
+    if (version.thumb) inUse.add(version.thumb.fileId);
+    if (version.screen) inUse.add(version.screen.fileId);
+  }
   let assetsChecked = 0;
   for (const asset of view.assets.values()) {
     if (asset.kind !== 'original') continue;
     known.add(asset.fileId);
     if (asset.deleted) {
-      if (byId.has(asset.fileId)) leftovers.push(asset.fileId);
+      if (byId.has(asset.fileId) && !inUse.has(asset.fileId) && !leftovers.includes(asset.fileId)) {
+        leftovers.push(asset.fileId);
+      }
       continue;
     }
     assetsChecked += 1;
