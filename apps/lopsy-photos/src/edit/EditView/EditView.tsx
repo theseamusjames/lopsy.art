@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, ClipboardPaste, Copy, Crop, Eye, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
-import { recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
+import { ArrowLeft, ClipboardPaste, Copy, Crop, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Version, VersionId } from '@lopsy/photos-core/library/types';
 import { LeftColumn, type LeftColumnSection } from '../LeftColumn/LeftColumn';
 import { HistoryPanel } from '../HistoryPanel/HistoryPanel';
@@ -14,6 +14,7 @@ import {
   COLOR_BY_HUE_TABS,
   COLOR_GRADING_SHARED,
   COLOR_GRADING_TABS,
+  FRAMING_GROUP,
   GROUPS,
   applyChanges,
   beforeRecipe,
@@ -31,8 +32,10 @@ import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
 import { CropTool } from '../CropTool/CropTool';
+import { LevelTool } from '../LevelTool/LevelTool';
 import { SplitView } from '../SplitView/SplitView';
-import { FULL_RECT, recipeCrop, toFramed, type Rect } from '../../engine/crop';
+import { FULL_RECT, levelAngle, recipeCrop, toFramed, type Rect } from '../../engine/crop';
+import { effectiveFraming, framingAngle, framingFlipV } from '../../engine/recipe-to-adjustments';
 import { ProfileMenu } from '../ProfileMenu/ProfileMenu';
 import { LoadStatus } from '../LoadStatus/LoadStatus';
 import { usePhotoEngine } from './use-photo-engine';
@@ -367,7 +370,7 @@ export function EditView({
     if (!engine) return;
     engine.setCropEditing(true);
     const crop = savedRecipe.framing.crop;
-    setCropDraft(crop ? toFramed(crop, savedRecipe.framing) : FULL_RECT);
+    setCropDraft(crop ? toFramed(crop, effectiveFraming(savedRecipe.framing)) : FULL_RECT);
   };
 
   const finishCrop = (isCommit: boolean) => {
@@ -375,7 +378,7 @@ export function EditView({
     const draftRect = cropDraft;
     setCropDraft(null);
     if (!isCommit || !draftRect) return;
-    const next = recipeCrop(draftRect, savedRecipe.framing);
+    const next = recipeCrop(draftRect, effectiveFraming(savedRecipe.framing));
     if (JSON.stringify(next) !== JSON.stringify(savedRecipe.framing.crop)) commit({ 'framing.crop': next as Json }, 'Crop');
   };
 
@@ -392,6 +395,18 @@ export function EditView({
       : null;
   const cropImageBox = boxOf(fullSize);
   const cropBox = fullSize && cropImageBox ? { aspect: fullSize.width / fullSize.height, box: cropImageBox } : null;
+
+  // ---- straighten -----------------------------------------------------
+
+  const [isLevelling, setIsLevelling] = useState(false);
+  const hasFlipV = 'flipV' in DEFAULT_RECIPE.framing;
+  const handleLevelLine = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    setIsLevelling(false);
+    const delta = levelAngle(a, b);
+    if (delta === 0) return;
+    const angle = Math.round(Math.max(-45, Math.min(45, framingAngle(savedRecipe.framing) + delta)) * 100) / 100;
+    commit({ 'framing.angle': angle }, changeLabel('Straighten', 'framing.angle', angle));
+  };
 
   // ---- split before and after ---------------------------------------
 
@@ -570,6 +585,18 @@ export function EditView({
           >
             <FlipHorizontal2 size={16} aria-hidden />
           </button>
+          {hasFlipV && (
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label="Flip vertical"
+              title="Flip top to bottom"
+              disabled={!canEdit || isBefore || isCropping}
+              onClick={() => commit({ 'framing.flipV': !framingFlipV(savedRecipe.framing) }, 'Flip vertical')}
+            >
+              <FlipVertical2 size={16} aria-hidden />
+            </button>
+          )}
           <button
             type="button"
             className={styles.iconButton}
@@ -674,6 +701,7 @@ export function EditView({
           onPointerCancel={handleStagePointerUp}
         >
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
+          {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
           {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
           {cropDraft && cropBox && (
             <CropTool
@@ -696,6 +724,19 @@ export function EditView({
               profileId={shownRecipe.profile.id}
               isDisabled={!canEdit || isBefore}
               onSelect={handleProfile}
+            />
+          )}
+          {FRAMING_GROUP && (
+            <ControlGroup
+              group={FRAMING_GROUP}
+              recipe={shownRecipe}
+              isDisabled={!canEdit || isBefore || isCropping}
+              onChange={handleSliderChange}
+              onCommit={handleSliderCommit}
+              onReset={handleGroupReset}
+              onAuto={() => setIsLevelling((v) => !v)}
+              autoLabel={isLevelling ? 'Cancel' : 'Level'}
+              autoTitle="Draw along something that should be level"
             />
           )}
           {GROUPS.map((group) => (

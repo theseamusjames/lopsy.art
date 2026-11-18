@@ -15,6 +15,12 @@
 import initWasm, {
   addLayer,
   autoTone as engineAutoTone,
+  beginLayerTransform,
+  compositeLayerTransformAffine,
+  dropFloat,
+  duplicateLayerTexture,
+  getLayerEngineBounds,
+  prepareLayerTransformTarget,
   clearImageColorGrading,
   clearImageColorMixer,
   clearImageCurves,
@@ -55,13 +61,15 @@ import type { ImageFormat } from '@lopsy/photos-core/library/types';
 import { DEFAULT_RECIPE, type Recipe } from '@lopsy/photos-core/library/recipe';
 import {
   framedSize,
+  effectiveFraming,
+  framingAngle,
   framingOps,
   recipeToAdjustments,
   sameAdjustments,
   type EngineAdjustments,
   type Framing,
 } from './recipe-to-adjustments';
-import { cropPixels, isFullCrop, toFramed } from './crop';
+import { cropPixels, inverseRotation, isFullCrop, rotatedBounds, straightenedCrop, toFramed } from './crop';
 import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
 import { decodeRafInWorkers, DecodeAbortedError } from './raf/raf-decode';
@@ -221,6 +229,11 @@ class PhotoEngine implements DevelopEngine {
   private rawDefaults: RawDevelopSettings | null = null;
   private appliedRawJson: string | null = null;
   private isCropEditing = false;
+  /** The straighten angle the layer is turned by, and the copy of the unturned image it is turned from. */
+  private appliedAngle = 0;
+  private pristineId: string | null = null;
+  /** Where the turned layer sits in the framed image's pixels; null when it is not turned. */
+  private turnedRect: { x: number; y: number; width: number; height: number } | null = null;
   /** What Curves, Color by hue and Color Grading last sent. */
   private colorKey: string | null = null;
   /** The document and layer placement last pushed, to skip unchanged layouts. */
@@ -423,6 +436,7 @@ class PhotoEngine implements DevelopEngine {
    * re-applying the framing to the new layer.
    */
   private swapInLayer(layer: string, size: Size, previous: Size): void {
+    this.unturn();
     removeLayer(this.engine, this.layerId);
     this.layerId = layer;
     setDocumentSize(this.engine, size.width, size.height);
@@ -448,6 +462,7 @@ class PhotoEngine implements DevelopEngine {
 
   /** Replaces the document with one visible layer of this size; returns its id. */
   private resetLayer(width: number, height: number): string {
+    this.unturn();
     if (this.hasLayer) removeLayer(this.engine, this.layerId);
     this.layerId = this.nextLayerId();
     setDocumentSize(this.engine, width, height);
@@ -481,13 +496,15 @@ class PhotoEngine implements DevelopEngine {
   private layout(): void {
     if (!this.sourceSize) return;
     const full = framedSize(this.sourceSize.width, this.sourceSize.height, this.framing.rotate);
-    const crop = this.isCropEditing ? null : this.recipe.framing.crop;
-    const px = crop && !isFullCrop(crop) ? cropPixels(toFramed(crop, this.framing), full.width, full.height) : { x: 0, y: 0, ...full };
-    const key = `${this.layerId}:${full.width}x${full.height}:${px.x},${px.y},${px.width},${px.height}`;
+    const userCrop = this.recipe.framing.crop ? toFramed(this.recipe.framing.crop, this.framing) : null;
+    const crop = this.isCropEditing ? null : straightenedCrop(userCrop, this.appliedAngle, full.width, full.height);
+    const px = crop && !isFullCrop(crop) ? cropPixels(crop, full.width, full.height) : { x: 0, y: 0, ...full };
+    const layer = this.turnedRect ?? { x: 0, y: 0, ...full };
+    const key = `${this.layerId}:${full.width}x${full.height}:${px.x},${px.y},${px.width},${px.height}:${layer.x},${layer.y},${layer.width},${layer.height}`;
     if (key === this.layoutKey) return;
     const previous = this.displaySize;
     setDocumentSize(this.engine, px.width, px.height);
-    updateLayer(this.engine, layerDesc(this.layerId, full.width, full.height, true, -px.x, -px.y));
+    updateLayer(this.engine, layerDesc(this.layerId, layer.width, layer.height, true, layer.x - px.x, layer.y - px.y));
     this.layoutKey = key;
     this.displaySize = { width: px.width, height: px.height };
     this.invalidate();
@@ -535,8 +552,55 @@ class PhotoEngine implements DevelopEngine {
         this.invalidate();
       }
     }
-    this.applyFraming({ rotate: this.recipe.framing.rotate, flipH: this.recipe.framing.flipH });
+    this.applyFraming(effectiveFraming(this.recipe.framing));
+    this.applyAngle(framingAngle(this.recipe.framing));
     this.layout();
+  }
+
+  /** Puts the unturned framed image back in the layer and forgets the copy kept for turning it. */
+  private unturn(): void {
+    if (this.pristineId) {
+      if (this.appliedAngle !== 0) duplicateLayerTexture(this.engine, this.pristineId, this.layerId);
+      removeLayer(this.engine, this.pristineId);
+      this.pristineId = null;
+    }
+    this.appliedAngle = 0;
+    this.turnedRect = null;
+    this.layoutKey = null;
+  }
+
+  /**
+   * Straighten: the layer re-rendered from a kept copy of the framed image,
+   * turned about its centre, through the engine's layer transform. The
+   * layer grows to the turned bounds; layout() crops inside them.
+   */
+  private applyAngle(angle: number): void {
+    if (angle === this.appliedAngle || !this.sourceSize) return;
+    const { width, height } = framedSize(this.sourceSize.width, this.sourceSize.height, this.framing.rotate);
+    if (this.pristineId && this.appliedAngle !== 0) duplicateLayerTexture(this.engine, this.pristineId, this.layerId);
+    this.layoutKey = null;
+    if (angle === 0) {
+      this.appliedAngle = 0;
+      this.turnedRect = null;
+      updateLayer(this.engine, layerDesc(this.layerId, width, height, true));
+      this.invalidate();
+      return;
+    }
+    if (!this.pristineId) {
+      this.pristineId = this.nextLayerId();
+      addLayer(this.engine, layerDesc(this.pristineId, width, height, false));
+      duplicateLayerTexture(this.engine, this.layerId, this.pristineId);
+    }
+    updateLayer(this.engine, layerDesc(this.layerId, width, height, true));
+    beginLayerTransform(this.engine, this.layerId, 0, 0, width, height);
+    const bounds = rotatedBounds(width, height, angle);
+    prepareLayerTransformTarget(this.engine, this.layerId, bounds.x, bounds.y, bounds.width, bounds.height);
+    compositeLayerTransformAffine(this.engine, inverseRotation(angle), width / 2, height / 2, width / 2, height / 2);
+    dropFloat(this.engine);
+    const [x = 0, y = 0, w = width, h = height] = getLayerEngineBounds(this.engine, this.layerId);
+    this.turnedRect = { x, y, width: w, height: h };
+    this.appliedAngle = angle;
+    this.invalidate();
   }
 
   private applyColorControls(): void {
@@ -558,6 +622,7 @@ class PhotoEngine implements DevelopEngine {
   private applyFraming(target: Framing): void {
     const ops = framingOps(this.framing, target);
     if (ops.length === 0 || !this.sourceSize) return;
+    this.unturn();
     for (const op of ops) {
       if (op.kind === 'flipH') flipLayer(this.engine, this.layerId, true);
       else rotateLayer90(this.engine, this.layerId, op.clockwise);

@@ -32,7 +32,7 @@ export interface ControlDef {
 }
 
 export interface GroupDef {
-  readonly id: 'whiteBalance' | 'tone' | 'color' | 'finish';
+  readonly id: 'whiteBalance' | 'tone' | 'color' | 'finish' | 'framing';
   readonly title: string;
   readonly controls: readonly ControlDef[];
 }
@@ -250,3 +250,7 @@ export function resetChangesFor(recipe: Recipe, controls: readonly ControlDef[])
   }
   return changes;
 }
+
+/** The Framing group's Straighten angle, once the recipe has one (framing.angle). */
+export const FRAMING_GROUP: GroupDef | null =
+  'framing.angle' in RECIPE_RANGES ? { id: 'framing', title: 'Straighten', controls: [{ path: 'framing.angle', label: 'Angle', historyLabel: 'Straighten' }] } : null;

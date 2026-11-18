@@ -216,3 +216,75 @@ function constrainDrag(
   const y = sides.hasN ? anchorY - height : sides.hasS ? anchorY : anchorY - height / 2;
   return { x, y, width, height };
 }
+
+// ---- straighten ------------------------------------------------------
+
+/**
+ * The largest rectangle of the frame's own aspect, centred, that fits
+ * inside a `width`×`height` image turned by `angleDeg` about its centre:
+ * the share of each side it keeps (1 at 0°).
+ */
+export function inscribedScale(width: number, height: number, angleDeg: number): number {
+  const t = (Math.abs(angleDeg) * Math.PI) / 180;
+  if (t === 0 || width <= 0 || height <= 0) return 1;
+  const c = Math.cos(t);
+  const s = Math.sin(t);
+  return Math.min(width / (width * c + height * s), height / (width * s + height * c));
+}
+
+/**
+ * The crop shown for a straightened photo, framed-normalized: the user's
+ * crop (or the whole frame) kept inside the largest upright rectangle the
+ * turned image fills, as Lightroom's straighten does.
+ */
+export function straightenedCrop(rect: Rect | null, angleDeg: number, width: number, height: number): Rect | null {
+  const k = inscribedScale(width, height, angleDeg);
+  if (k >= 1) return rect;
+  const inner: Rect = { x: (1 - k) / 2, y: (1 - k) / 2, width: k, height: k };
+  const base = rect ?? FULL_RECT;
+  const x0 = Math.max(base.x, inner.x);
+  const y0 = Math.max(base.y, inner.y);
+  const x1 = Math.min(base.x + base.width, inner.x + inner.width);
+  const y1 = Math.min(base.y + base.height, inner.y + inner.height);
+  if (x1 - x0 < MIN_CROP || y1 - y0 < MIN_CROP) return inner;
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
+
+/**
+ * The inverse of a turn by `angleDeg` (clockwise on screen, y down), as the
+ * column-major 3×3 `compositeLayerTransformAffine` takes.
+ */
+export function inverseRotation(angleDeg: number): Float32Array {
+  const t = (angleDeg * Math.PI) / 180;
+  const c = Math.cos(t);
+  const s = Math.sin(t);
+  return Float32Array.from([c, -s, 0, s, c, 0, 0, 0, 1]);
+}
+
+/** The pixel rect a `width`×`height` image covers once turned by `angleDeg` about its centre. */
+export function rotatedBounds(width: number, height: number, angleDeg: number): Rect {
+  const t = (Math.abs(angleDeg) * Math.PI) / 180;
+  // Rounded first, so cos(90°) is 0 and not 6e-17.
+  const tidy = (v: number) => Math.round(v * 1e6) / 1e6;
+  const w = tidy(width * Math.cos(t) + height * Math.sin(t));
+  const h = tidy(width * Math.sin(t) + height * Math.cos(t));
+  const x = Math.floor(width / 2 - w / 2);
+  const y = Math.floor(height / 2 - h / 2);
+  return { x, y, width: Math.ceil(width / 2 + w / 2) - x, height: Math.ceil(height / 2 + h / 2) - y };
+}
+
+/**
+ * The angle that makes the line from `a` to `b` (y down) level, or upright
+ * when it is nearer vertical; clamped to ±45°.
+ */
+export function levelAngle(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (dx === 0 && dy === 0) return 0;
+  const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  // The line's deviation from the nearest axis; turning the image by its negative levels it.
+  let off = ((deg % 90) + 90) % 90;
+  if (off > 45) off -= 90;
+  const angle = Math.round(-off * 100) / 100;
+  return Math.max(-45, Math.min(45, angle === 0 ? 0 : angle));
+}
