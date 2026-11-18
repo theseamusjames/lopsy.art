@@ -1,6 +1,6 @@
 //! Uniform structs of the develop shaders (`gpu/shaders/develop/`).
 
-use crate::gpu::uniforms::{uniforms, Mat3};
+use crate::gpu::uniforms::{uniforms, Mat3, Vec4Array};
 
 uniforms! {
     /// `develop/raw_develop.wgsl`
@@ -12,5 +12,12 @@ uniforms! {
         pub highlight_desat: i32,
         pub curve_size: i32,
         pub curve_width: i32,
+    }
+}
+
+uniforms! {
+    /// `develop/color_mixer.wgsl`
+    pub struct ColorMixerParams {
+        pub values: Vec4Array<6>,
     }
 }

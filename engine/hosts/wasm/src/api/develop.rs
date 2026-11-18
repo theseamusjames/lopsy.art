@@ -44,3 +44,15 @@ pub fn auto_tone(histogram: &[u32], current_json: &str) -> Result<String, JsErro
 pub fn raf_auto_white_balance(linear_rgba: &[f32]) -> Vec<f32> {
     lopsy_core::develop_stats::auto_white_balance(linear_rgba).to_vec()
 }
+
+/// Color by hue: 24 floats, (hue, saturation, luminance) per band in
+/// −100..100, bands red, orange, yellow, green, aqua, blue, purple, magenta.
+#[wasm_bindgen(js_name = "setImageColorMixer")]
+pub fn set_image_color_mixer(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::develop::set_image_color_mixer(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clearImageColorMixer")]
+pub fn clear_image_color_mixer(engine: &mut Engine) {
+    lopsy_engine::commands::develop::clear_image_color_mixer(&mut engine.inner)
+}

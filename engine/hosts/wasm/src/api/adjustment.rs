@@ -236,6 +236,18 @@ pub fn set_group_color_balance(
     lopsy_engine::commands::adjustment::set_group_color_balance(&mut engine.inner, group_id, sh_r, sh_g, sh_b, mt_r, mt_g, mt_b, hi_r, hi_g, hi_b).map_err(|e| JsError::new(&e))
 }
 
+/// The document's own colour grading: the same 18 floats as
+/// `setGroupColorGrading` (`compileColorGrade`).
+#[wasm_bindgen(js_name = "setImageColorGrading")]
+pub fn set_image_color_grading(engine: &mut Engine, values: &[f32]) -> Result<(), JsError> {
+    lopsy_engine::commands::adjustment::set_image_color_grading(&mut engine.inner, values).map_err(|e| JsError::new(&e))
+}
+
+#[wasm_bindgen(js_name = "clearImageColorGrading")]
+pub fn clear_image_color_grading(engine: &mut Engine) {
+    lopsy_engine::commands::adjustment::clear_image_color_grading(&mut engine.inner)
+}
+
 #[wasm_bindgen(js_name = "setGroupColorGrading")]
 pub fn set_group_color_grading(engine: &mut Engine, group_id: &str, values: &[f32]) -> Result<(), JsError> {
     lopsy_engine::commands::adjustment::set_group_color_grading(&mut engine.inner, group_id, values).map_err(|e| JsError::new(&e))

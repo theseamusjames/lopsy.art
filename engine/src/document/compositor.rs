@@ -468,6 +468,7 @@ pub fn composite(engine: &mut EngineInner) -> Result<(), String> {
     // image adjustments (exposure, contrast, etc.) if any are active
     apply_raw_develop(engine);
     apply_image_adjustments(engine);
+    apply_color_mixer(engine);
 
     // 4b. Quick mask overlay: translucent blue tint over unselected areas
     if engine.quick_mask_texture.is_some() {
@@ -1439,6 +1440,13 @@ fn render_stroke_apply(engine: &EngineInner, layer: &StrokeLayer, stroke: &Strok
 /// `composite` it has no in-progress stroke / preview handling and no
 /// group pre-adjustment cache.
 fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
+    composite_layers_for_export_with(engine, true)
+}
+
+/// `composite_layers_for_export`, with the colour mixer left out when
+/// `with_mixer` is false: a caller that applies the image adjustments
+/// after this runs the mixer after them itself, to keep the live order.
+fn composite_layers_for_export_with(engine: &mut EngineInner, with_mixer: bool) -> Result<(), String> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
     let bg = engine.bg_color;
@@ -1560,6 +1568,9 @@ fn composite_layers_for_export(engine: &mut EngineInner) -> Result<(), String> {
 
     // Exports develop a RAW composite as the live frame does.
     apply_raw_develop(engine);
+    if with_mixer {
+        apply_color_mixer(engine);
+    }
 
     Ok(())
 }
@@ -1670,12 +1681,13 @@ pub fn decode_native_color_mode(doc_color_mode: u32, pixels: &mut [u8]) {
 pub fn composite_for_export_u16(engine: &mut EngineInner) -> Read<Vec<u16>> {
     let doc_w = engine.doc_width;
     let doc_h = engine.doc_height;
-    if let Err(e) = composite_layers_for_export(engine) {
+    if let Err(e) = composite_layers_for_export_with(engine, false) {
         return Read::failed(e);
     }
     engine.needs_recomposite = true;
 
     apply_image_adjustments(engine);
+    apply_color_mixer(engine);
 
     let is_lab = engine.doc_color_mode == 1;
     engine.gpu().read_rgba_u16(engine.composite_texture, 0, 0, doc_w, doc_h).map(move |mut pixels| {
@@ -1842,11 +1854,47 @@ fn apply_raw_develop(engine: &EngineInner) {
     let Some(state) = engine.raw_develop.as_ref() else {
         return;
     };
-    let (pass, units) = crate::develop::pass(engine, engine.composite_texture, state);
-    if !over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a)) {
+    let program = match engine.shaders.raw_develop() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("RAW develop shader: {e}"));
+            return;
+        }
+    };
+    let (pass, units) = crate::develop::pass(engine, &program, engine.composite_texture, state);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(units);
+    if !is_drawn {
         return;
     }
-    engine.gpu().unbind_textures(units);
+    doc_pass(engine, &engine.shaders.copy_exact, ())
+        .texture("u_tex", engine.scratch_texture_a)
+        .draw(Target::Framebuffer(engine.composite_fbo));
+}
+
+/// Color by hue over the composite in place when it is set: composite ->
+/// scratch A through `color_mixer.wgsl`, then copied back texel for texel.
+/// A no-op when `engine.color_mixer` is `None`.
+fn apply_color_mixer(engine: &EngineInner) {
+    let Some(values) = engine.color_mixer.as_ref() else {
+        return;
+    };
+    let params = crate::gpu::params::develop::ColorMixerParams {
+        values: crate::gpu::uniforms::Vec4Array::from_floats(values),
+    };
+    let program = match engine.shaders.color_mixer() {
+        Ok(program) => program,
+        Err(e) => {
+            crate::host::log(crate::host::LogLevel::Error, &format!("Color mixer shader: {e}"));
+            return;
+        }
+    };
+    let pass = engine.pass(&program, params).texture("u_tex", engine.composite_texture);
+    let is_drawn = over_document(engine, pass).draw(Target::Framebuffer(engine.scratch_fbo_a));
+    engine.gpu().unbind_textures(1);
+    if !is_drawn {
+        return;
+    }
     doc_pass(engine, &engine.shaders.copy_exact, ())
         .texture("u_tex", engine.scratch_texture_a)
         .draw(Target::Framebuffer(engine.composite_fbo));
