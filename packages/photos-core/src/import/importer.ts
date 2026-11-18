@@ -22,7 +22,7 @@ import { isRawJpegPair, pairCandidatesByName } from './pairs';
 import type { PairableFile } from './pairs';
 import type { ImportItemRecord, ImportJobRecord, ImportQueueStore } from './queue-store';
 import type { StagingStore } from './staging';
-import { applySidecarFile, isSidecarName, matchSidecars } from '../xmp/sidecars';
+import { applySidecarFile, applySidecarToExisting, isSidecarName, matchSidecars } from '../xmp/sidecars';
 import type {
   EmbeddedPreview,
   ImageMetadata,
@@ -67,6 +67,11 @@ export interface ResumeContext {
   readonly queueStore: ImportQueueStore;
   readonly staging?: StagingStore;
   readonly now?: () => Date;
+}
+
+/** Where a photo's `.xmp` sidecar is staged, next to the photo's own copy. */
+export function sidecarStagingKey(sha256: string): string {
+  return `${sha256}.xmp`;
 }
 
 /** The key that lets a resumable adapter continue this file's upload after a reload. */
@@ -121,6 +126,8 @@ interface Work extends WorkSpec {
   readonly preparedSignal: Deferred<void>;
   /** The staging key this item wrote, to delete when it is finished with. */
   stagedKey: string | null;
+  /** The staging key of this item's sidecar, deleted with the photo's copy. */
+  sidecarKey: string | null;
 }
 
 /** What the prepare stage settled for the upload stage. */
@@ -272,12 +279,16 @@ export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | nul
       keywords ??= record.keywords;
       albumId ??= record.albumId;
       let content: Blob | null = null;
+      let sidecar: Blob | null = null;
       let resumeError: string | null = null;
       if (item.sha256 === null || !item.staged) {
         resumeError = 'Interrupted before it was staged on this device; import the file again';
       } else {
         content = ctx.staging ? await ctx.staging.get(item.sha256).catch(() => null) : null;
         if (!content) resumeError = 'Its staged copy on this device is gone; import the file again';
+        else if (item.sidecarStaged && ctx.staging) {
+          sidecar = await ctx.staging.get(sidecarStagingKey(item.sha256)).catch(() => null);
+        }
       }
       specs.push({
         content,
@@ -295,7 +306,7 @@ export async function resumeImports(ctx: ResumeContext): Promise<ImportJob | nul
                 destinationName: item.destinationName,
               },
         resumeError,
-        sidecar: null,
+        sidecar,
         skipReason: null,
       });
     }
@@ -344,6 +355,7 @@ function runJob(setup: JobSetup): ImportJob {
     outcome: deferred<AssetId | null>(),
     preparedSignal: deferred<void>(),
     stagedKey: spec.settled && spec.content ? spec.settled.sha256 : null,
+    sidecarKey: spec.settled && spec.content && spec.sidecar ? sidecarStagingKey(spec.settled.sha256) : null,
   }));
   const worksByAssetId = new Map(works.map((w) => [w.assetId, w]));
 
@@ -391,10 +403,12 @@ function runJob(setup: JobSetup): ImportJob {
   const isTerminal = (index: number) => TERMINAL.has(stateOf(index));
 
   const unstage = async (work: Work) => {
-    const key = work.stagedKey;
-    if (!key || !staging) return;
+    if (!staging) return;
+    for (const key of [work.stagedKey, work.sidecarKey]) {
+      if (key) await staging.delete(key).catch(warn('deleting a staged copy'));
+    }
     work.stagedKey = null;
-    await staging.delete(key).catch(warn('deleting a staged copy'));
+    work.sidecarKey = null;
   };
 
   const finish = async (work: Work, state: ImportItemState, change: Partial<ImportItem> = {}) => {
@@ -574,7 +588,8 @@ function runJob(setup: JobSetup): ImportJob {
     if (options.skipDuplicates) {
       const existing = existingAsset(sha);
       if (existing !== null && existing !== work.assetId) {
-        await endEarly(work, 'duplicate', { assetId: existing }, existing);
+        const note = work.sidecar ? await applySidecarToExisting(session, existing, work.sidecar) : null;
+        await endEarly(work, 'duplicate', { assetId: existing, ...(note ? { error: note } : {}) }, existing);
         return null;
       }
       const earlier = batchBySha.get(sha);
@@ -614,13 +629,22 @@ function runJob(setup: JobSetup): ImportJob {
         try {
           await staging.put(sha, work.content);
           work.stagedKey = sha;
+          if (work.sidecar) {
+            await staging.put(sidecarStagingKey(sha), work.sidecar);
+            work.sidecarKey = sidecarStagingKey(sha);
+          }
         } catch (error) {
           warn('staging a file')(error);
         }
       }
       if (work.stagedKey === null) unstagedNote = 'Not staged on this device: closing the tab stops this upload';
     }
-    persist(index, { staged: work.stagedKey !== null, pairedWith: pairCandidate, folderSegments: segments });
+    persist(index, {
+      staged: work.stagedKey !== null,
+      sidecarStaged: work.sidecarKey !== null,
+      pairedWith: pairCandidate,
+      folderSegments: segments,
+    });
     if (work.stagedKey !== null) setState(work, 'staged', { error: null });
     checkStopped();
     return { sha, metadata, segments, pairCandidate, earlierCopy, unstagedNote };

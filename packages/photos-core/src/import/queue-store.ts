@@ -20,6 +20,8 @@ export interface ImportItemRecord {
   readonly error: string | null;
   /** True once the file's copy is in staging, keyed by `sha256`. */
   readonly staged: boolean;
+  /** True once the photo's `.xmp` sidecar is staged too, under `sidecarStagingKey(sha256)`. */
+  readonly sidecarStaged?: boolean;
   /** The pair partner, settled before the file is staged. */
   readonly pairedWith: AssetId | null;
   /** Where the original goes under `Originals/`, once chosen. */
