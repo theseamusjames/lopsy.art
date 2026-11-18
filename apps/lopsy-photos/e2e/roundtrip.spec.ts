@@ -130,6 +130,11 @@ test('a photo goes to Lopsy and comes back as a document, then updates in place'
   await page.bringToFront();
   await page.getByRole('button', { name: /All photos/ }).click();
   await expect(photoTile).toBeVisible();
+  // It is stacked behind the photo it was made from: the photo's badge opens the stack.
+  // (Its accessible name is only the count; its title says what it is.)
+  const stackBadge = photoTile.locator('button[title^="1 Lopsy document made from this photo"]');
+  await expect(stackBadge).toBeVisible({ timeout: 60_000 });
+  await stackBadge.click();
   await expect(docTile).toHaveCount(1, { timeout: 60_000 });
   await expect(docTile.locator('img')).toBeVisible({ timeout: 60_000 });
   const docLeft = await tileLeftBrightness(docTile);
@@ -148,4 +153,73 @@ test('a photo goes to Lopsy and comes back as a document, then updates in place'
   await expect(page.locator('[role="gridcell"][title$=".lopsy"]')).toHaveCount(1);
   await expect.poll(async () => docTile.locator('img').getAttribute('src'), { timeout: 60_000 }).not.toBe(firstSrc);
   await expect.poll(async () => tileLeftBrightness(docTile), { timeout: 60_000 }).toBeLessThan(80);
+});
+
+/** A layer's pixel in Lopsy, read back from the engine (as Lopsy's own e2e helpers do). */
+async function lopsyPixel(lopsy: Page, x: number, y: number, layerId: string): Promise<number[]> {
+  return lopsy.evaluate(
+    async ({ x, y, layerId }) => {
+      const read = (window as unknown as { __readLayerPixels: (id: string) => Promise<{ width: number; pixels: number[] }> }).__readLayerPixels;
+      const { width, pixels } = await read(layerId);
+      const i = (y * width + x) * 4;
+      return [pixels[i]!, pixels[i + 1]!, pixels[i + 2]!, pixels[i + 3]!];
+    },
+    { x, y, layerId },
+  );
+}
+
+test('a Lopsy layer is graded in Photos and comes back as one undoable step', async ({ page, context }) => {
+  const lopsyUrl = process.env.ROUNDTRIP_LOPSY_URL ?? 'http://localhost:5173/';
+  await page.goto(lopsyUrl);
+  await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
+  await page.evaluate(() => {
+    const store = (window as unknown as { __editorStore: { getState: () => { createDocument: (w: number, h: number, t: boolean) => void } } }).__editorStore;
+    store.getState().createDocument(160, 120, false);
+  });
+  const bgId = await page.evaluate(() => {
+    const store = (window as unknown as { __editorStore: { getState: () => { document: { layers: Array<{ id: string; name: string }> } } } }).__editorStore;
+    return store.getState().document.layers.find((l) => l.name === 'Background')!.id;
+  });
+  await expect.poll(() => lopsyPixel(page, 20, 20, bgId)).toEqual([255, 255, 255, 255]);
+
+  // Lopsy → Photos: the layer opens in Photos' Edit view, with no library.
+  await page.locator(`[data-layer-id="${bgId}"]`).click({ button: 'right' });
+  const [photos] = await Promise.all([
+    context.waitForEvent('page'),
+    page.getByRole('menuitem', { name: 'Grade in Lopsy Photos…' }).click(),
+  ]);
+  await photos.waitForURL(/grade=/);
+  await expect(photos.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout: 60_000 });
+  await expect(photos.getByRole('heading', { name: 'Where should your library live?' })).toHaveCount(0);
+
+  // Darken it: Exposure -1.
+  const exposure = photos.getByLabel('Exposure value');
+  await exposure.fill('-1');
+  await exposure.press('Enter');
+  await expect(exposure).toHaveValue('−1.00');
+  await photos.screenshot({ path: 'test-results/roundtrip-grade-photos.png' });
+  await Promise.all([photos.waitForEvent('close', { timeout: 60_000 }), photos.getByRole('button', { name: 'Done' }).click()]);
+
+  // Photos → Lopsy: the layer is darker, as one history step, and undo restores it.
+  await expect.poll(() => lopsyPixel(page, 20, 20, bgId).then((p) => p[0]!), { timeout: 60_000 }).toBeLessThan(200);
+  const graded = await lopsyPixel(page, 20, 20, bgId);
+  expect(graded[3]).toBe(255);
+  const state = await page.evaluate((id) => {
+    const store = (window as unknown as {
+      __editorStore: {
+        getState: () => {
+          document: { layers: Array<{ id: string; gradeRecipe?: { tone?: { exposure?: number } } }> };
+          undoStack: Array<{ label?: string }>;
+        };
+      };
+    }).__editorStore;
+    const s = store.getState();
+    return { label: s.undoStack.at(-1)?.label, exposure: s.document.layers.find((l) => l.id === id)?.gradeRecipe?.tone?.exposure };
+  }, bgId);
+  expect(state).toEqual({ label: 'Grade in Lopsy Photos', exposure: -1 });
+  await page.screenshot({ path: 'test-results/roundtrip-grade-lopsy.png' });
+
+  await page.locator('[data-testid="canvas-container"]').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => lopsyPixel(page, 20, 20, bgId)).toEqual([255, 255, 255, 255]);
 });

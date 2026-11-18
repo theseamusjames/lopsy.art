@@ -220,6 +220,7 @@ export function runAdapterContract(name: string, makeAdapter: () => Promise<Stor
       const trashed = await adapter.getFile(file.id);
       expect(trashed?.trashed).toBe(true);
       expect(trashed?.properties).toEqual({ k: 'v' });
+      expect(await (await adapter.readContent(file.id)).text()).toBe('keep me');
       await adapter.untrash(file.id);
       expect((await adapter.getFile(file.id))?.trashed).toBe(false);
       expect(ids(await adapter.listChildren(root.id))).toContain(file.id);

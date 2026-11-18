@@ -1,0 +1,118 @@
+import { useState } from 'react';
+import { Pencil, Save, Trash2 } from 'lucide-react';
+import type { ExportPreset } from '@lopsy/photos-core/library/types';
+import { Button } from '../Button/Button';
+import { IconButton } from '../IconButton/IconButton';
+import styles from './ExportPresetBar.module.css';
+
+interface ExportPresetBarProps {
+  presets: readonly ExportPreset[];
+  /** The preset the form came from; null once it was changed by hand. */
+  selectedId: string | null;
+  disabled: boolean;
+  onPick: (preset: ExportPreset) => void;
+  onSave: (name: string) => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
+}
+
+/** Export presets: Lopsy's and the user's, pick one, save the current settings as one, rename or delete your own. */
+export function ExportPresetBar({ presets, selectedId, disabled, onPick, onSave, onRename, onDelete }: ExportPresetBarProps) {
+  const [mode, setMode] = useState<'idle' | 'saving' | 'renaming'>('idle');
+  const [text, setText] = useState('');
+  const selected = presets.find((p) => p.id === selectedId) ?? null;
+  const own = selected !== null && !selected.builtIn;
+
+  const finish = () => {
+    const name = text.trim();
+    if (name !== '') {
+      if (mode === 'saving') onSave(name);
+      else if (mode === 'renaming' && selected) onRename(selected.id, name);
+    }
+    setMode('idle');
+    setText('');
+  };
+
+  if (mode !== 'idle') {
+    return (
+      <div className={styles.bar}>
+        <input
+          className={styles.input}
+          autoFocus
+          value={text}
+          placeholder={mode === 'saving' ? 'Name these settings' : 'New name'}
+          aria-label={mode === 'saving' ? 'Preset name' : 'New preset name'}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') finish();
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              e.preventDefault();
+              setMode('idle');
+            }
+          }}
+        />
+        <Button size="sm" variant="primary" disabled={text.trim() === ''} onClick={finish}>
+          {mode === 'saving' ? 'Save preset' : 'Rename'}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setMode('idle')}>
+          Cancel
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.bar}>
+      <select
+        className={styles.select}
+        aria-label="Export preset"
+        disabled={disabled}
+        value={selectedId ?? ''}
+        onChange={(e) => {
+          const preset = presets.find((p) => p.id === e.target.value);
+          if (preset) onPick(preset);
+        }}
+      >
+        <option value="" disabled>
+          Your own settings
+        </option>
+        <optgroup label="Made by Lopsy">
+          {presets
+            .filter((p) => p.builtIn)
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+        </optgroup>
+        {presets.some((p) => !p.builtIn) && (
+          <optgroup label="Yours">
+            {presets
+              .filter((p) => !p.builtIn)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </optgroup>
+        )}
+      </select>
+      <IconButton size="sm" label="Save these settings as a preset" icon={<Save size={13} />} disabled={disabled} onClick={() => setMode('saving')} />
+      {own && selected && (
+        <>
+          <IconButton
+            size="sm"
+            label={`Rename ${selected.name}`}
+            icon={<Pencil size={12} />}
+            onClick={() => {
+              setText(selected.name);
+              setMode('renaming');
+            }}
+          />
+          <IconButton size="sm" label={`Delete ${selected.name}`} icon={<Trash2 size={12} />} onClick={() => onDelete(selected.id)} />
+        </>
+      )}
+    </div>
+  );
+}

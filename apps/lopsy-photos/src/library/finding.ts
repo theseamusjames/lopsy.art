@@ -9,6 +9,7 @@ import type { Asset, AssetId, ImageFormat, LibraryView } from '@lopsy/photos-cor
 import { compileSearch, type LabelChoice, type SavedSearch, type SearchRule } from '@lopsy/photos-core/search/rules';
 import { computeFacets, type Facets } from '@lopsy/photos-core/search/facets';
 import { groupBursts } from '@lopsy/photos-core/search/bursts';
+import { versionItemId, versionsByAsset, type ItemId } from './items';
 import { baseAssets, compareAssets, type AssetQuery, type Collection } from './asset-query';
 
 export interface FacetFilter {
@@ -158,7 +159,7 @@ export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((ass
   const bursts = new Map<AssetId, number>();
   if (!query.groupBursts) {
     const stacked = stackDocuments(shown.map((a) => a.id), view, query.expanded);
-    return { ids: stacked.ids, facets, bursts, documents: stacked.documents };
+    return { ids: openVersions(stacked.ids, view, query.expanded), facets, bursts, documents: stacked.documents };
   }
   const ids: AssetId[] = [];
   for (const burst of groupBursts(shown)) {
@@ -170,7 +171,7 @@ export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((ass
     }
   }
   const stacked = stackDocuments(ids, view, query.expanded);
-  return { ids: stacked.ids, facets, bursts, documents: stacked.documents };
+  return { ids: openVersions(stacked.ids, view, query.expanded), facets, bursts, documents: stacked.documents };
 }
 
 /** "March 2026", "14 March 2026", "2026". */
@@ -205,4 +206,30 @@ export function importBatches(view: LibraryView): ImportBatch[] {
   return [...batches]
     .map(([importId, b]) => ({ importId, importedAt: b.importedAt, count: b.count }))
     .sort((x, y) => (x.importedAt < y.importedAt ? 1 : x.importedAt > y.importedAt ? -1 : 0));
+}
+
+/** An import batch's name in the sidebar: "14 Mar, 09:30"; the year only when it is not this year's. */
+export function importLabel(iso: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const year = d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`;
+  return `${d.getDate()} ${months[d.getMonth()]}${year}, ${time}`;
+}
+
+/** After each open photo, its other versions as their own tiles (`assetId#versionId`). */
+export function openVersions(ids: readonly ItemId[], view: LibraryView, expanded: ReadonlySet<AssetId>): ItemId[] {
+  if (expanded.size === 0) return [...ids];
+  const byAsset = versionsByAsset(view);
+  const out: ItemId[] = [];
+  for (const id of ids) {
+    out.push(id);
+    if (!expanded.has(id)) continue;
+    const asset = view.assets.get(id);
+    for (const v of byAsset.get(id) ?? []) {
+      if (asset && v.id !== asset.primaryVersionId) out.push(versionItemId(id, v.id));
+    }
+  }
+  return out;
 }

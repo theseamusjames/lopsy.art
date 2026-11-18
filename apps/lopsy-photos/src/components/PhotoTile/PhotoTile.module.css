@@ -129,3 +129,11 @@
   background: var(--color-error);
   color: #fff;
 }
+
+.versionName {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--color-accent);
+}

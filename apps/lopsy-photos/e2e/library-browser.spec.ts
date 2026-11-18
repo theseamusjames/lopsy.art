@@ -49,6 +49,14 @@ test('This browser: import, rate, edit, reload, delete', async ({ page }) => {
   // Export the edited one into the library's Exports folder, rendered by the engine.
   await tile.click();
   await page.getByRole('button', { name: /^Export 1/ }).click();
+  // From a built-in preset, then saved as the user's own.
+  await page.getByRole('combobox', { name: 'Export preset' }).selectOption({ label: 'Web, 2048 px, sRGB' });
+  await expect(page.getByRole('radio', { name: /^JPEG/ })).toBeChecked();
+  await page.getByRole('button', { name: 'Save these settings as a preset' }).click();
+  await page.getByRole('textbox', { name: 'Preset name' }).fill('My web');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('combobox', { name: 'Export preset' })).toHaveValue(/.+/);
+  await expect(page.getByRole('combobox', { name: 'Export preset' }).locator('option', { hasText: 'My web' })).toHaveCount(1);
   await page.getByRole('textbox', { name: 'Folder name' }).fill('E2E');
   await page.getByRole('button', { name: 'Export', exact: true }).click();
   await expect(page.getByText('Exported 1 photo.')).toBeVisible({ timeout: 120_000 });

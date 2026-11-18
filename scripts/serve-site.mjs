@@ -25,8 +25,8 @@ const arg = (name, fallback) => {
 const dir = resolve(root, arg('--dir', 'dist'));
 const port = Number(arg('--port', process.env.PORT ?? '4180'));
 const host = arg('--host', process.env.SITE_HOST ?? '127.0.0.1');
-if (!existsSync(join(dir, 'index.html'))) {
-  console.error(`serve-site: ${dir}/index.html is missing. Run npm run build:site first.`);
+if (!existsSync(join(dir, 'index.html')) && !existsSync(join(dir, '_redirects'))) {
+  console.error(`serve-site: ${dir} has no site in it. Run npm run build:site first.`);
   process.exit(1);
 }
 

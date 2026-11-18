@@ -3,11 +3,14 @@ import { ArrowLeft, ChevronLeft, ChevronRight, EyeOff, Paintbrush, SlidersHorizo
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useAsset } from '../../app/hooks';
 import { useUi } from '../../app/store';
+import { parseItem } from '../../library/items';
 import { openInLopsy } from '../../app/lopsy-handoff';
 import { backOut, openEdit, runCommand, setLabel, setRating, toggleSetAside } from '../../app/commands';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import { LabelPicker } from '../LabelPicker/LabelPicker';
+import { VersionStrip } from '../VersionStrip/VersionStrip';
+import { DocumentList } from '../DocumentList/DocumentList';
 import { Preview, type ZoomPoint } from '../Preview/Preview';
 import { Stars } from '../Stars/Stars';
 import styles from './SingleView.module.css';
@@ -20,7 +23,7 @@ interface SingleViewProps {
 
 export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
   const focus = useUi((s) => s.selection.focus);
-  const asset = useAsset(focus);
+  const asset = useAsset(focus === null ? null : parseItem(focus).assetId);
   const index = focus === null ? -1 : orderedIds.indexOf(focus);
   // Zoom belongs to one photo; moving on fits the next one again.
   const [zoomed, setZoomed] = useState<{ id: AssetId; point: ZoomPoint } | null>(null);
@@ -44,7 +47,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
           <>
             <Preview
               key={focus}
-              assetId={focus}
+              itemId={focus}
               zoom={zoom}
               onZoom={(point) => setZoomed(point ? { id: focus, point } : null)}
             />
@@ -69,6 +72,8 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
         />
       </div>
 
+      {asset && focus !== null && <VersionStrip itemId={focus} />}
+      {asset && <DocumentList assetId={asset.id} />}
       {asset && (
         <div className={styles.bar}>
           <Stars rating={asset.rating} size={18} onChange={(r) => setRating(r, orderedIds, [asset.id])} />
@@ -84,7 +89,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
             variant="ghost"
             onClick={() => {
               const session = useUi.getState().connection?.session;
-              if (session) openInLopsy(session, asset.id);
+              if (session && focus !== null) openInLopsy(session, asset.id, parseItem(focus).versionId);
             }}
           >
             <Paintbrush size={14} />

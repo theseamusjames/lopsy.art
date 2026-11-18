@@ -73,10 +73,10 @@ async function renderPng16(session: LibrarySession, assetId: AssetId, versionId:
 }
 
 /** "Edit in Lopsy" for one photo. Call from a click: Lopsy's tab opens before this returns. */
-export function openInLopsy(session: LibrarySession, assetId: AssetId): void {
+export function openInLopsy(session: LibrarySession, assetId: AssetId, chosenVersion: string | null = null): void {
   const asset = session.getView().assets.get(assetId);
   if (!asset) return;
-  const versionId = asset.primaryVersionId;
+  const versionId = chosenVersion ?? asset.primaryVersionId;
   let handoff;
   try {
     handoff = editInLopsy({

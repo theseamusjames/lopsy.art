@@ -11,6 +11,8 @@ export interface ImportStats {
   readonly settled: number;
   /** Items a pause left waiting for `resumeImports`. */
   readonly paused: number;
+  /** Items the importer set aside after a failure, to try again (error "Waiting to retry: …"). */
+  readonly waiting: readonly ImportItem[];
   readonly totalBytes: number;
   readonly sentBytes: number;
   /** 0..1 by bytes. */
@@ -23,6 +25,7 @@ export function importStats(progress: ImportProgress): ImportStats {
   let totalBytes = 0;
   let sentBytes = 0;
   let paused = 0;
+  const waiting: ImportItem[] = [];
   const failed: ImportItem[] = [];
   for (const item of progress.items) {
     totalBytes += item.byteSize;
@@ -46,6 +49,7 @@ export function importStats(progress: ImportProgress): ImportStats {
         break;
       default:
         if (progress.finished && item.error === 'Paused') paused++;
+        if (isWaitingToRetry(item)) waiting.push(item);
         sentBytes += Math.min(item.byteSize, item.sentBytes);
     }
   }
@@ -57,6 +61,7 @@ export function importStats(progress: ImportProgress): ImportStats {
     failed,
     settled: done + duplicates + failed.length,
     paused,
+    waiting,
     totalBytes,
     sentBytes,
     fraction: totalBytes === 0 ? (progress.finished ? 1 : 0) : sentBytes / totalBytes,
@@ -75,4 +80,11 @@ export function estimateLeft(stats: ImportStats, elapsedMs: number): string | nu
   if (m < 60) return `About ${m} minute${m === 1 ? '' : 's'} left`;
   const h = Math.round(m / 6) / 10;
   return `About ${h} hours left`;
+}
+
+export const RETRY_NOTE_PREFIX = 'Waiting to retry';
+
+/** An item the importer parked after a failure; it stays queued until a resume. */
+export function isWaitingToRetry(item: ImportItem): boolean {
+  return item.state === 'queued' && item.error !== null && item.error.startsWith(RETRY_NOTE_PREFIX);
 }

@@ -101,3 +101,8 @@
   background: var(--color-accent);
   transition: width var(--transition-normal);
 }
+
+.warn {
+  color: var(--color-warning);
+  font-size: var(--font-size-sm);
+}

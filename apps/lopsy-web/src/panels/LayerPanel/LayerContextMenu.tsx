@@ -17,10 +17,12 @@ interface LayerContextMenuProps {
   y: number;
   currentTag: LayerColorTag | null | undefined;
   onSetColorTag: (tag: LayerColorTag | null) => void;
+  /** Grade in Lopsy Photos, offered for a raster layer in builds that ship Photos. */
+  onGradeInPhotos?: () => void;
   onClose: () => void;
 }
 
-export function LayerContextMenu({ x, y, currentTag, onSetColorTag, onClose }: LayerContextMenuProps) {
+export function LayerContextMenu({ x, y, currentTag, onSetColorTag, onGradeInPhotos, onClose }: LayerContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -66,6 +68,14 @@ export function LayerContextMenu({ x, y, currentTag, onSetColorTag, onClose }: L
         </button>
       </div>
       <div className={styles.contextMenuDivider} />
+      {onGradeInPhotos && (
+        <>
+          <button className={styles.contextMenuItem} onClick={onGradeInPhotos} type="button" role="menuitem">
+            Grade in Lopsy Photos…
+          </button>
+          <div className={styles.contextMenuDivider} />
+        </>
+      )}
       <button
         className={styles.contextMenuItem}
         onClick={onClose}

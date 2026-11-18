@@ -3,16 +3,106 @@
  * the same functions, so a key and a click always behave alike.
  */
 
-import type { AssetId, ColorLabel, Rating } from '@lopsy/photos-core/library/types';
+import type { AssetId, ColorLabel, Rating, VersionId } from '@lopsy/photos-core/library/types';
+import { itemAssets, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
+import { showToast } from './toasts';
+import { findPreset } from '@lopsy/photos-core/library/presets';
+import { asGroupIds, pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
 import { EMPTY_SELECTION, moveFocus, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
 
-/** The photos a command acts on: in Single, Cull and Compare the one in focus, in the grid the selection. */
-export function currentTargets(): AssetId[] {
+/** The tiles a command acts on: in Single, Cull and Compare the one in focus, in the grid the selection. */
+export function currentItems(): ItemId[] {
   const { selection, mode } = useUi.getState();
   if (mode !== 'grid' && selection.focus !== null) return [selection.focus];
   return targetIds(selection);
+}
+
+/** The photos a command acts on (marks, delete, albums belong to the photo, whichever version is shown). */
+export function currentTargets(): AssetId[] {
+  return itemAssets(currentItems());
+}
+
+/** The versions a command acts on (edit, export, Lopsy, paste): each tile's own version. */
+export function currentVersions(): { assetId: AssetId; versionId: VersionId }[] {
+  const view = session().getView();
+  const out: { assetId: AssetId; versionId: VersionId }[] = [];
+  for (const id of currentItems()) {
+    const versionId = itemVersionId(id, view);
+    if (versionId !== null) out.push({ assetId: parseItem(id).assetId, versionId });
+  }
+  return out;
+}
+
+/** Opens the Copy edits dialog for the focused photo. */
+export function askCopyEdits(): void {
+  const ui = useUi.getState();
+  if (ui.selection.focus === null && ui.selection.ids.size === 0) return;
+  ui.openDialog('copy-edits');
+}
+
+/** The version Copy edits copies from: the focused tile's. */
+export function copySource(): { assetId: AssetId; versionId: VersionId; name: string } | null {
+  const ui = useUi.getState();
+  const id = ui.selection.focus ?? [...ui.selection.ids][0];
+  if (id === undefined) return null;
+  const view = session().getView();
+  const { assetId } = parseItem(id);
+  const versionId = itemVersionId(id, view);
+  const asset = view.assets.get(assetId);
+  if (!asset || versionId === null) return null;
+  return { assetId, versionId, name: asset.fileName };
+}
+
+export function copyEdits(chosen: readonly string[]): void {
+  const groupIds = asGroupIds(chosen);
+  const source = copySource();
+  const version = source ? session().getView().versions.get(source.versionId) : undefined;
+  if (!source || !version) return;
+  const ui = useUi.getState();
+  ui.setCopiedEdits({ values: pickRecipeValues(version.recipe, groupIds), groupIds, sourceName: source.name });
+  ui.openDialog(null);
+  showToast(`Copied edits from ${source.name}. Select photos and paste.`);
+}
+
+/** Applies an edit preset to every selected tile's version, one history step each. */
+export function applyPreset(presetId: string): void {
+  const s = session();
+  const preset = findPreset(s.getView().presets, presetId);
+  const versionIds = currentVersions().map((v) => v.versionId);
+  if (!preset || versionIds.length === 0) return;
+  s.applyRecipeValues(versionIds, preset.values, `Preset: ${preset.name}`);
+  showToast(`Applied “${preset.name}” to ${versionIds.length.toLocaleString()} photo${versionIds.length === 1 ? '' : 's'}.`);
+}
+
+/** Pastes the copied edits onto every selected tile's version. */
+export function pasteEdits(): void {
+  const copied = useUi.getState().copiedEdits;
+  if (!copied) {
+    showToast('Copy edits from a photo first.');
+    return;
+  }
+  const versionIds = currentVersions().map((v) => v.versionId);
+  if (versionIds.length === 0) return;
+  pasteRecipeValues(session(), versionIds, copied);
+  showToast(`Pasted edits onto ${versionIds.length.toLocaleString()} photo${versionIds.length === 1 ? '' : 's'}.`);
+}
+
+/** Makes a new version of the focused tile's version (same edits), opens its stack and selects it. */
+export function newVersion(): void {
+  const ui = useUi.getState();
+  const id = ui.selection.focus ?? [...ui.selection.ids][0];
+  if (id === undefined) return;
+  const view = session().getView();
+  const { assetId } = parseItem(id);
+  const from = itemVersionId(id, view);
+  const source = from === null ? undefined : view.versions.get(from);
+  const names = (versionsByAsset(view).get(assetId) ?? []).map((v) => v.name);
+  const versionId = session().createVersion(assetId, nextVersionName(names), source?.recipe);
+  if (!versionId) return;
+  if (!ui.expandedBursts.has(assetId)) ui.toggleBurst(assetId);
+  ui.setSelection(selectOne(versionItemId(assetId, versionId)));
 }
 
 function session() {
@@ -71,9 +161,11 @@ export function openEdit(): void {
   const { selection } = useUi.getState();
   const id = selection.focus ?? [...selection.ids][0];
   if (id === undefined) return;
-  const asset = session().getView().assets.get(id);
-  if (!asset) return;
-  useUi.getState().setEditing({ assetId: asset.id, versionId: asset.primaryVersionId });
+  const view = session().getView();
+  const { assetId } = parseItem(id);
+  const versionId = itemVersionId(id, view);
+  if (!view.assets.get(assetId) || versionId === null) return;
+  useUi.getState().setEditing({ assetId, versionId });
 }
 
 function enterMode(mode: ViewMode, orderedIds: readonly AssetId[]): void {
@@ -171,6 +263,10 @@ export function runCommand(id: CommandId, orderedIds: readonly AssetId[]): void 
       return ui.setSelection(EMPTY_SELECTION);
     case 'delete':
       return askDeleteTargets();
+    case 'copy-edits':
+      return askCopyEdits();
+    case 'paste-edits':
+      return pasteEdits();
     case 'help':
       return ui.openDialog(ui.dialog === 'help' ? null : 'help');
     default:

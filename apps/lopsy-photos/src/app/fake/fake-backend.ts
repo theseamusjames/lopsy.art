@@ -5,6 +5,7 @@
  */
 
 import type { Asset, AssetId, LibrarySession, PreviewRef, VersionId } from '@lopsy/photos-core/library/types';
+import type { KeepOriginals, OriginalsDownload } from '@lopsy/photos-core/cache/keep-originals';
 import type { ImportItem, ImportJob, ImportOptions, ImportProgress } from '@lopsy/photos-core/import/types';
 import type { StorageQuota } from '@lopsy/photos-core/storage/types';
 import type { RepairReport } from '@lopsy/photos-core/library/repair';
@@ -256,6 +257,7 @@ export class FakeBackend implements PhotosBackend {
       originalsFound: assets.length,
       assetsChecked: assets.length,
       orphans: [],
+      leftovers: [],
       missing: by('missing'),
       trashed: by('trashed'),
       changed: by('changed'),
@@ -276,6 +278,20 @@ export class FakeBackend implements PhotosBackend {
   }
 
   async clearDeviceCache(): Promise<void> {}
+
+  private keepOriginals: KeepOriginals = 'recent';
+
+  getKeepOriginals(): KeepOriginals {
+    return this.keepOriginals;
+  }
+
+  async setKeepOriginals(_session: LibrarySession, mode: KeepOriginals): Promise<void> {
+    this.keepOriginals = mode;
+  }
+
+  getOriginalsDownload(): OriginalsDownload | null {
+    return null;
+  }
 
   async resumeImports(): Promise<ImportJob | null> {
     return null;
@@ -311,6 +327,7 @@ export class FakeBackend implements PhotosBackend {
     const view = session.getView();
     // The record first, then the files (as the real backend does).
     session.deleteAssets(assetIds);
+    await session.whenDurable();
     for (const id of assetIds) {
       const asset = view.assets.get(id);
       if (asset) await session.adapter.trash(asset.fileId);

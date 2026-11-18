@@ -11,6 +11,8 @@ export interface LastConnection {
   readonly kind: StorageChoice;
   /** For the button: the account email or the folder's name. */
   readonly label: string;
+  /** Google's `sub`, so reconnecting accepts only that account. */
+  readonly accountId?: string;
 }
 
 /** What the start screen offers before the full list of choices. */
@@ -37,11 +39,14 @@ export function parseLastConnection(raw: string | null): LastConnection | null {
   const kind: unknown = Reflect.get(value, 'kind');
   const label: unknown = Reflect.get(value, 'label');
   if (typeof kind !== 'string' || !KINDS.has(kind) || typeof label !== 'string') return null;
-  return { kind: kind as StorageChoice, label };
+  const accountId: unknown = Reflect.get(value, 'accountId');
+  return typeof accountId === 'string' && accountId !== ''
+    ? { kind: kind as StorageChoice, label, accountId }
+    : { kind: kind as StorageChoice, label };
 }
 
 export function serializeLastConnection(last: LastConnection): string {
-  return JSON.stringify({ kind: last.kind, label: last.label });
+  return JSON.stringify({ kind: last.kind, label: last.label, ...(last.accountId ? { accountId: last.accountId } : {}) });
 }
 
 /**

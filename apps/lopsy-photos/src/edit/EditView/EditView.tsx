@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, ClipboardPaste, Copy, Crop, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
 import type { RecipeGroupId } from '@lopsy/photos-core/library/recipe';
@@ -83,6 +83,14 @@ export interface EditViewProps {
   readonly canPasteEdits?: boolean;
   /** The current view's photos along the bottom; ← and → move along it. */
   readonly filmstrip?: { readonly items: readonly FilmstripItem[]; readonly currentId: string; readonly onOpen: (assetId: string) => void } | undefined;
+  /**
+   * Layer mode (Grade in Lopsy Photos): a Done button that hands over the
+   * saved recipe and a renderer of the full-size 16-bit PNG. Export and
+   * Edit in Lopsy are not offered then.
+   */
+  readonly onDone?: (renderPng16: () => Promise<ArrayBuffer>, recipe: Recipe) => void;
+  /** The leave button's words; 'Library' by default. */
+  readonly closeLabel?: string;
 }
 
 /** How long the edit must stay unchanged before previews are rendered. */
@@ -136,6 +144,8 @@ export function EditView({
   presets,
   onSavePreset,
   onDeletePreset,
+  onDone,
+  closeLabel = 'Library',
 }: EditViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -565,6 +575,20 @@ export function EditView({
     });
   }
 
+  const handleDone = () => {
+    if (!engine || !onDone) return;
+    const recipe = savedRecipe;
+    onDone(async () => {
+      engine.setRecipe(recipe);
+      try {
+        const png = await engine.exportImage({ format: 'png' });
+        return await png.arrayBuffer();
+      } finally {
+        engine.setRecipe(isBefore ? beforeRecipe(shownRecipe) : shownRecipe);
+      }
+    }, recipe);
+  };
+
   const isAllDefault = recipeHash(beforeRecipe(savedRecipe)) === recipeHash(savedRecipe);
   const zoomPercent = view ? Math.round(view.zoom * 100) : 100;
 
@@ -573,7 +597,7 @@ export function EditView({
       <header className={styles.toolbar}>
         <button type="button" className={styles.toolButton} onClick={() => void handleClose()} disabled={isBusy}>
           <ArrowLeft size={16} aria-hidden />
-          <span>Library</span>
+          <span>{closeLabel}</span>
         </button>
         <span className={styles.fileName} title={asset.fileName}>
           {asset.fileName}
@@ -713,6 +737,12 @@ export function EditView({
           <button type="button" className={styles.toolButton} onClick={handleEditInLopsy} disabled={!isReady || isBusy}>
             <SquarePen size={16} aria-hidden />
             <span>Edit in Lopsy</span>
+          </button>
+        )}
+        {onDone && (
+          <button type="button" className={styles.primaryButton} onClick={handleDone} disabled={!isReady || isBusy}>
+            <Check size={16} aria-hidden />
+            <span>Done</span>
           </button>
         )}
         {onExport && (

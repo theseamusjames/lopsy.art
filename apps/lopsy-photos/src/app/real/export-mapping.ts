@@ -7,7 +7,9 @@ import type { ExportProgress, ExportRequest } from '../backend';
 
 export function toExportSettings(request: ExportRequest): Partial<ExportSettings> {
   return {
+    ...(request.base ?? {}),
     format: request.format,
+    colorSpace: request.colorSpace ?? 'srgb',
     quality: Math.min(1, Math.max(0.01, request.quality / 100)),
     maxLongEdge: request.longEdge !== null && request.longEdge > 0 ? Math.round(request.longEdge) : null,
   };

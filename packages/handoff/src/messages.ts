@@ -20,6 +20,12 @@
  *   Lopsy  → Photos  lopsy:ping       { id }
  *   Photos → Lopsy   photos:pong      { id }
  * No pong within `PING_TIMEOUT_MS` and Lopsy reopens Photos to receive.
+ *
+ * Grade a layer (Lopsy opens Photos with `?grade=<id>`):
+ *   Photos → Lopsy   photos:ready     { id }
+ *   Lopsy  → Photos  lopsy:grade      { id, layer }
+ *   Photos → Lopsy   photos:graded    { id, ok: true, png, recipe }   (Done)
+ *                                     { id, ok: false, cancelled }    (Cancel)
  */
 
 export const PROTOCOL_VERSION = 1;
@@ -28,6 +34,15 @@ export const PROTOCOL_VERSION = 1;
 export const HANDOFF_PARAM = 'photos-handoff';
 /** Query parameter Lopsy adds to Photos' URL when it reopens Photos to receive a save. */
 export const RECEIVE_PARAM = 'receive';
+/** Query parameter Lopsy adds to Photos' URL to grade one layer. */
+export const GRADE_PARAM = 'grade';
+/** Window name Lopsy opens Photos under to grade a layer. */
+export const GRADE_WINDOW_NAME = 'lopsy-photos-grade';
+/** Largest side of a layer sent to be graded. */
+export const MAX_GRADE_SIDE = 65536;
+/** Largest recipe, as JSON, a graded layer may carry. */
+export const MAX_RECIPE_JSON = 64 * 1024;
+
 /** Window name Photos opens Lopsy under, so an open Lopsy tab is reused. */
 export const LOPSY_WINDOW_NAME = 'lopsy-editor';
 /** Window name Lopsy opens Photos under. */
@@ -166,6 +181,48 @@ export interface PhotosPongMessage {
   readonly id: string;
 }
 
+/**
+ * One raster layer to grade. `pixels` is the engine's 16-bit layer blob
+ * (`readLayerPixelsLz4U16`: a 32-byte geometry header, then LZ4), which the
+ * Photos engine uploads as it is (`uploadLayerPixelsCompressedU16`).
+ */
+export interface GradeLayer {
+  readonly name: string;
+  readonly width: number;
+  readonly height: number;
+  readonly pixels: ArrayBuffer;
+}
+
+export interface LopsyGradeMessage {
+  readonly protocol: 1;
+  readonly type: 'lopsy:grade';
+  readonly id: string;
+  readonly layer: GradeLayer;
+}
+
+/** The develop recipe a grade used, as plain JSON (photos-core `Recipe`). */
+export type GradeRecipe = Readonly<Record<string, unknown>>;
+
+export type PhotosGradedMessage =
+  | {
+      readonly protocol: 1;
+      readonly type: 'photos:graded';
+      readonly id: string;
+      readonly ok: true;
+      /** The graded layer, full size, as a 16-bit PNG. */
+      readonly png: ArrayBuffer;
+      readonly recipe: GradeRecipe;
+    }
+  | {
+      readonly protocol: 1;
+      readonly type: 'photos:graded';
+      readonly id: string;
+      readonly ok: false;
+      /** True when the user pressed Cancel; otherwise `error` says what failed. */
+      readonly cancelled: boolean;
+      readonly error?: string;
+    };
+
 export type HandoffMessage =
   | LopsyReadyMessage
   | PhotosDocumentMessage
@@ -174,7 +231,9 @@ export type HandoffMessage =
   | LopsySaveMessage
   | PhotosSavedMessage
   | LopsyPingMessage
-  | PhotosPongMessage;
+  | PhotosPongMessage
+  | LopsyGradeMessage
+  | PhotosGradedMessage;
 
 type Fields = Record<string, unknown>;
 
@@ -362,6 +421,56 @@ export function parsePhotosSaved(value: unknown): PhotosSavedMessage | null {
       saveId,
       ok: false,
       error: value.error.slice(0, MAX_ERROR_LENGTH),
+    };
+  }
+  return null;
+}
+
+function isSide(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_GRADE_SIDE;
+}
+
+export function parseLopsyGrade(value: unknown): LopsyGradeMessage | null {
+  if (!envelope(value, 'lopsy:grade')) return null;
+  const layer = value.layer;
+  if (!isRecord(layer)) return null;
+  const { name, width, height, pixels } = layer;
+  if (!isName(name) || !isSide(width) || !isSide(height)) return null;
+  if (!isArrayBuffer(pixels) || pixels.byteLength < 32 || pixels.byteLength > MAX_FILE_BYTES) return null;
+  return { protocol: 1, type: 'lopsy:grade', id: value.id, layer: { name, width, height, pixels } };
+}
+
+/** A recipe object of bounded size, or null. */
+export function parseGradeRecipe(value: unknown): GradeRecipe | null {
+  if (!isRecord(value)) return null;
+  let json: string;
+  try {
+    json = JSON.stringify(value);
+  } catch {
+    return null;
+  }
+  if (json.length > MAX_RECIPE_JSON) return null;
+  return JSON.parse(json) as GradeRecipe;
+}
+
+export function parsePhotosGraded(value: unknown): PhotosGradedMessage | null {
+  if (!envelope(value, 'photos:graded')) return null;
+  if (value.ok === true) {
+    if (!isFile(value.png, isPngBytes)) return null;
+    const recipe = parseGradeRecipe(value.recipe);
+    if (!recipe) return null;
+    return { protocol: 1, type: 'photos:graded', id: value.id, ok: true, png: value.png, recipe };
+  }
+  if (value.ok === false) {
+    if (typeof value.cancelled !== 'boolean') return null;
+    if (value.error !== undefined && typeof value.error !== 'string') return null;
+    return {
+      protocol: 1,
+      type: 'photos:graded',
+      id: value.id,
+      ok: false,
+      cancelled: value.cancelled,
+      ...(typeof value.error === 'string' ? { error: value.error.slice(0, MAX_ERROR_LENGTH) } : {}),
     };
   }
   return null;

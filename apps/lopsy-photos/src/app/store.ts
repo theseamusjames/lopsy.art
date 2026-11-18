@@ -11,9 +11,10 @@ import type { Connection, ExportJob, StorageChoice } from './backend';
 import { EMPTY_SELECTION, type Selection } from '../library/selection';
 import type { Collection, SortOrder } from '../library/asset-query';
 import { NO_FACETS, type FacetFilter } from '../library/finding';
+import type { CopiedEdits } from '../library/recipe-copy';
 
 export type ViewMode = 'grid' | 'single' | 'compare' | 'cull';
-export type DialogName = 'import' | 'export' | 'delete' | 'help' | 'sync' | 'settings' | null;
+export type DialogName = 'import' | 'export' | 'delete' | 'help' | 'sync' | 'settings' | 'copy-edits' | null;
 
 export interface EditTarget {
   readonly assetId: AssetId;
@@ -47,6 +48,8 @@ export interface UiState {
   readonly exportJob: ExportJob | null;
   /** What the delete confirmation will delete. */
   readonly deleteIds: readonly AssetId[];
+  /** Edits copied for pasting onto other photos. */
+  readonly copiedEdits: CopiedEdits | null;
 
   setConnecting(kind: StorageChoice | null, error?: string | null): void;
   setConnection(connection: Connection | null): void;
@@ -67,6 +70,7 @@ export interface UiState {
   setImportJob(job: ImportJob | null): void;
   setExportJob(job: ExportJob | null): void;
   askDelete(ids: readonly AssetId[]): void;
+  setCopiedEdits(copied: CopiedEdits | null): void;
 }
 
 export const THUMB_SIZE = { min: 96, max: 360, initial: 180 } as const;
@@ -92,6 +96,7 @@ export const useUi = create<UiState>()((set) => ({
   importJob: null,
   exportJob: null,
   deleteIds: [],
+  copiedEdits: null,
 
   setConnecting: (kind, error = null) => set({ connecting: kind, connectError: error }),
   setConnection: (connection) =>
@@ -130,5 +135,6 @@ export const useUi = create<UiState>()((set) => ({
   setPendingImport: (pendingImport) => set({ pendingImport, dialog: pendingImport ? 'import' : null }),
   setImportJob: (importJob) => set({ importJob }),
   setExportJob: (exportJob) => set({ exportJob }),
+  setCopiedEdits: (copiedEdits) => set({ copiedEdits }),
   askDelete: (deleteIds) => set({ deleteIds, dialog: deleteIds.length > 0 ? 'delete' : null }),
 }));

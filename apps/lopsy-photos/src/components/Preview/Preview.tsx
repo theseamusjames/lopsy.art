@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import type { AssetId } from '@lopsy/photos-core/library/types';
+import { parseItem, type ItemId } from '../../library/items';
 import { useLibraryView, usePreviewUrl } from '../../app/hooks';
 import styles from './Preview.module.css';
 
@@ -10,7 +10,8 @@ export interface ZoomPoint {
 }
 
 interface PreviewProps {
-  assetId: AssetId;
+  /** A grid item: an asset id (its primary version) or `assetId#versionId`. */
+  itemId: ItemId;
   /** null: fit to the box. A point: the preview at full size, panned to that point. */
   zoom?: ZoomPoint | null;
   /** Click toggles zoom at the clicked point; moving pans while zoomed. */
@@ -26,10 +27,11 @@ function pointIn(e: MouseEvent<HTMLElement>): ZoomPoint {
 }
 
 /** A photo's 2048 px preview, fit to its box or zoomed; the grid thumbnail stands in while it loads. */
-export function Preview({ assetId, zoom = null, onZoom }: PreviewProps) {
+export function Preview({ itemId, zoom = null, onZoom }: PreviewProps) {
   const view = useLibraryView();
+  const { assetId, versionId } = parseItem(itemId);
   const asset = view.assets.get(assetId);
-  const version = asset ? view.versions.get(asset.primaryVersionId) : undefined;
+  const version = asset ? view.versions.get(versionId ?? asset.primaryVersionId) : undefined;
   const thumb = usePreviewUrl(version?.thumb ?? null, 'thumb');
   const screen = usePreviewUrl(version?.screen ?? null, 'screen');
   const url = screen ?? thumb;

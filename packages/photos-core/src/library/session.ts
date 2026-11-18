@@ -501,13 +501,21 @@ class Session implements PhotosLibrarySession {
     const undoneHere = new Set(steps.filter((s) => s.device === this.deviceId && !s.active).map((s) => s.id));
     const ref = step.lastEvent ?? step.lastWrite;
     const touched = new Set<string>();
+    // What the field held right after `ref`: the step's value, or the value its undo restored.
+    const held = (path: string): Json =>
+      step.lastEvent?.undo === true
+        ? this.valueBefore(versionId, writes, step.first, path)
+        : ((step.fields[path] ?? null) as Json);
     for (const w of writes) {
       if (w.hlc < ref.hlc || (w.hlc === ref.hlc && w.opId <= ref.opId)) continue;
       const ownUndoRedo =
         deviceOf(w.opId) === this.deviceId && w.step !== null && (w.step.undoes !== undefined || w.step.redoes !== undefined);
       // This device's own steps that it has undone since do not count either: their change is gone.
       if (ownUndoRedo || (w.step !== null && undoneHere.has(w.step.id))) continue;
-      for (const path of Object.keys(w.fields)) touched.add(path);
+      for (const [path, value] of Object.entries(w.fields)) {
+        // A write of the value the field already held (a command that changed nothing) does not count.
+        if (!sameJson(value, held(path))) touched.add(path);
+      }
     }
     return Object.keys(step.fields).filter((path) => !touched.has(path));
   }
@@ -637,6 +645,10 @@ class Session implements PhotosLibrarySession {
 
   setSetting(key: string, value: Json): void {
     this.emit([{ t: 'set', kind: 'setting', id: key, fields: { value } }]);
+  }
+
+  whenDurable(): Promise<void> {
+    return this.engine.whenDurable();
   }
 
   syncNow(): Promise<void> {
@@ -849,8 +861,8 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
   let readOnly = false;
   let offlineError: unknown;
   let otherJournals: readonly FileId[] = [];
-  const preferLibraryId = (await store.lastLayout())?.libraryId;
-  const ensureOptions = { now, ...(preferLibraryId !== undefined ? { preferLibraryId } : {}) };
+  const last = await store.lastLayout();
+  const ensureOptions = { now, ...(last ? { preferLibraryId: last.libraryId, preferRootId: last.rootId } : {}) };
   try {
     const ensured = await ensureLibrary(adapter, ensureOptions);
     layout = ensured.layout;
@@ -911,7 +923,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
     const mergeStore = merge;
     const libraryId = layout.libraryId;
     const ensure = async (): Promise<LibraryLayout> => {
-      const ensured = await ensureLibrary(adapter, { now, preferLibraryId: libraryId });
+      const ensured = await ensureLibrary(adapter, { now, preferLibraryId: libraryId, preferRootId: layout.rootId });
       if (ensured.layout.libraryId !== libraryId) {
         throw new Error('The library in storage is not the one this device opened before.');
       }

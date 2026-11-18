@@ -5,6 +5,7 @@ import { useLibraryView } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { backOut, setLabel, setRating } from '../../app/commands';
 import { orderedSelection } from '../../library/selection';
+import { parseItem } from '../../library/items';
 import { Button } from '../Button/Button';
 import { LabelPicker } from '../LabelPicker/LabelPicker';
 import { Preview, type ZoomPoint } from '../Preview/Preview';
@@ -41,8 +42,10 @@ export function CompareView({ orderedIds }: CompareViewProps) {
       </div>
       <div className={styles.panes} data-count={ids.length}>
         {ids.map((id) => {
-          const asset = view.assets.get(id);
+          const { assetId, versionId } = parseItem(id);
+          const asset = view.assets.get(assetId);
           if (!asset) return null;
+          const version = view.versions.get(versionId ?? asset.primaryVersionId);
           return (
             <div
               key={id}
@@ -51,12 +54,15 @@ export function CompareView({ orderedIds }: CompareViewProps) {
               onClick={() => setSelection({ ...selection, focus: id })}
             >
               <div className={styles.image}>
-                <Preview assetId={id} zoom={zoom} onZoom={setZoom} />
+                <Preview itemId={id} zoom={zoom} onZoom={setZoom} />
               </div>
               <div className={styles.caption}>
-                <span className={styles.name}>{asset.fileName}</span>
-                <Stars rating={asset.rating} size={14} onChange={(r) => setRating(r, orderedIds, [id])} />
-                <LabelPicker value={asset.label} onChange={(l) => setLabel(l, orderedIds, [id])} />
+                <span className={styles.name}>
+                  {asset.fileName}
+                  {version && versionId !== null && ` · ${version.name}`}
+                </span>
+                <Stars rating={asset.rating} size={14} onChange={(r) => setRating(r, orderedIds, [assetId])} />
+                <LabelPicker value={asset.label} onChange={(l) => setLabel(l, orderedIds, [assetId])} />
               </div>
             </div>
           );

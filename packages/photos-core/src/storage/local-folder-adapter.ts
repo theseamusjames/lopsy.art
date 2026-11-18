@@ -153,7 +153,14 @@ export class LocalFolderAdapter implements StorageAdapter {
         properties,
         diskName,
       });
-      await this.saveIndex();
+      try {
+        await this.saveIndex();
+      } catch (error) {
+        // The saved index never named the file: drop it rather than leave bytes nothing points at.
+        this.index.forget(entry.id);
+        await ignoreNotFound(dir.removeEntry(diskName)).catch(() => undefined);
+        throw error;
+      }
       options.onProgress?.(content.size, content.size);
       return this.index.toStored(entry);
     });
@@ -168,7 +175,7 @@ export class LocalFolderAdapter implements StorageAdapter {
       throwIfAborted(options.signal);
       options.onProgress?.(0, content.size);
       const path = this.pathOf(entry);
-      await writeFile(await this.dirAt(path.slice(0, -1), true), diskNameOf(entry), content, options.signal);
+      await writeFile(await this.dirAt(path.slice(0, -1), true), path[path.length - 1] ?? diskNameOf(entry), content, options.signal);
       entry.size = content.size;
       entry.sha256 = sha256;
       this.index.touch(entry, true);
@@ -196,16 +203,17 @@ export class LocalFolderAdapter implements StorageAdapter {
       if (this.index.subtree(id).some((item) => item.id === newParentId)) {
         throw new StorageError('invalid', 'A folder cannot be moved into itself');
       }
-      if (entry.parentId !== newParentId) {
-        await this.relocate(entry, async () => {
+      if (entry.parentId === newParentId) return this.index.toStored(entry);
+      await this.relocate(
+        entry,
+        async () => {
           entry.parentId = newParentId;
           if (!entry.explicitlyTrashed) {
             entry.diskName = await this.uniqueDiskName(parent, entry.name, entry, await this.dirOf(parent, true));
           }
-        });
-      }
-      this.index.touch(entry, false);
-      await this.saveIndex();
+        },
+        () => this.index.touch(entry, false),
+      );
       return this.index.toStored(entry);
     });
   }
@@ -223,7 +231,7 @@ export class LocalFolderAdapter implements StorageAdapter {
       const entry = this.index.requireFile(id);
       const path = this.pathOf(entry);
       const dir = await this.dirAt(path.slice(0, -1), false);
-      const file = await (await dir.getFileHandle(diskNameOf(entry))).getFile();
+      const file = await (await dir.getFileHandle(path[path.length - 1] ?? diskNameOf(entry))).getFile();
       const blob = file.slice(0, file.size, entry.mimeType);
       const result = options.range
         ? blob.slice(options.range.start, Math.max(options.range.start, options.range.end), entry.mimeType)
@@ -259,10 +267,24 @@ export class LocalFolderAdapter implements StorageAdapter {
     return this.locked(async () => {
       const entry = this.index.require(id);
       if (entry.id === this.index.rootId) throw new StorageError('invalid', 'The root cannot be deleted');
-      const path = this.pathOf(entry);
-      await this.removeKnown(await this.dirAt(path.slice(0, -1), false), entry);
+      // Where its bytes are, read before the index forgets the subtree.
+      const files = this.index.subtree(id).filter((item) => !item.isFolder).map((item) => this.pathOf(item));
+      const folders = this.index
+        .subtree(id)
+        .filter((item) => item.isFolder)
+        .map((item) => this.pathOf(item))
+        .sort((a, b) => b.length - a.length);
       this.index.remove(id);
+      // The index first: a failure after this leaves stray bytes, never an entry whose bytes are gone.
       await this.saveIndex();
+      for (const path of files) {
+        await this.removeAt(path).catch((error: unknown) => console.warn('Could not remove', path.join('/'), error));
+      }
+      for (const path of folders) {
+        await this.dirAt(path.slice(0, -1), false)
+          .then((dir) => removeIfEmpty(dir, path[path.length - 1] ?? ''))
+          .catch(() => undefined);
+      }
     });
   }
 
@@ -357,30 +379,37 @@ export class LocalFolderAdapter implements StorageAdapter {
     const entry = this.index.require(id);
     if (entry.id === this.index.rootId) throw new StorageError('invalid', 'The root cannot be trashed');
     if (entry.explicitlyTrashed === trashed) return;
-    await this.relocate(entry, async () => {
-      entry.explicitlyTrashed = trashed;
-      if (!trashed && entry.parentId !== null) {
-        const parent = this.index.require(entry.parentId);
-        entry.diskName = await this.uniqueDiskName(parent, entry.name, entry, await this.dirOf(parent, true));
-      }
-    });
-    this.index.touch(entry, false);
-    for (const descendant of this.index.subtree(entry.id)) {
-      if (descendant !== entry) this.index.mark(descendant);
-    }
-    await this.saveIndex();
+    await this.relocate(
+      entry,
+      async () => {
+        entry.explicitlyTrashed = trashed;
+        if (!trashed && entry.parentId !== null) {
+          const parent = this.index.require(entry.parentId);
+          entry.diskName = await this.uniqueDiskName(parent, entry.name, entry, await this.dirOf(parent, true));
+        }
+      },
+      () => {
+        this.index.touch(entry, false);
+        for (const descendant of this.index.subtree(entry.id)) {
+          if (descendant !== entry) this.index.mark(descendant);
+        }
+      },
+    );
   }
 
   /**
-   * Applies `change` to an entry's place (parent, disk name, trashed) and
-   * moves its bytes there by copying, since FileSystemHandle.move is not
-   * available everywhere. If the copy fails (a full disk: copying needs
-   * the space twice), the partial copy is removed and the entry is put back
-   * as it was, so the index never points where the bytes are not. Only
-   * entries the index knows are copied and removed, so files the user
-   * added to a picked folder by hand are never deleted.
+   * Applies `change` to an entry's place (parent, disk name, trashed),
+   * moves its bytes there and saves the index, in the one order that never
+   * leaves the index pointing where the bytes are not: copy to the new
+   * place (FileSystemHandle.move is not available everywhere), save the
+   * index, then remove the old copy. If the copy or the index save fails
+   * (a full disk: copying needs the space twice), the new copy is removed
+   * and the entry is put back as it was, so the saved index still points
+   * at the old copy, which is untouched. Only entries the index knows are
+   * copied and removed, so files the user added by hand are never deleted.
+   * `record` notes the change in the index (seq, modifiedTime) before the save.
    */
-  private async relocate(entry: IndexEntry, change: () => Promise<void>): Promise<void> {
+  private async relocate(entry: IndexEntry, change: () => Promise<void>, record: () => void): Promise<void> {
     const before = { parentId: entry.parentId, diskName: entry.diskName, explicitlyTrashed: entry.explicitlyTrashed };
     const restore = (): void => {
       entry.parentId = before.parentId;
@@ -396,24 +425,29 @@ export class LocalFolderAdapter implements StorageAdapter {
       throw error;
     }
     const to = this.pathOf(entry);
-    if (from.join('/') === to.join('/')) return;
+    const moves = from.join('/') !== to.join('/');
     const fromName = from[from.length - 1] ?? '';
     const toName = to[to.length - 1] ?? '';
-    let fromDir: DirectoryHandle;
+    let fromDir: DirectoryHandle | null = null;
     let toDir: DirectoryHandle | null = null;
     try {
-      fromDir = await this.dirAt(from.slice(0, -1), false);
-      toDir = await this.dirAt(to.slice(0, -1), true);
-      await this.copyKnown(fromDir, fromName, toDir, toName, entry);
+      if (moves) {
+        fromDir = await this.dirAt(from.slice(0, -1), false);
+        toDir = await this.dirAt(to.slice(0, -1), true);
+        await this.copyKnown(fromDir, fromName, toDir, toName, entry);
+      }
+      record();
+      await this.saveIndex();
     } catch (error) {
       if (toDir) await this.removeKnownAt(toDir, toName, entry).catch(() => undefined);
       restore();
       throw error;
     }
+    if (!fromDir) return;
     try {
       await this.removeKnownAt(fromDir, fromName, entry);
     } catch (error) {
-      // The bytes are safe at their new place; a leftover copy only takes a name, which new files avoid.
+      // The bytes are safe at their new place, which the saved index names; a leftover copy only takes a name, which new files avoid.
       console.warn('Could not remove the old copy after moving', fromName, error);
     }
   }
@@ -438,9 +472,9 @@ export class LocalFolderAdapter implements StorageAdapter {
     }
   }
 
-  private async removeKnown(dir: DirectoryHandle, entry: IndexEntry): Promise<void> {
-    const name = entry.explicitlyTrashed ? entry.id : diskNameOf(entry);
-    await this.removeKnownAt(dir, name, entry);
+  private async removeAt(path: readonly string[]): Promise<void> {
+    const dir = await this.dirAt(path.slice(0, -1), false);
+    await ignoreNotFound(dir.removeEntry(path[path.length - 1] ?? ''));
   }
 
   private async removeKnownAt(dir: DirectoryHandle, name: string, entry: IndexEntry): Promise<void> {

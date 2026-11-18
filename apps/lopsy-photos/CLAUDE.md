@@ -61,7 +61,12 @@ npm run build:site:noopt   # the same with wasm:build:noopt, where wasm-opt cann
 npm run assemble:site      # only the assembly, from both apps' existing dist/
 npm run serve:site         # dist/ the way Cloudflare Pages serves it (_redirects, _headers), port 4180
 npm run test:e2e:site      # Playwright smoke test of dist/ (playwright.site.config.ts)
+npm run test:e2e:offline   # builds Photos alone at /photos/, starts it offline (service worker), cleans up
 ```
+
+The service worker (`src/sw/`, emitted as `<base>sw.js` by
+`scripts/vite-plugin-service-worker.ts`) runs only in production builds.
+It precaches the app shell and never handles Google hosts or Drive content.
 
 Photos' `public/_redirects` and `public/_headers` are written for serving
 it at `/` on its own domain; `assemble-site.mjs` moves them under

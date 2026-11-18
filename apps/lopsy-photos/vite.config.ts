@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import { resolve } from 'path';
+import { serviceWorkerPlugin } from './scripts/vite-plugin-service-worker';
 
 const repoRoot = resolve(__dirname, '../..');
 
@@ -23,7 +24,7 @@ function photosBase(value: string | undefined): string {
 
 export default defineConfig({
   base: photosBase(process.env.PHOTOS_BASE),
-  plugins: [react(), wasm(), topLevelAwait()],
+  plugins: [react(), wasm(), topLevelAwait(), serviceWorkerPlugin()],
   worker: {
     format: 'es',
     plugins: () => [wasm(), topLevelAwait()],
