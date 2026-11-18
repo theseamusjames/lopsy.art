@@ -653,6 +653,9 @@ value is then the x it was pulled from.
 `npm run wasm:build` has wasm-pack download binaryen for `wasm-opt`; when
 the sandbox can't reach that GitHub release the build fails. `npm run
 wasm:build:dev` skips `wasm-opt` and is enough for running e2e tests.
+`npm run wasm:build:noopt` is a release build without `wasm-opt`: a third of
+the dev build's size and much faster at decoding (a 40 MP RAF is slow in the
+dev build). Use it for anything that opens real photos.
 
 ## WebGL: unbind sampler units before drawing into a texture the compositor samples
 On WebGL a draw into a texture that is still bound to a texture unit for

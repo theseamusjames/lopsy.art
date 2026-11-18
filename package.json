@@ -12,6 +12,7 @@
     "wasm:build": "npm run wasm:build -w lopsy-web --",
     "wasm:build:wgpu": "npm run wasm:build:wgpu -w lopsy-web --",
     "wasm:build:dev": "npm run wasm:build:dev -w lopsy-web --",
+    "wasm:build:noopt": "npm run wasm:build:noopt -w lopsy-web --",
     "wasm:test": "npm run wasm:test -w lopsy-web --",
     "wasm:test:wgpu": "npm run wasm:test:wgpu -w lopsy-web --",
     "wasm:size": "npm run wasm:size -w lopsy-web --",

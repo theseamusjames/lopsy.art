@@ -8,6 +8,7 @@
     "wasm:build": "rm -rf src/engine-wasm/pkg && cd ../../engine && wasm-pack build hosts/wasm --target web --out-dir ../../../apps/lopsy-web/src/engine-wasm/pkg",
     "wasm:build:wgpu": "rm -rf src/engine-wasm/pkg-wgpu && cd ../../engine && wasm-pack build hosts/wasm --target web --out-dir ../../../apps/lopsy-web/src/engine-wasm/pkg-wgpu -- --features wgpu",
     "wasm:build:dev": "rm -rf src/engine-wasm/pkg && cd ../../engine && wasm-pack build hosts/wasm --target web --dev --out-dir ../../../apps/lopsy-web/src/engine-wasm/pkg",
+    "wasm:build:noopt": "rm -rf src/engine-wasm/pkg && cd ../../engine && wasm-pack build hosts/wasm --release --no-opt --target web --out-dir ../../../apps/lopsy-web/src/engine-wasm/pkg",
     "wasm:test": "cd ../../engine && cargo test",
     "wasm:test:wgpu": "cd ../../engine && cargo test -p lopsy-engine --features native && cargo test -p lopsy-cli",
     "wasm:size": "node scripts/check-bundle-size.mjs",
