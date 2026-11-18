@@ -1544,6 +1544,8 @@ Each question has a recommendation; the decision is the owner's.
 
 ## 15. Setup checklist
 
+The step-by-step version for the proof of concept is `lopsy-photos-setup.md`.
+
 **Google Cloud** (Phase 0):
 - [ ] A project for Lopsy Photos, with the Drive API and Google Picker
       API enabled.
