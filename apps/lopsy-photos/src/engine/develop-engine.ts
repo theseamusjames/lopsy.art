@@ -42,6 +42,7 @@ import initWasm, {
   setViewport,
   updateLayer,
   uploadLayerPixelsF32Rect,
+  uploadLayerPixelsCompressedU16,
   uploadLayerPixelsFromCanvas,
   type Engine,
 } from '@lopsy/engine-pkg/lopsy_wasm';
@@ -114,6 +115,14 @@ export interface DevelopEngine {
   exportImage(options: ExportOptions): Promise<Blob>;
   dispose(): void;
 }
+
+/**
+ * The MIME type of a Lopsy layer handed over to be graded: the engine's
+ * 16-bit layer blob (`readLayerPixelsLz4U16`), uploaded as it is. It loads
+ * through the non-RAW pipeline with a transparent background, so the
+ * layer's transparency survives the grade.
+ */
+export const LOPSY_LAYER_MIME = 'application/x-lopsy-layer16';
 
 /** Long edge of the binned first view of a RAF (`rafRenderBinnedLinear`). */
 const QUICK_VIEW_LONG_EDGE = 2048;
@@ -256,6 +265,7 @@ class PhotoEngine implements DevelopEngine {
     signal: AbortSignal,
     report: (stage: LoadProgress['stage'], fraction: number | null) => void,
   ): Promise<Size> {
+    if (source.type === LOPSY_LAYER_MIME) return this.showImage(await this.decodeLopsyLayer(source, signal, report));
     if (format === 'raf') return this.decodeRaf(source, signal, report);
     if (format === 'dng') return this.decodeDng(source, signal, report);
     if (format === 'png') {
@@ -351,6 +361,27 @@ class PhotoEngine implements DevelopEngine {
     if (!meta.width || !meta.height) throw new Error('The DNG file decoded to an empty image');
     this.sizeDocument(meta.width, meta.height);
     return this.showImage({ width: meta.width, height: meta.height });
+  }
+
+  /** A Lopsy layer blob, straight into the layer texture at full depth. */
+  private async decodeLopsyLayer(
+    source: Blob,
+    signal: AbortSignal,
+    report: (stage: LoadProgress['stage'], fraction: number | null) => void,
+  ): Promise<Size> {
+    const data = new Uint8Array(await source.arrayBuffer());
+    this.checkLive(signal);
+    if (data.byteLength < 24) throw new Error('The layer from Lopsy is empty');
+    const header = new DataView(data.buffer, data.byteOffset, 24);
+    const width = header.getInt32(16, true);
+    const height = header.getInt32(20, true);
+    if (width <= 0 || height <= 0) throw new Error('The layer from Lopsy has no size');
+    report('uploading', null);
+    setBackgroundColor(this.engine, 0, 0, 0, 0);
+    this.resetLayer(1, 1);
+    uploadLayerPixelsCompressedU16(this.engine, this.layerId, data);
+    this.sizeDocument(width, height);
+    return { width, height };
   }
 
   /** The engine's PNG decoder keeps 16-bit files at full depth; null when it cannot read the file. */
