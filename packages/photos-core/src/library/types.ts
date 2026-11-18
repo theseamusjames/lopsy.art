@@ -218,6 +218,17 @@ export interface HistoryStep {
   readonly hlc: string;
   /** False once undone (and not redone). */
   readonly active: boolean;
+  /** Made on this device. Undo and redo act only on this device's steps. */
+  readonly own?: boolean;
+  /**
+   * This device's active step with at least one field nobody has changed
+   * since; undoing it restores only those fields.
+   */
+  readonly undoable?: boolean;
+  /** The step `undo()` would undo now. */
+  readonly nextUndo?: boolean;
+  /** The step `redo()` would redo now. */
+  readonly nextRedo?: boolean;
 }
 
 /** A new asset: its facts plus optional starting marks. */
