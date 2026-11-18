@@ -22,11 +22,6 @@ fn log_error(what: &str, e: &str) {
     crate::host::log(crate::host::LogLevel::Error, &format!("{what}: {e}"));
 }
 
-/// A blurred copy of the composite, full-size or downscaled.
-struct Blurred {
-    tex: TextureHandle,
-}
-
 /// One separable blur pass of `src` into `dst` (`w`×`h`).
 fn blur_pass(engine: &EngineInner, src: TextureHandle, dst: TextureHandle, w: u32, h: u32, horizontal: bool, sigma: f32) -> Result<(), String> {
     let program = engine.shaders.blur_axis()?;
@@ -41,9 +36,10 @@ fn blur_pass(engine: &EngineInner, src: TextureHandle, dst: TextureHandle, w: u3
     if drawn { Ok(()) } else { Err("blur pass did not draw".to_string()) }
 }
 
-/// A Gaussian of σ (working pixels) of `src`, `w`×`h`. The caller releases
-/// the returned texture.
-fn blur(engine: &mut EngineInner, src: TextureHandle, w: u32, h: u32, sigma: f32) -> Result<Blurred, String> {
+/// A Gaussian of σ (working pixels) of `src`, `w`×`h`: full-size, or
+/// downscaled when σ is above `PYRAMID_SIGMA`. The caller releases the
+/// returned texture.
+fn blur(engine: &mut EngineInner, src: TextureHandle, w: u32, h: u32, sigma: f32) -> Result<TextureHandle, String> {
     if sigma <= detail::PYRAMID_SIGMA {
         let a = engine.texture_pool.acquire(w, h)?;
         let b = match engine.texture_pool.acquire(w, h) {
@@ -56,7 +52,7 @@ fn blur(engine: &mut EngineInner, src: TextureHandle, w: u32, h: u32, sigma: f32
         let result = blur_pass(engine, src, a, w, h, true, sigma).and_then(|_| blur_pass(engine, a, b, w, h, false, sigma));
         engine.texture_pool.release(a);
         return match result {
-            Ok(()) => Ok(Blurred { tex: b }),
+            Ok(()) => Ok(b),
             Err(e) => {
                 engine.texture_pool.release(b);
                 Err(e)
@@ -86,7 +82,7 @@ fn blur(engine: &mut EngineInner, src: TextureHandle, w: u32, h: u32, sigma: f32
         .and_then(|_| blur_pass(engine, b, a, lw, lh, false, low_sigma));
     engine.texture_pool.release(b);
     match result {
-        Ok(()) => Ok(Blurred { tex: a }),
+        Ok(()) => Ok(a),
         Err(e) => {
             engine.texture_pool.release(a);
             Err(e)
@@ -126,12 +122,12 @@ fn noise_reduction(engine: &mut EngineInner, s: &DetailSettings) -> Result<(), S
     let drawn = engine
         .pass(&program, params)
         .texture("u_tex", engine.composite_texture)
-        .texture("u_chroma", chroma.tex)
+        .texture("u_chroma", chroma)
         .blend(Blend::Off)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(2);
-    engine.texture_pool.release(chroma.tex);
+    engine.texture_pool.release(chroma);
     if drawn {
         scratch_to_composite(engine);
     }
@@ -169,12 +165,12 @@ fn sharpening(engine: &mut EngineInner, s: &DetailSettings, mask_view: bool) -> 
     let drawn = engine
         .pass(&program, DetailSharpenParams { amount: s.amount / 100.0, edges: s.edges, mask_view: i32::from(mask_view) })
         .texture("u_tex", engine.composite_texture)
-        .texture("u_blurred", blurred.tex)
+        .texture("u_blurred", blurred)
         .blend(Blend::Off)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(2);
-    engine.texture_pool.release(blurred.tex);
+    engine.texture_pool.release(blurred);
     if drawn {
         scratch_to_composite(engine);
     }
@@ -196,21 +192,21 @@ fn local_contrast(engine: &mut EngineInner, s: &LocalContrastSettings) -> Result
     let large = match blur(engine, engine.composite_texture, w, h, detail::LC_LARGE_SIGMA * s.pixel_scale) {
         Ok(l) => l,
         Err(e) => {
-            engine.texture_pool.release(small.tex);
+            engine.texture_pool.release(small);
             return Err(e);
         }
     };
     let drawn = engine
         .pass(&program, LocalContrastParams { large_amount: s.large, small_amount: s.small, haze_amount: s.haze })
         .texture("u_tex", engine.composite_texture)
-        .texture("u_small", small.tex)
-        .texture("u_large", large.tex)
+        .texture("u_small", small)
+        .texture("u_large", large)
         .blend(Blend::Off)
         .viewport(0, 0, w as i32, h as i32)
         .draw(Target::Framebuffer(engine.scratch_fbo_a));
     engine.gpu().unbind_textures(3);
-    engine.texture_pool.release(small.tex);
-    engine.texture_pool.release(large.tex);
+    engine.texture_pool.release(small);
+    engine.texture_pool.release(large);
     if drawn {
         scratch_to_composite(engine);
     }

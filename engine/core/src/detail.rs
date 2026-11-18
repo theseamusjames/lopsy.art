@@ -10,7 +10,8 @@
 //! layer, then the document's image adjustments (tone, colour, curves in
 //! one pass), then the colour mixer. These stages fit around that as:
 //! RAW develop → **noise reduction → haze + local contrast** → image
-//! adjustments → colour mixer → **sharpening**. Deviations: all of them
+//! adjustments → colour mixer → areas → **sharpening** → finish (the
+//! whole chain is in `engine/src/develop/mod.rs`). Deviations: all of them
 //! work on display-referred (sRGB-encoded) values rather than linear
 //! light, and local contrast runs before the tone controls instead of
 //! after them.
