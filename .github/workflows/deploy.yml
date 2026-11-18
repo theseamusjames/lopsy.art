@@ -26,7 +26,25 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - run: npm ci
-      - run: npm run build
+
+      # Lopsy Photos ships inside lopsy.art at /photos/ only once the owner
+      # sets the repository variable DEPLOY_PHOTOS to 'true' (Settings >
+      # Secrets and variables > Actions > Variables). Until then this job
+      # builds and publishes Lopsy exactly as before, and production does
+      # not change. See docs/lopsy-photos-spec.md, 6.3.
+      - name: Build Lopsy
+        if: vars.DEPLOY_PHOTOS != 'true'
+        run: npm run build
+
+      # The Google settings are public identifiers, not secrets: they ship in
+      # the page. Without the client ID, Photos offers local storage only.
+      - name: Build the site (Lopsy at /, Lopsy Photos at /photos/)
+        if: vars.DEPLOY_PHOTOS == 'true'
+        run: npm run build:site
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.PHOTOS_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_API_KEY: ${{ vars.PHOTOS_GOOGLE_API_KEY }}
+          VITE_GOOGLE_APP_ID: ${{ vars.PHOTOS_GOOGLE_APP_ID }}
 
       # Tutorial projects live only in R2 (uploaded with `npm run
       # tutorial:upload`), so no published link may point at a missing one.
@@ -38,4 +56,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/lopsy-web/dist --project-name=lopsy-art
+          command: pages deploy ${{ vars.DEPLOY_PHOTOS == 'true' && 'dist' || 'apps/lopsy-web/dist' }} --project-name=lopsy-art
