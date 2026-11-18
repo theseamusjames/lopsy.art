@@ -14,6 +14,9 @@ import {
 } from '@lopsy/photos-core/library/recipe';
 import type { Json } from '@lopsy/photos-core/library/types';
 import {
+  RECIPE_GROUPS,
+  isGroupDefault as isRecipeGroupDefault,
+  type RecipeGroupId,
   CURVE_CHANNELS,
   GRADE_RANGES,
   HUE_BANDS,
@@ -275,3 +278,8 @@ export function resetChangesFor(recipe: Recipe, controls: readonly ControlDef[])
 /** The Framing group's Straighten angle, once the recipe has one (framing.angle). */
 export const FRAMING_GROUP: GroupDef | null =
   'framing.angle' in RECIPE_RANGES ? { id: 'framing', title: 'Straighten', controls: [{ path: 'framing.angle', label: 'Angle', historyLabel: 'Straighten' }] } : null;
+
+/** The groups a new preset starts with: the ones this edit changed, framing left out (spec 5.4). */
+export function changedGroups(recipe: Recipe): RecipeGroupId[] {
+  return RECIPE_GROUPS.map((g) => g.id).filter((id) => id !== 'framing' && !isRecipeGroupDefault(recipe, id));
+}

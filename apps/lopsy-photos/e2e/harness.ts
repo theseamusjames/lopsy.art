@@ -89,6 +89,26 @@ export async function openGeneratedImages(page: Page, colors: readonly string[])
   }, colors);
 }
 
+/** A JPEG whose top half is red and bottom half blue, to tell a vertical flip. */
+export async function openTopBottomImage(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const canvas = new OffscreenCanvas(400, 300);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no 2d context');
+    ctx.fillStyle = '#c03030';
+    ctx.fillRect(0, 0, 400, 150);
+    ctx.fillStyle = '#3040c0';
+    ctx.fillRect(0, 150, 400, 150);
+    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([blob], 'top-bottom.jpg', { type: 'image/jpeg' }));
+    const input = document.querySelector<HTMLInputElement>('[data-testid="harness-file"]');
+    if (!input) throw new Error('no file input');
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
 export async function waitForReady(page: Page, timeout = 30_000): Promise<void> {
   await expect(page.getByTestId('edit-view')).toHaveAttribute('data-status', 'ready', { timeout });
 }
@@ -113,7 +133,11 @@ export async function settledPreview(page: Page, count: number): Promise<number>
   return (await previewCount(page)) - 1;
 }
 
-type BlobSource = { readonly kind: 'preview'; readonly index: number; readonly which: 'thumb' | 'screen' } | { readonly kind: 'export'; readonly index: number };
+type BlobSource = (
+ { readonly kind: 'preview'; readonly index: number; readonly which: 'thumb' | 'screen' } | { readonly kind: 'export'; readonly index: number }) & {
+  /** Measure only the top or bottom half. */
+  readonly half?: 'top' | 'bottom';
+};
 
 /** Decodes a recorded preview or export in the page and measures it. */
 export async function imageStats(page: Page, source: BlobSource): Promise<ImageStats> {
@@ -128,7 +152,10 @@ export async function imageStats(page: Page, source: BlobSource): Promise<ImageS
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('no 2d context');
     ctx.drawImage(bitmap, 0, 0);
-    const data = ctx.getImageData(0, 0, bitmap.width, bitmap.height).data;
+    const half = Math.floor(bitmap.height / 2);
+    const top = src.half === 'bottom' ? bitmap.height - half : 0;
+    const rows = src.half ? half : bitmap.height;
+    const data = ctx.getImageData(0, top, bitmap.width, rows).data;
     let sum = 0;
     let red = 0;
     let green = 0;

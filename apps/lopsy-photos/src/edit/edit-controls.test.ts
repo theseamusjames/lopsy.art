@@ -15,6 +15,7 @@ import {
   COLOR_BY_HUE_TABS,
   COLOR_GRADING_SHARED,
   COLOR_GRADING_TABS,
+  changedGroups,
   curvesResetChanges,
   resetChangesFor,
 } from './edit-controls';
@@ -128,5 +129,13 @@ describe('colour controls', () => {
     expect(resetChangesFor(r, controls)).toEqual({ 'colorByHue.aqua.hue': 0, 'colorGrading.blending': 50 });
     expect(curvesResetChanges(r)).toEqual({ 'curves.red': [{ x: 0, y: 0 }, { x: 1, y: 1 }] });
     expect(curvesResetChanges(DEFAULT_RECIPE)).toEqual({});
+  });
+});
+
+describe('changedGroups', () => {
+  it('lists the groups the edit changed, framing left out', () => {
+    expect(changedGroups(DEFAULT_RECIPE)).toEqual([]);
+    const r = applyChanges(DEFAULT_RECIPE, { 'tone.exposure': 1, 'sharpness.amount': 40, 'framing.angle': 5 });
+    expect(changedGroups(r)).toEqual(['tone', 'detail']);
   });
 });

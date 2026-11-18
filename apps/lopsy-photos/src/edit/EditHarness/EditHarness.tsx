@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
-import type { Asset, Json, PreviewRef, Version } from '@lopsy/photos-core/library/types';
+import type { Asset, Json, Preset, PreviewRef, Version } from '@lopsy/photos-core/library/types';
 import { EditView } from '../EditView/EditView';
 import type { FilmstripItem } from '../Filmstrip/Filmstrip';
 import { applyChanges } from '../edit-controls';
-import { recipeToPaths } from '@lopsy/photos-core/library/recipe';
+import { pickGroups, recipeToPaths } from '@lopsy/photos-core/library/recipe';
+import { BUILT_IN_PRESETS } from '@lopsy/photos-core/library/presets';
 import { formatOf, harnessAsset, harnessVersion } from './harness-asset';
 import { historySteps } from './recipe-history';
 import { EMPTY_HARNESS, currentPhoto, currentVersion, harnessReducer } from './harness-state';
@@ -53,6 +54,8 @@ export function EditHarness() {
   const [message, setMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [copied, setCopied] = useState<Recipe | null>(null);
+  const [userPresets, setUserPresets] = useState<readonly Preset[]>([]);
+  const presets = useMemo(() => [...BUILT_IN_PRESETS, ...userPresets], [userPresets]);
   const counter = useRef(0);
   const record = useMemo<HarnessRecord>(() => ({ previews: [], exports: [], steps: [], lopsyPngs: [], recipe: null }), []);
   const photo = currentPhoto(state);
@@ -217,6 +220,20 @@ export function EditHarness() {
             if (copied) handleEdit(pastedValues(copied), 'Paste edits');
           }}
           canPasteEdits={copied !== null}
+          presets={presets}
+          onSavePreset={(name, recipe, groups) => {
+            counter.current += 1;
+            const preset: Preset = {
+              id: `harness-preset-${counter.current}`,
+              name,
+              groups: [...groups],
+              values: pickGroups(recipe, groups),
+              createdAt: new Date().toISOString(),
+              deleted: false,
+            };
+            setUserPresets((list) => [...list, preset]);
+          }}
+          onDeletePreset={(presetId) => setUserPresets((list) => list.filter((p) => p.id !== presetId))}
           filmstrip={filmstrip.length > 1 ? { items: filmstrip, currentId: photo.asset.id, onOpen: (assetId) => dispatch({ kind: 'show', assetId }) } : undefined}
         />
       ) : (

@@ -1,7 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { ArrowLeft, ClipboardPaste, Copy, Crop, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
-import type { Asset, HistoryStep, Json, Version, VersionId } from '@lopsy/photos-core/library/types';
+import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
+import type { RecipeGroupId } from '@lopsy/photos-core/library/recipe';
+import { PresetsPanel } from '../PresetsPanel/PresetsPanel';
 import { LeftColumn, type LeftColumnSection } from '../LeftColumn/LeftColumn';
 import { HistoryPanel } from '../HistoryPanel/HistoryPanel';
 import { VersionsPanel } from '../VersionsPanel/VersionsPanel';
@@ -69,6 +71,11 @@ export interface EditViewProps {
   readonly onCreateVersion?: (name: string, recipe: Recipe) => void;
   readonly onRenameVersion?: (versionId: VersionId, name: string) => void;
   readonly onDeleteVersion?: (versionId: VersionId) => void;
+  /** Built-in and the user's edit presets (deleted ones left out). Shows the Presets list. */
+  readonly presets?: readonly Preset[];
+  /** Save preset…: the current edit's chosen groups (`LibrarySession.savePreset`). */
+  readonly onSavePreset?: (name: string, recipe: Recipe, groups: readonly RecipeGroupId[]) => void;
+  readonly onDeletePreset?: (presetId: PresetId) => void;
   /** Copy edits (⌘⇧C): the app asks which groups and keeps them. */
   readonly onCopyEdits?: (recipe: Recipe) => void;
   /** Paste edits (⌘⇧V) onto this version; the app applies them as one step. Disabled when `canPasteEdits` is false. */
@@ -126,6 +133,9 @@ export function EditView({
   onCopyEdits,
   onPasteEdits,
   canPasteEdits = true,
+  presets,
+  onSavePreset,
+  onDeletePreset,
 }: EditViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -145,6 +155,11 @@ export function EditView({
 
   const savedRecipe = committed?.base === version.recipe ? applyChanges(version.recipe, committed.changes) : version.recipe;
   const shownRecipe = useMemo(() => (draft ? applyChanges(savedRecipe, draft) : savedRecipe), [savedRecipe, draft]);
+  const [hoverPreset, setHoverPreset] = useState<Preset | null>(null);
+  const displayedRecipe = useMemo(
+    () => (hoverPreset ? applyChanges(shownRecipe, hoverPreset.values) : shownRecipe),
+    [shownRecipe, hoverPreset],
+  );
 
   // A committed edit only bridges the moment until the library hands back
   // the new recipe; once it has, an undo back to the old recipe object must
@@ -154,8 +169,8 @@ export function EditView({
   }, [version.recipe]);
 
   useEffect(() => {
-    engine?.setRecipe(isBefore ? beforeRecipe(shownRecipe) : shownRecipe);
-  }, [engine, shownRecipe, isBefore]);
+    engine?.setRecipe(isBefore ? beforeRecipe(displayedRecipe) : displayedRecipe);
+  }, [engine, displayedRecipe, isBefore]);
 
   // ---- previews ------------------------------------------------------
 
@@ -521,6 +536,23 @@ export function EditView({
           {...(onCreateVersion ? { onCreate: (name: string) => onCreateVersion(name, savedRecipe) } : {})}
           {...(onRenameVersion ? { onRename: onRenameVersion } : {})}
           {...(onDeleteVersion ? { onDelete: onDeleteVersion } : {})}
+        />
+      ),
+    });
+  }
+  if (presets) {
+    leftSections.unshift({
+      id: 'presets',
+      title: 'Presets',
+      content: (
+        <PresetsPanel
+          presets={presets}
+          recipe={savedRecipe}
+          isDisabled={!canEdit || isCropping || isBefore}
+          onApply={(preset) => commit(preset.values, `Preset: ${preset.name}`)}
+          onPreview={setHoverPreset}
+          {...(onSavePreset ? { onSave: (name: string, groups: readonly RecipeGroupId[]) => onSavePreset(name, savedRecipe, groups) } : {})}
+          {...(onDeletePreset ? { onDelete: onDeletePreset } : {})}
         />
       ),
     });
