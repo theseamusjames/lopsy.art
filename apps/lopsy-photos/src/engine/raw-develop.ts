@@ -15,6 +15,7 @@
  */
 
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
+import type { DevelopProfile } from './profiles';
 
 /** The JSON `setRawDevelop` takes and `rafDevelopDefaults` returns. */
 export interface RawDevelopSettings {
@@ -46,6 +47,24 @@ export function wbRatioFor(temperature: number, tint: number): [number, number, 
   const [wr, wg, wb] = WB_LUMA_WEIGHTS;
   const luma = wr * r + wg * g + wb * b;
   return [r / luma, g / luma, b / luma];
+}
+
+/**
+ * The inverse of `wbRatioFor`: Temperature and Tint whose ratios match
+ * `ratio` up to scale (the luminance normalisation drops out), rounded and
+ * clamped to the sliders' −100..100. Used for Auto white balance, whose
+ * engine answer is camera-space multipliers.
+ */
+export function temperatureTintFor(ratio: readonly [number, number, number]): { temperature: number; tint: number } {
+  const [r, g, b] = ratio;
+  if (!(r > 0 && g > 0 && b > 0)) return { temperature: 0, tint: 0 };
+  const t = Math.log2(r / b) / (2 * RAW_TEMPERATURE_STOPS);
+  const m = -Math.log2(g / Math.sqrt(r * b)) / RAW_TINT_STOPS;
+  const toSlider = (v: number) => {
+    const rounded = Math.round(Math.min(100, Math.max(-100, v * 100)));
+    return rounded === 0 ? 0 : rounded;
+  };
+  return { temperature: toSlider(t), tint: toSlider(m) };
 }
 
 function isNumberArray(value: unknown, length?: number): value is number[] {
@@ -83,15 +102,42 @@ export function parseRawDevelopSettings(json: string): RawDevelopSettings {
  * and saturation for a flat start; every other profile, 'standard'
  * included, is the camera's own film mode.
  */
-export function rawSettingsFor(defaults: RawDevelopSettings, recipe: Recipe): RawDevelopSettings {
-  const isNeutral = recipe.profile.id === 'neutral';
+export function rawSettingsFor(
+  defaults: RawDevelopSettings,
+  recipe: Recipe,
+  profiles: readonly DevelopProfile[] = [],
+): RawDevelopSettings {
+  const look = profileLook(defaults, recipe.profile.id, profiles);
   return {
     ...defaults,
     wbRatio: wbRatioFor(recipe.whiteBalance.temperature, recipe.whiteBalance.tint),
     exposureEv: defaults.exposureEv + recipe.tone.exposure,
-    saturation: isNeutral ? 1 : defaults.saturation,
-    baseCurve: isNeutral ? null : defaults.baseCurve,
+    saturation: look.saturation,
+    baseCurve: look.baseCurve,
   };
+}
+
+/**
+ * The saturation and curve of a profile. The engine's own profiles
+ * (`rafDevelopProfiles`) win when they carry their settings; otherwise
+ * 'neutral' is flat, 'monochrome' is the camera's curve with no colour,
+ * and anything else is the camera's own film mode.
+ */
+function profileLook(
+  defaults: RawDevelopSettings,
+  id: string,
+  profiles: readonly DevelopProfile[],
+): { saturation: number; baseCurve: readonly number[] | null } {
+  const engineProfile = profiles.find((p) => p.id === id);
+  if (engineProfile && (engineProfile.saturation !== undefined || engineProfile.baseCurve !== undefined)) {
+    return {
+      saturation: engineProfile.saturation ?? defaults.saturation,
+      baseCurve: engineProfile.baseCurve === undefined ? defaults.baseCurve : engineProfile.baseCurve,
+    };
+  }
+  if (id === 'neutral') return { saturation: 1, baseCurve: null };
+  if (id === 'monochrome') return { saturation: 0, baseCurve: defaults.baseCurve };
+  return { saturation: defaults.saturation, baseCurve: defaults.baseCurve };
 }
 
 export function rawSettingsJson(settings: RawDevelopSettings): string {

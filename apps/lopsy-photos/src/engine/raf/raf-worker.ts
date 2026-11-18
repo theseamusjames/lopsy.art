@@ -7,8 +7,10 @@
  * functions: no engine, no GPU.
  */
 
+import * as engineWasm from '@lopsy/engine-pkg/lopsy_wasm';
 import {
   initSync,
+  rafAutoWhiteBalance,
   rafDevelopDefaults,
   rafPrepare,
   rafRenderBand,
@@ -32,6 +34,20 @@ function takeBand(band: RafRenderedBand): RafBandPixels {
   }
 }
 
+/** `rafDevelopProfiles` arrives in a later engine build; until then there is none. */
+function developProfiles(paramsJson: string): string | null {
+  const fn: unknown = (engineWasm as unknown as Record<string, unknown>)['rafDevelopProfiles'];
+  if (typeof fn !== 'function') return null;
+  const result: unknown = fn(paramsJson);
+  return typeof result === 'string' ? result : null;
+}
+
+function autoWbRatio(binned: RafBandPixels | null): [number, number, number] | null {
+  if (!binned) return null;
+  const [r = 1, g = 1, b = 1] = rafAutoWhiteBalance(binned.pixels);
+  return [r, g, b];
+}
+
 function handle(req: RafWorkerRequest): void {
   if (req.kind === 'init') {
     initSync({ module: req.module });
@@ -53,6 +69,8 @@ function handle(req: RafWorkerRequest): void {
           developDefaultsJson: rafDevelopDefaults(paramsJson),
           mosaic,
           binned,
+          autoWbRatio: autoWbRatio(binned),
+          profilesJson: developProfiles(paramsJson),
         },
         transfer,
       );

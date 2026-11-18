@@ -39,6 +39,10 @@ export type RafWorkerResponse =
       developDefaultsJson: string;
       mosaic: Float32Array;
       binned: RafBandPixels | null;
+      /** `rafAutoWhiteBalance` of the binned frame: camera-space multipliers, green 1. */
+      autoWbRatio: [number, number, number] | null;
+      /** `rafDevelopProfiles(paramsJson)`, when the engine has it. */
+      profilesJson: string | null;
     }
   | {
       kind: 'band';

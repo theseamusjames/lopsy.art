@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE, type Recipe } from '@lopsy/photos-core/library/recipe';
-import { WB_LUMA_WEIGHTS, parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, wbRatioFor } from './raw-develop';
+import { WB_LUMA_WEIGHTS, parseRawDevelopSettings, rawSettingsFor, rawSettingsJson, temperatureTintFor, wbRatioFor } from './raw-develop';
 
 const DEFAULTS_JSON = JSON.stringify({
   wbRatio: [1, 1, 1],
@@ -94,5 +94,39 @@ describe('rawSettingsFor', () => {
     const s = rawSettingsFor(defaults, recipe({ profile: 'neutral' }));
     expect(s.baseCurve).toBeNull();
     expect(s.saturation).toBe(1);
+  });
+});
+
+describe('temperatureTintFor', () => {
+  it('inverts wbRatioFor', () => {
+    for (const t of [-100, -40, 0, 25, 100]) {
+      for (const m of [-80, 0, 33]) expect(temperatureTintFor(wbRatioFor(t, m))).toEqual({ temperature: t, tint: m });
+    }
+  });
+
+  it('ignores the scale of the ratios, as the engine gives green = 1', () => {
+    const [r, g, b] = wbRatioFor(30, -20);
+    expect(temperatureTintFor([r / g, 1, b / g])).toEqual({ temperature: 30, tint: -20 });
+  });
+
+  it('clamps to the slider range and survives nonsense', () => {
+    expect(temperatureTintFor([16, 1, 0.01])).toEqual({ temperature: 100, tint: -100 });
+    expect(temperatureTintFor([0, 1, 1])).toEqual({ temperature: 0, tint: 0 });
+  });
+});
+
+describe('profiles in the develop settings', () => {
+  const defaults = parseRawDevelopSettings(DEFAULTS_JSON);
+
+  it('takes Monochrome as no colour on the camera curve', () => {
+    const s = rawSettingsFor(defaults, recipe({ profile: 'monochrome' }));
+    expect(s.saturation).toBe(0);
+    expect(s.baseCurve).toEqual(defaults.baseCurve);
+  });
+
+  it('uses an engine profile with settings', () => {
+    const s = rawSettingsFor(defaults, recipe({ profile: 'astia' }), [{ id: 'astia', name: 'Astia', saturation: 1.1, baseCurve: [0, 1] }]);
+    expect(s.saturation).toBe(1.1);
+    expect(s.baseCurve).toEqual([0, 1]);
   });
 });

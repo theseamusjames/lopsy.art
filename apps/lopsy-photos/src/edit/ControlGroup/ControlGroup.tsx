@@ -12,14 +12,32 @@ export interface ControlGroupProps {
   readonly onChange: (control: ControlDef, value: number) => void;
   readonly onCommit: (control: ControlDef, value: number) => void;
   readonly onReset: (group: GroupDef) => void;
+  /** Shows an Auto button in the header that calls this. */
+  readonly onAuto?: () => void;
+  /** What Auto does, for its tooltip. */
+  readonly autoTitle?: string;
 }
 
-export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, onReset }: ControlGroupProps) {
+export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, onReset, onAuto, autoTitle }: ControlGroupProps) {
   const isDefault = isGroupDefault(recipe, group);
   return (
     <section className={styles.group} aria-label={group.title}>
       <header className={styles.header}>
         <h3 className={styles.title}>{group.title}</h3>
+        {onAuto && (
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.actionButton}
+              aria-label={`Auto ${group.title}`}
+              title={autoTitle}
+              disabled={isDisabled}
+              onClick={onAuto}
+            >
+              Auto
+            </button>
+          </div>
+        )}
         <button
           type="button"
           className={styles.reset}
