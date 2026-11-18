@@ -162,3 +162,31 @@ describe('library undo', () => {
     expect(other.getView().assets.get(b.assetId)?.rating).toBe(4);
   });
 });
+
+describe('editedAt', () => {
+  it('is stamped when a recipe changes, by edit, paste, undo and redo, and not by a no-op or a new version', async () => {
+    let wall = Date.UTC(2026, 10, 18, 9);
+    const s = await openLibrary({ adapter: new TestAdapter(), store: new MemoryLocalStore(), autoSync: false, now: () => wall });
+    const a = s.addAsset(photo(1));
+    const at = () => s.getView().versions.get(a.versionId)?.editedAt;
+    expect(at()).toBeUndefined();
+    wall += 1000;
+    s.editRecipe(a.versionId, { 'tone.exposure': 1 }, 'Exposure');
+    expect(at()).toBe(new Date(wall).toISOString());
+    const edited = at();
+    wall += 1000;
+    s.setRecipe(a.versionId, s.getView().versions.get(a.versionId)!.recipe, 'Paste settings');
+    expect(at()).toBe(edited);
+    wall += 1000;
+    s.applyRecipeValues([a.versionId], { 'color.vibrance': 20 }, 'Paste edits');
+    expect(at()).toBe(new Date(wall).toISOString());
+    wall += 1000;
+    s.undo(a.versionId);
+    expect(at()).toBe(new Date(wall).toISOString());
+    wall += 1000;
+    s.redo(a.versionId);
+    expect(at()).toBe(new Date(wall).toISOString());
+    const v2 = s.createVersion(a.assetId, 'Copy', s.getView().versions.get(a.versionId)!.recipe);
+    expect(s.getView().versions.get(v2)?.editedAt).toBeUndefined();
+  });
+});

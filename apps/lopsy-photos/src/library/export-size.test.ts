@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_EXPORT_SETTINGS } from '@lopsy/photos-core/export/types';
-import { DEFAULT_EXTRAS, extrasFromSettings, extrasOf, maxLongEdgeOf, outputSize, parseExtras, withExtras } from './export-size';
+import { DEFAULT_EXPORT_SETTINGS, exportSettingsFromJson } from '@lopsy/photos-core/export/types';
+import { DEFAULT_EXTRAS, extrasOf, maxLongEdgeOf, outputSize, parseExtras, presetExtras, withExtras } from './export-size';
 
 const image = { width: 6000, height: 4000 };
 
@@ -29,6 +29,16 @@ describe('export size', () => {
   it('maps a long edge both ways for photos-core and built-in presets', () => {
     expect(maxLongEdgeOf({ ...DEFAULT_EXTRAS, size: { mode: 'long', px: 2048 } })).toBe(2048);
     expect(maxLongEdgeOf({ ...DEFAULT_EXTRAS, size: { mode: 'short', px: 2048 } })).toBeNull();
-    expect(extrasFromSettings({ ...DEFAULT_EXPORT_SETTINGS, maxLongEdge: 2048 }).size).toEqual({ mode: 'long', px: 2048 });
+    // A preset saved before the size fields: its long edge is its size.
+    expect(extrasOf(exportSettingsFromJson({ format: 'jpeg', maxLongEdge: 2048 })).size).toEqual({ mode: 'long', px: 2048 });
+  });
+
+  it('are real settings fields that survive a saved preset, and read old presets from their setting', () => {
+    const extras = { ...DEFAULT_EXTRAS, size: { mode: 'megapixels' as const, mp: 12 }, allowEnlarge: true, pngDepth: 8 as const, zip: false };
+    const saved = exportSettingsFromJson(JSON.parse(JSON.stringify(withExtras({ ...DEFAULT_EXPORT_SETTINGS, format: 'png' as const }, extras))));
+    expect(saved).toMatchObject({ size: { mode: 'megapixels', mp: 12 }, allowEnlarge: true, pngDepth: 8, zip: false, maxLongEdge: null });
+    expect(presetExtras(saved, undefined)).toEqual(extras);
+    const legacy = { size: { mode: 'short', px: 1080 }, allowEnlarge: false, pngDepth: 16, zip: true };
+    expect(presetExtras(exportSettingsFromJson({ format: 'jpeg' }), legacy).size).toEqual({ mode: 'short', px: 1080 });
   });
 });

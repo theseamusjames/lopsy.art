@@ -163,6 +163,7 @@ export function versionFromRecord(id: string, record: EntityRecord): Version | n
     name: str(field(record, 'name'), ''),
     recipe: recipeFromPaths(recipePathsOf(record)),
     createdAt: str(field(record, 'createdAt'), ''),
+    ...(typeof field(record, 'editedAt') === 'string' ? { editedAt: field(record, 'editedAt') as string } : {}),
     thumb: preview(field(record, 'thumb')),
     screen: preview(field(record, 'screen')),
     deleted: field(record, 'deleted') === true,

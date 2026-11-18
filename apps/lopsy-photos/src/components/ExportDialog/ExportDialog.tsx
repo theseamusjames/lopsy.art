@@ -14,11 +14,10 @@ import { tiffExportAvailable } from '../../app/export-capabilities';
 import { COLOR_SPACE_WORDS, locationKept, offeredColorSpaces } from '../../library/export-form';
 import {
   DEFAULT_EXTRAS,
-  extrasFromSettings,
   extrasSettingKey,
-  extrasToJson,
   maxLongEdgeOf,
-  parseExtras,
+  presetExtras,
+  withExtras,
   type ExportExtras,
   type SizeSpec,
 } from '../../library/export-size';
@@ -81,8 +80,8 @@ export function ExportDialog() {
   const setSize = (size: SizeSpec) => change({}, { size });
 
   const pickPreset = (preset: ExportPreset) => {
-    const stored = view.settings.get(extrasSettingKey(preset.id));
-    const ex = stored !== undefined ? parseExtras(stored) : extrasFromSettings(preset.settings);
+    // A preset saved before the size fields existed kept them in a setting.
+    const ex = presetExtras(preset.settings, view.settings.get(extrasSettingKey(preset.id)));
     setState(fit(preset.settings, ex));
     setPresetId(preset.id);
   };
@@ -164,9 +163,8 @@ export function ExportDialog() {
             disabled={running}
             onPick={pickPreset}
             onSave={(presetName) => {
-              const id = session.saveExportPreset(presetName, settings);
+              const id = session.saveExportPreset(presetName, withExtras(settings, extras));
               if (!id) return;
-              session.setSetting(extrasSettingKey(id), extrasToJson(extras));
               setPresetId(id);
             }}
             onRename={(id, presetName) => session.renameExportPreset(id, presetName)}

@@ -10,7 +10,7 @@ import { compileSearch, type LabelChoice, type SavedSearch, type SearchRule } fr
 import { computeFacets, type Facets } from '@lopsy/photos-core/search/facets';
 import { groupBursts } from '@lopsy/photos-core/search/bursts';
 import { versionItemId, versionsByAsset, type ItemId } from './items';
-import { baseAssets, compareAssets, isHiddenPairHalf, type AssetQuery, type Collection } from './asset-query';
+import { baseAssets, compareAssets, isHiddenPairHalf, lastEditedIn, type AssetQuery, type Collection } from './asset-query';
 
 export interface FacetFilter {
   readonly cameras: readonly string[];
@@ -93,7 +93,7 @@ export interface FindQuery extends AssetQuery {
   /** Burst covers whose burst is shown open. */
   readonly expanded: ReadonlySet<AssetId>;
   readonly savedSearches: readonly SavedSearch[];
-  /** For the Last edited order: when the photo's shown version was last edited (sortable), or null. */
+  /** For the Last edited order: when the photo was last edited (sortable), or null. Default: `lastEditedIn(view)`. */
   readonly lastEdited?: (asset: Asset) => string | null;
 }
 
@@ -157,8 +157,8 @@ export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((ass
   const predicate = rule ? compileSearch(rule) : null;
   const shown = predicate ? base.filter((a) => predicate(a, view)) : base;
   let editedAt: ((asset: Asset) => string | null) | undefined;
-  if (query.sort.key === 'edited' && query.lastEdited) {
-    const lastEdited = query.lastEdited;
+  if (query.sort.key === 'edited') {
+    const lastEdited = query.lastEdited ?? lastEditedIn(view);
     const memo = new Map<AssetId, string | null>();
     editedAt = (asset) => {
       if (!memo.has(asset.id)) memo.set(asset.id, lastEdited(asset));
