@@ -13,7 +13,6 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 test.skip(!process.env.LOPSY_ROUNDTRIP, 'needs both apps running: npx playwright test -c e2e/roundtrip.config.ts');
-test.skip(true, 'the Edit in Lopsy buttons are not wired into the Photos UI on this branch yet');
 
 const PHOTO_NAME = 'roundtrip';
 
@@ -78,7 +77,8 @@ async function importPhoto(page: Page, jpeg: Buffer): Promise<Locator> {
 /** Selects a tile and clicks Edit in Lopsy; returns Lopsy's tab once its handoff bar shows `name`. */
 async function editInLopsy(page: Page, context: BrowserContext, tile: Locator, name: string, lopsy?: Page): Promise<Page> {
   await tile.click();
-  const button = page.getByRole('button', { name: 'Edit in Lopsy' }).first();
+  // The grid toolbar's button ("Edit in Lopsy, with layers, painting and text").
+  const button = page.getByRole('button', { name: /^Edit in Lopsy, with layers/ });
   let editor: Page;
   if (lopsy) {
     // The named target reuses Lopsy's tab: it navigates rather than opening a new one.
