@@ -7,7 +7,7 @@
 import { useEditorStore } from '../app/editor-store';
 import { useUIStore } from '../app/ui-store';
 import { getEngine } from '../engine-wasm/engine-state';
-import { initWasm, uploadLayerPixels, uploadLayerMask } from '../engine-wasm/wasm-bridge';
+import { initWasm, uploadLayerPixels, uploadLayerMask, uploadLayerPixelsCompressedU16 } from '../engine-wasm/wasm-bridge';
 import { resetTrackedState, flushLayerSync, syncDocumentSize, forgetTextLayerLayout } from '../engine-wasm/engine-sync';
 import { extractFamilyName } from '../utils/font-loader';
 import { pixelDataManager } from '../engine/pixel-data-manager';
@@ -16,7 +16,7 @@ import { loadDocumentFonts } from '../app/load-document-fonts';
 import type { Layer, RasterLayer, TextLayer, ShapeLayer, GroupLayer } from '../types/layers';
 import type { Color } from '../types/color';
 import type { AdjustmentNode } from '../types/adjustment-nodes';
-import { FORMAT_VERSION, type LopsyManifest, type SerializedLayer } from './project-save';
+import { FORMAT_VERSION, PIXEL_FORMAT_RGBA16_LZ4, type LopsyManifest, type SerializedLayer } from './project-save';
 import { effectsForFormatVersion, parseStoredEffects } from './layer-effects-format';
 import { parseStoredColorSpans } from '../tools/text/text-color-spans';
 
@@ -302,6 +302,13 @@ export async function loadProject(file: File): Promise<void> {
 
         const blob = blobs[s.pixelDataIndex];
         if (!blob) continue;
+
+        if (s.pixelFormat === PIXEL_FORMAT_RGBA16_LZ4) {
+          // The blob carries its own geometry; the layer's position comes
+          // from the descriptor flushLayerSync pushed above.
+          uploadLayerPixelsCompressedU16(engine, s.id, blob);
+          continue;
+        }
 
         const decompressed = await decompressBytes(blob);
         // Prefer the recorded blob dimensions; fall back to the layer's logical
