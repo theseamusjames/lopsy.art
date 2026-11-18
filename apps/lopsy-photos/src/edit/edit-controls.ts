@@ -94,7 +94,15 @@ export const GROUPS: readonly GroupDef[] = [
   {
     id: 'finish',
     title: 'Finish',
-    controls: [{ path: 'finish.vignette', label: 'Vignette' }],
+    controls: [
+      { path: 'finish.vignette', label: 'Vignette' },
+      { path: 'finish.vignetteSize', label: 'Midpoint', historyLabel: 'Vignette midpoint' },
+      { path: 'finish.vignetteRoundness', label: 'Roundness', historyLabel: 'Vignette roundness' },
+      { path: 'finish.vignetteFeather', label: 'Feather', historyLabel: 'Vignette feather' },
+      { path: 'finish.grain.amount', label: 'Grain', historyLabel: 'Grain' },
+      { path: 'finish.grain.size', label: 'Grain size', historyLabel: 'Grain size' },
+      { path: 'finish.grain.roughness', label: 'Roughness', historyLabel: 'Grain roughness' },
+    ],
   },
 ];
 

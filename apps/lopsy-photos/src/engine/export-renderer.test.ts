@@ -28,6 +28,7 @@ function fakeEngine(): FakeEngine {
     engine: undefined as unknown as DevelopEngine,
   };
   const engine: Partial<DevelopEngine> = {
+    setGrainSeed: () => undefined,
     load: async (source, _format, _onProgress, options) => {
       fake.loads.push(await source.text());
       fake.resolution = options?.resolution === 'full' ? 'full' : 'working';

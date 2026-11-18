@@ -149,7 +149,12 @@ leaving.
   Rotate right, Flip, **Crop**, **Before** (or hold `\`), Fit (⌘0), 100%
   (⌘1) with a zoom readout, **Edit in Lopsy** and **Export**. The image
   pans by dragging and zooms with the wheel.
-- **Histogram** of the rendered edit, updated as it changes.
+- **Histogram** of the rendered edit, updated as it changes. Its shadow
+  and highlight markers light when the photo clips, and clicking them
+  shows clipped pixels on the photo (blue at black, red at white; never
+  in exports or previews); **J** toggles both. Holding Alt (Option)
+  while dragging Blacks or Whites shows that side's clipping, and while
+  dragging a Sharpen slider shows what is being sharpened.
 - **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
   not listed a second time), then the engine's film looks with Provia
   shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
@@ -174,7 +179,9 @@ leaving.
   orange, yellow, green, aqua, blue, purple, magenta).
 - **Color Grading**: shadows, midtones, highlights and global wheels
   (hue, saturation, luminance), Blending and Balance.
-- **Finish**: Vignette.
+- **Finish**: Vignette, with its Midpoint, Roundness and Feather; and
+  Grain, Grain size and Roughness. Grain is the same on every render and
+  export of a photo.
 - Every group has a **Reset**; each slider has a typed value field, and
   double-clicking a slider resets it. Each change is one history step
   named after it ("Exposure +0.50").
