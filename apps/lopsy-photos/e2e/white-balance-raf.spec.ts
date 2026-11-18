@@ -54,8 +54,22 @@ test.describe('White balance on a RAF', () => {
 
   test('lists the body presets, applies Daylight, and reads Temperature in Kelvin', async ({ page }) => {
     await openHarness(page);
+    // Every frame while the RAF loads: Temperature never takes input before it reads in Kelvin.
+    await page.evaluate(() => {
+      const seen: string[] = [];
+      (window as unknown as { __wbEarly: string[] }).__wbEarly = seen;
+      const watch = () => {
+        const input = document.querySelector<HTMLInputElement>('input[aria-label="Temperature value"]');
+        if (input && !input.disabled && !input.value.endsWith(' K')) seen.push(input.value);
+        if (!input?.value.endsWith(' K')) requestAnimationFrame(watch);
+      };
+      requestAnimationFrame(watch);
+    });
     await page.getByTestId('harness-file').setInputFiles(sample ?? '');
     await waitForReady(page, 120_000);
+    await expect(page.getByLabel('Temperature value')).toHaveValue(/ K$/);
+    expect(await page.evaluate(() => (window as unknown as { __wbEarly: string[] }).__wbEarly)).toEqual([]);
+    await expect(page.getByRole('button', { name: 'Auto White balance' })).toHaveCount(0);
     const expected = await engineWhiteBalance(page, sample ?? '');
     expect(expected.presets.length).toBeGreaterThan(3);
     expect(expected.kelvin).not.toBeNull();
@@ -91,7 +105,8 @@ test.describe('White balance on a RAF', () => {
     await temperature.press('Enter');
     await expect(temperature).toHaveValue('6500 K');
     await expect(mode).toHaveValue('custom');
-    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['White balance: Daylight', expect.stringMatching(/^Temperature /)]);
+    // History reads in the readout's units.
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['White balance: Daylight', 'Temperature 6500 K']);
 
     // Invalid text puts the readout back; a value out of range is clamped, never ignored.
     await temperature.fill('-60');

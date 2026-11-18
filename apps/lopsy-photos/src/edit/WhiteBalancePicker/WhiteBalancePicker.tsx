@@ -40,6 +40,10 @@ export function WhiteBalancePicker({ imageBox, documentSize, onPick, onCancel }:
         if (cssX < 0 || cssY < 0 || cssX > imageBox.width || cssY > imageBox.height) return;
         onPick((cssX / imageBox.width) * documentSize.width, (cssY / imageBox.height) * documentSize.height);
       }}
-    />
+    >
+      <span className={styles.hint} role="status" data-testid="white-balance-hint">
+        Click something neutral · Esc to cancel
+      </span>
+    </div>
   );
 }

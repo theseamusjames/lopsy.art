@@ -77,8 +77,8 @@ test.describe('Edit view on a RAF', () => {
     // The camera's own look first (not listed twice), Provia as Standard, then Neutral and Monochrome.
     await expect(profiles).toContainText(['Camera', 'Standard (Provia look)', 'Neutral', 'Monochrome']);
     const balanced = await previewAfter(page, async () => {
-      await page.getByRole('button', { name: 'Auto White balance' }).click();
-      await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('Auto white balance');
+      await page.getByLabel('White balance mode').selectOption('auto');
+      await expect.poll(() => page.evaluate(() => window.__photosHarness?.steps.at(-1))).toBe('White balance: Auto');
     });
     await expect(page.getByTestId('histogram')).toHaveAttribute('data-ready', 'true');
 
