@@ -715,3 +715,14 @@ github.com/theseamusjames/sample-raf-images (sandboxes often have it at
 importer prepares files concurrently, so of two identical files in one
 batch, either may be kept and the other marked duplicate: a test with the
 default concurrency must not assume which (CI saw both orders).
+
+Where Playwright's pinned Chromium build is missing (see "Sandbox:
+Playwright wants a Chromium build that is not installed"), each suite has
+its own way in: Photos' configs take `PLAYWRIGHT_CHROMIUM_EXECUTABLE` or
+fall back to `$PLAYWRIGHT_BROWSERS_PATH/chromium_headless_shell`;
+photos-core's browser harness takes `PW_CHROMIUM_PATH` (and run it with
+`CI=1`, or it may reuse another worktree's server on its fixed port);
+Lopsy's configs need a wrapper config that sets
+`launchOptions.executablePath` and `--project=chromium`. Seeded or
+many-scenario Vitest tests need an explicit timeout: Vitest's 5 s default
+fails them on a loaded machine.
