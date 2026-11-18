@@ -237,6 +237,7 @@ export class GoogleDriveAdapter implements StorageAdapter {
     throwIfAborted(options.signal);
     if (range && range.end <= range.start) {
       if ((await this.getFile(id)) === null) throw new StorageError('not-found', `No file with ID ${id}`);
+      options.onProgress?.(0, 0);
       return new Blob([]);
     }
     const headers: Record<string, string> = {};
@@ -249,8 +250,13 @@ export class GoogleDriveAdapter implements StorageAdapter {
         accept: [416],
         ...(options.signal ? { signal: options.signal } : {}),
       });
-      if (response.status === 416) return new Blob([]);
-      return this.readBody(response, options.signal, (r) => r.blob());
+      if (response.status === 416) {
+        options.onProgress?.(0, 0);
+        return new Blob([]);
+      }
+      const onProgress = options.onProgress;
+      if (!onProgress) return this.readBody(response, options.signal, (r) => r.blob());
+      return this.readBody(response, options.signal, (r) => readWithProgress(r, onProgress));
     });
   }
 
@@ -620,6 +626,31 @@ class TokenBucket {
     // A negative balance is a queue: each caller waits for the tokens owed before it.
     if (this.tokens < 0) await abortableDelay(this.sleep, (-this.tokens * 1000) / this.rate, signal);
   }
+}
+
+/** Reads a body chunk by chunk, reporting bytes so far against Content-Length when Drive sends it. */
+async function readWithProgress(response: Response, onProgress: (received: number, total: number | null) => void): Promise<Blob> {
+  const length = Number(response.headers.get('Content-Length') ?? Number.NaN);
+  const total = Number.isFinite(length) ? length : null;
+  const type = response.headers.get('Content-Type') ?? '';
+  if (!response.body) {
+    const blob = await response.blob();
+    onProgress(blob.size, blob.size);
+    return blob;
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array<ArrayBuffer>[] = [];
+  let received = 0;
+  onProgress(0, total);
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.byteLength;
+    onProgress(received, total);
+  }
+  if (total !== received) onProgress(received, received);
+  return new Blob(chunks, { type });
 }
 
 function query(params: Readonly<Record<string, string>>): string {
