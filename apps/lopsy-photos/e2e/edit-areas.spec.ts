@@ -1,0 +1,87 @@
+import { expect, test, type Page } from '@playwright/test';
+import { imageStats, openFlatImage, openHarness, settledPreview, waitForPreview, waitForReady } from './harness';
+
+async function setAreaValue(page: Page, area: string, label: string, value: string): Promise<void> {
+  const readout = page.getByRole('group', { name: `${area} adjustments` }).getByLabel(`${label} value`, { exact: true });
+  await readout.fill(value);
+  await readout.press('Enter');
+}
+
+async function exportJpeg(page: Page): Promise<number> {
+  const count = await page.evaluate(() => window.__photosHarness?.exports.length ?? 0);
+  await page.getByRole('button', { name: 'Export' }).click();
+  await page.waitForFunction((n) => (window.__photosHarness?.exports.length ?? 0) > n, count);
+  return count;
+}
+
+test.describe('Areas', () => {
+  test('a linear area darkens the top, in the render and the export; undo removes it', async ({ page }) => {
+    await openHarness(page);
+    await openFlatImage(page);
+    await waitForReady(page);
+    await waitForPreview(page, 0);
+
+    await page.getByRole('button', { name: 'Areas', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Areas' });
+    await panel.getByRole('button', { name: 'Linear' }).click();
+    await expect(panel.getByRole('list', { name: 'Area list' }).getByRole('button', { name: /^Linear\s*Area 1$/ })).toHaveAttribute('aria-current', 'true');
+    await expect(page.getByTestId('area-handles')).toBeVisible();
+    await setAreaValue(page, 'Area 1', 'Exposure', '-1');
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Add linear area', 'Area 1 exposure −1.00']);
+
+    const last = await settledPreview(page, 1);
+    const top = await imageStats(page, { kind: 'preview', index: last, which: 'screen', half: 'top' });
+    const bottom = await imageStats(page, { kind: 'preview', index: last, which: 'screen', half: 'bottom' });
+    expect(top.mean).toBeLessThan(bottom.mean - 15);
+
+    const index = await exportJpeg(page);
+    const exportTop = await imageStats(page, { kind: 'export', index, half: 'top' });
+    const exportBottom = await imageStats(page, { kind: 'export', index, half: 'bottom' });
+    expect(exportTop.mean).toBeLessThan(exportBottom.mean - 15);
+
+    await page.locator('body').click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press('ControlOrMeta+z');
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(panel.getByRole('list', { name: 'Area list' }).getByRole('button')).toHaveCount(0);
+  });
+
+  test('an inverted radial area leaves its centre alone and changes the corners', async ({ page }) => {
+    await openHarness(page);
+    await openFlatImage(page);
+    await waitForReady(page);
+    await waitForPreview(page, 0);
+    const before = await imageStats(page, { kind: 'preview', index: 0, which: 'screen', half: 'centre' });
+
+    await page.getByRole('button', { name: 'Areas', exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Areas' });
+    await panel.getByRole('button', { name: 'Radial' }).click();
+    await panel.getByRole('button', { name: 'Invert Area 1' }).click();
+    await setAreaValue(page, 'Area 1', 'Exposure', '-2');
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Add radial area', 'Area 1 inverted', 'Area 1 exposure −2.00']);
+
+    const last = await settledPreview(page, 1);
+    const centre = await imageStats(page, { kind: 'preview', index: last, which: 'screen', half: 'centre' });
+    const whole = await imageStats(page, { kind: 'preview', index: last, which: 'screen' });
+    expect(Math.abs(centre.mean - before.mean)).toBeLessThan(3);
+    expect(whole.mean).toBeLessThan(before.mean - 10);
+  });
+
+  test('dragging the centre handle moves a radial area as one step', async ({ page }) => {
+    await openHarness(page);
+    await openFlatImage(page);
+    await waitForReady(page);
+    await page.getByRole('button', { name: 'Areas', exact: true }).click();
+    await page.getByRole('region', { name: 'Areas' }).getByRole('button', { name: 'Radial' }).click();
+    const handle = page.locator('[data-handle="move"]');
+    const box = await handle.boundingBox();
+    if (!box) throw new Error('no handle');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 20, { steps: 5 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['Add radial area', 'Area: move']);
+    const recipe = await page.evaluate(() => window.__photosHarness?.recipe);
+    const area = Object.values((recipe as { areas: Record<string, { geometry: { cx: number } }> }).areas)[0];
+    expect(area?.geometry.cx).toBeGreaterThan(0.55);
+  });
+});
