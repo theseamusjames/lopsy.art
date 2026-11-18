@@ -106,8 +106,11 @@ userinfo endpoint for the account.
 5. **Picker API key.** Credentials > Create credentials > API key, then
    edit it:
    - Application restrictions: **Websites (HTTP referrers)**:
-     `http://localhost:5174/*` and `https://lopsy.art/photos/*` (or your
-     domain's `/*`).
+     `http://localhost:5174/*`, `https://lopsy.art/photos/*` (or your
+     domain's `/*`) **and `https://docs.google.com/*`**. The Picker runs in
+     an iframe on docs.google.com and uses the key from there; without
+     that referrer it shows "The API developer key is invalid" (the app
+     then reports a Picker error).
    - API restrictions: **Google Picker API** and **Google Drive API**.
 6. **App ID.** The **project number** (Dashboard, or IAM & Admin >
    Settings). It is the Picker's app ID.
@@ -123,9 +126,57 @@ userinfo endpoint for the account.
    Restart `npm run dev:photos`. The start screen now offers **Google
    Drive** too. The library is created as `Lopsy Photos/` in your My Drive.
 
-The Picker (Add from Google Drive) is implemented in photos-core
-(`storage/google-drive/picker.ts`) but no screen calls it yet, so
-`VITE_GOOGLE_API_KEY` and `VITE_GOOGLE_APP_ID` are not used by the app yet.
+**Add from Google Drive** (the Picker) is offered when both
+`VITE_GOOGLE_API_KEY` and `VITE_GOOGLE_APP_ID` are set. The app ID is
+required with the `drive.file` scope: it is what grants the app the files
+the user picks.
+
+**What was checked, and how (2026-11-18).** Google's documentation sites
+(developers.google.com, .cn) were not reachable from the build machine, so
+these were checked against what was:
+
+- *Drive API v3*, against its live discovery document
+  (`https://www.googleapis.com/discovery/v1/apis/drive/v3/rest`): every
+  parameter the adapter sends exists (`files.list` `q`, `pageSize`,
+  `pageToken`, `spaces`; `files.update` `addParents`, `removeParents`;
+  `files.generateIds` `count`, `space`, `type`; `changes.list`
+  `pageToken`, `pageSize` (max 1000), `includeRemoved`, `spaces`;
+  `changes.getStartPageToken`; `permissions.create`/`list`; the global
+  `fields` and `alt`), and every field it reads exists (`sha256Checksum`
+  and `headRevisionId` for binary files only, `version`, `webViewLink`,
+  `appProperties`, `trashed` (also true from a trashed parent), `parents`
+  (one per file), `ChangeList.nextPageToken`/`newStartPageToken`,
+  `Change.removed`/`file`, `about.storageQuota.limit`/`usage`,
+  `Permission` `type: anyone` with `allowFileDiscovery`).
+- *CORS*, by live preflight requests from `https://lopsy.art` and
+  `http://localhost:5174`: the resumable-upload initiation allows
+  `authorization, content-type, x-upload-content-type,
+  x-upload-content-length`; `alt=media` reads allow `range`; userinfo and
+  `oauth2.googleapis.com/revoke` allow the app's origin. Whether a
+  successful initiation exposes `Location`, and a 308 exposes `Range`,
+  needs a signed-in request: an unauthenticated 401 exposes neither. The
+  adapter now gives up with an error, instead of resending a chunk for
+  ever, if Drive's progress cannot be read.
+- *Google Identity Services*, against `@types/google.accounts` 0.0.18 and
+  the live `accounts.google.com/gsi/client`: `initTokenClient` takes
+  `client_id`, `scope`, `callback`, `error_callback`, `prompt` (`''`,
+  `none`, `consent`, `select_account`) and `login_hint` (an email or the
+  account's `sub`; `hint` is deprecated); `hasGrantedAllScopes(response,
+  scope)` exists. The token client opens `accounts.google.com/o/oauth2/v2/auth`
+  in a popup and may frame `accounts.google.com/o/oauth2/iframe`; the
+  CSP allows both.
+- *The Picker*, against `@types/google.picker` 0.0.52 and Google
+  Workspace's `@googleworkspace/drive-picker-element` README: `setAppId`
+  (the project number, required for `drive.file`), `setOAuthToken`,
+  `setDeveloperKey`, `DocsView` with `setIncludeFolders`,
+  `setSelectFolderEnabled` and `setMimeTypes`, `Feature.MULTISELECT_ENABLED`,
+  and the callback's `picked`, `cancel` and `error` actions. Its example CSP
+  adds `frame-src https://drive.google.com` and `font-src
+  https://fonts.gstatic.com`, which `public/_headers` now has.
+
+Still to check with a real account (section 6): `permissions.create` with
+`type: anyone` on an app-created folder under `drive.file`, and that files
+in a link-shared folder are visible through the link.
 
 ## 4. Deploying on Cloudflare
 
