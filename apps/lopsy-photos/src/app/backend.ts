@@ -131,6 +131,13 @@ export interface PhotosBackend {
   /** Adds originals found in storage that the library has no entry for (they stay where they are). */
   addOrphans(session: LibrarySession, fileIds: readonly FileId[]): ImportJob;
 
+  /**
+   * Moves originals of deleted photos (a repair's `leftovers`) to the
+   * storage's trash. Files that still belong to a photo in the library are
+   * left alone. Resolves with how many were moved.
+   */
+  trashLeftovers(session: LibrarySession, fileIds: readonly FileId[]): Promise<number>;
+
   /** Takes trashed originals back out of the storage's trash. */
   restoreOriginals(session: LibrarySession, assetIds: readonly AssetId[]): Promise<void>;
 

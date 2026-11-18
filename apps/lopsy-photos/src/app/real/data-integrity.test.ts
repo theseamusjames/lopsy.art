@@ -6,7 +6,7 @@ import { openLibrary } from '@lopsy/photos-core/library/session';
 import { NoopLibraryLock } from '@lopsy/photos-core/library/lock';
 import { recipeHash, DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
 import { guardSession } from '../guard-session';
-import { trashAssets, TrashRefusedError } from './trash-assets';
+import { trashAssets, trashLeftoverOriginals, TrashRefusedError } from './trash-assets';
 import { storeEditPreviews } from './edit-previews';
 
 async function libraryWithPhoto() {
@@ -164,5 +164,18 @@ describe('storeEditPreviews', () => {
     expect(await adapter.getFile(previewId)).not.toBeNull();
     expect(created).toHaveLength(2);
     for (const id of created) expect(await adapter.getFile(id)).toBeNull();
+  });
+});
+
+describe('leftover originals', () => {
+  it('trashes originals of deleted photos and never a live one', async () => {
+    const { adapter, session, assetId, originalId } = await libraryWithPhoto();
+    // A live photo's original is refused even when asked for.
+    expect(await trashLeftoverOriginals(session, [originalId])).toBe(0);
+    expect((await adapter.getFile(originalId))?.trashed).toBe(false);
+    // The photo leaves the library but its original stays out of the trash (a failed delete).
+    session.deleteAssets([assetId]);
+    expect(await trashLeftoverOriginals(session, [originalId, originalId])).toBe(1);
+    expect((await adapter.getFile(originalId))?.trashed).toBe(true);
   });
 });

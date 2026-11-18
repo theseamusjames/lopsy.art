@@ -10,6 +10,7 @@ import { describeHealth, loadDriveAddMode, saveDriveAddMode, type DriveAddMode }
 import { formatBytes, plural } from '../../import/import-summary';
 import { Button } from '../Button/Button';
 import { Modal } from '../Modal/Modal';
+import { LeftoverAction } from '../LeftoverAction/LeftoverAction';
 import styles from './SettingsDialog.module.css';
 
 const KEEP_CHOICES: readonly { readonly mode: KeepOriginals; readonly label: string; readonly hint: string }[] = [
@@ -178,6 +179,7 @@ export function SettingsDialog() {
                     Restore {plural(report.trashed.length, 'original')} from the trash
                   </Button>
                 )}
+                <LeftoverAction leftovers={report.leftovers} disabled={checking} onDone={() => void check()} />
                 {report.orphans.length > 0 && (
                   <Button size="sm" variant="primary" onClick={addOrphans}>
                     Add {plural(report.orphans.length, 'photo')} back to the library
