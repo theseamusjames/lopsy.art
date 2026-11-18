@@ -81,6 +81,7 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       checkSignal(signal);
     }
     e.setRecipe(version.recipe);
+    if (settings.format === 'tiff') throw new Error('16-bit TIFF export needs the engine’s exportTiff16, not wired yet.');
     const blob = await e.exportImage({
       format: settings.format,
       quality: settings.quality,

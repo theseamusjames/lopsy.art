@@ -10,6 +10,8 @@
  * merges as a whole; every other control is one numeric leaf.
  */
 
+import type { Json } from './types';
+
 /** Bumped when the rendering maths changes; old recipes keep their version. */
 export const PIPELINE_VERSION = 1;
 
@@ -95,8 +97,23 @@ export interface Recipe {
   readonly framing: {
     readonly rotate: QuarterTurns;
     readonly flipH: boolean;
+    readonly flipV: boolean;
+    /** Straighten, degrees -45..45, applied before the crop. */
+    readonly angle: number;
     readonly crop: CropRect | null;
   };
+  /** Local contrast at large and small scales, and haze removal; each -100..100. */
+  readonly localContrast: { readonly large: number; readonly small: number; readonly haze: number };
+  readonly sharpness: {
+    /** 0..150. */
+    readonly amount: number;
+    /** 0.5..3, in full-resolution pixels. */
+    readonly radius: number;
+    /** Masks sharpening to edges, 0..100. */
+    readonly edges: number;
+  };
+  /** Noise reduction, 0..100 each; `detail` keeps texture (default 50). */
+  readonly noise: { readonly luminance: number; readonly color: number; readonly detail: number };
   /** One curve per channel; the identity is [{0,0},{1,1}]. */
   readonly curves: Readonly<Record<CurveChannel, readonly CurvePoint[]>>;
   readonly colorByHue: Readonly<Record<HueBand, HueAdjustment>>;
@@ -139,6 +156,16 @@ export const RECIPE_RANGES: Readonly<Record<string, RecipeRange>> = {
   ),
   'colorGrading.blending': { min: 0, max: 100, step: 1 },
   'colorGrading.balance': { min: -100, max: 100, step: 1 },
+  'framing.angle': { min: -45, max: 45, step: 0.1 },
+  'localContrast.large': { min: -100, max: 100, step: 1 },
+  'localContrast.small': { min: -100, max: 100, step: 1 },
+  'localContrast.haze': { min: -100, max: 100, step: 1 },
+  'sharpness.amount': { min: 0, max: 150, step: 1 },
+  'sharpness.radius': { min: 0.5, max: 3, step: 0.1 },
+  'sharpness.edges': { min: 0, max: 100, step: 1 },
+  'noise.luminance': { min: 0, max: 100, step: 1 },
+  'noise.color': { min: 0, max: 100, step: 1 },
+  'noise.detail': { min: 0, max: 100, step: 1 },
 };
 
 export const IDENTITY_CURVE: readonly CurvePoint[] = [
@@ -158,7 +185,11 @@ export const DEFAULT_RECIPE: Recipe = {
   tone: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0 },
   color: { vibrance: 0, saturation: 0 },
   finish: { vignette: 0 },
-  framing: { rotate: 0, flipH: false, crop: null },
+  framing: { rotate: 0, flipH: false, flipV: false, angle: 0, crop: null },
+  localContrast: { large: 0, small: 0, haze: 0 },
+  // No sharpening by default, RAW included: the owner's choice (spec 5.4).
+  sharpness: { amount: 0, radius: 1, edges: 0 },
+  noise: { luminance: 0, color: 0, detail: 50 },
   curves: { luminance: IDENTITY_CURVE, red: IDENTITY_CURVE, green: IDENTITY_CURVE, blue: IDENTITY_CURVE },
   colorByHue: {
     red: NEUTRAL_HUE,
@@ -195,7 +226,12 @@ export function recipeToPaths(recipe: Recipe): Record<string, RecipeLeaf> {
   out['finish.vignette'] = recipe.finish.vignette;
   out['framing.rotate'] = recipe.framing.rotate;
   out['framing.flipH'] = recipe.framing.flipH;
+  out['framing.flipV'] = recipe.framing.flipV;
+  out['framing.angle'] = recipe.framing.angle;
   out['framing.crop'] = recipe.framing.crop;
+  for (const [key, value] of Object.entries(recipe.localContrast)) out[`localContrast.${key}`] = value;
+  for (const [key, value] of Object.entries(recipe.sharpness)) out[`sharpness.${key}`] = value;
+  for (const [key, value] of Object.entries(recipe.noise)) out[`noise.${key}`] = value;
   for (const channel of CURVE_CHANNELS) out[`curves.${channel}`] = recipe.curves[channel];
   for (const band of HUE_BANDS) {
     const h = recipe.colorByHue[band];
@@ -305,7 +341,24 @@ export function recipeFromPaths(paths: Readonly<Record<string, unknown>>): Recip
     framing: {
       rotate: rotate === 90 || rotate === 180 || rotate === 270 ? rotate : 0,
       flipH: paths['framing.flipH'] === true,
+      flipV: paths['framing.flipV'] === true,
+      angle: num('framing.angle', 0),
       crop: isCropRect(paths['framing.crop']) ? paths['framing.crop'] : null,
+    },
+    localContrast: {
+      large: num('localContrast.large', 0),
+      small: num('localContrast.small', 0),
+      haze: num('localContrast.haze', 0),
+    },
+    sharpness: {
+      amount: num('sharpness.amount', d.sharpness.amount),
+      radius: num('sharpness.radius', d.sharpness.radius),
+      edges: num('sharpness.edges', d.sharpness.edges),
+    },
+    noise: {
+      luminance: num('noise.luminance', d.noise.luminance),
+      color: num('noise.color', d.noise.color),
+      detail: num('noise.detail', d.noise.detail),
     },
     curves: {
       luminance: curveFrom(paths['curves.luminance']),
@@ -334,10 +387,11 @@ export function recipeFromPaths(paths: Readonly<Record<string, unknown>>): Recip
   };
 }
 
-const LATER_GROUPS = ['curves.', 'colorByHue.', 'colorGrading.'];
+const LATER_GROUPS = ['curves.', 'colorByHue.', 'colorGrading.', 'localContrast.', 'sharpness.', 'noise.'];
+const LATER_PATHS: ReadonlySet<string> = new Set(['framing.angle', 'framing.flipV']);
 
 function isLaterPath(path: string): boolean {
-  return LATER_GROUPS.some((g) => path.startsWith(g));
+  return LATER_PATHS.has(path) || LATER_GROUPS.some((g) => path.startsWith(g));
 }
 
 /** Whether the recipe changes nothing (shows the badge-free tile). */
@@ -368,3 +422,91 @@ export function recipeHash(recipe: Recipe): string {
 }
 
 const DEFAULT_PATHS: Readonly<Record<string, RecipeLeaf>> = recipeToPaths(DEFAULT_RECIPE);
+
+export type RecipeGroupId =
+  | 'profile'
+  | 'whiteBalance'
+  | 'tone'
+  | 'curves'
+  | 'color'
+  | 'colorGrading'
+  | 'localContrast'
+  | 'detail'
+  | 'framing'
+  | 'finish';
+
+export interface RecipeGroup {
+  readonly id: RecipeGroupId;
+  /** As the Edit view and the Copy edits dialog name it. */
+  readonly label: string;
+  /** The recipe paths it owns start with one of these. */
+  readonly prefixes: readonly string[];
+}
+
+/** The control groups of spec 5.4, in panel order. */
+export const RECIPE_GROUPS: readonly RecipeGroup[] = [
+  { id: 'profile', label: 'Profile', prefixes: ['profile.'] },
+  { id: 'whiteBalance', label: 'White balance', prefixes: ['whiteBalance.'] },
+  { id: 'tone', label: 'Tone', prefixes: ['tone.'] },
+  { id: 'curves', label: 'Curves', prefixes: ['curves.'] },
+  { id: 'color', label: 'Color', prefixes: ['color.', 'colorByHue.'] },
+  { id: 'colorGrading', label: 'Color grading', prefixes: ['colorGrading.'] },
+  { id: 'localContrast', label: 'Local contrast', prefixes: ['localContrast.'] },
+  { id: 'detail', label: 'Detail', prefixes: ['sharpness.', 'noise.'] },
+  { id: 'framing', label: 'Framing', prefixes: ['framing.'] },
+  { id: 'finish', label: 'Finish', prefixes: ['finish.'] },
+];
+
+/** Copy edits copies everything but framing by default (spec 5.4, Copy and paste). */
+export const DEFAULT_COPY_GROUPS: readonly RecipeGroupId[] = RECIPE_GROUPS.map((g) => g.id).filter(
+  (id) => id !== 'framing',
+);
+
+export function isRecipeGroupId(value: unknown): value is RecipeGroupId {
+  return typeof value === 'string' && RECIPE_GROUPS.some((g) => g.id === value);
+}
+
+/** The group a recipe path belongs to; null for paths outside every group (`pipeline`). */
+export function groupOfPath(path: string): RecipeGroupId | null {
+  return RECIPE_GROUPS.find((g) => g.prefixes.some((p) => path.startsWith(p)))?.id ?? null;
+}
+
+/** A recipe leaf as JSON: crops and curve points are copied into plain objects. */
+export function recipeLeafJson(value: RecipeLeaf): Json {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return (value as readonly CurvePoint[]).map((p) => ({ x: p.x, y: p.y }));
+  const crop = value as CropRect;
+  return { x: crop.x, y: crop.y, width: crop.width, height: crop.height };
+}
+
+/** The recipe's values for the given groups, by path, ready for `applyRecipeValues` or a preset. */
+export function pickGroups(recipe: Recipe, groups: readonly RecipeGroupId[]): Record<string, Json> {
+  const wanted = new Set(groups);
+  const out: Record<string, Json> = {};
+  for (const [path, value] of Object.entries(recipeToPaths(recipe))) {
+    const group = groupOfPath(path);
+    if (group !== null && wanted.has(group)) out[path] = recipeLeafJson(value);
+  }
+  return out;
+}
+
+/** Whether every value of the group is at its default. */
+export function isGroupDefault(recipe: Recipe, group: RecipeGroupId): boolean {
+  const paths = recipeToPaths(recipe);
+  return Object.keys(paths).every(
+    (path) => groupOfPath(path) !== group || JSON.stringify(paths[path]) === JSON.stringify(DEFAULT_PATHS[path]),
+  );
+}
+
+/**
+ * Keeps only the paths that are recipe leaves, with values as
+ * `recipeFromPaths` reads them (clamped, or the default when invalid).
+ */
+export function sanitizeRecipeValues(values: Readonly<Record<string, unknown>>): Record<string, Json> {
+  const known = Object.keys(DEFAULT_PATHS).filter((p) => Object.prototype.hasOwnProperty.call(values, p));
+  if (known.length === 0) return {};
+  const read = recipeToPaths(recipeFromPaths(values));
+  const out: Record<string, Json> = {};
+  for (const path of known) out[path] = recipeLeafJson(read[path] ?? null);
+  return out;
+}

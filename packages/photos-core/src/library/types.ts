@@ -11,7 +11,8 @@
  */
 
 import type { FileId, StorageAdapter } from '../storage/types';
-import type { Recipe } from './recipe';
+import type { ExportSettings } from '../export/types';
+import type { Recipe, RecipeGroupId } from './recipe';
 
 export type Json = null | boolean | number | string | readonly Json[] | { readonly [key: string]: Json };
 
@@ -19,7 +20,33 @@ export type AssetId = string;
 export type VersionId = string;
 export type AlbumId = string;
 
-export type EntityKind = 'asset' | 'version' | 'album' | 'setting';
+export type EntityKind = 'asset' | 'version' | 'album' | 'setting' | 'preset' | 'exportPreset';
+
+export type PresetId = string;
+export type ExportPresetId = string;
+
+/** An edit preset (spec 5.4): the values of some recipe groups, applied with `applyRecipeValues`. */
+export interface Preset {
+  readonly id: PresetId;
+  readonly name: string;
+  readonly groups: readonly RecipeGroupId[];
+  /** Recipe values by dotted path, as `pickGroups` gives them. */
+  readonly values: Readonly<Record<string, Json>>;
+  readonly createdAt: string;
+  readonly deleted: boolean;
+  /** One of `BUILT_IN_PRESETS`, which live in code and are never stored. */
+  readonly builtIn?: boolean;
+}
+
+/** Saved export settings (spec 5.5). */
+export interface ExportPreset {
+  readonly id: ExportPresetId;
+  readonly name: string;
+  readonly settings: ExportSettings;
+  readonly createdAt: string;
+  readonly deleted: boolean;
+  readonly builtIn?: boolean;
+}
 
 /** One change. Fields are dotted paths into the entity (`recipe.tone.exposure`). */
 export type Op =
@@ -180,6 +207,9 @@ export interface LibraryView {
   readonly albums: ReadonlyMap<AlbumId, Album>;
   /** Synced settings, by key. */
   readonly settings: ReadonlyMap<string, Json>;
+  /** The user's edit presets, deleted ones included (filter on `deleted`); built-ins are in presets.ts. */
+  readonly presets: ReadonlyMap<PresetId, Preset>;
+  readonly exportPresets: ReadonlyMap<ExportPresetId, ExportPreset>;
 }
 
 /** Folder IDs of a library (spec 6.5, Layout). */
@@ -279,6 +309,22 @@ export interface LibrarySession {
   setAlbumMember(albumId: AlbumId, assetId: AssetId, present: boolean): void;
 
   setSetting(key: string, value: Json): void;
+
+  /**
+   * Sets recipe values on each version as its own history step labelled
+   * `label` (Paste edits, a preset, Sync). Paths outside the recipe are
+   * dropped and values clamped as `recipeFromPaths` reads them.
+   */
+  applyRecipeValues(versionIds: readonly VersionId[], values: Readonly<Record<string, Json>>, label: string): void;
+
+  /** Saves the recipe's values for `groups` as a preset. */
+  savePreset(name: string, recipe: Recipe, groups: readonly RecipeGroupId[]): PresetId;
+  renamePreset(presetId: PresetId, name: string): void;
+  deletePreset(presetId: PresetId): void;
+
+  saveExportPreset(name: string, settings: ExportSettings): ExportPresetId;
+  renameExportPreset(presetId: ExportPresetId, name: string): void;
+  deleteExportPreset(presetId: ExportPresetId): void;
 
   /** Writes queued ops and reads other devices' now. */
   syncNow(): Promise<void>;

@@ -76,7 +76,7 @@ describe('beforeRecipe', () => {
   it('keeps the framing and drops the rest', () => {
     const r: Recipe = {
       ...applyChanges(DEFAULT_RECIPE, { 'tone.exposure': 2 }),
-      framing: { rotate: 90, flipH: true, crop: null },
+      framing: { rotate: 90, flipH: true, flipV: false, angle: 0, crop: null },
     };
     const b = beforeRecipe(r);
     expect(b.tone.exposure).toBe(0);
@@ -92,8 +92,11 @@ describe('framing', () => {
   });
 
   it('flips and keeps the crop, which is stored on the unflipped image', () => {
-    const cropped: Recipe = { ...DEFAULT_RECIPE, framing: { rotate: 0, flipH: false, crop: { x: 0, y: 0, width: 0.5, height: 0.5 } } };
-    expect(flipRecipe(cropped).framing).toEqual({ rotate: 0, flipH: true, crop: cropped.framing.crop });
+    const cropped: Recipe = {
+      ...DEFAULT_RECIPE,
+      framing: { ...DEFAULT_RECIPE.framing, crop: { x: 0, y: 0, width: 0.5, height: 0.5 } },
+    };
+    expect(flipRecipe(cropped).framing).toEqual({ ...DEFAULT_RECIPE.framing, flipH: true, crop: cropped.framing.crop });
   });
 });
 
