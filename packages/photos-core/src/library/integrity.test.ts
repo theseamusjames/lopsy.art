@@ -46,6 +46,12 @@ class SlowStore implements LocalStore {
   lastLayout(): Promise<LibraryLayout | null> {
     return this.inner.lastLayout();
   }
+  getMarker(key: string): Promise<string | null> {
+    return this.inner.getMarker(key);
+  }
+  setMarker(key: string, value: string | null): Promise<void> {
+    return this.inner.setMarker(key, value);
+  }
   async write(id: string, patch: LocalStorePatch): Promise<void> {
     if (this.hold) await new Promise<void>((r) => this.held.push(r));
     // A dead tab's write never completes, and nothing after it runs.

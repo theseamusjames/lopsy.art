@@ -13,7 +13,14 @@ import type { FileId, StorageAdapter, StoredFile } from '../storage/types';
 import { isRecord } from './validate';
 
 export const SNAPSHOT_FORMAT = 1;
-export const MAX_SNAPSHOT_BYTES = 512 * 1024 * 1024;
+/**
+ * Caps on a snapshot, sized from the 50,000-photo benchmark (about 97 MB
+ * of JSON, 6.6 MB gzipped) with room for growth: anything larger is
+ * refused before it can exhaust a new device's memory, and the device
+ * falls back to an older snapshot or the journal.
+ */
+export const MAX_SNAPSHOT_BYTES = 256 * 1024 * 1024;
+export const MAX_SNAPSHOT_COMPRESSED_BYTES = 64 * 1024 * 1024;
 /** Snapshots kept in `snapshots/` (spec 6.6). */
 export const SNAPSHOTS_KEPT = 3;
 
@@ -71,6 +78,9 @@ export async function encodeSnapshot(data: SnapshotData): Promise<Blob> {
 
 /** Throws `DecodeError` on anything unreadable or malformed. */
 export async function decodeSnapshot(blob: Blob): Promise<LoadedSnapshot> {
+  if (blob.size > MAX_SNAPSHOT_COMPRESSED_BYTES) {
+    throw new DecodeError(`Snapshot is larger than ${MAX_SNAPSHOT_COMPRESSED_BYTES} bytes`);
+  }
   const text = await gunzipText(blob, MAX_SNAPSHOT_BYTES);
   let parsed: unknown;
   try {
@@ -108,13 +118,30 @@ export interface NewestSnapshot {
 }
 
 /** Loads the newest readable snapshot of this library, trying older ones if the newest is damaged. */
+export interface SnapshotGuard {
+  /** Snapshot names not to load (one crashed this device before). */
+  readonly skip: ReadonlySet<string>;
+  /** Called before a snapshot is read and decoded. */
+  readonly before: (name: string) => Promise<void>;
+}
+
 export async function loadNewestSnapshot(
   adapter: StorageAdapter,
   snapshotsId: FileId,
   libraryId: string,
+  guard?: SnapshotGuard,
 ): Promise<NewestSnapshot> {
   const errors: string[] = [];
   for (const file of await listSnapshots(adapter, snapshotsId)) {
+    if (guard?.skip.has(file.name)) {
+      errors.push(`${file.name}: skipped, it failed to load on this device before`);
+      continue;
+    }
+    if (file.size > MAX_SNAPSHOT_COMPRESSED_BYTES) {
+      errors.push(`${file.name}: larger than ${MAX_SNAPSHOT_COMPRESSED_BYTES} bytes`);
+      continue;
+    }
+    await guard?.before(file.name);
     try {
       const snapshot = await decodeSnapshot(await adapter.readContent(file.id));
       if (snapshot.libraryId !== libraryId) {

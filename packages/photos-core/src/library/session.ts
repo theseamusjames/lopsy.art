@@ -685,11 +685,46 @@ function normalizedKeywords(keywords: readonly string[]): string[] {
   return [...new Set(keywords.map((k) => k.trim()).filter((k) => k !== ''))];
 }
 
+function loadingKey(libraryId: string): string {
+  return `loading-snapshot:${libraryId}`;
+}
+
+function badKey(libraryId: string): string {
+  return `bad-snapshots:${libraryId}`;
+}
+
+/**
+ * The snapshots that must not be loaded again: one whose loading marker
+ * is still set crashed this device (too large, or hostile) last time.
+ */
+async function badSnapshots(store: LocalStore, libraryId: string): Promise<Set<string>> {
+  const bad = new Set<string>();
+  try {
+    const parsed: unknown = JSON.parse((await store.getMarker(badKey(libraryId))) ?? '[]');
+    if (Array.isArray(parsed)) for (const n of parsed) if (typeof n === 'string') bad.add(n);
+  } catch {
+    // A damaged list only loses the memory of old crashes.
+  }
+  const crashed = await store.getMarker(loadingKey(libraryId));
+  if (crashed !== null) {
+    bad.add(crashed);
+    await store.setMarker(badKey(libraryId), JSON.stringify([...bad].slice(-20)));
+    await store.setMarker(loadingKey(libraryId), null);
+  }
+  return bad;
+}
+
 async function bootstrap(
   adapter: StorageAdapter,
   layout: LibraryLayout,
+  store: LocalStore,
 ): Promise<{ merge: MergeStore; bookkeeping: SyncBookkeeping }> {
-  const newest = await loadNewestSnapshot(adapter, layout.snapshotsId, layout.libraryId);
+  const skip = await badSnapshots(store, layout.libraryId);
+  const newest = await loadNewestSnapshot(adapter, layout.snapshotsId, layout.libraryId, {
+    skip,
+    // Set before decoding and cleared once the session is built: if decoding kills the tab, the next open skips it.
+    before: (name) => store.setMarker(loadingKey(layout.libraryId), name),
+  });
   for (const problem of newest.errors) console.warn('Skipped snapshot', problem);
   if (!newest.snapshot || !newest.file) return { merge: new MergeStore(), bookkeeping: EMPTY_BOOKKEEPING };
   return {
@@ -743,7 +778,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
     let bookkeeping: SyncBookkeeping;
     let outbox: readonly OpEnvelope[] = [];
     const fromStorage = async () =>
-      online ? bootstrap(adapter, layout) : { merge: new MergeStore(), bookkeeping: EMPTY_BOOKKEEPING };
+      online ? bootstrap(adapter, layout, store) : { merge: new MergeStore(), bookkeeping: EMPTY_BOOKKEEPING };
     if (saved) {
       deviceId = saved.deviceId;
       outbox = saved.outbox;
@@ -821,6 +856,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<PhotosLi
           onApplied,
         }),
     });
+    await store.setMarker(loadingKey(layout.libraryId), null);
     session.syncEngine.start();
     return session;
   } catch (error) {
