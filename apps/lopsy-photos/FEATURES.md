@@ -141,13 +141,15 @@ leaving.
   develops; DNG through the engine's decoder; 16-bit PNG at full depth;
   JPEG and WebP through the browser.
 - **Toolbar.** Library (back), Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y), Rotate left,
-  Rotate right, Flip, **Crop**, **Before** (or hold `\`), Fit (⌘0), 100%
+  Rotate right, Flip, **Crop**, **Areas**, **Before** (or hold `\`), Fit (⌘0), 100%
   (⌘1) with a zoom readout, **Edit in Lopsy** and **Export**. The image
   pans by dragging and zooms with the wheel.
 - **Histogram** of the rendered edit, updated as it changes.
-- **Profile**: for RAW, the camera look and the engine's profiles
-  (including Neutral and Monochrome); for other photos, Standard and
-  Monochrome.
+- **Profile**: for RAW, the camera's look first ("Camera (Velvia look)",
+  not listed a second time), then the engine's film looks with Provia
+  shown as "Standard (Provia look)" (or "Camera (Provia look, Standard)"
+  when the camera shot Provia), Neutral and Monochrome; for other photos,
+  Standard and Monochrome.
 - **White balance**: Temperature and Tint, with Auto on RAW files; on
   other photos the sliders are relative and there is no Auto.
 - **Tone**: Exposure, Contrast, Highlights, Shadows, Whites, Blacks, with
@@ -166,6 +168,19 @@ leaving.
 - **Crop** tool: drag the frame; **Aspect** Free, Original, 1 : 1,
   4 : 5, 3 : 2 or 16 : 9, made landscape or portrait; Reset, Done (Enter)
   or Cancel (Escape). The crop follows rotation.
+- **Areas** (toolbar): a panel to add up to eight **Linear** or **Radial**
+  areas, each adjusting part of the photo with its own Amount, Exposure
+  (−4..4), Contrast, Highlights, Shadows, Temperature, Tint and
+  Saturation (and Feather for a radial area), Invert, a name and Delete.
+  Selecting an area shows its mask in red on screen (never in exports or
+  previews) and its handles on the image: a linear area's full-effect and
+  no-effect lines, dragged together or by either end; a radial area's
+  ellipse, moved from inside, with handles for its width, height,
+  rotation and feather (the inner ring). Areas are stored on the unrotated
+  photo, so they follow rotation, flips, straightening and the crop. Each
+  drag or slider release is one history step ("Area: move", "Area 1
+  exposure −1.00"); adding and deleting are steps too, so undo takes an
+  area away.
 - Recipes also carry local contrast, sharpening and noise reduction,
   which the engine renders; the panel has no controls for them yet.
 
