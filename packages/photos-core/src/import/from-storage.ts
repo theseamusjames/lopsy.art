@@ -20,6 +20,7 @@ import { DEFAULT_IMPORT_OPTIONS, MAX_ORIGINAL_BYTES, PREVIEW_SIZES } from './imp
 import { inspectImage } from './inspect';
 import { isRawJpegPair, pairCandidatesByName } from './pairs';
 import type { PairableFile } from './pairs';
+import { applySidecarFile, isSidecarName, matchSidecars } from '../xmp/sidecars';
 import type { EmbeddedPreview, ImportItem, ImportItemState, ImportJob, ImportOptions, ImportProgress, PreviewRenderer } from './types';
 
 export interface StorageImportOptions extends ImportOptions {
@@ -65,6 +66,10 @@ interface Work {
   readonly fileId: FileId;
   readonly assetId: AssetId;
   file: StoredFile | null;
+  /** The picked `.xmp` sidecar to apply once the asset is added. */
+  sidecar: StoredFile | null;
+  /** Set for a sidecar file: it is skipped with this reason. */
+  skipReason: string | null;
   readonly read: Deferred<PairableFile | null>;
   readonly outcome: Deferred<AssetId | null>;
 }
@@ -104,6 +109,8 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
     fileId,
     assetId: crypto.randomUUID(),
     file: null,
+    sidecar: null,
+    skipReason: null,
     read: deferred<PairableFile | null>(),
     outcome: deferred<AssetId | null>(),
   }));
@@ -205,6 +212,10 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       const file = work.file;
       if (!file) {
         finish(work, 'failed', { error: 'Not found, or not shared with the app' });
+        return;
+      }
+      if (work.skipReason !== null) {
+        finish(work, 'skipped', { error: work.skipReason });
         return;
       }
       if (file.isFolder) {
@@ -328,6 +339,14 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
       if (ctx.albumId !== undefined) session.setAlbumMember(ctx.albumId, assetId, true);
 
       let note = previews.error;
+      if (work.sidecar) {
+        const sidecar = work.sidecar;
+        const applied = await session.adapter
+          .readContent(sidecar.id, { signal: abort.signal })
+          .then((blob) => applySidecarFile(session, assetId, versionId, blob, metadata.orientation))
+          .catch(() => null);
+        if (!applied) note = 'Its XMP sidecar could not be read';
+      }
       if (!stopped) {
         for (const size of ['thumb', 'screen'] as const) {
           const preview = previews[size];
@@ -387,6 +406,22 @@ export function startImportFromStorage(fileIds: readonly FileId[], ctx: StorageI
         if (work.file) patch(work.index, { fileName: work.file.name, byteSize: work.file.size });
       }),
     );
+    const applySidecars = options.applySidecars ?? true;
+    const names = works.map((w) => w.file?.name ?? '');
+    const match = matchSidecars(names);
+    for (const work of works) {
+      if (!work.file || work.file.isFolder || !isSidecarName(work.file.name)) continue;
+      const image = match.imageFor.get(work.index);
+      const imageName = image === null || image === undefined ? null : (names[image] ?? null);
+      if (imageName === null) work.skipReason = 'XMP sidecar with no matching photo';
+      else work.skipReason = applySidecars ? `XMP sidecar, applied to ${imageName}` : `XMP sidecar for ${imageName}, not applied`;
+    }
+    if (applySidecars) {
+      for (const [image, sidecar] of match.sidecarFor) {
+        const target = works[image];
+        if (target) target.sidecar = works[sidecar]?.file ?? null;
+      }
+    }
     pairOf = pairCandidatesByName(works.filter((w) => w.file).map((w) => ({ id: String(w.index), name: w.file?.name ?? '' })));
     const raws = new Set([...pairOf.values()].map(Number));
     // RAWs with a JPEG partner go first, so a JPEG never waits on a RAW still queued behind it.

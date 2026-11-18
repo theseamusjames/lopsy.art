@@ -90,6 +90,12 @@ export interface ImportOptions {
   readonly rawPlusJpeg: 'both' | 'raw-only';
   /** How many files upload at once. Default 3. */
   readonly concurrency: number;
+  /**
+   * Apply `.xmp` sidecars found next to photos in the batch (ratings,
+   * labels, keywords, title, caption, basic edits). Default true. The
+   * sidecars themselves are never imported as photos.
+   */
+  readonly applySidecars?: boolean;
 }
 
 export interface ImportJob {
