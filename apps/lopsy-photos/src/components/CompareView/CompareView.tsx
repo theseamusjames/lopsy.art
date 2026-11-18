@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useLibraryView } from '../../app/hooks';
@@ -6,7 +7,7 @@ import { backOut, setLabel, setRating } from '../../app/commands';
 import { orderedSelection } from '../../library/selection';
 import { Button } from '../Button/Button';
 import { LabelPicker } from '../LabelPicker/LabelPicker';
-import { Preview } from '../Preview/Preview';
+import { Preview, type ZoomPoint } from '../Preview/Preview';
 import { Stars } from '../Stars/Stars';
 import styles from './CompareView.module.css';
 
@@ -23,6 +24,8 @@ export function CompareView({ orderedIds }: CompareViewProps) {
   const setSelection = useUi((s) => s.setSelection);
   const ids = orderedSelection(selection, orderedIds).slice(0, MAX_COMPARE);
   const extra = selection.ids.size - ids.length;
+  // One zoom for all panes, so the same spot is compared in each.
+  const [zoom, setZoom] = useState<ZoomPoint | null>(null);
 
   return (
     <div className={styles.view}>
@@ -32,7 +35,7 @@ export function CompareView({ orderedIds }: CompareViewProps) {
           Back to the grid
         </Button>
         <span className={styles.hint}>
-          Click a photo to mark it with the keys.
+          Click a photo to look closer at the same spot in all of them; the keys mark the one outlined.
           {extra > 0 && ` ${extra} more selected photo${extra === 1 ? ' is' : 's are'} not shown.`}
         </span>
       </div>
@@ -48,7 +51,7 @@ export function CompareView({ orderedIds }: CompareViewProps) {
               onClick={() => setSelection({ ...selection, focus: id })}
             >
               <div className={styles.image}>
-                <Preview assetId={id} />
+                <Preview assetId={id} zoom={zoom} onZoom={setZoom} />
               </div>
               <div className={styles.caption}>
                 <span className={styles.name}>{asset.fileName}</span>

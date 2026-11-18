@@ -86,6 +86,8 @@ export function matchesText(asset: Asset, text: string): boolean {
   return asset.keywords.some((k) => k.toLowerCase().includes(q));
 }
 
+const fileNameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
@@ -101,7 +103,7 @@ export function compareAssets(a: Asset, b: Asset, sort: SortOrder): number {
       c = compareStrings(a.importedAt, b.importedAt);
       break;
     case 'name':
-      c = a.fileName.localeCompare(b.fileName, undefined, { numeric: true, sensitivity: 'base' });
+      c = fileNameCollator.compare(a.fileName, b.fileName);
       break;
     case 'rating':
       c = a.rating - b.rating;

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, EyeOff, SlidersHorizontal } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useAsset } from '../../app/hooks';
@@ -6,7 +7,7 @@ import { backOut, openEdit, runCommand, setLabel, setRating, toggleSetAside } fr
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import { LabelPicker } from '../LabelPicker/LabelPicker';
-import { Preview } from '../Preview/Preview';
+import { Preview, type ZoomPoint } from '../Preview/Preview';
 import { Stars } from '../Stars/Stars';
 import styles from './SingleView.module.css';
 
@@ -20,6 +21,9 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
   const focus = useUi((s) => s.selection.focus);
   const asset = useAsset(focus);
   const index = focus === null ? -1 : orderedIds.indexOf(focus);
+  // Zoom belongs to one photo; moving on fits the next one again.
+  const [zoomed, setZoomed] = useState<{ id: AssetId; point: ZoomPoint } | null>(null);
+  const zoom = zoomed !== null && zoomed.id === focus ? zoomed.point : null;
 
   return (
     <div className={`${styles.view} ${cull ? styles.cull : ''}`}>
@@ -37,7 +41,12 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
       <div className={styles.stage}>
         {focus !== null && asset ? (
           <>
-            <Preview key={focus} assetId={focus} />
+            <Preview
+              key={focus}
+              assetId={focus}
+              zoom={zoom}
+              onZoom={(point) => setZoomed(point ? { id: focus, point } : null)}
+            />
             {asset.setAside && <span className={styles.asideTag}>Set aside</span>}
           </>
         ) : (

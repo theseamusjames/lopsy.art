@@ -15,6 +15,20 @@
   object-fit: contain;
 }
 
+/* Zoomed: the preview at its own size, panned by object-position. */
+.zoomed .image {
+  object-fit: none;
+  object-position: var(--zoom-x) var(--zoom-y);
+}
+
+.zoomable {
+  cursor: zoom-in;
+}
+
+.zoomable.zoomed {
+  cursor: zoom-out;
+}
+
 .loading {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
