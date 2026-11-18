@@ -5,7 +5,7 @@
  * frame. Pure.
  */
 
-import type { Asset, AssetId, ImageFormat, LibraryView } from '@lopsy/photos-core/library/types';
+import type { Album, Asset, AssetId, ImageFormat, LibraryView } from '@lopsy/photos-core/library/types';
 import { compileSearch, type LabelChoice, type SavedSearch, type SearchRule } from '@lopsy/photos-core/search/rules';
 import { computeFacets, type Facets } from '@lopsy/photos-core/search/facets';
 import { groupBursts } from '@lopsy/photos-core/search/bursts';
@@ -157,9 +157,14 @@ export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((ass
   shown.sort((a, b) => compareAssets(a, b, query.sort));
 
   const bursts = new Map<AssetId, number>();
+  const album = query.collection.kind === 'album' ? view.albums.get(query.collection.albumId) : undefined;
+  const finish = (ids: readonly AssetId[]): ItemId[] => {
+    const opened = openVersions(ids, view, query.expanded);
+    return album ? albumItems(opened, album, view) : opened;
+  };
   if (!query.groupBursts) {
     const stacked = stackDocuments(shown.map((a) => a.id), view, query.expanded);
-    return { ids: openVersions(stacked.ids, view, query.expanded), facets, bursts, documents: stacked.documents };
+    return { ids: finish(stacked.ids), facets, bursts, documents: stacked.documents };
   }
   const ids: AssetId[] = [];
   for (const burst of groupBursts(shown)) {
@@ -171,7 +176,7 @@ export function findAssets(view: LibraryView, query: FindQuery, textMatch: ((ass
     }
   }
   const stacked = stackDocuments(ids, view, query.expanded);
-  return { ids: openVersions(stacked.ids, view, query.expanded), facets, bursts, documents: stacked.documents };
+  return { ids: finish(stacked.ids), facets, bursts, documents: stacked.documents };
 }
 
 /** "March 2026", "14 March 2026", "2026". */
@@ -230,6 +235,42 @@ export function openVersions(ids: readonly ItemId[], view: LibraryView, expanded
     for (const v of byAsset.get(id) ?? []) {
       if (asset && v.id !== asset.primaryVersionId) out.push(versionItemId(id, v.id));
     }
+  }
+  return out;
+}
+
+/**
+ * An album's tiles (spec 7): a photo that is a whole member shows as
+ * itself; a single version as its own tile (the photo's tile when it is
+ * the shown version). Each tile once, in the order of `ids`.
+ */
+export function albumItems(ids: readonly ItemId[], album: Album, view: LibraryView): ItemId[] {
+  const whole = new Set<AssetId>();
+  const versions = new Map<AssetId, ItemId[]>();
+  for (const m of album.members) {
+    if (m.versionId === null) {
+      whole.add(m.assetId);
+      continue;
+    }
+    const asset = view.assets.get(m.assetId);
+    if (!asset || view.versions.get(m.versionId)?.deleted !== false) continue;
+    const item = m.versionId === asset.primaryVersionId ? asset.id : versionItemId(asset.id, m.versionId);
+    const list = versions.get(m.assetId) ?? [];
+    list.push(item);
+    versions.set(m.assetId, list);
+  }
+  const out: ItemId[] = [];
+  const seen = new Set<ItemId>();
+  const push = (id: ItemId) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push(id);
+  };
+  for (const id of ids) {
+    // Versions an open stack adds are not members; the album shows only what it holds.
+    if (id.includes('#')) continue;
+    if (whole.has(id)) push(id);
+    for (const item of versions.get(id) ?? []) push(item);
   }
   return out;
 }

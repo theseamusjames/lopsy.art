@@ -1,6 +1,6 @@
 /** Dragging photos from the grid onto an album. */
 
-/** The drag type tiles use to carry photo ids. */
+/** The drag type tiles use to carry grid item ids (`assetId` or `assetId#versionId`). */
 export const ASSET_DRAG_TYPE = 'application/x-lopsy-assets';
 
 export function writeDraggedIds(data: DataTransfer, ids: readonly string[]): void {

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximize, Paintbrush, SlidersHorizontal, Trash2 } from 'lucide-react';
-import type { ItemId } from '../../library/items';
+import { ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximize, Paintbrush, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
+import { parseItem, type ItemId } from '../../library/items';
 import { useUi } from '../../app/store';
-import { askDeleteTargets, currentVersions, newVersion, openEdit, runCommand } from '../../app/commands';
+import { askDeleteTargets, currentVersions, makeShownVersion, newVersion, openEdit, runCommand } from '../../app/commands';
 import { openInLopsy } from '../../app/lopsy-handoff';
 import styles from './TileMenu.module.css';
 
@@ -20,6 +20,9 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
   const selected = useUi((s) => s.selection.ids.size);
   const copied = useUi((s) => s.copiedEdits);
   const single = selected <= 1;
+  const focus = useUi((s) => s.selection.focus);
+  const parsed = focus === null ? null : parseItem(focus);
+  const focusedVersion = parsed && parsed.versionId !== null ? { assetId: parsed.assetId, versionId: parsed.versionId } : null;
 
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>('button')?.focus();
@@ -67,6 +70,8 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
       {item('Look at it large', <Maximize size={14} />, () => runCommand('open-single', orderedIds), !single)}
       {item('Edit', <SlidersHorizontal size={14} />, openEdit, !single)}
       {item('New version', <CopyPlus size={14} />, newVersion, !single)}
+      {focusedVersion &&
+        item('Show this version for the photo', <Star size={14} />, () => makeShownVersion(focusedVersion.assetId, focusedVersion.versionId), !single)}
       {item(
         'Edit in Lopsy',
         <Paintbrush size={14} />,

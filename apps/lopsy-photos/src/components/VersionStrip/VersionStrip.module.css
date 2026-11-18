@@ -49,3 +49,9 @@
   font-size: var(--font-size-sm);
   outline: none;
 }
+
+.shown {
+  font-size: var(--font-size-xs);
+  color: var(--color-accent);
+  padding: 0 var(--space-1);
+}

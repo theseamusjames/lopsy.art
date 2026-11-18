@@ -5,7 +5,7 @@ import { useFindResult, useLibraryView, usePreviewUrl, useVersionCounts } from '
 import { useUi } from '../../app/store';
 import { writeDraggedIds } from '../../app/drag';
 import { isEdited } from '../../library/asset-query';
-import { itemAssets, parseItem } from '../../library/items';
+import { parseItem } from '../../library/items';
 import { isDefaultRecipe } from '@lopsy/photos-core/library/recipe';
 import { Stars } from '../Stars/Stars';
 import styles from './PhotoTile.module.css';
@@ -60,7 +60,7 @@ export const PhotoTile = memo(function PhotoTile({ assetId: itemId, selected, fo
       draggable
       onDragStart={(e) => {
         const sel = useUi.getState().selection.ids;
-        writeDraggedIds(e.dataTransfer, sel.has(itemId) ? itemAssets(sel) : [asset.id]);
+        writeDraggedIds(e.dataTransfer, sel.has(itemId) ? [...sel] : [itemId]);
       }}
       onMouseDown={(e) => {
         if (e.shiftKey) e.preventDefault();

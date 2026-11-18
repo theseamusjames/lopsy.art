@@ -5,7 +5,7 @@
  * these item ids; commands turn them back into assets or versions. Pure.
  */
 
-import type { AssetId, LibraryView, Version, VersionId } from '@lopsy/photos-core/library/types';
+import type { Album, AlbumId, AssetId, LibrarySession, LibraryView, Version, VersionId } from '@lopsy/photos-core/library/types';
 
 export type ItemId = string;
 
@@ -67,4 +67,16 @@ export function nextVersionName(existing: readonly string[]): string {
     const name = `Version ${n}`;
     if (!taken.has(name.toLowerCase())) return name;
   }
+}
+
+/** Whether the album holds the tile: a photo tile as a whole member, a version tile as that version. */
+export function albumHasItem(album: Album, id: ItemId): boolean {
+  const { assetId, versionId } = parseItem(id);
+  return album.members.some((m) => m.assetId === assetId && m.versionId === versionId);
+}
+
+/** Adds or removes the tile: a photo tile is the whole photo, a version tile only that version. */
+export function setAlbumItem(session: LibrarySession, albumId: AlbumId, id: ItemId, present: boolean): void {
+  const { assetId, versionId } = parseItem(id);
+  session.setAlbumMember(albumId, assetId, present, versionId);
 }

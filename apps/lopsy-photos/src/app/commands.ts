@@ -3,7 +3,7 @@
  * the same functions, so a key and a click always behave alike.
  */
 
-import type { AssetId, ColorLabel, Rating, VersionId } from '@lopsy/photos-core/library/types';
+import type { AssetId, ColorLabel, LibraryView, Rating, VersionId } from '@lopsy/photos-core/library/types';
 import { itemAssets, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
@@ -87,6 +87,46 @@ export function pasteEdits(): void {
   if (versionIds.length === 0) return;
   pasteRecipeValues(session(), versionIds, copied);
   showToast(`Pasted edits onto ${versionIds.length.toLocaleString()} photo${versionIds.length === 1 ? '' : 's'}.`);
+}
+
+/** The tile for a version: the photo's own tile for its shown version. */
+function tileFor(view: LibraryView, assetId: AssetId, versionId: VersionId): ItemId {
+  return view.assets.get(assetId)?.primaryVersionId === versionId ? assetId : versionItemId(assetId, versionId);
+}
+
+/** Makes the version the one its photo shows (in the grid, albums, exports of the photo), and keeps it selected. */
+export function makeShownVersion(assetId: AssetId, versionId: VersionId): void {
+  const s = session();
+  if (s.getView().assets.get(assetId)?.primaryVersionId === versionId) return;
+  s.setPrimaryVersion(assetId, versionId);
+  useUi.getState().setSelection(selectOne(assetId));
+}
+
+/**
+ * Deletes a version. The shown one can go too, when the photo has another:
+ * the next one (else the one before) becomes the shown version first. The
+ * last version of a photo is never deleted. Selects what is left.
+ */
+export function deleteVersionOf(assetId: AssetId, versionId: VersionId): void {
+  const s = session();
+  const view = s.getView();
+  const asset = view.assets.get(assetId);
+  const versions = versionsByAsset(view).get(assetId) ?? [];
+  if (!asset || versions.length < 2 || !versions.some((v) => v.id === versionId)) return;
+  if (asset.primaryVersionId === versionId) {
+    const i = versions.findIndex((v) => v.id === versionId);
+    const next = versions[i + 1] ?? versions[i - 1];
+    if (!next) return;
+    s.setPrimaryVersion(assetId, next.id);
+  }
+  s.deleteVersion(versionId);
+  const ui = useUi.getState();
+  const focus = ui.selection.focus;
+  if (focus !== null && parseItem(focus).assetId === assetId) {
+    const shown = itemVersionId(focus, view);
+    const keep = shown !== null && shown !== versionId ? tileFor(s.getView(), assetId, shown) : assetId;
+    ui.setSelection(selectOne(keep));
+  }
 }
 
 /** Makes a new version of the focused tile's version (same edits), opens its stack and selects it. */
