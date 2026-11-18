@@ -57,6 +57,8 @@ export interface PreviewRenderer {
 export type ImportItemState =
   | 'queued'
   | 'reading'
+  /** Copied into staging on this device, waiting to upload (spec 6.8). */
+  | 'staged'
   | 'duplicate'
   | 'unsupported'
   | 'uploading'
@@ -94,7 +96,14 @@ export interface ImportJob {
   readonly id: string;
   getProgress(): ImportProgress;
   subscribe(listener: () => void): () => void;
+  /** Stops for good: unfinished items fail as cancelled and their staged copies are deleted. */
   cancel(): void;
-  /** Resolves when every item has finished, failed or been skipped. */
+  /**
+   * Stops for now: in-flight uploads are aborted, and unfinished items stay
+   * in the queue store for `resumeImports` (shown as 'queued', error
+   * 'Paused'). Without a queue store it is the same as `cancel`.
+   */
+  pause(): void;
+  /** Resolves when every item has finished, failed or been skipped, or the job was paused. */
   readonly finished: Promise<ImportProgress>;
 }
