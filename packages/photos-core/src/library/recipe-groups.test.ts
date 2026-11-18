@@ -84,3 +84,26 @@ describe('recipe groups', () => {
     expect(sanitizeRecipeValues({ nope: 1 })).toEqual({});
   });
 });
+
+describe('finish', () => {
+  it('adds the vignette shape and grain without changing hashes, in the finish group', () => {
+    expect(recipeHash(recipeFromPaths({}))).toBe(recipeHash(DEFAULT_RECIPE));
+    const shaped = recipeFromPaths({ 'finish.vignetteRoundness': 150, 'finish.grain.amount': 40, 'finish.grain.size': -3 });
+    expect(shaped.finish).toMatchObject({ vignetteRoundness: 100, grain: { amount: 40, size: 0, roughness: 50 } });
+    expect(recipeHash(shaped)).not.toBe(recipeHash(DEFAULT_RECIPE));
+    for (const path of [
+      'finish.vignetteSize',
+      'finish.vignetteRoundness',
+      'finish.vignetteFeather',
+      'finish.grain.amount',
+      'finish.grain.size',
+      'finish.grain.roughness',
+    ]) {
+      expect(groupOfPath(path)).toBe('finish');
+      expect(RECIPE_RANGES[path]).toBeDefined();
+    }
+    // The defaults reproduce the old vignette's falloff: midpoint 0.85, width 0.7 (engine/core/src/finish.rs).
+    expect(0.25 + (0.95 * DEFAULT_RECIPE.finish.vignetteSize) / 100).toBeCloseTo(0.85, 10);
+    expect(0.05 + (0.95 * DEFAULT_RECIPE.finish.vignetteFeather) / 100).toBeCloseTo(0.7, 10);
+  });
+});
