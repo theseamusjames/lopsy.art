@@ -53,7 +53,12 @@ function fakeAdapter(kind: StorageKind, label: string, usedBytes: () => number):
     deletePermanently: unsupported,
     getChangeCursor: unsupported,
     listChanges: unsupported,
-    getQuota: () => Promise.resolve({ usedBytes: usedBytes(), limitBytes: 15_000_000_000 }),
+    getQuota: () => {
+      const used = usedBytes();
+      // A large seeded library gets a bigger plan, so the fake is not always full.
+      const limit = used < 12_000_000_000 ? 15_000_000_000 : Math.ceil((used * 1.5) / 1e11) * 1e11;
+      return Promise.resolve({ usedBytes: used, limitBytes: limit });
+    },
   };
 }
 

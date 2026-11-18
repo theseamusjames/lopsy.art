@@ -100,8 +100,15 @@ export function canCompare(): boolean {
   return useUi.getState().selection.ids.size >= 2;
 }
 
-export function openCompare(): void {
-  if (canCompare()) useUi.getState().setMode('compare');
+export function openCompare(orderedIds: readonly AssetId[]): void {
+  if (!canCompare()) return;
+  const ui = useUi.getState();
+  const shown = orderedSelection(ui.selection, orderedIds).slice(0, 4);
+  // The keys act on the focused photo, so it must be one of those shown.
+  if (ui.selection.focus === null || !shown.includes(ui.selection.focus)) {
+    ui.setSelection({ ...ui.selection, focus: shown[0] ?? null });
+  }
+  ui.setMode('compare');
 }
 
 export function backOut(): void {
@@ -151,7 +158,7 @@ export function runCommand(id: CommandId, orderedIds: readonly AssetId[]): void 
     case 'open-single':
       return ui.mode === 'single' ? ui.setMode('grid') : enterMode('single', orderedIds);
     case 'open-compare':
-      return openCompare();
+      return openCompare(orderedIds);
     case 'open-cull':
       return openCull(orderedIds);
     case 'back':

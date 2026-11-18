@@ -17,7 +17,11 @@ export function Modal({ title, onClose, children, footer, width = 'md' }: ModalP
 
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const first = ref.current?.querySelector<HTMLElement>('[data-autofocus], button, input, select, textarea');
+    const root = ref.current;
+    const first =
+      root?.querySelector<HTMLElement>('[data-autofocus]') ??
+      root?.querySelector<HTMLElement>(`.${styles.body} button, .${styles.body} input, .${styles.body} select`) ??
+      root?.querySelector<HTMLElement>(`.${styles.footer} button`);
     first?.focus();
     return () => previous?.focus();
   }, []);

@@ -13,7 +13,8 @@ export const LABEL_NAMES: Readonly<Record<ColorLabel, string>> = {
 const LABELS: ColorLabel[] = ['red', 'yellow', 'green', 'blue', 'purple'];
 
 interface LabelPickerProps {
-  value: ColorLabel | null;
+  /** undefined: photos with different labels (nothing is marked). */
+  value: ColorLabel | null | undefined;
   onChange: (label: ColorLabel | null) => void;
 }
 

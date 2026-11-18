@@ -52,7 +52,9 @@ export function DeleteDialog() {
       onClose={() => askDelete([])}
       footer={
         <>
-          <Button onClick={() => askDelete([])}>Keep them</Button>
+          <Button onClick={() => askDelete([])} data-autofocus>
+            {ids.length === 1 ? 'Keep it' : 'Keep them'}
+          </Button>
           <Button variant="danger" disabled={busy} onClick={() => void confirm()}>
             Move to the trash
           </Button>
@@ -60,8 +62,8 @@ export function DeleteDialog() {
       }
     >
       <p>
-        {plural(ids.length, 'photo')} ({formatBytes(bytes)}) will leave the library and go to {where}, where they can
-        still be recovered for a while.
+        {plural(ids.length, 'photo')} ({formatBytes(bytes)}) will leave the library and go to {where}, where{' '}
+        {ids.length === 1 ? 'it' : 'they'} can still be recovered for a while.
       </p>
       {error && (
         <p className={styles.error} role="alert">

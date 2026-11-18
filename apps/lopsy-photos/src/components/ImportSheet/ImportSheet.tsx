@@ -38,7 +38,7 @@ export function ImportSheet() {
   if (!files) return null;
   const close = () => setPendingImport(null);
   const bytes = pairs === 'raw-only' ? summary.totalBytes - summary.pairJpegBytes : summary.totalBytes;
-  const free = quota && quota.limitBytes !== null ? quota.limitBytes - quota.usedBytes : null;
+  const free = quota && quota.limitBytes !== null ? Math.max(0, quota.limitBytes - quota.usedBytes) : null;
   const tooBig = free !== null && bytes > free;
 
   const start = () => {

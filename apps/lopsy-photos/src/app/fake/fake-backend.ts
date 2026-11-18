@@ -127,7 +127,11 @@ function fakeImport(files: readonly File[], session: FakeSession, options: Parti
         return 'uploading';
       }
       case 'uploading': {
-        if (file.name.toLowerCase().includes('fail')) return update(i, { state: 'failed', error: 'The upload was refused (simulated)' }), null;
+        if (file.name.toLowerCase().includes('fail')) {
+          if (item.assetId) session.deleteAssets([item.assetId]);
+          update(i, { state: 'failed', assetId: null, error: 'The upload was refused (simulated)' });
+          return null;
+        }
         const sent = Math.min(item.byteSize, item.sentBytes + Math.max(1, Math.ceil(item.byteSize / 4)));
         update(i, { sentBytes: sent, state: sent >= item.byteSize ? 'verifying' : 'uploading' });
         return 'uploading';

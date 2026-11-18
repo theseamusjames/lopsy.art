@@ -16,7 +16,11 @@ export function rememberImportedFile(assetId: string, file: Blob): void {
 
 function hashHue(text: string): number {
   let h = 0;
-  for (let i = 0; i < text.length; i++) h = (Math.imul(h, 31) + text.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  // Final avalanche so ids that differ only at the end spread over the wheel.
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x45d9f3b) >>> 0;
+  h ^= h >>> 16;
   return h % 360;
 }
 
@@ -48,7 +52,7 @@ async function renderGenerated(assetId: string, label: string, ref: PreviewRef):
   ctx.arc(ref.width * 0.68, ref.height * 0.4, Math.min(ref.width, ref.height) * 0.22, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.font = `600 ${Math.round(ref.height / 12)}px sans-serif`;
+  ctx.font = `600 ${Math.round(Math.min(ref.width, ref.height) / 12)}px sans-serif`;
   ctx.fillText(label, ref.width * 0.06, ref.height * 0.9);
   return canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
 }

@@ -112,7 +112,7 @@ export function GridToolbar({ orderedIds }: GridToolbarProps) {
           label={selected >= 2 ? 'Compare the selected photos (C)' : 'Compare: select two to four photos first'}
           icon={<Columns2 size={16} />}
           disabled={selected < 2}
-          onClick={openCompare}
+          onClick={() => openCompare(orderedIds)}
         />
         <IconButton label="Sort through full screen (F)" icon={<ScanEye size={16} />} onClick={() => openCull(orderedIds)} />
         <IconButton label="Details (I)" icon={<Info size={16} />} active={infoOpen} onClick={toggleInfo} />

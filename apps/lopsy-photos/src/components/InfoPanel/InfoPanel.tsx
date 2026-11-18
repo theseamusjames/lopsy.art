@@ -88,7 +88,7 @@ export function InfoPanel() {
         </div>
         <div className={styles.field}>
           <span className={styles.fieldLabel}>Label</span>
-          <LabelPicker value={label ?? null} onChange={(l) => setLabel(l, orderedIds, targetIds)} />
+          <LabelPicker value={label} onChange={(l) => setLabel(l, orderedIds, targetIds)} />
         </div>
         <Button size="sm" variant={allAside ? 'primary' : 'secondary'} onClick={() => toggleSetAside(orderedIds, targetIds)}>
           <EyeOff size={13} />
