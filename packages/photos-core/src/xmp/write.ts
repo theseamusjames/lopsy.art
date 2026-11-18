@@ -1,7 +1,7 @@
 /**
  * Writes an XMP sidecar for an asset: rating, label, keywords, title and
  * caption in the standard namespaces; the basic edits as Camera Raw
- * settings (the same approximate mapping as read.ts, the other way); and
+ * settings (crs-mapping.ts, the same approximate mapping read.ts uses); and
  * the full recipe in our namespace, which reads back exactly.
  */
 
@@ -9,7 +9,7 @@ import { recipeToPaths } from '../library/recipe';
 import type { Recipe } from '../library/recipe';
 import type { Asset, ColorLabel, Version } from '../library/types';
 import { RAW_FORMATS } from '../import/pairs';
-import { recipeToCrs } from './crs-mapping';
+import { explicitDetailDefaults, recipeToCrs } from './crs-mapping';
 import { NS } from './read';
 
 const LABEL_NAMES: Readonly<Record<ColorLabel, string>> = {
@@ -71,20 +71,10 @@ function crsSettings(recipe: Recipe, isRaw: boolean): { attributes: string[]; el
   }
   if (out.length > 0 || elements.length > 0) {
     out.unshift('crs:HasSettings="True"', 'crs:ProcessVersion="11.0"');
-    // Lightroom fills in its own defaults (sharpening 40, colour noise 25 on RAW) for what is missing: ours are none.
-    const paths = recipeToPaths(recipe);
-    for (const [crs, path] of DETAIL_DEFAULTS) {
-      if (!out.some((a) => a.startsWith(`crs:${crs}=`))) out.push(`crs:${crs}="${String(paths[path])}"`);
-    }
+    out.push(...explicitDetailDefaults(recipe, out));
   }
   return { attributes: out, elements };
 }
-
-const DETAIL_DEFAULTS: readonly (readonly [string, string])[] = [
-  ['Sharpness', 'sharpness.amount'],
-  ['ColorNoiseReduction', 'noise.color'],
-  ['LuminanceSmoothing', 'noise.luminance'],
-];
 
 function altElement(qname: string, value: string): string {
   return `   <${qname}><rdf:Alt><rdf:li xml:lang="x-default">${escapeXml(value)}</rdf:li></rdf:Alt></${qname}>`;

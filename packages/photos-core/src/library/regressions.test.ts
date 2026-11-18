@@ -1,4 +1,4 @@
-/** Regression tests from the second data-integrity review. */
+/** Regression tests for device durability, history and repair, each from a reproduced bug. */
 import { describe, expect, it } from 'vitest';
 import { ensureLibrary } from './layout';
 import { MemoryLocalStore, type LocalStorePatch } from './local-store';
@@ -62,8 +62,8 @@ async function copyInto(target: MemoryLocalStore, source: MemoryLocalStore, libr
   });
 }
 
-describe('second integrity review', () => {
-  it('A: a state write that keeps failing does not stop later ops from being uploaded', async () => {
+describe('durability, history and repair regressions', () => {
+  it('a state write that keeps failing does not stop later ops from being uploaded', async () => {
     const adapter = new TestAdapter();
     const store = new MemoryLocalStore();
     const a = await openLibrary({ adapter, store, autoSync: false });
@@ -88,7 +88,7 @@ describe('second integrity review', () => {
     expect(a3.getView().assets.get(x.assetId)?.label).toBe('red');
   });
 
-  it('B: a command that changes nothing does not make the previous step un-undoable', async () => {
+  it('a command that changes nothing does not make the previous step un-undoable', async () => {
     const a = await openLibrary({ adapter: new TestAdapter(), store: new MemoryLocalStore(), autoSync: false });
     const { versionId } = a.addAsset(photo(1));
     a.editRecipe(versionId, { 'tone.exposure': 1 }, 'Exposure');
@@ -100,7 +100,19 @@ describe('second integrity review', () => {
     expect(a.getView().versions.get(versionId)?.recipe.tone.exposure).toBe(1);
   });
 
-  it('C: whenDurable resolves once commands are saved and rejects when saving fails', async () => {
+  it('a failed write without state is retried whole, so the uploaded outbox is still trimmed', async () => {
+    const store = new BrokenStore();
+    const a = await openLibrary({ adapter: new TestAdapter(), store, autoSync: false });
+    a.addAsset(photo(1));
+    await a.whenDurable();
+    store.broken = true;
+    await a.syncNow();
+    store.broken = false;
+    await a.whenDurable();
+    expect((await store.load(a.libraryId))?.outbox).toEqual([]);
+  });
+
+  it('whenDurable resolves once commands are saved and rejects when saving fails', async () => {
     const store = new BrokenStore();
     const a = await openLibrary({ adapter: new TestAdapter(), store, autoSync: false });
     const x = a.addAsset(photo(1));
@@ -115,7 +127,7 @@ describe('second integrity review', () => {
     expect(saved?.outbox.some((op) => op.op.t === 'set' && op.op.fields.deleted === true)).toBe(true);
   });
 
-  it('C: repair lists originals of deleted photos left outside the trash', async () => {
+  it('repair lists originals of deleted photos left outside the trash', async () => {
     const adapter = new TestAdapter();
     const s = await openLibrary({ adapter, store: new MemoryLocalStore(), autoSync: false });
     const file = await adapter.createFile(
@@ -129,7 +141,7 @@ describe('second integrity review', () => {
     expect(report.orphans).toEqual([]);
   });
 
-  it('L8: a leftover never names a file a live photo still uses', async () => {
+  it('a leftover never names a file a live photo still uses', async () => {
     const adapter = new TestAdapter();
     const s = await openLibrary({ adapter, store: new MemoryLocalStore(), autoSync: false });
     const file = await adapter.createFile(
@@ -142,7 +154,7 @@ describe('second integrity review', () => {
     expect((await repairLibrary(s)).leftovers).toEqual([]);
   });
 
-  it('D: no snapshot holds ops whose outbox write has not committed', async () => {
+  it('no snapshot holds ops whose outbox write has not committed', async () => {
     const adapter = new TestAdapter();
     const store = new BrokenStore();
     const a = await openLibrary({ adapter, store, autoSync: false, snapshotEvery: 1 });
@@ -156,7 +168,7 @@ describe('second integrity review', () => {
     expect((await listSnapshots(adapter, a.layout.snapshotsId)).length).toBe(1);
   });
 
-  it('E: a root missing from a property search is still preferred by its stored ID', async () => {
+  it('a root missing from a property search is still preferred by its stored ID', async () => {
     const adapter = new TestAdapter();
     const first = await ensureLibrary(adapter);
     const original = adapter.findByProperty.bind(adapter);

@@ -4,10 +4,14 @@
  * (`recipe.tone.exposure`), so edits to different sliders made on two
  * devices both survive a merge (spec 6.6).
  *
- * POC scope: the controls the engine can render today plus white balance,
- * curves, colour by hue and colour grading. The full set (areas, spots...)
- * is in spec 5.4. Curves are one JSON-array leaf per channel, so a curve
- * merges as a whole; every other control is one numeric leaf.
+ * Curves are one JSON-array leaf per channel and a crop or an area's
+ * geometry one object leaf, so each merges as a whole; every other control
+ * is one leaf. Areas are keyed by ID (`areas.<id>.…`) with a `deleted`
+ * tombstone. Spot removal (spec 5.4) is not in the recipe yet.
+ *
+ * Controls added after the first release count in `recipeHash` only when
+ * they differ from their default (`LATER_PATHS`, `LATER_GROUPS`), so a
+ * recipe written before them keeps its hash and its stored previews.
  */
 
 import type { Json } from './types';
