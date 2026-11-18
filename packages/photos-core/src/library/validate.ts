@@ -29,8 +29,14 @@ const UNSAFE_SEGMENTS: ReadonlySet<string> = new Set(['__proto__', 'constructor'
 
 /** Field paths become object keys when records are built, so prototype-touching names are refused. */
 export function isSafePath(path: string): boolean {
-  return path.split('.').every((segment) => !UNSAFE_SEGMENTS.has(segment));
+  // The same few hundred paths recur in every op, so each is split once.
+  if (safePaths.has(path)) return true;
+  const safe = path.split('.').every((segment) => !UNSAFE_SEGMENTS.has(segment));
+  if (safe && safePaths.size < 10_000) safePaths.add(path);
+  return safe;
 }
+
+const safePaths = new Set<string>();
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

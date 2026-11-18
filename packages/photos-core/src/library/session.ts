@@ -291,8 +291,10 @@ class Session implements PhotosLibrarySession {
 
   addAsset(asset: NewAsset): { readonly assetId: AssetId; readonly versionId: VersionId } {
     const assetId = asset.id ?? newId(this.now());
-    const existing = this.cache.view.assets.get(assetId);
-    if (existing) return { assetId, versionId: existing.primaryVersionId };
+    // Read from the store, not the view, so an import does not rebuild the view after every photo.
+    const existing = asset.id === undefined ? undefined : this.merge.get('asset', assetId);
+    const primary = existing?.fields.get('primaryVersionId')?.value;
+    if (existing?.fields.has('fileId') && typeof primary === 'string') return { assetId, versionId: primary };
     const versionId = newId(this.now());
     const ops: Op[] = [
       { t: 'set', kind: 'asset', id: assetId, fields: assetFields(asset, versionId) },
