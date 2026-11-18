@@ -7,7 +7,7 @@
 
 import { gunzipText, gzipText } from './gzip';
 import type { OpEnvelope } from './types';
-import { validateEnvelope } from './validate';
+import { isRecord, OP_SCHEMA_VERSION, validateEnvelope } from './validate';
 
 const SEQ_DIGITS = 12;
 const SEGMENT_PATTERN = /^(\d{12})-(\d{12})\.jsonl\.gz$/;
@@ -40,6 +40,8 @@ export interface SegmentLineError {
   /** 1-based. */
   readonly line: number;
   readonly reason: string;
+  /** The op was written by a newer app; it may be valid there. */
+  readonly newer?: boolean;
 }
 
 export interface DecodedSegment {
@@ -76,6 +78,10 @@ export async function decodeSegment(blob: Blob, options: DecodeSegmentOptions = 
       parsed = JSON.parse(line);
     } catch {
       report('line is not JSON');
+      continue;
+    }
+    if (isRecord(parsed) && typeof parsed.v === 'number' && parsed.v > OP_SCHEMA_VERSION) {
+      errors.push({ line: i + 1, reason: `op schema ${parsed.v} is newer than this app reads`, newer: true });
       continue;
     }
     const env = validateEnvelope(parsed);

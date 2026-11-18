@@ -7,7 +7,7 @@
 import type { StorageAdapter } from '../storage/types';
 import { HybridClock } from './hlc';
 import { newId } from './ids';
-import { ensureLibrary } from './layout';
+import { ensureLibrary, LIBRARY_SCHEMA_VERSION } from './layout';
 import { EMPTY_BOOKKEEPING, type LocalStore, type SyncBookkeeping } from './local-store';
 import { MergeStore, type RecipeWrite } from './merge-store';
 import { DEFAULT_RECIPE, recipeToPaths, type Recipe } from './recipe';
@@ -47,6 +47,14 @@ export interface OpenLibraryOptions {
 }
 
 export const DEFAULT_SNAPSHOT_EVERY = 5000;
+
+/** Thrown by commands on a library whose schema is newer than this app. */
+export class LibraryReadOnlyError extends Error {
+  constructor() {
+    super('This library was updated by a newer version of Lopsy Photos. Reload to update before making changes.');
+    this.name = 'LibraryReadOnlyError';
+  }
+}
 
 /** The recipe as `recipe.*` field values. */
 export function recipeFields(recipe: Recipe): Record<string, Json> {
@@ -181,6 +189,8 @@ class Session implements LibrarySession {
   private readonly listeners = new Set<() => void>();
   private readonly now: () => number;
   private nextSeq: number;
+  /** True when the library was made by a newer app (sync status says so too). */
+  readonly readOnly: boolean;
 
   constructor(init: {
     layout: LibraryLayout;
@@ -190,8 +200,10 @@ class Session implements LibrarySession {
     merge: MergeStore;
     clock: HybridClock;
     now: () => number;
+    readOnly: boolean;
     makeEngine: (onApplied: (changed: Parameters<ViewCache['update']>[0]) => void) => SyncEngine;
   }) {
+    this.readOnly = init.readOnly;
     this.layout = init.layout;
     this.libraryId = init.layout.libraryId;
     this.adapter = init.adapter;
@@ -400,6 +412,7 @@ class Session implements LibrarySession {
   }
 
   private emit(ops: readonly Op[], step?: OpStep): void {
+    if (this.readOnly) throw new LibraryReadOnlyError();
     if (ops.length === 0) return;
     const envelopes: OpEnvelope[] = [];
     for (const op of ops) {
@@ -450,7 +463,8 @@ async function bootstrap(
 export async function openLibrary(options: OpenLibraryOptions): Promise<LibrarySession> {
   const now = options.now ?? Date.now;
   const { adapter, store } = options;
-  const { layout } = await ensureLibrary(adapter, { now });
+  const { layout, manifest } = await ensureLibrary(adapter, { now });
+  const readOnly = manifest.schemaVersion > LIBRARY_SCHEMA_VERSION;
   const saved = await store.load(layout.libraryId);
 
   let deviceId: string;
@@ -497,6 +511,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<LibraryS
     merge: mergeStore,
     clock,
     now,
+    readOnly,
     makeEngine: (onApplied) =>
       new SyncEngine({
         adapter,
@@ -512,6 +527,7 @@ export async function openLibrary(options: OpenLibraryOptions): Promise<LibraryS
         stamp: () => clock.now(),
         snapshotEvery: options.snapshotEvery ?? DEFAULT_SNAPSHOT_EVERY,
         autoSync: options.autoSync ?? true,
+        readOnly,
         ...(options.timers ? { timers: options.timers } : {}),
         onApplied,
       }),

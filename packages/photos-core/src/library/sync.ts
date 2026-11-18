@@ -35,10 +35,15 @@ export const SYNC_INTERVALS = {
   pullEveryMs: 30_000,
   retryMinMs: 2_000,
   retryMaxMs: 60_000,
+  /** The merged state is saved on the device at most this often while flushing. */
+  stateSaveMs: 30_000,
 } as const;
+
+export const NEWER_APP_MESSAGE = 'Another device uses a newer version of Lopsy Photos. Reload to update.';
 
 /** Segments hold at most this many ops, so one huge import does not make one huge file. */
 const MAX_OPS_PER_SEGMENT = 10_000;
+const MAX_PROBLEMS = 100;
 
 export interface SyncEngineOptions {
   readonly adapter: StorageAdapter;
@@ -49,12 +54,15 @@ export interface SyncEngineOptions {
   readonly store: MergeStore;
   readonly local: LocalStore;
   readonly bookkeeping: SyncBookkeeping;
+  /** The saved outbox. Ops at or below `bookkeeping.flushedSeq` are in storage already. */
   readonly outbox: readonly OpEnvelope[];
   readonly now: () => number;
   /** A fresh HLC stamp from the device clock (names snapshots). */
   readonly stamp: () => string;
   readonly snapshotEvery: number;
   readonly autoSync: boolean;
+  /** The library's schema is newer than this app: read, never write (spec 6.6). */
+  readonly readOnly?: boolean;
   readonly timers?: SyncTimers;
   /** Called after remote ops changed the store. */
   readonly onApplied: (changed: readonly ChangedEntity[]) => void;
@@ -86,14 +94,18 @@ export class SyncEngine {
   private retryTimer: unknown = null;
   private retryDelay: number = SYNC_INTERVALS.retryMinMs;
   private closed = false;
-  /** Segments or snapshots that could not be read, for diagnostics. */
+  private stateDirty = false;
+  private lastStateSave: number;
+  private newerSeen = false;
+  /** The latest segments or lines that could not be read, for diagnostics. */
   readonly problems: string[] = [];
 
   constructor(options: SyncEngineOptions) {
     this.o = options;
     this.timers = options.timers ?? DEFAULT_TIMERS;
-    this.outbox = [...options.outbox].sort((a, b) => a.seq - b.seq);
     const b = options.bookkeeping;
+    this.outbox = options.outbox.filter((op) => op.seq > b.flushedSeq).sort((x, y) => x.seq - y.seq);
+    this.lastStateSave = options.now();
     this.bk = {
       vector: { ...b.vector },
       appliedAhead: Object.fromEntries(Object.entries(b.appliedAhead).map(([d, names]) => [d, [...names]])),
@@ -102,7 +114,13 @@ export class SyncEngine {
       flushedSeq: b.flushedSeq,
       lastSyncedAt: b.lastSyncedAt,
     };
-    this.status = { state: 'idle', pendingOps: this.outbox.length, lastSyncedAt: b.lastSyncedAt, error: null };
+    this.newerSeen = options.readOnly === true;
+    this.status = {
+      state: this.newerSeen ? 'error' : 'idle',
+      pendingOps: this.outbox.length,
+      lastSyncedAt: b.lastSyncedAt,
+      error: this.newerSeen ? NEWER_APP_MESSAGE : null,
+    };
   }
 
   start(): void {
@@ -125,6 +143,7 @@ export class SyncEngine {
     if (ops.length === 0) return;
     this.outbox.push(...ops);
     this.bk.opsSinceSnapshot += ops.length;
+    this.stateDirty = true;
     this.persist({ appendOutbox: ops, nextSeq });
     this.setStatus({ pendingOps: this.outbox.length });
     if (this.firstPendingAt === null) this.firstPendingAt = this.o.now();
@@ -137,14 +156,14 @@ export class SyncEngine {
       await this.flush();
       await this.pull();
       await this.maybeSnapshot();
-    });
+    }, true);
   }
 
   /** Stops timers, flushes what it can and waits for local writes. */
   async close(): Promise<void> {
     this.closed = true;
     this.clearTimers();
-    await this.exclusive(() => this.flush());
+    await this.exclusive(() => this.flush(), true);
     await this.persistQueue;
   }
 
@@ -153,7 +172,7 @@ export class SyncEngine {
     await this.persistQueue;
   }
 
-  private async exclusive(work: () => Promise<void>): Promise<void> {
+  private async exclusive(work: () => Promise<void>, saveState: boolean): Promise<void> {
     while (this.running) await this.running;
     const run = (async () => {
       this.setStatus({ state: 'syncing' });
@@ -161,12 +180,16 @@ export class SyncEngine {
         await work();
         this.retryDelay = SYNC_INTERVALS.retryMinMs;
         this.bk.lastSyncedAt = new Date(this.o.now()).toISOString();
-        this.setStatus({ state: 'idle', error: null, lastSyncedAt: this.bk.lastSyncedAt });
-        this.persist({ sync: this.bookkeeping() });
+        this.setStatus({
+          state: this.newerSeen ? 'error' : 'idle',
+          error: this.newerSeen ? NEWER_APP_MESSAGE : null,
+          lastSyncedAt: this.bk.lastSyncedAt,
+        });
         if (this.o.autoSync && !this.closed && this.pullTimer === null) this.schedulePull(SYNC_INTERVALS.pullEveryMs);
       } catch (error) {
         this.fail(error);
       }
+      this.saveState(saveState);
     })();
     this.running = run;
     try {
@@ -211,8 +234,9 @@ export class SyncEngine {
       this.outbox = this.outbox.filter((op) => op.seq > last);
       this.bk.flushedSeq = Math.max(this.bk.flushedSeq, last);
       this.bk.vector[this.o.deviceId] = this.bk.flushedSeq;
-      // The saved state must hold these ops before they leave the outbox: pulls skip this device's folder.
-      this.persist({ removeOutboxThrough: last, state: this.o.store.serialize(), sync: this.bookkeeping() });
+      // The saved outbox keeps these ops until a saved state holds them (saveState): pulls skip this device's folder.
+      this.stateDirty = true;
+      this.persist({ sync: this.bookkeeping() });
       this.setStatus({ pendingOps: this.outbox.length });
     }
     this.firstPendingAt = null;
@@ -281,7 +305,29 @@ export class SyncEngine {
       if (!isDeviceId(device) || device === deviceId) continue;
       if (await this.pullDevice(device, folder)) appliedAny = true;
     }
-    if (appliedAny) this.persist({ state: this.o.store.serialize(), sync: this.bookkeeping() });
+    if (appliedAny) this.stateDirty = true;
+  }
+
+  /**
+   * Saves the merged state with the bookkeeping, and drops from the saved
+   * outbox the ops that are now both in storage and in the saved state.
+   */
+  private saveState(force: boolean): void {
+    if (!this.stateDirty) {
+      this.persist({ sync: this.bookkeeping() });
+      return;
+    }
+    if (!force && this.o.now() - this.lastStateSave < SYNC_INTERVALS.stateSaveMs) {
+      this.persist({ sync: this.bookkeeping() });
+      return;
+    }
+    this.stateDirty = false;
+    this.lastStateSave = this.o.now();
+    this.persist({
+      state: this.o.store.serialize(),
+      removeOutboxThrough: this.bk.flushedSeq,
+      sync: this.bookkeeping(),
+    });
   }
 
   private async pullDevice(device: string, folder: StoredFile): Promise<boolean> {
@@ -299,11 +345,19 @@ export class SyncEngine {
       let ops: OpEnvelope[];
       try {
         const decoded = await decodeSegment(await this.o.adapter.readContent(file.id), { device, range });
-        for (const e of decoded.errors) this.problems.push(`${device}/${file.name} line ${e.line}: ${e.reason}`);
+        for (const e of decoded.errors) this.report(`${device}/${file.name} line ${e.line}: ${e.reason}`);
         ops = decoded.ops;
+        if (decoded.errors.some((e) => e.newer)) {
+          // Read again after an update rather than marking it done and losing those ops.
+          this.newerSeen = true;
+          const changed = this.o.store.applyOps(ops);
+          if (changed.length > 0) this.o.onApplied(changed);
+          applied = true;
+          continue;
+        }
       } catch (error) {
         if (!(error instanceof DecodeError)) throw error;
-        this.problems.push(`${device}/${file.name}: ${error.message}`);
+        this.report(`${device}/${file.name}: ${error.message}`);
         continue;
       }
       const changed = this.o.store.applyOps(ops);
@@ -339,6 +393,7 @@ export class SyncEngine {
   }
 
   private async maybeSnapshot(): Promise<void> {
+    if (this.o.readOnly) return;
     if (this.bk.opsSinceSnapshot < this.o.snapshotEvery) return;
     const hlc = this.o.stamp();
     await writeSnapshot(this.o.adapter, this.o.layout.snapshotsId, {
@@ -352,6 +407,12 @@ export class SyncEngine {
     this.bk.snapshot = snapshotName(hlc, this.o.deviceId);
     this.bk.opsSinceSnapshot = 0;
     this.persist({ sync: this.bookkeeping() });
+  }
+
+  private report(problem: string): void {
+    if (this.problems.includes(problem)) return;
+    this.problems.push(problem);
+    if (this.problems.length > MAX_PROBLEMS) this.problems.splice(0, this.problems.length - MAX_PROBLEMS);
   }
 
   private bookkeeping(): SyncBookkeeping {
@@ -395,7 +456,7 @@ export class SyncEngine {
     this.flushTimer = this.timers.setTimeout(() => {
       this.flushTimer = null;
       if (this.status.state === 'paused' || this.closed) return;
-      void this.exclusive(() => this.flush());
+      void this.exclusive(() => this.flush(), false);
     }, delay);
   }
 

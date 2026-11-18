@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { listSnapshots } from './snapshot';
 import { MemoryLocalStore } from './local-store';
-import { openLibrary, type OpenLibraryOptions } from './session';
-import type { SyncTimers } from './sync';
+import { gzipText } from './gzip';
+import { LibraryReadOnlyError, openLibrary, type OpenLibraryOptions } from './session';
+import { NEWER_APP_MESSAGE, type SyncTimers } from './sync';
 import { canonicalView } from './test-support/canonical';
 import { TestAdapter } from './test-support/test-adapter';
 import type { LibrarySession, NewAsset } from './types';
@@ -285,6 +286,60 @@ describe('sync between devices', () => {
     await b.syncNow();
     expect(b.getView().assets.get(assetId)).toBeDefined();
     expect(b.getSyncStatus().state).toBe('idle');
+  });
+});
+
+describe('versions of the schema', () => {
+  it('keeps ops from a newer app for later instead of dropping them', async () => {
+    const adapter = new TestAdapter();
+    const a = await open(adapter);
+    const b = await open(adapter);
+    const { assetId } = a.addAsset(photo(1));
+    await a.syncNow();
+    const folder = (await adapter.listChildren(a.layout.journalId)).find((f) => f.name === a.deviceId)!;
+    const newer = { id: `${a.deviceId}:3`, device: a.deviceId, seq: 3, hlc: `999999999999999-00000-${a.deviceId}`, v: 2, op: { t: 'future' } };
+    const valid = { id: `${a.deviceId}:4`, device: a.deviceId, seq: 4, hlc: `999999999999999-00001-${a.deviceId}`, v: 1, op: { t: 'set', kind: 'asset', id: assetId, fields: { rating: 2 } } };
+    await adapter.createFile(
+      { parentId: folder.id, name: '000000000003-000000000004.jsonl.gz', mimeType: 'application/gzip' },
+      await gzipText(JSON.stringify(newer) + '\n' + JSON.stringify(valid) + '\n'),
+    );
+    await b.syncNow();
+    expect(b.getView().assets.get(assetId)?.rating).toBe(2);
+    expect(b.getSyncStatus()).toMatchObject({ state: 'error', error: NEWER_APP_MESSAGE });
+    const reads = adapter.calls.filter((c) => c === 'readContent').length;
+    await b.syncNow();
+    // Not marked as read, so an updated app reads it again.
+    expect(adapter.calls.filter((c) => c === 'readContent').length).toBe(reads + 1);
+  });
+
+  it('opens a library with a newer schema read-only', async () => {
+    const adapter = new TestAdapter();
+    const a = await open(adapter);
+    a.addAsset(photo(1));
+    await a.syncNow();
+    const manifest = (await adapter.listChildren(a.layout.dataId)).find((f) => f.name === 'library.json')!;
+    const json = JSON.parse(await (await adapter.readContent(manifest.id)).text());
+    await adapter.updateContent(manifest.id, new Blob([JSON.stringify({ ...json, schemaVersion: 2 })]));
+    const b = await open(adapter);
+    await b.syncNow();
+    expect(b.getView().assets.size).toBe(1);
+    expect(b.getSyncStatus().state).toBe('error');
+    expect(() => b.setSetting('x', 1)).toThrow(LibraryReadOnlyError);
+  });
+});
+
+describe('device persistence', () => {
+  it('keeps flushed ops in the saved outbox until a saved state holds them', async () => {
+    const adapter = new TestAdapter();
+    const store = new MemoryLocalStore();
+    const a = await open(adapter, store);
+    a.addAsset(photo(1));
+    await a.syncNow();
+    const saved = await store.load(a.libraryId);
+    expect(saved?.outbox).toEqual([]);
+    expect(saved?.sync?.flushedSeq).toBe(2);
+    expect(saved?.state?.entities.length).toBe(2);
+    expect(saved?.nextSeq).toBe(3);
   });
 });
 
