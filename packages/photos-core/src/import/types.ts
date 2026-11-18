@@ -96,6 +96,12 @@ export interface ImportOptions {
    * sidecars themselves are never imported as photos.
    */
   readonly applySidecars?: boolean;
+  /**
+   * A saved or built-in edit preset (library/presets.ts) the new versions
+   * start from. Ignored when the import is given a `recipe` directly, or
+   * when no such preset exists.
+   */
+  readonly presetId?: string;
 }
 
 export interface ImportJob {

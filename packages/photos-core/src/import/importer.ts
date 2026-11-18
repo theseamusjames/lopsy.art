@@ -9,7 +9,8 @@
  * file from its staged copy. Without them it runs from the `File`s alone.
  */
 
-import { DEFAULT_RECIPE, recipeHash } from '../library/recipe';
+import { findPreset } from '../library/presets';
+import { DEFAULT_RECIPE, recipeFromPaths, recipeHash, recipeToPaths } from '../library/recipe';
 import type { Recipe } from '../library/recipe';
 import type { AlbumId, AssetId, LibrarySession, LibraryView, NewAsset, VersionId } from '../library/types';
 import { isStorageError } from '../storage/errors';
@@ -209,6 +210,13 @@ interface JobSetup {
   readonly saved: Promise<void>;
 }
 
+/** The recipe a preset gives a new version, or null when there is no such preset. */
+function presetRecipe(session: LibrarySession, presetId: string | undefined): Recipe | null {
+  if (presetId === undefined) return null;
+  const preset = findPreset(session.getView().presets, presetId);
+  return preset ? recipeFromPaths({ ...recipeToPaths(DEFAULT_RECIPE), ...preset.values }) : null;
+}
+
 function warn(what: string) {
   return (error: unknown) => console.warn(`Import: ${what}:`, error);
 }
@@ -279,7 +287,7 @@ export function startImport(files: readonly File[], ctx: ImportContext): ImportJ
     previewRenderer: ctx.previewRenderer,
     options,
     now,
-    recipe: ctx.recipe ?? null,
+    recipe: ctx.recipe ?? presetRecipe(ctx.session, options.presetId),
     keywords: ctx.keywords ?? null,
     albumId: ctx.albumId ?? null,
     queueStore: ctx.queueStore ?? null,
