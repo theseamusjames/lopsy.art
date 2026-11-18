@@ -50,6 +50,12 @@ test('new version, edit it, copy its edits onto another photo', async ({ page })
   await expect(second).toHaveAttribute('data-edited', 'true');
   await expect(first).toHaveAttribute('data-edited', 'false');
 
+  // A preset from the grid edits the photo it is applied to.
+  await first.click();
+  await page.getByRole('button', { name: 'Apply a preset to the selected photos' }).click();
+  await page.getByRole('menu', { name: 'Presets' }).getByRole('menuitem', { name: 'Punchy' }).click();
+  await expect(first).toHaveAttribute('data-edited', 'true');
+
   // All of it is kept.
   await expect(page.getByRole('button', { name: /Saved/ })).toBeVisible({ timeout: 30_000 });
   await page.reload();
