@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { StorageQuota } from '@lopsy/photos-core/storage/types';
 import { getBackend } from '../../app/backend-registry';
-import { isSettled, useExportProgress, useImportProgress, useOriginalsDownload, useSession, useSyncStatus } from '../../app/hooks';
+import { isSettled, useExportProgress, useImportProgress, useOriginalsDownload, usePreviewRefresh, useSession, useSyncStatus } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { formatBytes, plural } from '../../import/import-summary';
-import { describeDownload, describeSync, formatWhen } from './sync-words';
+import { describeDownload, describePreviewRefresh, describeSync, formatWhen } from './sync-words';
 import { Button } from '../Button/Button';
 import { ExportShare } from '../ExportShare/ExportShare';
 import styles from './SyncPanel.module.css';
@@ -17,6 +17,8 @@ export function SyncPanel() {
   const exportProgress = useExportProgress(useUi((s) => s.exportJob));
   const download = getBackend().getOriginalsDownload(session);
   const downloadProgress = useOriginalsDownload(download);
+  const previews = usePreviewRefresh(getBackend().getPreviewRefresh(session));
+  const previewsLine = previews ? describePreviewRefresh(previews) : null;
   const [quota, setQuota] = useState<StorageQuota | null>(null);
   const [quotaError, setQuotaError] = useState<string | null>(null);
 
@@ -58,6 +60,14 @@ export function SyncPanel() {
           {status.state === 'error' || status.state === 'offline' ? 'Try again' : 'Save now'}
         </Button>
       </section>
+
+      {previewsLine && (
+        <section className={styles.section}>
+          <p className={styles.muted} role="status">
+            {previewsLine}
+          </p>
+        </section>
+      )}
 
       {(importProgress || exportProgress) && (
         <section className={styles.section}>

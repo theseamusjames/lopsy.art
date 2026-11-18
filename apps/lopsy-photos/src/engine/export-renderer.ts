@@ -35,7 +35,25 @@ function checkSignal(signal: AbortSignal): void {
   if (signal.aborted) throw new ExportAbortedError();
 }
 
-export function createEngineExportRenderer(options: EngineExportRendererOptions): ExportRenderer & { dispose(): void } {
+/** The version's previews at the grid's and Single view's sizes (photos-core PREVIEW_SIZES). */
+export interface RenderedPreviews {
+  readonly thumb: Blob;
+  readonly screen: Blob;
+}
+
+export interface EngineRenderer extends ExportRenderer {
+  /**
+   * Renders a version's thumb and screen previews on the same engine as
+   * exports, after any export queued before it (one render at a time).
+   */
+  renderPreviews(asset: Asset, version: Version, signal: AbortSignal): Promise<RenderedPreviews>;
+  dispose(): void;
+}
+
+const THUMB_LONG_EDGE = 512;
+const SCREEN_LONG_EDGE = 2048;
+
+export function createEngineExportRenderer(options: EngineExportRendererOptions): EngineRenderer {
   const idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
   const create = options.createEngine ?? createRealEngine;
   let engine: Promise<DevelopEngine> | null = null;
@@ -67,7 +85,7 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     return engine;
   };
 
-  const renderOne = async (asset: Asset, version: Version, settings: ExportSettings, signal: AbortSignal): Promise<Blob> => {
+  const loaded = async (asset: Asset, signal: AbortSignal): Promise<DevelopEngine> => {
     checkSignal(signal);
     if (isDisposed) throw new Error('The export renderer was disposed');
     const e = await getEngine();
@@ -80,6 +98,11 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
       loadedAssetId = asset.id;
       checkSignal(signal);
     }
+    return e;
+  };
+
+  const renderOne = async (asset: Asset, version: Version, settings: ExportSettings, signal: AbortSignal): Promise<Blob> => {
+    const e = await loaded(asset, signal);
     e.setRecipe(version.recipe);
     const space = settings.colorSpace ?? 'srgb';
     if (space === 'rec2020') throw new Error('Rec. 2020 export needs an engine that encodes it; choose sRGB or Display P3.');
@@ -94,17 +117,34 @@ export function createEngineExportRenderer(options: EngineExportRendererOptions)
     return blob;
   };
 
+  const renderPreviewsOne = async (asset: Asset, version: Version, signal: AbortSignal): Promise<RenderedPreviews> => {
+    const e = await loaded(asset, signal);
+    e.setRecipe(version.recipe);
+    const thumb = await e.renderPreview(THUMB_LONG_EDGE);
+    checkSignal(signal);
+    const screen = await e.renderPreview(SCREEN_LONG_EDGE);
+    checkSignal(signal);
+    return { thumb, screen };
+  };
+
+  const enqueue = <T>(work: () => Promise<T>): Promise<T> => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = null;
+    pending++;
+    const job = queue.then(work);
+    queue = job.catch(() => undefined).then(() => {
+      pending--;
+      if (!isDisposed && pending === 0) idleTimer = setTimeout(release, idleMs);
+    });
+    return job;
+  };
+
   return {
     render(asset, version, settings, signal) {
-      if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = null;
-      pending++;
-      const job = queue.then(() => renderOne(asset, version, settings, signal));
-      queue = job.catch(() => undefined).then(() => {
-        pending--;
-        if (!isDisposed && pending === 0) idleTimer = setTimeout(release, idleMs);
-      });
-      return job;
+      return enqueue(() => renderOne(asset, version, settings, signal));
+    },
+    renderPreviews(asset, version, signal) {
+      return enqueue(() => renderPreviewsOne(asset, version, signal));
     },
     dispose() {
       isDisposed = true;

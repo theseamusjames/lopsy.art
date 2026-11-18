@@ -1,5 +1,6 @@
 import type { SyncStatus } from '@lopsy/photos-core/library/types';
 import type { DownloadProgress } from '@lopsy/photos-core/cache/keep-originals';
+import type { PreviewRefreshProgress } from '../../app/preview-refresh';
 
 /** The sync state in the UI's words. */
 export function describeSync(status: SyncStatus): string {
@@ -49,4 +50,12 @@ export function describeDownload(progress: DownloadProgress): string {
     case 'stopped':
       return `${count} originals on this device`;
   }
+}
+
+/** Background previews, or null when there is nothing to say. */
+export function describePreviewRefresh(progress: PreviewRefreshProgress): string | null {
+  const failed = progress.failed > 0 ? ` ${progress.failed.toLocaleString('en-US')} could not be updated.` : '';
+  if (progress.pending === 0) return failed === '' ? null : failed.trim();
+  const count = `${progress.pending.toLocaleString('en-US')} ${progress.pending === 1 ? 'preview' : 'previews'}`;
+  return progress.paused ? `${count} to update after editing.${failed}` : `Updating ${count}.${failed}`;
 }
