@@ -1,0 +1,42 @@
+{
+  "name": "lopsy-photos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lopsy Photos: a photo library and RAW editor on the Lopsy engine (proof of concept)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@lopsy/photos-core": "*",
+    "lucide-react": "0.577.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zustand": "5.0.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.37.0",
+    "@playwright/test": "1.58.2",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.1.4",
+    "eslint": "9.37.0",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "globals": "15.15.0",
+    "jsdom": "28.1.0",
+    "playwright": "1.58.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.0",
+    "vite": "7.3.1",
+    "vite-plugin-top-level-await": "1.6.0",
+    "vite-plugin-wasm": "3.6.0",
+    "vitest": "4.0.18"
+  }
+}

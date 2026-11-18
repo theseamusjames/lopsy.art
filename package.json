@@ -2,9 +2,10 @@
   "name": "lopsy",
   "version": "0.1.0",
   "private": true,
-  "description": "Lopsy: a browser-based image editor (apps/lopsy-web) and the engine it renders with (engine)",
+  "description": "Lopsy: a browser-based image editor (apps/lopsy-web), Lopsy Photos (apps/lopsy-photos, proof of concept) and the engine they render with (engine)",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
@@ -17,17 +18,23 @@
     "wgsl:check": "npm run wgsl:check -w lopsy-web --",
     "perf:load": "npm run perf:load -w lopsy-web --",
     "dev": "npm run dev -w lopsy-web --",
+    "dev:photos": "npm run dev -w lopsy-photos --",
     "build": "npm run build -w lopsy-web --",
+    "build:photos": "npm run build -w lopsy-photos --",
     "preview": "npm run preview -w lopsy-web --",
     "test": "npm run test -w lopsy-web --",
+    "test:photos": "npm run test -w @lopsy/photos-core && npm run test -w lopsy-photos",
     "test:watch": "npm run test:watch -w lopsy-web --",
     "test:e2e": "npm run test:e2e -w lopsy-web --",
+    "test:e2e:photos": "npm run test:e2e -w lopsy-photos --",
     "parity:record": "npm run parity:record -w lopsy-web --",
     "parity:check": "npm run parity:check -w lopsy-web --",
     "tutorial:upload": "npm run tutorial:upload -w lopsy-web --",
     "tutorial:check": "npm run tutorial:check -w lopsy-web --",
     "typecheck": "npm run typecheck -w lopsy-web --",
+    "typecheck:photos": "npm run typecheck -w @lopsy/photos-core && npm run typecheck -w lopsy-photos",
     "lint": "npm run lint -w lopsy-web --",
+    "lint:photos": "npm run lint -w @lopsy/photos-core && npm run lint -w lopsy-photos",
     "storybook": "npm run storybook -w lopsy-web --",
     "build-storybook": "npm run build-storybook -w lopsy-web --"
   }

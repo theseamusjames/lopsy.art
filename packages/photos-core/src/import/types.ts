@@ -1,0 +1,92 @@
+/**
+ * Import contracts (spec 5.3, 6.8). Metadata and embedded previews are read
+ * from the file's bytes by pure code that runs in a worker or in Node.
+ * Rendering thumbnails needs the browser, so it is injected.
+ */
+
+import type { AssetId, CameraInfo, ExposureInfo, GpsInfo, ImageFormat } from '../library/types';
+
+export interface ImageMetadata {
+  readonly format: ImageFormat;
+  readonly mimeType: string;
+  /** Oriented size, when the file says. */
+  readonly width: number | null;
+  readonly height: number | null;
+  /** EXIF orientation, 1 to 8; 1 when absent. */
+  readonly orientation: number;
+  /** DateTimeOriginal as 'YYYY-MM-DDTHH:mm:ss', with the offset appended when the file has one. */
+  readonly capturedAt: string | null;
+  readonly camera: CameraInfo | null;
+  readonly lens: string | null;
+  readonly exposure: ExposureInfo | null;
+  readonly gps: GpsInfo | null;
+}
+
+export interface EmbeddedPreview {
+  /** A JPEG the camera stored in the file (or the file itself for a JPEG). */
+  readonly blob: Blob;
+  readonly width: number | null;
+  readonly height: number | null;
+  /**
+   * EXIF orientation still to apply when showing the preview. Camera
+   * previews are usually stored unrotated.
+   */
+  readonly orientation: number;
+}
+
+export interface InspectedImage {
+  readonly metadata: ImageMetadata;
+  readonly preview: EmbeddedPreview | null;
+}
+
+/** Renders a downscaled JPEG. The browser implementation uses createImageBitmap and OffscreenCanvas. */
+export interface PreviewRenderer {
+  render(
+    source: Blob,
+    maxSize: number,
+    orientation: number,
+  ): Promise<{ readonly blob: Blob; readonly width: number; readonly height: number }>;
+}
+
+export type ImportItemState =
+  | 'queued'
+  | 'reading'
+  | 'duplicate'
+  | 'unsupported'
+  | 'uploading'
+  | 'verifying'
+  | 'done'
+  | 'failed';
+
+export interface ImportItem {
+  readonly id: string;
+  readonly fileName: string;
+  readonly byteSize: number;
+  readonly state: ImportItemState;
+  readonly sentBytes: number;
+  readonly assetId: AssetId | null;
+  readonly error: string | null;
+}
+
+export interface ImportProgress {
+  readonly items: readonly ImportItem[];
+  readonly finished: boolean;
+}
+
+export interface ImportOptions {
+  /** Skip files whose SHA-256 is already in the library. Default true. */
+  readonly skipDuplicates: boolean;
+  /** For RAW+JPEG pairs: keep both (paired) or only the RAW. Default 'both'. */
+  readonly rawPlusJpeg: 'both' | 'raw-only';
+  /** How many files upload at once. Default 3. */
+  readonly concurrency: number;
+}
+
+export interface ImportJob {
+  readonly id: string;
+  getProgress(): ImportProgress;
+  subscribe(listener: () => void): () => void;
+  cancel(): void;
+  /** Resolves when every item has finished, failed or been skipped. */
+  readonly finished: Promise<ImportProgress>;
+}
