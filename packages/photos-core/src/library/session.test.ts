@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { listSnapshots } from './snapshot';
 import { MemoryLocalStore } from './local-store';
 import { gzipText } from './gzip';
+import { DEFAULT_RECIPE, recipeHash } from './recipe';
 import { LibraryReadOnlyError, openLibrary, type OpenLibraryOptions } from './session';
 import { NEWER_APP_MESSAGE, type SyncTimers } from './sync';
 import { canonicalView } from './test-support/canonical';
 import { TestAdapter } from './test-support/test-adapter';
 import type { LibrarySession, NewAsset } from './types';
+
+const DEFAULT_HASH = recipeHash(DEFAULT_RECIPE);
 
 function photo(n: number): NewAsset {
   return {
@@ -94,14 +97,14 @@ describe('openLibrary', () => {
     session.restoreAssets([assetId]);
     const v2 = session.createVersion(assetId, 'B&W', undefined);
     session.renameVersion(v2, 'Mono');
-    session.setPreview(v2, 'thumb', { fileId: 'p1', recipeHash: 'abc', width: 512, height: 341 });
+    session.setPreview(v2, 'thumb', { fileId: 'p1', recipeHash: DEFAULT_HASH, width: 512, height: 341 });
     const album = session.createAlbum('Trip');
     session.setAlbumMember(album, assetId, true);
     session.renameAlbum(album, 'Trip 2026');
     session.setSetting('export.quality', 90);
     const view = session.getView();
     expect(view.assets.get(assetId)).toMatchObject({ rating: 5, label: 'red', title: 'Harbour', keywords: ['sea'], deleted: false });
-    expect(view.versions.get(v2)).toMatchObject({ name: 'Mono', thumb: { fileId: 'p1', recipeHash: 'abc', width: 512, height: 341 } });
+    expect(view.versions.get(v2)).toMatchObject({ name: 'Mono', thumb: { fileId: 'p1', recipeHash: DEFAULT_HASH, width: 512, height: 341 } });
     expect(view.albums.get(album)).toEqual({ id: album, name: 'Trip 2026', assetIds: [assetId], deleted: false });
     expect(view.settings.get('export.quality')).toBe(90);
     session.deleteVersion(v2);
@@ -459,8 +462,10 @@ describe('undo and redo', () => {
     a.setRecipe(versionId, { ...recipe, tone: { ...recipe.tone, exposure: -2, shadows: 30 }, framing: { ...recipe.framing, crop: { x: 0, y: 0, width: 0.5, height: 0.5 } } }, 'Paste');
     expect(a.getView().versions.get(versionId)?.recipe.framing.crop).toEqual({ x: 0, y: 0, width: 0.5, height: 0.5 });
     await syncAll(a, b);
-    expect(b.undo(versionId)).toBe(true);
-    await syncAll(b, a);
+    // Undo acts on this device's own steps only.
+    expect(b.undo(versionId)).toBe(false);
+    expect(a.undo(versionId)).toBe(true);
+    await syncAll(a, b);
     for (const s of [a, b]) {
       const r = s.getView().versions.get(versionId)?.recipe;
       expect(r?.tone.exposure).toBe(1.5);

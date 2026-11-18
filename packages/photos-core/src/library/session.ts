@@ -21,7 +21,7 @@ import {
 import { isStorageError } from '../storage/errors';
 import { EMPTY_BOOKKEEPING, type LocalStore, type SyncBookkeeping } from './local-store';
 import { MergeStore, type RecipeWrite } from './merge-store';
-import { DEFAULT_RECIPE, recipeToPaths, type Recipe } from './recipe';
+import { DEFAULT_RECIPE, recipeHash, recipeToPaths, type Recipe } from './recipe';
 import { loadNewestSnapshot } from './snapshot';
 import { SyncEngine, type SyncTimers } from './sync';
 import type {
@@ -148,13 +148,23 @@ interface StepInfo {
   readonly id: string;
   readonly label: string;
   readonly hlc: string;
+  /** The device that made the step. */
+  readonly device: string;
   /** The step's first write, for ordering. */
   readonly first: RecipeWrite;
   readonly fields: Record<string, Json>;
+  /** The ops that wrote the step. */
+  readonly opIds: Set<string>;
+  /** The step's latest write. */
+  lastWrite: { hlc: string; opId: string };
   active: boolean;
-  /** HLC of the latest undo or redo of this step. */
-  lastEventHlc: string | null;
+  /** The latest undo or redo of this step. */
+  lastEvent: { readonly hlc: string; readonly opId: string; readonly undo: boolean } | null;
   lastUndoHlc: string | null;
+}
+
+function deviceOf(opId: string): string {
+  return opId.slice(0, opId.indexOf(':'));
 }
 
 function before(a: RecipeWrite, b: RecipeWrite): boolean {
@@ -163,34 +173,43 @@ function before(a: RecipeWrite, b: RecipeWrite): boolean {
 
 function analyseHistory(writes: readonly RecipeWrite[]): StepInfo[] {
   const steps = new Map<string, StepInfo>();
-  const events: { target: string; undo: boolean; hlc: string }[] = [];
+  const events: { target: string; undo: boolean; hlc: string; opId: string }[] = [];
   for (const w of writes) {
     const step = w.step;
     if (!step) continue;
     if (step.undoes !== undefined) {
-      events.push({ target: step.undoes, undo: true, hlc: w.hlc });
+      events.push({ target: step.undoes, undo: true, hlc: w.hlc, opId: w.opId });
     } else if (step.redoes !== undefined) {
-      events.push({ target: step.redoes, undo: false, hlc: w.hlc });
+      events.push({ target: step.redoes, undo: false, hlc: w.hlc, opId: w.opId });
     } else {
       const existing = steps.get(step.id);
-      if (existing) Object.assign(existing.fields, w.fields);
-      else
+      if (existing) {
+        Object.assign(existing.fields, w.fields);
+        existing.opIds.add(w.opId);
+        existing.lastWrite = { hlc: w.hlc, opId: w.opId };
+      } else {
         steps.set(step.id, {
           id: step.id,
           label: step.label,
           hlc: w.hlc,
+          device: deviceOf(w.opId),
           first: w,
           fields: { ...w.fields },
+          opIds: new Set([w.opId]),
+          lastWrite: { hlc: w.hlc, opId: w.opId },
           active: true,
-          lastEventHlc: null,
+          lastEvent: null,
           lastUndoHlc: null,
         });
+      }
     }
   }
   for (const e of events) {
     const s = steps.get(e.target);
-    if (!s || (s.lastEventHlc !== null && s.lastEventHlc > e.hlc)) continue;
-    s.lastEventHlc = e.hlc;
+    if (!s) continue;
+    const last = s.lastEvent;
+    if (last && (last.hlc > e.hlc || (last.hlc === e.hlc && last.opId > e.opId))) continue;
+    s.lastEvent = { hlc: e.hlc, opId: e.opId, undo: e.undo };
     s.active = !e.undo;
     if (e.undo) s.lastUndoHlc = e.hlc;
   }
@@ -362,16 +381,24 @@ class Session implements PhotosLibrarySession {
       width: preview.width,
       height: preview.height,
     };
+    // A render of an older edit, finishing after a newer one (here or on another device), is not kept.
+    const version = this.getView().versions.get(versionId);
+    if (version && recipeHash(version.recipe) !== preview.recipeHash) return;
     this.emit([{ t: 'set', kind: 'version', id: versionId, fields: { [size]: value } }]);
   }
 
+  /**
+   * Undoes this device's latest step that can still be undone. Only fields
+   * the step (or its last redo) still holds are written back: a field
+   * someone changed since, on any device, keeps that newer value.
+   */
   undo(versionId: VersionId): boolean {
     const writes = this.merge.recipeWrites(versionId);
     const steps = analyseHistory(writes);
-    const target = [...steps].reverse().find((s) => s.active);
+    const target = [...steps].reverse().find((s) => this.undoable(versionId, s, steps));
     if (!target) return false;
     const fields: Record<string, Json> = {};
-    for (const path of Object.keys(target.fields)) {
+    for (const path of this.heldFields(versionId, target, steps)) {
       fields[`recipe.${path}`] = this.valueBefore(versionId, writes, target.first, path);
     }
     this.emit([{ t: 'set', kind: 'version', id: versionId, fields }], {
@@ -382,19 +409,13 @@ class Session implements PhotosLibrarySession {
     return true;
   }
 
+  /** Redoes this device's most recently undone step, for the fields its undo still holds. */
   redo(versionId: VersionId): boolean {
     const steps = analyseHistory(this.merge.recipeWrites(versionId));
-    let target: StepInfo | null = null;
-    for (const s of steps) {
-      if (s.active || s.lastUndoHlc === null) continue;
-      if (!target || (target.lastUndoHlc !== null && s.lastUndoHlc > target.lastUndoHlc)) target = s;
-    }
-    if (!target || target.lastUndoHlc === null) return false;
-    const undoneAt = target.lastUndoHlc;
-    // A new edit after the undo ends the redo chain, as in any editor.
-    if (steps.some((s) => s.hlc > undoneAt)) return false;
+    const target = this.redoTarget(versionId, steps);
+    if (!target) return false;
     const fields: Record<string, Json> = {};
-    for (const [path, value] of Object.entries(target.fields)) fields[`recipe.${path}`] = value;
+    for (const path of this.heldFields(versionId, target, steps)) fields[`recipe.${path}`] = target.fields[path] as Json;
     this.emit([{ t: 'set', kind: 'version', id: versionId, fields }], {
       id: newId(this.now()),
       label: `Redo ${target.label}`,
@@ -404,12 +425,59 @@ class Session implements PhotosLibrarySession {
   }
 
   history(versionId: VersionId): readonly HistoryStep[] {
-    return analyseHistory(this.merge.recipeWrites(versionId)).map((s) => ({
+    const steps = analyseHistory(this.merge.recipeWrites(versionId));
+    const undoTarget = [...steps].reverse().find((s) => this.undoable(versionId, s, steps));
+    const redoTarget = this.redoTarget(versionId, steps);
+    return steps.map((s) => ({
       id: s.id,
       label: s.label,
       hlc: s.hlc,
       active: s.active,
+      own: s.device === this.deviceId,
+      undoable: this.undoable(versionId, s, steps),
+      nextUndo: s === undoTarget,
+      nextRedo: s === redoTarget,
     }));
+  }
+
+  /**
+   * The step's fields nobody has changed since the step's latest write (the
+   * step itself, or its last undo or redo): no other device, and no newer
+   * edit here, has written them after it. This device's undos and redos,
+   * and its steps undone since, do not count, so undoing several steps in
+   * a row still works.
+   */
+  private heldFields(versionId: VersionId, step: StepInfo, steps: readonly StepInfo[]): string[] {
+    const writes = this.merge.recipeWrites(versionId);
+    const undoneHere = new Set(steps.filter((s) => s.device === this.deviceId && !s.active).map((s) => s.id));
+    const ref = step.lastEvent ?? step.lastWrite;
+    const touched = new Set<string>();
+    for (const w of writes) {
+      if (w.hlc < ref.hlc || (w.hlc === ref.hlc && w.opId <= ref.opId)) continue;
+      const ownUndoRedo =
+        deviceOf(w.opId) === this.deviceId && w.step !== null && (w.step.undoes !== undefined || w.step.redoes !== undefined);
+      // This device's own steps that it has undone since do not count either: their change is gone.
+      if (ownUndoRedo || (w.step !== null && undoneHere.has(w.step.id))) continue;
+      for (const path of Object.keys(w.fields)) touched.add(path);
+    }
+    return Object.keys(step.fields).filter((path) => !touched.has(path));
+  }
+
+  private undoable(versionId: VersionId, step: StepInfo, steps: readonly StepInfo[]): boolean {
+    return step.device === this.deviceId && step.active && this.heldFields(versionId, step, steps).length > 0;
+  }
+
+  private redoTarget(versionId: VersionId, steps: readonly StepInfo[]): StepInfo | null {
+    let target: StepInfo | null = null;
+    for (const s of steps) {
+      if (s.device !== this.deviceId || s.active || !s.lastEvent || deviceOf(s.lastEvent.opId) !== this.deviceId) continue;
+      if (!target || (s.lastUndoHlc ?? '') > (target.lastUndoHlc ?? '')) target = s;
+    }
+    if (!target || target.lastUndoHlc === null) return null;
+    const undoneAt = target.lastUndoHlc;
+    // A new edit on this device after the undo ends the redo chain, as in any editor.
+    if (steps.some((s) => s.device === this.deviceId && s.hlc > undoneAt)) return null;
+    return this.heldFields(versionId, target, steps).length > 0 ? target : null;
   }
 
   createAlbum(name: string): AlbumId {
@@ -478,13 +546,20 @@ class Session implements PhotosLibrarySession {
     return this.merge.foldedRecipeValue(versionId, path) ?? DEFAULT_PATHS[path] ?? null;
   }
 
-  private emit(ops: readonly Op[], step?: OpStep): void {
+  private emit(given: readonly Op[], step?: OpStep): void {
     if (this.lockLost) throw new LibraryLockLostError();
     if (this.readonlyFlag) throw new LibraryReadOnlyError();
+    // An undo or redo is always recorded, even when it changes nothing, so the history moves on.
+    const keepAll = step !== undefined && (step.undoes !== undefined || step.redoes !== undefined);
+    const ops: Op[] = [];
+    for (const op of given) {
+      const cleaned = op.t === 'set' ? withoutUndefined(op) : op;
+      const effective = keepAll ? cleaned : this.withoutNoOps(cleaned);
+      if (effective) ops.push(effective);
+    }
     if (ops.length === 0) return;
     const envelopes: OpEnvelope[] = [];
-    for (const given of ops) {
-      const op = given.t === 'set' ? withoutUndefined(given) : given;
+    for (const op of ops) {
       const seq = this.nextSeq;
       const env: OpEnvelope = {
         id: `${this.deviceId}:${seq}`,
@@ -506,6 +581,31 @@ class Session implements PhotosLibrarySession {
     if (this.cache.defer(changed)) this.notify();
   }
 
+  /**
+   * Drops what would not change the local state. A write stamps its fields
+   * with a new HLC, so writing a value that is already there could only
+   * override a newer change from another device that has not arrived yet.
+   */
+  private withoutNoOps(op: Op): Op | null {
+    const record = this.merge.get(op.kind, op.id);
+    if (!record) return op;
+    if (op.t === 'member') {
+      const current = record.sets.get(op.set)?.get(op.member);
+      // A member never added counts as absent.
+      return (current?.present ?? false) === op.present ? null : op;
+    }
+    let fields: Record<string, Json> | null = null;
+    for (const [path, value] of Object.entries(op.fields)) {
+      const current = record.fields.get(path);
+      if (current !== undefined && sameJson(current.value, value)) {
+        fields ??= { ...op.fields };
+        delete fields[path];
+      }
+    }
+    if (!fields) return op;
+    return Object.keys(fields).length === 0 ? null : { ...op, fields };
+  }
+
   private notify(): void {
     for (const listener of this.listeners) listener();
   }
@@ -517,6 +617,12 @@ function withoutUndefined(op: Extract<Op, { t: 'set' }>): Op {
   const fields: Record<string, Json> = {};
   for (const [k, v] of Object.entries(op.fields)) if (v !== undefined) fields[k] = v;
   return { ...op, fields };
+}
+
+function sameJson(a: Json, b: Json): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function normalizedKeywords(keywords: readonly string[]): string[] {
