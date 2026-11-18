@@ -90,9 +90,16 @@ export class LocalFolderAdapter implements StorageAdapter {
     return withFsErrors(async () => {
       const now = options.now ?? (() => new Date());
       const existing = await readIndex(handle);
-      const index = existing === null ? FileIndex.create(handle.name, now) : FileIndex.load(existing, now);
+      const index =
+        existing === null
+          ? FileIndex.create(handle.name, now)
+          : FileIndex.load(existing, {
+              now,
+              disk: { nameOf: diskNameOf, isSafe: isSafeDiskName, reservedAtRoot: RESERVED_ROOT_NAMES },
+            });
+      if (index.repairs.length > 0) console.warn('The storage index was damaged and has been repaired', index.repairs);
       const adapter = new LocalFolderAdapter(handle, index, options);
-      if (existing === null) await adapter.saveIndex();
+      if (existing === null || index.repairs.length > 0) await adapter.saveIndex();
       return adapter;
     });
   }
@@ -105,8 +112,9 @@ export class LocalFolderAdapter implements StorageAdapter {
     return this.locked(async () => {
       validateProperties(properties);
       const parent = this.index.requireFolder(parentId);
-      const diskName = this.uniqueDiskName(parent, name, null);
-      await (await this.dirOf(parent, true)).getDirectoryHandle(diskName, { create: true });
+      const dir = await this.dirOf(parent, true);
+      const diskName = await this.uniqueDiskName(parent, name, null, dir);
+      await dir.getDirectoryHandle(diskName, { create: true });
       const entry = this.index.add({
         name,
         parentId,
@@ -131,9 +139,10 @@ export class LocalFolderAdapter implements StorageAdapter {
       await this.checkQuota(content.size);
       const sha256 = await sha256Hex(content);
       throwIfAborted(options.signal);
-      const diskName = this.uniqueDiskName(parent, file.name, null);
+      const dir = await this.dirOf(parent, true);
+      const diskName = await this.uniqueDiskName(parent, file.name, null, dir);
       options.onProgress?.(0, content.size);
-      await writeFile(await this.dirOf(parent, true), diskName, content, options.signal);
+      await writeFile(dir, diskName, content, options.signal);
       const entry = this.index.add({
         name: file.name,
         parentId: file.parentId,
@@ -188,10 +197,12 @@ export class LocalFolderAdapter implements StorageAdapter {
         throw new StorageError('invalid', 'A folder cannot be moved into itself');
       }
       if (entry.parentId !== newParentId) {
-        const from = this.pathOf(entry);
-        entry.parentId = newParentId;
-        if (!entry.explicitlyTrashed) entry.diskName = this.uniqueDiskName(parent, entry.name, entry);
-        await this.relocate(entry, from, this.pathOf(entry));
+        await this.relocate(entry, async () => {
+          entry.parentId = newParentId;
+          if (!entry.explicitlyTrashed) {
+            entry.diskName = await this.uniqueDiskName(parent, entry.name, entry, await this.dirOf(parent, true));
+          }
+        });
       }
       this.index.touch(entry, false);
       await this.saveIndex();
@@ -296,14 +307,13 @@ export class LocalFolderAdapter implements StorageAdapter {
    */
   private pathOf(entry: IndexEntry): string[] {
     const segments: string[] = [];
-    let current: IndexEntry | undefined = entry;
-    while (current && current.id !== this.index.rootId) {
+    for (const current of this.index.ancestry(entry)) {
+      if (current.id === this.index.rootId) break;
       if (current.explicitlyTrashed) {
         segments.unshift(TRASH_FOLDER_NAME, current.id);
         return segments;
       }
       segments.unshift(diskNameOf(current));
-      current = current.parentId === null ? undefined : this.index.get(current.parentId);
     }
     return segments;
   }
@@ -318,8 +328,13 @@ export class LocalFolderAdapter implements StorageAdapter {
     return dir;
   }
 
-  /** A name for `name` in `parent` that no other present child uses on disk, ignoring case. */
-  private uniqueDiskName(parent: IndexEntry, name: string, self: IndexEntry | null): string {
+  /**
+   * A name for `name` in `parent` that no other present child uses, ignoring
+   * case, and that nothing in the folder on disk (`dir`) has either: a
+   * picked folder can hold files the index does not know (a lost index, a
+   * restored backup), and those are never overwritten.
+   */
+  private async uniqueDiskName(parent: IndexEntry, name: string, self: IndexEntry | null, dir: DirectoryHandle): Promise<string> {
     const taken = new Set(
       this.index
         .children(parent.id)
@@ -332,7 +347,9 @@ export class LocalFolderAdapter implements StorageAdapter {
     const stem = dot > 0 ? safe.slice(0, dot) : safe;
     const extension = dot > 0 ? safe.slice(dot) : '';
     let candidate = safe;
-    for (let n = 2; taken.has(candidate.toLowerCase()); n++) candidate = `${stem} (${n})${extension}`;
+    for (let n = 2; taken.has(candidate.toLowerCase()) || (await existsOnDisk(dir, candidate)); n++) {
+      candidate = `${stem} (${n})${extension}`;
+    }
     return candidate;
   }
 
@@ -340,12 +357,13 @@ export class LocalFolderAdapter implements StorageAdapter {
     const entry = this.index.require(id);
     if (entry.id === this.index.rootId) throw new StorageError('invalid', 'The root cannot be trashed');
     if (entry.explicitlyTrashed === trashed) return;
-    const from = this.pathOf(entry);
-    entry.explicitlyTrashed = trashed;
-    if (!trashed && entry.parentId !== null) {
-      entry.diskName = this.uniqueDiskName(this.index.require(entry.parentId), entry.name, entry);
-    }
-    await this.relocate(entry, from, this.pathOf(entry));
+    await this.relocate(entry, async () => {
+      entry.explicitlyTrashed = trashed;
+      if (!trashed && entry.parentId !== null) {
+        const parent = this.index.require(entry.parentId);
+        entry.diskName = await this.uniqueDiskName(parent, entry.name, entry, await this.dirOf(parent, true));
+      }
+    });
     this.index.touch(entry, false);
     for (const descendant of this.index.subtree(entry.id)) {
       if (descendant !== entry) this.index.mark(descendant);
@@ -354,19 +372,50 @@ export class LocalFolderAdapter implements StorageAdapter {
   }
 
   /**
-   * Moves an entry's bytes from one disk path to another by copying, since
-   * FileSystemHandle.move is not available everywhere. Only entries the
-   * index knows are copied and removed, so files the user added to a picked
-   * folder by hand are never deleted.
+   * Applies `change` to an entry's place (parent, disk name, trashed) and
+   * moves its bytes there by copying, since FileSystemHandle.move is not
+   * available everywhere. If the copy fails (a full disk: copying needs
+   * the space twice), the partial copy is removed and the entry is put back
+   * as it was, so the index never points where the bytes are not. Only
+   * entries the index knows are copied and removed, so files the user
+   * added to a picked folder by hand are never deleted.
    */
-  private async relocate(entry: IndexEntry, from: readonly string[], to: readonly string[]): Promise<void> {
+  private async relocate(entry: IndexEntry, change: () => Promise<void>): Promise<void> {
+    const before = { parentId: entry.parentId, diskName: entry.diskName, explicitlyTrashed: entry.explicitlyTrashed };
+    const restore = (): void => {
+      entry.parentId = before.parentId;
+      entry.explicitlyTrashed = before.explicitlyTrashed;
+      if (before.diskName === undefined) delete entry.diskName;
+      else entry.diskName = before.diskName;
+    };
+    const from = this.pathOf(entry);
+    try {
+      await change();
+    } catch (error) {
+      restore();
+      throw error;
+    }
+    const to = this.pathOf(entry);
     if (from.join('/') === to.join('/')) return;
-    const fromDir = await this.dirAt(from.slice(0, -1), false);
-    const toDir = await this.dirAt(to.slice(0, -1), true);
     const fromName = from[from.length - 1] ?? '';
     const toName = to[to.length - 1] ?? '';
-    await this.copyKnown(fromDir, fromName, toDir, toName, entry);
-    await this.removeKnownAt(fromDir, fromName, entry);
+    let fromDir: DirectoryHandle;
+    let toDir: DirectoryHandle | null = null;
+    try {
+      fromDir = await this.dirAt(from.slice(0, -1), false);
+      toDir = await this.dirAt(to.slice(0, -1), true);
+      await this.copyKnown(fromDir, fromName, toDir, toName, entry);
+    } catch (error) {
+      if (toDir) await this.removeKnownAt(toDir, toName, entry).catch(() => undefined);
+      restore();
+      throw error;
+    }
+    try {
+      await this.removeKnownAt(fromDir, fromName, entry);
+    } catch (error) {
+      // The bytes are safe at their new place; a leftover copy only takes a name, which new files avoid.
+      console.warn('Could not remove the old copy after moving', fromName, error);
+    }
   }
 
   private async copyKnown(
@@ -435,6 +484,11 @@ function diskNameOf(entry: IndexEntry): string {
 }
 
 /** File systems refuse separators and a few names; Drive allows anything. */
+/** A name this adapter would itself have written: unchanged by safeFileName. */
+function isSafeDiskName(name: string): boolean {
+  return safeFileName(name) === name;
+}
+
 function safeFileName(name: string): string {
   const cleaned = Array.from(name, (char) => (char.charCodeAt(0) < 0x20 || '/\\:*?"<>|'.includes(char) ? '_' : char))
     .join('')
@@ -468,6 +522,18 @@ async function readIndex(handle: DirectoryHandle): Promise<unknown> {
     return parsed;
   } catch (error) {
     throw new StorageError('unknown', 'The storage index is damaged', { cause: error });
+  }
+}
+
+/** Whether the folder has a file or folder of this name. */
+async function existsOnDisk(dir: DirectoryHandle, name: string): Promise<boolean> {
+  try {
+    await dir.getFileHandle(name);
+    return true;
+  } catch (error) {
+    if (isDomError(error, 'TypeMismatchError')) return true;
+    if (isDomError(error, 'NotFoundError')) return false;
+    throw error;
   }
 }
 

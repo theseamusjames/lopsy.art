@@ -40,6 +40,17 @@ export interface IndexData {
   readonly tombstones: readonly { readonly id: FileId; readonly seq: number }[];
 }
 
+export interface LoadIndexOptions {
+  readonly now?: () => Date;
+  /** For indexes of real folders: how entries are named on disk, and which names are safe. */
+  readonly disk?: {
+    readonly nameOf: (entry: IndexEntry) => string;
+    readonly isSafe: (name: string) => boolean;
+    /** Names a child of the root may not take (the index file, the trash folder), any case. */
+    readonly reservedAtRoot: ReadonlySet<string>;
+  };
+}
+
 export interface NewIndexEntry {
   readonly name: string;
   readonly parentId: FileId;
@@ -85,10 +96,73 @@ export class FileIndex {
     return new FileIndex({ version: 1, rootId, seq: 0, entries: [root], tombstones: [] }, now);
   }
 
-  /** Throws StorageError('unknown') when `data` is not an index this code wrote. */
-  static load(data: unknown, now: () => Date = () => new Date()): FileIndex {
+  /**
+   * Loads a saved index, which is untrusted input (anyone can edit a file
+   * in a picked folder). Refuses, with StorageError('unknown'), an index
+   * that is the wrong shape, has no root or repeats an ID. Repairs the
+   * rest by dropping entries (and everything below them) that do not hang
+   * off the root through folders (orphans and cycles), and, with
+   * `disk`, entries whose name on disk is unsafe, reserved at the root,
+   * or taken by a sibling. `repairs` lists what was dropped.
+   */
+  static load(data: unknown, options: LoadIndexOptions = {}): FileIndex {
     if (!isIndexData(data)) throw new StorageError('unknown', 'The storage index is damaged');
-    return new FileIndex(data, now);
+    const byId = new Map<FileId, IndexEntry>();
+    for (const entry of data.entries) {
+      if (byId.has(entry.id)) throw new StorageError('unknown', `The storage index is damaged: ID ${entry.id} appears twice`);
+      byId.set(entry.id, entry);
+    }
+    const root = byId.get(data.rootId);
+    if (!root || root.parentId !== null || !root.isFolder) {
+      throw new StorageError('unknown', 'The storage index is damaged: it has no root folder');
+    }
+    const children = new Map<FileId, IndexEntry[]>();
+    for (const entry of data.entries) {
+      if (entry.parentId === null) continue;
+      const list = children.get(entry.parentId) ?? [];
+      list.push(entry);
+      children.set(entry.parentId, list);
+    }
+    const kept: IndexEntry[] = [root];
+    const repairs: string[] = [];
+    const disk = options.disk;
+    const queue: IndexEntry[] = [root];
+    for (let folder = queue.shift(); folder; folder = queue.shift()) {
+      const taken = new Set<string>();
+      if (disk && folder === root) for (const name of disk.reservedAtRoot) taken.add(name.toLowerCase());
+      for (const child of children.get(folder.id) ?? []) {
+        if (disk) {
+          const name = disk.nameOf(child);
+          const key = name.toLowerCase();
+          const clash = !child.explicitlyTrashed && taken.has(key);
+          if (!disk.isSafe(name) || !disk.isSafe(child.id) || clash) {
+            repairs.push(`dropped ${child.id} ("${child.name}"): ${clash ? 'its name on disk is taken' : 'unsafe name on disk'}`);
+            continue;
+          }
+          if (!child.explicitlyTrashed) taken.add(key);
+        }
+        kept.push(child);
+        if (child.isFolder) queue.push(child);
+      }
+    }
+    const keptIds = new Set(kept.map((entry) => entry.id));
+    for (const entry of data.entries) {
+      if (!keptIds.has(entry.id) && !repairs.some((line) => line.includes(entry.id))) {
+        repairs.push(`dropped ${entry.id} ("${entry.name}"): not inside the root folder`);
+      }
+    }
+    const seq = Math.max(data.seq, ...kept.map((entry) => entry.seq), ...data.tombstones.map((tombstone) => tombstone.seq));
+    const index = new FileIndex({ ...data, seq, entries: kept }, options.now ?? (() => new Date()));
+    index.repairs = repairs;
+    return index;
+  }
+
+  /** What `load` dropped from a damaged index; empty for a sound one. */
+  repairs: readonly string[] = [];
+
+  /** Every parent walk stops after this many steps, so a cycle cannot hang it. */
+  private walkLimit(): number {
+    return this.entries.size + 1;
   }
 
   toJSON(): IndexData {
@@ -127,23 +201,30 @@ export class FileIndex {
     return entry;
   }
 
-  isTrashed(entry: IndexEntry): boolean {
+  /**
+   * The entry, then its parent, and so on up to the root. Throws instead of
+   * looping if the parents form a cycle (load drops cycles; this is a
+   * second line of defence).
+   */
+  ancestry(entry: IndexEntry): IndexEntry[] {
+    const chain: IndexEntry[] = [];
+    const limit = this.walkLimit();
     let current: IndexEntry | undefined = entry;
     while (current) {
-      if (current.explicitlyTrashed) return true;
+      if (chain.length >= limit) throw new StorageError('unknown', 'The storage index is damaged: its folders form a cycle');
+      chain.push(current);
       current = current.parentId === null ? undefined : this.entries.get(current.parentId);
     }
-    return false;
+    return chain;
+  }
+
+  isTrashed(entry: IndexEntry): boolean {
+    return this.trashedAncestor(entry) !== null;
   }
 
   /** The nearest entry, itself included, that was trashed explicitly. */
   trashedAncestor(entry: IndexEntry): IndexEntry | null {
-    let current: IndexEntry | undefined = entry;
-    while (current) {
-      if (current.explicitlyTrashed) return current;
-      current = current.parentId === null ? undefined : this.entries.get(current.parentId);
-    }
-    return null;
+    return this.ancestry(entry).find((item) => item.explicitlyTrashed) ?? null;
   }
 
   toStored(entry: IndexEntry): StoredFile {
@@ -170,10 +251,13 @@ export class FileIndex {
   /** The entry and everything below it. */
   subtree(id: FileId): IndexEntry[] {
     const result: IndexEntry[] = [];
+    const seen = new Set<FileId>();
     const stack = [this.require(id)];
     while (stack.length > 0) {
       const entry = stack.pop();
       if (!entry) break;
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
       result.push(entry);
       if (entry.isFolder) stack.push(...this.children(entry.id));
     }
