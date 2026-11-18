@@ -1,8 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2 } from 'lucide-react';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
-import { DEFAULT_COPY_GROUPS, RECIPE_GROUPS, pickGroups, type RecipeGroupId } from '@lopsy/photos-core/library/recipe';
+import { DEFAULT_COPY_GROUPS, RECIPE_GROUPS, addArea, liveAreas, pickGroups, removeArea, type AreaKind, type RecipeGroupId } from '@lopsy/photos-core/library/recipe';
 import type { CopiedEdits } from '../../library/recipe-copy';
 import { CopyEditsDialog } from '../../components/CopyEditsDialog/CopyEditsDialog';
 import { PresetsPanel } from '../PresetsPanel/PresetsPanel';
@@ -36,6 +36,10 @@ import type { DevelopEngine, PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
 import { CropTool } from '../CropTool/CropTool';
+import { AreasPanel } from '../AreasPanel/AreasPanel';
+import { AreaHandles } from '../AreaHandles/AreaHandles';
+import { areaLabel } from '../area-edit';
+import { newId } from '@lopsy/photos-core/library/ids';
 import { LevelTool } from '../LevelTool/LevelTool';
 import { SplitView } from '../SplitView/SplitView';
 import { FULL_RECT, levelAngle, recipeCrop, toFramed, type Rect } from '../../engine/crop';
@@ -450,6 +454,45 @@ export function EditView({
     commit({ 'framing.angle': angle }, changeLabel('Straighten', 'framing.angle', angle));
   };
 
+  // ---- areas ----------------------------------------------------------
+
+  const [isAreasOpen, setIsAreasOpen] = useState(false);
+  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
+  const shownAreas = liveAreas(shownRecipe);
+  const selectedArea = isAreasOpen ? shownAreas.find((a) => a.id === selectedAreaId) ?? null : null;
+  const labelOfArea = (id: string) => {
+    const index = shownAreas.findIndex((a) => a.id === id);
+    const area = shownAreas[index];
+    return area ? areaLabel(area, index) : 'Area';
+  };
+
+  useEffect(() => {
+    engine?.setAreaOverlay(isAreasOpen && selectedAreaId ? selectedAreaId : null);
+  }, [engine, isAreasOpen, selectedAreaId]);
+
+  const handleAddArea = (kind: AreaKind) => {
+    const id = newId();
+    const added = addArea(savedRecipe, kind, id);
+    if (!added) return;
+    commit(added.values, kind === 'linear' ? 'Add linear area' : 'Add radial area');
+    setSelectedAreaId(id);
+  };
+
+  const areaFrame = selectedArea && canEdit && !isCropping ? engine?.areaFrame() ?? null : null;
+  const docSize = areaFrame ? engine?.imageSize() ?? null : null;
+  const areaBox = boxOf(docSize);
+  const areaHandles =
+    selectedArea && areaFrame && docSize && areaBox ? (
+      <AreaHandles
+        area={selectedArea}
+        frame={areaFrame}
+        box={areaBox}
+        docWidth={docSize.width}
+        onDraft={(geometry) => setDraft({ [`areas.${selectedArea.id}.geometry`]: { ...geometry } })}
+        onCommit={(geometry, label) => commit({ [`areas.${selectedArea.id}.geometry`]: { ...geometry } }, label)}
+      />
+    ) : null;
+
   // ---- split before and after ---------------------------------------
 
   const [isSplit, setIsSplit] = useState(false);
@@ -681,6 +724,17 @@ export function EditView({
           >
             <Crop size={16} aria-hidden />
           </button>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label="Areas"
+            title="Areas"
+            aria-pressed={isAreasOpen}
+            disabled={!canEdit || isBefore || isCropping}
+            onClick={() => setIsAreasOpen((v) => !v)}
+          >
+            <Spline size={16} aria-hidden />
+          </button>
         </div>
         <div className={styles.toolGroup}>
           <button
@@ -781,6 +835,7 @@ export function EditView({
         >
           <canvas ref={canvasRef} className={styles.canvas} data-testid="edit-canvas" />
           {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
+          {areaHandles}
           {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
           {cropDraft && cropBox && (
             <CropTool
@@ -797,6 +852,23 @@ export function EditView({
         </div>
         <aside className={styles.panel} aria-label="Edits">
           <Histogram bins={histogram} />
+          {isAreasOpen && (
+            <AreasPanel
+              recipe={shownRecipe}
+              selectedId={selectedAreaId}
+              isDisabled={!canEdit || isBefore || isCropping}
+              onAdd={handleAddArea}
+              onSelect={setSelectedAreaId}
+              onRename={(id, name) => commit({ [`areas.${id}.name`]: name }, 'Rename area')}
+              onInvert={(id, isInverted) => commit({ [`areas.${id}.invert`]: isInverted }, `${labelOfArea(id)} ${isInverted ? 'inverted' : 'not inverted'}`)}
+              onDelete={(id) => {
+                commit(removeArea(id), `Delete ${labelOfArea(id)}`);
+                if (selectedAreaId === id) setSelectedAreaId(null);
+              }}
+              onChange={handleSliderChange}
+              onCommit={handleSliderCommit}
+            />
+          )}
           {photoInfo && (
             <ProfileMenu
               profiles={photoInfo.profiles}
