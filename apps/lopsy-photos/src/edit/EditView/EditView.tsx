@@ -38,6 +38,8 @@ import type { DevelopProfile } from '../../engine/profiles';
 import { Histogram } from '../Histogram/Histogram';
 import { CropTool } from '../CropTool/CropTool';
 import { WhiteBalanceMenu } from '../WhiteBalanceMenu/WhiteBalanceMenu';
+import { WhiteBalancePicker } from '../WhiteBalancePicker/WhiteBalancePicker';
+import { kelvinDisplay } from '../../engine/white-balance';
 import { AreasPanel } from '../AreasPanel/AreasPanel';
 import { AreaHandles } from '../AreaHandles/AreaHandles';
 import { areaLabel } from '../area-edit';
@@ -326,6 +328,29 @@ export function EditView({
   }, [engine, savedRecipe, shownRecipe, isBefore, commit]);
 
   const autoWhiteBalance = photoInfo?.autoWhiteBalance ?? null;
+  const whiteBalancePresets = useMemo(() => photoInfo?.whiteBalancePresets ?? [], [photoInfo]);
+  const kelvinScale = photoInfo?.kelvin ?? null;
+  const temperatureDisplays = useMemo(
+    () => (kelvinScale ? { 'whiteBalance.temperature': kelvinDisplay(kelvinScale) } : null),
+    [kelvinScale],
+  );
+  const [isPickingWb, setIsPickingWb] = useState(false);
+  const handleWhiteBalancePick = useCallback(
+    async (x: number, y: number) => {
+      setIsPickingWb(false);
+      const picked = await engine?.sampleWhiteBalance(x, y, 8);
+      if (!picked) return;
+      commit(
+        {
+          'whiteBalance.mode': 'custom',
+          'whiteBalance.temperature': Math.round(picked.temperature),
+          'whiteBalance.tint': Math.round(picked.tint),
+        },
+        'White balance: picked',
+      );
+    },
+    [engine, commit],
+  );
   const handleAutoWhiteBalance = useCallback(() => {
     if (!autoWhiteBalance) return;
     commit(
@@ -518,6 +543,8 @@ export function EditView({
   const [splitAt, setSplitAt] = useState(0.5);
   const [beforeSrc, setBeforeSrc] = useState<string | null>(null);
   const isSplitShown = isSplit && canEdit && !isCropping;
+  const wbDocSize = isPickingWb ? engine?.imageSize() ?? null : null;
+  const wbPickBox = boxOf(wbDocSize);
   const splitBox = isSplitShown ? boxOf(engine?.imageSize() ?? null) : null;
   const pixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
   const beforeLongEdge = splitBox ? Math.min(2048, Math.max(64, Math.round(Math.max(splitBox.width, splitBox.height) * pixelRatio))) : 0;
@@ -872,6 +899,14 @@ export function EditView({
               {isLoadingFull ? 'Loading full resolution…' : 'Loading…'}
             </span>
           )}
+          {isPickingWb && wbPickBox && wbDocSize && (
+            <WhiteBalancePicker
+              imageBox={wbPickBox}
+              documentSize={wbDocSize}
+              onPick={(x, y) => void handleWhiteBalancePick(x, y)}
+              onCancel={() => setIsPickingWb(false)}
+            />
+          )}
           {isLevelling && <LevelTool onLine={handleLevelLine} onCancel={() => setIsLevelling(false)} />}
           {areaHandles}
           {splitBox && <SplitView imageBox={splitBox} beforeSrc={beforeSrc} at={splitAt} onChange={setSplitAt} />}
@@ -934,9 +969,11 @@ export function EditView({
               <WhiteBalanceMenu
                 recipe={shownRecipe}
                 auto={autoWhiteBalance}
-                presets={[]}
+                presets={whiteBalancePresets}
                 isDisabled={!canEdit || isBefore}
                 onCommit={commit}
+                isPicking={isPickingWb}
+                onTogglePicker={() => setIsPickingWb((v) => !v)}
               />
             )}
             <ControlGroup
@@ -954,6 +991,7 @@ export function EditView({
                 : group.id === 'whiteBalance' && autoWhiteBalance
                   ? { onAuto: handleAutoWhiteBalance, autoTitle: canEdit ? 'Neutralise the colour cast' : 'Auto is ready once the photo has loaded' }
                   : {})}
+              {...(group.id === 'whiteBalance' && temperatureDisplays ? { displays: temperatureDisplays } : {})}
             />
             {group.id === 'tone' && (
               <CurvesGroup recipe={shownRecipe} isDisabled={!canEdit || isBefore} onDraft={setDraft} onCommit={commit} />

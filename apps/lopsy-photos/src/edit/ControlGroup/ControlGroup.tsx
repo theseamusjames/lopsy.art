@@ -1,6 +1,6 @@
 import { RotateCcw } from 'lucide-react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
-import { Slider } from '../../components/Slider/Slider';
+import { Slider, type SliderDisplay } from '../../components/Slider/Slider';
 import { defaultAt, isGroupDefault, numberAt, rangeOf, type ControlDef, type GroupDef } from '../edit-controls';
 import styles from './ControlGroup.module.css';
 
@@ -18,9 +18,11 @@ export interface ControlGroupProps {
   readonly autoTitle?: string;
   /** The Auto button's text, when it does something else ('Level'). */
   readonly autoLabel?: string;
+  /** Readouts in other units, by control path (Temperature in Kelvin for RAW). */
+  readonly displays?: Readonly<Record<string, SliderDisplay>>;
 }
 
-export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, onReset, onAuto, autoTitle, autoLabel = 'Auto' }: ControlGroupProps) {
+export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, onReset, onAuto, autoTitle, autoLabel = 'Auto', displays }: ControlGroupProps) {
   const isDefault = isGroupDefault(recipe, group);
   return (
     <section className={styles.group} aria-label={group.title}>
@@ -66,6 +68,7 @@ export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, on
               isDisabled={isDisabled}
               onChange={(v) => onChange(control, v)}
               onCommit={(v) => onCommit(control, v)}
+              {...(displays?.[control.path] ? { display: displays[control.path] } : {})}
             />
           );
         })}

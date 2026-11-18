@@ -184,11 +184,12 @@ export interface DevelopEngine {
   renderPreview(maxSize: number, quality?: number): Promise<Blob>;
   exportImage(options: ExportOptions): Promise<Blob>;
   /**
-   * The white balance (recipe units) that makes the patch of `radius`
-   * document pixels around (x, y) neutral; null where the engine cannot
-   * say (not a RAW file, outside the image).
+   * The white balance (recipe units: absolute for RAW, relative for other
+   * photos) that makes the patch of `radius` document pixels around (x, y)
+   * neutral; null before a load. A patch with a channel at zero reads
+   * [0, 0].
    */
-  sampleWhiteBalance(x: number, y: number, radius: number): { temperature: number; tint: number } | null;
+  sampleWhiteBalance(x: number, y: number, radius: number): Promise<{ temperature: number; tint: number } | null>;
   dispose(): void;
 }
 
@@ -752,6 +753,8 @@ class PhotoEngine implements DevelopEngine {
     if (!defaults) {
       this.autoWb = null;
       this.engineProfiles = [];
+      this.wbPresets = [];
+      this.kelvinScale = null;
       clearRawDevelop(this.engine);
     }
   }
@@ -917,13 +920,19 @@ class PhotoEngine implements DevelopEngine {
     };
   }
 
-  sampleWhiteBalance(x: number, y: number, radius: number): { temperature: number; tint: number } | null {
-    if (!this.sourceSize || !this.rawDefaults || this.isDisposed) return null;
-    const out = sampleNeutralWhiteBalance(this.engine, x, y, radius);
-    const [temperature, tint] = [out[0], out[1]];
+  async sampleWhiteBalance(x: number, y: number, radius: number): Promise<{ temperature: number; tint: number } | null> {
+    if (!this.sourceSize || this.isDisposed) return null;
+    const out = await readback<Float32Array>(
+      this.engine,
+      () => sampleNeutralWhiteBalance(this.engine, x, y, Math.max(0, Math.min(64, radius))),
+      () => this.isDisposed,
+    );
+    const temperature = out[0];
+    const tint = out[1];
     if (temperature === undefined || tint === undefined || !Number.isFinite(temperature) || !Number.isFinite(tint)) return null;
     return { temperature, tint };
   }
+
 
   async readHistogram(): Promise<Uint32Array | null> {
     if (!this.sourceSize || this.isDisposed) return null;

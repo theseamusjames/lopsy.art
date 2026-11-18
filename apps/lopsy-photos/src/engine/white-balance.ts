@@ -68,3 +68,20 @@ export function kelvinFor(scale: KelvinScale, temperature: number): number | nul
 export function temperatureForKelvin(scale: KelvinScale, kelvin: number): number {
   return (1e6 / kelvin - scale.miredAtZero) / scale.miredPerUnit;
 }
+
+/** The Temperature readout in Kelvin, rounded to 50 K; typed Kelvin back to recipe units. */
+export function kelvinDisplay(scale: KelvinScale): { format: (value: number) => string; parse: (text: string) => number | null } {
+  return {
+    format: (value) => {
+      const k = kelvinFor(scale, value);
+      return k === null ? '—' : `${Math.round(k / 50) * 50} K`;
+    },
+    parse: (text) => {
+      const cleaned = text.trim().replace(/\s*k$/i, '').replace(',', '.');
+      if (!/^\d+(\.\d+)?$/.test(cleaned)) return null;
+      const kelvin = Number(cleaned);
+      if (kelvin < 1000 || kelvin > 50000) return null;
+      return Math.round(temperatureForKelvin(scale, kelvin));
+    },
+  };
+}

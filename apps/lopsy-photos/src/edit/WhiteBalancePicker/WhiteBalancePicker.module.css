@@ -1,0 +1,6 @@
+.picker {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}

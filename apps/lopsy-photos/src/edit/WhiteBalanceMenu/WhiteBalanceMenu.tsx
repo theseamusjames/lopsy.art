@@ -1,3 +1,4 @@
+import { Pipette } from 'lucide-react';
 import type { Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Json } from '@lopsy/photos-core/library/types';
 import { choiceChanges, currentChoice, type WhiteBalanceChoice, type WhiteBalancePreset, type WhiteBalanceValues } from './white-balance-mode';
@@ -11,13 +12,16 @@ export interface WhiteBalanceMenuProps {
   readonly presets: readonly WhiteBalancePreset[];
   readonly isDisabled: boolean;
   readonly onCommit: (changes: Readonly<Record<string, Json>>, label: string) => void;
+  /** Whether the picker is waiting for a click on the photo. */
+  readonly isPicking: boolean;
+  readonly onTogglePicker: () => void;
 }
 
 /** White balance mode: As shot, Auto, presets, or Custom (what the sliders set). */
-export function WhiteBalanceMenu({ recipe, auto, presets, isDisabled, onCommit }: WhiteBalanceMenuProps) {
+export function WhiteBalanceMenu({ recipe, auto, presets, isDisabled, onCommit, isPicking, onTogglePicker }: WhiteBalanceMenuProps) {
   const choice = currentChoice(recipe, auto, presets);
   return (
-    <label className={styles.row}>
+    <div className={styles.row}>
       <span className={styles.title}>Mode</span>
       <select
         className={styles.select}
@@ -40,6 +44,20 @@ export function WhiteBalanceMenu({ recipe, auto, presets, isDisabled, onCommit }
           Custom
         </option>
       </select>
-    </label>
+      <button
+        type="button"
+        className={styles.picker}
+        aria-label="Pick a neutral grey"
+        title="Click something in the photo that should be neutral grey (Esc cancels)"
+        aria-pressed={isPicking}
+        disabled={isDisabled}
+        onClick={(e) => {
+          e.preventDefault();
+          onTogglePicker();
+        }}
+      >
+        <Pipette size={14} aria-hidden />
+      </button>
+    </div>
   );
 }
