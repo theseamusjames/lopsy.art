@@ -3,15 +3,29 @@
  * the same functions, so a key and a click always behave alike.
  */
 
-import type { AssetId, ColorLabel, LibraryHistory, LibrarySession, LibraryView, Rating, VersionId } from '@lopsy/photos-core/library/types';
+import type { AssetId, ColorLabel, LibraryHistory, LibrarySession, Rating, VersionId } from '@lopsy/photos-core/library/types';
 import { getBackend } from './backend-registry';
-import { itemAssets, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset, type ItemId } from '../library/items';
+import { openInLopsy } from './lopsy-handoff';
+import { itemAssets, itemForVersion, itemVersionId, nextVersionName, parseItem, versionItemId, versionsByAsset, type ItemId } from '../library/items';
 import type { CommandId } from '../shortcuts/registry';
 import { useUi, type ViewMode } from './store';
 import { showToast } from './toasts';
+import { plural } from '../import/import-summary';
 import { findPreset } from '@lopsy/photos-core/library/presets';
 import { asGroupIds, pasteRecipeValues, pickRecipeValues } from '../library/recipe-copy';
 import { EMPTY_SELECTION, moveFocus, nextAfterRemoval, orderedSelection, selectAll, selectOne, targetIds } from '../library/selection';
+
+function session(): LibrarySession {
+  const connection = useUi.getState().connection;
+  if (!connection) throw new Error('No library is open');
+  return connection.session;
+}
+
+/** The tile a one-photo command acts on: the focused one, else the first selected. */
+function focusedItem(): ItemId | null {
+  const { selection } = useUi.getState();
+  return selection.focus ?? [...selection.ids][0] ?? null;
+}
 
 /** The tiles a command acts on: in Single, Cull and Compare the one in focus, in the grid the selection. */
 export function currentItems(): ItemId[] {
@@ -36,7 +50,6 @@ export function currentVersions(): { assetId: AssetId; versionId: VersionId }[] 
   return out;
 }
 
-/** Library undo and redo (marks, albums, versions, the delete record), with what it did said in a toast. */
 /**
  * The last delete, while nothing has been done in the library since: ⌘Z
  * undoes it the way the toast's Undo does, bringing back the record and
@@ -59,12 +72,13 @@ export async function undoDelete(assetIds: readonly AssetId[]): Promise<void> {
     await getBackend().untrashAssets(s, assetIds);
     const first = assetIds[0];
     if (first !== undefined) useUi.getState().setSelection(selectOne(first));
-    showToast(`Brought back ${assetIds.length === 1 ? 'the photo' : `${assetIds.length.toLocaleString()} photos`} from the trash.`, 3000);
+    showToast(`Brought back ${assetIds.length === 1 ? 'the photo' : plural(assetIds.length, 'photo')} from the trash.`, 3000);
   } catch (e) {
     showToast(e instanceof Error ? e.message : String(e));
   }
 }
 
+/** Library undo and redo (marks, keywords, albums, versions), with what it did said in a toast. */
 export function undoLibrary(redo: boolean): void {
   const s = session();
   // Right after a delete, with nothing done since (the history is the same object), ⌘Z undoes the delete.
@@ -80,17 +94,14 @@ export function undoLibrary(redo: boolean): void {
 }
 
 /** Opens the Copy edits dialog for the focused photo. */
-export function askCopyEdits(): void {
-  const ui = useUi.getState();
-  if (ui.selection.focus === null && ui.selection.ids.size === 0) return;
-  ui.openDialog('copy-edits');
+function askCopyEdits(): void {
+  if (focusedItem() !== null) useUi.getState().openDialog('copy-edits');
 }
 
 /** The version Copy edits copies from: the focused tile's. */
 export function copySource(): { assetId: AssetId; versionId: VersionId; name: string } | null {
-  const ui = useUi.getState();
-  const id = ui.selection.focus ?? [...ui.selection.ids][0];
-  if (id === undefined) return null;
+  const id = focusedItem();
+  if (id === null) return null;
   const view = session().getView();
   const { assetId } = parseItem(id);
   const versionId = itemVersionId(id, view);
@@ -117,7 +128,7 @@ export function applyPreset(presetId: string): void {
   const versionIds = currentVersions().map((v) => v.versionId);
   if (!preset || versionIds.length === 0) return;
   s.applyRecipeValues(versionIds, preset.values, `Preset: ${preset.name}`);
-  showToast(`Applied “${preset.name}” to ${versionIds.length.toLocaleString()} photo${versionIds.length === 1 ? '' : 's'}.`);
+  showToast(`Applied “${preset.name}” to ${plural(versionIds.length, 'photo')}.`);
 }
 
 /** Pastes the copied edits onto every selected tile's version. */
@@ -130,12 +141,13 @@ export function pasteEdits(): void {
   const versionIds = currentVersions().map((v) => v.versionId);
   if (versionIds.length === 0) return;
   pasteRecipeValues(session(), versionIds, copied);
-  showToast(`Pasted edits onto ${versionIds.length.toLocaleString()} photo${versionIds.length === 1 ? '' : 's'}.`);
+  showToast(`Pasted edits onto ${plural(versionIds.length, 'photo')}.`);
 }
 
-/** The tile for a version: the photo's own tile for its shown version. */
-function tileFor(view: LibraryView, assetId: AssetId, versionId: VersionId): ItemId {
-  return view.assets.get(assetId)?.primaryVersionId === versionId ? assetId : versionItemId(assetId, versionId);
+/** Edit in Lopsy for the focused tile's version (from the click, so the browser lets the tab open). */
+export function openFocusedInLopsy(): void {
+  const target = currentVersions()[0];
+  if (target !== undefined) openInLopsy(session(), target.assetId, target.versionId);
 }
 
 /** Makes the version the one its photo shows (in the grid, albums, exports of the photo), and keeps it selected. */
@@ -169,33 +181,30 @@ export function deleteVersionOf(assetId: AssetId, versionId: VersionId): void {
   const focus = ui.selection.focus;
   if (focus !== null && parseItem(focus).assetId === assetId) {
     const shown = itemVersionId(focus, view);
-    const keep = shown !== null && shown !== versionId ? tileFor(s.getView(), assetId, shown) : assetId;
+    const keep = shown !== null && shown !== versionId ? itemForVersion(s.getView(), assetId, shown) : assetId;
     ui.setSelection(selectOne(keep));
   }
 }
 
-/** Makes a new version of the focused tile's version (same edits), opens its stack and selects it. */
+/** New version: asks for its name (`createNamedVersion` makes it). */
 export function newVersion(): void {
-  const ui = useUi.getState();
-  if (ui.selection.focus === null && ui.selection.ids.size === 0) return;
-  ui.openDialog('new-version');
+  if (focusedItem() !== null) useUi.getState().openDialog('new-version');
 }
 
 /** The name New version offers: the first "Version N" the photo does not use. */
 export function suggestedVersionName(): string {
-  const ui = useUi.getState();
-  const id = ui.selection.focus ?? [...ui.selection.ids][0];
-  if (id === undefined) return 'Version 2';
+  const id = focusedItem();
+  if (id === null) return 'Version 2';
   const names = (versionsByAsset(session().getView()).get(parseItem(id).assetId) ?? []).map((v) => v.name);
   return nextVersionName(names);
 }
 
-/** Creates the version New version asked for, named `name`. */
+/** Makes the version New version asked for: the focused tile's edits under `name`; opens its stack and selects it. */
 export function createNamedVersion(name: string): void {
   const ui = useUi.getState();
   ui.openDialog(null);
-  const id = ui.selection.focus ?? [...ui.selection.ids][0];
-  if (id === undefined) return;
+  const id = focusedItem();
+  if (id === null) return;
   const view = session().getView();
   const { assetId } = parseItem(id);
   const from = itemVersionId(id, view);
@@ -204,12 +213,6 @@ export function createNamedVersion(name: string): void {
   if (!versionId) return;
   if (!ui.expandedBursts.has(assetId)) ui.toggleBurst(assetId);
   ui.setSelection(selectOne(versionItemId(assetId, versionId)));
-}
-
-function session() {
-  const connection = useUi.getState().connection;
-  if (!connection) throw new Error('No library is open');
-  return connection.session;
 }
 
 /** The next photo after `id` in display order, or the previous one at the end. */
@@ -257,18 +260,18 @@ export function toggleSetAside(orderedIds: readonly AssetId[], ids = currentTarg
   s.setMarks(ids, { setAside });
   if (leavesCollection(setAside)) selectAfterRemoval(orderedIds, ids);
   else if (next !== null) useUi.getState().setSelection(selectOne(next));
-  const words = `${ids.length === 1 ? 'Photo' : `${ids.length.toLocaleString()} photos`} ${setAside ? 'set aside' : 'back from Set aside'}.`;
-  showToast(words, 6000, {
-    label: 'Undo',
-    run: () => {
-      const back = [...before.entries()];
-      const was = back.filter(([, aside]) => aside).map(([id]) => id);
-      const wasNot = back.filter(([, aside]) => !aside).map(([id]) => id);
-      if (was.length > 0) s.setMarks(was, { setAside: true });
-      if (wasNot.length > 0) s.setMarks(wasNot, { setAside: false });
-      useUi.getState().setSelection(selectOne(ids[0] as AssetId));
-    },
-  });
+  const words = `${ids.length === 1 ? 'Photo' : plural(ids.length, 'photo')} ${setAside ? 'set aside' : 'back from Set aside'}.`;
+  showToast(words, 6000, { label: 'Undo', run: () => restoreSetAside(s, before) });
+}
+
+/** The set-aside toast's Undo: each photo as it was, and the first one selected again. */
+function restoreSetAside(s: LibrarySession, before: ReadonlyMap<AssetId, boolean>): void {
+  const was = [...before].filter(([, aside]) => aside).map(([id]) => id);
+  const wasNot = [...before].filter(([, aside]) => !aside).map(([id]) => id);
+  if (was.length > 0) s.setMarks(was, { setAside: true });
+  if (wasNot.length > 0) s.setMarks(wasNot, { setAside: false });
+  const first = before.keys().next().value;
+  if (first !== undefined) useUi.getState().setSelection(selectOne(first));
 }
 
 export function setLabel(label: ColorLabel | null, orderedIds: readonly AssetId[], ids = currentTargets()): void {
@@ -287,9 +290,8 @@ export function toggleLabel(label: ColorLabel, orderedIds: readonly AssetId[], i
 }
 
 export function openEdit(): void {
-  const { selection } = useUi.getState();
-  const id = selection.focus ?? [...selection.ids][0];
-  if (id === undefined) return;
+  const id = focusedItem();
+  if (id === null) return;
   const view = session().getView();
   const { assetId } = parseItem(id);
   const versionId = itemVersionId(id, view);

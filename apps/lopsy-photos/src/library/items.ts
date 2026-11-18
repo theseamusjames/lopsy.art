@@ -26,6 +26,11 @@ export function parseItem(id: ItemId): ParsedItem {
   return at < 0 ? { assetId: id, versionId: null } : { assetId: id.slice(0, at), versionId: id.slice(at + 1) };
 }
 
+/** The tile for a version: the photo's own tile for the version it shows, else the version's. */
+export function itemForVersion(view: LibraryView, assetId: AssetId, versionId: VersionId): ItemId {
+  return view.assets.get(assetId)?.primaryVersionId === versionId ? assetId : versionItemId(assetId, versionId);
+}
+
 /** The version a tile shows: its own, else the asset's primary one. */
 export function itemVersionId(id: ItemId, view: LibraryView): VersionId | null {
   const { assetId, versionId } = parseItem(id);

@@ -45,6 +45,8 @@
     "lint": "npm run lint -w lopsy-web --",
     "lint:photos": "npm run lint -w @lopsy/photos-core && npm run lint -w lopsy-photos",
     "storybook": "npm run storybook -w lopsy-web --",
-    "build-storybook": "npm run build-storybook -w lopsy-web --"
+    "build-storybook": "npm run build-storybook -w lopsy-web --",
+    "storybook:photos": "npm run storybook -w lopsy-photos --",
+    "build-storybook:photos": "npm run build-storybook -w lopsy-photos --"
   }
 }

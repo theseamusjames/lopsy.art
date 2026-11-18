@@ -4,8 +4,7 @@ import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useAsset } from '../../app/hooks';
 import { useUi } from '../../app/store';
 import { parseItem } from '../../library/items';
-import { openInLopsy } from '../../app/lopsy-handoff';
-import { backOut, openEdit, runCommand, setLabel, setRating, toggleSetAside } from '../../app/commands';
+import { backOut, openEdit, openFocusedInLopsy, runCommand, setLabel, setRating, toggleSetAside } from '../../app/commands';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
 import { LabelPicker } from '../LabelPicker/LabelPicker';
@@ -87,10 +86,7 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              const session = useUi.getState().connection?.session;
-              if (session && focus !== null) openInLopsy(session, asset.id, parseItem(focus).versionId);
-            }}
+            onClick={openFocusedInLopsy}
           >
             <Paintbrush size={14} />
             Edit in Lopsy

@@ -2,8 +2,7 @@ import { useEffect, useRef } from 'react';
 import { ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximize, Paintbrush, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
 import { parseItem, type ItemId } from '../../library/items';
 import { useUi } from '../../app/store';
-import { askDeleteTargets, currentVersions, makeShownVersion, newVersion, openEdit, runCommand } from '../../app/commands';
-import { openInLopsy } from '../../app/lopsy-handoff';
+import { askDeleteTargets, makeShownVersion, newVersion, openEdit, openFocusedInLopsy, runCommand } from '../../app/commands';
 import styles from './TileMenu.module.css';
 
 interface TileMenuProps {
@@ -75,11 +74,7 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
       {item(
         'Edit in Lopsy',
         <Paintbrush size={14} />,
-        () => {
-          const session = useUi.getState().connection?.session;
-          const target = currentVersions()[0];
-          if (session && target) openInLopsy(session, target.assetId, target.versionId);
-        },
+        openFocusedInLopsy,
         !single,
       )}
       <hr className={styles.rule} />

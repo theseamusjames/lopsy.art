@@ -48,6 +48,15 @@ for this app's sake.
   the fake Drive in `packages/photos-core`. E2E tests use the local
   adapter in the browser.
 
+## Storybook
+
+Every component has a `.stories.tsx` beside it (`apps/lopsy-web/CLAUDE.md`).
+Components that read the library use `src/stories/fake-library.tsx`: the
+`?backend=fake` library, seeded and opened in the store, never real
+storage. Known gap: `LibraryScreen` (the whole screen, made of storied
+parts). `DocumentList`, `DropZone` and `ImportStrip` render nothing until
+there is a document, a drag or an import.
+
 ## Commands
 
 ```bash
@@ -56,6 +65,8 @@ npm run dev:photos         # http://localhost:5174
 npm run test:photos        # Vitest: photos-core, then the app
 npm run typecheck:photos
 npm run lint:photos
+npm run storybook:photos        # Storybook on port 6007
+npm run build-storybook:photos  # static build (storybook-static/; delete it after)
 npm run test:e2e:photos    # Playwright
 
 # The lopsy.art site: Lopsy at /, Photos at /photos/ (spec 6.3)
