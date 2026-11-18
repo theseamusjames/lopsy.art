@@ -20,6 +20,8 @@ const port = Number(process.env.VITE_PORT ?? 41000 + portOffset);
 
 export default defineConfig({
   testDir: './e2e',
+  // Needs a build that ships Lopsy Photos; it runs under playwright.photos.config.ts.
+  testIgnore: [/photos-handoff\.spec\.ts$/],
   timeout: 600000,
   workers: 2,
   retries: 1,

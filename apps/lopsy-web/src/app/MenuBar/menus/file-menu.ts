@@ -28,6 +28,7 @@ import { importRafFile } from '../../../io/raf';
 import { saveProject } from '../../../io/project-save';
 import { loadProject } from '../../../io/project-load';
 import { addDocumentToPhotos } from '../../../io/photos-handoff/photos-handoff';
+import { isPhotosEnabled } from '../../../io/photos-handoff/photos-url';
 
 // Re-export ExportFormat and ExportOptions from export-logic so the rest of
 // the codebase imports from one place.
@@ -412,7 +413,8 @@ export const fileMenu: MenuDef = {
     { separator: true, label: '' },
     { label: 'Save Project', shortcut: '⌘S', action: () => { saveProject().catch((err) => notifyError(`Save failed: ${describeError(err)}`)); } },
     { label: 'Open Project...', action: () => openProjectFromDisk() },
-    { label: 'Add to Lopsy Photos', action: () => { void addDocumentToPhotos(); } },
+    // Only builds that ship Lopsy Photos (VITE_PHOTOS_URL) offer the handoff.
+    ...(isPhotosEnabled() ? [{ label: 'Add to Lopsy Photos', action: () => { void addDocumentToPhotos(); } }] : []),
     { separator: true, label: '' },
     { label: 'Export…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
     { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },

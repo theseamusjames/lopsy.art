@@ -1,18 +1,22 @@
 /**
- * Where Lopsy Photos lives, for handoffs. `VITE_PHOTOS_URL` overrides the
- * default: the Photos dev server in development, `/photos/` on this origin
- * in a production build. Only this URL's origin is trusted (spec 6.12).
+ * Where Lopsy Photos lives, for handoffs: `VITE_PHOTOS_URL`, set at build
+ * time by builds that ship Photos (the site build sets `/photos/`; in
+ * development, set it to the Photos dev server, `http://localhost:5174/`).
+ * Without it Lopsy has no Photos to talk to: File → Add to Lopsy Photos is
+ * hidden and `?photos-handoff=` is ignored, so Lopsy is exactly as it was.
+ * Only this URL's origin is trusted (spec 6.12).
  */
 
-export const DEV_PHOTOS_URL = 'http://localhost:5174/';
-export const PRODUCTION_PHOTOS_URL = '/photos/';
-
-export function photosUrlFor(configured: string | undefined, isDev: boolean): string {
+export function photosUrlFor(configured: string | undefined): string | null {
   const trimmed = configured?.trim();
-  if (trimmed) return trimmed;
-  return isDev ? DEV_PHOTOS_URL : PRODUCTION_PHOTOS_URL;
+  return trimmed ? trimmed : null;
 }
 
-export function photosUrl(): string {
-  return photosUrlFor(import.meta.env.VITE_PHOTOS_URL, import.meta.env.DEV);
+/** The configured Photos URL, or null when this build does not ship Photos. */
+export function photosUrl(): string | null {
+  return photosUrlFor(import.meta.env.VITE_PHOTOS_URL);
+}
+
+export function isPhotosEnabled(): boolean {
+  return photosUrl() !== null;
 }

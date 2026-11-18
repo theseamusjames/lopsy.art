@@ -49,19 +49,26 @@ clears Lopsy's own data, because the two apps share that origin.
 ## 2. Lopsy and Photos together (the handoff)
 
 ```bash
-npm run dev                 # Lopsy, http://localhost:5173
-npm run dev:photos          # Photos, http://localhost:5174 (a second terminal)
+VITE_PHOTOS_URL=http://localhost:5174/ npm run dev   # Lopsy, http://localhost:5173
+npm run dev:photos                                  # Photos, http://localhost:5174 (a second terminal)
 ```
 
-In development, each app finds the other at those ports. To use other
-ports, set the URL of the other app:
+Lopsy talks to Photos only when its build names Photos' URL in
+`VITE_PHOTOS_URL`. Without it (plain `npm run dev`, `npm run build`, and
+production while Photos is not deployed) Lopsy is exactly as before: File →
+Add to Lopsy Photos is hidden and `?photos-handoff=` is ignored. The site
+build (`npm run build:site`, `build:site:noopt`, and the deploy workflow
+when `DEPLOY_PHOTOS` is `true`) sets it to `/photos/`. Put it in
+`apps/lopsy-web/.env.local` to keep it on in development.
 
-| Variable | In | Default in dev | Default in a build |
+| Variable | In | Unset | Site build |
 |---|---|---|---|
-| `VITE_LOPSY_URL` | `apps/lopsy-photos/.env.local` | `http://localhost:5173/` | `/` |
-| `VITE_PHOTOS_URL` | `apps/lopsy-web/.env.local` | `http://localhost:5174/` | `/photos/` |
+| `VITE_LOPSY_URL` | `apps/lopsy-photos/.env.local` | `http://localhost:5173/` in dev, `/` in a build | `/` |
+| `VITE_PHOTOS_URL` | `apps/lopsy-web/.env.local` | no handoff | `/photos/` |
 
-Only the configured URL's origin is trusted for handoff messages.
+Only the configured URL's origin is trusted for handoff messages. The
+round-trip e2e (`apps/lopsy-photos/e2e/roundtrip.config.ts`) starts both
+dev servers with each other's URL set.
 
 ## 3. Google Cloud setup
 
