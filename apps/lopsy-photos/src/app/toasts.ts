@@ -2,9 +2,16 @@
 
 import { create } from 'zustand';
 
+export interface ToastAction {
+  readonly label: string;
+  readonly run: () => void;
+}
+
 export interface Toast {
   readonly id: number;
   readonly message: string;
+  /** A button beside the message ("Reload"). */
+  readonly action?: ToastAction;
 }
 
 interface ToastState {
@@ -23,12 +30,12 @@ export const useToasts = create<ToastState>()((set) => ({
  * Shows a message for a few seconds (`ms` null: until dismissed); the same
  * message twice in a row shows once. Returns the id for `dismissToast`.
  */
-export function showToast(message: string, ms: number | null = 6000): number {
+export function showToast(message: string, ms: number | null = 6000, action?: ToastAction): number {
   const { toasts } = useToasts.getState();
   const same = toasts.find((t) => t.message === message);
   if (same) return same.id;
   const id = nextId++;
-  useToasts.setState({ toasts: [...toasts, { id, message }].slice(-3) });
+  useToasts.setState({ toasts: [...toasts, { id, message, ...(action ? { action } : {}) }].slice(-3) });
   if (ms !== null) setTimeout(() => useToasts.getState().dismiss(id), ms);
   return id;
 }
