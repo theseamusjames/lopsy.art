@@ -7,6 +7,23 @@ async function setAreaValue(page: Page, area: string, label: string, value: stri
   await readout.press('Enter');
 }
 
+/** The share of the canvas, as shown on screen, that is clearly red (a screenshot, decoded by the browser). */
+async function canvasRedness(page: Page): Promise<number> {
+  const png = await page.getByTestId('edit-canvas').screenshot();
+  return page.evaluate(async (base64) => {
+    const blob = new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: 'image/png' });
+    const bitmap = await createImageBitmap(blob, { resizeWidth: 64, resizeHeight: 64 });
+    const canvas = new OffscreenCanvas(64, 64);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no 2d context');
+    ctx.drawImage(bitmap, 0, 0);
+    const data = ctx.getImageData(0, 0, 64, 64).data;
+    let red = 0;
+    for (let i = 0; i < data.length; i += 4) if ((data[i] ?? 0) - (data[i + 1] ?? 0) > 40) red += 1;
+    return red / (data.length / 4);
+  }, png.toString('base64'));
+}
+
 async function exportJpeg(page: Page): Promise<number> {
   const count = await page.evaluate(() => window.__photosHarness?.exports.length ?? 0);
   await page.getByRole('button', { name: 'Export' }).click();
@@ -97,6 +114,33 @@ test.describe('Areas', () => {
     await expect(page.getByTestId('crop-tool')).toBeVisible();
     await page.locator('body').press('r');
     await expect(page.getByTestId('crop-tool')).toHaveCount(0);
+  });
+
+  test('a newly added area is selected and its mask shows red on screen, never in an export', async ({ page }) => {
+    await openHarness(page);
+    await openFlatImage(page);
+    await waitForReady(page);
+    await waitForPreview(page, 0);
+
+    const steps = [
+      ['m', /^Linear\s*Area 1$/],
+      ['Shift+M', /^Radial\s*Area 2$/],
+    ] as const;
+    for (const [key, name] of steps) {
+      await page.locator('body').press(key);
+      await expect(page.getByRole('list', { name: 'Area list' }).getByRole('button', { name })).toHaveAttribute('aria-current', 'true');
+      // The photo is grey: only the selected area's red mask makes the screen redder than green.
+      await expect.poll(() => canvasRedness(page), { timeout: 30_000 }).toBeGreaterThan(0.02);
+      // Still there once the histogram has been read and the previews rendered.
+      await page.waitForTimeout(2500);
+      expect(await canvasRedness(page)).toBeGreaterThan(0.02);
+    }
+
+    const index = await exportJpeg(page);
+    const exported = await imageStats(page, { kind: 'export', index });
+    expect(Math.abs(exported.red - exported.green)).toBeLessThan(3);
+    // And back on screen after the export.
+    await expect.poll(() => canvasRedness(page), { timeout: 30_000 }).toBeGreaterThan(0.02);
   });
 
   test('the pixel readout shows the colour under the pointer', async ({ page }) => {
