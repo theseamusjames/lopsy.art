@@ -14,7 +14,6 @@ import {
   rafDevelopProfiles,
   rafPrepare,
   rafRenderBand,
-  rafRenderBinnedLinear,
   rafRenderLinearBand,
   type RafRenderedBand,
 } from '@lopsy/engine-pkg/lopsy_wasm';
@@ -49,8 +48,10 @@ function handle(req: RafWorkerRequest): void {
     const prepared = rafPrepare(req.data);
     try {
       const paramsJson = prepared.paramsJson;
+      // Bin from the mosaic the prepared result still holds: binning after
+      // takeMosaic would copy the 160 MB mosaic back into the module.
+      const binned = req.binnedLongEdge === null ? null : takeBand(prepared.binnedLinear(req.binnedLongEdge));
       const mosaic = prepared.takeMosaic();
-      const binned = req.binnedLongEdge === null ? null : takeBand(rafRenderBinnedLinear(mosaic, paramsJson, req.binnedLongEdge));
       const transfer: Transferable[] = [mosaic.buffer];
       if (binned) transfer.push(binned.pixels.buffer);
       reply(
