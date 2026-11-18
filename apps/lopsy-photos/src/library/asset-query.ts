@@ -143,11 +143,11 @@ function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-/** Sort comparator; ties fall back to file name, then id, so the order is stable. */
 /**
- * `editedAt` gives an asset's last edit as a sortable string (an HLC), or
- * null when it was never edited; unedited photos come after edited ones
- * either way.
+ * Sort comparator; ties fall back to file name, then id, so the order is
+ * stable. `editedAt` gives an asset's last edit as a sortable string, or
+ * null when it was never edited (`lastEditedIn`); unedited photos come
+ * after edited ones either way.
  */
 export function compareAssets(a: Asset, b: Asset, sort: SortOrder, editedAt?: (asset: Asset) => string | null): number {
   let c = 0;
@@ -206,9 +206,25 @@ export function baseAssets(
   return out;
 }
 
+/**
+ * When each photo was last edited: the newest `editedAt` among its live
+ * versions (synced, so edits made on any device count), or null when none
+ * was ever edited. Built once per view.
+ */
+export function lastEditedIn(view: LibraryView): (asset: Asset) => string | null {
+  const latest = new Map<AssetId, string>();
+  for (const version of view.versions.values()) {
+    if (version.deleted || version.editedAt === undefined) continue;
+    const seen = latest.get(version.assetId);
+    if (seen === undefined || version.editedAt > seen) latest.set(version.assetId, version.editedAt);
+  }
+  return (asset) => latest.get(asset.id) ?? null;
+}
+
 export function queryAssets(view: LibraryView, query: AssetQuery): AssetId[] {
   const out = baseAssets(view, query);
-  out.sort((a, b) => compareAssets(a, b, query.sort));
+  const editedAt = query.sort.key === 'edited' ? lastEditedIn(view) : undefined;
+  out.sort((a, b) => compareAssets(a, b, query.sort, editedAt));
   return out.map((a) => a.id);
 }
 

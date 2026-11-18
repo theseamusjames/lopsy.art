@@ -186,6 +186,12 @@ export interface Version {
   readonly name: string;
   readonly recipe: Recipe;
   readonly createdAt: string;
+  /**
+   * When its recipe last changed (an edit, a paste, a preset, an undo or
+   * redo), on whichever device; absent while it has never been edited.
+   * An ordinary last-writer-wins field.
+   */
+  readonly editedAt?: string;
   /** 512 px, for the grid. */
   readonly thumb: PreviewRef | null;
   /** 2048 px, for Single view and Compare. */

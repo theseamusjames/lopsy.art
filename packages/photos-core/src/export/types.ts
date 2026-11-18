@@ -17,8 +17,20 @@ export interface ExportSettings {
   readonly colorSpace?: ExportColorSpace;
   /** JPEG quality, 0 to 1. */
   readonly quality: number;
-  /** Longest edge in pixels, never enlarging; null for the full size. */
+  /**
+   * Longest edge in pixels, never enlarging; null for the full size. Kept
+   * for settings saved before `size`; when `size` is set it wins, and
+   * `maxLongEdge` mirrors it where it can (a long edge without enlarging).
+   */
   readonly maxLongEdge: number | null;
+  /** The output size (export/size.ts). Absent: what `maxLongEdge` says. */
+  readonly size?: ExportSize;
+  /** Whether a photo smaller than `size` is scaled up. Default false. */
+  readonly allowEnlarge?: boolean;
+  /** PNG only: bits per channel. Default 16. */
+  readonly pngDepth?: 8 | 16;
+  /** Download only: several files packed into one zip. Default true. */
+  readonly zip?: boolean;
   /** all: camera, exposure, date, copyright (and location unless removed); copyright: Artist and Copyright only; none. */
   readonly metadata: 'all' | 'copyright' | 'none';
   readonly removeLocation: boolean;
@@ -27,6 +39,8 @@ export interface ExportSettings {
   readonly copyright?: string;
   readonly creator?: string;
 }
+
+import { exportSizeFromJson, sizeProblem, type ExportSize } from './size';
 
 const MIME_TYPES: Readonly<Record<ExportFormat, string>> = {
   jpeg: 'image/jpeg',
@@ -66,6 +80,8 @@ export function exportSettingsProblem(settings: ExportSettings): string | null {
   if (settings.maxLongEdge !== null && !(Number.isInteger(settings.maxLongEdge) && settings.maxLongEdge > 0)) {
     return 'The long edge must be a whole number of pixels.';
   }
+  if (settings.size !== undefined && exportSizeFromJson(settings.size) === null) return sizeProblem(settings.size);
+  if (settings.pngDepth !== undefined && settings.pngDepth !== 8 && settings.pngDepth !== 16) return 'PNG depth must be 8 or 16 bits.';
   return null;
 }
 
@@ -85,11 +101,17 @@ export function exportSettingsFromJson(value: unknown): ExportSettings {
   const space = v.colorSpace === 'display-p3' || v.colorSpace === 'rec2020' ? v.colorSpace : 'srgb';
   const quality = typeof v.quality === 'number' && v.quality >= 0 && v.quality <= 1 ? v.quality : d.quality;
   const edge = v.maxLongEdge;
+  const maxLongEdge = typeof edge === 'number' && Number.isInteger(edge) && edge > 0 && edge <= 100_000 ? edge : null;
   return {
     format,
     colorSpace: colorSpacesFor(format).includes(space) ? space : 'srgb',
     quality,
-    maxLongEdge: typeof edge === 'number' && Number.isInteger(edge) && edge > 0 && edge <= 100_000 ? edge : null,
+    maxLongEdge,
+    // Settings saved before these fields: the size is what the long edge said.
+    size: exportSizeFromJson(v.size) ?? (maxLongEdge !== null ? { mode: 'long', px: maxLongEdge } : { mode: 'original' }),
+    allowEnlarge: v.allowEnlarge === true,
+    pngDepth: v.pngDepth === 8 ? 8 : 16,
+    zip: v.zip !== false,
     metadata: v.metadata === 'copyright' || v.metadata === 'none' ? v.metadata : 'all',
     removeLocation: typeof v.removeLocation === 'boolean' ? v.removeLocation : d.removeLocation,
     fileNameTemplate:
@@ -103,6 +125,10 @@ export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   format: 'jpeg',
   quality: 0.9,
   maxLongEdge: null,
+  size: { mode: 'original' },
+  allowEnlarge: false,
+  pngDepth: 16,
+  zip: true,
   metadata: 'all',
   removeLocation: true,
   fileNameTemplate: '{name}',

@@ -108,14 +108,8 @@ export function useFindResult(): FindResult {
     const idx = index;
     textMatch = (asset) => idx.matches(asset.id, query);
   }
-  const lastEdited = (asset: Asset): string | null => {
-    let latest: string | null = null;
-    for (const step of session.history(asset.primaryVersionId)) {
-      if (step.active && (latest === null || step.hlc > latest)) latest = step.hlc;
-    }
-    return latest;
-  };
-  const result = findAssets(view, { collection, sort, text, facets, groupBursts, expanded, savedSearches, lastEdited }, textMatch);
+  // Last edited comes from each version's synced editedAt (findAssets' default).
+  const result = findAssets(view, { collection, sort, text, facets, groupBursts, expanded, savedSearches }, textMatch);
   findMemo = { view, collection, sort, text, facets, groupBursts, expanded, result };
   return result;
 }

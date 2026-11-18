@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RECIPE } from '@lopsy/photos-core/library/recipe';
-import { compareAssets, isEdited, pairPartners, SORT_DESCENDING, sortDirectionLabel, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
+import { compareAssets, isEdited, lastEditedIn, pairPartners, SORT_DESCENDING, sortDirectionLabel, queryAssets, sidebarCounts, type AssetQuery } from './asset-query';
 import { importBatches } from './finding';
 import { makeAsset, makeView } from './test-fixtures';
 
@@ -139,5 +139,29 @@ describe('sorting', () => {
       [a, b, c].sort((x, y) => compareAssets(x, y, { key: 'edited', descending }, at)).map((x) => x.id);
     expect(order(true)).toEqual(['c', 'a', 'b']);
     expect(order(false)).toEqual(['a', 'c', 'b']);
+  });
+
+  it('takes the last edit from any live version, synced from every device', () => {
+    const [a, b, c] = [makeAsset('a'), makeAsset('b'), makeAsset('c')];
+    const version = (id: string, assetId: string, editedAt: string | undefined, deleted = false) => ({
+      id,
+      assetId,
+      name: id,
+      recipe: DEFAULT_RECIPE,
+      createdAt: '2026-01-01T00:00:00Z',
+      ...(editedAt !== undefined ? { editedAt } : {}),
+      thumb: null,
+      screen: null,
+      deleted,
+    });
+    const view = makeView([a, b, c], [], [
+      version(a.primaryVersionId, 'a', '2026-11-18T10:00:00.000Z'),
+      // A second version of c, edited later than anything else; a deleted one of b does not count.
+      version('c-2', 'c', '2026-11-18T12:00:00.000Z'),
+      version('b-2', 'b', '2026-11-18T13:00:00.000Z', true),
+    ]);
+    expect(lastEditedIn(view)(c)).toBe('2026-11-18T12:00:00.000Z');
+    expect(lastEditedIn(view)(b)).toBeNull();
+    expect(queryAssets(view, { ...byCapture, sort: { key: 'edited', descending: true } })).toEqual(['c', 'a', 'b']);
   });
 });
