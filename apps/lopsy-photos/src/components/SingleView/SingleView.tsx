@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, EyeOff, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, EyeOff, Paintbrush, SlidersHorizontal } from 'lucide-react';
 import type { AssetId } from '@lopsy/photos-core/library/types';
 import { useAsset } from '../../app/hooks';
 import { useUi } from '../../app/store';
+import { openInLopsy } from '../../app/lopsy-handoff';
 import { backOut, openEdit, runCommand, setLabel, setRating, toggleSetAside } from '../../app/commands';
 import { Button } from '../Button/Button';
 import { IconButton } from '../IconButton/IconButton';
@@ -78,6 +79,17 @@ export function SingleView({ orderedIds, cull = false }: SingleViewProps) {
           </Button>
           <span className={styles.spacer} />
           {cull && <span className={styles.hint}>1–5 rate · X set aside · each moves on · Esc leaves</span>}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const session = useUi.getState().connection?.session;
+              if (session) openInLopsy(session, asset.id);
+            }}
+          >
+            <Paintbrush size={14} />
+            Edit in Lopsy
+          </Button>
           <Button size="sm" onClick={openEdit}>
             <SlidersHorizontal size={14} />
             Edit

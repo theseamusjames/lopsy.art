@@ -138,3 +138,12 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
+
+.receiving {
+  margin-top: var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-subtle);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+}

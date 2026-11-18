@@ -38,6 +38,8 @@ interface StartScreenProps {
   onReconnect: (offer: ReconnectOffer) => void;
   /** The library another tab of this browser has open, if opening it was refused for that. */
   busyKind: StorageChoice | null;
+  /** Lopsy opened this page to save into the library and is waiting. */
+  receiving: boolean;
   onTakeOver: (kind: StorageChoice) => void;
 }
 
@@ -52,7 +54,7 @@ function reopenWords(offer: ReconnectOffer): string {
   }
 }
 
-export function StartScreen({ choices, offer, connecting, error, onChoose, onReconnect, busyKind, onTakeOver }: StartScreenProps) {
+export function StartScreen({ choices, offer, connecting, error, onChoose, onReconnect, busyKind, onTakeOver, receiving }: StartScreenProps) {
   return (
     <main className={styles.screen}>
       <div className={styles.column}>
@@ -62,6 +64,12 @@ export function StartScreen({ choices, offer, connecting, error, onChoose, onRec
           exactly as they were.
         </p>
         <p className={styles.lead}>Your photos are stored where you choose, never on Lopsy’s servers.</p>
+
+        {receiving && (
+          <p className={styles.receiving} role="status">
+            Lopsy is waiting to save into your library. Open it to receive the save.
+          </p>
+        )}
 
         {busyKind && (
           <div className={styles.busy} role="alert">

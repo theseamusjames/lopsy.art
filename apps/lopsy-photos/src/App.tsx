@@ -4,6 +4,7 @@ import { ConnectCancelled, type ConnectOptions, type ReconnectOffer, type Storag
 import { useUi } from './app/store';
 import { LibraryBusyError } from '@lopsy/photos-core/library/lock';
 import { Toasts } from './components/Toasts/Toasts';
+import { isReceivePage, startReceiving } from './app/lopsy-handoff';
 import { StartScreen } from './components/StartScreen/StartScreen';
 import { LibraryScreen } from './components/LibraryScreen/LibraryScreen';
 import { EditSlot } from './app/EditSlot/EditSlot';
@@ -28,6 +29,8 @@ export function App() {
     getBackend()
       .connect(kind, options)
       .then((c) => {
+        // A page Lopsy opened to save into the library answers it before anything else.
+        startReceiving(c.session);
         useUi.getState().setConnection(c);
         // Imports a reload interrupted carry on, shown in the strip.
         getBackend()
@@ -74,6 +77,7 @@ export function App() {
       <StartScreen
         choices={getBackend().listStorageOptions()}
         busyKind={busyKind}
+        receiving={isReceivePage(location.search)}
         onTakeOver={(kind) => choose(kind, { reconnect: true, takeOver: true })}
         offer={offer}
         connecting={connecting}
