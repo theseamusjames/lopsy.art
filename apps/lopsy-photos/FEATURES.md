@@ -183,7 +183,8 @@ is `docs/lopsy-photos-spec.md`; running and setup are in
 Opened with Enter, **Edit** in Single view, or double-click. One photo, a
 left column, the image and a panel of groups; edits are saved to the
 version as they are made, and previews are rendered when the edit settles
-and on leaving.
+(never during a slider drag), on leaving, and before the filmstrip opens
+another photo.
 
 - **Loading and working size.** RAF decodes on a pool of workers into the
   engine's RAW develop stage; DNG through the engine's decoder; 16-bit PNG

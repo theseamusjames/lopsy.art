@@ -94,6 +94,7 @@ import {
 import { cropPixels, inverseRotation, isFullCrop, rotatedBounds, straightenedCrop, toFramed } from './crop';
 import { detailKey, detailValues, localContrastValues } from './detail-controls';
 import { finishKey, finishValues } from './finish-controls';
+import { renderCounts, type RenderKind } from './render-counts';
 import { areaValues, type AreaFrame } from './areas';
 import { colorControlsKey, colorGradeValues, colorMixerValues, curvesLut } from './color-controls';
 import { clampZoom, fitView, limitSize, panBy, zoomAround, type Size, type View } from './viewport';
@@ -203,6 +204,8 @@ export interface DevelopEngine {
   panBy(dx: number, dy: number): void;
   /** A JPEG of the current edit, long edge at most `maxSize`. */
   renderPreview(maxSize: number, quality?: number, recipe?: Recipe): Promise<Blob>;
+  /** JPEGs at each long edge in `maxSizes`, drawn in one go (one render each, one to put the view back). */
+  renderPreviews(maxSizes: readonly number[], quality?: number, recipe?: Recipe): Promise<Blob[]>;
   exportImage(options: ExportOptions): Promise<Blob>;
   /** Paints clipped pixels on the live frame only (any channel at or past white red, at or below black blue); exports are unaffected. */
   setClippingWarning(shadows: boolean, highlights: boolean): void;
@@ -347,6 +350,8 @@ class PhotoEngine implements DevelopEngine {
   private readonly viewListeners = new Set<(view: View) => void>();
   private isDisposed = false;
   private frameRequest: number | null = null;
+  /** Whether the last render shows the engine's current state, so a histogram read needs no render of its own. */
+  private isFrameCurrent = false;
   private hasLayer = false;
   private layerId = 'photo-0';
   private layerCount = 0;
@@ -946,6 +951,7 @@ class PhotoEngine implements DevelopEngine {
     const isMask = this.isDetailMaskView;
     const overlay = this.overlayAreaId;
     if (!shadows && !highlights && !isMask && !overlay) return work();
+    this.isFrameCurrent = false;
     if (shadows || highlights) engineSetClippingWarning(this.engine, false, false);
     if (isMask) setImageDetailMaskView(this.engine, false);
     if (overlay) this.setAreaOverlay(null);
@@ -1070,8 +1076,9 @@ class PhotoEngine implements DevelopEngine {
     if (!this.sourceSize || this.isDisposed) return null;
     // The histogram counts the photo, not the clipping colours or the sharpening mask.
     return this.withScreenViewsOff(async () => {
-      render(this.engine);
+      this.renderFrameNow();
       // WebGL answers at once; a wgpu build parks the read, which this does not wait for yet.
+      renderCounts.histogramReads += 1;
       const bins: unknown = readDevelopHistogram(this.engine);
       return bins instanceof Uint32Array && bins.length === 1024 ? bins : null;
     });
@@ -1186,16 +1193,42 @@ class PhotoEngine implements DevelopEngine {
 
   // ---- rendering -----------------------------------------------------
 
+  /** One engine render, counted by what it was for (render-counts.ts). */
+  private renderFor(kind: RenderKind): void {
+    renderCounts[kind] += 1;
+    render(this.engine);
+    // A render at another size leaves the screen's frame to be drawn again;
+    // any other shows the current state, so a pending screen render would repeat it.
+    this.isFrameCurrent = kind !== 'offscreen';
+    if (this.isFrameCurrent && this.frameRequest !== null) {
+      cancelAnimationFrame(this.frameRequest);
+      this.frameRequest = null;
+    }
+  }
+
+  /** Brings the rendered frame up to date: the pending screen render now, or nothing when it already is. */
+  private renderFrameNow(): void {
+    if (this.frameRequest !== null) {
+      cancelAnimationFrame(this.frameRequest);
+      this.frameRequest = null;
+      this.renderFor('screen');
+    } else if (!this.isFrameCurrent) {
+      this.renderFor('histogram');
+    }
+  }
+
   private invalidate(): void {
+    this.isFrameCurrent = false;
     if (this.frameRequest !== null || this.isDisposed) return;
     this.frameRequest = requestAnimationFrame(() => {
       this.frameRequest = null;
       if (this.isDisposed) return;
-      render(this.engine);
+      this.renderFor('screen');
     });
   }
 
   async renderPreview(maxSize: number, quality = 0.85, recipe?: Recipe): Promise<Blob> {
+    renderCounts.previewEncodes += 1;
     return this.exportImage({ format: 'jpeg', quality, maxSize, ...(recipe ? { recipe } : {}) });
   }
 
@@ -1204,17 +1237,41 @@ class PhotoEngine implements DevelopEngine {
     return this.withScreenViewsOff(() => this.exportClean(options));
   }
 
-  private async exportClean(options: ExportOptions): Promise<Blob> {
+  async renderPreviews(maxSizes: readonly number[], quality = 0.85, recipe?: Recipe): Promise<Blob[]> {
+    renderCounts.previewEncodes += maxSizes.length;
+    return this.withScreenViewsOff(() =>
+      this.atSizeWith(Math.max(...maxSizes), recipe, () => {
+        const image = this.imageSize();
+        if (!image || this.isDisposed) throw new Error('No photo is loaded');
+        const outs = maxSizes.map((max) => limitSize(image, max));
+        const drawn = this.drawAtSizes(outs);
+        // Started before atSizeWith puts the screen's edit back: a fallback renders synchronously first.
+        return Promise.all(
+          outs.map((out, i) => drawn[i]?.convertToBlob({ type: JPEG_MIME, quality }) ?? this.encodeFromPng16(out, JPEG_MIME, quality)),
+        );
+      }),
+    );
+  }
+
+  private exportClean(options: ExportOptions): Promise<Blob> {
+    return this.atSizeWith(options.maxSize, options.recipe, () => this.encode(options));
+  }
+
+  /**
+   * Runs `work` with the full size loaded when an output of long edge
+   * `maxSize` (full size when undefined) needs it, and with `recipe`
+   * applied, putting the screen's edit back afterwards.
+   */
+  private async atSizeWith<T>(maxSize: number | undefined, recipe: Recipe | undefined, work: () => Promise<T>): Promise<T> {
     const working = this.imageSize();
-    if (working && !this.isFullResolution() && (!options.maxSize || options.maxSize > Math.max(working.width, working.height))) {
+    if (working && !this.isFullResolution() && (!maxSize || maxSize > Math.max(working.width, working.height))) {
       await this.ensureFullResolution();
     }
-    const { recipe } = options;
-    if (!recipe) return this.encode(options);
+    if (!recipe) return work();
     const shown = this.recipe;
     this.setRecipe(recipe);
     try {
-      return await this.encode(options);
+      return await work();
     } finally {
       // Unless the screen's edit changed meanwhile, which then stays.
       if (this.recipe === recipe && !this.isDisposed) this.setRecipe(shown);
@@ -1231,49 +1288,54 @@ class PhotoEngine implements DevelopEngine {
     const isFullSize = out.width === image.width && out.height === image.height;
     if (options.format === 'png' && isFullSize && options.pngDepth !== 8) return this.encodePng16(space);
     // The drawing buffer is sRGB; Display P3 goes through the engine's P3 PNG instead.
-    const drawn = space === SRGB ? this.drawAtSize(out) : null;
+    const drawn = space === SRGB ? (this.drawAtSizes([out])[0] ?? null) : null;
     if (drawn) return drawn.convertToBlob({ type: mime, quality: options.quality });
     return this.encodeFromPng16(out, mime, options.quality, space);
   }
 
   private async encodeTiff16(space: number): Promise<Blob> {
-    render(this.engine);
+    this.renderFor('readback');
     const bytes = await readback<Uint8Array>(this.engine, () => exportTiff16(this.engine, space), () => this.isDisposed);
     return new Blob([bytes as BlobPart], { type: TIFF_MIME });
   }
 
   /**
    * Has the engine draw the edited image into its own canvas at exactly
-   * `size` and copies that into an OffscreenCanvas, all in one task, so the
-   * browser never shows the resized canvas. Null when the GPU cannot make a
-   * drawing buffer that large.
+   * each of `sizes` and copies each into an OffscreenCanvas, all in one
+   * task, so the browser never shows the resized canvas, and the view is
+   * rendered back once at the end. Null for a size the GPU cannot make a
+   * drawing buffer that large for.
    */
-  private drawAtSize(size: Size): OffscreenCanvas | null {
+  private drawAtSizes(sizes: readonly Size[]): (OffscreenCanvas | null)[] {
     const image = this.imageSize();
-    if (!image) return null;
+    if (!image) return sizes.map(() => null);
     const { width: savedW, height: savedH } = this.canvas;
     try {
-      this.canvas.width = size.width;
-      this.canvas.height = size.height;
-      const gl = this.canvas.getContext('webgl2');
-      if (!gl || gl.drawingBufferWidth !== size.width || gl.drawingBufferHeight !== size.height) return null;
-      setViewport(this.engine, size.width / image.width, 0, 0, size.width, size.height);
-      render(this.engine);
-      const out = new OffscreenCanvas(size.width, size.height);
-      const ctx = out.getContext('2d');
-      if (!ctx) return null;
-      ctx.drawImage(this.canvas, 0, 0);
-      return out;
+      return sizes.map((size) => this.drawOne(image, size));
     } finally {
       this.canvas.width = savedW;
       this.canvas.height = savedH;
       this.pushViewport();
-      render(this.engine);
+      this.renderFor('restore');
     }
   }
 
+  private drawOne(image: Size, size: Size): OffscreenCanvas | null {
+    this.canvas.width = size.width;
+    this.canvas.height = size.height;
+    const gl = this.canvas.getContext('webgl2');
+    if (!gl || gl.drawingBufferWidth !== size.width || gl.drawingBufferHeight !== size.height) return null;
+    setViewport(this.engine, size.width / image.width, 0, 0, size.width, size.height);
+    this.renderFor('offscreen');
+    const out = new OffscreenCanvas(size.width, size.height);
+    const ctx = out.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(this.canvas, 0, 0);
+    return out;
+  }
+
   private async encodePng16(space = SRGB): Promise<Blob> {
-    render(this.engine);
+    this.renderFor('readback');
     const bytes = await readback<Uint8Array>(this.engine, () => exportPng16(this.engine, space), () => this.isDisposed);
     return new Blob([bytes as BlobPart], { type: PNG_MIME });
   }
