@@ -6,6 +6,7 @@ import { useUi } from '../../app/store';
 import { formatBytes, plural } from '../../import/import-summary';
 import { describeDownload, describeSync, formatWhen } from './sync-words';
 import { Button } from '../Button/Button';
+import { ExportShare } from '../ExportShare/ExportShare';
 import styles from './SyncPanel.module.css';
 
 /** Pending changes, last sync, errors, imports and exports in progress, and storage used. */
@@ -72,6 +73,13 @@ export function SyncPanel() {
               Export: {exportProgress.done} of {exportProgress.total}
               {exportProgress.finished ? ' (finished)' : ''}
             </p>
+          )}
+          {exportProgress?.finished && exportProgress.folder && (
+            <ExportShare
+              session={session}
+              folder={exportProgress.folder}
+              photoCount={exportProgress.done - exportProgress.failures.length}
+            />
           )}
         </section>
       )}
