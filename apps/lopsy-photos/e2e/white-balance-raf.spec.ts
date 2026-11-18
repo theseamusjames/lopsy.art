@@ -92,5 +92,16 @@ test.describe('White balance on a RAF', () => {
     await expect(temperature).toHaveValue('6500 K');
     await expect(mode).toHaveValue('custom');
     expect(await page.evaluate(() => window.__photosHarness?.steps)).toEqual(['White balance: Daylight', expect.stringMatching(/^Temperature /)]);
+
+    // Invalid text puts the readout back; a value out of range is clamped, never ignored.
+    await temperature.fill('-60');
+    await temperature.press('Enter');
+    await expect(temperature).toHaveValue('6500 K');
+    await temperature.fill('60');
+    await temperature.press('Enter');
+    await expect(temperature).not.toHaveValue('6500 K');
+    const clamped = Number((await temperature.inputValue()).replace(' K', ''));
+    expect(clamped).toBeGreaterThanOrEqual(2000);
+    expect(clamped).toBeLessThan(6500);
   });
 });
