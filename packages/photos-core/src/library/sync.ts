@@ -38,6 +38,8 @@ export const SYNC_INTERVALS = {
   retryMaxMs: 60_000,
   /** The merged state is saved on the device at most this often while flushing. */
   stateSaveMs: 30_000,
+  /** `devices/<id>.json` is rewritten at most this often on flush. */
+  deviceFileMs: 5 * 60_000,
 } as const;
 
 export const NEWER_APP_MESSAGE = 'Another device uses a newer version of Lopsy Photos. Reload to update.';
@@ -46,10 +48,19 @@ export const NEWER_APP_MESSAGE = 'Another device uses a newer version of Lopsy P
 const MAX_OPS_PER_SEGMENT = 10_000;
 const MAX_PROBLEMS = 100;
 const DEFAULT_ROLLUP_AT = 20;
+const DEFAULT_FULL_PULL_EVERY = 60;
 
 export interface SyncEngineOptions {
   readonly adapter: StorageAdapter;
   readonly layout: LibraryLayout;
+  /**
+   * Set when the library was opened from the device alone because storage
+   * was unreachable: finds the library in storage before the first sync,
+   * and is retried until it succeeds.
+   */
+  readonly ensure?: () => Promise<LibraryLayout>;
+  /** Why storage could not be reached at open, shown in the first status. */
+  readonly initialError?: unknown;
   readonly deviceId: string;
   readonly deviceName: string;
   readonly appVersion: string;
@@ -67,6 +78,8 @@ export interface SyncEngineOptions {
   readonly readOnly?: boolean;
   /** Roll up this device's segments once this many small ones have been written (default 20). */
   readonly rollUpAt?: number;
+  /** List every device folder after this many pulls through the change feed (default 60, 30 minutes). */
+  readonly fullPullEvery?: number;
   readonly timers?: SyncTimers;
   /** The synced settings, for the readable `settings.json` copy (spec 6.6). */
   readonly settings?: () => Readonly<Record<string, Json>>;
@@ -81,7 +94,18 @@ type Bookkeeping = {
   opsSinceSnapshot: number;
   flushedSeq: number;
   lastSyncedAt: string | null;
+  changeCursor: string | null;
 };
+
+/** auth: needs the user; network and rate limits: offline, retried; anything else: an error. */
+export function classify(error: unknown): { state: 'paused' | 'offline' | 'error'; error: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  if (isStorageError(error) && error.code === 'auth') return { state: 'paused', error: message };
+  if (isStorageError(error) && (error.code === 'network' || error.code === 'rate-limited')) {
+    return { state: 'offline', error: message };
+  }
+  return { state: 'error', error: message };
+}
 
 export class SyncEngine {
   private readonly o: SyncEngineOptions;
@@ -93,7 +117,11 @@ export class SyncEngine {
   private running: Promise<void> | null = null;
   private persistQueue: Promise<void> = Promise.resolve();
   private deviceFolderId: FileId | null = null;
-  private deviceFileWritten = false;
+  private deviceFileWrittenAt: number | null = null;
+  private layout: LibraryLayout;
+  private ready: boolean;
+  private lost = false;
+  private readOnly: boolean;
   private firstPendingAt: number | null = null;
   private flushTimer: unknown = null;
   private pullTimer: unknown = null;
@@ -103,6 +131,10 @@ export class SyncEngine {
   private stateDirty = false;
   private lastStateSave: number;
   private newerSeen = false;
+  /** Starts high so a session's first pull lists every folder (and retries segments it skipped before). */
+  private pullsSinceFull = Number.POSITIVE_INFINITY;
+  /** Journal folder ID -> device, learned from listings and the feed. */
+  private readonly deviceFolders = new Map<FileId, string>();
   private segmentsSinceRollUp = 0;
   private settingsDirty = false;
   private settingsFileId: FileId | null = null;
@@ -111,6 +143,9 @@ export class SyncEngine {
 
   constructor(options: SyncEngineOptions) {
     this.o = options;
+    this.layout = options.layout;
+    this.ready = options.ensure === undefined;
+    this.readOnly = options.readOnly === true;
     this.timers = options.timers ?? DEFAULT_TIMERS;
     const b = options.bookkeeping;
     this.outbox = options.outbox.filter((op) => op.seq > b.flushedSeq).sort((x, y) => x.seq - y.seq);
@@ -122,6 +157,7 @@ export class SyncEngine {
       opsSinceSnapshot: b.opsSinceSnapshot,
       flushedSeq: b.flushedSeq,
       lastSyncedAt: b.lastSyncedAt,
+      changeCursor: b.changeCursor ?? null,
     };
     this.newerSeen = options.readOnly === true;
     this.status = {
@@ -130,6 +166,13 @@ export class SyncEngine {
       lastSyncedAt: b.lastSyncedAt,
       error: this.newerSeen ? NEWER_APP_MESSAGE : null,
     };
+    if (options.initialError !== undefined) this.status = { ...this.status, ...classify(options.initialError) };
+  }
+
+  /** The library turned out to have a newer schema: keep reading, stop writing. */
+  markReadOnly(): void {
+    this.readOnly = true;
+    this.newerSeen = true;
   }
 
   start(): void {
@@ -184,12 +227,33 @@ export class SyncEngine {
     await this.persistQueue;
   }
 
+  /**
+   * Another tab took the library over: stop writing to storage and to the
+   * device, for good.
+   */
+  lose(message: string): void {
+    this.lost = true;
+    this.closed = true;
+    this.clearTimers();
+    this.setStatus({ state: 'error', error: message });
+  }
+
+  get isLost(): boolean {
+    return this.lost;
+  }
+
   private async exclusive(work: () => Promise<void>, saveState: boolean): Promise<void> {
     while (this.running) await this.running;
+    if (this.lost) return;
     const run = (async () => {
       this.setStatus({ state: 'syncing' });
       try {
+        if (!this.ready && this.o.ensure) {
+          this.layout = await this.o.ensure();
+          this.ready = true;
+        }
         await work();
+        if (this.lost) return;
         this.retryDelay = SYNC_INTERVALS.retryMinMs;
         this.bk.lastSyncedAt = new Date(this.o.now()).toISOString();
         this.setStatus({
@@ -199,6 +263,7 @@ export class SyncEngine {
         });
         if (this.o.autoSync && !this.closed && this.pullTimer === null) this.schedulePull(SYNC_INTERVALS.pullEveryMs);
       } catch (error) {
+        if (this.lost) return;
         this.fail(error);
       }
       this.saveState(saveState);
@@ -212,19 +277,10 @@ export class SyncEngine {
   }
 
   private fail(error: unknown): void {
-    const message = error instanceof Error ? error.message : String(error);
-    if (isStorageError(error) && error.code === 'auth') {
-      this.clearTimers();
-      this.setStatus({ state: 'paused', error: message });
-      return;
-    }
-    if (isStorageError(error) && (error.code === 'network' || error.code === 'rate-limited')) {
-      this.setStatus({ state: 'offline', error: message });
-      this.scheduleRetry();
-      return;
-    }
-    this.setStatus({ state: 'error', error: message });
-    this.scheduleRetry();
+    const status = classify(error);
+    this.setStatus(status);
+    if (status.state === 'paused') this.clearTimers();
+    else this.scheduleRetry();
   }
 
   private async flush(): Promise<void> {
@@ -239,7 +295,7 @@ export class SyncEngine {
           parentId: folderId,
           name: segmentName(first, last),
           mimeType: SEGMENT_MIME_TYPE,
-          properties: { 'lp.lib': this.o.layout.libraryId, 'lp.role': ROLES.segment, 'lp.device': this.o.deviceId },
+          properties: { 'lp.lib': this.layout.libraryId, 'lp.role': ROLES.segment, 'lp.device': this.o.deviceId },
         },
         content,
       );
@@ -253,12 +309,15 @@ export class SyncEngine {
       this.setStatus({ pendingOps: this.outbox.length });
     }
     this.firstPendingAt = null;
-    if (!this.deviceFileWritten && this.deviceFolderId !== null) await this.writeDeviceFile();
+    const due =
+      this.deviceFileWrittenAt === null || this.o.now() - this.deviceFileWrittenAt >= SYNC_INTERVALS.deviceFileMs;
+    if (due && this.deviceFolderId !== null) await this.writeDeviceFile();
   }
 
   private async deviceFolder(): Promise<FileId> {
     if (this.deviceFolderId) return this.deviceFolderId;
-    const { adapter, layout, deviceId } = this.o;
+    const { adapter, deviceId } = this.o;
+    const layout = this.layout;
     const existing = (await adapter.listChildren(layout.journalId)).find(
       (f) => f.isFolder && f.properties['lp.device'] === deviceId,
     );
@@ -274,7 +333,8 @@ export class SyncEngine {
   }
 
   private async writeDeviceFile(): Promise<void> {
-    const { adapter, layout, deviceId } = this.o;
+    const { adapter, deviceId } = this.o;
+    const layout = this.layout;
     const content = new Blob(
       [
         JSON.stringify(
@@ -282,7 +342,7 @@ export class SyncEngine {
             deviceId,
             name: this.o.deviceName,
             appVersion: this.o.appVersion,
-            lastSeen: new Date(this.o.now()).toISOString(),
+            lastSeenAt: new Date(this.o.now()).toISOString(),
           },
           null,
           2,
@@ -306,19 +366,93 @@ export class SyncEngine {
         content,
       );
     }
-    this.deviceFileWritten = true;
+    this.deviceFileWrittenAt = this.o.now();
   }
 
+  /**
+   * Reads other devices' new segments. Normally only the devices the
+   * storage change feed mentions are listed; every `fullPullEvery` pulls,
+   * with no saved cursor, or when the feed fails, every device folder is.
+   */
   private async pull(): Promise<void> {
-    const { adapter, layout, deviceId } = this.o;
-    const folders = (await adapter.listChildren(layout.journalId)).filter((f) => f.isFolder);
+    const cursor = this.bk.changeCursor;
+    const every = this.o.fullPullEvery ?? DEFAULT_FULL_PULL_EVERY;
+    if (cursor !== null && this.pullsSinceFull < every) {
+      const devices = await this.devicesFromFeed(cursor);
+      if (devices) {
+        this.pullsSinceFull += 1;
+        let appliedAny = false;
+        for (const [device, folderId] of devices) {
+          if (await this.pullDevice(device, folderId)) appliedAny = true;
+        }
+        if (appliedAny) this.stateDirty = true;
+        return;
+      }
+    }
+    await this.fullPull();
+  }
+
+  private async fullPull(): Promise<void> {
+    const { adapter, deviceId } = this.o;
+    let cursor: string | null = null;
+    try {
+      // Taken before listing, so a change made while listing shows in the next feed read.
+      cursor = await adapter.getChangeCursor();
+    } catch (error) {
+      if (!isStorageError(error) || error.code === 'auth' || error.retryable) throw error;
+      this.report(`Change feed unavailable: ${error.message}`);
+    }
+    const folders = (await adapter.listChildren(this.layout.journalId)).filter((f) => f.isFolder);
     let appliedAny = false;
     for (const folder of folders) {
       const device = folder.properties['lp.device'] ?? folder.name;
       if (!isDeviceId(device) || device === deviceId) continue;
-      if (await this.pullDevice(device, folder)) appliedAny = true;
+      this.deviceFolders.set(folder.id, device);
+      if (await this.pullDevice(device, folder.id)) appliedAny = true;
     }
     if (appliedAny) this.stateDirty = true;
+    this.bk.changeCursor = cursor;
+    this.pullsSinceFull = 0;
+  }
+
+  /**
+   * The devices with new journal files since `cursor`, by device folder,
+   * and the feed's new cursor saved; null when the feed cannot be used.
+   */
+  private async devicesFromFeed(cursor: string): Promise<Map<string, FileId> | null> {
+    const devices = new Map<string, FileId>();
+    let next = cursor;
+    try {
+      for (;;) {
+        const page = await this.o.adapter.listChanges(next);
+        for (const change of page.changes) {
+          const file = change.file;
+          if (!file || file.trashed || file.parentId === null) continue;
+          if (file.isFolder && file.parentId === this.layout.journalId) {
+            const device = file.properties['lp.device'] ?? file.name;
+            if (isDeviceId(device) && device !== this.o.deviceId) {
+              this.deviceFolders.set(file.id, device);
+              devices.set(device, file.id);
+            }
+            continue;
+          }
+          const device = this.deviceFolders.get(file.parentId) ?? file.properties['lp.device'];
+          if (file.isFolder || device === undefined || device === this.o.deviceId) continue;
+          if (file.properties['lp.role'] !== ROLES.segment && !this.deviceFolders.has(file.parentId)) continue;
+          if (!isDeviceId(device)) continue;
+          devices.set(device, file.parentId);
+        }
+        next = page.cursor;
+        if (!page.hasMore) break;
+      }
+    } catch (error) {
+      if (!isStorageError(error) || error.code === 'auth' || error.retryable) throw error;
+      // An expired or refused cursor: list everything instead.
+      this.report(`Change feed failed, listing folders instead: ${error.message}`);
+      return null;
+    }
+    this.bk.changeCursor = next;
+    return devices;
   }
 
   /**
@@ -343,10 +477,10 @@ export class SyncEngine {
     });
   }
 
-  private async pullDevice(device: string, folder: StoredFile): Promise<boolean> {
+  private async pullDevice(device: string, folderId: FileId): Promise<boolean> {
     const seen = this.bk.vector[device] ?? 0;
     const ahead = new Set(this.bk.appliedAhead[device] ?? []);
-    const segments = (await this.o.adapter.listChildren(folder.id))
+    const segments = (await this.o.adapter.listChildren(folderId))
       .map((file) => ({ file, range: parseSegmentName(file.name) }))
       .filter(
         (s): s is { file: StoredFile; range: { firstSeq: number; lastSeq: number } } =>
@@ -415,12 +549,12 @@ export class SyncEngine {
   }
 
   private async maybeSnapshot(): Promise<void> {
-    if (this.o.readOnly) return;
+    if (this.readOnly) return;
     if (this.bk.opsSinceSnapshot < this.o.snapshotEvery) return;
     const hlc = this.o.stamp();
-    await writeSnapshot(this.o.adapter, this.o.layout.snapshotsId, {
+    await writeSnapshot(this.o.adapter, this.layout.snapshotsId, {
       format: 1,
-      libraryId: this.o.layout.libraryId,
+      libraryId: this.layout.libraryId,
       device: this.o.deviceId,
       hlc,
       vector: { ...this.bk.vector },
@@ -432,8 +566,9 @@ export class SyncEngine {
   }
 
   private async writeSettings(): Promise<void> {
-    if (!this.settingsDirty || this.o.readOnly || !this.o.settings) return;
-    const { adapter, layout } = this.o;
+    if (!this.settingsDirty || this.readOnly || !this.o.settings) return;
+    const { adapter } = this.o;
+    const layout = this.layout;
     const content = new Blob([JSON.stringify(this.o.settings(), null, 2) + '\n'], { type: 'application/json' });
     this.settingsFileId ??=
       (await adapter.listChildren(layout.dataId)).find((f) => !f.isFolder && f.properties['lp.role'] === ROLES.settings)
@@ -456,7 +591,7 @@ export class SyncEngine {
   }
 
   private async maybeRollUp(): Promise<void> {
-    if (this.o.readOnly || this.deviceFolderId === null) return;
+    if (this.readOnly || this.deviceFolderId === null) return;
     const minRun = this.o.rollUpAt ?? DEFAULT_ROLLUP_AT;
     if (this.segmentsSinceRollUp < minRun) return;
     try {
@@ -464,7 +599,7 @@ export class SyncEngine {
         adapter: this.o.adapter,
         folderId: this.deviceFolderId,
         deviceId: this.o.deviceId,
-        libraryId: this.o.layout.libraryId,
+        libraryId: this.layout.libraryId,
         throughSeq: this.bk.flushedSeq,
         minRun,
       });
@@ -489,13 +624,16 @@ export class SyncEngine {
       snapshot: this.bk.snapshot,
       opsSinceSnapshot: this.bk.opsSinceSnapshot,
       flushedSeq: this.bk.flushedSeq,
+      changeCursor: this.bk.changeCursor,
       lastSyncedAt: this.bk.lastSyncedAt,
     };
   }
 
   private persist(patch: LocalStorePatch): void {
+    // The tab that took over owns the device's saved data now.
+    if (this.lost) return;
     this.persistQueue = this.persistQueue
-      .then(() => this.o.local.write(this.o.layout.libraryId, patch))
+      .then(() => this.o.local.write(this.layout.libraryId, patch))
       .catch((error: unknown) => {
         console.error('Could not save library state on this device', error);
         this.setStatus({ state: 'error', error: 'Could not save changes on this device' });

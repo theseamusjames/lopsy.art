@@ -27,6 +27,7 @@ export class TestAdapter implements StorageAdapter {
   private readonly files = new Map<FileId, Entry>();
   private readonly rootId: FileId;
   private counter = 0;
+  private readonly changeLog: FileId[] = [];
   private failures: { code: StorageErrorCode; method: string | null; remaining: number }[] = [];
   /** Every call, by method name, for assertions. */
   readonly calls: string[] = [];
@@ -39,6 +40,11 @@ export class TestAdapter implements StorageAdapter {
   /** Makes the next `count` calls (of `method`, or of any method) throw a StorageError. */
   failNext(code: StorageErrorCode, options: { method?: string; count?: number } = {}): void {
     this.failures.push({ code, method: options.method ?? null, remaining: options.count ?? 1 });
+  }
+
+  /** Drops failures queued with `failNext` that have not fired yet. */
+  clearFailures(): void {
+    this.failures = [];
   }
 
   /** Every file and folder, trashed or not. */
@@ -57,6 +63,7 @@ export class TestAdapter implements StorageAdapter {
     const id = this.nextId();
     const file = this.makeFile(id, name, parentId, true, 'application/vnd.google-apps.folder', properties, 0);
     this.files.set(id, { file, content: new Uint8Array() });
+    this.changed(id);
     return file;
   }
 
@@ -67,6 +74,7 @@ export class TestAdapter implements StorageAdapter {
     const id = this.nextId();
     const stored = this.makeFile(id, file.name, file.parentId, false, file.mimeType, file.properties ?? {}, bytes.byteLength);
     this.files.set(id, { file: stored, content: bytes });
+    this.changed(id);
     return stored;
   }
 
@@ -76,6 +84,7 @@ export class TestAdapter implements StorageAdapter {
     const bytes = new Uint8Array(await content.arrayBuffer());
     entry.content = bytes;
     entry.file = { ...entry.file, size: bytes.byteLength, revision: this.nextId(), modifiedTime: new Date().toISOString() };
+    this.changed(id);
     return entry.file;
   }
 
@@ -88,6 +97,7 @@ export class TestAdapter implements StorageAdapter {
       else next[k] = v;
     }
     entry.file = { ...entry.file, properties: next };
+    this.changed(id);
     return entry.file;
   }
 
@@ -96,6 +106,7 @@ export class TestAdapter implements StorageAdapter {
     this.mustFolder(newParentId);
     const entry = this.must(id);
     entry.file = { ...entry.file, parentId: newParentId };
+    this.changed(id);
     return entry.file;
   }
 
@@ -125,28 +136,46 @@ export class TestAdapter implements StorageAdapter {
     this.enter('trash');
     const entry = this.must(id);
     entry.file = { ...entry.file, trashed: true };
+    this.changed(id);
   }
 
   async untrash(id: FileId): Promise<void> {
     this.enter('untrash');
     const entry = this.must(id);
     entry.file = { ...entry.file, trashed: false };
+    this.changed(id);
   }
 
   async deletePermanently(id: FileId): Promise<void> {
     this.enter('deletePermanently');
     this.must(id);
     this.files.delete(id);
+    this.changed(id);
   }
 
   async getChangeCursor(): Promise<string> {
     this.enter('getChangeCursor');
-    return '0';
+    return String(this.changeLog.length);
   }
 
+  /** Pages of at most 5 changes, so callers must follow `hasMore`. */
   async listChanges(cursor: string): Promise<ChangePage> {
     this.enter('listChanges');
-    return { changes: [], cursor, hasMore: false };
+    const from = Number(cursor);
+    if (!Number.isInteger(from) || from < 0 || from > this.changeLog.length) {
+      throw new StorageError('invalid', `Bad change cursor ${cursor}`);
+    }
+    const ids = this.changeLog.slice(from, from + 5);
+    const next = from + ids.length;
+    return {
+      changes: ids.map((fileId) => ({ fileId, file: this.files.get(fileId)?.file ?? null })),
+      cursor: String(next),
+      hasMore: next < this.changeLog.length,
+    };
+  }
+
+  private changed(id: FileId): void {
+    this.changeLog.push(id);
   }
 
   async getQuota(): Promise<StorageQuota> {

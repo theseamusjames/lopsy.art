@@ -306,11 +306,61 @@ describe('sync between devices', () => {
   });
 });
 
+describe('change feed', () => {
+  it('lists only the folders the feed mentions after the first pull', async () => {
+    const adapter = new TestAdapter();
+    const a = await open(adapter);
+    const b = await open(adapter);
+    const c = await open(adapter);
+    a.addAsset(photo(1));
+    c.setSetting('x', 1);
+    await a.syncNow();
+    await c.syncNow();
+    await b.syncNow();
+    a.addAsset(photo(2));
+    await a.syncNow();
+    const before = adapter.calls.length;
+    await b.syncNow();
+    const calls = adapter.calls.slice(before);
+    expect(calls.filter((x) => x === 'listChanges').length).toBeGreaterThan(0);
+    // a's folder only: not the journal folder, not c's folder.
+    expect(calls.filter((x) => x === 'listChildren')).toHaveLength(1);
+    expect(canonicalView(b.getView())).toEqual(canonicalView(a.getView()));
+    expect(b.getView().settings.get('x')).toBe(1);
+  });
+
+  it('falls back to listing folders when the feed refuses its cursor', async () => {
+    const adapter = new TestAdapter();
+    const a = await open(adapter);
+    const b = await open(adapter);
+    await b.syncNow();
+    const { assetId } = a.addAsset(photo(1));
+    await a.syncNow();
+    adapter.failNext('invalid', { method: 'listChanges' });
+    await b.syncNow();
+    expect(b.getSyncStatus().state).toBe('idle');
+    expect(b.getView().assets.get(assetId)).toBeDefined();
+  });
+
+  it('lists every folder every fullPullEvery pulls', async () => {
+    const adapter = new TestAdapter();
+    const b = await open(adapter, new MemoryLocalStore(), { fullPullEvery: 2 });
+    await b.syncNow();
+    const listings = async () => {
+      const before = adapter.calls.length;
+      await b.syncNow();
+      return adapter.calls.slice(before).filter((x) => x === 'getChangeCursor').length;
+    };
+    expect([await listings(), await listings(), await listings()]).toEqual([0, 0, 1]);
+  });
+});
+
 describe('versions of the schema', () => {
   it('keeps ops from a newer app for later instead of dropping them', async () => {
     const adapter = new TestAdapter();
     const a = await open(adapter);
-    const b = await open(adapter);
+    const storeB = new MemoryLocalStore();
+    const b = await open(adapter, storeB);
     const { assetId } = a.addAsset(photo(1));
     await a.syncNow();
     const folder = (await adapter.listChildren(a.layout.journalId)).find((f) => f.name === a.deviceId)!;
@@ -323,10 +373,12 @@ describe('versions of the schema', () => {
     await b.syncNow();
     expect(b.getView().assets.get(assetId)?.rating).toBe(2);
     expect(b.getSyncStatus()).toMatchObject({ state: 'error', error: NEWER_APP_MESSAGE });
+    await b.close();
     const reads = adapter.calls.filter((c) => c === 'readContent').length;
-    await b.syncNow();
-    // Not marked as read, so an updated app reads it again.
-    expect(adapter.calls.filter((c) => c === 'readContent').length).toBe(reads + 1);
+    const reopened = await open(adapter, storeB);
+    await reopened.syncNow();
+    // Not marked as read, so the next session (an updated app) reads it again.
+    expect(adapter.calls.filter((c) => c === 'readContent').length).toBe(reads + 2);
   });
 
   it('opens a library with a newer schema read-only', async () => {

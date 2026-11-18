@@ -8,7 +8,7 @@
 
 import type { SerializedStore } from './merge-store';
 import type { VersionVector } from './snapshot';
-import type { OpEnvelope } from './types';
+import type { LibraryLayout, OpEnvelope } from './types';
 
 export interface SyncBookkeeping {
   /** Per device, the last seq applied with no gaps before it. */
@@ -22,6 +22,8 @@ export interface SyncBookkeeping {
   /** The last seq of this device that is in storage. */
   readonly flushedSeq: number;
   readonly lastSyncedAt: string | null;
+  /** The storage change feed's cursor after the last pull; absent in data saved before it existed. */
+  readonly changeCursor?: string | null;
 }
 
 export interface StoredLibrary {
@@ -31,6 +33,8 @@ export interface StoredLibrary {
   readonly outbox: readonly OpEnvelope[];
   readonly state: SerializedStore | null;
   readonly sync: SyncBookkeeping | null;
+  /** The library's folders, so it opens while storage is unreachable. */
+  readonly layout: LibraryLayout | null;
 }
 
 /** One atomic change to a library's saved data. Absent parts are left as they are. */
@@ -42,6 +46,8 @@ export interface LocalStorePatch {
   readonly removeOutboxThrough?: number;
   readonly state?: SerializedStore;
   readonly sync?: SyncBookkeeping;
+  /** Also makes this the library `lastLayout()` returns. */
+  readonly layout?: LibraryLayout;
 }
 
 export interface LocalStore {
@@ -49,6 +55,8 @@ export interface LocalStore {
   load(libraryId: string): Promise<StoredLibrary | null>;
   /** Applies the patch atomically. A patch without `deviceId` needs a library that was saved before. */
   write(libraryId: string, patch: LocalStorePatch): Promise<void>;
+  /** The layout most recently saved, for opening without storage; null when none. */
+  lastLayout(): Promise<LibraryLayout | null>;
 }
 
 export const EMPTY_BOOKKEEPING: SyncBookkeeping = {
@@ -58,6 +66,7 @@ export const EMPTY_BOOKKEEPING: SyncBookkeeping = {
   opsSinceSnapshot: 0,
   flushedSeq: 0,
   lastSyncedAt: null,
+  changeCursor: null,
 };
 
 function applyPatch(current: StoredLibrary | null, patch: LocalStorePatch): StoredLibrary {
@@ -75,12 +84,14 @@ function applyPatch(current: StoredLibrary | null, patch: LocalStorePatch): Stor
     outbox,
     state: patch.state ?? current?.state ?? null,
     sync: patch.sync ?? current?.sync ?? null,
+    layout: patch.layout ?? current?.layout ?? null,
   };
 }
 
 /** For tests and for running without persistence. Data is copied in and out, as a real store would. */
 export class MemoryLocalStore implements LocalStore {
   private readonly libraries = new Map<string, StoredLibrary>();
+  private last: string | null = null;
 
   async load(libraryId: string): Promise<StoredLibrary | null> {
     const saved = this.libraries.get(libraryId);
@@ -90,6 +101,12 @@ export class MemoryLocalStore implements LocalStore {
   async write(libraryId: string, patch: LocalStorePatch): Promise<void> {
     const next = applyPatch(this.libraries.get(libraryId) ?? null, structuredClone(patch));
     this.libraries.set(libraryId, next);
+    if (patch.layout) this.last = libraryId;
+  }
+
+  async lastLayout(): Promise<LibraryLayout | null> {
+    const layout = this.last === null ? null : this.libraries.get(this.last)?.layout;
+    return layout ? structuredClone(layout) : null;
   }
 }
 
@@ -103,6 +120,9 @@ interface MetaRecord {
   readonly deviceId: string;
   readonly nextSeq: number;
   readonly sync: SyncBookkeeping | null;
+  readonly layout?: LibraryLayout | null;
+  /** When `layout` was last saved (ms), to find the last library opened. */
+  readonly layoutSavedAt?: number;
 }
 
 interface OutboxRecord {
@@ -164,7 +184,21 @@ export class IndexedDbLocalStore implements LocalStore {
       outbox: outbox.sort((a, b) => a.seq - b.seq).map((r) => r.op),
       state: state?.state ?? null,
       sync: meta.sync,
+      layout: meta.layout ?? null,
     };
+  }
+
+  async lastLayout(): Promise<LibraryLayout | null> {
+    const db = await this.open();
+    const tx = db.transaction([META], 'readonly');
+    const done = completed(tx);
+    const all = (await promised(tx.objectStore(META).getAll())) as MetaRecord[];
+    await done;
+    let best: MetaRecord | null = null;
+    for (const m of all) {
+      if (m.layout && (best === null || (m.layoutSavedAt ?? 0) > (best.layoutSavedAt ?? 0))) best = m;
+    }
+    return best?.layout ?? null;
   }
 
   async write(libraryId: string, patch: LocalStorePatch): Promise<void> {
@@ -181,6 +215,8 @@ export class IndexedDbLocalStore implements LocalStore {
         deviceId,
         nextSeq: patch.nextSeq ?? current?.nextSeq ?? 1,
         sync: patch.sync ?? current?.sync ?? null,
+        layout: patch.layout ?? current?.layout ?? null,
+        layoutSavedAt: patch.layout ? Date.now() : (current?.layoutSavedAt ?? 0),
       };
       metaStore.put(meta);
       const outbox = tx.objectStore(OUTBOX);
