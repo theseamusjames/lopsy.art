@@ -666,8 +666,10 @@ class PhotoEngine implements DevelopEngine {
 
   /**
    * Replaces the working image with the full-size layer, keeping the zoom and
-   * pan the user chose in the meantime (scaled to the larger image) and
-   * re-applying the framing to the new layer.
+   * pan the user chose in the meantime (scaled to the larger image).
+   * Everything sized in document pixels or by `pixelScale` is applied
+   * again for the new size: framing, straighten, the crop's layout, areas
+   * (and the mask overlay), detail, local contrast and Finish.
    */
   private swapInLayer(layer: string, size: Size, previous: Size): void {
     this.unturn();
@@ -677,19 +679,24 @@ class PhotoEngine implements DevelopEngine {
     setDocumentSize(this.engine, size.width, size.height);
     updateLayer(this.engine, layerDesc(layer, size.width, size.height, true));
     setLayerOrder(this.engine, JSON.stringify([layer]));
-    const target = this.framing;
     const wasFit = this.view.isFit;
     const zoom = this.view.zoom * (previous.width / size.width);
     this.sourceSize = size;
+    // The new layer is unframed; applyRecipe frames and turns it to the recipe.
     this.framing = { rotate: 0, flipH: false };
-    this.layoutKey = null;
-    this.applyFraming(target);
-    this.layout();
+    this.forgetSizedState();
+    this.applyRecipe();
     if (wasFit) this.fit();
     else this.setView({ ...this.view, zoom, isFit: false });
-    // Grain is sized in source pixels: the full-size layer needs it again.
-    this.applyFinish();
     this.invalidate();
+  }
+
+  /** Forgets what was sent for the old image size, so applyRecipe sends it all again. */
+  private forgetSizedState(): void {
+    this.layoutKey = null;
+    this.areasKey = null;
+    this.detailKeyApplied = null;
+    this.finishKeyApplied = null;
   }
 
   private nextLayerId(): string {
