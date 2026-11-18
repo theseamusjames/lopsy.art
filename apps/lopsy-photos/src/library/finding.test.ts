@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { importLabel, datePrefixLabel, facetRule, findAssets, hasFacets, importBatches, NO_FACETS, ruleForSaving, toggleValue, type FindQuery } from './finding';
+import { importLabel, importLabels, datePrefixLabel, facetRule, findAssets, hasFacets, importBatches, NO_FACETS, ruleForSaving, toggleValue, type FindQuery } from './finding';
 import { makeAsset, makeView } from './test-fixtures';
 
 const x100 = { make: 'FUJIFILM', model: 'X100VI' };
@@ -95,5 +95,19 @@ describe('importLabel', () => {
     const now = new Date(2026, 10, 18, 12, 0);
     expect(importLabel(new Date(2026, 2, 14, 9, 30).toISOString(), now)).toBe('14 Mar, 09:30');
     expect(importLabel(new Date(2025, 11, 1, 18, 5).toISOString(), now)).toBe('1 Dec 2025, 18:05');
+  });
+
+  it('adds seconds only where two imports share a minute', () => {
+    const now = new Date(2026, 10, 18, 15, 0);
+    const at = (s: number) => new Date(2026, 10, 18, 14, 38, s).toISOString();
+    const labels = importLabels(
+      [
+        { importId: 'a', importedAt: at(5), count: 1 },
+        { importId: 'b', importedAt: at(40), count: 2 },
+        { importId: 'c', importedAt: new Date(2026, 10, 18, 9, 1).toISOString(), count: 3 },
+      ],
+      now,
+    );
+    expect([...labels.values()]).toEqual(['18 Nov, 14:38:05', '18 Nov, 14:38:40', '18 Nov, 09:01']);
   });
 });

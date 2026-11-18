@@ -225,13 +225,26 @@ export function importBatches(view: LibraryView): ImportBatch[] {
 }
 
 /** An import batch's name in the sidebar: "14 Mar, 09:30"; the year only when it is not this year's. */
-export function importLabel(iso: string, now: Date = new Date()): string {
+export function importLabel(iso: string, now: Date = new Date(), withSeconds = false): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const two = (n: number) => String(n).padStart(2, '0');
+  const time = `${two(d.getHours())}:${two(d.getMinutes())}${withSeconds ? `:${two(d.getSeconds())}` : ''}`;
   const year = d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`;
   return `${d.getDate()} ${months[d.getMonth()]}${year}, ${time}`;
+}
+
+/** Every batch's label, with seconds for batches that would otherwise share one (two imports in a minute). */
+export function importLabels(batches: readonly ImportBatch[], now: Date = new Date()): Map<string, string> {
+  const short = batches.map((b) => importLabel(b.importedAt, now));
+  const out = new Map<string, string>();
+  batches.forEach((b, i) => {
+    const label = short[i] ?? '';
+    const clash = short.indexOf(label) !== i || short.lastIndexOf(label) !== i;
+    out.set(b.importId, clash ? importLabel(b.importedAt, now, true) : label);
+  });
+  return out;
 }
 
 /** After each open photo, its other versions as their own tiles (`assetId#versionId`). */

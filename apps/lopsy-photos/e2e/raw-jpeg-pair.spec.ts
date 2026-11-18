@@ -41,7 +41,8 @@ test('a RAW+JPEG pair is one tile with its badge, counted once', async ({ page }
   await writeFile(jpegPath, raf.subarray(raf.readUInt32BE(84), raf.readUInt32BE(84) + raf.readUInt32BE(88)));
   await (await chooser).setFiles([sample, jpegPath]);
   await page.getByRole('button', { name: /^Import \d+ photo/ }).click();
-  await expect(page.getByText(/^Imported \d+ photo/)).toBeVisible({ timeout: 150_000 });
+  // The strip counts photos, as the grid does: the pair is one.
+  await expect(page.getByText('Imported 1 photo (2 files: RAW+JPEG pairs count once)')).toBeVisible({ timeout: 150_000 });
 
   const sidebar = page.getByRole('navigation', { name: 'Library' });
   await sidebar.getByRole('button', { name: /^All photos/ }).click();

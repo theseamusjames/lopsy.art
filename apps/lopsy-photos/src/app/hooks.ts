@@ -15,10 +15,22 @@ import { readSavedSearches, type SavedSearch } from '@lopsy/photos-core/search/r
 import { pairPartners, versionCounts, type Collection, type SortOrder } from '../library/asset-query';
 import { loadPreviewUrl, peekPreviewUrl } from './preview-cache';
 
+/** The library last open, kept for a component that renders once more while the library closes. */
+let lastSession: LibrarySession | null = null;
+
+/**
+ * The open library. While it closes, a component still mounted can render
+ * once more before App replaces the screen; it gets the library that was
+ * open rather than an error that would blank the page.
+ */
 export function useSession(): LibrarySession {
   const connection = useUi((s) => s.connection);
-  if (!connection) throw new Error('No library is open');
-  return connection.session;
+  if (connection) {
+    lastSession = connection.session;
+    return connection.session;
+  }
+  if (lastSession) return lastSession;
+  throw new Error('No library is open');
 }
 
 export function useLibraryView(): LibraryView {

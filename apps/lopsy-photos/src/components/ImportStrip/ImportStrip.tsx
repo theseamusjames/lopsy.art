@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
-import { useImportProgress } from '../../app/hooks';
+import { useImportProgress, useLibraryView } from '../../app/hooks';
+import { isHiddenPairHalf } from '../../library/asset-query';
 import { useUi } from '../../app/store';
 import { getBackend } from '../../app/backend-registry';
 import { estimateLeft, importStats } from '../../import/import-progress';
@@ -39,6 +40,18 @@ export function ImportStrip() {
   };
 
   const stats = useMemo(() => (progress ? importStats(progress) : null), [progress]);
+  const view = useLibraryView();
+  // The JPEG half of a RAW+JPEG pair is a file but not a photo of its own: count photos as the grid does.
+  const pairHalves = useMemo(
+    () =>
+      progress?.finished
+        ? progress.items.filter((item) => {
+            const asset = item.state === 'done' && item.assetId !== null ? view.assets.get(item.assetId) : undefined;
+            return asset !== undefined && isHiddenPairHalf(asset, view.assets);
+          }).length
+        : 0,
+    [progress, view.assets],
+  );
   if (!job || !progress || !stats) return null;
 
   const left = progress.finished ? null : estimateLeft(stats, now - started.current);
@@ -49,7 +62,7 @@ export function ImportStrip() {
     : progress.finished && waiting > 0
     ? `Imported ${plural(stats.done, 'photo')} · ${plural(waiting, 'photo')} waiting to try again`
     : progress.finished
-    ? `Imported ${plural(stats.done, 'photo')}${stats.duplicates > 0 ? `, skipped ${stats.duplicates} already in the library` : ''}`
+    ? `Imported ${plural(stats.done - pairHalves, 'photo')}${pairHalves > 0 ? ` (${plural(stats.done, 'file')}: RAW+JPEG pairs count once)` : ''}${stats.duplicates > 0 ? `, skipped ${stats.duplicates} already in the library` : ''}`
     : `Importing ${stats.settled.toLocaleString()} of ${plural(stats.total, 'photo')} · ${formatBytes(stats.totalBytes - stats.sentBytes)} left`;
 
   return (

@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { readGradeId, receiveGrade } from '@lopsy/handoff/grade';
 import { App } from './App';
+import { ErrorBoundary } from './components/ErrorBoundary/ErrorBoundary';
 import { GradeScreen } from './handoff/GradeScreen/GradeScreen';
 import { lopsyUrl } from './handoff/send-to-lopsy';
 import { registerServiceWorker } from './sw/register';
@@ -16,11 +17,13 @@ const gradeId = readGradeId(window.location.search);
 
 createRoot(rootElement).render(
   <StrictMode>
-    {gradeId ? (
-      <GradeScreen session={receiveGrade({ lopsyUrl: lopsyUrl(), id: gradeId })} onFinished={() => window.close()} />
-    ) : (
-      <App />
-    )}
+    <ErrorBoundary>
+      {gradeId ? (
+        <GradeScreen session={receiveGrade({ lopsyUrl: lopsyUrl(), id: gradeId })} onFinished={() => window.close()} />
+      ) : (
+        <App />
+      )}
+    </ErrorBoundary>
   </StrictMode>,
 );
 
