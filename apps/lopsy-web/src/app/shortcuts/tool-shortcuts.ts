@@ -2,7 +2,7 @@ import { useUIStore } from '../ui-store';
 import { useToolSettingsStore } from '../tool-settings-store';
 import { toolRegistry } from '../../tools/tool-registry';
 import { useShortcutStore, buildKeyToActionMap, NON_TOOL_ACTION_IDS } from '../store/shortcut-store';
-import { toggleQuickMaskMode } from '../interactions/quick-mask-ops';
+import { runKeyCommand } from './key-bindings';
 import { scheduleNudge } from './nudge-coalesce';
 import { isPartialTextMove, PARTIAL_TEXT_MOVE_HINT } from '../interactions/text-transform-handlers';
 import { isMaskEditSelectionMove, MASK_EDIT_MOVE_HINT } from '../interactions/mask-edit-move-guard';
@@ -11,9 +11,9 @@ import type { ToolId } from '../../types';
 
 /** Actions that aren't tool selections but live in the single-key namespace. */
 const NON_TOOL_ACTIONS: Record<string, () => void> = {
-  'swap-colors': () => useToolSettingsStore.getState().swapColors(),
-  'reset-colors': () => useToolSettingsStore.getState().resetColors(),
-  'toggle-quick-mask': () => toggleQuickMaskMode(),
+  'swap-colors': () => runKeyCommand('swapColors'),
+  'reset-colors': () => runKeyCommand('resetColors'),
+  'toggle-quick-mask': () => runKeyCommand('toggleQuickMask'),
 };
 
 const NON_TOOL_ACTION_SET = new Set<string>(NON_TOOL_ACTION_IDS);
@@ -28,7 +28,7 @@ export function handleToolShortcut(e: KeyboardEvent): boolean {
   if (!actionId) return false;
 
   if (TOOL_ID_SET.has(actionId)) {
-    useUIStore.getState().setActiveTool(actionId as ToolId);
+    runKeyCommand('toolLetter', { tool: actionId as ToolId });
     return true;
   }
 

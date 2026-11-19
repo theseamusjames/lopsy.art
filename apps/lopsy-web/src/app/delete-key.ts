@@ -1,7 +1,8 @@
 import { useEditorStore } from './editor-store';
 import { useToolSettingsStore } from './tool-settings-store';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
-import { fillActiveLayerMask } from './fill-layer-mask';
+import { fillActiveLayerMask, isEditingActiveLayerMask } from './fill-layer-mask';
+import { runKeyCommand } from './shortcuts/key-bindings';
 import { commitLiveFloat } from './interactions/live-float';
 import { isUnmovedPrefloat, commitUnmovedPrefloat } from './interactions/prefloat';
 import { getEngine } from '../engine-wasm/engine-state';
@@ -70,14 +71,16 @@ export function clearSelectedLayerPixels(activeId: string, selectionMask: Uint8C
 export function handleDeleteKey(): void {
   const editor = useEditorStore.getState();
   const sel = editor.selection;
-  const activeId = editor.document.activeLayerId;
-  if (!activeId) return;
+  if (!editor.document.activeLayerId) return;
 
-  if (clearActiveLayerMask()) return;
+  if (isEditingActiveLayerMask()) {
+    runKeyCommand('deleteMaskClear');
+    return;
+  }
 
   if (sel.active && sel.mask) {
-    clearSelectedLayerPixels(activeId, sel.mask);
+    runKeyCommand('deleteSelectedPixels');
   } else {
-    editor.removeLayer(activeId);
+    runKeyCommand('deleteLayer');
   }
 }

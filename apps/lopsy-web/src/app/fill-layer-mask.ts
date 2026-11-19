@@ -7,6 +7,15 @@ import { uploadLayerMaskIfChanged } from '../engine-wasm/engine-sync';
 import { fillMaskWithValue, setSelectionMask } from '../engine-wasm/wasm-bridge';
 import { maskValueForColor } from '../layers/mask-fill';
 
+/** True in layer-mask edit mode when the active layer has a mask: Edit → Fill and Delete then write the mask. */
+export function isEditingActiveLayerMask(): boolean {
+  if (useUIStore.getState().maskMode !== 'layerMask') return false;
+  const { document: doc } = useEditorStore.getState();
+  const activeId = doc.activeLayerId;
+  if (!activeId) return false;
+  return Boolean(doc.layers.find((l) => l.id === activeId)?.mask);
+}
+
 /**
  * In layer-mask edit mode, Edit → Fill and Delete write the active layer's
  * (or group's) mask instead of its pixels (#1034). The GPU mask is filled
@@ -15,12 +24,11 @@ import { maskValueForColor } from '../layers/mask-fill';
  * back to its pixel path.
  */
 export function fillActiveLayerMask(color: Pick<Color, 'r' | 'g' | 'b'>, label: string): boolean {
-  if (useUIStore.getState().maskMode !== 'layerMask') return false;
+  if (!isEditingActiveLayerMask()) return false;
   const editor = useEditorStore.getState();
   const activeId = editor.document.activeLayerId;
-  if (!activeId) return false;
   const layer = editor.document.layers.find((l) => l.id === activeId);
-  if (!layer?.mask) return false;
+  if (!activeId || !layer?.mask) return false;
   const engine = getEngine();
   if (!engine) return true;
 

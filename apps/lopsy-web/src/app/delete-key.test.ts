@@ -18,6 +18,7 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
 const mocks = vi.hoisted(() => ({
   engine: null as object | null,
   fillActiveLayerMask: vi.fn((..._args: unknown[]) => false),
+  isEditingActiveLayerMask: vi.fn(() => false),
   clearSelectedPixels: vi.fn(),
   setSelectionMask: vi.fn(),
   hasFloat: vi.fn(() => false),
@@ -32,15 +33,23 @@ vi.mock('../engine-wasm/wasm-bridge', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../engine-wasm/wasm-bridge')>();
   return { ...actual, clearSelectedPixels: mocks.clearSelectedPixels, setSelectionMask: mocks.setSelectionMask, hasFloat: mocks.hasFloat };
 });
-vi.mock('./fill-layer-mask', () => ({ fillActiveLayerMask: mocks.fillActiveLayerMask }));
+vi.mock('./fill-layer-mask', () => ({
+  fillActiveLayerMask: mocks.fillActiveLayerMask,
+  isEditingActiveLayerMask: mocks.isEditingActiveLayerMask,
+}));
 vi.mock('./interactions/live-float', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./interactions/live-float')>();
   return { ...actual, commitLiveFloat: mocks.commitLiveFloat };
 });
 
 const { useEditorStore } = await import('./editor-store');
+const { useUIStore } = await import('./ui-store');
 const { useToolSettingsStore } = await import('./tool-settings-store');
 const { clearActiveLayerMask, clearSelectedLayerPixels, handleDeleteKey } = await import('./delete-key');
+const invokeSpy = vi.spyOn(await import('../commands/invoke-from-ui'), 'invokeFromUi');
+await import('../commands/mask/clear');
+await import('../commands/paint/clear');
+await import('../commands/layer/layer');
 
 function store() {
   return useEditorStore.getState();
@@ -68,29 +77,44 @@ afterEach(() => {
 });
 
 describe('the Delete key', () => {
-  it('clears the mask with the background colour as "Mask Clear" when fillActiveLayerMask takes it', () => {
+  it('runs mask.clear in mask edit mode, which clears the mask with the background colour as "Mask Clear"', () => {
+    const doc = store().document;
+    const mask = { data: new Uint8Array(4), width: 2, height: 2, enabled: true };
+    useEditorStore.setState({ document: { ...doc, layers: doc.layers.map((l) => (l.id === doc.activeLayerId ? { ...l, mask } : l)) } as typeof doc });
+    useUIStore.setState({ maskMode: 'layerMask' });
+    mocks.isEditingActiveLayerMask.mockReturnValueOnce(true);
     mocks.fillActiveLayerMask.mockReturnValueOnce(true);
     handleDeleteKey();
+    expect(invokeSpy.mock.calls).toEqual([['mask.clear', undefined]]);
     expect(removeLayer).not.toHaveBeenCalled();
     expect(mocks.fillActiveLayerMask).toHaveBeenCalledWith(useToolSettingsStore.getState().backgroundColor, 'Mask Clear');
     expect(mocks.clearSelectedPixels).not.toHaveBeenCalled();
+    useUIStore.setState({ maskMode: 'off' });
   });
 
-  it('clears the selected pixels as "Clear Selection" with a selection', () => {
+  it('runs paint.clear with a selection, which clears the selected pixels as "Clear Selection" in the same tick', () => {
     select();
     const id = store().document.activeLayerId;
     handleDeleteKey();
+    expect(invokeSpy.mock.calls).toEqual([['paint.clear', undefined]]);
     expect(mocks.setSelectionMask).toHaveBeenCalledTimes(1);
     expect(mocks.clearSelectedPixels).toHaveBeenCalledWith(mocks.engine, id, true);
     expect(pushHistory).toHaveBeenCalledWith('Clear Selection');
     expect(removeLayer).not.toHaveBeenCalled();
   });
 
-  it('removes the active layer with no selection', () => {
+  it('runs layer.remove with no selection, which removes the active layer in the same tick', () => {
     const id = store().document.activeLayerId;
     handleDeleteKey();
+    expect(invokeSpy.mock.calls).toEqual([['layer.remove', undefined]]);
     expect(removeLayer).toHaveBeenCalledWith(id);
     expect(pushHistory).not.toHaveBeenCalled();
+  });
+
+  it('does nothing with no active layer', () => {
+    useEditorStore.setState({ document: { ...store().document, activeLayerId: null } });
+    handleDeleteKey();
+    expect(invokeSpy).not.toHaveBeenCalled();
   });
 
   it('commits a live float before clearing', () => {

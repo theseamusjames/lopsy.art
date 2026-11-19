@@ -10,7 +10,7 @@ import { isModalDialogOpen } from './shortcuts/modal-guard';
 import { dismissTopPopover } from './shortcuts/escape-dismiss';
 import { handleEditShortcut } from './shortcuts/edit-shortcuts';
 import { handleDeleteKey } from './delete-key';
-import { deselectAndCommit } from './interactions/deselect-and-commit';
+import { runKeyCommand } from './shortcuts/key-bindings';
 import { handleZoomShortcut } from './shortcuts/zoom-shortcuts';
 import { pasteOrOpenBlob, pasteInternalClipboard } from './paste-or-open';
 import {
@@ -237,7 +237,7 @@ export function useKeyboardShortcuts({
         if (uiState.activeTool === 'path' && (uiState.pathDraft?.anchors.length ?? 0) > 0) {
           uiState.clearPath();
         } else {
-          deselectAndCommit();
+          runKeyCommand('escapeDeselect');
         }
         return;
       }

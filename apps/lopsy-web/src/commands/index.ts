@@ -43,6 +43,7 @@ import './ui/layer';
 import './ui/filter';
 import './ui/view';
 import './ui/help';
+import './ui/quick-mask';
 
 setSettle(settled);
 

@@ -265,6 +265,7 @@ test.describe('the command API', () => {
       'ui.help.agents',
       'ui.image.indexed-color',
       'ui.layer.adjustment-layer', 'ui.layer.duplicate',
+      'ui.quick-mask.toggle',
       'ui.view.actual-size', 'ui.view.fit', 'ui.view.grid', 'ui.view.guides', 'ui.view.pixel-grid', 'ui.view.renderer',
       'ui.view.ruler-unit', 'ui.view.rulers', 'ui.view.seamless-pattern', 'ui.view.snap-to-grid', 'ui.view.snap-to-guides',
       'ui.view.snap-to-layers', 'ui.view.zoom-in', 'ui.view.zoom-out',
