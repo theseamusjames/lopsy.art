@@ -31,7 +31,7 @@
   height: 22px;
   border-radius: var(--radius-sm);
   background: var(--color-input-bg);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-control-edge);
   cursor: ew-resize;
 }
 
@@ -40,8 +40,13 @@
   height: 22px;
   border-radius: var(--radius-sm);
   background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-control-edge);
   cursor: ew-resize;
+}
+
+.slider:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
 }
 
 .valueWrapper {
@@ -68,6 +73,15 @@
 
 .valueInput:focus {
   color: var(--color-text-primary);
+}
+
+.valueInput:focus-visible {
+  outline: none;
+}
+
+.valueWrapper:has(.valueInput:focus-visible) {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
 }
 
 .suffix {

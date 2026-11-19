@@ -30,6 +30,11 @@
   --color-accent-active: #3a8eef;
   --color-accent-subtle: rgba(74, 158, 255, 0.15);
 
+  /* The focus ring, and the edge of a control with no text of its own (a
+     slider's thumb): at least 3:1 against every surface (WCAG 2.2 AA). */
+  --color-focus-ring: #6cb6ff;
+  --color-control-edge: #8f8f8f;
+
   --color-input-bg: #3d3d3d;
 
   --color-error: #f44336;
