@@ -18,6 +18,10 @@ export interface CommandDefinition<S extends ParamSchema, R> extends CommandMeta
   readonly params: S;
   /** Same contract as Command.run: do the work before the first await. */
   run(params: InferParams<S>): R | Promise<R>;
+  /** Same contract as Command.enabled. */
+  enabled?(params: InferParams<S>): boolean;
+  /** Same contract as Command.checked. */
+  checked?(params: InferParams<S>): boolean;
   /** Same contract as Command.check. */
   check?(params: InferParams<S>): void;
 }
@@ -43,6 +47,12 @@ export interface Registry {
   list(surface?: CommandSurface): Command[];
   describe(surface?: CommandSurface): CommandDescription[];
   run(id: string, params?: unknown): Promise<unknown>;
+  /**
+   * As run, but what fails before `run` returns (an unknown id, invalid
+   * params, a refusal or a bug in its synchronous part) is thrown in the
+   * caller's tick instead of rejecting, as a menu action's own throw was.
+   */
+  start(id: string, params?: unknown): Promise<unknown>;
   runInvocation(invocation: unknown): Promise<unknown>;
   runAll(invocations: readonly unknown[]): Promise<unknown[]>;
   setSettle(settle: SettleFn): void;
@@ -149,17 +159,21 @@ export function createRegistry(): Registry {
     return command.run(params);
   }
 
-  // Not async: command.run must start in the caller's tick, and errors must still reject.
+  // Not async: command.run must start in the caller's tick, and what it throws there is thrown here.
+  function start(id: string, rawParams?: unknown): Promise<unknown> {
+    const command = commands.get(id);
+    if (!command) throw notFound(String(id), [...commands.keys()]);
+    const params = validateParams(id, command.params, rawParams);
+    if (command.settles === 'before') {
+      command.check?.(params);
+      return settleThenRun(command, params);
+    }
+    return finish(command, command.run(params));
+  }
+
   function run(id: string, rawParams?: unknown): Promise<unknown> {
     try {
-      const command = commands.get(id);
-      if (!command) throw notFound(String(id), [...commands.keys()]);
-      const params = validateParams(id, command.params, rawParams);
-      if (command.settles === 'before') {
-        command.check?.(params);
-        return settleThenRun(command, params);
-      }
-      return finish(command, command.run(params));
+      return start(id, rawParams);
     } catch (error) {
       return Promise.reject(error);
     }
@@ -206,6 +220,7 @@ export function createRegistry(): Registry {
         params: describeParams(command.params),
       })),
     run,
+    start,
     runInvocation,
     runAll,
     setSettle(next) {
@@ -219,6 +234,7 @@ const defaultRegistry = createRegistry();
 export const defineCommand = defaultRegistry.define;
 export const getCommand = defaultRegistry.get;
 export const runCommand = defaultRegistry.run;
+export const startCommand = defaultRegistry.start;
 export const runInvocation = defaultRegistry.runInvocation;
 export const runInvocations = defaultRegistry.runAll;
 export const describeCommands = defaultRegistry.describe;

@@ -179,6 +179,33 @@ describe('run: errors', () => {
   });
 });
 
+describe('start', () => {
+  it('runs in the caller\'s tick and resolves as run does', async () => {
+    const registry = createRegistry();
+    const calls: string[] = [];
+    registry.define({ ...noop('layer.add'), run: () => (calls.push('ran'), 'layer-7') });
+    const pending = registry.start('layer.add');
+    expect(calls).toEqual(['ran']);
+    await expect(pending).resolves.toBe('layer-7');
+  });
+
+  it('throws what fails before run returns instead of rejecting', () => {
+    const registry = createRegistry();
+    const bug = new TypeError('broken');
+    registry.define({ ...noop('a.b'), params: { n: { type: 'number' } }, run: () => { throw bug; } });
+    expect(() => registry.start('a.b', { n: 'x' })).toThrow(CommandError);
+    expect(() => registry.start('a.c')).toThrow(/Unknown command/);
+    expect(() => registry.start('a.b', { n: 1 })).toThrow(bug);
+  });
+
+  it('rejects what fails after an await', async () => {
+    const registry = createRegistry();
+    const late = new Error('late');
+    registry.define({ ...noop('a.b'), run: () => Promise.reject(late) });
+    await expect(registry.start('a.b')).rejects.toBe(late);
+  });
+});
+
 describe('suggestIds', () => {
   it('returns at most five, related ids first', () => {
     const ids = ['layer.a', 'layer.b', 'layer.c', 'layer.d', 'layer.e', 'layer.f', 'layen.a'];
@@ -462,8 +489,8 @@ describe('list and describe', () => {
     expect(registry.list().map((command) => command.id)).toEqual(['canvas.resize', 'layer.set', 'view.grid']);
     const ui = registry.list('ui');
     expect(ui.map((command) => command.id)).toEqual(['view.grid']);
-    expect(ui[0]?.checked?.()).toBe(true);
-    expect(registry.get('layer.set')?.enabled?.()).toBe(false);
+    expect(ui[0]?.checked?.({})).toBe(true);
+    expect(registry.get('layer.set')?.enabled?.({})).toBe(false);
   });
 
   it('describes sorted, JSON round-trippable entries', () => {

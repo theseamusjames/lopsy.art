@@ -57,8 +57,6 @@ export interface CommandMeta {
   /** One sentence, shown to agents by describe. */
   readonly summary: string;
   readonly surface: CommandSurface;
-  enabled?(): boolean;
-  checked?(): boolean;
   /**
    * When the registry waits for the engine. true (the default): after `run`, so
    * the work happens in the caller's tick. false: never. 'before': once, after
@@ -79,6 +77,10 @@ export interface Command<P = unknown, R = unknown> extends CommandMeta {
    * work inside the user's click, and keyboard undo must apply in the same tick as the key.
    */
   run(params: P): R | Promise<R>;
+  /** Whether a menu item bound to these params can be chosen; read when the menu is built. */
+  enabled?(params: P): boolean;
+  /** Whether a menu item bound to these params shows a checkmark; read when the menu is built. */
+  checked?(params: P): boolean;
   /**
    * With settles 'before': runs synchronously on the validated params before the
    * wait, so a call that cannot succeed (no document open, when the render loop
