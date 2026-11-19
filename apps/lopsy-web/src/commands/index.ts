@@ -8,6 +8,7 @@ import './layer/layer';
 import './layer/effects';
 import './layer/rasterize';
 import './mask/mask';
+import './selection/selection';
 
 setSettle(settled);
 

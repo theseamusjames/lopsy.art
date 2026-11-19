@@ -220,6 +220,8 @@ test.describe('the command API', () => {
       'layer.add', 'layer.add-group', 'layer.duplicate', 'layer.effects', 'layer.flatten', 'layer.group', 'layer.merge-down',
       'layer.rasterize', 'layer.rasterize-style', 'layer.remove', 'layer.remove-selected', 'layer.reorder', 'layer.select', 'layer.set',
       'mask.add', 'mask.edit', 'mask.remove', 'mask.set-enabled', 'mask.to-selection',
+      'select.all', 'select.ellipse', 'select.from-layer', 'select.invert', 'select.modify', 'select.none', 'select.polygon',
+      'select.rect', 'select.to-path',
     ]);
     expect(JSON.parse(JSON.stringify(all))).toEqual(all);
     for (const command of all) {
