@@ -183,7 +183,7 @@ export const layerRemoveSelected = defineCommand({
 export const layerSelect = defineCommand({
   id: 'layer.select',
   summary:
-    'Selects a layer as a click on its row in the Layers panel does: replace makes it the active and only selected layer (and leaves mask edit mode), toggle adds it to or removes it from the selection (Cmd-click), range selects every row from the active layer to it (Shift-click). Returns the active layer and the selected layers.',
+    'Selects a layer as a click on its row in the Layers panel does: replace commits a pending Move float or multi-layer transform first, as the click does, then makes the layer the active and only selected layer and leaves mask edit mode; toggle adds it to or removes it from the selection (Cmd-click), range selects every row from the active layer to it (Shift-click). Returns the active layer and the selected layers.',
   surface: 'document',
   params: {
     layer: requiredLayerRefSpec,

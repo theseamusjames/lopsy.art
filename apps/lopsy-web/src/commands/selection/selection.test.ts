@@ -42,6 +42,8 @@ vi.mock('../../app/selection-actions', async (importOriginal) => {
   };
 });
 
+vi.mock('../../app/interactions/deselect-and-commit', () => ({ deselectAndCommit: vi.fn() }));
+
 vi.mock('../../panels/LayerPanel/layer-selection', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../panels/LayerPanel/layer-selection')>();
   return { ...actual, selectLayerAlpha: vi.fn(() => Promise.resolve()) };
@@ -54,6 +56,7 @@ const { runCommand } = await import('../registry');
 const handlers = await import('../../app/interactions/selection-handlers');
 const actions = await import('../../app/selection-actions');
 const { selectLayerAlpha } = await import('../../panels/LayerPanel/layer-selection');
+const { deselectAndCommit } = await import('../../app/interactions/deselect-and-commit');
 await import('./selection');
 
 type Store = ReturnType<typeof useEditorStore.getState>;
@@ -185,6 +188,19 @@ describe('select.all and select.none', () => {
     useEditorStore.setState({ clearSelection: clear });
     const pending = runCommand('select.none', {});
     expect(clear).toHaveBeenCalledTimes(1);
+    expect(deselectAndCommit).not.toHaveBeenCalled();
+    expect(await pending).toEqual({ active: false, bounds: null });
+  });
+
+  it('select.none with commit is Cmd+D: the key\'s deselect-and-commit sequence', async () => {
+    await runCommand('select.all', {});
+    vi.mocked(deselectAndCommit).mockClear();
+    vi.mocked(deselectAndCommit).mockImplementationOnce(() => realClear());
+    const clear = vi.fn(realClear);
+    useEditorStore.setState({ clearSelection: clear });
+    const pending = runCommand('select.none', { commit: true });
+    expect(deselectAndCommit).toHaveBeenCalledTimes(1);
+    expect(clear).not.toHaveBeenCalled();
     expect(await pending).toEqual({ active: false, bounds: null });
   });
 });

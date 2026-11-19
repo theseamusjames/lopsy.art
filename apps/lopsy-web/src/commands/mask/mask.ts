@@ -98,7 +98,7 @@ export const maskSetEnabled = defineCommand({
 export const maskEdit = defineCommand({
   id: 'mask.edit',
   summary:
-    'Enters mask edit mode on a layer, as a click on its mask thumbnail does (the layer becomes active; paint, fill and filters then go to the mask), or leaves it, as a plain click on the layer\'s row does (the layer becomes the active and only selected layer). No history step. Returns the mask state.',
+    'Enters mask edit mode on a layer, as a click on its mask thumbnail does (the layer becomes active; paint, fill and filters then go to the mask), or leaves it, as a plain click on the layer\'s row does (the layer becomes the active and only selected layer). Either click first commits a pending Move float or multi-layer transform. No history step of its own. Returns the mask state.',
   surface: 'document',
   params: {
     layer: layerRefSpec,

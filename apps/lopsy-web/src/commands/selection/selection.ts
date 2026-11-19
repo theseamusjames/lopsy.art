@@ -17,6 +17,7 @@ import {
   selectionToPathAction,
 } from '../../app/selection-actions';
 import { selectLayerAlpha } from '../../panels/LayerPanel/layer-selection';
+import { deselectAndCommit } from '../../app/interactions/deselect-and-commit';
 import type { SelectionCombineMode } from '../../selection/selection';
 import type { Rect } from '../../types';
 
@@ -146,12 +147,19 @@ export const selectAllCommand = defineCommand({
 export const selectNone = defineCommand({
   id: 'select.none',
   summary:
-    'Drops the selection, as Select > Deselect does (no history step). This is the menu\'s Deselect: unlike Cmd+D and Escape it does not commit a pending Move-tool float or transform. Returns whether a selection is active and its bounds.',
+    'Drops the selection (no history step). With commit false (the default) it is Select > Deselect, which only drops the selection: a pending Move-tool float or multi-layer transform stays live. With commit true it is Cmd+D or Escape: the transform box goes too and a pending Move float or layer transform is committed into its layer. API callers that want a clean state should pass commit: true. Returns whether a selection is active and its bounds.',
   surface: 'document',
-  params: {},
-  run(): SelectionResult {
+  params: {
+    commit: {
+      type: 'boolean',
+      default: false,
+      description: 'false: Select > Deselect. true: Cmd+D / Escape, which also commit a pending Move float or layer transform.',
+    },
+  },
+  run({ commit }): SelectionResult {
     requireDocument();
-    store().clearSelection();
+    if (commit) deselectAndCommit();
+    else store().clearSelection();
     return selectionResult();
   },
 });

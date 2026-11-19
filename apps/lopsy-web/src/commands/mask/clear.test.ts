@@ -20,6 +20,12 @@ const mocks = vi.hoisted(() => ({
   clearActiveLayerMask: vi.fn(() => true),
 }));
 
+// The layer row click commits the Move float first; there is none here, and the fake engine cannot answer.
+vi.mock('../../app/interactions/gesture-session', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../app/interactions/gesture-session')>();
+  return { ...actual, clearPersistentTransform: vi.fn() };
+});
+
 vi.mock('../../engine-wasm/engine-state', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../engine-wasm/engine-state')>();
   return { ...actual, getEngine: () => mocks.engine };

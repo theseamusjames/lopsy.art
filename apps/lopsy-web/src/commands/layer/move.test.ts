@@ -29,6 +29,7 @@ vi.mock('../../app/interactions/gesture-session', () => ({
   gestureDown: gesture.down,
   gestureMove: gesture.move,
   gestureUp: gesture.up,
+  clearPersistentTransform: vi.fn(),
 }));
 
 const boxes = vi.hoisted(() => ({

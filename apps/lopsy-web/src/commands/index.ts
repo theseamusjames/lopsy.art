@@ -32,6 +32,7 @@ import './paint/drag';
 import './selection/tool-select';
 import './layer/move';
 import './gesture/gesture';
+import './layer/nudge';
 
 setSettle(settled);
 

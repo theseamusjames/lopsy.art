@@ -1,6 +1,6 @@
 import { CommandError } from './command';
 import { useEditorStore, type EditorState } from '../app/editor-store';
-import { useUIStore } from '../app/ui-store';
+import { activateLayerFromPanel, editLayerMaskFromPanel } from '../app/interactions/layer-activation';
 import { getEngine } from '../engine-wasm/engine-state';
 import type { Engine } from '../engine-wasm/wasm-bridge';
 import { hexToRgb, rgbToHex } from '../utils/color';
@@ -53,16 +53,14 @@ export function resolveLayer(ref?: string): Layer {
   throw new CommandError('not-found', `No layer has the id or name ${JSON.stringify(ref)}.`);
 }
 
-/** What a plain click on a layer row does that a plain module can reach. */
+/** A plain click on a layer row: a pending Move float or layer transform is committed, the layer becomes active and mask edit mode ends. */
 export function selectReplace(id: string): void {
-  useEditorStore.getState().setActiveLayer(id);
-  useUIStore.getState().setMaskEditMode(false);
+  activateLayerFromPanel(id);
 }
 
-/** What a click on a layer's mask thumbnail does that a plain module can reach: the layer becomes active and its mask is edited. */
+/** A click on a layer's mask thumbnail: as a row click, but the layer's mask is then edited. */
 export function enterMaskEdit(id: string): void {
-  useEditorStore.getState().setActiveLayer(id);
-  useUIStore.getState().setMaskEditMode(true);
+  editLayerMaskFromPanel(id);
 }
 
 /** A row click on `id` unless it is already the active layer, as commands that act on the active layer need. */
