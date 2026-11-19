@@ -2,8 +2,7 @@
 
 Status: proposal, written 2026-11-18. A proof of concept was built the
 same day; Appendix B says what exists and where it departs from this
-design. "Photonamous" and its URL are placeholders: the app may get its
-own name and domain, and nothing in the design depends on either.
+design. The app is served from its own domain, photonamous.com (6.3).
 
 Photonamous is a photo library and RAW editor that runs in the browser.
 It keeps every original in the user's own Google Drive and renders every
@@ -45,7 +44,7 @@ Appendix A. Re-check them before building on them.
 
 | Topic | Decision | Why |
 |---|---|---|
-| Where it runs | A static app on Cloudflare Pages, built from this monorepo. It starts at `lopsy.art/photos/` and may move to its own domain. | Serving it needs no server code. The two apps share no browser storage, so either URL works (6.3). |
+| Where it runs | A static app on Cloudflare Pages at `photonamous.com`, built from this monorepo and deployed by the same job as Lopsy. | Serving it needs no server code. Its own origin keeps a script-injection bug in either app away from the other's storage and token (6.3, 6.13). |
 | Code | `apps/photonamous/`, with shared code moved into `packages/`: the engine bridge, the UI kit, the handoff protocol, and the Drive and library code | Matches the migration plan's direction (an engine with several consumers). Each app keeps its own rules and tests. |
 | Sign-in | Google Identity Services, token model, entirely in the browser | No server. Tokens last about an hour and there is no refresh token. The app works around this (6.4); an optional stateless sign-in helper removes it (open question 2). |
 | Drive access | The `drive.file` scope only | Google's recommended, non-sensitive Drive scope. No restricted-scope review or yearly security assessment. The app sees only files it created or the user picked. |
@@ -150,7 +149,7 @@ app is that second app.
 
 ### 5.1 First run
 
-1. The user opens the app (for now, `lopsy.art/photos/`) and sees a short
+1. The user opens the app at `photonamous.com` and sees a short
    page: what the app does, that photos live in their own Google Drive,
    and a **Sign in with Google** button.
 2. Google's consent screen asks for the basic profile and "the specific
@@ -431,7 +430,7 @@ the product.
 
 ```
  Photonamous tab                                     Lopsy tab
- (lopsy.art/photos/ or its own domain)                (lopsy.art)
+ (photonamous.com)                                    (lopsy.art)
  ┌────────────────────────────────────────┐          ┌──────────────────────────┐
  │ React UI: Library, Edit, Export        │          │ Lopsy editor             │
  │ library store (Zustand, compact index) │ post-    │ handoff: takes 16-bit    │
@@ -453,7 +452,7 @@ the product.
 ```
 apps/
   lopsy-web/        Lopsy. Gains the handoff and Save to Photonamous (section 9)
-  photonamous/     this app: React, TypeScript, Vite; base '/photos/', or '/' on its own domain
+  photonamous/     this app: React, TypeScript, Vite; served at '/' on photonamous.com
 packages/
   engine-web/       the two wasm builds, the typed bridge, renderer choice and
                     the decode worker pools, moved from apps/lopsy-web/src/engine-wasm/
@@ -471,11 +470,9 @@ engine/             gains develop/, metadata, and the decode split (section 8)
 `lopsy-web`:
 - `dev` keeps starting Lopsy; `dev:photos` starts this app.
 - `test`, `lint` and `typecheck` run in every workspace.
-- `build` builds the engine once, then both apps.
-  - On the lopsy.art path, `scripts/assemble-site.mjs` then writes one
-    `dist/`, with Lopsy at `/` and Photonamous at `/photos/`.
-  - On its own domain, each app's `dist/` deploys separately (6.3).
-- The deploy job publishes the result.
+- `build` builds the engine once, then both apps, each into its own
+  `dist/`.
+- The deploy job publishes each `dist/` to its own Pages project (6.3).
 - PR CI gains Photonamous jobs (lint including the pixel-debt check,
   typecheck, unit tests, an e2e subset), and the pre-push hook runs them.
 
@@ -501,44 +498,51 @@ apps' stores and test suites.
 **Engine bundle.** Both apps load the same engine wasm, so the develop
 code grows Lopsy's bundle too. That is accepted, measured with
 `scripts/check-bundle-size.mjs`, and revisited if the engine grows by
-more than 15 %. While both apps are served from one origin, the wasm file
-is published once at a stable path, so a user who opens both downloads
-it once.
+more than 15 %. Each app serves its own copy from its own origin, so a
+user who opens both downloads it twice. Browsers partition their caches
+by site, so one shared URL would not avoid that.
 
 ### 6.3 Hosting on Cloudflare
 
-The app is a static build deployed from this monorepo to Cloudflare
-Pages. It can live at a path on lopsy.art or on its own domain, and the
-design does not depend on which:
+The app is a static build deployed from this monorepo to its own
+Cloudflare Pages project, `photonamous`, at `photonamous.com`. Lopsy stays
+in its project, `lopsy-art`, at `lopsy.art`. One deploy job builds and
+publishes both. Lopsy goes first, so a failing Photonamous step never holds
+Lopsy back.
 
-| | A path on lopsy.art (the starting point) | Its own domain |
+| | Lopsy | Photonamous |
 |---|---|---|
-| Pages project | The existing `lopsy-art`. The deploy publishes an assembled `dist/`, with Photonamous under `/photos/`. | A second project, published by the same deploy job |
-| Routing | `_redirects` gains `/photos/* /photos/index.html 200` before the catch-all `/* /index.html 200`. Pages takes the first match, and static files win over rewrites, as they already do for Lopsy. | The app's own `_redirects`, with `/* /index.html 200` |
-| Google sign-in | `https://lopsy.art` is an authorized JavaScript origin | The new domain is an authorized JavaScript origin on the same OAuth client |
-| Handoff | `postMessage` between two windows on one origin | `postMessage` between two origins. Each app's build lists the other's origin. |
+| Pages project | `lopsy-art` | `photonamous`, published by Direct Upload |
+| Domain | `lopsy.art` | `photonamous.com`; `www.photonamous.com` redirects to it |
+| Routing | `/* /index.html 200` | Its own `_redirects`, with `/* /index.html 200` |
+| Google sign-in | None | `https://photonamous.com` is the authorized JavaScript origin |
+| Handoff | Its build names Photonamous' URL and trusts only that origin | Its build names Lopsy's URL and trusts only that origin |
 
-Either way:
+The handoff is `postMessage` between two origins (6.12). The app works
+from one origin only, because Google sign-in and Lopsy trust
+`photonamous.com` alone. The `pages.dev` address and preview deployments
+load, but cannot sign in or hand off.
+
 - **Headers.** The app's `_headers` sets:
   - a Content-Security-Policy that allows `self`, `wasm-unsafe-eval`, and
     the Google hosts for sign-in, the Picker and the Drive API;
-  - no `Cross-Origin-Opener-Policy` (6.4, 6.12);
+  - no `Cross-Origin-Opener-Policy` (6.4, 6.12). Lopsy sends none either;
   - long cache lifetimes for hashed assets.
 
   Spike S1 settles the exact policy before Phase 1.
-- **PWA.** The app has its own web manifest and service worker, scoped to
-  its path. Lopsy's root `sw.js` is a no-op today.
-- **Search.** The app is left out of the sitemap until the public launch,
-  and the lopsy.art build never gains a root `404.html` (`MEMORY.md`).
-- **No shared storage.** On one origin the two apps *could* share
-  IndexedDB and OPFS. They never do, even when they can. That way,
-  moving to another domain changes configuration, not code.
+- **PWA.** The app has its own web manifest, and a service worker at its
+  root. Lopsy's worker is on another origin and never sees its pages.
+- **Search.** The app stays out of search engines until the public
+  launch. Neither build gains a root `404.html`: Pages treats a site as
+  an SPA only while it has none (`MEMORY.md`).
+- **No shared storage.** On different origins the two apps share no
+  IndexedDB, OPFS, CacheStorage or cookies. Everything between them
+  crosses in handoff messages.
 
 **Optional sign-in helper.** If chosen (open question 2), it is a pair of
-Pages Functions under the app's path (`functions/<path>/auth/`), in
-whichever Pages project serves the app. It is deployed by the same
-`wrangler pages deploy`; confirm that the functions directory is picked
-up from where the deploy runs.
+Pages Functions (`functions/auth/`) in the `photonamous` project. It is
+deployed by the same `wrangler pages deploy`; confirm that the functions
+directory is picked up from where the deploy runs.
 
 ### 6.4 Sign-in
 
@@ -577,7 +581,7 @@ changes have not synced yet, it says so and asks for confirmation.
 
 **Optional sign-in helper** (open question 2). Two stateless Pages
 Functions using Google's authorization-code flow:
-- `auth/callback`, under the app's path, exchanges the code. The refresh
+- `auth/callback`, on the app's origin, exchanges the code. The refresh
   token goes into an `HttpOnly`, `Secure`, `SameSite=Strict` cookie,
   encrypted with a key only the Worker has.
 - `auth/token` uses that cookie to return a fresh access token to the
@@ -588,8 +592,8 @@ say it handles tokens that could in principle reach the user's Drive,
 even though it never does. Both token sources implement one `TokenSource`
 interface, so the helper can be added later without touching callers.
 
-**Header constraint.** The GIS popup talks back to the page, and across
-origins the handoff talks to its opener (6.12).
+**Header constraint.** The GIS popup talks back to the page, and the
+handoff, between two origins, talks to its opener (6.12).
 `Cross-Origin-Opener-Policy: same-origin` breaks both, so neither app may
 set it. If the engine ever needs `SharedArrayBuffer`, which requires
 cross-origin isolation, sign-in and the handoff have to be redesigned
@@ -1015,7 +1019,8 @@ transfer function) in the worker-hosted engine.
 ### 6.12 Handoff protocol
 
 The two apps talk only through `window.postMessage` between a Photonamous tab
-and a Lopsy tab. The same code runs whether they share an origin or not.
+and a Lopsy tab. In production they are on different origins (6.3); the
+same code runs on one.
 Lopsy never touches Google: Photonamous does every Drive read and write.
 
 **The channel.**
@@ -1058,7 +1063,7 @@ Lopsy never touches Google: Photonamous does every Drive read and write.
    - journals the ops (`asset.add` with `kind: "document"`, or a new
      revision of an existing document);
    - renders a preview;
-   - answers `{ type: 'photos:saved' }`, and Lopsy shows "Saved to Lopsy
+   - answers `{ type: 'photos:saved' }`, and Lopsy shows "Saved to
      Photonamous".
 3. If Lopsy has no Photonamous tab to talk to because the user closed it, Save
    to Photonamous opens one with `?receive=<id>`, and the same handshake
@@ -1102,20 +1107,12 @@ buffer between processes; the handoff budget (11) includes that.
   text.
 - Handoff messages are accepted only from the other app's origin, sent
   only to it, and schema-checked (6.12).
-- While Photonamous is served from lopsy.art, Lopsy's code runs on the same
-  origin, so a script-injection bug in Lopsy could reach Photonamous' storage
-  and token. Moving Photonamous to its own domain removes that.
-  - The offline shell's CacheStorage is per origin too: a script in Lopsy
-    could write a cached Photonamous file. The service worker checks every
-    cached file against the SHA-256 the build wrote into `sw.js` before
-    serving it, and drops it on a mismatch. That stops a poisoned cache
-    from outliving the bug, but not a script on the origin from reading
-    or changing Photonamous' IndexedDB, OPFS or a page while it runs; only
-    its own domain does.
-  - Lopsy's own worker at `/` can control Photonamous' pages until Photonamous'
-    worker installs, so Photonamous decides updates from its own registration
-    and reloads only when the user chooses to. A waiting worker takes
-    an update request only from a Photonamous page.
+- Photonamous has its own origin, so a script-injection bug in Lopsy
+  cannot reach Photonamous' storage, token or pages, nor one in
+  Photonamous reach Lopsy's.
+- The service worker checks every cached file against the SHA-256 the
+  build wrote into `sw.js` before serving it, and drops it on a mismatch.
+  A cache poisoned by an injection bug does not outlive the bug.
 
 **Untrusted input.**
 - Everything read from Drive is schema-checked, with size limits, before
@@ -1324,9 +1321,9 @@ item, nothing changes for someone who never uses Photonamous.
 - Reload in the middle of an import.
 - Two devices: two browser contexts with separate storage against one
   fake Drive, editing at the same time and offline, then converging.
-- The Lopsy round trip, twice: on one origin (Lopsy at `/`, Photonamous at
-  `/photos/`) and on two origins (two ports). It includes a save made
-  after the Photonamous tab was closed.
+- The Lopsy round trip between two origins: two ports locally, as
+  lopsy.art and photonamous.com are in production. It includes a save
+  made after the Photonamous tab was closed.
 - Token expiry during an upload.
 
 **RAW fixtures.**
@@ -1388,8 +1385,7 @@ Nothing user-visible ships in this phase.
 
 **Google and the site.**
 - The Google Cloud project with the consent screen in Testing (15).
-- A placeholder, deployed at `lopsy.art/photos/` unless the app has its
-  own domain by then.
+- A placeholder, deployed at `photonamous.com`.
 - The privacy policy page.
 
 **Spikes.** Results are appended to this document.
@@ -1512,7 +1508,7 @@ tablet layout, and print.
 | Browser memory and GPU limits (wasm32's 4 GB address space; integrated GPUs) | Banded decode; a working image sized to the view; tiled export (E17); budgets measured on the Iris Xe machine. |
 | Safari storage eviction | Flush the outbox promptly; offer installation; caches are rebuildable. |
 | The hourly token expiry makes long imports stall | Resumable everything; reconnect without losing state; the helper (open question 2). |
-| While the apps share lopsy.art, a script-injection bug in one reaches the other | A strict CSP; no third-party scripts but Google's; no HTML from Drive; or the app's own domain |
+| A script-injection bug reaches the user's Drive token | A strict CSP; no third-party scripts but Google's; no HTML from Drive; an origin of its own, so a bug in Lopsy cannot reach it |
 | A page that is not the other app sends handoff messages | Origin allowlists on both sides, explicit target origins, schema checks (6.12) |
 | A tab is closed in the middle of a handoff | Nothing is written until Save; a save with no Photonamous tab open reopens one (6.12) |
 | Scope: this is a large product next to a large editor | The phases each ship something usable; the Not in 1.0 list stands. |
@@ -1548,7 +1544,7 @@ Each question has a recommendation; the decision is the owner's.
    (proposed). Recommendation: keep it on.
 8. **Should Lopsy save to Drive on its own** (Save, Open recent), rather
    than through Add to Photonamous? It would bring Google sign-in into
-   Lopsy, which today has no account. Recommendation: no; Add to Lopsy
+   Lopsy, which today has no account. Recommendation: no; Add to
    Photonamous covers it.
 9. **Fujifilm look names.** Profiles named after the in-camera film
    simulations they approximate. Recommendation: use descriptive names
@@ -1563,13 +1559,12 @@ The step-by-step version for the proof of concept is `photonamous-setup.md`.
 - [ ] A project for Photonamous, with the Drive API and Google Picker
       API enabled.
 - [ ] OAuth consent screen: External, app name, logo, support email,
-      `lopsy.art` (and the app's own domain, if it gets one) as
-      authorized domains, verified in Search Console; a privacy policy
+      `photonamous.com` as the authorized domain, verified in Search
+      Console; a privacy policy
       page; a terms page. Scopes `openid`, `email`, `profile`,
       `drive.file`. Status: Testing, with test users.
 - [ ] OAuth client, Web application, with JavaScript origins
-      `https://lopsy.art` (or the app's own domain) and
-      `http://localhost:<dev port>`. With the helper, also the redirect
+      `https://photonamous.com` and `http://localhost:<dev port>`. With the helper, also the redirect
       URI `<app URL>/auth/callback`.
 - [ ] A Picker API key restricted to the app's origin and the Drive and
       Picker APIs. The project number serves as the Picker app ID.
@@ -1578,9 +1573,9 @@ The step-by-step version for the proof of concept is `photonamous-setup.md`.
 - [ ] Later: Drive UI integration ("Open with") configuration.
 
 **Cloudflare:**
-- [ ] The deploy publishes the app: the assembled `dist/` on lopsy.art,
-      or its own Pages project and domain (6.3).
-- [ ] `_redirects` and `_headers` for the app's path or domain.
+- [ ] The Pages project `photonamous`, with the custom domain
+      `photonamous.com` and `www.` redirected to it (6.3).
+- [ ] `_redirects` and `_headers` in the app's `public/`.
 - [ ] Each app's build lists the other's origin for the handoff.
 - [ ] With the helper: secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
       and `COOKIE_KEY` in the Pages project. Functions deploy with the
@@ -1632,10 +1627,10 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 | 5.3, 6.8 Import | Files, folders, and Add from Google Drive (Picker). Duplicates by SHA-256 (named before importing), RAW+JPEG pairs, embedded previews, EXIF, XMP sidecars with Lightroom's develop settings mapped (`xmp/crs-mapping.ts`), a preset, album and keywords to apply. Staged in OPFS, resumable uploads with checksum verification, retry with backoff, Retry for parked items. Survives a reload; one tab at a time claims an import. |
 | 5.4, 6.10 Edit | Profile (Standard and the Fujifilm looks from the base curves, Neutral, Monochrome), White balance (As shot, Auto, the camera's presets, picker, Kelvin for RAW), Tone with Auto, Curves (luminance, red, green, blue), Color with Color by hue, Color Grading, Local contrast (large details, small details, haze), Sharpness & noise, Framing (crop with aspect presets, straighten with a Level tool, rotate, flip both ways), Finish (vignette amount, midpoint, roundness, feather; grain), Areas (up to 8 linear or radial gradients with their own tone, white balance and saturation). Histogram with clipping warnings (J, and Alt while dragging Blacks, Whites or sharpening). History with click-back, Versions, Presets (built-in and the user's, previewed on hover), Copy and Paste edits, Before and after (toggle and split), filmstrip. Edits run on a working image of at most 4096 px; full resolution loads at 50 % zoom and for output. |
 | 5.5, 6.11 Export | JPEG, PNG (8 or 16-bit) and TIFF (16-bit, Deflate, ICC), in sRGB or Display P3. Size by long edge, short edge or megapixels, with "Don't enlarge". Metadata all, copyright only or none, with location removed by default. File-name templates. To `Exports/` in the library, a download, or a ZIP. Export presets (built-in and the user's). Show in Drive and share links, only after the user confirms. |
-| 5.6, 6.12 Round trips | Edit in Lopsy (16-bit), Save to Photonamous (`.lopsy` v3 with a 16-bit render, stacked with the photo, updated in place only at a matching revision, otherwise a copy), Add to Photonamous from Lopsy's File menu, and Grade in Photonamous for a layer (L5). Lopsy offers none of this unless its build sets `VITE_PHOTOS_URL`; without it Lopsy is unchanged, and Save Project still writes v2. |
+| 5.6, 6.12 Round trips | Edit in Lopsy (16-bit), Save to Photonamous (`.lopsy` v3 with a 16-bit render, stacked with the photo, updated in place only at a matching revision, otherwise a copy), Add to Photonamous from Lopsy's File menu, and Grade in Photonamous for a layer (L5). Lopsy offers none of this unless its build sets `VITE_PHOTONAMOUS_URL`; without it Lopsy is unchanged, and Save Project still writes v2. |
 | 5.7, 6.7 Devices and offline | The library opens offline from IndexedDB, and a service worker loads the app shell offline. Keep originals: Recent, All or None. Previews re-render in the background after presets, pastes, synced edits and new versions. Sync panel, storage meter, device cache. |
 | 6.6 Library database | Per-device journals of last-writer-wins fields stamped with hybrid logical clocks, snapshots, roll-up, the Drive change feed, a Web Locks single writer per device, durable-before-destructive ordering, and merging of duplicate library roots. A 50,000-photo library opens cold in about 2 s. |
-| 6.3 Hosting | Lopsy at `/`, Photonamous at `/photos/` with its own CSP. Deployed only when the repository variable `DEPLOY_PHOTOS` is `true`. CI runs Photonamous' typecheck, lint and unit tests. |
+| 6.3 Hosting | Its own Pages project, `photonamous`, for `photonamous.com`, with its own CSP; Lopsy hands off to it there. Deployed only when the repository variable `DEPLOY_PHOTONAMOUS` is `true`. CI runs Photonamous' typecheck, lint and unit tests. |
 
 ### Where it departs from the design
 
@@ -1689,7 +1684,8 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
   Unit tests cover photos-core, the app and the handoff package; e2e
   suites cover the app (including real RAFs from
   `LOPSY_RAF_SAMPLES`), photos-core in a browser, the Lopsy round trip,
-  Lopsy's handoff and grade, the assembled site and offline start. All
+  Lopsy's handoff and grade, and the production build as Pages serves it,
+  offline start included. All
   eight sample RAFs decode, and the engine's Rust tests run on them.
 - **Not verified against Google.** Sign-in, the Picker, uploads, the
   change feed and share links ran against the fake Drive and stubbed
@@ -1715,14 +1711,11 @@ feature: `apps/photonamous/FEATURES.md`. How the library database works:
 
 ### Decisions for the owner
 
-1. **Shared origin or its own domain.** At `/photos/` Photonamous shares an
-   origin with Lopsy, so a script injection in either reaches the other's
-   storage and tokens (6.13). The service worker checks every file it
-   serves against the build's hashes, but its own domain is the real fix;
-   until then, give Lopsy a CSP too.
-2. **Default sharpening and noise reduction for RAW**, as Lightroom does.
-3. **A SIMD engine build**, measured 15 % faster at RAF decoding.
-4. **Deploying:** after the Google Cloud setup (section 15, setup guide
-   §3), set `DEPLOY_PHOTOS` and the `PHOTOS_GOOGLE_*` variables (setup
-   guide §4).
-5. **The name and domain.**
+1. **Default sharpening and noise reduction for RAW**, as Lightroom does.
+2. **A SIMD engine build**, measured 15 % faster at RAF decoding.
+3. **Deploying:** create the Pages project and its domain, do the Google
+   Cloud setup (section 15), then set `DEPLOY_PHOTONAMOUS` and the
+   `PHOTONAMOUS_GOOGLE_*` variables (setup guide §3–4).
+
+The name and domain are settled: Photonamous, at photonamous.com. An
+origin of its own also settles the shared-origin risk (6.13).

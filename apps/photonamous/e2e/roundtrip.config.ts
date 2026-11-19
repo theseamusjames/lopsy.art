@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 /**
  * The Photonamous ⇄ Lopsy round trip, with both apps running: Lopsy's dev
  * server on 5173 and Photos' on 5174, the URLs each side's dev defaults
- * point at. Each server is also told the other's URL (VITE_PHOTOS_URL,
+ * point at. Each server is also told the other's URL (VITE_PHOTONAMOUS_URL,
  * VITE_LOPSY_URL), so other ports work too. Run from apps/photonamous:
  *
  *   npx playwright test -c e2e/roundtrip.config.ts
@@ -74,7 +74,7 @@ export default defineConfig({
       command: `npx vite --port ${lopsyPort} --strictPort`,
       cwd: join(here, '../../lopsy-web'),
       port: lopsyPort,
-      env: { VITE_PHOTOS_URL: photosUrl },
+      env: { VITE_PHOTONAMOUS_URL: photosUrl },
       reuseExistingServer: false,
       timeout: 120_000,
     },

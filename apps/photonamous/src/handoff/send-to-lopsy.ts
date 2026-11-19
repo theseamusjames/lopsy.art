@@ -121,11 +121,11 @@ export function editInLopsy(options: EditInLopsyOptions): LopsyHandoff {
   });
 }
 
-/** Lopsy's URL for handoffs: `VITE_LOPSY_URL`, else the Lopsy dev server in development and this origin's root in production. */
+/** Lopsy's URL for handoffs: `VITE_LOPSY_URL`, else the Lopsy dev server in development and lopsy.art in a build. */
 export function lopsyUrlFor(configured: string | undefined, isDev: boolean): string {
   const trimmed = configured?.trim();
   if (trimmed) return trimmed;
-  return isDev ? 'http://localhost:5173/' : '/';
+  return isDev ? 'http://localhost:5173/' : 'https://lopsy.art/';
 }
 
 export function lopsyUrl(): string {

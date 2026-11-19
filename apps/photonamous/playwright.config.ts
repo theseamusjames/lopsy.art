@@ -43,10 +43,10 @@ const port = Number(process.env.VITE_PORT ?? 5174);
 const drivePort = port + 1;
 const DRIVE_SPECS = /\.drive\.spec\.ts$/;
 /**
- * Specs with their own configs: site.spec.ts (playwright.site.config.ts,
- * the assembled site) and roundtrip.spec.ts (e2e/roundtrip.config.ts, Lopsy
- * and Photos together). A project's testIgnore replaces the top-level one,
- * so each project lists these again.
+ * Specs with their own configs: site.spec.ts and offline.spec.ts
+ * (playwright.site.config.ts, the production build) and roundtrip.spec.ts
+ * (e2e/roundtrip.config.ts, Lopsy and Photonamous together). A project's
+ * testIgnore replaces the top-level one, so each project lists these again.
  */
 const OWN_CONFIG_SPECS = [/site\.spec\.ts$/, /roundtrip\.spec\.ts$/, /offline\.spec\.ts$/];
 

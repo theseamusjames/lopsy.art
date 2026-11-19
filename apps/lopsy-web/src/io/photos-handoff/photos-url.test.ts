@@ -3,14 +3,14 @@ import { photosUrlFor } from './photos-url';
 import { activePhotosSession, type PhotosHandoffSession } from './photos-handoff-store';
 
 describe('photosUrlFor', () => {
-  it('is null unless the build sets VITE_PHOTOS_URL', () => {
+  it('is null unless the build sets VITE_PHOTONAMOUS_URL', () => {
     expect(photosUrlFor(undefined)).toBeNull();
     expect(photosUrlFor('  ')).toBeNull();
   });
 
-  it('uses VITE_PHOTOS_URL', () => {
-    expect(photosUrlFor('/photos/')).toBe('/photos/');
-    expect(photosUrlFor(' https://photos.lopsy.art/ ')).toBe('https://photos.lopsy.art/');
+  it('uses VITE_PHOTONAMOUS_URL', () => {
+    expect(photosUrlFor('https://photonamous.com/')).toBe('https://photonamous.com/');
+    expect(photosUrlFor(' http://localhost:5174/ ')).toBe('http://localhost:5174/');
   });
 });
 

@@ -69,22 +69,22 @@ npm run storybook:photos        # Storybook on port 6007
 npm run build-storybook:photos  # static build (storybook-static/; delete it after)
 npm run test:e2e:photos    # Playwright
 
-# The lopsy.art site: Lopsy at /, Photonamous at /photos/ (spec 6.3)
-npm run build:site         # engine + Lopsy, Photonamous with PHOTOS_BASE=/photos/, then scripts/assemble-site.mjs into dist/
-npm run build:site:noopt   # the same with wasm:build:noopt, where wasm-opt cannot be downloaded
-npm run assemble:site      # only the assembly, from both apps' existing dist/
-npm run serve:site         # dist/ the way Cloudflare Pages serves it (_redirects, _headers), port 4180
-npm run test:e2e:site      # Playwright smoke test of dist/ (playwright.site.config.ts)
-npm run test:e2e:offline   # builds Photonamous alone at /photos/, starts it offline (service worker), cleans up
+# The production build, as photonamous.com serves it (spec 6.3)
+npm run build:photos       # apps/photonamous/dist; the engine must be built first
+npm run serve:photos       # that dist/ the way Cloudflare Pages serves it (_redirects, _headers), port 4180
+npm run test:e2e:site      # builds, runs site.spec.ts and offline.spec.ts against it (playwright.site.config.ts), cleans up
 ```
 
-The service worker (`src/sw/`, emitted as `<base>sw.js` by
+The service worker (`src/sw/`, emitted as `/sw.js` by
 `scripts/vite-plugin-service-worker.ts`) runs only in production builds.
 It precaches the app shell and never handles Google hosts or Drive content.
 
-Photonamous' `public/_redirects` and `public/_headers` are written for serving
-it at `/` on its own domain; `assemble-site.mjs` moves them under
-`/photos/`. The Content-Security-Policy is there: a new Google host or
-script source goes in `public/_headers`, and `test:e2e:site` fails on
-any CSP violation. Production deploys Photonamous only when the repository
-variable `DEPLOY_PHOTOS` is `true` (`.github/workflows/deploy.yml`).
+Photonamous is served at `/` on its own origin, photonamous.com, by its own
+Cloudflare Pages project; Lopsy is on lopsy.art, and the two talk only
+through handoff messages. Pages serves `public/_redirects` and
+`public/_headers` as written. The Content-Security-Policy is there: a new
+Google host or script source goes in `public/_headers`, and
+`test:e2e:site` fails on any CSP violation. Production deploys
+Photonamous, and Lopsy hands off to it, only when the repository variable
+`DEPLOY_PHOTONAMOUS` is `true` (`.github/workflows/deploy.yml`, setup
+guide §4).

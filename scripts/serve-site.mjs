@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /**
- * Serves the assembled dist/ the way Cloudflare Pages does, for local
- * previews and the site smoke test: static files win; otherwise the first
+ * Serves a built site the way Cloudflare Pages does, for local previews and
+ * Photonamous' site smoke test: static files win; otherwise the first
  * matching `_redirects` rule applies (200 rewrites, 301/302 redirects);
  * `_headers` blocks whose path matches add their headers; a directory
- * serves its index.html; nothing found is a 404.
+ * serves its index.html; nothing found is a 404. The directory defaults to
+ * Photonamous' build; `--dir apps/lopsy-web/dist` serves Lopsy's.
  *
- *   node scripts/serve-site.mjs [--dir dist] [--port 4180] [--host 127.0.0.1]
+ *   node scripts/serve-site.mjs [--dir apps/photonamous/dist] [--port 4180] [--host 127.0.0.1]
  *
  * Listens on the loopback interface only, unless --host or SITE_HOST says
  * otherwise (0.0.0.0 to reach it from another device on the network).
@@ -22,11 +23,11 @@ const arg = (name, fallback) => {
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : fallback;
 };
-const dir = resolve(root, arg('--dir', 'dist'));
+const dir = resolve(root, arg('--dir', 'apps/photonamous/dist'));
 const port = Number(arg('--port', process.env.PORT ?? '4180'));
 const host = arg('--host', process.env.SITE_HOST ?? '127.0.0.1');
 if (!existsSync(join(dir, 'index.html')) && !existsSync(join(dir, '_redirects'))) {
-  console.error(`serve-site: ${dir} has no site in it. Run npm run build:site first.`);
+  console.error(`serve-site: ${dir} has no site in it. Build it first (npm run build:photos, or npm run build for Lopsy).`);
   process.exit(1);
 }
 

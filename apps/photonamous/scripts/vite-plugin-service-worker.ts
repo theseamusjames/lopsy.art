@@ -9,8 +9,8 @@ import type { Plugin, ResolvedConfig } from 'vite';
  * the precache manifest into it once the build is on disk: every file
  * written (the hashed JS and CSS, the engine's wasm, the public fonts,
  * icons and manifest) with the SHA-256 of its bytes. The page itself is
- * precached as the base URL (`/photos/`), since Pages answers
- * `/photos/index.html` with a redirect to it. The cache version is a hash
+ * precached as the base URL (`/`), since Pages answers `/index.html`
+ * with a redirect to it. The cache version is a hash
  * of every name and checksum, so any changed byte gives a new cache, and
  * the worker checks cached bytes against the checksums before serving
  * them (spec 6.13: a script on the same origin could write the cache).

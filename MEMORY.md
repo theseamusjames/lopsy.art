@@ -697,16 +697,16 @@ to `chromium.launch`. Headless WebGPU (SwiftShader) and WebGL both work
 that way. There is no Vulkan adapter either, so the native render tests
 (`--features native`) skip themselves.
 
-## Sandbox disk: cargo targets and the site's dist fill the allowance
+## Sandbox disk: cargo targets and production builds fill the allowance
 The session's writable disk is a fixed allowance, so `df -h /` shows
 "Avail" near 0 when it is spent, and pushes then fail with ENOSPC (the
 pre-push hook writes). With several agent worktrees, the big users are
-each worktree's `engine/target` (3–7 GB apiece) and site builds:
-`apps/lopsy-web/dist` is about 900 MB because of the tutorials, and
-`npm run build:site` copies it again into `dist/`. A worktree that only
-needs the engine can copy `apps/lopsy-web/src/engine-wasm/pkg` from one
-that built it instead of building its own, and site builds should be
-deleted after the test that needed them.
+each worktree's `engine/target` (3–7 GB apiece) and production builds:
+`apps/lopsy-web/dist` is about 900 MB because of the tutorials. A
+worktree that only needs the engine can copy
+`apps/lopsy-web/src/engine-wasm/pkg` from one that built it instead of
+building its own, and production builds should be deleted after the test
+that needed them.
 
 ## Photonamous tests: real RAFs and import order
 Photonamous' RAF e2e reads real camera files from `LOPSY_RAF_SAMPLES`: clone

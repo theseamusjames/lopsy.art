@@ -1,6 +1,5 @@
-# Photonamous on Cloudflare Pages (docs/photonamous-spec.md, 6.3).
-# Paths are relative to the app: scripts/assemble-site.mjs moves them under
-# /photos/ for lopsy.art; on its own domain they apply as written.
+# Photonamous on Cloudflare Pages at photonamous.com, its own origin
+# (docs/photonamous-spec.md, 6.3).
 #
 # - script-src: the engine needs 'wasm-unsafe-eval'; Google sign-in
 #   (accounts.google.com/gsi) and the Picker's loader (apis.google.com).

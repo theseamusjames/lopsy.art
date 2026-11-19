@@ -40,7 +40,7 @@ export type GradeResult =
   | { readonly kind: 'cancelled' };
 
 export interface GradeInPhotosOptions {
-  /** Photos' URL (`VITE_PHOTOS_URL`). Its origin is the only one trusted. */
+  /** Photos' URL (`VITE_PHOTONAMOUS_URL`). Its origin is the only one trusted. */
   readonly photosUrl: string;
   /**
    * The layer, or a promise of it: Photos is opened at once, inside the

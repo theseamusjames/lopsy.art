@@ -1,5 +1,5 @@
 /**
- * Without VITE_PHOTOS_URL (every build that does not ship Photonamous) Lopsy
+ * Without VITE_PHOTONAMOUS_URL (every build that does not ship Photonamous) Lopsy
  * is exactly as before: no Add to Photonamous item, and a
  * `?photos-handoff=` link is ignored. The handoff itself is covered by
  * photos-handoff.spec.ts, which runs with the URL set

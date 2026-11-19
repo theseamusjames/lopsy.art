@@ -5,10 +5,10 @@
  * `__PRECACHE_MANIFEST__`. It has no imports left after bundling and no
  * exports, so it runs as a classic worker script in every browser.
  *
- * CacheStorage belongs to the whole origin, which Photos shares with Lopsy
- * on lopsy.art, so cached bytes are checked against the build's checksums
- * before they are served (once per file per worker lifetime) and dropped
- * when they do not match (spec 6.13).
+ * Any script on the origin can write to CacheStorage, so cached bytes are
+ * checked against the build's checksums before they are served (once per
+ * file per worker lifetime) and dropped when they do not match. A cache
+ * poisoned by an injection bug does not outlive the bug (spec 6.13).
  *
  * A new version installs and then waits; the page shows "New version
  * ready" and posts SKIP_WAITING_MESSAGE when the user chooses to reload.

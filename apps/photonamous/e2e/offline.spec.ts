@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { generatedJpeg, importFiles, tiles } from './library';
 
 /**
- * Offline start (spec 5.7) on the production build (playwright.offline.config.ts):
+ * Offline start (spec 5.7) on the production build (playwright.site.config.ts):
  * the service worker serves the app shell, the library opens from the
  * device, and changes made offline are kept and saved.
  */
@@ -10,7 +10,7 @@ test('the app starts offline and keeps working', async ({ page, context }) => {
   const problems: string[] = [];
   page.on('pageerror', (error) => problems.push(error.message));
 
-  await page.goto('/photos/');
+  await page.goto('/');
   await page.getByRole('button', { name: /This browser/ }).click();
   await expect(page.getByText('Your library is empty')).toBeVisible();
   await importFiles(page, [{ name: 'offline.jpg', buffer: await generatedJpeg(page, 120) }]);
@@ -37,8 +37,8 @@ test('the app starts offline and keeps working', async ({ page, context }) => {
   await page.keyboard.press('3');
   await expect(tile).toHaveAttribute('data-rating', '3');
 
-  // A deep link reloads offline too: the shell serves every path under /photos/.
-  await page.goto('/photos/some/deep/link');
+  // A deep link reloads offline too: the shell serves every path.
+  await page.goto('/some/deep/link');
   await expect(tiles(page)).toHaveCount(1, { timeout: 30_000 });
 
   await context.setOffline(false);
@@ -50,7 +50,7 @@ test('the app starts offline and keeps working', async ({ page, context }) => {
 });
 
 test('a cached file that another script on the origin changed is not served', async ({ page, context }) => {
-  await page.goto('/photos/');
+  await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
 

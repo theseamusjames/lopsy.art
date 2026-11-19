@@ -34,7 +34,7 @@ export function createLayerMenu(): MenuDef {
         disabled: disableMergeDown,
       },
       { label: 'Flatten Image', action: () => void useEditorStore.getState().flattenImage() },
-      // Only builds that ship Photonamous (VITE_PHOTOS_URL) offer the grade.
+      // Only builds that ship Photonamous (VITE_PHOTONAMOUS_URL) offer the grade.
       ...(isPhotosEnabled()
         ? [
             { separator: true, label: '' },

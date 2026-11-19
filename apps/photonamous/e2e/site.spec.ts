@@ -1,11 +1,12 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { generatedJpeg, importFiles, tiles } from './library';
 
 /**
- * Smoke test of the assembled lopsy.art site (playwright.site.config.ts):
- * both apps load from their paths with no CSP violation, failed request or
- * console error, and Photos' SPA rule wins under /photos/.
+ * Smoke test of Photonamous' production build at `/` on its own origin, as
+ * on photonamous.com (playwright.site.config.ts): it loads with its CSP and
+ * no COOP, with no CSP violation, failed request or console error; deep
+ * links get the app; and Edit in Lopsy opens lopsy.art, the build's
+ * default.
  */
 
 interface Problems {
@@ -39,33 +40,24 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('Lopsy loads at /', async ({ page }) => {
+test('Photonamous loads with its CSP and no COOP', async ({ page }) => {
   const problems = watch(page);
   const response = await page.goto('/');
   expect(response?.status()).toBe(200);
-  await expect(page).toHaveTitle(/Lopsy/);
-  await expect(page.getByRole('dialog', { name: 'New Document' })).toBeVisible();
-  await page.waitForLoadState('networkidle');
-  expect(await cspViolations(page)).toEqual([]);
-  expect(problems.list).toEqual([]);
-});
-
-test('Photos loads at /photos/ with its CSP and no COOP', async ({ page }) => {
-  const problems = watch(page);
-  const response = await page.goto('/photos/');
-  expect(response?.status()).toBe(200);
   const headers = response?.headers() ?? {};
   expect(headers['content-security-policy']).toContain("'wasm-unsafe-eval'");
+  // A COOP header would cut the sign-in popup and Lopsy's tab off from their openers.
   expect(headers['cross-origin-opener-policy']).toBeUndefined();
+  await expect(page).toHaveTitle('Photonamous');
   await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
   await page.waitForLoadState('networkidle');
   expect(await cspViolations(page)).toEqual([]);
   expect(problems.list).toEqual([]);
 });
 
-test('a deep link under /photos/ serves Photos, not Lopsy', async ({ page }) => {
+test('a deep link gets the app', async ({ page }) => {
   const problems = watch(page);
-  const response = await page.goto('/photos/some/deep/link');
+  const response = await page.goto('/some/deep/link');
   expect(response?.status()).toBe(200);
   await expect(page).toHaveTitle('Photonamous');
   await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
@@ -73,46 +65,27 @@ test('a deep link under /photos/ serves Photos, not Lopsy', async ({ page }) => 
   expect(problems.list).toEqual([]);
 });
 
-test("Lopsy's handoff default points at the served Photos", async ({ page }) => {
-  // The production build has no VITE_PHOTOS_URL, so Lopsy hands off to the default.
-  const assets = join(import.meta.dirname, '../../../dist/assets');
-  const bundles = readdirSync(assets).filter((name) => name.endsWith('.js'));
-  const withDefault = bundles.filter((name) => readFileSync(join(assets, name), 'utf8').includes('"/photos/"'));
-  expect(withDefault.length).toBeGreaterThan(0);
-
+test('Edit in Lopsy opens lopsy.art', async ({ page, context }) => {
+  // Nothing reaches the real lopsy.art: a blank page stands in for it.
+  await context.route(
+    (url) => url.origin === 'https://lopsy.art',
+    (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Lopsy</title>' }),
+  );
   await page.goto('/');
-  const photosUrl = await page.evaluate(() => new URL('/photos/', window.location.href).href);
-  const photos = await page.request.get(photosUrl);
-  expect(photos.status()).toBe(200);
-  expect(await photos.text()).toContain('<title>Photonamous</title>');
-});
-
-test("a first Photos visit under Lopsy's root worker neither reloads nor offers an update", async ({ page }) => {
-  await page.goto('/');
-  // Lopsy registers its own worker at /sw.js, scope /, and it claims the origin's pages.
-  await expect
-    .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration('/'))?.active?.state ?? null))
-    .toBe('activated');
-
-  // Lopsy's own loads are not under test here; leaving the page mid-load would abort them.
-  await page.waitForLoadState('networkidle');
-  const problems = watch(page);
-  let loads = 0;
-  page.on('load', () => {
-    loads += 1;
-  });
-  await page.goto('/photos/');
-  await expect(page.getByRole('heading', { name: 'Photonamous' })).toBeVisible();
-  await page.evaluate(() => Reflect.set(window, '__firstVisit', true));
-  await expect
-    .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration('/photos/'))?.active?.state ?? null))
-    .toBe('activated');
-  // Photos' worker takes over the page (clients.claim); that must not reload it.
-  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? '')).toContain('/photos/sw.js');
-  await page.waitForTimeout(500);
-  expect(await page.evaluate(() => Reflect.get(window, '__firstVisit'))).toBe(true);
-  expect(loads).toBe(1);
-  await expect(page.getByText('New version ready')).toHaveCount(0);
-  expect(await cspViolations(page)).toEqual([]);
-  expect(problems.list).toEqual([]);
+  await page.getByRole('button', { name: /This browser/ }).click();
+  await expect(page.getByText('Your library is empty')).toBeVisible();
+  await importFiles(page, [{ name: 'handoff.jpg', buffer: await generatedJpeg(page, 200) }]);
+  await page.getByRole('button', { name: /^All photos/ }).click();
+  await expect(tiles(page)).toHaveCount(1);
+  await tiles(page).first().click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  const [lopsy] = await Promise.all([
+    context.waitForEvent('page'),
+    page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: /^Edit in Lopsy/ }).click(),
+  ]);
+  await lopsy.waitForLoadState();
+  const url = new URL(lopsy.url());
+  expect(url.origin).toBe('https://lopsy.art');
+  expect(url.pathname).toBe('/');
+  expect(url.searchParams.get('photos-handoff')).toBeTruthy();
 });

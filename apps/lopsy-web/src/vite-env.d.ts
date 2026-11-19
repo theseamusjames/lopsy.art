@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** Photonamous' URL, for handoffs. Defaults to http://localhost:5174/ in dev and /photos/ in production. */
-  readonly VITE_PHOTOS_URL?: string;
+  /** Photonamous' URL, for handoffs (https://photonamous.com/ when deployed). Without it Lopsy offers no handoff. */
+  readonly VITE_PHOTONAMOUS_URL?: string;
 }
 
 declare module '*.module.css' {

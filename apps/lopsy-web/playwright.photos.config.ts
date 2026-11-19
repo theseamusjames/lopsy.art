@@ -3,7 +3,7 @@ import base from './playwright.config';
 
 /**
  * The Photonamous handoff specs (e2e/photos-handoff.spec.ts) need a build
- * that ships Photos: Lopsy offers the handoff only when VITE_PHOTOS_URL is
+ * that ships Photos: Lopsy offers the handoff only when VITE_PHOTONAMOUS_URL is
  * set. They run here against a dev server started with it, on the port next
  * to the main suite's so both can run at once.
  *
@@ -22,6 +22,6 @@ export default defineConfig({
     command: `npx vite --port ${port} --strictPort`,
     port,
     reuseExistingServer: false,
-    env: { VITE_PHOTOS_URL: 'http://localhost:5174/' },
+    env: { VITE_PHOTONAMOUS_URL: 'http://localhost:5174/' },
   },
 });

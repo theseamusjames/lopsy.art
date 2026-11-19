@@ -8,22 +8,15 @@ import { serviceWorkerPlugin } from './scripts/vite-plugin-service-worker';
 const repoRoot = resolve(__dirname, '../..');
 
 /**
- * Photonamous. Served at `/` in development and at PHOTOS_BASE in a
- * build (`/photos/` when it ships inside lopsy.art; `/` on its own domain).
+ * Photonamous, served at `/` on its own origin (photonamous.com in
+ * production, docs/photonamous-spec.md 6.3).
  *
  * The engine is the wasm package `npm run wasm:build` writes into
  * lopsy-web (`@lopsy/engine-pkg`). Moving it to packages/engine-web is
  * Phase 0 work in docs/photonamous-spec.md; until then this app reads it
  * from there.
  */
-/** `photos`, `/photos` and `/photos/` all mean `/photos/`: Vite needs both slashes for asset URLs. */
-function photosBase(value: string | undefined): string {
-  const trimmed = value?.trim().replace(/^\/+|\/+$/g, '') ?? '';
-  return trimmed === '' ? '/' : `/${trimmed}/`;
-}
-
 export default defineConfig({
-  base: photosBase(process.env.PHOTOS_BASE),
   plugins: [react(), wasm(), topLevelAwait(), serviceWorkerPlugin()],
   worker: {
     format: 'es',

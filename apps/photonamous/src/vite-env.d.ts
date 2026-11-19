@@ -7,7 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_GOOGLE_API_KEY?: string;
   /** Cloud project number; the Picker's app ID. */
   readonly VITE_GOOGLE_APP_ID?: string;
-  /** Lopsy's URL, for handoffs. Defaults to this origin's root. */
+  /** Lopsy's URL, for handoffs. Defaults to http://localhost:5173/ in development and https://lopsy.art/ in a build. */
   readonly VITE_LOPSY_URL?: string;
 }
 

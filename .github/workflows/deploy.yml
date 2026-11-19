@@ -11,6 +11,11 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+# Lopsy (lopsy.art) and Photonamous (photonamous.com) are two Pages projects.
+# Photonamous is built and deployed only once the owner sets the repository
+# variable DEPLOY_PHOTONAMOUS to 'true' (Settings > Secrets and variables >
+# Actions > Variables); until then this job publishes Lopsy exactly as
+# before. Setup: docs/photonamous-setup.md, section 4.
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -27,36 +32,43 @@ jobs:
 
       - run: npm ci
 
-      # Photonamous ships inside lopsy.art at /photos/ only once the owner
-      # sets the repository variable DEPLOY_PHOTOS to 'true' (Settings >
-      # Secrets and variables > Actions > Variables). Until then this job
-      # builds and publishes Lopsy exactly as before, and production does
-      # not change. See docs/photonamous-spec.md, 6.3.
+      # Lopsy offers the handoff (File > Add to Photonamous, Grade in
+      # Photonamous, ?photos-handoff=) only when its build names Photonamous'
+      # URL, and trusts only that origin.
       - name: Build Lopsy
-        if: vars.DEPLOY_PHOTOS != 'true'
         run: npm run build
-
-      # The Google settings are public identifiers, not secrets: they ship in
-      # the page. Without the client ID, Photos offers local storage only.
-      - name: Build the site (Lopsy at /, Photonamous at /photos/)
-        if: vars.DEPLOY_PHOTOS == 'true'
-        run: npm run build:site
         env:
-          # Lopsy offers the handoff (File > Add to Photonamous, ?photos-handoff=)
-          # only when its build names Photos' URL.
-          VITE_PHOTOS_URL: /photos/
-          VITE_GOOGLE_CLIENT_ID: ${{ vars.PHOTOS_GOOGLE_CLIENT_ID }}
-          VITE_GOOGLE_API_KEY: ${{ vars.PHOTOS_GOOGLE_API_KEY }}
-          VITE_GOOGLE_APP_ID: ${{ vars.PHOTOS_GOOGLE_APP_ID }}
+          VITE_PHOTONAMOUS_URL: ${{ vars.DEPLOY_PHOTONAMOUS == 'true' && (vars.PHOTONAMOUS_URL || 'https://photonamous.com/') || '' }}
 
       # Tutorial projects live only in R2 (uploaded with `npm run
       # tutorial:upload`), so no published link may point at a missing one.
       - name: Check tutorial projects are on R2
         run: npm run tutorial:check
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy Lopsy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy ${{ vars.DEPLOY_PHOTOS == 'true' && 'dist' || 'apps/lopsy-web/dist' }} --project-name=lopsy-art
+          command: pages deploy apps/lopsy-web/dist --project-name=lopsy-art
+
+      # After Lopsy, so a failing Photonamous step never holds Lopsy back. It
+      # reuses the engine Lopsy's build compiled. The Google settings are
+      # public identifiers, not secrets: they ship in the page. Without the
+      # client ID, Photonamous offers local storage only.
+      - name: Build Photonamous
+        if: vars.DEPLOY_PHOTONAMOUS == 'true'
+        run: npm run build:photos
+        env:
+          VITE_LOPSY_URL: ${{ vars.LOPSY_URL || 'https://lopsy.art/' }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.PHOTONAMOUS_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_API_KEY: ${{ vars.PHOTONAMOUS_GOOGLE_API_KEY }}
+          VITE_GOOGLE_APP_ID: ${{ vars.PHOTONAMOUS_GOOGLE_APP_ID }}
+
+      - name: Deploy Photonamous to Cloudflare Pages
+        if: vars.DEPLOY_PHOTONAMOUS == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/photonamous/dist --project-name=${{ vars.PHOTONAMOUS_PAGES_PROJECT || 'photonamous' }}

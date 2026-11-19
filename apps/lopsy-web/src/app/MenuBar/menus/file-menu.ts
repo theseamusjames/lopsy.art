@@ -413,7 +413,7 @@ export const fileMenu: MenuDef = {
     { separator: true, label: '' },
     { label: 'Save Project', shortcut: '⌘S', action: () => { saveProject().catch((err) => notifyError(`Save failed: ${describeError(err)}`)); } },
     { label: 'Open Project...', action: () => openProjectFromDisk() },
-    // Only builds that ship Photonamous (VITE_PHOTOS_URL) offer the handoff.
+    // Only builds that ship Photonamous (VITE_PHOTONAMOUS_URL) offer the handoff.
     ...(isPhotosEnabled() ? [{ label: 'Add to Photonamous', action: () => { void addDocumentToPhotos(); } }] : []),
     { separator: true, label: '' },
     { label: 'Export…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },

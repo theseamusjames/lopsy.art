@@ -34,7 +34,7 @@ import {
 } from './messages.ts';
 
 export interface LopsyHandoffConfig {
-  /** Photos' URL (`VITE_PHOTOS_URL`): absolute, or a path on this origin. Its origin is the only one trusted. */
+  /** Photos' URL (`VITE_PHOTONAMOUS_URL`): absolute, or a path on this origin. Its origin is the only one trusted. */
   readonly photosUrl: string;
   /** Defaults to the page's window. */
   readonly window?: HandoffWindow;

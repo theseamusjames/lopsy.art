@@ -5,11 +5,10 @@
  * a page never switches code under an open edit.
  *
  * Whether an update is waiting is read from this app's own registration,
- * never from `navigator.serviceWorker.controller`: on lopsy.art, Lopsy's
- * worker at `/` may control Photos' pages before Photos' worker exists.
- * The page reloads only after the user chose Reload, so a first install
- * (which claims the page) never reloads it, for example in the middle of a
- * handoff from Lopsy.
+ * never from `navigator.serviceWorker.controller`, which is null on a
+ * first visit and changes when the first install claims the page. The page
+ * reloads only after the user chose Reload, so a first install never
+ * reloads it, for example in the middle of a handoff from Lopsy.
  */
 
 import { showToast } from '../app/toasts';

@@ -532,7 +532,7 @@ describe('helpers', () => {
     expect(freeStem(['X.lopsy', 'X 2.png'], 'X')).toBe('X 3');
     expect(hrefWithoutReceive('https://p.example/photos/?receive=1&a=b')).toBe('/photos/?a=b');
     expect(lopsyUrlFor(undefined, true)).toBe('http://localhost:5173/');
-    expect(lopsyUrlFor(undefined, false)).toBe('/');
+    expect(lopsyUrlFor(undefined, false)).toBe('https://lopsy.art/');
     expect(lopsyUrlFor('https://lopsy.art/', true)).toBe('https://lopsy.art/');
     expect(pngSize(new ArrayBuffer(10))).toBeNull();
   });

@@ -30,7 +30,7 @@ storage:
 of 240 generated photos (`&seed=N` for another count). Nothing is saved.
 
 **Where the data lives** (all per origin, so `localhost:5174` is separate
-from `lopsy.art`):
+from `photonamous.com`):
 
 | What | Where |
 |---|---|
@@ -43,34 +43,36 @@ from `lopsy.art`):
 
 **To wipe it:** DevTools > Application > Storage > **Clear site data**,
 with the page open at `http://localhost:5174`. Files in a picked folder
-stay; delete the folder yourself. On lopsy.art, clearing site data also
-clears Lopsy's own data, because the two apps share that origin.
+stay; delete the folder yourself. Lopsy is on another origin, so its data
+is never touched.
 
 ## 2. Lopsy and Photonamous together (the handoff)
 
 ```bash
-VITE_PHOTOS_URL=http://localhost:5174/ npm run dev   # Lopsy, http://localhost:5173
+VITE_PHOTONAMOUS_URL=http://localhost:5174/ npm run dev   # Lopsy, http://localhost:5173
 npm run dev:photos                                  # Photonamous, http://localhost:5174 (a second terminal)
 ```
 
 Lopsy talks to Photonamous only when its build names Photonamous' URL in
-`VITE_PHOTOS_URL`. Without it (plain `npm run dev`, `npm run build`, and
+`VITE_PHOTONAMOUS_URL`. Without it (plain `npm run dev`, `npm run build`, and
 production while Photonamous is not deployed) Lopsy is exactly as before: File →
-Add to Photonamous is hidden and `?photos-handoff=` is ignored. The site
-build (`npm run build:site`, `build:site:noopt`, and the deploy workflow
-when `DEPLOY_PHOTOS` is `true`) sets it to `/photos/`. Put it in
-`apps/lopsy-web/.env.local` to keep it on in development.
+Add to Photonamous is hidden and `?photos-handoff=` is ignored. The deploy
+workflow sets it to `https://photonamous.com/` when `DEPLOY_PHOTONAMOUS` is
+`true` (section 4). Put it in `apps/lopsy-web/.env.local` to keep it on in
+development.
 
-| Variable | In | Unset | Site build |
+| Variable | In | Unset | Deployed |
 |---|---|---|---|
-| `VITE_LOPSY_URL` | `apps/photonamous/.env.local` | `http://localhost:5173/` in dev, `/` in a build | `/` |
-| `VITE_PHOTOS_URL` | `apps/lopsy-web/.env.local` | no handoff | `/photos/` |
+| `VITE_LOPSY_URL` | `apps/photonamous/.env.local` | `http://localhost:5173/` in dev, `https://lopsy.art/` in a build | `https://lopsy.art/` |
+| `VITE_PHOTONAMOUS_URL` | `apps/lopsy-web/.env.local` | no handoff | `https://photonamous.com/` |
 
-Both directions run over this channel: Edit in Lopsy and Save to Lopsy
+Both directions run over this channel: Edit in Lopsy and Save to
 Photonamous, and Lopsy's Grade in Photonamous, which opens Photonamous at
 `?grade=<id>` straight into the Edit view on one layer (no library needed).
 
-Only the configured URL's origin is trusted for handoff messages. The
+Only the configured URL's origin is trusted for handoff messages. The two
+apps are on different origins in production (lopsy.art and
+photonamous.com), as the two dev servers are on different ports. The
 round-trip e2e (`apps/photonamous/e2e/roundtrip.config.ts`) starts both
 dev servers with each other's URL set.
 
@@ -87,9 +89,9 @@ userinfo endpoint for the account.
    **Google Picker API**.
 3. **Consent screen.** APIs & Services > OAuth consent screen (Google Auth
    Platform):
-   - User type **External**; app name, support email, developer contact.
-   - Authorized domain `lopsy.art` (and your own domain if Photonamous gets
-     one).
+   - User type **External**; app name **Photonamous**, support email,
+     developer contact.
+   - Authorized domain `photonamous.com`.
    - Data access (scopes): `openid`, `.../auth/userinfo.email`,
      `.../auth/userinfo.profile`, `.../auth/drive.file`. All are
      non-sensitive, so no verification is needed for Testing.
@@ -98,16 +100,15 @@ userinfo endpoint for the account.
      after seven days.
 4. **OAuth client.** Credentials > Create credentials > OAuth client ID,
    type **Web application**. Authorized JavaScript origins:
+   - `https://photonamous.com`
    - `http://localhost:5174` (the Photonamous dev server)
-   - `https://lopsy.art`
-   - your own domain, if Photonamous is deployed on one.
 
    No redirect URIs: the token model uses a popup. Copy the **client ID**.
 5. **Picker API key.** Credentials > Create credentials > API key, then
    edit it:
    - Application restrictions: **Websites (HTTP referrers)**:
-     `http://localhost:5174/*`, `https://lopsy.art/photos/*` (or your
-     domain's `/*`) **and `https://docs.google.com/*`**. The Picker runs in
+     `https://photonamous.com/*`, `http://localhost:5174/*` **and
+     `https://docs.google.com/*`**. The Picker runs in
      an iframe on docs.google.com and uses the key from there; without
      that referrer it shows "The API developer key is invalid" (the app
      then reports a Picker error).
@@ -152,7 +153,8 @@ these were checked against what was:
   `http://localhost:5174`: the resumable-upload initiation allows
   `authorization, content-type, x-upload-content-type,
   x-upload-content-length`; `alt=media` reads allow `range`; userinfo and
-  `oauth2.googleapis.com/revoke` allow the app's origin. Whether a
+  `oauth2.googleapis.com/revoke` allow the app's origin. Repeated on
+  2026-11-19 from `https://photonamous.com`, with the same answers. Whether a
   successful initiation exposes `Location`, and a 308 exposes `Range`,
   needs a signed-in request: an unauthenticated 401 exposes neither. The
   adapter now gives up with an error, instead of resending a chunk for
@@ -181,34 +183,80 @@ in a link-shared folder are visible through the link.
 ## 4. Deploying on Cloudflare
 
 Production deploys run from `.github/workflows/deploy.yml` on every push to
-`main`, into the existing Pages project `lopsy-art`. Photonamous is included
-only when you switch it on:
+`main`. Lopsy goes to the Pages project `lopsy-art` (lopsy.art), as before.
+Photonamous goes to a Pages project of its own at photonamous.com, but only
+once you switch it on. Until then nothing in production changes. Set it up
+once, in this order:
 
-1. GitHub > the repository > Settings > Secrets and variables > Actions >
-   **Variables** > New repository variable:
-   - `DEPLOY_PHOTOS` = `true`
-   - `PHOTOS_GOOGLE_CLIENT_ID` = the client ID
-   - `PHOTOS_GOOGLE_API_KEY` = the Picker API key
-   - `PHOTOS_GOOGLE_APP_ID` = the project number
+1. **Create the Pages project.** It is published by the workflow (Direct
+   Upload), not by Cloudflare's Git integration. With wrangler, logged in
+   to the account that has `lopsy-art`:
 
-   The Google ones are optional; without the client ID, Photonamous offers
-   local storage only. They are public identifiers, so they are
-   variables, not secrets.
-2. Run the **Deploy to Cloudflare Pages** workflow (Actions > Run
-   workflow), or push to `main`. It runs `npm run build:site`: Lopsy at
-   `/`, Photonamous at `https://lopsy.art/photos/`.
-3. Check `https://lopsy.art/` and `https://lopsy.art/photos/`.
+   ```bash
+   npx wrangler pages project create photonamous --production-branch main
+   ```
 
-**Rollback:** set `DEPLOY_PHOTOS` to `false` (or delete it) and run the
-workflow again. It then builds and publishes Lopsy alone, exactly as
-before. Cloudflare's dashboard can also roll back to an earlier
-deployment at once (Pages > lopsy-art > Deployments).
+   Or in the dashboard: Workers & Pages > Create > Pages > **Upload
+   assets**, named `photonamous`. The upload can be any placeholder folder,
+   since the first workflow run replaces it. Another name works too: set
+   the repository variable `PHOTONAMOUS_PAGES_PROJECT` to it.
+2. **Add the domain.** The project > **Custom domains** > Set up a custom
+   domain > `photonamous.com`. With the domain's DNS on Cloudflare, Pages
+   adds the record itself; a bare domain like this one needs its zone on
+   Cloudflare. Then send `www.photonamous.com` to it: a proxied DNS record
+   for `www`, and a redirect rule (Rules > Redirect Rules > the "Redirect
+   from WWW to root" template).
 
-To see the deployed site before pushing:
+   Use the app only at `https://photonamous.com`. Google sign-in and Lopsy
+   trust that origin alone. The `photonamous.pages.dev` address and preview
+   deployments load, but cannot sign in to Google or hand off to Lopsy.
+3. **The API token.** The workflow deploys with the repository secrets
+   Lopsy's deploy already uses, `CLOUDFLARE_API_TOKEN` and
+   `CLOUDFLARE_ACCOUNT_ID`. The token's **Account > Cloudflare Pages >
+   Edit** permission is for every Pages project in the account, so it
+   covers the new one.
+4. **Google.** Section 3, with `https://photonamous.com` as the JavaScript
+   origin and the API key's referrer.
+5. **GitHub variables.** GitHub > the repository > Settings > Secrets and
+   variables > Actions > **Variables** > New repository variable:
+   - `DEPLOY_PHOTONAMOUS` = `true`
+   - `PHOTONAMOUS_GOOGLE_CLIENT_ID` = the client ID
+   - `PHOTONAMOUS_GOOGLE_API_KEY` = the Picker API key
+   - `PHOTONAMOUS_GOOGLE_APP_ID` = the project number
+
+   The Google ones are optional. Without the client ID, Photonamous offers
+   local storage only. They are public identifiers, so they are variables,
+   not secrets.
+
+   Three more variables are optional, each with a default:
+
+   | Variable | Default | What it sets |
+   |---|---|---|
+   | `PHOTONAMOUS_PAGES_PROJECT` | `photonamous` | The Pages project the workflow deploys to |
+   | `PHOTONAMOUS_URL` | `https://photonamous.com/` | Where Lopsy hands off |
+   | `LOPSY_URL` | `https://lopsy.art/` | Where Photonamous hands off |
+6. **Deploy.** Run the **Deploy to Cloudflare Pages** workflow (Actions >
+   Run workflow), or push to `main`. It first builds and publishes Lopsy,
+   with File > Add to Photonamous and Grade in Photonamous pointing at
+   photonamous.com. Then it builds and publishes Photonamous. A failing
+   Photonamous step never holds Lopsy's deploy back.
+7. **Check.**
+   - `https://photonamous.com/` shows the start screen, and the DevTools
+     console has no CSP errors.
+   - A photo's **Edit in Lopsy** opens lopsy.art with the photo.
+   - Lopsy's **Save to Photonamous** brings it back.
+
+**Rollback.** Set `DEPLOY_PHOTONAMOUS` to `false` (or delete it) and run
+the workflow again. Lopsy is then built without the handoff, exactly as
+before. Photonamous keeps its last deployment until you remove its custom
+domain or delete the project. Either project can also be rolled back to
+an earlier deployment at once (Pages > the project > Deployments).
+
+To see the production build before pushing:
 
 ```bash
-npm run build:site          # or build:site:noopt where wasm-opt cannot be downloaded
-npm run serve:site          # http://127.0.0.1:4180 (SITE_HOST=0.0.0.0 to share it), served the way Pages serves it
+npm run build:photos        # apps/photonamous/dist; the engine must be built (section 1)
+npm run serve:photos        # http://127.0.0.1:4180 (SITE_HOST=0.0.0.0 to share it), served the way Pages serves it
 ```
 
 ## 5. Tests
@@ -220,12 +268,17 @@ npm run test:photos                          # Vitest: photos-core, then the app
 npm run test -w @lopsy/handoff               # the handoff protocol
 npm run test:e2e -w @lopsy/photos-core       # photos-core's browser-only classes in Chromium (Vite harness)
 npm run test:e2e:photos                      # the app in Chromium; *.drive.spec.ts run against the fake Drive
-npm run test:e2e:site                        # smoke test of the assembled dist/ (build it first)
-npm run test:e2e:offline                     # Photonamous' production build started offline (builds, runs, cleans up)
+npm run test:e2e:site                        # the production build as Pages serves it: headers, deep links, offline start, Edit in Lopsy
 cd apps/lopsy-web && npx playwright test e2e/photos-handoff.spec.ts --project=chromium   # Lopsy's side of the handoff
 ```
 
 No test talks to Google: the Drive tests use photos-core's fake Drive.
+
+`test:e2e:site` builds Photonamous without the settings in `.env.local`,
+runs `site.spec.ts` and `offline.spec.ts` against the build
+(`apps/photonamous/playwright.site.config.ts`), then deletes it. To run one
+of them, run its build step yourself, then for example
+`npm exec -w photonamous -- playwright test -c playwright.site.config.ts offline.spec.ts`.
 
 **Browsers.** Playwright uses its own Chromium when `npx playwright
 install chromium` has installed it. Where a different revision is
@@ -257,7 +310,7 @@ These need a real account, in a real browser, before Phase 1
 - **S1, uploads and CSP.** That the browser can read the resumable upload's
   `Location` header under CORS, and that chunks resume after a reload.
   That the CSP in `apps/photonamous/public/_headers` lets sign-in, the
-  Picker and the Drive API through on lopsy.art: watch the console for
+  Picker and the Drive API through on photonamous.com: watch the console for
   CSP errors. Its `style-src 'unsafe-inline'` is there on the assumption
   that the Picker and the sign-in UI insert inline styles; drop it if
   they work without.

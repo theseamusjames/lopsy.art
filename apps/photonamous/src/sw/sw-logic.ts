@@ -12,7 +12,7 @@ export const CACHE_PREFIX = 'photonamous-shell-';
 /** What the build writes into the worker: its version, the files to precache (absolute paths) and their SHA-256. */
 export interface PrecacheManifest {
   readonly version: string;
-  /** The app's base path, `/` or `/photos/`; the page itself is precached under it. */
+  /** The app's base path (`/` on photonamous.com); the page itself is precached under it. */
   readonly base: string;
   readonly files: readonly string[];
   /** Lower-case hex SHA-256 of each file's bytes, by path. */
@@ -55,9 +55,9 @@ export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
 }
 
 /**
- * Whether these are the bytes the build wrote for `path`. The cache is
- * shared with everything on the origin (Lopsy too, on lopsy.art), so a
- * cached file is checked before it is served.
+ * Whether these are the bytes the build wrote for `path`. Any script on
+ * the origin can write to the cache, so a cached file is checked before it
+ * is served.
  */
 export async function matchesBuild(manifest: PrecacheManifest, path: string, bytes: ArrayBuffer): Promise<boolean> {
   const expected = manifest.hashes[path];
