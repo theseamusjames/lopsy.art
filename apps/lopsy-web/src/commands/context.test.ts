@@ -24,7 +24,7 @@ vi.mock('../engine-wasm/engine-state', async (importOriginal) => {
 
 const { useEditorStore } = await import('../app/editor-store');
 const { CommandError } = await import('./command');
-const { layerSummary, requireDocument, requireEngine, resolveLayer, waitForEditorState } = await import('./context');
+const { decodeBase64, encodeBase64, layerSummary, requireDocument, requireEngine, resolveLayer, waitForEditorState } = await import('./context');
 
 function store() {
   return useEditorStore.getState();
@@ -118,5 +118,29 @@ describe('waitForEditorState', () => {
     });
     await vi.advanceTimersByTimeAsync(500);
     await assertion;
+  });
+});
+
+describe('base64', () => {
+  it('round-trips bytes, including runs longer than one encode chunk', () => {
+    const bytes = new Uint8Array(70_000).map((_, i) => (i * 31) % 256);
+    expect(decodeBase64('x.op', 'base64', encodeBase64(bytes))).toEqual(bytes);
+    expect(encodeBase64(new Uint8Array([0, 255, 128]))).toBe('AP+A');
+  });
+
+  it('accepts missing padding and line breaks', () => {
+    expect(decodeBase64('x.op', 'base64', 'AP+A\nAP8')).toEqual(new Uint8Array([0, 255, 128, 0, 255]));
+  });
+
+  it('rejects anything that is not base64, or decodes to nothing, as invalid naming the param', () => {
+    for (const bad of ['not*base64', 'A', '====', 'AB=C', '']) {
+      try {
+        decodeBase64('doc.open', 'base64', bad);
+        throw new Error(`accepted ${bad}`);
+      } catch (error) {
+        expect(error).toBeInstanceOf(CommandError);
+        expect((error as InstanceType<typeof CommandError>).message).toBe('doc.open: base64 is not valid base64');
+      }
+    }
   });
 });

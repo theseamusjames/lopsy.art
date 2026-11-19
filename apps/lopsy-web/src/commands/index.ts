@@ -16,6 +16,8 @@ import './adjust/adjust';
 import './filter/filter';
 import './image/image';
 import './document/color-mode';
+import './document/files';
+import './layer/add-image';
 
 setSettle(settled);
 

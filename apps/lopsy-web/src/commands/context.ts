@@ -152,3 +152,50 @@ export function parseGradientStops(commandId: string, path: string, value: unkno
   const stops = value.map((stop: unknown, index) => parseStop(commandId, `${path}[${index}]`, stop));
   return stops.sort((a, b) => a.position - b.position);
 }
+
+/**
+ * The longest base64 string a command takes: 256 Mi characters, which is
+ * 192 MiB of file. That is more than a PNG, PSD or .lopsy of an 8192x8192
+ * document needs, and half of V8's longest string, so the decoded binary
+ * string and its bytes still fit beside it.
+ */
+export const MAX_BASE64_LENGTH = 256 * 1024 * 1024;
+
+export const base64Spec = (what: string) =>
+  ({
+    type: 'string',
+    minLength: 1,
+    maxLength: MAX_BASE64_LENGTH,
+    description: `${what}, base64-encoded (standard alphabet; padding optional).`,
+  }) as const;
+
+const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
+
+function binaryFromBase64(value: string): string | null {
+  const compact = value.replace(/\s+/g, '');
+  if (!BASE64_PATTERN.test(compact) || compact.length % 4 === 1) return null;
+  try {
+    return atob(compact);
+  } catch {
+    return null;
+  }
+}
+
+/** Bytes from base64; throws `invalid` naming `path` when it is not base64 or decodes to nothing. */
+export function decodeBase64(commandId: string, path: string, value: string): Uint8Array {
+  const binary = binaryFromBase64(value);
+  if (!binary) throw new CommandError('invalid', `${commandId}: ${path} is not valid base64`);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+const BASE64_CHUNK = 0x8000;
+
+export function encodeBase64(bytes: Uint8Array): string {
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK)));
+  }
+  return btoa(chunks.join(''));
+}
