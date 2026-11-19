@@ -393,7 +393,7 @@ export function EditView({
   };
   // Set once the tools below are defined; the key handler reads it.
   const toolShortcuts = useRef<(shortcut: 'crop' | 'linearArea' | 'radialArea') => void>(() => undefined);
-  const isToolOpen = isCropping || isLevelling || isCopyDialogOpen || isHelpOpen;
+  const isToolOpen = isCropping || isLevelling || isPickingWb || isCopyDialogOpen || isHelpOpen;
   const handlers = useRef({ onUndo: handleUndo, onRedo: handleRedo, engine, filmstrip, isCropping: false, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => {}, openFromStrip });
   handlers.current = { onUndo: handleUndo, onRedo: handleRedo, engine, filmstrip, isCropping, onCopyPaste: handleCopyPaste, isToolOpen, leave: () => void handleClose(), openFromStrip };
 
