@@ -739,12 +739,13 @@ fails them on a loaded machine.
   React StrictMode's double effect sends the dialog's returned focus to
   the wrong place; Photonamous applies it a frame later.
 
-## UI preference: no coloured edge bars
-The owner doesn't want a coloured bar along an element's edge (a left
-border or an inset box-shadow stripe) to mark state, in either app or the
-sites. Mark the current or selected item with a small accent-blue dot
-beside its label instead (Photonamous' History, Versions and Areas lists
-reserve a 6 px dot slot on every row so labels line up), and a toast's
-kind with a dot in its colour. Callouts get a tinted background, not a
-stripe.
+## UI preference: no coloured left border as an indicator
+A coloured left border (or any edge stripe, such as an inset box-shadow
+bar) used to mark state or kind is always wrong, in either app and on the
+sites. What replaces it depends on the context; choose what fits: a dot
+beside the label, an icon, a check, a fill, or a word. Examples in the
+code: Photonamous' History, Versions and Areas lists mark the current or
+selected row with a 6 px accent dot (every row keeps the dot's slot, so
+labels line up); Lopsy's toasts show their kind with a dot in its colour;
+tutorial notes are a tinted box.
 

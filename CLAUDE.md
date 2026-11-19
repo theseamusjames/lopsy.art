@@ -85,9 +85,9 @@ Sometimes you'll need example images to test image editing, particularly when wo
 
 ## Visual design
 
-- Never mark state with a coloured bar along an element's edge (a left
-  border or inset stripe): use a small accent dot beside the label.
-  `MEMORY.md` has the details.
+- Never use a coloured left border (or any edge stripe) as an indicator
+  of state or kind. Choose what fits the context instead: a dot beside
+  the label, an icon, a check, a fill or a word. `MEMORY.md` has examples.
 
 ## Dependencies
 
