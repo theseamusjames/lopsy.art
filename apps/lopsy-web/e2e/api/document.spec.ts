@@ -217,6 +217,7 @@ test.describe('the command API', () => {
     const all = await describe(page);
     expect(all.map((c) => c.id)).toEqual([
       'adjust.add', 'adjust.list', 'adjust.remove', 'adjust.reorder', 'adjust.set', 'adjust.set-enabled', 'adjust.set-node-enabled',
+      'brush.define',
       'clipboard.copy', 'clipboard.copy-merged', 'clipboard.cut', 'clipboard.paste',
       'color.reset', 'color.set', 'color.swap',
       'doc.color-mode', 'doc.export', 'doc.export-psd', 'doc.info', 'doc.new', 'doc.open', 'doc.save',
@@ -237,6 +238,8 @@ test.describe('the command API', () => {
       'paint.fill',
       'path.add', 'path.exclude', 'path.intersect', 'path.list', 'path.remove', 'path.rename', 'path.select', 'path.stroke',
       'path.subtract', 'path.unite',
+      'pattern.define',
+      'quickmask.set',
       'select.all', 'select.ellipse', 'select.from-layer', 'select.invert', 'select.modify', 'select.none', 'select.polygon',
       'select.rect', 'select.to-path',
       'tool.describe', 'tool.options', 'tool.select', 'tool.set',

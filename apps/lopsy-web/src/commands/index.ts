@@ -22,6 +22,9 @@ import './view/view';
 import './clipboard/clipboard';
 import './path/path';
 import './guide/guide';
+import './pattern/pattern';
+import './brush/brush';
+import './quick-mask/quick-mask';
 
 setSettle(settled);
 
