@@ -167,6 +167,33 @@ describe('areas across devices', () => {
   });
 });
 
+describe('areas in whole-recipe writes', () => {
+  it('New version copies the areas, linear and radial', async () => {
+    const { a, b, versionId } = await twoDevices();
+    const linear = addArea(DEFAULT_RECIPE, 'linear', newId(2_000_000))!;
+    const radial = addArea(DEFAULT_RECIPE, 'radial', newId(2_000_010))!;
+    a.editRecipe(versionId, { ...linear.values, ...radial.values }, 'Add areas');
+    const recipe = a.getView().versions.get(versionId)!.recipe;
+    expect(liveAreas(recipe)).toHaveLength(2);
+    const second = a.createVersion(a.getView().versions.get(versionId)!.assetId, 'Copy', recipe);
+    await exchange(a, b);
+    for (const s of [a, b]) expect(s.getView().versions.get(second)!.recipe.areas).toEqual(recipe.areas);
+  });
+
+  it('Rotate, Flip and Reset write the whole recipe, areas and all', async () => {
+    const { a, b, versionId } = await twoDevices();
+    a.editRecipe(versionId, addArea(DEFAULT_RECIPE, 'radial', newId(2_000_000))!.values, 'Add area');
+    const recipe = a.getView().versions.get(versionId)!.recipe;
+    a.setRecipe(versionId, { ...recipe, framing: { ...recipe.framing, flipH: !recipe.framing.flipH } }, 'Flip');
+    await exchange(a, b);
+    for (const s of [a, b]) {
+      const flipped = s.getView().versions.get(versionId)!.recipe;
+      expect(flipped.framing.flipH).toBe(!recipe.framing.flipH);
+      expect(flipped.areas).toEqual(recipe.areas);
+    }
+  });
+});
+
 describe('versions in albums and the primary version', () => {
   it('holds one version or the whole photo, as separate memberships', async () => {
     const { a, b, versionId } = await twoDevices();

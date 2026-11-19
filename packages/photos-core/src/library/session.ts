@@ -31,11 +31,9 @@ import {
   DEFAULT_RECIPE,
   removedAreaValues,
   recipeHash,
+  recipeLeafJson,
   recipeToPaths,
-  type CropRect,
-  type CurvePoint,
   type Recipe,
-  type RecipeLeaf,
 } from './recipe';
 import { loadNewestSnapshot } from './snapshot';
 import { SyncEngine, type SyncTimers } from './sync';
@@ -96,18 +94,15 @@ export class LibraryReadOnlyError extends Error {
   }
 }
 
-function leafJson(value: RecipeLeaf): Json {
-  if (value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return (value as readonly CurvePoint[]).map((p) => ({ x: p.x, y: p.y }));
-  const crop = value as CropRect;
-  return { x: crop.x, y: crop.y, width: crop.width, height: crop.height };
-}
-
-/** The recipe as `recipe.*` field values. */
+/**
+ * The recipe as `recipe.*` field values. Every object leaf is copied whole:
+ * a crop rectangle, and a mask's linear or radial geometry, whose keys are
+ * not a rectangle's.
+ */
 export function recipeFields(recipe: Recipe): Record<string, Json> {
   const out: Record<string, Json> = {};
   for (const [path, value] of Object.entries(recipeToPaths(recipe))) {
-    out[`recipe.${path}`] = leafJson(value);
+    out[`recipe.${path}`] = recipeLeafJson(value);
   }
   return out;
 }
