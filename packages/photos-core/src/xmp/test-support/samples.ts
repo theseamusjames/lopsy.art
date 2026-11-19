@@ -1,17 +1,16 @@
-/** Hand-written sidecars in the shapes Lightroom Classic and darktable write. */
+/** Hand-written sidecars in the shapes Camera Raw and darktable write. */
 
-export const LIGHTROOM_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 7.0-c000 1.000000, 0000/00/00-00:00:00        ">
+export const CAMERA_RAW_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 7.0-c000 1.000000, 0000/00/00-00:00:00        ">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
   <rdf:Description rdf:about=""
     xmlns:xmp="http://ns.adobe.com/xap/1.0/"
     xmlns:tiff="http://ns.adobe.com/tiff/1.0/"
     xmlns:exif="http://ns.adobe.com/exif/1.0/"
     xmlns:dc="http://purl.org/dc/elements/1.1/"
-    xmlns:lr="http://ns.adobe.com/lightroom/1.0/"
     xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
    xmp:Rating="4"
    xmp:Label="Green"
-   xmp:CreatorTool="Adobe Photoshop Lightroom Classic 13.0 (Macintosh)"
+   xmp:CreatorTool="Adobe Photoshop Camera Raw 16.0 (Macintosh)"
    tiff:Orientation="6"
    crs:Version="16.0"
    crs:ProcessVersion="11.0"
@@ -43,14 +42,9 @@ export const LIGHTROOM_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe
     <rdf:Bag>
      <rdf:li>harbour</rdf:li>
      <rdf:li>France</rdf:li>
+     <rdf:li>Boats</rdf:li>
     </rdf:Bag>
    </dc:subject>
-   <lr:hierarchicalSubject>
-    <rdf:Bag>
-     <rdf:li>Places|Europe|France</rdf:li>
-     <rdf:li>Subjects|Boats</rdf:li>
-    </rdf:Bag>
-   </lr:hierarchicalSubject>
   </rdf:Description>
  </rdf:RDF>
 </x:xmpmeta>

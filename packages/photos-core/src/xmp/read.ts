@@ -11,7 +11,7 @@
  * | tiff:Orientation vs file   | 1, 6, 3, 8   | framing.rotate    | the quarter turns between them |
  *
  * With a CropAngle the angle maps to framing.angle and the crop is left
- * out: Lightroom's turned crop rectangle has no exact form in ours, which
+ * out: Camera Raw's turned crop rectangle has no exact form in ours, which
  * crops the straightened image to its largest upright rectangle.
  */
 
@@ -26,7 +26,6 @@ export const NS = {
   rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
   xmp: 'http://ns.adobe.com/xap/1.0/',
   dc: 'http://purl.org/dc/elements/1.1/',
-  lr: 'http://ns.adobe.com/lightroom/1.0/',
   crs: 'http://ns.adobe.com/camera-raw-settings/1.0/',
   tiff: 'http://ns.adobe.com/tiff/1.0/',
   /** Ours: the recipe, one attribute per dotted path, values as JSON. */
@@ -180,7 +179,6 @@ export function readXmp(source: string, options: { readonly kelvinScale?: Kelvin
     keywords.push(t);
   };
   list(props, NS.dc, 'subject').forEach(add);
-  for (const path of list(props, NS.lr, 'hierarchicalSubject')) add(path.split('|').pop() ?? '');
 
   const edits = crsToRecipePaths({
     number: (local) => number(props, NS.crs, local),

@@ -1,5 +1,5 @@
 /**
- * Lightroom and Camera Raw edits (the `crs:` namespace) mapped onto our
+ * Camera Raw edits (the `crs:` namespace) mapped onto our
  * recipe, both ways (spec Phase 5, for people moving from other software).
  *
  * Every mapping is approximate. Our controls are not Adobe's maths, so
@@ -116,7 +116,7 @@ export const CRS_SCALARS: readonly CrsScalar[] = [
 
 /**
  * Shape controls that mean something only while their effect is on, so
- * they are read and written only then: Lightroom writes its defaults
+ * they are read and written only then: Camera Raw writes its defaults
  * (midpoint 50, grain size 25) even with no vignette, and ours differ.
  */
 const CRS_DEPENDENT: readonly { readonly when: string; readonly scalars: readonly CrsScalar[] }[] = [
@@ -145,7 +145,7 @@ export const CRS_CURVES: Readonly<Record<CurveChannel, string>> = {
   blue: 'ToneCurvePV2012Blue',
 };
 
-/** Temperatures above this are Kelvin (RAW); at or below it, Lightroom's relative -100..100 (JPEG, TIFF). */
+/** Temperatures above this are Kelvin (RAW); at or below it, Camera Raw's relative -100..100 (JPEG, TIFF). */
 const KELVIN_FLOOR = 1000;
 
 /**
@@ -153,7 +153,7 @@ const KELVIN_FLOOR = 1000;
  * shape of the engine's `rafWhiteBalanceKelvin`:
  * `kelvin = 1e6 / (miredAtZero + miredPerUnit · temperature)`, with
  * `asShotKelvin` at temperature 0. Our RAW temperature is relative to the
- * camera's as-shot balance and Lightroom's is absolute Kelvin, so without
+ * camera's as-shot balance and Camera Raw's is absolute Kelvin, so without
  * this scale a RAW sidecar's white balance cannot be mapped either way.
  */
 export interface KelvinScale {
@@ -186,7 +186,7 @@ function isUsableScale(scale: KelvinScale | null | undefined): scale is KelvinSc
 
 export type CrsValue = string | readonly string[];
 
-/** A tone curve from Lightroom's "x, y" points (0..255); null when it cannot be read. */
+/** A tone curve from Camera Raw's "x, y" points (0..255); null when it cannot be read. */
 export function curveFromCrs(value: CrsValue | undefined): CurvePoint[] | null {
   if (value === undefined) return null;
   const items = typeof value === 'string' ? [value] : value;
@@ -203,7 +203,7 @@ export function curveFromCrs(value: CrsValue | undefined): CurvePoint[] | null {
   const first = points[0];
   const last = points[points.length - 1];
   if (!first || !last) return null;
-  // Lightroom's curves run from 0 to 255; one that stops short is held flat to the ends.
+  // Camera Raw's curves run from 0 to 255; one that stops short is held flat to the ends.
   if (first.x > 0) points.unshift({ x: 0, y: first.y });
   if (last.x < 1) points.push({ x: 1, y: last.y });
   if (points.length < 2 || points.length > MAX_CURVE_POINTS) return null;
@@ -249,8 +249,8 @@ export function crsToRecipePaths(src: CrsSource, kelvinScale?: KelvinScale | nul
   return out;
 }
 
-/** Detail controls Lightroom gives a default of its own (sharpening 40, colour noise 25 on RAW) when they are missing. */
-const LIGHTROOM_DETAIL_DEFAULTS: readonly (readonly [crs: string, path: string])[] = [
+/** Detail controls Camera Raw gives a default of its own (sharpening 40, colour noise 25 on RAW) when they are missing. */
+const CAMERA_RAW_DETAIL_DEFAULTS: readonly (readonly [crs: string, path: string])[] = [
   ['Sharpness', 'sharpness.amount'],
   ['ColorNoiseReduction', 'noise.color'],
   ['LuminanceSmoothing', 'noise.luminance'],
@@ -258,11 +258,11 @@ const LIGHTROOM_DETAIL_DEFAULTS: readonly (readonly [crs: string, path: string])
 
 /**
  * Attributes for the detail controls `written` leaves out, at our values:
- * without them Lightroom would add its own sharpening and noise reduction.
+ * without them Camera Raw would add its own sharpening and noise reduction.
  */
 export function explicitDetailDefaults(recipe: Recipe, written: readonly string[]): string[] {
   const paths = recipeToPaths(recipe);
-  return LIGHTROOM_DETAIL_DEFAULTS.filter(([crs]) => !written.some((a) => a.startsWith(`crs:${crs}=`))).map(
+  return CAMERA_RAW_DETAIL_DEFAULTS.filter(([crs]) => !written.some((a) => a.startsWith(`crs:${crs}=`))).map(
     ([crs, path]) => `crs:${crs}="${String(paths[path])}"`,
   );
 }
@@ -314,7 +314,7 @@ export function recipeToCrs(
   }
   for (const { when, scalars } of CRS_DEPENDENT) {
     if (paths[when] === 0) continue;
-    // All of them, defaults included: Lightroom's defaults are not ours.
+    // All of them, defaults included: Camera Raw's defaults are not ours.
     for (const { crs, path } of scalars) {
       const value = paths[path];
       if (typeof value === 'number') attributes.push(`crs:${crs}="${signed(Math.round(value))}"`);

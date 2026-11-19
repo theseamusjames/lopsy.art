@@ -24,7 +24,7 @@ interface Field {
 }
 
 function asciiField(tag: number, text: string): Field {
-  // EXIF says 7-bit ASCII, but '©' in a copyright is common and readers (exiftool, Lightroom) take UTF-8.
+  // EXIF says 7-bit ASCII, but '©' in a copyright is common and readers (exiftool, photo editors) take UTF-8.
   const bytes = concat([new TextEncoder().encode(text), new Uint8Array(1)]);
   return { tag, type: ASCII, count: bytes.length, data: bytes };
 }

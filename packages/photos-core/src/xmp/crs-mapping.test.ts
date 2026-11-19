@@ -5,8 +5,8 @@ import { curveFromCrs, kelvinForTemperature, temperatureForKelvin, type KelvinSc
 import { readXmp, recipeFromXmp } from './read';
 import { writeXmp } from './write';
 
-/** A Lightroom Classic sidecar for a RAW file, with most of the Develop panels in use (synthesized). */
-const FULL_LIGHTROOM_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 7.0-c000">
+/** A Camera Raw sidecar for a RAW file, with most of the develop panels in use (synthesized). */
+const FULL_CAMERA_RAW_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 7.0-c000">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
   <rdf:Description rdf:about=""
     xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
@@ -39,9 +39,9 @@ const FULL_LIGHTROOM_XMP = `<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe X
 /** A body shot at 5000 K whose temperature +100 is 20000 K and -100 is about 2857 K (made up, the engine's shape). */
 const SCALE: KelvinScale = { asShotKelvin: 5000, miredAtZero: 200, miredPerUnit: -1.5 };
 
-describe('Lightroom edit mapping', () => {
-  it('maps a full Lightroom sidecar onto the recipe', () => {
-    const x = readXmp(FULL_LIGHTROOM_XMP, { kelvinScale: SCALE });
+describe('Camera Raw edit mapping', () => {
+  it('maps a full Camera Raw sidecar onto the recipe', () => {
+    const x = readXmp(FULL_CAMERA_RAW_XMP, { kelvinScale: SCALE });
     const r = x ? recipeFromXmp(x, 1) : null;
     expect(r).not.toBeNull();
     if (!r) return;
@@ -140,7 +140,7 @@ describe('Lightroom edit mapping', () => {
     const doc = (attrs: string) =>
       `<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/" ${attrs}/></rdf:RDF></x:xmpmeta>`;
     const tungsten = doc('crs:WhiteBalance="Custom" crs:Temperature="3200" crs:Tint="+6" crs:Exposure2012="+0.5"');
-    // A frame shot under tungsten, kept at 3200 K in Lightroom: no change from as shot.
+    // A frame shot under tungsten, kept at 3200 K in Camera Raw: no change from as shot.
     const tungstenScale: KelvinScale = { asShotKelvin: 3200, miredAtZero: 1e6 / 3200, miredPerUnit: -1.5 };
     expect(recipeFromXmp(readXmp(tungsten, { kelvinScale: tungstenScale })!, 1)?.whiteBalance).toEqual({ mode: 'custom', temperature: 0, tint: 4 });
     // Without the scale the white balance is left as shot; the other edits still map.
@@ -164,8 +164,8 @@ describe('Lightroom edit mapping', () => {
     expect(jpeg).toContain('crs:Tint="+4"');
   });
 
-  it('writes Camera Raw settings Lightroom reads back to the same recipe', () => {
-    const x = readXmp(FULL_LIGHTROOM_XMP, { kelvinScale: SCALE })!;
+  it('writes Camera Raw settings that read back to the same recipe', () => {
+    const x = readXmp(FULL_CAMERA_RAW_XMP, { kelvinScale: SCALE })!;
     const recipe = recipeFromXmp(x, 1)!;
     const asset = { id: 'a', format: 'raf', rating: 0, setAside: false, label: null, keywords: [], title: null, caption: null } as unknown as Asset;
     const version = { id: 'v', assetId: 'a', name: 'Original', recipe } as unknown as Version;
@@ -193,7 +193,7 @@ describe('Lightroom edit mapping', () => {
     }
   });
 
-  it('writes no sharpening explicitly, so Lightroom does not add its own', () => {
+  it('writes no sharpening explicitly, so Camera Raw does not add its own', () => {
     const recipe = recipeFromPaths({ 'tone.exposure': 1 });
     const asset = { id: 'a', format: 'raf', rating: 0, setAside: false, label: null, keywords: [], title: null, caption: null } as unknown as Asset;
     const text = writeXmp(asset, { id: 'v', assetId: 'a', name: 'Original', recipe } as unknown as Version);

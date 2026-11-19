@@ -235,7 +235,7 @@ export function inscribedScale(width: number, height: number, angleDeg: number):
 /**
  * The crop shown for a straightened photo, framed-normalized: the user's
  * crop (or the whole frame) kept inside the largest upright rectangle the
- * turned image fills, as Lightroom's straighten does.
+ * turned image fills, as straighten tools in RAW developers do.
  */
 export function straightenedCrop(rect: Rect | null, angleDeg: number, width: number, height: number): Rect | null {
   const k = inscribedScale(width, height, angleDeg);

@@ -101,8 +101,8 @@ export function targetIds(selection: Selection): string[] {
 /**
  * Where the selection goes when photos leave the grid (set aside,
  * deleted): the first tile after the last one leaving that stays, else the
- * last one before them that stays; null when nothing is left. Like
- * Lightroom, so the next photo is up.
+ * last one before them that stays; null when nothing is left. So the
+ * next photo is up.
  */
 export function nextAfterRemoval(orderedIds: readonly string[], leaving: ReadonlySet<string>, assetOf: (id: string) => string): string | null {
   const gone = (id: string) => leaving.has(assetOf(id));

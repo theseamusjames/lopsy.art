@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SIDECAR_APPLIED_DUPLICATE, SIDECAR_NOT_APPLIED_DUPLICATE } from '../xmp/sidecars';
-import { LIGHTROOM_XMP } from '../xmp/test-support/samples';
+import { CAMERA_RAW_XMP } from '../xmp/test-support/samples';
 import { resumeImports, startImport } from './importer';
 import { MemoryImportQueueStore } from './queue-store';
 import { MemoryStagingStore } from './staging';
@@ -43,7 +43,7 @@ describe('sidecars across a reload and for duplicates', () => {
     const queueStore = new MemoryImportQueueStore();
     const staging = new MemoryStagingStore();
     adapter.hooks.createDelay = (file) => (file.properties?.['lp.role'] === 'original' ? new Promise<void>(() => {}) : null);
-    const files = [jpegFile('A.JPG', 1), new File([LIGHTROOM_XMP], 'A.xmp')];
+    const files = [jpegFile('A.JPG', 1), new File([CAMERA_RAW_XMP], 'A.xmp')];
     const first = startImport(files, { session, previewRenderer: renderer, queueStore, staging });
     await vi.waitFor(() => expect(first.getProgress().items.map((i) => i.state)).toEqual(['uploading', 'skipped']));
     expect((await staging.list()).filter((k) => k.endsWith('.xmp'))).toHaveLength(1);
@@ -66,7 +66,7 @@ describe('sidecars across a reload and for duplicates', () => {
     const photo = jpegFile('B.JPG', 2);
     const first = await startImport([photo], { session, previewRenderer: renderer }).finished;
     const existing = first.items[0]?.assetId;
-    const again = await startImport([new File([photo], 'B copy.JPG'), new File([LIGHTROOM_XMP], 'B copy.xmp')], {
+    const again = await startImport([new File([photo], 'B copy.JPG'), new File([CAMERA_RAW_XMP], 'B copy.xmp')], {
       session,
       previewRenderer: renderer,
     }).finished;
@@ -84,7 +84,7 @@ describe('sidecars across a reload and for duplicates', () => {
     const first = await startImport([photo], { session, previewRenderer: renderer }).finished;
     const existing = first.items[0]?.assetId ?? '';
     session.setKeyword([existing], 'mine', true);
-    const again = await startImport([new File([photo], 'C.JPG'), new File([LIGHTROOM_XMP], 'C.xmp')], {
+    const again = await startImport([new File([photo], 'C.JPG'), new File([CAMERA_RAW_XMP], 'C.xmp')], {
       session,
       previewRenderer: renderer,
     }).finished;

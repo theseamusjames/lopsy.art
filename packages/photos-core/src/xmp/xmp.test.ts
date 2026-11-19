@@ -6,7 +6,7 @@ import type { Version } from '../library/types';
 import { exportSidecars } from './export';
 import { readXmp, recipeFromXmp } from './read';
 import { matchSidecars } from './sidecars';
-import { LIGHTROOM_XMP, REJECTED_CROPPED_XMP } from './test-support/samples';
+import { CAMERA_RAW_XMP, REJECTED_CROPPED_XMP } from './test-support/samples';
 import { escapeXml, writeXmp } from './write';
 import { parseXml } from './xml';
 import { MemoryAdapter } from '../storage/memory-adapter';
@@ -60,7 +60,7 @@ describe('XML subset parser', () => {
     expect(parseXml(tag(500), { ...{ maxChars: 1e7, maxDepth: 8, maxElements: 8 }, maxAttributes: 100_000 })).not.toBeNull();
     let seed = 3;
     for (let n = 0; n < 300; n++) {
-      const chars = [...LIGHTROOM_XMP];
+      const chars = [...CAMERA_RAW_XMP];
       for (let k = 0; k < 4; k++) {
         seed = (seed * 1103515245 + 12345) >>> 0;
         chars[seed % chars.length] = '<>&"=/ x'[seed % 8] ?? 'x';
@@ -71,8 +71,8 @@ describe('XML subset parser', () => {
 });
 
 describe('readXmp', () => {
-  it('reads a Lightroom sidecar', () => {
-    const x = readXmp(LIGHTROOM_XMP);
+  it('reads a Camera Raw sidecar', () => {
+    const x = readXmp(CAMERA_RAW_XMP);
     expect(x).toMatchObject({
       rating: 4,
       setAside: false,

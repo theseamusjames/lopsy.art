@@ -2,8 +2,7 @@
 //! image of 16-bit RGBA (unassociated alpha, as `encode_png_16` writes),
 //! Deflate compression (8, zlib streams) with the horizontal differencing
 //! predictor (2), strips of about 64 KB of raw pixels, and the export's ICC
-//! profile embedded in tag 34675, as Photoshop, Lightroom and libtiff
-//! expect.
+//! profile embedded in tag 34675, as Photoshop and libtiff expect.
 
 use std::io::Write;
 

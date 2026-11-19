@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { generatedJpeg, importFiles } from './library';
 
-/** Set aside moves the selection to the next photo, as Lightroom does; Undo (toast or Ctrl+Z) brings it back. */
+/** Set aside moves the selection to the next photo; Undo (toast or Ctrl+Z) brings it back. */
 test('set aside moves on, and undo brings the photo back', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: /This browser/ }).click();

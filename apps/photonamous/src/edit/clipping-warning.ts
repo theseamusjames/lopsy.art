@@ -2,7 +2,7 @@
  * Clipping warnings (spec 5.4): the histogram's shadow and highlight
  * indicators toggle an overlay on the live frame (the engine paints
  * clipped pixels red at white, blue at black; exports never show it).
- * J toggles both, as in Lightroom. The warnings switch off when the Edit
+ * J toggles both. The warnings switch off when the Edit
  * view closes.
  */
 
