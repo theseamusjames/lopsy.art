@@ -357,9 +357,72 @@ never talks to Google. Lopsy's side is in `apps/lopsy-web/FEATURES.md`
     are not. When a delete left originals of deleted photos outside the
     trash, it offers to move them there.
 
+## Accessibility
+
+The app aims at WCAG 2.2 level AA. `e2e/accessibility.spec.ts` walks every
+view as a user reaches it and runs axe-core's WCAG 2.2 A and AA and
+best-practice rules at each step; the `a11y-*.spec.ts` and
+`character-keys.spec.ts` specs drive the same views by keyboard.
+
+- **Colour and size.** Text meets 4.5:1 and control edges and focus rings
+  3:1 on every surface: primary buttons are a darker blue (#1f6fd6) and
+  danger buttons a darker red (#c62828) under white text, and secondary
+  text is #adadad. Every control is at least 24 × 24 px, or 24 px from
+  its neighbours. Every control shows a light-blue focus ring when it is
+  reached by keyboard. Animations stop when the system asks for reduced
+  motion.
+- **Single-key shortcuts** (1–5, the label letters, X, R, J, ?…) can be
+  turned off in Settings > Keyboard, for speech input or stray key
+  presses. Shortcuts with Ctrl or ⌘, the arrow keys, Space, Enter and
+  Escape keep working, and text fields get every key. The choice is kept
+  on this device.
+- **Dialogs.** Tab and Shift+Tab stay inside the open dialog; Escape
+  closes only the topmost dialog or popover, and focus goes back where it
+  was. Delete opens on Keep, Settings on its first heading.
+- **Popovers** (sync, keyboard shortcuts, filters): focus moves in when
+  one opens and back when it closes; they close when focus moves out. The
+  shortcut list scrolls with the arrow keys.
+- **Menus** (More, Photo actions, Presets, Import photos): they open on
+  the first item; the arrow keys move (wrapping), Home and End jump, a
+  letter jumps to the next item starting with it, Enter or Space chooses,
+  Escape closes with focus back on the button, and Tab closes and moves on.
+- **Rating stars and colour labels** are one Tab stop each; the arrow
+  keys choose, Space on the chosen star clears the rating, and every
+  label is named in words ("Red label").
+- **Toasts.** Errors are announced at once and other messages politely. A
+  toast stays while it is hovered or focused, Escape dismisses it, and
+  its Undo also dismisses it.
+- **Announcements.** Saving state, originals downloads, Check library's
+  findings, an export's start and end, and "Link copied." are announced
+  politely and once.
+- **Edit view.** The photo is the page's main content with its file name
+  as the heading, and the page title is "<file> – Edit – Photonamous".
+  Opening it focuses the heading and closing it gives focus back.
+  Screen readers hear when the photo is ready, export progress, and what
+  Undo or Redo did; errors also show on screen with Dismiss.
+  - *Crop*: each edge is a slider. The arrow keys move the focused edge,
+    Shift or Page Up/Down by 10 %, Home and End to the photo's side; Left,
+    Top, Width and Height fields set the crop in pixels. Opening Crop
+    focuses the top edge, and focus returns to Crop when it closes.
+  - *Areas*: the selected area's shape sliders set Start and End X and Y
+    (linear), or Center X and Y, Width, Height, Turn and Feather
+    (radial), in percent of the photo as shown. Each row has Rename.
+  - *Curves*: points are sliders. Up and Down change the output, Left and
+    Right the input (Shift for ten levels), Delete removes a point, and
+    Add point adds one in the widest gap.
+  - With the photo focused, the arrow keys move a zoomed photo and + and
+    − zoom. The before/after divider takes the arrow, Page, Home and End
+    keys.
+  - The histogram's clipping markers are outlined, or filled when that
+    end clips; its channels are solid, dashed and dotted lines, named in
+    a key. The current history step and version are marked by a bar as
+    well as by colour.
+  - Exposure and Angle tell screen readers their units ("+0.50 EV").
+
 ## Keyboard shortcuts
 
-Shown in the app with `?`.
+Shown in the app with `?`. The one-key shortcuts below (digits, letters,
+`?`) can be turned off in Settings > Keyboard.
 
 | Keys | What |
 |---|---|
@@ -384,4 +447,5 @@ In the Edit view: ⌘Z undo, ⇧⌘Z or ⌘Y redo, ⌘0 fit, ⌘1 100%, ⇧⌘C 
 ⇧⌘V copy and paste edits, hold `\` for before, J for clipping, R crop,
 M a linear area, ⇧M a radial area, ← → the previous or next photo,
 Escape back to the library (or out of the tool in use), ? the Edit
-view's shortcuts.
+view's shortcuts. With the photo focused, the arrow keys move a zoomed
+photo and + and − zoom.
