@@ -253,7 +253,7 @@ test.describe('Colour controls', () => {
 
   test('raising the luminance curve brightens the render, as one step', async ({ page }) => {
     const before = await imageStats(page, { kind: 'preview', index: 0, which: 'screen' });
-    const curve = page.getByRole('img', { name: 'Luminance curve' });
+    const curve = page.getByRole('group', { name: 'Luminance curve' });
     await curve.scrollIntoViewIfNeeded();
     const box = await curve.boundingBox();
     if (!box) throw new Error('no curve editor');

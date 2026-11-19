@@ -77,3 +77,71 @@ export function isStraight(points: readonly CurvePoint[]): boolean {
   const p = normalizePoints(points);
   return p.length === 2 && p[0]?.y === 0 && p[1]?.y === 1;
 }
+
+/** A curve value as the editor reads it out: a level, 0..255. */
+export function toLevel(value: number): number {
+  return Math.round(clamp01(value) * 255);
+}
+
+/** One level, the step of an arrow key; Shift, Page Up and Page Down move ten. */
+const LEVEL = 1 / 255;
+
+/**
+ * The points after a key on point `index`, or null for a key a point does
+ * not take. Up and down move its output; left and right its input, for
+ * inner points only (an end point takes them and stays); Home and End put
+ * its output at black and white.
+ */
+export function keyMovePoint(points: readonly CurvePoint[], index: number, key: string, isLarge: boolean): CurvePoint[] | null {
+  const point = points[index];
+  if (!point) return null;
+  const step = (isLarge ? 10 : 1) * LEVEL;
+  switch (key) {
+    case 'ArrowUp':
+      return movePoint(points, index, point.x, point.y + step);
+    case 'ArrowDown':
+      return movePoint(points, index, point.x, point.y - step);
+    case 'ArrowRight':
+      return movePoint(points, index, point.x + step, point.y);
+    case 'ArrowLeft':
+      return movePoint(points, index, point.x - step, point.y);
+    case 'PageUp':
+      return movePoint(points, index, point.x, point.y + 10 * LEVEL);
+    case 'PageDown':
+      return movePoint(points, index, point.x, point.y - 10 * LEVEL);
+    case 'Home':
+      return movePoint(points, index, point.x, 0);
+    case 'End':
+      return movePoint(points, index, point.x, 1);
+    default:
+      return null;
+  }
+}
+
+/** Where Add point puts a point: the middle of the widest gap between two points. */
+export function newPointX(points: readonly CurvePoint[]): number {
+  let x = 0.5;
+  let widest = -1;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (!a || !b || b.x - a.x <= widest) continue;
+    widest = b.x - a.x;
+    x = (a.x + b.x) / 2;
+  }
+  return x;
+}
+
+/** A point's name: the black and white ends, and the points between numbered from the left. */
+export function pointName(index: number, count: number): string {
+  if (index === 0) return 'Black point';
+  if (index === count - 1) return 'White point';
+  return `Point ${index}`;
+}
+
+/** The curve in words, for its text alternative. */
+export function describeCurve(points: readonly CurvePoint[]): string {
+  if (isStraight(points)) return 'Straight: every tone stays as it is.';
+  const p = normalizePoints(points);
+  return `${p.length} points, input to output: ${p.map((q) => `${toLevel(q.x)} to ${toLevel(q.y)}`).join(', ')}.`;
+}
