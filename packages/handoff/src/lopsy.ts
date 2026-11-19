@@ -1,7 +1,7 @@
 /**
  * The Lopsy end of the handoff (spec 6.12). Lopsy never talks to Google:
- * it receives a document from a Photos tab and posts saves back to one,
- * opening Photos itself when there is no Photos tab to talk to.
+ * it receives a document from a Photonamous tab and posts saves back to one,
+ * opening Photonamous itself when there is no Photonamous tab to talk to.
  */
 
 import {
@@ -34,7 +34,7 @@ import {
 } from './messages.ts';
 
 export interface LopsyHandoffConfig {
-  /** Photos' URL (`VITE_PHOTONAMOUS_URL`): absolute, or a path on this origin. Its origin is the only one trusted. */
+  /** Photonamous' URL (`VITE_PHOTONAMOUS_URL`): absolute, or a path on this origin. Its origin is the only one trusted. */
   readonly photosUrl: string;
   /** Defaults to the page's window. */
   readonly window?: HandoffWindow;
@@ -54,10 +54,10 @@ export function searchWithoutHandoffParam(search: string): string {
   return rest ? `?${rest}` : '';
 }
 
-/** A live connection to a Photos tab, kept for saves. */
+/** A live connection to a Photonamous tab, kept for saves. */
 export interface PhotosConnection {
   readonly id: string;
-  /** The Photos tab; replaced when a save had to reopen Photos. */
+  /** The Photonamous tab; replaced when a save had to reopen Photonamous. */
   peer: HandoffPeer | null;
   /** The document's place in the library, sent back with each save; gains `documentId` from the first save. */
   source?: HandoffSource;
@@ -73,12 +73,12 @@ export interface AcceptedHandoff {
 export interface AcceptHandoffOptions extends LopsyHandoffConfig {
   /** The id from `readHandoffId`. */
   readonly id: string;
-  /** How long to wait for the document after saying ready; Photos may still be rendering it. Default 120 s. */
+  /** How long to wait for the document after saying ready; Photonamous may still be rendering it. Default 120 s. */
   readonly timeoutMs?: number;
 }
 
 /**
- * Says ready to the Photos tab that opened this page and waits for the
+ * Says ready to the Photonamous tab that opened this page and waits for the
  * document. Rejects when there is no opener, it closes, or nothing valid
  * arrives in time.
  */
@@ -133,29 +133,29 @@ export type SaveOutcome =
 export interface SaveToPhotosOptions extends LopsyHandoffConfig {
   /**
    * The handoff this document came from. Null (Add to Photonamous) opens a
-   * new Photos tab and sends no source block. When the connection's tab was
-   * closed, Photos is reopened and the connection follows the new tab.
+   * new Photonamous tab and sends no source block. When the connection's tab was
+   * closed, Photonamous is reopened and the connection follows the new tab.
    */
   readonly connection: PhotosConnection | null;
   /**
    * The files, or a promise of them. Pass the promise straight away from a
-   * click handler: a Photos tab that must be opened is opened before the
+   * click handler: a Photonamous tab that must be opened is opened before the
    * files are awaited, while the click still allows popups.
    */
   readonly payload: SavePayload | Promise<SavePayload>;
   readonly timeouts?: {
-    /** For a reopened Photos tab to say ready. Default 60 s. */
+    /** For a reopened Photonamous tab to say ready. Default 60 s. */
     readonly readyMs?: number;
-    /** For Photos to finish storing the save. Default 10 min. */
+    /** For Photonamous to finish storing the save. Default 10 min. */
     readonly savedMs?: number;
-    /** For a known Photos tab to answer a ping before Photos is reopened. Default `PING_TIMEOUT_MS`. */
+    /** For a known Photonamous tab to answer a ping before Photonamous is reopened. Default `PING_TIMEOUT_MS`. */
     readonly pingMs?: number;
   };
 }
 
 /**
- * Posts a save to Photos and waits for its answer. Resolves with the
- * outcome Photos reports; rejects when Photos cannot be reached (popup
+ * Posts a save to Photonamous and waits for its answer. Resolves with the
+ * outcome Photonamous reports; rejects when Photonamous cannot be reached (popup
  * blocked, closed, timed out).
  */
 export async function saveToPhotos(options: SaveToPhotosOptions): Promise<SaveOutcome> {
@@ -184,7 +184,7 @@ export async function saveToPhotos(options: SaveToPhotosOptions): Promise<SaveOu
     return { peer: opened, ready };
   };
 
-  // The payload is built while Photos is checked and, if need be, reopened:
+  // The payload is built while Photonamous is checked and, if need be, reopened:
   // both must start now, inside the click that allows the popup.
   const payloadPromise = Promise.resolve(options.payload);
   payloadPromise.catch(() => {});
@@ -240,7 +240,7 @@ export async function saveToPhotos(options: SaveToPhotosOptions): Promise<SaveOu
   };
 }
 
-/** Pings a Photos tab and resolves true if it answers for this handoff within `timeoutMs`. */
+/** Pings a Photonamous tab and resolves true if it answers for this handoff within `timeoutMs`. */
 async function isListening(win: HandoffWindow, peer: HandoffPeer, origin: string, id: string, timeoutMs: number): Promise<boolean> {
   const ping: LopsyPingMessage = { protocol: PROTOCOL_VERSION, type: 'lopsy:ping', id };
   const pong = waitForMessage(win, {
@@ -264,8 +264,8 @@ async function isListening(win: HandoffWindow, peer: HandoffPeer, origin: string
 }
 
 /**
- * Back to Photos: focuses the Photos tab this document came from, or
- * opens Photos when that tab is gone. Call it from a click.
+ * Back to Photonamous: focuses the Photonamous tab this document came from, or
+ * opens Photonamous when that tab is gone. Call it from a click.
  */
 export function focusPhotos(options: LopsyHandoffConfig & { readonly connection: PhotosConnection | null }): void {
   const win = options.window ?? browserWindow();
@@ -274,7 +274,7 @@ export function focusPhotos(options: LopsyHandoffConfig & { readonly connection:
     peer.focus();
     return;
   }
-  // The new tab is a plain Photos page, not one waiting for a save, so the
-  // connection keeps its closed peer and the next save reopens Photos to receive.
+  // The new tab is a plain Photonamous page, not one waiting for a save, so the
+  // connection keeps its closed peer and the next save reopens Photonamous to receive.
   win.open(resolveAppUrl(options.photosUrl, win).href, PHOTOS_WINDOW_NAME);
 }

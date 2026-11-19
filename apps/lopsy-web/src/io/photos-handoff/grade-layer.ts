@@ -1,5 +1,5 @@
 /**
- * Grade in Photonamous (spec 6.12, L5): sends one raster layer to Photos'
+ * Grade in Photonamous (spec 6.12, L5): sends one raster layer to Photonamous'
  * Edit view and, on Done, replaces the layer's pixels with the graded ones
  * as one history step, keeping the recipe on the layer for provenance.
  *
@@ -67,7 +67,7 @@ export function applyGrade(layerId: string, result: Extract<GradeResult, { kind:
 }
 
 /**
- * Layer → Grade in Photonamous. Call it from a click: Photos opens before
+ * Layer → Grade in Photonamous. Call it from a click: Photonamous opens before
  * the layer is read. Does nothing in a build without Photonamous.
  */
 export async function gradeLayerInPhotos(layerId?: string): Promise<void> {

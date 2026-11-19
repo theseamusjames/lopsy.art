@@ -61,9 +61,9 @@ export interface PhotosSourceBlock {
   readonly assetId: string;
   readonly versionId: string;
   readonly recipeHash: string;
-  /** The library's document asset, once the file has been saved to Photos. */
+  /** The library's document asset, once the file has been saved to Photonamous. */
   readonly documentId?: string;
-  /** The photo's camera metadata summary, as Photos sent it. */
+  /** The photo's camera metadata summary, as Photonamous sent it. */
   readonly camera?: {
     readonly make?: string;
     readonly model?: string;

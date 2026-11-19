@@ -5,7 +5,7 @@ import type { PhotosSaveStatus } from '../../io/photos-handoff/photos-handoff-st
 import styles from './PhotosHandoffBar.module.css';
 
 interface PhotosHandoffBarProps {
-  /** The name Photos gave the document. */
+  /** The name Photonamous gave the document. */
   name: string;
   status: PhotosSaveStatus;
   onSave: () => void;
@@ -27,7 +27,7 @@ function statusText(status: PhotosSaveStatus): string | null {
 
 /**
  * Shown while the document came from Photonamous. While it is up, ⌘S /
- * Ctrl+S saves to Photos instead of the browser's Save Page.
+ * Ctrl+S saves to Photonamous instead of the browser's Save Page.
  */
 export function PhotosHandoffBar({ name, status, onSave, onBack }: PhotosHandoffBarProps) {
   useEffect(() => {

@@ -1,5 +1,5 @@
 /**
- * The Photos end of the handoff (spec 6.12). Photos does all Drive work;
+ * The Photonamous end of the handoff (spec 6.12). Photonamous does all Drive work;
  * these helpers only move bytes between the two tabs.
  */
 
@@ -215,7 +215,7 @@ export function sendToLopsy(options: SendToLopsyOptions): LopsyHandoff {
   return { id, delivered, close };
 }
 
-/** The `?receive=<id>` value of a Photos page Lopsy opened, or null. */
+/** The `?receive=<id>` value of a Photonamous page Lopsy opened, or null. */
 export function readReceiveId(search: string, param = 'receive'): string | null {
   const value = new URLSearchParams(search).get(param);
   return isHandoffId(value) ? value : null;
@@ -240,8 +240,8 @@ export interface LopsyReceiver {
 }
 
 /**
- * For a Photos page Lopsy opened with `?receive=<id>` because it had no
- * Photos tab to talk to: says ready to the opener and answers its saves.
+ * For a Photonamous page Lopsy opened with `?receive=<id>` because it had no
+ * Photonamous tab to talk to: says ready to the opener and answers its saves.
  * Later saves from the same Lopsy tab keep arriving until `close`.
  */
 export function receiveFromLopsy(options: ReceiveFromLopsyOptions): LopsyReceiver {

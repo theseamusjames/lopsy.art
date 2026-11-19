@@ -1,4 +1,4 @@
-// Color by hue (Photos' colour mixer) in OkLCh on display-referred,
+// Color by hue (Photonamous' colour mixer) in OkLCh on display-referred,
 // sRGB-encoded, straight-alpha pixels. The CPU reference, with the band
 // centres and every constant explained, is lopsy_core::color_mixer; change
 // the two together.

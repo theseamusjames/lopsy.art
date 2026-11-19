@@ -1,12 +1,12 @@
 /**
  * Lopsy's side of the Photonamous round trip (spec 5.6, 6.12):
  *
- * - `?photos-handoff=<id>` on load: receive a document from the Photos tab
+ * - `?photos-handoff=<id>` on load: receive a document from the Photonamous tab
  *   that opened this one and open it, with the "From Photonamous" bar.
  * - Save to Photonamous: post the `.lopsy` and a flattened 16-bit PNG back.
  * - Add to Photonamous (File menu): send the current document as new.
  *
- * Lopsy never talks to Google; Photos does all Drive work.
+ * Lopsy never talks to Google; Photonamous does all Drive work.
  */
 
 import {
@@ -91,7 +91,7 @@ async function openPngDocument(bytes: ArrayBuffer, name: string): Promise<void> 
 export async function openPhotosHandoffFromQuery(): Promise<void> {
   const url = photosUrl();
   const id = readHandoffId(window.location.search);
-  // A build without Photos ignores the parameter entirely.
+  // A build without Photonamous ignores the parameter entirely.
   if (!id || !url) return;
 
   const { pathname, search, hash } = window.location;
@@ -123,13 +123,13 @@ export async function openPhotosHandoffFromQuery(): Promise<void> {
 }
 
 /**
- * The document as Photos stores it: the `.lopsy` (carrying the source block
+ * The document as Photonamous stores it: the `.lopsy` (carrying the source block
  * when there is one) and a flattened 16-bit PNG.
  */
 async function buildSavePayload(source?: HandoffSource, camera?: CameraSummary): Promise<SavePayload> {
   const engine = getEngine();
   if (!engine) throw new Error('engine not ready.');
-  // Photos keeps the 16-bit pixels (v3); Save Project's downloads stay v2.
+  // Photonamous keeps the 16-bit pixels (v3); Save Project's downloads stay v2.
   const lopsy = await serializeProject({ precision: 16, ...(source ? { photos: camera ? { ...source, camera } : source } : {}) });
   const render = await (await renderPng16(engine)).arrayBuffer();
   const name = useEditorStore.getState().document.name || 'Untitled';
@@ -137,7 +137,7 @@ async function buildSavePayload(source?: HandoffSource, camera?: CameraSummary):
 }
 
 /**
- * Save to Photonamous. Call it from a click or key press: when the Photos
+ * Save to Photonamous. Call it from a click or key press: when the Photonamous
  * tab is gone it is reopened before the files are built, while the browser
  * still allows popups.
  */
@@ -172,7 +172,7 @@ export function backToPhotos(): void {
   focusPhotos({ photosUrl: url, connection: session?.connection ?? null });
 }
 
-/** File > Add to Photonamous: hands the document to Photos as a new document. */
+/** File > Add to Photonamous: hands the document to Photonamous as a new document. */
 export async function addDocumentToPhotos(): Promise<void> {
   if (!getEngine()) {
     notifyError('Cannot add to Photonamous: engine not ready.');

@@ -4,51 +4,51 @@
  * is untrusted input and goes through the validator for its type before
  * either app acts on it.
  *
- * Send flow (Photos opens Lopsy with `?photos-handoff=<id>`):
- *   Lopsy  → Photos  lopsy:ready      { id }
- *   Photos → Lopsy   photos:document  { id, document }
- *   Lopsy  → Photos  lopsy:received   { id }
- *   Lopsy  → Photos  lopsy:save       { id, saveId, … }   (each save)
- *   Photos → Lopsy   photos:saved     { id, saveId, ok }
+ * Send flow (Photonamous opens Lopsy with `?photos-handoff=<id>`):
+ *   Lopsy       → Photonamous  lopsy:ready      { id }
+ *   Photonamous → Lopsy        photos:document  { id, document }
+ *   Lopsy       → Photonamous  lopsy:received   { id }
+ *   Lopsy       → Photonamous  lopsy:save       { id, saveId, … }   (each save)
+ *   Photonamous → Lopsy        photos:saved     { id, saveId, ok }
  *
- * Reopen flow (Lopsy opens Photos with `?receive=<id>`):
- *   Photos → Lopsy   photos:ready     { id }
+ * Reopen flow (Lopsy opens Photonamous with `?receive=<id>`):
+ *   Photonamous → Lopsy        photos:ready     { id }
  *   then lopsy:save / photos:saved as above.
  *
- * Before saving to a Photos tab it already knows, Lopsy checks that the tab
+ * Before saving to a Photonamous tab it already knows, Lopsy checks that the tab
  * still listens for this handoff (it may have reloaded or navigated):
- *   Lopsy  → Photos  lopsy:ping       { id }
- *   Photos → Lopsy   photos:pong      { id }
- * No pong within `PING_TIMEOUT_MS` and Lopsy reopens Photos to receive.
+ *   Lopsy       → Photonamous  lopsy:ping       { id }
+ *   Photonamous → Lopsy        photos:pong      { id }
+ * No pong within `PING_TIMEOUT_MS` and Lopsy reopens Photonamous to receive.
  *
- * Grade a layer (Lopsy opens Photos with `?grade=<id>`):
- *   Photos → Lopsy   photos:ready     { id }
- *   Lopsy  → Photos  lopsy:grade      { id, layer }
- *   Photos → Lopsy   photos:graded    { id, ok: true, png, recipe }   (Done)
- *                                     { id, ok: false, cancelled }    (Cancel)
+ * Grade a layer (Lopsy opens Photonamous with `?grade=<id>`):
+ *   Photonamous → Lopsy        photos:ready     { id }
+ *   Lopsy       → Photonamous  lopsy:grade      { id, layer }
+ *   Photonamous → Lopsy        photos:graded    { id, ok: true, png, recipe }   (Done)
+ *                                               { id, ok: false, cancelled }    (Cancel)
  */
 
 export const PROTOCOL_VERSION = 1;
 
-/** Query parameter Photos adds to Lopsy's URL to start a handoff. */
+/** Query parameter Photonamous adds to Lopsy's URL to start a handoff. */
 export const HANDOFF_PARAM = 'photos-handoff';
-/** Query parameter Lopsy adds to Photos' URL when it reopens Photos to receive a save. */
+/** Query parameter Lopsy adds to Photonamous' URL when it reopens Photonamous to receive a save. */
 export const RECEIVE_PARAM = 'receive';
-/** Query parameter Lopsy adds to Photos' URL to grade one layer. */
+/** Query parameter Lopsy adds to Photonamous' URL to grade one layer. */
 export const GRADE_PARAM = 'grade';
-/** Window name Lopsy opens Photos under to grade a layer. */
+/** Window name Lopsy opens Photonamous under to grade a layer. */
 export const GRADE_WINDOW_NAME = 'photonamous-grade';
 /** Largest side of a layer sent to be graded. */
 export const MAX_GRADE_SIDE = 65536;
 /** Largest recipe, as JSON, a graded layer may carry. */
 export const MAX_RECIPE_JSON = 64 * 1024;
 
-/** Window name Photos opens Lopsy under, so an open Lopsy tab is reused. */
+/** Window name Photonamous opens Lopsy under, so an open Lopsy tab is reused. */
 export const LOPSY_WINDOW_NAME = 'lopsy-editor';
-/** Window name Lopsy opens Photos under. */
+/** Window name Lopsy opens Photonamous under. */
 export const PHOTOS_WINDOW_NAME = 'photonamous';
 
-/** How long Lopsy waits for a pong before reopening Photos; short enough that the click still allows a popup. */
+/** How long Lopsy waits for a pong before reopening Photonamous; short enough that the click still allows a popup. */
 export const PING_TIMEOUT_MS = 1500;
 
 /** Largest file either side accepts in one message (1 GiB). */
@@ -64,14 +64,14 @@ const LOPSY_MAGIC = [0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00];
 
 export type HandoffDocumentKind = 'png16' | 'lopsy';
 
-/** Where a document belongs in the Photos library. */
+/** Where a document belongs in the Photonamous library. */
 export interface HandoffSource {
   readonly libraryId: string;
   readonly assetId: string;
   readonly versionId: string;
   readonly recipeHash: string;
   /**
-   * The library's document asset this file is, once there is one. Photos
+   * The library's document asset this file is, once there is one. Photonamous
    * sends it with a document it reopens and returns it with the first save
    * of a new document, so later saves update that document in place.
    */
@@ -143,7 +143,7 @@ export interface LopsySaveMessage {
   readonly lopsy: ArrayBuffer;
   /** The flattened composite as a 16-bit PNG. */
   readonly render: ArrayBuffer;
-  /** Absent for Add to Photonamous: Photos files it as a new document. */
+  /** Absent for Add to Photonamous: Photonamous files it as a new document. */
   readonly source?: HandoffSource;
   readonly baseRevision?: string;
 }
@@ -184,7 +184,7 @@ export interface PhotosPongMessage {
 /**
  * One raster layer to grade. `pixels` is the engine's 16-bit layer blob
  * (`readLayerPixelsLz4U16`: a 32-byte geometry header, then LZ4), which the
- * Photos engine uploads as it is (`uploadLayerPixelsCompressedU16`).
+ * Photonamous engine uploads as it is (`uploadLayerPixelsCompressedU16`).
  */
 export interface GradeLayer {
   readonly name: string;

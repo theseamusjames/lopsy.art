@@ -17,7 +17,7 @@ function savePayload(name = 'Edited') {
   return { name, lopsy: bytes(LOPSY_BYTES), render: bytes(PNG_BYTES) };
 }
 
-/** Photos opens Lopsy with a document; returns both windows once the document is accepted. */
+/** Photonamous opens Lopsy with a document; returns both windows once the document is accepted. */
 async function startHandoff(onSave: (save: ReceivedSave) => Promise<void | { revision?: string }> = async () => {}) {
   const photos = new FakeWindow(`${PHOTOS}library`);
   const docBytes = bytes(PNG_BYTES);
@@ -64,7 +64,7 @@ describe('send flow', () => {
     for (const post of photos.posts) expect(post.targetOrigin).toBe(post.to.origin);
   });
 
-  it('round-trips a save: Lopsy posts both files, Photos answers once onSave settles', async () => {
+  it('round-trips a save: Lopsy posts both files, Photonamous answers once onSave settles', async () => {
     const saves: ReceivedSave[] = [];
     let finishSave: (r: { revision: string }) => void = () => {};
     const { photos, accepted, lopsy } = await startHandoff((save) => {
@@ -198,7 +198,7 @@ describe('untrusted messages', () => {
     expect(accepted).not.toBeNull();
   });
 
-  it('Photos ignores a save from another origin', async () => {
+  it('Photonamous ignores a save from another origin', async () => {
     const onSave = vi.fn(async () => {});
     const { photos, handoff } = await startHandoff(onSave);
     const evil = new FakeWindow('https://evil.example/');
@@ -212,7 +212,7 @@ describe('untrusted messages', () => {
 
   it('a message aimed at the wrong origin never arrives', async () => {
     const { photos, accepted, lopsy } = await startHandoff();
-    // Lopsy configured with the wrong Photos URL posts to an origin the tab is not on:
+    // Lopsy configured with the wrong Photonamous URL posts to an origin the tab is not on:
     // the ping goes unanswered, and the reopened tab (on the wrong origin) never says ready.
     const outcome = saveToPhotos({
       photosUrl: 'https://not-photos.example/',
@@ -241,7 +241,7 @@ describe('untrusted messages', () => {
 });
 
 describe('ping', () => {
-  it('a listening Photos tab answers the ping and gets the save without a reopen', async () => {
+  it('a listening Photonamous tab answers the ping and gets the save without a reopen', async () => {
     const { photos, accepted, lopsy } = await startHandoff();
     const outcome = saveToPhotos({ photosUrl: PHOTOS, connection: accepted.connection, payload: savePayload(), window: lopsy });
     await flush();
@@ -252,7 +252,7 @@ describe('ping', () => {
     expect(types).toContain('photos:pong');
   });
 
-  it('a Photos tab that reloaded (no listener) is detected within the ping timeout and Photos is reopened', async () => {
+  it('a Photonamous tab that reloaded (no listener) is detected within the ping timeout and Photonamous is reopened', async () => {
     const saves: ReceivedSave[] = [];
     const { handoff, accepted, lopsy } = await startHandoff();
     // The page reloaded: the tab is open, but nothing in it listens for this handoff.
@@ -278,7 +278,7 @@ describe('ping', () => {
 });
 
 describe('document ids and deferred documents', () => {
-  it('the documentId Photos returns joins the source block of later saves', async () => {
+  it('the documentId Photonamous returns joins the source block of later saves', async () => {
     const saves: ReceivedSave[] = [];
     const { accepted, lopsy } = await startHandoff(async (save) => {
       saves.push(save);
@@ -322,7 +322,7 @@ describe('document ids and deferred documents', () => {
 });
 
 describe('reopen flow', () => {
-  it('reopens Photos with ?receive= when its tab was closed, and later saves use the new tab', async () => {
+  it('reopens Photonamous with ?receive= when its tab was closed, and later saves use the new tab', async () => {
     const { photos, accepted, lopsy } = await startHandoff();
     photos.closed = true;
 
@@ -354,7 +354,7 @@ describe('reopen flow', () => {
     expect(saves[1]!.baseRevision).toBe('r9');
   });
 
-  it('Add to Photonamous opens Photos and sends no source block', async () => {
+  it('Add to Photonamous opens Photonamous and sends no source block', async () => {
     const lopsy = new FakeWindow(LOPSY);
     let payloadReady: (p: ReturnType<typeof savePayload>) => void = () => {};
     const outcome = saveToPhotos({
@@ -388,7 +388,7 @@ describe('reopen flow', () => {
     expect(saves[0]!.baseRevision).toBeUndefined();
   });
 
-  it('rejects when the reopened Photos never says ready', async () => {
+  it('rejects when the reopened Photonamous never says ready', async () => {
     const lopsy = new FakeWindow(LOPSY);
     const outcome = saveToPhotos({ photosUrl: PHOTOS, connection: null, payload: savePayload(), window: lopsy, timeouts: { readyMs: 4000 } });
     const result = expect(outcome).rejects.toMatchObject({ code: 'timeout' });
@@ -424,8 +424,8 @@ describe('reopen flow', () => {
   });
 });
 
-describe('Back to Photos and URL helpers', () => {
-  it('focuses the Photos tab when it is open, otherwise opens Photos', async () => {
+describe('Back to Photonamous and URL helpers', () => {
+  it('focuses the Photonamous tab when it is open, otherwise opens Photonamous', async () => {
     const { photos, accepted, lopsy } = await startHandoff();
     focusPhotos({ photosUrl: PHOTOS, connection: accepted.connection, window: lopsy });
     expect(photos.focused).toBe(1);
@@ -435,7 +435,7 @@ describe('Back to Photos and URL helpers', () => {
     expect(lopsy.opened[0]!.url).toBe(PHOTOS);
   });
 
-  it('resolves a relative Photos URL against the page', async () => {
+  it('resolves a relative Photonamous URL against the page', async () => {
     const lopsy = new FakeWindow('https://lopsy.art/');
     void saveToPhotos({ photosUrl: '/photos/', connection: null, payload: savePayload(), window: lopsy }).catch(() => {});
     expect(lopsy.opened[0]!.url).toMatch(/^https:\/\/lopsy\.art\/photos\/\?receive=/);

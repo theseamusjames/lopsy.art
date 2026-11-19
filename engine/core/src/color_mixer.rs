@@ -1,4 +1,4 @@
-//! Color by hue (the Photos "Color mixer", spec 5.4): eight hue bands, each
+//! Color by hue (the Photonamous "Color mixer", spec 5.4): eight hue bands, each
 //! with a hue shift, a saturation and a luminance control, applied in OkLCh
 //! to display-referred (sRGB-encoded) pixels. This is the CPU reference of
 //! `engine/src/gpu/shaders/develop/color_mixer.wgsl`; change them together.

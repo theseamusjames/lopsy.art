@@ -184,7 +184,7 @@ pub fn set_clipping_warning(engine: &mut EngineInner, shadows: bool, highlights:
 }
 
 /// The white balance that makes the patch of `radius` document pixels
-/// around (`x`, `y`) neutral, as `[temperature, tint]` in the Photos
+/// around (`x`, `y`) neutral, as `[temperature, tint]` in the Photonamous
 /// recipe's units (`lopsy_core::develop_stats::neutral_temperature_tint`).
 /// The patch is read from the document's layers composited without the
 /// RAW develop stage or any adjustment: for a RAW document, camera RGB at

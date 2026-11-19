@@ -1,9 +1,9 @@
 /**
  * The Photonamous handoff, Lopsy's side (spec 6.12).
  *
- * A stand-in Photos page is served with `context.route` at Lopsy's default
- * dev Photos URL (http://localhost:5174/). Its inline script plays the
- * Photos side of the protocol by hand: it opens Lopsy with
+ * A stand-in Photonamous page is served with `context.route` at Lopsy's default
+ * dev Photonamous URL (http://localhost:5174/). Its inline script plays the
+ * Photonamous side of the protocol by hand: it opens Lopsy with
  * `?photos-handoff=<id>`, answers `lopsy:ready` with a 16-bit PNG, and
  * records each `lopsy:save` it receives. Writing the wire format out here,
  * rather than importing @lopsy/handoff, keeps the test honest about what
@@ -116,11 +116,11 @@ function decodePng16(png: Buffer): { width: number; height: number; samples: num
 }
 
 /**
- * The stand-in Photos page. `startHandoff` plays the send flow
+ * The stand-in Photonamous page. `startHandoff` plays the send flow
  * (`mode: 'unprompted'` posts the document without waiting for ready); a
  * page opened with `?receive=<id>` plays the reopen flow with its opener.
  */
-const photosPage = (lopsyOrigin: string): string => `<!doctype html><meta charset="utf-8"><title>Photos stand-in</title><body>
+const photosPage = (lopsyOrigin: string): string => `<!doctype html><meta charset="utf-8"><title>Photonamous stand-in</title><body>
 <script>
 window.__log = [];
 window.__saves = [];
@@ -263,7 +263,7 @@ function savesOf(photos: Page): Promise<RecordedSave[]> {
 }
 
 test.describe('Photonamous handoff', () => {
-  test('opens a 16-bit PNG from Photos and saves back a .lopsy and a 16-bit PNG', async ({ page, context, baseURL }) => {
+  test('opens a 16-bit PNG from Photonamous and saves back a .lopsy and a 16-bit PNG', async ({ page, context, baseURL }) => {
     await servePhotosPages(context, new URL(baseURL!).origin);
     await page.goto(`${PHOTOS_ORIGIN}/library`);
     const lopsy = await openLopsyFrom(context, page, `${baseURL}/`);
@@ -320,7 +320,7 @@ test.describe('Photonamous handoff', () => {
       camera: { make: 'FUJIFILM', model: 'X-T5', lens: 'XF23mmF1.4 R LM WR', iso: 400, shutter: '1/250', aperture: 2.8, focalLength: 23, capturedAt: '2026-11-14T16:02:11' },
     });
 
-    // While the bar is shown, Ctrl+S saves to Photos, carrying the revision the last save returned.
+    // While the bar is shown, Ctrl+S saves to Photonamous, carrying the revision the last save returned.
     await lopsy.locator('[data-testid="canvas-container"]').click({ position: { x: 5, y: 5 } });
     await lopsy.keyboard.press('Control+s');
     await expect.poll(async () => (await savesOf(page)).length, { timeout: 30_000 }).toBe(2);
@@ -329,7 +329,7 @@ test.describe('Photonamous handoff', () => {
     expect(second.lopsyMagic).toEqual([0x4c, 0x4f, 0x50, 0x53, 0x59, 0x00]);
   });
 
-  test('a save after the Photos tab reloaded reopens Photos to receive it', async ({ page, context, baseURL }) => {
+  test('a save after the Photonamous tab reloaded reopens Photonamous to receive it', async ({ page, context, baseURL }) => {
     await servePhotosPages(context, new URL(baseURL!).origin);
     await page.goto(`${PHOTOS_ORIGIN}/library`);
     const lopsy = await openLopsyFrom(context, page, `${baseURL}/`);
@@ -370,7 +370,7 @@ test.describe('Photonamous handoff', () => {
     // The render holds values between 8-bit steps (an 8-bit value v widens to v * 257).
     expect(before.samples.filter((v) => v % 257 !== 0).length).toBeGreaterThan(before.samples.length / 2);
 
-    // Reopen the saved project with File > Open Project..., then hand it to Photos again.
+    // Reopen the saved project with File > Open Project..., then hand it to Photonamous again.
     await lopsy.getByRole('button', { name: 'File' }).click();
     const [chooser] = await Promise.all([
       lopsy.waitForEvent('filechooser'),
@@ -402,7 +402,7 @@ test.describe('Photonamous handoff', () => {
     expect(maxDiff).toBe(0);
   });
 
-  test('ignores a handoff from an origin that is not Photos', async ({ page, context, baseURL }) => {
+  test('ignores a handoff from an origin that is not Photonamous', async ({ page, context, baseURL }) => {
     await servePhotosPages(context, new URL(baseURL!).origin);
     await page.goto(`${EVIL_ORIGIN}/`);
     const lopsy = await openLopsyFrom(context, page, `${baseURL}/`, 'unprompted');
@@ -413,11 +413,11 @@ test.describe('Photonamous handoff', () => {
     await expect(lopsy.getByRole('dialog', { name: 'New Document' })).toBeVisible();
     await expect(lopsy.getByRole('region', { name: 'Photonamous' })).toHaveCount(0);
     expect((await getEditorState(lopsy)).document.width).not.toBe(PNG_W);
-    // Lopsy said ready only to the Photos origin, so this page never heard from it.
+    // Lopsy said ready only to the Photonamous origin, so this page never heard from it.
     expect(await page.evaluate(() => (window as unknown as { __log: string[] }).__log)).toEqual([]);
   });
 
-  test('File > Add to Photonamous opens Photos to receive the document', async ({ page, context, baseURL }) => {
+  test('File > Add to Photonamous opens Photonamous to receive the document', async ({ page, context, baseURL }) => {
     await servePhotosPages(context, new URL(baseURL!).origin);
     await page.goto('/');
     await waitForStore(page);
@@ -445,11 +445,11 @@ test.describe('Photonamous handoff', () => {
     expect(save!.renderBitDepth).toBe(16);
     expect(save!.renderWidth).toBe(120);
     expect(save!.renderHeight).toBe(80);
-    // A document that did not come from Photos gets no bar.
+    // A document that did not come from Photonamous gets no bar.
     await expect(page.getByRole('region', { name: 'Photonamous' })).toHaveCount(0);
   });
 
-  test('without the handoff parameter Lopsy shows no Photos bar', async ({ page }) => {
+  test('without the handoff parameter Lopsy shows no Photonamous bar', async ({ page }) => {
     await page.goto('/');
     await waitForStore(page);
     await page.evaluate(() => {

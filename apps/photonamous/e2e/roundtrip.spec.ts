@@ -4,7 +4,7 @@
  *
  *   npx playwright test -c e2e/roundtrip.config.ts
  *
- * Photos keeps its library in this browser. A generated JPEG is imported,
+ * Photonamous keeps its library in this browser. A generated JPEG is imported,
  * sent to Lopsy with "Edit in Lopsy", inverted there through Lopsy's
  * Filter menu and saved back; the document joins the library with a
  * preview. Reopening that document in Lopsy and saving again updates it
@@ -111,7 +111,7 @@ test('a photo goes to Lopsy and comes back as a document, then updates in place'
   const photoLeft = await tileLeftBrightness(photoTile);
   expect(photoLeft).toBeLessThan(80);
 
-  // Photos → Lopsy: the photo opens as a document named after it.
+  // Photonamous → Lopsy: the photo opens as a document named after it.
   const lopsy = await editInLopsy(page, context, photoTile, PHOTO_NAME);
   await expect(lopsy.getByRole('dialog', { name: 'New Document' })).toBeHidden();
   const size = await lopsy.evaluate(() => {
@@ -126,7 +126,7 @@ test('a photo goes to Lopsy and comes back as a document, then updates in place'
   await saveToPhotos(lopsy);
   await lopsy.screenshot({ path: 'test-results/roundtrip-lopsy-saved.png' });
 
-  // Back in Photos: the document is in the library, beside the photo, with an inverted preview.
+  // Back in Photonamous: the document is in the library, beside the photo, with an inverted preview.
   const docTile = page.locator(`[role="gridcell"][title="${PHOTO_NAME}.lopsy"]`);
   await page.bringToFront();
   await page.getByRole('button', { name: /All photos/ }).click();
@@ -168,7 +168,7 @@ async function lopsyPixel(lopsy: Page, x: number, y: number, layerId: string): P
   );
 }
 
-test('a Lopsy layer is graded in Photos and comes back as one undoable step', async ({ page, context }) => {
+test('a Lopsy layer is graded in Photonamous and comes back as one undoable step', async ({ page, context }) => {
   const lopsyUrl = process.env.ROUNDTRIP_LOPSY_URL ?? 'http://localhost:5173/';
   await page.goto(lopsyUrl);
   await page.waitForFunction(() => !!(window as unknown as Record<string, unknown>).__editorStore);
@@ -182,7 +182,7 @@ test('a Lopsy layer is graded in Photos and comes back as one undoable step', as
   });
   await expect.poll(() => lopsyPixel(page, 20, 20, bgId)).toEqual([255, 255, 255, 255]);
 
-  // Lopsy → Photos: the layer opens in Photos' Edit view, with no library.
+  // Lopsy → Photonamous: the layer opens in Photonamous' Edit view, with no library.
   await page.locator(`[data-layer-id="${bgId}"]`).click({ button: 'right' });
   const [photos] = await Promise.all([
     context.waitForEvent('page'),
@@ -200,7 +200,7 @@ test('a Lopsy layer is graded in Photos and comes back as one undoable step', as
   await photos.screenshot({ path: 'test-results/roundtrip-grade-photos.png' });
   await Promise.all([photos.waitForEvent('close', { timeout: 60_000 }), photos.getByRole('button', { name: 'Done' }).click()]);
 
-  // Photos → Lopsy: the layer is darker, as one history step, and undo restores it.
+  // Photonamous → Lopsy: the layer is darker, as one history step, and undo restores it.
   await expect.poll(() => lopsyPixel(page, 20, 20, bgId).then((p) => p[0]!), { timeout: 60_000 }).toBeLessThan(200);
   const graded = await lopsyPixel(page, 20, 20, bgId);
   expect(graded[3]).toBe(255);

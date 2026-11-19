@@ -1,9 +1,9 @@
 /**
  * Grade in Photonamous, Lopsy's side (spec 6.12, "Grade a layer").
  *
- * A stand-in Photos page is served with `context.route` at the Photos URL
+ * A stand-in Photonamous page is served with `context.route` at the Photonamous URL
  * this build is configured with (playwright.photos.config.ts). It plays the
- * Photos side of the grade by hand: it says ready, records the layer it is
+ * Photonamous side of the grade by hand: it says ready, records the layer it is
  * sent, and answers either Done (a red PNG of the layer's size and a recipe)
  * or Cancel.
  */
@@ -15,7 +15,7 @@ const PHOTOS_ORIGIN = 'http://localhost:5174';
 
 type Mode = 'done' | 'cancel' | 'huge' | 'manual';
 
-const gradePage = (lopsyOrigin: string, mode: Mode): string => `<!doctype html><meta charset="utf-8"><title>Photos grade stand-in</title><body>
+const gradePage = (lopsyOrigin: string, mode: Mode): string => `<!doctype html><meta charset="utf-8"><title>Photonamous grade stand-in</title><body>
 <script>
 window.__received = null;
 const id = new URLSearchParams(location.search).get('grade');
@@ -234,7 +234,7 @@ test.describe('Grade in Photonamous, offset layers', () => {
     expect(await layerGeometry(page, id)).toEqual(before);
     // The graded (red) pixels sit where the block was.
     await expect.poll(() => getPixelAt(page, before.x + 2, before.y + 2, id)).toMatchObject({ r: 255, g: 0, b: 0 });
-    // Photos closes its grade tab when it is done; the stand-in leaves that to the test.
+    // Photonamous closes its grade tab when it is done; the stand-in leaves that to the test.
     await first.photos.close();
 
     // Drag the layer so it hangs off the canvas's left and top edges, then grade again.

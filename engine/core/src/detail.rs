@@ -1,5 +1,5 @@
 //! Sharpness & noise (spec E8) and local contrast & haze (E15, first part)
-//! for the Photos develop view: the CPU reference of the shaders in
+//! for the Photonamous develop view: the CPU reference of the shaders in
 //! `engine/src/gpu/shaders/develop/` (`blur_axis`, `noise_reduce`,
 //! `detail_sharpen`, `local_contrast`). Change each function and its shader
 //! together; `engine/src/develop/detail.rs` drives the passes.

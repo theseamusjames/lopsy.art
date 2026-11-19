@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * The Photonamous ⇄ Lopsy round trip, with both apps running: Lopsy's dev
- * server on 5173 and Photos' on 5174, the URLs each side's dev defaults
+ * server on 5173 and Photonamous' on 5174, the URLs each side's dev defaults
  * point at. Each server is also told the other's URL (VITE_PHOTONAMOUS_URL,
  * VITE_LOPSY_URL), so other ports work too. Run from apps/photonamous:
  *

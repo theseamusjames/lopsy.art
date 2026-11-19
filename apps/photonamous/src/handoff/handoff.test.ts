@@ -76,7 +76,7 @@ async function addOriginal(): Promise<{ assetId: string; versionId: string }> {
   });
 }
 
-/** Photos sends the asset with editInLopsy; a fake Lopsy window accepts it. */
+/** Photonamous sends the asset with editInLopsy; a fake Lopsy window accepts it. */
 async function openInLopsy(assetId: string, onSaved?: (save: ReceivedSave) => void) {
   const photos = new FakeWindow(`${PHOTOS}library`);
   const renderPng16 = vi.fn(async () => png16(6240, 4160));

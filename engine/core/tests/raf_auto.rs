@@ -4,7 +4,7 @@
 //! `--release --nocapture` to see every sample's answer (set `AUTO_DEBUG`
 //! for its histogram percentiles and channel means, without the asserts).
 //!
-//! The pipeline is the Photos app's: the binned linear preview, developed
+//! The pipeline is the Photonamous app's: the binned linear preview, developed
 //! with the camera defaults, encoded to 8 bits, binned into the histogram
 //! the engine reads back.
 

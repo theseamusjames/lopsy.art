@@ -80,7 +80,7 @@ pub const FUJI_CLASSIC_CHROME: BaseCurve = BaseCurve {
 };
 
 /// Neutral — not a Fujifilm look: a starting point for grading in Lopsy
-/// Photos' Neutral and Monochrome profiles. Close to the identity (so the
+/// Photonamous' Neutral and Monochrome profiles. Close to the identity (so the
 /// rendering is nearly colorimetric after sRGB encoding) with a slight
 /// lift through the midtones (18 % grey → 19.5 %) and a soft shoulder
 /// into white, so it adds almost no contrast of its own and leaves the

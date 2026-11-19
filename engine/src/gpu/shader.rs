@@ -434,7 +434,7 @@ pub struct ShaderPrograms {
     // Color
     pub color_convert: ShaderProgram<params::color::ColorConvertParams>,
     // Develop
-    /// The Photos develop passes, compiled on first use (`raw_develop()`,
+    /// The Photonamous develop passes, compiled on first use (`raw_develop()`,
     /// `color_mixer()`) so a Lopsy session never links them.
     raw_develop: RefCell<Option<Rc<ShaderProgram<params::develop::RawDevelopParams>>>>,
     color_mixer: RefCell<Option<Rc<ShaderProgram<params::develop::ColorMixerParams>>>>,

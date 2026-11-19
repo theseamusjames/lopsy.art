@@ -32,7 +32,7 @@
 //! Saturation is linear, so it commutes with exposure; it must come before
 //! highlight desaturation because that is what `render_rgb` does (the boost
 //! can push a channel over 1.0, which desaturation then neutralizes).
-//! Capture sharpening is not reproduced; the Photos pipeline will add it as
+//! Capture sharpening is not reproduced; the Photonamous pipeline will add it as
 //! its default sharpening.
 //!
 //! **What the full pipeline (spec 6.10) changes.** This is stages 2–4 and 8–9

@@ -1,6 +1,6 @@
 /**
  * The document that came from Photonamous, if any, and the state of its
- * last Save to Photonamous. Null for everyone who never uses Photos, so
+ * last Save to Photonamous. Null for everyone who never uses Photonamous, so
  * the bar never shows for them.
  */
 
@@ -15,7 +15,7 @@ export type PhotosSaveStatus =
   | { readonly kind: 'failed'; readonly reason: string };
 
 export interface PhotosHandoffSession {
-  /** The name Photos gave the document. */
+  /** The name Photonamous gave the document. */
   readonly name: string;
   /** The editor document it opened as. Opening or creating another document ends the bar. */
   readonly documentId: string;

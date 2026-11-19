@@ -1,7 +1,7 @@
 /**
  * Maps a recipe onto the engine's per-document image adjustments, the
  * shader Lopsy's own Adjustments panel drives (adjustments.wgsl). Until the
- * develop pipeline of spec 6.10 exists in the engine, this is how Photos
+ * develop pipeline of spec 6.10 exists in the engine, this is how Photonamous
  * renders an edit.
  *
  * The engine takes the recipe's numbers as they are: exposure in EV, and

@@ -1,4 +1,4 @@
-//! Statistics for the Photos develop view: the histogram of the displayed
+//! Statistics for the Photonamous develop view: the histogram of the displayed
 //! result, Auto tone from it, and an auto white balance for RAW.
 //!
 //! The histogram is 4 × 256 `u32` bins in this order: red 0..=255, green,
@@ -34,7 +34,7 @@ pub fn histogram_from_rgba8(pixels: &[u8]) -> Vec<u32> {
     h
 }
 
-/// The six tone controls of a Photos recipe, in its units: `exposure` in
+/// The six tone controls of a Photonamous recipe, in its units: `exposure` in
 /// EV, the rest −100..100. The field names are the JSON keys.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -240,7 +240,7 @@ pub fn auto_tone_json(histogram: &[u32], current_json: &str) -> Result<String, S
 /// Each ratio is clamped to 0.25..4; with nothing usable it returns
 /// `[1, 1, 1]`.
 ///
-/// Mapping these to the Photos temperature / tint sliders is the app's
+/// Mapping these to the Photonamous temperature / tint sliders is the app's
 /// side of the white balance model.
 pub fn auto_white_balance(linear_rgba: &[f32]) -> [f32; 3] {
     let peak = linear_rgba
@@ -311,7 +311,7 @@ pub const AWB_SAMPLE_PIXELS: usize = 500_000;
 /// How far apart a near-neutral pixel's channels may be (max / min).
 pub const NEUTRAL_SPREAD: f32 = 1.2;
 
-/// The Photos app's white balance for RAW photos (`raw-develop.ts`): red
+/// The Photonamous app's white balance for RAW photos (`raw-develop.ts`): red
 /// and blue gain 2^(±0.6·T/100), green 2^(−0.4·tint/100), in camera space.
 pub const RAW_TEMPERATURE_STOPS: f32 = 0.6;
 pub const RAW_TINT_STOPS: f32 = 0.4;

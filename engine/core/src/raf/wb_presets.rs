@@ -485,7 +485,7 @@ fn sensor_family_siblings(model: &str) -> &'static [&'static str] {
     }
 }
 
-// ── Presets in the Photos recipe's units ─────────────────────────────
+// ── Presets in the Photonamous recipe's units ────────────────────────
 
 /// A preset as the Edit view's White balance menu offers it: the recipe's
 /// temperature and tint (−100..100, relative to the as-shot balance, in the

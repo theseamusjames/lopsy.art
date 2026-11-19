@@ -17,7 +17,7 @@ interface LayerContextMenuProps {
   y: number;
   currentTag: LayerColorTag | null | undefined;
   onSetColorTag: (tag: LayerColorTag | null) => void;
-  /** Grade in Photonamous, offered for a raster layer in builds that ship Photos. */
+  /** Grade in Photonamous, offered for a raster layer in builds that name Photonamous' URL. */
   onGradeInPhotos?: () => void;
   onClose: () => void;
 }

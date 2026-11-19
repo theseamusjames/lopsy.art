@@ -33,7 +33,7 @@ function flush(ms = 0): Promise<void> {
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-/** Lopsy asks Photos to grade a layer; returns both ends once Photos has the layer. */
+/** Lopsy asks Photonamous to grade a layer; returns both ends once Photonamous has the layer. */
 async function startGrade(layerPixels = blob16()) {
   const lopsy = new FakeWindow(`${LOPSY}`);
   let result: GradeResult | Error | null = null;
@@ -59,7 +59,7 @@ async function startGrade(layerPixels = blob16()) {
 }
 
 describe('grade a layer', () => {
-  it('opens Photos at ?grade= in its own tab and hands over the layer, transferred', async () => {
+  it('opens Photonamous at ?grade= in its own tab and hands over the layer, transferred', async () => {
     const pixels = blob16();
     const { opened, layer, lopsy } = await startGrade(pixels);
     expect(opened.target).toMatch(/^photonamous-grade-/);
@@ -96,7 +96,7 @@ describe('grade a layer', () => {
     await expect(second.pending).resolves.toEqual({ kind: 'cancelled' });
   });
 
-  it('a failure in Photos rejects with its message', async () => {
+  it('a failure in Photonamous rejects with its message', async () => {
     const { session, pending } = await startGrade();
     session.fail('render failed');
     const result = expect(pending).rejects.toThrow('render failed');
@@ -114,7 +114,7 @@ describe('grade a layer', () => {
     expect(result()).toBeNull();
   });
 
-  it('Photos ignores a layer from another origin and times out', async () => {
+  it('Photonamous ignores a layer from another origin and times out', async () => {
     const lopsy = new FakeWindow(LOPSY);
     const evil = new FakeWindow('https://evil.example/');
     const page = new FakeWindow(`${PHOTOS}?grade=g1`);
@@ -148,7 +148,7 @@ describe('grade safety', () => {
     expect(lopsy.opened[0]!.target).not.toBe(lopsy.opened[1]!.target);
   });
 
-  it('Photos reports a PNG of the wrong size as a failure instead of sending it', async () => {
+  it('Photonamous reports a PNG of the wrong size as a failure instead of sending it', async () => {
     const { session, pending, lopsy } = await startGrade();
     expect(session.done(png(5000, 5000), {})).toBe(false);
     const result = expect(pending).rejects.toThrow(/5000 \u00d7 5000, not 4 \u00d7 2/);
