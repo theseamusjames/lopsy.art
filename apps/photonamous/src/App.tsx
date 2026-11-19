@@ -56,6 +56,7 @@ export function App() {
 
   useEffect(() => {
     if (connection) return;
+    document.title = 'Photonamous';
     let live = true;
     getBackend()
       .getReconnectOffer()
