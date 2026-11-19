@@ -23,8 +23,11 @@
  *   panWithSpace(page, dx, dy)         Hold Space and drag the canvas.
  *   watchPasteEvents(page)             Count native `paste` events from now on.
  *   pasteEventCount(page)              Read that count.
+ *   clipboardWriter(browser, page)     A page with clipboard permissions, in its own context.
+ *   pasteOverText(page, text, opts?)   Put `text` on the system clipboard and press Cmd+V,
+ *                                      retrying until the paste event carries that text alone.
  */
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, type Browser, type Locator, type Page } from '@playwright/test';
 import { settle, type SurfaceState } from './surface-helpers';
 
 export async function blurFocus(page: Page): Promise<void> {
@@ -235,6 +238,82 @@ export async function watchPasteEvents(page: Page): Promise<void> {
 
 export async function pasteEventCount(page: Page): Promise<number> {
   return page.evaluate(() => (window as unknown as Record<string, number>).__surfacePasteEvents ?? 0);
+}
+
+const PASTE_ATTEMPTS = 5;
+
+export interface PasteOverTextOptions {
+  readonly writer?: Page;
+  readonly settleMs?: number;
+}
+
+/**
+ * A page on the app's origin, in a new context granted the clipboard
+ * permissions, for writing to the system clipboard on behalf of a page that
+ * has none. Close its context when done.
+ */
+export async function clipboardWriter(browser: Browser, page: Page): Promise<Page> {
+  const context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+  const writer = await context.newPage();
+  await writer.goto(new URL('/robots.txt', page.url()).href);
+  return writer;
+}
+
+/**
+ * Put `text` on the system clipboard and press Cmd+V, so the paste event the
+ * app handles carries exactly that plain text and no image.
+ *
+ * The system clipboard is shared by every Playwright worker, so another
+ * test's copy can replace the text between the write and the key. A capture
+ * listener on window, which runs before the app's own paste listener, checks
+ * each paste event: when it carries anything else, it stops the event before
+ * the app sees it and the write and key are tried again. A stopped event
+ * still leaves Cmd+V's 200 ms fallback timer (set only outside text editing),
+ * so callers start with an empty internal clipboard or while editing text.
+ *
+ * `writer` is the page that writes the text, which needs clipboard-write: the
+ * page itself when its context has the grant, or a page in another context
+ * (`clipboardWriter`) when the test is about a page without clipboard
+ * permissions.
+ */
+export async function pasteOverText(page: Page, text: string, { writer = page, settleMs }: PasteOverTextOptions = {}): Promise<void> {
+  await page.evaluate((expected) => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__surfacePasteExpected = expected;
+    if (w.__surfacePasteGuard) return;
+    w.__surfacePasteGuard = true;
+    window.addEventListener('paste', (e) => {
+      const data = e.clipboardData;
+      const types = data ? Array.from(data.types) : [];
+      const isOnlyText =
+        types.every((type) => type === 'text/plain') &&
+        (data?.files.length ?? 0) === 0 &&
+        data?.getData('text/plain') === w.__surfacePasteExpected;
+      w.__surfacePasteClean = isOnlyText;
+      if (isOnlyText) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+  }, text);
+
+  for (let attempt = 1; attempt <= PASTE_ATTEMPTS; attempt++) {
+    await page.evaluate(() => { (window as unknown as Record<string, unknown>).__surfacePasteClean = null; });
+    const written = await writer.evaluate(async (value) => {
+      try {
+        await navigator.clipboard.writeText(value);
+        return 'ok';
+      } catch (e) {
+        return String(e);
+      }
+    }, text);
+    expect(written).toBe('ok');
+    await page.keyboard.press('ControlOrMeta+v');
+    await settle(page, settleMs);
+    const isClean = await page.evaluate(() => (window as unknown as Record<string, unknown>).__surfacePasteClean);
+    expect(isClean, 'Cmd+V dispatched a paste event').not.toBeNull();
+    if (isClean) return;
+  }
+  throw new Error(`Another worker replaced the system clipboard text on each of ${PASTE_ATTEMPTS} attempts`);
 }
 
 /** Write a solid-colour PNG to the system clipboard, as another app would. Needs clipboard-write. */

@@ -6,8 +6,8 @@
  * global handler ignores it, so the move onto the command registry can be
  * checked against them. Setups mirror the Edit, Select and Layer menu specs
  * so the differences show. Behaviour that looks wrong is pinned as-is and
- * says so. Disagreement ids (D1, D2, D3, D9, D18, D21) refer to the surface
- * inventory.
+ * says so. Disagreement ids (D1, D2, D3, D9, D18, D21) refer to
+ * docs/ui-surface-differences.md.
  *
  * Shifted letters are pressed upper-case (`ControlOrMeta+Shift+Z`), which is
  * what a real keyboard reports as `e.key`.
@@ -34,9 +34,11 @@ import {
 import {
   blurFocus,
   clickLayerRow,
+  clipboardWriter,
   gridFlags,
   layerByName,
   pasteEventCount,
+  pasteOverText,
   pressKey,
   putExternalImageOnClipboard,
   rootAdjustments,
@@ -207,12 +209,22 @@ test.describe('Cmd/Ctrl keys (characterization)', () => {
     expect((await getPixelAt(page, 50, 40, layer)).a).toBe(0);
   });
 
-  test('D2: Cmd+V with an empty internal clipboard and no clipboard permission does nothing', async ({ page }) => {
+  test('D2: Cmd+V with an empty internal clipboard and no clipboard permission does nothing', async ({ page, browser }) => {
     await pressKey(page, 'b');
     const before = await surfaceState(page);
     expect(before.clipboard).toBeNull();
 
-    await pressKey(page, 'ControlOrMeta+v', 600);
+    // Plain text on the system clipboard, written from another context, takes
+    // the paste event past its file and image branches to
+    // navigator.clipboard.read(), which this page has no permission for, and
+    // from there to the empty internal clipboard.
+    const writer = await clipboardWriter(browser, page);
+    try {
+      await blurFocus(page);
+      await pasteOverText(page, 'not an image', { writer, settleMs: 600 });
+    } finally {
+      await writer.context().close();
+    }
 
     const after = await surfaceState(page);
     expect(await historyLabels(page)).toEqual(['New Document']);
@@ -602,10 +614,8 @@ test.describe('Cmd/Ctrl keys (characterization)', () => {
   test('D2/D3: Cmd+V while editing text inserts the system clipboard text', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await startTextEditing(page, 100, 80, 'Hi');
-    await page.evaluate(() => navigator.clipboard.writeText(' there'));
 
-    await page.keyboard.press('ControlOrMeta+v');
-    await settle(page, 300);
+    await pasteOverText(page, ' there', { settleMs: 300 });
 
     expect((await textEdit(page))?.text).toBe('Hi there');
     const s = await surfaceState(page);
