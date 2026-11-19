@@ -201,3 +201,11 @@
   outline: 2px solid var(--ph-focus-ring);
   outline-offset: -2px;
 }
+
+@media (max-width: 760px) {
+  .sidebar {
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+}

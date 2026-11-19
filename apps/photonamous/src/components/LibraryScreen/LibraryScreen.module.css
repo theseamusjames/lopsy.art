@@ -77,3 +77,23 @@
     grid-template-columns: 188px minmax(0, 1fr) 248px;
   }
 }
+
+/* Narrow windows and 200 % zoom (1.4.10): one column that scrolls, the grid a screen tall in it. */
+@media (max-width: 760px) {
+  .screen {
+    overflow-y: auto;
+  }
+
+  .layout,
+  .layout[data-info='true'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto max(320px, 85vh) auto;
+    grid-template-areas:
+      'header'
+      'sidebar'
+      'main'
+      'info';
+    height: auto;
+    min-height: 100%;
+  }
+}

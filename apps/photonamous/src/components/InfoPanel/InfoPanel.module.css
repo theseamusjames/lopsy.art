@@ -175,3 +175,10 @@
 .fact dd {
   overflow-wrap: anywhere;
 }
+
+@media (max-width: 760px) {
+  .panel {
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+  }
+}

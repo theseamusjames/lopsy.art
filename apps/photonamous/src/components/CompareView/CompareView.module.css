@@ -87,3 +87,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (max-width: 760px) {
+  .panes,
+  .panes[data-count='3'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
