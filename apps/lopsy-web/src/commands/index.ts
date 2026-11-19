@@ -19,6 +19,7 @@ import './document/color-mode';
 import './document/files';
 import './layer/add-image';
 import './view/view';
+import './clipboard/clipboard';
 
 setSettle(settled);
 

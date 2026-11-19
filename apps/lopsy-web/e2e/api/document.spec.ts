@@ -217,6 +217,7 @@ test.describe('the command API', () => {
     const all = await describe(page);
     expect(all.map((c) => c.id)).toEqual([
       'adjust.add', 'adjust.list', 'adjust.remove', 'adjust.reorder', 'adjust.set', 'adjust.set-enabled', 'adjust.set-node-enabled',
+      'clipboard.copy', 'clipboard.copy-merged', 'clipboard.cut', 'clipboard.paste',
       'color.reset', 'color.set', 'color.swap',
       'doc.color-mode', 'doc.export', 'doc.export-psd', 'doc.info', 'doc.new', 'doc.open', 'doc.save',
       'filter.add-noise', 'filter.bloom', 'filter.box-blur', 'filter.brightness-contrast', 'filter.cel-shading',
