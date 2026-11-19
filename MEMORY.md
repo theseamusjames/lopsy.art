@@ -770,3 +770,11 @@ selected row with a 6 px accent dot (every row keeps the dot's slot, so
 labels line up); Lopsy's toasts show their kind with a dot in its colour;
 tutorial notes are a tinted box.
 
+
+## Stopping a dev server that npm started: kill its process group
+`npm run dev` runs the script through `sh -c`, and on Linux (dash) that
+shell does not hand over to Vite: killing the npm process leaves Vite
+running, holding its port. `scripts/dev.mjs` (the root `npm run dev`)
+starts each app as its own process group and signals the group, so npm,
+the shell and Vite stop together; it forwards Ctrl+C itself, since those
+groups don't get the terminal's.

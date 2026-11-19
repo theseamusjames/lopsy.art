@@ -10,7 +10,7 @@ unless it says otherwise.
 ```bash
 npm ci
 npm run wasm:build          # the engine; or wasm:build:noopt where wasm-opt cannot be downloaded
-npm run dev:photos          # http://localhost:5174
+npm run dev:photonamous     # http://localhost:5174 (npm run dev starts Lopsy with it, section 2)
 ```
 
 The engine build needs Rust and `wasm-pack` (root `CLAUDE.md`). It is
@@ -49,22 +49,27 @@ is never touched.
 ## 2. Lopsy and Photonamous together (the handoff)
 
 ```bash
-VITE_PHOTONAMOUS_URL=http://localhost:5174/ npm run dev   # Lopsy, http://localhost:5173
-npm run dev:photos                                  # Photonamous, http://localhost:5174 (a second terminal)
+npm run dev    # Lopsy on http://localhost:5173, Photonamous on http://localhost:5174
 ```
 
-Lopsy talks to Photonamous only when its build names Photonamous' URL in
-`VITE_PHOTONAMOUS_URL`. Without it (plain `npm run dev`, `npm run build`, and
-production while Photonamous is not deployed) Lopsy is exactly as before: File →
-Add to Photonamous is hidden and `?photos-handoff=` is ignored. The deploy
-workflow sets it to `https://photonamous.com/` when `DEPLOY_PHOTONAMOUS` is
-`true` (section 4). Put it in `apps/lopsy-web/.env.local` to keep it on in
-development.
+`npm run dev` (`scripts/dev.mjs`) starts both dev servers and tells each
+the other's URL. The ports are fixed, because each app trusts only the
+other's origin: if one is taken, both stop and say which. Ctrl+C stops
+both. `npm run dev:lopsy` and `npm run dev:photonamous` start one alone.
 
-| Variable | In | Unset | Deployed |
-|---|---|---|---|
-| `VITE_LOPSY_URL` | `apps/photonamous/.env.local` | `http://localhost:5173/` in dev, `https://lopsy.art/` in a build | `https://lopsy.art/` |
-| `VITE_PHOTONAMOUS_URL` | `apps/lopsy-web/.env.local` | no handoff | `https://photonamous.com/` |
+Lopsy talks to Photonamous only when its build names Photonamous' URL in
+`VITE_PHOTONAMOUS_URL`. Without it (`npm run dev:lopsy`, `npm run build`, and
+production while Photonamous is not deployed) Lopsy is exactly as before: File →
+Add to Photonamous is hidden and `?photos-handoff=` is ignored. `npm run dev`
+sets it to `http://localhost:5174/`, and the deploy workflow to
+`https://photonamous.com/` when `DEPLOY_PHOTONAMOUS` is `true` (section 4).
+A value in the shell or in `apps/lopsy-web/.env.local` wins over the one
+`npm run dev` sets, and keeps the handoff on under `npm run dev:lopsy` too.
+
+| Variable | In | Unset | `npm run dev` | Deployed |
+|---|---|---|---|---|
+| `VITE_LOPSY_URL` | `apps/photonamous/.env.local` | `http://localhost:5173/` in dev, `https://lopsy.art/` in a build | `http://localhost:5173/` | `https://lopsy.art/` |
+| `VITE_PHOTONAMOUS_URL` | `apps/lopsy-web/.env.local` | no handoff | `http://localhost:5174/` | `https://photonamous.com/` |
 
 Both directions run over this channel: Edit in Lopsy and Save to
 Photonamous, and Lopsy's Grade in Photonamous, which opens Photonamous at
@@ -124,7 +129,7 @@ userinfo endpoint for the account.
    VITE_GOOGLE_APP_ID=<project number>
    ```
 
-   Restart `npm run dev:photos`. The start screen now offers **Google
+   Restart `npm run dev` or `npm run dev:photonamous`. The start screen now offers **Google
    Drive** too. The library is created as `Photonamous/` in your My Drive.
 
 **Add from Google Drive** (the Picker) is offered when both

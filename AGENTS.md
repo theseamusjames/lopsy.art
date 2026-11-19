@@ -83,7 +83,7 @@ A small set of known exceptions predates this rule and is tracked in [`docs/pixe
 ```bash
 npm install
 npm run wasm:build          # Build the Rust/WASM engine
-npm run dev                 # Start dev server
+npm run dev                 # Start both apps' dev servers (dev:lopsy or dev:photonamous for one)
 npm run test                # Unit tests (Vitest)
 npm run typecheck           # tsc --noEmit
 npm run lint                # ESLint

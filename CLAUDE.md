@@ -45,10 +45,12 @@ What you may be looking for:
 ## Commands
 
 Run `npm` scripts from the repository root: the root `package.json` is an
-npm workspace that forwards every script to the app.
+npm workspace whose scripts forward to Lopsy unless the name says otherwise
+(`:photos` or `:photonamous` for Photonamous, `:ui` for `packages/ui`).
 
 ```bash
-npm run dev          # Start the app's Vite dev server
+npm run dev          # Both apps' dev servers, set up to hand off: Lopsy :5173, Photonamous :5174
+npm run dev:lopsy    # One app's dev server alone; also dev:photonamous
 npm run build        # Production build (both engine builds, then the app)
 npm run test         # Vitest unit tests
 npm run test:e2e     # Playwright E2E tests

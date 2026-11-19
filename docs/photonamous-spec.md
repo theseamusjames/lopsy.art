@@ -468,7 +468,8 @@ engine/             gains develop/, metadata, and the decode split (section 8)
 **Workspaces and scripts.** The root `package.json` workspaces become
 `["apps/*", "packages/*"]`, and root scripts stop forwarding only to
 `lopsy-web`:
-- `dev` keeps starting Lopsy; `dev:photos` starts this app.
+- `dev` starts both apps, set up to hand off to each other;
+  `dev:lopsy` and `dev:photonamous` start one.
 - `test`, `lint` and `typecheck` run in every workspace.
 - `build` builds the engine once, then both apps, each into its own
   `dist/`.

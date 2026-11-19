@@ -201,12 +201,13 @@ and are tracked for cleanup — new code must not extend the list.
 ## Commands
 
 Every `npm run` script works from here or from the repository root, which
-forwards to this package. Tools run directly (`npx playwright test`,
-`npx tsc`, `npx vitest`) must be run from this directory: the configs are
-here.
+forwards to this package, except `dev`: at the root it starts Photonamous
+too, and `npm run dev:lopsy` there starts Lopsy alone. Tools run directly
+(`npx playwright test`, `npx tsc`, `npx vitest`) must be run from this
+directory: the configs are here.
 
 ```bash
-npm run dev          # Start Vite dev server
+npm run dev          # Start Vite dev server (at the root: npm run dev:lopsy)
 npm run build        # Production build
 npm run test         # Run Vitest unit tests
 npm run test:e2e     # Run Playwright E2E tests

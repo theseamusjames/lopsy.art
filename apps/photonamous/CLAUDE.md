@@ -85,7 +85,7 @@ there is a document, a drag or an import.
 
 ```bash
 npm run wasm:build:dev     # the engine, once (or after engine changes)
-npm run dev:photos         # http://localhost:5174
+npm run dev:photonamous    # http://localhost:5174; npm run dev starts Lopsy with it
 npm run test:photos        # Vitest: packages/ui, photos-core, then the app
 npm run typecheck:photos
 npm run lint:photos
