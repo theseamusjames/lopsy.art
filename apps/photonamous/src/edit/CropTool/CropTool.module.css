@@ -121,3 +121,11 @@
 .primary:active {
   background: var(--ph-primary-bg-active);
 }
+
+.select:focus-visible,
+.button:focus-visible,
+.iconButton:focus-visible,
+.primary:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}

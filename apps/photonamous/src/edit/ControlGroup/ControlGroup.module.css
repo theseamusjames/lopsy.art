@@ -83,3 +83,9 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
+
+.actionButton:focus-visible,
+.reset:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}

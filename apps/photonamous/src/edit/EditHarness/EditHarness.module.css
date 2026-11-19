@@ -56,3 +56,8 @@
   opacity: 0;
   pointer-events: none;
 }
+
+.pick:focus-within {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}

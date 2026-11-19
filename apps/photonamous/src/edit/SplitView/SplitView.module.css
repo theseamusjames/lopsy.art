@@ -45,8 +45,13 @@
   box-shadow: var(--shadow-sm);
 }
 
+.divider:focus-visible::before {
+  background: var(--ph-focus-ring);
+}
+
 .divider:focus-visible::after {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
 }
 
 .labelBefore,

@@ -79,6 +79,11 @@
   font-size: var(--font-size-sm);
 }
 
+.check input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
 .groups {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -141,4 +146,17 @@
 .add:hover:not(:disabled) {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
+}
+
+.icon:focus-visible,
+.small:focus-visible,
+.add:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
+.preset:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: -2px;
 }
