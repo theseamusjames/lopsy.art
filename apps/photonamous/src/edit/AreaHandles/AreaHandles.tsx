@@ -32,7 +32,9 @@ const ROTATE_OFFSET = 28;
  * The selected area's handles over the image: for a linear area the lines
  * of full and no effect with a handle at each and one to move both; for a
  * radial one the ellipse, a handle per radius, a turn handle and a feather
- * ring. Drags work in document pixels and hand back source geometry.
+ * ring. Drags work in document pixels and hand back source geometry. The
+ * handles are for the pointer: the Areas panel's shape sliders do the same
+ * by keyboard, so they stay out of the accessibility tree.
  */
 export function AreaHandles({ area, frame, box, docWidth, onDraft, onCommit }: AreaHandlesProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -82,6 +84,7 @@ export function AreaHandles({ area, frame, box, docWidth, onDraft, onCommit }: A
     <svg
       ref={svgRef}
       className={styles.handles}
+      aria-hidden="true"
       data-testid="area-handles"
       onPointerMove={handleMove}
       onPointerUp={handleUp}

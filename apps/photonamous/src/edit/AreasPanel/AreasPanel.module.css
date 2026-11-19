@@ -96,6 +96,7 @@
 
 .area[aria-current='true'] {
   background: var(--color-bg-active);
+  box-shadow: inset 3px 0 0 var(--ph-accent-text);
   color: var(--color-text-primary);
 }
 

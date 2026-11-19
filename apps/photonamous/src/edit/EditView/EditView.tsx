@@ -493,6 +493,19 @@ export function EditView({
 
   const [isAreasOpen, setIsAreasOpen] = useState(false);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  // Focus for the Areas panel once it has rendered: a new area's row, or (null) its first button.
+  const [areaFocus, setAreaFocus] = useState<{ readonly id: string | null } | null>(null);
+  useEffect(() => {
+    if (!areaFocus) return;
+    const panel = panelRef.current;
+    const target =
+      areaFocus.id === null
+        ? panel?.querySelector<HTMLElement>('[data-area-add]')
+        : panel?.querySelector<HTMLElement>(`[data-area-id="${CSS.escape(areaFocus.id)}"]`);
+    target?.focus();
+    setAreaFocus(null);
+  }, [areaFocus]);
   const shownAreas = liveAreas(shownRecipe);
   const selectedArea = isAreasOpen ? shownAreas.find((a) => a.id === selectedAreaId) ?? null : null;
   const labelOfArea = (id: string) => {
@@ -511,6 +524,13 @@ export function EditView({
     if (!added) return;
     commit(added.values, kind === 'linear' ? 'Add linear area' : 'Add radial area');
     setSelectedAreaId(id);
+    setAreaFocus({ id });
+  };
+
+  const toggleAreas = () => {
+    const isOpening = !isAreasOpen;
+    setIsAreasOpen(isOpening);
+    if (isOpening) setAreaFocus({ id: null });
   };
 
   toolShortcuts.current = (shortcut) => {
@@ -770,7 +790,7 @@ export function EditView({
             title="Areas (M linear, ⇧M radial)"
             aria-pressed={isAreasOpen}
             disabled={!canEdit || isBefore || isCropping}
-            onClick={() => setIsAreasOpen((v) => !v)}
+            onClick={toggleAreas}
           >
             <Spline size={16} aria-hidden />
           </button>
@@ -921,7 +941,7 @@ export function EditView({
             {!(storedPreviewUrl && status.kind !== 'error' && !canEdit) && <LoadStatus status={status} onClose={onClose} />}
           </div>
         </main>
-        <aside className={styles.panel} aria-label="Edits">
+        <aside ref={panelRef} className={styles.panel} aria-label="Edits">
           <Histogram bins={histogram} />
           {isAreasOpen && (
             <AreasPanel
@@ -938,6 +958,9 @@ export function EditView({
               }}
               onChange={handleSliderChange}
               onCommit={handleSliderCommit}
+              shapeFrame={areaFrame && docSize ? { frame: areaFrame, doc: docSize } : null}
+              onShapeChange={(id, geometry) => setDraft({ [`areas.${id}.geometry`]: { ...geometry } })}
+              onShapeCommit={(id, geometry, label) => commit({ [`areas.${id}.geometry`]: { ...geometry } }, label)}
             />
           )}
           {photoInfo && (
