@@ -12,8 +12,9 @@ import {
 // opacity scaled so its first pixel past the stroke keeps its old strength.
 //
 // The pre-change file is built here from a current save by rewriting its
-// format version to 1 — the container was otherwise unchanged — which is
-// byte-for-byte what the old app wrote for the same settings.
+// format version to 1. Its layers keep their 16-bit pixels (v3): the loader
+// reads the pixel encoding from the manifest's `layerPixelFormat`, not the
+// version, so only the effects migration sees the relabel.
 
 type Rgba = { r: number; g: number; b: number; a: number };
 
@@ -183,7 +184,7 @@ test.describe('projects saved before shadows included the stroke keep their look
     expect(await shadowEdges(page)).toEqual({ right: SQUARE.x1 + STROKE_W + OFFSET, bottom: SQUARE.y1 + STROKE_W + OFFSET });
 
     const saved = await saveProject(page);
-    expect(formatVersion(saved)).toBe(2);
+    expect(formatVersion(saved)).toBe(3);
 
     // ... while the old renderer cast them from the bare square: 420 / 270.
     await openProject(page, asFormatV1(saved));
@@ -199,7 +200,7 @@ test.describe('projects saved before shadows included the stroke keep their look
     // Saving writes the current version with the migrated values, and
     // reopening it doesn't migrate them a second time.
     const resaved = await saveProject(page);
-    expect(formatVersion(resaved)).toBe(2);
+    expect(formatVersion(resaved)).toBe(3);
     await openProject(page, resaved);
     expect((await layerEffects(page))!.dropShadow).toMatchObject({ offsetX: OFFSET - STROKE_W, offsetY: OFFSET - STROKE_W });
     expect(await shadowEdges(page)).toEqual(legacy);

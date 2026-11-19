@@ -58,7 +58,7 @@ async function hideRow(page: Page, layerName: string, layerId: string, y: number
 async function maskSamples(page: Page, name: string): Promise<MaskSamples | null> {
   return page.evaluate(async ({ n, points }) => {
     const { materializeAllMaskData } = await import('/src/app/mask-data-sync.ts');
-    materializeAllMaskData();
+    await materializeAllMaskData();
     const store = (window as unknown as Record<string, unknown>).__editorStore as {
       getState: () => { document: { layers: Array<{
         name: string; x: number; y: number;
