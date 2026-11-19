@@ -1,5 +1,6 @@
 import {
   CommandError,
+  SettleTimeoutError,
   isValidCommandId,
   type Command,
   type CommandMeta,
@@ -40,6 +41,18 @@ export interface CommandDescription {
 
 export type SettleFn = () => Promise<void>;
 
+/** Runs on the API path after the params validate and before the command: throws to refuse the call. */
+export type PreflightFn = () => void;
+
+export interface StartOptions {
+  /**
+   * false: resolve once `run` has, without waiting for the engine afterwards.
+   * The UI starts commands this way, since nothing it does waits for one.
+   * A settles 'before' command still waits before it runs.
+   */
+  readonly settle?: boolean;
+}
+
 export interface Registry {
   define<const S extends ParamSchema, R>(command: CommandDefinition<S, R>): Command<InferParams<S>, R>;
   get(id: string): Command | undefined;
@@ -52,10 +65,12 @@ export interface Registry {
    * params, a refusal or a bug in its synchronous part) is thrown in the
    * caller's tick instead of rejecting, as a menu action's own throw was.
    */
-  start(id: string, params?: unknown): Promise<unknown>;
+  start(id: string, params?: unknown, options?: StartOptions): Promise<unknown>;
   runInvocation(invocation: unknown): Promise<unknown>;
   runAll(invocations: readonly unknown[]): Promise<unknown[]>;
   setSettle(settle: SettleFn): void;
+  /** Checked by run, runInvocation and runAll, never by start: the UI's path does not refuse on it. */
+  setPreflight(preflight: PreflightFn): void;
 }
 
 const MAX_SUGGESTIONS = 5;
@@ -126,11 +141,26 @@ function splitInvocation(invocation: unknown): { op: string; params: Record<stri
   return { op, params };
 }
 
-function withIndex(error: unknown, index: number, op: string | undefined): unknown {
+function withIndex(error: unknown, index: number, op: string | undefined, completed: readonly unknown[]): unknown {
   if (!(error instanceof CommandError)) return error;
   const label = op ?? '(invalid)';
   const message = error.message.startsWith(`${label}: `) ? error.message : `${label}: ${error.message}`;
-  return new CommandError(error.code, `[${index}] ${message}`, { notice: error.notice });
+  return new CommandError(error.code, `[${index}] ${message}`, {
+    notice: error.notice,
+    result: error.result,
+    completed: [...completed],
+  });
+}
+
+/** The settle wait after a command whose work was done timed out: say so without calling the command failed. */
+function unsettledError(id: string, timeout: SettleTimeoutError, result: unknown): CommandError {
+  const seconds = timeout.timeoutMs / 1000;
+  const why = timeout.hint ? ` ${timeout.hint}` : '';
+  return new CommandError(
+    'unsettled',
+    `${id}: the change was applied, but the engine had not gone idle after ${seconds} s (still waiting for ${timeout.waitingFor}).${why} Do not run ${id} again: its result is attached as \`result\`, and the next command waits for the engine as usual.`,
+    { result },
+  );
 }
 
 function opOf(invocation: unknown): string | undefined {
@@ -142,15 +172,22 @@ function opOf(invocation: unknown): string | undefined {
 export function createRegistry(): Registry {
   const commands = new Map<string, Command>();
   let settle: SettleFn = () => Promise.resolve();
+  let preflight: PreflightFn | null = null;
 
   const sorted = (surface?: CommandSurface): Command[] =>
     [...commands.values()]
       .filter((command) => surface === undefined || command.surface === surface)
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-  async function finish(command: Command, pending: unknown): Promise<unknown> {
+  async function finish(command: Command, pending: unknown, shouldSettle: boolean): Promise<unknown> {
     const result = await pending;
-    if (command.settles !== false) await settle();
+    if (!shouldSettle || command.settles === false) return result;
+    try {
+      await settle();
+    } catch (error) {
+      if (error instanceof SettleTimeoutError) throw unsettledError(command.id, error, result);
+      throw error;
+    }
     return result;
   }
 
@@ -160,20 +197,25 @@ export function createRegistry(): Registry {
   }
 
   // Not async: command.run must start in the caller's tick, and what it throws there is thrown here.
-  function start(id: string, rawParams?: unknown): Promise<unknown> {
+  function start(id: string, rawParams?: unknown, options: StartOptions = {}): Promise<unknown> {
+    return startCommand(id, rawParams, options.settle ?? true, false);
+  }
+
+  function startCommand(id: string, rawParams: unknown, shouldSettle: boolean, isApiCall: boolean): Promise<unknown> {
     const command = commands.get(id);
     if (!command) throw notFound(String(id), [...commands.keys()]);
     const params = validateParams(id, command.params, rawParams);
+    if (isApiCall) preflight?.();
     if (command.settles === 'before') {
       command.check?.(params);
       return settleThenRun(command, params);
     }
-    return finish(command, command.run(params));
+    return finish(command, command.run(params), shouldSettle);
   }
 
   function run(id: string, rawParams?: unknown): Promise<unknown> {
     try {
-      return start(id, rawParams);
+      return startCommand(id, rawParams, true, true);
     } catch (error) {
       return Promise.reject(error);
     }
@@ -197,7 +239,7 @@ export function createRegistry(): Registry {
       try {
         results.push(await runInvocation(invocation));
       } catch (error) {
-        throw withIndex(error, index, opOf(invocation));
+        throw withIndex(error, index, opOf(invocation), results);
       }
     }
     return results;
@@ -226,6 +268,9 @@ export function createRegistry(): Registry {
     setSettle(next) {
       settle = next;
     },
+    setPreflight(next) {
+      preflight = next;
+    },
   };
 }
 
@@ -239,3 +284,4 @@ export const runInvocation = defaultRegistry.runInvocation;
 export const runInvocations = defaultRegistry.runAll;
 export const describeCommands = defaultRegistry.describe;
 export const setSettle = defaultRegistry.setSettle;
+export const setPreflight = defaultRegistry.setPreflight;

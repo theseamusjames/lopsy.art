@@ -1,6 +1,6 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { requireDocument } from '../context';
+import { coordinateSpec, requireDocument } from '../context';
 import { useUIStore, type Guide } from '../../app/ui-store';
 
 export interface GuideJSON {
@@ -24,10 +24,7 @@ const orientationSpec = {
   description: 'horizontal: a guide across the canvas at a row (a click on the left ruler). vertical: a guide down the canvas at a column (a click on the top ruler).',
 } as const;
 
-const positionSpec = {
-  type: 'number',
-  description: 'Document pixels from the top (horizontal) or left (vertical) edge; fractions are kept, as a ruler click keeps them.',
-} as const;
+const positionSpec = coordinateSpec('Document pixels from the top (horizontal) or left (vertical) edge; fractions are kept, as a ruler click keeps them.');
 
 function findGuide(id: string | undefined, orientation: string | undefined, position: number | undefined): Guide {
   if (id !== undefined) {
@@ -50,6 +47,7 @@ export const guideList = defineCommand({
   id: 'guide.list',
   summary: 'Lists the ruler guides in the order they were added, each with its id, orientation and position in document pixels. Changes nothing.',
   surface: 'document',
+  settles: false,
   params: {},
   run(): { guides: GuideJSON[] } {
     requireDocument();
@@ -62,6 +60,7 @@ export const guideAdd = defineCommand({
   summary:
     'Adds a ruler guide at an exact position, as a click on a ruler does (no history step; guides are not part of undo). A Cmd/Ctrl ruler click snaps to a fraction of the canvas first: pass the position you want instead. Returns the new guide.',
   surface: 'document',
+  settles: false,
   params: { orientation: orientationSpec, position: positionSpec },
   run({ orientation, position }): GuideJSON {
     requireDocument();
@@ -78,6 +77,7 @@ export const guideRemove = defineCommand({
   summary:
     'Removes one ruler guide, as a click on it in the ruler does (no history step): pass its id, or its orientation and exact position. Returns the removed guide.',
   surface: 'document',
+  settles: false,
   params: {
     guide: { type: 'string', optional: true, description: 'A guide id from guide.list or guide.add.' },
     orientation: { ...orientationSpec, optional: true },
@@ -95,6 +95,7 @@ export const guideClear = defineCommand({
   id: 'guide.clear',
   summary: 'Removes every ruler guide and deselects any guide, as Edit > Clear Guides does (no history step). With no guides it still deselects, as the menu does, and is then refused. Returns how many it removed.',
   surface: 'document',
+  settles: false,
   params: {},
   run(): { removed: number } {
     requireDocument();

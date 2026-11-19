@@ -38,7 +38,8 @@ const { useEditorStore } = await import('../../app/editor-store');
 const { useUIStore } = await import('../../app/ui-store');
 const { useToolSettingsStore } = await import('../../app/tool-settings-store');
 const { CommandError } = await import('../command');
-const { documentEnvironment, runGesture } = await import('./run-gesture');
+const { docPointSpec, documentEnvironment, pointsSpec, runGesture } = await import('./run-gesture');
+const { validateParams } = await import('../params');
 
 type Layer = ReturnType<typeof useEditorStore.getState>['document']['layers'][number];
 
@@ -163,5 +164,53 @@ describe('runGesture', () => {
     useEditorStore.setState({ documentReady: false });
     expect(failure(() => runGesture({ points: [{ x: 1, y: 1 }] }))).toMatchObject({ code: 'unavailable' });
     expect(gesture.down).not.toHaveBeenCalled();
+  });
+
+  it('releases at the last point delivered and clears the interacting flag when a move throws, then rethrows', () => {
+    const bug = new Error('move failed');
+    gesture.move.mockImplementation((e) => {
+      calls.push(`move ${e.clientX}`);
+      if (e.clientX === 5) throw bug;
+    });
+    expect(() => runGesture({ points: [{ x: 1, y: 1 }, { x: 3, y: 3 }, { x: 5, y: 5 }, { x: 7, y: 7 }] })).toThrow(bug);
+    expect(calls).toEqual(['down interacting=false', 'move 3', 'move 5', 'up interacting=true']);
+    expect(gesture.up).toHaveBeenCalledWith(event(3, 3), documentEnvironment);
+    expect(useUIStore.getState().isInteracting).toBe(false);
+  });
+
+  it('clears the interacting flag when the release throws, then rethrows', () => {
+    const bug = new Error('up failed');
+    gesture.up.mockImplementation(() => {
+      throw bug;
+    });
+    expect(() => runGesture({ points: [{ x: 1, y: 1 }, { x: 3, y: 3 }] })).toThrow(bug);
+    expect(useUIStore.getState().isInteracting).toBe(false);
+  });
+
+  it.each([
+    ['liquify', 'Liquify'],
+    ['tiltShift', 'Tilt-Shift'],
+    ['meshWarp', 'Mesh Warp'],
+  ])('refuses while a %s session is open, naming it, before any press', (field, name) => {
+    useUIStore.setState({ [field]: {} } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
+    try {
+      expect(failure(() => runGesture({ points: [{ x: 1, y: 1 }] }))).toMatchObject({
+        code: 'refused',
+        message: `A ${name} session is open, and it would take the press instead of the tool: apply or cancel it first.`,
+      });
+      expect(gesture.down).not.toHaveBeenCalled();
+    } finally {
+      useUIStore.setState({ [field]: null } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
+    }
+  });
+});
+
+describe('gesture point specs', () => {
+  it('reject a coordinate beyond the document-side range, which would hang stroke interpolation', () => {
+    const schema = { points: pointsSpec('Path.'), at: docPointSpec('Point.') };
+    const far = { points: [{ x: 0, y: 0 }, { x: 1e17, y: 0 }], at: { x: 0, y: 0 } };
+    expect(() => validateParams('paint.stroke', schema, far)).toThrow(/points\[1\]\.x must be a finite number from -16384 to 32768, got 100000000000000000/);
+    expect(() => validateParams('paint.stroke', schema, { points: [{ x: 0, y: 0 }], at: { x: 0, y: -16385 } })).toThrow(/at\.y must be/);
+    expect(validateParams('paint.stroke', schema, { points: [{ x: -16384, y: 32768 }], at: { x: -5, y: 300 } })).toBeTruthy();
   });
 });

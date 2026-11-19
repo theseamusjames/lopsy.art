@@ -1,5 +1,6 @@
 import { CommandError } from '../command';
 import { gradientStopsJson, parseGradientStops } from '../context';
+import { hasOwnKey } from '../params';
 import { normalizePoints, type CurvePoint, type Curves } from '../../filters/curves';
 import type { Levels, LevelsChannel } from '../../filters/levels';
 import type { AdjustmentNode, AdjustmentNodeType, ColorGradeWheel } from '../../types/adjustment-nodes';
@@ -155,7 +156,7 @@ export const NODE_PARAMS: Readonly<Record<AdjustmentNodeType, Readonly<Record<st
 export function checkNodeParams(node: AdjustmentNode, params: Record<string, unknown>): [string, unknown][] {
   const table = NODE_PARAMS[node.type];
   const names = Object.keys(table);
-  const unknown = Object.keys(params).find((key) => !(key in table));
+  const unknown = Object.keys(params).find((key) => !hasOwnKey(table, key));
   if (unknown !== undefined) {
     const valid = names.length > 0 ? `valid params for ${node.type}: ${names.join(', ')}` : `${node.type} has no params`;
     throw new CommandError('invalid', `adjust.set: unknown param ${JSON.stringify(unknown)}; ${valid}`);
@@ -163,7 +164,7 @@ export function checkNodeParams(node: AdjustmentNode, params: Record<string, unk
   if (Object.keys(params).length === 0) throw new CommandError('invalid', `adjust.set: params is empty; valid params for ${node.type}: ${names.join(', ')}`);
   const current = node as unknown as Readonly<Record<string, unknown>>;
   return names
-    .filter((name) => params[name] !== undefined)
+    .filter((name) => hasOwnKey(params, name) && params[name] !== undefined)
     .map((name) => [name, (table[name] as ParamCheck)(`params.${name}`, params[name], current)]);
 }
 

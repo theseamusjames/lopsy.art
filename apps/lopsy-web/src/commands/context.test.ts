@@ -15,16 +15,16 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
   });
 }
 
-const mocks = vi.hoisted(() => ({ engine: null as object | null }));
+const mocks = vi.hoisted(() => ({ engine: null as object | null, isContextLost: false }));
 
 vi.mock('../engine-wasm/engine-state', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../engine-wasm/engine-state')>();
-  return { ...actual, getEngine: () => mocks.engine };
+  return { ...actual, getEngine: () => mocks.engine, isGpuContextLost: () => mocks.isContextLost };
 });
 
 const { useEditorStore } = await import('../app/editor-store');
 const { CommandError } = await import('./command');
-const { decodeBase64, encodeBase64, layerSummary, requireDocument, requireEngine, resolveLayer, waitForEditorState } = await import('./context');
+const { MAX_ENCODED_BYTES, decodeBase64, encodeBase64, gpuContextPreflight, layerSummary, requireDocument, requireEngine, resolveLayer, waitForEditorState } = await import('./context');
 
 function store() {
   return useEditorStore.getState();
@@ -61,6 +61,33 @@ describe('requireDocument / requireEngine', () => {
     expect(caught(requireEngine).code).toBe('unavailable');
     mocks.engine = {};
     expect(requireEngine()).toBe(mocks.engine);
+  });
+
+  it('does not look at the graphics context: the UI still runs its function while it is lost', () => {
+    mocks.engine = {};
+    mocks.isContextLost = true;
+    expect(requireEngine()).toBe(mocks.engine);
+    mocks.isContextLost = false;
+  });
+});
+
+describe('gpuContextPreflight', () => {
+  it('refuses unavailable while an engine exists and its graphics context is lost', () => {
+    mocks.engine = {};
+    mocks.isContextLost = true;
+    const error = caught(gpuContextPreflight);
+    mocks.isContextLost = false;
+    expect(error.code).toBe('unavailable');
+    expect(error.message).toContain('graphics context is lost');
+  });
+
+  it('lets calls through before any engine exists, where there is no context to lose', () => {
+    mocks.engine = null;
+    mocks.isContextLost = true;
+    expect(() => gpuContextPreflight()).not.toThrow();
+    mocks.isContextLost = false;
+    mocks.engine = {};
+    expect(() => gpuContextPreflight()).not.toThrow();
   });
 });
 
@@ -142,5 +169,16 @@ describe('base64', () => {
         expect((error as InstanceType<typeof CommandError>).message).toBe('doc.open: base64 is not valid base64');
       }
     }
+  });
+});
+
+describe('encodeBase64 size limit', () => {
+  it('refuses a file too large for one base64 string before encoding any of it', () => {
+    const subarray = vi.fn();
+    const huge = { length: MAX_ENCODED_BYTES + 1, subarray } as unknown as Uint8Array;
+    const error = caught(() => encodeBase64(huge));
+    expect(error.code).toBe('refused');
+    expect(error.message).toMatch(/^The file is 192\.0 MiB, more than the 192\.0 MiB a command can return as base64: use view\.render with maxSize/);
+    expect(subarray).not.toHaveBeenCalled();
   });
 });

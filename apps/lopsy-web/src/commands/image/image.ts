@@ -1,7 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
-import { activateIfOther, layerRefSpec, parseHexColor, requireDocument, requireEngine, resolveLayer } from '../context';
+import { activateIfOther, coordinateSpec, extentSpec, layerRefSpec, parseHexColor, requireDocument, requireEngine, resolveLayer } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import { layerCreationRefusal } from '../../app/store/document-slice';
@@ -177,10 +177,10 @@ export const imageBorder = defineCommand({
 });
 
 const cropParams = {
-  x: { type: 'number', integer: true, description: 'Left edge of the kept area in document pixels; (0,0) is the top-left of the document.' },
-  y: { type: 'number', integer: true, description: 'Top edge of the kept area in document pixels.' },
-  width: { type: 'number', integer: true, min: 1, description: 'Width of the kept area in pixels.' },
-  height: { type: 'number', integer: true, min: 1, description: 'Height of the kept area in pixels.' },
+  x: coordinateSpec('Left edge of the kept area in document pixels; (0,0) is the top-left of the document.', { integer: true }),
+  y: coordinateSpec('Top edge of the kept area in document pixels.', { integer: true }),
+  width: extentSpec('Width of the kept area in pixels.', { integer: true }),
+  height: extentSpec('Height of the kept area in pixels.', { integer: true }),
 } as const;
 
 export const imageCrop = defineCommand({

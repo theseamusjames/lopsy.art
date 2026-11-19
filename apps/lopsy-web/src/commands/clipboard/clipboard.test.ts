@@ -110,7 +110,24 @@ describe.each([
 
   it('refuses when the engine copied nothing', async () => {
     stub(action, vi.fn());
-    expect((await failure(runCommand(id))).message).toBe('The engine copied nothing, so the clipboard is unchanged.');
+    const message = action === 'copy'
+      ? 'The engine copied nothing, so the clipboard is unchanged.'
+      : 'The engine cut nothing (no pixels in the area to cut), so the clipboard is unchanged.';
+    expect((await failure(runCommand(id))).message).toBe(message);
+  });
+});
+
+describe('clipboard.cut with nothing to cut', () => {
+  it('says that the "Cut" step the store pushed before finding nothing is still there', async () => {
+    type Entry = ReturnType<typeof store>['undoStack'][number];
+    const pushCut = () => useEditorStore.setState({ undoStack: [...store().undoStack, { label: 'Cut' } as Entry] });
+    stub('cut', vi.fn(pushCut));
+    const error = await failure(runCommand('clipboard.cut'));
+    expect(error.code).toBe('refused');
+    expect(error.message).toBe(
+      'The engine cut nothing (no pixels in the area to cut), so the clipboard is unchanged. A "Cut" history step was still added, with no change to the pixels, as Edit > Cut adds one: history.undo removes it.',
+    );
+    expect(store().undoStack.map((entry) => entry.label)).toContain('Cut');
   });
 });
 

@@ -84,8 +84,8 @@ describe('select.wand', () => {
     await runCommand('select.wand', { x: 3, y: 4 });
     expect(gesture.down).toHaveBeenCalledTimes(1);
     expect(await failure(runCommand('select.wand', { x: 3, y: 30 }))).toMatchObject({
-      code: 'invalid',
-      message: 'select.wand: (3, 30) is outside the 40x30 document.',
+      code: 'refused',
+      message: '(3, 30) is outside the 40x30 document: a Magic Wand click there selects nothing.',
     });
     expect((await failure(runCommand('select.wand', { x: 3, y: 4, mode: 'xor' }))).code).toBe('invalid');
   });

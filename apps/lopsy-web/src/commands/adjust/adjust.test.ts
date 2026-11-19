@@ -70,6 +70,13 @@ function labels(): string[] {
   return store().undoStack.map((e) => e.label);
 }
 
+const INHERITED_NAMES = ['toString', 'constructor', '__proto__', 'hasOwnProperty'] as const;
+
+/** An object whose one own key is `name`, as JSON.parse makes it, even for __proto__. */
+function ownKeyed(name: string): Record<string, unknown> {
+  return JSON.parse(`{${JSON.stringify(name)}: 1}`) as Record<string, unknown>;
+}
+
 async function failure(promise: Promise<unknown>): Promise<InstanceType<typeof CommandError>> {
   try {
     await promise;
@@ -199,6 +206,14 @@ describe('adjust.set', () => {
     for (const [node, params, message] of cases) {
       const error = await failure(runCommand('adjust.set', { node, params }));
       expect([error.code, error.message]).toEqual(['invalid', message]);
+    }
+    expect(labels()).toEqual(['New Document']);
+  });
+
+  it('is invalid for names Object.prototype has, which are no params, and changes nothing', async () => {
+    for (const name of INHERITED_NAMES) {
+      const error = await failure(runCommand('adjust.set', { node: 'exposure', params: ownKeyed(name) }));
+      expect([error.code, error.message]).toEqual(['invalid', `adjust.set: unknown param ${JSON.stringify(name)}; valid params for exposure: exposure`]);
     }
     expect(labels()).toEqual(['New Document']);
   });

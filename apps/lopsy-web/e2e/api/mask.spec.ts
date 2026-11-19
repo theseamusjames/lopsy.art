@@ -24,6 +24,18 @@ async function paintLayer1(page: Page): Promise<void> {
   await pressKey(page, 'ControlOrMeta+d');
 }
 
+/** Whether the active layer's mask bytes in the store hide any pixel. */
+async function maskHidesSomething(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const store = (window as unknown as Record<string, unknown>).__editorStore as {
+      getState: () => { document: { activeLayerId: string | null; layers: Array<{ id: string; mask?: { data: Uint8ClampedArray } | null }> } };
+    };
+    const { activeLayerId, layers } = store.getState().document;
+    const mask = layers.find((layer) => layer.id === activeLayerId)?.mask;
+    return !!mask && mask.data.some((value) => value < 255);
+  });
+}
+
 function toolbarButton(page: Page, name: string) {
   return page.getByRole('toolbar', { name: 'Layer actions' }).getByRole('button', { name, exact: true });
 }
@@ -218,6 +230,18 @@ test.describe('the Layers panel mask controls and the mask commands', () => {
     });
     expect(modes).toEqual(['off', 'off']);
     expect(api.selection.active).toBe(true);
+  });
+
+  test('mask.to-selection after undoing a mask stroke selects the mask as undone, not the stroke the stale bytes still hold', async ({ page }) => {
+    await run(page, { op: 'doc.new', width: 200, height: 150 });
+    await run(page, { op: 'mask.add' });
+    await run(page, { op: 'color.set', foreground: '#000000' });
+    await run(page, { op: 'paint.stroke', points: STROKE });
+    // Let the stroke's own readback land, so the editor's copy of the mask holds the stroke.
+    await expect.poll(() => maskHidesSomething(page), { timeout: 10_000 }).toBe(true);
+    await run(page, { op: 'history.undo' });
+    const { selection } = await run<{ selection: unknown }>(page, { op: 'mask.to-selection' });
+    expect(selection).toBeNull();
   });
 
   test('mask.to-selection refuses a layer with no mask', async ({ page }) => {

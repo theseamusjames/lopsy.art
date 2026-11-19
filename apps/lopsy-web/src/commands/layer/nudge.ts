@@ -1,7 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
-import { activateIfOther, layerRefSpec, requireDocument, requireEngine, resolveLayer } from '../context';
+import { activateIfOther, layerRefSpec, offsetSpec as boundedOffsetSpec, requireDocument, requireEngine, resolveLayer } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { nudgeMove, nudgeSelection } from '../../app/interactions/gesture-session';
@@ -19,10 +19,8 @@ const APPLY: Record<NudgeTarget, (dx: number, dy: number) => void> = {
 
 const offsetSpec = (axis: 'Horizontal' | 'Vertical', positive: string) =>
   ({
-    type: 'number',
-    integer: true,
+    ...boundedOffsetSpec(`${axis} offset in document pixels; positive moves ${positive}. The arrow keys move 1 px (10 with Shift) per press.`, { integer: true }),
     default: 0,
-    description: `${axis} offset in document pixels; positive moves ${positive}. The arrow keys move 1 px (10 with Shift) per press.`,
   }) as const;
 
 export interface LayerNudgeResult {

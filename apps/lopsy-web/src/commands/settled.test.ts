@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CommandError } from './command';
-import { createSettle, type SettleDeps } from './settled';
+import { CommandError, SettleTimeoutError } from './command';
+import { BUSY_PASS_LIMIT, createSettle, type SettleDeps } from './settled';
 
 vi.mock('../engine-wasm/engine-state', () => ({
   engineStarted: () => Promise.resolve(null),
+  isGpuContextLost: () => false,
 }));
 
 vi.mock('../engine-wasm/wasm-bridge', () => ({
@@ -17,6 +18,8 @@ interface FakeWorld {
   pass(rendered: boolean): Promise<void>;
   isLoopRunning: boolean;
   parked: number;
+  crops: number;
+  isContextLost: boolean;
   isHidden: boolean;
   engineStart: Promise<unknown>;
 }
@@ -26,6 +29,8 @@ function fakeWorld(timeoutMs = 1000): FakeWorld {
   const world: FakeWorld = {
     isLoopRunning: true,
     parked: 0,
+    crops: 0,
+    isContextLost: false,
     isHidden: false,
     engineStart: Promise.resolve(null),
     async pass(rendered) {
@@ -39,6 +44,8 @@ function fakeWorld(timeoutMs = 1000): FakeWorld {
       isLoopRunning: () => world.isLoopRunning,
       nextLoopPass: () => new Promise((resolve) => waiters.push(resolve)),
       parkedReadbackCount: () => world.parked,
+      pendingDeferredCropCount: () => world.crops,
+      isGpuContextLost: () => world.isContextLost,
       setTimer: (callback, ms) => setTimeout(callback, ms),
       clearTimer: (handle) => clearTimeout(handle),
       isDocumentHidden: () => world.isHidden,
@@ -152,6 +159,7 @@ describe('createSettle', () => {
     expect(result.state).toBe('rejected');
     expect(result.error).toBeInstanceOf(CommandError);
     const error = result.error as CommandError;
+    expect(error).toBeInstanceOf(SettleTimeoutError);
     expect(error.code).toBe('unavailable');
     expect(error.message).toContain('the engine to go idle');
     expect(error.message).not.toContain('background tab');
@@ -196,5 +204,68 @@ describe('createSettle', () => {
     await world.pass(false);
     expect(result.state).toBe('rejected');
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('resolves after BUSY_PASS_LIMIT rendered passes in a row with nothing outstanding', async () => {
+    const world = fakeWorld(10_000);
+    const result = track(createSettle(world.deps)());
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < BUSY_PASS_LIMIT - 1; i++) await world.pass(true);
+    expect(result.state).toBe('pending');
+    await world.pass(true);
+    expect(result.state).toBe('resolved');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('starts the busy count again after a pass with a parked readback', async () => {
+    const world = fakeWorld(10_000);
+    const result = track(createSettle(world.deps)());
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < BUSY_PASS_LIMIT - 1; i++) await world.pass(true);
+    world.parked = 1;
+    await world.pass(true);
+    world.parked = 0;
+    for (let i = 0; i < BUSY_PASS_LIMIT - 1; i++) await world.pass(true);
+    expect(result.state).toBe('pending');
+    await world.pass(true);
+    expect(result.state).toBe('resolved');
+  });
+
+  it('waits while a deferred layer crop is pending, idle passes or busy ones', async () => {
+    const world = fakeWorld(10_000);
+    world.crops = 1;
+    const result = track(createSettle(world.deps)());
+    await vi.advanceTimersByTimeAsync(0);
+    await world.pass(false);
+    for (let i = 0; i < BUSY_PASS_LIMIT; i++) await world.pass(true);
+    expect(result.state).toBe('pending');
+    world.crops = 0;
+    await world.pass(true);
+    expect(result.state).toBe('pending');
+    await world.pass(false);
+    expect(result.state).toBe('resolved');
+  });
+
+  it('rejects unavailable at once while the graphics context is lost', async () => {
+    const world = fakeWorld();
+    world.isContextLost = true;
+    const result = track(createSettle(world.deps)());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.state).toBe('rejected');
+    const error = result.error as CommandError;
+    expect(error.code).toBe('unavailable');
+    expect(error).not.toBeInstanceOf(SettleTimeoutError);
+    expect(error.message).toContain('graphics context is lost');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('rejects unavailable when the context is lost during the wait, not on the idle pass it reports', async () => {
+    const world = fakeWorld();
+    const result = track(createSettle(world.deps)());
+    await vi.advanceTimersByTimeAsync(0);
+    world.isContextLost = true;
+    await world.pass(false);
+    expect(result.state).toBe('rejected');
+    expect((result.error as CommandError).message).toContain('graphics context is lost');
   });
 });

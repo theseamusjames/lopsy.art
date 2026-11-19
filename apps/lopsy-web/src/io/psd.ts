@@ -32,6 +32,7 @@ import { commitLayerTransform } from '../app/interactions/layer-transform';
 import { materializeAllMaskData } from '../app/mask-data-sync';
 import { bytesOf } from '../utils/byte-view';
 import { BLEND_MODE_TO_PSD_INDEX, BLEND_MODES_BY_PSD_INDEX } from '../types/blend-mode-tables';
+import type { DocumentFile } from './project-save';
 
 const BLEND_MODE_TO_U8 = BLEND_MODE_TO_PSD_INDEX;
 const U8_TO_BLEND_MODE = BLEND_MODES_BY_PSD_INDEX;
@@ -94,7 +95,7 @@ function flattenLayerTreeForPsd(
  * The document as the bytes of a PSD file, after committing what the file
  * must hold. Null when the engine has not started; throws when encoding fails.
  */
-export async function encodePsdFile(depth: 8 | 16 = 8): Promise<Uint8Array | null> {
+export async function encodePsdFile(depth: 8 | 16 = 8): Promise<DocumentFile | null> {
   const engine = getEngine();
   if (!engine) return null;
 
@@ -205,17 +206,18 @@ export async function encodePsdFile(depth: 8 | 16 = 8): Promise<Uint8Array | nul
   // PSD header color mode: grayscale documents write a single gray channel;
   // every other Lopsy mode round-trips as RGB.
   const psdColorMode = useEditorStore.getState().document.colorMode === 'grayscale' ? 1 : 3;
-  return exportPsd(engine, layersJson, allMaskData, depth, isWideGamut() ? 1 : 0, psdColorMode);
+  const bytes = await exportPsd(engine, layersJson, allMaskData, depth, isWideGamut() ? 1 : 0, psdColorMode);
+  return { bytes, name: doc.name };
 }
 
 export async function exportPsdFile(depth: 8 | 16 = 8): Promise<void> {
-  const psdBytes = await encodePsdFile(depth);
-  if (!psdBytes) return;
-  const blob = new Blob([psdBytes.slice().buffer], { type: 'application/octet-stream' });
+  const file = await encodePsdFile(depth);
+  if (!file) return;
+  const blob = new Blob([file.bytes.slice().buffer], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${useEditorStore.getState().document.name || 'lopsy'}.psd`;
+  a.download = `${file.name || 'lopsy'}.psd`;
   a.click();
   URL.revokeObjectURL(url);
   useEditorStore.getState().markClean();

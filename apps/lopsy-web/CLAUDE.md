@@ -203,14 +203,35 @@ table), never a direct store call.
 file-input click, `window.open` and system-clipboard writes only work
 inside the user's click, and a key's undo must apply in the key's tick,
 so the registry starts `run` synchronously in the caller's tick (`start`
-is deliberately not `async`). After `run`, the registry waits for the
-engine to settle (`settled.ts`: everything rendered, no readback
-outstanding) unless `settles` says otherwise: `false` for commands that
-never touch the document (zoom, view toggles), `'before'` for read-only
-commands that must see what earlier commands left. A `'before'` command
-starts after a wait, so it must never be bound to a user gesture, and it
-gives a `check` that rejects at once when the wait could never end (no
-document open).
+is deliberately not `async`).
+
+**Settling.** For an API call (`run`, `runInvocation`, `runAll`), after
+`run` the registry waits for the engine to settle (`settled.ts`): a pass
+of the render loop that rendered nothing with no readback parked and no
+deferred layer crop pending (`deferred-crop-on-switch.ts`), or 30 passes
+in a row that rendered with none of those outstanding (something, such as
+the pointer over the canvas, keeps the canvas dirty). It rejects
+`unavailable` while the graphics context is lost; on the same path, a
+preflight (`setPreflight`, wired in `index.ts` to `gpuContextPreflight`
+in `context.ts`) refuses a call before `run` while an engine exists and
+its context is lost. `start`, the UI's path, consults neither, so a menu
+item or key still runs its function then. It only waits: it never runs a crop or a readback
+itself. `settles` changes this: `false` for commands that never touch the
+document or the engine, only tool settings, colours, guides or the UI
+(zoom, view toggles, `color.*`, `tool.*`, `guide.*`), which must work with
+no document open; `'before'` for read-only commands that must see what
+earlier commands left. A `'before'` command starts after a wait, so it
+must never be bound to a user gesture, and it gives a `check` that
+rejects at once when the wait could never end (no document open). The UI
+does not settle: `invokeFromUi` starts the command with
+`start(id, params, { settle: false })`, since nothing in the UI waits for
+a command and a key on auto-repeat would stack the waits up.
+
+When the wait after a command's own work times out, the work has
+happened: the registry rejects with code `'unsettled'`, the command's
+result on the error's `result`, and a message saying not to run it
+again. `runAll` puts the results of the steps that completed before a
+failure on the error's `completed`.
 
 **Wrap, never re-implement.** A command calls the same function the UI
 calls, so the two cannot drift; when that function lives in a component
@@ -240,7 +261,16 @@ the tools. Do not add per-call overrides of them.
 (`src/commands/gesture/run-gesture.ts`), which feeds
 `gestureDown`/`gestureMove`/`gestureUp` in
 `src/app/interactions/gesture-session.ts`, the same dispatcher the canvas
-pointer uses. Never call a tool's handlers directly.
+pointer uses. Never call a tool's handlers directly. `runGesture` refuses
+while a Liquify, Tilt-Shift or Mesh Warp session is open (they would take
+the press), and once the press has landed it always releases and clears
+the interacting flag, even when a move throws. Document coordinates and
+offsets in params use the shared specs in `context.ts`
+(`coordinateSpec`, `boundedPointSpec`, `offsetSpec`, `extentSpec`), which
+bound them to the largest document's side beyond each edge: an unbounded
+point can hang a tool's interpolation. A key from a caller's `record`
+param is looked up with `ownEntry` / `hasOwnKey`, never `table[key]` or
+`key in table`, which find Object.prototype's names.
 
 **Imports.** Command modules import stores and plain modules, never
 React components or hooks: they must run with no UI mounted.

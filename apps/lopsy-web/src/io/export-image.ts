@@ -2,8 +2,9 @@
  * Image export as bytes: composites the document in the engine and encodes
  * it as PNG (8- or 16-bit), JPEG, WebP or BMP with the metadata and colour
  * profile File > Export… and Quick Export PNG write. Downloading the result
- * is the menu's job (file-menu.ts); this module only produces the bytes and
- * throws when it cannot.
+ * is the menu's job (file-menu.ts), which takes the encoded Blob as it is;
+ * only the commands, which return the file, read it into bytes. This module
+ * throws when it cannot encode.
  */
 import { useEditorStore } from '../app/editor-store';
 import { getEngine } from '../engine-wasm/engine-state';
@@ -23,12 +24,21 @@ const COLOR_SPACE_DISPLAY_P3 = 1;
 
 export type ImageExportSettings = Pick<ExportOptions, 'format' | 'quality' | 'highQuality'>;
 
-export interface EncodedImage {
-  bytes: Uint8Array;
+interface ImageFileInfo {
   mime: string;
   ext: string;
   width: number;
   height: number;
+}
+
+/** The encoded file as the browser made it, for a download. */
+export interface EncodedImageBlob extends ImageFileInfo {
+  blob: Blob;
+}
+
+/** The encoded file's bytes, for a command's result. */
+export interface EncodedImage extends ImageFileInfo {
+  bytes: Uint8Array;
 }
 
 /** The 16-bit PNG encoder failed; the menu toasts this one as "Failed to export PNG: …". */
@@ -50,8 +60,15 @@ function exportIccProfile(): EmbeddedIccProfile | undefined {
   return { name: 'Display P3', data: buildIccProfile(COLOR_SPACE_DISPLAY_P3) };
 }
 
-async function encoded(blob: Blob, format: ExportFormat, width: number, height: number): Promise<EncodedImage> {
-  return { bytes: new Uint8Array(await blob.arrayBuffer()), mime: FORMAT_MIME[format], ext: FORMAT_EXT[format], width, height };
+function encoded(blob: Blob, format: ExportFormat, width: number, height: number): EncodedImageBlob {
+  return { blob, mime: FORMAT_MIME[format], ext: FORMAT_EXT[format], width, height };
+}
+
+async function readBytes(pending: Promise<EncodedImageBlob | null>): Promise<EncodedImage | null> {
+  const image = await pending;
+  if (!image) return null;
+  const { blob, ...info } = image;
+  return { ...info, bytes: new Uint8Array(await blob.arrayBuffer()) };
 }
 
 /**
@@ -71,14 +88,19 @@ function prepareForExport(): void {
  * exports nothing and says nothing: no engine, an empty composite, or no 2D
  * context.
  */
-export function encodeDocumentImage(options: ImageExportSettings): Promise<EncodedImage | null> {
+export function encodeDocumentImageBlob(options: ImageExportSettings): Promise<EncodedImageBlob | null> {
   const engine = getEngine();
   if (!engine) return Promise.resolve(null);
   prepareForExport();
-  return encodeCompositeImage(engine, options);
+  return encodeCompositeBlob(engine, options);
 }
 
-async function encodePng16(engine: Engine, width: number, height: number): Promise<EncodedImage> {
+/** As encodeDocumentImageBlob, read into bytes. */
+export function encodeDocumentImage(options: ImageExportSettings): Promise<EncodedImage | null> {
+  return readBytes(encodeDocumentImageBlob(options));
+}
+
+async function encodePng16(engine: Engine, width: number, height: number): Promise<EncodedImageBlob> {
   let blob: Blob;
   try {
     const colorSpace: number = isWideGamut() ? COLOR_SPACE_DISPLAY_P3 : 0;
@@ -92,7 +114,11 @@ async function encodePng16(engine: Engine, width: number, height: number): Promi
 }
 
 /** The composite as `encodeDocumentImage` encodes it, without the pre-steps: for reads that must not change the document. */
-export async function encodeCompositeImage(engine: Engine, options: ImageExportSettings): Promise<EncodedImage | null> {
+export function encodeCompositeImage(engine: Engine, options: ImageExportSettings): Promise<EncodedImage | null> {
+  return readBytes(encodeCompositeBlob(engine, options));
+}
+
+async function encodeCompositeBlob(engine: Engine, options: ImageExportSettings): Promise<EncodedImageBlob | null> {
   const { format, quality, highQuality } = options;
   const sizeArr = getCompositeSize(engine);
   const srcWidth = sizeArr[0] ?? 0;
@@ -107,11 +133,15 @@ export async function encodeCompositeImage(engine: Engine, options: ImageExportS
   const clamped = new Uint8ClampedArray(srcWidth * srcHeight * 4);
   clamped.set(rawPixels);
   const imageData = createImageDataFromArray(clamped, srcWidth, srcHeight);
-  return encodeImageData(imageData, format, quality);
+  return encodeImageDataBlob(imageData, format, quality);
 }
 
 /** Pixels in the working colour space, encoded as export encodes the composite. */
 export function encodeImageData(imageData: ImageData, format: ExportFormat, quality: number): Promise<EncodedImage | null> {
+  return readBytes(encodeImageDataBlob(imageData, format, quality));
+}
+
+function encodeImageDataBlob(imageData: ImageData, format: ExportFormat, quality: number): Promise<EncodedImageBlob | null> {
   const canvas = document.createElement('canvas');
   canvas.width = imageData.width;
   canvas.height = imageData.height;
@@ -121,7 +151,7 @@ export function encodeImageData(imageData: ImageData, format: ExportFormat, qual
   return encodeCanvas(canvas, imageData.width, imageData.height, format, quality);
 }
 
-function encodeBmpCanvas(canvas: HTMLCanvasElement, width: number, height: number): Promise<EncodedImage | null> {
+function encodeBmpCanvas(canvas: HTMLCanvasElement, width: number, height: number): Promise<EncodedImageBlob | null> {
   const ctx = canvas.getContext('2d', contextOptions);
   if (!ctx) return Promise.resolve(null);
   const imageData = ctx.getImageData(0, 0, width, height);
@@ -131,7 +161,7 @@ function encodeBmpCanvas(canvas: HTMLCanvasElement, width: number, height: numbe
   const pixels = isWideGamut()
     ? convertP3ToSrgb(new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength))
     : imageData.data;
-  return encoded(encodeBMP({ width, height, data: pixels }), 'bmp', width, height);
+  return Promise.resolve(encoded(encodeBMP({ width, height, data: pixels }), 'bmp', width, height));
 }
 
 function canvasBlob(canvas: HTMLCanvasElement, width: number, height: number, mimeType: string, qualityFraction: number): Promise<Blob> {
@@ -159,7 +189,7 @@ async function encodeCanvas(
   height: number,
   format: ExportFormat,
   quality: number,
-): Promise<EncodedImage | null> {
+): Promise<EncodedImageBlob | null> {
   // BMP is encoded on the JS side — no canvas.toBlob support
   if (format === 'bmp') return encodeBmpCanvas(canvas, width, height);
   const blob = await canvasBlob(canvas, width, height, FORMAT_MIME[format], qualityToFraction(quality));

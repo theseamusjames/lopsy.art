@@ -1,6 +1,6 @@
 import type { ParamSchema } from './params';
 
-export type CommandErrorCode = 'invalid' | 'refused' | 'not-found' | 'unavailable';
+export type CommandErrorCode = 'invalid' | 'refused' | 'not-found' | 'unavailable' | 'unsettled';
 
 export type CommandNotice = 'info' | 'error' | null;
 
@@ -9,30 +9,64 @@ export type CommandSurface = 'document' | 'ui';
 export interface CommandErrorOptions {
   /** What the UI toasts for this refusal; null keeps it silent, as many refusals are today. */
   readonly notice?: CommandNotice;
+  /** With 'unsettled': what the command returned, since its work was done. */
+  readonly result?: unknown;
+  /** From runAll: the results of the steps that completed before this one failed. */
+  readonly completed?: readonly unknown[];
 }
 
 export interface CommandErrorJSON {
   readonly name: 'CommandError';
   readonly code: CommandErrorCode;
   readonly message: string;
+  readonly result?: unknown;
+  readonly completed?: readonly unknown[];
 }
 
-const ERROR_CODES: readonly CommandErrorCode[] = ['invalid', 'refused', 'not-found', 'unavailable'];
+const ERROR_CODES: readonly CommandErrorCode[] = ['invalid', 'refused', 'not-found', 'unavailable', 'unsettled'];
 
 export class CommandError extends Error {
   readonly code: CommandErrorCode;
   readonly notice: CommandNotice;
+  readonly result?: unknown;
+  readonly completed?: readonly unknown[];
 
   constructor(code: CommandErrorCode, message: string, options: CommandErrorOptions = {}) {
     super(message);
     this.name = 'CommandError';
     this.code = code;
     this.notice = options.notice ?? null;
+    if (options.result !== undefined) this.result = options.result;
+    if (options.completed !== undefined) this.completed = options.completed;
   }
 
   /** Error properties are not enumerable, so without this the error arrives across page.evaluate as {}. */
   toJSON(): CommandErrorJSON {
-    return { name: 'CommandError', code: this.code, message: this.message };
+    return {
+      name: 'CommandError',
+      code: this.code,
+      message: this.message,
+      ...(this.result === undefined ? {} : { result: this.result }),
+      ...(this.completed === undefined ? {} : { completed: this.completed }),
+    };
+  }
+}
+
+/**
+ * The settle wait timed out: `waitingFor` completes "waiting for ...", and
+ * `hint` says why when that is known (a background tab). The registry turns
+ * it into 'unsettled' when the command's own work already happened.
+ */
+export class SettleTimeoutError extends CommandError {
+  readonly timeoutMs: number;
+  readonly waitingFor: string;
+  readonly hint: string;
+
+  constructor(timeoutMs: number, waitingFor: string, hint: string) {
+    super('unavailable', `Timed out after ${timeoutMs} ms waiting for ${waitingFor}.${hint ? ` ${hint}` : ''}`);
+    this.timeoutMs = timeoutMs;
+    this.waitingFor = waitingFor;
+    this.hint = hint;
   }
 }
 

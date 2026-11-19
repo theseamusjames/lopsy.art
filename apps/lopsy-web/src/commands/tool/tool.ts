@@ -1,5 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
+import { ownEntry } from '../context';
+import { hasOwnKey } from '../params';
 import { useUIStore } from '../../app/ui-store';
 import { toolRegistry } from '../../tools/tool-registry';
 import {
@@ -38,6 +40,7 @@ export const toolSelect = defineCommand({
   summary:
     'Makes a tool the active tool, as clicking it in the toolbox or pressing its letter key does; leaving the Text tool commits text being edited, and leaving the Pen or Crop tool drops its unfinished path or perspective quad, as a switch in the UI does. No history step of its own. Returns the active tool.',
   surface: 'document',
+  settles: false,
   params: { tool: toolSpec },
   run({ tool }): { tool: ToolId } {
     useUIStore.getState().setActiveTool(tool);
@@ -50,6 +53,7 @@ export const toolOptions = defineCommand({
   summary:
     'Reads a tool\'s current options (default: the active tool) as the options bar shows them: numbers in the bar\'s units, colours as hex, gradient stops as { position, color }. Call tool.describe for each option\'s type and range. Returns the tool id and its options.',
   surface: 'document',
+  settles: false,
   params: { tool: optionalToolSpec },
   run({ tool }): ToolOptionsResult {
     const id = tool ?? activeTool();
@@ -62,6 +66,7 @@ export const toolDescribe = defineCommand({
   summary:
     'Lists the options tool.set takes for one tool, or for every tool when `tool` is omitted: each option\'s type, allowed values or range for the open document, a note on its unit, and its current value.',
   surface: 'document',
+  settles: false,
   params: { tool: { ...toolSpec, optional: true, description: 'A tool id. Omitted means every tool.' } },
   run({ tool }): { tools: Record<string, Record<string, OptionDescription>> } {
     const ids = tool ? [tool] : SELECTABLE_TOOLS;
@@ -83,7 +88,7 @@ function checkOptions(tool: ToolId, options: Record<string, unknown>): void {
   const names = Object.keys(options);
   if (names.length === 0) throw new CommandError('invalid', `tool.set: options is empty; ${validNames(tool)}`);
   for (const name of names) {
-    const option = table[name];
+    const option = ownEntry(table, name);
     if (!option) throw new CommandError('invalid', `tool.set: unknown option ${JSON.stringify(name)}; ${validNames(tool)}`);
     checkOption(`options.${name}`, option, options[name]);
   }
@@ -94,6 +99,7 @@ export const toolSet = defineCommand({
   summary:
     'Changes a tool\'s options as its options bar does (and the Gradient Editor for gradient stops); painting, filling and selecting commands use them. Options left out keep their values. Call tool.describe for the names, types and ranges. Text options are refused while a text layer is active or text is being edited, since in the UI they would restyle it: text.style restyles a text layer, text.set-font sets the font. No history step. Returns the tool\'s options after.',
   surface: 'document',
+  settles: false,
   params: {
     tool: toolSpec,
     options: {
@@ -109,7 +115,7 @@ export const toolSet = defineCommand({
     }
     const table = TOOL_OPTIONS[tool];
     for (const [name, option] of Object.entries(table)) {
-      if (name in options) option.write(options[name]);
+      if (hasOwnKey(options, name)) option.write(options[name]);
     }
     return { tool, options: optionValues(tool) };
   },

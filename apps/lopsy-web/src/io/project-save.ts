@@ -219,11 +219,17 @@ function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
   return out;
 }
 
+/** A serialized file, and the document name it was made from: the name the download takes. */
+export interface DocumentFile {
+  bytes: Uint8Array;
+  name: string;
+}
+
 /**
  * The current project as the bytes of a .lopsy file, after committing what
  * the file must hold. Throws when the engine has not started or a read fails.
  */
-export async function serializeProject(): Promise<Uint8Array> {
+export async function serializeProject(): Promise<DocumentFile> {
   if (!getEngine()) throw new Error('engine not ready.');
 
   finalizePendingStrokeGlobal();
@@ -314,7 +320,7 @@ export async function serializeProject(): Promise<Uint8Array> {
   headerView.setUint16(6, FORMAT_VERSION, true);
   headerView.setUint32(8, manifestBytes.length, true);
 
-  return concatBytes([header, manifestBytes, blobSizeTable, ...allBlobs]);
+  return { bytes: concatBytes([header, manifestBytes, blobSizeTable, ...allBlobs]), name: doc.name };
 }
 
 /**
@@ -328,12 +334,12 @@ export async function saveProject(): Promise<void> {
   }
 
   try {
-    const bytes = await serializeProject();
+    const { bytes, name } = await serializeProject();
     const blob = new Blob([bytes as BlobPart], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${useEditorStore.getState().document.name || 'lopsy'}.lopsy`;
+    a.download = `${name || 'lopsy'}.lopsy`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
     useEditorStore.getState().markClean();

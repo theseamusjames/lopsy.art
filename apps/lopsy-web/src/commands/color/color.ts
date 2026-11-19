@@ -43,6 +43,7 @@ export const colorSet = defineCommand({
   summary:
     'Sets the foreground and/or background colour, as typing a hex value into the Color panel\'s field does. Painting and filling commands use these colours. No history step. Returns both colours as hex.',
   surface: 'document',
+  settles: false,
   params: { foreground: hexSpec('foreground'), background: hexSpec('background') },
   run({ foreground, background }): ColorsResult {
     if (foreground === undefined && background === undefined) {
@@ -61,6 +62,7 @@ export const colorSwap = defineCommand({
   id: 'color.swap',
   summary: 'Swaps the foreground and background colours, as the X key and the Color panel\'s Swap button do. No history step. Returns both colours as hex.',
   surface: 'document',
+  settles: false,
   params: {},
   run(): ColorsResult {
     useToolSettingsStore.getState().swapColors();
@@ -72,6 +74,7 @@ export const colorReset = defineCommand({
   id: 'color.reset',
   summary: 'Resets the colours to a black foreground and a white background, as the D key does. No history step. Returns both colours as hex.',
   surface: 'document',
+  settles: false,
   params: {},
   run(): ColorsResult {
     useToolSettingsStore.getState().resetColors();

@@ -1,5 +1,6 @@
-import { setSettle } from './registry';
+import { setPreflight, setSettle } from './registry';
 import { settled } from './settled';
+import { gpuContextPreflight } from './context';
 
 // Command families are imported here for their side effect of registering their commands.
 import './document/document';
@@ -46,6 +47,7 @@ import './ui/help';
 import './ui/quick-mask';
 
 setSettle(settled);
+setPreflight(gpuContextPreflight);
 
 export {
   runCommand,

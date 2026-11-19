@@ -11,7 +11,7 @@ import { describeError, notifyError } from '../../notifications-store';
 import { finalizePendingStrokeGlobal } from '../../interactions/pending-stroke';
 import { commitLayerTransform } from '../../interactions/layer-transform';
 import { flushLayerSync } from '../../../engine-wasm/engine-sync';
-import { encodeDocumentImage, Png16EncodeError, type EncodedImage } from '../../../io/export-image';
+import { encodeDocumentImageBlob, Png16EncodeError, type EncodedImageBlob } from '../../../io/export-image';
 import { openFile, OPEN_FILE_ACCEPT } from '../../../io/open-file';
 
 // Re-export so existing callers (App.tsx, e2e tests) keep working.
@@ -77,7 +77,7 @@ export function unregisterOpenExportDialog(): void {
 
 /** Quick-export using the WASM engine's GPU compositor (no dialog). */
 export function exportCanvas(format: ExportFormat): void {
-  const pending = encodeDocumentImage({ format, quality: 92, highQuality: false });
+  const pending = encodeDocumentImageBlob({ format, quality: 92, highQuality: false });
   const docName = useEditorStore.getState().document.name;
   downloadExport(pending, docName || 'lopsy');
 }
@@ -87,7 +87,7 @@ export function exportCanvas(format: ExportFormat): void {
  * scale multiplier; PNG bypasses the quality parameter.
  */
 export function exportCanvasWithOptions(options: ExportOptions): void {
-  downloadExport(encodeDocumentImage(options), options.filename);
+  downloadExport(encodeDocumentImageBlob(options), options.filename);
 }
 
 /**
@@ -187,10 +187,10 @@ function downloadBlob(blob: Blob, ext = 'png', filename = 'lopsy'): void {
   useEditorStore.getState().markClean();
 }
 
-function downloadExport(pending: Promise<EncodedImage | null>, filename: string): void {
+function downloadExport(pending: Promise<EncodedImageBlob | null>, filename: string): void {
   pending
     .then((image) => {
-      if (image) downloadBlob(new Blob([image.bytes as BlobPart], { type: image.mime }), image.ext, filename);
+      if (image) downloadBlob(image.blob, image.ext, filename);
     })
     .catch(reportExportError);
 }

@@ -1,8 +1,9 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { activateIfOther, layerRefSpec, requireDocument, requireEngine, resolveLayer } from '../context';
-import { documentEnvironment, runGesture } from '../gesture/run-gesture';
+import { activateIfOther, coordinateSpec, extentSpec, layerRefSpec, ownEntry, requireDocument, requireEngine, resolveLayer } from '../context';
+import { documentEnvironment, gestureNote, runGesture } from '../gesture/run-gesture';
 import { TOOL_OPTIONS, checkOption } from '../tool/tool-options';
+import { hasOwnKey } from '../params';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
@@ -28,7 +29,12 @@ export interface TextLayerResult {
   name: string;
 }
 
-export interface TextFontResult {
+export interface FontLoadResult {
+  /** false when the font had not loaded after FONT_WAIT_MS: the change is made, drawn in a fallback face until it arrives. */
+  fontLoaded: boolean;
+}
+
+export interface TextFontResult extends FontLoadResult {
   family: string;
   weight: number;
   style: FontStyle;
@@ -51,22 +57,22 @@ function isFontPending(engine: Engine, fontFamily: string): boolean {
 }
 
 /**
- * Resolves once the engine has the family, so the text it renders (a commit,
- * or the re-render the loader runs when the binary lands) shows the real
- * glyphs; rejects `unavailable` when it never arrives.
+ * Resolves true once the engine has the family, so the text it renders (a
+ * commit, or the re-render the loader runs when the binary lands) shows the
+ * real glyphs; false when it has not arrived after FONT_WAIT_MS. The text
+ * change is made either way, so a timeout is no failure: a caller that
+ * retried would make it twice.
  */
-async function fontReady(engine: Engine, fontFamily: string): Promise<void> {
+async function fontReady(engine: Engine, fontFamily: string): Promise<boolean> {
   const deadline = Date.now() + FONT_WAIT_MS;
   while (isFontPending(engine, fontFamily)) {
-    if (Date.now() > deadline) {
-      throw new CommandError(
-        'unavailable',
-        `The font "${extractFamilyName(fontFamily)}" did not load within ${FONT_WAIT_MS / 1000} s, so the text shows the fallback face.`,
-      );
-    }
+    if (Date.now() > deadline) return false;
     await new Promise<void>((resolve) => setTimeout(resolve, FONT_POLL_MS));
   }
+  return true;
 }
+
+const FONT_WAIT_NOTE = `Resolves once the font is loaded and the text is drawn with it, or after ${FONT_WAIT_MS / 1000} s without it: fontLoaded is then false, the change is made all the same and shows a fallback face until the font arrives, so do not run the command again.`;
 
 function textLayer(id: string): TextLayer {
   const layer = useEditorStore.getState().document.layers.find((l) => l.id === id);
@@ -92,7 +98,9 @@ function typeAndCommit(text: string): void {
 
 function editedLayerId(what: string): string {
   const editing = useUIStore.getState().textEditing;
-  if (!editing) throw new Error(`${what}: the Text-tool click did not start editing`);
+  if (!editing) {
+    throw new CommandError('refused', `${what}: the Text-tool click did not open a text box there, so nothing was typed.`);
+  }
   return editing.layerId;
 }
 
@@ -101,23 +109,23 @@ const boxSpec = {
   optional: true,
   description: 'Box (paragraph) text: the Text tool is dragged from (x, y) to (x + width, y + height) and lines wrap at the width. Omitted: point text, a click.',
   fields: {
-    width: { type: 'number', integer: true, min: 5, description: 'Document pixels; a drag of 4 px or less is a click.' },
-    height: { type: 'number', integer: true, min: 5, description: 'Document pixels.' },
+    width: extentSpec('Document pixels; a drag of 4 px or less is a click.', { integer: true, min: 5 }),
+    height: extentSpec('Document pixels.', { integer: true, min: 5 }),
   },
 } as const;
 
 export const textAdd = defineCommand({
   id: 'text.add',
   summary:
-    'Adds a text layer as the Text tool does: a click at (x, y) for point text, or a drag for box text, then `text` typed (\\n starts a new line, as Enter does) and committed, as Tab does. It uses the current Text options, font and foreground colour (tool.set, text.set-font, color.set). Two history steps ("Add Text Layer", "Text"); the layer is named after its text. Resolves once the layer\'s font is loaded and its glyphs are drawn with it. Refused while text is being edited and where a click at (x, y) would edit an existing text layer instead (use text.edit). Returns the new layer\'s id and name.',
+    'Adds a text layer as the Text tool does: a click at (x, y) for point text, or a drag for box text, then `text` typed (\\n starts a new line, as Enter does) and committed, as Tab does. It uses the current Text options, font and foreground colour (tool.set, text.set-font, color.set). Two history steps ("Add Text Layer", "Text"); the layer is named after its text. Refused while text is being edited and where a click at (x, y) would edit an existing text layer instead (use text.edit). Returns the new layer\'s id and name, and fontLoaded. ' + FONT_WAIT_NOTE + gestureNote('the Text tool'),
   surface: 'document',
   params: {
-    x: { type: 'number', description: 'Document x of the click, (0,0) at the top-left: the text\'s anchor.' },
-    y: { type: 'number', description: 'Document y of the click.' },
+    x: coordinateSpec('Document x of the click, (0,0) at the top-left: the text\'s anchor.'),
+    y: coordinateSpec('Document y of the click.'),
     text: { type: 'string', minLength: 1, maxLength: 100_000, description: 'The text; \\n for a line break.' },
     box: boxSpec,
   },
-  async run({ x, y, text, box }): Promise<TextLayerResult> {
+  async run({ x, y, text, box }): Promise<TextLayerResult & FontLoadResult> {
     requireDocument();
     const engine = requireEngine();
     checkHasText('text.add', text);
@@ -132,8 +140,8 @@ export const textAdd = defineCommand({
     const id = editedLayerId('text.add');
     typeAndCommit(text);
     const layer = textLayer(id);
-    await fontReady(engine, layer.fontFamily);
-    return { id, name: textLayer(id).name };
+    const fontLoaded = await fontReady(engine, layer.fontFamily);
+    return { id, name: textLayer(id).name, fontLoaded };
   },
 });
 
@@ -155,13 +163,13 @@ function requireTextLayer(layer: Layer): TextLayer {
 export const textEdit = defineCommand({
   id: 'text.edit',
   summary:
-    'Replaces a text layer\'s text as a user would: a Text-tool click inside it opens it for editing (its font, size and colour become the Text options, as the click does), Cmd+A selects all of it, `text` is typed over it and committed, as Tab does. One history step ("Text"); a layer still named after its old text is renamed after the new one. Resolves once its font is loaded and drawn. Refused while text is being edited, and for a layer a click cannot reach (hidden, locked, empty or covered by another text layer). Returns the layer\'s id and name.',
+    'Replaces a text layer\'s text as a user would: a Text-tool click inside it opens it for editing (its font, size and colour become the Text options, as the click does), Cmd+A selects all of it, `text` is typed over it and committed, as Tab does. One history step ("Text"); a layer still named after its old text is renamed after the new one. Refused while text is being edited, and for a layer a click cannot reach (hidden, locked, empty or covered by another text layer). Returns the layer\'s id and name, and fontLoaded. ' + FONT_WAIT_NOTE + gestureNote('the Text tool'),
   surface: 'document',
   params: {
     layer: layerRefSpec,
     text: { type: 'string', minLength: 1, maxLength: 100_000, description: 'The new text; \\n for a line break.' },
   },
-  async run({ layer: ref, text }): Promise<TextLayerResult> {
+  async run({ layer: ref, text }): Promise<TextLayerResult & FontLoadResult> {
     requireDocument();
     const engine = requireEngine();
     const layer = requireTextLayer(resolveLayer(ref));
@@ -171,8 +179,8 @@ export const textEdit = defineCommand({
     if (editedLayerId('text.edit') !== layer.id) throw new Error('text.edit: the click opened another layer');
     selectAllEditedText();
     typeAndCommit(text);
-    await fontReady(engine, textLayer(layer.id).fontFamily);
-    return { id: layer.id, name: textLayer(layer.id).name };
+    const fontLoaded = await fontReady(engine, textLayer(layer.id).fontFamily);
+    return { id: layer.id, name: textLayer(layer.id).name, fontLoaded };
   },
 });
 
@@ -189,15 +197,15 @@ function checkWeight(entry: FontEntry, weight: number | undefined): void {
   throw new CommandError('invalid', `text.set-font: ${entry.family} offers the weights ${entry.weights.join(', ')}, not ${weight}.`);
 }
 
-function fontResult(): TextFontResult {
+function fontResult(fontLoaded: boolean): TextFontResult {
   const text = useToolSettingsStore.getState().settings.text;
-  return { family: extractFamilyName(text.fontFamily), weight: text.fontWeight, style: text.fontStyle };
+  return { family: extractFamilyName(text.fontFamily), weight: text.fontWeight, style: text.fontStyle, fontLoaded };
 }
 
 export const textSetFont = defineCommand({
   id: 'text.set-font',
   summary:
-    'Sets the Text font as the options bar\'s font picker does, then its Weight and Style selects when given: new text uses it, and, as in the UI, the active text layer (or the text being edited) is restyled too, one "Text" history step per change. Resolves once the font is loaded into the engine and text already using it is re-rendered with it. Refused for a family the picker does not list; the weight must be one the family offers. Returns the font family, weight and style now set.',
+    'Sets the Text font as the options bar\'s font picker does, then its Weight and Style selects when given: new text uses it, and, as in the UI, the active text layer (or the text being edited) is restyled too, one "Text" history step per change. Refused for a family the picker does not list; the weight must be one the family offers. Returns the font family, weight and style now set, and fontLoaded. ' + FONT_WAIT_NOTE,
   surface: 'document',
   params: {
     family: { type: 'string', minLength: 1, maxLength: 200, description: 'A family name as the font picker lists it, e.g. "Montserrat".' },
@@ -215,8 +223,7 @@ export const textSetFont = defineCommand({
     if (weight !== undefined && weight !== settings().fontWeight) loads.push(applyTextWeight(weight));
     if (style !== undefined && style !== settings().fontStyle) loads.push(applyDiscreteTextSetting('fontStyle', style));
     await Promise.all(loads);
-    await fontReady(engine, value);
-    return fontResult();
+    return fontResult(await fontReady(engine, value));
   },
 });
 
@@ -227,7 +234,7 @@ function checkStyleOptions(options: Record<string, unknown>): void {
   const valid = Object.keys(TEXT_OPTIONS).join(', ');
   if (names.length === 0) throw new CommandError('invalid', `text.style: options is empty; valid options: ${valid}`);
   for (const name of names) {
-    const option = TEXT_OPTIONS[name];
+    const option = ownEntry(TEXT_OPTIONS, name);
     if (!option) throw new CommandError('invalid', `text.style: unknown option ${JSON.stringify(name)}; valid options: ${valid}`);
     checkOption(`options.${name}`, option, options[name], 'text.style');
   }
@@ -266,7 +273,7 @@ export const textStyle = defineCommand({
     activateIfOther(layer.id);
     const loads: Promise<void>[] = [];
     for (const name of Object.keys(TEXT_OPTIONS)) {
-      if (!(name in options) || TEXT_OPTIONS[name]?.read() === options[name]) continue;
+      if (!hasOwnKey(options, name) || TEXT_OPTIONS[name]?.read() === options[name]) continue;
       loads.push(applyStyleOption(name as keyof TextSettings, options[name]));
     }
     await Promise.all(loads);

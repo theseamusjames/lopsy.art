@@ -5,6 +5,7 @@ import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { addMaskAndEdit, removeMaskAndLeaveEdit } from '../../panels/LayerPanel/mask-actions';
 import { convertMaskToMarquee } from '../../panels/LayerPanel/layer-selection';
+import { materializeMaskData } from '../../app/mask-data-sync';
 import type { Layer } from '../../types';
 
 export interface MaskState {
@@ -120,11 +121,14 @@ export const maskEdit = defineCommand({
 export const maskToSelection = defineCommand({
   id: 'mask.to-selection',
   summary:
-    'Replaces the selection with the area a layer\'s mask hides (255 minus the mask), and leaves mask edit mode, as the Convert mask to selection button on the mask row does (no history step). A mask that hides nothing leaves the selection as it was. Returns the selection bounds in document pixels, or null when there is no selection.',
+    'Replaces the selection with the area a layer\'s mask hides (255 minus the mask), and leaves mask edit mode, as the Convert mask to selection button on the mask row does (no history step). It first reads the mask back from the GPU when the editor\'s copy of it is behind (after a mask stroke, undo or redo), so the selection matches the mask as drawn. A mask that hides nothing leaves the selection as it was. Returns the selection bounds in document pixels, or null when there is no selection.',
   surface: 'document',
   params: { layer: layerRefSpec },
-  run({ layer: ref }): MaskSelectionResult {
-    const layer = maskedLayer(ref);
+  async run({ layer: ref }): Promise<MaskSelectionResult> {
+    const { id } = maskedLayer(ref);
+    // convertMaskToMarquee reads layer.mask.data, which lags the GPU mask after a stroke, undo or redo.
+    await materializeMaskData(id);
+    const layer = maskedLayer(id);
     convertMaskToMarquee(layer.id);
     const { selection } = store();
     return {

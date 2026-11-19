@@ -1,6 +1,6 @@
 import { CommandError } from '../command';
 import { refusalError } from '../refusal';
-import { requireDocument, requireEngine } from '../context';
+import { MAX_COORDINATE, MIN_COORDINATE, boundedPointSpec, requireDocument, requireEngine } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
@@ -32,14 +32,21 @@ export const MAX_GESTURE_POINTS = 10_000;
 export const pointsSpec = (what: string) =>
   ({
     type: 'array',
-    items: { type: 'point' },
+    items: boundedPointSpec('A point of the path.'),
     minItems: 1,
     maxItems: MAX_GESTURE_POINTS,
-    description: `${what} Document pixels, (0,0) at the top-left of the document; fractions land between pixels as a pointer would.`,
+    description: `${what} Document pixels, (0,0) at the top-left of the document; fractions land between pixels as a pointer would. Each coordinate from ${MIN_COORDINATE} to ${MAX_COORDINATE}: a drag may start or end outside the canvas.`,
   }) as const;
 
 export const docPointSpec = (what: string) =>
-  ({ type: 'point', description: `${what} In document pixels, (0,0) at the top-left of the document.` }) as const;
+  boundedPointSpec(`${what} In document pixels, (0,0) at the top-left of the document.`);
+
+export const OPEN_SESSION_NOTE = 'Refused while a Liquify, Tilt-Shift or Mesh Warp session is open (apply or cancel it first).';
+
+/** What a gesture command's summary says about the tool it switches to and the sessions that refuse it. */
+export function gestureNote(tool: string): string {
+  return ` It makes ${tool} active first, as tool.select does, which commits text being edited or a pending Move float. ${OPEN_SESSION_NOTE}`;
+}
 
 export interface GestureResult {
   tool: ToolId;
@@ -62,6 +69,25 @@ function activeLayer(): Layer {
   const layer = doc.activeLayerId ? doc.layers.find((l) => l.id === doc.activeLayerId) : undefined;
   if (!layer) throw new CommandError('refused', 'There is no active layer.');
   return layer;
+}
+
+/**
+ * The canvas session that would claim a press before any tool: an open
+ * Liquify session takes every press, and the Tilt-Shift and Mesh Warp
+ * overlays take presses on their handles (gesture-session's pre-tool
+ * guards, which read the same store fields).
+ */
+export function openSessionRefusal(): string | null {
+  const { liquify, tiltShift, meshWarp } = useUIStore.getState();
+  const open = liquify ? 'Liquify' : tiltShift ? 'Tilt-Shift' : meshWarp ? 'Mesh Warp' : null;
+  if (!open) return null;
+  return `A ${open} session is open, and it would take the press instead of the tool: apply or cancel it first.`;
+}
+
+/** Throws `refused` while a canvas session would claim the gesture's press. */
+export function checkNoOpenSession(): void {
+  const refusal = openSessionRefusal();
+  if (refusal) throw new CommandError('refused', refusal);
 }
 
 /** Throws for a press gestureDown would drop without acting, using the same predicates it does. */
@@ -94,26 +120,38 @@ function toolEvent(point: Point, input: GestureInput, detail?: number): ToolEven
  * move per further point, release at the last. Around the calls it does what
  * useCanvasPointerHandlers does for a left-button press on the canvas: the
  * interacting flag on press and off on release, and the status bar's cursor
- * position at the last point.
+ * position at the last point. Once the press has landed, the release and
+ * the interacting flag's reset happen even when a move throws, so no stroke
+ * or session is left open; the error is then rethrown.
  */
 export function runGesture(input: GestureInput): GestureResult {
   const [first, ...rest] = input.points;
   if (!first) throw new CommandError('invalid', 'A gesture needs at least one point.');
   requireDocument();
   requireEngine();
+  checkNoOpenSession();
   const ui = useUIStore.getState();
   if (input.tool && input.tool !== ui.activeTool) ui.setActiveTool(input.tool);
   const tool = useUIStore.getState().activeTool;
   const layer = activeLayer();
   checkGesturePress(tool, layer);
 
-  const last = rest[rest.length - 1] ?? first;
   gestureDown(toolEvent(first, input, input.clicks), documentEnvironment);
-  useUIStore.getState().setIsInteracting(true);
-  for (const point of rest) gestureMove(toolEvent(point, input), documentEnvironment);
-  const cursor = documentEnvironment.toCanvas(last.x, last.y);
-  if (cursor) useUIStore.getState().setCursorPosition(cursor);
-  gestureUp(toolEvent(last, input), documentEnvironment);
-  useUIStore.getState().setIsInteracting(false);
+  let lastDelivered = first;
+  try {
+    useUIStore.getState().setIsInteracting(true);
+    for (const point of rest) {
+      gestureMove(toolEvent(point, input), documentEnvironment);
+      lastDelivered = point;
+    }
+    const cursor = documentEnvironment.toCanvas(lastDelivered.x, lastDelivered.y);
+    if (cursor) useUIStore.getState().setCursorPosition(cursor);
+  } finally {
+    try {
+      gestureUp(toolEvent(lastDelivered, input), documentEnvironment);
+    } finally {
+      useUIStore.getState().setIsInteracting(false);
+    }
+  }
   return { tool, layer: layer.id };
 }

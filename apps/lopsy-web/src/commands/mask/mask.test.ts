@@ -20,6 +20,15 @@ vi.mock('../../engine-wasm/engine-state', async (importOriginal) => {
   return { ...actual, getEngine: () => null };
 });
 
+const maskSync = vi.hoisted(() => ({ materialize: null as null | ((layerId: string) => Promise<void>) }));
+vi.mock('../../app/mask-data-sync', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../app/mask-data-sync')>();
+  return {
+    ...actual,
+    materializeMaskData: (layerId: string) => (maskSync.materialize ?? actual.materializeMaskData)(layerId),
+  };
+});
+
 const { useEditorStore } = await import('../../app/editor-store');
 const { useUIStore } = await import('../../app/ui-store');
 const { CommandError } = await import('../command');
@@ -194,17 +203,43 @@ describe('mask.edit', () => {
 });
 
 describe('mask.to-selection', () => {
-  it('selects what the mask hides and leaves mask edit mode, before its first await', async () => {
+  it('selects what the mask hides and leaves mask edit mode', async () => {
     select(10, 5, 20, 15);
     await runCommand('mask.add', {});
     const setSelection = spyOn('setSelection');
     const pending = runCommand('mask.to-selection', {});
+    expect(await pending).toEqual({ selection: { x: 0, y: 0, width: 40, height: 30 }, editing: false });
     expect(setSelection).toHaveBeenCalledTimes(1);
     expect(maskMode()).toBe('off');
-    expect(await pending).toEqual({ selection: { x: 0, y: 0, width: 40, height: 30 }, editing: false });
     const { selection, document } = store();
     expect(selection.mask?.[7 * document.width + 12]).toBe(0);
     expect(selection.mask?.[0]).toBe(255);
+  });
+
+  it('converts the mask bytes read back from the GPU, not the stale copy it started with', async () => {
+    await runCommand('mask.add', {});
+    const id = store().document.activeLayerId!;
+    const setSelection = spyOn('setSelection');
+    maskSync.materialize = async (layerId) => {
+      expect(layerId).toBe(id);
+      expect(setSelection).not.toHaveBeenCalled();
+      const doc = store().document;
+      const layers = doc.layers.map((l) => {
+        if (l.id !== id || !l.mask) return l;
+        const data = l.mask.data.slice().fill(0);
+        data[0] = 255;
+        return { ...l, mask: { ...l.mask, data } };
+      });
+      useEditorStore.setState({ document: { ...doc, layers } });
+    };
+    try {
+      const result = await runCommand('mask.to-selection', {});
+      expect(result).toEqual({ selection: { x: 0, y: 0, width: 40, height: 30 }, editing: false });
+      expect(store().selection.mask?.[0]).toBe(0);
+      expect(store().selection.mask?.[1]).toBe(255);
+    } finally {
+      maskSync.materialize = null;
+    }
   });
 
   it('leaves the selection alone when the mask hides nothing', async () => {

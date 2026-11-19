@@ -1,7 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { activateIfOther, layerRefSpec, requireDocument, requireEngine, resolveLayer } from '../context';
-import { checkGesturePress, runGesture } from '../gesture/run-gesture';
+import { activateIfOther, layerRefSpec, offsetSpec, requireDocument, requireEngine, resolveLayer } from '../context';
+import { checkGesturePress, checkNoOpenSession, gestureNote, runGesture } from '../gesture/run-gesture';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { getLayerTransformBox } from '../../app/interactions/layer-transform';
@@ -93,18 +93,19 @@ function position(id: string): LayerMoveResult {
 export const layerMove = defineCommand({
   id: 'layer.move',
   summary:
-    'Moves a layer by (dx, dy) document pixels with the Move tool, as dragging it on the canvas does: the layer becomes active (other selected layers move with it, as in the UI), a raster layer is first cropped to its content, and its mask follows it. View > Snap to Grid (with the grid shown) and View > Snap to Layers can change where it lands, as they do for a drag; both are off by default. One history step ("Move"). Refused on a locked layer and while a selection is active (a drag would move the selected pixels: deselect first). Returns the layer id and its position afterwards (the top-left of its content for a raster layer).',
+    'Moves a layer by (dx, dy) document pixels with the Move tool, as dragging it on the canvas does: the layer becomes active (a layer that is not active is first selected alone, as a click on its row does, so only it moves; when the active layer is moved, the other selected layers move with it, as in the UI), a raster layer is first cropped to its content, and its mask follows it. View > Snap to Grid (with the grid shown) and View > Snap to Layers can change where it lands, as they do for a drag; both are off by default. One history step ("Move"). Refused on a locked layer and while a selection is active (a drag would move the selected pixels: deselect first). Returns the layer id and its position afterwards (the top-left of its content for a raster layer).' + gestureNote('the Move tool'),
   surface: 'document',
   params: {
     layer: layerRefSpec,
-    dx: { type: 'number', integer: true, description: 'Horizontal offset in document pixels; positive moves right.' },
-    dy: { type: 'number', integer: true, description: 'Vertical offset in document pixels; positive moves down.' },
+    dx: offsetSpec('Horizontal offset in document pixels; positive moves right.', { integer: true }),
+    dy: offsetSpec('Vertical offset in document pixels; positive moves down.', { integer: true }),
   },
   async run({ layer: ref, dx, dy }): Promise<LayerMoveResult> {
     requireDocument();
     const engine = requireEngine();
     const layer = resolveLayer(ref);
     checkMovable(dx, dy);
+    checkNoOpenSession();
     checkGesturePress('move', layer);
     activateIfOther(layer.id);
     if (useUIStore.getState().activeTool !== 'move') useUIStore.getState().setActiveTool('move');

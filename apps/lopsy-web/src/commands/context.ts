@@ -1,12 +1,23 @@
 import { CommandError } from './command';
+import { hasOwnKey } from './params';
 import { useEditorStore, type EditorState } from '../app/editor-store';
 import { activateLayerFromPanel, editLayerMaskFromPanel } from '../app/interactions/layer-activation';
-import { getEngine } from '../engine-wasm/engine-state';
+import { getEngine, isGpuContextLost } from '../engine-wasm/engine-state';
 import type { Engine } from '../engine-wasm/wasm-bridge';
 import { hexToRgb, rgbToHex } from '../utils/color';
 import { MAX_GRADIENT_STOPS, MIN_GRADIENT_STOPS } from '../tools/gradient/gradient-settings';
 import type { GradientStop } from '../tools/gradient/gradient';
 import type { Color, DocumentState, Layer } from '../types';
+import { MAX_DOCUMENT_SIDE } from '../utils/document-size';
+
+/**
+ * `table[key]` for a key the caller chose, counting only the table's own
+ * entries: `toString`, `constructor` or `__proto__` would otherwise find
+ * what Object.prototype has.
+ */
+export function ownEntry<T>(table: Readonly<Record<string, T>>, key: string): T | undefined {
+  return hasOwnKey(table, key) ? table[key] : undefined;
+}
 
 export function requireDocument(): DocumentState {
   const state = useEditorStore.getState();
@@ -26,6 +37,72 @@ export function requireEngine(): Engine {
   }
   return engine;
 }
+
+/**
+ * The API's preflight (registry setPreflight): refuses while the engine's
+ * graphics context is lost, where GPU work would be dropped. Only once an
+ * engine exists: before the first document there is none, and doc.new and
+ * the commands that never touch the engine must still run. The UI does not
+ * consult it, so a menu item or key still runs its function as before.
+ */
+export function gpuContextPreflight(): void {
+  if (getEngine() && isGpuContextLost()) {
+    throw new CommandError('unavailable', 'The graphics context is lost; the editor is restoring it. Try again once the canvas is back.');
+  }
+}
+
+/**
+ * The range a document coordinate a command takes may lie in: the largest
+ * document's side beyond each edge, so a drag may start or end well outside
+ * the canvas, while a value that would make a tool loop or allocate without
+ * end is refused.
+ */
+export const MIN_COORDINATE = -MAX_DOCUMENT_SIDE;
+export const MAX_COORDINATE = 2 * MAX_DOCUMENT_SIDE;
+/** The longest offset or extent within that range. */
+export const MAX_SPAN = MAX_COORDINATE - MIN_COORDINATE;
+
+const COORDINATE_RANGE = `From ${MIN_COORDINATE} to ${MAX_COORDINATE}: points outside the document are allowed.`;
+
+export interface NumberSpecOptions {
+  readonly integer?: boolean;
+  /** extentSpec only: the smallest extent; 1 when omitted. */
+  readonly min?: number;
+}
+
+/** A document x or y. */
+export const coordinateSpec = (description: string, { integer = false }: NumberSpecOptions = {}) =>
+  ({
+    type: 'number',
+    min: MIN_COORDINATE,
+    max: MAX_COORDINATE,
+    ...(integer ? { integer: true } : {}),
+    description: `${description} ${COORDINATE_RANGE}`,
+  }) as const;
+
+/** A document point; each coordinate bounded as coordinateSpec's. */
+export const boundedPointSpec = (description: string) =>
+  ({ type: 'point', min: MIN_COORDINATE, max: MAX_COORDINATE, description: `${description} ${COORDINATE_RANGE}` }) as const;
+
+/** A signed distance in document pixels, such as a move's dx. */
+export const offsetSpec = (description: string, { integer = false }: NumberSpecOptions = {}) =>
+  ({
+    type: 'number',
+    min: -MAX_SPAN,
+    max: MAX_SPAN,
+    ...(integer ? { integer: true } : {}),
+    description: `${description} From ${-MAX_SPAN} to ${MAX_SPAN}.`,
+  }) as const;
+
+/** A width or height in document pixels. */
+export const extentSpec = (description: string, { integer = false, min = 1 }: NumberSpecOptions = {}) =>
+  ({
+    type: 'number',
+    min,
+    max: MAX_SPAN,
+    ...(integer ? { integer: true } : {}),
+    description: `${description} From ${min} to ${MAX_SPAN}.`,
+  }) as const;
 
 export const layerRefSpec = {
   type: 'string',
@@ -196,7 +273,23 @@ export function decodeBase64(commandId: string, path: string, value: string): Ui
 
 const BASE64_CHUNK = 0x8000;
 
+/** The most bytes a command returns as base64: what MAX_BASE64_LENGTH characters encode. */
+export const MAX_ENCODED_BYTES = (MAX_BASE64_LENGTH / 4) * 3;
+
+const MIB = 1024 * 1024;
+
+function mib(bytes: number): string {
+  return `${(bytes / MIB).toFixed(1)} MiB`;
+}
+
+/** Base64 of `bytes`; refused before any encoding when the string would be longer than a command returns. */
 export function encodeBase64(bytes: Uint8Array): string {
+  if (bytes.length > MAX_ENCODED_BYTES) {
+    throw new CommandError(
+      'refused',
+      `The file is ${mib(bytes.length)}, more than the ${mib(MAX_ENCODED_BYTES)} a command can return as base64: use view.render with maxSize, a lossy format (jpeg or webp with doc.export), or a smaller document.`,
+    );
+  }
   const chunks: string[] = [];
   for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
     chunks.push(String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK)));

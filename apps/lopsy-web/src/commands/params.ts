@@ -35,6 +35,9 @@ export interface ColorSpec extends BaseSpec<string> {
 
 export interface PointSpec extends BaseSpec<Readonly<Point>> {
   readonly type: 'point';
+  /** Bounds each coordinate. */
+  readonly min?: number;
+  readonly max?: number;
 }
 
 export interface ArraySpec extends BaseSpec<readonly unknown[]> {
@@ -121,6 +124,11 @@ interface Context {
   readonly commandId: string;
 }
 
+/** Whether `key` is `object`'s own property: a caller's key must not find what Object.prototype has. */
+export function hasOwnKey(object: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -162,7 +170,7 @@ export function expectedText(spec: ParamSpec): string {
     case 'color':
       return 'a colour "#rgb", "#rrggbb" or "#rrggbbaa"';
     case 'point':
-      return 'a point {x, y} of finite numbers';
+      return `a point {x, y} of finite numbers${rangeText(spec.min, spec.max)}`;
     case 'array':
       return `an array${countText(spec.minItems, spec.maxItems, 'items')}`;
     case 'object':
@@ -224,8 +232,8 @@ function validatePoint(ctx: Context, spec: PointSpec, value: unknown, path: stri
   rejectUnknownKeys(ctx, value, ['x', 'y'], path);
   for (const axis of ['x', 'y'] as const) {
     const coordinate = value[axis];
-    if (typeof coordinate !== 'number' || !Number.isFinite(coordinate)) {
-      fail(ctx, `${path}.${axis}`, { type: 'number' }, coordinate);
+    if (typeof coordinate !== 'number' || !Number.isFinite(coordinate) || outOfRange(coordinate, spec.min, spec.max)) {
+      fail(ctx, `${path}.${axis}`, { type: 'number', min: spec.min, max: spec.max }, coordinate);
     }
   }
   return { x: value.x as number, y: value.y as number };
@@ -271,7 +279,7 @@ function validateFields(
   const output: Record<string, unknown> = {};
   for (const [key, spec] of Object.entries(fields)) {
     const fieldPath = path ? `${path}.${key}` : key;
-    const fieldValue = value[key];
+    const fieldValue = hasOwnKey(value, key) ? value[key] : undefined;
     if (fieldValue !== undefined) {
       output[key] = validateSpec(ctx, spec, fieldValue, fieldPath);
     } else if (spec.default !== undefined) {
@@ -337,6 +345,8 @@ function describeSpec(spec: ParamSpec): ParamDescription {
   switch (spec.type) {
     case 'number':
       return withoutUndefined({ ...base, min: spec.min, max: spec.max, integer: spec.integer });
+    case 'point':
+      return withoutUndefined({ ...base, min: spec.min, max: spec.max });
     case 'string':
       return withoutUndefined({
         ...base,

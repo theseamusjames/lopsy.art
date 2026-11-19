@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { CommandError, isCommandError, type Command } from './command';
+import { CommandError, SettleTimeoutError, isCommandError, type Command } from './command';
 import { createRegistry, suggestIds } from './registry';
 
 interface Deferred {
@@ -259,6 +259,41 @@ describe('run: settle', () => {
     expect(settleCount).toBe(1);
   });
 
+  it('start with settle false resolves with the result and never calls settle', async () => {
+    const registry = createRegistry();
+    let settleCount = 0;
+    registry.setSettle(async () => {
+      settleCount++;
+    });
+    registry.define({ ...noop('layer.add'), run: () => 'added' });
+    await expect(registry.start('layer.add', {}, { settle: false })).resolves.toBe('added');
+    expect(settleCount).toBe(0);
+    await registry.start('layer.add');
+    expect(settleCount).toBe(1);
+  });
+
+  it('rejects unsettled, carrying the result, when the settle after the work times out', async () => {
+    const registry = createRegistry();
+    registry.setSettle(() => Promise.reject(new SettleTimeoutError(10_000, 'the engine to go idle', 'The page is a background tab.')));
+    registry.define({ ...noop('layer.add'), run: () => ({ id: 'layer-7' }) });
+    const error = await rejection(registry.run('layer.add'));
+    expect(error.code).toBe('unsettled');
+    expect(error.result).toEqual({ id: 'layer-7' });
+    expect(error.message).toContain('the change was applied');
+    expect(error.message).toContain('after 10 s');
+    expect(error.message).toContain('background tab');
+    expect(error.message).toContain('Do not run layer.add again');
+    expect(JSON.parse(JSON.stringify(error))).toMatchObject({ code: 'unsettled', result: { id: 'layer-7' } });
+  });
+
+  it('passes a settle failure that is not a timeout through unchanged', async () => {
+    const registry = createRegistry();
+    const lost = new CommandError('unavailable', 'The graphics context is lost');
+    registry.setSettle(() => Promise.reject(lost));
+    registry.define(noop('layer.add'));
+    expect(await rejection(registry.run('layer.add'))).toBe(lost);
+  });
+
   it('does not settle when the command fails', async () => {
     const registry = createRegistry();
     let settleCount = 0;
@@ -271,6 +306,48 @@ describe('run: settle', () => {
     });
     await rejection(registry.run('layer.add'));
     expect(settleCount).toBe(0);
+  });
+});
+
+describe('run: preflight', () => {
+  function preflighted(refuse: boolean): { registry: ReturnType<typeof createRegistry>; ran: string[]; checks: number[] } {
+    const registry = createRegistry();
+    const ran: string[] = [];
+    const checks = [0];
+    registry.setPreflight(() => {
+      checks[0] = (checks[0] ?? 0) + 1;
+      if (refuse) throw new CommandError('unavailable', 'The graphics context is lost');
+    });
+    registry.define({ ...noop('layer.add'), params: { n: { type: 'number', optional: true } }, run: () => { ran.push('ran'); } });
+    return { registry, ran, checks };
+  }
+
+  it('refuses run, runInvocation and runAll before the command runs', async () => {
+    const { registry, ran } = preflighted(true);
+    expect((await rejection(registry.run('layer.add'))).code).toBe('unavailable');
+    expect((await rejection(registry.runInvocation({ op: 'layer.add' }))).code).toBe('unavailable');
+    expect((await rejection(registry.runAll([{ op: 'layer.add' }]))).message).toBe('[0] layer.add: The graphics context is lost');
+    expect(ran).toEqual([]);
+  });
+
+  it('reports invalid params before the preflight', async () => {
+    const { registry, checks } = preflighted(true);
+    expect((await rejection(registry.run('layer.add', { n: 'x' }))).code).toBe('invalid');
+    expect(checks[0]).toBe(0);
+  });
+
+  it('is not consulted by start, the UI path', async () => {
+    const { registry, ran, checks } = preflighted(true);
+    await registry.start('layer.add', {}, { settle: false });
+    await registry.start('layer.add');
+    expect(ran).toEqual(['ran', 'ran']);
+    expect(checks[0]).toBe(0);
+  });
+
+  it('checks nothing when none is installed', async () => {
+    const registry = createRegistry();
+    registry.define(noop('layer.add'));
+    await expect(registry.run('layer.add')).resolves.toBeUndefined();
   });
 });
 
@@ -455,7 +532,26 @@ describe('runAll', () => {
     expect(error.message).toBe('[1] step.fail: Nothing selected');
     expect(error.code).toBe('refused');
     expect(error.notice).toBe('info');
+    expect(error.completed).toEqual(['a']);
+    expect(JSON.parse(JSON.stringify(error))).toMatchObject({ completed: ['a'] });
     expect(events).not.toContain('start c');
+  });
+
+  it('keeps an unsettled step\'s result and the completed steps before it', async () => {
+    const registry = sequenceRegistry([]);
+    let calls = 0;
+    registry.setSettle(() => {
+      calls++;
+      return calls === 2 ? Promise.reject(new SettleTimeoutError(10_000, 'the engine to go idle', '')) : Promise.resolve();
+    });
+    const error = await rejection(registry.runAll([
+      { op: 'step.slow', name: 'a' },
+      { op: 'step.slow', name: 'b' },
+    ]));
+    expect(error.code).toBe('unsettled');
+    expect(error.message).toMatch(/^\[1\] step\.slow: /);
+    expect(error.result).toBe('b');
+    expect(error.completed).toEqual(['a']);
   });
 
   it('does not repeat an op already named by a validation message', async () => {

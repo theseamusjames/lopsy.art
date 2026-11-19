@@ -1,6 +1,6 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { colorHex, encodeBase64, layerRefSpec, requireDocument, requireEngine, resolveLayer } from '../context';
+import { colorHex, coordinateSpec, encodeBase64, layerRefSpec, requireDocument, requireEngine, resolveLayer } from '../context';
 import { encodeCompositeImage, encodeImageData, type EncodedImage } from '../../io/export-image';
 import { getLayerTextureDimensions, readCompositeThumbnail, sampleColor, type Engine } from '../../engine-wasm/wasm-bridge';
 import { readLayerAsImageData, readLayerThumbnail } from '../../engine-wasm/gpu-pixel-access';
@@ -129,12 +129,8 @@ export interface SampleResult {
   alpha: number;
 }
 
-const coordinateSpec = (axis: string) =>
-  ({
-    type: 'number',
-    integer: true,
-    description: `${axis} in document pixels; (0,0) is the top-left of the document.`,
-  }) as const;
+const sampleCoordinateSpec = (axis: string) =>
+  coordinateSpec(`${axis} in document pixels; (0,0) is the top-left of the document.`, { integer: true });
 
 export const viewSample = defineCommand({
   id: 'view.sample',
@@ -143,7 +139,7 @@ export const viewSample = defineCommand({
   surface: 'document',
   settles: 'before',
   check: requireDocument,
-  params: { x: coordinateSpec('Column'), y: coordinateSpec('Row') },
+  params: { x: sampleCoordinateSpec('Column'), y: sampleCoordinateSpec('Row') },
   async run({ x, y }): Promise<SampleResult> {
     requireDocument();
     const engine = requireEngine();

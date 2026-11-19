@@ -82,7 +82,14 @@ const { useUIStore } = await import('../../app/ui-store');
 const { createTextLayer } = await import('../../layers/layer-model');
 const { CommandError } = await import('../command');
 const { runCommand } = await import('../registry');
-await import('./text');
+const { FONT_WAIT_MS } = await import('./text');
+
+const INHERITED_NAMES = ['toString', 'constructor', '__proto__', 'hasOwnProperty'] as const;
+
+/** An object whose one own key is `name`, as JSON.parse makes it, even for __proto__. */
+function ownKeyed(name: string): Record<string, unknown> {
+  return JSON.parse(`{${JSON.stringify(name)}: 1}`) as Record<string, unknown>;
+}
 
 async function failure(promise: Promise<unknown>): Promise<InstanceType<typeof CommandError>> {
   try {
@@ -142,7 +149,32 @@ describe('text.add', () => {
     const pending = runCommand('text.add', { x: 12.4, y: 30, text: 'Hi\nthere' });
     expect(calls).toEqual(['gesture [{"x":12.4,"y":30}]', 'insert Hi\nthere', 'commit']);
     expect(text.hit).toHaveBeenCalledWith({ x: 12, y: 30 });
-    await expect(pending).resolves.toEqual({ id: expect.any(String), name: 'Text 1' });
+    await expect(pending).resolves.toEqual({ id: expect.any(String), name: 'Text 1', fontLoaded: true });
+  });
+
+  it('resolves with fontLoaded false, not a failure, when the font never arrives: the layer is already made', async () => {
+    gesture.run.mockImplementation(() => {
+      const layer = addText('Text 1', 'Montserrat, sans-serif');
+      startEditing(layer.id, true);
+      return { tool: 'text', layer: layer.id };
+    });
+    vi.useFakeTimers();
+    try {
+      const pending = runCommand('text.add', { x: 10, y: 10, text: 'M' });
+      await vi.advanceTimersByTimeAsync(FONT_WAIT_MS + 1000);
+      await expect(pending).resolves.toEqual({ id: expect.any(String), name: 'Text 1', fontLoaded: false });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses with a CommandError when the click opened no text box', async () => {
+    gesture.run.mockImplementation(() => ({ tool: 'text', layer: 'none' }));
+    expect(await failure(runCommand('text.add', { x: 1, y: 1, text: 'A' }))).toMatchObject({
+      code: 'refused',
+      message: 'text.add: the Text-tool click did not open a text box there, so nothing was typed.',
+    });
+    expect(calls).not.toContain('commit');
   });
 
   it('drags for box text', async () => {
@@ -194,7 +226,7 @@ describe('text.edit', () => {
     });
     const pending = runCommand('text.edit', { layer: 'Hello', text: 'Bye' });
     expect(calls).toEqual(['gesture [{"x":30,"y":30}]', 'selectAll', 'insert Bye', 'commit']);
-    await expect(pending).resolves.toEqual({ id: layer.id, name: 'Hello' });
+    await expect(pending).resolves.toEqual({ id: layer.id, name: 'Hello', fontLoaded: true });
   });
 
   it('refuses a raster layer and a layer a click cannot reach', async () => {
@@ -213,6 +245,18 @@ describe('text.set-font', () => {
     expect(settings.weight).toHaveBeenCalledWith(700);
     expect(settings.discrete).toHaveBeenCalledWith('fontStyle', 'italic');
     await expect(pending).resolves.toMatchObject({ weight: expect.any(Number) });
+  });
+
+  it('resolves with fontLoaded false when the font never arrives, the setting already applied', async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = runCommand('text.set-font', { family: 'Montserrat' });
+      expect(settings.family).toHaveBeenCalledWith('Montserrat, sans-serif');
+      await vi.advanceTimersByTimeAsync(FONT_WAIT_MS + 1000);
+      await expect(pending).resolves.toMatchObject({ fontLoaded: false });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('quotes a family with a space, and skips an unchanged weight', async () => {
@@ -244,6 +288,16 @@ describe('text.style', () => {
     expect(settings.discrete).toHaveBeenCalledWith('align', 'center');
     expect(settings.discrete).not.toHaveBeenCalledWith('underline', false);
     await expect(pending).resolves.toMatchObject({ id: layer.id, name: 'Hello' });
+  });
+
+  it('is invalid for names Object.prototype has, which are no options', async () => {
+    addText('Hello');
+    for (const name of INHERITED_NAMES) {
+      const error = await failure(runCommand('text.style', { layer: 'Hello', options: ownKeyed(name) }));
+      expect([error.code, error.message]).toEqual(['invalid', expect.stringContaining(`unknown option ${JSON.stringify(name)}`)]);
+    }
+    expect(settings.discrete).not.toHaveBeenCalled();
+    expect(settings.apply).not.toHaveBeenCalled();
   });
 
   it('refuses a raster layer and rejects unknown or out-of-range options', async () => {

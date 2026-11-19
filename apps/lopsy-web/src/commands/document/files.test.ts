@@ -138,7 +138,7 @@ describe('doc.export', () => {
 
 describe('doc.save and doc.export-psd', () => {
   it('doc.save serializes in the synchronous part and returns the .lopsy bytes, leaving the dirty flag', async () => {
-    mocks.serializeProject.mockResolvedValue(PIXELS);
+    mocks.serializeProject.mockResolvedValue({ bytes: PIXELS, name: 'Untitled' });
     useEditorStore.setState({ isDirty: true });
     const pending = runCommand('doc.save');
     expect(mocks.serializeProject).toHaveBeenCalledTimes(1);
@@ -152,7 +152,7 @@ describe('doc.save and doc.export-psd', () => {
   });
 
   it('doc.export-psd encodes at 16 bits by default, 8 when asked, and rejects other depths', async () => {
-    mocks.encodePsdFile.mockResolvedValue(PIXELS);
+    mocks.encodePsdFile.mockResolvedValue({ bytes: PIXELS, name: 'Untitled' });
     const pending = runCommand('doc.export-psd');
     expect(mocks.encodePsdFile).toHaveBeenCalledWith(16);
     expect(await pending).toEqual({ mime: 'application/octet-stream', ext: 'psd', base64: btoa(String.fromCharCode(...PIXELS)) });

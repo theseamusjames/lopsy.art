@@ -1,7 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { requireDocument } from '../context';
-import { docPointSpec, pointsSpec, runGesture } from '../gesture/run-gesture';
+import { docPointSpec, gestureNote, pointsSpec, runGesture } from '../gesture/run-gesture';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { stampSourceState } from '../../tools/common/stamp-source-state';
@@ -40,7 +40,7 @@ function checkCloneSource(tool: StrokeTool, source: Point | undefined): void {
 export const paintStroke = defineCommand({
   id: 'paint.stroke',
   summary:
-    'Paints a stroke through `points` with a painting tool, as dragging it on the canvas does (one point is a single dab or click), using the tool\'s current options and colours (set them first with tool.set and color.set). In layer-mask edit mode (mask.edit) or Quick Mask mode (quickmask.set) the brush, pencil and eraser paint the mask instead, as in the UI. `line` is a Shift-press: it joins the first point to where the previous stroke on this layer ended; with no previous stroke on the layer it is a plain dab, as in the UI. For stamp and healing, `source` is the Alt-click that sets the point to clone from, made before the stroke; without it the source set last is used. The stroke is instantaneous: the brush\'s speed-based size (off by default) sees a very fast stroke, and hold-to-smooth never fires. One history step, labelled as the UI labels it. Refused on a locked layer and on a text or group layer. Returns the tool, the layer id and whether a line was drawn.',
+    'Paints a stroke through `points` with a painting tool, as dragging it on the canvas does (one point is a single dab or click), using the tool\'s current options and colours (set them first with tool.set and color.set). In layer-mask edit mode (mask.edit) or Quick Mask mode (quickmask.set) the brush, pencil and eraser paint the mask instead, as in the UI. `line` is a Shift-press: it joins the first point to where the previous stroke on this layer ended; with no previous stroke on the layer it is a plain dab, as in the UI. For stamp and healing, `source` is the Alt-click that sets the point to clone from, made before the stroke; without it the source set last is used. The stroke is instantaneous: the brush\'s speed-based size (off by default) sees a very fast stroke, and hold-to-smooth never fires. One history step, labelled as the UI labels it. Refused on a locked layer and on a text or group layer. Returns the tool, the layer id and whether a line was drawn.' + gestureNote('the chosen painting tool'),
   surface: 'document',
   params: {
     tool: { type: 'string', enum: STROKE_TOOLS, default: 'brush', description: 'The painting tool. spray is not offered: it paints on a timer while held.' },

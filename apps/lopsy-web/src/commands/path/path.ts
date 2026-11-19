@@ -1,7 +1,8 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
-import { requireDocument, requireEngine } from '../context';
+import { boundedPointSpec, requireDocument, requireEngine } from '../context';
+import { MAX_GESTURE_POINTS } from '../gesture/run-gesture';
 import type { Point } from '../params';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
@@ -83,12 +84,12 @@ const pathRefSpec = {
 } as const;
 
 const pointSpec = (what: string) =>
-  ({ type: 'point', optional: true, description: `${what}, in document pixels. Omitted means none (null in path.list): the curve meets the anchor straight.` }) as const;
+  ({ ...boundedPointSpec(`${what}, in document pixels. Omitted means none (null in path.list): the curve meets the anchor straight.`), optional: true }) as const;
 
 const anchorSpec = {
   type: 'object',
   fields: {
-    point: { type: 'point', description: 'The anchor, in document pixels with (0,0) at the top-left.' },
+    point: boundedPointSpec('The anchor, in document pixels with (0,0) at the top-left.'),
     handleIn: pointSpec('The bezier handle the curve arrives along'),
     handleOut: pointSpec('The bezier handle the curve leaves along'),
   },
@@ -125,7 +126,7 @@ export const pathAdd = defineCommand({
     'Adds a vector path to the Paths panel, as committing a Pen-tool draft does ("Add Path"), without stroking it: it is named "Path N" and becomes the selected path. Stroke it with path.stroke. Returns its id and name.',
   surface: 'document',
   params: {
-    anchors: { type: 'array', items: anchorSpec, minItems: 2, description: 'The anchors in order: at least two, as the Pen tool needs to commit a path.' },
+    anchors: { type: 'array', items: anchorSpec, minItems: 2, maxItems: MAX_GESTURE_POINTS, description: `The anchors in order: at least two, as the Pen tool needs to commit a path, and at most ${MAX_GESTURE_POINTS}.` },
     closed: { type: 'boolean', default: false, description: 'true joins the last anchor back to the first.' },
   },
   run({ anchors, closed }): PathRef {

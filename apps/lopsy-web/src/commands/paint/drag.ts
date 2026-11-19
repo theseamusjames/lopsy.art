@@ -1,7 +1,7 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
-import { requireDocument } from '../context';
-import { docPointSpec, runGesture, type GestureResult } from '../gesture/run-gesture';
+import { coordinateSpec, requireDocument } from '../context';
+import { docPointSpec, gestureNote, runGesture, type GestureResult } from '../gesture/run-gesture';
 import { useEditorStore } from '../../app/editor-store';
 import { useUIStore } from '../../app/ui-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
@@ -18,7 +18,7 @@ function rounded(p: Point): Point {
 export const paintGradient = defineCommand({
   id: 'paint.gradient',
   summary:
-    'Draws a gradient with the Gradient tool by dragging from `from` to `to`, as on the canvas: linear along the drag, radial centred on `from` with the drag as radius, with the type, stops and reverse from the tool\'s options (set them with tool.set). It fills the selection when one is active, else the whole layer; in mask edit or Quick Mask mode it draws into the mask. One history step ("Linear Gradient" or "Radial Gradient"). Refused on a locked layer and on a text or group layer. Returns the tool and the layer id.',
+    'Draws a gradient with the Gradient tool by dragging from `from` to `to`, as on the canvas: linear along the drag, radial centred on `from` with the drag as radius, with the type, stops and reverse from the tool\'s options (set them with tool.set). It fills the selection when one is active, else the whole layer; in mask edit or Quick Mask mode it draws into the mask. One history step ("Linear Gradient" or "Radial Gradient"). Refused on a locked layer and on a text or group layer. Returns the tool and the layer id.' + gestureNote('the Gradient tool'),
   surface: 'document',
   params: {
     from: docPointSpec('Where the drag starts: the gradient\'s first stop, or a radial gradient\'s centre.'),
@@ -62,7 +62,7 @@ function newPathId(before: number): string | null {
 export const paintShape = defineCommand({
   id: 'paint.shape',
   summary:
-    'Draws a shape with the Shape tool by dragging from `from` to `to`, as on the canvas. The shape grows from its centre: `from` is the centre and `to` a corner of its bounding box. Kind, fill, stroke, corner radius, sides and Output come from the tool\'s options (tool.set): with pixel output it paints the active layer ("Shape"), with path output it adds a closed path ("Add Path") and leaves the pixels alone. `constrain` is the Cmd/Ctrl press that makes the box square (a circle for the ellipse). Grid and guide snapping apply as in the UI. Refused on a locked layer, and with pixel output on a text or group layer. Returns the tool, the layer id, the output and the new path\'s id (null for pixels).',
+    'Draws a shape with the Shape tool by dragging from `from` to `to`, as on the canvas. The shape grows from its centre: `from` is the centre and `to` a corner of its bounding box. Kind, fill, stroke, corner radius, sides and Output come from the tool\'s options (tool.set): with pixel output it paints the active layer ("Shape"), with path output it adds a closed path ("Add Path") and leaves the pixels alone. `constrain` is the Cmd/Ctrl press that makes the box square (a circle for the ellipse). Grid and guide snapping apply as in the UI. Refused on a locked layer, and with pixel output on a text or group layer. Returns the tool, the layer id, the output and the new path\'s id (null for pixels).' + gestureNote('the Shape tool'),
   surface: 'document',
   params: {
     from: docPointSpec('The press: the shape\'s centre.'),
@@ -97,11 +97,11 @@ function checkBucketSeed(x: number, y: number): void {
 export const paintBucket = defineCommand({
   id: 'paint.bucket',
   summary:
-    'Clicks the Paint Bucket at (x, y): floods the region around that pixel with the foreground colour, as the tool does, using its tolerance and contiguous options (tool.set) and staying inside the selection; in mask edit or Quick Mask mode it floods the mask. The fill reads the layer\'s pixels first; the command resolves once it has landed. One history step ("Bucket Fill"). Refused on a locked layer, on a text or group layer, and (outside the mask modes) for a pixel outside the document or the selection, where a click does nothing. Returns the tool and the layer id.',
+    'Clicks the Paint Bucket at (x, y): floods the region around that pixel with the foreground colour, as the tool does, using its tolerance and contiguous options (tool.set) and staying inside the selection; in mask edit or Quick Mask mode it floods the mask. The fill reads the layer\'s pixels first; the command resolves once it has landed. One history step ("Bucket Fill"). Refused on a locked layer, on a text or group layer, and (outside the mask modes) for a pixel outside the document or the selection, where a click does nothing. Returns the tool and the layer id.' + gestureNote('the Paint Bucket'),
   surface: 'document',
   params: {
-    x: { type: 'number', description: 'Document x of the clicked pixel; (0,0) is the top-left.' },
-    y: { type: 'number', description: 'Document y of the clicked pixel.' },
+    x: coordinateSpec('Document x of the clicked pixel; (0,0) is the top-left.'),
+    y: coordinateSpec('Document y of the clicked pixel.'),
   },
   run({ x, y }): GestureResult {
     requireDocument();

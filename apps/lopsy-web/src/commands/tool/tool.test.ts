@@ -32,6 +32,13 @@ const { TOOL_OPTIONS } = await import('./tool-options');
 
 const realSetActiveTool = useUIStore.getState().setActiveTool;
 
+const INHERITED_NAMES = ['toString', 'constructor', '__proto__', 'hasOwnProperty'] as const;
+
+/** An object whose one own key is `name`, as JSON.parse makes it, even for __proto__. */
+function ownKeyed(name: string): Record<string, unknown> {
+  return JSON.parse(`{${JSON.stringify(name)}: 1}`) as Record<string, unknown>;
+}
+
 async function failure(promise: Promise<unknown>): Promise<InstanceType<typeof CommandError>> {
   try {
     await promise;
@@ -182,6 +189,15 @@ describe('tool.set', () => {
     expect(error.code).toBe('refused');
     expect(error.message).toContain('is a text layer');
     expect(settings().text.fontSize).toBe(24);
+  });
+
+  it('is invalid for names Object.prototype has, which are no options', async () => {
+    for (const name of INHERITED_NAMES) {
+      const options = ownKeyed(name);
+      expect(Object.keys(options)).toEqual([name]);
+      const error = await failure(runCommand('tool.set', { tool: 'brush', options }));
+      expect([error.code, error.message]).toEqual(['invalid', expect.stringContaining(`unknown option ${JSON.stringify(name)}`)]);
+    }
   });
 
   it('is invalid for an unknown option, listing the tool\'s options', async () => {

@@ -87,7 +87,7 @@ export const docSave = defineCommand({
   run(): Promise<FileResult> {
     requireDocument();
     requireEngine();
-    return serializeProject().then((bytes) => ({ mime: FILE_MIME, ext: 'lopsy', base64: encodeBase64(bytes) }));
+    return serializeProject().then(({ bytes }) => ({ mime: FILE_MIME, ext: 'lopsy', base64: encodeBase64(bytes) }));
   },
 });
 
@@ -111,9 +111,9 @@ export const docExportPsd = defineCommand({
     requireEngine();
     const bits = PSD_DEPTHS.find((candidate) => candidate === depth);
     if (bits === undefined) throw new CommandError('invalid', `doc.export-psd: depth must be 8 or 16, got ${depth}`);
-    return encodePsdFile(bits).then((bytes) => {
-      if (!bytes) throw new CommandError('unavailable', 'The rendering engine stopped before the PSD was written.');
-      return { mime: FILE_MIME, ext: 'psd', base64: encodeBase64(bytes) };
+    return encodePsdFile(bits).then((file) => {
+      if (!file) throw new CommandError('unavailable', 'The rendering engine stopped before the PSD was written.');
+      return { mime: FILE_MIME, ext: 'psd', base64: encodeBase64(file.bytes) };
     });
   },
 });

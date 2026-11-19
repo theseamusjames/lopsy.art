@@ -270,6 +270,8 @@ export function checkOption(path: string, option: ToolOption, value: unknown, co
     case 'stops':
       parseGradientStops(commandId, path, value);
       return;
+    default:
+      invalid(commandId, `${path} is not an option this command takes`);
   }
 }
 

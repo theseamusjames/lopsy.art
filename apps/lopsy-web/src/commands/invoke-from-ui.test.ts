@@ -7,8 +7,20 @@ const toasts = vi.hoisted(() => ({
 
 vi.mock('../app/notifications-store', () => toasts);
 
+const frameClock = vi.hoisted(() => ({
+  isLoopRunning: () => true,
+  nextLoopPass: vi.fn(() => new Promise<boolean>(() => undefined)),
+}));
+
+vi.mock('../app/rendering/frame-clock', () => frameClock);
+vi.mock('../engine-wasm/engine-state', () => ({
+  engineStarted: () => Promise.resolve(null),
+  isGpuContextLost: () => false,
+}));
+
 const { CommandError } = await import('./command');
-const { defineCommand, setSettle } = await import('./registry');
+const { defineCommand, runCommand, setPreflight, setSettle } = await import('./registry');
+const { settled } = await import('./settled');
 const { invokeFromUi, startFromUi } = await import('./invoke-from-ui');
 
 const log: string[] = [];
@@ -105,11 +117,53 @@ describe('invokeFromUi', () => {
     expect(toasts.notifyError).not.toHaveBeenCalled();
   });
 
-  it('swallows a settle that times out, with no toast', async () => {
-    setSettle(() => Promise.reject(new CommandError('unavailable', 'Timed out')));
+  it('never waits for the engine to settle', async () => {
+    const settle = vi.fn(() => Promise.reject(new CommandError('unavailable', 'Timed out')));
+    setSettle(settle);
     await expect(startFromUi('test.ui-sync')).resolves.toBeUndefined();
     expect(log).toEqual(['ran']);
+    expect(settle).not.toHaveBeenCalled();
     expect(toasts.notifyInfo).not.toHaveBeenCalled();
     expect(toasts.notifyError).not.toHaveBeenCalled();
+  });
+});
+
+describe('invokeFromUi with a preflight that refuses', () => {
+  afterEach(() => {
+    setPreflight(() => undefined);
+  });
+
+  it('still runs the command, as the menu ran its function while the context was lost', async () => {
+    setPreflight(() => {
+      throw new CommandError('unavailable', 'The graphics context is lost');
+    });
+    invokeFromUi('test.ui-sync', { tag: 'pressed' });
+    expect(log).toEqual(['pressed']);
+    await expect(runCommand('test.ui-sync')).rejects.toMatchObject({ code: 'unavailable' });
+    expect(log).toEqual(['pressed']);
+  });
+});
+
+describe('invokeFromUi with the real settle', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    setSettle(settled);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('starts no settle timer and no render-loop waiter, where an API run does', async () => {
+    invokeFromUi('test.ui-sync');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(frameClock.nextLoopPass).not.toHaveBeenCalled();
+
+    const apiRun = runCommand('test.ui-sync').catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await apiRun;
   });
 });

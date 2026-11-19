@@ -1,7 +1,8 @@
 import { CommandError } from '../command';
 import { defineCommand } from '../registry';
 import { refusalError } from '../refusal';
-import { layerRefSpec, requireDocument, requireEngine, resolveLayer } from '../context';
+import { boundedPointSpec, coordinateSpec, extentSpec, layerRefSpec, requireDocument, requireEngine, resolveLayer } from '../context';
+import { MAX_GESTURE_POINTS } from '../gesture/run-gesture';
 import { useEditorStore } from '../../app/editor-store';
 import { useToolSettingsStore } from '../../app/tool-settings-store';
 import {
@@ -53,11 +54,14 @@ const modeSpec = {
     'How the new shape combines with the current selection, as the modifier keys do with the tool: replace (no key), add (Shift), subtract (Alt), intersect (Shift+Alt). With nothing selected every mode replaces, as with the tool.',
 } as const;
 
+/** As many corners as a gesture command takes points. */
+export const MAX_POLYGON_POINTS = MAX_GESTURE_POINTS;
+
 const boxParams = {
-  x: { type: 'number', description: 'Left edge in document pixels; (0,0) is the top-left of the document.' },
-  y: { type: 'number', description: 'Top edge in document pixels.' },
-  width: { type: 'number', min: 1, description: 'Width in document pixels.' },
-  height: { type: 'number', min: 1, description: 'Height in document pixels.' },
+  x: coordinateSpec('Left edge in document pixels; (0,0) is the top-left of the document.'),
+  y: coordinateSpec('Top edge in document pixels.'),
+  width: extentSpec('Width in document pixels.'),
+  height: extentSpec('Height in document pixels.'),
   mode: modeSpec,
 } as const;
 
@@ -117,9 +121,10 @@ export const selectPolygon = defineCommand({
   params: {
     points: {
       type: 'array',
-      items: { type: 'point' },
+      items: boundedPointSpec('A corner.'),
       minItems: 3,
-      description: 'The polygon\'s corners in document pixels, in order; it is closed back to the first point.',
+      maxItems: MAX_POLYGON_POINTS,
+      description: `The polygon's corners in document pixels, in order; it is closed back to the first point. At most ${MAX_POLYGON_POINTS}.`,
     },
     mode: modeSpec,
   },

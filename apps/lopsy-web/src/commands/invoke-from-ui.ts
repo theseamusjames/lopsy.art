@@ -15,16 +15,17 @@ function handleFailure(error: unknown): void {
 /**
  * Starts a command for a menu item, a key or a button, in the caller's tick,
  * and returns what is left once it has finished: a promise that resolves, or
- * rejects with anything that is not a CommandError. A CommandError, whether
- * thrown before the command returns or rejected after (a settle that timed
- * out is one, with notice null), shows the toast its notice asks for and is
- * otherwise swallowed. Anything else is a bug: thrown synchronously, it
+ * rejects with anything that is not a CommandError. It does not wait for the
+ * engine to settle afterwards: nothing in the UI waits for a command, and a
+ * key on auto-repeat would stack the waits up. A CommandError, whether
+ * thrown before the command returns or rejected after, shows the toast its
+ * notice asks for and is otherwise swallowed. Anything else is a bug: thrown synchronously, it
  * propagates to the caller, as a menu action's own throw did.
  */
 export function startFromUi(id: string, params?: unknown): Promise<void> {
   let pending: Promise<unknown>;
   try {
-    pending = startCommand(id, params);
+    pending = startCommand(id, params, { settle: false });
   } catch (error) {
     handleFailure(error);
     return Promise.resolve();

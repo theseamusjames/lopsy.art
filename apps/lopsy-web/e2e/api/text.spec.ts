@@ -146,7 +146,7 @@ test.describe('the text commands against the Text tool', () => {
         props.push(await textProps(p));
       },
     });
-    expect(results).toEqual([{ id: expect.any(String), name: 'Hello' }]);
+    expect(results).toEqual([{ id: expect.any(String), name: 'Hello', fontLoaded: true }]);
     expect(props[1]).toEqual(props[0]);
     expect(props[1]?.[0]).toMatchObject({ name: 'Hello', text: 'Hello', width: null });
     expect(after.history.undo).toEqual(['New Document', 'Add Text Layer', 'Text']);
@@ -213,7 +213,7 @@ test.describe('the text commands against the Text tool', () => {
         renders.push(await render(p));
       },
       viaApi: async (p) => {
-        expect(await run(p, { op: 'text.set-font', family: 'Montserrat', weight: 700 })).toEqual({ family: 'Montserrat', weight: 700, style: 'normal' });
+        expect(await run(p, { op: 'text.set-font', family: 'Montserrat', weight: 700 })).toEqual({ family: 'Montserrat', weight: 700, style: 'normal', fontLoaded: true });
         await run(p, { op: 'tool.set', tool: 'text', options: { fontSize: 40 } });
         await run(p, { op: 'color.set', foreground: '#c81e3c' });
         await run(p, { op: 'text.add', x: 30, y: 50, text: 'Bold' });
@@ -243,7 +243,7 @@ test.describe('the text commands against the Text tool', () => {
         props.push(await textProps(p));
       },
       viaApi: async (p) => {
-        expect(await run(p, { op: 'text.edit', layer: 'Hello', text: 'Goodbye' })).toEqual({ id: expect.any(String), name: 'Goodbye' });
+        expect(await run(p, { op: 'text.edit', layer: 'Hello', text: 'Goodbye' })).toEqual({ id: expect.any(String), name: 'Goodbye', fontLoaded: true });
         await settle(p, 300);
         props.push(await textProps(p));
       },

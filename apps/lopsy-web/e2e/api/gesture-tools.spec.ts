@@ -327,8 +327,8 @@ test.describe('the gesture commands on their own', () => {
 
   test('select.wand refuses a pixel outside the document and works on a locked layer', async ({ page }) => {
     expect(await runError(page, { op: 'select.wand', x: -1, y: 10 })).toEqual({
-      code: 'invalid',
-      message: 'select.wand: (-1, 10) is outside the 200x150 document.',
+      code: 'refused',
+      message: '(-1, 10) is outside the 200x150 document: a Magic Wand click there selects nothing.',
     });
     await lockActive(page);
     await run(page, { op: 'select.wand', x: 10, y: 10 });

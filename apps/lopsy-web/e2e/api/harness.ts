@@ -12,8 +12,10 @@
  *                                  for the command API. No document is
  *                                  created: `doc.new` is under test.
  *   run(page, invocation | [...])  Run one command or a batch. A refusal
- *                                  rejects with an ApiError {code, message};
- *                                  anything else the page throws is a plain
+ *                                  rejects with an ApiError {code, message},
+ *                                  plus `result` for 'unsettled' and
+ *                                  `completed` (earlier steps' results) for
+ *                                  a batch; anything else the page throws is a plain
  *                                  Error and fails the test.
  *   runError(page, invocation)     Run expecting a CommandError; returns it.
  *   describe(page, surface?)       The registry's command descriptions.
@@ -49,14 +51,25 @@ export interface CommandErrorInfo {
   message: string;
 }
 
+interface CommandErrorPayload extends CommandErrorInfo {
+  /** With code 'unsettled': what the command returned, since its work was done. */
+  result?: unknown;
+  /** From a list of invocations: the results of the steps that completed before the failure. */
+  completed?: unknown[];
+}
+
 /** A command's refusal (a CommandError in the page), carried into Node. */
 export class ApiError extends Error {
   readonly code: string;
+  readonly result?: unknown;
+  readonly completed?: unknown[];
 
-  constructor({ code, message }: CommandErrorInfo) {
+  constructor({ code, message, result, completed }: CommandErrorPayload) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
+    if (result !== undefined) this.result = result;
+    if (completed !== undefined) this.completed = completed;
   }
 }
 
@@ -93,7 +106,7 @@ interface CommandsWindow {
 
 type Outcome =
   | { ok: true; result: unknown }
-  | { ok: false; error: { isCommandError: true; code: string; message: string } }
+  | { ok: false; error: { isCommandError: true } & CommandErrorPayload }
   | { ok: false; error: { isCommandError: false; message: string } };
 
 export const test = base.extend<{ _commandApi: void }>({
@@ -125,10 +138,9 @@ export async function run<T = unknown>(page: Page, invocation: Invocation | read
     try {
       return { ok: true, result: await api.run(payload) };
     } catch (error) {
-      const candidate = error as { name?: unknown; toJSON?: () => { code: string; message: string } };
+      const candidate = error as { name?: unknown; toJSON?: () => CommandErrorPayload };
       if (candidate && candidate.name === 'CommandError' && typeof candidate.toJSON === 'function') {
-        const { code, message } = candidate.toJSON();
-        return { ok: false, error: { isCommandError: true, code, message } };
+        return { ok: false, error: { isCommandError: true, ...candidate.toJSON() } };
       }
       const message = error instanceof Error ? `${error.name}: ${error.message}\n${error.stack ?? ''}` : String(error);
       return { ok: false, error: { isCommandError: false, message } };
