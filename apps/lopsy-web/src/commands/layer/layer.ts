@@ -77,6 +77,18 @@ function assertCanCreateLayer(doc: DocumentState): void {
   if (refusal) throw refusalError(refusal);
 }
 
+/**
+ * For a store action that checks layer creation itself, after whatever it
+ * does first, and toasts when it refuses: throws that refusal silently when
+ * the action added no layer to `before`.
+ */
+function assertLayerAdded(before: DocumentState): void {
+  const known = new Set(before.layers.map((layer) => layer.id));
+  if (currentDocument().layers.some((layer) => !known.has(layer.id))) return;
+  const refusal = layerCreationRefusal(currentDocument());
+  throw new CommandError('refused', refusal?.reason ?? 'No layer was added.');
+}
+
 function trimmedName(commandId: string, name: string): string {
   const trimmed = name.trim();
   if (trimmed) return trimmed;
@@ -119,14 +131,14 @@ function refuse(reason: string): never {
 export const layerAdd = defineCommand({
   id: 'layer.add',
   summary:
-    'Adds an empty raster layer above the active layer, inside its group, and makes it active, as the Layers panel\'s Add Layer button does; a `name` renames it afterwards as a rename in the panel does (a second "Rename Layer" history step). Returns its id.',
+    'Adds an empty raster layer above the active layer, inside its group, and makes it active, as the Layers panel\'s Add Layer button and Layer > New Layer do: a pending stroke is finalized first, even in an Indexed document, where no layer is added and the command is refused with the text the UI toasts. A `name` renames it afterwards as a rename in the panel does (a second "Rename Layer" history step). Returns its id.',
   surface: 'document',
   params: { name: nameSpec('new layer') },
   run({ name }): CreatedLayer {
     const doc = requireDocument();
     const newName = optionalName('layer.add', name);
-    assertCanCreateLayer(doc);
     store().addLayer();
+    assertLayerAdded(doc);
     const created = createdActiveLayer();
     if (newName !== undefined) store().renameLayer(created.id, newName);
     return created;
@@ -324,7 +336,7 @@ export const layerDuplicate = defineCommand({
 export const layerMergeDown = defineCommand({
   id: 'layer.merge-down',
   summary:
-    'Merges a layer into the layer directly below it in the same group, as Layer > Merge Down does; a `layer` other than the active one is made active first, as a click on its row would. Returns the id of the merged layer, which is active after.',
+    'Merges a layer into the layer directly below it in the same group, as Layer > Merge Down and Cmd+E do; a `layer` other than the active one is made active first, as a click on its row would (one that cannot merge is refused before that). Returns the id of the merged layer, which is active after.',
   surface: 'document',
   params: { layer: layerRefSpec },
   enabled(): boolean {
@@ -334,9 +346,11 @@ export const layerMergeDown = defineCommand({
     const doc = requireDocument();
     const layer = resolveLayer(ref);
     const refusal = mergeDownRefusal({ ...doc, activeLayerId: layer.id });
-    if (refusal) throw refusalError(refusal);
+    if (refusal && layer.id !== doc.activeLayerId) throw refusalError(refusal);
     activateIfOther(layer.id);
+    // As Cmd+E, mergeDown runs even when it cannot merge: it flushes pending layer data first.
     store().mergeDown();
+    if (refusal) throw refusalError(refusal);
     return createdActiveLayer();
   },
 });

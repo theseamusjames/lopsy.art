@@ -120,6 +120,14 @@ describe('paint.fill', () => {
     expect([error.code, error.message]).toEqual(['refused', "Groups can't be painted on. Select a layer inside the group."]);
   });
 
+  it('refuses a text layer before the engine starts as Edit > Fill does: the toasted text refusal, not the silent missing engine', async () => {
+    engine.current = null;
+    patchActive({ type: 'text' });
+    const error = await failure(runCommand('paint.fill'));
+    expect([error.code, error.notice, error.message]).toEqual(['refused', 'info', 'Text layers must be rasterized before they can be painted on.']);
+    expect(fillSelection).not.toHaveBeenCalled();
+  });
+
   it('is unavailable without an engine', async () => {
     engine.current = null;
     expect((await failure(runCommand('paint.fill'))).code).toBe('unavailable');

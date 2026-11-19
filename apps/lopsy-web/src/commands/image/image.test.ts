@@ -169,10 +169,13 @@ describe('image.border', () => {
     expect(huge.message).toMatch(/^Too large: the canvas can be at most \d+ px on a side\.$/);
   });
 
-  it('is refused in an Indexed document, with the text the store toasts', async () => {
+  it('in an Indexed document calls addBorder, which finalizes a pending stroke and toasts, then refuses silently with that text', async () => {
     useEditorStore.setState({ document: { ...store().document, colorMode: 'indexed' } });
-    const error = await failure(runCommand('image.border', { width: 4 }));
-    expect([error.code, error.notice]).toEqual(['refused', 'info']);
+    const spy = spyAction('addBorder');
+    const pending = runCommand('image.border', { width: 4 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    const error = await failure(pending);
+    expect([error.code, error.notice, error.message]).toEqual(['refused', null, 'Indexed mode does not support layers. Convert to RGB first.']);
   });
 
   it('passes a saturated colour unconverted in a Grayscale document, as the dialog does', async () => {

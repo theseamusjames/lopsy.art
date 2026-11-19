@@ -213,7 +213,7 @@ export interface EditorState {
   convertColorMode: (
     newMode: DocumentColorMode,
     options?: import('./actions/convert-color-mode').IndexedConversionOptions,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
 
   // Viewport
   setZoom: (zoom: number) => void;

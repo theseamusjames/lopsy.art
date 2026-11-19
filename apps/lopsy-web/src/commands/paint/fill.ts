@@ -26,12 +26,13 @@ export const paintFill = defineCommand({
     requireDocument();
     const layer = resolveLayer();
     if (layer.locked) throw new CommandError('refused', `"${layer.name}" is locked: unlock it to fill it.`);
-    requireEngine();
     const target = fillTarget(layer);
+    // In fillSelection's order: the lock, the mask, the layer type, and only then the engine.
     if (target === 'pixels') {
       const refusal = pixelWriteRefusal(layer);
       if (refusal) throw refusalError(refusal);
     }
+    requireEngine();
     fillSelection();
     return { layer: layer.id, target };
   },

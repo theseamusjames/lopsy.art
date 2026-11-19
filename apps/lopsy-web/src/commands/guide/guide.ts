@@ -93,14 +93,14 @@ export const guideRemove = defineCommand({
 
 export const guideClear = defineCommand({
   id: 'guide.clear',
-  summary: 'Removes every ruler guide, as Edit > Clear Guides does (no history step). Refused when there are none, where the menu does nothing. Returns how many it removed.',
+  summary: 'Removes every ruler guide and deselects any guide, as Edit > Clear Guides does (no history step). With no guides it still deselects, as the menu does, and is then refused. Returns how many it removed.',
   surface: 'document',
   params: {},
   run(): { removed: number } {
     requireDocument();
     const removed = guides().length;
-    if (removed === 0) throw new CommandError('refused', 'There are no guides to clear.');
     useUIStore.getState().clearGuides();
+    if (removed === 0) throw new CommandError('refused', 'There are no guides to clear.');
     return { removed };
   },
 });

@@ -161,17 +161,18 @@ export const imageBorder = defineCommand({
     const sides = borderWidths(width, widths);
     const corners: BorderCorners = { outer: outerRadius, inner: innerRadius };
     const color = borderColor(hex);
+    const before = new Set(doc.layers.map((layer) => layer.id));
+    store().addBorder(color, sides, placement, corners);
+    const added = store().document.layers.find((layer) => !before.has(layer.id));
+    if (added) return { layer: added.id, ...size() };
+    // addBorder has already toasted this one.
     const refusal = layerCreationRefusal(doc);
-    if (refusal) throw refusalError(refusal);
+    if (refusal) throw new CommandError('refused', refusal.reason);
     requireEngine();
     if (!planBorder(doc.width, doc.height, sides, placement, getMaxDocumentSide(), corners)) {
       throw new CommandError('refused', describeBorderPlan(null, sides, doc.width, doc.height));
     }
-    const before = new Set(doc.layers.map((layer) => layer.id));
-    store().addBorder(color, sides, placement, corners);
-    const added = store().document.layers.find((layer) => !before.has(layer.id));
-    if (!added) throw new Error('image.border: no Border layer was added');
-    return { layer: added.id, ...size() };
+    throw new Error('image.border: no Border layer was added');
   },
 });
 

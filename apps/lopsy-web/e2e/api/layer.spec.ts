@@ -5,7 +5,7 @@
  */
 import { test, expect, run, runError, compareUiAndApi, type Page } from './harness';
 import { setBlendMode } from '../helpers';
-import { clickMenu, fillRect, historyLabels, settle, topHistoryLabel } from '../surface-helpers';
+import { clickMenu, fillRect, historyLabels, settle, toasts, topHistoryLabel } from '../surface-helpers';
 import { clickLayerRow, pressKey, rowButton } from '../surface-helpers-keys';
 import { docPixel } from '../surface-helpers-filters';
 
@@ -456,6 +456,27 @@ test.describe('layer command refusals', () => {
       expect(await runError(page, { op })).toEqual({ code: 'refused', message: 'Indexed mode does not support layers. Convert to RGB first.' });
     }
     expect(await info(page)).toEqual(before);
+  });
+
+  test('Layer > New Layer in an Indexed document: layer.add shows the same single toast and leaves the same history', async ({ page }) => {
+    const message = 'Indexed mode does not support layers. Convert to RGB first.';
+    const { api } = await compareUiAndApi(page, {
+      setup: async (p) => {
+        await clickMenu(p, 'Image', 'Mode', 'Indexed Color...');
+        await p.getByRole('dialog', { name: 'Indexed Color', exact: true }).getByRole('button', { name: 'Convert', exact: true }).click();
+        await expect.poll(async () => (await run<{ colorMode: string }>(p, { op: 'doc.info' })).colorMode).toBe('indexed');
+        await settle(p);
+      },
+      viaUi: async (p) => {
+        await clickMenu(p, 'Layer', 'New Layer');
+        expect(await toasts(p)).toEqual([message]);
+      },
+      viaApi: async (p) => {
+        expect(await runError(p, { op: 'layer.add' })).toEqual({ code: 'refused', message });
+        expect(await toasts(p)).toEqual([message]);
+      },
+    });
+    expect(api.history.undo.at(-1)).toBe('Convert to Indexed');
   });
 
   test('invalid params are rejected before anything runs', async ({ page }) => {

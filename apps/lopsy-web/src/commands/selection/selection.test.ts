@@ -214,10 +214,12 @@ describe('select.invert', () => {
     expect(labels()).toEqual(['New Document', 'Inverse Selection']);
   });
 
-  it('refuses with nothing selected', async () => {
-    const error = await failure(runCommand('select.invert', {}));
-    expect(error.message).toBe('Nothing is selected to invert.');
-    expect(actions.invertSelectionAction).not.toHaveBeenCalled();
+  it('with nothing selected still calls invertSelectionAction, which commits a live Move float, then refuses silently', async () => {
+    const pending = runCommand('select.invert', {});
+    expect(actions.invertSelectionAction).toHaveBeenCalledTimes(1);
+    const error = await failure(pending);
+    expect([error.code, error.notice, error.message]).toEqual(['refused', null, 'Nothing is selected to invert.']);
+    expect(labels()).toEqual(['New Document']);
   });
 });
 
@@ -250,7 +252,7 @@ describe('select.modify', () => {
 
   it('refuses with nothing selected, and amounts outside the dialog range', async () => {
     expect((await failure(runCommand('select.modify', { kind: 'grow', amount: 2 }))).message).toBe('Nothing is selected to grow.');
-    expect(actions.modifySelection).not.toHaveBeenCalled();
+    expect(actions.modifySelection).toHaveBeenCalledWith('grow', 2);
     await runCommand('select.all', {});
     const tooMuch = await failure(runCommand('select.modify', { kind: 'grow', amount: 101 }));
     expect(tooMuch.code).toBe('invalid');

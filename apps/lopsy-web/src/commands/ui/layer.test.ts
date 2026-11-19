@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  editor: { addLayer: vi.fn(), duplicateLayer: vi.fn() },
+  editor: { duplicateLayer: vi.fn() },
   openAdjustmentLayer: vi.fn(),
 }));
 
@@ -17,7 +17,6 @@ beforeEach(() => {
 
 describe('ui.layer.* commands', () => {
   it.each([
-    ['ui.layer.new', () => mocks.editor.addLayer],
     ['ui.layer.duplicate', () => mocks.editor.duplicateLayer],
     ['ui.layer.adjustment-layer', () => mocks.openAdjustmentLayer],
   ] as const)('%s makes its one call in the synchronous part, with no pre-check', async (id, wrapped) => {

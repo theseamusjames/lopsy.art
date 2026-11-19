@@ -43,6 +43,16 @@ function selectRect(): void {
 
 /** The menu items bound to a document command, which runs exactly what the item ran before the commands. */
 const DOCUMENT_BINDINGS: Record<string, { id: string; params?: Record<string, unknown> }> = {
+  'Edit > Undo': { id: 'history.undo' },
+  'Edit > Redo': { id: 'history.redo' },
+  'Edit > Fill': { id: 'paint.fill' },
+  'Edit > Clear Guides': { id: 'guide.clear' },
+  'Image > Mode > RGB Color': { id: 'doc.color-mode', params: { mode: 'rgb' } },
+  'Image > Mode > Grayscale': { id: 'doc.color-mode', params: { mode: 'grayscale' } },
+  'Image > Mode > CMYK Color': { id: 'doc.color-mode', params: { mode: 'cmyk' } },
+  'Image > Mode > Lab Color': { id: 'doc.color-mode', params: { mode: 'lab' } },
+  'Layer > New Layer': { id: 'layer.add' },
+  'Select > Inverse': { id: 'select.invert' },
   'Edit > Cut': { id: 'clipboard.cut' },
   'Edit > Copy': { id: 'clipboard.copy' },
   'Edit > Copy Merged': { id: 'clipboard.copy-merged' },
@@ -171,9 +181,15 @@ describe('menu state, read as the menu is built', () => {
     expect(mode.map((item) => [item.label, item.checked])).toEqual([
       ['RGB Color', true], ['Grayscale', false], ['Indexed Color...', false], ['CMYK Color', false], ['Lab Color', false],
     ]);
-    expect(mode.map((item) => item.command)).toEqual(
-      ['rgb', 'grayscale', 'indexed', 'cmyk', 'lab'].map((m) => ({ id: 'ui.image.mode', params: { mode: m } })),
-    );
+    expect(mode.map((item) => item.command)).toEqual([
+      { id: 'doc.color-mode', params: { mode: 'rgb' } },
+      { id: 'doc.color-mode', params: { mode: 'grayscale' } },
+      { id: 'ui.image.indexed-color' },
+      { id: 'doc.color-mode', params: { mode: 'cmyk' } },
+      { id: 'doc.color-mode', params: { mode: 'lab' } },
+    ]);
+    useEditorStore.setState({ document: { ...useEditorStore.getState().document, colorMode: 'indexed' } });
+    expect(getMenus()[2]!.items[0]!.submenu!.map((item) => item.checked)).toEqual([false, false, true, false, false]);
   });
 
   it('checks the View toggles from the UI store', () => {

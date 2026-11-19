@@ -40,7 +40,6 @@ import './ui/file';
 import './ui/edit';
 import './ui/image';
 import './ui/layer';
-import './ui/select';
 import './ui/filter';
 import './ui/view';
 import './ui/help';

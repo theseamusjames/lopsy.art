@@ -2,17 +2,6 @@ import { defineCommand } from '../registry';
 import { useEditorStore } from '../../app/editor-store';
 import { openAdjustmentLayer } from '../../app/MenuBar/layer-menu-actions';
 
-export const uiLayerNew = defineCommand({
-  id: 'ui.layer.new',
-  summary:
-    'Layer > New Layer exactly as the menu runs it: a pending stroke is finalized, then an empty layer is added above the active one ("Add Layer"), or a toast says why not in an Indexed document. Agents should use layer.add, which returns the new id. Returns nothing.',
-  surface: 'ui',
-  params: {},
-  run(): void {
-    useEditorStore.getState().addLayer();
-  },
-});
-
 export const uiLayerDuplicate = defineCommand({
   id: 'ui.layer.duplicate',
   summary:

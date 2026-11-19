@@ -329,7 +329,8 @@ export interface DocumentSlice {
   resizeCanvas: (newWidth: number, newHeight: number, anchorX: number, anchorY: number) => void;
   addBorder: (color: Color, widths: BorderWidths, placement: BorderPlacement, corners?: BorderCorners) => void;
   resizeImage: (newWidth: number, newHeight: number) => void;
-  convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => Promise<void>;
+  /** Resolves true once it has converted; false when it did nothing (already in that mode by the time its turn came). */
+  convertColorMode: (newMode: DocumentColorMode, options?: IndexedConversionOptions) => Promise<boolean>;
 
   // Multi-select
   toggleLayerSelection: (id: string) => void;
@@ -1019,7 +1020,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
 
   convertColorMode: (newMode, options) => convertColorModesInOrder(async () => {
     const s = get();
-    if (s.document.colorMode === newMode) return;
+    if (s.document.colorMode === newMode) return false;
 
     // Bake in-flight strokes into layer textures first, then snapshot — the
     // conversion overwrites those textures in place, so history must capture
@@ -1044,7 +1045,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     }
 
     const result = computeConvertColorMode(doc, newMode);
-    if (!result?.document) return;
+    if (!result?.document) return false;
     let nextDocument = result.document;
 
     const engine = getEngine();
@@ -1085,6 +1086,7 @@ export const createDocumentSlice: SliceCreator<DocumentSlice> = (set, get) => ({
     ts.setBackgroundColor(convertColorToDocMode(ts.backgroundColor, newMode, palette));
 
     s.notifyRender();
+    return true;
   }),
 
   toggleLayerSelection: (id) => {

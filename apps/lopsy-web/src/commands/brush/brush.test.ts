@@ -95,12 +95,12 @@ describe('brush.define', () => {
     expect(mocks.readSelectionBrushTip).not.toHaveBeenCalled();
   });
 
-  it('refuses an empty tip with the text the menu toasts, adding no preset', async () => {
+  it('refuses an empty tip silently with the text readSelectionBrushTip has already toasted, adding no preset', async () => {
     select();
     mocks.readSelectionBrushTip.mockResolvedValue(null);
     const count = useToolSettingsStore.getState().presets.length;
     const error = await failure(runCommand('brush.define', { name: 'x', color: true }));
-    expect([error.code, error.notice, error.message]).toEqual(['refused', 'info', 'The selection has no visible pixels, so the brush would be empty.']);
+    expect([error.code, error.notice, error.message]).toEqual(['refused', null, 'The selection has no visible pixels, so the brush would be empty.']);
     expect(useToolSettingsStore.getState().presets.length).toBe(count);
   });
 

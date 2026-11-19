@@ -90,14 +90,34 @@ describe('history.undo', () => {
     expect(labels()).toEqual({ undo: [], redo: ['Fill', 'Brush', 'New Document'] });
   });
 
-  it('refuses silently with nothing to undo', async () => {
+  it('still calls undo() with nothing to undo, as Edit > Undo does, then refuses silently', async () => {
     await runCommand('history.undo', { steps: 3 });
     const undo = spyOn('undo');
-    const error = await rejection(runCommand('history.undo', {}));
+    const pending = runCommand('history.undo', {});
+    expect(undo).toHaveBeenCalledTimes(1);
+    const error = await rejection(pending);
     expect(error.code).toBe('refused');
     expect(error.message).toBe('Nothing to undo.');
     expect(error.notice).toBeNull();
-    expect(undo).not.toHaveBeenCalled();
+    expect(labels()).toEqual({ undo: [], redo: ['Fill', 'Brush', 'New Document'] });
+  });
+
+  it('decides from what undo() did: a step it creates first is undone, not refused', async () => {
+    await runCommand('history.undo', { steps: 3 });
+    const undo = vi.fn(() => {
+      store().pushHistory('Dodge');
+      real.undo();
+    });
+    useEditorStore.setState({ undo });
+    await expect(runCommand('history.undo', {})).resolves.toEqual({ undo: [], redo: ['Dodge'] });
+  });
+
+  it('refuses steps over an empty history after calling undoBy, with the same message', async () => {
+    await runCommand('history.undo', { steps: 3 });
+    const undoBy = spyOn('undoBy');
+    const error = await rejection(runCommand('history.undo', { steps: 2 }));
+    expect(undoBy).toHaveBeenCalledWith(2);
+    expect(error.message).toBe('Nothing to undo.');
   });
 
   it('refuses more steps than there are, saying how many there are', async () => {
@@ -138,9 +158,12 @@ describe('history.redo', () => {
     await expect(pending).resolves.toEqual({ undo: ['New Document', 'Brush', 'Fill'], redo: [] });
   });
 
-  it('refuses silently with nothing to redo', async () => {
+  it('still calls redo() with nothing to redo, as Edit > Redo does, then refuses silently', async () => {
     await runCommand('history.redo', { steps: 2 });
-    const error = await rejection(runCommand('history.redo', {}));
+    const redo = spyOn('redo');
+    const pending = runCommand('history.redo', {});
+    expect(redo).toHaveBeenCalledTimes(1);
+    const error = await rejection(pending);
     expect(error.code).toBe('refused');
     expect(error.message).toBe('Nothing to redo.');
     expect(error.notice).toBeNull();
@@ -154,13 +177,15 @@ describe('history.redo', () => {
     expect(single.message).toBe('Only 3 steps to redo; asked for 4.');
   });
 
-  it('refuses while an uncommitted text layer\'s entry would clear the redo stack', async () => {
+  it('records an uncommitted text layer\'s entry, as Edit > Redo does, then refuses: recording it cleared the redo stack', async () => {
     const layerId = store().document.activeLayerId!;
     deferHistoryEntry({ ...store().undoStack[0]!, label: 'Add Text Layer' }, layerId);
     const redo = spyOn('redo');
     const error = await rejection(runCommand('history.redo', {}));
     expect(error.message).toBe('Nothing to redo.');
-    expect(redo).not.toHaveBeenCalled();
+    expect(error.notice).toBeNull();
+    expect(redo).toHaveBeenCalledTimes(1);
+    expect(labels()).toEqual({ undo: ['New Document', 'Add Text Layer'], redo: [] });
     discardDeferredHistoryEntry(layerId);
   });
 });

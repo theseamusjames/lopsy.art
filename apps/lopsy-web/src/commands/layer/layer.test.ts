@@ -134,12 +134,18 @@ describe('layer.add', () => {
     expect(add).not.toHaveBeenCalled();
   });
 
-  it('refuses in an Indexed document with the toast the UI shows', async () => {
+  it('in an Indexed document calls addLayer, which toasts, and then refuses silently with the same text', async () => {
     useEditorStore.setState({ document: { ...doc(), colorMode: 'indexed' } });
-    const error = await rejection(runCommand('layer.add', {}));
+    const add = spyOn('addLayer');
+    const { useNotificationsStore } = await import('../../app/notifications-store');
+    const toastsBefore = useNotificationsStore.getState().notifications.length;
+    const pending = runCommand('layer.add', {});
+    expect(add).toHaveBeenCalledTimes(1);
+    const error = await rejection(pending);
     expect(error.code).toBe('refused');
     expect(error.message).toBe('Indexed mode does not support layers. Convert to RGB first.');
-    expect(error.notice).toBe('info');
+    expect(error.notice).toBeNull();
+    expect(useNotificationsStore.getState().notifications.length).toBe(toastsBefore + 1);
     expect(doc().layers).toHaveLength(3);
   });
 });
@@ -399,6 +405,16 @@ describe('layer.merge-down', () => {
     await refusedWith(runCommand('layer.merge-down', { layer: 'Project' }), /^The active layer is a group, and the layer below it is inside it/);
     expect(merge).not.toHaveBeenCalled();
     expect(doc().activeLayerId).toBe(idOf('Layer 1'));
+  });
+
+  it('for the active layer still calls mergeDown, which flushes and does nothing, as Cmd+E does, then refuses silently', async () => {
+    store().setActiveLayer(idOf('Background'));
+    const merge = spyOn('mergeDown');
+    const pending = runCommand('layer.merge-down', {});
+    expect(merge).toHaveBeenCalledTimes(1);
+    const error = await rejection(pending);
+    expect([error.code, error.notice, error.message]).toEqual(['refused', null, 'There is no layer below the active layer to merge into.']);
+    expect(labels()).toEqual(['New Document']);
   });
 
   it('makes a named layer active first', async () => {

@@ -259,13 +259,12 @@ test.describe('the command API', () => {
     const ui = await describe(page, 'ui');
     expect(ui.map((c) => c.id)).toEqual([
       'ui.dialog.export', 'ui.dialog.filter', 'ui.dialog.help', 'ui.dialog.image', 'ui.dialog.select',
-      'ui.edit.clear-guides', 'ui.edit.define-brush', 'ui.edit.fill', 'ui.edit.redo', 'ui.edit.undo',
+      'ui.edit.define-brush',
       'ui.file.export-psd', 'ui.file.new', 'ui.file.open', 'ui.file.open-project', 'ui.file.quick-export-png', 'ui.file.save-project',
       'ui.filter.liquify', 'ui.filter.tilt-shift',
       'ui.help.agents',
-      'ui.image.mode',
-      'ui.layer.adjustment-layer', 'ui.layer.duplicate', 'ui.layer.new',
-      'ui.select.inverse',
+      'ui.image.indexed-color',
+      'ui.layer.adjustment-layer', 'ui.layer.duplicate',
       'ui.view.actual-size', 'ui.view.fit', 'ui.view.grid', 'ui.view.guides', 'ui.view.pixel-grid', 'ui.view.renderer',
       'ui.view.ruler-unit', 'ui.view.rulers', 'ui.view.seamless-pattern', 'ui.view.snap-to-grid', 'ui.view.snap-to-guides',
       'ui.view.snap-to-layers', 'ui.view.zoom-in', 'ui.view.zoom-out',

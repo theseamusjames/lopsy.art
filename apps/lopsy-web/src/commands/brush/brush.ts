@@ -30,7 +30,8 @@ export const brushDefine = defineCommand({
     }
     requireEngine();
     return readSelectionBrushTip(color).then((tip: BrushTipData | null) => {
-      if (!tip) throw new CommandError('refused', color ? EMPTY_COLOR_TIP_MESSAGE : EMPTY_TIP_MESSAGE, { notice: 'info' });
+      // readSelectionBrushTip has already toasted an empty tip.
+      if (!tip) throw new CommandError('refused', color ? EMPTY_COLOR_TIP_MESSAGE : EMPTY_TIP_MESSAGE);
       const preset = addBrushPreset(tip, name);
       return { id: preset.id, name: preset.name };
     });

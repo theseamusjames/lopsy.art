@@ -11,7 +11,7 @@ export function createSelectMenu(): MenuDef {
       commandItem('All', 'select.all', undefined, '⌘A'),
       // select.none with its default commit: false is clearSelection() alone (Cmd+D also commits).
       commandItem('Deselect', 'select.none', undefined, '⌘D'),
-      commandItem('Inverse', 'ui.select.inverse', undefined, '⇧⌘I'),
+      commandItem('Inverse', 'select.invert', undefined, '⇧⌘I'),
       { separator: true, label: '' },
       commandItem('Grow…', 'ui.dialog.select', { dialog: 'grow' }),
       commandItem('Shrink…', 'ui.dialog.select', { dialog: 'shrink' }),

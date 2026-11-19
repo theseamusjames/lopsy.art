@@ -5,7 +5,7 @@ export function createLayerMenu(): MenuDef {
   return {
     label: 'Layer',
     items: [
-      commandItem('New Layer', 'ui.layer.new', undefined, '⇧⌘N'),
+      commandItem('New Layer', 'layer.add', undefined, '⇧⌘N'),
       commandItem('Duplicate Layer', 'ui.layer.duplicate', undefined, '⌘J'),
       commandItem('Group Layers', 'layer.group', undefined, '⌘G'),
       { separator: true, label: '' },

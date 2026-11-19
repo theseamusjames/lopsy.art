@@ -488,6 +488,27 @@ test.describe('the Image menu and the image commands', () => {
     expect(api.layers.filter((l) => l.type !== 'group')).toHaveLength(1);
   });
 
+  test('a second doc.color-mode during a running conversion is queued as Image > Mode queues it, and refused when its turn finds nothing to do', async ({ page }) => {
+    const { api } = await compareUiAndApi(page, {
+      viaUi: async (p) => {
+        await clickMenu(p, 'Image', 'Mode', 'Lab Color');
+        await clickMenu(p, 'Image', 'Mode', 'Lab Color');
+        await expect.poll(() => colorMode(p)).toBe('lab');
+        await settle(p);
+      },
+      viaApi: async (p) => {
+        const [first, second] = await Promise.all([
+          run(p, { op: 'doc.color-mode', mode: 'lab' }),
+          runError(p, { op: 'doc.color-mode', mode: 'lab' }),
+        ]);
+        expect(first).toEqual({ colorMode: 'lab' });
+        expect(second).toEqual({ code: 'refused', message: 'The document is already in Lab mode.' });
+        await settle(p);
+      },
+    });
+    expect(api.history.undo.filter((label) => label === 'Convert to Lab')).toHaveLength(1);
+  });
+
   test('doc.color-mode refuses the current mode silently and indexed options with another mode', async ({ page }) => {
     await run(page, { op: 'doc.new', width: 60, height: 40 });
     expect(await runError(page, { op: 'doc.color-mode', mode: 'rgb' })).toEqual({

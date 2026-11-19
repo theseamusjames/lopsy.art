@@ -84,6 +84,13 @@ describe('guide commands', () => {
     expect(await failure(runCommand('guide.clear'))).toMatchObject({ code: 'refused', message: 'There are no guides to clear.' });
   });
 
+  it('guide.clear with no guides still clears the selected guide, as Edit > Clear Guides does, then refuses silently', async () => {
+    useUIStore.setState({ selectedGuideId: 'stale' });
+    const pending = runCommand('guide.clear');
+    expect(useUIStore.getState().selectedGuideId).toBeNull();
+    expect(await failure(pending)).toMatchObject({ code: 'refused', notice: null, message: 'There are no guides to clear.' });
+  });
+
   it('needs a document', async () => {
     useEditorStore.setState({ documentReady: false });
     expect((await failure(runCommand('guide.add', { orientation: 'vertical', position: 1 }))).code).toBe('unavailable');

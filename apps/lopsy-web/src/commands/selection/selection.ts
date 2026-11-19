@@ -167,13 +167,12 @@ export const selectNone = defineCommand({
 export const selectInvert = defineCommand({
   id: 'select.invert',
   summary:
-    'Inverts the selection, as Select > Inverse does ("Inverse Selection"): a pending Move-tool float is committed first. Inverting a selection of everything leaves an active, empty selection framed by the whole document, as the menu does. Returns whether a selection is active and its bounds.',
+    'Inverts the selection, as Select > Inverse and Cmd+Shift+I do ("Inverse Selection"): a pending Move-tool float is committed first, even with nothing selected, which is then refused. Inverting a selection of everything leaves an active, empty selection framed by the whole document, as the menu does. Returns whether a selection is active and its bounds.',
   surface: 'document',
   params: {},
   run(): SelectionResult {
     requireDocument();
-    requireSelection('invert');
-    invertSelectionAction();
+    if (!invertSelectionAction()) refuse('Nothing is selected to invert.');
     return selectionResult();
   },
 });
@@ -181,7 +180,7 @@ export const selectInvert = defineCommand({
 export const selectModify = defineCommand({
   id: 'select.modify',
   summary:
-    'Grows, shrinks or feathers the selection, as Apply in the Select > Grow…, Shrink… or Feather… dialog does ("Grow Selection", "Shrink Selection", "Feather Selection"): a pending Move-tool float is committed first. Refused, with the selection kept, when no pixel would remain selected. Returns whether a selection is active and its bounds.',
+    'Grows, shrinks or feathers the selection, as Apply in the Select > Grow…, Shrink… or Feather… dialog does ("Grow Selection", "Shrink Selection", "Feather Selection"): a pending Move-tool float is committed first, even with nothing selected, which is then refused. Refused, with the selection kept, when no pixel would remain selected. Returns whether a selection is active and its bounds.',
   surface: 'document',
   params: {
     kind: { type: 'string', enum: ['grow', 'shrink', 'feather'] },
@@ -198,7 +197,6 @@ export const selectModify = defineCommand({
     if (kind !== 'feather' && amount > 100) {
       throw new CommandError('invalid', `select.modify: amount must be from 1 to 100 for ${kind}, got ${amount}`);
     }
-    requireSelection(kind);
     const outcome = await modifySelection(kind, amount);
     if (outcome === 'empty') throw refusalError(EMPTY_MODIFIED_SELECTION);
     if (outcome === 'no-selection') refuse(`Nothing is selected to ${kind}.`);

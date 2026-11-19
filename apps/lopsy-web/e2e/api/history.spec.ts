@@ -3,7 +3,7 @@
  */
 import { test, expect, run, runError, compareUiAndApi, type Page } from './harness';
 import { undo, redo } from '../helpers';
-import { brushStroke, fillRect, historyLabels, redoLabels } from '../surface-helpers';
+import { brushStroke, clickMenu, fillRect, historyLabels, redoLabels, startTextEditing, toasts } from '../surface-helpers';
 import { docPixelHash } from '../surface-helpers-filters';
 
 interface NewDocumentResult {
@@ -152,5 +152,33 @@ test.describe('history refusals', () => {
       const error = await runError(page, { op });
       expect(error.code).toBe('unavailable');
     }
+  });
+});
+
+test.describe('history commands call the store first, as Edit > Undo and Redo do', () => {
+  test('Edit > Redo with an uncommitted new text layer records its "Add Text Layer" step, and history.redo does the same before refusing', async ({ page }) => {
+    const { api } = await compareUiAndApi(page, {
+      setup: (p) => startTextEditing(p, 40, 60, 'Hi'),
+      viaUi: (p) => clickMenu(p, 'Edit', 'Redo'),
+      viaApi: async (p) => {
+        expect(await runError(p, { op: 'history.redo' })).toEqual({ code: 'refused', message: 'Nothing to redo.' });
+      },
+    });
+    expect(api.history).toEqual({ undo: ['New Document', 'Add Text Layer'], redo: [] });
+  });
+
+  test('Edit > Undo with an empty history matches history.undo, which is refused silently', async ({ page }) => {
+    const { api } = await compareUiAndApi(page, {
+      setup: (p) => clickMenu(p, 'Edit', 'Undo'),
+      viaUi: async (p) => {
+        await clickMenu(p, 'Edit', 'Undo');
+        expect(await toasts(p)).toEqual([]);
+      },
+      viaApi: async (p) => {
+        expect(await runError(p, { op: 'history.undo' })).toEqual({ code: 'refused', message: 'Nothing to undo.' });
+        expect(await toasts(p)).toEqual([]);
+      },
+    });
+    expect(api.history).toEqual({ undo: [], redo: ['New Document'] });
   });
 });

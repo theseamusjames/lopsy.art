@@ -29,7 +29,7 @@ function indexedOptions(mode: DocumentColorMode, maxColors?: number, dither?: bo
 export const docColorMode = defineCommand({
   id: 'doc.color-mode',
   summary:
-    'Converts the document to another colour mode, as Image > Mode does ("Convert to <Mode>"); indexed takes the Indexed Color dialog\'s palette size and dithering, and flattens the layers into one first. Choosing the current mode is refused, as the menu does nothing then. Resolves once the conversion has finished. Returns the colour mode.',
+    'Converts the document to another colour mode, as Image > Mode does ("Convert to <Mode>"); indexed takes the Indexed Color dialog\'s palette size and dithering, and flattens the layers into one first. Conversions run one after another, each waiting for the one before, as the menu queues them; one that finds the document already in its mode when its turn comes does nothing and is refused. Checked for the document\'s mode. Resolves once the conversion has finished. Returns the colour mode.',
   surface: 'document',
   params: {
     mode: { type: 'string', enum: MODES },
@@ -43,13 +43,16 @@ export const docColorMode = defineCommand({
     },
     dither: { type: 'boolean', optional: true, description: 'Indexed only: Floyd-Steinberg dithering ("Dither"), default false.' },
   },
+  checked({ mode }): boolean {
+    return useEditorStore.getState().document.colorMode === mode;
+  },
   run({ mode, maxColors, dither }): Promise<ColorModeResult> {
-    const doc = requireDocument();
+    requireDocument();
     const options = indexedOptions(mode, maxColors, dither);
-    if (doc.colorMode === mode) throw new CommandError('refused', `The document is already in ${colorModeLabel(mode)} mode.`);
-    return useEditorStore.getState().convertColorMode(mode, options).then(() => {
+    return useEditorStore.getState().convertColorMode(mode, options).then((converted) => {
       const { colorMode } = useEditorStore.getState().document;
       if (colorMode !== mode) throw new CommandError('refused', `The document could not be converted to ${colorModeLabel(mode)}.`);
+      if (!converted) throw new CommandError('refused', `The document is already in ${colorModeLabel(mode)} mode.`);
       return { colorMode };
     });
   },

@@ -7,7 +7,7 @@
  */
 import { test, expect, run, runError, compareUiAndApi, snapshot, type Page } from './harness';
 import { createDocument, docToScreen, selectTool, setForegroundColor, setToolOption } from '../helpers';
-import { clickMenu, dragMarquee, fillRect, historyLabels, settle, toasts } from '../surface-helpers';
+import { clickMenu, dragMarquee, fillRect, floatSelection, historyLabels, settle, surfaceState, toasts } from '../surface-helpers';
 import { pressKey } from '../surface-helpers-keys';
 
 const RED = { r: 255, g: 0, b: 0 };
@@ -285,6 +285,26 @@ test.describe('the selection tools and Select menu, and the select commands', ()
       },
     });
     expect(api.history.undo).toEqual(['New Document', 'Inverse Selection', 'Fill']);
+  });
+
+  test('Select > Inverse with a live Move float and nothing selected commits the float, and so does select.invert before refusing', async ({ page }) => {
+    const { api } = await compareUiAndApi(page, {
+      setup: async (p) => {
+        await fillRect(p, 20, 20, 80, 60, RED);
+        await floatSelection(p, { x: 50, y: 40 }, { x: 90, y: 60 });
+        await clickMenu(p, 'Select', 'Deselect');
+        expect((await surfaceState(p)).hasFloat).toBe(true);
+      },
+      viaUi: async (p) => {
+        await clickMenu(p, 'Select', 'Inverse');
+        expect((await surfaceState(p)).hasFloat).toBe(false);
+      },
+      viaApi: async (p) => {
+        expect(await runError(p, { op: 'select.invert' })).toEqual({ code: 'refused', message: 'Nothing is selected to invert.' });
+        expect((await surfaceState(p)).hasFloat).toBe(false);
+      },
+    });
+    expect(api.selection.active).toBe(false);
   });
 
   for (const [item, kind, amount] of [['Grow…', 'grow', 10], ['Shrink…', 'shrink', 20], ['Feather…', 'feather', 5]] as const) {

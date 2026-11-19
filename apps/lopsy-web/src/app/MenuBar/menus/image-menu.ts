@@ -73,7 +73,9 @@ function createModeSubmenu(): MenuItem[] {
   // Indexed needs palette size and dithering up front, so its item opens a
   // dialog instead of converting on click.
   return MODE_MENU_ITEMS.map(({ mode, label }) =>
-    commandItem(mode === 'indexed' ? `${label}...` : label, 'ui.image.mode', { mode }),
+    mode === 'indexed'
+      ? commandItem(`${label}...`, 'ui.image.indexed-color')
+      : commandItem(label, 'doc.color-mode', { mode }),
   );
 }
 
