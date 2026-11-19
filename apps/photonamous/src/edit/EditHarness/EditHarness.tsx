@@ -228,12 +228,16 @@ export function EditHarness() {
           filmstrip={filmstrip.length > 1 ? { items: filmstrip, currentId: photo.asset.id, onOpen: (assetId) => dispatch({ kind: 'show', assetId }) } : undefined}
         />
       ) : (
-        <div className={styles.empty}>
+        <main className={styles.empty}>
           <h1 className={styles.title}>Edit view harness</h1>
           <p className={styles.hint}>Drop RAF, DNG, JPEG, PNG or WebP files here, or</p>
           {picker}
-          {message && <p className={styles.message}>{message}</p>}
-        </div>
+          {message && (
+            <p className={styles.message} role="alert">
+              {message}
+            </p>
+          )}
+        </main>
       )}
     </div>
   );

@@ -30,6 +30,11 @@
   color: var(--color-text-secondary);
 }
 
+/* The heading takes focus only to be read out when the view opens; it is not a control. */
+.fileName:focus {
+  outline: none;
+}
+
 .toolGroup {
   display: flex;
   align-items: center;

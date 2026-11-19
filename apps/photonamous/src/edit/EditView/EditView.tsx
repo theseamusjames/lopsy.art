@@ -1021,7 +1021,7 @@ export function EditView({
               />
             )}
             {isBefore && canEdit && <span className={styles.beforeBadge}>Before</span>}
-            {!(storedPreviewUrl && status.kind !== 'error' && !canEdit) && <LoadStatus status={status} onClose={onClose} />}
+            {!(storedPreviewUrl && status.kind !== 'error' && !canEdit) && <LoadStatus status={status} onClose={onClose} {...(closeLabel === 'Library' ? {} : { closeLabel })} />}
             {problem && (
               <div key={problem.id} className={styles.problem} role="alert" data-testid="edit-problem">
                 <span>{problem.text}</span>
