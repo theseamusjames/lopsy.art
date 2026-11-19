@@ -48,6 +48,11 @@
   accent-color: var(--color-accent);
 }
 
+.option input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
 .report {
   display: flex;
   flex-direction: column;
@@ -67,7 +72,7 @@
 }
 
 .error {
-  color: var(--color-error);
+  color: var(--ph-error-text);
   font-size: var(--font-size-sm);
 }
 

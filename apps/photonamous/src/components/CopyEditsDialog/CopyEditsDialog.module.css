@@ -20,6 +20,12 @@
   padding: 0;
 }
 
+.link:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
 .groups {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -36,4 +42,9 @@
 
 .option input {
   accent-color: var(--color-accent);
+}
+
+.option input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
 }

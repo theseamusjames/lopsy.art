@@ -46,7 +46,7 @@
 }
 
 .hint {
-  color: var(--color-text-secondary);
+  color: var(--ph-text-muted);
   font-size: var(--font-size-sm);
 }
 

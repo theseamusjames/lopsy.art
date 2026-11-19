@@ -34,7 +34,7 @@
 }
 
 .error {
-  color: var(--color-error);
+  color: var(--ph-error-text);
   font-size: var(--font-size-sm);
 }
 

@@ -30,6 +30,12 @@
   accent-color: var(--color-accent);
 }
 
+.option input:focus-visible,
+.range input:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
+}
+
 .muted {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -63,12 +69,21 @@
 .input {
   height: 28px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--ph-control-edge);
   border-radius: var(--radius-sm);
   background: var(--color-input-bg);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
   font-size: var(--font-size-md);
+}
+
+.select:focus-visible,
+.input:focus-visible,
+.number:focus-visible,
+.text:focus-visible {
+  border-color: var(--ph-focus-ring);
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
 }
 
 .input {
@@ -83,7 +98,7 @@
 
 .failures {
   list-style: none;
-  color: var(--color-error);
+  color: var(--ph-error-text);
   font-size: var(--font-size-sm);
 }
 
@@ -162,7 +177,7 @@
 .text {
   height: 28px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--ph-control-edge);
   border-radius: var(--radius-sm);
   background: var(--color-input-bg);
   color: var(--color-text-primary);

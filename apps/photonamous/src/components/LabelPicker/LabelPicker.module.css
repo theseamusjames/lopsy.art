@@ -40,8 +40,8 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  border-color: var(--color-border-strong);
-  color: var(--color-text-secondary);
+  border-color: var(--ph-control-edge);
+  color: var(--ph-text-muted);
 }
 
 .none[aria-checked='true'] {
@@ -51,6 +51,6 @@
 
 .swatch:focus-visible,
 .none:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 2px;
 }

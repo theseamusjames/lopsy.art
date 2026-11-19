@@ -45,7 +45,7 @@
 .itemDetail {
   display: block;
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--ph-text-muted);
 }
 
 .hint {

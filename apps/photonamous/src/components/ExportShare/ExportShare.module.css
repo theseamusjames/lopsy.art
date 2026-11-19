@@ -22,11 +22,16 @@
 .link {
   width: 100%;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-border-strong);
+  border: 1px solid var(--ph-control-edge);
   border-radius: var(--radius-sm);
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--ph-focus-ring);
+  outline-offset: 1px;
 }
 
 .warning {
@@ -35,6 +40,6 @@
 }
 
 .error {
-  color: var(--color-error);
+  color: var(--ph-error-text);
   font-size: var(--font-size-sm);
 }
