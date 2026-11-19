@@ -46,6 +46,7 @@ export function TabbedGroup({ title, tabs, sharedControls = [], recipe, isDisabl
         isDisabled={isDisabled}
         onChange={(v) => onChange(control, v)}
         onCommit={(v) => onCommit(control, v)}
+        {...(control.unit ? { unit: control.unit } : {})}
       />
     );
   };

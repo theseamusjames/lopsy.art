@@ -80,6 +80,7 @@ export function ControlGroup({ group, recipe, isDisabled, onChange, onCommit, on
               onChange={(v) => onChange(control, v)}
               onCommit={(v) => onCommit(control, v)}
               {...(displays?.[control.path] ? { display: displays[control.path] } : {})}
+              {...(control.unit ? { unit: control.unit } : {})}
             />
           );
         })}

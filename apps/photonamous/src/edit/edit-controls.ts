@@ -31,6 +31,8 @@ export interface ControlDef {
   /** Dotted recipe path, a key of RECIPE_RANGES. */
   readonly path: string;
   readonly label: string;
+  /** Said after the value by screen readers ("+0.50 EV"). */
+  readonly unit?: string;
   /** How the history names a change, when the slider label alone is ambiguous ('Red hue'). */
   readonly historyLabel?: string;
 }
@@ -54,7 +56,7 @@ export const GROUPS: readonly GroupDef[] = [
     id: 'tone',
     title: 'Tone',
     controls: [
-      { path: 'tone.exposure', label: 'Exposure' },
+      { path: 'tone.exposure', label: 'Exposure', unit: 'EV' },
       { path: 'tone.contrast', label: 'Contrast' },
       { path: 'tone.highlights', label: 'Highlights' },
       { path: 'tone.shadows', label: 'Shadows' },
@@ -288,7 +290,7 @@ export function resetChangesFor(recipe: Recipe, controls: readonly ControlDef[])
 
 /** The Framing group's Straighten angle, once the recipe has one (framing.angle). */
 export const FRAMING_GROUP: GroupDef | null =
-  'framing.angle' in RECIPE_RANGES ? { id: 'framing', title: 'Straighten', controls: [{ path: 'framing.angle', label: 'Angle', historyLabel: 'Straighten' }] } : null;
+  'framing.angle' in RECIPE_RANGES ? { id: 'framing', title: 'Straighten', controls: [{ path: 'framing.angle', label: 'Angle', unit: 'degrees', historyLabel: 'Straighten' }] } : null;
 
 /** The groups a new preset starts with: the ones this edit changed, framing left out (spec 5.4). */
 export function changedGroups(recipe: Recipe): RecipeGroupId[] {
