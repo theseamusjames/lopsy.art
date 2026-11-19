@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ClipboardCopy, ClipboardPaste, CopyPlus, Download, Maximize, Paintbrush, SlidersHorizontal, Star, Trash2 } from 'lucide-react';
 import { parseItem, type ItemId } from '../../library/items';
 import { useUi } from '../../app/store';
 import { askDeleteTargets, makeShownVersion, newVersion, openEdit, openFocusedInLopsy, runCommand } from '../../app/commands';
+import { useMenuKeys } from '../Menu/use-menu-keys';
 import styles from './TileMenu.module.css';
 
 interface TileMenuProps {
@@ -13,9 +14,13 @@ interface TileMenuProps {
   onClose: () => void;
 }
 
-/** The grid's right-click menu: what can be done with the selected photos. */
+/**
+ * The grid's right-click menu: what can be done with the selected photos.
+ * It is drawn at the end of the page rather than inside the grid, whose
+ * rows may hold only cells.
+ */
 export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
-  const ref = useRef<HTMLDivElement>(null);
+  const { menuRef, onMenuKeyDown } = useMenuKeys({ isOpen: true, onClose });
   const selected = useUi((s) => s.selection.ids.size);
   const copied = useUi((s) => s.copiedEdits);
   const single = selected <= 1;
@@ -23,32 +28,15 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
   const parsed = focus === null ? null : parseItem(focus);
   const focusedVersion = parsed && parsed.versionId !== null ? { assetId: parsed.assetId, versionId: parsed.versionId } : null;
 
-  useEffect(() => {
-    ref.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey, true);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey, true);
-    };
-  }, [onClose]);
-
   const item = (label: string, icon: React.ReactNode, run: () => void, disabled = false) => (
     <button
       type="button"
       role="menuitem"
+      tabIndex={-1}
       className={styles.item}
-      disabled={disabled}
+      aria-disabled={disabled || undefined}
       onClick={() => {
+        if (disabled) return;
         onClose();
         run();
       }}
@@ -58,12 +46,14 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
     </button>
   );
 
-  return (
+  return createPortal(
     <div
-      ref={ref}
+      ref={menuRef}
       className={styles.menu}
       role="menu"
       aria-label="Photo actions"
+      tabIndex={-1}
+      onKeyDown={onMenuKeyDown}
       style={{ '--menu-x': `${x}px`, '--menu-y': `${y}px` } as React.CSSProperties}
     >
       {item('Look at it large', <Maximize size={14} />, () => runCommand('open-single', orderedIds), !single)}
@@ -83,6 +73,7 @@ export function TileMenu({ x, y, orderedIds, onClose }: TileMenuProps) {
       <hr className={styles.rule} />
       {item('Export…', <Download size={14} />, () => useUi.getState().openDialog('export'))}
       {item('Move to the trash…', <Trash2 size={14} />, askDeleteTargets)}
-    </div>
+    </div>,
+    document.body,
   );
 }
