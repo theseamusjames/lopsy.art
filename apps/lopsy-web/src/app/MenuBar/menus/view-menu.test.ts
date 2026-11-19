@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import '../../../test/canvas-mock';
 import { describe, it, expect, beforeEach } from 'vitest';
+import '../../../commands/ui/view';
+import { invokeFromUi } from '../../../commands/invoke-from-ui';
 import { useUIStore } from '../../ui-store';
 import { createViewMenu } from './view-menu';
+import type { MenuItem } from './types';
+
+function choose(item: MenuItem | undefined): void {
+  invokeFromUi(item!.command!.id, item!.command!.params);
+}
 
 function unitsSubmenu() {
   const item = createViewMenu().items.find((i) => i.label === 'Units');
@@ -26,11 +33,11 @@ describe('View → Units', () => {
   });
 
   it('picking a unit updates the store and the checkmark follows on the next build', () => {
-    unitsSubmenu()[2]!.action!();
+    choose(unitsSubmenu()[2]);
     expect(useUIStore.getState().rulerUnit).toBe('in');
     expect(unitsSubmenu().map((i) => i.checked)).toEqual([false, false, true, false]);
 
-    unitsSubmenu()[3]!.action!();
+    choose(unitsSubmenu()[3]);
     expect(useUIStore.getState().rulerUnit).toBe('mm');
     expect(unitsSubmenu().map((i) => i.checked)).toEqual([false, false, false, true]);
   });

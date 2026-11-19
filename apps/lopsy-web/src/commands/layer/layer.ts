@@ -12,7 +12,7 @@ import {
 } from '../context';
 import { useEditorStore } from '../../app/editor-store';
 import { layerCreationRefusal } from '../../app/store/document-slice';
-import { mergeDownRefusal } from '../../app/store/actions/merge-down';
+import { canMergeDown, mergeDownRefusal } from '../../app/store/actions/merge-down';
 import { computeDropLayer, type LayerDropTarget } from '../../app/store/actions/drop-layer';
 import { currentDropTarget } from '../../panels/LayerPanel/drop-target';
 import { blendModeGroupsFor } from '../../components/BlendModeSelect/blend-mode-groups';
@@ -327,6 +327,9 @@ export const layerMergeDown = defineCommand({
     'Merges a layer into the layer directly below it in the same group, as Layer > Merge Down does; a `layer` other than the active one is made active first, as a click on its row would. Returns the id of the merged layer, which is active after.',
   surface: 'document',
   params: { layer: layerRefSpec },
+  enabled(): boolean {
+    return canMergeDown(currentDocument());
+  },
   run({ layer: ref }): CreatedLayer {
     const doc = requireDocument();
     const layer = resolveLayer(ref);

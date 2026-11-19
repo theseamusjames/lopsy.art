@@ -8,16 +8,10 @@ import { transformTextLayerInDocument } from '../../text-layer-transform';
 import { notifyInfo } from '../../notifications-store';
 import { ROTATE_CCW, ROTATE_CW } from '../../../tools/text/text-transform';
 import type { MenuDef, MenuItem } from './types';
+import { commandItem } from './command-item';
 import { rotatedTextureOrigin } from '../../../layers/rotate-90';
 import { remapLayerMaskThrough } from '../../store/actions/_helpers/remap-layer-masks';
 import { layerRotation90 } from '../../../layers/mask-remap';
-import {
-  applyAutoColor,
-  applyAutoContrast,
-  applyAutoTone,
-  flipActiveLayer,
-  rotateImage,
-} from '../../image-actions';
 
 export async function rotateActiveLayer(direction: 'cw' | 'ccw'): Promise<void> {
   const activeId = useEditorStore.getState().document.activeLayerId;
@@ -75,44 +69,32 @@ const MODE_MENU_ITEMS: readonly { mode: DocumentColorMode; label: string }[] = [
   { mode: 'lab', label: 'Lab Color' },
 ];
 
-function createModeSubmenu(
-  colorMode: DocumentColorMode,
-  convertColorMode: (mode: DocumentColorMode) => void,
-  showDialog: (id: ImageDialogId) => void,
-): MenuItem[] {
-  return MODE_MENU_ITEMS.map(({ mode, label }) => ({
-    // Indexed needs palette size and dithering up front, so it opens a dialog
-    // instead of converting on click.
-    label: mode === 'indexed' ? `${label}...` : label,
-    checked: colorMode === mode,
-    action: mode === 'indexed'
-      ? () => showDialog('convert-to-indexed')
-      : () => convertColorMode(mode),
-  }));
+function createModeSubmenu(): MenuItem[] {
+  // Indexed needs palette size and dithering up front, so its item opens a
+  // dialog instead of converting on click.
+  return MODE_MENU_ITEMS.map(({ mode, label }) =>
+    commandItem(mode === 'indexed' ? `${label}...` : label, 'ui.image.mode', { mode }),
+  );
 }
 
-export function createImageMenu(
-  showDialog: (id: ImageDialogId) => void,
-  colorMode: DocumentColorMode,
-  convertColorMode: (mode: DocumentColorMode) => void,
-): MenuDef {
+export function createImageMenu(): MenuDef {
   return {
   label: 'Image',
   items: [
-    { label: 'Mode', submenu: createModeSubmenu(colorMode, convertColorMode, showDialog) },
+    { label: 'Mode', submenu: createModeSubmenu() },
     { separator: true, label: '' },
-    { label: 'Canvas Size...', action: () => showDialog('canvas-size') },
-    { label: 'Image Size...', action: () => showDialog('image-size') },
-    { label: 'Border...', action: () => showDialog('border') },
+    commandItem('Canvas Size...', 'ui.dialog.image', { dialog: 'canvas-size' }),
+    commandItem('Image Size...', 'ui.dialog.image', { dialog: 'image-size' }),
+    commandItem('Border...', 'ui.dialog.image', { dialog: 'border' }),
     { separator: true, label: '' },
-    { label: 'Auto Tone', shortcut: '\u21E7\u2318L', action: applyAutoTone },
-    { label: 'Auto Contrast', shortcut: '\u2325\u21E7\u2318L', action: applyAutoContrast },
-    { label: 'Auto Color', shortcut: '\u21E7\u2318B', action: applyAutoColor },
+    commandItem('Auto Tone', 'image.auto', { kind: 'tone' }, '\u21E7\u2318L'),
+    commandItem('Auto Contrast', 'image.auto', { kind: 'contrast' }, '\u2325\u21E7\u2318L'),
+    commandItem('Auto Color', 'image.auto', { kind: 'color' }, '\u21E7\u2318B'),
     { separator: true, label: '' },
-    { label: 'Rotate 90\u00B0 CW', action: () => rotateImage('cw') },
-    { label: 'Rotate 90\u00B0 CCW', action: () => rotateImage('ccw') },
-    { label: 'Flip Horizontal', action: () => void flipActiveLayer('horizontal') },
-    { label: 'Flip Vertical', action: () => void flipActiveLayer('vertical') },
+    commandItem('Rotate 90\u00B0 CW', 'image.rotate', { direction: 'cw' }),
+    commandItem('Rotate 90\u00B0 CCW', 'image.rotate', { direction: 'ccw' }),
+    commandItem('Flip Horizontal', 'image.flip-layer', { axis: 'horizontal' }),
+    commandItem('Flip Vertical', 'image.flip-layer', { axis: 'vertical' }),
   ],
   };
 }

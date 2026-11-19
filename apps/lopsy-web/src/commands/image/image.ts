@@ -203,6 +203,9 @@ export const imageCropToSelection = defineCommand({
     'Crops the canvas to the selection\'s bounds and drops the selection, as Edit > Crop does ("Crop Canvas"). Refused with nothing selected, where the menu item is disabled. Returns the new size.',
   surface: 'document',
   params: {},
+  enabled(): boolean {
+    return store().selection.active;
+  },
   run(): SizeResult {
     requireDocument();
     if (!store().selection.active || !store().selection.bounds) throw new CommandError('refused', 'Nothing is selected to crop to.');

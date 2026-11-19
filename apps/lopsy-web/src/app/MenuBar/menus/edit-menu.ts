@@ -1,36 +1,28 @@
-import { useEditorStore } from '../../editor-store';
-import { useUIStore } from '../../ui-store';
-import { fillSelection } from '../../fill-selection';
-import { pasteInternalClipboard } from '../../paste-or-open';
-import { cropToSelection } from '../../crop-to-selection';
-import { definePattern } from '../pattern-actions';
-import { defineBrush } from '../brush-actions';
-import type { FilterDialogId } from '../filter-actions';
+import { commandItem } from './command-item';
 import type { MenuDef } from './types';
 
-export function createEditMenu(showFilterDialog: (id: FilterDialogId) => void): MenuDef {
-  const hasSelection = useEditorStore.getState().selection.active;
+export function createEditMenu(): MenuDef {
   return {
     label: 'Edit',
     items: [
-      { label: 'Undo', shortcut: '⌘Z', action: () => useEditorStore.getState().undo() },
-      { label: 'Redo', shortcut: '⇧⌘Z', action: () => useEditorStore.getState().redo() },
+      commandItem('Undo', 'ui.edit.undo', undefined, '⌘Z'),
+      commandItem('Redo', 'ui.edit.redo', undefined, '⇧⌘Z'),
       { separator: true, label: '' },
-      { label: 'Cut', shortcut: '⌘X', action: () => useEditorStore.getState().cut() },
-      { label: 'Copy', shortcut: '⌘C', action: () => useEditorStore.getState().copy() },
-      { label: 'Copy Merged', shortcut: '⇧⌘C', action: () => void useEditorStore.getState().copyMerged() },
-      { label: 'Paste', shortcut: '⌘V', action: () => pasteInternalClipboard() },
+      commandItem('Cut', 'clipboard.cut', undefined, '⌘X'),
+      commandItem('Copy', 'clipboard.copy', undefined, '⌘C'),
+      commandItem('Copy Merged', 'clipboard.copy-merged', undefined, '⇧⌘C'),
+      commandItem('Paste', 'clipboard.paste', undefined, '⌘V'),
       { separator: true, label: '' },
-      { label: 'Fill', shortcut: '⇧F5', action: () => fillSelection() },
-      { label: 'Fill with Pattern...', action: () => showFilterDialog('pattern-fill') },
+      commandItem('Fill', 'ui.edit.fill', undefined, '⇧F5'),
+      commandItem('Fill with Pattern...', 'ui.dialog.filter', { dialog: 'pattern-fill' }),
       { separator: true, label: '' },
-      { label: 'Crop', action: () => cropToSelection(), disabled: !hasSelection },
+      commandItem('Crop', 'image.crop-to-selection'),
       { separator: true, label: '' },
-      { label: 'Define Pattern', action: () => definePattern() },
-      { label: 'Define Brush...', action: () => defineBrush(false), disabled: !hasSelection },
-      { label: 'Define Color Brush...', action: () => defineBrush(true), disabled: !hasSelection },
+      commandItem('Define Pattern', 'pattern.define'),
+      commandItem('Define Brush...', 'ui.edit.define-brush', { color: false }),
+      commandItem('Define Color Brush...', 'ui.edit.define-brush', { color: true }),
       { separator: true, label: '' },
-      { label: 'Clear Guides', action: () => useUIStore.getState().clearGuides() },
+      commandItem('Clear Guides', 'ui.edit.clear-guides'),
     ],
   };
 }

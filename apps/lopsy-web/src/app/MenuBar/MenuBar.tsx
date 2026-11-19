@@ -51,6 +51,8 @@ import {
   type SelectionModifyOutcome,
 } from '../selection-actions';
 import { announceRefusal } from '../../commands/refusal';
+import { invokeFromUi } from '../../commands/invoke-from-ui';
+import { registerDialogOpener, unregisterDialogOpener } from './dialog-openers';
 import { BrandLinks } from '../../components/BrandLinks/BrandLinks';
 import styles from './MenuBar.module.css';
 
@@ -100,10 +102,24 @@ export function MenuBar() {
     setSelectDialog(id);
   }, []);
 
-  const colorMode = useEditorStore((s) => s.document.colorMode);
-  const convertColorMode = useEditorStore((s) => s.convertColorMode);
+  // The ui.dialog.* commands open these dialogs through the registered openers.
+  useEffect(() => {
+    registerDialogOpener('filter', showFilterDialog);
+    registerDialogOpener('image', showImageDialog);
+    registerDialogOpener('help', showHelpDialog);
+    registerDialogOpener('select', showSelectDialog);
+    return () => {
+      unregisterDialogOpener('filter');
+      unregisterDialogOpener('image');
+      unregisterDialogOpener('help');
+      unregisterDialogOpener('select');
+    };
+  }, [showFilterDialog, showImageDialog, showHelpDialog, showSelectDialog]);
 
-  const menus = getMenus(showFilterDialog, showImageDialog, showHelpDialog, showSelectDialog, colorMode, convertColorMode);
+  // A colour-mode change re-renders the bar, so Image > Mode's checkmark follows it.
+  useEditorStore((s) => s.document.colorMode);
+
+  const menus = getMenus();
 
   const handleMenuClick = useCallback((index: number) => {
     setOpenSubmenu(null);
@@ -131,8 +147,9 @@ export function MenuBar() {
   }, []);
 
   const handleItemClick = useCallback((item: MenuItem) => {
-    if (item.disabled || !item.action) return;
-    item.action();
+    if (item.disabled || (!item.action && !item.command)) return;
+    if (item.command) invokeFromUi(item.command.id, item.command.params);
+    else item.action?.();
     setOpenSubmenu(null);
     setOpenMenu(null);
   }, []);

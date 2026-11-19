@@ -231,6 +231,9 @@ export const selectToPath = defineCommand({
     'Traces the selection\'s outline into new paths, as Select > Selection → Path does ("Selection to Path"); the selection is kept. Returns whether a selection is active and its bounds.',
   surface: 'document',
   params: {},
+  enabled(): boolean {
+    return store().selection.active;
+  },
   run(): SelectionResult {
     requireDocument();
     requireSelection('turn into a path');

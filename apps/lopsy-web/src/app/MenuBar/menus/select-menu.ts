@@ -1,26 +1,23 @@
-import { useEditorStore } from '../../editor-store';
-import { invertSelectionAction, selectAll, selectionToPathAction, type SelectionModifyKind } from '../../selection-actions';
+import type { SelectionModifyKind } from '../../selection-actions';
+import { commandItem } from './command-item';
 import type { MenuDef } from './types';
 
 export type SelectDialogId = SelectionModifyKind;
 
-export function createSelectMenu(showDialog: (id: SelectDialogId) => void): MenuDef {
+export function createSelectMenu(): MenuDef {
   return {
     label: 'Select',
     items: [
-      { label: 'All', shortcut: '⌘A', action: () => selectAll() },
-      { label: 'Deselect', shortcut: '⌘D', action: () => useEditorStore.getState().clearSelection() },
-      { label: 'Inverse', shortcut: '⇧⌘I', action: () => invertSelectionAction() },
+      commandItem('All', 'select.all', undefined, '⌘A'),
+      // select.none with its default commit: false is clearSelection() alone (Cmd+D also commits).
+      commandItem('Deselect', 'select.none', undefined, '⌘D'),
+      commandItem('Inverse', 'ui.select.inverse', undefined, '⇧⌘I'),
       { separator: true, label: '' },
-      { label: 'Grow…', action: () => showDialog('grow') },
-      { label: 'Shrink…', action: () => showDialog('shrink') },
-      { label: 'Feather…', action: () => showDialog('feather') },
+      commandItem('Grow…', 'ui.dialog.select', { dialog: 'grow' }),
+      commandItem('Shrink…', 'ui.dialog.select', { dialog: 'shrink' }),
+      commandItem('Feather…', 'ui.dialog.select', { dialog: 'feather' }),
       { separator: true, label: '' },
-      {
-        label: 'Selection → Path',
-        action: () => selectionToPathAction(),
-        disabled: !useEditorStore.getState().selection.active,
-      },
+      commandItem('Selection → Path', 'select.to-path'),
     ],
   };
 }

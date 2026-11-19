@@ -4,6 +4,8 @@ import { contextOptions, createImageDataFromArray } from '../../../engine/color-
 import { getEngine } from '../../../engine-wasm/engine-state';
 import { compositeForExport, getCompositeSize } from '../../../engine-wasm/wasm-bridge';
 import type { MenuDef } from './types';
+import { commandItem } from './command-item';
+import { registerDialogOpener, unregisterDialogOpener } from '../dialog-openers';
 import { exportPsdFile, importPsdFile } from '../../../io/psd';
 import { describeError, notifyError } from '../../notifications-store';
 import { finalizePendingStrokeGlobal } from '../../interactions/pending-stroke';
@@ -55,15 +57,22 @@ export function openFileFromDisk(): void {
   input.click();
 }
 
-/** Callback registry so MenuBar.tsx can open the Export dialog in response to
- *  a File-menu action without creating a circular import. MenuBar registers
- *  its setter once on mount. */
-let openExportDialogFn: (() => void) | null = null;
+/** File > New: the unsaved-changes confirm, then the New Document modal. */
+export function startNewDocument(): void {
+  if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true);
+}
+
+/** File > Save Project: the download, with a toast if it fails. */
+export function saveProjectFromMenu(): void {
+  saveProject().catch((err) => notifyError(`Save failed: ${describeError(err)}`));
+}
+
+/** MenuBar registers its Export dialog opener once on mount, so ui.dialog.export can open it. */
 export function registerOpenExportDialog(fn: () => void): void {
-  openExportDialogFn = fn;
+  registerDialogOpener('export', fn);
 }
 export function unregisterOpenExportDialog(): void {
-  openExportDialogFn = null;
+  unregisterDialogOpener('export');
 }
 
 /** Quick-export using the WASM engine's GPU compositor (no dialog). */
@@ -186,17 +195,19 @@ function downloadExport(pending: Promise<EncodedImage | null>, filename: string)
     .catch(reportExportError);
 }
 
-export const fileMenu: MenuDef = {
-  label: 'File',
-  items: [
-    { label: 'New', shortcut: '⌘N', action: () => { if (confirmIfDirty()) useUIStore.getState().setShowNewDocumentModal(true); } },
-    { label: 'Open...', shortcut: '⌘O', action: () => openFileFromDisk() },
-    { separator: true, label: '' },
-    { label: 'Save Project', shortcut: '⌘S', action: () => { saveProject().catch((err) => notifyError(`Save failed: ${describeError(err)}`)); } },
-    { label: 'Open Project...', action: () => openProjectFromDisk() },
-    { separator: true, label: '' },
-    { label: 'Export…', shortcut: '⌥⇧⌘E', action: () => openExportDialogFn?.() },
-    { label: 'Quick Export PNG', shortcut: '⇧⌘E', action: () => exportCanvas('png') },
-    { label: 'Export PSD', action: () => void exportPsdFile(16) },
-  ],
-};
+export function createFileMenu(): MenuDef {
+  return {
+    label: 'File',
+    items: [
+      commandItem('New', 'ui.file.new', undefined, '⌘N'),
+      commandItem('Open...', 'ui.file.open', undefined, '⌘O'),
+      { separator: true, label: '' },
+      commandItem('Save Project', 'ui.file.save-project', undefined, '⌘S'),
+      commandItem('Open Project...', 'ui.file.open-project'),
+      { separator: true, label: '' },
+      commandItem('Export…', 'ui.dialog.export', undefined, '⌥⇧⌘E'),
+      commandItem('Quick Export PNG', 'ui.file.quick-export-png', undefined, '⇧⌘E'),
+      commandItem('Export PSD', 'ui.file.export-psd'),
+    ],
+  };
+}
