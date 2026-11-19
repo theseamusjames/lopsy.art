@@ -41,7 +41,6 @@ import { onScreenHdrChange } from '../engine-wasm/screen-output';
 import { expandLayerToDocSize, hasFloat } from '../engine-wasm/wasm-bridge';
 import { cropLayerToContentIfMeasured } from './crop-layer-to-content';
 import { readLayerContentRectLocal } from './layer-content-rect';
-import { invalidateCachedSnapshot } from './store/history-slice';
 import { handleGpuContextLost, handleGpuContextRestored } from './gpu-context-loss';
 import { backupLayersToCpu, layerBackupTime, pauseLayerBackup, restoreLayerBackup } from './gpu-layer-backup';
 import { clearJsPixelData } from './store/clear-js-pixel-data';
@@ -109,7 +108,6 @@ function renderFrameGpu(
             const now = croppable();
             if (!now || now.eng !== first.eng) return;
             const { eng, currentOld } = now;
-            invalidateCachedSnapshot(oldId);
             const result = cropLayerToContentIfMeasured(eng, oldId) ?? [];
             if (result.length !== 4 || (result[2] ?? 0) <= 0) return;
             croppedLayerIds.add(oldId);

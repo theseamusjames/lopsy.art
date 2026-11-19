@@ -682,3 +682,15 @@ identity, per layer) and `floatLayerSelection` lifts through a mask with the
 resampling's coverage divided back out. While a transform is still pending
 the store's `selection` deliberately holds the *pre-transform* mask and
 bounds; the float and the ants re-derive from it through `uiStore.transform`.
+
+## Glyph outlines are filled by our own rasterizer, not zeno
+
+zeno (swash's `Render`) sums signed area per pixel and clamps it, so where
+two contours of one glyph overlap (variable fonts never merge them) and
+both have an edge in a pixel, that edge pixel is drawn about twice as
+bright (#1806). `render_glyph_unhinted` still lets `Render` handle colour
+outlines and bitmaps, but fills plain outlines with
+`engine/src/document/text/glyph_raster.rs`: 64 scanlines per pixel row,
+crossings walked with a winding count so overlaps merge before coverage is
+taken. `engine/tests/fixtures/AzeretMono-wght-latin.woff2` (served by
+`e2e/font-fixtures.ts`) has the overlapping P that reproduces it.

@@ -35,6 +35,7 @@ import type {
 import { DEFAULT_TRANSFORM_FIELDS, withMoveGesture } from './interaction-types';
 import { translateSelectionMask } from './quick-mask-move';
 import { floatLayerSelection } from './float-layer-selection';
+import { wholeLayerFloatFor, wholeLayerSelectionAt } from './whole-layer-float';
 import { beginQuickMaskContentMove, endQuickMaskContentMove, moveQuickMaskContent } from './quick-mask-content-move';
 import { nudgeHeldSelection } from './selection-nudge';
 import { applyMaskFollow, beginMaskFollow, endMaskFollow, isMaskFollowActive, nudgeMasksWithLayers } from './move-layer-masks';
@@ -231,17 +232,24 @@ function beginSelectionDrag(
     // this copy behind and carries a new one, as a fresh Alt float does.
     if (isStampingLiveFloat && engine && hasFloat(engine)) {
       restoreFloatBase(engine, activeLayerId);
+      const { wholeLayer } = floatingSelectionRef.current;
+      if (wholeLayer) wholeLayer.isLayerOnly = false;
     }
   } else if (prebuilt) {
     // Prefloat already set up the GPU float
+    const wholeLayer = wholeLayerFloatFor(activeLayerId, prebuilt.mask, true);
     floatingSelectionRef.current = {
       offsetX: 0,
       offsetY: 0,
       originalMask: prebuilt.mask,
-      originalBounds: { ...prebuilt.bounds },
+      originalBounds: { ...(wholeLayer?.content.rect ?? prebuilt.bounds) },
       gpuResident: true,
+      wholeLayer,
     };
   } else if (engine && selNow.active && selNow.mask) {
+    // Asked before the lift: a whole-layer lift moves the part of the layer
+    // past the canvas edge too, so the moved selection is framed on all of it.
+    const wholeLayer = wholeLayerFloatFor(activeLayerId, selNow.mask, !altKey);
     floatLayerSelection(engine, activeLayerId, { ...selNow, mask: selNow.mask });
 
     // The float expanded the layer texture; mirror its full rect into the
@@ -263,8 +271,9 @@ function beginSelectionDrag(
       offsetX: 0,
       offsetY: 0,
       originalMask: new Uint8ClampedArray(selNow.mask),
-      originalBounds: { ...selNow.bounds! },
+      originalBounds: { ...(wholeLayer?.content.rect ?? selNow.bounds!) },
       gpuResident: true,
+      wholeLayer,
     };
   }
 
@@ -895,7 +904,14 @@ export function handleMoveUp(
   // Materialize the translated selection mask now that the drag is done.
   // During the drag we only updated bounds to avoid per-move mask copies.
   const moveGesture = state.gesture.kind === 'move' ? state.gesture : null;
-  if (moveGesture?.originalMask && moveGesture.originalBounds) {
+  const { wholeLayer } = floatingSelectionRef.current;
+  if (wholeLayer && state.layerId) {
+    const edState = useEditorStore.getState();
+    const { width: docW, height: docH } = edState.document;
+    const { mask, bounds } = wholeLayerSelectionAt(state.layerId, wholeLayer, dropOffset.x, dropOffset.y, docW, docH);
+    claimLiveFloat(state.layerId, mask);
+    edState.setSelection(bounds, mask, docW, docH);
+  } else if (moveGesture?.originalMask && moveGesture.originalBounds) {
     const edState = useEditorStore.getState();
     const { width: docW, height: docH } = edState.document;
     const dx = floatingSelectionRef.current.offsetX;
@@ -1006,6 +1022,7 @@ export function handleNudgeMove(
 
     // Float selection on GPU if not already floating
     if (!floatingSelectionRef.current) {
+      const wholeLayer = wholeLayerFloatFor(activeId, sel.mask, true);
       floatLayerSelection(engine, activeId, { ...sel, mask: sel.mask });
       // Leave the pixel version alone until the hold ends (flushNudgeMask):
       // a bump here queued a synchronous thumbnail readback mid-hold (#1383).
@@ -1017,8 +1034,9 @@ export function handleNudgeMove(
         offsetX: 0,
         offsetY: 0,
         originalMask: new Uint8ClampedArray(sel.mask),
-        originalBounds: { ...sel.bounds! },
+        originalBounds: { ...(wholeLayer?.content.rect ?? sel.bounds!) },
         gpuResident: true,
+        wholeLayer,
       };
     }
 
@@ -1050,6 +1068,7 @@ export function handleNudgeMove(
       originalBounds: origBounds,
       offsetX: newOffsetX,
       offsetY: newOffsetY,
+      wholeLayer: floatingSelectionRef.current.wholeLayer,
     });
     editor.setSelectionBounds(newBounds);
     useUIStore.getState().setTransform(createTransformState(newBounds));
