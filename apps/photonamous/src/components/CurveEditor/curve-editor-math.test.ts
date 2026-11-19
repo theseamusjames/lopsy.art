@@ -65,6 +65,13 @@ describe('keyboard editing', () => {
     expect(keyMovePoint(curve, 1, 'End', false)?.[1]?.y).toBe(1);
   });
 
+  it('steps onto whole levels, so every press reads one more', () => {
+    let points = curve;
+    for (let i = 0; i < 3; i++) points = keyMovePoint(points, 1, 'ArrowUp', true) ?? points;
+    expect(toLevel(points[1]?.y ?? 0)).toBe(158);
+    expect(toLevel(keyMovePoint(points, 1, 'ArrowLeft', false)?.[1]?.x ?? 0)).toBe(127);
+  });
+
   it('keeps end points at their ends and outputs in range', () => {
     expect(keyMovePoint(curve, 0, 'ArrowRight', true)?.[0]).toEqual({ x: 0, y: 0 });
     expect(keyMovePoint(curve, 2, 'ArrowUp', false)?.[2]).toEqual({ x: 1, y: 1 });

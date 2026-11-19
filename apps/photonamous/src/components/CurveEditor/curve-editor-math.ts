@@ -83,32 +83,32 @@ export function toLevel(value: number): number {
   return Math.round(clamp01(value) * 255);
 }
 
-/** One level, the step of an arrow key; Shift, Page Up and Page Down move ten. */
-const LEVEL = 1 / 255;
-
 /**
  * The points after a key on point `index`, or null for a key a point does
  * not take. Up and down move its output; left and right its input, for
- * inner points only (an end point takes them and stays); Home and End put
- * its output at black and white.
+ * inner points only (an end point takes them and stays); a level a press,
+ * ten with Shift and for Page Up and Page Down, onto whole levels so each
+ * press reads one more or less. Home and End put its output at black and
+ * white.
  */
 export function keyMovePoint(points: readonly CurvePoint[], index: number, key: string, isLarge: boolean): CurvePoint[] | null {
   const point = points[index];
   if (!point) return null;
-  const step = (isLarge ? 10 : 1) * LEVEL;
+  const step = isLarge ? 10 : 1;
+  const by = (value: number, levels: number) => (toLevel(value) + levels) / 255;
   switch (key) {
     case 'ArrowUp':
-      return movePoint(points, index, point.x, point.y + step);
+      return movePoint(points, index, point.x, by(point.y, step));
     case 'ArrowDown':
-      return movePoint(points, index, point.x, point.y - step);
+      return movePoint(points, index, point.x, by(point.y, -step));
     case 'ArrowRight':
-      return movePoint(points, index, point.x + step, point.y);
+      return movePoint(points, index, by(point.x, step), point.y);
     case 'ArrowLeft':
-      return movePoint(points, index, point.x - step, point.y);
+      return movePoint(points, index, by(point.x, -step), point.y);
     case 'PageUp':
-      return movePoint(points, index, point.x, point.y + 10 * LEVEL);
+      return movePoint(points, index, point.x, by(point.y, 10));
     case 'PageDown':
-      return movePoint(points, index, point.x, point.y - 10 * LEVEL);
+      return movePoint(points, index, point.x, by(point.y, -10));
     case 'Home':
       return movePoint(points, index, point.x, 0);
     case 'End':
