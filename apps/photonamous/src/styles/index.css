@@ -22,17 +22,10 @@ body,
 
   /*
    * Colours that meet WCAG 2.2 AA contrast on this app's surfaces (#111 to
-   * #404040): 4.5:1 for text, 3:1 for a button's edge against the page.
-   * Lopsy's accent (#4a9eff) is too light under white text, and its
-   * disabled grey is for disabled controls only.
+   * #404040): 4.5:1 for text, 3:1 for a control's edge or focus ring.
+   * Lopsy's disabled grey is for disabled controls only. Filled buttons
+   * take @lopsy/ui's --color-primary-* and --color-danger-*, as Lopsy's do.
    */
-  --ph-primary-bg: #1f6fd6;
-  --ph-primary-bg-hover: #1d64d1;
-  --ph-primary-bg-active: #1a5fc9;
-  --ph-primary-text: #ffffff;
-  --ph-danger-bg: #c62828;
-  --ph-danger-bg-hover: #b91c1c;
-  --ph-danger-text: #ffffff;
   /* Accent-coloured text, also on a selected or hovered row. */
   --ph-accent-text: #6cb6ff;
   /* Secondary text that must stay readable on every surface, hover and active rows included. */
@@ -60,4 +53,35 @@ body {
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
+}
+
+/*
+ * Every select draws the same arrow in the same place: Lucide's ChevronDown,
+ * as the app's other dropdowns use, 8 px in from the right. Once a select is
+ * styled, the browser puts its own arrow wherever it likes, often against
+ * the edge. The colours are --color-text-secondary and, when disabled,
+ * --color-text-disabled, written out because a data URI can't read a custom
+ * property. A module styling a select sets background-color and the other
+ * sides' padding, never the shorthands, which would undo this.
+ */
+select {
+  appearance: none;
+  padding-right: var(--space-7);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0a0a0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-2) center;
+  background-size: 12px 12px;
+}
+
+select:disabled {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23606060' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* Forced colours: the system's own arrow, which follows the user's colours. */
+@media (forced-colors: active) {
+  select,
+  select:disabled {
+    appearance: auto;
+    background-image: none;
+  }
 }

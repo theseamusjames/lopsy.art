@@ -43,6 +43,17 @@
   --color-warning: #ff9800;
   --color-success: #4caf50;
 
+  /* Filled buttons, primary and danger: white text on every state's
+     background is at least 4.5:1 (WCAG 2.2 AA), which on the accent and
+     error colours it is not. */
+  --color-primary-bg: #1f6fd6;
+  --color-primary-bg-hover: #1d64d1;
+  --color-primary-bg-active: #1a5fc9;
+  --color-primary-text: #ffffff;
+  --color-danger-bg: #c62828;
+  --color-danger-bg-hover: #b91c1c;
+  --color-danger-text: #ffffff;
+
   /* Radii */
   --radius-sm: 3px;
   --radius-md: 6px;

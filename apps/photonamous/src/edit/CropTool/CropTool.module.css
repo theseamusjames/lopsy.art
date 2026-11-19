@@ -144,10 +144,11 @@
   border: 0;
 }
 
+/* Longhands: the right padding and background image are the arrow (styles/index.css). */
 .select {
   height: 28px;
-  padding: 0 var(--space-2);
-  background: var(--color-input-bg);
+  padding-left: var(--space-2);
+  background-color: var(--color-input-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
@@ -190,17 +191,17 @@
 }
 
 .primary {
-  background: var(--ph-primary-bg);
-  border-color: var(--ph-primary-bg);
-  color: var(--ph-primary-text);
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary-bg);
+  color: var(--color-primary-text);
 }
 
 .primary:hover {
-  background: var(--ph-primary-bg-hover);
+  background: var(--color-primary-bg-hover);
 }
 
 .primary:active {
-  background: var(--ph-primary-bg-active);
+  background: var(--color-primary-bg-active);
 }
 
 .number:focus-visible,

@@ -60,7 +60,9 @@ could use too goes there; one only this app uses stays here.
     also has a field, slider or button (crop edges, curve points and areas
     show how);
   - text uses the `--ph-*` tokens in `src/styles/index.css` (4.5:1), not
-    `--color-text-disabled`, and every control is at least 24 × 24 px;
+    `--color-text-disabled`; a filled button uses `@lopsy/ui`'s
+    `--color-primary-*` or `--color-danger-*`, as Lopsy's does; and every
+    control is at least 24 × 24 px;
   - every focusable element shows the `--ph-focus-ring` ring; never set
     `outline: none` without one;
   - dialogs use `Modal`, menus `@lopsy/ui/Menu` or `use-menu-keys`,
