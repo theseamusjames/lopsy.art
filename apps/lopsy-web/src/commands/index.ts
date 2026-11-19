@@ -12,6 +12,7 @@ import './selection/selection';
 import './paint/fill';
 import './color/color';
 import './tool/tool';
+import './adjust/adjust';
 
 setSettle(settled);
 

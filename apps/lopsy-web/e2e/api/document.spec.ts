@@ -216,6 +216,7 @@ test.describe('the command API', () => {
   test('describe lists exactly the commands defined so far, with JSON-round-trippable schemas', async ({ page }) => {
     const all = await describe(page);
     expect(all.map((c) => c.id)).toEqual([
+      'adjust.add', 'adjust.list', 'adjust.remove', 'adjust.reorder', 'adjust.set', 'adjust.set-enabled', 'adjust.set-node-enabled',
       'color.reset', 'color.set', 'color.swap',
       'doc.info', 'doc.new', 'history.redo', 'history.undo',
       'layer.add', 'layer.add-group', 'layer.duplicate', 'layer.effects', 'layer.flatten', 'layer.group', 'layer.merge-down',
