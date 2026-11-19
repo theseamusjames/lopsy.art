@@ -8,6 +8,8 @@
 .select,
 .input {
   flex: 1;
+  /* A long preset name is cut off rather than pushing the bar out of its column. */
+  min-width: 0;
   height: 28px;
   padding-left: var(--space-2);
   border: 1px solid var(--ph-control-edge);
