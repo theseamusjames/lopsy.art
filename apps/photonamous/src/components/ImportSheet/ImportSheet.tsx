@@ -131,7 +131,7 @@ export function ImportSheet() {
 
           <label className={styles.preset}>
             <span className={styles.legend}>Add to album</span>
-            <select value={album} onChange={(e) => setAlbum(e.target.value)} aria-label="Album for the import">
+            <select value={album} onChange={(e) => setAlbum(e.target.value)}>
               <option value="">No album</option>
               {albums.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -164,7 +164,7 @@ export function ImportSheet() {
 
           <label className={styles.preset}>
             <span className={styles.legend}>Edits to start from</span>
-            <select value={presetId} onChange={(e) => setPresetId(e.target.value)} aria-label="Preset to apply">
+            <select value={presetId} onChange={(e) => setPresetId(e.target.value)}>
               <option value="">None — as the camera took them</option>
               {presets.map((p) => (
                 <option key={p.id} value={p.id}>
