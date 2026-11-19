@@ -205,7 +205,9 @@ another photo.
   edit, choosing its groups), **Versions** (switch, rename, **New
   version**) and **History** (every step; clicking one goes back to it).
   The column folds away. A **filmstrip** of the photos around this one
-  moves between them.
+  moves between them, in the grid's order: a photo whose stack is open in
+  the grid shows each version as a tile of its own (named "<file>
+  (<version>)", with that version's preview), which opens that version.
 - **Toolbar.** Library (back), Undo / Redo (⌘Z, ⇧⌘Z or ⌘Y), Rotate left,
   Rotate right, Flip, Flip vertical, **Crop**, **Areas**, **Before** (or
   hold `\`), **Split** (before and after side by side, with a divider to

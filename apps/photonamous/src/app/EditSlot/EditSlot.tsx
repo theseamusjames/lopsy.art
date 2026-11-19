@@ -3,7 +3,8 @@ import type { Asset, AssetId, Json, PresetId, PreviewRef, VersionId } from '@lop
 import type { Recipe, RecipeGroupId } from '@lopsy/photos-core/library/recipe';
 import type { FilmstripItem } from '../../edit/Filmstrip/Filmstrip';
 import { pasteRecipeValues, type CopiedEdits } from '../../library/recipe-copy';
-import { versionsByAsset } from '../../library/items';
+import { versionsByAsset, type ItemId } from '../../library/items';
+import { currentStripId, editTargetOf, filmstripEntries, type PhotoVersion } from '../../library/filmstrip';
 import { loadPreviewUrl, peekPreviewUrl } from '../preview-cache';
 import { useUi } from '../store';
 import { useOrderedIds, usePresets, usePreviewUrl } from '../hooks';
@@ -44,7 +45,7 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const history = useMemo(() => session.history(versionId), [session, versionId, view]);
   const versions = useMemo(() => versionsByAsset(view).get(assetId) ?? [], [view, assetId]);
-  const filmstrip = useFilmstrip(orderedIds, assetId);
+  const filmstrip = useFilmstrip(orderedIds, { assetId, versionId });
   // The stored screen preview shows at once while the engine loads the original.
   const storedPreviewUrl = usePreviewUrl(version?.screen ?? null, 'screen');
   const abort = useRef<AbortController | null>(null);
@@ -178,13 +179,14 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
         onPasteEdits={onPasteEdits}
         canPasteEdits={copiedEdits !== null}
         filmstrip={
-          filmstrip.length > 1
+          filmstrip.items.length > 1
             ? {
-                items: filmstrip,
-                currentId: assetId,
-                onOpen: (id: string) => {
-                  const next = view.assets.get(id);
-                  if (next) setEditing({ assetId: id, versionId: next.primaryVersionId });
+                items: filmstrip.items,
+                currentId: filmstrip.currentId,
+                onOpen: (id: ItemId) => {
+                  // The Edit view calls this once this photo's previews are saved: read the tile from the library as it is then.
+                  const next = editTargetOf(session.getView(), id);
+                  if (next) setEditing(next);
                 },
               }
             : undefined
@@ -210,44 +212,47 @@ export function EditSlot({ assetId, versionId, onClose }: EditSlotProps) {
   );
 }
 
-/** How many photos either side of the open one the filmstrip loads thumbnails for. */
+/** How many tiles either side of the open one the filmstrip loads thumbnails for. */
 const FILMSTRIP_REACH = 40;
 
-/** The grid's photos for the filmstrip, with thumbnails loaded around the open one. */
-function useFilmstrip(orderedIds: readonly AssetId[], currentId: AssetId): FilmstripItem[] {
+function thumbKey(ref: PreviewRef): string {
+  return `${ref.fileId}|${ref.recipeHash}`;
+}
+
+/**
+ * The grid's tiles for the filmstrip: its photos and their versions' own
+ * tiles (library/filmstrip.ts); the open one, and thumbnails loaded
+ * around it.
+ */
+function useFilmstrip(orderedIds: readonly ItemId[], open: PhotoVersion): { items: FilmstripItem[]; currentId: ItemId } {
   const session = useSession();
   const view = useLibraryView();
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(new Map());
-
-  const entries = useMemo(() => {
-    const index = orderedIds.indexOf(currentId);
-    return orderedIds.map((id, i) => {
-      const asset = view.assets.get(id);
-      const version = asset ? view.versions.get(asset.primaryVersionId) : undefined;
-      const ref: PreviewRef | null = version?.thumb ?? null;
-      return { id, label: asset?.fileName ?? id, ref, isNear: index < 0 || Math.abs(i - index) <= FILMSTRIP_REACH };
-    });
-  }, [orderedIds, currentId, view]);
+  const entries = useMemo(() => filmstripEntries(orderedIds, view), [orderedIds, view]);
+  const currentId = currentStripId(entries, view, open);
+  const index = entries.findIndex((e) => e.id === currentId);
 
   useEffect(() => {
     let live = true;
-    for (const entry of entries) {
-      if (!entry.isNear || !entry.ref || peekPreviewUrl('thumb', entry.ref)) continue;
-      const key = `${entry.ref.fileId}|${entry.ref.recipeHash}`;
-      loadPreviewUrl(session, 'thumb', entry.ref)
+    entries.forEach((entry, i) => {
+      const isNear = index < 0 || Math.abs(i - index) <= FILMSTRIP_REACH;
+      if (!isNear || !entry.thumb || peekPreviewUrl('thumb', entry.thumb)) return;
+      const key = thumbKey(entry.thumb);
+      loadPreviewUrl(session, 'thumb', entry.thumb)
         .then((url) => {
           if (live) setUrls((prev) => new Map(prev).set(key, url));
         })
         .catch(() => undefined);
-    }
+    });
     return () => {
       live = false;
     };
-  }, [entries, session]);
+  }, [entries, index, session]);
 
-  return entries.map((e) => ({
+  const items = entries.map((e) => ({
     id: e.id,
     label: e.label,
-    thumbnail: e.ref ? (peekPreviewUrl('thumb', e.ref) ?? urls.get(`${e.ref.fileId}|${e.ref.recipeHash}`) ?? null) : null,
+    thumbnail: e.thumb ? (peekPreviewUrl('thumb', e.thumb) ?? urls.get(thumbKey(e.thumb)) ?? null) : null,
   }));
+  return { items, currentId };
 }

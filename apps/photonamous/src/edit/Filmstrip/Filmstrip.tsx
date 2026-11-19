@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import styles from './Filmstrip.module.css';
 
 export interface FilmstripItem {
-  /** The asset ID. */
+  /** What the item opens (in the library, a grid tile's id), handed back to `onOpen`. */
   readonly id: string;
   readonly label: string;
   /** An image URL for the thumbnail; null shows the name. */

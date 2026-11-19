@@ -103,8 +103,8 @@ export interface EditViewProps {
   readonly canPasteEdits?: boolean;
   /** The version's stored screen preview, shown at once while the engine loads the photo. */
   readonly storedPreviewUrl?: string | null;
-  /** The current view's photos along the bottom; ← and → move along it. */
-  readonly filmstrip?: { readonly items: readonly FilmstripItem[]; readonly currentId: string; readonly onOpen: (assetId: string) => void } | undefined;
+  /** The current view's photos along the bottom; ← and → move along it. `onOpen` gets the item's id. */
+  readonly filmstrip?: { readonly items: readonly FilmstripItem[]; readonly currentId: string; readonly onOpen: (id: string) => void } | undefined;
   /**
    * Layer mode (Grade in Photonamous): a Done button that hands over the
    * saved recipe and a renderer of the full-size 16-bit PNG. Export and
@@ -247,9 +247,9 @@ export function EditView({
 
   /** Another photo from the filmstrip, once this one's previews show its edit. */
   const openFromStrip = useCallback(
-    (assetId: string) => {
+    (id: string) => {
       if (!filmstrip) return;
-      const open = () => filmstrip.onOpen(assetId);
+      const open = () => filmstrip.onOpen(id);
       if (isReady) void refreshPreviews(savedRecipe).finally(open);
       else open();
     },
