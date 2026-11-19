@@ -236,6 +236,7 @@ test.describe('the command API', () => {
       'select.all', 'select.ellipse', 'select.from-layer', 'select.invert', 'select.modify', 'select.none', 'select.polygon',
       'select.rect', 'select.to-path',
       'tool.describe', 'tool.options', 'tool.select', 'tool.set',
+      'view.render', 'view.render-layer', 'view.sample',
     ]);
     expect(JSON.parse(JSON.stringify(all))).toEqual(all);
     for (const command of all) {
