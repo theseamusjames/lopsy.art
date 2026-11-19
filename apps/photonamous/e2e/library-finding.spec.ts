@@ -49,7 +49,8 @@ test('find photos by text, camera, saved search and date', async ({ page }) => {
   await arrowOf(/^June/).click();
   await nav.getByRole('button', { name: /14 June 2025/ }).click();
   await expect(tiles(page)).toHaveCount(2);
-  await nav.getByRole('button', { name: /2026/ }).first().click();
+  // The year's row, not its arrow ("Open 2026").
+  await nav.getByRole('button', { name: /^2026/ }).click();
   await expect(tiles(page)).toHaveCount(1);
   await expect(tiles(page).first()).toHaveAttribute('title', 'snow.jpg');
 });

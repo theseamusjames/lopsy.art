@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { IconButton } from '../IconButton/IconButton';
 import { focusedElement, nextTabStop, returnFocus, tabStops } from './focus-trap';
@@ -33,6 +33,7 @@ function initialFocus(root: HTMLElement): HTMLElement {
  */
 export function Modal({ title, onClose, children, footer, width = 'md' }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const previous = useRef<HTMLElement | null>(null);
   const layer = useRef<Layer | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -59,7 +60,7 @@ export function Modal({ title, onClose, children, footer, width = 'md' }: ModalP
     if (!root) return;
     const own = openLayer(true);
     layer.current = own;
-    const previous = focusedElement();
+    previous.current = focusedElement();
     initialFocus(root).focus();
 
     // Keys from outside the dialog (focus on the page, or nowhere) still close it and bring Tab back in.
@@ -76,8 +77,14 @@ export function Modal({ title, onClose, children, footer, width = 'md' }: ModalP
       document.removeEventListener('focusin', onFocusIn);
       closeLayer(own);
       layer.current = null;
-      returnFocus(previous, root);
     };
+  }, []);
+
+  // Focus goes back after the commit's layout effects, where the page behind drops `inert`: an inert
+  // element can't take focus. Done before other passive effects, so nothing else picks a new home for it.
+  useEffect(() => {
+    const root = ref.current;
+    return () => returnFocus(previous.current, root);
   }, []);
 
   return (
