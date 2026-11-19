@@ -791,3 +791,20 @@ running, holding its port. `scripts/dev.mjs` (the root `npm run dev`)
 starts each app as its own process group and signals the group, so npm,
 the shell and Vite stop together; it forwards Ctrl+C itself, since those
 groups don't get the terminal's.
+
+## Library writes: test them on the real session, not the fake
+The app's `?backend=fake` session (`apps/photonamous/src/app/fake/`)
+never validates ops, so a malformed write passes there and fails only on
+a real library (`photos-core`'s session rejects it as "not bounded JSON",
+and the user sees nothing). `recipeFields` once copied every object leaf
+as a crop rectangle, which broke New version, Rotate, Flip and Reset on
+any photo with an area. Cover library writes with `openLibrary` and
+`TestAdapter` (`packages/photos-core/src/library/areas.test.ts`), and
+write a recipe's object leaves with `recipeLeafJson`.
+
+## Primary buttons: the shared colours, even when a dialog draws its own
+Use `Button variant="primary"`. A dialog that styles its own primary
+button (several of Lopsy's do: `.applyButton`, `.createButton`,
+`.exportButton`) takes `@lopsy/ui`'s `--color-primary-bg`, `-hover`,
+`-active` and `--color-primary-text`, never `--color-accent` under white
+text (2.75:1). The accent stays for selection, toggles and borders.
