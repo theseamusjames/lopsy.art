@@ -1,5 +1,6 @@
 import type { MutableRefObject } from 'react';
-import type { FloatingSelection, PersistentTransform } from './interaction-types';
+import type { FloatingSelection, PersistentTransform, WholeLayerFloat } from './interaction-types';
+import { wholeLayerSelectionAt } from './whole-layer-float';
 import { useEditorStore } from '../editor-store';
 import { useUIStore } from '../ui-store';
 import { clearJsPixelData } from '../store/clear-js-pixel-data';
@@ -52,6 +53,8 @@ export interface PendingNudgeMask {
   originalBounds: Rect;
   offsetX: number;
   offsetY: number;
+  /** Set when the float lifted a whole layer: the mask is rebuilt from its alpha. */
+  wholeLayer?: WholeLayerFloat;
   /** Runs once when the hold ends, however it ends. */
   onEnd?: () => void;
 }
@@ -176,14 +179,9 @@ export function flushNudgeMask(): void {
   const editor = useEditorStore.getState();
   if (!editor.selection.active || editor.selection.mask !== p.staleMask) return;
   const { width: docW, height: docH } = editor.document;
-  const { mask, bounds } = translateSelectionMask(
-    p.originalMask,
-    p.originalBounds,
-    p.offsetX,
-    p.offsetY,
-    docW,
-    docH,
-  );
+  const { mask, bounds } = p.wholeLayer && p.layerId !== null
+    ? wholeLayerSelectionAt(p.layerId, p.wholeLayer, p.offsetX, p.offsetY, docW, docH)
+    : translateSelectionMask(p.originalMask, p.originalBounds, p.offsetX, p.offsetY, docW, docH);
   if (p.layerId !== null && owner?.mask === p.staleMask) owner = { layerId: p.layerId, mask };
   editor.setSelection(bounds, mask, docW, docH);
   useUIStore.getState().setTransform(createTransformState(bounds));
