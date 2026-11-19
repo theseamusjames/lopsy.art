@@ -20,8 +20,9 @@
  *   snapshot(page)                 A JSON picture of the document with no
  *                                  ids or times in it, for toEqual: layers
  *                                  (with group adjustment nodes), selection,
- *                                  history, a hash of the export composite,
- *                                  and the active tool and colours.
+ *                                  history, paths (anchor points), guides,
+ *                                  a hash of the export composite, and the
+ *                                  active tool and colours.
  *   editorState(page)              The active tool and the colours.
  *   compositeHash(page)            Hash of the export composite.
  *   compareUiAndApi(page, {...})   Run one operation through the UI and
@@ -201,10 +202,19 @@ export interface DocSnapshot {
     mask: string | null;
   };
   history: { undo: string[]; redo: string[] };
+  /** Vector paths in the store's order, with each anchor's point in document pixels. */
+  paths: SnapshotPath[];
+  /** Ruler guides in the order they were added; a guide's position is in document pixels. */
+  guides: Array<{ orientation: string; position: number }>;
   /** Hash of the flattened document as Export renders it, so adjustments show in the comparison. */
   composite: string;
   /** Ambient editor state: compared only when a comparison asks for it with `withEditorState`. */
   editor: EditorState;
+}
+
+export interface SnapshotPath {
+  closed: boolean;
+  anchors: Array<{ x: number; y: number }>;
 }
 
 export interface EditorState {
@@ -253,7 +263,11 @@ async function readStructure(page: Page): Promise<Structure> {
         };
         undoStack: Array<{ label: string }>;
         redoStack: Array<{ label: string }>;
+        paths: Array<{ closed: boolean; anchors: Array<{ point: { x: number; y: number } }> }>;
       };
+    };
+    const ui = (window as unknown as Record<string, unknown>).__uiStore as {
+      getState: () => { guides: Array<{ orientation: string; position: number }> };
     };
     const state = store.getState();
     const doc = state.document;
@@ -308,6 +322,8 @@ async function readStructure(page: Page): Promise<Structure> {
         undo: state.undoStack.map((e) => e.label),
         redo: state.redoStack.map((e) => e.label),
       },
+      paths: state.paths.map((p) => ({ closed: p.closed, anchors: p.anchors.map((a) => ({ x: a.point.x, y: a.point.y })) })),
+      guides: ui.getState().guides.map((g) => ({ orientation: g.orientation, position: g.position })),
     };
   });
 }
