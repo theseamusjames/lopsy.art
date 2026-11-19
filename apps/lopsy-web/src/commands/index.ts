@@ -27,6 +27,11 @@ import './brush/brush';
 import './quick-mask/quick-mask';
 import './paint/clear';
 import './mask/clear';
+import './paint/stroke';
+import './paint/drag';
+import './selection/tool-select';
+import './layer/move';
+import './gesture/gesture';
 
 setSettle(settled);
 
