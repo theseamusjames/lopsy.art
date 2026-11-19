@@ -17,6 +17,7 @@
 }
 
 .item {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -36,6 +37,16 @@
 
 .item[aria-current='true'] {
   border-color: var(--color-accent);
+}
+
+.item[aria-current='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: var(--ph-accent-text);
 }
 
 .thumb {

@@ -15,7 +15,7 @@ export interface FilmstripProps {
   readonly onOpen: (id: string) => void;
 }
 
-/** The photos of the current view along the bottom of the Edit view (spec 5.4). */
+/** The photos of the current view along the bottom of the Edit view (spec 5.4); the open one is marked by a bar as well as its colour. */
 export function Filmstrip({ items, currentId, onOpen }: FilmstripProps) {
   const currentRef = useRef<HTMLButtonElement>(null);
 
@@ -35,12 +35,11 @@ export function Filmstrip({ items, currentId, onOpen }: FilmstripProps) {
                 type="button"
                 className={styles.item}
                 aria-current={isCurrent ? 'true' : undefined}
-                aria-label={item.label}
                 title={item.label}
                 onClick={() => onOpen(item.id)}
               >
                 {item.thumbnail ? (
-                  <img className={styles.thumb} src={item.thumbnail} alt="" draggable={false} />
+                  <img className={styles.thumb} src={item.thumbnail} alt={item.label} draggable={false} />
                 ) : (
                   <span className={styles.name}>{item.label}</span>
                 )}
