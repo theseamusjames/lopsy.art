@@ -9,6 +9,9 @@ import './layer/effects';
 import './layer/rasterize';
 import './mask/mask';
 import './selection/selection';
+import './paint/fill';
+import './color/color';
+import './tool/tool';
 
 setSettle(settled);
 

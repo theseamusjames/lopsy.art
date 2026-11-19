@@ -216,12 +216,15 @@ test.describe('the command API', () => {
   test('describe lists exactly the commands defined so far, with JSON-round-trippable schemas', async ({ page }) => {
     const all = await describe(page);
     expect(all.map((c) => c.id)).toEqual([
+      'color.reset', 'color.set', 'color.swap',
       'doc.info', 'doc.new', 'history.redo', 'history.undo',
       'layer.add', 'layer.add-group', 'layer.duplicate', 'layer.effects', 'layer.flatten', 'layer.group', 'layer.merge-down',
       'layer.rasterize', 'layer.rasterize-style', 'layer.remove', 'layer.remove-selected', 'layer.reorder', 'layer.select', 'layer.set',
       'mask.add', 'mask.edit', 'mask.remove', 'mask.set-enabled', 'mask.to-selection',
+      'paint.fill',
       'select.all', 'select.ellipse', 'select.from-layer', 'select.invert', 'select.modify', 'select.none', 'select.polygon',
       'select.rect', 'select.to-path',
+      'tool.describe', 'tool.options', 'tool.select', 'tool.set',
     ]);
     expect(JSON.parse(JSON.stringify(all))).toEqual(all);
     for (const command of all) {
