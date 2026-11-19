@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
 import { ArrowLeft, Check, ClipboardPaste, Copy, Crop, Spline, Eye, FlipVertical2, Download, FlipHorizontal2, SquarePen, Redo2, RotateCcw, RotateCw, SplitSquareHorizontal, Undo2, X } from 'lucide-react';
 import { DEFAULT_RECIPE, recipeHash, type Recipe } from '@lopsy/photos-core/library/recipe';
 import type { Asset, HistoryStep, Json, Preset, PresetId, Version, VersionId } from '@lopsy/photos-core/library/types';
@@ -31,7 +31,7 @@ import {
   type ControlDef,
   type GroupDef,
 } from '../edit-controls';
-import { EDIT_SHORTCUTS, isTypingTarget, neighbourId, shortcutFor } from '../edit-keys';
+import { EDIT_SHORTCUTS, isTypingTarget, neighbourId, shortcutFor, stageKeyAction } from '../edit-keys';
 import { Modal } from '../../components/Modal/Modal';
 import type { PhotoInfo } from '../../engine/develop-engine';
 import type { DevelopProfile } from '../../engine/profiles';
@@ -174,6 +174,7 @@ export function EditView({
   const headingRef = useRef<HTMLHeadingElement>(null);
   useDocumentTitle(documentTitle ?? editPageTitle(asset.fileName));
   useFocusOnOpen(headingRef);
+  const stageHintId = useId();
   // Status messages for screen readers (WCAG 4.1.3): polite news, and errors, which also show.
   const messageId = useRef(0);
   const [news, setNews] = useState<{ readonly id: number; readonly text: string } | null>(null);
@@ -631,6 +632,15 @@ export function EditView({
     panPointer.current = { id: p.id, x: e.clientX, y: e.clientY };
   };
 
+  const handleStageKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget || !engine || !canEdit) return;
+    const action = stageKeyAction(e);
+    if (!action) return;
+    e.preventDefault();
+    if (action.kind === 'pan') engine.panBy(action.dx, action.dy);
+    else engine.setZoom(engine.getView().zoom * action.factor);
+  };
+
   // ---- pixel readout ---------------------------------------------------
 
   const pixel = usePixelReadout((clientX, clientY) => {
@@ -964,6 +974,11 @@ export function EditView({
           <div
             ref={stageRef}
             className={styles.stage}
+            tabIndex={0}
+            role="group"
+            aria-label="Photo"
+            aria-describedby={stageHintId}
+            onKeyDown={handleStageKeyDown}
             onPointerDown={handleStagePointerDown}
             onPointerMove={handleStagePointerMove}
             onPointerUp={handleStagePointerUp}
@@ -1016,6 +1031,9 @@ export function EditView({
               </div>
             )}
           </div>
+          <p id={stageHintId} className={styles.srOnly}>
+            Arrow keys move a zoomed photo, Shift by more; plus and minus zoom in and out.
+          </p>
           <p className={styles.srOnly} role="status" data-testid="edit-status">
             {news && <span key={news.id}>{news.text}</span>}
           </p>

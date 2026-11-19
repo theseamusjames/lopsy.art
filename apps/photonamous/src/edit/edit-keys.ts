@@ -82,6 +82,9 @@ export const EDIT_SHORTCUTS: readonly { readonly keys: string; readonly action: 
   { keys: '⇧⌘V', action: 'Paste edits' },
   { keys: '⌘0', action: 'Fit' },
   { keys: '⌘1', action: '100 %' },
+  { keys: '+ −', action: 'Zoom in or out, with the photo focused' },
+  { keys: '← → ↑ ↓', action: 'Move a zoomed photo, with the photo focused' },
+  { keys: 'J', action: 'Clipping warnings' },
   { keys: '\\ (hold)', action: 'Before' },
   { keys: 'R', action: 'Crop, and Done' },
   { keys: 'M', action: 'Add a linear area' },
@@ -127,4 +130,40 @@ export function splitAfterKey(at: number, key: string, isLarge: boolean): number
 export function splitValueText(at: number): string {
   const before = Math.round(Math.min(1, Math.max(0, at)) * 100);
   return `${before} % before, ${100 - before} % after`;
+}
+
+/** How far an arrow key moves the focused photo, in CSS pixels, and with Shift. */
+export const PAN_STEP = 40;
+export const PAN_LARGE_STEP = 200;
+/** How much + and − zoom the focused photo. */
+export const ZOOM_STEP = 1.25;
+
+export type StageKeyAction = { readonly kind: 'pan'; readonly dx: number; readonly dy: number } | { readonly kind: 'zoom'; readonly factor: number };
+
+/**
+ * What a key does on the focused photo: arrows move the view over it, as
+ * scrolling does (Right shows more of the right side), Shift by more;
+ * + and − zoom in and out. Null for other keys and for shortcuts.
+ */
+export function stageKeyAction(e: KeyInfo): StageKeyAction | null {
+  if (e.metaKey || e.ctrlKey || e.altKey) return null;
+  const step = e.shiftKey ? PAN_LARGE_STEP : PAN_STEP;
+  switch (e.key) {
+    case 'ArrowLeft':
+      return { kind: 'pan', dx: step, dy: 0 };
+    case 'ArrowRight':
+      return { kind: 'pan', dx: -step, dy: 0 };
+    case 'ArrowUp':
+      return { kind: 'pan', dx: 0, dy: step };
+    case 'ArrowDown':
+      return { kind: 'pan', dx: 0, dy: -step };
+    case '+':
+    case '=':
+      return { kind: 'zoom', factor: ZOOM_STEP };
+    case '-':
+    case '_':
+      return { kind: 'zoom', factor: 1 / ZOOM_STEP };
+    default:
+      return null;
+  }
 }

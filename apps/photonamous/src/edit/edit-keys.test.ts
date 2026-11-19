@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPreviewStale, isTypingTarget, neighbourId, shortcutFor, splitAfterKey, splitValueText, type KeyInfo } from './edit-keys';
+import { PAN_LARGE_STEP, PAN_STEP, ZOOM_STEP, isPreviewStale, isTypingTarget, neighbourId, shortcutFor, splitAfterKey, splitValueText, stageKeyAction, type KeyInfo } from './edit-keys';
 
 function key(k: string, mods: Partial<KeyInfo> = {}): KeyInfo {
   return { key: k, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...mods };
@@ -77,5 +77,24 @@ describe('splitAfterKey', () => {
 
   it('reads both sides', () => {
     expect(splitValueText(0.3)).toBe('30 % before, 70 % after');
+  });
+});
+
+describe('stageKeyAction', () => {
+  it('pans the view as scrolling does, further with Shift', () => {
+    expect(stageKeyAction(key('ArrowRight'))).toEqual({ kind: 'pan', dx: -PAN_STEP, dy: 0 });
+    expect(stageKeyAction(key('ArrowUp', { shiftKey: true }))).toEqual({ kind: 'pan', dx: 0, dy: PAN_LARGE_STEP });
+  });
+
+  it('zooms with + and −, whether or not Shift makes them', () => {
+    expect(stageKeyAction(key('+', { shiftKey: true }))).toEqual({ kind: 'zoom', factor: ZOOM_STEP });
+    expect(stageKeyAction(key('='))).toEqual({ kind: 'zoom', factor: ZOOM_STEP });
+    expect(stageKeyAction(key('-'))).toEqual({ kind: 'zoom', factor: 1 / ZOOM_STEP });
+  });
+
+  it('leaves shortcuts and other keys to the view', () => {
+    expect(stageKeyAction(key('ArrowRight', { metaKey: true }))).toBeNull();
+    expect(stageKeyAction(key('=', { ctrlKey: true }))).toBeNull();
+    expect(stageKeyAction(key('r'))).toBeNull();
   });
 });
