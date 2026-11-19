@@ -30,8 +30,23 @@
 
 .step[aria-current='step'] {
   background: var(--color-bg-active);
-  box-shadow: inset 3px 0 0 var(--ph-accent-text);
   color: var(--color-text-primary);
+}
+
+/* The current step: a dot before its label, in a slot every row keeps so labels line up. */
+.step::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--space-2);
+  border-radius: 50%;
+  vertical-align: middle;
+  background: transparent;
+}
+
+.step[aria-current='step']::before {
+  background: var(--ph-accent-text);
 }
 
 .step[data-undone] {

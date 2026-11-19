@@ -44,8 +44,23 @@
 
 .version[aria-current='true'] {
   background: var(--color-bg-active);
-  box-shadow: inset 3px 0 0 var(--ph-accent-text);
   color: var(--color-text-primary);
+}
+
+/* The current version: a dot before its label, in a slot every row keeps so labels line up. */
+.version::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--space-2);
+  border-radius: 50%;
+  vertical-align: middle;
+  background: transparent;
+}
+
+.version[aria-current='true']::before {
+  background: var(--ph-accent-text);
 }
 
 .icon {

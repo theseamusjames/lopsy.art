@@ -96,8 +96,21 @@
 
 .area[aria-current='true'] {
   background: var(--color-bg-active);
-  box-shadow: inset 3px 0 0 var(--ph-accent-text);
   color: var(--color-text-primary);
+}
+
+/* The selected area: a dot before its type, in a slot every row keeps so they line up. */
+.area::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.area[aria-current='true']::before {
+  background: var(--ph-accent-text);
 }
 
 .kind {
